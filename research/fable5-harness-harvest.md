@@ -88,3 +88,16 @@ Design:
   classifier-fallback claim is Anthropic-stated, uncorroborated by user
   reports at the time of the pass). Operationally irrelevant to ember's local
   loop; relevant only to cloud-side scaffolding sessions.
+
+
+## Citation status (added per Kai checkpoint 14418, FLAG S2-A)
+
+Exact sources for the "docs-verified" claims above:
+- Compiled report: `B:/M/avir/kai/state/fable-5-model-card-technical-report-2026-06-09.md` (Kai, 2026-06-09).
+- Anthropic announcement: https://www.anthropic.com/news/claude-fable-5-mythos-5
+- Product page: https://www.anthropic.com/claude/fable
+- API docs: https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5
+- AWS availability: https://aws.amazon.com/blogs/aws/anthropic-claude-fable-5-on-aws-mythos-class-capabilities-with-built-in-safeguards-now-available/
+- Third-party system-card coverage (failure modes, pp.37-216 quotes): https://www.digitalapplied.com/blog/claude-fable-5-mythos-5-agentic-coding-deep-dive-2026 (SECONDARY source quoting the 319-page system card; card itself is primary).
+- News roundup: https://www.latent.space/p/ainews-anthropic-claude-fable-5-mythos
+Claims sourced only from the compiled report and not re-fetched from a primary URL are attributable to that report file, not to independent verification in this note.

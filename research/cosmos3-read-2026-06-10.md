@@ -89,3 +89,16 @@ build around and eventually instead of it.
   dependency-layer for ember. The contribution layer — receipted ledger,
   three-test gate, invariant-gated self-editing, residency-bounded
   accumulation — is exactly what this release does NOT contain.
+
+
+## Citation status (added per Kai checkpoint 14418, FLAG S2-A)
+
+Honest demotion: this note's sources were gathered via a background agent sweep
+(session 2026-06-10, pre-compaction) and the note named source CLASSES (NVIDIA
+newsroom/blog, research.nvidia.com cosmos-lab/cosmos3 technical report) without
+retaining exact URLs or archived excerpts. Per the monitor protocol: **source
+classes named, not citation-complete in this file.** Claims herein (launch
+date, two-tower MoT architecture, Nano/Super/Edge sizes, Qwen3-VL backbone,
+OpenMDW-1.1 license, listed failure modes) should be re-verified against
+primary URLs before any of them becomes load-bearing for a contract decision;
+none currently is (disposition was "no track change").

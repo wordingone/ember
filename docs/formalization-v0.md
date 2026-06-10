@@ -217,7 +217,42 @@ verbatim forms are retracted as over-claims.**
   removing its own hallucination-detection markers, STOP's sandbox-flag
   circumvention — which is independent empirical support for §6's design.
 
-## 10. Open problems
+## 9b. What "finished" means for ember (user thread, 2026-06-10)
+
+Two observations forced this section. First: *"the-search did not succeed
+because it defined finished before it knew what finished was"* — it froze a
+project-level destination (100% on 3 random games, 25× verified) before
+knowing the substrate, then iterated inside that frame. Second: *"ember needs
+to be finished in some fundamental sense that allows everything else to
+compound."*
+
+The resolution: **finish lines exist at three levels, and exactly one of them
+must be finished.**
+
+- **The top (the mind) never finishes** — by design; only the user retires the
+  goal. A mind that finished would be done improving.
+- **The artifacts always finish** — the verifier is an absolute finish line at
+  the smallest grain; the gate cannot admit an unfinished thing.
+- **The kernel must be FINISHED, once** — and this is the thing Avir has been
+  circling through every project (the-search's R1–R6 constitution, SDEK's
+  control kernel, ember's invariant set are three drafts of the same object).
+  Compounding requires a fixed substrate the way compound interest requires a
+  fixed unit of account, or evolution requires the frozen genetic code:
+  everything accumulates BECAUSE the deposit machinery stopped changing. For
+  ember that kernel is: the verifier axiom, the gate semantics (G1∧G2∧G3),
+  ledger append-only + replayability (episode/receipt schema breaks never,
+  extends only), and the invariant-set enforcement. The-search froze the
+  wrong layer — a destination instead of an engine.
+
+**Completion condition (the mechanism's, not the mind's):** the kernel is
+finished when (a) it is versioned 1.0 and closed under everything the system
+can do — no reachable action can unfix it (write-surface exclusion + boot
+checksum + replay test), and (b) **one full flywheel turn is demonstrated**:
+a self-generated episode → a gated gain → a measurably higher feed rate
+`F` → more self-generated episodes. `dF/dround > 0` under a frozen kernel is
+the moment ember-the-mechanism is finished and ember-the-mind begins
+compounding. Everything after is turns of a finished crank. The engine
+finishes; the journey doesn't.
 
 - **O1 — Floor vs. separation:** all-zero arms make G1/G2 undefined, not
   failed. The 3B receipt decides whether ARC-1 has a measurable floor at
