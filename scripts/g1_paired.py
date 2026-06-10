@@ -2,8 +2,9 @@
 
 Executes the EXACT invocation pre-registered in
 research/r1w-g1-decision-tree.md (#32, committed BEFORE the control/MTP
-legs landed): four samples files (base/a/control/mtp; validation 43 x k=8,
-seed 16 across arms -> per-task pairing), two metrics with fixed roles —
+legs landed): samples files (base/a/control/mtp, + grpo when its leg
+landed via #24; validation 43 x k=8, seed 16 across arms -> per-task
+pairing), two metrics with fixed roles —
 
   - task-level feed (any-of-8): McNemar exact test on discordant pairs +
     Newcombe paired-delta interval (power.newcombe_paired_delta).
@@ -29,9 +30,11 @@ from power import Z80, Z975, newcombe_paired_delta
 
 NC_WIN = "B:/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC_WIN}/receipts"
-ARMS = ("base", "a", "control", "mtp")
+ARMS = ("base", "a", "control", "mtp", "grpo")
 PAIRS = (("a", "base"), ("control", "base"), ("mtp", "base"),
-         ("a", "control"), ("mtp", "a"), ("mtp", "control"))
+         ("a", "control"), ("mtp", "a"), ("mtp", "control"),
+         ("grpo", "base"), ("grpo", "control"), ("grpo", "a"),
+         ("grpo", "mtp"))
 
 
 def load_samples(path):
@@ -148,6 +151,14 @@ def main():
           "FLAT": "drop MTP at SFT scale; re-evaluate at NC2-own pretrain",
           "DOWN": "MTP harmful at SFT scale: receipt the negative; "
                   "pretrain-rung re-evaluation only"}[mtp_a]
+    grpo_b = blocks["grpo - base"]["sample"]["flag"]
+    grpo_read = {
+        "UP": "GRPO advances on the gains metric: t5-grpo harm gate "
+              "fires before any round-2 role",
+        "FLAT": "GRPO flat vs base at k=8 (MDE in block); joins r2 "
+                "arm-4 via the trainability precondition only (#24)",
+        "DOWN": "GRPO regresses vs base: receipt the negative; r2 "
+                "arm-4 requires redesign before dispatch"}[grpo_b]
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     receipt = {
@@ -156,6 +167,11 @@ def main():
         "comparisons": blocks,
         "tree": {"cell": cell, "why": why,
                  "d3_mtp_overlay": {"flag": mtp_a, "reading": d3},
+                 "grpo_overlay": {
+                     "flag": grpo_b,
+                     "vs_control": blocks["grpo - control"]["sample"]["flag"],
+                     "vs_mtp": blocks["grpo - mtp"]["sample"]["flag"],
+                     "reading": grpo_read},
                  "t5_gate": "any advancing arm must show t5 non-regression"},
     }
     os.makedirs(RECEIPTS, exist_ok=True)

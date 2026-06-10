@@ -1,0 +1,279 @@
+{
+  "ticket": "G1-PAIRED-R1W",
+  "ts": "20260610T225707Z",
+  "files": {
+    "base": "w1-floor-g1-base-20260610T215814Z-samples.jsonl",
+    "a": "w1-floor-g1-a-20260610T220325Z-samples.jsonl",
+    "control": "w1-floor-g1-control-20260610T220712Z-samples.jsonl",
+    "mtp": "w1-floor-g1-mtp-20260610T221956Z-samples.jsonl",
+    "grpo": "w1-floor-g1-grpo-20260610T225450Z-samples.jsonl"
+  },
+  "pre_registration": "research/r1w-g1-decision-tree.md (#32, PR #40)",
+  "comparisons": {
+    "a - base": {
+      "pair": "a - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 35,
+        "ref": 39,
+        "discordant_ref_only_b": 5,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 0.2188,
+        "newcombe_ci95": [
+          -0.244,
+          0.0586
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0145,
+        "bootstrap_ci95": [
+          -0.032,
+          0.0669
+        ],
+        "mde": 0.073,
+        "flag": "FLAT"
+      }
+    },
+    "control - base": {
+      "pair": "control - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 34,
+        "ref": 39,
+        "discordant_ref_only_b": 6,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 0.125,
+        "newcombe_ci95": [
+          -0.2697,
+          0.0392
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0262,
+        "bootstrap_ci95": [
+          -0.0698,
+          0.0174
+        ],
+        "mde": 0.0623,
+        "flag": "FLAT"
+      }
+    },
+    "mtp - base": {
+      "pair": "mtp - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 37,
+        "ref": 39,
+        "discordant_ref_only_b": 3,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 0.625,
+        "newcombe_ci95": [
+          -0.191,
+          0.097
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0523,
+        "bootstrap_ci95": [
+          0.0058,
+          0.1047
+        ],
+        "mde": 0.0711,
+        "flag": "UP"
+      }
+    },
+    "a - control": {
+      "pair": "a - control",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 35,
+        "ref": 34,
+        "discordant_ref_only_b": 0,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 1.0,
+        "newcombe_ci95": [
+          -0.1461,
+          0.1913
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0407,
+        "bootstrap_ci95": [
+          0.0,
+          0.0872
+        ],
+        "mde": 0.0635,
+        "flag": "FLAT"
+      }
+    },
+    "mtp - a": {
+      "pair": "mtp - a",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 37,
+        "ref": 35,
+        "discordant_ref_only_b": 0,
+        "discordant_arm_only_c": 2,
+        "mcnemar_p": 0.5,
+        "newcombe_ci95": [
+          -0.1134,
+          0.205
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0378,
+        "bootstrap_ci95": [
+          0.0058,
+          0.0814
+        ],
+        "mde": 0.0565,
+        "flag": "UP"
+      }
+    },
+    "mtp - control": {
+      "pair": "mtp - control",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 37,
+        "ref": 34,
+        "discordant_ref_only_b": 0,
+        "discordant_arm_only_c": 3,
+        "mcnemar_p": 0.25,
+        "newcombe_ci95": [
+          -0.0938,
+          0.2306
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0785,
+        "bootstrap_ci95": [
+          0.0349,
+          0.1308
+        ],
+        "mde": 0.0699,
+        "flag": "UP"
+      }
+    },
+    "grpo - base": {
+      "pair": "grpo - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 40,
+        "ref": 39,
+        "discordant_ref_only_b": 0,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 1.0,
+        "newcombe_ci95": [
+          -0.106,
+          0.1545
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0029,
+        "bootstrap_ci95": [
+          -0.0407,
+          0.0349
+        ],
+        "mde": 0.0553,
+        "flag": "FLAT"
+      }
+    },
+    "grpo - control": {
+      "pair": "grpo - control",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 40,
+        "ref": 34,
+        "discordant_ref_only_b": 1,
+        "discordant_arm_only_c": 7,
+        "mcnemar_p": 0.0703,
+        "newcombe_ci95": [
+          -0.0107,
+          0.2894
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0233,
+        "bootstrap_ci95": [
+          -0.0233,
+          0.0698
+        ],
+        "mde": 0.0662,
+        "flag": "FLAT"
+      }
+    },
+    "grpo - a": {
+      "pair": "grpo - a",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 40,
+        "ref": 35,
+        "discordant_ref_only_b": 1,
+        "discordant_arm_only_c": 6,
+        "mcnemar_p": 0.125,
+        "newcombe_ci95": [
+          -0.03,
+          0.2637
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0174,
+        "bootstrap_ci95": [
+          -0.0727,
+          0.0349
+        ],
+        "mde": 0.0778,
+        "flag": "FLAT"
+      }
+    },
+    "grpo - mtp": {
+      "pair": "grpo - mtp",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 40,
+        "ref": 37,
+        "discordant_ref_only_b": 1,
+        "discordant_arm_only_c": 4,
+        "mcnemar_p": 0.375,
+        "newcombe_ci95": [
+          -0.0681,
+          0.2105
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0552,
+        "bootstrap_ci95": [
+          -0.1105,
+          -0.0029
+        ],
+        "mde": 0.0767,
+        "flag": "DOWN"
+      }
+    }
+  },
+  "tree": {
+    "cell": "R2-RETHINK",
+    "why": "content null at this scale (A~base, A~control)",
+    "d3_mtp_overlay": {
+      "flag": "UP",
+      "reading": "MTP joins round-2 default recipe"
+    },
+    "grpo_overlay": {
+      "flag": "FLAT",
+      "vs_control": "FLAT",
+      "vs_mtp": "DOWN",
+      "reading": "GRPO flat vs base at k=8 (MDE in block); joins r2 arm-4 via the trainability precondition only (#24)"
+    },
+    "t5_gate": "any advancing arm must show t5 non-regression"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "ticket": "W1-FLOOR",
+  "ts": "20260610T225450Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1w-q3-grpo",
+    "split": "validation",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 16,
+    "tag": "g1-grpo",
+    "calibrate": false,
+    "focus_from": null,
+    "focus_max_rate": 0.75,
+    "ext_verify": false
+  },
+  "n_tasks": 43,
+  "k": 8,
+  "feed_tasks": 40,
+  "feed_pct": 93.02,
+  "feed_ci95": [
+    83.72,
+    100.0
+  ],
+  "verified_samples": 225,
+  "verified_sample_pct": 65.41,
+  "extraction_fail": 0,
+  "gen_secs": 163.4,
+  "samples_file": "w1-floor-g1-grpo-20260610T225450Z-samples.jsonl",
+  "split_discipline": "train=world pool, validation=heldout, test=t5-harm-only"
+}
