@@ -1,0 +1,71 @@
+{
+  "ticket": "NC0-T0",
+  "ts": "2026-06-09T22:28:22.997093+00:00",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+  "checks": {
+    "gpu": {
+      "ok": true,
+      "value": {
+        "torch": "2.6.0+cu124",
+        "cuda_available": true,
+        "device": "NVIDIA GeForce RTX 4090",
+        "vram_free_gb": 24.1,
+        "vram_total_gb": 25.76
+      }
+    },
+    "versions": {
+      "ok": true,
+      "value": {
+        "transformers": "5.2.0",
+        "unsloth": "2026.3.3",
+        "trl": "0.24.0",
+        "peft": "0.18.1",
+        "datasets": "4.3.0",
+        "vllm": null,
+        "accelerate": "1.13.0",
+        "bitsandbytes": "0.49.2",
+        "xformers": "0.0.29.post3",
+        "numpy": "2.4.2"
+      }
+    },
+    "nvidia_smi": {
+      "ok": true,
+      "value": "NVIDIA GeForce RTX 4090, 24564 MiB, 2004 MiB"
+    },
+    "hf_cache": {
+      "ok": true,
+      "value": {
+        "path": "/home/jun/.cache/huggingface/hub",
+        "exists": false
+      }
+    },
+    "arc_corpus": {
+      "ok": true,
+      "value": {
+        "dir": "/mnt/b/M/the-search/incoming/arc-agi1-visa/ARC-AGI",
+        "exists": true,
+        "training": {
+          "path": "/mnt/b/M/the-search/incoming/arc-agi1-visa/ARC-AGI/data/training",
+          "json_count": 400
+        },
+        "evaluation": {
+          "path": "/mnt/b/M/the-search/incoming/arc-agi1-visa/ARC-AGI/data/evaluation",
+          "json_count": 400
+        }
+      }
+    },
+    "disk": {
+      "ok": true,
+      "value": {
+        "home": {
+          "free_gb": 922.6,
+          "total_gb": 1081.1
+        },
+        "mnt_b": {
+          "free_gb": 414.0,
+          "total_gb": 1754.6
+        }
+      }
+    }
+  }
+}

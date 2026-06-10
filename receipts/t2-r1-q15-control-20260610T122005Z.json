@@ -1,0 +1,19 @@
+{
+  "ticket": "NC0-T2",
+  "round": 1,
+  "control": true,
+  "model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+  "ts": "20260610T122005Z",
+  "dataset": {
+    "n_examples": 1909,
+    "n_tasks": 1909
+  },
+  "training": {
+    "train_loss": 0.143,
+    "steps": 360,
+    "n_examples": 1909,
+    "n_texts_after_repeat": 1909,
+    "secs": 1220.8
+  },
+  "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1-q15-control"
+}

@@ -1,0 +1,19 @@
+{
+  "ticket": "NC0-T2",
+  "round": 1,
+  "control": true,
+  "model": "unsloth/Qwen2.5-Coder-7B-Instruct",
+  "ts": "20260610T052546Z",
+  "dataset": {
+    "n_examples": 1909,
+    "n_tasks": 1909
+  },
+  "training": {
+    "train_loss": 0.1343,
+    "steps": 360,
+    "n_examples": 1909,
+    "n_texts_after_repeat": 1909,
+    "secs": 2035.9
+  },
+  "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1-control"
+}

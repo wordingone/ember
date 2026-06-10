@@ -1,0 +1,14 @@
+{
+  "ticket": "NC0-T3b-DIAG",
+  "ts": "20260610T015000Z",
+  "provenance": "RESULT line from executed daemon job a5c3641e log (verbatim below). Two-mode comparison aborted by daemon arg-injection: daemon appended '--lora-path' to the script invocation, argv dispatch routed to a single probe with mode='--lora-path' (= unpinned/native: the 'pinned' branch never fired). That single native run is decisive on both hypotheses.",
+  "verbatim_result_line": "RESULT {\"mode\": \"--lora-path\", \"pairs_generated\": 48, \"gen_exhausted\": 0, \"solver_pass\": 25, \"verifier_pass\": 48, \"solver_error\": 6, \"verifier_error\": 0}",
+  "config": {"n_tasks": 12, "pairs_per_task": 4, "diff_ub": 0.5, "seed": 14},
+  "findings": {
+    "H1_generation_under_pinned_dsl": "CONFIRMED indirectly: native generation = 0 exhausted (48/48) vs t3 production (pinned) = 168 exhausted variants + v1 diag hang pattern (alarm-retry loops, >20min/mode).",
+    "H2_solver_verifier_divergence": "CONFIRMED directly: re-arc verifiers.py passes 48/48 generated pairs; original arc-dsl solvers pass 25/48 (52%) with 6 errors. verifiers.py is the correct program text for the augmented distribution.",
+    "explains_t3_26pct": "t3 used solver text on augmented pairs (52% ceiling at diff 0.5, lower at 0.7/1.0) under pinned-dsl generation (exhaustion + corruption)."
+  },
+  "decision": "t3 seed v2 (pending layer): generate under re-arc NATIVE dsl; augmented episodes use verifiers.py program text (same MIT, wrapped like solvers); switch sandbox world-library to re-arc's dsl copy; re-verify ALL episodes (existing 767 included) under the unified dsl. Expected ledger ~2000. Runs parallel; does NOT block tonight's r1 train on the current 767.",
+  "lesson_daemon": "Eval scripts must not dispatch on argv — the daemon appends its own args (e.g. --lora-path). Use env vars or self-contained mains."
+}

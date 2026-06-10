@@ -1,0 +1,45 @@
+{
+  "ticket": "NC0-T3-SEED-v2",
+  "ts": "20260610T021308Z",
+  "seed": 14,
+  "v2": "native re-arc dsl generation; verifiers.py text for augmented episodes; unified sandbox dsl; fresh ledger (v1 archived)",
+  "config": {
+    "n_variants": 4,
+    "diffs": [
+      0.3,
+      0.5,
+      0.7,
+      1.0
+    ],
+    "pairs_per_variant": 4,
+    "max_prompt_chars": 10000
+  },
+  "phase_a": {
+    "solvers_parsed": 400
+  },
+  "phase_b": {
+    "verified_orig": 399,
+    "failed_orig": [
+      {
+        "task": "e40b9e2f",
+        "error": null,
+        "train_pass": 0
+      }
+    ]
+  },
+  "phase_c": {
+    "variant_jobs": 1566,
+    "aug_verified": 1510,
+    "gen_fail": [],
+    "gen_fail_count": 0,
+    "prompt_skips": 30,
+    "no_generator": []
+  },
+  "phase_d": {
+    "controls_written": 1909,
+    "accidental_pass_dropped": 0
+  },
+  "episodes_total": 1909,
+  "episodes_written_new": 1909,
+  "secs": 15.3
+}

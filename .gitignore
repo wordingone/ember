@@ -1,0 +1,10 @@
+# Weights stay out of git — every adapter's size+provenance is pinned in the
+# t2 receipt that gated it (receipts/t2-*.json).
+adapters/
+
+# Third-party clones (arc-dsl, re-arc, ARC-AGI-2 — MIT) carry their own .git;
+# provenance = clone URL + SHA recorded in STATE.md / receipts, not vendoring.
+vendor/
+
+__pycache__/
+*.tmp
