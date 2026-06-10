@@ -195,6 +195,25 @@ def main():
             _p.data = _p.data.to(torch.bfloat16)
             n_cast += 1
     print(f"[t2_grpo] fp32 params collapsed to bf16: {n_cast}", flush=True)
+    # Attempt 6 (eng #24; v5 receipt e75e2ae6: 686 fp32 params collapsed,
+    # SAME lm_head seam => the Float input is an ACTIVATION upcast inside
+    # TRL's forward path (logprob pass / autocast-off generation), not a
+    # parameter dtype). Break the wall AT the seam: a forward pre-hook on
+    # lm_head casts any floating-point input to the weight dtype before the
+    # matmul (.to() is autograd-safe) — works wherever the upcast
+    # originates, including code paths we don't control.
+    _lm = model.get_output_embeddings()
+
+    def _cast_to_weight_dtype(mod, inputs):
+        wd = mod.weight.dtype
+        return tuple(
+            x.to(wd) if torch.is_tensor(x) and x.is_floating_point()
+            and x.dtype != wd else x
+            for x in inputs)
+
+    _lm.register_forward_pre_hook(_cast_to_weight_dtype)
+    print(f"[t2_grpo] lm_head pre-hook armed: activations -> "
+          f"{_lm.weight.dtype}", flush=True)
 
     problems = load_split("train")
     problems_by_id = {p["id"]: p for p in problems}
