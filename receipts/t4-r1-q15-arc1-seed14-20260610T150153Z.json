@@ -1,7 +1,26 @@
 {
-  "fingerprint": "0540b49ed1ffd1f3",
-  "chunks_done": 4,
+  "ticket": "NC0-T4-CHUNKED",
+  "round": 1,
+  "ts": "20260610T150153Z",
+  "surface": "arc1",
+  "tag_suffix": "-q15",
+  "args": {
+    "round": 1,
+    "model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "n_tasks": 100,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 768,
+    "temp": 0.8,
+    "seed": 14,
+    "surface": "arc1",
+    "chunk_size": 25,
+    "min_tasks_stop": 50,
+    "tag_suffix": "-q15"
+  },
   "n_tasks_done": 100,
+  "stopped_early": false,
+  "stop_reason": null,
   "arms": {
     "core_only": {
       "n_tasks": 100,
@@ -40,16 +59,12 @@
       "verify_any_pct": 0.0
     }
   },
-  "deltas": {
-    "delta_meta_minus_core_ci95": [
-      0.0,
-      0.0
-    ],
-    "delta_meta_minus_control_ci95": [
-      0.0,
-      0.0
-    ]
-  },
-  "skipped_arms": {},
-  "stopped": false
+  "delta_meta_minus_core_ci95": [
+    0.0,
+    0.0
+  ],
+  "delta_meta_minus_control_ci95": [
+    0.0,
+    0.0
+  ]
 }
