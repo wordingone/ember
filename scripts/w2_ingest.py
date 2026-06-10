@@ -35,12 +35,14 @@ def sha(s):
     return hashlib.sha1(s.encode()).hexdigest()[:16]
 
 
-def samples_to_records(rows, round_n):
+def samples_to_records(rows, round_n, ts="", receipt=""):
     """w1 sample rows -> (verified_records, failed_records). Pure.
 
-    Key scheme + fields mirror t2_round.ingest_samples; adds prompt/sampler
-    passthrough. "solved" mirrors "verified" for W-code: the MBPP harness'
-    asserts ARE the task's full test, there is no separate held-back test pair.
+    Emits ledger schema v3 (docs/ledger-schema-v3.md): explicit verified/ts/
+    origin/receipt on every record — origin absorbs the w1 sampler identity
+    (one provenance field; sampler kept as passthrough for leave-set-out
+    tooling). "solved" mirrors "verified" for W-code: the MBPP harness'
+    asserts ARE the task's full test, there is no separate held-back pair.
     """
     verified, failed = [], []
     for row in rows:
@@ -49,6 +51,9 @@ def samples_to_records(rows, round_n):
             continue
         rec = {"key": f"{row['task']}:{sha(src)}",
                "task": row["task"], "src": src,
+               "verified": bool(row.get("verified")),
+               "ts": ts, "receipt": receipt,
+               "origin": row.get("sampler") or "w1-floor",
                "round": round_n, "solved": bool(row.get("verified"))}
         for field in ("prompt", "sampler"):
             if row.get(field):
@@ -79,10 +84,12 @@ def main():
     rows, files = load_rows(args.samples)
     if not rows:
         raise SystemExit(f"w2_ingest: no rows matched {args.samples}")
-    verified, failed = samples_to_records(rows, args.round)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    verified, failed = samples_to_records(
+        rows, args.round, ts=ts, receipt=f"w2-ingest-{ts}.json")
 
     receipt = {"ticket": "W2-INGEST",
-               "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+               "ts": ts,
                "args": vars(args), "files": files, "rows_read": len(rows),
                "verified_records": len(verified),
                "control_records": len(failed),
