@@ -1,0 +1,44 @@
+{
+  "ticket": "NC0-T2-GRPO-FAILTRAIL",
+  "note": "Failed integration attempts crash before the script's receipt write, so this artifact IS the committed receipt of the iteration (per Kai FLAG 14432: 'receipted' claims require committed receipt files). Error signatures captured from the train-daemon job API log_tail at terminal; diagnostics from in-job prints.",
+  "attempts": [
+    {
+      "n": 1, "job_id": "e8013346", "ts": "2026-06-10T21:50Z",
+      "stack": "unsloth FastLanguageModel + PatchFastRL(try) + vanilla TRL GRPOTrainer",
+      "error": "RuntimeError: self and mat2 must have the same dtype, but got Half and Float",
+      "site": "unsloth/kernels/utils.py:1043 matmul_lora out.addmm_(XA, B.to(dtype))",
+      "step": "0/60 (~56s in, during first generation/forward)",
+      "fix_applied_next": "PatchFastRL applied-logging + LoRA fp32->bf16 cast (commit cc627f0)"
+    },
+    {
+      "n": 2, "job_id": "e68e6ae8", "ts": "2026-06-10T21:55Z",
+      "stack": "same as attempt 1 + lora cast",
+      "error": "identical to attempt 1",
+      "diagnostics": "[t2_grpo] PatchFastRL applied: True; [t2_grpo] lora params cast fp32->bf16: 504 — both candidate fixes confirmed APPLIED and both insufficient: structural (patch re-upcasts LoRA fp32, inference path generates fp16)",
+      "fix_applied_next": "remove unsloth from this arm entirely: transformers + bnb-4bit(bf16, nf4, double-quant) + PEFT via TRL peft_config (commit 426ab90)"
+    },
+    {
+      "n": 3, "job_id": "4b763324", "ts": "2026-06-10T21:58Z",
+      "stack": "vanilla transformers + bnb + TRL peft_config",
+      "error": "AttributeError: 'Qwen2ForCausalLM' object has no attribute 'warnings_issued'",
+      "site": "trl/trainer/grpo_trainer.py:406 (transformers 5.2 removed the attribute; this TRL still touches it)",
+      "interpretation": "NEW error = the kernel wall is broken; remaining failures are version-skew seams",
+      "fix_applied_next": "shim model.warnings_issued = {} (commit cb86d2d)"
+    },
+    {
+      "n": 4, "job_id": "dcfd0e53", "ts": "2026-06-10T22:01Z",
+      "stack": "same as attempt 3 + shim",
+      "error": "RuntimeError: expected scalar type BFloat16 but found Float",
+      "site": "modeling_qwen2.py:490 lm_head forward — TRL kbit-prep upcasts LN/lm_head to fp32 against bf16 hidden states",
+      "fix_applied_next": "self-wrap PEFT (prepare_model_for_kbit_training + get_peft_model), collapse ALL fp32 params to bf16 with logged count, pass pre-wrapped model so TRL skips its prep (commit 1ff0617)"
+    }
+  ],
+  "attempt_5": {
+    "job_id": "e75e2ae6", "ts": "2026-06-10T22:05Z",
+    "stack": "vanilla + self-wrapped PEFT + all-params bf16 collapse",
+    "error": "identical to attempt 4 (lm_head: expected BFloat16 but found Float)",
+    "diagnostics": "[t2_grpo] fp32 params collapsed to bf16: 686 — collapse RAN; the Float input to lm_head is therefore NOT a parameter dtype: it is an activation upcast inside TRL's forward path (suspect: logprob pass upcasting hidden states, or autocast-off generation context)",
+    "decision": "STARVATION GUARD FIRED — same seam twice, stop iterating this tick; v_extended FPR + four-way G1 (base/A/control/MTP) take the chain; GRPO iteration resumes next tick from the activation-upcast hypothesis"
+  },
+  "starvation_guard": "per STATE: if attempt 5 fails on a new seam, fire v_extended FPR + four-way G1 (base/A/control/MTP) and iterate GRPO next tick — the verdict chain does not starve behind one arm"
+}

@@ -1,0 +1,49 @@
+{
+  "ticket": "NC0-T2-MTP",
+  "ts": "20260610T214222Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "tag": "r1w-q3-mtp",
+    "k_aux": 3,
+    "lam": 0.3
+  },
+  "world": "mbpp",
+  "round": 1,
+  "dataset": {
+    "n_examples": 294,
+    "n_tasks": 109,
+    "identical_to_arm_A": true
+  },
+  "train_loss": 24.2695,
+  "lm_loss_first5": [
+    1.9654,
+    2.0834,
+    1.9364,
+    2.1434,
+    1.7047
+  ],
+  "lm_loss_last5": [
+    0.1659,
+    0.248,
+    0.0877,
+    0.0957,
+    0.1929
+  ],
+  "aux_loss_first5": [
+    11.9312,
+    11.9312,
+    11.9312,
+    11.9312,
+    11.9312
+  ],
+  "aux_loss_last5": [
+    3.1277,
+    2.8002,
+    3.1651,
+    2.1609,
+    2.3243
+  ],
+  "train_secs": 252.5,
+  "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1w-q3-mtp",
+  "aux_heads_file": "mtp_aux_heads.pt (scaffold \u2014 unused at inference)"
+}
