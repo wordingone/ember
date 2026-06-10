@@ -143,7 +143,9 @@ def main():
                       labels=labels, output_hidden_states=True,
                       use_cache=False)
             lm_loss = out.loss
-            h = out.hidden_states[-1]
+            # unsloth emits hidden_states in float32; aux heads + lm_head
+            # are bf16 (integration-test fix 474440aa: mat1 float vs bf16)
+            h = out.hidden_states[-1].to(aux_heads[0].weight.dtype)
             aux_losses = []
             for d, head in enumerate(aux_heads, start=1):
                 logits_d = lm_head(head(h))
