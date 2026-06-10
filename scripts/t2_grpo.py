@@ -63,6 +63,18 @@ def shaped_reward(extracted, verified):
     return R_VERIFIED if verified else R_RUNNABLE
 
 
+def shaped_reward_partial(extracted, frac):
+    """Row-9 arm (eng #15): reward = fraction of asserts passed — denser
+    training-only signal, same extremes as the binary table. THE GATE STAYS
+    BINARY (verified/not); this never touches verification. Floor at
+    R_RUNNABLE keeps the anti-degenerate shaping (a runnable program that
+    fails every assert still beats no program); all asserts passed -> 1.0,
+    identical to R_VERIFIED."""
+    if extracted is None:
+        return R_NONE
+    return max(R_RUNNABLE, frac)
+
+
 def build_prompt_rows(problems, stats, repeats=None):
     """MBPP problems + pooled (s,n) stats -> GRPO dataset rows with
     bits-weighted repetition. Row: conversational prompt + task_id column
@@ -83,8 +95,14 @@ def build_prompt_rows(problems, stats, repeats=None):
     return rows
 
 
-def make_reward_fn(problems_by_id, counter):
-    """Closure executing each completion in the t1_probe sandbox."""
+def make_reward_fn(problems_by_id, counter, mode="binary"):
+    """Closure executing each completion in the t1_probe sandbox.
+
+    mode="binary" (default, pre-registered eng #13 arm): one sandbox job
+    per completion, all asserts joined — reward per shaped_reward.
+    mode="partial" (row-9 arm, eng #15): one sandbox job PER ASSERT —
+    reward per shaped_reward_partial (fraction passed). Sandbox cost
+    multiplies by the assert count (~3x on MBPP); execute_batch pools."""
     from t1_probe import execute_batch, extract_code
 
     def verify_reward(prompts, completions, task_id=None, **kwargs):
@@ -94,15 +112,34 @@ def make_reward_fn(problems_by_id, counter):
             if src is None:
                 continue
             p = problems_by_id[int(task_id[i])]
-            harness = "\n".join(p["imports"]) + "\n" + src + "\n" + \
-                "\n".join(p["tests"]) + SOLVE_STUB
-            jobs.append((harness, [], []))
-            idx.append(i)
+            # p["tests"] elements are top-level MBPP assert statements;
+            # each is independently executable after imports + src.
+            tests = p["tests"] if mode == "partial" \
+                else ["\n".join(p["tests"])]
+            for t in tests:
+                harness = "\n".join(p["imports"]) + "\n" + src + "\n" + \
+                    t + SOLVE_STUB
+                jobs.append((harness, [], []))
+                idx.append(i)
         results = execute_batch(jobs) if jobs else []
-        ok = {i: bool(r.get("verified")) and not r.get("error")
-              for i, r in zip(idx, results)}
-        rewards = [shaped_reward(srcs[i], ok.get(i, False))
-                   for i in range(len(completions))]
+        passed, total = {}, {}
+        for i, r in zip(idx, results):
+            total[i] = total.get(i, 0) + 1
+            passed[i] = passed.get(i, 0) + \
+                (1 if bool(r.get("verified")) and not r.get("error") else 0)
+        if mode == "partial":
+            rewards = [shaped_reward_partial(
+                srcs[i], passed.get(i, 0) / total[i] if total.get(i) else 0.0)
+                for i in range(len(completions))]
+            counter["asserts_passed"] = \
+                counter.get("asserts_passed", 0) + sum(passed.values())
+            counter["asserts_total"] = \
+                counter.get("asserts_total", 0) + sum(total.values())
+        else:
+            ok = {i: total.get(i, 0) > 0 and passed[i] == total[i]
+                  for i in idx}
+            rewards = [shaped_reward(srcs[i], ok.get(i, False))
+                       for i in range(len(completions))]
         counter["batches"] += 1
         counter["completions"] += len(rewards)
         counter["verified"] += sum(1 for r in rewards if r == R_VERIFIED)
@@ -125,6 +162,11 @@ def main():
     ap.add_argument("--lr", type=float, default=5e-6)
     ap.add_argument("--temp", type=float, default=0.8)
     ap.add_argument("--seed", type=int, default=3407)
+    ap.add_argument("--reward", choices=["binary", "partial"],
+                    default="binary",
+                    help="binary = pre-registered eng #13 shaping table; "
+                         "partial = per-assert fraction (row-9 arm, eng #15;"
+                         " training-only — THE GATE STAYS BINARY)")
     args, _unknown = ap.parse_known_args()  # daemon appends args
 
     import sys
@@ -217,6 +259,16 @@ def main():
 
     problems = load_split("train")
     problems_by_id = {p["id"]: p for p in problems}
+    if args.reward == "partial":
+        # Fail-closed (adversarial-review finding): a zero-assert problem in
+        # partial mode would silently score extracted code at the floor and
+        # void the asserts_total counter invariant. w1 MBPP rows always carry
+        # asserts; if that ever changes, refuse the launch instead.
+        empty = [p["id"] for p in problems if not p["tests"]]
+        if empty:
+            raise SystemExit(
+                f"--reward partial requires asserts on every problem; "
+                f"empty tests for ids {empty[:10]}")
     rows = []
     with_stats = []
     for path in args.stats_from:
@@ -243,7 +295,8 @@ def main():
         bf16=True, seed=args.seed)
     trainer = GRPOTrainer(
         model=model, processing_class=tok,
-        reward_funcs=[make_reward_fn(problems_by_id, counter)],
+        reward_funcs=[make_reward_fn(problems_by_id, counter,
+                                     mode=args.reward)],
         args=config,  # model pre-wrapped: TRL must skip its own kbit prep
         train_dataset=Dataset.from_list(rows),
         callbacks=[_Headroom()])
@@ -256,11 +309,16 @@ def main():
     rewards = [h["reward"] for h in trainer.state.log_history
                if "reward" in h]
     from receipt_fp import args_fingerprint  # eng #10
+    # args_fp note: adding --reward shifts fingerprints for ALL runs vs
+    # pre-eng-15 receipts (vars(args) gained a key). The invariant "same fp
+    # == byte-identical args" still holds; cross-version joins pin tags,
+    # not fingerprints.
     receipt = {
         "ticket": "NC0-T2-GRPO", "ts": ts, "args": vars(args),
         "args_fp": args_fingerprint(vars(args)),
         "governor": governor_block,
-        "world": "mbpp", "round": 1, "prompt_rows": len(rows),
+        "world": "mbpp", "round": 1, "reward_mode": args.reward,
+        "prompt_rows": len(rows),
         "prompt_mix": {st: sum(1 for r in rows if r["stratum"] == st)
                        for st in STRATUM_REPEATS},
         "sandbox": counter,
@@ -285,6 +343,13 @@ def _selftest():
     assert shaped_reward(None, False) == R_NONE
     assert shaped_reward("def f(): pass", False) == R_RUNNABLE
     assert shaped_reward("def f(): pass", True) == R_VERIFIED
+    # partial-credit variant (eng #15): same extremes, dense middle,
+    # R_RUNNABLE floor preserved
+    assert shaped_reward_partial(None, 1.0) == R_NONE
+    assert shaped_reward_partial("def f(): pass", 0.0) == R_RUNNABLE
+    assert shaped_reward_partial("def f(): pass", 1.0) == R_VERIFIED
+    assert shaped_reward_partial("def f(): pass", 2 / 3) == 2 / 3
+    assert shaped_reward_partial("def f(): pass", 0.01) == R_RUNNABLE
     # prompt-mix weighting (pure parts of build_prompt_rows, inlined to stay
     # Windows-safe: w1_mbpp imports t1_probe -> POSIX resource)
     import sys
