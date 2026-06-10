@@ -1,0 +1,42 @@
+{
+  "ticket": "NC0-T5",
+  "round": 1,
+  "ts": "20260610T203520Z",
+  "n_problems": 50,
+  "args": {
+    "round": 1,
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "arms": [
+      "core_only",
+      "core_meta"
+    ],
+    "k": 4,
+    "batch_size": 8,
+    "temp": 0.6,
+    "seed": 14,
+    "tag_suffix": "-q3"
+  },
+  "arms": {
+    "core_only": {
+      "pass_any_pct": 90.0,
+      "ci95": [
+        82.0,
+        98.0
+      ],
+      "gen_secs": 83.2
+    },
+    "core_meta": {
+      "pass_any_pct": 74.0,
+      "ci95": [
+        62.0,
+        86.0
+      ],
+      "gen_secs": 111.8
+    }
+  },
+  "delta_meta_minus_core_ci95": [
+    -28.0,
+    -4.0
+  ],
+  "harm_flag": true
+}
