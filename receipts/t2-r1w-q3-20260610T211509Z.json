@@ -1,0 +1,53 @@
+{
+  "ticket": "NC0-T2-WCODE",
+  "ts": "20260610T211509Z",
+  "control": false,
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "world": "mbpp",
+  "round": 1,
+  "ledger_records_world": 956,
+  "frontier": {
+    "easy": {
+      "tasks": 67,
+      "episodes": 498,
+      "post_cap": 134,
+      "dropped": 364,
+      "bits_banked": 25.83
+    },
+    "mid": {
+      "tasks": 28,
+      "episodes": 410,
+      "post_cap": 112,
+      "dropped": 298,
+      "bits_banked": 105.97
+    },
+    "frontier": {
+      "tasks": 14,
+      "episodes": 48,
+      "post_cap": 48,
+      "dropped": 0,
+      "bits_banked": 120.4
+    },
+    "dead": {
+      "tasks": 0,
+      "episodes": 0,
+      "post_cap": 0,
+      "dropped": 0,
+      "bits_banked": 0.0
+    },
+    "total_bits_banked": 252.2
+  },
+  "dataset": {
+    "n_examples": 294,
+    "n_tasks": 109
+  },
+  "excluded": "ARC seed episodes (off-policy DSL, t5 harm receipt 20260610T203520Z)",
+  "training": {
+    "train_loss": 0.4984,
+    "steps": 57,
+    "n_examples": 294,
+    "n_texts_after_repeat": 294,
+    "secs": 281.3
+  },
+  "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1w-q3"
+}
