@@ -83,6 +83,20 @@ READING NOTES (binding):
   machine (chunked/resumable, sequential early-stopping); the NC2-own
   component contract is the design language of the main track, not a
   destination appendix.
+- PROBLEM-LEVEL CALIBRATION (user 2026-06-10, clarifying the portfolio
+  pointers): the references to the-search / WEB-CAD / upstream-fork problem
+  spaces were NOT a directive to divert focus onto those tracks — they set
+  the LEVEL ember's work must live at: real problems the existing industry
+  dependencies do not solve, never optimizations centered around existing
+  dependencies. Operative test on any work item: "does any HF/llama.cpp/
+  vllm/unsloth-class dependency already do this?" If yes, it is
+  instrumentation — necessary plumbing, never the contribution; spend
+  minimum effort and never let it occupy the center of a work window. The
+  contribution layer is what no dependency provides: the verifier-gated
+  experience ledger, the three-test gate incl. on self-edits, the invariant-
+  gated self-editing kernel, residency-bounded accumulation, owned mass.
+  Wait-window priority follows this split: unsolved-layer items outrank
+  dependency-layer optimization always.
 - RESIDENT FORM = CONSTANT THINKING, EPISODIC DEPTH (user 2026-06-10,
   literature-checked same day): ember's runtime is an event-driven
   PERPETUAL loop, not a request-response REPL — a small always-on resident
