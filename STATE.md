@@ -91,7 +91,7 @@ Borrowed-core NC0 is rehearsal; ember's end-state is owned mass, not owned delta
 
 ## Branch registry — every staged-not-fired bet carries a fire-condition (collab-audit U2, 2026-06-10)
 
-No registered branch may exist without a fire-condition or review date. Registry size reported at verdict-class events. Kills require the user, by name.
+No registered branch may exist without a fire-condition or review date. Verdict-class events report NET FLOW (rows added/retired since last verdict), not just size. Consolidation rule (user backlog concern 2026-06-10): a method-variant of an existing experiment is an ARM of that row, never a new row. Kills require the user, by name.
 
 | # | Branch | Fires when | Status |
 |---|---|---|---|
@@ -103,7 +103,7 @@ No registered branch may exist without a fire-condition or review date. Registry
 | 6 | Teacher-admission probe (w1 + ~7B coder, ~5GB pull) | W-code admitted AND feed math favors a teacher | registered |
 | 7 | `t1c_run_q15.py` (contamination) | first idle window post round-1 chain | staged |
 | 8 | 7B retained four-arm evals (chunked, ~11h paced) | overnight idle windows; REVIEW 2026-06-17 — kill candidate if small-core verdicts moot it | staged |
-| 9 | Round-2 self-generation (`t2_round --round 2`) | round-1 verdict gated; k from verify% | REQUIRED for goal |
+| 9 | Round-2 self-generation (`t2_round --round 2`) | round-1 verdict gated; k from verify% | REQUIRED for goal — design arms per `research/bottleneck-conversion-2026-06-10.md` §2: plain SFT (baseline) vs MTP-aux-SFT vs GRPO-on-verifier-reward (3B is above the 1.5B GRPO floor; control_pool = contrast material); method variants are ARMS of this row, never new rows |
 | 10 | NC1c IFC world build | NC0 verdict lands | registered |
 | 11 | NC1d ARC-AGI-3 policy world | NC0 verdict lands | registered |
 | 12 | NC-K kernel detail design | NC0 verdict lands (contract + map on disk) | registered |
