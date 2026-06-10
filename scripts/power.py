@@ -85,6 +85,81 @@ def n_required(p0, delta, z_alpha=Z975, z_beta=Z80):
                      / (delta * delta))
 
 
+def paired_se(rates_ref, delta, k):
+    """SE of the mean paired per-task rate difference at sampling depth k.
+
+    Binomial sampling noise per task for both arms at true rates p (ref)
+    and p+delta (arm, clipped to [0,1]); homogeneous true delta, so
+    between-task delta variance is 0 by construction (stated assumption —
+    heterogeneous true effects make the real SE larger)."""
+    n = len(rates_ref)
+    tot = 0.0
+    for p in rates_ref:
+        pa = min(1.0, max(0.0, p + delta))
+        tot += pa * (1 - pa) / k + p * (1 - p) / k
+    return math.sqrt(tot / (n * n))
+
+
+def mde_paired_rates(rates_ref, k, z_alpha=Z975, z_beta=Z80, tol=1e-7):
+    """Minimum detectable homogeneous shift for the paired sample-level
+    design (validation task set rates_ref, k samples/task/arm). Fixed-point
+    on the shift-dependent SE, as in mde_two_prop."""
+    delta = 0.05
+    for _ in range(200):
+        new = (z_alpha + z_beta) * paired_se(rates_ref, delta, k)
+        if abs(new - delta) < tol:
+            return new
+        delta = new
+    return delta
+
+
+def power_mc_paired(rates_ref, delta, k, sims=2000, seed=16, z=Z975):
+    """Monte-Carlo power of the paired sample-level test: per sim, draw
+    Bin(k, p+delta) vs Bin(k, p) per task, reject when |mean diff| exceeds
+    z * estimated SE (normal proxy for the registered bootstrap CI).
+    Returns rejection fraction."""
+    import random as _r
+    rng = _r.Random(seed)
+    n = len(rates_ref)
+    rej = 0
+    for _ in range(sims):
+        diffs = []
+        for p in rates_ref:
+            pa = min(1.0, max(0.0, p + delta))
+            sa = sum(1 for _ in range(k) if rng.random() < pa)
+            sb = sum(1 for _ in range(k) if rng.random() < p)
+            diffs.append(sa / k - sb / k)
+        m = sum(diffs) / n
+        var = sum((d - m) ** 2 for d in diffs) / (n - 1)
+        se = math.sqrt(var / n)
+        if se > 0 and abs(m) / se > z:
+            rej += 1
+    return rej / sims
+
+
+def power_mc_feed(rates_ref, delta, k, sims=2000, seed=16):
+    """Monte-Carlo power of the task-level any-of-k (feed) McNemar exact
+    test under a homogeneous per-sample shift delta. Captures the ceiling:
+    feed probability 1-(1-p)^k saturates as k grows."""
+    import random as _r
+    from g1_paired import mcnemar_exact
+    rng = _r.Random(seed)
+    rej = 0
+    for _ in range(sims):
+        b = c = 0
+        for p in rates_ref:
+            pa = min(1.0, max(0.0, p + delta))
+            fa = any(rng.random() < pa for _ in range(k))
+            fr = any(rng.random() < p for _ in range(k))
+            if fr and not fa:
+                b += 1
+            elif fa and not fr:
+                c += 1
+        if mcnemar_exact(b, c) < 0.05:
+            rej += 1
+    return rej / sims
+
+
 def _close(a, b, tol):
     return abs(a - b) <= tol
 
@@ -123,6 +198,18 @@ def _selftest():
           f" {mde_two_prop(100, 0.01)*100:.1f}pp")
     print(f"  round-2 sizing: detect +10pp over 30% floor -> n>="
           f" {n_required(0.30, 0.10)}; +5pp -> n>= {n_required(0.30, 0.05)}")
+    # paired-design extensions (eng tracker #29)
+    rates = [0.2, 0.5, 0.8] * 14 + [0.5]  # 43 synthetic task rates
+    se8, se32 = paired_se(rates, 0.0, 8), paired_se(rates, 0.0, 32)
+    assert _close(se8 / se32, 2.0, 0.01), (se8, se32)  # SE ~ 1/sqrt(k)
+    m8, m16 = mde_paired_rates(rates, 8), mde_paired_rates(rates, 16)
+    assert m16 < m8 < 0.20 and m16 > 0.0, (m8, m16)
+    p0 = power_mc_paired(rates, 0.0, 8, sims=400)
+    assert p0 < 0.12, p0  # null rejection ~ alpha
+    p_big = power_mc_paired(rates, 0.15, 8, sims=400)
+    assert p_big > 0.85, p_big
+    pf0 = power_mc_feed(rates, 0.0, 8, sims=200)
+    assert pf0 < 0.12, pf0
     print("POWER_SELFTEST_PASS")
 
 
