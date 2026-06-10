@@ -96,3 +96,25 @@ else: expected verifier-bits per GPU-hour.
   candidates) is a harness artifact stream; the invariant set still owns the
   gate. Exteroception never gains write access to anything — it only proposes
   probes.
+
+## 6. The discovery gap, demonstrated (user, 2026-06-10, same day)
+
+The user sourced DiffusionGemma — a same-day Google release directly relevant
+to feed math (4× decode in 18GB VRAM, fits the 4090) — before I or any
+scheduled mechanism did. His framing: "at least currently I'm better than you
+or ember at sourcing external info. definitely a problem." Correct, and §5's
+"Today: I am the exteroception" was written as if the organ existed; in
+practice the sweep ran only when a thread prompted it. Sensing was designed
+but not SCHEDULED — the un-retired founder organ (O6) turned out to include
+discovery itself, carried by the user.
+
+**Fix (standing, mechanical):** registry row 18 — a bounded release-scan as a
+RECURRING wait-window item, not a one-shot: each idle tick that advances the
+queue runs ONE sweep pass over a named feed list (model-release blogs:
+Google/DeepMind, Meta, Qwen, DeepSeek, Mistral; HF trending; vLLM/llama.cpp
+release notes; arXiv cs.LG/cs.CL listings), output = typed candidates →
+contract WATCHING rows with probe shapes, or an explicit "no candidates"
+line in the tick receipt. The scan is sensing-tier (network + CPU, zero GPU,
+nothing leaves the PC beyond the queries themselves) so it never competes
+with probes. DiffusionGemma row 9 is the protocol's first execution —
+user-sourced, which is the baseline the scan has to beat.

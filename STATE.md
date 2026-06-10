@@ -112,6 +112,8 @@ No registered branch may exist without a fire-condition or review date. Registry
 | 15 | HF weights upload | first verdict-bearing adapter | standing |
 | 16 | OpenMDW SDG corpus intake (Cosmos 3) | NC2-own entry | registered |
 | 17 | W-swe (SWE-bench/SWE-smith repo-scale code world) | W-code loop turns AND a core clears a measurable SWE-class floor | registered (world-choice §7; HLE evaluated same pass — REJECTED, answer-key V) |
+| 18 | Release-scan (exteroception §6 — bounded sweep over named feeds → typed candidates → WATCHING rows) | RECURRING: every idle tick that advances the wait-window queue; "no candidates" is a recorded outcome | standing (first execution was user-sourced DiffusionGemma → contract row 9 — the baseline to beat) |
+| 19 | DiffusionGemma sampler probe (contract row 9a: w1-style MBPP floor, DiffusionGemma vs Qwen-3B, measured F) | idle GPU window AND W-code admitted (probe rides the w1 harness) | registered (~18GB pull, on-PC, no escalation) |
 
 ## Resolved layers
 
