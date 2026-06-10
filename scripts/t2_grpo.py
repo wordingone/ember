@@ -171,6 +171,10 @@ def main():
     tok = AutoTokenizer.from_pretrained(model_path)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
+    # transformers 5.2 removed PreTrainedModel.warnings_issued; this TRL
+    # still touches it in GRPOTrainer.__init__ (attempt-3 receipt 4b763324)
+    if not hasattr(model, "warnings_issued"):
+        model.warnings_issued = {}
     peft_cfg = LoraConfig(
         r=LORA["r"], lora_alpha=LORA["alpha"], lora_dropout=0.0,
         bias="none", task_type="CAUSAL_LM",
