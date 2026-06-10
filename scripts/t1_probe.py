@@ -104,7 +104,16 @@ def extract_code(text):
     if m:
         return m.group(1).strip()
     if "def solve" in text:  # unfenced fallback
-        return text[text.index("def solve"):].strip()
+        start = text.index("def solve")
+        # Ledger-style programs (t3_seed PROG_TMPL) put 'from dsl import *'
+        # and 'def _impl' ABOVE solve; cutting at solve decapitates them ->
+        # guaranteed NameError at runtime (136x '_impl' in t4-r1-q15
+        # context_only). Back start up to the earliest of those when present.
+        for pat in ("from dsl import", "def _impl"):
+            i = text.find(pat)
+            if 0 <= i < start:
+                start = i
+        return text[start:].strip()
     return None
 
 

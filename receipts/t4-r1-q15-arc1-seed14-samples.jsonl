@@ -1728,3 +1728,658 @@
 {"arm": "core_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 2}
 {"arm": "core_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "ValueError: Invalid cell value", "chunk": 2}
 {"arm": "core_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: 'tuple' object cannot be interpreted as an integer", "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 5 were given", "chunk": 2}
+{"arm": "core_meta", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "core_meta", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: asobject() takes 1 positional argument but 2 were given", "chunk": 2}
+{"arm": "core_meta", "task": "3b4c2228", "verified": false, "solved": false, "error": "NameError: name 'NORTHEAST' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: toobject() missing 1 required positional argument: 'grid'", "chunk": 2}
+{"arm": "core_meta", "task": "fe9372f3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name 'ALLCOLORS' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "5d2a5c43", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: matcher() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "core_meta", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "core_meta", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: 'function' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: shoot() missing 1 required positional argument: 'direction'", "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: canvas() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "a406ac07", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "fafd9572", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "fafd9572", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: cannot unpack non-iterable int object", "chunk": 2}
+{"arm": "core_meta", "task": "e57337a4", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "e57337a4", "verified": false, "solved": false, "error": "SyntaxError: invalid syntax. Perhaps you forgot a comma? (<string>, line 8)", "chunk": 2}
+{"arm": "core_meta", "task": "e57337a4", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "e57337a4", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "e57337a4", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "e57337a4", "verified": false, "solved": false, "error": "TypeError: 'function' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "e57337a4", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: partition() takes 1 positional argument but 2 were given", "chunk": 2}
+{"arm": "core_meta", "task": "d5c634a2", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: matcher() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "core_meta", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: merge() takes 1 positional argument but 2 were given", "chunk": 2}
+{"arm": "core_meta", "task": "d492a647", "verified": false, "solved": false, "error": "TypeError: leastcommon() takes 1 positional argument but 2 were given", "chunk": 2}
+{"arm": "core_meta", "task": "d492a647", "verified": false, "solved": false, "error": "NameError: name 'hlines' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "d492a647", "verified": false, "solved": false, "error": "TypeError: shoot() missing 1 required positional argument: 'direction'", "chunk": 2}
+{"arm": "core_meta", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "d492a647", "verified": false, "solved": false, "error": "IndexError: tuple index out of range", "chunk": 2}
+{"arm": "core_meta", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "ad7e01d0", "verified": false, "solved": false, "error": "TypeError: 'tuple' object is not callable", "chunk": 2}
+{"arm": "core_meta", "task": "ad7e01d0", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name 'sapply' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name 'UP_LEFT' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "ccd554ac", "verified": false, "solved": false, "error": "TypeError: asobject() takes 1 positional argument but 2 were given", "chunk": 2}
+{"arm": "core_meta", "task": "ccd554ac", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "ccd554ac", "verified": false, "solved": false, "error": "TypeError: colorfilter() missing 1 required positional argument: 'value'", "chunk": 2}
+{"arm": "core_meta", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "aa300dc3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name 'paintgrid' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "aa300dc3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "aa300dc3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "aa300dc3", "verified": false, "solved": false, "error": "TypeError: can only concatenate tuple (not \"int\") to tuple", "chunk": 2}
+{"arm": "core_meta", "task": "aa300dc3", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name 'FIVE_BY_FIVE' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: merge() takes 1 positional argument but 4 were given", "chunk": 2}
+{"arm": "core_meta", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "f9a67cb5", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: Value after * must be an iterable, not function", "chunk": 2}
+{"arm": "core_meta", "task": "f9a67cb5", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "423a55dc", "verified": false, "solved": false, "error": "TypeError: cannot unpack non-iterable int object", "chunk": 2}
+{"arm": "core_meta", "task": "423a55dc", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "core_meta", "task": "423a55dc", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "423a55dc", "verified": false, "solved": false, "error": "NameError: name 'flip_v' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "423a55dc", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "core_meta", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "core_meta", "task": "d282b262", "verified": false, "solved": false, "error": "NameError: name 'FOUR_BY_FOUR' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "d282b262", "verified": false, "solved": false, "error": "ValueError: not enough values to unpack (expected 2, got 1)", "chunk": 2}
+{"arm": "core_meta", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "d4c90558", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "d4c90558", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "d4c90558", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "d4c90558", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "a3f84088", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "a3f84088", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "a3f84088", "verified": false, "solved": false, "error": "TypeError: mostcolor() takes 1 positional argument but 2 were given", "chunk": 2}
+{"arm": "core_meta", "task": "a3f84088", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "a3f84088", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "a3f84088", "verified": false, "solved": false, "error": "TypeError: 'tuple' object cannot be interpreted as an integer", "chunk": 2}
+{"arm": "core_meta", "task": "94133066", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: colorfilter() missing 1 required positional argument: 'value'", "chunk": 2}
+{"arm": "core_meta", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: 'tuple' object is not callable", "chunk": 2}
+{"arm": "core_meta", "task": "94133066", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "94133066", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "7bb29440", "verified": false, "solved": false, "error": "TypeError: order() missing 1 required positional argument: 'compfunc'", "chunk": 2}
+{"arm": "core_meta", "task": "7bb29440", "verified": false, "solved": false, "error": "TypeError: colorcount() missing 1 required positional argument: 'value'", "chunk": 2}
+{"arm": "core_meta", "task": "7bb29440", "verified": false, "solved": false, "error": "TypeError: lbind() missing 1 required positional argument: 'fixed'", "chunk": 2}
+{"arm": "core_meta", "task": "7bb29440", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "7bb29440", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "212895b5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "212895b5", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "core_meta", "task": "212895b5", "verified": false, "solved": false, "error": "NameError: name 'xor' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "212895b5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "212895b5", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "9772c176", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "9772c176", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "core_meta", "task": "9772c176", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "9772c176", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "9772c176", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: matcher() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "core_meta", "task": "c6e1b8da", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "core_meta", "task": "c6e1b8da", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "core_meta", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name 'UNITS' is not defined", "chunk": 2}
+{"arm": "core_meta", "task": "c6e1b8da", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": "StopIteration: ", "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: combine() missing 1 required positional argument: 'b'", "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": "NameError: name 'NEG_I' is not defined", "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "3b4c2228", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "fe9372f3", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name 'EIGHT_BY_EIGHT' is not defined", "chunk": 2}
+{"arm": "control", "task": "fe9372f3", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "fe9372f3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for %: 'tuple' and 'int'", "chunk": 2}
+{"arm": "control", "task": "5d2a5c43", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: 'function' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": "NameError: name 'DOWN_RIGHT' is not defined", "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: object of type 'function' has no len()", "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: 'function' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "fafd9572", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for -: 'tuple' and 'int'", "chunk": 2}
+{"arm": "control", "task": "fafd9572", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: sizefilter() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "control", "task": "fafd9572", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: initset() takes 1 positional argument but 3 were given", "chunk": 2}
+{"arm": "control", "task": "fafd9572", "verified": false, "solved": false, "error": "TypeError: sizefilter() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "control", "task": "e57337a4", "verified": false, "solved": false, "error": "TypeError: '>' not supported between instances of 'int' and 'tuple'", "chunk": 2}
+{"arm": "control", "task": "e57337a4", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "e57337a4", "verified": false, "solved": false, "error": "TypeError: sfilter() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "control", "task": "e57337a4", "verified": false, "solved": false, "error": "StopIteration: ", "chunk": 2}
+{"arm": "control", "task": "e57337a4", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "e57337a4", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "e57337a4", "verified": false, "solved": false, "error": "SyntaxError: invalid syntax (<string>, line 11)", "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": "NameError: name 'leastcolorfilter' is not defined", "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": "NameError: name 'contains' is not defined", "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": "StopIteration: ", "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: rbind.<locals>.<lambda>() missing 2 required positional arguments: 'y' and 'z'", "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": "IndexError: tuple index out of range", "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d492a647", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for -: 'tuple' and 'frozenset'", "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": "ValueError: not enough values to unpack (expected 2, got 1)", "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name 'decreasing' is not defined", "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "ad7e01d0", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": "TypeError: colorcount() missing 1 required positional argument: 'value'", "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name 'shifted' is not defined", "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name 'colorzero' is not defined", "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "ccd554ac", "verified": false, "solved": false, "error": "TypeError: object of type 'function' has no len()", "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name 'concatenate' is not defined", "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": "TypeError: 'function' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "aa300dc3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "f9a67cb5", "verified": false, "solved": false, "error": "NameError: name 'two' is not defined", "chunk": 2}
+{"arm": "control", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: 'tuple' object is not callable", "chunk": 2}
+{"arm": "control", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "f9a67cb5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "f9a67cb5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "f9a67cb5", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": "SyntaxError: invalid syntax (<string>, line 19)", "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": "NameError: name 'lfilter' is not defined", "chunk": 2}
+{"arm": "control", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: 'function' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: '>' not supported between instances of 'int' and 'tuple'", "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": "NameError: name 'FOUR_BY_FOUR' is not defined", "chunk": 2}
+{"arm": "control", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": "TypeError: objects() missing 3 required positional arguments: 'univalued', 'diagonal', and 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": "NameError: name 'neighborhood' is not defined", "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": "NameError: name 'fromjvec' is not defined", "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": "TypeError: objects() missing 3 required positional arguments: 'univalued', 'diagonal', and 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "d4c90558", "verified": false, "solved": false, "error": "IndexError: tuple index out of range", "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": "NameError: name 'FOUR_BY_FOUR' is not defined", "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": "UnboundLocalError: cannot access local variable 'x3' where it is not associated with a value", "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not callable", "chunk": 2}
+{"arm": "control", "task": "a3f84088", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "94133066", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: upscale() missing 1 required positional argument: 'factor'", "chunk": 2}
+{"arm": "control", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: objects() missing 1 required positional argument: 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: objects() missing 3 required positional arguments: 'univalued', 'diagonal', and 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "94133066", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: 'tuple' object cannot be interpreted as an integer", "chunk": 2}
+{"arm": "control", "task": "7bb29440", "verified": false, "solved": false, "error": "TypeError: objects() missing 3 required positional arguments: 'univalued', 'diagonal', and 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name 'greater_than' is not defined", "chunk": 2}
+{"arm": "control", "task": "7bb29440", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name 'SIVELFIVE' is not defined", "chunk": 2}
+{"arm": "control", "task": "7bb29440", "verified": false, "solved": false, "error": "TypeError: objects() missing 3 required positional arguments: 'univalued', 'diagonal', and 'without_bg'", "chunk": 2}
+{"arm": "control", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name 'upsample' is not defined", "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": "NameError: name 'shoots' is not defined", "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": "SyntaxError: invalid syntax. Perhaps you forgot a comma? (<string>, line 51)", "chunk": 2}
+{"arm": "control", "task": "212895b5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "9772c176", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "9772c176", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "control", "task": "9772c176", "verified": false, "solved": false, "error": "NameError: name 'vertline' is not defined", "chunk": 2}
+{"arm": "control", "task": "9772c176", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "9772c176", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "9772c176", "verified": false, "solved": false, "error": "ValueError: too many values to unpack (expected 2)", "chunk": 2}
+{"arm": "control", "task": "9772c176", "verified": false, "solved": false, "error": "NameError: name 'neighborhood' is not defined", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: object of type 'int' has no len()", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: 'frozenset' object is not subscriptable", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: object of type 'NoneType' has no len()", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "control", "task": "c6e1b8da", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: vconcat() missing 1 required positional argument: 'b'", "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": "NameError: name 'ALL' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": "TypeError: astuple() missing 1 required positional argument: 'b'", "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": "NameError: name 'H' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c48954c1", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": "NameError: name 'flipud' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "context_only", "task": "3b4c2228", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name 'transposed' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name 'rotate_clockwise' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fe9372f3", "verified": false, "solved": false, "error": "NameError: name 'MIRROR_X' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: crop() missing 1 required positional argument: 'dims'", "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": "NameError: name 'TOP_LEFT' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "5d2a5c43", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "context_only", "task": "a406ac07", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "a406ac07", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a406ac07", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a406ac07", "verified": false, "solved": false, "error": "NameError: name 'hrotate' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a406ac07", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "context_only", "task": "a406ac07", "verified": false, "solved": false, "error": "NameError: name 'stack' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a406ac07", "verified": false, "solved": false, "error": "NameError: name 'flipvert' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": "NameError: name 'CROPPED' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": "NameError: name 'copy' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": "NameError: name 'flipud' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "fafd9572", "verified": false, "solved": false, "error": "NameError: name 'flip_vertically' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": "NameError: name 'BOTTOM' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "e57337a4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": "NameError: name 'CROPS' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d5c634a2", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": "NameError: name 'flip_x' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": "NameError: name 'TOPLEFT' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d492a647", "verified": false, "solved": false, "error": "NameError: name 'rotate270' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": "TypeError: slice indices must be integers or None or have an __index__ method", "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name 'CUBE' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ad7e01d0", "verified": false, "solved": false, "error": "NameError: name 'np' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name 'TRIANGLE' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "ccd554ac", "verified": false, "solved": false, "error": "NameError: name 'hreflect' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name 'flip_x' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "context_only", "task": "aa300dc3", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": "NameError: name 'rotate_right' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "f9a67cb5", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": "NameError: name 'rotate180' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": "NameError: name 'rotate_90' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": "NameError: name 'rotate180' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "423a55dc", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": "NameError: name 'transposed' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": "NameError: name 'rotate_left' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": "NameError: name 'vrotate180' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": "NameError: name 'hflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d282b262", "verified": false, "solved": false, "error": "NameError: name 'hflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": "NameError: name 'TOP_LEFT' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": "TypeError: slice indices must be integers or None or have an __index__ method", "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": "TypeError: tuple expected at most 1 argument, got 4", "chunk": 2}
+{"arm": "context_only", "task": "d4c90558", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": "UnboundLocalError: cannot access local variable 'x16' where it is not associated with a value", "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": "NameError: name 'flip_rows' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": "NameError: name 'FIFTH' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "a3f84088", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "NameError: name 'RIGHT_EDGE' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "NameError: name 'RIGHT_BOTTOM' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "94133066", "verified": false, "solved": false, "error": "NameError: name 'CROPPED' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name 'np' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name 'hflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "7bb29440", "verified": false, "solved": false, "error": "TypeError: tuple expected at most 1 argument, got 2", "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": "IndexError: tuple index out of range", "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "212895b5", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": "TypeError: 'bool' object is not iterable", "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 15 were given", "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": "UnboundLocalError: cannot access local variable 'x4' where it is not associated with a value", "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "9772c176", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name 'split_at_col' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name 'hstack' is not defined", "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": null, "chunk": 2}
+{"arm": "context_only", "task": "c6e1b8da", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 2}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 35)", "chunk": 3}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "fc754716", "verified": false, "solved": false, "error": "AssertionError: ", "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "34b99a2b", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": "no solve()", "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 27)", "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": "ValueError: cannot reshape array of size 7 into shape (7,7)", "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9110e3c5", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 30)", "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": "SyntaxError: closing parenthesis ']' does not match opening parenthesis '(' (<string>, line 2)", "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "67636eac", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 30)", "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 52)", "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "21f83797", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 34)", "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": "NameError: name 'input_3' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 37)", "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e74e1818", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 27)", "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": "SyntaxError: closing parenthesis ']' does not match opening parenthesis '(' (<string>, line 20)", "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": "NameError: name 'prod' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9a4bb226", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 39)", "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": "NameError: name 'output' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 39)", "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8ee62060", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 39)", "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": "NameError: name 'output' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": "SyntaxError: closing parenthesis ')' does not match opening parenthesis '[' (<string>, line 9)", "chunk": 3}
+{"arm": "core_only", "task": "e9b4f6fc", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 40)", "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 42)", "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9f27f097", "verified": false, "solved": false, "error": "no solve()", "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 28)", "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": "AttributeError: 'numpy.ndarray' object has no attribute 'count'", "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 28)", "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "5b692c0f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "e0fb7511", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 35)", "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": "TypeError: can only concatenate list (not \"int\") to list", "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "845d6e51", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": "IndexError: index 15 is out of bounds for axis 0 with size 15", "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "8cb8642d", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 41)", "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 21)", "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 24)", "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": "NameError: name 'product' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "1c02dbbe", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": "TypeError: 'numpy.bool' object is not iterable", "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": "TypeError: 'int' object does not support item assignment", "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "5b6cbef5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": "NameError: name 'new_grid' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 30)", "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 3}
+{"arm": "core_only", "task": "992798f6", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": "SyntaxError: import * only allowed at module level (<string>, line 3)", "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "1c56ad9f", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 30)", "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 27)", "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "b457fec5", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": "NameError: name 'row' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": "TypeError: cannot unpack non-iterable int object", "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 35)", "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 33)", "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "9caba7c3", "verified": false, "solved": false, "error": "TypeError: list indices must be integers or slices, not tuple", "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": "ValueError: Invalid grid configuration", "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 35)", "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "551d5bf1", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": "TypeError: list indices must be integers or slices, not tuple", "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": "NameError: name 'random' is not defined", "chunk": 3}
+{"arm": "core_only", "task": "d94c3b52", "verified": false, "solved": false, "error": "TypeError: can only concatenate list (not \"int\") to list", "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 18)", "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": "timeout", "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": null, "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": "ValueError: setting an array element with a sequence. The requested array has an inhomogeneous shape after 1 dimensions. The detected shape was (2,) + inhomogeneous part.", "chunk": 3}
+{"arm": "core_only", "task": "f21745ec", "verified": false, "solved": false, "error": "SyntaxError: closing parenthesis ']' does not match opening parenthesis '(' (<string>, line 10)", "chunk": 3}
