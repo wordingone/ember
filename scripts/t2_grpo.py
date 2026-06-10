@@ -137,17 +137,17 @@ def main():
     from governor import preflight
     governor_block = preflight()
 
-    from unsloth import FastLanguageModel
-    patched = False
-    try:  # unsloth GRPO patch (older recipes need it; newer absorb it)
-        from unsloth import PatchFastRL
-        PatchFastRL("GRPO", FastLanguageModel)
-        patched = True
-    except ImportError:
-        pass
-    print(f"[t2_grpo] PatchFastRL applied: {patched}", flush=True)
+    # Attempt 3 (integration tests e8013346 + e68e6ae8 receipted): unsloth's
+    # fast_lora kernels clash with TRL GRPO generation (fp16 inference path
+    # vs fp32 LoRA re-upcast by PatchFastRL — both fixes confirmed applied
+    # and both insufficient). Wall broken by REMOVING unsloth from this arm:
+    # vanilla transformers + bnb-4bit(bf16 compute) + PEFT via TRL's
+    # peft_config. Slower generation, standard stack, no custom kernels.
+    # SFT arms keep unsloth (proven there).
     from trl import GRPOConfig, GRPOTrainer
-    from transformers import TrainerCallback
+    from transformers import (AutoModelForCausalLM, AutoTokenizer,
+                              BitsAndBytesConfig, TrainerCallback)
+    from peft import LoraConfig
     from datasets import Dataset
     from huggingface_hub import snapshot_download
     from t2_round import ADAPTERS, LORA
@@ -162,25 +162,20 @@ def main():
         model_path = snapshot_download(args.model, local_files_only=True)
     except Exception:  # noqa: BLE001
         model_path = args.model
-    model, tok = FastLanguageModel.from_pretrained(
-        model_name=model_path, max_seq_length=LORA["max_seq"],
-        dtype=torch.bfloat16, load_in_4bit=True)
-    model = FastLanguageModel.get_peft_model(
-        model, r=LORA["r"], lora_alpha=LORA["alpha"],
-        lora_dropout=0.0,  # GRPO: dropout off, policy = sampled policy
-        bias="none", use_gradient_checkpointing="unsloth",
-        random_state=args.seed,
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        quantization_config=BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True),
+        torch_dtype=torch.bfloat16, device_map={"": 0})
+    tok = AutoTokenizer.from_pretrained(model_path)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    peft_cfg = LoraConfig(
+        r=LORA["r"], lora_alpha=LORA["alpha"], lora_dropout=0.0,
+        bias="none", task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                         "gate_proj", "up_proj", "down_proj"])
-    # Integration fix (e8013346 attempt 1): unsloth keeps LoRA params in
-    # float32; vanilla-TRL generation under autocast hits the fast_lora
-    # kernel with mismatched dtypes ("Half and Float"). One dtype everywhere:
-    n_cast = 0
-    for _n, _p in model.named_parameters():
-        if "lora_" in _n and _p.dtype == torch.float32:
-            _p.data = _p.data.to(torch.bfloat16)
-            n_cast += 1
-    print(f"[t2_grpo] lora params cast fp32->bf16: {n_cast}", flush=True)
 
     problems = load_split("train")
     problems_by_id = {p["id"]: p for p in problems}
@@ -211,13 +206,13 @@ def main():
     trainer = GRPOTrainer(
         model=model, processing_class=tok,
         reward_funcs=[make_reward_fn(problems_by_id, counter)],
-        args=config,
+        args=config, peft_config=peft_cfg,
         train_dataset=Dataset.from_list(rows),
         callbacks=[_Headroom()])
     t0 = time.time()
     trainer.train()
     secs = round(time.time() - t0, 1)
-    model.save_pretrained(out_dir)
+    trainer.save_model(out_dir)  # PEFT adapter
     tok.save_pretrained(out_dir)
 
     rewards = [h["reward"] for h in trainer.state.log_history
