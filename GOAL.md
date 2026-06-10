@@ -48,13 +48,18 @@ Only the user may retire or narrow this goal, by name.
 
 TRACKER ENUMERATION (operational form of the clause, adopted same day;
 amended same day when the re-issue added the first-principles class):
-the wordingone/ember issue tracker carries FIVE task classes by label —
+the wordingone/ember issue tracker carries EIGHT task classes by label —
 `first-principles` (standing questioning of inherited assumptions; CONSTANT
 by construction: the PR closing an fp issue MUST file the next fp question,
 so the class never empties), `eng` (engineering/code; Eli-pickable when
 awake), `math` (derivations, power/MDE, estimators), `reasoning` (verdict
 protocols, world-choice, analysis), `spec` (pre-registrations,
-rung/mechanism specs). The Stop hook (`eng-stop-gate.sh`) blocks turn-end
+rung/mechanism specs), and — user add 2026-06-10 — `research`
+(source/literature surveys, external-stack scouting; subagent-draftable,
+Leo gates), `physics` (world dynamics, simulation grounding,
+energy/bits-per-joule accounting), `logic` (formal invariants, proofs,
+gate/kernel correctness arguments — first customer: #34's invariant gate).
+Only `eng` routes to Eli; everything else is Leo's. The Stop hook (`eng-stop-gate.sh`) blocks turn-end
 while ANY class has an open issue and names the lowest. Every class closes
 the same way: branch → artifact + selftest/receipt → PR "Closes #n" →
 squash merge.

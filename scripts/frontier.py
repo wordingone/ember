@@ -127,6 +127,51 @@ def ext_clean(records, flagged_keys):
     return [r for r in records if r.get("key") not in flagged_keys]
 
 
+def fpr_corrected_bits(records, flagged_keys, uncovered_tasks, fpr_ci,
+                       caps=None):
+    """Third bits estimator (eng #30): exact where measured, FPR-discounted
+    where not. Over the POST-CAP kept set (same distinct-src shortest-first
+    selection as report_block):
+
+      - key in flagged_keys (measured WRONG)      -> 0 bits
+      - task uncovered by MBPP+ (unmeasurable)    -> bits * (1 - FPR_st),
+        with the stratum FPR's Wilson CI propagated to (lo, hi)
+      - covered and not flagged (measured CLEAN)  -> full bits
+
+    fpr_ci: {stratum: (lo, point, hi)} from the v-extended receipt counts.
+    Returns {"lo","point","hi","uncovered_kept","flagged_kept","clean_kept"}.
+    """
+    caps = caps or DEFAULT_CAPS
+    by_task = {}
+    for rec in records:
+        by_task.setdefault(rec["task"], []).append(rec)
+    lo = point = hi = 0.0
+    n_unc = n_flag = n_clean = 0
+    for task, recs in by_task.items():
+        st = recs[0]["stratum"]
+        uniq = {}
+        for r in sorted(recs, key=lambda r: len(r["src"])):
+            uniq.setdefault(r["src"], r)
+        for r in list(uniq.values())[:caps[st]]:
+            if r.get("key") in flagged_keys:
+                n_flag += 1
+                continue
+            if task in uncovered_tasks:
+                f_lo, f_pt, f_hi = fpr_ci[st]
+                lo += r["bits"] * (1 - f_hi)
+                point += r["bits"] * (1 - f_pt)
+                hi += r["bits"] * (1 - f_lo)
+                n_unc += 1
+            else:
+                lo += r["bits"]
+                point += r["bits"]
+                hi += r["bits"]
+                n_clean += 1
+    return {"lo": round(lo, 2), "point": round(point, 2),
+            "hi": round(hi, 2), "uncovered_kept": n_unc,
+            "flagged_kept": n_flag, "clean_kept": n_clean}
+
+
 def _selftest():
     rows = (
         [{"task": "mbpp:1", "verified": True}] * 7
@@ -177,6 +222,24 @@ def _selftest():
         assert load_ext_flags([fp], include_timeouts=True) == {"k1", "k2"}
         recs2 = [{"key": "k1"}, {"key": "k2"}, {"key": "k3"}]
         assert [r["key"] for r in ext_clean(recs2, flags)] == ["k2", "k3"]
+    # fpr_corrected_bits (eng #30): flagged->0, uncovered->scaled w/ CI,
+    # covered-clean->full; lo <= point <= hi
+    frecs = [
+        {"task": "mbpp:10", "stratum": "easy", "bits": 1.0, "key": "a",
+         "src": "s1"},                                   # covered clean
+        {"task": "mbpp:10", "stratum": "easy", "bits": 1.0, "key": "b",
+         "src": "s2"},                                   # flagged
+        {"task": "mbpp:20", "stratum": "frontier", "bits": 4.0, "key": "c",
+         "src": "s3"},                                   # uncovered
+    ]
+    fci = {"easy": (0.1, 0.2, 0.3), "frontier": (0.2, 0.25, 0.4)}
+    out = fpr_corrected_bits(frecs, {"b"}, {"mbpp:20"}, fci)
+    assert out["flagged_kept"] == 1 and out["uncovered_kept"] == 1
+    assert out["clean_kept"] == 1
+    assert out["point"] == round(1.0 + 4.0 * 0.75, 2), out
+    assert out["lo"] == round(1.0 + 4.0 * 0.6, 2)
+    assert out["hi"] == round(1.0 + 4.0 * 0.8, 2)
+    assert out["lo"] <= out["point"] <= out["hi"]
     print("FRONTIER_SELFTEST_PASS")
 
 
