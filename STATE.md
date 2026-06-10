@@ -111,6 +111,7 @@ No registered branch may exist without a fire-condition or review date. Registry
 | 14 | Kernel v1.0 freeze (formalization §9b) | round-1 verdict + episode/receipt schema stability review | spec on disk (`docs/kernel-v1-freeze-spec.md`, 637231a): 6-member freeze surface, closure condition, pre-freeze gap list (schema unification, fingerprint universality, governor extraction, replay test), flywheel protocol |
 | 15 | HF weights upload | first verdict-bearing adapter | standing |
 | 16 | OpenMDW SDG corpus intake (Cosmos 3) | NC2-own entry | registered |
+| 17 | W-swe (SWE-bench/SWE-smith repo-scale code world) | W-code loop turns AND a core clears a measurable SWE-class floor | registered (world-choice §7; HLE evaluated same pass — REJECTED, answer-key V) |
 
 ## Resolved layers
 

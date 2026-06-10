@@ -141,3 +141,46 @@ different axis and starves the loop at residency scale.
    now with the world-choice criterion (§7 of the formalization) as the
    admission test, including measured floor accessibility before any round-1
    commitment.
+
+## 7. Benchmark intake rule + SWE-bench / HLE verdicts (user question, 2026-06-10)
+
+*Can we sample scripts/functions from SWE-bench and HLE, and are they useful
+for ember?*
+
+**The intake rule the question crystallizes:** a benchmark is a WORLD
+candidate iff its verifier executes novel artifacts (tests, asserts,
+simulators — V computable for tasks/solutions that didn't ship with the
+benchmark). A benchmark whose verifier is an answer key is at best a
+held-out TRANSFER surface and never a world: an answer key cannot verify a
+novel artifact, so it cannot support round-2 self-generation, and training
+against it teaches key-recall, not competence (the verified-experience
+definition fails at its root).
+
+**SWE-bench — world-class V, admission-gated, register as the rung above
+W-code.** Verification = the repo's own FAIL_TO_PASS/PASS_TO_PASS test
+suites executing the candidate patch — exactly ember's currency, at repo
+scale where MBPP is function scale. Three gates before it's usable:
+(a) **feed floor:** a 3B core's SWE solve-rate ≈ 0 ⇒ feed ≈ 0 ⇒ fails §7
+admission today — same math that role-limited ARC. (b) **harness cost:**
+per-instance containerized envs vs our in-process sandbox — a real
+W-harness-class build (SWE-style env setup is itself upstream-wall work,
+the portfolio's own hardness class). (c) **context scale:** multi-file repo
+context strains a small core long before competence does. Useful TODAY in
+one place: the SWE-smith-style *synthetic task generation* method (generate
+repo tasks with test-based V) is the strongest published instance of the
+generator-first teacher inversion (teacher-system §10) — method-reference
+for w-side task generation, not a corpus import.
+
+**HLE — not a world, not even a good transfer surface for ember.** Verifier
+= static answer key on expert exam questions: no execution, no V for novel
+tasks, no self-generation possible. Public answers ⇒ contamination risk in
+any borrowed core ⇒ a score movement is uninterpretable (recall vs
+competence — a t1c-class confound built into the benchmark for our use).
+And it measures knowledge breadth, the axis ember explicitly does not
+train. 3B floor ≈ 0 regardless. Verdict: skip entirely; ARC-2 + MBPP-test
++ (later) SWE held-out instances are the transfer surfaces.
+
+**Registry consequence:** SWE-bench (or SWE-smith-generated equivalent)
+registered as W-swe, the world above W-code on the code ladder
+(function → repo); fires when W-code round receipts show the loop turning
+AND a core clears a measurable SWE-class floor. No HLE row.
