@@ -83,7 +83,9 @@ def main():
     else:
         examples, counts = build_dataset(f"{VIEWS}/wcode-r1.jsonl", cap=caps)
 
+    from receipt_fp import args_fingerprint  # eng #10
     receipt = {"ticket": "NC0-T2-WCODE", "ts": ts, "control": args.control,
+               "args_fp": args_fingerprint(vars(args)),
                "model": args.model, "world": "mbpp", "round": 1,
                "ledger_records_world": len(arm_recs),
                "frontier": report_block(arm_recs),

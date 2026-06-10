@@ -185,8 +185,10 @@ def main():
     torch.save(aux_heads.state_dict(), f"{out_dir}/mtp_aux_heads.pt")
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    from receipt_fp import args_fingerprint  # eng #10
     receipt = {
         "ticket": "NC0-T2-MTP", "ts": ts, "args": vars(args),
+        "args_fp": args_fingerprint(vars(args)),
         "world": "mbpp", "round": 1,
         "dataset": {"n_examples": len(examples), "n_tasks": len(counts),
                     "identical_to_arm_A": True},
