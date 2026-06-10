@@ -163,12 +163,12 @@ def train_lora(model_id, examples, out_dir, seed=3407):
     from datasets import Dataset
 
     class _Headroom(TrainerCallback):
-        # Headroom rule (Jun 2026-06-10): never pegged wall-to-wall — brief
+        # Headroom rule (user 2026-06-10): never pegged wall-to-wall — brief
         # pause each optimizer step keeps GPU/CPU duty cycle under 100%.
         def on_step_end(self, args, state, control, **kw):
             time.sleep(float(os.environ.get("EMBER_THROTTLE_S", "0.3")))
 
-    # Resource governor (post-crash 2026-06-10, Jun headroom rule): hard
+    # Resource governor (post-crash 2026-06-10, the user headroom rule): hard
     # per-process VRAM cap + free-margin assert as launch PRECONDITIONS —
     # same block as t1_probe.load_model; the 0670e3ec crash receipt is the
     # reason. r1's 4-bit train peaked 16.4/24.5GB, well inside the cap.

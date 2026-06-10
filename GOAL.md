@@ -1,9 +1,9 @@
-# ember GOAL (adopted 2026-06-10, Jun via /goal — session-scoped hook; re-issue verbatim each session until satisfied)
+# ember GOAL (adopted 2026-06-10, user via /goal — session-scoped hook; re-issue verbatim each session until satisfied)
 
 Supersedes the 2026-06-09 nc-ladder goal (whose three-test terminal condition
 is now the per-artifact gain gate inside this goal — every gain must pass it).
 
-GOAL (verbatim, Jun-adopted):
+GOAL (verbatim, user-adopted):
 
 Build the mind that is missing from Avir, and own every layer of it: a
 substrate that runs, trains, and improves on this machine alone — its weights
@@ -26,12 +26,12 @@ else Avir has built is an organ waiting for it. If you find yourself making
 and being confined to the paradigms and limits of existing neural
 architectures and their limits, you are prabably doing it wrong.
 
-(Text re-issued by Jun 2026-06-10 post-crash with the final sentence ADDED —
-that sentence is a binding amendment, issued together with Jun's stated
+(Text re-issued by the user 2026-06-10 post-crash with the final sentence ADDED —
+that sentence is a binding amendment, issued together with the user's stated
 doubts about the core's architecture, the accumulation-time assumptions, and
 the resource assumptions. "prabably" sic, kept verbatim.)
 
-## Operational annex (carried from the prior goal; unchanged unless Jun says)
+## Operational annex (carried from the prior goal; unchanged unless the user says)
 
 WHILE UNSATISFIED — valid activities, in priority order:
  1. Gate any finished job (receipt → STATE.md transition).
@@ -51,18 +51,18 @@ READING NOTES (binding):
   is fully local; cloud minds (Leo, research agents) are authorized
   scaffolding OUTSIDE the loop, and are among the things the finished mind
   must not need.
-- COMFORTABLE RESIDENCY (Jun 2026-06-10: "ember has to be something that
+- COMFORTABLE RESIDENCY (user 2026-06-10: "ember has to be something that
   lives comfortably in my system or device, not require huge or large
   compute if everything is done correctly") — ember's steady state is a
   light resident: small footprint, CPU-viable or low-VRAM inference, the
-  machine stays Jun's. The GPU SHOULD be leveraged — definitely (Jun
+  machine stays the user's. The GPU SHOULD be leveraged — definitely (user
   2026-06-10): use it hard whenever there is real work (sampling, training,
   eval bursts); the constraint is on ember's RESIDENT form, not on working
   compute. Heavy compute runs as BOUNDED, SCHEDULED bursts (overnight/idle
-  windows), never perpetual occupation. HEADROOM RULE (Jun 2026-06-10):
+  windows), never perpetual occupation. HEADROOM RULE (user 2026-06-10):
   100% utilization should never be the case, GPU or CPU — all ember jobs
   duty-cycle (EMBER_THROTTLE_S between batches/steps) and CPU pools stay
-  below core count; the machine always answers to Jun first. Efficiency is
+  below core count; the machine always answers to the user first. Efficiency is
   not an optimization pass; it is the correctness criterion — a design that
   needs huge compute is wrong, not early. This is why the component contract
   exists (QAT/ternary/sub-quadratic/MTP/small-core): residency tools, not
@@ -74,7 +74,7 @@ READING NOTES (binding):
   decode_pacer() inside every generate path. FIX-FORWARD ON A DISCOVERED
   HEADROOM VIOLATION IS BANNED — kill and relaunch governed; the crash
   receipt is the cost asymmetry, settled.
-- PARADIGM NON-CONFINEMENT (Jun 2026-06-10, the goal's final sentence):
+- PARADIGM NON-CONFINEMENT (user 2026-06-10, the goal's final sentence):
   defaults inherited from the existing-architecture stack — 7B-class cores,
   datacenter eval norms (fixed mega-grids of generations), saturate-the-
   accelerator habits — are NOT load-bearing and are the first suspects
@@ -88,8 +88,8 @@ READING NOTES (binding):
   policies) → NC2-own (owned-mass pretrain, component contract in
   nc2-own-technique-contract.md). STATE.md is the single position ledger.
 
-AUTHORITY: Leo executes solo, spawning subagents/agent teams as needed (Jun
+AUTHORITY: Leo executes solo, spawning subagents/agent teams as needed (user
 2026-06-09, limits temporarily off). Escalate ONLY for money, cloud, new
 hardware, >100GB disk, or anything leaving this PC — and escalation never
-pauses local work that can proceed. Cron = this goal only (Jun 2026-06-10).
-Only Jun retires this goal, by name.
+pauses local work that can proceed. Cron = this goal only (user 2026-06-10).
+Only the user retires this goal, by name.

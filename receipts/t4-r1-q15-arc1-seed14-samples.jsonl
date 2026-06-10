@@ -672,3 +672,186 @@
 {"arm": "control", "task": "df8cc377", "verified": false, "solved": false, "error": null, "chunk": 0}
 {"arm": "control", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'FOUR_BY_FOUR' is not defined", "chunk": 0}
 {"arm": "control", "task": "df8cc377", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": "TypeError: vconcat() missing 1 required positional argument: 'b'", "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": "NameError: name 'H' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "2072aba6", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": "NameError: name 'BOTTOM_LEFT' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": "TypeError: 'NoneType' object is not subscriptable", "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "68b67ca3", "verified": false, "solved": false, "error": "NameError: name 'flipud' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": "NameError: name 'TOP_LEFT_CORNER' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": "NameError: name 'THREELINE' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": "TypeError: object of type 'bool' has no len()", "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": "UnboundLocalError: cannot access local variable 'x3' where it is not associated with a value", "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "5783df64", "verified": false, "solved": false, "error": "NameError: name 'transposed' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "59341089", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": "NameError: name 'rotate_clockwise' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": "NameError: name 'tile' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ed98d772", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "NameError: name 'rotate_clockwise' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "NameError: name 'flipud' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "TypeError: rot90() takes 1 positional argument but 2 were given", "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "NameError: name 'rotate_right_90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "ef26cbf6", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": "TypeError: astuple() missing 1 required positional argument: 'b'", "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": "TypeError: astuple() missing 1 required positional argument: 'b'", "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 0}
+{"arm": "context_only", "task": "626c0bcc", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": "NameError: name 'copy' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": "NameError: name 'hstack' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 0}
+{"arm": "context_only", "task": "64a7c07e", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": "TypeError: rot90() takes 1 positional argument but 2 were given", "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "5207a7b5", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "e78887d1", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "e78887d1", "verified": false, "solved": false, "error": "NameError: name 'H' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "e78887d1", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "e78887d1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "e78887d1", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "e78887d1", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "e78887d1", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": "NameError: name 'transposed' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "8719f442", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name 'flip_horiz' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name 'RIGHT_TOP' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "b0f4d537", "verified": false, "solved": false, "error": "NameError: name 'flipv' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": "TypeError: crop() missing 1 required positional argument: 'dims'", "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "dc2aa30b", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "NameError: name 'HORI' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "UnboundLocalError: cannot access local variable 'x7' where it is not associated with a value", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "NameError: name 'flip_y' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "f5c89df1", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 9 were given", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": "NameError: name 'flip_vertical' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": "NameError: name 'flip_horizontal' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "55059096", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": "NameError: name 'MINUS' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": "NameError: name 'flip_horizontally' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "cf133acc", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": "NameError: name 'flip_vertically' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 0}
+{"arm": "context_only", "task": "9b4c17c4", "verified": false, "solved": false, "error": "NameError: name 'swap_row_col' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": "NameError: name 'rotate_left' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "4c177718", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name 'rotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "85b81ff1", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": "NameError: name 'MINUS' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": "TypeError: unsupported operand type(s) for +: 'int' and 'tuple'", "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": "NameError: name 'flip_rows' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 0}
+{"arm": "context_only", "task": "79369cc6", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": "NameError: name 'CRUSHED' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": "NameError: name 'flip_row' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": "NameError: name 'hflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": "NameError: name 'ITYPE' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": "NameError: name 'copy' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "97239e3d", "verified": false, "solved": false, "error": "TypeError: can only concatenate tuple (not \"int\") to tuple", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "NameError: name 'vrotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "NameError: name '_impl' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "NameError: name 'MID' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "TypeError: astuple() takes 2 positional arguments but 3 were given", "chunk": 0}
+{"arm": "context_only", "task": "18419cfa", "verified": false, "solved": false, "error": "NameError: name 'vflip' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'TETRIS_T' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'transpose' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'transmute' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": null, "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'vrotate' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
+{"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "IndexError: tuple index out of range", "chunk": 0}

@@ -199,7 +199,7 @@ def _grids_equal(a, b):
         return False
 
 
-# Headroom rule (Jun 2026-06-10: "100% should never be the case, for both
+# Headroom rule (user 2026-06-10: "100% should never be the case, for both
 # GPU and CPU"): duty-cycle pause between GPU batches, and CPU pools capped
 # below the core count. Tunable via EMBER_THROTTLE_S without code edits.
 THROTTLE_S = float(os.environ.get("EMBER_THROTTLE_S", "0.6"))
@@ -288,7 +288,7 @@ def load_model(model_id, adapter=None):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    # Resource governor (post-crash 2026-06-10, Jun headroom rule — LAUNCH
+    # Resource governor (post-crash 2026-06-10, the user headroom rule — LAUNCH
     # PRECONDITION, not politeness): the unpaced t4 eval (0670e3ec) held 97%
     # of VRAM at 100% duty; Windows' compositor shares that VRAM; system
     # services timed out (asComSvc 23:31-23:34 local) and the PC went down.

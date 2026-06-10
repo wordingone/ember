@@ -1,10 +1,10 @@
 # NC2-own technique contract — ember's owned-core stack
 
-Jun directive 2026-06-10 (verbatim components): "qat, turboquant, 1.58 bit, or SubQ, mtp, sdek, and any chinese techniques as well" + "oh and also gemma 4 12b's unified architecture".
+the user directive 2026-06-10 (verbatim components): "qat, turboquant, 1.58 bit, or SubQ, mtp, sdek, and any chinese techniques as well" + "oh and also gemma 4 12b's unified architecture".
 
 Directed-path gate applies (break-the-wall §2): this list is the contract. Every NC2
 status check verifies component-by-component. A silent pivot off any component is a
-gate violation; only Jun drops a component.
+gate violation; only the user drops a component.
 
 Context: NC2-own = port the NC0-proven accumulation loop onto a from-scratch core we
 own end-to-end (~0.1–1B params, ~20B tokens ≈ 3wk continuous 4090), in a
@@ -27,7 +27,7 @@ BitNet-from-scratch holds at our scale, QAT-int4 becomes the fallback, not the p
 
 ## 2. turboquant — owned quantization/export pipeline
 
-**What:** Jun's quantization tooling (avir-cli fragment; proven on this box for GGUF
+**What:** the user's quantization tooling (avir-cli fragment; proven on this box for GGUF
 export work; in the directed registry of the LiteRT track).
 **Role in ember:** (a) the export path — ember artifacts ship through OUR quantizer,
 never a third-party converter we can't audit; (b) KV-cache compression duty per the
@@ -137,7 +137,7 @@ Per-technique, with ember-fit:
 
 ## 8. Gemma 4 12B unified architecture — encoder-free multimodal
 
-**What** (Jun add-on; SDEK handoff thread): unified/encoder-free multimodal — all
+**What** (user add-on; SDEK handoff thread): unified/encoder-free multimodal — all
 modalities tokenized into ONE transformer; no separate frozen vision/audio encoder
 bolted on.
 **Why it matters for ember:** separate frozen encoders are exactly the kind of
@@ -194,13 +194,13 @@ MMBench, EVE stage-skip collapse, Mono-InternVL catastrophic forgetting.
 
 Evidence-based dispositions per directed component. NOTHING IS DROPPED — components
 with negative small-scale evidence are re-staged to the rung where the evidence
-supports them. Drops require Jun, by name.
+supports them. Drops require the user, by name.
 
 | # | Component | Survey verdict @ ≤1B/4090 | Disposition |
 |---|-----------|---------------------------|-------------|
 | 1 | QAT | int4 QAT tail (torchao) proven; Muon×QAT has published null/negative (2604.07888 B.5) | ADOPT — QAT tail runs on AdamW, not Muon |
 | 2 | turboquant | (not a survey item — ours) | ADOPT — export + KV duty unchanged |
-| 3 | 1.58-bit | quality crossover ~3B; 700M ternary ≈ 0.5 ppl worse @100B tok; Falcon-Edge + onebitllms prove 1B from-scratch ternary PRACTICAL; training on 4090 saves nothing (inference-only payoff) | RE-STAGED — int4-QAT carries low-bit at ≤1B; ternary pilot via onebitllms iff CPU-deploy becomes a requirement; full ternary belongs to a ≥3B rung (= hardware escalation, Jun's call) |
+| 3 | 1.58-bit | quality crossover ~3B; 700M ternary ≈ 0.5 ppl worse @100B tok; Falcon-Edge + onebitllms prove 1B from-scratch ternary PRACTICAL; training on 4090 saves nothing (inference-only payoff) | RE-STAGED — int4-QAT carries low-bit at ≤1B; ternary pilot via onebitllms iff CPU-deploy becomes a requirement; full ternary belongs to a ≥3B rung (= hardware escalation, the user's call) |
 | 4 | SubQ (sub-quadratic attn) | NSA attended-token floor ~1.5-2k ≈ full attention at ARC's 2-4k ctx | RE-STAGED to NC1c/long-context; GDN-hybrid pilot (see 6) keeps the class alive now |
 | 5 | MTP | NEGATIVE quality evidence ≤1B (Meta 2404.19737 "worse on smaller models"; TOP 340M/1.8B inconsistent) | RE-STAGED — post-hoc speculative-decode drafter (Gemma-4-style), not a pretrain quality lever |
 | 6 | SDEK | sleep paper 2605.26099 RESOLVES: fast weights = gated delta-rule SSM state matrices (GDN/Jet layers), backprop-through-sleep-passes; Ouro-1.4B 41.9→61.5% GSM-Infinite; no code release | ADOPT — middle timescale now has a named substrate; concrete experiment = 340M GDN-hybrid pilot (also serves component 4) |
@@ -217,7 +217,7 @@ substrate pilot for the sleep/fast-weights + sub-quadratic line.
 either GRPO waits for a bigger-core rung or the core grows past 1B (token budget
 then under-trains; more disk/compute = escalation).
 
-## Residency budget (Jun 2026-06-10 — binding design gate)
+## Residency budget (user 2026-06-10 — binding design gate)
 
 Ember lives COMFORTABLY on this machine: steady-state inference CPU-viable or
 low-VRAM (ternary/QAT int4 are residency tools — the survey's "training saves
@@ -228,7 +228,7 @@ framing is RETIRED: pilot small first (~100-300M, days), grow only if the
 verify floor demands it, and run long jobs as interruptible windowed bursts.
 A design that only works with huge compute fails the goal — efficiency is the
 correctness criterion, not a later optimization. Smallest core that clears
-the floor wins. AND: the GPU should be leveraged, definitely (Jun) — the
+the floor wins. AND: the GPU should be leveraged, definitely (user) — the
 constraint bounds ember's resident form, never the build work; when there is
 real sampling/training/eval to do, run the 4090 hard.
 
