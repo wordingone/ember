@@ -1,0 +1,52 @@
+{
+  "ticket": "V-EXTENDED",
+  "ts": "20260610T215421Z",
+  "args": {
+    "view": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r1.jsonl"
+  },
+  "v_passed_episodes": 956,
+  "covered_episodes": 845,
+  "uncovered_tasks": [
+    625,
+    627,
+    738,
+    746,
+    747,
+    756,
+    779,
+    783,
+    802
+  ],
+  "fpr": {
+    "overall": {
+      "n": 845,
+      "ext_wrong": 187,
+      "ext_timeout": 9,
+      "fpr": 0.2213,
+      "fpr_incl_timeout": 0.232
+    },
+    "easy": {
+      "n": 457,
+      "ext_wrong": 107,
+      "ext_timeout": 3,
+      "fpr": 0.2341,
+      "fpr_incl_timeout": 0.2407
+    },
+    "frontier": {
+      "n": 48,
+      "ext_wrong": 13,
+      "ext_timeout": 1,
+      "fpr": 0.2708,
+      "fpr_incl_timeout": 0.2917
+    },
+    "mid": {
+      "n": 340,
+      "ext_wrong": 67,
+      "ext_timeout": 5,
+      "fpr": 0.1971,
+      "fpr_incl_timeout": 0.2118
+    }
+  },
+  "flags_file": "v-ext-flags-20260610T215421Z.jsonl",
+  "quarantine": "GATE decision on this receipt \u2014 no auto-removal from ledger"
+}
