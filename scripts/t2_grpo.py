@@ -175,11 +175,26 @@ def main():
     # still touches it in GRPOTrainer.__init__ (attempt-3 receipt 4b763324)
     if not hasattr(model, "warnings_issued"):
         model.warnings_issued = {}
+    # Attempt 5 (v4 receipt dcfd0e53: TRL's internal kbit-prep upcasts
+    # LN/lm_head to fp32 -> "expected BFloat16 but found Float" in the
+    # vanilla forward). Wrap PEFT OURSELVES, then collapse every
+    # non-quantized param back to bf16 — one dtype everywhere; pass the
+    # wrapped model so TRL skips its own prep.
+    from peft import get_peft_model, prepare_model_for_kbit_training
     peft_cfg = LoraConfig(
         r=LORA["r"], lora_alpha=LORA["alpha"], lora_dropout=0.0,
         bias="none", task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                         "gate_proj", "up_proj", "down_proj"])
+    model = prepare_model_for_kbit_training(
+        model, use_gradient_checkpointing=True)
+    model = get_peft_model(model, peft_cfg)
+    n_cast = 0
+    for _p in model.parameters():
+        if _p.dtype == torch.float32:
+            _p.data = _p.data.to(torch.bfloat16)
+            n_cast += 1
+    print(f"[t2_grpo] fp32 params collapsed to bf16: {n_cast}", flush=True)
 
     problems = load_split("train")
     problems_by_id = {p["id"]: p for p in problems}
@@ -210,7 +225,7 @@ def main():
     trainer = GRPOTrainer(
         model=model, processing_class=tok,
         reward_funcs=[make_reward_fn(problems_by_id, counter)],
-        args=config, peft_config=peft_cfg,
+        args=config,  # model pre-wrapped: TRL must skip its own kbit prep
         train_dataset=Dataset.from_list(rows),
         callbacks=[_Headroom()])
     t0 = time.time()
