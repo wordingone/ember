@@ -151,3 +151,47 @@ harness `H` — engineering, not poetry: identity elaborations are gated
 harness artifacts (`δ_H` through the same three tests), while the name itself
 sits in the invariant set. Ember may propose what its name means; only
 receipts make it true, and only the user changes the token.
+
+## 4. The Leo-parity horizon (user framing, 2026-06-10)
+
+*User: treat "ember surpasses Leo's known capabilities (Fable 5 × Claude Code
+coupled)" as a 100% milestone — what percent are we at, and is the framework
+useful?*
+
+**Two numbers, both judgment-class (no receipt can ground a scalar like this;
+labeled accordingly):**
+
+- **Capability: ~1–2%.** Ember's effective capability today = the borrowed 3B
+  core, unmodified — the owned delta on top of it is exactly 0 (round-1 q3:
+  trained arm 0 verifies, base arm 1). A 3B local model vs Fable×CC on the
+  work Leo actually does (multi-hour agentic design/build/gate) is a small
+  single-digit fraction by any benchmark family we could anchor to.
+- **Machinery: ~20%.** Of the components the milestone requires: substrate
+  runs locally ✓, verifier+gate demonstrated ✓, ledger-as-identity
+  demonstrated 3× ✓, training loop runs ✓ (but no positive delta yet), eval
+  harness ✓. Absent: a single flywheel turn (the highest-weight item — 0
+  demonstrated), NC-K kernel/executive (not built), round-2 self-generation
+  (staged), teacher system (designed only), multimodality (reserved),
+  verifier-free judgment (deliberately not on the ladder).
+
+**Is the framework useful? As a horizon, yes; as the tracking metric, no —
+three failure modes:**
+
+1. **Destination-metric trap** — the-search's exact failure (§9b): percent-
+   toward-a-far-destination is unfalsifiable in the small and invites
+   narrative drift. The tracking metric stays `dF/dround` — engine, not
+   destination.
+2. **Goodhart risk** — optimizing "Leo-likeness" would pull effort toward
+   imitating the scaffold (verbosity, tool ceremony) instead of verified
+   accumulation, the one thing ember does that Leo can't.
+3. **Moving/expiring reference** — "Leo" changes models June 22. Fix: the
+   reference must be FROZEN (same principle as freeze-target-spec memory):
+   define the milestone against a **Fable 5 × CC June-2026 snapshot** —
+   which is actually a *good* frozen target precisely because the teacher
+   disappears while the benchmark stays definable.
+
+**Usable form:** keep the scalar as orientation only; track the VECTOR — this
+doc's gap inventory as a per-axis matrix, each axis anchored to a measurable
+proxy (narrow-domain verified solve-rate vs Leo-session baseline on the same
+tasks), reported per round alongside F. Parity claims per-axis, by receipt,
+or not at all.
