@@ -1,0 +1,26 @@
+{
+  "ticket": "NC0-T1",
+  "mode": "smoke",
+  "ts": "20260610T150303Z",
+  "args": {
+    "mode": "smoke",
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "n_tasks": 10,
+    "k": 4,
+    "batch_size": 8,
+    "max_new": 768,
+    "temp": 0.8,
+    "seed": 14
+  },
+  "summary": {
+    "tasks_sampled": 8,
+    "tasks_skipped_prompt_len": 2,
+    "verify_any_pct": 0.0,
+    "solve_any_pct": 0.0,
+    "programs_executed": 32,
+    "extraction_rate_pct": 100.0,
+    "gen_tokens": 3937,
+    "gen_secs": 59.8,
+    "gen_tok_per_s": 65.8
+  }
+}
