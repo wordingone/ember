@@ -855,3 +855,193 @@
 {"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'vrotate' is not defined", "chunk": 0}
 {"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "NameError: name 'rotate90' is not defined", "chunk": 0}
 {"arm": "context_only", "task": "df8cc377", "verified": false, "solved": false, "error": "IndexError: tuple index out of range", "chunk": 0}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": "NameError: name 'output_grid' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": "TypeError: '>' not supported between instances of 'list' and 'int'", "chunk": 1}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": "AssertionError: ", "chunk": 1}
+{"arm": "core_only", "task": "e133d23d", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": "NameError: name 'row' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "c8b7cc0f", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": "NameError: name 'output_2' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": "IndexError: tuple index out of range", "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "332efdb3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": "TypeError: can only concatenate tuple (not \"int\") to tuple", "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": "TypeError: 'int' object is not subscriptable", "chunk": 1}
+{"arm": "core_only", "task": "7953d61e", "verified": false, "solved": false, "error": "TypeError: roll() missing 1 required positional argument: 'shift'", "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": "NameError: name 'i' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": "timeout", "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": "NameError: name 'i' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "1a2e2828", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "575b1a71", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 33)", "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "45737921", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": "no solve()", "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": "NameError: name 'row' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0bb8deee", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ae58858e", "verified": false, "solved": false, "error": "ValueError: operands could not be broadcast together with shapes (10,) (8,) ", "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": "no solve()", "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "310f3251", "verified": false, "solved": false, "error": "no solve()", "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 33)", "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "81c0276b", "verified": false, "solved": false, "error": "IndexError: pop from empty list", "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "ea9794b1", "verified": false, "solved": false, "error": "SyntaxError: '(' was never closed (<string>, line 36)", "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 25)", "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 22)", "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 29)", "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 24)", "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "c64f1187", "verified": false, "solved": false, "error": "NameError: name 'row' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": "NameError: name 'np' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 39)", "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e1baa8a4", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "d47aa2ff", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": "NameError: name 'cell' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": "TypeError: list indices must be integers or slices, not list", "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 33)", "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 24)", "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 33)", "chunk": 1}
+{"arm": "core_only", "task": "baf41dbf", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "5af49b42", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": "UnboundLocalError: cannot access local variable 'i' where it is not associated with a value", "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "896d5239", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": "NameError: name 'input_grid' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": "TypeError: clip() missing 1 required positional argument: 'a_max'", "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "705a3229", "verified": false, "solved": false, "error": "no solve()", "chunk": 1}
+{"arm": "core_only", "task": "17b80ad2", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "17b80ad2", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "17b80ad2", "verified": false, "solved": false, "error": "TypeError: 'int' object is not iterable", "chunk": 1}
+{"arm": "core_only", "task": "17b80ad2", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "17b80ad2", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 16)", "chunk": 1}
+{"arm": "core_only", "task": "17b80ad2", "verified": false, "solved": false, "error": "TypeError: list indices must be integers or slices, not list", "chunk": 1}
+{"arm": "core_only", "task": "17b80ad2", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": "IndexError: index 19 is out of bounds for axis 0 with size 19", "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": "NameError: name 'maxes' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "e88171ec", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": "AttributeError: 'set' object has no attribute 'is_empty'", "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 25)", "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "33b52de3", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 19)", "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 18)", "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
+{"arm": "core_only", "task": "fd096ab6", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0607ce86", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0607ce86", "verified": false, "solved": false, "error": "SyntaxError: '[' was never closed (<string>, line 23)", "chunk": 1}
+{"arm": "core_only", "task": "0607ce86", "verified": false, "solved": false, "error": "IndexError: index 22 is out of bounds for axis 1 with size 22", "chunk": 1}
+{"arm": "core_only", "task": "0607ce86", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0607ce86", "verified": false, "solved": false, "error": "IndexError: list index out of range", "chunk": 1}
+{"arm": "core_only", "task": "0607ce86", "verified": false, "solved": false, "error": null, "chunk": 1}
+{"arm": "core_only", "task": "0607ce86", "verified": false, "solved": false, "error": "NameError: name 'input_1' is not defined", "chunk": 1}
