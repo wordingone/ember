@@ -175,26 +175,42 @@ This is the inversion of the datacenter assumption: scale is not an axis we
 own; verifier-bit efficiency is. Every component contract item (QAT, ternary,
 sub-quadratic, MTP, small-core) is a residency tool — see GOAL.md annex.
 
-## 9. Candidate contributions (to be confirmed/falsified by lit sweep)
+## 9. Contributions — REVISED per adversarial lit sweep (2026-06-10)
 
-Stated as candidates, not claims:
+Five-cluster adversarial sweep (expert-iteration/STaR/SOAR; DGM/self-
+rewriting; Voyager/memory; TTT/continual; verifier-gated-data) — full
+verdict table with citations: `research/novelty-verdicts-2026-06-10.md`.
+**No candidate survived as stated in v0; all four survive narrowed. The v0
+verbatim forms are retracted as over-claims.**
 
-- **C1 — Ledger-as-identity:** persistent state = receipted episode ledger;
-  weights as compiled view; forgetting bought out by recompile-from-base at
-  the slow timescale. (vs. expert iteration / STaR / SOAR, which keep the
-  *model* as the state and the data as transient.)
-- **C2 — The three-test gate as a standing protocol** applied to *every*
-  artifact including harness self-edits — G2's matched-budget control and
-  G3's deletion test together exceed what DGM-style benchmark-gating checks.
-- **C3 — Residency-bounded accumulation:** verifier-bits/GPU-hour as the
-  loop's objective constant on one consumer machine; world admissibility
-  defined by measured floor accessibility (§3, §7).
-- **C4 — Unified artifact type:** weight deltas and harness edits behind one
-  gate, over one invariant lattice (§6).
-
-Known adjacent work to sweep against: STaR, SOAR/expert iteration, AlphaZero
-self-play, Voyager skill libraries, Darwin Gödel Machine, test-time training,
-replay-based continual learning, constitutional/self-critique loops.
+- **C1-narrowed:** the *conjunction* of receipted per-episode provenance
+  (verifier identity/version, hashes, provenance) with ledger-as-canonical-
+  identity and weights-as-disposable-compiled-view. Recompile-from-base
+  anti-forgetting is ADOPTED PRIOR ART (STaR 2203.14465 §3.1, ReST-EM
+  2312.06585, GDumb ECCV'20) — cited, never claimed. Closest single work:
+  SOAR (2507.14172) — cumulative verified archive + retrain-base, but no
+  receipts and no identity framing.
+- **C2-narrowed:** the *composed standing gate* — G1 held-out transfer with
+  paired-bootstrap CI as the accept criterion + G2 equal-volume-UNVERIFIED
+  matched control (found nowhere as a gate in any cluster) + G3 per-artifact
+  deletion — applied to every artifact including harness edits. The
+  individual tests are standard one-off evaluation practice (ReST-EM,
+  Bansal 2408.16737, NAT 2402.11651, Voyager/DGM ablations) — cited as such.
+- **C3-narrowed:** *verifier-bits-per-GPU-hour* as the loop's explicit
+  optimized objective (returned by no cluster), conjoined with consumer-
+  machine residency (Cramming 2212.14034, cited) and a PRE-COMMIT measured
+  world-admission floor — distinguished precisely from Absolute Zero's
+  (2505.03335) in-loop learnability reward: C3's floor is an admission
+  decision made before committing training compute, not reward shaping.
+- **C4-narrowed (strongest survivor — NOT-FOUND in 3/5 clusters):** weight
+  deltas AND harness/code self-edits as ONE artifact type behind ONE
+  empirical gate whose invariant evaluation set is held OUTSIDE the write
+  surface. Every prior system sits on exactly one side of the weights/code
+  divide (STOP 2310.02304, DGM 2505.22954 — which names FM retraining as
+  future work; SEAL 2506.10943 on the weights side); and the held-out
+  invariant set's absence is a *documented live failure mode* — DGM's agent
+  removing its own hallucination-detection markers, STOP's sandbox-flag
+  circumvention — which is independent empirical support for §6's design.
 
 ## 10. Open problems
 
