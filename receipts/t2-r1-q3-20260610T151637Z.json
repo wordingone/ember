@@ -1,0 +1,24 @@
+{
+  "ticket": "NC0-T2",
+  "round": 1,
+  "control": false,
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "ts": "20260610T151637Z",
+  "sampling": {
+    "source": "ledger-only (--train-only)"
+  },
+  "episodes_verified_new": 0,
+  "control_pool_new": 0,
+  "dataset": {
+    "n_examples": 1909,
+    "n_tasks": 1909
+  },
+  "training": {
+    "train_loss": 0.1395,
+    "steps": 360,
+    "n_examples": 1909,
+    "n_texts_after_repeat": 1909,
+    "secs": 1533.5
+  },
+  "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1-q3"
+}
