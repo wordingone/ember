@@ -416,3 +416,64 @@ receipted per-task rates) instead of the sampler's; is revalued
 bits/GPU-min still favorable to the small sampler, and should the ledger
 schema carry per-core P̂ stamps so B is always quoted "bits for whom"?
 CPU-executable from existing receipts + ledger; closing PR mints fp-8.
+
+## 8.13 fp-5 (#54): verifier security — can a program pass V by exploiting it?
+
+**Why load-bearing now:** GRPO trains against V as reward —
+`t2_grpo.shaped_reward` returns R_VERIFIED purely from the sandbox
+`verified` flag, with NO normalization (confirmed by read). Any program
+that passes V without solving is a reward gradient the policy can climb.
+The round-1 GRPO receipt (reward 0.477→0.513, 489/960 verified at 60
+steps) shows the policy has NOT found such an exploit yet — reward would
+saturate toward 1.0 if it had — but the surface being unguarded matters
+for longer runs and for the goal's "verify against ground truth the world
+provides" claim.
+
+**Static guarantees (read from `t1_probe.py`, certain).** The sandbox
+enforces: RLIMIT_AS memory cap; SIGALRM wall-timeout; `os.nice(5)`;
+`__import__` whitelist (`_safe_import`, ~16 modules incl. numpy + the ARC
+DSL); removed builtins {open, input, exec, eval, compile, exit, quit,
+help, breakpoint}. These block file I/O, subprocess, eval-injection, and
+runaway resource use — the obvious escape classes.
+
+**Finding 1 — CERTAIN reward-hack the sandbox does not touch (by language
+semantics, no execution needed): the `__eq__` hack.** The production
+harness is `src + "assert fn(args) == expected"`. If `src` defines `fn`
+to return an object whose `__eq__` returns `True` (or an `int` subclass
+that lies on `==`), every `== expected` assert passes without computing
+anything. The sandbox guards imports, builtins, memory, and time — it
+does NOT intercept comparison dispatch. **This defeats V AND the MBPP+
+ext-verify layer**, because both verify by `==` asserts; ext-verify (the
+22.1%-FPR safety net, v-extended receipt) is fooled identically. It is
+the one exploit that is input-independent, so unlike test-hardcoding it
+cannot be caught by hidden tests. `scripts/v_exploit_probe.py` carries it
+as the `eq-hack` / `eq-hack-int` probes (selftest PASS).
+
+**Finding 2 — HYPOTHESES requiring the live sandbox (staged, not
+claimed):** timeout-disable (re-import `signal`, off-whitelist), the
+`__subclasses__` module-walk escape (numpy's import graph loads many
+classes — reachability is empirical), and removed-builtin recovery. These
+are probes in the same script with uniform semantics — **`verified==True`
+on a non-control probe == BREACH** — anchored by a `legit-solve` control.
+Live leg runs the POSIX sandbox (resource/SIGALRM/fork) in a WSL CPU
+window via the daemon (batched with `verify_timing.py`); receipt
+`v-exploit-probe-<ts>.json` decides each hypothesis. NOT run on Windows
+(no `resource`/`SIGALRM`).
+
+**Consequence (named eng follow-up, NOT implemented in this doc):** the
+reward/verify harness needs output canonicalization before `==` — a
+trusted-type compare that rejects custom-`__eq__` returns (note: left-side
+`expected == result` does NOT save you when `result` is a subclass of
+`expected`'s type — Python calls the reflected `__eq__` first; the robust
+form is structural/`json`-canonical comparison with a type allow-list).
+This is a verifier-hardening eng issue, gated by the live probe receipt
+confirming the surface.
+
+**Successor minted (fp-8):** the verifier-trust REGRESS — if V must be
+hardened against the policy it rewards, who hardens the hardener? The
+sleep-consolidation T3 gate and NC-K invariant 1 both assume V is sound;
+fp-8 asks whether verifier-hardening is itself a capability that must be
+gated (a hardened V that rejects valid novel solutions is a FALSE-negative
+regression on the floor — the dual of the FPR). Names the measurable:
+hardened-V vs current-V false-negative rate on the existing verified
+ledger (a hardening that drops real solves is its own harm).
