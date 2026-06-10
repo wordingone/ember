@@ -24,7 +24,9 @@ everything above them churns. Six members:
    **Soundness caveat (first-principles audit §4):** the axiom freezes V's
    MEANING, not its quality — V's false-positive rate is a measurable WORLD
    PROPERTY carried on a per-world V card (ARC pair-equality ≈ strong;
-   MBPP ~3-assert suites measurably weak per EvalPlus-class findings).
+   MBPP ~3-assert suites weak per EvalPlus, Liu et al. NeurIPS 2023,
+   arXiv 2305.01210 — our harness's exact FPR is eng issue #7's
+   deliverable, not assumed from the paper).
    Prose must say "passed-V," never inflate to "correct"; worlds upgrade V
    (extended test sets) without invalidating the ledger — entries record
    which V version blessed them.
