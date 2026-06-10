@@ -363,3 +363,56 @@ ledger episodes, does it inherit Qwen's distribution as ground truth
 clean for training-data use? Names the licensing read + a measurable
 probe (style-classifier separability of ledger episodes vs human MBPP
 reference solutions).
+
+## 8.12 fp-4 (#52): is on-policy-ness core-size-transferable?
+
+**The question:** fp-1 (§8.9) showed the 1.5B core banks 1.23× stratified
+bits/GPU-min. The cheap-sampler architecture (small core samples, large
+core consolidates) only works if the small core's episodes are worth
+anything TO the large core. Round-1 receipts already bound the stakes:
+off-policy expert episodes produced harm (t5, ARC chain); on-policy
+episodes produced the MTP gain. Cross-CORE episodes sit between — same
+family, same worlds, different capacity.
+
+**Receipt `fp4-cross-core-20260610T231029Z.json`** (`fp4_cross_core.py`,
+selftest PASS — CPU analysis over the receipted q15/q3 sample files:
+identical prompts/split/k/seed, 120 paired tasks, only the core differs):
+
+1. **Per-task rates agree strongly but not interchangeably:** Pearson
+   0.767 [0.680, 0.839], rank r 0.766. The cores see correlated — not
+   identical — difficulty.
+2. **Coverage direction favors the cheap sampler:** 25 of the 3B core's
+   29 hot-band tasks (dead+frontier, 86%) are ALSO hot for 1.5B — a
+   small sampler aimed at its own cracks covers almost all of the big
+   core's cracks. The cost: 19 of 1.5B's 44 hot tasks (43%) are mid/easy
+   for 3B — that fraction of small-sampler targeting buys low-value
+   episodes for the consolidator.
+3. **The text is genuinely off-policy:** only 17.8% of the small core's
+   verified (task, sha1) programs appear in the big core's verified set
+   (74/415). Cross-core feeding is NOT "the same programs from a cheaper
+   GPU" — it is off-policy text on mostly-shared cracks.
+
+**The fp-class finding — bits are sampler-relative.** B (the banked-bits
+numerator, #30) is computed against the SAMPLER's P̂. The same episode
+carries different surprise for a different core: ~43% of the small
+core's hot-band targeting is mis-valued from the 3B consolidator's seat.
+fp-1's 1.23× bits/GPU-min therefore does NOT transfer as-is to a
+cross-core architecture; it is exact only when sampler == consolidator.
+Any cross-core design needs consolidator-side re-valuation of episode
+surprise before the efficiency claim survives.
+
+**Falsification arm (named, GPU, round-3 window — rides the §8.9/§8.11
+ladder):** 3B-MTP trained on 1.5B-q15 verified episodes (w2-pipeline
+build, matched to the receipted t2-r1w-q3-mtp budget) → G1 paired vs
+MTP-on-own-episodes. MATCH (CI overlap on the gains metric) = on-policy-
+ness transfers down-up at this scale, cheap-sampler viable; FLAT vs base
+= consolidation requires the consolidator's own episodes — the
+sleep-consolidation spec's T2 trigger then binds episodes to the core
+that will burn them.
+
+**Successor minted (fp-7):** consolidator-side re-valuation — re-score
+ledger episode surprise under the CONSOLIDATING core's P̂ (its own
+receipted per-task rates) instead of the sampler's; is revalued
+bits/GPU-min still favorable to the small sampler, and should the ledger
+schema carry per-core P̂ stamps so B is always quoted "bits for whom"?
+CPU-executable from existing receipts + ledger; closing PR mints fp-8.
