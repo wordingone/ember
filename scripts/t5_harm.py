@@ -130,7 +130,9 @@ def main():
 
     problems = load_mbpp(N_PROBLEMS)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    from receipt_fp import args_fingerprint  # eng #10
     receipt = {"ticket": "NC0-T5", "round": args.round, "ts": ts,
+               "args_fp": args_fingerprint(vars(args)),
                "n_problems": len(problems), "args": vars(args), "arms": {}}
 
     arm_vals = {}

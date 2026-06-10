@@ -266,8 +266,10 @@ def main():
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     tag = f"r{args.round}{args.tag_suffix}" + ("-control" if args.control else "")
+    from receipt_fp import args_fingerprint  # eng #10
     receipt = {"ticket": "NC0-T2", "round": args.round, "control": args.control,
-               "model": args.model, "ts": ts}
+               "model": args.model, "ts": ts,
+               "args_fp": args_fingerprint(vars(args))}
 
     if not args.control:
         if args.train_only:

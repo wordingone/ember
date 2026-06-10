@@ -210,8 +210,10 @@ def main():
 
     rewards = [h["reward"] for h in trainer.state.log_history
                if "reward" in h]
+    from receipt_fp import args_fingerprint  # eng #10
     receipt = {
         "ticket": "NC0-T2-GRPO", "ts": ts, "args": vars(args),
+        "args_fp": args_fingerprint(vars(args)),
         "governor": governor_block,
         "world": "mbpp", "round": 1, "prompt_rows": len(rows),
         "prompt_mix": {st: sum(1 for r in rows if r["stratum"] == st)
