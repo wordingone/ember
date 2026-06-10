@@ -170,30 +170,18 @@ def train_lora(model_id, examples, out_dir, seed=3407, match_texts=None):
 
     match_texts: exact effective text count to replicate/truncate to —
     matched-budget (G2) arms pass the mirrored arm's effective count."""
-    import torch
+    import torch  # noqa: F401 — cuda context for governor + trainer
     from unsloth import FastLanguageModel
     from trl import SFTTrainer
-    from transformers import TrainingArguments, TrainerCallback
+    from transformers import TrainingArguments
     from datasets import Dataset
 
-    class _Headroom(TrainerCallback):
-        # Headroom rule (user 2026-06-10): never pegged wall-to-wall — brief
-        # pause each optimizer step keeps GPU/CPU duty cycle under 100%.
-        def on_step_end(self, args, state, control, **kw):
-            time.sleep(float(os.environ.get("EMBER_THROTTLE_S", "0.3")))
-
-    # Resource governor (post-crash 2026-06-10, the user headroom rule): hard
-    # per-process VRAM cap + free-margin assert as launch PRECONDITIONS —
-    # same block as t1_probe.load_model; the 0670e3ec crash receipt is the
-    # reason. r1's 4-bit train peaked 16.4/24.5GB, well inside the cap.
-    frac = float(os.environ.get("EMBER_VRAM_FRACTION", "0.85"))
-    torch.cuda.set_per_process_memory_fraction(frac)
-    free, total = torch.cuda.mem_get_info()
-    margin_gb = float(os.environ.get("EMBER_VRAM_MARGIN_GB", "4.0"))
-    if free < margin_gb * 1e9:
-        raise SystemExit(
-            f"VRAM-PREFLIGHT: {free/1e9:.1f}GB free of {total/1e9:.1f}GB — "
-            f"need >= {margin_gb}GB free before load; refusing launch")
+    # Resource governor (post-crash 2026-06-10, the user headroom rule):
+    # launch PRECONDITIONS + per-step throttle, canonical copy in
+    # governor.py since eng #14 (crash context 0670e3ec documented there).
+    # r1's 4-bit train peaked 16.4/24.5GB, well inside the cap.
+    from governor import make_headroom_callback, preflight
+    governor_block = preflight()
 
     # unsloth pings the HF API even when weights are cached; under our
     # offline flags that raises. Resolve the cached snapshot DIR offline and
@@ -232,7 +220,7 @@ def train_lora(model_id, examples, out_dir, seed=3407, match_texts=None):
         model=model, tokenizer=tok, train_dataset=ds,
         dataset_text_field="text", max_seq_length=LORA["max_seq"],
         dataset_num_proc=4,  # headroom rule: don't peg all cores tokenizing
-        callbacks=[_Headroom()],
+        callbacks=[make_headroom_callback()],
         args=TrainingArguments(
             output_dir=out_dir + "-ckpt", per_device_train_batch_size=1,
             gradient_accumulation_steps=16, num_train_epochs=LORA["epochs"],
@@ -244,7 +232,8 @@ def train_lora(model_id, examples, out_dir, seed=3407, match_texts=None):
     tok.save_pretrained(out_dir)
     return {"train_loss": round(stats.training_loss, 4),
             "steps": stats.global_step, "n_examples": len(examples),
-            "n_texts_after_repeat": len(texts)}
+            "n_texts_after_repeat": len(texts),
+            "governor": governor_block}
 
 
 def main():

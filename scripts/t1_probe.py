@@ -212,6 +212,10 @@ def _grids_equal(a, b):
 # GPU and CPU"): duty-cycle pause between GPU batches, and CPU pools capped
 # below the core count. Tunable via EMBER_THROTTLE_S without code edits.
 THROTTLE_S = float(os.environ.get("EMBER_THROTTLE_S", "0.6"))
+
+# Governor receipt block, filled by load_model via governor.preflight()
+# (eng #14: limits ride on receipts instead of being asserted in prose).
+GOV = {}
 EXEC_WORKERS = max(2, min(6, (os.cpu_count() or 8) - 2))
 # Per-batch sleep is too sparse for long generations (one eval batch = 3-4
 # min continuous kernel time → duty 99.7%, observed pegged 100% during t4
@@ -298,20 +302,13 @@ def load_model(model_id, adapter=None):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     # Resource governor (post-crash 2026-06-10, the user headroom rule — LAUNCH
-    # PRECONDITION, not politeness): the unpaced t4 eval (0670e3ec) held 97%
-    # of VRAM at 100% duty; Windows' compositor shares that VRAM; system
-    # services timed out (asComSvc 23:31-23:34 local) and the PC went down.
-    # (a) hard per-process VRAM cap — a job that doesn't fit the budget OOMs
-    #     itself instead of starving the desktop;
-    # (b) free-VRAM margin assert before load — refuse to start crowded.
-    frac = float(os.environ.get("EMBER_VRAM_FRACTION", "0.85"))
-    torch.cuda.set_per_process_memory_fraction(frac)
-    free, total = torch.cuda.mem_get_info()
-    margin_gb = float(os.environ.get("EMBER_VRAM_MARGIN_GB", "4.0"))
-    if free < margin_gb * 1e9:
-        raise SystemExit(
-            f"VRAM-PREFLIGHT: {free/1e9:.1f}GB free of {total/1e9:.1f}GB — "
-            f"need >= {margin_gb}GB free before load; refusing launch")
+    # PRECONDITION, not politeness; crash context 0670e3ec documented in
+    # governor.py, the single canonical copy since eng #14). Cap + margin
+    # assert; receipt block stashed for the summary writer. The decode pacer
+    # (THROTTLE_S=0.6 above) is generation-side and intentionally NOT the
+    # module's train-step throttle.
+    from governor import preflight
+    GOV.update(preflight())
 
     tok = AutoTokenizer.from_pretrained(model_id, padding_side="left")
     model = AutoModelForCausalLM.from_pretrained(
@@ -457,6 +454,8 @@ def main():
         "gen_secs": round(gen_secs, 1),
         "gen_tok_per_s": round(gen_tokens / max(gen_secs, 1), 1),
     }
+    if GOV:
+        receipt["governor"] = dict(GOV)
     with open(receipt_path, "w") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt["summary"], indent=2))
