@@ -232,6 +232,55 @@ the floor wins. AND: the GPU should be leveraged, definitely (user) — the
 constraint bounds ember's resident form, never the build work; when there is
 real sampling/training/eval to do, run the 4090 hard.
 
+## Research-intake posture — when more advanced research goes public (standing, 2026-06-10)
+
+User question: what happens when more advanced research is released in the
+future — what is ember's posture? **Answer: absorb through the gate, never
+through belief.** The architecture was built so that new research threatens
+components, never the organism. Three levels:
+
+1. **Component level** (new optimizer / attention / quant / training recipe):
+   a published technique is a CLAIM — same epistemic status as model
+   self-report. Intake = contract amendment: add a row at status WATCHING with
+   the probe shape that would decide it; promote to ADOPT only on a local
+   receipt at residency scale. Most published gains won't reproduce at 4090
+   scale or won't move verifier-bits/GPU-hour — the metric filters fashion
+   from leverage. The dispositions table above IS this protocol's first
+   execution (MTP re-staged on negative ≤1B evidence, FP8 skipped on
+   consumer-stack reality, Muon adopted on validated same-scale receipts).
+
+2. **Core level** (a better base model or architecture family): the core is
+   cattle; the ledger is the self (formalization C1). A better core =
+   recompile-target change — replay the ledger into it, gate the result.
+   Mechanically proven 2026-06 week alone: the same 1,909-episode ledger
+   compiled into 7B, 1.5B, and 3B cores with zero identity loss. This contract
+   is versioned the same way: research that obsoletes a locked choice before
+   NC2 entry revs the contract, and the pilot decides.
+
+3. **Paradigm level** (research that attacks the loop's own assumptions): the
+   only level that can't be A/B'd as a delta. The verifier axiom, the
+   three-test gate, receipts-only truth, and the invariant set are NOT
+   research-amendable — no paper, however strong, edits the gate; only the
+   user can. A genuine paradigm shift gets a written approach-change case to
+   the user (break-the-wall escalation shape: confirm approach, never hand
+   back the work), never a silent re-architecture.
+
+**Strategic frame:** ember is deliberately a SECOND mover on components and a
+first mover only on the accumulation layer (the narrowed C1–C4). Public
+research is subsidized verifier-bits — other labs spend datacenter compute
+discovering what works; we adopt post-hoc at the cost of a pilot. New releases
+strengthen ember rather than threaten it precisely because ember does not
+compete on the layer where research lands (architecture/scale); it competes on
+the layer almost nobody publishes (gated accumulation under residency). The
+Cosmos 3 read is the standing example: NVIDIA's frontier physical-AI runs on
+borrowed Qwen backbones — the moat is the loop, not the backbone.
+
+**Mechanics:** periodic lit sweeps (Haiku agents, wait-window queue) feed
+candidate rows; every row carries a status (ADOPT / RE-STAGED / WATCHING /
+SKIP-with-receipt), the receipt or planned probe that decides it, and a
+revision trigger (what evidence reopens it). No component is ever dropped by
+research alone — drops require the user, by name.
+
 ## Sequencing (proposal, revisable)
 
 - **Now (NC0 running):** survey lands → pilot plan written. No pretrain spend.

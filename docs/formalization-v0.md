@@ -139,7 +139,12 @@ and enforced in code (protected paths + boot-time checksum):
 5. the enforcement layer itself.
 
 Formally: the editable surface is `H \ I`; `I` defines the feasible set of the
-self-modification search and is not reachable by any `δ_H`.
+self-modification search and is not reachable by any `δ_H`. The same boundary
+holds for *research intake*: published techniques enter as candidate artifacts
+through the same gate (component-level), or as recompile targets for the ledger
+(core-level) — but no external result, however strong, amends `I` itself.
+Paradigm-level challenges to the loop's assumptions go to the user as a written
+approach-change case (intake posture: `nc2-own-technique-contract.md`).
 
 ## 7. World choice (the criterion this week's receipts forced)
 
