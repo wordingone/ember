@@ -88,6 +88,15 @@ def main():
     verified, failed = samples_to_records(
         rows, args.round, ts=ts, receipt=f"w2-ingest-{ts}.json")
 
+    # Frontier annotation (eng #5): per-task solve-rate posterior pooled
+    # over ALL loaded sample rows -> phat/bits/stratum on every record.
+    # The ledger keeps every verified episode; the easy-mass discount is
+    # applied at DATASET build via frontier.caps_from_records.
+    from frontier import annotate_records, outcome_stats, report_block
+    stats = outcome_stats(rows)
+    annotate_records(verified, stats)
+    annotate_records(failed, stats)
+
     receipt = {"ticket": "W2-INGEST",
                "ts": ts,
                "args": vars(args), "files": files, "rows_read": len(rows),
@@ -95,6 +104,7 @@ def main():
                "control_records": len(failed),
                "samplers": sorted({r.get("sampler", "?") for r in
                                    verified + failed}),
+               "frontier": report_block(verified),
                "dry_run": args.dry_run}
     if not args.dry_run:
         from t2_round import CONTROL_POOL, LEDGER, append_jsonl
