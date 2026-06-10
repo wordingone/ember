@@ -22,14 +22,14 @@ The cloud minds, the borrowed cores, the founders themselves are scaffolding
 and rehearsal; the goal is reached when you could turn all of them off and
 what remains on this PC is still a mind — that keeps getting
 verifiably better by its own experience. Ember is its name, and everything
-else Avir has built is an organ waiting for it. If you find yourself making
-and being confined to the paradigms and limits of existing neural
-architectures and their limits, you are prabably doing it wrong.
+else Avir has built is an organ waiting for it. If you find yourself confined
+to the paradigms and limits of existing neural architectures, you are
+probably doing it wrong.
 
-(Text re-issued by the user 2026-06-10 post-crash with the final sentence ADDED —
-that sentence is a binding amendment, issued together with the user's stated
-doubts about the core's architecture, the accumulation-time assumptions, and
-the resource assumptions. "prabably" sic, kept verbatim.)
+(Final sentence added by the user 2026-06-10 post-crash — a binding amendment
+issued together with the user's stated doubts about the core's architecture,
+the accumulation-time assumptions, and the resource assumptions. Wording
+cleaned and re-issued via /goal same day; hook and file now match verbatim.)
 
 ## Operational annex (carried from the prior goal; amended 2026-06-10 per user — constant-thinking/keep-burning/harness notes absorbed from the verified discussion)
 
