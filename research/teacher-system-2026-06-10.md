@@ -123,7 +123,60 @@ Until then it is engineering.
   decode pacer as the core. No exceptions for "it's just a probe."
 - **License check per model** at acquisition time, recorded in the receipt.
 
-## 8. Sequencing (gated on the 3B verdict — nothing fires from this note)
+## 8. Placement — local hf-cli vs HF compute (user question, 2026-06-10)
+
+The question: should teachers run on HF compute (Inference API / Endpoints)
+instead of locally, so they don't compete with ember for the one GPU?
+
+**Decision: local hf-cli is the default.** Four reasons:
+
+1. **The admission metric already prices the competition.** Feed-per-GPU-hour
+   is measured against the alternative use of that same GPU-hour by the core.
+   A teacher that can't beat the core's use of the hour isn't admitted — the
+   "competition" is the test, not a problem to engineer away.
+2. **Receipt integrity.** Local = revision-pinned weights + exact quant config
+   + reproducible decode params. Serverless endpoints can change serving
+   config silently; sampler provenance in receipts weakens to "whatever HF
+   served that day." Paid dedicated endpoints pin revisions but are spend.
+3. **Zero spend, zero egress.** Free-tier serverless is rate-limited far below
+   probe scale (k × tasks ≈ thousands of generations) and non-pinnable; paid
+   endpoints are buying back datacenter GPU-hours — the exact inversion the
+   residency frame exists to resist.
+4. **Verification already doesn't compete.** The sandbox is CPU-side; only
+   generation contends for the GPU, and teacher generation is an idle-window
+   burst by design.
+
+**What the question gets right (registered, not adopted):** generation is the
+GPU hog and verification is not — offloading teacher *generation* to compute
+we don't own frees the whole 4090 for train/verify, a real pipeline split. It
+is admissible in principle: cloud teachers don't touch the verifier axiom
+(proposals verify locally) and fall under the same scaffolding clause as the
+cloud founders themselves. But it is spend + task-data egress, both behind the
+standing escalation line. **Named escalation trigger:** if a post-verdict
+receipt shows (a) an admitted teacher's feed-per-GPU-hour substantially beats
+the core's AND (b) GPU time is the binding constraint on round cadence (idle
+windows can't supply the sampling budget the admission math says is worth
+buying), the cloud option returns as a specific ask — named model, endpoint
+type, $/GPU-hour, expected verifier-bits per dollar. Until that receipt
+exists, paying for cloud teachers is optimizing an unmeasured bottleneck.
+
+## 9. Lit-check verdict (Haiku adversarial sweep, 2026-06-10)
+
+**SURVIVES-NARROWED** — same shape as C1–C4. Closest prior art per area:
+RouteLLM (2406.18665) cost-quality routing = inference-time, not data
+generation; GRACEs (2511.02833) teacher *selection* from a fixed set, no
+dynamic pool / no per-cost measurement; RFT (2308.01825) / Orca (2306.02707)
+verified filtering with FIXED teacher — the verifier component is standard;
+SOAR (2507.14172) single-teacher measured-student-progress; In-Run Data
+Shapley (2406.11011) per-source attribution but POST-HOC; **DataEnvGym
+(2410.06215) = closest** — dynamic budgeted allocation across data-generation
+*skills* with student feedback, but skills not models, no per-GPU-hour
+admission, no receipts. Surviving claim (integration only, no single
+component): dynamic multi-teacher pool + pre-commit feed-per-GPU-hour
+admission + world-grounded verification + receipted per-teacher episode
+attribution, in one online loop on consumer hardware.
+
+## 10. Sequencing (gated on the 3B verdict — nothing fires from this note)
 
 - **3B all-zero → W-code restructure (already registered):** the w1 floor
   probes (`w1_floor_q15/q3`) measure the core's F on MBPP; add ONE teacher

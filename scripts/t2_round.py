@@ -137,16 +137,21 @@ def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None):
         if match_counts is not None:
             rng.shuffle(recs)
         for r in recs[:n]:
-            if r.get("pairs"):
-                t = {"id": task_id, "train": r["pairs"],
-                     "test": r.get("test", [])}
+            if r.get("prompt"):
+                # Non-ARC worlds (W-code mbpp:* via w2_ingest): the record
+                # carries the exact user text the sampler saw — render it
+                # verbatim; these task keys are not in ARC_TRAIN.
+                user = r["prompt"]
+            elif r.get("pairs"):
+                user = task_prompt({"id": task_id, "train": r["pairs"],
+                                    "test": r.get("test", [])})
             elif task_id in tasks:
-                t = tasks[task_id]
+                user = task_prompt(tasks[task_id])
             else:
                 continue
             examples.append({
                 "messages": [
-                    {"role": "user", "content": task_prompt(t)},
+                    {"role": "user", "content": user},
                     {"role": "assistant",
                      "content": f"```python\n{r['src']}\n```"},
                 ]})

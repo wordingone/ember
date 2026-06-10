@@ -137,6 +137,10 @@ def main():
     tagpart = f"-{args.tag}" if args.tag else ""
     samples_path = f"{RECEIPTS}/w1-floor{tagpart}-{ts}-samples.jsonl"
 
+    # Sampler provenance (teacher-system design note S1): every sample row
+    # records who generated it + the exact prompt it saw, so w2_ingest ledger
+    # records carry both (per-teacher G3 leave-set-out + SFT prompt fidelity).
+    sampler = args.model + (f"+{args.adapter}" if args.adapter else "")
     passed_by_task = {p["id"]: 0 for p in problems}
     samples_by_task = {p["id"]: 0 for p in problems}
     ri = 0
@@ -154,6 +158,8 @@ def main():
                        "error": r.get("error"), "src": src}
                 if ok:
                     passed_by_task[pid] += 1
+            row["prompt"] = problem_prompt(by_id[pid])
+            row["sampler"] = sampler
             samples_by_task[pid] += 1
             sf.write(json.dumps(row) + "\n")
 
