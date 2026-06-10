@@ -80,9 +80,66 @@ F(θ, W, k) = Σ_{x ∈ X_train} (1 − (1 − p_θ(x))^k)        (tasks fed per
 - **Floor accessibility** (world-choice criterion, §7): a world is admissible
   for *training* only if `F(θ_0, W, k_affordable) > 0` on this machine's
   budget. Separation between arms is measurable only above a nonzero floor.
-- The binding resource is **verifier-bits per GPU-hour**:
-  `B(θ, W) = F · H(V) / (sampling + verification GPU-time)`. Residency (§8)
-  makes this the loop's objective constant, not an afterthought.
+- The binding resource is **verifier-bits per GPU-hour** — defined formally
+  in §3b (the `B = F·H(V)/time` sketch this line previously carried left
+  `H(V)` undefined; closed by eng issue #1).
+
+### 3b. Verifier-bits, formally (eng #1, 2026-06-10)
+
+**Definition.** The information banked by a verified episode on task `x` is
+its surprisal under the system's own calibrated expectation:
+
+```
+bits(x) = −log₂ P̂(V=1 | x, S)
+```
+
+where `S` is the sampler (core+adapter+harness) and `P̂` is a calibrated
+estimate of the per-task verify probability. The round's feed objective:
+
+```
+B(θ, W) = Σ_{x ∈ fed(round)} bits(x) / GPU-hours(round)
+```
+
+with `fed(round)` = tasks first-verified this round (further distinct
+solutions of an already-fed task bank marginal bits at the updated, higher
+P̂ — i.e., approximately zero; dedup matches the ledger's `task:sha(src)`
+key discipline).
+
+**Estimating P̂ (ordered by preference):**
+1. The round's calibration predictor (eng #6) once it exists and its
+   reliability receipt passes — this is what makes calibration and feed one
+   mechanism.
+2. Previous-round empirical solve rate on the same task (off-sample, unbiased
+   for the current round's selection).
+3. Split-half fallback (no predictor, first round in a world): estimate
+   `P̂` on a random half of the k samples (Laplace-smoothed,
+   `(s+1)/(k/2+2)`), bank bits only for tasks verified in the OTHER half.
+   The naive single-pool estimator is BIASED — a fluke 1-of-k verify both
+   creates the episode and sets its own probability, capping observed bits
+   at −log₂(2/(k+2)) regardless of true difficulty; the split breaks the
+   self-reference.
+
+**Properties (why this unifies three open designs):**
+- **Easy-mass discount (audit §3):** `P̂→1 ⇒ bits→0` — self-distillation
+  episodes weigh nothing. Frontier-weighting = a bits floor, not an ad-hoc
+  solve-rate band; the round-2 frontier arm trains on bits-weighted episodes.
+- **Teacher admission anti-Goodhart (teacher §7b):** a teacher/generator is
+  admitted iff `B_with > B_without` at matched GPU budget. A generator
+  drifting easy starves its own bits as its tasks' P̂ rises — gaming the
+  count metric was possible, gaming the surprisal metric requires producing
+  genuinely hard-but-solvable tasks, which is the desired behavior.
+- **Calibration becomes load-bearing (audit §8.2):** B is only meaningful
+  under calibrated P̂; the Brier/reliability receipt is therefore part of
+  the feed pipeline, not an optional diagnostic.
+
+**Non-claim (audit §1 discipline):** bits measure the information content of
+the FEED, not capability gained. The flywheel condition stays conjunctive —
+dF/dround > 0 (now measurable in bits as dB/dround > 0) AND a positive G1
+held-out delta. A high-bits diet that doesn't convert is still a conversion
+failure; B replaces the count only on the feed side.
+
+Estimator: `scripts/vbits.py` (pure functions, unit-checked; consumed by w2
+ingest and the round-2 dataset builder).
 
 ## 4. The gain gate (three tests, formal)
 
