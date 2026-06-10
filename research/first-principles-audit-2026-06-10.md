@@ -244,3 +244,48 @@ or does the round-1 off-policy harm receipt generalize to "same-core
 episodes only"? Bears directly on whether a small SAMPLER can feed a
 larger CONSOLIDATOR (teacher-system split) or whether each core must earn
 its own ledger.
+
+## §8.10 — fp-2 (#38): what is V's ceiling — is assert-verification the right shape?
+
+**Question:** asserts are SAMPLES of a specification (22.1% of V-passes
+fail MBPP+ extended, frontier 27.1% — receipt v-extended-20260610T215421Z).
+What raises soundness WITHOUT a model judge, and where does hardening stop
+paying?
+
+**Survey verdict (draft research/drafts/fp2-v-ceiling-draft.md, gated):**
+the draft's five-layer stack is directionally right but its cumulative-FPR
+table (22% → 3–6%) is UNVERIFIED estimation — no local receipt exists for
+any layer's reduction; adopted as hypothesis, never as a number. Two
+layers are REJECTED for v0 on first principles: property-based testing and
+metamorphic relations both require task-specific properties, and
+auto-synthesizing properties reintroduces the verification problem one
+level up (who verifies the property? — a model would, breaking
+receipts-only). Mutation testing measures TEST quality, not program
+correctness — useful diagnostics, wrong layer for FPR.
+
+**What actually pays (in order):**
+1. **DONE — extended-tests-join-V** (eng #21/#22): the single biggest
+   measured hardening; on HumanEval+ (#33/#46) V is born hardened
+   (plus-tests ARE the verifier).
+2. **NEXT (named follow-up): differential cross-candidate testing**
+   (`v_differential`): for each task, run ALL verified sibling programs
+   (k=8 yields several) on shared auto-generated inputs derived from the
+   assert call signatures; any disagreement flags the minority WITHOUT
+   deciding who is right (flag → build-time quarantine, gate decides —
+   same discipline as ext flags). Model-free, uses artifacts we already
+   produce, ~ms cost. Known limit, stated: dead/frontier tasks have few
+   siblings — exactly where FPR is worst, coverage is thinnest; it
+   complements, never replaces, extended tests.
+3. **Compute headroom receipt:** sandbox verification is ms-scale vs
+   generation seconds-scale (~100× headroom) — V-hardening's binding
+   constraint is property QUALITY, not compute. Hardening stops paying
+   when it needs hand-or-model-written specs; at that line, switch worlds
+   (HumanEval+ born-hardened, then policy worlds where the WORLD is the
+   verifier — the goal's own language).
+
+**Successor minted (fp-5):** is the SANDBOX itself trustworthy — what do
+the t1_probe rlimits/import-whitelist actually guarantee, and can a
+generated program pass V by exploiting the verifier (reward-hacking via
+sandbox edges: monkeypatching asserts, output capture, timing)? V's
+soundness question one level down: verifier SECURITY, which GRPO (now
+training against V as reward) makes load-bearing.
