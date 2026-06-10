@@ -44,6 +44,36 @@ def replay_paired_delta_ci(a, b, n=10000, seed=7):
     return [round(100 * deltas[int(n * q)], 2) for q in (0.025, 0.975)]
 
 
+def load_sample_aggregates(samples_path, k=None):
+    """Per-(arm,task) OR-aggregated (solved,verified) from sample rows,
+    RESUMED-RUN SAFE (eng #8): a crashed-then-resumed chunk leaves stale
+    partial sample rows in the file, followed by the complete re-run rows
+    for the same (arm, chunk, task). Re-run-lines-win == keep only the
+    LAST k rows of each (arm, chunk, task) group (a complete group is
+    exactly k samples; anything older in the group is pre-crash residue).
+    Contiguity is NOT a usable boundary: when the crash arm is also the
+    resume's first arm, stale and re-run rows are adjacent with identical
+    keys (caught by the synthetic fixture). k=None -> keep all rows
+    (clean-run behavior, exact for never-resumed files).
+    The old OR-over-everything produced false mismatches on legitimate
+    resumed receipts."""
+    groups = {}
+    with open(samples_path, encoding="utf-8") as f:
+        for line in f:
+            r = json.loads(line)
+            groups.setdefault(
+                (r.get("arm"), r.get("chunk"), r.get("task")), []).append(r)
+    agg = {}
+    for (arm, _chunk, task), rows in groups.items():
+        kept = rows if k is None else rows[-int(k):]
+        for r in kept:
+            key = (arm, task)
+            s, v = agg.get(key, (0, 0))
+            agg[key] = (s | int(r.get("solved", 0)),
+                        v | int(r.get("verified", 0)))
+    return agg
+
+
 def load_task_rows(chunks_path, arms):
     """Per-arm per-task bits, later-lines-win; first-seen order preserved
     (mirrors t4_chunked's append-order accumulation)."""
@@ -112,16 +142,11 @@ def replay_receipt(receipt_path):
               receipt.get("delta_meta_minus_control_ci95"))
 
     # cross-check: task any-bits re-derived from raw per-sample rows
+    # (resumed-run safe: stale pre-crash stretches dropped, eng #8)
     mismatch, sampleless = 0, 0
     if os.path.exists(samples_path):
-        agg = {}
-        with open(samples_path, encoding="utf-8") as f:
-            for line in f:
-                r = json.loads(line)
-                k = (r.get("arm"), r.get("task"))
-                s, v = agg.get(k, (0, 0))
-                agg[k] = (s | int(r.get("solved", 0)),
-                          v | int(r.get("verified", 0)))
+        agg = load_sample_aggregates(samples_path,
+                                     k=(receipt.get("args") or {}).get("k"))
         for arm in arms:
             for i in ids:
                 row = acc[arm][i]
@@ -170,13 +195,91 @@ def replay_episode(task_key, ledger_path):
     return ok
 
 
+def _selftest():
+    """Synthetic resumed-run fixture (eng #8) — fully fabricated, built in a
+    temp dir, exercises: (1) a resumed receipt replays PASS (stale pre-crash
+    sample stretch superseded); (2) under the OLD or-over-everything
+    aggregation the same fixture would mismatch (asserted directly);
+    (3) a tampered receipt replays FAIL (replay catches edits)."""
+    import tempfile
+    arms = ["core_only", "core_meta", "control"]
+    tasks = ["t1", "t2", "t3", "t4"]
+    solved = {"core_only": [1, 0, 0, 0], "core_meta": [0, 0, 0, 0],
+              "control": [0, 0, 0, 0]}
+    with tempfile.TemporaryDirectory() as td:
+        tag = "synthfix-t4-resumed"
+        chunks, samples = [], []
+        for ci, chunk_tasks in ((0, tasks[:2]), (1, tasks[2:])):
+            for arm in arms:
+                if ci == 1 and arm == "core_only":
+                    # STALE pre-crash stretch: t3 wrongly solved, partial
+                    samples.append({"arm": arm, "chunk": 1, "task": "t3",
+                                    "solved": 1, "verified": 1})
+                    chunks.append({"arm": arm, "chunk": 1, "task": "t3",
+                                   "solved": 1, "verified": 1})
+            for arm in arms:  # complete (re-)run stretches, later lines
+                for t in chunk_tasks:
+                    i = tasks.index(t)
+                    for _ in range(2):  # k=2 samples
+                        samples.append({"arm": arm, "chunk": ci, "task": t,
+                                        "solved": solved[arm][i],
+                                        "verified": solved[arm][i]})
+                    chunks.append({"arm": arm, "chunk": ci, "task": t,
+                                   "solved": solved[arm][i],
+                                   "verified": solved[arm][i]})
+        receipt = {"n_tasks_done": 4, "arms": {}, "args": {"k": 2}}
+        for arm in arms:
+            receipt["arms"][arm] = {
+                "n_tasks": 4,
+                "solve_any_pct": round(100 * sum(solved[arm]) / 4, 2),
+                "verify_any_pct": round(100 * sum(solved[arm]) / 4, 2),
+                "solve_ci95": replay_bootstrap_ci(solved[arm])}
+        receipt["delta_meta_minus_core_ci95"] = replay_paired_delta_ci(
+            solved["core_meta"], solved["core_only"])
+        receipt["delta_meta_minus_control_ci95"] = replay_paired_delta_ci(
+            solved["core_meta"], solved["control"])
+        rp = os.path.join(td, f"{tag}-00000000T000000Z.json")
+        with open(rp, "w") as f:
+            json.dump(receipt, f)
+        for suffix, rows in (("chunks", chunks), ("samples", samples)):
+            with open(os.path.join(td, f"{tag}-{suffix}.jsonl"), "w") as f:
+                for r in rows:
+                    f.write(json.dumps(r) + "\n")
+
+        # (2) the old aggregation WOULD have flagged the stale t3 row
+        old_agg = {}
+        for r in samples:
+            k = (r["arm"], r["task"])
+            s, v = old_agg.get(k, (0, 0))
+            old_agg[k] = (s | r["solved"], v | r["verified"])
+        assert old_agg[("core_only", "t3")] == (1, 1)  # stale residue
+        assert load_sample_aggregates(
+            os.path.join(td, f"{tag}-samples.jsonl"), k=2)[
+                ("core_only", "t3")] == (0, 0)  # fix drops it
+
+        # (1) resumed receipt replays PASS
+        assert replay_receipt(rp) is True
+
+        # (3) tampering caught
+        receipt["arms"]["core_only"]["solve_any_pct"] += 1.0
+        with open(rp, "w") as f:
+            json.dump(receipt, f)
+        assert replay_receipt(rp) is False
+    print("KERNEL_REPLAY_SELFTEST_PASS")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--receipt", help="t4 receipt JSON to replay (mode B)")
     ap.add_argument("--episode", help="ledger task key to re-verify (mode A)")
+    ap.add_argument("--selftest", action="store_true",
+                    help="synthetic resumed-run fixture (eng #8)")
     ap.add_argument("--ledger", default=os.path.join(
         os.path.dirname(HERE), "data", "episodes.jsonl"))
     args = ap.parse_args()
+    if args.selftest:
+        _selftest()
+        return
     if not args.receipt and not args.episode:
         ap.error("need --receipt or --episode")
     ok = True
