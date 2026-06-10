@@ -131,14 +131,11 @@ def main():
     sys.path.insert(0, f"{NC}/scripts")
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-    import torch
-    # Governor preconditions (same floor as train_lora; crash 0670e3ec).
-    frac = float(os.environ.get("EMBER_VRAM_FRACTION", "0.85"))
-    torch.cuda.set_per_process_memory_fraction(frac)
-    free, total = torch.cuda.mem_get_info()
-    margin_gb = float(os.environ.get("EMBER_VRAM_MARGIN_GB", "4.0"))
-    if free < margin_gb * 1e9:
-        raise SystemExit(f"VRAM-PREFLIGHT: {free/1e9:.1f}GB free — refusing")
+    import torch  # noqa: F401 — cuda context for governor + trainer
+    # Governor preconditions via the canonical module (eng #9); evidence
+    # block rides on the receipt.
+    from governor import preflight
+    governor_block = preflight()
 
     from unsloth import FastLanguageModel
     try:  # unsloth GRPO patch (older recipes need it; newer absorb it)
@@ -215,6 +212,7 @@ def main():
                if "reward" in h]
     receipt = {
         "ticket": "NC0-T2-GRPO", "ts": ts, "args": vars(args),
+        "governor": governor_block,
         "world": "mbpp", "round": 1, "prompt_rows": len(rows),
         "prompt_mix": {st: sum(1 for r in rows if r["stratum"] == st)
                        for st in STRATUM_REPEATS},
