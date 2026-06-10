@@ -141,7 +141,18 @@ READING NOTES (binding):
   avir-cli compressed to invariants as the seed) → NC2-own (owned-mass
   pretrain, component contract in nc2-own-technique-contract.md). NC-K
   detail-design starts when the NC0 verdict lands; it must not preempt the
-  accumulation track. STATE.md is the single position ledger.
+  accumulation track. AMENDED 2026-06-10 (user: "waiting is not an operating
+  mode"): WAIT-WINDOW CONCURRENCY — downstream work not tied to the weights
+  being collected (NC-K prep: invariant extraction, formalization,
+  world-choice analysis, config maintenance) runs in GPU-wait windows, via
+  background agents/workflows where parallelizable; the accumulation track
+  keeps absolute priority on gates/launches and the GPU is never taken from
+  it. Queue = STATE.md pending layer 7. ARC ROLE SPLIT same day (user
+  challenge + receipts): ARC-1/ARC-2 are permanent HELD-OUT TRANSFER
+  surfaces; training worlds are admitted by the world-choice criterion
+  (verification-dense + floor-accessible at residency scale + portfolio-
+  coupled — formalization §7, research/world-choice.md). STATE.md is the
+  single position ledger.
 
 AUTHORITY: Leo executes solo, spawning subagents/agent teams as needed (user
 2026-06-09, limits temporarily off). Escalate ONLY for money, cloud, new
