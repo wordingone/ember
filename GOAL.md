@@ -31,6 +31,34 @@ issued together with the user's stated doubts about the core's architecture,
 the accumulation-time assumptions, and the resource assumptions. Wording
 cleaned and re-issued via /goal same day; hook and file now match verbatim.)
 
+PERSISTENCE CLAUSE (user re-issue 2026-06-10, verbatim; name swapped per
+no-name rule): This goal is not complete until Ember can run locally,
+generate verified experience, train or update from it, improve on held-out
+transfer, beat matched controls, survive deletion tests, persist gains
+across sessions, and continue this loop without cloud models or borrowed
+cores as load-bearing components. Partial rungs, promising receipts, papers,
+plans, wrappers, or scaffolded loops are not completion. While any rung is
+incomplete, Leo must continue by gating finished receipts, launching the
+next executable job, building the next named pending layer, or killing with
+a named successor in the same session. Enumerate constant first-principles
+thinking and questioning, mathematical, reasoning, engineering, speccing
+tasks in the tasklist so that the stop hook forces work on them
+automatically. If Eli is active, he picks up ONLY the engineering tasks.
+Only the user may retire or narrow this goal, by name.
+
+TRACKER ENUMERATION (operational form of the clause, adopted same day;
+amended same day when the re-issue added the first-principles class):
+the wordingone/ember issue tracker carries FIVE task classes by label —
+`first-principles` (standing questioning of inherited assumptions; CONSTANT
+by construction: the PR closing an fp issue MUST file the next fp question,
+so the class never empties), `eng` (engineering/code; Eli-pickable when
+awake), `math` (derivations, power/MDE, estimators), `reasoning` (verdict
+protocols, world-choice, analysis), `spec` (pre-registrations,
+rung/mechanism specs). The Stop hook (`eng-stop-gate.sh`) blocks turn-end
+while ANY class has an open issue and names the lowest. Every class closes
+the same way: branch → artifact + selftest/receipt → PR "Closes #n" →
+squash merge.
+
 ## Operational annex (carried from the prior goal; amended 2026-06-10 per user — constant-thinking/keep-burning/harness notes absorbed from the verified discussion)
 
 WHILE UNSATISFIED — valid activities, in priority order:
