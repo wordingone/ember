@@ -86,6 +86,68 @@ def calibration_block(predicted_by_task, outcomes_by_task):
             "reliability": reliability(pairs)}
 
 
+def murphy_decomposition(pairs, n_bins=10):
+    """Brier = REL - RES + UNC (Murphy 1973), binned by prediction.
+
+    REL (reliability, lower better): how far bin-mean predictions sit from
+    bin-observed rates. RES (resolution, higher better): how far bin
+    outcomes spread from the base rate — zero resolution = zero
+    discrimination regardless of REL. UNC: base-rate variance, the
+    predictor-independent floor. Exact identity when predictions are
+    constant within bins; binning residual reported as `residual`."""
+    pairs = list(pairs)
+    n = len(pairs)
+    if not n:
+        return None
+    obar = sum(y for _, y in pairs) / n
+    rel = res = 0.0
+    for b in range(n_bins):
+        lo, hi = b / n_bins, (b + 1) / n_bins
+        sel = [(p, y) for p, y in pairs
+               if (lo <= p < hi) or (b == n_bins - 1 and p == hi)]
+        if not sel:
+            continue
+        nk = len(sel)
+        pk = sum(p for p, _ in sel) / nk
+        ok = sum(y for _, y in sel) / nk
+        rel += nk * (pk - ok) ** 2
+        res += nk * (ok - obar) ** 2
+    rel, res = rel / n, res / n
+    unc = obar * (1 - obar)
+    b_actual = brier(pairs)
+    return {"brier": round(b_actual, 4), "reliability": round(rel, 4),
+            "resolution": round(res, 4), "uncertainty": round(unc, 4),
+            "residual": round(b_actual - (rel - res + unc), 4),
+            "n": n, "base_rate": round(obar, 4)}
+
+
+def per_task_skill(predicted_by_task, outcomes_by_task):
+    """Per-task skill contributions s_t = mean_y[(obar-y)^2 - (p_t-y)^2]
+    against the GLOBAL base rate (positive = beats base-rate reference).
+    Returns (skills list, obar). Tasks without parsed predictions skipped."""
+    all_y = [y for t, ys in outcomes_by_task.items()
+             if predicted_by_task.get(t) is not None for y in ys]
+    obar = sum(all_y) / len(all_y)
+    skills = []
+    for t, p in predicted_by_task.items():
+        if p is None:
+            continue
+        ys = outcomes_by_task.get(t, [])
+        if ys:
+            skills.append(sum((obar - y) ** 2 - (p - y) ** 2
+                              for y in ys) / len(ys))
+    return skills, obar
+
+
+def skill_mde(skills, n_tasks, z=2.8015852335973596):
+    """Detectable mean skill at n_tasks elicitations (80% power, two-sided
+    .05; z = z_.975 + z_.80), using the empirical per-task skill sd."""
+    import math
+    m = sum(skills) / len(skills)
+    sd = math.sqrt(sum((s - m) ** 2 for s in skills) / (len(skills) - 1))
+    return z * sd / math.sqrt(n_tasks)
+
+
 def _selftest():
     assert parse_prob("0.7") == 0.7
     assert parse_prob("I'd say 70% likely") == 0.7
@@ -103,6 +165,25 @@ def _selftest():
     assert blk["brier"] is not None and blk["brier"] < 0.25
     assert blk["skill_vs_base_rate"] is not None
     assert any(r["n"] for r in blk["reliability"])
+    # murphy: perfect binary predictor -> REL~0, RES~UNC, brier~0
+    perfect = [(0.99, 1)] * 5 + [(0.01, 0)] * 5
+    d = murphy_decomposition(perfect)
+    assert d["reliability"] < 0.001 and abs(d["resolution"] - d["uncertainty"]) < 0.001
+    # constant-0.5 predictor on a 50/50 mix -> RES=0, brier=0.25=UNC
+    flat = [(0.5, 1)] * 5 + [(0.5, 0)] * 5
+    d2 = murphy_decomposition(flat)
+    assert d2["resolution"] == 0.0 and d2["brier"] == 0.25
+    assert abs(d2["residual"]) < 1e-9  # identity exact (constant in bin)
+    # per-task skill: knowing predictor positive, anti-predictor negative
+    pred = {"a": 0.9, "b": 0.1}
+    outs = {"a": [1, 1, 1], "b": [0, 0, 0]}
+    sk, _ = per_task_skill(pred, outs)
+    assert all(s > 0 for s in sk)
+    anti = {"a": 0.1, "b": 0.9}
+    sk2, _ = per_task_skill(anti, outs)
+    assert all(s < 0 for s in sk2)
+    # mde shrinks with n
+    assert skill_mde(sk + sk2, 200) < skill_mde(sk + sk2, 50)
     print("CALIBRATE_SELFTEST_PASS")
 
 
