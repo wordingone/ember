@@ -1,19 +1,19 @@
 {
   "fingerprint": "b6b4cfafab8069db",
-  "chunks_done": 2,
-  "n_tasks_done": 50,
+  "chunks_done": 3,
+  "n_tasks_done": 75,
   "arms": {
     "core_only": {
-      "n_tasks": 50,
-      "solve_any_pct": 0.0,
+      "n_tasks": 75,
+      "solve_any_pct": 1.33,
       "solve_ci95": [
         0.0,
-        0.0
+        4.0
       ],
-      "verify_any_pct": 0.0
+      "verify_any_pct": 1.33
     },
     "core_meta": {
-      "n_tasks": 50,
+      "n_tasks": 75,
       "solve_any_pct": 0.0,
       "solve_ci95": [
         0.0,
@@ -22,7 +22,7 @@
       "verify_any_pct": 0.0
     },
     "control": {
-      "n_tasks": 50,
+      "n_tasks": 75,
       "solve_any_pct": 0.0,
       "solve_ci95": [
         0.0,
@@ -31,7 +31,7 @@
       "verify_any_pct": 0.0
     },
     "context_only": {
-      "n_tasks": 50,
+      "n_tasks": 75,
       "solve_any_pct": 0.0,
       "solve_ci95": [
         0.0,
@@ -42,7 +42,7 @@
   },
   "deltas": {
     "delta_meta_minus_core_ci95": [
-      0.0,
+      -4.0,
       0.0
     ],
     "delta_meta_minus_control_ci95": [

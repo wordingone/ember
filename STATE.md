@@ -88,6 +88,29 @@ Borrowed-core NC0 is rehearsal; ember's end-state is owned mass, not owned delta
    - ~~Research-intake posture~~ **DONE 2026-06-10** (user thread: "what happens when more advanced research is released?") → standing section in `nc2-own-technique-contract.md` + formalization §6 line: **absorb through the gate, never through belief** — component level = contract row WATCHING→ADOPT on local receipt only; core level = recompile-target change (ledger is the self — proven 3× this week: 7B/1.5B/3B on one ledger); paradigm level = invariant set is NOT research-amendable, approach-change case to the user. Strategic frame: second mover on components, first mover on the accumulation layer; public research = subsidized verifier-bits.
    - t1c contamination probes + 7B idle-window evals — carried from layers 4/5b, unchanged.
 
+## Branch registry — every staged-not-fired bet carries a fire-condition (collab-audit U2, 2026-06-10)
+
+No registered branch may exist without a fire-condition or review date. Registry size reported at verdict-class events. Kills require the user, by name.
+
+| # | Branch | Fires when | Status |
+|---|---|---|---|
+| 1 | `t4_r1_q3_s15.py` (seed-15 replication) | q3 s14 final receipt NONZERO (likely — ccd554ac) | staged |
+| 2 | `t4_r1_q3_arc2_s14.py` (ARC-2 transfer) | s15 completes | staged |
+| 3 | `t5_r1_q3.py` (harm suite) | arc2 completes | staged |
+| 4 | `w1_floor_q15/q3.py` (W-code floor probes) | s14 ALL-ZERO → immediate; NONZERO → first idle window post-chain (W-code = second-world admission either way) | staged |
+| 5 | `w2_ingest` + `w4_eval` (W-code round) | w1 floor receipt > 0 | built, gated on 4 |
+| 6 | Teacher-admission probe (w1 + ~7B coder, ~5GB pull) | W-code admitted AND feed math favors a teacher | registered |
+| 7 | `t1c_run_q15.py` (contamination) | first idle window post round-1 chain | staged |
+| 8 | 7B retained four-arm evals (chunked, ~11h paced) | overnight idle windows; REVIEW 2026-06-17 — kill candidate if small-core verdicts moot it | staged |
+| 9 | Round-2 self-generation (`t2_round --round 2`) | round-1 verdict gated; k from verify% | REQUIRED for goal |
+| 10 | NC1c IFC world build | NC0 verdict lands | registered |
+| 11 | NC1d ARC-AGI-3 policy world | NC0 verdict lands | registered |
+| 12 | NC-K kernel detail design | NC0 verdict lands (contract + map on disk) | registered |
+| 13 | Config rollout 2–4 (Eli/Archie/dormant) | USER wakes the founder | user-gated |
+| 14 | Kernel v1.0 freeze (formalization §9b) | round-1 verdict + episode/receipt schema stability review | NEW — registered |
+| 15 | HF weights upload | first verdict-bearing adapter | standing |
+| 16 | OpenMDW SDG corpus intake (Cosmos 3) | NC2-own entry | registered |
+
 ## Resolved layers
 
 - Harm suite: BUILT (`t5_harm.py`, MBPP-50 sanitized via HF datasets).
