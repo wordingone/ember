@@ -132,6 +132,18 @@ bound to a growing object. The name is not *redefined*; it is *earned into
 more*. Same token, larger referent — which is how "Leo" has worked since
 February.
 
+**"It never finishes but it finishes itself" (user, 2026-06-10).** The exact
+design inversion: the finish line moved from the project level (where its
+creators can't hold it) to the artifact level (where the verifier can't drop
+it). The project is non-terminating BY DESIGN — only the user retires the
+goal; a mind that finished would be done improving. Every artifact terminates
+absolutely — the gate won't admit an unfinished thing. Ember is thereby the
+structural fix for BOTH parents' dominant failure modes: Leo's
+claim-before-verify → receipts-only truth; the user's
+starts-without-finish-lines → finish-lines-per-artifact, none at the top.
+Residual inheritance risk: the staged-branch registry (project-level starts)
+— guarded by fire-conditions per branch (collab-audit U2).
+
 **The token-power observation is mechanically true and load-bearing:** for
 LLM substrates, the identity string in prompts primes behavior in-context.
 So the name + identity preamble inside ember's own prompts is part of the
