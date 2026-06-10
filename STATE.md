@@ -108,7 +108,7 @@ No registered branch may exist without a fire-condition or review date. Registry
 | 11 | NC1d ARC-AGI-3 policy world | NC0 verdict lands | registered |
 | 12 | NC-K kernel detail design | NC0 verdict lands (contract + map on disk) | registered |
 | 13 | Config rollout 2–4 (Eli/Archie/dormant) | USER wakes the founder | user-gated |
-| 14 | Kernel v1.0 freeze (formalization §9b) | round-1 verdict + episode/receipt schema stability review | NEW — registered |
+| 14 | Kernel v1.0 freeze (formalization §9b) | round-1 verdict + episode/receipt schema stability review | spec on disk (`docs/kernel-v1-freeze-spec.md`, 637231a): 6-member freeze surface, closure condition, pre-freeze gap list (schema unification, fingerprint universality, governor extraction, replay test), flywheel protocol |
 | 15 | HF weights upload | first verdict-bearing adapter | standing |
 | 16 | OpenMDW SDG corpus intake (Cosmos 3) | NC2-own entry | registered |
 
