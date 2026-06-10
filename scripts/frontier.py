@@ -102,6 +102,31 @@ def report_block(records, caps=None):
     return out
 
 
+def load_ext_flags(patterns, include_timeouts=False):
+    """v-ext-flags-*.jsonl path(s)/glob(s) -> set of ledger keys to EXCLUDE
+    at dataset build (eng #11, FPR receipt 22.1%). Timeout-flagged keys are
+    excluded only on request — a timeout under the sandbox budget is a
+    measurement limit, not proof of wrongness. Ledger itself is never
+    touched: quarantine lives at build, identity stays whole."""
+    import glob as globlib
+    import json as jsonlib
+    keys = set()
+    for pat in patterns:
+        for path in sorted(globlib.glob(pat)):
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    r = jsonlib.loads(line)
+                    if r.get("timeout") and not include_timeouts:
+                        continue
+                    keys.add(r["key"])
+    return keys
+
+
+def ext_clean(records, flagged_keys):
+    """Drop records whose ledger key is ext-flagged."""
+    return [r for r in records if r.get("key") not in flagged_keys]
+
+
 def _selftest():
     rows = (
         [{"task": "mbpp:1", "verified": True}] * 7
@@ -138,6 +163,20 @@ def _selftest():
     # no-data task -> phat 0.5, bits 1, dead
     nd = annotate_records([{"task": "mbpp:99", "src": "x"}], stats)
     assert nd[0]["phat"] == 0.5 and nd[0]["stratum"] == "dead"
+    # ext-flags exclusion (eng #11): wrong excluded, timeout kept by default
+    import json as _json
+    import os as _os
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as td:
+        fp = _os.path.join(td, "v-ext-flags-x.jsonl")
+        with open(fp, "w") as f:
+            f.write(_json.dumps({"key": "k1", "timeout": False}) + "\n")
+            f.write(_json.dumps({"key": "k2", "timeout": True}) + "\n")
+        flags = load_ext_flags([fp])
+        assert flags == {"k1"}
+        assert load_ext_flags([fp], include_timeouts=True) == {"k1", "k2"}
+        recs2 = [{"key": "k1"}, {"key": "k2"}, {"key": "k3"}]
+        assert [r["key"] for r in ext_clean(recs2, flags)] == ["k2", "k3"]
     print("FRONTIER_SELFTEST_PASS")
 
 

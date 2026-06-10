@@ -55,7 +55,8 @@ def main():
 
     import sys
     sys.path.insert(0, f"{NC}/scripts")
-    from frontier import caps_from_records, report_block
+    from frontier import caps_from_records, ext_clean, load_ext_flags, \
+        report_block
     from t2_round import CONTROL_POOL, LEDGER, ADAPTERS, build_dataset, \
         train_lora
 
@@ -65,6 +66,16 @@ def main():
     arm_recs = write_view(LEDGER, f"{VIEWS}/wcode-r1.jsonl")
     if not arm_recs:
         raise SystemExit("t2_wcode: no mbpp:* records in ledger — ingest first")
+    # eng #11 (FPR receipt 22.1%): quarantine ext-flagged episodes AT BUILD —
+    # the view is a build artifact, the ledger keeps everything. Re-write the
+    # view ext-clean so build_dataset reads only clean records.
+    flags = load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"])
+    n_before = len(arm_recs)
+    arm_recs = ext_clean(arm_recs, flags)
+    with open(f"{VIEWS}/wcode-r1.jsonl", "w") as vf:
+        for r in arm_recs:
+            vf.write(json.dumps(r) + "\n")
+    ext_excluded = n_before - len(arm_recs)
     caps = caps_from_records(arm_recs)
 
     match_texts = None
@@ -87,8 +98,10 @@ def main():
     receipt = {"ticket": "NC0-T2-WCODE", "ts": ts, "control": args.control,
                "args_fp": args_fingerprint(vars(args)),
                "model": args.model, "world": "mbpp", "round": 1,
-               "ledger_records_world": len(arm_recs),
-               "frontier": report_block(arm_recs),
+               "ledger_records_world": n_before,
+               "ext_excluded": ext_excluded,
+               "ext_flag_sources": f"{RECEIPTS}/v-ext-flags-*.jsonl",
+               "frontier_ext_clean": report_block(arm_recs),
                "dataset": {"n_examples": len(examples),
                            "n_tasks": len(counts)},
                "excluded": "ARC seed episodes (off-policy DSL, t5 harm "
