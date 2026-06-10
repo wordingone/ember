@@ -102,9 +102,16 @@ def main():
         def on_step_end(self, targs, state, control, **kw):
             time.sleep(float(os.environ.get("EMBER_THROTTLE_S", "0.3")))
 
-    # identical dataset to arm A — the arm delta is the aux loss only
+    # identical dataset to arm A — the arm delta is the aux loss only.
+    # eng #11: same ext-clean quarantine at build as t2_wcode.
+    from frontier import ext_clean, load_ext_flags
     arm_recs = write_view(f"{NC}/ledger/episodes.jsonl",
                           f"{VIEWS}/wcode-r1.jsonl")
+    arm_recs = ext_clean(arm_recs,
+                         load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"]))
+    with open(f"{VIEWS}/wcode-r1.jsonl", "w") as vf:
+        for r in arm_recs:
+            vf.write(json.dumps(r) + "\n")
     caps = caps_from_records(arm_recs)
     examples, counts = build_dataset(f"{VIEWS}/wcode-r1.jsonl", cap=caps)
     if not examples:

@@ -129,6 +129,10 @@ def main():
                     help="prior samples.jsonl: keep tasks at/below "
                          "--focus-max-rate (frontier/dead top-up)")
     ap.add_argument("--focus-max-rate", type=float, default=0.75)
+    ap.add_argument("--ext-verify", action="store_true",
+                    help="re-execute V-passed samples against MBPP+ extended "
+                         "tests (eng #11): additive ext_verified per sample; "
+                         "feed/floor semantics unchanged")
     args, _unknown = ap.parse_known_args()  # daemon appends args; ignore them
 
     problems = load_split(args.split, args.n_tasks or None)
@@ -195,27 +199,64 @@ def main():
     samples_by_task = {p["id"]: 0 for p in problems}
     outcomes_by_task = {p["id"]: [] for p in problems}
     ri = 0
+    rows = []
+    for pid, src in job_meta:
+        if src is None:
+            row = {"task": f"mbpp:{pid}", "verified": False,
+                   "error": "extraction-failed", "src": None}
+            outcomes_by_task[pid].append(0)
+        else:
+            r = results[ri]
+            ri += 1
+            ok = bool(r.get("verified")) and not r.get("error")
+            row = {"task": f"mbpp:{pid}", "verified": ok,
+                   "error": r.get("error"), "src": src}
+            outcomes_by_task[pid].append(int(ok))
+            if ok:
+                passed_by_task[pid] += 1
+        row["prompt"] = problem_prompt(by_id[pid])
+        row["sampler"] = sampler
+        if args.calibrate:
+            row["predicted_p"] = predicted_by_task.get(pid)
+        samples_by_task[pid] += 1
+        rows.append(row)
+
+    # eng #11: extended-tests-join-V at sampling — ADDITIVE. `verified`
+    # stays the V verdict (feed/floor semantics unchanged); V-passed samples
+    # covered by MBPP+ gain ext_verified/ext_timeout so build-time joins
+    # (ext_clean) can quarantine without re-mining sample files. Absence of
+    # the field = task not covered by MBPP+ or sample not V-passed.
+    ext_block = None
+    if args.ext_verify:
+        from datasets import load_dataset as _load_ds
+        from v_extended import build_harness as ext_harness
+        plus = {int(r["task_id"]): r for r in
+                _load_ds("evalplus/mbppplus", split="test")}
+        idxs = [i for i, row in enumerate(rows)
+                if row["verified"] and int(row["task"].split(":")[1]) in plus]
+        ext_jobs = []
+        for i in idxs:
+            p = plus[int(rows[i]["task"].split(":")[1])]
+            ext_jobs.append((ext_harness(rows[i]["src"], p["test"],
+                                         p.get("test_imports") or []), [], []))
+        for i, res in zip(idxs, execute_batch(ext_jobs) if ext_jobs else []):
+            timeout = (res.get("error") or "") in ("timeout", "pool-timeout")
+            rows[i]["ext_verified"] = (bool(res.get("verified"))
+                                       and not res.get("error"))
+            rows[i]["ext_timeout"] = timeout
+        wrong = sum(1 for i in idxs if not rows[i]["ext_verified"]
+                    and not rows[i]["ext_timeout"])
+        tmo = sum(1 for i in idxs if rows[i]["ext_timeout"])
+        ext_block = {"v_passed_samples": sum(passed_by_task.values()),
+                     "ext_covered": len(idxs), "ext_wrong": wrong,
+                     "ext_timeout": tmo,
+                     "fpr": round(wrong / len(idxs), 4) if idxs else None}
+        print(f"[w1] ext-verify: {len(idxs)} covered, {wrong} wrong, "
+              f"{tmo} timeout", flush=True)
+
     os.makedirs(RECEIPTS, exist_ok=True)
     with open(samples_path, "w") as sf:
-        for pid, src in job_meta:
-            if src is None:
-                row = {"task": f"mbpp:{pid}", "verified": False,
-                       "error": "extraction-failed", "src": None}
-                outcomes_by_task[pid].append(0)
-            else:
-                r = results[ri]
-                ri += 1
-                ok = bool(r.get("verified")) and not r.get("error")
-                row = {"task": f"mbpp:{pid}", "verified": ok,
-                       "error": r.get("error"), "src": src}
-                outcomes_by_task[pid].append(int(ok))
-                if ok:
-                    passed_by_task[pid] += 1
-            row["prompt"] = problem_prompt(by_id[pid])
-            row["sampler"] = sampler
-            if args.calibrate:
-                row["predicted_p"] = predicted_by_task.get(pid)
-            samples_by_task[pid] += 1
+        for row in rows:
             sf.write(json.dumps(row) + "\n")
 
     order = [p["id"] for p in problems]
@@ -240,6 +281,8 @@ def main():
         from calibrate import calibration_block
         receipt["calibration"] = calibration_block(predicted_by_task,
                                                    outcomes_by_task)
+    if ext_block is not None:
+        receipt["ext_verify"] = ext_block
     with open(f"{RECEIPTS}/w1-floor{tagpart}-{ts}.json", "w") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in
