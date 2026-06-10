@@ -59,6 +59,13 @@ while ANY class has an open issue and names the lowest. Every class closes
 the same way: branch → artifact + selftest/receipt → PR "Closes #n" →
 squash merge.
 
+ENG PARALLELISM (user side-note 2026-06-10): the eng class never serializes
+behind one owner — when Eli holds an active eng task (or is asleep),
+remaining parallelizable eng items queue to Leo's own subagents
+(Haiku-class per the agent-model rule); Leo gates every subagent artifact
+before it lands. GPU-gated steps stay serialized under the governor
+regardless of owner.
+
 ## Operational annex (carried from the prior goal; amended 2026-06-10 per user — constant-thinking/keep-burning/harness notes absorbed from the verified discussion)
 
 WHILE UNSATISFIED — valid activities, in priority order:
