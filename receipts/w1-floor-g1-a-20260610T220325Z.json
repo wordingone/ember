@@ -1,0 +1,33 @@
+{
+  "ticket": "W1-FLOOR",
+  "ts": "20260610T220325Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1w-q3",
+    "split": "validation",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 16,
+    "tag": "g1-a",
+    "calibrate": false,
+    "focus_from": null,
+    "focus_max_rate": 0.75
+  },
+  "n_tasks": 43,
+  "k": 8,
+  "feed_tasks": 35,
+  "feed_pct": 81.4,
+  "feed_ci95": [
+    69.77,
+    93.02
+  ],
+  "verified_samples": 231,
+  "verified_sample_pct": 67.15,
+  "extraction_fail": 0,
+  "gen_secs": 107.5,
+  "samples_file": "w1-floor-g1-a-20260610T220325Z-samples.jsonl",
+  "split_discipline": "train=world pool, validation=heldout, test=t5-harm-only"
+}
