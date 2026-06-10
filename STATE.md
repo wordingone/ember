@@ -108,7 +108,7 @@ No registered branch may exist without a fire-condition or review date. Verdict-
 | 11 | NC1d ARC-AGI-3 policy world | NC0 verdict lands | registered |
 | 12 | NC-K kernel detail design | NC0 verdict lands (contract + map on disk) | registered |
 | 13 | Config rollout 2–4 (Eli/Archie/dormant) | USER wakes the founder | user-gated |
-| 14 | Kernel v1.0 freeze (formalization §9b) | round-1 verdict + episode/receipt schema stability review | spec on disk (`docs/kernel-v1-freeze-spec.md`, 637231a): 6-member freeze surface, closure condition, pre-freeze gap list (schema unification, fingerprint universality, governor extraction, replay test), flywheel protocol |
+| 14 | Kernel v1.0 freeze (formalization §9b) | round-1 verdict + episode/receipt schema stability review | spec on disk (`docs/kernel-v1-freeze-spec.md`, 637231a); pre-freeze gap 4/4 (replay test) BUILT+EXERCISED 2026-06-10: `scripts/kernel_replay.py` mode B re-derived BOTH t4 verdict receipts from raw rows, 20/20 fields each (q3 + q15), independent code path, seeded-CI byte-exact; mode A (episode re-exec through V) platform-gated to daemon, fires first idle window. Remaining gaps: schema unification, fingerprint universality, governor extraction |
 | 15 | HF weights upload | first verdict-bearing adapter | standing |
 | 16 | OpenMDW SDG corpus intake (Cosmos 3) | NC2-own entry | registered |
 | 17 | W-swe (SWE-bench/SWE-smith repo-scale code world) | W-code loop turns AND a core clears a measurable SWE-class floor | registered (world-choice §7; HLE evaluated same pass — REJECTED, answer-key V) |
