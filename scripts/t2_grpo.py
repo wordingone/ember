@@ -138,11 +138,14 @@ def main():
     governor_block = preflight()
 
     from unsloth import FastLanguageModel
+    patched = False
     try:  # unsloth GRPO patch (older recipes need it; newer absorb it)
         from unsloth import PatchFastRL
         PatchFastRL("GRPO", FastLanguageModel)
+        patched = True
     except ImportError:
         pass
+    print(f"[t2_grpo] PatchFastRL applied: {patched}", flush=True)
     from trl import GRPOConfig, GRPOTrainer
     from transformers import TrainerCallback
     from datasets import Dataset
@@ -169,6 +172,15 @@ def main():
         random_state=args.seed,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                         "gate_proj", "up_proj", "down_proj"])
+    # Integration fix (e8013346 attempt 1): unsloth keeps LoRA params in
+    # float32; vanilla-TRL generation under autocast hits the fast_lora
+    # kernel with mismatched dtypes ("Half and Float"). One dtype everywhere:
+    n_cast = 0
+    for _n, _p in model.named_parameters():
+        if "lora_" in _n and _p.dtype == torch.float32:
+            _p.data = _p.data.to(torch.bfloat16)
+            n_cast += 1
+    print(f"[t2_grpo] lora params cast fp32->bf16: {n_cast}", flush=True)
 
     problems = load_split("train")
     problems_by_id = {p["id"]: p for p in problems}
