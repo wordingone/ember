@@ -1,0 +1,31 @@
+{
+  "ticket": "FP1-BITS-PER-MIN",
+  "ts": "20260610T225300Z",
+  "method": "stratified bits vs each core OWN posterior (vbits laplace), uncapped/undeduped V-passed rows; ext-FPR inflation (~22% at 3B) NOT corrected and UNMEASURED at 1.5B - both flagged",
+  "core_1p5B": {
+    "samples_file": "w1-floor-q15-20260610T202511Z-samples.jsonl",
+    "gen_min": 6.06,
+    "verified_rows": 518,
+    "stratified_bits_total": 244.3,
+    "bits_per_gpu_min": 40.3,
+    "bits_by_stratum": {
+      "easy": 53.6,
+      "mid": 131.6,
+      "frontier": 59.1
+    }
+  },
+  "core_3B": {
+    "samples_file": "w1-floor-q3-20260610T203401Z-samples.jsonl",
+    "gen_min": 7.14,
+    "verified_rows": 633,
+    "stratified_bits_total": 233.5,
+    "bits_per_gpu_min": 32.7,
+    "bits_by_stratum": {
+      "easy": 87.7,
+      "mid": 108.7,
+      "frontier": 37.1
+    }
+  },
+  "ratio_bits_per_min_1p5_over_3": 1.23,
+  "draft_correction": "fp1 draft claimed 205.8 vs 131.2 (1.57x) using verified-SAMPLES/min as bits proxy; stratified bits give 40.3 vs 32.7 (1.23x) - direction holds, margin halves"
+}

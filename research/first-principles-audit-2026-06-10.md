@@ -205,3 +205,42 @@ eval-serialization (on infra coordination window).
    already run Windows-side organically. Switching is NOT free
    (re-proving the recipe burns the June-13 window) — the bet stays
    WSL-for-GPU until a green native smoke receipt says otherwise.
+
+## §8.9 — fp-1 (#37): is 3B the right core, or does smaller-core × larger-k win per joule?
+
+**Inherited assumption questioned:** 3B chosen over 1.5B on per-sample
+verify rate (66% vs 54%) — a datacenter default (bigger = better) applied
+to a residency-constrained goal whose objective is VERIFIED BITS PER
+RESOURCE, not per-sample rate.
+
+**Receipts (fp1-bits-per-min-20260610.json, re-derived stratified — the
+Haiku draft's 1.57× used verified-samples/min as a bits proxy and is
+corrected here):** at k=8 on the same 120-task pool, bits measured against
+each core's OWN posterior: 1.5B = 244.3 bits in 6.06 GPU-min = **40.3
+bits/min**; 3B = 233.5 bits in 7.14 GPU-min = **32.7 bits/min**. The
+smaller core banks ~23% more bits per GPU-minute — its lower competence
+makes each verified episode carry more surprise, and it generates faster.
+1.5B's frontier-stratum haul is also larger in absolute terms (59.1 vs
+37.1 bits). Caveats flagged on the receipt: uncapped/undeduped; ext-FPR
+inflation ~22% at 3B, UNMEASURED at 1.5B.
+
+**Why this does not flip round-2 (frozen, docs/r2-prereg.md):** bits only
+matter if they train — round-1 proved objective dominates count (plain
+SFT flat on 252 naive bits; MTP positive on the same data). The
+sampling-side win is necessary, not sufficient.
+
+**Named falsification probe (round-3 candidate, two halves):**
+(a) sampling half — 1.5B k=24 focused top-up on its own ≤0.75-rate tasks
+(mirror of receipt 99f539e1): if stratified bits/min stays ≥ the 3B
+number, the sampling claim survives adaptive-k. (b) training half (the
+real bar) — 1.5B MTP arm on its OWN episodes, G1 on the 1.5B validation
+floor (80% base feed = MORE gain headroom than 3B's 90.7% ceiling), t5
+harm. If (b) shows a control-beating gain, the residency rule (smallest
+core that clears the floor) makes 1.5B the round-3 core candidate.
+
+**Successor minted (fp-4):** is on-policy-ness core-size-transferable —
+do 1.5B-generated verified episodes train the 3B core (and vice versa),
+or does the round-1 off-policy harm receipt generalize to "same-core
+episodes only"? Bears directly on whether a small SAMPLER can feed a
+larger CONSOLIDATOR (teacher-system split) or whether each core must earn
+its own ledger.
