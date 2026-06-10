@@ -165,8 +165,11 @@ def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None):
     return examples, counts
 
 
-def train_lora(model_id, examples, out_dir, seed=3407):
-    """Mirrors the spec-forge-proven unsloth invocation on this box."""
+def train_lora(model_id, examples, out_dir, seed=3407, match_texts=None):
+    """Mirrors the spec-forge-proven unsloth invocation on this box.
+
+    match_texts: exact effective text count to replicate/truncate to —
+    matched-budget (G2) arms pass the mirrored arm's effective count."""
     import torch
     from unsloth import FastLanguageModel
     from trl import SFTTrainer
@@ -211,7 +214,16 @@ def train_lora(model_id, examples, out_dir, seed=3407):
                         "gate_proj", "up_proj", "down_proj"])
     texts = [tok.apply_chat_template(e["messages"], tokenize=False)
              for e in examples]
-    if len(texts) < 200:  # spec-forge small-dataset repeat
+    if match_texts:
+        # Matched-budget arm (G2): replicate/truncate to EXACTLY the
+        # mirrored arm's effective text count, so both arms see the same
+        # number of optimizer steps. Added 2026-06-10 after the W-code
+        # control (180 distinct fails) hit the <200 repeat rule while arm A
+        # (294) did not — 174 vs 57 planned steps, caught mid-run, killed.
+        rep = -(-match_texts // max(len(texts), 1))
+        texts = (texts * rep)[:match_texts]
+        random.Random(seed).shuffle(texts)
+    elif len(texts) < 200:  # spec-forge small-dataset repeat
         rep = max(5, 200 // max(len(texts), 1))
         texts = texts * rep
         random.Random(seed).shuffle(texts)

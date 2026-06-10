@@ -67,11 +67,19 @@ def main():
         raise SystemExit("t2_wcode: no mbpp:* records in ledger — ingest first")
     caps = caps_from_records(arm_recs)
 
+    match_texts = None
     if args.control:
-        _, verified_counts = build_dataset(f"{VIEWS}/wcode-r1.jsonl", cap=caps)
+        arm_examples, verified_counts = build_dataset(
+            f"{VIEWS}/wcode-r1.jsonl", cap=caps)
         ctrl_recs = write_view(CONTROL_POOL, f"{VIEWS}/wcode-r1-control.jsonl")
         examples, counts = build_dataset(f"{VIEWS}/wcode-r1-control.jsonl",
                                          match_counts=verified_counts)
+        # G2 matched budget = matched OPTIMIZER STEPS: mirror arm A's
+        # EFFECTIVE text count (post the <200 repeat rule). Caught live
+        # 2026-06-10: control 180 distinct fails hit the repeat (x5 -> 174
+        # steps) while arm A's 294 did not (57 steps) — killed + fixed.
+        n_a = len(arm_examples)
+        match_texts = n_a if n_a >= 200 else n_a * max(5, 200 // max(n_a, 1))
     else:
         examples, counts = build_dataset(f"{VIEWS}/wcode-r1.jsonl", cap=caps)
 
@@ -87,8 +95,10 @@ def main():
         receipt["verdict"] = "EMPTY-DATASET (gate before training)"
     else:
         t0 = time.time()
+        receipt["match_texts"] = match_texts
         receipt["training"] = train_lora(args.model, examples,
-                                         f"{ADAPTERS}/{tag}")
+                                         f"{ADAPTERS}/{tag}",
+                                         match_texts=match_texts)
         receipt["training"]["secs"] = round(time.time() - t0, 1)
         receipt["adapter"] = f"{ADAPTERS}/{tag}"
 
