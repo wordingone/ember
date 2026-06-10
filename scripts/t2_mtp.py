@@ -82,25 +82,19 @@ def main():
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
-    frac = float(os.environ.get("EMBER_VRAM_FRACTION", "0.85"))
-    torch.cuda.set_per_process_memory_fraction(frac)
-    free, total = torch.cuda.mem_get_info()
-    margin_gb = float(os.environ.get("EMBER_VRAM_MARGIN_GB", "4.0"))
-    if free < margin_gb * 1e9:
-        raise SystemExit(f"VRAM-PREFLIGHT: {free/1e9:.1f}GB free — refusing")
+    # Resource governor — canonical copy in governor.py since eng #14
+    # (cap + margin assert before load; per-step throttle via callback).
+    from governor import make_headroom_callback, preflight
+    governor_block = preflight()
 
     from unsloth import FastLanguageModel
     from trl import SFTTrainer
-    from transformers import TrainingArguments, TrainerCallback
+    from transformers import TrainingArguments
     from datasets import Dataset
     from huggingface_hub import snapshot_download
     from frontier import caps_from_records
     from t2_round import ADAPTERS, LORA, build_dataset
     from t2_wcode import write_view
-
-    class _Headroom(TrainerCallback):
-        def on_step_end(self, targs, state, control, **kw):
-            time.sleep(float(os.environ.get("EMBER_THROTTLE_S", "0.3")))
 
     # identical dataset to arm A — the arm delta is the aux loss only.
     # eng #11: same ext-clean quarantine at build as t2_wcode.
@@ -177,7 +171,7 @@ def main():
     trainer = MTPTrainer(
         model=model, tokenizer=tok, train_dataset=ds,
         dataset_text_field="text", max_seq_length=LORA["max_seq"],
-        dataset_num_proc=4, callbacks=[_Headroom()],
+        dataset_num_proc=4, callbacks=[make_headroom_callback()],
         args=TrainingArguments(
             output_dir=out_dir + "-ckpt", per_device_train_batch_size=1,
             gradient_accumulation_steps=16, num_train_epochs=LORA["epochs"],
@@ -197,6 +191,7 @@ def main():
         "ticket": "NC0-T2-MTP", "ts": ts, "args": vars(args),
         "args_fp": args_fingerprint(vars(args)),
         "world": "mbpp", "round": 1,
+        "governor": governor_block,
         "dataset": {"n_examples": len(examples), "n_tasks": len(counts),
                     "identical_to_arm_A": True},
         "train_loss": round(res.training_loss, 4),
