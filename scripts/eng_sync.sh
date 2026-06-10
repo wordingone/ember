@@ -21,12 +21,17 @@ OPEN_JSON=$(gh issue list --label eng --state open \
 CLOSED_JSON=$(gh issue list --label eng --state closed \
   --json number,title --limit 100)
 
-# closed-without-merged-PR check (violation) — per-issue query
+# closed-without-merged-PR check (violation) — per-issue query.
+# NOTE: must use GraphQL directly — `gh issue view --json` FLATTENS the
+# closing-PR refs and drops the `merged` field (every closure looked like a
+# violation; bug surfaced by Kai checkpoint 14424 S1-C follow-up 2026-06-10).
+OWNER=$(gh repo view --json owner --jq .owner.login)
+NAME=$(gh repo view --json name --jq .name)
 VIOLATIONS="["
 first=1
 for n in $(echo "$CLOSED_JSON" | grep -o '"number":[0-9]*' | grep -o '[0-9]*' || true); do
-  prs=$(gh issue view "$n" --json closedByPullRequestsReferences \
-        --jq '[.closedByPullRequestsReferences[]? | select(.merged==true)] | length' \
+  prs=$(gh api graphql -f query="query{repository(owner:\"$OWNER\",name:\"$NAME\"){issue(number:$n){closedByPullRequestsReferences(first:20){nodes{merged}}}}}" \
+        --jq '[.data.repository.issue.closedByPullRequestsReferences.nodes[] | select(.merged==true)] | length' \
         2>/dev/null || echo "QUERY_FAIL")
   if [ "$prs" = "0" ] || [ "$prs" = "QUERY_FAIL" ]; then
     [ $first -eq 0 ] && VIOLATIONS="$VIOLATIONS,"
