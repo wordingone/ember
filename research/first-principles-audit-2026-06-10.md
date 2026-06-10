@@ -276,9 +276,16 @@ correctness — useful diagnostics, wrong layer for FPR.
    produce, ~ms cost. Known limit, stated: dead/frontier tasks have few
    siblings — exactly where FPR is worst, coverage is thinnest; it
    complements, never replaces, extended tests.
-3. **Compute headroom receipt:** sandbox verification is ms-scale vs
-   generation seconds-scale (~100× headroom) — V-hardening's binding
-   constraint is property QUALITY, not compute. Hardening stops paying
+3. **Compute headroom (HYPOTHESIS — no timing receipt existed at first
+   writing; Kai S2-A 14444 caught the original "receipt"/"~100×"
+   wording):** sandbox verification is hypothesized far cheaper than
+   generation; the measured ratio comes from `scripts/verify_timing.py`
+   (staged — re-executes a receipted samples file's harnesses and
+   compares wall time against that same run's receipted gen_secs;
+   dispatches in the next free eval window). The §8.10 conclusion does
+   not lean on the exact ratio — V-hardening's binding constraint is
+   property QUALITY, not compute, which survives any ratio ≫ 1 and takes
+   its number from the receipt when it lands. Hardening stops paying
    when it needs hand-or-model-written specs; at that line, switch worlds
    (HumanEval+ born-hardened, then policy worlds where the WORLD is the
    verifier — the goal's own language).
