@@ -1,0 +1,303 @@
+{
+  "ticket": "ARCADE-HARNESS",
+  "ts": "20260610T233807Z",
+  "args": {
+    "envs_dir": "B:/M/the-search/environment_files",
+    "receipts_dir": "B:/M/avir/leo/state/nc-ladder/receipts",
+    "games": null,
+    "max_steps": 200,
+    "seed": 16,
+    "tag": "random-smoke"
+  },
+  "engine": "arc_agi OFFLINE + arcengine (local, no network)",
+  "judge": "engine GameState + levels_completed only",
+  "baseline_ref": {
+    "repo": "dolphin-in-a-coma/arc-agi-3-just-explore",
+    "license": "MIT (GitHub API, 2026-06-10)",
+    "commit": "c2d98318ecca",
+    "code_vendored": false
+  },
+  "n_games": 25,
+  "n_ran": 25,
+  "n_errors": 0,
+  "wins": 0,
+  "games_with_level_progress": 3,
+  "total_steps": 5000,
+  "per_game": [
+    {
+      "game": "ar25",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 2,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.05
+    },
+    {
+      "game": "bp35",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 4,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.26
+    },
+    {
+      "game": "cd82",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.03
+    },
+    {
+      "game": "cn04",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.02
+    },
+    {
+      "game": "dc22",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.05
+    },
+    {
+      "game": "ft09",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 0,
+      "levels_completed": 1,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.07
+    },
+    {
+      "game": "g50t",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.07
+    },
+    {
+      "game": "ka59",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.03
+    },
+    {
+      "game": "lf52",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 2,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.07
+    },
+    {
+      "game": "lp85",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 0,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.02
+    },
+    {
+      "game": "ls20",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.1
+    },
+    {
+      "game": "m0r0",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.03
+    },
+    {
+      "game": "r11l",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 7,
+      "levels_completed": 1,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.1
+    },
+    {
+      "game": "re86",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.04
+    },
+    {
+      "game": "s5i5",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 3,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.02
+    },
+    {
+      "game": "sb26",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.16
+    },
+    {
+      "game": "sc25",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 3,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.09
+    },
+    {
+      "game": "sk48",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 0,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.05
+    },
+    {
+      "game": "sp80",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 6,
+      "levels_completed": 1,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.06
+    },
+    {
+      "game": "su15",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 2,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.03
+    },
+    {
+      "game": "tn36",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 3,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.04
+    },
+    {
+      "game": "tr87",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.08
+    },
+    {
+      "game": "tu93",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 3,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.04
+    },
+    {
+      "game": "vc33",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 3,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.05
+    },
+    {
+      "game": "wa30",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 0,
+      "levels_completed": 0,
+      "final_state": "GAME_OVER",
+      "win": false,
+      "elapsed_s": 0.01
+    }
+  ]
+}
