@@ -234,3 +234,11 @@ verbatim forms are retracted as over-claims.**
 - **O5 — Quantization-native compile:** `compile` that emits
   deployment-form (quantized) weights directly, so the gate measures what
   actually runs (QAT inside the loop, not after it).
+- **O6 — Verification-sparse judgment:** ember learns only where `V` exists,
+  but the highest-leverage cognition observed in its own development (design
+  calls, claim narrowing, world choice) happens in verification-sparse space,
+  currently supplied by founders as on-loan scaffolding. Open: does judgment
+  transfer-emerge from enough verified-dense experience, or does it need its
+  own mechanism? Until answered, the founders are a named un-retired organ —
+  the gap inventory (`research/self-inventory-2026-06-10.md` §1) is the
+  scaffolding contract.
