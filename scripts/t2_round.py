@@ -113,6 +113,10 @@ def sample_round(model_id, adapter, k, round_n, batch_size, seed):
 def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None):
     """Returns chat examples. match_counts: {task: n} to mirror (control).
 
+    cap: int (flat ceiling) OR {task: n} dict (bits-weighted per-task caps
+    from frontier.caps_from_records, eng #5 — easy mass discounted, frontier
+    kept deep; tasks absent from the dict fall back to MAX_PER_TASK).
+
     Records carrying inline "pairs" (seed episodes from t3_seed, incl. re-arc
     augmented variants like "tid#a2") render their prompt from those pairs;
     others look up the task in ARC_TRAIN.
@@ -130,8 +134,10 @@ def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None):
         for r in recs:
             uniq.setdefault(r["src"], r)
         recs = sorted(uniq.values(), key=lambda r: len(r["src"]))
-        n = (match_counts or {}).get(task_id, cap) if match_counts is not None \
+        task_cap = cap.get(task_id, MAX_PER_TASK) if isinstance(cap, dict) \
             else cap
+        n = (match_counts or {}).get(task_id, task_cap) \
+            if match_counts is not None else task_cap
         if match_counts is not None and task_id not in match_counts:
             continue
         if match_counts is not None:
