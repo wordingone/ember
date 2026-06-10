@@ -1,0 +1,30 @@
+{
+  "ticket": "CALIBRATION-DECOMP",
+  "ts": "20260610T223737Z",
+  "source": "w1-floor-q3-focus-20260610T210228Z-samples.jsonl",
+  "n_tasks": 59,
+  "base_rate": 0.3863,
+  "murphy": {
+    "brier": 0.5087,
+    "reliability": 0.2736,
+    "resolution": 0.0,
+    "uncertainty": 0.2371,
+    "residual": -0.002,
+    "n": 1416,
+    "base_rate": 0.3863
+  },
+  "mean_skill": -0.2716,
+  "skill_bootstrap_ci95": [
+    -0.3553,
+    -0.1842
+  ],
+  "skill_mde_by_n_tasks": {
+    "43": 0.1421,
+    "59": 0.1213,
+    "120": 0.0851,
+    "200": 0.0659,
+    "400": 0.0466
+  },
+  "positive_skill_criterion": "bootstrap CI lower bound > 0 AND resolution > 0.01",
+  "selection_caveat": "hard-subset elicitation (rate<=0.75 tasks); single-bin concentration is selection-independent (carried from 99f539e1)"
+}
