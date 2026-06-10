@@ -176,3 +176,32 @@ eval-serialization (on infra coordination window).
    to training) dissolves the monolithic-run framing; the cost is
    checkpoint I/O overhead, not feasibility. NC2-own's entry barrier is
    smaller than its headline number.
+
+### §8 addendum — third pass (user question 2026-06-10: "did you ever question the use of WSL")
+
+8. **WSL2 itself — NO, never questioned. Inherited as infrastructure,
+   treated as physics.** Honest trace: the train-daemon→WSL2 pipeline rode
+   in from the avir-wide stack (Linux-first training tooling) and every
+   ember job inherited it without an examination receipt. What WSL has
+   actually COST this project, from receipts: (a) 9P observability
+   blindness — `tail -F` from Windows on WSL-written files holds stale
+   caches (T2_ROUND_DONE written and never seen; 40+ min watcher
+   blindness, transition log 2026-06-10); (b) the shared `eval.log`
+   mode-"w" truncation hazard lives in the daemon's WSL job layout;
+   (c) a hard RAM split (32GB ceiling reserved whether used or not);
+   (d) the cygheap bash-fork crash class (bites WASM builds; ember dodges
+   it only by the native-process daemon rule); (e) path duality
+   (/mnt/b vs B:) tax on every script. What WSL BUYS: the proven training
+   recipe (unsloth/triton/bnb) was validated IN WSL on this box; triton on
+   native Windows = community port (triton-windows), unproven here.
+   Verdict: keeping WSL for GPU jobs is currently a REASONED bet only
+   after this paragraph — before it, it was an unexamined assumption (the
+   exact failure class §8 exists to catch). Cheap probes registered, no
+   mid-round migration: (i) measure 9P I/O share of job wall-time from
+   existing receipts (gen_secs vs elapsed delta — free); (ii) one idle-
+   window smoke: native-Windows torch+unsloth(+triton-windows) on the
+   t1_smoke harness — if it passes at parity, the WSL dependency becomes
+   optional per job class; CPU-only jobs (ingest, replay, eng_sync)
+   already run Windows-side organically. Switching is NOT free
+   (re-proving the recipe burns the June-13 window) — the bet stays
+   WSL-for-GPU until a green native smoke receipt says otherwise.
