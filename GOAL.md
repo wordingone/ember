@@ -31,7 +31,7 @@ that sentence is a binding amendment, issued together with the user's stated
 doubts about the core's architecture, the accumulation-time assumptions, and
 the resource assumptions. "prabably" sic, kept verbatim.)
 
-## Operational annex (carried from the prior goal; unchanged unless the user says)
+## Operational annex (carried from the prior goal; amended 2026-06-10 per user — constant-thinking/keep-burning/harness notes absorbed from the verified discussion)
 
 WHILE UNSATISFIED — valid activities, in priority order:
  1. Gate any finished job (receipt → STATE.md transition).
@@ -83,10 +83,65 @@ READING NOTES (binding):
   machine (chunked/resumable, sequential early-stopping); the NC2-own
   component contract is the design language of the main track, not a
   destination appendix.
+- RESIDENT FORM = CONSTANT THINKING, EPISODIC DEPTH (user 2026-06-10,
+  literature-checked same day): ember's runtime is an event-driven
+  PERPETUAL loop, not a request-response REPL — a small always-on resident
+  thinks continuously over its event stream (mail, file events, job
+  receipts, schedule) and emits tool calls / messages SELECTIVELY; hard
+  problems recruit BOUNDED deep bursts (more samples, longer chains,
+  training rounds). Conversation is one event source among several — the
+  user talks to a thing already mid-thought. Allocation principle: thinking
+  LENGTH is not thinking QUALITY (overthinking literature: accuracy can
+  fall as chains grow on easy problems); effort scales with difficulty
+  (quality x volume), not duration — matching the only working example
+  (human cognition runs near-flat-cost background processing; strain
+  tracks load, not time). Verified anchors: AISI x Irregular inference-
+  scaling evals — success keeps climbing with reasoning budget, NO PLATEAU
+  observed; Brown — test-time compute trades against model scale at
+  ~1,000-10,000x, the only named ceiling is economic; the caveat is a
+  COMPETENCE FLOOR (reasoning on a too-weak base compounds nothing), which
+  is K1's shape and why smallest-core preference is bounded from below.
+  Architecture precedents for think-while-acting: full-duplex models
+  (Moshi), dual-system robotics (Helix, GR00T).
+- KEEP BURNING — LIFETIME TRAINING WITH SLEEP-LIKE CONSOLIDATION (user
+  2026-06-10): ember trains repeatedly over its lifetime and runs
+  inference, BOTH autonomously — deliberately counter to the industry's
+  train-once / freeze / infer / replace-with-successor pattern. The known
+  failure modes are named, not hand-waved: catastrophic forgetting and
+  loss of plasticity under continual training (Dohare et al., Nature
+  2024). Standing answers already in the design: the verified-episode
+  ledger IS a replay buffer; NC0 retrains from base on the full ledger
+  each round (paying compute to sidestep forgetting — valid v0); the
+  steady state is SDEK's three timescales — continuous cheap adaptation,
+  periodic sleep-like consolidation, rare durable burns — which is ALSO
+  how perpetual burning coexists with the headroom rule (the user's own
+  introspective caveat, "the brain thinks constantly but needs sleep,"
+  re-derives this architecture). K3 harm gate guards every burn.
+- HARNESS = ORGAN; SELF-EDITING BEHIND THE SAME GATE (user 2026-06-10):
+  capability lives in the model x harness PAIR — frontier multi-day
+  autonomy exists only inside harnesses (goals, hooks, state files,
+  schedulers, sub-agent delegation), not in conversation (Fable-5-class
+  model cards, verified). avir-cli is absorbed as ember's kernel ONLY
+  after compression to its invariants — process supervision, hooks, tool
+  dispatch, state persistence; the chat REPL becomes one optional event
+  source, not the interface. Ember gets full ability to version-control
+  and edit its own harness, and a harness edit is an artifact exactly like
+  a weight delta: branch -> run receipts (harness test suite + invariant
+  checks) -> promote on green; deletion test applies (empirical precedent:
+  Darwin Goedel Machine — self-rewriting agent code, empirically gated,
+  fixed outer evaluation loop). UN-REMOVABLE INVARIANTS, held OUTSIDE
+  ember's write surface and enforced in code (protected paths + boot-time
+  checksum), never self-editable: (1) the three-test gain gate; (2) the
+  resource governor + headroom rule; (3) GOAL.md and only-the-user-
+  retires-it; (4) receipts-only truth; (5) this enforcement layer itself.
 - Milestone ladder: NC0 (borrowed-core loop proof) → rounds N (self-generated
   accumulation) → NC1x worlds (ARC-2 transfer surface, IFC, ARC-AGI-3
-  policies) → NC2-own (owned-mass pretrain, component contract in
-  nc2-own-technique-contract.md). STATE.md is the single position ledger.
+  policies) → NC-K (kernel rung, added per user 2026-06-10: resident
+  event-loop runtime + self-editing harness behind the invariant gate;
+  avir-cli compressed to invariants as the seed) → NC2-own (owned-mass
+  pretrain, component contract in nc2-own-technique-contract.md). NC-K
+  detail-design starts when the NC0 verdict lands; it must not preempt the
+  accumulation track. STATE.md is the single position ledger.
 
 AUTHORITY: Leo executes solo, spawning subagents/agent teams as needed (user
 2026-06-09, limits temporarily off). Escalate ONLY for money, cloud, new
