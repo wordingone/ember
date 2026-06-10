@@ -477,3 +477,50 @@ gated (a hardened V that rejects valid novel solutions is a FALSE-negative
 regression on the floor — the dual of the FPR). Names the measurable:
 hardened-V vs current-V false-negative rate on the existing verified
 ledger (a hardening that drops real solves is its own harm).
+
+## 8.14 fp-7 (#60): consolidator-side episode re-valuation — bits for whom?
+
+**Question (minted by §8.12):** fp-1's headline — the 1.5B sampler banks
+1.23× bits/GPU-min vs 3B — values each episode by the SAMPLER's posterior.
+The consolidator that burns those episodes is the 3B. Re-score the 1.5B's
+verified episodes under the 3B's own receipted per-task P̂: does the
+cheap-sampler advantage survive the honest denominator?
+
+**Method (`scripts/fp7_revalue.py`, selftest PASS, receipt
+`fp7-revalue-20260610T233935Z.json`):** mirrors fp-1 exactly (stratified
+Laplace P̂, uncapped/undeduped passed rows, ext-FPR uncorrected — flagged)
+with ONE change: bits = −log₂ P̂_3B(t) per 1.5B episode instead of
+−log₂ P̂_1.5B(t). Same 6.06 gen-minutes denominator (production cost is
+unchanged; only worth-to-consolidator moves). Internal cross-check: the
+sampler-valued leg re-derives fp-1's 40.3 bits/min from raw samples —
+method-identity confirmed, not assumed.
+
+**Finding — survives, but 1.23× → 1.07×.** Consolidator-valued: 212.0
+bits over 6.06 min = 35.0 bits/min vs the 3B's self-consistent 32.7. The
+advantage is real in sign but thin in magnitude. Stratum mechanics: the
+1.5B's frontier stratum (its rarest solves, the bits fp-1 weighted
+hardest) loses 45% of its value under the 3B posterior (59.1 → 32.7 bits)
+— what is rare for the small core is often routine for the big one.
+Partially offset by 60.9 bits UPvalued: tasks easy for the 1.5B but
+harder for the 3B (the same non-monotone band fp-4 measured as 43%
+targeting mis-valuation). Net shift −32.3 bits (= 60.9 − 93.3).
+
+**Consequences:** (1) fp-1's efficiency claim must be quoted re-valued —
+1.07×, not 1.23× — whenever the burner is the 3B; the ledger schema
+should stamp per-core P̂ so B is always "bits for whom" (schema item for
+the sleep-consolidation spec). (2) A 7% edge is within plausible reach of
+the two flagged uncorrected factors (ext-FPR 22.1%; no bootstrap on the
+ratio). The claim is now PROVISIONAL pending fp-9. (3) The upvalued band
+(easy-for-small, hard-for-big) is the one place cheap sampling buys
+something the 3B cannot cheaply make itself — candidate targeting filter
+if the edge survives fp-9.
+
+**Successor minted (fp-9):** is 1.07× distinguishable from parity? Two
+corrections, both CPU-from-receipts: (a) bootstrap CI (task-level
+resample, seed-fixed) on the re-valued ratio; (b) propagate the ext-FPR
+correction into BOTH numerators (fp-1 flagged it and fp-7 inherited the
+flag — a 22.1% false-credit rate could erase a 7% edge or widen it,
+direction not obvious because it hits both cores' ledgers). Verdict
+shape: CI excludes 1.0 → edge real, quote re-valued; CI includes 1.0 →
+cheap-sampler line is COST parity not advantage, and the upvalued-band
+filter becomes the only surviving rationale. Closing PR mints fp-10.
