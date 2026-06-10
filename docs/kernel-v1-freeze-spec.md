@@ -21,6 +21,13 @@ everything above them churns. Six members:
    posture (fixed seeds where sampling enters V — none today), and the
    definition `verified := V(artifact, task) = 1`. A change to what counts
    as verified invalidates every ledger entry before it — this is the axiom.
+   **Soundness caveat (first-principles audit §4):** the axiom freezes V's
+   MEANING, not its quality — V's false-positive rate is a measurable WORLD
+   PROPERTY carried on a per-world V card (ARC pair-equality ≈ strong;
+   MBPP ~3-assert suites measurably weak per EvalPlus-class findings).
+   Prose must say "passed-V," never inflate to "correct"; worlds upgrade V
+   (extended test sets) without invalidating the ledger — entries record
+   which V version blessed them.
 2. **Gate semantics (G1–G3).** G1 held-out transfer (eval split never
    sampled, never trained); G2 matched-control beat (equal-volume
    unverified/failed-program control, identical train budget); G3 deletion
@@ -90,6 +97,15 @@ drift detected by manifest checksum in the Kai audit sweep = gate violation.
 measured per round with matched sampling budgets (same task count, k, seeds
 across rounds; CI by task-level bootstrap). The control for the turn itself:
 round-N adapter must beat round-(N−1) adapter on F under identical budget —
-not merely add ledger mass. One such receipt, under a tagged kernel manifest,
-is the milestone the whole project's "finished" inversion points at: the
-kernel finished once, so that improvement never has to finish.
+not merely add ledger mass.
+
+**Conjunctive amendment (first-principles audit §1, 2026-06-10):** F alone is
+Goodhart-able — an adapter can overfit world-task style, raising train-pool F
+while transferring nothing (round-1's loss-improved/transfer-zero pattern one
+level up). A turn therefore requires BOTH: (a) dF/dround > 0 on the train
+pool, AND (b) the round's adapter shows a positive G1 held-out delta (CI
+excluding 0). A turn that feeds itself but transfers nothing is not a turn.
+
+One such conjunctive receipt, under a tagged kernel manifest, is the
+milestone the whole project's "finished" inversion points at: the kernel
+finished once, so that improvement never has to finish.

@@ -1,0 +1,144 @@
+# First-principles audit — assumptions and fallacies the day review missed
+
+*2026-06-10, on user prompt ("any first principles assumptions or mistakes
+that you missed, any fallacies?"). These are foundation-level, not
+execution-level — each names the assumption, the failure it permits, and the
+fix taken.*
+
+## 1. The flywheel condition is Goodhart-able as written (SPEC BUG — fixed)
+
+Freeze-spec §6 defined the turn as dF/dround > 0 with F measured on the
+world's TRAIN pool. But F can rise without any real gain: an adapter that
+overfits world-task style solves more train-pool tasks per hour while
+held-out transfer stays flat — the exact round-1 pattern (loss improved,
+transfer zero) reappearing one level up. The milestone metric and the gate
+were misaligned: G1 gates artifacts on held-out transfer, while the
+project's headline condition didn't require it. **Fix (same day): the turn
+condition is now CONJUNCTIVE — dF/dround > 0 on the train pool AND the
+round's adapter shows a positive G1 held-out delta.** A turn that feeds
+itself but transfers nothing is not a turn.
+
+## 2. Round-1's "conversion bottleneck" attribution carries a confound
+
+I named conversion (capability-per-verified-episode) THE bottleneck from
+round-1 receipts. Unexamined: round-1's 1,909 episodes are SEED episodes —
+re-verified solver-derived DSL programs, not the model's own samples. The
+zero lift is therefore consistent with TWO hypotheses: (a) conversion
+mechanism failure (SFT/LoRA extracts nothing), and (b) distribution
+mismatch (imitating expert-written DSL the model can't naturally produce —
+classic off-policy imitation failure). Round-2 on own-generated episodes is
+the discriminating experiment, and the bottleneck note's claim is hereby
+softened from "named" to "leading hypothesis, confounded by seed-episode
+off-policy-ness."
+
+## 3. Easy-mass self-distillation — the W-code repeat-failure mode
+
+W-code's rich floor (~50%+ at 3B on MBPP) reverses ARC's problem: verified
+episodes will be dominated by tasks the model ALREADY solves reliably.
+Training on that mass is self-distillation of existing competence —
+expected lift ≈ 0 for a third distinct reason (ARC: floor too low; W-code
+risk: signal redundant). Expert-iteration gains live at the FRONTIER —
+tasks solved rarely at high k. `w2_ingest` currently admits ALL verified
+episodes. **Fix: frontier-weighting becomes a named design choice of the
+W-code round (e.g. train only on tasks with per-task solve-rate in (0,
+threshold]), evaluated as part of the round-2 arms.** Registry row 9
+amended (arm note), not a new row.
+
+## 4. V is assumed sound; MBPP's V measurably is not
+
+The verifier axiom treats V's verdict as ground truth. For ARC, V = full
+train-pair equality — strong. For MBPP, V = the task's ~3 asserts —
+literature (EvalPlus) shows base MBPP tests pass a substantial fraction of
+WRONG programs. "Burning only verified experience" can therefore burn
+assert-overfit junk, with the gate's blessing. The kernel must treat V's
+false-positive rate as a measurable WORLD PROPERTY, not an axiom: freeze
+spec §1.1 amended — per-world V cards carry a soundness note, and W-code
+upgrades to extended test sets (EvalPlus-style) when available locally.
+Until then the W-code verify bit is "passed-asserts," and prose must not
+inflate it to "correct."
+
+## 5. "Ledger-as-identity, 3× demonstrated" is currently behaviorally vacuous
+
+The 7B/1.5B/3B recompiles demonstrate REPRODUCIBILITY of the compile
+pipeline — but every compiled artifact has produced zero measurable
+behavioral delta. Identity that changes nothing observable is an empty
+predicate so far. C1's mechanical half stands (replayability, provenance,
+excision); its semantic half (the ledger IS the self) is unearned until a
+ledger produces a nonzero transfer delta that survives G3 deletion. Claims
+discipline updated accordingly.
+
+## 6. s15 was fired on autopilot into a power vacuum
+
+Pre-registration said NONZERO → s15, and I fired it correctly — but the
+branch was designed when the expected regimes were "all-zero" or "clearly
+measurable floor." At the OBSERVED floor (1/100, CI [0,3]), a 100-task
+replication has ~no power: 0/100 and 1/100 and 2/100 are all mutually
+consistent — either s15 outcome leaves floor ∈ [0, ~3%]. The run's
+information value is near nil; its cost is ~2h GPU. Letting it finish is
+correct (killing mid-run = unregistered pivot), but the registry gains a
+rule: **every fire-condition on a measured quantity must state the regime
+it was designed for; firing into an out-of-regime result requires a power
+note in the gate entry, and the gate may then re-route with the deviation
+recorded.** The deeper lesson: pre-registration discipline executed
+mechanically can still execute a vacuous experiment — power analysis
+belongs IN the fire-condition.
+
+## 7. Secondary catches (recorded, no action yet)
+
+- **G2 control may be too weak:** failed-program controls include broken
+  junk; "trained beats control" could one day pass on well-formedness alone.
+  A plausible-but-unverified control (compiles, runs, subtly wrong) is the
+  stronger comparator — revisit when any delta is nonzero at all.
+- **GPU-serial ≠ WIP bound for build items:** my backlog defense covered
+  GPU rows only; CPU/build rows have no such bound — the consolidation rule
+  is the real control, the serial argument was partly rationalization.
+- **Feed-list scanning has an unknown-unknowns ceiling:** the DiffusionGemma
+  catch came from ambient human awareness, not a list. The release-scan is a
+  floor; the user remains the better sensor for surprises (O6 again).
+
+## 8. Bottlenecks I was treating as unsolvable (user follow-up, same day)
+
+Audit of impossibility assumptions — each either falls or narrows:
+
+1. **"The datacenter prior is unbridgeable" — TRUE only for breadth-parity,
+   and I let it justify more than it covers.** The physics holds for
+   matching Fable-class breadth. But ember doesn't need breadth — it needs a
+   usable prior in verification-dense domains, and distillation/synthetic
+   curricula are exactly the levers that broke naive compute-capability
+   scaling (phi-class, distilled reasoners). The teacher system already
+   contains the route; the dead assumption was "owned mass must be weak
+   because local compute is small." NC2-own's ceiling is set by
+   curriculum quality × distillation, not by 4090 FLOPs alone.
+2. **"Verifier-free judgment is THE unbridged gap" — overbroad. Judgment has
+   a verifiable core I left off the ladder: CALIBRATION.** Predicting
+   P(verify) per task before sampling and Brier-scoring against V afterward
+   is a fully verifiable judgment signal, free at every round. Knowing what
+   you can and can't solve IS a load-bearing fraction of judgment, and the
+   loop can eat it today. Folded into registry row 9 as instrumentation
+   (zero new rows); O6 narrows from "judgment is verification-sparse" to
+   "judgment MINUS its calibration core is verification-sparse."
+3. **"One eval at a time" — partly a LAW (GPU), partly a BUG I promoted to a
+   law.** True serialization: GPU sampling/training. False serialization:
+   the daemon's shared eval.log opened mode-"w" truncates a live job's log
+   on any concurrent dispatch — that single line forces CPU-only probes
+   (kernel_replay mode A, t1c, w2 runtime checks) to queue behind GPU jobs.
+   Per-job log files dissolve it. Infra is cross-founder (train-daemon) —
+   flagged for coordination when founders wake; not edited alone, but no
+   longer carried as a law of nature.
+4. **"~14B-class is the residency ceiling" — architecture-dependent, and it
+   moved TODAY.** DiffusionGemma runs 26B total / 3.8B active in 18GB: MoE
+   decouples capability-class from resident-VRAM in a way the NC1b ceiling
+   (dense 14B 4-bit) didn't price in. The ceiling is on ACTIVE params, not
+   total. Already a WATCHING row; named here as a softened ceiling.
+5. **"Rich-world verification is hours-per-candidate" (NC1c IFC) — cascade
+   structure dissolves most of it.** Cheap surrogate pre-filters (parse →
+   schema-validate → unit-checks) reject most candidates in ms; the
+   expensive full check runs only on survivors. Per-check partial credit
+   was already planned; the explicit assumption-kill is "verification cost
+   = worst-case cost."
+
+Standing lesson across all five: my impossibility claims age badly and are
+cheap to re-derive — the registry treatment (fire-condition + review date)
+should apply to CEILINGS as much as to branches. Ceilings now get review
+dates: prior-gap (NC2-own entry), VRAM ceiling (on any MoE-local evidence),
+eval-serialization (on infra coordination window).
