@@ -24,7 +24,8 @@ from datetime import datetime, timezone
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 sys.path.insert(0, f"{NC}/scripts")
-from t1_probe import extract_code, execute_batch  # noqa: E402
+from t1_probe import (THROTTLE_S, decode_pacer, execute_batch,  # noqa: E402
+                      extract_code, load_model)
 from t4_eval import bootstrap_ci, paired_delta_ci  # noqa: E402
 
 ADAPTERS = f"{NC}/adapters"
@@ -53,16 +54,12 @@ def problem_prompt(p):
 
 def run_arm(arm, model_id, adapter, problems, k, batch_size, temp, seed):
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     torch.manual_seed(seed)
-    tok = AutoTokenizer.from_pretrained(model_id, padding_side="left")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, device_map="cuda", torch_dtype="auto")
-    if adapter:
-        from peft import PeftModel
-        model = PeftModel.from_pretrained(model, adapter)
-    model.eval()
+    # Governed load (post-crash 2026-06-10): VRAM fraction cap + margin
+    # assert + adapter merge_and_unload — replaces the pre-governor inline
+    # load this script was built with.
+    model, tok = load_model(model_id, adapter=adapter)
 
     prompts, meta = [], []
     for p in problems:
@@ -81,11 +78,13 @@ def run_arm(arm, model_id, adapter, problems, k, batch_size, temp, seed):
         with torch.no_grad():
             out = model.generate(**enc, do_sample=True, temperature=temp,
                                  top_p=0.95, max_new_tokens=512,
+                                 stopping_criteria=decode_pacer(),
                                  pad_token_id=tok.pad_token_id or tok.eos_token_id)
         completions.extend(tok.batch_decode(out[:, enc.input_ids.shape[1]:],
                                             skip_special_tokens=True))
         print(f"[{arm}] {min(i + batch_size, len(prompts))}/{len(prompts)}",
               flush=True)
+        time.sleep(THROTTLE_S)
 
     by_id = {p["id"]: p for p in problems}
     jobs, job_ids = [], []
@@ -124,7 +123,10 @@ def main():
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--temp", type=float, default=0.6)
     ap.add_argument("--seed", type=int, default=14)
-    args = ap.parse_args()
+    ap.add_argument("--tag-suffix",
+                    default=os.environ.get("EMBER_ADAPTER_TAG", ""),
+                    help="adapter namespace suffix (e.g. -q3) matching t2_round")
+    args, _unknown = ap.parse_known_args()  # daemon appends args; ignore
 
     problems = load_mbpp(N_PROBLEMS)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -133,7 +135,8 @@ def main():
 
     arm_vals = {}
     for arm in args.arms:
-        adapter = f"{ADAPTERS}/r{args.round}" if arm == "core_meta" else None
+        adapter = (f"{ADAPTERS}/r{args.round}{args.tag_suffix}"
+                   if arm == "core_meta" else None)
         if adapter and not os.path.isdir(adapter):
             receipt["arms"][arm] = {"skipped": f"no adapter at {adapter}"}
             continue
@@ -148,7 +151,8 @@ def main():
         receipt["harm_flag"] = receipt["delta_meta_minus_core_ci95"][1] < 0
 
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t5-r{args.round}-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/t5-r{args.round}{args.tag_suffix}-{ts}.json",
+              "w") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in receipt
                       if k in ("arms", "delta_meta_minus_core_ci95",
