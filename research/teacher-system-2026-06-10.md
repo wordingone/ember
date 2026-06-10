@@ -176,7 +176,48 @@ component): dynamic multi-teacher pool + pre-commit feed-per-GPU-hour
 admission + world-grounded verification + receipted per-teacher episode
 attribution, in one online loop on consumer hardware.
 
-## 10. Sequencing (gated on the 3B verdict — nothing fires from this note)
+## 10. ROLE INVERSION (user, 2026-06-10): generator-first, sampler-as-bootstrap
+
+User reframe: *"huggingface should function more as a synthetic dataset
+generator, essentially, unless that assumption is wrong."* The assumption is
+right, and sharper than §1–§3's design in one decisive way — it relocates the
+teacher from the **policy side to the world side**:
+
+- **Teacher solves tasks** (§1–§3's sampler role) → episodes are the
+  *teacher's* experience: own-feed dilution, style-mismatch risk (the q3
+  taxonomy's measured crash-rate increase), distillery drift.
+- **Teacher generates tasks** (the generator role) → the CORE solves them →
+  episodes are 100% ember's own experience. The teacher's influence lands on
+  X (the task space), which is external by design — humans authored ARC's
+  distribution too. Own-feed dilution doesn't shrink; it VANISHES.
+
+Formally this merges into **§7a world admission**, not a parallel teacher
+market: a generator manufactures worlds with F > 0 *by construction* (graded
+curricula at the core's frontier) instead of hunting the hub for datasets
+that happen to have an accessible floor. Generated-task admission stays
+world-grounded: (a) executable self-consistency — the generator's reference
+solution passes its own tests in OUR sandbox; (b) non-degeneracy — reject
+tautological/trivial tests; (c) measured pre-commit floor like any world.
+The classic synthetic-data failure (compounding generated garbage) is exactly
+what V blocks.
+
+**Sampler role demoted to bootstrap-only:** fires only if the core's floor is
+zero even on a generated curriculum — gated, provenance-tagged, own-feed
+metric watching (t3's hand-written solver seeds are the precedent).
+
+**Boundaries:** (1) transfer surfaces are NEVER generated — a teacher-authored
+held-out surface lets the generator Goodhart the gate; generated tasks feed
+training worlds only. (2) Ledger entry always requires local V execution —
+downloading pre-made synthetic corpora (e.g. OpenMDW SDG sets) is a different
+channel (NC2-own pretraining mass), never episodes.
+
+**Failure-mode pairing:** starvation (ARC, measured) → restructure world;
+exhaustion (core solves the W-code pool out) → generate tasks. W-code's
+likely reality is the second: a 3B coder on sanitized MBPP should have a
+healthy floor, so the generator matters when the ~120-task pool exhausts.
+Both staged; floor-probe receipts decide which fires.
+
+## 11. Sequencing (gated on the 3B verdict — nothing fires from this note)
 
 - **3B all-zero → W-code restructure (already registered):** the w1 floor
   probes (`w1_floor_q15/q3`) measure the core's F on MBPP; add ONE teacher
