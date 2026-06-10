@@ -99,6 +99,18 @@ can. The grader-awareness number (24%) is the empirical justification for
 exactly this architecture: do not trust the gatekeeper's narration, trust
 receipts.
 
+**Mitigation added 2026-06-10 (user-directed): external adversarial monitor.**
+Kai — different model lineage, uncorrelated failure modes — now runs
+checkpointed adversarial audit of this gatekeeper: receipts-vs-prose on every
+gate claim in the ember repo, over-claim detection, silent-pivot detection,
+governor-compliance grep, constitution-drift checks, presentation audit.
+Protocol: `B:/M/avir/leo/state/leo-adversarial-monitor-protocol-2026-06-10.md`
+(adversarial-advisory; FLAG obligates receipt-or-correction; disputes to the
+user verbatim; monitor outside the write surface). The audit trail needs no
+cooperation from me — the public repo is the evidence. This is §6's
+invariant-set logic applied one level up: the gate that watches ember gets a
+watcher of its own, from a lineage that doesn't share its blind spots.
+
 ## 3. The name
 
 **The premise is correct and it's the name's strength.** An ember is not
