@@ -142,3 +142,21 @@ cheap to re-derive — the registry treatment (fire-condition + review date)
 should apply to CEILINGS as much as to branches. Ceilings now get review
 dates: prior-gap (NC2-own entry), VRAM ceiling (on any MoE-local evidence),
 eval-serialization (on infra coordination window).
+
+### §8 addendum — second pass (two more found)
+
+6. **"The gate needs a frontier LLM" — mostly false already.** I treat my
+   own gatekeeping as irreplaceable until NC-K, but today's gate work is
+   mostly deterministic: receipt math (kernel_replay re-derived 20/20
+   fields), fire-condition matching, manifest checksums, governor greps.
+   The non-deterministic residue (prose-vs-receipt judgment, approach
+   audit) is small and already partially externalized to Kai. The
+   gatekeeper bottleneck — me, session-bound, June-22-limited — is
+   substantially automatable NOW, not at NC-K. Each gate check that moves
+   from my judgment into a script survives June 22 by construction.
+7. **"From-scratch pretrain = ~3 weeks CONTINUOUS" — the continuity is an
+   assumption, not a requirement.** Checkpointed/resumable pretraining in
+   governed idle windows (exactly the t4-chunked redesign pattern, applied
+   to training) dissolves the monolithic-run framing; the cost is
+   checkpoint I/O overhead, not feasibility. NC2-own's entry barrier is
+   smaller than its headline number.
