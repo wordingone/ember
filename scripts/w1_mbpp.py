@@ -87,6 +87,29 @@ def generate_chat(model, tok, user_texts, batch_size, max_new, temp, seed):
     return completions
 
 
+def elicit_prompt(p):
+    return (f"Read this programming task:\n{p['prompt']}\n\n"
+            "Estimate the probability that a Python function you write for "
+            "it would pass its hidden tests. Reply with ONLY a number "
+            "between 0 and 1.")
+
+
+def focus_filter(problems, samples_path, max_rate):
+    """Keep only tasks whose prior per-sample verify rate <= max_rate
+    (includes never-sampled tasks). Frontier/dead top-up selection."""
+    seen = {}
+    with open(samples_path) as f:
+        for line in f:
+            r = json.loads(line)
+            pid = int(str(r["task"]).split(":")[1])
+            s, k = seen.get(pid, (0, 0))
+            seen[pid] = (s + int(bool(r.get("verified"))), k + 1)
+    kept = [p for p in problems
+            if p["id"] not in seen
+            or seen[p["id"]][0] / seen[p["id"]][1] <= max_rate]
+    return kept
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="Qwen/Qwen2.5-Coder-1.5B-Instruct")
@@ -100,13 +123,40 @@ def main():
     ap.add_argument("--temp", type=float, default=0.8)
     ap.add_argument("--seed", type=int, default=14)
     ap.add_argument("--tag", default="", help="receipt tag (e.g. q15, q3)")
+    ap.add_argument("--calibrate", action="store_true",
+                    help="pre-sampling P(verify) elicitation pass (eng #6)")
+    ap.add_argument("--focus-from", default=None,
+                    help="prior samples.jsonl: keep tasks at/below "
+                         "--focus-max-rate (frontier/dead top-up)")
+    ap.add_argument("--focus-max-rate", type=float, default=0.75)
     args, _unknown = ap.parse_known_args()  # daemon appends args; ignore them
 
     problems = load_split(args.split, args.n_tasks or None)
+    if args.focus_from:
+        before = len(problems)
+        problems = focus_filter(problems, args.focus_from,
+                                args.focus_max_rate)
+        print(f"w1 focus: {before} -> {len(problems)} tasks "
+              f"(rate <= {args.focus_max_rate} in {args.focus_from})",
+              flush=True)
     print(f"w1 floor probe: {len(problems)} tasks x k={args.k} "
           f"model={args.model} adapter={args.adapter}", flush=True)
 
     model, tok = load_model(args.model, adapter=args.adapter)
+
+    predicted_by_task = {}
+    if args.calibrate:
+        from calibrate import parse_prob
+        el_texts = [elicit_prompt(p) for p in problems]
+        # greedy-ish short elicitation, same governed path (temp must be >0
+        # for do_sample; 0.1 ~ near-greedy), one output per task
+        el_out = generate_chat(model, tok, el_texts, args.batch_size,
+                               max_new=8, temp=0.1, seed=args.seed)
+        for p, txt in zip(problems, el_out):
+            predicted_by_task[p["id"]] = parse_prob(txt)
+        n_parsed = sum(1 for v in predicted_by_task.values() if v is not None)
+        print(f"[w1] calibration elicited {len(problems)}, parsed {n_parsed}",
+              flush=True)
     user_texts, meta = [], []
     for p in problems:
         for _ in range(args.k):
@@ -143,6 +193,7 @@ def main():
     sampler = args.model + (f"+{args.adapter}" if args.adapter else "")
     passed_by_task = {p["id"]: 0 for p in problems}
     samples_by_task = {p["id"]: 0 for p in problems}
+    outcomes_by_task = {p["id"]: [] for p in problems}
     ri = 0
     os.makedirs(RECEIPTS, exist_ok=True)
     with open(samples_path, "w") as sf:
@@ -150,16 +201,20 @@ def main():
             if src is None:
                 row = {"task": f"mbpp:{pid}", "verified": False,
                        "error": "extraction-failed", "src": None}
+                outcomes_by_task[pid].append(0)
             else:
                 r = results[ri]
                 ri += 1
                 ok = bool(r.get("verified")) and not r.get("error")
                 row = {"task": f"mbpp:{pid}", "verified": ok,
                        "error": r.get("error"), "src": src}
+                outcomes_by_task[pid].append(int(ok))
                 if ok:
                     passed_by_task[pid] += 1
             row["prompt"] = problem_prompt(by_id[pid])
             row["sampler"] = sampler
+            if args.calibrate:
+                row["predicted_p"] = predicted_by_task.get(pid)
             samples_by_task[pid] += 1
             sf.write(json.dumps(row) + "\n")
 
@@ -181,6 +236,10 @@ def main():
         "split_discipline": "train=world pool, validation=heldout, "
                             "test=t5-harm-only",
     }
+    if args.calibrate:
+        from calibrate import calibration_block
+        receipt["calibration"] = calibration_block(predicted_by_task,
+                                                   outcomes_by_task)
     with open(f"{RECEIPTS}/w1-floor{tagpart}-{ts}.json", "w") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in
