@@ -1,0 +1,135 @@
+{
+  "ticket": "CORPUS-MIX-V0",
+  "ts": "20260611T075802Z",
+  "issue": "wordingone/ember#168",
+  "scope": "corpus-side mix audit on the frozen v0 tokenizer + corpus: per-source distributions, packing-efficiency estimate, code/prose mix, reserved-band corpus-side verification",
+  "tokenizer_receipt": "tokenizer-freeze-20260611T060423Z.json",
+  "tokenizer_receipt_sha256": "cefd8238e5ff414273a0954be4399262aad064a8cb312356dca43d6e4a4e009e",
+  "tokenizer_json_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+  "assembly_receipt_sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+  "seq_pack": 1024,
+  "real_total_tokens": 6973632296,
+  "per_source": {
+    "code_github_clean": {
+      "tokens_real": 4053253613,
+      "docs": 1867710,
+      "mean_tokens_per_doc_exact": 2170.173,
+      "sample": {
+        "docs": 22171,
+        "bytes": 154152161,
+        "stride_k": 84,
+        "median_tokens": 608,
+        "p95_tokens": 7476,
+        "mean_tokens": 2168.897
+      },
+      "packing_waste_no_packing_at_seq1024": 0.223629,
+      "band_string_hits": 0,
+      "sample_id_band_hits": 0
+    },
+    "fineweb_edu": {
+      "tokens_real": 1666837787,
+      "docs": 1549860,
+      "mean_tokens_per_doc_exact": 1075.476,
+      "sample": {
+        "docs": 18319,
+        "bytes": 87751646,
+        "stride_k": 84,
+        "median_tokens": 654,
+        "p95_tokens": 3010,
+        "mean_tokens": 1081.456
+      },
+      "packing_waste_no_packing_at_seq1024": 0.337844,
+      "band_string_hits": 0,
+      "sample_id_band_hits": 0
+    },
+    "gutenberg_en": {
+      "tokens_real": 506114061,
+      "docs": 4510,
+      "mean_tokens_per_doc_exact": 112220.413,
+      "sample": {
+        "docs": 54,
+        "bytes": 20622810,
+        "stride_k": 84,
+        "median_tokens": 69771,
+        "p95_tokens": 282925,
+        "mean_tokens": 99829.074
+      },
+      "packing_waste_no_packing_at_seq1024": 0.005587,
+      "band_string_hits": 0,
+      "sample_id_band_hits": 0
+    },
+    "ledger_mit": {
+      "tokens_real": 232578,
+      "docs": 780,
+      "mean_tokens_per_doc_exact": 298.177,
+      "sample": {
+        "docs": 10,
+        "bytes": 6284,
+        "stride_k": 84,
+        "median_tokens": 201,
+        "p95_tokens": 457,
+        "mean_tokens": 276.2
+      },
+      "packing_waste_no_packing_at_seq1024": 0.730273,
+      "band_string_hits": 0,
+      "sample_id_band_hits": 0
+    },
+    "wikipedia_en": {
+      "tokens_real": 747194257,
+      "docs": 813598,
+      "mean_tokens_per_doc_exact": 918.383,
+      "sample": {
+        "docs": 9686,
+        "bytes": 35443843,
+        "stride_k": 84,
+        "median_tokens": 508,
+        "p95_tokens": 2921,
+        "mean_tokens": 909.023
+      },
+      "packing_waste_no_packing_at_seq1024": 0.402638,
+      "band_string_hits": 0,
+      "sample_id_band_hits": 0
+    }
+  },
+  "packing": {
+    "model": "each doc padded up to ceil(len/seq)*seq; waste = unused padded slots / total padded slots at seq 1024",
+    "corpus_waste_fraction_no_packing": 0.26718,
+    "note": "sequence packing collapses this to ~0 (one final partial window) \u2014 the delta is why #167 packs no-pad",
+    "estimate_basis": "aggregate over the stratified sample (distribution shape); exact per-source token totals are from the freeze receipt"
+  },
+  "mix": {
+    "code_source": "code_github_clean",
+    "code_fraction_real": 0.5812,
+    "plan_code_fraction": 0.6,
+    "delta": -0.0188,
+    "note": "real code fraction vs the fp-22 60/40 plan; delta receipted (not prose)"
+  },
+  "reserved_band_corpus_side": {
+    "band_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "special_strings": [
+      "<boi>",
+      "<eoi>",
+      "<image_soft>",
+      "<boa>",
+      "<eoa>",
+      "<audio_soft>",
+      "<video_soft>"
+    ],
+    "total_string_hits": 0,
+    "total_sample_id_hits": 0,
+    "verdict": "CLEAN",
+    "equivalence_basis": "ids 0-7 are special added tokens; learned BPE vocab is ids >= 8, so a merge cannot emit ids 1-7 \u2014 they occur iff a doc carries a literal special string. Full-corpus string scan = the id-occurrence check; confirmed on the sample (encode -> no id in 1-7). NC2 v0 LOCK #1 corpus side."
+  },
+  "sample_budget_bytes": 300000000,
+  "sampler": "deterministic stride per source (k = source_bytes // budget), no RNG \u2014 same as tokenizer_freeze.sample_source",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "no_gpu": true
+}
