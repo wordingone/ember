@@ -1,0 +1,108 @@
+{
+  "ticket": "TIMESHARE-V0-SEGMENT",
+  "ts": "20260611T074548Z",
+  "issue": "wordingone/ember#167",
+  "scope": "v0 survivor-stack pretrain segment \u2014 cpu dry-run",
+  "segment_id": "seg-A",
+  "contract": "configs/v0-pretrain-config.json",
+  "mode": "cpu_dryrun",
+  "steps": 16,
+  "resume_step": 0,
+  "global_step_end": 16,
+  "total_steps": 16,
+  "tokens_this_segment": 512,
+  "wall_s": 0.092,
+  "loss_first": 5.703529,
+  "loss_last": 5.615628,
+  "losses": [
+    5.703529357910156,
+    5.820107460021973,
+    5.5984039306640625,
+    5.6719489097595215,
+    5.542245388031006,
+    5.6430559158325195,
+    5.572068214416504,
+    5.719778060913086,
+    5.752190113067627,
+    5.633021354675293,
+    5.5651774406433105,
+    5.559088230133057,
+    5.727169990539551,
+    5.72838020324707,
+    5.640198707580566,
+    5.615628242492676
+  ],
+  "lr_mults": [
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.85,
+    0.475
+  ],
+  "components": {
+    "optimizer": {
+      "mode": "muon_split",
+      "n_muon": 2,
+      "n_adamw": 6,
+      "lr_muon": 0.02,
+      "lr_adamw": 0.0003
+    },
+    "schedule": {
+      "type": "WSD (warmup-stable-decay)",
+      "warmup_frac": 0.01,
+      "stable_until_frac": 0.85,
+      "decay_to_lr_frac": 0.1,
+      "lr_mult_first": 0.0,
+      "lr_mult_last": 0.475
+    },
+    "ce": {
+      "impl": "cut_ce_chunked"
+    },
+    "mtp": {
+      "enabled": true,
+      "n_heads": 2,
+      "weight": 0.3,
+      "composition": "total = primary_ce + weight * mean(mtp_ces)"
+    },
+    "loader": {
+      "seq": 16,
+      "n_mtp": 2,
+      "block_len": 19,
+      "n_windows": 41,
+      "batch_size": 2,
+      "packing": "no-pad sequence packing, stride=seq"
+    }
+  },
+  "governor": {
+    "mode": "cpu_dryrun",
+    "fp19_fraction_floor": 0.8,
+    "fp19_margin_gib_floor": 1.5,
+    "fp19_pace_s_floor": 0.05,
+    "note": "governor.preflight() not called (no GPU path)"
+  },
+  "pacing": {
+    "throttle_s": 0.0,
+    "throttle_steps": 0,
+    "pace_s": 0.0,
+    "pace_steps": 16,
+    "pacing_total_s": 0.0,
+    "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s"
+  },
+  "last_checkpoint": "C:\\Users\\Admin\\AppData\\Local\\Temp\\v0_dryrun_fwlmjy39\\checkpoints\\step-00000016",
+  "resume_checkpoint": null,
+  "deviation_receipts": [],
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "pass": true,
+  "verdict": "V0_SEGMENT_COMPLETE"
+}

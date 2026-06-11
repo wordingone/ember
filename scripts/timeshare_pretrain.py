@@ -599,6 +599,712 @@ def run_segment(
     return receipt
 
 
+# ===========================================================================
+# v0 SURVIVOR-STACK EXTENSION (eng-43, #167)
+# ===========================================================================
+# Implements the FROZEN contract configs/v0-pretrain-config.json against the
+# eng-33 primitives ABOVE (save_checkpoint/load_checkpoint/capture_rng/
+# restore_rng/verify_resume/_apply_governor/_check_launch_interlock/pacing —
+# all reused unchanged; the eng-33 surface is byte-identical). Component
+# choices are frozen in the contract, NOT here.
+#
+#   1. Muon split-optimizer  — Muon on 2D hidden weights; AdamW on
+#                              embeddings/norms/head. AdamW-everything fallback
+#                              is RECEIPTED (never a silent drop).
+#   2. WSD schedule          — warmup 1% / stable to 85% / decay to 10% lr;
+#                              checkpoints ride the stable phase.
+#   3. Chunked/fused CE       — Liger FLCE if importable, else a portable
+#                              cut-CE that never materializes [N, vocab].
+#   4. MTP aux heads          — n=2, weight 0.3 (contract #5); CE-only fallback
+#                              is RECEIPTED.
+#   5. Packed-shard loader    — no-pad sequence packing; synthetic fixture now
+#                              (real shards blocked on the production token
+#                              shards; the merged tokenizer receipt binds them).
+#
+# Constraints honored: governor floor tighten-only (eng-33 _apply_governor),
+# launch interlock unchanged (eng-33 _check_launch_interlock), NO FP8, NO
+# sparse attention, every fallback emits a deviation receipt (directed-path
+# gate — a silent component drop is a gate violation).
+# ---------------------------------------------------------------------------
+
+CONTRACT_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "configs", "v0-pretrain-config.json")
+
+# vocab 32000 < 65536 -> uint16 is the packed-shard dtype (memory-mappable).
+PACK_DTYPE = "<u2"
+
+
+def load_contract(path: str | None = None) -> dict:
+    """Load the frozen v0 pretrain config contract."""
+    with open(path or CONTRACT_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def emit_deviation_receipt(out_dir: str, component: str, *, basis: str,
+                           detail: str) -> str:
+    """Write a fail-closed deviation receipt for a RECEIPTED fallback path.
+
+    A silent component drop is a gate violation (directed-path gate); every
+    fallback that deviates from the frozen contract lands one of these.
+    """
+    from receipt_write import checked_write
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    rec = {
+        "ticket": "V0EXT-DEVIATION",
+        "ts": ts,
+        "issue": "wordingone/ember#167",
+        "component": component,
+        "basis": basis,
+        "detail": detail,
+        "clause": ("fallback path RECEIPTED per the directed-path gate; the "
+                   "component re-enters at the contract-named window — never "
+                   "silently dropped"),
+    }
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, f"v0ext-deviation-{component}-{ts}.json")
+    checked_write(out, rec)
+    return out
+
+
+# --- 1. Muon optimizer (self-contained, CPU-deterministic, no external dep) -
+
+def _zeropower_via_newtonschulz5(G, steps: int = 5, eps: float = 1e-7):
+    """Orthogonalize a 2D matrix via the quintic Newton-Schulz iteration
+    (Muon / Bernstein-Newhouse). float32, deterministic matmuls on CPU.
+    Pushes the singular values of G toward 1 (semi-orthogonal update)."""
+    import torch
+    assert G.ndim == 2, "Newton-Schulz operates on 2D matrices only"
+    a, b, c = 3.4445, -4.7750, 2.0315
+    X = G.to(torch.float32)
+    transposed = False
+    if X.shape[0] > X.shape[1]:
+        X = X.T
+        transposed = True
+    X = X / (X.norm() + eps)
+    for _ in range(steps):
+        A = X @ X.T
+        B = b * A + c * (A @ A)
+        X = a * X + B @ X
+    if transposed:
+        X = X.T
+    return X
+
+
+_MUON_CLS = None
+
+
+def _muon_class():
+    """Build (once) the Muon optimizer class. Lazy so the module imports
+    without torch (eng-33 discipline: pure-logic paths stay torch-free)."""
+    global _MUON_CLS
+    if _MUON_CLS is not None:
+        return _MUON_CLS
+    import torch
+
+    class _Muon(torch.optim.Optimizer):
+        """Momentum-orthogonalized optimizer for 2D hidden weights. State
+        (momentum_buffer per param) rides the optimizer state_dict, so the
+        eng-33 checkpoint/resume round-trip carries it bit-exact."""
+
+        def __init__(self, params, lr=0.02, momentum=0.95, nesterov=True,
+                     ns_steps=5, weight_decay=0.0):
+            defaults = dict(lr=lr, momentum=momentum, nesterov=nesterov,
+                            ns_steps=ns_steps, weight_decay=weight_decay)
+            super().__init__(params, defaults)
+
+        @torch.no_grad()
+        def step(self, closure=None):
+            loss = None
+            if closure is not None:
+                with torch.enable_grad():
+                    loss = closure()
+            for group in self.param_groups:
+                lr = group["lr"]
+                mom = group["momentum"]
+                nesterov = group["nesterov"]
+                ns_steps = group["ns_steps"]
+                wd = group["weight_decay"]
+                for p in group["params"]:
+                    if p.grad is None:
+                        continue
+                    g = p.grad
+                    if g.ndim != 2:
+                        # Routing guarantees 2D; fail closed rather than
+                        # silently corrupt a non-2D parameter.
+                        raise ValueError(
+                            "Muon received a non-2D parameter — the "
+                            "split-routing invariant is violated")
+                    state = self.state[p]
+                    if "momentum_buffer" not in state:
+                        state["momentum_buffer"] = torch.zeros_like(g)
+                    buf = state["momentum_buffer"]
+                    buf.mul_(mom).add_(g)
+                    upd = g.add(buf, alpha=mom) if nesterov else buf
+                    upd = _zeropower_via_newtonschulz5(upd, steps=ns_steps)
+                    # aspect-ratio scale (Keller Jordan): update RMS ~ constant
+                    scale = max(1.0, p.shape[0] / p.shape[1]) ** 0.5
+                    if wd != 0.0:
+                        p.mul_(1.0 - lr * wd)
+                    p.add_(upd, alpha=-lr * scale)
+            return loss
+
+    _MUON_CLS = _Muon
+    return _MUON_CLS
+
+
+def split_param_groups(model):
+    """Route params per the contract: a 2D weight that is NOT an embedding and
+    NOT a head goes to Muon; everything else (embeddings, 1D norms/biases,
+    primary + MTP heads) goes to AdamW. Tied tensors are deduped by id() so a
+    tied embed/head appears exactly once. Deterministic over named_parameters
+    order (resume-safe optimizer-state indexing)."""
+    muon, adamw = [], []
+    seen = set()
+    for name, p in model.named_parameters():
+        if not p.requires_grad or id(p) in seen:
+            continue
+        seen.add(id(p))
+        low = name.lower()
+        is_2d = p.ndim == 2
+        is_embed = "embed" in low
+        is_head = "head" in low
+        if is_2d and not is_embed and not is_head:
+            muon.append((name, p))
+        else:
+            adamw.append((name, p))
+    return muon, adamw
+
+
+def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
+                          deviation_dir: str | None = None):
+    """Build the Muon/AdamW split optimizer from the contract lrs. On
+    force_fallback (Muon impl failed its selftest) build AdamW-everything and
+    RECEIPT the deviation. Returns (optimizers_dict, base_lrs, routing)."""
+    import torch
+    opt_cfg = cfg["optimizer"]
+    lr_muon = opt_cfg["lr_muon"]
+    lr_adamw = opt_cfg["lr_adamw"]
+    wd = opt_cfg["weight_decay"]
+    muon_named, adamw_named = split_param_groups(model)
+    routing = {
+        "muon_params": [n for n, _ in muon_named],
+        "adamw_params": [n for n, _ in adamw_named],
+        "n_muon": len(muon_named),
+        "n_adamw": len(adamw_named),
+    }
+    if force_fallback:
+        all_params = [p for _, p in muon_named] + [p for _, p in adamw_named]
+        opt = torch.optim.AdamW(all_params, lr=lr_adamw, weight_decay=wd)
+        routing["mode"] = "adamw_everything_fallback"
+        if deviation_dir is not None:
+            routing["deviation_receipt"] = emit_deviation_receipt(
+                deviation_dir, "optimizer-muon",
+                basis="Muon implementation failed its selftest at build time",
+                detail=("split optimizer fell back to AdamW-everything; Muon "
+                        "re-enters at the first checkpoint window per "
+                        "contract.optimizer.fallback (RECEIPTED)"))
+        return {"adamw_all": opt}, {"adamw_all": lr_adamw}, routing
+    Muon = _muon_class()
+    opts: dict[str, Any] = {}
+    base_lrs: dict[str, float] = {}
+    if muon_named:
+        opts["muon"] = Muon([p for _, p in muon_named], lr=lr_muon,
+                            weight_decay=wd)
+        base_lrs["muon"] = lr_muon
+    if adamw_named:
+        opts["adamw"] = torch.optim.AdamW([p for _, p in adamw_named],
+                                          lr=lr_adamw, weight_decay=wd)
+        base_lrs["adamw"] = lr_adamw
+    routing["mode"] = "muon_split"
+    return opts, base_lrs, routing
+
+
+def save_optimizers_state(optimizers: dict) -> dict:
+    """Bundle every optimizer's state_dict for checkpointing. The bundle is
+    an opaque dict to the eng-33 save_checkpoint (it just torch.saves it)."""
+    return {k: opt.state_dict() for k, opt in optimizers.items()}
+
+
+def load_optimizers_state(optimizers: dict, bundle: dict) -> None:
+    """Restore each optimizer from a save_optimizers_state() bundle. Same key
+    set + same param order (split_param_groups is deterministic) => the state
+    indices align, so the resume is bit-exact."""
+    for k, opt in optimizers.items():
+        if k not in bundle:
+            raise ValueError(
+                f"optimizer state bundle missing key {k!r} (have "
+                f"{sorted(bundle)}) — checkpoint/runner optimizer mismatch")
+        opt.load_state_dict(bundle[k])
+
+
+# --- 2. WSD schedule (pure lr-multiplier function) -------------------------
+
+def wsd_lr_frac(step: int, total_steps: int, warmup_frac: float,
+                stable_until_frac: float, decay_to_lr_frac: float) -> float:
+    """Warmup-Stable-Decay lr multiplier in [decay_to_lr_frac, 1.0].
+
+      warmup : linear 0 -> 1 over [0, warmup_frac)
+      stable : 1.0 over [warmup_frac, stable_until_frac)
+      decay  : linear 1.0 -> decay_to_lr_frac over [stable_until_frac, 1.0]
+
+    Pure function of the step fraction; identical on resume (no RNG)."""
+    if total_steps <= 0:
+        return 1.0
+    frac = step / total_steps
+    if frac < 0.0:
+        frac = 0.0
+    elif frac > 1.0:
+        frac = 1.0
+    if frac < warmup_frac:
+        return frac / warmup_frac if warmup_frac > 0 else 1.0
+    if frac < stable_until_frac:
+        return 1.0
+    span = 1.0 - stable_until_frac
+    if span <= 0:
+        return decay_to_lr_frac
+    progress = (frac - stable_until_frac) / span
+    return 1.0 + progress * (decay_to_lr_frac - 1.0)
+
+
+def apply_wsd(optimizers: dict, base_lrs: dict, step: int, total_steps: int,
+              sched_cfg: dict) -> float:
+    """Set every optimizer group's lr = base_lr * WSD(step). Returns the
+    multiplier so the receipt can quote the realized schedule."""
+    mult = wsd_lr_frac(step, total_steps, sched_cfg["warmup_frac"],
+                       sched_cfg["stable_until_frac"],
+                       sched_cfg["decay_to_lr_frac"])
+    for key, opt in optimizers.items():
+        for g in opt.param_groups:
+            g["lr"] = base_lrs[key] * mult
+    return mult
+
+
+# --- 3. Chunked / fused cross-entropy --------------------------------------
+
+def chunked_cross_entropy(hidden, weight, targets, *, chunk_tokens: int = 1024,
+                          ignore_index: int = -100):
+    """Portable cut-CE. hidden [N, H], weight [V, H] (logits = hidden @ wᵀ),
+    targets [N] int64. Mean CE over valid (target != ignore_index) tokens
+    WITHOUT ever materializing the full [N, V] logit tensor — peak logit
+    memory is [chunk_tokens, V]. Deterministic accumulation (fixed chunk
+    order). Returns (mean_ce, n_valid)."""
+    import torch
+    n = hidden.shape[0]
+    total_nll = hidden.new_zeros(())
+    n_valid = 0
+    for s in range(0, n, chunk_tokens):
+        e = min(s + chunk_tokens, n)
+        logits = hidden[s:e] @ weight.T          # [chunk, V] — the bounded term
+        logp = torch.log_softmax(logits, dim=-1)
+        t = targets[s:e]
+        mask = (t != ignore_index)
+        safe_t = t.clamp(min=0).unsqueeze(-1)
+        nll = -logp.gather(-1, safe_t).squeeze(-1)
+        total_nll = total_nll + (nll * mask).sum()
+        n_valid += int(mask.sum())
+    if n_valid == 0:
+        return hidden.new_zeros(()), 0
+    return total_nll / n_valid, n_valid
+
+
+def resolve_ce_impl(*, prefer_liger: bool = True):
+    """Pick the chunked-CE implementation. Liger FLCE (fused linear+CE, never
+    materializes the logit tensor) when importable on the real GPU path; else
+    the portable cut-CE. Both are contract-valid 'chunked/fused CE' — this is
+    NOT a deviation. Returns (impl_name, ce_fn) with ce_fn(hidden, weight,
+    targets, chunk_tokens=..., ignore_index=...) -> (loss, n_valid)."""
+    if prefer_liger:
+        try:
+            from liger_kernel.transformers import (  # type: ignore
+                LigerFusedLinearCrossEntropyLoss)
+
+            _flce = LigerFusedLinearCrossEntropyLoss()
+
+            def _liger_ce(hidden, weight, targets, *, chunk_tokens=1024,
+                          ignore_index=-100):
+                # Liger fuses hidden@weightᵀ + CE; the full logit tensor is
+                # never materialized. chunk_tokens is irrelevant (kernel-tiled).
+                loss = _flce(weight, hidden, targets)
+                import torch
+                n_valid = int((targets != ignore_index).sum())
+                return loss, n_valid
+
+            return "liger_flce", _liger_ce
+        except Exception:
+            pass
+    return "cut_ce_chunked", chunked_cross_entropy
+
+
+# --- 4. MTP aux heads — loss composition -----------------------------------
+
+def mtp_total_loss(primary_ce, mtp_ces, weight):
+    """total = primary_ce + weight * mean(mtp_ces). CE-only (total =
+    primary_ce) when mtp_ces is empty — the contract's RECEIPTED fallback."""
+    if not mtp_ces:
+        return primary_ce
+    import torch
+    return primary_ce + weight * torch.stack(list(mtp_ces)).mean()
+
+
+# --- 5. Packed-shard loader (no-pad sequence packing) ----------------------
+
+def write_packed_shard(path: str, token_ids) -> str:
+    """Write a flat uint16 packed shard (fixture writer / tokenization-side
+    util). token_ids: iterable of ints in [0, 65536)."""
+    import numpy as np
+    arr = np.asarray(list(token_ids), dtype=PACK_DTYPE)
+    arr.tofile(path)
+    return path
+
+
+class PackedShardLoader:
+    """No-pad sequence packing over tokenizer-freeze output shards.
+
+    Reads every *.bin shard in shard_dir (sorted) as one flat uint16 stream
+    and yields contiguous windows of block_len = seq + 1 + n_mtp tokens at
+    stride `seq`. The final short window is DROPPED (no padding token is ever
+    introduced — the whole point of packing). Per window:
+
+      x         = w[0 : seq]                 model input
+      y_primary = w[1 : seq+1]               next-token target (offset +1)
+      y_mtp[k]  = w[k+2 : seq+k+2]           MTP head k target (offset +k+2)
+
+    Window i input is stream[i*seq : i*seq+seq]; inputs are disjoint and
+    contiguous, so concatenating them reconstructs the stream prefix exactly
+    (the round-trip claim). batch(step, B) is a pure function of step (windows
+    indexed mod n_windows), so resume re-derives the identical data stream."""
+
+    def __init__(self, shard_dir: str, seq: int, n_mtp: int):
+        import numpy as np
+        self.seq = seq
+        self.n_mtp = n_mtp
+        self.block_len = seq + 1 + n_mtp
+        shards = sorted(p for p in os.listdir(shard_dir) if p.endswith(".bin"))
+        if not shards:
+            raise ValueError(f"no .bin packed shards in {shard_dir}")
+        arrs = [np.fromfile(os.path.join(shard_dir, s), dtype=PACK_DTYPE)
+                for s in shards]
+        self.stream = np.concatenate(arrs) if len(arrs) > 1 else arrs[0]
+        self.n_tokens = int(self.stream.shape[0])
+        if self.n_tokens < self.block_len:
+            raise ValueError(
+                f"stream {self.n_tokens} tokens < block_len {self.block_len}")
+        self.n_windows = (self.n_tokens - self.block_len) // self.seq + 1
+        self.shards = shards
+
+    def window_np(self, i: int):
+        """Window i as (x, y_primary, [y_mtp...]) numpy int64 arrays. i is
+        taken mod n_windows so dry-runs cycle deterministically; the
+        round-trip selftest uses i in [0, n_windows)."""
+        start = (i % self.n_windows) * self.seq
+        w = self.stream[start:start + self.block_len].astype("int64")
+        x = w[:self.seq]
+        y0 = w[1:self.seq + 1]
+        y_mtp = [w[k + 2:self.seq + k + 2] for k in range(self.n_mtp)]
+        return x, y0, y_mtp
+
+    def batch(self, step: int, batch_size: int):
+        """A (x, y_primary, [y_mtp...]) batch of torch int64 tensors [B, seq]
+        for global `step`. Pure function of step — resume-safe."""
+        import numpy as np
+        import torch
+        xs, y0s = [], []
+        ymtps: list[list] = [[] for _ in range(self.n_mtp)]
+        for j in range(batch_size):
+            x, y0, ym = self.window_np(step * batch_size + j)
+            xs.append(x)
+            y0s.append(y0)
+            for k in range(self.n_mtp):
+                ymtps[k].append(ym[k])
+        x_t = torch.from_numpy(np.stack(xs))
+        y0_t = torch.from_numpy(np.stack(y0s))
+        ymtp_t = [torch.from_numpy(np.stack(ymtps[k]))
+                  for k in range(self.n_mtp)]
+        return x_t, y0_t, ymtp_t
+
+
+# --- the model (tiny CPU stand-in; real c03 backbone behind the interlock) -
+
+def _tiny_v0_model(vocab: int, hidden: int, n_mtp: int, depth: int = 2):
+    """Tiny CPU stand-in with the SAME interface as the real c03 wrapper:
+    .backbone(ids) -> [B,T,H]; .head + .mtp_heads as separate linear heads.
+    Routing names (embed/blocks/norm/head/mtp_heads) exercise split_param_groups
+    exactly as the real model does."""
+    import torch
+
+    class _TinyV0(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.embed = torch.nn.Embedding(vocab, hidden)
+            self.blocks = torch.nn.ModuleList(
+                [torch.nn.Linear(hidden, hidden, bias=False)
+                 for _ in range(depth)])
+            self.norm = torch.nn.LayerNorm(hidden)
+            self.head = torch.nn.Linear(hidden, vocab, bias=False)
+            self.mtp_heads = torch.nn.ModuleList(
+                [torch.nn.Linear(hidden, vocab, bias=False)
+                 for _ in range(n_mtp)])
+
+        def backbone(self, ids):
+            h = self.embed(ids)
+            for blk in self.blocks:
+                h = torch.relu(blk(h))
+            return self.norm(h)
+
+    return _TinyV0()
+
+
+def build_v0_model(cfg: dict, *, live: bool, tiny_dims: dict | None = None):
+    """Build the v0 model. CPU dry-run: tiny stand-in. live (gated): real c03
+    LlamaModel backbone + tied primary head + MTP heads. Returns (model,
+    vocab, hidden, n_mtp)."""
+    import torch
+    n_mtp = cfg["objective"]["mtp_aux_heads"]["n_heads"]
+    if not live:
+        td = tiny_dims or {"vocab": 64, "hidden": 32, "depth": 2}
+        model = _tiny_v0_model(td["vocab"], td["hidden"], n_mtp,
+                               td.get("depth", 2))
+        return model, td["vocab"], td["hidden"], n_mtp
+    # live: real c03 — gated by the eng-33 interlock; fires on fp-22's gate.
+    from transformers import LlamaConfig, LlamaModel  # type: ignore
+    m = cfg["model"]
+
+    class _V0Real(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            conf = LlamaConfig(
+                vocab_size=m["vocab"], hidden_size=m["hidden"],
+                intermediate_size=4096, num_hidden_layers=m["layers"],
+                num_attention_heads=m["heads"], num_key_value_heads=m["heads"],
+                max_position_embeddings=m["seq"], tie_word_embeddings=False)
+            self.backbone_model = LlamaModel(conf)
+            self.head = torch.nn.Linear(m["hidden"], m["vocab"], bias=False)
+            if m["tied_embeddings"]:
+                self.head.weight = self.backbone_model.embed_tokens.weight
+            self.mtp_heads = torch.nn.ModuleList(
+                [torch.nn.Linear(m["hidden"], m["vocab"], bias=False)
+                 for _ in range(n_mtp)])
+
+        def backbone(self, ids):
+            return self.backbone_model(input_ids=ids).last_hidden_state
+
+    model = _V0Real().cuda().to(torch.bfloat16)
+    model.backbone_model.gradient_checkpointing_enable()
+    return model, m["vocab"], m["hidden"], n_mtp
+
+
+# --- assemble + run a v0 segment (full survivor stack) ---------------------
+
+def run_v0_segment(
+    run_dir: str,
+    cfg: dict,
+    *,
+    n_steps: int,
+    total_steps: int | None = None,
+    live: bool = False,
+    resume_ckpt_dir: str | None = None,
+    checkpoint_every: int = 50,
+    pace_s: float = FP19_PACE_S,
+    segment_id: str = "v0-seg-A",
+    shard_dir: str | None = None,
+    tiny_dims: dict | None = None,
+    batch_size: int | None = None,
+    ce_chunk_tokens: int = 256,
+    mtp_force_fallback: bool = False,
+    opt_force_fallback: bool = False,
+    deviation_dir: str | None = None,
+) -> dict:
+    """Run a v0 pretrain segment with the full survivor stack against the
+    frozen contract. CPU dry-run by default; the real c03 path is gated by the
+    eng-33 launch interlock (EMBER_GATE_AUTHORIZED=1 + --live). Reuses the
+    eng-33 checkpoint/resume/governor/pacing primitives unchanged."""
+    import torch
+
+    if live:
+        _check_launch_interlock(live=live)
+        gov_receipt = _apply_governor()
+    else:
+        gov_receipt = {
+            "mode": "cpu_dryrun",
+            "fp19_fraction_floor": FP19_VRAM_FRACTION,
+            "fp19_margin_gib_floor": FP19_MARGIN_GIB,
+            "fp19_pace_s_floor": FP19_PACE_S,
+            "note": "governor.preflight() not called (no GPU path)",
+        }
+
+    os.makedirs(run_dir, exist_ok=True)
+    deviation_dir = deviation_dir or os.path.join(run_dir, "deviations")
+    _pace_reset()
+
+    seq = cfg["model"]["seq"] if live else (tiny_dims or {}).get("seq", 16)
+    batch_size = batch_size or (cfg["throughput"]["batch"] if live else 2)
+    if total_steps is None:
+        total_steps = n_steps
+
+    # --- model + heads ---
+    model, vocab, hidden, n_mtp = build_v0_model(cfg, live=live,
+                                                 tiny_dims=tiny_dims)
+
+    # --- packed-shard loader (synthetic fixture for the dry-run) ---
+    if shard_dir is None:
+        shard_dir = os.path.join(run_dir, "shards")
+        os.makedirs(shard_dir, exist_ok=True)
+        import numpy as np
+        rng = np.random.default_rng(0)
+        need = (n_steps + 4) * batch_size * seq + seq + n_mtp + 8
+        toks = rng.integers(1, vocab, size=int(need), dtype=np.int64)
+        # plant <|endoftext|>=0 doc separators (packing flows across them)
+        toks[:: max(1, seq * 3)] = 0
+        write_packed_shard(os.path.join(shard_dir, "synthetic-00000.bin"),
+                           toks.astype(np.uint16).tolist())
+    loader = PackedShardLoader(shard_dir, seq, n_mtp)
+
+    # --- optimizer (Muon split, or AdamW-everything fallback RECEIPTED) ---
+    optimizers, base_lrs, routing = build_split_optimizer(
+        model, cfg, force_fallback=opt_force_fallback,
+        deviation_dir=deviation_dir)
+
+    # --- chunked/fused CE impl ---
+    ce_impl, ce_fn = resolve_ce_impl(prefer_liger=live)
+
+    # --- MTP composition (CE-only fallback RECEIPTED) ---
+    mtp_cfg = cfg["objective"]["mtp_aux_heads"]
+    mtp_weight = mtp_cfg["weight"]
+    mtp_enabled = mtp_cfg["enabled"] and not mtp_force_fallback
+    mtp_deviation = None
+    if mtp_cfg["enabled"] and mtp_force_fallback:
+        mtp_deviation = emit_deviation_receipt(
+            deviation_dir, "mtp-aux-heads",
+            basis="MTP head implementation failed its selftest at build time",
+            detail=("v0 trains CE-only; the MTP aux heads re-enter at v0.1 per "
+                    "contract.objective.mtp_aux_heads.fallback (RECEIPTED)"))
+
+    # --- resume ---
+    resume_step = 0
+    resume_checkpoint = None
+    if resume_ckpt_dir is not None:
+        m_state, o_state, r_state, manifest = load_checkpoint(resume_ckpt_dir)
+        model.load_state_dict(m_state)
+        load_optimizers_state(optimizers, o_state)
+        restore_rng(r_state)
+        resume_step = manifest["step"]
+        resume_checkpoint = {
+            "ckpt_dir": resume_ckpt_dir, "step": manifest["step"],
+            "files": manifest["files"], "hash_verified": True,
+        }
+
+    # --- training loop ---
+    losses: list[float] = []
+    last_ckpt_dir: str | None = None
+    t_start = time.perf_counter()
+    lr_mults: list[float] = []
+
+    for local_step in range(n_steps):
+        global_step = resume_step + local_step
+        x, y0, y_mtp = loader.batch(global_step, batch_size)
+        if live:
+            x = x.cuda()
+            y0 = y0.cuda()
+            y_mtp = [t.cuda() for t in y_mtp]
+
+        hidden_out = model.backbone(x)                       # [B, T, H]
+        h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
+        primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
+                              chunk_tokens=ce_chunk_tokens)
+        mtp_ces = []
+        if mtp_enabled:
+            for k, head in enumerate(model.mtp_heads):
+                ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
+                                chunk_tokens=ce_chunk_tokens)
+                mtp_ces.append(ce_k)
+        loss = mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
+
+        mult = apply_wsd(optimizers, base_lrs, global_step, total_steps,
+                         cfg["schedule"])
+        lr_mults.append(round(mult, 6))
+
+        loss.backward()
+        for opt in optimizers.values():
+            opt.step()
+        for opt in optimizers.values():
+            opt.zero_grad(set_to_none=True)
+        losses.append(float(loss.detach()))
+
+        time.sleep(pace_s)
+        _pace_record("pace", pace_s)
+
+        if (local_step + 1) % checkpoint_every == 0 or local_step == n_steps - 1:
+            rng = capture_rng()
+            last_ckpt_dir = save_checkpoint(
+                run_dir, global_step + 1,
+                model.state_dict(), save_optimizers_state(optimizers), rng,
+                extra={"last_loss": losses[-1], "segment_id": segment_id,
+                       "optimizer_mode": routing["mode"], "ce_impl": ce_impl,
+                       "mtp_enabled": bool(mtp_enabled),
+                       "total_steps": total_steps})
+
+    wall_s = time.perf_counter() - t_start
+    tokens_this_seg = n_steps * batch_size * seq
+
+    deviations = [d for d in (routing.get("deviation_receipt"), mtp_deviation)
+                  if d]
+
+    receipt: dict[str, Any] = {
+        "ticket": "TIMESHARE-V0-SEGMENT",
+        "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "issue": "wordingone/ember#167",
+        "scope": "v0 survivor-stack pretrain segment — cpu dry-run"
+                 if not live else "v0 survivor-stack pretrain segment — live",
+        "segment_id": segment_id,
+        "contract": "configs/v0-pretrain-config.json",
+        "mode": "cpu_dryrun" if not live else "live",
+        "steps": n_steps,
+        "resume_step": resume_step,
+        "global_step_end": resume_step + n_steps,
+        "total_steps": total_steps,
+        "tokens_this_segment": tokens_this_seg,
+        "wall_s": round(wall_s, 3),
+        "loss_first": round(losses[0], 6) if losses else None,
+        "loss_last": round(losses[-1], 6) if losses else None,
+        "losses": losses,
+        "lr_mults": lr_mults,
+        "components": {
+            "optimizer": {"mode": routing["mode"], "n_muon": routing["n_muon"],
+                          "n_adamw": routing["n_adamw"],
+                          "lr_muon": cfg["optimizer"]["lr_muon"],
+                          "lr_adamw": cfg["optimizer"]["lr_adamw"]},
+            "schedule": {"type": cfg["schedule"]["type"],
+                         "warmup_frac": cfg["schedule"]["warmup_frac"],
+                         "stable_until_frac": cfg["schedule"]["stable_until_frac"],
+                         "decay_to_lr_frac": cfg["schedule"]["decay_to_lr_frac"],
+                         "lr_mult_first": lr_mults[0] if lr_mults else None,
+                         "lr_mult_last": lr_mults[-1] if lr_mults else None},
+            "ce": {"impl": ce_impl},
+            "mtp": {"enabled": bool(mtp_enabled),
+                    "n_heads": n_mtp if mtp_enabled else 0,
+                    "weight": mtp_weight,
+                    "composition": "total = primary_ce + weight * mean(mtp_ces)"},
+            "loader": {"seq": seq, "n_mtp": n_mtp,
+                       "block_len": loader.block_len,
+                       "n_windows": loader.n_windows,
+                       "batch_size": batch_size,
+                       "packing": "no-pad sequence packing, stride=seq"},
+        },
+        "governor": gov_receipt,
+        "pacing": pacing_snapshot(),
+        "last_checkpoint": last_ckpt_dir,
+        "resume_checkpoint": resume_checkpoint,
+        "deviation_receipts": deviations,
+        "sha_convention": (
+            "sha256 over on-disk raw bytes (binary read, no line-ending "
+            "normalization)"),
+        "pass": True,
+        "verdict": "V0_SEGMENT_COMPLETE",
+    }
+    return receipt
+
+
 # ---------------------------------------------------------------------------
 # Selftest
 # ---------------------------------------------------------------------------
@@ -784,6 +1490,254 @@ def _selftest() -> None:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def _selftest_v0ext() -> None:
+    """v0 survivor-stack selftest (eng-43, #167). CPU-only, no GPU, no daemon.
+
+    Covers the contract's five components + the AC's full-stack proof:
+      1. optimizer split-param routing (Muon vs AdamW) + the Newton-Schulz core
+      2. WSD schedule shape (warmup/stable/decay boundaries + monotonicity)
+      3. packed-shard loader round-trip (no-pad reconstruction + shifted targets)
+      4. MTP head loss composition (+ CE-only fallback)
+      5. full-stack CPU dry-run: step + checkpoint + bit-exact resume
+    Plus: v0_config_check structural green, and both RECEIPTED fallback paths
+    (AdamW-everything, CE-only) actually write a deviation receipt.
+
+    Marker: TIMESHARE_V0EXT_SELFTEST_PASS
+    """
+    import numpy as np
+    import torch
+
+    cfg = load_contract()
+
+    # ---- 0. contract is structurally green (the validator the launch shim runs)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import v0_config_check  # noqa: E402
+    assert v0_config_check.check(cfg) == [], v0_config_check.check(cfg)
+
+    # ---- 1. optimizer split-param routing -------------------------------
+    model = _tiny_v0_model(vocab=64, hidden=32, n_mtp=2, depth=2)
+    muon_named, adamw_named = split_param_groups(model)
+    muon_names = {n for n, _ in muon_named}
+    adamw_names = {n for n, _ in adamw_named}
+    assert muon_names == {"blocks.0.weight", "blocks.1.weight"}, muon_names
+    assert adamw_names == {"embed.weight", "norm.weight", "norm.bias",
+                           "head.weight", "mtp_heads.0.weight",
+                           "mtp_heads.1.weight"}, adamw_names
+    # no param routed twice; every trainable param covered exactly once
+    all_ids = {id(p) for _, p in model.named_parameters() if p.requires_grad}
+    muon_ids = {id(p) for _, p in muon_named}
+    adamw_ids = {id(p) for _, p in adamw_named}
+    assert muon_ids.isdisjoint(adamw_ids), "a param is in both groups"
+    assert muon_ids | adamw_ids == all_ids, "params dropped from routing"
+
+    # Newton-Schulz core: the iteration pushes singular values toward 1, i.e.
+    # makes the matrix MORE semi-orthogonal than the raw (Frobenius-normalized)
+    # input. It is approximate by design at 5 steps (Muon needs near-, not
+    # exact, orthogonality), so the claim is improvement, not a tiny residual.
+    torch.manual_seed(0)
+    G = torch.randn(8, 16)
+    Xn = G / (G.norm() + 1e-7)
+    before = (Xn @ Xn.T - torch.eye(8)).abs().max().item()
+    O = _zeropower_via_newtonschulz5(G, steps=5)
+    after = (O @ O.T - torch.eye(8)).abs().max().item()
+    assert after < before, (
+        f"Newton-Schulz did not improve orthogonality: {after} !< {before}")
+    assert after < 0.35, f"Newton-Schulz residual too large: {after}"
+
+    # Muon optimizer actually moves a 2D weight (the step ran end to end).
+    Muon = _muon_class()
+    p = torch.nn.Parameter(torch.randn(8, 16))
+    before = p.detach().clone()
+    mopt = Muon([p], lr=0.02)
+    (p.sum()).backward()
+    mopt.step()
+    assert not torch.equal(before, p.detach()), "Muon step was a no-op"
+
+    # ---- 2. WSD schedule shape ------------------------------------------
+    T = 1000
+    assert wsd_lr_frac(0, T, 0.01, 0.85, 0.10) == 0.0
+    assert abs(wsd_lr_frac(5, T, 0.01, 0.85, 0.10) - 0.5) < 1e-9    # mid-warmup
+    assert wsd_lr_frac(10, T, 0.01, 0.85, 0.10) == 1.0             # warmup end
+    assert wsd_lr_frac(500, T, 0.01, 0.85, 0.10) == 1.0            # stable
+    assert wsd_lr_frac(850, T, 0.01, 0.85, 0.10) == 1.0            # decay start
+    assert abs(wsd_lr_frac(925, T, 0.01, 0.85, 0.10) - 0.55) < 1e-9  # mid-decay
+    assert abs(wsd_lr_frac(T, T, 0.01, 0.85, 0.10) - 0.10) < 1e-9  # decay floor
+    # monotone: warmup non-decreasing, decay non-increasing; all in [floor, 1]
+    warm = [wsd_lr_frac(s, T, 0.01, 0.85, 0.10) for s in range(0, 10)]
+    assert all(b >= a for a, b in zip(warm, warm[1:]))
+    dec = [wsd_lr_frac(s, T, 0.01, 0.85, 0.10) for s in range(850, 1001, 10)]
+    assert all(b <= a for a, b in zip(dec, dec[1:]))
+    # global range is [0, 1]: warmup ramps from 0, decay bottoms at the floor
+    assert all(0.0 <= wsd_lr_frac(s, T, 0.01, 0.85, 0.10) <= 1.0 + 1e-9
+               for s in range(0, T + 1, 7))
+    # boundaries hold on the ACTUAL contract fractions too
+    sc = cfg["schedule"]
+    assert wsd_lr_frac(0, T, sc["warmup_frac"], sc["stable_until_frac"],
+                       sc["decay_to_lr_frac"]) == 0.0
+    assert abs(wsd_lr_frac(T, T, sc["warmup_frac"], sc["stable_until_frac"],
+                           sc["decay_to_lr_frac"]) - sc["decay_to_lr_frac"]) < 1e-9
+
+    # ---- 3. packed-shard loader round-trip ------------------------------
+    tmp = tempfile.mkdtemp(prefix="v0ext_selftest_")
+    try:
+        shard_dir = os.path.join(tmp, "shards")
+        os.makedirs(shard_dir)
+        N_TOK = 200
+        stream = [(i % 60) + 1 for i in range(N_TOK)]
+        stream[0] = 0  # a doc separator — packing flows across it
+        stream[100] = 0
+        write_packed_shard(os.path.join(shard_dir, "s-00000.bin"), stream)
+        loader = PackedShardLoader(shard_dir, seq=8, n_mtp=2)
+        assert loader.block_len == 11
+        assert loader.n_windows == (N_TOK - 11) // 8 + 1
+        # inputs disjoint + contiguous -> reconstruct the stream prefix exactly
+        recon = []
+        for i in range(loader.n_windows):
+            x, y0, ym = loader.window_np(i)
+            recon.extend(int(t) for t in x)
+            base = i * 8
+            assert list(int(t) for t in y0) == stream[base + 1:base + 9]
+            assert list(int(t) for t in ym[0]) == stream[base + 2:base + 10]
+            assert list(int(t) for t in ym[1]) == stream[base + 3:base + 11]
+        assert recon == stream[:loader.n_windows * 8], "round-trip mismatch"
+        # no pad token was ever introduced: every reconstructed token is real
+        assert all(t in stream for t in recon)
+        # batch() is a pure function of step (resume-safe)
+        bx, by0, bym = loader.batch(0, 2)
+        assert tuple(bx.shape) == (2, 8) and len(bym) == 2
+        x0, _, _ = loader.window_np(0)
+        assert list(int(t) for t in bx[0]) == list(int(t) for t in x0)
+
+        # ---- 4. MTP loss composition ------------------------------------
+        tot = mtp_total_loss(torch.tensor(2.0),
+                             [torch.tensor(1.0), torch.tensor(3.0)], 0.3)
+        assert abs(float(tot) - 2.6) < 1e-6, float(tot)   # 2 + 0.3*mean(1,3)
+        ce_only = mtp_total_loss(torch.tensor(2.0), [], 0.3)
+        assert float(ce_only) == 2.0, "CE-only fallback must equal primary CE"
+
+        # ---- 5. full-stack CPU dry-run: step + checkpoint + bit-exact resume
+        tiny = {"vocab": 64, "hidden": 32, "depth": 2, "seq": 8}
+        shared = os.path.join(tmp, "shared-shards")
+        os.makedirs(shared)
+        rng = np.random.default_rng(7)
+        toks = rng.integers(1, 64, size=4000, dtype=np.int64)
+        toks[::24] = 0
+        write_packed_shard(os.path.join(shared, "shared-00000.bin"),
+                           toks.astype(np.uint16).tolist())
+        Nstep, Mstep, TOTAL = 3, 4, 7
+
+        def _run(run_dir, n_steps, resume=None):
+            torch.manual_seed(123)
+            random.seed(123)
+            return run_v0_segment(
+                run_dir, cfg, n_steps=n_steps, total_steps=TOTAL,
+                checkpoint_every=Nstep, pace_s=0.0, shard_dir=shared,
+                tiny_dims=tiny, batch_size=2, ce_chunk_tokens=8,
+                resume_ckpt_dir=resume)
+
+        straight = _run(os.path.join(tmp, "straight"), Nstep + Mstep)
+        assert straight["verdict"] == "V0_SEGMENT_COMPLETE"
+        assert len(straight["losses"]) == Nstep + Mstep
+        ckpt_n = os.path.join(tmp, "straight", "checkpoints",
+                              f"step-{Nstep:08d}")
+        assert os.path.isdir(ckpt_n), "step-N checkpoint missing"
+        resumed = _run(os.path.join(tmp, "resumed"), Mstep, resume=ckpt_n)
+        assert len(resumed["losses"]) == Mstep
+        # bit-exact: resumed trajectory == the straight run's tail
+        for i, (a, b) in enumerate(zip(resumed["losses"],
+                                       straight["losses"][Nstep:])):
+            assert a == b, (f"resume not bit-exact at step {i}: "
+                            f"{a!r} != {b!r}")
+        # the Muon split optimizer was the live optimizer (not the fallback)
+        assert straight["components"]["optimizer"]["mode"] == "muon_split"
+        assert straight["components"]["ce"]["impl"] == "cut_ce_chunked"
+        assert straight["components"]["mtp"]["enabled"] is True
+        assert straight["components"]["mtp"]["n_heads"] == 2
+
+        # ---- RECEIPTED fallbacks actually write a deviation receipt ------
+        import receipt_check
+        dev_dir = os.path.join(tmp, "devs")
+        r_opt = run_v0_segment(
+            os.path.join(tmp, "opt-fb"), cfg, n_steps=2, total_steps=2,
+            checkpoint_every=2, pace_s=0.0, shard_dir=shared, tiny_dims=tiny,
+            batch_size=2, ce_chunk_tokens=8, opt_force_fallback=True,
+            deviation_dir=dev_dir)
+        assert r_opt["components"]["optimizer"]["mode"] == \
+            "adamw_everything_fallback"
+        assert r_opt["deviation_receipts"], "optimizer fallback left no receipt"
+        for dpath in r_opt["deviation_receipts"]:
+            assert os.path.exists(dpath)
+            assert receipt_check.run_file(dpath) == 0, dpath
+            with open(dpath, encoding="utf-8") as f:
+                assert "RECEIPTED" in f.read()
+
+        r_mtp = run_v0_segment(
+            os.path.join(tmp, "mtp-fb"), cfg, n_steps=2, total_steps=2,
+            checkpoint_every=2, pace_s=0.0, shard_dir=shared, tiny_dims=tiny,
+            batch_size=2, ce_chunk_tokens=8, mtp_force_fallback=True,
+            deviation_dir=dev_dir)
+        assert r_mtp["components"]["mtp"]["enabled"] is False
+        assert r_mtp["components"]["mtp"]["n_heads"] == 0
+        assert r_mtp["deviation_receipts"], "MTP fallback left no receipt"
+        for dpath in r_mtp["deviation_receipts"]:
+            assert os.path.exists(dpath) and receipt_check.run_file(dpath) == 0
+
+        dryrun_summary = {
+            "straight_steps": Nstep + Mstep,
+            "resume_from_step": Nstep,
+            "resumed_steps": Mstep,
+            "bit_exact_resume": True,
+            "optimizer_mode": straight["components"]["optimizer"]["mode"],
+            "ce_impl": straight["components"]["ce"]["impl"],
+            "mtp_n_heads": straight["components"]["mtp"]["n_heads"],
+            "loader_n_windows": straight["components"]["loader"]["n_windows"],
+            "loss_first": straight["loss_first"],
+            "loss_last_resumed": resumed["loss_last"],
+        }
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    checks = {
+        "config_structural_green": True,
+        "optimizer_split_routing": True,
+        "newton_schulz_orthogonalizes": True,
+        "wsd_schedule_shape": True,
+        "packed_loader_roundtrip_nopad": True,
+        "mtp_loss_composition": True,
+        "full_stack_checkpoint_resume_bit_exact": True,
+        "optimizer_fallback_receipted": True,
+        "mtp_fallback_receipted": True,
+    }
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    receipt = {
+        "ticket": "TIMESHARE-V0EXT-SELFTEST",
+        "ts": ts,
+        "issue": "wordingone/ember#167",
+        "contract": "configs/v0-pretrain-config.json",
+        "checks": checks,
+        "dryrun": dryrun_summary,
+        "components_implemented": [
+            "muon-split-optimizer", "wsd-schedule", "chunked-cut-ce",
+            "mtp-aux-heads-n2-w0.3", "packed-shard-loader-nopad"],
+        "fallbacks_receipted": ["optimizer->adamw_everything", "mtp->ce_only"],
+        "exclusions_held": ["no_fp8", "no_sparse_attention"],
+        "base_preserved": ("eng-33 timeshare_pretrain.py surface byte-identical "
+                           "— extension only"),
+        "no_network": True,
+        "no_gpu": True,
+        "note": ("pace re-bench vs fp19-bench c03-qat rides the first governed "
+                 "GPU window per the AC (live path gated by "
+                 "EMBER_GATE_AUTHORIZED=1 + --live)"),
+    }
+    from receipt_write import checked_write
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = os.path.join(repo, "receipts", f"v0ext-selftest-{ts}.json")
+    checked_write(out, receipt)
+    print(json.dumps(receipt, indent=2))
+    print(f"[selftest] receipt: {out}")
+    print("TIMESHARE_V0EXT_SELFTEST_PASS")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -793,6 +1747,11 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--selftest", action="store_true",
                     help="Run pure-logic CPU selftest (< 30 s)")
+    ap.add_argument("--selftest-v0ext", action="store_true",
+                    help="Run the v0 survivor-stack selftest (eng-43, CPU-only)")
+    ap.add_argument("--v0-dryrun", action="store_true",
+                    help="Run a short v0 survivor-stack CPU dry-run (synthetic "
+                         "shards) and print the segment receipt")
     ap.add_argument("--live", action="store_true",
                     help="Enable GPU path (requires EMBER_GATE_AUTHORIZED=1)")
     ap.add_argument("--run-dir", default=None,
@@ -810,6 +1769,31 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.selftest:
         _selftest()
+        return
+
+    if args.selftest_v0ext:
+        _selftest_v0ext()
+        return
+
+    if args.v0_dryrun:
+        import random as _r
+        import torch
+        torch.manual_seed(123)
+        _r.seed(123)
+        run_dir = args.run_dir or tempfile.mkdtemp(prefix="v0_dryrun_")
+        cfg = load_contract()
+        receipt = run_v0_segment(
+            run_dir, cfg, n_steps=args.steps, total_steps=args.steps,
+            checkpoint_every=max(1, args.steps // 2), pace_s=0.0,
+            tiny_dims={"vocab": 64, "hidden": 32, "depth": 2, "seq": 16},
+            batch_size=2, ce_chunk_tokens=64, segment_id=args.segment_id)
+        from receipt_write import checked_write
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        out = os.path.join(repo, "receipts",
+                           f"v0ext-dryrun-{receipt['ts']}.json")
+        checked_write(out, receipt)
+        print(json.dumps(receipt, indent=2, sort_keys=True))
+        print(f"[v0-dryrun] receipt: {out}")
         return
 
     if args.verify_resume:
