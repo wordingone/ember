@@ -20,9 +20,11 @@ const LEG = {
   },
   required: ['leg', 'pass', 'findings', 'numbers_checked'],
 }
-const pr = args && args.pr
+// Runtime delivers args as a JSON string (verified wf_38f0566c: typeof args === 'string') — parse defensively.
+const a = typeof args === 'string' ? JSON.parse(args) : args
+const pr = a && a.pr
 if (!pr) throw new Error('args.pr required (e.g. {pr: 112})')
-const claims = (args && args.claims) || '(no mail-claims text provided — use the PR body as the claims source)'
+const claims = (a && a.claims) || '(no mail-claims text provided — use the PR body as the claims source)'
 const REPO = 'wordingone/ember'
 const COMMON = `PR #${pr} on ${REPO}. Work READ-ONLY against the PR head: use \`git fetch origin pull/${pr}/head:gatewf${pr}\` in B:\\M\\avir\\leo\\state\\nc-ladder, then \`git show gatewf${pr}:<path>\` / \`git diff $(git merge-base origin/master gatewf${pr})..gatewf${pr}\`. NEVER: merge, comment, push, mail, dispatch daemon/GPU jobs, or modify the working tree (worktrees for selftest runs are OK, clean them up). Claims under test:\n${claims}\nReturn the StructuredOutput verdict; numbers_checked lists every number you actually recomputed.`
 phase('Evidence')
