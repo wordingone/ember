@@ -1,0 +1,64 @@
+{
+  "ticket": "W4-EVAL",
+  "ts": "20260611T060930Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "arm": [
+      "base="
+    ],
+    "split": "train",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 16,
+    "tag": "fp25b-cov",
+    "task_ids_file": null
+  },
+  "n_tasks": 120,
+  "k": 8,
+  "arms": {
+    "base": {
+      "pass_any_pct": 86.67,
+      "pass_ci95": [
+        80.0,
+        92.5
+      ],
+      "gen_secs": 458.4,
+      "extraction_fail": 0,
+      "programs": 960
+    }
+  },
+  "deltas": {},
+  "samples_file": "w4-eval-fp25b-cov-20260611T060930Z-samples.jsonl",
+  "split_discipline": "validation=heldout only; train=world pool; test=t5-harm-only",
+  "exact": {
+    "per_arm_wilson_ci": {
+      "base": {
+        "lo": 0.794352,
+        "hi": 0.916234,
+        "k": 104,
+        "n": 120
+      }
+    },
+    "paired_newcombe_ci": {},
+    "mde": {
+      "binom_p0_baseline_n": {
+        "p0": 0.8667,
+        "n": 120,
+        "mde": 0.086938
+      },
+      "paired_disc05_n": {
+        "disc_rate": 0.05,
+        "n": 120,
+        "mde": 0.057187
+      },
+      "paired_disc10_n": {
+        "disc_rate": 0.1,
+        "n": 120,
+        "mde": 0.080875
+      }
+    }
+  }
+}

@@ -1,8 +1,11 @@
 import runpy
 import sys
 
-# fp-25 Surface-B SELECTION leg: uniform base-only theta coverage on the FULL
-# MBPP train split (374 tasks x k8). Feasibility receipt 2026-06-11: pooled-q3
+# fp-25 Surface-B SELECTION leg: uniform base-only theta coverage over the
+# full w4_eval --split train sanitized pool (120 tasks x k8 = 960 — w1 split
+# discipline; NOT raw-MBPP 374, wording corrected per monitor audit 14579;
+# n_tasks proven by the terminal receipt). Feasibility receipt 2026-06-11:
+# pooled-q3
 # round-1 coverage leaves only 2 held-out frontier candidates (theta in
 # (0,0.5] outside the sft+grpo training union) — the r2 frontier filter
 # selected the known frontier INTO training by construction. Surface B needs
