@@ -88,6 +88,25 @@ def _check_launch_interlock(*, live: bool) -> None:
         print(msg)
         raise SystemExit(msg)
 
+    # eng-52 (#190): env+flag is AUTHORIZATION, not substance. The live/GPU
+    # dispatch must ALSO pass v0_pretrain_launch_gate (all G-rows green:
+    # corpus / tokenizer / shards / config / governor / world / budget /
+    # prereg). Without this call the interlock was fail-OPEN w.r.t. the gate —
+    # the gate was a standalone shim the trainer never consulted, so a drifted
+    # premise / missing shards / over-budget corpus could still dispatch under
+    # env+flag. Fail-closed; the failing rows are named. (Lazy import keeps the
+    # module top CPU-safe and avoids any cycle — the gate never imports this.)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import v0_pretrain_launch_gate as _lg
+    rows = _lg.gate(datetime.now(timezone.utc).date())
+    blocked = [r for r in rows if r[1] != "GREEN"]
+    if blocked:
+        detail = "; ".join(f"{r[0]}={r[2]}" for r in blocked)
+        msg = ("TIMESHARE_LAUNCH_GATE_REFUSED: v0_pretrain_launch_gate BLOCKS "
+               f"dispatch — blocked rows {[r[0] for r in blocked]}. {detail}")
+        print(msg)
+        raise SystemExit(msg)
+
 
 # ---------------------------------------------------------------------------
 # Governor consumption (GPU path only; imported lazily to stay CPU-safe)
@@ -1729,6 +1748,43 @@ def _selftest_v0ext() -> None:
                  "GPU window per the AC (live path gated by "
                  "EMBER_GATE_AUTHORIZED=1 + --live)"),
     }
+    # ---- 6. launch-gate ENFORCEMENT (eng-52 #190) ----------------------
+    # The interlock must consult v0_pretrain_launch_gate, not just env+flag —
+    # else the gate is decorative (a meta-fail-open on GPU dispatch). No GPU is
+    # reachable here: the interlock raises before any dispatch.
+    import v0_pretrain_launch_gate as _lg  # noqa: E402
+    _saved_env = os.environ.get("EMBER_GATE_AUTHORIZED")
+    _saved_gate = _lg.gate
+    try:
+        # 6a: env+flag set but the REAL gate blocks (today: G-shards has no
+        # shard receipt) -> the interlock must refuse with the gate's rows.
+        os.environ["EMBER_GATE_AUTHORIZED"] = "1"
+        _gate_refused = False
+        try:
+            _check_launch_interlock(live=True)
+        except SystemExit as e:
+            _gate_refused = "TIMESHARE_LAUNCH_GATE_REFUSED" in str(e)
+        assert _gate_refused, ("interlock must refuse when the launch gate "
+                               "blocks, even with env+flag set (eng-52)")
+        # 6b: gate all-green (monkeypatched) -> the interlock passes.
+        _lg.gate = lambda *a, **k: [(r, "GREEN", "ok") for r in _lg.ROWS]
+        _check_launch_interlock(live=True)        # must NOT raise
+        # 6c: the env/flag guard is still independently required (it fires
+        # before the gate check) even when the gate would be green.
+        os.environ.pop("EMBER_GATE_AUTHORIZED", None)
+        _env_refused = False
+        try:
+            _check_launch_interlock(live=True)
+        except SystemExit as e:
+            _env_refused = "TIMESHARE_LAUNCH_INTERLOCK_REFUSED" in str(e)
+        assert _env_refused, "env+flag guard must hold independently (eng-52)"
+    finally:
+        _lg.gate = _saved_gate
+        if _saved_env is None:
+            os.environ.pop("EMBER_GATE_AUTHORIZED", None)
+        else:
+            os.environ["EMBER_GATE_AUTHORIZED"] = _saved_env
+
     from receipt_write import checked_write
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(repo, "receipts", f"v0ext-selftest-{ts}.json")
