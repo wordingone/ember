@@ -1,0 +1,48 @@
+{
+  "ticket": "TIMESHARE-V0EXT-SELFTEST",
+  "ts": "20260611T074545Z",
+  "issue": "wordingone/ember#167",
+  "contract": "configs/v0-pretrain-config.json",
+  "checks": {
+    "config_structural_green": true,
+    "optimizer_split_routing": true,
+    "newton_schulz_orthogonalizes": true,
+    "wsd_schedule_shape": true,
+    "packed_loader_roundtrip_nopad": true,
+    "mtp_loss_composition": true,
+    "full_stack_checkpoint_resume_bit_exact": true,
+    "optimizer_fallback_receipted": true,
+    "mtp_fallback_receipted": true
+  },
+  "dryrun": {
+    "straight_steps": 7,
+    "resume_from_step": 3,
+    "resumed_steps": 4,
+    "bit_exact_resume": true,
+    "optimizer_mode": "muon_split",
+    "ce_impl": "cut_ce_chunked",
+    "mtp_n_heads": 2,
+    "loader_n_windows": 499,
+    "loss_first": 5.54743,
+    "loss_last_resumed": 5.451304
+  },
+  "components_implemented": [
+    "muon-split-optimizer",
+    "wsd-schedule",
+    "chunked-cut-ce",
+    "mtp-aux-heads-n2-w0.3",
+    "packed-shard-loader-nopad"
+  ],
+  "fallbacks_receipted": [
+    "optimizer->adamw_everything",
+    "mtp->ce_only"
+  ],
+  "exclusions_held": [
+    "no_fp8",
+    "no_sparse_attention"
+  ],
+  "base_preserved": "eng-33 timeshare_pretrain.py surface byte-identical \u2014 extension only",
+  "no_network": true,
+  "no_gpu": true,
+  "note": "pace re-bench vs fp19-bench c03-qat rides the first governed GPU window per the AC (live path gated by EMBER_GATE_AUTHORIZED=1 + --live)"
+}
