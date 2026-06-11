@@ -1259,3 +1259,23 @@ maximal, certification only by receipts.
 **Successors:** fp-23 (probe-analysis + curriculum-generator prereg,
 frozen before pretrain step 0) + eng-36 (#130, acquisition — already
 minted + mailed).
+
+## 8.31 sp-1 (#117): the-search → ember component map — method layer ports strongest
+
+User-pointed (via Kai 14482). Verdict of the mapping
+(research/sp1-thesearch-ember-map.md): the-search's REGIME (no labels,
+no gradients) is ember's opposite, so component-level ports are
+selective while the METHOD layer ports whole: family/kill discipline,
+extraction protocol (= our matched-control single-variable arms),
+catalog-as-contract, budget audits, enforced-runner lesson. Named
+pointer classes resolved: codebooks → FSQ/STE prior for QAT-native
+(v0, EXTERNAL-CITED) + staged v1 tokenizer; eigenvectors →
+information-only spectral fields in fp-23's probe schema (never a
+bar); graphs → the ledger's time-indexed append-only shape is the
+surviving C32 form, and the negative-transfer receipt becomes NC1a's
+strongest design prior (per-state stores banned); SSMs → v1
+single-variable ablation only (fp-19 pin keeps v0 plain attention;
+the-search's standalone-helps/multi-task-hurts pair is the honest
+prior). Successor sp-2 staged on NC1a entry. One adoption applies
+immediately: round verdicts gain the "killed too fast?" budget-audit
+column from round-3 on.
