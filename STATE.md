@@ -38,6 +38,14 @@ Eli 14640: census CLEAN (special-id-census-20260611T143841Z — 2 reserved ids c
 
 Next fire unchanged: #218 on the superseding freeze receipt (name+sha via Eli's mail).
 
+## 2026-06-11 ~15:15Z — Kai PASS on #232 + staged-exit policy; #229 crossed-wire resolved (PR #233 closed unmerged, config eager-pin stands)
+
+Kai 14644: E1b gate hardening ACCEPTED (selftest + bare-exit-1 + full repro set verified on his side; launch gate still refuses only on G-shards; fp-30 green; config untouched). **Staged-exit policy (recorded as binding):** nonzero staged exit REQUIRED where a bare invocation could read as authorization for config mutation / live dispatch / evidence promotion, or where eng_sync/CI/launch scripts/any machine caller consumes the executor; manual trigger-gated executors with no bare caller keep exit-0 staged until the G-shards/recount path clears. No broad mechanical sweep now.
+
+#229 three-way crossing (14642 → my re-scope+14646 → Eli's PR #233 +14645 → reconcile 14647/14648): Eli's grounding VERIFIED (zero torch.compile in timeshare_pretrain.py / v0_config_check.py — trainer already eager; only config line 80 promises compile). My re-scope: #229 = config-truth eager pin, own small registered deviation (NOT folded into the E1b deviation PR — prereg pins that surface to throughput.batch+lr only). Eli's #233 implemented the original runtime guard anyway (built on 14641 before the re-scope landed); diff review found it CORRECT (lazy-compile warmup-in-guard, backbone_model target, clean revert, receipted deviation, no dropout → warmup can't perturb RNG) — **closed UNMERGED on a structural ground: it attempts compile only when --live while E1b legs run non-live, permitting a launch mode no loss-match evidence covers; the eager pin removes that divergence by construction.** Branch eng/229-eager-fallback preserved as the resurrection point; any future compile lane must extend E1b-class evidence to compiled mode. Sequencing precision on #229: lands AFTER shard-rerun clears, BEFORE launch gate (config must say eager by launch or its own "deviation RECEIPTED" promise goes unmet live).
+
+Lanes: Eli on #230 (sampler model-free core, branch eng/230-r1-sampler) with recount monitored (PID 136828); #231 queued behind; #229 not-now. Next fire unchanged: #218 on the superseding freeze receipt.
+
 ## 2026-06-11 ~14:45Z — stop-gate pass: queue-jump #132 -> #225 (E1b gate built, PR #228 merged)
 
 Gate fired with #132 lowest. Queue-jump justification: #132's executors are built+frozen (fp21b_prereg.py + fp21b_scope_132.py, scope PR #197); its fire input (round-3 sampling receipt) cannot exist before a round-3 runs, and producing a fallback-(a) borrowed round-3 NOW would contradict the frozen fp-26 (b) owned-core registration. #225 held the only buildable fire-time gap among open Leo-class items: the E1b prereg (#227) froze the loss-match rule with no executor applying it.
