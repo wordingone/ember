@@ -120,7 +120,25 @@ def main():
                          "recorded for linkage")
     ap.add_argument("--gate-token-present", action="store_true",
                     help="set by the round-2 wrapper after its interlock")
+    ap.add_argument("--license-allow", default=None,
+                    help="license allow-list (ledger_license.parse_allow "
+                         "format) passed to build_dataset — set by the r2 "
+                         "wrapper to mirror the sft arm's build exactly")
+    ap.add_argument("--sft-receipt", default=None,
+                    help="path of the certified sft arm receipt; with "
+                         "--expected-view-sha256, identity with the sft arm "
+                         "is ASSERTED fail-closed (rows + n_examples cross-"
+                         "checked against this receipt) and claimed true")
+    ap.add_argument("--expected-view-sha256", default=None,
+                    help="the dispatcher's sha pin of the view file; the "
+                         "build-time hash must match or we refuse (catches "
+                         "mutation between dispatch and training start)")
     args, _unknown = ap.parse_known_args()  # daemon appends args
+    if (args.sft_receipt or args.expected_view_sha256) and not args.view_path:
+        raise SystemExit(
+            "t2_mtp: --sft-receipt/--expected-view-sha256 declare an "
+            "identity intent only --view-path can honor; the legacy path "
+            "regenerates from the ledger. Refusing.")
 
     import sys
     sys.path.insert(0, f"{NC}/scripts")
@@ -144,36 +162,97 @@ def main():
     from t2_wcode import write_view
 
     # eng #11: same ext-clean quarantine at build as t2_wcode.
-    # eng #140: with --view-path the caller's view is load-bearing — load it
-    # as-is, never regenerate, never touch wcode-r1.jsonl. Legacy path
-    # (no --view-path) keeps the round-1 behavior: regenerate from the
-    # ledger (identical dataset to arm A — the arm delta is the aux loss).
+    # eng #140 (gate rework, option b): with --view-path the caller's view
+    # is load-bearing AND already clean — the installer (sft arm or wrapper
+    # pinning the sft view) ran ext_clean before writing it. Here ext_clean
+    # is a fail-closed GUARD only: if it would drop rows, the pinned view
+    # no longer matches the quarantine state and we refuse rather than
+    # silently train on a different dataset than the pinned sha. The view
+    # file is never rewritten in this mode. Build mirrors t2_r2w's sft
+    # shape exactly: flat default cap + license_allow (NOT
+    # caps_from_records — that was the residual build-shape delta).
+    # Legacy path (no --view-path) keeps the round-1 behavior unchanged:
+    # regenerate from the ledger, ext-clean in place, caps_from_records
+    # (identical dataset to arm A — the arm delta is the aux loss).
     from frontier import ext_clean, load_ext_flags
+    from ledger_license import parse_allow
+    allow = parse_allow(args.license_allow) if args.license_allow else None
+    sft_anchor = None
     if args.view_path:
         view_path = args.view_path
         arm_recs = load_view_records(view_path)
+        n_pre_ext = len(arm_recs)
+        cleaned = ext_clean(arm_recs,
+                            load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"]))
+        if len(cleaned) != n_pre_ext:
+            raise SystemExit(
+                f"t2_mtp: ext-clean guard — caller view {view_path} contains "
+                f"{n_pre_ext - len(cleaned)} quarantined row(s); the pinned "
+                "view must be ext-clean at install time. Refusing to train "
+                "on a dataset that differs from the pinned sha.")
+        arm_recs = cleaned
+        view_sha = file_sha256(view_path)
+        if (args.expected_view_sha256
+                and view_sha != args.expected_view_sha256):
+            raise SystemExit(
+                f"t2_mtp: view sha mismatch — {view_path} hashes to "
+                f"{view_sha} at build time but the dispatcher pinned "
+                f"{args.expected_view_sha256}. The file changed between "
+                "dispatch and training start. Refusing.")
+        if args.sft_receipt:
+            with open(args.sft_receipt, encoding="utf-8") as sf:
+                sft_rec = json.load(sf)
+            ff = sft_rec.get("frontier_filter", {})
+            sft_anchor = {
+                "receipt": args.sft_receipt,
+                "tag": sft_rec.get("tag"),
+                "view_rows_after_theta": ff.get("view_rows_after_theta"),
+                "dataset_examples": ff.get("dataset_examples"),
+            }
+            if len(arm_recs) != sft_anchor["view_rows_after_theta"]:
+                raise SystemExit(
+                    f"t2_mtp: identity assert failed — view has "
+                    f"{len(arm_recs)} rows but the sft receipt certified "
+                    f"{sft_anchor['view_rows_after_theta']} "
+                    f"(view_rows_after_theta, {args.sft_receipt}). Refusing.")
+        examples, counts = build_dataset(view_path, license_allow=allow)
+        if (sft_anchor
+                and len(examples) != sft_anchor["dataset_examples"]):
+            raise SystemExit(
+                f"t2_mtp: identity assert failed — build produced "
+                f"{len(examples)} examples but the sft receipt certified "
+                f"{sft_anchor['dataset_examples']} (dataset_examples). "
+                "Same view + same build shape must give the same dataset; "
+                "check --license-allow matches the sft run. Refusing.")
+        build_shape = "sft-mirror: flat default cap + license_allow"
     else:
         view_path = f"{VIEWS}/wcode-r1.jsonl"
         arm_recs = write_view(f"{NC}/ledger/episodes.jsonl", view_path)
-    n_pre_ext = len(arm_recs)
-    arm_recs = ext_clean(arm_recs,
-                         load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"]))
-    with open(view_path, "w", encoding="utf-8", newline="\n") as vf:
-        for r in arm_recs:
-            vf.write(json.dumps(r) + "\n")
-    caps = caps_from_records(arm_recs)
-    examples, counts = build_dataset(view_path, cap=caps)
+        n_pre_ext = len(arm_recs)
+        arm_recs = ext_clean(arm_recs,
+                             load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"]))
+        with open(view_path, "w", encoding="utf-8", newline="\n") as vf:
+            for r in arm_recs:
+                vf.write(json.dumps(r) + "\n")
+        caps = caps_from_records(arm_recs)
+        examples, counts = build_dataset(view_path, cap=caps,
+                                         license_allow=allow)
+        build_shape = "legacy round-1: caps_from_records per-task caps"
+        view_sha = file_sha256(view_path)
     if not examples:
         raise SystemExit("t2_mtp: empty dataset — ingest first")
     view_block = {
         "path": view_path,
         "source": ("explicit --view-path (caller-installed view, "
-                   "no regeneration)") if args.view_path
+                   "no regeneration, no rewrite; ext-clean guard passed)")
+                  if args.view_path
                   else "regenerated from ledger (legacy round-1 path)",
         "rows_pre_ext_clean": n_pre_ext,
         "rows_built": len(arm_recs),
         "ext_clean_dropped": n_pre_ext - len(arm_recs),
-        "sha256": file_sha256(view_path),
+        "build_shape": build_shape,
+        "license_allow": args.license_allow,
+        "sha256": view_sha,
     }
 
     try:
@@ -254,13 +333,36 @@ def main():
     from receipt_fp import args_fingerprint  # eng #10
     # eng #140: dataset-identity is a NAMED claim with a basis, never an
     # unconditional literal. Legacy path = by-construction identical to
-    # arm A (same write_view -> ext_clean -> caps build); explicit-view
-    # path = whatever the wrapper installed, claim false.
-    if args.view_path:
+    # arm A (same write_view -> ext_clean -> caps build). View-path with
+    # BOTH identity anchors (--sft-receipt + --expected-view-sha256):
+    # claim TRUE — the asserts above already failed closed unless the
+    # build-time hash matched the dispatch pin and rows/n_examples matched
+    # the certified sft receipt. View-path without anchors: honest False
+    # (generic caller view, no named arm to claim against).
+    if args.view_path and sft_anchor and args.expected_view_sha256:
+        identity_claim = {
+            "claim": True,
+            "arm": sft_anchor["tag"] or "r2 sft arm (t2_r2w)",
+            "basis": ("sha-pinned to sft arm view wcode-r2-sft.jsonl: "
+                      "build-time training_view_sha256 == dispatcher pin; "
+                      "view rows == sft receipt view_rows_after_theta; "
+                      "n_examples == sft receipt dataset_examples — all "
+                      "asserted fail-closed before training"),
+            "training_view_sha256": view_sha,
+            "expected_view_sha256": args.expected_view_sha256,
+            "sft_receipt": sft_anchor["receipt"],
+            "sft_view_rows_after_theta":
+                sft_anchor["view_rows_after_theta"],
+            "sft_dataset_examples": sft_anchor["dataset_examples"],
+        }
+    elif args.view_path:
         identity_claim = {
             "claim": False,
-            "basis": ("explicit --view-path: dataset is the "
-                      "caller-installed view, not arm A's build"),
+            "basis": ("explicit --view-path without identity anchors "
+                      "(--sft-receipt + --expected-view-sha256): dataset "
+                      "is the caller-installed view consumed as-is "
+                      "(ext-clean guard, no rewrite), sft build shape; "
+                      "no named-arm identity asserted"),
         }
     else:
         identity_claim = {
@@ -279,7 +381,7 @@ def main():
         "governor": governor_block,
         "view": view_block,
         "dataset": {"n_examples": len(examples), "n_tasks": len(counts),
-                    "identical_to_arm_A": identity_claim},
+                    "identity_claim": identity_claim},
         "train_loss": round(res.training_loss, 4),
         "lm_loss_first5": loss_log["lm"][:5],
         "lm_loss_last5": loss_log["lm"][-5:],

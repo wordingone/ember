@@ -3,21 +3,30 @@
 Kai's live r2 audit (mails 14509/14508): t2_r2_mtp installed its
 frontier-filtered view at wcode-r1.jsonl, but t2_mtp regenerated that file
 from the full ledger before building — the filtered set never reached
-training. The fix makes the caller's view explicit (--view-path) and the
-terminal receipt honest (round / gate presence / wrapper linkage / view
-hash / named dataset-identity claim). This selftest pins the closure.
+training. The first fix had the wrapper build its OWN theta view, which
+skipped ext_clean (row-level confound vs the sft arm — gate finding on
+PR #143). Final shape (gate option b): the wrapper consumes the sft arm's
+EXACT view (wcode-r2-sft.jsonl) sha-pinned, t2_mtp consumes it READ-ONLY
+(zero-drop ext-clean guard, no rewrite), asserts the build-time hash
+equals the dispatch pin, cross-checks rows + n_examples against the
+certified sft receipt, and claims identity TRUE in both receipts.
+This selftest pins the closure.
 
 Checks (pure logic + source-wiring asserts; no GPU, no torch):
   1. load_view_records round-trips a temp JSONL and refuses empty files;
   2. file_sha256 matches hashlib over raw bytes;
-  3. t2_mtp source: new argparse surface present; ledger regeneration
-     (write_view) only on the no-view-path branch; receipt carries round /
+  3. t2_mtp source: argparse surface (incl. --license-allow /
+     --sft-receipt / --expected-view-sha256); view-path arm is read-only
+     (no view rewrite, no caps_from_records, sft-mirror build, fail-closed
+     guard + identity asserts); ledger regeneration (write_view) and the
+     view rewrite live only on the legacy arm; receipt carries round /
      gate_token_present / wrapper_receipt / view block / claim-dict
-     identity (no unconditional identical_to_arm_A literal);
+     identity with the sha-pinned TRUE branch;
   4. t2_r2_mtp source (text-only — importing it trips the gate-token
-     interlock): no copy onto wcode-r1.jsonl, no backup machinery,
-     delegation argv carries --view-path/--round/--wrapper-receipt/
-     --gate-token-present.
+     interlock): consumes wcode-r2-sft.jsonl, builds no view, applies no
+     filter (frontier_filter gone), resolves the certified sft receipt
+     fail-closed, refuses --theta/--all-verified, delegation argv carries
+     the full identity-anchor surface.
 
 Writes receipts/eng140-viewpath-selftest-<ts>.json. Sentinel:
 T2_MTP_VIEWPATH_SELFTEST_PASS.
@@ -69,37 +78,82 @@ def main():
     # 3. t2_mtp source wiring
     src = open(os.path.join(HERE, "t2_mtp.py"), encoding="utf-8").read()
     for flag in ("--view-path", "--round", "--wrapper-receipt",
-                 "--gate-token-present"):
+                 "--gate-token-present", "--license-allow",
+                 "--sft-receipt", "--expected-view-sha256"):
         assert f'"{flag}"' in src, f"argparse missing {flag}"
     main_src = src.split("def main():")[1]
     branch_pos = main_src.index("if args.view_path:")
     regen_pos = main_src.index("write_view(")
     assert branch_pos < regen_pos, \
         "ledger regeneration must be guarded by the view-path branch"
-    # regeneration sits in the else arm: between the branch and write_view
-    # there must be an `else:`
-    assert "else:" in main_src[branch_pos:regen_pos], \
+    else_pos = main_src.index("\n    else:", branch_pos)
+    assert else_pos < regen_pos, \
         "write_view must live in the else (no --view-path) arm"
+    checks["t2_mtp_branch_guard"] = True
+
+    # 3a. view-path arm is READ-ONLY + sft-mirror + fail-closed identity
+    ifarm = main_src[branch_pos:else_pos]
+    assert 'with open(view_path, "w"' not in ifarm, \
+        "view-path arm must never rewrite the caller's view"
+    assert "caps_from_records(" not in ifarm, \
+        "view-path arm must use the sft build shape, not bits-caps"
+    assert "build_dataset(view_path, license_allow=allow)" in ifarm, \
+        "view-path arm must mirror the sft build call exactly"
+    assert "ext-clean guard" in ifarm, "zero-drop ext-clean guard missing"
+    assert "view sha mismatch" in ifarm, "dispatch-pin sha assert missing"
+    assert ifarm.count("identity assert failed") == 2, \
+        "rows + n_examples asserts against the sft receipt missing"
+    checks["t2_mtp_viewpath_arm_readonly_identity"] = True
+
+    # 3b. legacy arm keeps the round-1 behavior (regenerate, rewrite, caps)
+    legacy = main_src[else_pos:main_src.index("view_block = {")]
+    assert "write_view(" in legacy and "caps_from_records(" in legacy, \
+        "legacy arm must keep regeneration + bits-caps"
+    assert 'with open(view_path, "w"' in legacy, \
+        "legacy arm must keep the in-place ext-clean rewrite"
+    checks["t2_mtp_legacy_arm_unchanged"] = True
+
+    # 3c. receipt fields + identity claim branches
     for field in ('"round": args.round',
                   '"gate_token_present": args.gate_token_present',
                   '"wrapper_receipt": args.wrapper_receipt',
                   '"view": view_block',
-                  '"identical_to_arm_A": identity_claim'):
+                  '"identity_claim": identity_claim'):
         assert field in main_src, f"receipt field wiring missing: {field}"
     assert '"identical_to_arm_A": True' not in src, \
         "unconditional identity literal must be gone"
-    checks["t2_mtp_wiring"] = True
+    assert ("if args.view_path and sft_anchor and "
+            "args.expected_view_sha256:") in main_src, \
+        "anchored TRUE-claim branch missing"
+    assert "sha-pinned to sft arm view wcode-r2-sft.jsonl" in main_src, \
+        "TRUE-claim basis must name the sha pin"
+    checks["t2_mtp_receipt_identity"] = True
 
     # 4. wrapper source (text-only)
     wsrc = open(os.path.join(HERE, "t2_r2_mtp.py"), encoding="utf-8").read()
     assert "shutil.copy2" not in wsrc, "r1-path install copy must be gone"
     assert "wcode-r1.jsonl.r2-backup" not in wsrc, "backup machinery gone"
-    for flag in ("--view-path", "--round", "--wrapper-receipt",
-                 "--gate-token-present"):
-        assert f'"{flag}"' in wsrc, f"delegation argv missing {flag}"
-    # the only r1-view mentions left are documentation, never an open(...,"w")
     assert 'os.path.join(VIEWS, "wcode-r1.jsonl")' not in wsrc, \
         "wrapper must not construct the r1 view path"
+    # gate option b: consume the sft view, build nothing, filter nothing
+    assert 'os.path.join(VIEWS, "wcode-r2-sft.jsonl")' in wsrc, \
+        "wrapper must consume the sft arm's exact view"
+    assert "frontier_filter" not in wsrc, \
+        "wrapper must not compute its own frontier filter"
+    assert "solve_rates_from_ledger" not in wsrc, \
+        "wrapper must not read solve rates"
+    assert "wcode-r2.jsonl" not in wsrc, \
+        "wrapper must not touch t2_r2w's pre-theta intermediate"
+    assert "sft view not found" in wsrc, \
+        "fail-closed on missing sft view required"
+    assert "no certified sft receipt" in wsrc, \
+        "fail-closed sft-receipt resolution required"
+    assert "no longer applies a frontier filter" in wsrc, \
+        "--theta/--all-verified refusal required"
+    for flag in ("--view-path", "--round", "--wrapper-receipt",
+                 "--gate-token-present", "--sft-receipt",
+                 "--expected-view-sha256"):
+        assert f'"{flag}"' in wsrc, f"delegation argv missing {flag}"
     checks["wrapper_wiring"] = True
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -110,13 +164,18 @@ def main():
         "sha_convention": ("sha256 over on-disk raw bytes "
                            "(binary read, no line-ending normalization) — "
                            "the convention file_sha256 is pinned against"),
+        "gate_rework": ("PR #143 changes-requested (option b): wrapper "
+                        "consumes the sft arm's exact view sha-pinned; "
+                        "t2_mtp read-only consume + build-time pin assert "
+                        "+ certified-sft-receipt cross-check (rows, "
+                        "n_examples) -> identity claim TRUE in both "
+                        "receipts, by construction"),
         "default_path_unchanged": ("no --view-path = legacy round-1 "
                                    "behavior (regenerate wcode-r1.jsonl "
                                    "from ledger, arm-A-identical build)"),
         "quarantine_note": ("adapter r2-q3-mtp stays PRE-GATE/QUARANTINED "
-                            "until rerun on the explicit view or "
-                            "relabeled exploratory — dispatch is the "
-                            "gate-holder's call"),
+                            "until rerun on the sft-identical view — "
+                            "dispatch is the gate-holder's call"),
     }
     out = os.path.join(REPO, "receipts", f"eng140-viewpath-selftest-{ts}.json")
     with open(out, "w", encoding="utf-8", newline="\n") as f:
