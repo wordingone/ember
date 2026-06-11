@@ -664,3 +664,43 @@ pacing overhead is fixed-per-batch, the smaller/faster core absorbs
 proportionally more)? CPU-from-receipts: receipts carry gen_secs +
 tok/s + batch counts; pacer parameters are code constants. Closing PR
 mints fp-12.
+
+## 8.17 fp-9 (#68): the cheap-sampler edge is COST PARITY — verdict on the fp-1 headline
+
+**Question (minted by §8.14):** is fp-7's re-valued 1.07× distinguishable
+from parity once (a) sampling uncertainty and (b) the ext-FPR correction
+are applied?
+
+**Method (`scripts/fp9_parity.py`, selftest PASS, receipt
+`fp9-parity-20260611T002323Z.json`):** task-level bootstrap (120 joint
+tasks, seed 16, 10k resamples) on the fp-7 ratio — both numerators valued
+by the 3B posterior, divided by their own receipted gen-minutes (6.06 /
+7.14). ext-FPR propagation discounts success counts per-stratum (3B
+measured rates: easy 23.4 / mid 19.7 / frontier 27.1%) AND re-derives the
+valuing posterior from the discounted counts (fewer true successes →
+lower P̂ → higher bits/episode — the two effects partially cancel; the
+receipt measures the net). Flags carried: fail-rates modeled at 1.5B
+(measured only at 3B); gen-minutes are governed wall-clock (fp-11).
+
+**Verdict — COST PARITY, by the pre-registered rule:**
+- uncorrected: point **1.07**, CI95 **[0.834, 1.367]** — includes 1.0;
+- ext-corrected: point **1.02**, CI95 **[0.867, 1.203]** — includes 1.0,
+  point essentially AT parity.
+
+The fp-1 → fp-7 → fp-9 arc is the record correcting its own headline:
+1.23× (sampler-valued) → 1.07× (consolidator-valued) → statistically
+nothing. **Consequences:** (1) the cheap-sampler line loses its
+efficiency rationale entirely; what survives is fp-7's upvalued band
+(easy-for-small/hard-for-big, +60.9 bits — content the 3B cannot cheaply
+make) as a TARGETING filter, not bulk feed. (2) With efficiency a wash,
+**fp-6's license axis alone decides the sampler** for owned-core-destined
+episodes: 1.5B output unencumbered, 3B output not. (3) Any future
+quote of fp-1's number must say "parity within CI" — the 1.23× headline
+is retired.
+
+**Successor minted (fp-12):** is the upvalued band a STABLE property of
+tasks or sampling noise? The 1.5B was sampled twice independently (k=8
+floor + k=24 focused top-up) — band membership stability across the two
+runs is measurable from existing receipts; a stable band justifies the
+targeting filter, an unstable one kills the last cheap-sampler rationale.
+CPU-from-receipts. Closing PR mints fp-13.
