@@ -38,6 +38,12 @@ from receipt_write import checked_write
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 
+# Repo-standard sha convention (eng #103/#107). The receipt carries
+# ledger/control sha256 before/after as the byte-unchanged proof, so it MUST
+# declare this — receipt_check fail-closes on a sha256 field without it.
+SHA_CONVENTION = ("sha256 over on-disk raw bytes "
+                  "(binary read, no line-ending normalization)")
+
 # Every class classify() can emit except UNKNOWN, which is fail-closed and
 # never allowable. arc-dsl-mit comes from classify's origin branch, not the
 # sampler map.
@@ -190,6 +196,7 @@ def main():
 
     receipt = {
         "ticket": "ENG20-LICENSE-VIEW", "ts": ts,
+        "sha_convention": SHA_CONVENTION,
         "mapping_source": "fp6_provenance.classify (#57, single source)",
         "known_classes": KNOWN_CLASSES,
         "ledger": args.ledger, "view": args.view_out, "view_rows": len(recs),
@@ -330,6 +337,24 @@ def _selftest():
     assert view[6]["license_basis"].startswith("CONFLICT(")
     os.unlink(p)
     os.unlink(v)
+
+    # eng #172: the receipt carries sha256 fields, so it MUST declare
+    # sha_convention — receipt_check fail-closes otherwise. Pin both that the
+    # emitter wires it (source) and that the contract holds (functional).
+    import receipt_check
+    src = open(os.path.abspath(__file__), encoding="utf-8").read()
+    assert '"sha_convention": SHA_CONVENTION' in src, \
+        "emitter receipt must carry sha_convention"
+    shaped = {"ticket": "ENG20-LICENSE-VIEW", "ts": "20260611T000000Z",
+              "ledger_sha256_before": "a" * 64, "ledger_sha256_after": "a" * 64,
+              "sha_convention": SHA_CONVENTION}
+    assert receipt_check.validate_receipt(shaped) == [], \
+        receipt_check.validate_receipt(shaped)
+    no_conv = {k: v for k, v in shaped.items() if k != "sha_convention"}
+    assert any("MISSING_SHA_CONVENTION" in f
+               for f in receipt_check.validate_receipt(no_conv)), \
+        "without sha_convention the sha-bearing receipt must be flagged"
+
     print("LEDGER_LICENSE_SELFTEST_PASS")
 
 
