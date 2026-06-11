@@ -1301,3 +1301,37 @@ convention = pacing-INCLUDED governed minutes (fp-14).
 **Successor:** fp-24 — execute the verdicts on the real 1B/2B/4B
 checkpoint receipts (receipt-gated on the v0 run; the spectral
 information-only fields from sp-1 ride the same schema).
+
+## 8.33 fp-20b (#131): pacing SETTLED on the first instrumented w1 receipt — 25.35% as-operated overhead, cross-instrument consistent
+
+**The number (fp-9 "as operated" qualifier, measured not reconstructed):**
+the first instrumented w1 leg (g1r2-base, validation 43×k8, receipt
+`w1-floor-g1r2-base-20260611T040544Z.json` carrying the #136-wired
+block) spent **36.5s of 144.0s generation wall in governor pacing =
+25.35%**; implied raw/paced = **1.34×**. Composition: 100% decode-pacer
+(73 sleeps × 0.5s), zero batch-throttle sleeps on this leg.
+
+**Consistency check (the fp20b_settle sanity band + the independent
+instrument):** fp19_bench measured raw/paced ≈1.3–1.5× on training
+steps — a different workload, a different meter, the same governed
+duty cycle — and the w1 meter lands at 1.34×, inside that band. The
+two instruments agree; the meter is trustworthy.
+
+**What this settles:** fp-9's throughput numbers carry an "as
+operated" qualifier = governed wall is ~1.34× compute-only wall on
+sampling legs; any compute-only comparison divides by that, from a
+measured receipt field instead of fp-11's reconstruction bracket.
+Verdict receipt: `fp20b-settle-20260611T040647Z.json`
+(`scripts/fp20b_settle.py`, selftest PASS, fail-closed sanity band —
+zero-pacing or >50% pacing on a governed generation leg =
+INSTRUMENTATION-FLAG, never silently accepted).
+
+**Context receipt (PRE-GATE/BASE-ONLY CACHE label per kai 14516):**
+the same leg pre-caches the G1 base arm: base validation feed 90.7%,
+verified samples 65.7% — consumed by the binding G1 only after the
+certified arm set completes.
+
+**Successor:** fp-20c — pacing-fraction stability re-check on the
+round-3 sampling receipt (a drifting fraction = the governor config
+changed class without a deviation record; the field is now free on
+every w1 receipt).
