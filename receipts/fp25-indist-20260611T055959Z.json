@@ -1,0 +1,189 @@
+{
+  "ticket": "FP25-INDIST",
+  "ts": "20260611T055959Z",
+  "surface": "A-recall",
+  "arms": [
+    "base",
+    "control",
+    "grpo",
+    "mtp",
+    "sft"
+  ],
+  "k": 8,
+  "seed": 16,
+  "recall_task_ids_sha256": "0837b98209c80269b6567a2e12bccf6ef68e79edf10fbfa970c6976ce5b34601",
+  "recall_task_count": 28,
+  "samples_file": "w4-eval-fp25-recall-20260611T054801Z-samples.jsonl",
+  "adapter_provenance": {
+    "base": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "sft": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-sft",
+    "mtp": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-mtp",
+    "grpo": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-grpo",
+    "control": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-control"
+  },
+  "basis": "round-2 OOD-null decomposition: train-task recall (the EXACT 28 frontier MBPP-train tasks) as the memorization floor / null-detector; g1_paired per-sample-rate binding",
+  "result": {
+    "surface": "A-recall",
+    "verdict": "RECIPE-LEARNS",
+    "provenance": "receipt-derived (fp-25 eval), not Fable-derived",
+    "arm_learns_vs_base": {
+      "sft": true,
+      "mtp": true,
+      "grpo": true
+    },
+    "owned_core_gate": "CONDITIONAL-PENDING-B \u2014 the mechanism fires in-distribution at Surface A; a green-light for the owned-core loop is CONDITIONAL on Surface B held-out lift (split disjoint from EVERY r2 training view) and certifies NEITHER the foundation architecture NOR OOD transfer \u2014 both remain separately gated",
+    "next": "Surface B (held-out frontier, disjoint from all training views) resolves generalize-vs-OOD-transfer-ceiling",
+    "blocks": {
+      "sft_minus_base": {
+        "pair": "sft - base",
+        "n_tasks": 28,
+        "feed": {
+          "arm": 28,
+          "ref": 21,
+          "discordant_ref_only_b": 0,
+          "discordant_arm_only_c": 7,
+          "mcnemar_p": 0.0156,
+          "newcombe_ci95": [
+            0.0775,
+            0.4336
+          ],
+          "flag": "UP"
+        },
+        "sample": {
+          "mean_diff": 0.7589,
+          "bootstrap_ci95": [
+            0.6786,
+            0.8304
+          ],
+          "mde": 0.1095,
+          "flag": "UP"
+        }
+      },
+      "sft_minus_control": {
+        "pair": "sft - control",
+        "n_tasks": 28,
+        "feed": {
+          "arm": 28,
+          "ref": 1,
+          "discordant_ref_only_b": 0,
+          "discordant_arm_only_c": 27,
+          "mcnemar_p": 0.0,
+          "newcombe_ci95": [
+            0.7784,
+            0.9937
+          ],
+          "flag": "UP"
+        },
+        "sample": {
+          "mean_diff": 0.9777,
+          "bootstrap_ci95": [
+            0.9464,
+            1.0
+          ],
+          "mde": 0.0405,
+          "flag": "UP"
+        }
+      },
+      "mtp_minus_base": {
+        "pair": "mtp - base",
+        "n_tasks": 28,
+        "feed": {
+          "arm": 26,
+          "ref": 21,
+          "discordant_ref_only_b": 1,
+          "discordant_arm_only_c": 6,
+          "mcnemar_p": 0.125,
+          "newcombe_ci95": [
+            -0.0195,
+            0.3692
+          ],
+          "flag": "FLAT"
+        },
+        "sample": {
+          "mean_diff": 0.4598,
+          "bootstrap_ci95": [
+            0.3393,
+            0.5759
+          ],
+          "mde": 0.1784,
+          "flag": "UP"
+        }
+      },
+      "mtp_minus_control": {
+        "pair": "mtp - control",
+        "n_tasks": 28,
+        "feed": {
+          "arm": 26,
+          "ref": 1,
+          "discordant_ref_only_b": 0,
+          "discordant_arm_only_c": 25,
+          "mcnemar_p": 0.0,
+          "newcombe_ci95": [
+            0.683,
+            0.9523
+          ],
+          "flag": "UP"
+        },
+        "sample": {
+          "mean_diff": 0.6786,
+          "bootstrap_ci95": [
+            0.5312,
+            0.817
+          ],
+          "mde": 0.2096,
+          "flag": "UP"
+        }
+      },
+      "grpo_minus_base": {
+        "pair": "grpo - base",
+        "n_tasks": 28,
+        "feed": {
+          "arm": 23,
+          "ref": 21,
+          "discordant_ref_only_b": 1,
+          "discordant_arm_only_c": 3,
+          "mcnemar_p": 0.625,
+          "newcombe_ci95": [
+            -0.1445,
+            0.2804
+          ],
+          "flag": "FLAT"
+        },
+        "sample": {
+          "mean_diff": 0.0893,
+          "bootstrap_ci95": [
+            0.0179,
+            0.1607
+          ],
+          "mde": 0.1032,
+          "flag": "UP"
+        }
+      },
+      "grpo_minus_control": {
+        "pair": "grpo - control",
+        "n_tasks": 28,
+        "feed": {
+          "arm": 23,
+          "ref": 1,
+          "discordant_ref_only_b": 0,
+          "discordant_arm_only_c": 22,
+          "mcnemar_p": 0.0,
+          "newcombe_ci95": [
+            0.5589,
+            0.8897
+          ],
+          "flag": "UP"
+        },
+        "sample": {
+          "mean_diff": 0.308,
+          "bootstrap_ci95": [
+            0.2188,
+            0.4062
+          ],
+          "mde": 0.1354,
+          "flag": "UP"
+        }
+      }
+    }
+  }
+}
