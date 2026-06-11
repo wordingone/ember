@@ -1132,6 +1132,7 @@ def run_v0_segment(
     ce_chunk_tokens: int = 256,
     mtp_force_fallback: bool = False,
     opt_force_fallback: bool = False,
+    compile_force_fallback: bool = False,
     deviation_dir: str | None = None,
 ) -> dict:
     """Run a v0 pretrain segment with the full survivor stack against the
@@ -1220,6 +1221,46 @@ def run_v0_segment(
             "files": manifest["files"], "hash_verified": True,
         }
 
+    # --- torch.compile on the train step (eager fallback RECEIPTED) ---
+    # contract.throughput.compile: torch.compile (TorchInductor) on the train
+    # step; fallback eager if compile fails on the QAT graph — deviation
+    # RECEIPTED. torch.compile is lazy: a daemon-env failure (Leo R3 — dynamo x
+    # transformers output-capture NameError) surfaces on the FIRST forward, not
+    # at the compile() call, so the guard wraps a warmup forward and reverts the
+    # backbone module to eager. The real backbone nn.Module is backbone_model
+    # (the .backbone method wraps it) — compile that, not the bound method.
+    compile_requested = bool(cfg.get("throughput", {}).get("compile"))
+    compile_status = "not-requested"
+    compile_deviation = None
+    if compile_force_fallback:
+        compile_status = "eager-fallback"
+        compile_deviation = emit_deviation_receipt(
+            deviation_dir, "compile-eager",
+            basis="contract.throughput.compile; forced eager fallback "
+                  "(selftest / receipted daemon-env compile failure)",
+            detail="v0 trains the step eager; the deviation is RECEIPTED per "
+                   "contract.throughput.compile.fallback (never silent)")
+    elif compile_requested and live:
+        eager_backbone_model = model.backbone_model
+        try:
+            model.backbone_model = torch.compile(eager_backbone_model)
+            xc, _, _ = loader.batch(resume_step, batch_size)
+            with torch.no_grad():
+                model.backbone(xc.cuda())
+            compile_status = "compiled"
+        except Exception as exc:                       # noqa: BLE001 — RECEIPTED
+            model.backbone_model = eager_backbone_model
+            compile_status = "eager-fallback"
+            compile_deviation = emit_deviation_receipt(
+                deviation_dir, "compile-eager",
+                basis="contract.throughput.compile; torch.compile failed on "
+                      "the QAT graph at warmup",
+                detail=f"v0 trains the step eager; deviation RECEIPTED per "
+                       f"contract.throughput.compile.fallback. "
+                       f"err={type(exc).__name__}: {exc}")
+    elif compile_requested and not live:
+        compile_status = "dryrun-eager-not-attempted"
+
     # --- training loop ---
     losses: list[float] = []
     last_ckpt_dir: str | None = None
@@ -1273,7 +1314,8 @@ def run_v0_segment(
     wall_s = time.perf_counter() - t_start
     tokens_this_seg = n_steps * batch_size * seq
 
-    deviations = [d for d in (routing.get("deviation_receipt"), mtp_deviation)
+    deviations = [d for d in (routing.get("deviation_receipt"), mtp_deviation,
+                              compile_deviation)
                   if d]
 
     receipt: dict[str, Any] = {
@@ -1311,6 +1353,10 @@ def run_v0_segment(
                     "n_heads": n_mtp if mtp_enabled else 0,
                     "weight": mtp_weight,
                     "composition": "total = primary_ce + weight * mean(mtp_ces)"},
+            "compile": {"status": compile_status,
+                        "requested": compile_requested,
+                        "clause": "contract.throughput.compile (eager fallback "
+                                  "RECEIPTED)"},
             "loader": {"seq": seq, "n_mtp": n_mtp,
                        "block_len": loader.block_len,
                        "n_windows": loader.n_windows,
@@ -1708,6 +1754,16 @@ def _selftest_v0ext() -> None:
         for dpath in r_mtp["deviation_receipts"]:
             assert os.path.exists(dpath) and receipt_check.run_file(dpath) == 0
 
+        r_compile = run_v0_segment(
+            os.path.join(tmp, "compile-fb"), cfg, n_steps=2, total_steps=2,
+            checkpoint_every=2, pace_s=0.0, shard_dir=shared, tiny_dims=tiny,
+            batch_size=2, ce_chunk_tokens=8, compile_force_fallback=True,
+            deviation_dir=dev_dir)
+        assert r_compile["components"]["compile"]["status"] == "eager-fallback"
+        assert r_compile["deviation_receipts"], "compile fallback left no receipt"
+        for dpath in r_compile["deviation_receipts"]:
+            assert os.path.exists(dpath) and receipt_check.run_file(dpath) == 0
+
         dryrun_summary = {
             "straight_steps": Nstep + Mstep,
             "resume_from_step": Nstep,
@@ -1733,6 +1789,7 @@ def _selftest_v0ext() -> None:
         "full_stack_checkpoint_resume_bit_exact": True,
         "optimizer_fallback_receipted": True,
         "mtp_fallback_receipted": True,
+        "compile_fallback_receipted": True,
     }
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     receipt = {
@@ -1745,7 +1802,8 @@ def _selftest_v0ext() -> None:
         "components_implemented": [
             "muon-split-optimizer", "wsd-schedule", "chunked-cut-ce",
             "mtp-aux-heads-n2-w0.3", "packed-shard-loader-nopad"],
-        "fallbacks_receipted": ["optimizer->adamw_everything", "mtp->ce_only"],
+        "fallbacks_receipted": ["optimizer->adamw_everything", "mtp->ce_only",
+                                "compile->eager"],
         "exclusions_held": ["no_fp8", "no_sparse_attention"],
         "base_preserved": ("eng-33 timeshare_pretrain.py surface byte-identical "
                            "— extension only"),
