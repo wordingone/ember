@@ -524,3 +524,76 @@ direction not obvious because it hits both cores' ledgers). Verdict
 shape: CI excludes 1.0 → edge real, quote re-valued; CI includes 1.0 →
 cheap-sampler line is COST parity not advantage, and the upvalued-band
 filter becomes the only surviving rationale. Closing PR mints fp-10.
+
+## 8.15 fp-6 (#57): borrowed-core lock-in — license read + ledger provenance
+
+**Question (minted by §8.11):** every ledger episode was written by some
+other author's distribution — what does the owned core inherit if NC2
+pretrains on it: (a) whose LICENSE terms ride on the text, (b) whose
+IDIOM becomes its ground truth?
+
+**(a) License read — engineering risk read, not legal advice; texts
+read 2026-06-10 from the canonical HF repos (the cached snapshots ship
+weights+tokenizer only, no LICENSE files).** The issue's premise ("Qwen2.5
+Apache-2.0") is WRONG for the active core: the family license is
+size-split. **Qwen2.5-Coder-3B-Instruct — the round-2 core and the
+sampler of every W-code episode — is under the Qwen RESEARCH LICENSE
+AGREEMENT (2024-09-19), not Apache.** Grant: "FOR NON-COMMERCIAL PURPOSES
+ONLY." And its §4.b reaches OUTPUTS explicitly: "If you use the Materials
+or any outputs or results therefrom to create, train, fine-tune, or
+improve an AI model that is distributed or made available, you shall
+prominently display 'Built with Qwen' or 'Improved using Qwen'."
+Coder 0.5B/1.5B/7B are apache-2.0; Apache has NO output clause — outputs
+as training data are unrestricted by the model license. Verdict on
+outputs-as-training-data: **3B episodes = encumbered** (attribution
+obligation at minimum; the non-commercial umbrella arguably covers the
+act of generating training data for a model with commercial intent);
+**1.5B/7B episodes = clean.**
+
+**(b) Provenance census (`scripts/fp6_provenance.py`, selftest PASS,
+receipt `fp6-provenance-20260610T235623Z.json`):** episodes.jsonl =
+**1,909 arc-dsl-mit** (Hodel arc-dsl solvers + re-arc verifier variants —
+HUMAN expert code, not model output; origins seed-dsl-orig 399 /
+seed-verifier-rearc-v2 1,510) + **956 qwen-research** (all W-code,
+sampler-stamped Qwen2.5-Coder-3B-Instruct, 573.2 pre-cap ledger bits).
+**Zero apache-clean model-output episodes exist** — the 1.5B's 518
+verified q15 samples were never ingested. Fail-closed classifier:
+unmapped provenance = UNKNOWN, never silently clean.
+
+**Convergence with §8.14:** sampler choice is now bits/min × license-
+class. fp-7 thinned the 1.5B's efficiency edge to a provisional 1.07× —
+but fp-6 adds the license axis: 1.5B output is unencumbered, 3B output is
+not. If fp-9 lands at cost-parity, license class alone still decides the
+sampler for any episode destined for the owned core's corpus.
+
+**(c) Contamination probe — NAMED, fireable (pre-registered here):**
+style-separability of the 956 W-code episodes vs the MBPP sanitized
+reference solutions (human-written). Features: cheap stylometry per
+program (type-hint rate, docstring/comment rate, f-string usage, quote
+style, identifier casing, mean line length, comprehension/lambda rate) +
+hashed char-3gram bag. Classifier: logistic regression, 5-fold CV split
+BY TASK (no task leakage). Pre-registered verdict: **CV-AUC ≥ 0.75 =
+idiom signature real and quantified** (report top features); below =
+contamination concern demoted at this granularity. CPU-only, minutes,
+fires from existing files. = fp-10.
+
+**(d) Consequence analysis — NC2 data-mix design inputs (falsifiable):**
+1. Owned-core corpus EXCLUDES qwen-research-class episodes by mechanical
+   filter, or the user explicitly accepts attribution + non-commercial
+   taint (his call; "nothing load-bearing borrowed" reads license-
+   encumbered training text as a borrow). Enforcement = eng #70
+   (license_class stamping at ingest + --license-allow views, UNKNOWN
+   fail-closed), assigned to Eli with the mapping imported from
+   fp6_provenance.py.
+2. Dilution sources, in preference order: human reference solutions
+   (MBPP CC/Apache-class — verify per-dataset before ingest), Apache-core
+   sampling (1.5B/7B), other-world episodes (IFC/arcade), arc-dsl-MIT
+   mass (already 67% of ledger).
+3. Round-2 stays as frozen (#36, 3B LoRA — research use, compliant);
+   the license axis binds the ROUND-3+ sampler choice and the NC2-own
+   corpus assembly, not the current prereg.
+
+**Successor minted (fp-10):** run the pre-registered separability probe —
+is the W-code ledger text Qwen-idiom-marked enough that a from-scratch
+core trained on it inherits a detectable signature? AUC + top features +
+the dilution-mix consequence quantified. Closing PR mints fp-11.
