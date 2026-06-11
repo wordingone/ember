@@ -435,7 +435,7 @@ provides" claim.
 enforces: RLIMIT_AS memory cap; SIGALRM wall-timeout; `os.nice(5)`;
 `__import__` whitelist (`_safe_import`, ~16 modules incl. numpy + the ARC
 DSL); removed builtins {open, input, exec, eval, compile, exit, quit,
-help, breakpoint}. These block file I/O, subprocess, eval-injection, and
+help, breakpoint}. These block file I/O, subprocess, eval/exec misuse, and
 runaway resource use — the obvious failure classes.
 
 **Finding 1 — CERTAIN false-accept path the sandbox does not touch (by
@@ -704,3 +704,59 @@ floor + k=24 focused top-up) — band membership stability across the two
 runs is measurable from existing receipts; a stable band justifies the
 targeting filter, an unstable one kills the last cheap-sampler rationale.
 CPU-from-receipts. Closing PR mints fp-13.
+
+## 8.18 fp-10 (#73): idiom-separability probe — contamination concern DEMOTED at the prereg bar
+
+**Question (pre-registered FROZEN in §8.15c):** can a cheap classifier
+separate the 956 W-code ledger episodes (3B-emitted) from the MBPP
+sanitized reference solutions (human-written)? Bar frozen before the
+run: **pooled CV-AUC ≥ 0.75 = signature real**; below = contamination
+concern demoted at this granularity.
+
+**Method (`scripts/fp10_idiom.py`, selftest PASS, receipt
+`fp10-idiom-20260611T003930Z.json`, daemon eval 7b13577d):** 956
+episodes vs 109 reference solutions for the SAME 109 tasks (pairing by
+task controls the task-content confound; `load_split` lacks the dataset's
+"code" field, so the script reads the raw dataset). Features exactly the
+frozen families: 7 stylometry + 256 hashed char-3gram buckets (crc32 —
+deterministic; builtin hash() is salted). Logistic regression (balanced
+class weights), 5-fold CV by sha1(task)%5 — both classes of a task share
+a fold, no task leakage. Zero parse failures; zero duplicate episode
+srcs. AUC is rank-based (imbalance-insensitive).
+
+**Verdict — DEMOTED, by the pre-registered rule:** pooled out-of-fold
+AUC **0.7431 < 0.75** (per-fold 0.791 / 0.690 / 0.682 / 0.788 / 0.772 —
+straddles the bar; the pooled statistic is the pre-registered one and it
+falls short). No reinterpretation: the bar was frozen in §8.15c before
+any feature was computed.
+
+**What the sub-bar signal actually is (observation, not verdict
+revision):** the top separating features are mundane formatting, not deep
+idiom — mean line length (32.8 vs 29.0), doc/comment rate (**0.049 vs
+literally 0.0** — the reference solutions contain no comments at all),
+and 3-gram buckets dominated by English-prose grams that live INSIDE
+comments ("the" 0.50/episode vs 0.00/human; "of " 0.14 vs 0.00) plus
+human blank-line/whitespace habits (" \n " 0.19 vs 0.73). Both classes
+have type-hint rate and f-string rate identically 0.0 (dead features).
+The residual separability is largely "the model writes comments; the
+references don't" — a strip-comments normalization would plausibly erase
+most of it. Recorded as context for NC2 data-mix design, not pursued:
+the concern is demoted at this granularity per the frozen rule.
+
+**Consequences (§8.15d wiring):** (1) the dilution-mix design input is
+now quantified at the demoted level — the 573.2 marked bits carry no
+detectable-above-bar style signature at program granularity; (2) the
+license axis (fp-6) remains the ONLY binding reason to exclude
+qwen-research episodes from NC2-own — mechanical filter eng #70 already
+enforces it; (3) the token-distribution question for a from-scratch core
+is NOT answered by program-level separability and stays with NC2 round
+design where it is measurable directly (held-out perplexity by class).
+
+**Successor minted (fp-13):** fp-10's instrument probed the ledger's 33%
+minority class and demoted it — but the 67% MAJORITY (1,909 arc-dsl-MIT
+episodes, essentially single-author Hodel DSL code) was never probed for
+ITS concentration. A from-scratch core inherits the dominant
+distribution: if arc-dsl separates from MBPP-human FAR above the bar
+(plausible — one author, one DSL idiom), the larger style-monoculture
+risk in NC2-own is the seed mass, not the demoted Qwen share. Same
+instrument, one config change. Closing PR mints fp-14.

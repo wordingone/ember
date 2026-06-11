@@ -1,0 +1,20 @@
+{
+  "ticket": "FP8-VGATE",
+  "ts": "20260611T003919Z",
+  "ledger": "episodes.jsonl (verified mbpp rows)",
+  "n_episodes": 956,
+  "n_assert_jobs": 3024,
+  "unparsed_asserts": 160,
+  "raw_reexec_disagreements": 0,
+  "flip_assert_counts_by_cause": {
+    "container-kind": 2
+  },
+  "flipped_episodes": 2,
+  "flip_rate_pct": 0.21,
+  "bits_cost_of_flips": 2.2,
+  "ledger_bits_total": 573.2,
+  "flips_by_stratum": {
+    "mid": 2
+  },
+  "gate": "any production comparator change must re-run this script and quote flip_rate_pct + bits_cost before adoption; verifier edits are artifacts under NC-K invariant-1 (held-out / control / deletion) with this receipt as the required false-negative field"
+}

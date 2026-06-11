@@ -1,0 +1,183 @@
+{
+  "ticket": "FP10-IDIOM",
+  "ts": "20260611T003930Z",
+  "prereg": "audit \u00a78.15c (frozen): CV-AUC >= 0.75 = signature real",
+  "n_episodes": 956,
+  "n_human_refs": 109,
+  "n_tasks": 109,
+  "parse_failures": 0,
+  "duplicate_episode_srcs": 0,
+  "features": "7 stylometry + 256 hashed char-3gram buckets (crc32), z-scored per train fold",
+  "cv": "5-fold by sha1(task)%5 \u2014 both classes of a task share a fold",
+  "auc_pooled_oof": 0.7431,
+  "auc_per_fold": [
+    0.7911,
+    0.6895,
+    0.6823,
+    0.7882,
+    0.7717
+  ],
+  "verdict": "demoted",
+  "top_stylometry": [
+    {
+      "feature": "mean_line_len",
+      "mean_abs_coef": 1.181,
+      "episode_mean": 32.8037,
+      "human_mean": 28.9842
+    },
+    {
+      "feature": "doc_comment_rate",
+      "mean_abs_coef": 1.141,
+      "episode_mean": 0.049,
+      "human_mean": 0.0
+    },
+    {
+      "feature": "comprehension_lambda_per_line",
+      "mean_abs_coef": 0.24,
+      "episode_mean": 0.1216,
+      "human_mean": 0.1057
+    },
+    {
+      "feature": "camel_ident_frac",
+      "mean_abs_coef": 0.222,
+      "episode_mean": 0.0032,
+      "human_mean": 0.0072
+    },
+    {
+      "feature": "single_quote_frac",
+      "mean_abs_coef": 0.137,
+      "episode_mean": 0.1281,
+      "human_mean": 0.133
+    },
+    {
+      "feature": "type_hint_rate",
+      "mean_abs_coef": 0.0,
+      "episode_mean": 0.0,
+      "human_mean": 0.0
+    },
+    {
+      "feature": "fstring_rate",
+      "mean_abs_coef": 0.0,
+      "episode_mean": 0.0,
+      "human_mean": 0.0
+    }
+  ],
+  "top_trigram_buckets": [
+    {
+      "bucket": 72,
+      "mean_abs_coef": 1.42,
+      "top_grams": [
+        {
+          "gram": "res",
+          "per_ep": 0.38,
+          "per_human": 0.69
+        },
+        {
+          "gram": " (r",
+          "per_ep": 0.02,
+          "per_human": 0.14
+        },
+        {
+          "gram": " ra",
+          "per_ep": 0.55,
+          "per_human": 0.44
+        }
+      ]
+    },
+    {
+      "bucket": 132,
+      "mean_abs_coef": 1.271,
+      "top_grams": [
+        {
+          "gram": " = ",
+          "per_ep": 1.63,
+          "per_human": 1.57
+        },
+        {
+          "gram": "fac",
+          "per_ep": 0.03,
+          "per_human": 0.01
+        },
+        {
+          "gram": "m %",
+          "per_ep": 0.04,
+          "per_human": 0.02
+        }
+      ]
+    },
+    {
+      "bucket": 230,
+      "mean_abs_coef": 1.156,
+      "top_grams": [
+        {
+          "gram": "the",
+          "per_ep": 0.5,
+          "per_human": 0.0
+        },
+        {
+          "gram": "of ",
+          "per_ep": 0.14,
+          "per_human": 0.0
+        },
+        {
+          "gram": "com",
+          "per_ep": 0.11,
+          "per_human": 0.04
+        }
+      ]
+    },
+    {
+      "bucket": 232,
+      "mean_abs_coef": 1.137,
+      "top_grams": [
+        {
+          "gram": ": \n",
+          "per_ep": 0.02,
+          "per_human": 0.45
+        },
+        {
+          "gram": "uct",
+          "per_ep": 0.04,
+          "per_human": 0.01
+        },
+        {
+          "gram": "ona",
+          "per_ep": 0.04,
+          "per_human": 0.02
+        }
+      ]
+    },
+    {
+      "bucket": 176,
+      "mean_abs_coef": 1.065,
+      "top_grams": [
+        {
+          "gram": " \n ",
+          "per_ep": 0.19,
+          "per_human": 0.73
+        },
+        {
+          "gram": "cou",
+          "per_ep": 0.29,
+          "per_human": 0.19
+        },
+        {
+          "gram": "ht ",
+          "per_ep": 0.11,
+          "per_human": 0.02
+        }
+      ]
+    }
+  ],
+  "consequence_8_15d": {
+    "marked_episode_bits": 573.2,
+    "marked_bits_source": "fp6-provenance receipt (qwen-research class)",
+    "mechanical_filter": "eng #70 ledger_license.py --license-allow (UNKNOWN fail-closed) already excludes the marked class from owned-core builds",
+    "dilution_order": "human refs > apache-core (1.5B/7B) sampling > other-world episodes > arc-dsl-MIT mass"
+  },
+  "flags": [
+    "class imbalance episodes:humans handled by balanced class weights; AUC is rank-based (imbalance-insensitive)",
+    "duplicate srcs stay within their task's fold \u2014 no cross-fold leakage",
+    "feature FORMULAS are implementation choices; the frozen spec fixes the feature FAMILIES and the 0.75 bar"
+  ]
+}
