@@ -54,6 +54,29 @@ shard_set sha pins, init seed, per-leg {batch, lr_muon, lr_adamw, steps,
 tokens, ce_final10, wall_s, governor}, rule_verdict PASS / PASS-SCALED-LR /
 FAIL, deviation_action, sha_convention. receipt_check-clean, committed.
 
+### Contract tightening 2026-06-11 (Kai 14639 — rule UNCHANGED, binding hardened)
+
+The fire-time gate is `scripts/fp32_e1b_gate.py`; the decision rule above
+is untouched. The pair-receipt CONTRACT gains binding obligations:
+
+1. Bare gate invocation (no `--pair`) exits NONZERO — staged is never
+   readable as a pass.
+2. `ticket == "FP32-E1B-LOSSMATCH"` and `seq == 1024` are enforced
+   values.
+3. Exact accounting per leg: `steps == ceil(budget/(B*seq))`,
+   `tokens == steps*B*seq` (B=24 legitimately overshoots the 10,485,760
+   budget by <1 step; "equal tokens" in the protocol above reads as
+   "equal budget, minimal whole steps").
+4. The scaled-lr leg is refused unless the frozen-lr candidate MISSED
+   the bar (rule 2 is a retry, never an extra arm).
+5. Shard provenance is bound, not trusted: the pair receipt names the
+   post-#218 `TOKEN-SHARDS-V0` receipt (`shard_receipt` field);
+   `shard_set_sha256` must equal the sha256 of that receipt's on-disk
+   bytes; the gate requires it git-tracked, receipt_check-clean, and its
+   `total_stream_tokens` equal to the LIVE tokenizer-freeze total via
+   the fp-30 binder — a pair built on stale shards can never certify
+   the deviation.
+
 ## What this prereg does NOT authorize
 
 - No change to seq, optimizer family, QAT scheme, MTP weight, WSD shape,
