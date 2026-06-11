@@ -1,0 +1,64 @@
+{
+  "ticket": "FP27-ROUND1-PREREG",
+  "ts": "20260611T130743Z",
+  "issue": 198,
+  "round": "own-r1",
+  "prereg_frozen": true,
+  "base_policy": {
+    "primary": "terminal v0 checkpoint (full frozen token budget 6,973,632,296), identified by the trainer's terminal receipt sha",
+    "calendar_fallback": "if the terminal receipt is not on disk by 2026-06-18T00:00Z, base = the highest-token checkpoint with a PASS floor verdict (fp-24), token count >= 4B, AND verdict-receipt ts < 2026-06-18T00:00Z \u2014 the ts bound makes the lookup TIME-INVARIANT (same answer whenever evaluated; adversarial-panel fix). The chosen base's receipt sha is recorded in the round-1 dispatch receipt and is immutable thereafter.",
+    "floor_precondition": "round-1 dispatches ONLY after a PASS floor verdict on the base checkpoint (fp-23 bar via fp-24; KILL path gated by fp-29)"
+  },
+  "split": {
+    "probe_buckets": "0-9 (fp-23 frozen, untouchable)",
+    "train_buckets": "10-89",
+    "roundgate_buckets": "90-99",
+    "roundgate_n": 100,
+    "in_dist_by_construction": true
+  },
+  "sampling": {
+    "n_tasks_l1": 200,
+    "n_tasks_l2": 56,
+    "k": 8,
+    "seed": 31,
+    "temperature": 0.8,
+    "top_p": 0.95,
+    "max_new_tokens": 512,
+    "pacing": "fp-14 convention \u2014 governed wall = compute + pacing; the pacing block in the sampling receipt carries the retargeted fp-20c (#146) re-check"
+  },
+  "accumulation": {
+    "ingest": "verified episodes append to the owned ledger; retrain FROM BASE on the full ledger each round (GOAL replay-buffer convention \u2014 pays compute to sidestep forgetting; valid v0)",
+    "binding_arm": "sft",
+    "information_arms": "mtp / grpo legs only if governed windows allow; information-only, no bar"
+  },
+  "round_gate": {
+    "surface": "buckets 90-99, N=100, generator seed 23",
+    "stats": "stats_exact paired vs base, per-task pass-any + per-sample",
+    "d_gate": "round adapter quarantine vs owned base (sp-2 #201 instance)",
+    "p_gate": "boundary pair across any daemon restart (sp-2 #201 instance)",
+    "verdict_vocabulary": "FROZEN \u2014 the round receipt's verdict is mechanical from the paired CI on the binding arm: GAIN (CI excludes 0, positive) / FLAT (CI contains 0) / NEGATIVE (CI excludes 0, negative). No other verdict words for round outcomes (adversarial-panel fix: kills post-hoc reframing).",
+    "round_failure_semantics": "FLAT/NEGATIVE round = DATA for round-2 design; never a rung-kill; only the floor protocol escalates"
+  },
+  "kill_wiring": {
+    "floor_protocol": "fp-23 decide() via fp-24; bar untouched",
+    "kill_gate": "fp-29 validate_kill \u2014 KILL valid only with a receipted 2B->4B synthesis attempt",
+    "mandatory_in_window_synthesis": "RETRY-AT-4B at 2B OBLIGATES a receipted synthesis mix in the continued pretrain before the 4B leg (fp-29 shape: ticket, ts, window, episodes_generated, bucket_range_assert, ops_in_grammar_assert, probe_buckets_untouched_assert, ingestion_manifest_sha256, episodes_manifest_sha256)",
+    "refusal_semantics": "an un-receipted KILL refusal = execution-discipline violation surfaced to the user; NEVER a third probe (fp-22: no third retry)",
+    "synthesis_audit_obligation": "gate-time auditor re-derives bucket membership + episode count from the episodes manifest (eng-53 byte-scan pattern) \u2014 the boolean asserts are the emitter's claim, never the verdict's evidence"
+  },
+  "premises": {
+    "fp26_decision": {
+      "path": "research/fp26-round3-shape-decision.md",
+      "sha256": "5ef7cc20f22168878f139af00e6ac9a75d43c758ffd2b3eb181372c50081c939"
+    },
+    "fp26_prereg_receipts": [
+      "fp26-prereg-20260611T081213Z.json"
+    ]
+  },
+  "result": {
+    "verdict": "FROZEN",
+    "round": "own-r1"
+  },
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}

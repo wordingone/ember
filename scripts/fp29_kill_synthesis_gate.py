@@ -80,7 +80,14 @@ SYNTHESIS_REQUIRED_FIELDS = (
     "ops_in_grammar_assert",        # true: ops subset of fp-23 L1/L2 grammar
     "probe_buckets_untouched_assert",  # true: no bucket 0-9 materialized
     "ingestion_manifest_sha256",    # trainer data-manifest proving ingestion
+    "episodes_manifest_sha256",     # per-episode manifest (op, input, bucket)
 )
+# AUDIT OBLIGATION (adversarial-panel finding, eng-53 byte-scan pattern):
+# the three boolean asserts are the EMITTER's claim; at gate time an
+# auditor MUST re-derive bucket membership + episode count from the
+# episodes manifest named here (never trust the declared field alone).
+# The auditor rides the synthesis emitter harness (eng track); this
+# field makes the manifest addressable so the audit is possible.
 
 
 def _sha(path):
@@ -144,9 +151,13 @@ def validate_kill(verdict_receipt, synthesis_receipt=None):
                 "verdict": "KILL",
                 "note": ("fp-26 kill clause 'even with curriculum synthesis' "
                          "never exercised: no synthesis receipt for the "
-                         "2B->4B window. The rung-kill cannot escalate; the "
-                         "next protocol step is the synthesis attempt, not "
-                         "the escalation.")}
+                         "2B->4B window. The rung-kill cannot escalate. This "
+                         "refusal does NOT authorize a third probe (fp-22: "
+                         "no third retry) — it surfaces an "
+                         "execution-discipline violation to the user: the "
+                         "mandated lever was skipped in its window (fp-27 "
+                         "makes the synthesis MANDATORY-IN-WINDOW on a 2B "
+                         "RETRY so this state is unreachable).")}
     findings = validate_synthesis_receipt(synthesis_receipt)
     if findings:
         return {"gate": "KILL-REFUSED-SYNTHESIS-MALFORMED",
@@ -167,6 +178,7 @@ def _demo_branches():
                "ops_in_grammar_assert": True,
                "probe_buckets_untouched_assert": True,
                "ingestion_manifest_sha256": "0" * 64,
+               "episodes_manifest_sha256": "1" * 64,
                "sha_convention": SHA_CONVENTION}
     bad_sr = dict(good_sr, episodes_generated=0)
     return {
@@ -238,7 +250,8 @@ def _selftest():
         "episodes_generated": 5, "bucket_range_assert": True,
         "ops_in_grammar_assert": True,
         "probe_buckets_untouched_assert": True,
-        "ingestion_manifest_sha256": "0" * 64}.items()}
+        "ingestion_manifest_sha256": "0" * 64,
+        "episodes_manifest_sha256": "1" * 64}.items()}
     assert validate_kill({"verdict": "KILL"}, sr)["gate"] == \
         "KILL-REFUSED-SYNTHESIS-MALFORMED"
     # emitted receipt is receipt_check-clean
