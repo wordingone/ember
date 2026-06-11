@@ -38,6 +38,12 @@ import sys
 import time
 from datetime import datetime, timezone
 
+# Object-graph reachability guard (#86, eng-23). Hard import, no fallback,
+# by design: the sandbox MUST NOT run without the second false-accept class
+# (graph traversal) closed. Resolves from the same scripts/ dir on every
+# call path (callers insert NC/scripts at sys.path[0] before importing this).
+from v_reachguard import scan as _reachguard_scan
+
 ARC_TRAIN = "/mnt/b/M/the-search/incoming/arc-agi1-visa/ARC-AGI/data/training"
 RECEIPTS = "/mnt/b/M/avir/leo/state/nc-ladder/receipts"
 
@@ -167,6 +173,13 @@ def run_program(args):
     signal.signal(signal.SIGALRM, _alarm)
     out = {"compiled": False, "train_pass": 0, "train_total": len(train_pairs),
            "verified": False, "solved": False, "error": None}
+    # Reachability guard (#86): refuse object-graph traversal to non-allow-listed
+    # objects BEFORE exec. Fail-closed — flagged source returns a normal FAIL
+    # verdict with a REACHGUARD: sentinel (prefix-first; truncated to 200).
+    _reach = _reachguard_scan(src)
+    if _reach:
+        out["error"] = _reach
+        return out
     try:
         signal.alarm(EXEC_TIMEOUT_S)
         exec(src, g)  # noqa: S102 — sandboxed worker, rlimit+alarm+import-whitelist
