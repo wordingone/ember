@@ -1,0 +1,44 @@
+{
+  "byte_budget": 100000000,
+  "counts": {
+    "docs_in": 1909,
+    "docs_kept": 780,
+    "dups_dropped": 1129,
+    "empty_skipped": 0,
+    "license_rejected": 0,
+    "text_bytes_kept": 521867,
+    "text_chars_kept": 521867
+  },
+  "dedup": {
+    "docs_after": 780,
+    "docs_before": 1909,
+    "method": "doc-level exact sha256 over utf-8 text, source-local"
+  },
+  "est_tokens_heuristic": 130466,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "fp22_row": 5,
+  "license_stamp": {
+    "basis": "RECEIPTED \u2014 fp-6/eng-70 per-record stamps via ledger_license.effective_class; qwen-research class EXCLUDED (fp-6 boundary); fp-22 \u00a71 row 5",
+    "class": "arc-dsl-mit"
+  },
+  "out_dir_windows": "B:/M/avir/eli/state/ember-eng/corpus-v0\\ledger_mit",
+  "out_dir_wsl": "/mnt/b/M/avir/eli/state/ember-eng/corpus-v0/ledger_mit",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "shards": [
+    {
+      "bytes_on_disk": 80038,
+      "bytes_uncompressed": 570426,
+      "docs": 780,
+      "file": "ledger_mit-00000.jsonl.zst",
+      "sha256": "b6c23875148e0bb60fa0dcac2f50c2db7d2b7a9609d987718df03e470eada43b"
+    }
+  ],
+  "source": "ledger_mit",
+  "tokens_pending_tokenizer_freeze": true,
+  "ts": "20260611T044523Z",
+  "url_pin": {
+    "dataset": "local nc-ladder ledger (read-only)",
+    "ledger_sha256": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/episodes.jsonl"
+  }
+}

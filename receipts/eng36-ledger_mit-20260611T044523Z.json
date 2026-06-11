@@ -1,0 +1,39 @@
+{
+  "ticket": "ENG36-CORPUS-LEDGER_MIT",
+  "ts": "20260611T044523Z",
+  "issue": "wordingone/ember#130",
+  "source": "ledger_mit",
+  "url_pin": {
+    "dataset": "local nc-ladder ledger (read-only)",
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/episodes.jsonl",
+    "ledger_sha256": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604"
+  },
+  "license_stamp": {
+    "class": "arc-dsl-mit",
+    "basis": "RECEIPTED \u2014 fp-6/eng-70 per-record stamps via ledger_license.effective_class; qwen-research class EXCLUDED (fp-6 boundary); fp-22 \u00a71 row 5"
+  },
+  "counts": {
+    "docs_in": 1909,
+    "docs_kept": 780,
+    "dups_dropped": 1129,
+    "license_rejected": 0,
+    "empty_skipped": 0,
+    "text_bytes_kept": 521867,
+    "text_chars_kept": 521867
+  },
+  "dedup": {
+    "method": "doc-level exact sha256 over utf-8 text, source-local",
+    "docs_before": 1909,
+    "docs_after": 780
+  },
+  "n_shards": 1,
+  "bytes_on_disk_total": 80038,
+  "manifest_path": "B:/M/avir/eli/state/ember-eng/corpus-v0\\ledger_mit\\manifest.json",
+  "manifest_mirror_in_repo": "corpus-manifests\\ledger_mit-manifest-20260611T044523Z.json",
+  "manifest_sha256": "d42826b8062ce226883a53cf51d5954c50ab007d91e7d735992c492748d5da5e",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "tokens_pending_tokenizer_freeze": true,
+  "est_tokens_heuristic": 130466,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "no_gpu": true
+}
