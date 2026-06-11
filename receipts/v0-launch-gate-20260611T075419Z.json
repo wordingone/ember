@@ -1,0 +1,50 @@
+{
+  "ticket": "V0-LAUNCH-GATE",
+  "ts": "20260611T075419Z",
+  "launch_date": "2026-06-11",
+  "deadline": "2026-06-22",
+  "rows": {
+    "G-corpus": {
+      "status": "GREEN",
+      "detail": "sha pin match; 25.30 GB < 100 GB"
+    },
+    "G-tokenizer": {
+      "status": "GREEN",
+      "detail": "pin match; 6,973,632,296 real tokens; band 8 ids"
+    },
+    "G-config": {
+      "status": "GREEN",
+      "detail": "V0_CONFIG_GREEN (launch mode)"
+    },
+    "G-governor": {
+      "status": "GREEN",
+      "detail": "floor vram<=0.80 / margin>=1.5GiB / pace>=0.05s (tighten-only)"
+    },
+    "G-world": {
+      "status": "GREEN",
+      "detail": "world specs present (2)"
+    },
+    "G-budget": {
+      "status": "GREEN",
+      "detail": "11 d to 2026-06-22 >= 4.55 d unstacked envelope"
+    },
+    "G-prereg": {
+      "status": "BLOCKED",
+      "detail": "no fp26-prereg-*.json receipt \u2014 round-3 prereg not frozen (awaits monitor MDE-wording reply, mail 14582 ask #2)"
+    }
+  },
+  "all_green": false,
+  "blocked_rows": [
+    "G-prereg"
+  ],
+  "pins": {
+    "assembly_receipt": "eng36-assembly-20260611T052337Z.json",
+    "assembly_sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+    "tokenizer_receipt": "tokenizer-freeze-20260611T060423Z.json",
+    "config": "configs/v0-pretrain-config.json",
+    "envelope_days_floor": 4.55
+  },
+  "dispatch_rule": "v0 pretrain refuses unless all_green; the failing G-row(s) are named in blocked_rows. No row waivable except by the user by name.",
+  "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; receipt paths carry the git -text pin",
+  "no_gpu": true
+}

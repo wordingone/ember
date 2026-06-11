@@ -1,0 +1,3 @@
+{"ticket":"ENG-SYNC","ts":"20260611T075435Z","open":3,"closed":40,
+"closed_without_merged_pr":[],
+"open_issues":[{"number":168,"title":"eng-44: tokenized-corpus per-source mix stats receipt (post-freeze successor)","updatedAt":"2026-06-11T07:28:42Z"},{"number":167,"title":"eng-43: v0 trainer survivor-stack extension against the frozen config contract","updatedAt":"2026-06-11T07:19:07Z"},{"number":128,"title":"eng-35: P-gate live probe leg — r1w-q3-mtp boundary pair across daemon restart (HOLD for Leo dispatch order)","updatedAt":"2026-06-11T03:26:09Z"}]}
