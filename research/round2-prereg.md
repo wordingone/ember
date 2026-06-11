@@ -11,7 +11,11 @@ full (t5 powered; MTP default; param caveat addressed; exact stats).
    artifact = the loop's accumulation semantics). k per task: 8 default;
    instrument = the existing w1 generation path with adapter +
    `--ext-verify` (strict comparator + reachability guard + extended
-   tests in-path — eng-21/23/24 stack). New verified episodes →
+   tests in-path — eng-21/23/24 stack). Pinned dispatch (pre-launch):
+   `w1_mbpp.py --model Qwen/Qwen2.5-Coder-3B-Instruct --adapter
+   adapters/r1w-q3-mtp --split train --k 8 --ext-verify --calibrate
+   --seed 18 --tag q3-r2mtp` (seed 18 = fresh, r1 used 14/15;
+   --calibrate = the §4 elicitation). New verified episodes →
    `w2_ingest` (appends ledger + eng-25 sidecar stamps; main files
    byte-append-only).
 2. **Arms (training, via the #112 wrappers, interlocked):**
