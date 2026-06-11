@@ -1,0 +1,183 @@
+{
+  "governor_floor": {
+    "margin_gib_floor": 1.5,
+    "note": "governor.preflight() not called (CPU dry-run path); fp19 constants carried in receipt as the governing floor",
+    "pace_s_floor": 0.05,
+    "source": "fp19_bench.py (fp-19 frozen 2026-06-11, commit be76095)",
+    "vram_fraction_floor": 0.8
+  },
+  "handoff": {
+    "checkpoint_out": {
+      "ckpt_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_umuvrmgl\\checkpoints\\step-00000263",
+      "ckpt_files": {
+        "model.pt": "3681fc46f660569d0f1898937ae2919aa483087ba4460e60c639908656f54369",
+        "optimizer.pt": "3adddd621a7df4095d235d332b63766f0b499878b23812bd6f6111ec26ac151b",
+        "rng.pt": "7a35d49c6aef6490a14f6d5e5f4269b0865eeb50483b8893408124cf6e097eeb"
+      },
+      "event": "checkpoint_out",
+      "from": "PRETRAIN_HOLDS_GPU",
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 263,
+        "tok_per_s": 4472.3,
+        "tokens_so_far": 67328,
+        "wall_s": 15.054
+      },
+      "segment_id": "seg-A",
+      "to": "CHECKPOINT_OUT",
+      "ts": "20260611T032045Z"
+    },
+    "close_window": {
+      "event": "close_window",
+      "from": "WINDOW_OPEN",
+      "jobs_terminal": [
+        "dryrun-noop-job-01"
+      ],
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 263,
+        "tok_per_s": 4457.5,
+        "tokens_so_far": 67328,
+        "wall_s": 15.104
+      },
+      "round_id": "round-dryrun",
+      "to": "WINDOW_CLOSED",
+      "ts": "20260611T032045Z"
+    },
+    "never_concurrent": true,
+    "open_window": {
+      "event": "open_window",
+      "from": "CHECKPOINT_OUT",
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 263,
+        "tok_per_s": 4472.3,
+        "tokens_so_far": 67328,
+        "wall_s": 15.054
+      },
+      "round_id": "round-dryrun",
+      "to": "WINDOW_OPEN",
+      "ts": "20260611T032045Z"
+    },
+    "resume_pretrain": {
+      "ckpt_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_umuvrmgl\\checkpoints\\step-00000263",
+      "ckpt_files": {
+        "model.pt": "3681fc46f660569d0f1898937ae2919aa483087ba4460e60c639908656f54369",
+        "optimizer.pt": "3adddd621a7df4095d235d332b63766f0b499878b23812bd6f6111ec26ac151b",
+        "rng.pt": "7a35d49c6aef6490a14f6d5e5f4269b0865eeb50483b8893408124cf6e097eeb"
+      },
+      "event": "resume_pretrain",
+      "from": "WINDOW_CLOSED",
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 263,
+        "tok_per_s": 4457.5,
+        "tokens_so_far": 67328,
+        "wall_s": 15.104
+      },
+      "segment_id": "seg-A",
+      "to": "PRETRAIN_HOLDS_GPU",
+      "ts": "20260611T032045Z"
+    },
+    "state_sequence": [
+      "PRETRAIN_HOLDS_GPU",
+      "CHECKPOINT_OUT",
+      "WINDOW_OPEN",
+      "WINDOW_CLOSED",
+      "PRETRAIN_HOLDS_GPU"
+    ]
+  },
+  "interlock": {
+    "ember_gate_authorized": false,
+    "live_flag": false,
+    "mode": "default_closed",
+    "refusal_line": "TIMESHARE_LAUNCH_INTERLOCK_REFUSED: GPU/real-pretrain path blocked. Requires EMBER_GATE_AUTHORIZED=1 (env) AND --live (flag). Real v0 pretrain fires only on fp-22's gate. [authorized=False, live=False]",
+    "verdict": "INTERLOCK_BLOCKED_GPU_PATH"
+  },
+  "issue": "wordingone/ember#123",
+  "pass": true,
+  "resume_integrity": {
+    "loss_post_resume": 0.9408131837844849,
+    "loss_pre_checkpoint": 0.9326716065406799,
+    "note": "CLOSE: within rtol tolerance",
+    "pass": true,
+    "rel_diff": 0.00872931,
+    "rtol": 2.0,
+    "verdict": "CLOSE"
+  },
+  "resume_safety_determination": {
+    "checkpoints": [
+      {
+        "dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_umuvrmgl\\checkpoints\\step-00000263",
+        "error": null,
+        "files": {
+          "model.pt": "3681fc46f660569d0f1898937ae2919aa483087ba4460e60c639908656f54369",
+          "optimizer.pt": "3adddd621a7df4095d235d332b63766f0b499878b23812bd6f6111ec26ac151b",
+          "rng.pt": "7a35d49c6aef6490a14f6d5e5f4269b0865eeb50483b8893408124cf6e097eeb"
+        },
+        "step": 263,
+        "valid": true
+      }
+    ],
+    "checkpoints_scanned": 1,
+    "checkpoints_valid": 1,
+    "issue": "wordingone/ember#123",
+    "latest_valid": {
+      "dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_umuvrmgl\\checkpoints\\step-00000263",
+      "files": {
+        "model.pt": "3681fc46f660569d0f1898937ae2919aa483087ba4460e60c639908656f54369",
+        "optimizer.pt": "3adddd621a7df4095d235d332b63766f0b499878b23812bd6f6111ec26ac151b",
+        "rng.pt": "7a35d49c6aef6490a14f6d5e5f4269b0865eeb50483b8893408124cf6e097eeb"
+      },
+      "step": 263
+    },
+    "orphan_tmp_dirs": [],
+    "pass": true,
+    "run_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_umuvrmgl",
+    "scope": "post-failure resume-safety determination (safe resume vs restart-from-scratch)",
+    "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+    "ticket": "TIMESHARE-RESUME-VERIFY",
+    "ts": "20260611T032100Z",
+    "verdict": "SAFE_RESUME"
+  },
+  "scope": "CPU dry-run segment pair \u2014 no GPU, no daemon, interlock active",
+  "segment_A": {
+    "checkpoint_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_umuvrmgl\\checkpoints\\step-00000263",
+    "loss_first": 1.138674,
+    "loss_last": 0.932672,
+    "pacing": {
+      "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+      "pace_s": 13.15,
+      "pace_steps": 263,
+      "pacing_total_s": 13.15,
+      "throttle_s": 0.0,
+      "throttle_steps": 0
+    },
+    "segment_id": "seg-A",
+    "steps": 263,
+    "tok_per_s": 4472.3,
+    "tokens": 67328,
+    "wall_s": 15.054
+  },
+  "segment_B": {
+    "loss_first": 0.940813,
+    "loss_last": 1.053754,
+    "pacing": {
+      "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+      "pace_s": 13.2,
+      "pace_steps": 264,
+      "pacing_total_s": 13.2,
+      "throttle_s": 0.0,
+      "throttle_steps": 0
+    },
+    "segment_id": "seg-B",
+    "steps": 264,
+    "tok_per_s": 4491.4,
+    "tokens": 67584,
+    "wall_s": 15.047
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "ticket": "ENG123-TIMESHARE-DRYRUN",
+  "ts": "20260611T032029Z",
+  "verdict": "DRYRUN_COMPLETE"
+}
