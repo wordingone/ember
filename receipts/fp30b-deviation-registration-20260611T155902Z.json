@@ -1,0 +1,37 @@
+{
+  "ticket": "FP30B-DEVIATION-REGISTRATION",
+  "ts": "20260611T155902Z",
+  "issue": 218,
+  "freeze_receipt": "tokenizer-freeze-20260611T154111Z.json",
+  "freeze_sha256": "1e2da479d09f896d1ef15cece19255347aff2bc78a450b4160905579910e56ee",
+  "freeze_tracked_clean": true,
+  "new_total": 6973632300,
+  "census_receipt": "special-id-census-20260611T143841Z.json",
+  "census_sha256": "dabe30c3efd07d0f1ed16eb2fe5c1e2cc8c0cd20f7a467ae9f8e1b9be94fa0a2",
+  "registrations": [
+    {
+      "pin": "configs/v0-pretrain-config.json data.real_token_total",
+      "old": 6973632296,
+      "new": 6973632300
+    },
+    {
+      "pin": "scripts/v0_pretrain_launch_gate.py TOKENIZER_RECEIPT",
+      "old": "tokenizer-freeze-20260611T060423Z.json",
+      "new": "tokenizer-freeze-20260611T154111Z.json"
+    },
+    {
+      "pin": "fp27 base_policy budget literal",
+      "old": "fp27-prereg-20260611T130743Z.json",
+      "new": "fp27-prereg-20260611T155902Z.json"
+    }
+  ],
+  "stale_worklist_consumed": [
+    "configs/v0-pretrain-config.json data.real_token_total=6973632296 != live freeze 6973632300 (tokenizer-freeze-20260611T154111Z.json)",
+    "scripts/v0_pretrain_launch_gate.py TOKENIZER_RECEIPT=tokenizer-freeze-20260611T060423Z.json != live freeze tokenizer-freeze-20260611T154111Z.json",
+    "fp27-prereg-20260611T130743Z.json base_policy does not carry the live freeze total 6973632300 \u2014 register the deviation (old/new + census sha)"
+  ],
+  "post_check": "GREEN",
+  "basis": "count-semantics remedy frozen pre-census (mail 14628 / STATE 2026-06-11 ~13:35Z): band contract supreme; counting instrument re-aligned; literal pins of the old total updated as REGISTERED deviations, old/new + census sha recorded; fp-26/fp-27 freezes otherwise untouched",
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}

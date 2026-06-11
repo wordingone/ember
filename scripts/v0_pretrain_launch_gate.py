@@ -35,7 +35,7 @@ import token_shards_v0                              # noqa: E402
 ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
 ASSEMBLY_SHA = ("a29d2e567f1853966cc72a4890eadc963164265e"
                 "4f24a89cadea24d9ff5b80c2")
-TOKENIZER_RECEIPT = "tokenizer-freeze-20260611T060423Z.json"
+TOKENIZER_RECEIPT = "tokenizer-freeze-20260611T154111Z.json"
 CONFIG = f"{NC}/configs/v0-pretrain-config.json"
 DEADLINE = datetime.date(2026, 6, 22)
 # fp19-bench receipted-unstacked days-to-compute-optimal for the c03-qat core
