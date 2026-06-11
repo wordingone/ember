@@ -1,0 +1,177 @@
+{
+  "ticket": "W4-EVAL",
+  "ts": "20260611T044559Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "arm": [
+      "base=",
+      "sft=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-sft",
+      "mtp=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-mtp",
+      "grpo=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-grpo",
+      "control=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-control"
+    ],
+    "split": "validation",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 16,
+    "tag": "r2w-q3"
+  },
+  "n_tasks": 43,
+  "k": 8,
+  "arms": {
+    "base": {
+      "pass_any_pct": 90.7,
+      "pass_ci95": [
+        81.4,
+        97.67
+      ],
+      "gen_secs": 142.7,
+      "extraction_fail": 0,
+      "programs": 344
+    },
+    "sft": {
+      "pass_any_pct": 81.4,
+      "pass_ci95": [
+        69.77,
+        93.02
+      ],
+      "gen_secs": 113.0,
+      "extraction_fail": 0,
+      "programs": 344
+    },
+    "mtp": {
+      "pass_any_pct": 83.72,
+      "pass_ci95": [
+        72.09,
+        93.02
+      ],
+      "gen_secs": 109.7,
+      "extraction_fail": 0,
+      "programs": 344
+    },
+    "grpo": {
+      "pass_any_pct": 88.37,
+      "pass_ci95": [
+        79.07,
+        97.67
+      ],
+      "gen_secs": 157.1,
+      "extraction_fail": 0,
+      "programs": 344
+    },
+    "control": {
+      "pass_any_pct": 88.37,
+      "pass_ci95": [
+        79.07,
+        97.67
+      ],
+      "gen_secs": 133.7,
+      "extraction_fail": 0,
+      "programs": 344
+    }
+  },
+  "deltas": {
+    "sft_minus_base_ci95": [
+      -20.93,
+      0.0
+    ],
+    "mtp_minus_base_ci95": [
+      -16.28,
+      0.0
+    ],
+    "grpo_minus_base_ci95": [
+      -11.63,
+      4.65
+    ],
+    "control_minus_base_ci95": [
+      -6.98,
+      0.0
+    ]
+  },
+  "samples_file": "w4-eval-r2w-q3-20260611T044559Z-samples.jsonl",
+  "split_discipline": "validation=heldout only; train=world pool; test=t5-harm-only",
+  "exact": {
+    "per_arm_wilson_ci": {
+      "base": {
+        "lo": 0.783973,
+        "hi": 0.963228,
+        "k": 39,
+        "n": 43
+      },
+      "sft": {
+        "lo": 0.67383,
+        "hi": 0.902582,
+        "k": 35,
+        "n": 43
+      },
+      "mtp": {
+        "lo": 0.700276,
+        "hi": 0.918834,
+        "k": 36,
+        "n": 43
+      },
+      "grpo": {
+        "lo": 0.755208,
+        "hi": 0.949296,
+        "k": 38,
+        "n": 43
+      },
+      "control": {
+        "lo": 0.755208,
+        "hi": 0.949296,
+        "k": 38,
+        "n": 43
+      }
+    },
+    "paired_newcombe_ci": {
+      "sft_minus_base_ci95": {
+        "lo": -0.222953,
+        "hi": 0.024339,
+        "b": 1,
+        "c": 5,
+        "n": 43
+      },
+      "mtp_minus_base_ci95": {
+        "lo": -0.18609,
+        "hi": 0.024143,
+        "b": 0,
+        "c": 3,
+        "n": 43
+      },
+      "grpo_minus_base_ci95": {
+        "lo": -0.132981,
+        "hi": 0.079735,
+        "b": 1,
+        "c": 2,
+        "n": 43
+      },
+      "control_minus_base_ci95": {
+        "lo": -0.12059,
+        "hi": 0.060958,
+        "b": 0,
+        "c": 1,
+        "n": 43
+      }
+    },
+    "mde": {
+      "binom_p0_baseline_n": {
+        "p0": 0.907,
+        "n": 43,
+        "mde": 0.124098
+      },
+      "paired_disc05_n": {
+        "disc_rate": 0.05,
+        "n": 43,
+        "mde": 0.095533
+      },
+      "paired_disc10_n": {
+        "disc_rate": 0.1,
+        "n": 43,
+        "mde": 0.135104
+      }
+    }
+  }
+}
