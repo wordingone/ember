@@ -16,8 +16,15 @@ bits-weighted stratification (STRATUM_REPEATS from t2_grpo) on the MBPP
 train split. Frontier-filtering in the GRPO context means restricting
 the prompt pool to tasks with solve rate in (0, theta] — tasks the
 current adapter cannot trivially solve, preserving gradient signal.
-The wrapper passes a --focus-max-rate argument to the w1_mbpp sampler
-(not to t2_grpo itself, which receives a pre-built stats-from path).
+
+eng #142 (Kai r2 audit): the filter used to be informational-only — the
+wrapper recorded it but t2_grpo trained the full MBPP pool. The wrapper
+now writes the selected task-key list to a file and passes it via
+--task-list, making the selection load-bearing. Pool semantics PINNED
+in prereg §5 (gate call, mail 14514): theta (0,0.5] live-frontier
+STRICTLY — ledger-absent and dead tasks stay OUT of the round-2 pool;
+dead-task GRPO is a named round-3 candidate, not a silent r2 expansion.
+The selection basis is recorded verbatim in both receipts.
 
 GRPO stats-from: t2_grpo.py needs --stats-from pointing to round-2
 w1 samples receipts (*.jsonl). If the round-2 w1 floor receipts do not
@@ -105,6 +112,7 @@ def main():
 
     LEDGER = f"{NC}/ledger/episodes.jsonl"
     CONTROL_POOL = f"{NC}/ledger/control_pool.jsonl"
+    VIEWS = f"{NC}/ledger/views"
     RECEIPTS = f"{NC}/receipts"
 
     # --- Frontier filter (informational for receipt; GRPO uses stats-from) ---
@@ -132,6 +140,32 @@ def main():
         f"[t2_r2_grpo] frontier_filter: theta={theta} "
         f"-> {tasks_filtered}/{tasks_all} tasks, "
         f"{len(filtered)}/{len(episodes)} episodes",
+        flush=True,
+    )
+
+    # --- Write the selected task-key list (eng #142, load-bearing) ---
+    # Pool pin (prereg §5, mail 14514): theta (0,0.5] live-frontier
+    # strictly — W-code (mbpp:*) tasks only, no dead/ledger-absent tasks.
+    selected_keys = sorted({str(e["task"]) for e in filtered
+                            if str(e.get("task", "")).startswith("mbpp:")})
+    os.makedirs(VIEWS, exist_ok=True)
+    task_list_path = os.path.join(VIEWS, "grpo-r2-tasks.json")
+    with open(task_list_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(selected_keys, f, indent=0)
+    import hashlib
+    h = hashlib.sha256()
+    with open(task_list_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    task_list_sha256 = h.hexdigest()
+    selection_basis = (
+        f"frontier_filter theta={theta} over ledger solve rates "
+        f"(r2_arms.solve_rates_from_ledger, ledger+control_pool); "
+        f"all_verified={args.all_verified}; mbpp:* only; prereg §5 pin: "
+        f"live-frontier strictly, no dead/ledger-absent tasks")
+    print(
+        f"[t2_r2_grpo] task list: {task_list_path} "
+        f"({len(selected_keys)} keys, sha256={task_list_sha256[:12]}...)",
         flush=True,
     )
 
@@ -194,7 +228,8 @@ def main():
     os.makedirs(RECEIPTS, exist_ok=True)
     receipt_path = f"{RECEIPTS}/r2-grpo-wrapper-{ts}.json"
 
-    # Build the argv we will pass to t2_grpo
+    # Build the argv we will pass to t2_grpo (eng #142: the task list is
+    # load-bearing; receipt linkage rides along).
     grpo_argv = [
         "t2_grpo.py",
         "--model", args.model,
@@ -205,6 +240,11 @@ def main():
         "--lr", str(args.lr),
         "--temp", str(args.temp),
         "--reward", args.reward,
+        "--task-list", task_list_path,
+        "--round", "2",
+        "--wrapper-receipt", receipt_path,
+        "--gate-token-present",
+        "--selection-basis", selection_basis,
     ]
     if stats_paths:
         grpo_argv += ["--stats-from"] + stats_paths
@@ -231,6 +271,14 @@ def main():
             "episodes_filtered": len(filtered),
             "episodes_total": len(episodes),
         },
+        "selected_tasks": {
+            "path": task_list_path,
+            "n_keys": len(selected_keys),
+            "sha256": task_list_sha256,
+        },
+        "sha_convention": ("sha256 over on-disk raw bytes "
+                           "(binary read, no line-ending normalization)"),
+        "selection_basis": selection_basis,
         "stats_from": stats_paths,
         "stats_note": stats_note,
         "calibration": calibration_receipt,
