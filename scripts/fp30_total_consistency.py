@@ -50,9 +50,17 @@ FP27_GLOB = "receipts/fp27-prereg-*.json"
 FREEZE_GLOB = "receipts/tokenizer-freeze-*.json"
 
 
+_FREEZE_NAME = re.compile(r"^tokenizer-freeze-\d{8}T\d{6}Z\.json$")
+
+
 def live_freeze(nc=NC):
-    """(name, total) of the newest clean tokenizer-freeze receipt."""
-    hits = sorted(globmod.glob(f"{nc}/{FREEZE_GLOB}"))
+    """(name, total) of the newest clean PRODUCTION tokenizer-freeze
+    receipt. The name pattern is enforced (digits-timestamp only) so
+    sibling artifacts the glob would catch — tokenizer-freeze-selftest-*
+    — can never bind, even if a future selftest fixture carries a
+    real_token_counts.total (green-by-luck is not a design)."""
+    hits = sorted(p for p in globmod.glob(f"{nc}/{FREEZE_GLOB}")
+                  if _FREEZE_NAME.match(os.path.basename(p)))
     for p in reversed(hits):                  # newest ts-name last
         try:
             d = json.load(open(p, encoding="utf-8"))
@@ -156,6 +164,15 @@ def _selftest():
              "w").write('{"ts": "x"}')                   # missing ticket
         name, total = live_freeze(nc=td)
         assert name == "tokenizer-freeze-20260102T000000Z.json"
+        # a NON-production name (selftest sibling) can NEVER bind, even
+        # carrying a clean total that sorts newest
+        json.dump({"ticket": "TOK", "ts": "x",
+                   "real_token_counts": {"total": 999},
+                   "sha_convention": "x"},
+                  open(f"{td}/receipts/tokenizer-freeze-selftest-"
+                       f"20260109T000000Z.json", "w"))
+        name2, total2 = live_freeze(nc=td)
+        assert (name2, total2) == (name, total), (name2, total2)
     # live-tree: pins must match TODAY (pre-re-freeze)
     assert check() == [], check()
     print("FP30_TOTAL_CONSISTENCY_SELFTEST_PASS")
