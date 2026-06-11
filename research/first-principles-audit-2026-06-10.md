@@ -982,3 +982,70 @@ near-duplicate text under the current t2 build (arc-dsl 67% of rows but
 (consumes the eng-25 stamp)? Quantifiable from build views now;
 verdict = the implicit-weight table + a pre-registered choice for
 round-3. Closing PR mints fp-18.
+
+## 8.23 fp-17 (#96): implicit training-mix weights — the cross-task channel is OPEN on the ARC side, CLOSED on the wcode side
+
+**Question (minted by §8.22):** §8.21–8.22 established duplication binds
+at TRAINING, not eval. What do the REALIZED builds actually train on,
+counted as completion evidence — and what build lever does round-3 get?
+
+**Key code fact first:** `t2_round.build_dataset` already dedups exact
+srcs WITHIN a task (`uniq.setdefault(r["src"], r)`). So any exact
+duplication surviving into a build is CROSS-TASK — re-arc variants are
+separate task keys (`tid`, `tid#a1`, …) sharing solver text, putting
+the same completion under many prompts.
+
+**Method (`scripts/fp17_mixweights.py`, selftest PASS, receipt
+`fp17-mixweights-20260611T014512Z.json`, daemon-run, replay views under
+/tmp — production ledger/views untouched):** replay the two live build
+shapes (A `arc_round` = build_dataset(LEDGER, default caps); B
+`wcode_arm` = mbpp view → ext-flag filter → bits-weighted caps →
+build_dataset; C = B + license-allow filter) and compute the
+implicit-weight table over ASSISTANT completion texts: exact-dup groups
++ near-dup clusters (fp-13/fp-16 machinery, single source).
+
+**The table (the verdict):**
+- **arc_round:** 2,018 tasks → 2,321 examples → 1,192 exact-unique
+  completions. **65.5% of SFT steps land on completion text shared by
+  ≥2 examples** (1,519/2,321); max implicit weight 12×, top group sizes
+  [12,8,8,8,8]. Near-dup giant cluster carries 81.2% of steps — but
+  chain-dominated (median direct cosine 0.918, 12.2% of sampled direct
+  pairs ≥0.95), so the chaining caveat from §8.21 carries: the
+  exact-dup 65.5% is the hard number, the 81.2% is texture-cluster
+  reachability, not pairwise sameness.
+- **wcode_arm:** 101 tasks → 260 examples → 260 exact-unique. **Zero
+  exact duplication** — within-task dedup + bits-weighted per-task caps
+  fully close the channel here; largest near-dup cluster = 5.8% of
+  steps.
+- **wcode_license_clean:** 0 records under allow {arc-dsl-mit,
+  apache-2.0} — the §8.6/#79 expectation, reproduced.
+
+**Round-3 pre-registration (frozen on the receipt, my call per the
+design-calls rule):** named choice = **cluster-cap** — extend the
+existing bits-weighted cap discipline one level: cap examples per dedup
+cluster with the same {easy 2, mid 4, frontier 8} table applied at
+cluster level (cluster stratum = best member-task stratum), consuming
+the eng-25 stamp. Rejected: dedup-collapse (loses the prompt diversity
+the augmentation exists to provide); 1/cluster-size loss-weighting (no
+trainer support without surgery). Revision criterion: if the
+cluster-capped arm's G1 held-out delta underperforms the row-build
+control beyond CI in round-3 → revert to row-build, move the lever to
+loss-weighting.
+
+**Adversarial verify (2 Haiku lenses, arithmetic + inference,
+pre-gate):** both refuted=false. Arithmetic lens reconciled every
+headline (1519/2321, 12-max, 81.2% share, 802 singletons + 390
+multi-groups = 1,192, median-over-groups logic, selftest pins). One
+inference-lens caveat ACCEPTED and carried: the receipt cannot isolate
+whether the arc/wcode asymmetry is the cap strategy vs build
+composition (2,018 vs 101 tasks; different filters) — caps are the
+plausible mechanism, not an isolated cause. The asymmetry claim is
+therefore descriptive ("channel open here, closed there"), not causal.
+
+**Successor minted (fp-18):** the prereg's rejection of dedup-collapse
+rests on an UNMEASURED assumption — that the prompts over a duplicated
+completion are themselves diverse. If within-group PROMPT texture is
+also near-dup, the "augmentation provides prompt diversity" rationale
+is a false-accept and dedup-collapse re-enters as the simpler lever.
+fp-18 = prompt-side diversity within exact-dup completion groups,
+measurable from the same build views now.
