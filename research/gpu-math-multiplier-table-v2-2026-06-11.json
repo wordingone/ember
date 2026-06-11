@@ -1,0 +1,774 @@
+{
+ "v": "gpu-math-attack-v2",
+ "ts": "2026-06-11T06:30Z",
+ "run": "wxgtzfcg1",
+ "agents": 127,
+ "multiplier_table": [
+  {
+   "technique": "int4 weight-only W4A16 decode kernels (Marlin / AWQ-Marlin / GPTQ-Marlin) in vLLM for the batch-1 episode sampler",
+   "axis": "sampling_throughput",
+   "claimed": 1.8,
+   "surviving_multiplier": 1.4,
+   "contested": true,
+   "refutes": 2,
+   "baseline": "Receipted bf16 single-stream (batch-1) autoregressive sampler: 97.7 tok/s @ 1.5B (t1-smoke-20260610T115140Z) and 65-98 tok/s @ 3B (STATE 3B smoke). NET multiplier = raw tok/s speedup x verify-rate-retained, because the loop math F = verified-episodes-per-GPU-hour and the verifier (3B base floor = per-sample 65.7%, 226/344 @ k8, receipt w1-floor-g1-base-20260610T215814Z) is the real bottleneck, not raw decode tok/s.",
+   "conditions": "RTX 4090, Ada sm89, ONE GPU, batch=1 memory-bandwidth-bound decode, 0.4-3B decoder, seq 1024. Decomposition: (1) RAW tok/s ~2.0x — Marlin per-kernel ceiling is ~3.87-4x (arXiv 2408.11743, IST-DASLab/marlin), but MARLIN's OWN end-to-end batch-1 measurement is 2.9x at 7B on A10 (Table 2; the gap is un-quantized attention/KV/norm/sampling). At 0.4-3B this erodes further: the un-quantized fraction of per-token decode is proportionally LARGER at small hidden dims, Marlin gains shrink on small matrices, and vLLM's fp16 batch-1 path is already well-optimized (vLLM #21266: W4A16 can even regress below fp16 in some small configs). Conservative realized ~2.0x at 1.5-3B, falling toward ~1.5-1.8x at 0.4B. (2) VERIFY-RATE RETAINED ~0.93 — int4 weight-only costs ~4pp pass@1 on code/program tasks for AWQ-class (56.1->51.8 HumanEval) and ~8-10pp for GPTQ-class; AWQ-Marlin is the path to use. 4pp off the 65.7% verify floor => retention ~0.93-0.94. NET = 2.0 x 0.93 ~= 1.85, reported conservatively as 1.8x. IMPORTANT HARDWARE CORRECTION to the survey-prior: Machete is Hopper-only (SM 9.0a), does NOT run on Ada/4090 — drop it from the 4090 candidate set; Atom (W4A4, arXiv 2310.19102) trades activations to int4 and would cost MORE verify-rate, not recommended. The relevant Ada kernel is Marlin / AWQ-Marlin / GPTQ-Marlin only.",
+   "citations": [
+    "arXiv:2408.11743 (MARLIN: per-kernel ~3.87x batch-1; end-to-end 2.93x Llama-2-7B on A10, Table 2 — no sub-7B data)",
+    "github.com/IST-DASLab/marlin (near-ideal ~4x to medium batch 16-32; b=1 close to 3.87x ceiling)",
+    "arXiv:2505.22179 (Speculative Decoding Meets Quantization / SpecMQuant: quant x speculative NOT cleanly multiplicative; int4 shifts target distribution and LOWERS draft acceptance rate)",
+    "arXiv:2411.02355 ('Give Me BF16 or Give Me Death': int4 weight-only accuracy-perf trade-offs, code generation most sensitive)",
+    "vLLM quantization docs + GPTQModel docs (AWQ-Marlin / GPTQ-Marlin on Ada); vLLM issue #21266 (W4A16 can be slower than fp16 in small configs)",
+    "nc-ladder local: t1-smoke-20260610T115140Z.json (1.5B bf16 97.7 tok/s), w1-floor-g1-base-20260610T215814Z.json (3B verify floor 65.7%), STATE.md b140cdb0 (bnb-4bit DEAD 16-46 tok/s — bnb lacks a fast batched/Marlin path; NOT the W4A16/Marlin result and must not be cited as such)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The only end-to-end Marlin throughput measurement cited is a single data point: 2.93x at 7B on A10 (arXiv 2408.11743 Table 2). There is no published sub-7B end-to-end W4A16 Marlin measurement at any scale. The claim extrapolates from 7B/A10 to 1.5-3B/4090 and calls the result (~2.0x) the central estimate, with 1.5x as the conservative floor. That framing is inverted: without sub-7B evidence, 1.5x is the honest central and 2.0x is the optimistic ceiling.",
+    "The physical mechanism of the extrapolation is directionally correct but the magnitude is understated. At small hidden dims (d=1024 for the v0 0.37B core, d=~2048 for 1.5B), the un-quantized components (attention ops, KV cache management, layer norms, sampling logic, tokenizer) represent a proportionally LARGER fraction of per-token decode time than at 7B, because those components do not scale with weight matrix size. The ratio of per-kernel speedup (3.87x) to end-to-end speedup (2.93x) at 7B is 0.757. At 1.5B, the un-quantized fraction grows further, pushing the ratio lower -- the 2.93x/3.87x decomposition at 7B cannot be linearly applied to estimate 1.5B performance.",
+    "vLLM issue #21266 (cited in the claim) documents that W4A16 can REGRESS below fp16 in small configurations, and the claim's own notes flag this. This is not a tail risk: at d=1024 the Marlin kernel's tile sizes cover a proportionally larger fraction of the matrix, reducing the bandwidth-savings opportunity, and at these sizes bf16 GEMMs are already partially L2-bound. The claim names this risk but treats 1.5x as a conservative floor; given the regression risk, 1.5x is properly the expected central value, not the floor.",
+    "The operational scale is receipted. The active sampler is Qwen2.5-Coder-1.5B at 97.7 tok/s (receipt t1-smoke-20260610T115140Z) and 3B at 65.8 tok/s (receipt t1-smoke-20260610T150303Z). The v0 owned core is 0.37B (fp-19 envelope, c03 config: d=1024, 20 layers). No W4A16/Marlin receipt exists at ANY of these sizes on this box -- the claim honestly acknowledges this, but characterizes it as a discharge-path item while still asserting 1.8x as the central multiplier. By the project's own receipts-only-truth rule (GOAL.md), an unreceipted literature extrapolation across a 5x scale gap cannot be called a central estimate.",
+    "Adjusted multiplier derivation: raw tok/s central at 1.5-3B = 1.5x (not 2.0x, per the scale-gap argument above); verify-rate retention = 0.93 (AWQ-Marlin ~4pp hit, carried from the claim -- this component is literature-supported and not the mismatch point); NET = 1.5 x 0.93 = 1.395, rounded to 1.4x. This is consistent with the claim's own stated conservative floor (1.5x raw x 0.93 = 1.40x), confirming that the claim's floor IS the honest central. The 1.8x figure represents an optimistic scenario requiring the 2.0x raw speedup, which has no sub-7B supporting receipt.",
+    "Marlin (IST-DASLab) and its AWQ-Marlin / GPTQ-Marlin vLLM derivatives require only sm80+ (cp.async + WMMA int4 tiles). Ada sm89 (RTX 4090) fully satisfies both. IST-DASLab publishes measurements on A10 (sm86) — Ada is downstream, not a regression. No Hopper-only instruction (WGMMA, sm90a) is in the Marlin critical path."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "MARLIN paper (2408.11743) confirms a 2.93x end-to-end speedup for Llama-2-7B on A10 GPU (Table 2), and a per-kernel batch-1 ceiling of ~3.87x. These numbers are real and in the paper, but ALL measurements are on >=7B models and datacenter GPUs (A10), not on <=1B/3B models or consumer RTX 4090. The scale mismatch is critical: at small param counts the weight-matrix tiles are too small to saturate the Marlin pipeline, so the kernel benefit is expected to be lower.",
+     "The IST-DASLab/marlin GitHub README confirms the ~3.87x per-kernel ceiling at batch-1 on an A10, consistent with the paper. No sub-2B model data exists in any public benchmark found.",
+     "arXiv:2505.22179 (SpecMQuant) is MISCHARACTERIZED in the citation. The paper explicitly states W4A16 causes 'nearly no degradation' in speculative decoding acceptance rate. The citation claims it 'LOWERS draft acceptance rate', which is the opposite of what the paper reports. The paper's actual concern is that tree-style EAGLE-2 verification becomes compute-bound on W4A16 models — a different mechanism.",
+     "arXiv:2411.02355 covers throughput for Llama-3.1 8B/70B/405B on A6000/A100/H100 datacenter GPUs only. No consumer GPU (RTX 4090 / Ada Lovelace) data, no sub-8B thorough throughput benchmarks. Does not directly support or contradict the multiplier at the relevant scale."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Muon optimizer (momentum-orthogonalized updates via Newton-Schulz iteration on 2D hidden weights; AdamW retained on embeddings/norms/head)",
+   "axis": "data_efficiency",
+   "claimed": 1.5,
+   "surviving_multiplier": 1.35,
+   "contested": true,
+   "refutes": 1,
+   "baseline": "bf16 AdamW-dense pretrain, tokens-to-equal-validation-loss at 0.1-0.4B dense decoder (our receipted 0.37B core bench, 20,201 tok/s paced, seq 1024). Multiplier = AdamW-tokens / Muon-tokens to reach the same val loss.",
+   "conditions": "0.1-0.4B DENSE decoder-only, seq 1024, bf16 mixed precision, single RTX 4090. Muon applied to 2D hidden weight matrices only; AdamW on embeddings, norms, and the LM head (the modded-nanogpt config). Gain is data/sample efficiency (fewer tokens to equal loss), NOT raw step throughput. EXCLUSION: does NOT apply to a QAT tail phase (final ~5% of tokens) — published evidence (2604.07888 App B.5) shows Muon+fake-quant is null/slightly-negative there, so revert to AdamW for that phase; this trims the end-to-end blend slightly (~0.95x1.5 + 0.05x1.0 ~= 1.48x) but 1.5x is the clean pretrain-phase figure.",
+   "citations": [
+    "arXiv:2502.16982 (Liu et al., 'Muon is Scalable for LLM Training' / Moonlight — claims ~2x compute efficiency vs AdamW, but on a 3B/16B MoE at 5.7T tokens; architecture+scale mismatch to our dense 0.1-0.4B, so used as an UPPER anchor not the point estimate)",
+    "arXiv:2509.24406 (Mehta, Dandekar et al., 'Muon: Training and Trade-offs with Latent Attention and MoE' — dense 30-200M decoders: Muon reaches target loss at 48-52% of AdamW compute, i.e. ~1.9-2.1x; single study, our scale, used as upper-dense anchor)",
+    "github.com/KellerJordan/modded-nanogpt (GPT-2 124M dense FineWeb speedrun — README isolates Muon at ~1.5x sample-efficiency and <2% wallclock overhead; explicitly does NOT attribute the 10B->0.4B token reduction to Muon alone, that is the cumulative effect of 20+ techniques — THIS is the load-bearing dense-at-our-exact-scale number)",
+    "kellerjordan.github.io/posts/muon (originator writeup: 1.35x nanogpt training-speed; ~1.33x on a 1.5B HellaSwag run, 10 vs 13.3 8xH100-hours; FLOP overhead 0.7% at nanogpt scale, <1% generally)",
+    "torch.optim.Muon (PyTorch core since ~2.9, confirmed present in 2.12 docs; single-GPU ready, distributed still maturing — torchtitan issue #2494)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The claim's load-bearing citation IS at-scale: modded-nanogpt is 124M dense GPT-2, directly within the 0.1-0.4B target window. Moonlight (2502.16982) and 2509.24406 are correctly labeled upper anchors and are not used as the point estimate. No large-scale number drives the 1.5x. The scale-mismatch lens does not refute this claim.",
+    "The genuine tension is attribution isolation, not scale extrapolation. The modded-nanogpt README attributes ~1.5x sample-efficiency to Muon within a cumulative 20+-technique speedrun ablation. That isolation is originator-authored, not a standalone controlled A/B. The originator's own separate controlled dense runs (the blog writeup: 1.33-1.35x at 124M nanogpt and 1.5B HellaSwag) are cleaner and cluster lower.",
+    "arXiv 2509.24406 (Mehta et al., 30-200M) reports 1.9-2.1x but is MoE-contaminated: their architecture combines MLA+MoE+Muon without a dense-decoder-only ablation. Attributing the full 1.9-2.1x to Muon alone on a dense decoder is unsupported at any scale, including ours. This is an architecture-mismatch sub-issue within the scale lens.",
+    "The two at-scale dense-decoder-isolated data points from the originator both cluster at 1.33-1.35x. The 1.5x estimate blends these with the noisier speedrun README isolation and the MoE upper anchor. A conservative but honest at-scale dense-only point estimate is 1.4x: above the originator's tightest controlled figures (1.33-1.35x) but below the speedrun-attributed 1.5x, consistent with the MoE-contaminated study being an upper anchor. No local 4090 execution receipt exists for Muon, but the gap is hardware-overhead, not a scale extrapolation problem.",
+    "No refutation: the claim does not smuggle in large-scale numbers as the point estimate, correctly labels upper anchors, and the originator's at-scale dense evidence is genuinely present. The adjustment from 1.5x to 1.4x reflects the isolation-quality of the speedrun attribution versus the originator's cleaner controlled runs, not a scale-mismatch correction.",
+    "Newton-Schulz iteration is a fixed 5-step polynomial matmul chain (zeta = a*G + b*(G@G.T@G) + c*(G@G.T@G@G.T@G)) executed in bf16. BF16 tensor cores are fully supported on Ada Lovelace (sm89) — they were introduced in Ampere (sm80). No Hopper-only feature is in this path."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The load-bearing citation (kellerjordan.github.io/posts/muon) is found and confirms 1.35x on NanoGPT (124M dense, FineWeb) and 1.33x on a 1.5B HellaSwag run — these bracket the surviving_multiplier of 1.35 and directly support it at the lower end of the claimed scale range.",
+     "The modded-nanogpt README states '~1.5x better sample-efficiency' for Muon in its training scenario, matching the claimed_multiplier of 1.5, but the README explicitly does NOT isolate Muon from 20+ other simultaneous techniques for the overall 10B→400M token reduction. The 1.5x figure is asserted for Muon's section without a controlled ablation.",
+     "arXiv:2509.24406 (Mehta, Dandekar et al.) is confirmed at 30M-200M dense parameters — matching scale — and reports Muon reaches target loss at 48-52% of AdamW FLOPs (~1.9-2.1x efficiency). However, this large multiplier applies to Muon combined with MLA+MoE; the paper also states plain Muon requires 10-15% fewer tokens (~1.12-1.18x) at the same scale when used alone on dense models without architectural changes. The claim cites this paper as 'upper-dense anchor' but the 1.9-2.1x figure conflates architecture plus optimizer gains.",
+     "arXiv:2502.16982 (Liu et al., Moonlight) is confirmed but is at 3B/16B MoE scale, 5.7T tokens — architecture and scale mismatch. The claim correctly uses it only as an upper anchor, not a point estimate. Not load-bearing for the stated multiplier."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Speculative decoding via MTP/EAGLE-class self-drafter on the sampler (paired with MLA/GQA KV-compression, which contributes ~1.0x at this scale)",
+   "axis": "sampling_throughput",
+   "claimed": 1.6,
+   "surviving_multiplier": 1.25,
+   "contested": true,
+   "refutes": 2,
+   "baseline": "bf16 autoregressive (no-draft) generation on a single-4090 1.5-3B sampler in the verified-episode loop: ~97.7 tok/s at 1.5B (governed 65-98 tok/s across 1.5-3B), batch = k samples/task (currently k=8). This is the generation leg of verified-episodes-per-GPU-hour, separate from the 20,201 tok/s paced TRAINING bench.",
+   "conditions": "Single RTX 4090, 24GB, 1.5-3B decoder-only sampler, bf16 inference, 2-4k context, code-synthesis (MBPP/ARC-DSL) workload. Multiplier is almost entirely from the speculative-decode drafter, NOT from MLA. MLA/KV-compression is ~1.0x on THIS axis at this scale: KV cache for a 1.5-3B model at 2-4k context is tens of MB, not a 24GB bottleneck, so it neither raises tok/s at fixed batch nor unlocks meaningful extra concurrency (survey nc2-technique-survey-2026-06.md §6); MLA is also not retrofittable to the Qwen GQA sampler we currently run. The 1.6x is BELOW the batch-1 headlines (EAGLE-2 3.05-4.26x, EAGLE-3 up to 6.5x, DeepSeek-V3 MTP-1 ~1.8x decode) because our loop samples k=8 completions/task: as effective batch rises, target-model verification trends compute-bound and the speculative speedup systematically erodes toward 1.0x (arXiv 2601.11580 'Performance or Illusion?'; arXiv 2408.11049 MagicDec). 1.6x is the surviving estimate in the intermediate (partially memory-bound) regime of a small model at modest batch on a 24GB card, helped by code's high token-predictability (high acceptance length). It is ABOVE the prior multiplier-table row's 0.95x because that row mis-scoped the question to MLA's training/KV benefit rather than the sampling-throughput axis isolated here. Requires building/training the drafter (MTP head on frozen trunk, or EAGLE-style draft layer) — a few-hundred-MB add, lossless to output quality (acceptance-gated). Conservative floor if the loop runs at high batch / GPU-saturated: ~1.1-1.2x; do NOT assume the batch-1 3-4x.",
+   "citations": [
+    "arXiv:2412.19437 (DeepSeek-V3: MLA + sequential MTP module reusable as self-speculative drafter; MTP-1 acceptance >80% -> ~1.8x decode throughput)",
+    "arXiv:2401.10774 (Medusa: multiple decoding heads + tree attention, self-drafting, no separate draft model)",
+    "arXiv:2401.15077 (EAGLE: feature-level autoregressive drafting)",
+    "arXiv:2406.16858 (EAGLE-2: dynamic draft trees; 3.05-4.26x at batch 1, acceptance length tau ~3.7-5.4)",
+    "arXiv:2503.01840 (EAGLE-3: training-time test; up to 6.5x at batch 1, ~70-90% acceptance with few draft tokens)",
+    "arXiv:2601.11580 (Speculative Decoding: Performance or Illusion? — speedup systematically shrinks as batch grows; batch-1 3-4x is not the realistic-batch number)",
+    "arXiv:2408.11049 (MagicDec — latency/throughput tradeoff, spec-decode gains concentrate in the memory-bound small/medium-batch regime)",
+    "nc-ladder STATE.md + prior multiplier table (local sampler baseline 1.5B @ 97.7 tok/s, governed 65-98 tok/s, bf16 single-4090)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "EAGLE-2/EAGLE-3 acceptance-rate evidence is from 7B-70B targets on conversational workloads (MT-Bench, Vicuna-7B/13B/33B, Llama-3.1-70B), not 1.5-3B targets on code synthesis. The claim's central 1.6x estimate implicitly requires ~65-70% acceptance on the 1.5B target, but no published acceptance-rate measurement exists for EAGLE-style drafting at 1.5-3B on code-synthesis workloads. This is a checkable gap: the acceptance floor at smaller, less predictable targets on structured code tasks is likely 45-60%, not the 70-80% measured at 7B+.",
+    "DeepSeek-V3 MTP-1 ~1.8x decode throughput is measured on a 671B parameter model. At 671B the verification step per token is so costly that draft tokens are cheap relative to verification, yielding high per-accepted-token leverage. At 1.5B the verification cost is roughly 450x smaller per step, which shrinks the leverage ratio of accepted draft tokens and makes the drafter's own overhead proportionally larger. The 1.8x anchor cannot be linearly extrapolated to 1.5-3B targets.",
+    "The claim correctly accounts for batch degradation (k=8 erodes batch-1 headlines toward 1.1-1.2x floor per arXiv 2601.11580 and 2408.11049). But batch degradation and scale-mismatch in acceptance rate are independent compounding effects. The 1.6x estimate adjusts for batch but leaves acceptance rate unscaled from the large-model benchmarks. If acceptance on a 1.5-3B code-synthesis target at k=8 runs 50-60% (consistent with the scale trend: EAGLE-3 ~80% at 70B, lower at smaller targets), the batch-adjusted multiplier falls from the claim's 1.6x into the 1.2-1.35x range, converging with the claim's own stated floor.",
+    "The claim's stated floor (1.1-1.2x) already captures the batch-saturation case. The scale-mismatch lens moves the central estimate (not just the floor) toward that range: 1.25x is the honest scale-adjusted center, with 1.4-1.6x achievable only if a local receipt demonstrates acceptance rates at 1.5B code-synthesis matching the large-model benchmarks. No such receipt exists in the state files (the claim itself flags 'no local 4090 speculative-decode receipt exists yet').",
+    "The claim notes 'realized acceptance on from-scratch small cores may be lower than the cited 7-13B/conversational benchmarks' as a caveat but still anchors the central estimate at 1.6x. The scale-mismatch lens treats this caveat as the dominant uncertainty, not a tail risk: ALL cited acceptance evidence is from models at least 4x larger (EAGLE-2: 7B min; EAGLE-3: 70B; DeepSeek-V3: 671B), so downward adjustment to the central estimate is warranted, not just to the floor.",
+    "NO H100-GATED HARDWARE IN THE CRITICAL PATH. Speculative decoding via MTP/EAGLE-class drafters operates entirely in BF16: draft head forward pass (BF16 GEMMs), target-model verification pass (BF16 GEMMs + tree attention mask), and sampling. Ada sm89 executes BF16 tensor-core GEMMs natively at 330 TFLOPS. No FP8 path is involved -- the claim explicitly states BF16 inference throughout. The FP8 concern (TE issue #15, torchao rowwise H100-only CUTLASS kernels) that kills the FP8 training row is irrelevant here."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "All cited papers confirm speculative decoding / MTP-class self-drafting produces real throughput gains in memory-bound single-GPU inference. The mechanism is valid.",
+     "No citation reports a number at the claimed scale: <=1B parameters on a single consumer RTX 4090. Every measured speedup (EAGLE-2 3.05-4.26x, EAGLE-3 up to 6.5x, DeepSeek-V3 MTP 1.8x, Medusa 2.2-3.6x) was measured on models ranging from 7B to 671B on enterprise hardware (H100, A100, MI300X), often multi-GPU.",
+     "The 1.8x figure from DeepSeek-V3 (arXiv:2412.19437) is the closest match to the surviving multiplier of 1.25x, but it applies to a 671B MoE model on 8xMI300X. Applying it to a 1.5B model on a single 4090 is an extrapolation, not a direct citation.",
+     "arXiv:2601.11580 (Performance or Illusion) and arXiv:2408.11049 (MagicDec) directly confirm that speedup shrinks as batch size or GPU utilization rises. At batch-1 on Llama3.1-8B with EAGLE on a single H100, speedup was 1.73x; that is the closest scale to the claim's scenario and it is already below the claimed 1.6x only at batch-1 with an 8B model."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Data selection / dedup-cap / curriculum for small-LM pretrain (document dedup + domain-mix reweighting + semantic-dedup, DoReMi/DSIR/SemDeDup/SlimPajama/D4 family)",
+   "axis": "data_efficiency",
+   "claimed": 1.5,
+   "surviving_multiplier": 1.15,
+   "contested": true,
+   "refutes": 2,
+   "baseline": "Tokens-to-equal-validation-loss vs UNFILTERED raw corpus at 0.1-0.4B, seq 1024, bf16-AdamW-dense.",
+   "conditions": "~1.5x holds ONLY against a genuinely unfiltered/redundant raw corpus and is a CEILING that does not compose: DoReMi's 2.6x (arXiv:2305.10429) is downstream-accuracy steps on The Pile's 22 maximally-heterogeneous domains (max mix-reweighting headroom we do NOT have); SemDeDup's ~2x (arXiv:2303.09540) is ~50% removal on highly-redundant LAION/C4; DSIR (arXiv:2302.03169) reports only +2-2.5% downstream accuracy, not a clean loss-step multiplier; D4 (arXiv:2308.12284) gives the cleanest equal-compute number at ~1.25x (20% efficiency) at 6.7B ON TOP of already-deduplicated data. The levers OVERLAP (dedup and mix both strip low-value gradient signal), so dedup x mix is NOT 2x x 2.6x — the honest combined ceiling is ~the larger single lever, taken conservatively to ~1.5x to-equal-LOSS (loss converges faster than downstream accuracy headlines). CRITICAL for ember: our fp-22 v0 corpus is ALREADY curated (the-stack-v2 permissive-only, FineWeb-Edu already quality-filtered, Wikipedia, Gutenberg) and the eng-36 plan ALREADY bakes in exact-hash document dedup at ingest — so most of the 1.5x headroom is pre-spent in the planned baseline; the MARGINAL multiplier of additional semantic-dedup/DoReMi-style reweighting OVER our actual curated+deduped plan is ~1.1-1.2x, not 1.5x. The local receipt cluster-cap 2321->394 (~5.9x, eng26-cap) is SFT-side on a pathologically augmented re-arc set (dup_step_fraction 0.65, one near-dup cluster = 81% of step share) and is explicitly NOT counted toward pretrain. Single-GPU/4090 does not change the multiplier (data selection is a pre-processing/offline cost, GPU-class-independent).",
+   "citations": [
+    "arXiv:2305.10429 (DoReMi: domain reweighting, 2.6x fewer steps to baseline downstream accuracy on The Pile, 280M proxy -> 8B)",
+    "arXiv:2303.09540 (SemDeDup: semantic dedup, remove ~50% data with minimal loss, ~2x training-time on LAION/C4)",
+    "arXiv:2302.03169 (DSIR: importance-resampling data selection, +2-2.5% GLUE vs random — accuracy delta, not a loss-step multiplier)",
+    "arXiv:2309.10818 (SlimPajama-DC: dedup 1.2T->627B tokens; convergence gain << raw token-removal ratio)",
+    "arXiv:2308.12284 (D4: doc dedup + diversification, ~20% efficiency = ~1.25x equal-compute at 6.7B, on top of already-deduped data)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "DoReMi (arXiv:2305.10429) reports 2.6x fewer steps to baseline DOWNSTREAM ACCURACY using a 280M proxy model to reweight domain mixes for an 8B target. The reported number is a steps-to-accuracy metric at 8B. There is no published DoReMi receipt at 0.1-0.4B decoder scale. The claim's own notes correctly cap this at ~1.5x, but the 8B origin of the 2.6x headline is a concrete scale-mismatch flaw: domain reweighting headroom grows with domain heterogeneity AND with the gap between proxy scale and target scale (the proxy-to-target scale ratio in DoReMi is 280M:8B = ~28x; at 0.37B target the ratio collapses to ~1:1 if the proxy is same-scale, removing a compounding factor from the original measurement).",
+    "SemDeDup (arXiv:2303.09540) measured ~2x training-time reduction on LAION (400M image-text pairs) and C4 (web text). LAION is pathologically redundant (scraped image-alt-text pairs); C4 is CommonCrawl-derived with high near-duplicate rate. The ember v0 corpus is the-stack-v2-permissive + FineWeb-Edu + Wikipedia + Gutenberg — upstream-curated, quality-filtered sources with far lower near-duplicate density than LAION or raw C4. The SemDeDup 2x was measured against a redundancy regime that ember's corpus does not have, making the measured multiplier inapplicable at this data regime regardless of model scale.",
+    "D4 (arXiv:2308.12284) gives the cleanest equal-compute number at ~1.25x at 6.7B params, ON TOP of already-deduplicated data. The claim correctly cites this as the cleanest number. However D4's 6.7B scale is ~17-67x larger than the 0.1-0.4B target range. The data-efficiency literature has no published D4-style measurement at 0.1-0.4B decoder scale; scaling behavior of data-selection gains below 1B is unstretched territory — and small models are known to be less sample-efficient per parameter (they underfit more; a curated gradient-dense token is less wasted on a 7B model that can absorb it than on a 0.37B model that may already be compute-bound per-token rather than data-quality-bound).",
+    "The marginal case is the most critical flaw. The claim's own 'CRITICAL for ember' section acknowledges that most of the 1.5x is pre-spent because the v0 corpus is ALREADY curated (FineWeb-Edu is quality-filtered, the-stack-v2-permissive is license-curated, Wikipedia and Gutenberg are low-redundancy) and eng-36 ALREADY bakes in exact-hash document dedup. The claim states the marginal multiplier over the actual curated+deduped plan is ~1.1-1.2x. The scale-mismatch lens sharpens this further: the papers establishing even 1.1-1.2x marginal gain were measured at 6.7B+ where signal-density-per-gradient-step is the binding axis. At 0.37B with 7.4B tokens (20 tok/param — compute-optimal by Chinchilla), the model is in the regime where COMPUTE (not data quality) is the binding constraint; adding semantic dedup removes tokens, shrinking the already-thin budget, and the quality gain per removed token may not compensate. The honest 4090-scale number for ADDITIONAL semantic-dedup/DoReMi reweighting ON TOP of the already-curated+deduped ember plan is ~1.1x, not 1.5x, and may be closer to 1.05x at 0.37B where budget shrinkage is costly.",
+    "DSIR (arXiv:2302.03169) reports +2-2.5% GLUE accuracy delta, not a loss-step multiplier at any scale. This citation provides no checkable multiplier and is scale-ambiguous; it should not anchor any pretrain multiplier number regardless of model size.",
+    "Data selection, dedup, and curriculum reweighting (DoReMi/DSIR/SemDeDup/D4) are entirely offline preprocessing steps. They execute before any GPU touches the training data. The RTX 4090 (sm89, Ada Lovelace) is not in the critical path for these operations."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "DoReMi (2305.10429) reports 2.6x fewer steps to baseline accuracy, which would support a multiplier well above 1.5x, but the result is measured with an 8B target model trained on a multi-GPU cluster — not at <=1B / single consumer GPU scale. The 280M proxy is the selection model, not the trained model being evaluated.",
+     "SemDeDup (2303.09540) reports halving training time by removing 50% of data on LAION-440M (vision/CLIP experiments). Language experiments used 125M and 1.3B OPT models. The 125M result is at sub-1B scale, providing partial support. However, 'halving training time' assumes the removed data is truly redundant — the paper notes performance drop is '<0.5%' on ImageNet-1k but the LM efficiency number in absolute multiplier terms is not directly stated as 2x for language.",
+     "DSIR (2302.03169) reports only +2-2.5% GLUE accuracy improvement, not a training-steps-to-baseline multiplier. The citation itself acknowledges this is 'an accuracy delta, not a loss-step multiplier.' This citation does NOT provide evidence for a data_efficiency multiplier on the claimed axis.",
+     "SlimPajama-DC (2309.10818) removed 48% of tokens (1.2T to 627B) but the paper's own framing is that convergence gain is much less than the raw token-removal ratio — the best 1.3B configuration outperforms RedPajama 'by a significant margin' but no numerical multiplier is provided; the paper trains on 330B tokens, not reporting fewer-steps-to-same-loss. Scale is 1.3B (slightly above 1B threshold) on a Cerebras cluster."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "torch.compile (TorchInductor) end-to-end training-step compilation for a small decoder LM",
+   "axis": "step_throughput",
+   "claimed": 1.15,
+   "surviving_multiplier": 1.08,
+   "contested": true,
+   "refutes": 1,
+   "baseline": "Our receipted c03-bf16 eager bench: 0.37B Llama decoder (368,354,304 params), batch 4, seq 1024, bf16, dense AdamW (torch.optim.AdamW, NON-fused), gradient-checkpointing ON, attn_implementation defaulting to SDPA/flash, RTX 4090 governed = 20,201.2 tok/s paced (26,813 tok/s raw). The 1.15x multiplies this paced step-throughput.",
+   "conditions": "RTX 4090 24GB, single GPU, 0.1-0.4B decoder LM, seq 1024, bf16, batch 4 (memory/launch-bound regime). Multiplier is the STEADY-STATE rate after warm-up; first ~tens of steps are 1.5-5x SLOWER (compile cost) but amortize to negligible over a 7-8 day pretrain. Holds ONLY if recompilation/graph-breaks are avoided (static shapes, no Python control flow in the step) and gradient-checkpointing does not force checkpoint-boundary graph breaks; dynamic shapes or frequent recompiles can drop this to ~1.0x or below.",
+   "citations": [
+    "arXiv:2304.14226 (TorchBench: TorchInductor reports geomean ~1.30x training across 180+ models)",
+    "karpathy/nanoGPT (repo: torch.compile cut iter time ~250ms->135ms ~1.85x, but on A100 with a NON-flash eager baseline -> bundles the flash-attention win = double-count)",
+    "pytorch.org/blog/out-of-the-box-acceleration (SDPA/flash already gives the attention win; head-dim 128 flash is only ~1.01x over a decent baseline -> attention is not where compile adds for decoders)",
+    "adamcasson.com/posts/torch-compile-vit (mechanism: compile gains on a transformer come from fusing memory-bound elementwise ops -- layernorm/residual/bias/activation -- because linears and attention already dispatch to cuBLAS/FlashAttention)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "TorchBench 1.30x geomean (arXiv:2304.14226) spans 180+ models including large compute-bound ones (BERT-large, T5, bigger decoders) where fused-op wins are proportionally larger. The geomean is upward-biased for a 0.37B memory-bound decoder. The claim correctly discounts from 1.30x to 1.15x but the discount is derived from reasoning, not from a receipted measurement at this scale — there is no cited 0.1-0.4B decoder compile receipt on RTX 4090.",
+    "The nanoGPT 1.85x result (the only small-model data point, ~124M) is run on an A100, not Ada/4090. A100 has higher DRAM bandwidth (2TB/s vs 1TB/s) and a different SM architecture; compile's fusion wins are proportionally larger on A100's higher-bandwidth device where memory-bound elementwise ops are faster to saturate, making the compiled vs eager delta appear larger. Direct transfer to RTX 4090 Ada is unvalidated.",
+    "The adamcasson ViT post measures a Vision Transformer, not a causal decoder LM. ViT has no autoregressive causal masking, no RoPE positional embedding, no SwiGLU, and no gradient-checkpointing recompute in the backward. The fused-ops profile is structurally different from a 0.37B LlamaForCausalLM with grad-ckpt ON. This citation establishes the mechanism (fusing memory-bound elementwise ops) but not the magnitude for the target architecture.",
+    "At 0.37B with gradient-checkpointing ON, the backward pass is dominated by recompute of activations. Compile can fuse the recomputed elementwise ops (RMSNorm, RoPE, SwiGLU) but cannot fuse across checkpoint boundaries. The checkpoint-boundary graph-break risk is real and its absence must be asserted per-model, not assumed. The claim notes this condition but does not cite evidence that LlamaForCausalLM with grad-ckpt avoids graph breaks on the specific PyTorch version in use.",
+    "The genuine (non-double-counted) compile win at 0.37B is two components: (1) elementwise glue fusion (RMSNorm/residual/SwiGLU/RoPE), estimated ~5-8% HBM traffic reduction for a small decoder where these ops are a modest fraction of step time, and (2) non-fused AdamW optimizer fuse, estimated ~3-5% at this model size. Combined honest range is 1.08-1.12x. The 1.15x sits above the defensible evidence floor for this exact scale+hardware combination, making it slightly optimistic rather than wrong in direction.",
+    "No receipt exists for torch.compile vs eager on a 0.37B decoder with the exact baseline conditions (SDPA already active, grad-ckpt ON, non-fused AdamW, RTX 4090, seq 1024, batch 4). The confidence is correctly labeled medium but the point estimate should be adjusted downward to reflect that all cited evidence at small scale (nanoGPT) bundles the flash-attention win already excluded by the baseline, leaving no clean small-scale receipt for the non-double-counted compile delta."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "TorchBench paper (arXiv:2304.14226) confirms 1.30x geomean training speedup for TorchInductor, but this is measured on an A100 (40GB) across 84 heterogeneous models; no per-class breakdown isolates decoder-only LMs, and the A100 is not a consumer GPU (4090 class). The 1.30x figure is a broad average that includes non-transformer workloads, making it a related-but-not-identical scale number for the specific claim axis.",
+     "nanoGPT 250ms->135ms (~1.85x) is cited as evidence but the README does not specify GPU hardware. The current model.py auto-enables flash attention (SDPA) when PyTorch >= 2.0 is available, which is exactly the condition that enables torch.compile. PR #102 (merged Feb 2023) added SDPA after the Dec 2022 compile benchmark was first documented, but the README benchmark was updated later. The claim's own annotation notes this bundles the flash-attention win — a valid double-count concern that the citation does not disprove.",
+     "The pytorch.org/blog/out-of-the-box-acceleration post explicitly reports training speedups of 10-70% on decoder models (gpt2, gpt-neo, LLaMA etc.) on A10G and A100. However, this post benchmarks SDPA/flash-attention specifically, NOT torch.compile. It provides no data on what torch.compile adds beyond SDPA. The head-dim 128 flash-attention being only 1.01x over a decent baseline is confirmed by the post ('from 3.4x for headdim=8 to 1.01x for headdim=128 using flash attention kernel') — meaning the attention speedup is already exhausted before compile runs on a GPT-class head dimension.",
+     "adamcasson.com correctly describes the mechanism (fusing memory-bound elementwise ops: layernorm, residual, bias, activation) but the benchmark is ViT-g/14 (1B params) inference on A100, not a small decoder LM training step. The 13% inference speedup (~1.13x) is in the right ballpark for the surviving_multiplier (1.08) but wrong task type, wrong scale class, and wrong GPU."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Logit/sequence-level knowledge distillation from a frozen open teacher (soft-target KD / sequence-KD / GKD) for from-scratch pretraining of a 0.1-0.4B dense decoder",
+   "axis": "data_efficiency",
+   "claimed": 1.3,
+   "surviving_multiplier": 1.05,
+   "contested": true,
+   "refutes": 2,
+   "baseline": "bf16 dense-AdamW next-token-prediction from-scratch pretrain of the 0.1-0.4B core at fixed token budget (our receipted 0.37B = 20,201 tok/s paced); multiplier = tokens-to-equal-held-out-PPL of from-scratch / tokens under KD-supervised training",
+   "conditions": "Realistic 4090-scale figure, NOT the survey-prior. The prior (\"KD buys large data-efficiency\") FAILS the fixed-compute test at our scale and must be discounted: (1) arXiv 2404.19319 (Insights@ACL 2024) shows that under a FIXED COMPUTE budget plain logit-KD is only COMPARABLE to from-scratch (~1.0x) — the multiplier only exceeds 1.0 for sophisticated INTERMEDIATE-REPRESENTATION KD (TinyBERT/MiniLM hidden-state+attention matching), and gains grow 'when data must be repeated' (our <=20B-token regime is repeat-heavy, which is the one tailwind). That paper is BERT-scale encoder MLM, so it bounds rather than supplies our number. (2) The from-scratch DECODER data-point is Baby Llama (2308.02019): a 58M LLaMA student on a ~10M-word (~13M-token) budget distilled from a GPT-2+LLaMA ensemble EXCEEDS both teachers and the from-scratch baseline at fixed tokens — genuine >1.0x on the data_efficiency axis, but reported as a quality delta at fixed tokens (not a clean tokens-to-target multiplier) and at 58M (below our 0.1-0.4B band). Netting these: a conservative ~1.3x tokens-to-PPL on a token-starved decoder is defensible; 2-3x claims are not supported once the teacher cost is charged. CONTINGENT ON: (a) THROUGHPUT — running a 4-8B teacher live to make soft targets DOES bottleneck the 20,201 tok/s meter: a 7B teacher is ~19x the FLOPs of a 0.37B student, so live shared-GPU KD drops the training meter by roughly an order of magnitude, turning any nominal data-efficiency win into a wall-clock LOSS; GKD/on-policy (2306.13649) is the worst case — it needs live teacher passes over student-generated sequences and is UNCACHEABLE. (b) TOP-K LOGIT CACHING REMOVES the in-loop cost: pre-compute the teacher's top-k (k~128, stored sparse) ONCE offline (the 2410.16215 pre-training-distillation pattern), then student training runs a cheap sparse-softmax KD loss at near-baseline throughput; the teacher leaves the training loop entirely. But the offline pass is itself ~20B teacher-forward tokens (not free) and the sparse-logit cache for 20B tokens is large on-disk — so the 1.3x is realizable ONLY in the cached, off-policy logit-KD configuration, not live and not GKD. (c) LICENSE/INDEPENDENCE is the BINDING blocker for the repo's owned-core (NC2-own, Anthropic/Alibaba/Google-INDEPENDENT) goal: Gemma terms define distillation/synthetic-data outputs as 'Model Derivatives' and PROPAGATE the Gemma license to the student -> a Gemma-distilled core is a Gemma derivative (FAILS Google-independence); Llama 3.0 forbade using outputs to 'improve any other large language model', 3.1+ permits it only WITH mandatory 'Llama' attribution+license propagation (FAILS Meta-independence); ONLY Apache-2.0 dense Qwen3 imposes no derivative/field-of-use restriction and does NOT propagate to the student weights, so it is the sole license-clean teacher — yet even then the core's output DISTRIBUTION is teacher-derived, which is exactly the 'borrowed, load-bearing' mass GOAL.md resists. This is DISTINCT from the repo's teacher-as-sampler note (teacher-system-2026-06-10.md): there the teacher proposes episodes the world verifies and NEVER grades (own-feed preserved); here the teacher's distribution IS the loss, so the dependency is on the core's weights, not on disposable cache.",
+   "citations": [
+    "arXiv:2404.19319 (Knowledge Distillation vs. Pretraining from Scratch under a Fixed Computation Budget; Insights@ACL 2024 / aclanthology 2024.insights-1.6)",
+    "arXiv:2308.02019 (Baby Llama: knowledge distillation from an ensemble of teachers on a small dataset, CoNLL-CMCL 2023 BabyLM)",
+    "arXiv:2306.08543 (MiniLLM: Knowledge Distillation of Large Language Models)",
+    "arXiv:2306.13649 (GKD / On-Policy Distillation of Language Models, ICLR 2024)",
+    "arXiv:2410.16215 (Pre-training Distillation for Large Language Models: A Design Space Exploration)",
+    "Gemma Terms of Use (ai.google.dev/gemma/terms — Model Derivatives incl. distillation)",
+    "Meta Llama 3 Community License (llama.com/llama3/license)",
+    "Qwen3 dense models Apache-2.0 (huggingface.co/Qwen/Qwen3-8B/LICENSE)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "PRIMARY ANCHOR IS OUT-OF-BAND (params): The sole decoder from-scratch KD evidence is Baby Llama (arXiv:2308.02019) at 58M params — roughly 2-7x below the 0.1-0.4B target band. KD benefit is known to shrink as student capacity grows (the student can learn more directly from data). The 2404.19319 fixed-compute result at BERT encoder scale shows ~1.0x for plain logit-KD. Extrapolating from 58M (below band) toward 0.4B (top of band) using these two anchors gives a monotonically declining benefit curve; the 1.3x was read off the 58M anchor and inherited upward, not interpolated from a point within the band.",
+    "REPEAT-HEAVY TAILWIND IS 4x WEAKER AT TARGET SCALE: Baby Llama runs 13M tokens on a 58M student — approximately 224 tokens/param, an extremely data-starved regime where every example is seen hundreds of times. The stated tailwind for logit-KD ('gains grow when data must be repeated,' per 2404.19319) is strongest here. The target regime is 20B tokens on 0.37B params — approximately 54 tokens/param. That is still data-starved but the repeat pressure is roughly 4x lower than Baby Llama's regime, which directly weakens the one identified mechanism producing >1.0x. The 1.3x was derived under 4x stronger tailwind conditions than the actual target.",
+    "BABY LLAMA MEASURES QUALITY-DELTA NOT TOKENS-TO-PPL MULTIPLIER: The claim's own notes admit Baby Llama reports 'a quality delta at fixed tokens (not a clean tokens-to-target multiplier).' Converting a quality-delta at fixed 13M tokens into a tokens-to-target multiplier requires knowing the PPL curve shape — this conversion is not provided in the paper and is non-trivial. The 1.3x tokens-to-PPL multiplier was inferred from a fixed-tokens quality comparison, introducing a shape-assumption that may not hold at the target token budget (20B).",
+    "NO PUBLISHED DECODER EVIDENCE IN THE 0.1-0.4B BAND AT 20B TOKENS: The claim explicitly states 'Direct evidence at the EXACT 0.1-0.4B-decoder / tokens-to-target axis does not exist in the literature.' This is the definition of a scale-mismatch gap. The 1.3x is an interpolation across two out-of-band anchor points (58M decoder below, BERT encoder above), neither at target scale, neither measuring the exact tokens-to-PPL axis. A 1.3x built on two out-of-band anchors with different architectures (encoder vs decoder) and different token regimes is not a reliable 4090-scale figure.",
+    "HONEST 4090-SCALE ADJUSTMENT: Applying the scale-mismatch correction — (a) KD benefit declining from 58M toward 0.4B along the monotone curve anchored by 2404.19319's ~1.0x at BERT scale, (b) repeat-heavy tailwind 4x weaker at 54 tok/param vs 224 tok/param, (c) off-policy cached logit-KD only (not live/GKD, which is correctly discounted by the claim itself) — the honest 4090-scale estimate is approximately 1.1-1.2x. The midpoint 1.15x reflects: the 58M result genuinely shows >1.0x, so the floor is above 1.0x; but the two mechanisms driving the 1.3x (small student, extreme data starvation) are both weaker at target scale, pushing the ceiling down. The claim's own pre-commit probe (cache top-128 Qwen3-4B logits, train two 0.1B students to fixed tokens) is the correct discharge path — 1.15x is the conservative prior until that receipt exists.",
+    "The 1.3x data-efficiency multiplier is conditioned on offline cached off-policy logit-KD: the teacher leaves the training loop entirely and the student trains in BF16 against pre-computed sparse top-128 logits read from disk. This configuration has zero dependency on Hopper/H100-specific hardware. All required ops (BF16 matmuls, FlashAttention-2, sparse softmax KLD) run natively on Ada/sm89."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "No cited paper reports a 1.3x data efficiency multiplier (or 1.05x surviving multiplier) specifically for from-scratch pretraining of a 0.1-0.4B dense decoder on a single consumer GPU.",
+     "arXiv:2404.19319 (ACL 2024 Insights) does test KD vs. pretraining from scratch under fixed compute, but uses masked LM (BERT-class) not autoregressive decoders, and reports only qualitative 'notable margin' — no numerical multiplier accessible.",
+     "arXiv:2308.02019 (Baby Llama) covers a 58M-param student in an extreme data-limited regime (10M words), reports qualitative improvement over scratch but no quantitative data-efficiency ratio.",
+     "arXiv:2306.08543 (MiniLLM) is exclusively about instruction fine-tuning distillation starting from a pretrained checkpoint — it does not compare to pretraining from scratch at all; irrelevant to the claimed axis."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "bitsandbytes 8-bit Adam (Adam8bit) vs 32-bit Adam optimizer state",
+   "axis": "memory_enables_batch",
+   "claimed": 1.1,
+   "surviving_multiplier": 1.03,
+   "contested": true,
+   "refutes": 2,
+   "baseline": "bf16 mixed-precision AdamW-dense, 0.37B core, seq 1024, 24GB 4090 (our receipted 20,201 tok/s paced bench) with 32-bit Adam optimizer state (8 bytes/param)",
+   "conditions": "8-bit Adam stores both moments at 1 byte/param (2 bytes/param total) vs 4+4=8 bytes/param for 32-bit Adam, freeing ~6 bytes/param of optimizer state. At 0.37B that frees ~2.2 GB (range ~0.6 GB at 0.1B to ~2.4 GB at 0.4B). On a 24GB card the achievable batch is set by the ACTIVATION budget: after fixed model(bf16 0.74GB)+fp32-master(1.48GB)+grad(0.74GB)+32bit-Adam(2.96GB)=~6GB, ~18GB remains for activations at 0.37B. Adding the freed ~2.2GB to that activation budget extends the max token-batch by ~(18+2.2)/18 ≈ 1.12x. At 0.1B the freed slice is smaller AND fixed footprint tinier, so relative gain is ~1.03x; at 0.4B ~1.13x. Conservative single figure across the 0.1-0.4B band: ~1.1x. The naive \"4x\" applies ONLY to the optimizer-state line item, NOT to total memory or batch, because at this scale optimizer state is a small slice of 24GB and seq-1024 activations dominate the variable cost. NOTE: tensors <4096 elements (biases, norms) stay fp32 by default, so realized optimizer-state savings is slightly below the 4x ceiling.",
+   "citations": [
+    "arXiv:2110.02861 (Dettmers, Lewis, Shleifer, Zettlemoyer, '8-bit Optimizers via Block-wise Quantization', ICLR 2022)",
+    "github.com/bitsandbytes-foundation/bitsandbytes (bnb.optim.Adam8bit)",
+    "huggingface.co/docs/bitsandbytes/main/en/optimizers (8-bit optimizer state = 8 bits/state, ~75% optimizer-state memory reduction)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The primary citation (arXiv:2110.02861) does characterize 8-bit Adam benefits at 7B+ and multi-GPU scale where optimizer state is a dominant memory fraction, and the HF docs '4x faster' phrasing originates from large-scale feasibility framing. However, the claim does NOT naively inherit the large-scale figure: it performs bottom-up byte-accounting specific to 0.1-0.4B on 24GB, computing freed memory as a fraction of the actual activation budget (~18GB residual), yielding 1.1x independently of any large-model benchmark.",
+    "The scale-mismatch lens points in the direction of making the multiplier smaller, not invalidating it. At small model scale, optimizer state (2.96GB at 0.37B) is a minor fraction of 24GB; activations dominate the variable budget. The claim acknowledges this correctly and uses it to explain why the naive '4x' shrinks to ~1.1x. That reasoning is scale-aware, not scale-blind.",
+    "A genuine residual scale-mismatch concern: the activation memory denominator (~18GB) is estimated, not receipted. At 0.1-0.4B with FlashAttention enabled, real activation footprint at seq-1024 may be substantially lower than naive layer-by-layer estimates (FlashAttention trades recompute for memory). If true activation budget is, say, 8GB rather than 18GB, the freed 2.2GB represents ~27% of that budget, pushing multiplier toward 1.28x — but this would mean the 1.1x claim is conservative, not inflated. Either way the direction of error does not constitute a refutable flaw.",
+    "No evidence of a 7B+/multi-GPU measurement being directly transplanted to 0.1-0.4B. The 1.1x figure is derived from first-principles arithmetic with scale-specific inputs. The claim even explicitly states '8-bit Adam genuinely matters at this scale for headroom/robustness, not raised throughput' — exactly the scale-corrected conclusion the scale-mismatch lens would demand.",
+    "Adam8bit uses INT8 block-wise quantization of optimizer state tensors — plain CUDA integer ops, not FP8 Tensor Cores. INT8 is fully supported on RTX 4090 (sm89, Ada Lovelace) with no degraded path. Compute capability requirement is cc>=6.0 for the optimizer kernels; sm89 clears this comfortably.",
+    "The cc<7.5 'slow 8-bit matmul' warning in bitsandbytes applies exclusively to LLM.int8() inference matmul acceleration, not to optimizer state quantize/dequantize. Those optimizer kernels are element-wise, not matmul-class, and have no Turing/Ampere/Hopper gate."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "All three citations are real and locatable. arXiv:2110.02861 confirms 75% reduction in optimizer-state memory (Adam: 8 bytes/param → 2 bytes/param), experiments at 110M–1.5B params on V100/A100 GPUs. The paper explicitly states no hyperparameters (including batch size) are changed between 32-bit and 8-bit runs — it does NOT report a batch-size multiplier.",
+     "HuggingFace bitsandbytes docs confirm '75% less GPU memory' for optimizer states but frame the benefit as enabling larger models on the same hardware, not larger batches. No batch size multiplier (1.1x or otherwise) is stated anywhere in the documentation.",
+     "The GitHub repo README contains no batch size multiplier claim.",
+     "The claimed 1.1x batch multiplier is a derived inference: if optimizer states are a fixed fraction of total VRAM, a 75% reduction in that fraction translates to a total-memory reduction, which then permits a proportionally larger batch. None of the sources perform or report this derivation for the <=1B param, single consumer GPU (RTX 4090) scenario. The surviving 1.03x multiplier is plausible as a back-of-envelope calculation for small models where optimizer state is a minority of VRAM, but no citation reports that number directly."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Maximal Update Parametrization (muP / μP, Tensor Programs V, arXiv 2203.03466) with zero-shot LR/init/multiplier transfer from a small proxy",
+   "axis": "data_efficiency",
+   "claimed": 1.02,
+   "surviving_multiplier": 1.01,
+   "contested": true,
+   "refutes": 1,
+   "baseline": "Our receipted bf16-AdamW-dense 0.37B core run (20,201 tok/s paced, seq 1024), tuned with a small in-budget LR/init sweep on one 4090 — a same-budget single AdamW or Muon run whose HPs come from a few short trials, not a multi-run large sweep.",
+   "conditions": "From-scratch dense decoder, 0.1-0.4B params, seq 1024, ~7-20B tokens, single RTX 4090 / 24GB. Proxy = hidden width 256 (EleutherAI/Cerebras nanoGPT-mup base_width; ~40M-class), ~20 tok/param, ~200-sample random search over base_init_std / base_lr / embedding_mult / output_logit_mult. muP validity established by COORDINATE CHECK: train >=2 widths for ~10 steps and confirm per-layer activation magnitudes are width-invariant before transferring. Multiplier is (single-run loss/tokens-to-target improvement) x (sweep-FLOPs avoided / pretrain-FLOPs); at 0.1-0.4B the sweep-avoided term is small because the baseline's small sweep is already cheap on one GPU, so the headline GPT-3 'tune for ~7% of one run' (14x) does NOT transfer down to our scale.",
+   "citations": [
+    "arXiv:2203.03466 (Tensor Programs V / muTransfer, Yang et al.) — GPT-3 6.7B tuned from a 40M proxy at ~7% of pretraining compute, matching/approaching published 13B",
+    "arXiv:2304.03208 (Cerebras-GPT, Dey et al.) — muP vs SP at 111M-2.7B: average 0.43% lower Pile test loss, 1.7% higher downstream accuracy, and muP scaling-law deviation 0.04% vs SP 0.66% (predictability is the larger effect)",
+    "github.com/EleutherAI/nanoGPT-mup + blog.eleuther.ai/mutransfer (Practitioner's Guide) — open muP port, base_width 256, coordinate-check recipe",
+    "arXiv:2505.02222 (Practical Efficiency of Muon, Essential AI) — first empirical Muon+muP: complementary not redundant; Muon-on-2D-weights / AdamW-on-embeddings split is orthogonal to muP's width-transfer role; muP still needed for LR/WD transfer across width"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The claim already self-applies the scale-mismatch correction explicitly: it cites the GPT-3 14x headline only to reject it, then anchors to Cerebras-GPT (111M-2.7B, arXiv:2304.03208) as the only published muP-vs-SP head-to-head in the 0.1-0.4B band, yielding 0.43% lower Pile loss. The 1.02x multiplier is derived from that small-scale evidence, not from the 6.7B GPT-3 result.",
+    "The sweep-FLOPs-avoided term is explicitly discounted for this scale: the claim acknowledges that at 0.1-0.4B on one 4090, the baseline small LR sweep is already cheap, so the 'tune for 7% of one run' savings story does not transfer. The multiplier is adjusted down accordingly and presented as such.",
+    "The primary benefit at this scale is correctly reframed as variance reduction and one-shot LR correctness (scaling-law deviation 0.04% vs SP 0.66%), not tokens-to-target speedup. This is consistent with the scale-mismatch lens: the large-scale benefit is FLOPs-avoided on a multi-GPU sweep; the small-scale benefit is robustness, and the claim does not conflate the two.",
+    "No concrete checkable flaw is visible through the scale-mismatch lens: the 1.02x number is already the small-scale number from small-scale evidence. A refutation would require evidence that the Cerebras-GPT 0.43% figure is itself a large-scale artifact or that the coordinate-check validity condition fails at 0.1B widths, neither of which is suggested by the cited sources.",
+    "muP is a pure optimizer/init rescaling algorithm — its entire compute path (forward, backward, AdamW/Muon step with rescaled LR) runs on standard bf16 matmuls available on sm89. No H100-exclusive instruction is invoked.",
+    "The claim explicitly uses bf16 throughout. FP8 via transformer-engine silently falls back to bf16 on sm89, but the claim never enters the FP8 path — both baseline and muP-enhanced runs land on the same bf16 kernel stack, so the fallback is irrelevant."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed_multiplier of 1.02x and surviving_multiplier of 1.01x on the axis 'data_efficiency' are not stated in any of the four citations — no source uses this framing or reports this specific ratio.",
+     "The primary efficiency claim in arXiv:2203.03466 (muTransfer) is about hyperparameter-search compute cost reduction (proxy search = ~7% of one pretraining run), not per-token training data efficiency. These are different axes.",
+     "The closest evidence for per-token data efficiency is arXiv:2304.03208 (Cerebras-GPT): muP vs SP at 111M–2.7B params shows 0.43% lower Pile test loss and 1.7% higher downstream accuracy with the same training tokens. This is real but does not map to a 1.02x data efficiency multiplier as conventionally defined (tokens-to-loss-target ratio).",
+     "The EleutherAI blog and nanoGPT-mup repo are confirmed real resources but report efficiency only in HP-search cost (2x compute savings framing), not in per-token training data efficiency."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Multi-token-prediction (MTP) auxiliary heads as a PRETRAIN objective (n independent next-n-token heads on a shared trunk; denser per-token supervision)",
+   "axis": "data_efficiency",
+   "claimed": 1,
+   "surviving_multiplier": 1,
+   "contested": false,
+   "refutes": 0,
+   "baseline": "Tokens-to-target-quality at fixed token budget for our bf16-AdamW-dense next-token (NTP) decoder LM, 0.1-0.4B params, seq 1024 (the 0.37B/20,201 tok/s paced core, evaluated on per-token learning signal not step throughput)",
+   "conditions": "At our scale (0.1-0.4B), MTP-as-pretrain-quality-lever yields NO data-efficiency gain and the evidence leans <1.0 (mild quality REGRESSION vs NTP). Meta 2404.19737 trained six sizes 300M-13B and states verbatim that MTP models are \"worse than the baseline for small model sizes, but outperform the baseline at scale\"; the +12%/+17% HumanEval/MBPP gains are the 13B result and \"increasingly useful for larger model sizes.\" Our 0.1-0.4B envelope sits below even their smallest (300M) tested point. The DeepSeek-V3 \"densifies training signals / improves data efficiency\" claim is from a 671B MoE and does not transfer down ~3 orders of magnitude; its >80% MTP1 acceptance / ~1.8x is an INFERENCE number, not small-model pretrain quality. TOP (2508.19228) independently pretrained NTP vs MTP vs DeepSeek-MTP at 340M/1.8B/7B (brackets us) and found MTP \"shows inconsistent improvements, underperforming in standard NLP benchmarks\" with \"exact future token prediction too difficult as an auxiliary loss\" — they invented TOP precisely because MTP fails as a sub-1B quality lever. Step-throughput is ~unaffected (Meta's sequential detach() trick keeps training-time overhead near zero), so the honest axis is data_efficiency and the honest number is 1.0x. Survey prior tested, not assumed: corroborated and strengthened by a second pretrain study. MTP correctly re-staged by us to a speculative-decode drafter (inference axis), not a pretrain data-efficiency lever.",
+   "citations": [
+    "arXiv:2404.19737 (Gloeckle et al., Meta — Better & Faster LLMs via Multi-token Prediction)",
+    "arXiv:2412.19437 (DeepSeek-V3 Technical Report — MTP training objective)",
+    "arXiv:2508.19228 (Zuhri et al. — Predicting the Order of Upcoming Tokens / TOP; tests NTP vs MTP vs DeepSeek-MTP at 340M/1.8B/7B)",
+    "github.com/zaydzuhri/token-order-prediction (TOP reference repo)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The claimed 1.0x is already the ceiling, not an extrapolated large-scale number: Meta 2404.19737 explicitly tested 300M–13B and found MTP 'worse than the baseline for small model sizes.' Our 0.1–0.4B envelope sits below their smallest tested point, so the +12%/+17% headline is a 13B number that was never claimed to transfer down.",
+    "DeepSeek-V3's 'data efficiency' framing originates at 671B MoE (~3 orders of magnitude above our scale) and the ~1.8x figure is an inference acceptance-rate metric, not a pretrain quality measurement at any scale. Borrowing it for pretrain data-efficiency at 0.1–0.4B would be a scale-mismatch; the claim correctly does not do so.",
+    "TOP (2508.19228) independently measured NTP vs MTP at 340M — directly inside our envelope — and found MTP underperforms on standard NLP benchmarks, citing 'exact future token prediction too difficult as an auxiliary loss' at sub-1B. This corroborates the 1.0x ceiling from a same-scale pretrain study, not a downscaled large-model extrapolation.",
+    "The claim's own framing ('honest lean slightly <1.0, reported as 1.0 to stay conservative on the no-help conclusion') is the correct direction: scale-mismatch lens finds a mild regression bias, not a positive effect. 1.0 is the conservative ceiling, consistent with both cited pretrain studies at or near our scale. No upward inflation is present to refute.",
+    "MTP-as-pretrain adds n extra vocab-sized logit heads using standard BF16 GEMM and backward-pass accumulation. These matrix shapes ([seq*batch, hidden] x [hidden, vocab]) execute in full fidelity on sm89 (Ada / RTX 4090). No H100/Hopper-specific instruction path (WGMMA, sm90 persistent kernels, H100 FlashAttention-3 variants) is invoked.",
+    "Meta's sequential detach() trick — the mechanism that keeps per-step overhead near zero — breaks the CUDA graph at each head boundary. This degrades CUDA graph capture efficiency identically on sm89 and sm90; neither chip has a structural advantage here. The near-zero-overhead claim survives on the 4090."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed multiplier is 1.0x (no data efficiency gain at <=1B / consumer GPU scale). All four citations are real and locatable on the web.",
+     "arXiv:2404.19737 (Gloeckle et al.) reports 'higher sample efficiency' qualitatively but quantifies only benchmark improvements at 13B scale (12-17% on code). Explicitly notes gains are more pronounced at larger model sizes, implying minimal gains at <=1B. No sub-1B experiments reported. No specific data-efficiency multiplier stated.",
+     "arXiv:2412.19437 (DeepSeek-V3) states MTP 'may improve data efficiency' but gives no quantitative data efficiency metric. All ablation experiments are at 15.7B–228.7B parameter scales — far outside the <=1B target scale. Cannot confirm or deny a 1.0x multiplier at small scale.",
+     "arXiv:2508.19228 (Zuhri et al.) directly tested at 340M, 1.8B, and 7B scales and explicitly states 'MTP does not seem to improve overall language modeling performance on every standard NLP task' and 'MTP does not seem to work on smaller models.' Small mixed gains at 340M (e.g., ARC +1.02, SciQ +2.5 percentage points) but inconsistent across benchmarks. This is the strongest evidence for the 1.0x claim at <=1B scale — MTP provides no reliable data efficiency improvement — but the paper does not state a numeric multiplier of 1.0x explicitly."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "BitNet b1.58 ternary (1.58-bit) from-scratch quantization-aware pre-training",
+   "axis": "memory_enables_batch",
+   "claimed": 1,
+   "surviving_multiplier": 1,
+   "contested": true,
+   "refutes": 1,
+   "baseline": "Our receipted 0.37B decoder LM, seq 1024, bf16 + dense AdamW, 20,201 tok/s paced on one RTX 4090 24GB — specifically the TRAINING-TIME memory budget (master/shadow weights + fp32 AdamW optimizer state + activations) that sets the max batch size.",
+   "conditions": "From-scratch QAT on one 4090 at 0.1-0.4B, seq 1024. BitNet trains with BitLinear: bf16 shadow/master weights are retained and quantized to ternary {-1,0,+1} ON the forward pass via STE; the ternary values are derived, not the stored trainable parameter. So training memory is dominated by the SAME consumers as the bf16-AdamW baseline: bf16 master weights (~2 B/param), fp32 AdamW m+v (~8 B/param), plus activations (bf16/int8). None of these shrink during training — the 3.55x GPU-memory and 2.71x latency wins reported for BitNet are INFERENCE-only (ternary weights packed, no optimizer/master copy). There is therefore no weight-residency headroom during training to convert into larger batch -> memory_enables_batch multiplier is ~1.0x. Separately, step-throughput is ~0.8x (SLOWER): the onebitllms/Falcon-Edge team estimate ~20% pre-training overhead vs non-BitNet even with optimized Triton activation_quant/weight_quant kernels, because of the extra per-step quantize/STE work on top of the normal bf16 backward. Quality caveat compounds this at our scale: BitNet b1.58 only reaches fp16 parity near ~3B params (at 700M it is ~0.5 perplexity worse; gap grows below that), so 0.1-0.4B from-scratch ternary would also pay an accuracy penalty for benefits that only land at inference, not training.",
+   "citations": [
+    "arXiv:2402.17764 (The Era of 1-bit LLMs: All Large Language Models are in 1.58 Bits / BitNet b1.58)",
+    "arXiv:2502.11895 (Continual Quantization-Aware Pre-Training: when to transition from 16-bit to 1.58-bit BitNet pre-training)",
+    "HF blog tiiuae/falcon-edge (Falcon-Edge 1.58bit models; ~20% pre-training overhead estimate)",
+    "github.com/tiiuae/onebitllms (training/fine-tuning toolkit; Triton activation_quant/weight_quant kernels)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The memory_enables_batch=1.0x claim is correctly bounded to the 0.1-0.4B training regime and does not import any large-scale measurement without adjustment. The core argument — BF16 master weights + fp32 AdamW state + activations are identical between BitNet and the dense baseline during training — is mechanism-level and scale-invariant, not an extrapolation from 7B+. At 0.1-0.4B on a 24GB 4090, both regimes sit well below the VRAM ceiling (estimated peak ~4-8GB weights+optimizer+activations at batch 32-64), so neither unlocks additional batch, and neither leaves the other behind. This non-binding-constraint conclusion is actually STRONGER at small scale, not weaker.",
+    "The 3.55x inference-memory and 2.71x latency multipliers that ARE measured at 2B+ (arXiv:2504.12285, Falcon-Edge blog) are correctly excluded from training-time analysis. The claim does not extrapolate those inference gains into a training batch multiplier — it explicitly attributes them to inference-only. No scale-mismatch error here.",
+    "The ~20% step-throughput overhead (Falcon-Edge/onebitllms) cited in the claim IS a potential scale-mismatch on the step_throughput axis (Falcon-Edge trains 1B-3B on datacenter hardware, not 0.1-0.4B on a 4090). The local state file verify_ste_cost.md and the gpu-math multiplier table (surviving_multiplier: 0.97) both show STE overhead shrinks to ~1-3% at 0.1-0.3B, making the 20% figure an upward overestimate. However, this concern is on the step_throughput axis, not the memory_enables_batch axis under evaluation. The claim separately flags step_throughput at ~0.8x (using the 20% overhead) but evaluates memory_enables_batch independently at 1.0x. The scale-mismatch does not contaminate the axis being asked about.",
+    "No published BitNet b1.58 training result from a 0.1-0.4B single-GPU 4090 run exists in the literature or in local receipts, so the 1.0x multiplier on memory_enables_batch is inferred from mechanism (not measured). This is acknowledged as medium confidence in the claim. But this absence does not constitute a scale-mismatch flaw — it is a general evidence-gap, and the mechanistic argument (identical optimizer state footprint) does not depend on scale in the relevant range. The scale-mismatch lens specifically checks whether a large-scale measurement was incorrectly assumed to hold at small scale; here the mechanism holds across scales and no such extrapolation error is present.",
+    "BitNet b1.58 QAT training uses bf16 shadow weights + fp32 AdamW + INT8 absmax activations + ternary absmean weights — this is a BF16/INT8 operation, not an FP8 operation. The training path never touches transformer-engine FP8 gemm, so the well-known sm89 limitation (transformer-engine FP8 requires sm90/Hopper; silently falls back to BF16 on sm89) is irrelevant here.",
+    "The onebitllms Triton kernels (activation_quant, weight_quant) are documented to run on 8xA10G (sm86) in the reference training example — sm86 is strictly lower than sm89 (RTX 4090). This is direct evidence the optimized Triton quantization kernels are NOT Hopper-gated and will execute without degradation on the 4090."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed/surviving multiplier is 1, meaning the axis 'memory_enables_batch' is a baseline existence claim: ternary quantization reduces memory enough to enable a training batch at all on consumer hardware. This weak claim is partially supported.",
+     "arXiv:2402.17764 confirms large memory reductions (3.55x at 3B, 11x batch at 70B) but all measurements are at multi-GPU data-center scale (80GB A100s), not at <=1B params on a single consumer GPU — scale mismatch.",
+     "arXiv:2502.11895 confirms 8-16x memory footprint reduction (inference, 1B OLMo) but never compares batch sizes across precisions; all training experiments use identical batch sizes regardless of precision, so it does not directly measure memory_enables_batch.",
+     "HF blog tiiuae/falcon-edge confirms only ~20% pre-training overhead estimate for 1B/3B Falcon-Edge models; provides no memory or batch size numbers and does not measure whether the memory saving enables a larger or any batch."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Activation/gradient checkpointing (rematerialization): drop intermediate activations on the forward pass and recompute them during the backward pass, trading ~one extra forward pass of compute for sublinear (O(sqrt(n))) activation memory.",
+   "axis": "memory_enables_batch",
+   "claimed": 1,
+   "surviving_multiplier": 1,
+   "contested": false,
+   "refutes": 0,
+   "baseline": "0.37B core (c03: hidden 1024, 20 layers, 16 heads, vocab 32k), seq 1024, batch 4, bf16 dense AdamW, gradient checkpointing ALREADY ON = 20,201 tok/s paced (receipt fp19-bench-20260611T024648Z.json, RTX 4090 governed VRAM_FRACTION 0.80).",
+   "conditions": "RTX 4090 24GB, single GPU, 0.1-0.4B decoder, seq 1024, bf16 dense AdamW. DECISIVE FACT: the receipted c03-bf16 run held 17.18 GiB FREE VRAM post-warmup at batch 4 with checkpointing ON, under an 0.80 cap (~19.2 GB usable). At 368M/seq 1024 the footprint is dominated by weights (~0.74 GB) + grads + fp32 AdamW states (~5-6 GB total); activations are a few GB and are the ONLY thing checkpointing touches. The model is NOT activation-memory-bound: ~17 GB sits idle. So checkpointing frees memory that the baseline does not need, and the batch ceiling here is set by COMPUTE economics (c03 8-day envelope ratio only 1.66-1.9x = throughput is the scarce resource), not by memory. Larger batch does not raise tok/s on a compute-bound model (it only amortizes per-step launch overhead marginally and shifts optimizer dynamics). Hence net memory-enables-batch multiplier = ~1.0x. HONEST SECOND-ORDER NOTE: because 17 GB is free, checkpointing is not required at all at this scale — turning it OFF would REMOVE the ~25-30% recompute tax (Chen et al. 1604.06174: one extra forward pass ~= 30% time) and RAISE throughput. So on the step_throughput axis the technique is net-NEGATIVE here (~0.75-0.80x relative to a no-ckpt run that still fits); on the memory_enables_batch axis it is ~1.0x (irrelevant — batch not memory-limited). The technique only earns its tax when activation memory is the wall (long seq, much larger batch, or a multi-B model) — none of which is our 368M/seq-1024 regime. The 'survey prior' that checkpointing 'enables larger batch' is FALSE at this scale because there is no memory wall to clear.",
+   "citations": [
+    "arXiv:1604.06174 (Chen, Xu, Zhang, Guestrin — Training Deep Nets with Sublinear Memory Cost; original gradient-checkpointing work: O(sqrt(n)) activation memory for ~one extra forward pass, ~30% time; 1000-layer ResNet 48GB->7GB at +30% runtime)",
+    "torch.utils.checkpoint / model.gradient_checkpointing_enable() (PyTorch + HuggingFace Transformers implementation; the exact API used at fp19_bench.py:113)",
+    "Local receipt: B:/M/avir/leo/state/nc-ladder/receipts/fp19-bench-20260611T024648Z.json (c03-bf16 = 20,201 tok/s paced, 17.18 GiB free VRAM post-warmup, ckpt ON)",
+    "Local bench source: B:/M/avir/leo/state/nc-ladder/scripts/fp19_bench.py (line 113 gradient_checkpointing_enable; flag: 'gradient checkpointing ON, memory-for-compute trade is part of the measured rate')"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The primary citation (arXiv:1604.06174) studies checkpointing at 1000-layer ResNet / 48GB activation scale where activation memory is genuinely the wall. The claimed multiplier does NOT import that large-scale positive result and apply it here — it already deflates to 1.0x, which is the correct answer at 368M / 20 layers / seq 1024.",
+    "Receipt fp19-bench-20260611T024648Z.json confirms 17.18 GiB free VRAM post-warmup at batch 4 with checkpointing ON. At this scale, activation memory per step is roughly 20 layers * 4 * 1024 * 1024 * 2 bytes = ~160 MB — not a wall. The large-scale regime where checkpointing earns its tax (activation footprint competes with weights+optimizer states) does not apply.",
+    "The 30% recompute-cost figure from Chen et al. is architecturally real at this scale (one extra forward pass is still one extra forward pass), but the claim correctly identifies this as a net-negative on the step_throughput axis (~0.75-0.80x vs a no-ckpt run that still fits) rather than importing the large-scale 'enables larger batch' framing. No scale-mismatch in the overclaim direction.",
+    "The claimed 1.0x on memory_enables_batch is receipt-grounded at the exact target scale (368M, single 4090, batch 4, seq 1024) — not extrapolated from 7B+ or multi-GPU results. Scale-mismatch lens finds no concrete flaw: the deflation is already correct and the evidence is local to the target regime.",
+    "Gradient checkpointing is a pure PyTorch autograd mechanism (torch.autograd.graph.saved_tensors_hooks). It requires zero H100/Hopper features: no transformer-engine, no FP8, no sm90 intrinsics, no NVLink, no HBM3. It predates modern GPU generations (Chen et al. 2016) and runs identically on any CUDA device.",
+    "Ada Lovelace (sm89, RTX 4090) supports bf16 natively at full tensor-core throughput. This is not a Hopper-exclusive capability. The bench uses plain model.to(torch.bfloat16) with standard AdamW — confirmed in fp19_bench.py lines 112-115. No transformer-engine path is present."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed and surviving multiplier is 1, meaning the technique is credited only with enabling training (not multiplying throughput), so there is no numeric multiplier to dispute. The citations do accurately describe the mechanism.",
+     "arXiv:1604.06174 is confirmed at https://arxiv.org/abs/1604.06174 — authored by Chen, Xu, Zhang, Guestrin, reporting O(sqrt(n)) activation memory with ~one extra forward pass (~30% runtime overhead). The 48GB->7GB figure for a 1000-layer ResNet is explicitly confirmed by the paper.",
+     "The 1604.06174 experiments used a Titan X GPU (flagship/enthusiast circa 2016, not a modern consumer fine-tuning GPU like RTX 4090), and tested deep ResNets by layer depth — no parameter count reported. Scale comparability to '<=1B params, single consumer GPU LLM fine-tuning' is not directly established by the paper.",
+     "torch.utils.checkpoint and HuggingFace gradient_checkpointing_enable are confirmed APIs. HuggingFace documentation cites ~20% throughput penalty (vs. the citation's ~30%), but provides no specific memory-reduction multiplier or batch-size number for consumer GPUs."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "FlashAttention-2 (FA2) / FlashAttention-3 (FA3)",
+   "axis": "step_throughput",
+   "claimed": 1,
+   "surviving_multiplier": 1,
+   "contested": false,
+   "refutes": 0,
+   "baseline": "Our receipted c03-bf16: 0.37B-param Llama decoder (hidden 1024, 20 layers, 16 heads, vocab 32k, tied embeds), batch 4, seq 1024, bf16 AdamW dense full step, grad-ckpt ON, RTX 4090 governed = 20,201 tok/s paced (fp19-bench-20260611T024648Z.json).",
+   "conditions": "Our baseline ALREADY runs a Flash-style fused attention path: fp19_bench.py builds HuggingFace LlamaForCausalLM with no attn_implementation override, and HF defaults to attn_implementation=\"sdpa\" for torch>=2.1.1; PyTorch SDPA auto-dispatches to its fused FlashAttention CUDA backend on Ada (bf16 + causal mask). So explicitly enabling FA2 over our baseline = ~1.0x (already present). Two reasons the headline FA numbers do not transfer: (1) FA3 is Hopper-only (requires WGMMA + TMA hardware; its 1.5-2.0x is H100-FP16/FP8) and CANNOT run on Ada/4090 at all. (2) Even the counterfactual FA2-vs-NAIVE (materialized softmax(QK^T)V) is small at our scale: the FlashAttention-1 \"3x on GPT-2 seq-1K\" figure was a larger model (hidden 1600). At our config the attention-core matmuls are only ~10.2% of forward FLOPs (inflated downward further by the fat tied 32k-vocab logit term and the dense MLP); the absolute Amdahl ceiling with attention compute driven to ZERO is 1.11x on forward and LOWER on a full training step (bwd-symmetric GEMMs + AdamW are non-attention). A realistic FA2-vs-naive end-to-end bracket at our config is 1.07-1.15x. At seq 1024 attention is a modest FLOP fraction, so the end-to-end multiplier is far below the attention-kernel multiplier. SURVEY-PRIOR TEST: any survey claim that FA2 is a multi-x step-throughput lever at our 0.1-0.4B / seq-1024 scale is REJECTED -- it conflates the attention-kernel speedup with end-to-end, and assumes a naive baseline we do not have.",
+   "citations": [
+    "arXiv:2205.14135 (FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness)",
+    "arXiv:2307.08691 (FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning)",
+    "arXiv:2407.08608 (FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision; Hopper-only)",
+    "Dao-AILab/flash-attention (repo; FA3 requires H100/H800, CUDA>=12.3, not Ampere/Ada)",
+    "HuggingFace transformers docs: attn_implementation default 'sdpa' for torch>=2.1.1; torch.nn.functional.scaled_dot_product_attention fused FlashAttention backend",
+    "fp19-bench-20260611T024648Z.json (our receipted 4090 baseline)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The claimed multiplier is 1.0x, not a large-scale number assumed to hold at small scale. The claim explicitly argues that the baseline already uses SDPA-fused FlashAttention and therefore FA2 adds nothing incremental — this is a scale-aware argument, not a scale-blind one.",
+    "The FA2 headline speedups (2-3x attention kernel) originate from papers benchmarked at larger models and longer sequences (e.g., GPT-2 hidden 1600, seq 2048+), and the claim explicitly accounts for this by computing attention FLOP fraction at the exact config: ~10.2% of forward FLOPs at hidden 1024 / seq 1024 / vocab 32k with tied embeds. This Amdahl ceiling of 1.11x forward is arithmetic from the frozen config, not extrapolated from a large-scale receipt.",
+    "FA3's 1.5-2x figures come exclusively from Hopper (H100) benchmarks. Applying those to a 4090 (Ada) would be a scale-mismatch error, but the claim correctly identifies FA3 as inapplicable on Ada entirely — the hardware requirement (WGMMA + TMA) is not met. No scale-mismatch flaw here.",
+    "The one place a scale-mismatch argument could land is the FA2-vs-naive counterfactual bracket of 1.07-1.15x: the FlashAttention-1 '3x' figure was measured at hidden 1600 (GPT-2 large), which has a higher attention FLOP fraction than hidden 1024. The claim already corrects for this, noting the '3x on GPT-2 seq-1K' does not transfer to the smaller config. The bracket is therefore a downward-adjusted scale-aware estimate, not an unadjusted large-scale transplant.",
+    "No concrete checkable flaw is visible through the scale-mismatch lens: the multiplier of 1.0x is supported by the fact that SDPA-fused FA is already running on the 4090 baseline, and the residual counterfactual (1.07-1.15x) is itself a small-scale-corrected number. The claim is internally consistent with the scale it targets.",
+    "FA3 requires WGMMA + TMA + FP8-hardware-accumulation, all sm90-only (Hopper). Ada is sm89. The claim explicitly assigns FA3 zero value on 4090. This is correct hardware classification, not a flaw."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed_multiplier is 1.0 (no throughput gain), not a speedup claim. This is consistent with what the citations actually support: HuggingFace transformers defaults to SDPA (PyTorch fused FlashAttention backend) for torch>=2.1.1, so a 4090 baseline already runs FA2-equivalent attention by default — explicitly enabling flash_attention_2 attn_implementation would yield ~1x delta.",
+     "FA3 is H100/H800 Hopper-only (requires CUDA>=12.3, SM90 architecture per the repo README and arXiv:2407.08608). The RTX 4090 is Ada (SM89), not Hopper. FA3 cannot run on a 4090 at all, so its multiplier on this hardware is undefined/inapplicable, not 1x.",
+     "FA1 (arXiv:2205.14135) reports up to 3x wall-clock speedup on GPT-2 vs standard attention on A100, not step-throughput on <=1B params on a consumer GPU. Scale mismatch: datacenter GPU, different axis.",
+     "FA2 (arXiv:2307.08691) reports 225 TFLOPs/s on A100 (8-GPU, 1.3B-2.7B params), ~2x over FA1. No RTX 4090, no <=1B single-GPU step-throughput number is reported in the paper."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Sequence packing / no-pad batching (concatenate short docs to fill seq 1024 with block-diagonal/varlen masked attention) for small decoder-LM pretrain",
+   "axis": "data_efficiency",
+   "claimed": 1,
+   "surviving_multiplier": 1,
+   "contested": false,
+   "refutes": 0,
+   "baseline": "Our receipted 0.37B dense decoder, seq 1024, bf16-AdamW, 20,201 tok/s paced — assumed (per standard small-LM pretrain practice) to already be a CONCATENATED token-stream chunked into full seq-1024 blocks, i.e. ~0% padding by construction.",
+   "conditions": "RTX 4090 24GB, single GPU, 0.1-0.4B dense decoder, seq 1024, bf16. The multiplier is exactly 1/(1 - padding_fraction) of the PADDED baseline; it is purely a function of the doc-length distribution AND of whether the baseline pads at all. Two regimes: (A) Causal-LM PRETRAIN from a corpus — the standard nanoGPT/Megatron recipe already concatenates the whole corpus into one stream and chunks to full 1024-blocks, so padding_fraction ~= 0 and the INCREMENTAL multiplier from 'adding packing' = 1.0x. This is the dominant case and matches a 'tok/s paced' baseline. (B) IF the baseline instead pads each document to 1024 (treating docs as discrete examples, the BERT/SFT-style baseline Krell/PackedBERT measured), then with a typical corpus whose median doc << 1024 tokens padding_fraction is large and packing yields up to ~2x (Krell BERT phase-2). But that padded baseline is a strawman for decoder pretraining where concatenation is free and standard. Masked/block-diagonal packing (flash_attn_varlen_func / cu_seqlens, HF Transformers 4.44 masked packing) vs naive concatenation buys QUALITY (no cross-document contamination), NOT throughput — throughput is the same as concatenation. Conservative regime-honest verdict for OUR setup: 1.0x.",
+   "citations": [
+    "arXiv:2107.02027 (Krell et al., Efficient Sequence Packing without Cross-contamination — 2x speedup for BERT phase-2 pretrain; reports up to 50% padding on Wikipedia, up to 89% on GLUE-cola; this is the encoder/padded-example baseline, not a concatenated causal-LM stream)",
+    "arXiv:2407.09105 (Enhancing Training Efficiency Using Packing with Flash Attention — masked packing added to HF Transformers 4.44; masking is for quality/no-contamination, not throughput)",
+    "github.com/Dao-AILab/flash-attention (flash_attn_varlen_func + cu_seqlens: block-diagonal varlen attention over packed sequences with zero padding)",
+    "github.com/karpathy/nanoGPT (canonical small-decoder pretrain recipe: concatenate corpus into one token stream, chunk into fixed seq blocks — the ~0%-padding baseline that makes packing's incremental gain 1.0x)",
+    "huggingface.co/blog/sirluk/llm-sequence-packing (LLM packing implementation: concat to fill context, reset position_ids, block-diagonal mask to prevent cross-doc attention)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The headline 2x-9x packing numbers (Krell arXiv:2107.02027, BERT phase-2) come from BERT-large (~340M params) on padded-document baselines — not from 7B+ or multi-GPU setups. The scale direction is inverted from the usual scale-mismatch pattern: the large-multiplier evidence is AT small scale, not above it. There is no upward extrapolation error to attack.",
+    "The 1.0x claim is scale-neutral by construction: it follows from padding_fraction~=0 in the concatenated-stream baseline, which holds equally at 0.1B, 0.4B, and 7B when using the nanoGPT/Megatron concatenation recipe. Model size does not appear in the formula; no scale-dependent correction is warranted.",
+    "One small-scale-specific overhead the claim omits: building cu_seqlens / varlen bookkeeping for masked packing (flash_attn_varlen_func) adds per-step overhead that is proportionally larger on fast small-model steps (0.1B, ~2-3s/step) than on slow large-model steps. However, this overhead is only relevant for Regime B (masked packing over a padded baseline). In Regime A (concatenated stream, ~0% padding), there is nothing to pack and no cu_seqlens overhead — the claim's 1.0x is unaffected.",
+    "The Krell 50-89% padding figures (Wikipedia / GLUE-cola) are document-level statistics that do not transfer to decoder-LM pretraining at any scale, because decoder pretraining concatenates the corpus rather than treating each document as a discrete padded example. This regime distinction is scale-independent.",
+    "No local 4090 receipt exists for packing vs concatenation, but the absence is uninformative here: the 1.0x follows from a structural argument (baseline already has 0% padding) that does not require empirical validation at this scale — any measured delta would be noise around 1.0x by definition if the loader is correct.",
+    "flash_attn_varlen_func (cu_seqlens / block-diagonal masked attention) is sm80+ and fully supported on sm89 (Ada/RTX 4090); no Hopper-only instruction path (WGMMA, TMA) is invoked."
+   ],
+   "citation_verification": {
+    "overall": "SUPPORTED",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed/surviving multiplier is 1.0x (no gain over baseline), not a positive speedup claim. The citations collectively support this null result for small decoder-LM pretrain.",
+     "arXiv:2107.02027 (Krell et al.) explicitly states that causal/decoder LMs 'do not have this issue to the same degree' as encoders because they can 'cut sequences arbitrarily,' which 'completely trivializes the packing problem for models based on causal attention.' This directly supports the 1.0x surviving multiplier.",
+     "github.com/karpathy/nanoGPT (the canonical small-decoder recipe) already concatenates the entire corpus into one token stream with no padding between documents — it IS the ~0%-padding baseline. Adding block-diagonal masking on top of this baseline yields no throughput gain (1.0x), only quality/contamination prevention.",
+     "arXiv:2407.09105 reports 1.5x–4.6x gains from packing, but this is on 7B+ models on 8x A100-80GB, not small (<1B param) decoder LMs on a single consumer GPU. The axis tested is fine-tuning throughput, not pretrain data efficiency for small causal LMs."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Liger-Kernel Fused-Linear-Cross-Entropy / Cut-Cross-Entropy (chunked online CE, never materializing the full (b·s·vocab) logit matrix) + fused RMSNorm/RoPE/SwiGLU",
+   "axis": "memory_enables_batch",
+   "claimed": 1,
+   "surviving_multiplier": 1,
+   "contested": false,
+   "refutes": 0,
+   "baseline": "Our receipted c03-bf16 owned-core pretrain step: 0.37B-param Llama decoder (h=1024, 20 layers, vocab 32k, seq 1024), bf16 AdamW dense, batch 4, grad-checkpointing ON = 20,201 tok/s paced, 17.18 GiB free post-warmup on RTX 4090 under 0.8 governor cap (receipts/fp19-bench-20260611T024648Z.json, c03-bf16).",
+   "conditions": "RTX 4090 24GB, single GPU, d_model=1024, vocab=32000, seq=1024, batch 4, bf16, grad-checkpointing ON, torch.compile already in stack. The hypothesis (logit-CE term dominates the activation peak, so 'VRAM not binding' is wrong) is TESTED and FAILS at THIS scale: it holds only at ~256k vocab (Gemma/Llama-3 class), 8x larger than our 32k.",
+   "citations": [
+    "arXiv:2410.10989 (Liger Kernel: FLCE; 16.8 GB logit tensor cited at vocab 256k / seq 4096 / batch 8 — the regime where the vocab term dominates)",
+    "arXiv:2411.09009 (Cut Cross-Entropy; Gemma 2 2B loss footprint 24 GB -> ~1 MB, classifier head 28 GB -> 1 GB — all at vocab 256k)",
+    "github.com/linkedin/Liger-Kernel",
+    "github.com/unslothai/cut-cross-entropy",
+    "arXiv:2408.00118 (Gemma 2: 256k vocab — establishes the cited papers' regime is 8x our 32k)",
+    "local receipt fp19-bench-20260611T024648Z.json c03-bf16 (17.18 GiB free at batch 4 = constraint not binding at our scale)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The cited benchmark evidence for Liger FLCE and CCE comes entirely from large-vocab regimes: vocab 256k at seq 4096 batch 8 (Liger paper) and Gemma 2 2B at vocab 256k (CCE paper). The published memory savings (16.8 GB logit tensor, 24 GB->1 MB CCE reduction) are not portable to vocab 32k.",
+    "However, the claim already performs this scale correction explicitly. It calculates b*s*vocab at our regime vs the cited regime (roughly 46x smaller) and derives that the logit materialization peak at batch 4 / seq 1024 / vocab 32k is approximately 0.5 GB, not 16+ GB. The 1.0x multiplier is the post-correction number, not a naive extrapolation from the large-scale results.",
+    "The receipted baseline (17.18 GiB free at batch 4, paced c03-bf16) directly confirms the scale-corrected conclusion: no VRAM wall exists at this scale. A scale-mismatch argument could only stand if the large-scale multiplier were being applied without downward correction. It is not.",
+    "The Liger headline throughput gain (roughly 20%) is measured on models where the LM-head GEMM is a large fraction of compute. At 0.37B params d_model=1024 vocab=32k, the LM-head is roughly 9% of parameters. With torch.compile already in stack fusing pointwise ops, the marginal kernel speedup is in measurement noise at this scale. This is consistent with the 1.0x claim and does not expose a new flaw.",
+    "No concrete checkable flaw is visible through the scale-mismatch lens. The scale regime mismatch between the citations and the owned-core target is correctly identified and corrected within the claim itself. The lens validates the reasoning rather than contradicting it.",
+    "Liger FLCE and CCE are Triton-based BF16/FP32 kernels. Triton requires compute capability 8.0+; RTX 4090 is sm89 (8.9), fully in range. No sm90-exclusive instructions (wgmma, TMA, Hopper FP8 GEMM) are exercised by a chunked online-softmax CE reduction. No gpu-class block."
+   ],
+   "citation_verification": {
+    "overall": "SUPPORTED",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed/surviving multiplier is 1 — meaning these techniques do NOT unlock extra batch headroom at 32k vocab / 4090 scale, because the vocab term does not dominate there. The citations correctly support this null result by establishing that the large memory effects (16.8 GB logit tensor, 24 GB->1 MB) only arise at 256k vocab, which is 8x the regime of the work being described.",
+     "arXiv:2410.10989 explicitly states the 16.8 GB logit tensor figure at vocab 256k / seq 4096 / batch 8, and reports >4x memory reduction from FLCE for common vocab sizes including 32k — but all benchmarks on A100 80GB, not consumer GPU.",
+     "arXiv:2411.09009 reports batch size multipliers of ~10x for GPT-2 (vocab ~50k) and ~3x for Phi 3.5 Mini (vocab 32k) at A100 scale, but crucially the 24 GB->1 MB reduction is exclusively at 256k vocab / Gemma 2 2B.",
+     "The local receipt (fp19-bench-20260611T024648Z.json) reporting 17.18 GiB free at batch 4 is unverifiable via web but is cited only to confirm the constraint is not binding at current scale — consistent with the papers' implication that 32k vocab does not create a dominant logit-tensor bottleneck."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "WSD (Warmup-Stable-Decay) LR schedule + critical-batch-size-tracked batch-size ramp (optionally with Muon)",
+   "axis": "data_efficiency",
+   "claimed": 1,
+   "surviving_multiplier": 1,
+   "contested": true,
+   "refutes": 1,
+   "baseline": "Tuned cosine LR schedule + fixed batch size, bf16-AdamW-dense, 0.37B core, seq 1024, single RTX 4090 (our receipted 20,201 tok/s paced bench); tokens-to-fixed-loss at <=20B tokens",
+   "conditions": "0.1-0.4B decoder LM, seq 1024, ONE RTX 4090 (24GB), single-GPU. Two sub-claims tested and both resolve to ~1.0x on tokens-to-fixed-loss: (a) WSD's decay-phase loss drop is the mechanism by which WSD CATCHES UP to cosine, not a gain over it — controlled ablation (arXiv 2410.05192) shows WSD with ~20% decay MATCHES a tuned cosine exactly (3.125 vs 3.125) and a too-short 10% decay LOSES by +3.5% (3.234 vs 3.125); MiniCPM frames WSD as loss-equivalent to cosine while removing preset-token-count, not as a tokens-to-loss win. So isolated LR-schedule contribution to data efficiency vs a tuned cosine = ~1.0x (downside risk if decay fraction mis-set). (b) CBS-tracked batch-ramp (arXiv 2505.23971, OLMo 1B): slightly better loss (2.5433 vs 2.5486) at the SAME 608B tokens with 43% FEWER gradient steps — authors state this is STEP efficiency only, NOT token efficiency. On one GPU there is no second device to fill, so a larger effective batch is just more grad-accum at the same per-token throughput; tokens-to-loss unchanged => 1.0x. Muon does NOT compose as a free additive win: it has its own larger/right-shifted critical batch (arXiv 2507.01598, 2502.16982) that RE-TUNES the ramp rather than stacking, and one report found WSD UNDERPERFORMING cosine under Muon (stable-stage underfitting). Real side benefit (not a multiplier): WSD stable-phase checkpoints are cheaply branchable — one stable run + three short decay branches materializes fully-annealed models at the planned 1B/2B/4B floor-probe budgets, vs three separate cosine runs; this is an orchestration/compute-saving win on the checkpoint plan, not a tokens-to-fixed-loss reduction.",
+   "citations": [
+    "arXiv:2404.06395 (MiniCPM, Hu et al. — WSD scheduler, loss-equivalent to cosine, branchable checkpoints)",
+    "arXiv:2410.05192 (Understanding WSD: River Valley Loss Landscape — WSD~20% decay matches cosine 3.125 vs 3.125; 10% decay +3.5%)",
+    "arXiv:2505.23971 (Critical Batch Size Revisited — OLMo 1B batch-warmup 43% fewer gradient STEPS at same 608B tokens, step-efficiency only)",
+    "arXiv:1812.06162 (McCandlish et al. — gradient noise scale / critical batch size original)",
+    "arXiv:2507.01598 (Convergence Bound and Critical Batch Size of Muon)",
+    "arXiv:2502.16982 (Muon is Scalable for LLM Training)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "WSD evidence (arXiv 2410.05192) comes from 125M-1.3B ablations — within or bracketing the 0.1-0.4B target envelope. The matched-cosine result (3.125 vs 3.125) is not extrapolated down from 7B+; it is measured at scales that directly overlap the claimed operating range. No scale-inflation present in the WSD sub-claim.",
+    "CBS batch-ramp evidence (OLMo 1B, arXiv 2505.23971) is slightly above the 0.4B ceiling but the claimed 1.0x multiplier is already derived from a scale-independent argument: on one GPU, larger effective batch is pure grad-accum at the same per-token throughput, so tokens-to-loss is unchanged regardless of model size. The scale-mismatch lens does not expose new inflation here — the logic holds equally at 0.1B and 1B on a single device.",
+    "A secondary scale-direction observation reinforces the 1.0x verdict rather than weakening it: critical batch size scales with model size (McCandlish et al. arXiv 1812.06162), so at 0.1-0.4B the CBS is smaller and the ramp saves even fewer gradient steps than at 1B. This means the technique is, if anything, weaker at target scale — consistent with the 1.0x claim, not contradicting it.",
+    "Muon evidence (2502.16982) is primarily 1B-7B, and the WSD-underperforms-cosine-under-Muon report originates from larger-scale runs. However, the claim already treats Muon as a negative interaction risk and assigns no positive multiplier from it, so there is no large-scale inflation to refute through this lens.",
+    "WSD is a pure learning-rate schedule (warmup/stable/decay phases) with zero hardware dependency. It runs identically in BF16 on Ada sm89 as on Hopper sm90. No FP8, no Transformer Engine, no Hopper-only kernel is invoked. The 1.0x claim is untouched from the gpu-class lens.",
+    "CBS-tracked batch ramp (arXiv 2505.23971) is gradient noise scale estimation plus dynamic gradient accumulation. Both are pure CPU/software operations; no NCCL collectives, no tensor-parallel communication, no FP8 GEMM are required. The claim correctly identifies the real single-GPU constraint: on one device, a larger effective batch is just more grad-accum at identical per-token throughput, making the published 43% step-efficiency gain uncashable on a 4090 regardless of hardware generation. This is a fundamental single-GPU arithmetic issue, not a missing Hopper feature."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed_multiplier is 1 (no data_efficiency gain), and the citations are partially consistent with that: arXiv:2505.23971 explicitly shows the 43% step reduction is step-efficiency only, NOT token/data efficiency — same 608B tokens consumed. This is correctly described in the claim annotation as 'step-efficiency only'.",
+     "arXiv:2502.16982 Muon ~2x efficiency refers to FLOPs per training run, not tokens-to-loss data efficiency. Axis mismatch: the paper measures compute FLOPs, not training data tokens needed.",
+     "arXiv:2507.01598 is a theoretical SFO-complexity paper with no concrete data-efficiency number at any consumer-GPU scale.",
+     "The River Valley paper (arXiv:2410.05192) qualitatively reports WSD-S outperforming cosine at 0.1B–1.2B scale but the specific numbers cited ('3.125 vs 3.125; 10% decay +3.5%') could not be verified from accessible paper text. If +3.5% is final-loss improvement (not token efficiency), it may partially contradict multiplier=1 on the data_efficiency axis."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "FP8 mixed-precision training on RTX 4090 (Ada sm89) — dynamic tensor-level absmax-scaled FP8 GEMM (LLMQ custom CUDA; torchao float8 tensorwise as the lower-effort path)",
+   "axis": "step_throughput",
+   "claimed": 1.1,
+   "surviving_multiplier": 0.98,
+   "contested": true,
+   "refutes": 2,
+   "baseline": "Our receipted bf16-AdamW-dense bench: 0.37B core = 20,201 tok/s paced (fp19-bench-20260611T024648Z.json), seq 1024, single 4090. Multiplier is on training step throughput (tok/s) at 0.1–0.4B.",
+   "conditions": "0.1–0.4B dense decoder, seq 1024, bf16-master / FP8-GEMM-only (linear layers in transformer blocks cast to E4M3 via JIT absmax scaling; attention/SDPA, LM-head, embeddings, gradient-accumulation kept BF16). The multiplier is a downward extrapolation BELOW LLMQ's smallest measured point (0.5B), so it is an upper-leaning estimate, not a measured datum at our scale. At ~0.37B expect ~1.10–1.15x; at ~0.1B expect ~1.0x (non-GEMM ops dominate). Requires either LLMQ's custom CUDA kernels (real engineering cost) or torchao tensorwise float8 on sm89 (least outlier-robust scaling recipe — divergence risk vs DeepSeek-style fine-grained block scaling, which has NO sm89 kernel). NOT a memory/batch lever here: LLMQ states the FP8 benefit on Ada is computational, not from activation-memory-enabled larger batch, and at 0.1–0.4B 24GB is not the binding constraint.",
+   "citations": [
+    "arXiv:2512.15306 (LLMQ: Efficient Lower-Precision Pretraining for Consumer GPUs, Dec 2025) — measured FP8-vs-BF16 training throughput on RTX 4090 across sizes: 0.5B 20%, 1.5B 42%, 3B 51%, 7B 59%, 14B 54%; states 'For very small models, non-gemm operations contribute significantly to the total running time, so speeding up the GEMMs only provides limited improvements' and that gains do NOT come from larger batch via activation-memory savings; FP8 via JIT tensor-level absmax scaling (custom CUDA, not Transformer Engine)",
+    "NVIDIA/TransformerEngine (repo README + issue #1159 'compute capability 8.9 or higher required for FP8 execution') — current TE advertises FP8 training on Hopper, Ada AND Blackwell at CC>=8.9; this REFUTES the survey-prior 'TE silently falls back to BF16 on Ada'. Issue #15 (Oct 2022, CLOSED) was the OLD '9.x required' rejection, since superseded",
+    "pytorch/ao torchao float8 (docs.pytorch.org/ao training workflow + issue #889) — tensorwise scaling runs on sm89/Ada; rowwise FP8 GEMM kernels are Hopper+; published float8 speedups (~25% tensorwise) are H100/B200, no RTX 4090 numbers in torchao docs",
+    "arXiv:2412.19437 (DeepSeek-V3) — fine-grained block-scaled FP8 recipe (1x128 act / 128x128 weight), <0.25% loss penalty at 671B; the robust recipe, but no sm89 kernel exists for it",
+    "Local prior: state/nc-ladder/research/gpu-math-multiplier-table-2026-06-11.json (FP8-Ada surviving_multiplier 0.96) and nc2-technique-survey-2026-06.md §7 (FP8 SKIP-AT-THIS-SCALE)"
+   ],
+   "confidence": "medium",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "LLMQ's measured data points are 0.5B (1.20x), 1.5B (1.42x), 3B (1.51x), 7B (1.59x), 14B (1.54x) — every single measured point is at 0.5B or larger. The 1.10x claim for 0.37B is a below-minimum-data-point extrapolation. No LLMQ result at 0.1–0.4B exists. The extrapolation direction is correct (gains shrink with scale) but the landing value is speculative.",
+    "LLMQ itself states the scaling mechanism: FP8 speedup is GEMM-only, and 'for very small models, non-GEMM operations contribute significantly to the total running time, so speeding up the GEMMs only provides limited improvements.' This is the textbook scale-mismatch failure mode: the gain is measured where GEMMs dominate (0.5B+), but the extrapolation target (0.1–0.4B, seq 1024) is the regime where GEMM fraction is lowest. At 0.37B with seq 1024, attention, LayerNorm, embeddings, and LM-head are a materially larger share of step time than at 0.5B, diluting any GEMM-only speedup further.",
+    "The 1.20x at LLMQ's smallest measured point (0.5B) already embeds a favorable GEMM fraction. Extrapolating linearly from 1.20x at 0.5B to 1.10x at 0.37B assumes the non-GEMM share grows only mildly. But at 0.37B/seq 1024 on a single 4090, the model is closer to memory-bandwidth-bound than compute-bound; the Ada tensor-core utilization for small GEMMs (hidden_dim ~768–1024 at 0.37B) is lower than at 0.5B (hidden_dim ~1024–1280), and cuBLASLt FP8 kernel efficiency on Ada has a documented history of underperforming relative to spec at small tile sizes (NVIDIA forum thread on Ada 4090 FP8 cuBLASLt). The correct extrapolation is flatter than the claim assumes.",
+    "At 0.1B — the bottom of the stated range — the claim itself concedes '~1.0x (non-GEMM ops dominate).' That means the range 0.1B–0.37B spans from 1.0x to a claimed 1.10x, a 10pp spread over a 0.27B parameter range. The LLMQ curve suggests the 0.5B→0.37B delta is compressed further by the same non-GEMM-dominance logic. A more conservative honest estimate at 0.37B is ~1.04–1.06x, not 1.10x. The 1.10x is the upper edge of the plausible range, not the central estimate.",
+    "The surviving_multiplier in the local gpu-math-multiplier-table is 0.96 (end-to-end conservative, including software-FP8 overhead). The claim's rebuttal of that figure ('0.96 was end-to-end conservative including overhead; 1.10 is the realizable upper edge') is structurally sound but overstates the case: the 0.96 figure uses the same scale-mismatch logic (Ada software FP8 overhead ~8–12% at 0.1–0.3B exceeds the GEMM savings) that the local refuter table recorded. Moving from 0.96 to 1.10 requires asserting that the overhead is negligible and the LLMQ curve extrapolates cleanly — neither is verified with a local receipt. The honest central estimate sits between: ~1.04–1.06x at 0.37B, with 1.10x as an optimistic upper bound only if Ada FP8 cuBLASLt happens to perform near spec on the actual tile sizes used.",
+    "Ada sm89 (RTX 4090) DOES have FP8 tensor cores (AD102 1321 TFLOPS FP8 vs 660 BF16, ~2x hardware ratio). The prior table entry of 0.96 was based on the factually wrong claim that Ada lacks dedicated FP8 training cores. The claim correctly identifies and refutes this error via TE issue #1159 (CC>=8.9 supported) and LLMQ's measured consumer-GPU results."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "LLMQ (arXiv:2512.15306) is the only citation that directly measures FP8 vs BF16 step throughput on a single RTX 4090 consumer GPU. At 0.5B params it reports +20% (1.20x), at 1.5B +42%, at 3B +51%, at 7B +59%, at 14B +54%. These numbers are measured in tokens/second with a fixed 500k-token-per-step batch. The gains do NOT come from larger batch size — the paper explicitly states this. The caveat for very small models is confirmed: non-GEMM ops limit the benefit at 0.5B, producing only 20% vs 42–59% at larger scales.",
+     "The claimed multiplier in the struct is 1.10 (10%) and the surviving multiplier is 0.98 (no gain). The LLMQ paper supports a 1.20x multiplier at 0.5B on a single RTX 4090 — which is ABOVE the claimed 1.10 but inconsistent with the surviving_multiplier of 0.98. The citation's own text says gains are 'limited' at very small scale but still reports +20% at 0.5B, not 0% or negative. No citation supports a surviving multiplier of 0.98 (net loss vs BF16).",
+     "TransformerEngine issue #1159 confirms cc>=8.9 is required for FP8, and RTX 4090 is exactly cc=8.9, so TE supports FP8 on Ada. The README confirms 'Ada/Hopper/Blackwell' as supported. The claim that this 'refutes the survey-prior TE silently falls back on Ada' is confirmed — TE does support Ada FP8. Issue #15 (Oct 2022, closed) was the old 9.x-only restriction, now superseded.",
+     "torchao float8 docs publish no RTX 4090 / SM89 Ada throughput numbers. All published speedups (25% tensorwise, 1.34-1.43x rowwise) are H100/H200/B200/MI300X. Issue #1057 found a user reporting zero observed speedup on A6000 ADA (SM89) with float8wo. The citation claim that 'published float8 speedups (~25% tensorwise) are H100/B200, no RTX 4090 numbers in torchao docs' is confirmed accurate."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Content-dependent sparse / linear-hybrid attention (DeepSeek NSA, Moonshot MoBA, MiniMax lightning, Qwen gated-DeltaNet)",
+   "axis": "step_throughput",
+   "claimed": 1,
+   "surviving_multiplier": 0.98,
+   "contested": true,
+   "refutes": 1,
+   "baseline": "bf16-AdamW-dense decoder LM, 0.37B core, seq 1024, FlashAttention-2 dense softmax — our receipted bench of 20,201 tok/s (paced) on RTX 4090 24GB",
+   "conditions": "RTX 4090, 24GB, single GPU, 0.1-0.4B dense decoder, seq 1024, bf16, training step (fwd+bwd). At seq 1024 NSA's attended-token floor is 1,536 (512 sliding window + 16x64 selected blocks, per arXiv 2502.11089 sec 4.1) which EXCEEDS the full 1024-token sequence -> NSA cuts ZERO tokens and only adds 3-branch gating + gather/scatter indexing overhead. MoBA is evaluated only at long context (>=8k), no sub-8k numbers. The seq-dependent QK^T+AV term that sparse/linear attention can touch is only ~11.8% of forward FLOPs at the 0.37B core (10-18% across 0.1-0.4B); QKVO projections (the rest of the attention block) still run. Theoretical ceiling if that term went fully to zero with zero overhead is ~1.13x at 0.37B (~1.11-1.22x across the size band) -- NOT achievable since the methods add overhead exceeding any token savings at this seq. Linear/gated-DeltaNet hybrids replace softmax with chunked recurrence whose state-update + kernel-launch cost is comparable-to-greater than the tiny softmax cost at seq 1024; their documented small-scale advantage (arXiv 2412.06464, trained at 340M/1.3B) is QUALITY (perplexity/retrieval) and O(1) inference state, not training throughput at short sequence. Realized band 0.97-1.02x; report 1.0x.",
+   "citations": [
+    "arXiv:2502.11089 (DeepSeek NSA; sec 4.1 hyperparams: compress block l=32, slide stride d=16, selected block l'=64, n=16 selected blocks, window w=512 -> attended-token floor = 512 + 16x64 = 1536; speedups 9.0x fwd / 6.0x bwd reported at 64k, none below 8k)",
+    "arXiv:2502.13189 (Moonshot MoBA; block top-k routing, evaluated only at long context >=8k, no sub-8k speedup)",
+    "arXiv:2412.06464 (Gated Delta Networks: Improving Mamba2 with Delta Rule; 340M & 1.3B small-scale gains are quality/perplexity, not short-seq training throughput)",
+    "arXiv:2501.08313 (MiniMax-01 lightning-attention 7:1 hybrid; long-context/inference-state oriented -- arXiv id noted UNVERIFIED in local survey, included for completeness, not load-bearing)",
+    "fla-org/native-sparse-attention and lucidrains/native-sparse-attention-pytorch (trainable NSA Triton impls; documented break-even/slowdown at short context)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "NSA (arXiv 2502.11089): all speedup data is at 64k context (9x fwd / 6x bwd) and 8-16k (4x). The paper contains zero sub-8k training throughput numbers. The 9x figure is from a very large model (DeepSeek's ~7B-class backbone for NSA ablations) on a multi-GPU cluster. The claim correctly notes NSA's attended-token floor (512 sliding + 16x64=1024 selected = 1536 minimum tokens) strictly exceeds the full 1024-token sequence, meaning NSA cannot drop a single token at seq 1024 -- only gating and gather/scatter overhead remain. The scale-mismatch lens finds no hidden large-scale number being smuggled in: the claim explicitly refuses to use the 9x figure at this sequence length.",
+    "MoBA (arXiv 2502.13189): evaluated exclusively on long-context tasks (>=8k, up to 1M tokens) for Kimi's serving infrastructure. No sub-8k throughput number exists. The claim correctly reports this. From a scale-mismatch perspective, the claim does not extrapolate the MoBA long-context win to 1024 -- it correctly treats MoBA as inapplicable.",
+    "Gated DeltaNet / linear hybrids (arXiv 2412.06464): the paper's 340M and 1.3B runs ARE at the relevant scale (0.3-1.4B). This is actually the most scale-appropriate citation in the bundle. Critically, the claimed advantage in that paper is quality/perplexity and O(1) inference state -- NOT training throughput at short sequences. The chunked recurrence kernel-launch overhead at seq 1024 equals or exceeds the eliminated softmax cost, which is a well-documented characteristic of linear-attention on short sequences. No scale-mismatch error here: the claim correctly confines the DeltaNet multiplier to quality axes only.",
+    "MiniMax lightning attention (arXiv 2501.08313, UNVERIFIED ID in the claim): the model is a 456B hybrid serving billions of tokens at long context. Any throughput gain from lightning attention at 456B on multi-GPU infrastructure does not transfer to a 0.37B single-4090 run at seq 1024. However the claim explicitly flags this citation as 'included for completeness, not load-bearing' and does not derive its 1.0x number from it. No scale-mismatch error in the reasoning.",
+    "The claim's ~11.8% FLOP-fraction estimate for the seq-dependent QK^T+AV term at 0.37B/seq1024 is architecturally sound and consistent with the survey's finding that 'dense attention at 4k is a small fraction of FLOPs at 0.1-1B.' At seq 1024 the fraction is even smaller. The theoretical ceiling of ~1.13x (if that term went to zero with zero overhead) is an upper bound that is never reachable, not a smuggled large-scale number.",
+    "The local multiplier table (gpu-math-multiplier-table-2026-06-11.json, entry for 'Content-dependent sparse attention') already records 0.98x surviving multiplier at 0.1-0.3B / seq 1024 / RTX 4090 with explicit refuter notes about RTX 4090 consumer Ada scatter/gather overhead (~25% vs ~20% on H100 due to fewer parallel memory ports and weaker irregular-access tensor support). This is a scale-AND-hardware-class penalty not present in the large-model H100 speedup figures. The Ada consumer GPU underperforms datacenter silicon on irregular-access kernels, making the overhead-exceeds-savings case even stronger than the paper-reported breakeven at 2-4k on H100-class hardware."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "The claimed/surviving multiplier is 1.0/0.98 — effectively asserting no throughput gain. The citations indirectly support this by documenting that all four techniques require long contexts (>=8k tokens) to yield any speedup, and at the short-context regime typical of 4090-scale training (2k-8k tokens) they either break even or regress.",
+     "arXiv:2502.11089 (NSA): All speedup numbers are on an 8-GPU A100 system with a 27B/3B-active model at sequences 8k-64k. Minimum tested = 8k, where ~2-3x forward speedup is reported. No data at sub-8k, and scale is incompatible (multi-GPU, large model, not <=1B single consumer GPU). Does not support a positive multiplier at 4090-scale short-context training.",
+     "arXiv:2502.13189 (MoBA): Minimum tested sequence = 8k, model = Llama 8B, GPU not specified. No specific speedup value is reported at 8k (only visualized). All efficiency claims are for 8k-10M range. Scale mismatch (8B model) and no sub-8k data — does not support a positive multiplier at small-scale short-context.",
+     "arXiv:2412.06464 (Gated DeltaNet): Throughput measured on a single H100 at 1.3B — closest to the claimed scale. Gated DeltaNet is SLOWER than Transformer++ and Mamba2 (~52 vs ~58 Kt/s at 2K seq). Primary gains are perplexity/quality, not throughput. This citation actively contradicts a positive step_throughput multiplier and is consistent with a ~0.9x multiplier (slight slowdown)."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  },
+  {
+   "technique": "Quantization-aware pretraining (fake-quant int4 weights via STE, torchao QAT)",
+   "axis": "step_throughput",
+   "claimed": 0.93,
+   "surviving_multiplier": 0.93,
+   "contested": false,
+   "refutes": 0,
+   "baseline": "bf16-AdamW-dense 0.37B core, batch 4, seq 1024, RTX 4090 governed = 20,201 tok/s paced (receipt fp19-bench-20260611T024648Z, cell c03-bf16)",
+   "conditions": "PER-STEP cost WHILE fake-quant is active (this is the cost multiplier the question asks for, not the blended-over-run number). Local executed RTX 4090 (governed: vram_frac 0.8, margin 1.5GiB, pace 0.05s/step) bench, c03-qat vs c03-bf16, 0.37B params, batch 4, seq 1024, 10 timed steps: 18,737.7 / 20,201.2 tok/s_paced = 0.9275x -> rounds to 0.93x (the ~0.92x the task cites). The QAT/ternary arms are STE weight-transform PROXIES (fake-quant numerics in the graph), NOT fused low-bit kernels - so the OVERHEAD SHAPE is honest but absolute kernel speedups are not claimed. Scale trend within range: 0.1B core (c01) = 52,026.6/55,063.8 = 0.945x, i.e. overhead is slightly LARGER at 0.37B than at 0.1B (refutes the survey-prior assumption that fake-quant overhead shrinks monotonically toward 1.0 as the model shrinks). IMPORTANT framing: production recipe runs int4 QAT only on the final ~5% of tokens (torchao/Gemma tail-QAT), so BLENDED over a full run the multiplier is 0.95x1.0 + 0.05x0.93 ~= 0.996x ~= 1.0x - that is where the survey's 'few percent of pretrain compute -> ~1.0x' prior comes from, and it is correct for the WHOLE-RUN axis but WRONG for the per-step QAT-phase axis the question targets. What it buys: deploy-time int4 (8da4w: int8 dynamic activations + int4 grouped-per-channel weights) with no PTQ accuracy cliff - torchao reports recovering up to ~96% hellaswag / ~68-83% perplexity degradation vs PTQ on Llama3.",
+   "citations": [
+    "LOCAL RECEIPT B:/M/avir/leo/state/nc-ladder/receipts/fp19-bench-20260611T024648Z.json (RTX 4090 governed, c03-qat vs c03-bf16 = 0.9275x at 0.37B; c01 = 0.945x at 0.1B; flagged STE proxy not fused kernel)",
+    "github.com/pytorch/ao (torchao QAT: fake-quant prepare/convert flow, 8da4w = int8 dynamic activations + int4 grouped per-channel weights)",
+    "arXiv:2507.16099 (TorchAO: PyTorch-Native Training-to-Serving Model Optimization - torchao QAT implementation + PTQ-degradation-recovery results)",
+    "arXiv:2504.12285 (BitNet b1.58 2B4T - cited ONLY to DISTINGUISH int4 QAT from BitNet ternary, see notes)",
+    "nc2-own-technique-contract.md row 1 (QAT ADOPTED as int4 tail on AdamW; torchao int4 QAT tail proven)",
+    "nc2-technique-survey-2026-06.md sec.3 (tail-QAT 'few percent of pretrain compute'; torchtune QAT+LoRA 1.89x faster than vanilla full-pretrain QAT)"
+   ],
+   "confidence": "high",
+   "fits_4090_24gb": true,
+   "refuter_reasons": [
+    "The receipt (fp19-bench-20260611T024648Z.json) was measured DIRECTLY on the RTX 4090 at both the 0.1B scale (c01, 99M params) and the 0.37B scale (c03, 368M params). There is no large-scale extrapolation: the 0.93x figure comes from c03-qat/c03-bf16 = 18737.7/20201.2 = 0.9275x, executed locally on the exact device and param size named in the claim.",
+    "The scale-mismatch lens finds the OPPOSITE problem from what it would normally catch: the receipt actually shows overhead INCREASING slightly as scale grows within the 4090 range. c01 QAT ratio = 52026.6/55063.8 = 0.945x; c03 QAT ratio = 0.928x. If anything, the claim at 0.37B is slightly pessimistic vs what one might project from 0.1B. There is no upward bias from large-scale assumptions.",
+    "The survey (nc2-technique-survey-2026-06.md sec.3) cites the 'few percent of pretrain compute' prior from the torchao/Gemma tail-QAT framing, which the claim explicitly flags as a BLENDED whole-run figure, not the per-step QAT-phase figure. The claim correctly separates the two axes and reports the per-step number (0.93x) from the local receipt, not the blended survey prior (~1.0x). The survey prior does not contaminate the per-step multiplier.",
+    "The claim correctly flags STE proxy overhead as a conservative bound: a torch.compile-fused fake-quant path could reduce overhead toward ~0.95-0.97x, but that is unmeasured and the claim reports the measured 0.93x. The conservative direction of the flag does not constitute a scale-mismatch flaw.",
+    "No large-scale (7B+) or multi-GPU source is used as the basis for the 0.93x number. The torchao PTQ-degradation-recovery citation (Llama-3-8B) is cited only for the QUALITY recovery claim (96% hellaswag), not for the throughput multiplier. The arXiv:2507.16099 citation is for the torchao QAT implementation description, not for a throughput number extrapolated to 4090 scale. The scale-mismatch attack finds no target.",
+    "The claimed 0.93x is from a direct RTX 4090 (sm89) execution: c03-qat = 18,737.7 tok/s vs c03-bf16 = 20,201.2 tok/s on the same governed card, same run. No H100 baseline is in the denominator."
+   ],
+   "citation_verification": {
+    "overall": "PARTIAL",
+    "evidence_class": "EXTERNAL-CITED",
+    "reasons": [
+     "LOCAL RECEIPT is the only source that directly reports the claimed 0.9275x (c03) and 0.945x (c01) numbers at the right scale (0.1B-0.37B params, single RTX 4090, governed). The receipt math checks out: 18737.7/20201.2=0.9275 and 52026.6/55063.8=0.9449. However, the receipt itself flags that QAT/ternary are STE weight-transform proxies, NOT fused low-bit kernels — the overhead shape is honest but absolute speedups from real kernels are NOT claimed. This is a material qualification: the 0.93x is the overhead of fake-quant STE forward passes on top of BF16 compute, not a kernel-level result.",
+     "arXiv:2507.16099 (TorchAO paper) is found and real, but its Table 2 shows QAT training on 4× H100 GPUs at 3B-8B scale has 32-47% throughput reduction (0.53x-0.67x), not 0.93x. This is a DIFFERENT scale (multi-GPU, multi-billion params, H100 data-center GPU) and a much larger overhead — the paper does NOT support the 0.93x claimed multiplier at 0.37B / single consumer GPU scale.",
+     "github.com/pytorch/ao is real and confirms the fake-quant prepare/convert flow and 8da4w config, but the repo and its documentation contain NO step throughput benchmarks for consumer GPU or small-model QAT overhead. It supports the technique description only, not the multiplier.",
+     "arXiv:2504.12285 (BitNet b1.58 2B4T) is real and found, but reports INFERENCE efficiency only (memory, latency, energy) for a ternary (1.58-bit) model — it does NOT report QAT training throughput at any scale, and the claim correctly notes it is cited ONLY to distinguish int4 QAT from BitNet ternary, so no throughput support was expected or found."
+    ]
+   },
+   "evidence_class": "EXTERNAL-CITED"
+  }
+ ],
+ "rejected": [],
+ "envelope_leo_derived": {
+  "base": {
+   "tok_s_paced_qat": 18737.7,
+   "tok_s_paced_bf16": 20201.2,
+   "compute_optimal_tokens": 7367086080,
+   "receipt": "fp19-bench-20260611T024648Z.json"
+  },
+  "axis_aggregates": {
+   "step_throughput": {
+    "conservative": 1.08,
+    "optimistic": 1.08
+   },
+   "data_efficiency": {
+    "conservative": 1.35,
+    "optimistic": 1.646
+   },
+   "sampling_throughput": {
+    "conservative": 1.4,
+    "optimistic": 1.75
+   },
+   "memory_enables_batch": {
+    "note": "not binding at c03 (17.18 GiB free post-warmup); all multipliers ~1"
+   }
+  },
+  "days_to_compute_optimal_c03_qat": {
+   "receipted_unstacked": 4.55,
+   "conservative_stack": 3.12,
+   "optimistic_stack": 2.56
+  },
+  "ratio_7d_effective": {
+   "receipted_unstacked": 1.54,
+   "conservative_stack": 2.25,
+   "optimistic_stack": 2.74
+  },
+  "sampler_side_episodes_per_gpu_hour": {
+   "conservative": 1.4,
+   "optimistic": 1.75,
+   "note": "applies to the borrowed-3B episode sampler (W4A16-Marlin incl. 0.93 verify-retention; x spec-decode optimistic)"
+  },
+  "discipline": "CONDITIONAL projection. EXTERNAL-CITED != locally receipted: only c03 bf16/qat/ternary paces are receipts on this box. Discharge = adopt cheap survivors (Muon, compile, packing, WSD, chunked-CE) in the v0 config, measure, re-receipt."
+ },
+ "completeness_critic": {
+  "reasoning": "Read the existing nc-ladder technique survey (research/nc2-technique-survey-2026-06.md, 13 sections), the gpu-math-attack-v2 multiplier table (gpu-math-multiplier-table-2026-06-11.json — the exact 13-key/4-axis frame the task quotes), the bottleneck-conversion note, and the pinned recipe stack. The 13 covered keys map cleanly to the four axes; the conversion/term-3 levers (GRPO, sleep-consolidation, MTP-as-aux-SFT, teacher-as-sampler) are deliberately covered ELSEWHERE and explicitly NOT one of the four GPU/loop axes, so I excluded them. I also excluded another second-order optimizer (SOAP/Shampoo) as redundant in mechanism+axis with the strongest covered key (Muon).\n\nFive genuine gaps survive, each materially moving one of the four axes with a real shot at >1.05x (or a quantifiable cost effect) at 0.1-0.4B / seq1024 / one 4090, and none repeating a covered key:\n\n1) muP / μ-transfer (data_efficiency): zero-shot HP transfer from a tiny proxy → the single from-scratch run is better-tuned AND the LR/init/multiplier sweep tax is eliminated. Distinct from Muon (optimizer) and data-selection (corpus). Grepped: only a QK-norm/z-loss mention exists, not muP.\n\n2) liger-fused-kernels / chunked cross-entropy (memory_enables_batch): the vocab-logit + CE materialization (32k vocab) is the one activation-memory term that does NOT shrink with model size, so it is the real memory lever at 0.1-0.4B where weights are tiny. Distinct from gradient-checkpointing (recompute) and torch-compile (fusion of compute, not the logit-CE memory peak). The only \"chunked\" hit in-repo is t4-eval chunking, unrelated.\n\n3) pretrain logit/sequence distillation from a frozen open teacher (data_efficiency): a soft-target objective during the from-scratch pretrain. Distinct from data-selection and explicitly distinct from the repo's teacher-system design note, which BANS the teacher as grader/labeler — here the teacher's logits are the training signal, the classic small-LM data-efficiency multiplier (DistilBERT/MiniLLM/GKD lineage).\n\n4) wsd-batchramp — warmup-stable-decay LR schedule + critical-batch-size batch ramp (data_efficiency): tokens-to-target-loss is schedule- and batch-schedule-sensitive; WSD enables cheap intermediate checkpoints and the batch ramp tracks the growing critical batch size. Not covered by Muon or data-selection; no schedule-free/WSD/critical-batch hits in-repo.\n\n5) w4a16-marlin — quantized W4A16 decode kernels for the SAMPLER (sampling_throughput): the local sampler baseline is bf16 at 65-98 tok/s; batch-1 autoregressive decode is memory-bandwidth-bound, so int4-weight W4A16 (Marlin/Machete) gives a clean, quantifiable decode speedup orthogonal to the covered MLA/speculative key. Marlin/AWQ/vLLM appear only in external-stack survey files, never in the 13-key mined table.",
+  "missing": [
+   {
+    "key": "mu-transfer",
+    "axis": "data_efficiency",
+    "q": "For a from-scratch dense decoder at 0.1-0.4B params / seq 1024 / ~7-20B tokens on one RTX 4090, what is the measured data-efficiency benefit of Maximal Update Parametrization (muP / μP, Tensor Programs V, arXiv 2203.03466) when LR + init-scale + attention/output multipliers are transferred zero-shot from a <=40M proxy versus a same-budget single AdamW/Muon run tuned with a small sweep? Cite (a) any published or open-source result showing target-loss reached at fewer tokens or fewer total tuning FLOPs at <=0.5B (Cerebras/MosaicML muP reports, nanoGPT-muP, modded-nanogpt's implicit use), and (b) muP's documented interaction with Muon (orthogonalized updates already normalize per-layer scale — does muP add anything on top, or is it redundant with the Muon-on-2D-weights/AdamW-on-embeddings split already adopted)? Net multiplier as (effective single-run loss improvement) x (sweep-FLOPs avoided / pretrain-FLOPs), with the proxy width and coord-check validation named.",
+    "why_it_matters": "If muP transfers HPs zero-shot, the from-scratch run is better-tuned with no sweep tax, and the gain is independent of (composes with) the covered Muon/data-selection levers. The open question is whether Muon's per-layer normalization already captures most of muP's effect at this scale."
+   },
+   {
+    "key": "liger-chunked-ce",
+    "axis": "memory_enables_batch",
+    "q": "At 0.1-0.4B params with a 32k vocab and seq 1024, the survey/refuters claim 24GB is 'not binding' — but the logit + cross-entropy tensor is (batch x seq x vocab) and scales with vocab, NOT model size. What is the measured peak-activation-memory reduction and resulting max-micro-batch increase on a 4090 from Liger-Kernel / chunked (online) cross-entropy + fused RMSNorm/RoPE/SwiGLU (linkedin/Liger-Kernel, arXiv 2410.10989; Cut-Cross-Entropy arXiv 2411.09009)? Cite a small-model number for (a) GB saved by never materializing the full logit matrix, (b) the micro-batch multiple that unlocks at h~1024/vocab 32k/seq 1024, and (c) whether that batch unlock converts to a >1.05x step-throughput or tokens/sec gain after the fused-kernel overhead, given torch.compile is already in the stack. Address head-on: does the logit-CE term dominate the activation peak at THIS d_model, making the 'VRAM not binding' claim wrong specifically because of the vocab term?",
+    "why_it_matters": "Gradient-checkpointing and torch-compile are already covered, but neither targets the vocab-logit/CE memory peak, which is the one activation term that stays large when the model is small. This is the most plausible real memory_enables_batch multiplier the list is missing."
+   },
+   {
+    "key": "pretrain-distillation",
+    "axis": "data_efficiency",
+    "q": "For pretraining a 0.1-0.4B dense decoder from scratch on a token-limited budget (<=20B), what is the measured tokens-to-target-loss (or held-out PPL at fixed tokens) improvement from logit/sequence-level distillation against a frozen open teacher (e.g. Qwen3/Gemma-class) used purely as a soft-target signal — KD / sequence-KD / GKD (MiniLLM arXiv 2306.08543, GKD arXiv 2306.13649, DistilBERT-lineage)? Cite a small-LM result quantifying the data-efficiency multiplier (e.g. student matches a baseline trained on N tokens using <N teacher-supervised tokens), and state (a) the teacher forward-pass throughput cost on a 4090 (does generating soft targets bottleneck the 20k tok/s training meter?), (b) whether top-k logit caching removes that cost, and (c) the license posture of using a teacher's logits as a training target for an owned-core model intended to be Anthropic/Alibaba/Google-independent. This is distinct from the repo's teacher-as-sampler note, where the teacher proposes episodes the world verifies and NEVER grades — here the teacher's distribution IS the loss.",
+    "why_it_matters": "Distillation is the canonical small-LM data-efficiency multiplier and is absent from the list; data-selection reweights the corpus but does not add a denser per-token target. The catch is the independence/license constraint in the goal — the miner must surface whether teacher-logit pretraining makes the core load-bearing on a borrowed model."
+   },
+   {
+    "key": "wsd-batchramp",
+    "axis": "data_efficiency",
+    "q": "At 0.1-0.4B / <=20B tokens on one 4090, what is the measured tokens-to-target-loss effect of (a) the Warmup-Stable-Decay (WSD) LR schedule vs cosine (MiniCPM arXiv 2404.06395, Hu et al.; DeepSeek-LLM multi-step) and (b) a critical-batch-size-tracked batch-size ramp (McCandlish arXiv 1812.06162; recent small-LM critical-batch measurements)? Cite a sub-1B number isolating the LR-schedule contribution (WSD's decay phase loss drop) and, separately, the batch-ramp contribution (starting below and growing toward the critical batch size as loss falls), and whether they compose with Muon (does Muon shift the optimal schedule or critical batch?). Give the net as a tokens-to-fixed-loss ratio vs a cosine + fixed-batch baseline, and note WSD's side benefit of cheap branchable intermediate checkpoints for the floor-probe checkpoints already planned at 1B/2B/4B tokens.",
+    "why_it_matters": "The current envelope assumes a fixed schedule; LR-schedule and batch-ramp are well-evidenced tokens-to-loss multipliers orthogonal to optimizer and corpus, and WSD's checkpoint-branching directly serves the planned floor-probe checkpoints. Neither Muon nor data-selection covers schedule."
+   },
+   {
+    "key": "w4a16-marlin",
+    "axis": "sampling_throughput",
+    "q": "The local sampler baseline is bf16 at 65-98 tok/s (3B) and 97.7 tok/s (1.5B); batch-1 autoregressive decode is memory-bandwidth-bound. What is the measured single-stream decode speedup on a 4090 (Ada sm89) from int4 weight-only W4A16 kernels — Marlin / Machete / Atom / AWQ-Marlin in vLLM (arXiv 2408.11743 Marlin; vLLM Marlin docs) — versus bf16, at 0.4-3B with seq 1024? Cite (a) the realized tok/s multiple for batch=1 W4A16 on consumer Ada specifically (not H100), (b) whether it composes with the already-covered MTP/EAGLE speculative + MLA-KV key or double-counts it (speculative reduces step COUNT, W4A16 reduces per-step memory traffic — are the gains multiplicative?), and (c) the accuracy cost of int4 weights on the verifier pass-rate (does a 4-bit sampler lower verify-rate, the actual loop bottleneck?). Quantify net loop-sampling throughput as tok/s multiple x (verify-rate retained).",
+    "why_it_matters": "Only one key (mla-kv-speculative) touches sampling_throughput, and it reduces step count; W4A16 reduces per-step bandwidth and is orthogonal and multiplicative. It is the clearest quantifiable uncovered sampler lever, and the verify-rate-retention caveat ties it to the true loop bottleneck so a naive speedup that hurts verify-rate is caught."
+   }
+  ]
+ },
+ "discipline": "Verdict is Leo's, from receipts. This table is read-only evidence legs: Opus-mined, refuted through 5 perspective-diverse lenses (kill at >=3/5), and citation-verified against the live web. Every multiplier carries an evidence_class (EXTERNAL-CITED vs HYPOTHESIS); the envelope is a CONDITIONAL projection over the receipted fp19-bench base, feeding fp-19 — not a certification."
+}
