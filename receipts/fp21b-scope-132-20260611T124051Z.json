@@ -1,0 +1,42 @@
+{
+  "ticket": "FP21B-SCOPE-132",
+  "ts": "20260611T124051Z",
+  "issue": 132,
+  "status": "OPEN \u2014 trigger-gated, conditional on fallback-(a)",
+  "scope": "fp-21b prong-A (band predicts transfer) is a BORROWED-WORLD question; under the frozen fp-26 (b) decision it fires ONLY on a fallback-(a) borrowed-world (Qwen/w1-mbpp) round-3 sampling receipt",
+  "world_pin": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "world": "w1-mbpp"
+  },
+  "fp26_decision": {
+    "path": "research/fp26-round3-shape-decision.md",
+    "sha256": "5ef7cc20f22168878f139af00e6ac9a75d43c758ffd2b3eb181372c50081c939"
+  },
+  "gate_branches": {
+    "primary_b_owned_core": {
+      "sampler_model": "ember-v0-0.37b",
+      "world_gate": "NOT-APPLICABLE-WORLD-CHANGED",
+      "detail": "sampling model 'ember-v0-0.37b' != pinned 'Qwen/Qwen2.5-Coder-3B-Instruct' \u2014 fp-21b bars/band-legs are borrowed-world artifacts; derive a fresh prong-A prereg in the new world",
+      "reading": "(b) round-3 is owned-core in-dist (eval==train); fp-21b's borrowed-world transfer-prediction question does not apply and the bars do not carry"
+    },
+    "fallback_a_borrowed_world": {
+      "sampler_model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "world_gate": "APPLICABLE",
+      "detail": "world pin intact",
+      "reading": "fp-21b prong-A FIRES here \u2014 this is the only world in which #132 re-executes (taken iff the owned core kills the verify floor)"
+    },
+    "missing_sibling": {
+      "world_gate": "PROTOCOL-FLAG",
+      "detail": "no sibling receipt for C:\\WINDOWS\\TEMP\\tmput3wv0gc\\r3-samples.jsonl \u2014 world unverifiable, refusing to apply borrowed-world bars",
+      "reading": "no sibling receipt -> refuse to apply borrowed bars"
+    }
+  },
+  "not_a_scope_reduction": "the prong-A re-execution still happens when its trigger lands; only the firing world is pinned. #132 is NOT closed.",
+  "result": {
+    "verdict": "SCOPE-PINNED",
+    "fires_in_world": "w1-mbpp",
+    "owned_core_b_refuses": true
+  },
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}
