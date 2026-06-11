@@ -27,6 +27,7 @@ import random
 from datetime import datetime, timezone
 
 from power import Z80, Z975, newcombe_paired_delta
+from receipt_write import checked_write
 
 NC_WIN = "B:/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC_WIN}/receipts"
@@ -176,8 +177,7 @@ def main():
     }
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/g1-paired-r1w-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"G1_PAIRED_DONE {out}")
 

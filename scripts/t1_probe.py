@@ -43,6 +43,7 @@ from datetime import datetime, timezone
 # (graph traversal) closed. Resolves from the same scripts/ dir on every
 # call path (callers insert NC/scripts at sys.path[0] before importing this).
 from v_reachguard import scan as _reachguard_scan
+from receipt_write import checked_write
 
 ARC_TRAIN = "/mnt/b/M/the-search/incoming/arc-agi1-visa/ARC-AGI/data/training"
 RECEIPTS = "/mnt/b/M/avir/leo/state/nc-ladder/receipts"
@@ -440,8 +441,7 @@ def main():
         ok, report = selftest()
         receipt["selftest_ok"] = ok
         receipt["cases"] = report
-        with open(receipt_path, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(receipt, f, indent=2)
+        checked_write(receipt_path, receipt)
         print(json.dumps(report, indent=2))
         print(f"SELFTEST {'PASS' if ok else 'FAIL'}")
         sys.exit(0 if ok else 1)
@@ -497,8 +497,7 @@ def main():
     }
     if GOV:
         receipt["governor"] = dict(GOV)
-    with open(receipt_path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(receipt_path, receipt)
     print(json.dumps(receipt["summary"], indent=2))
     print("T1_PROBE_DONE")
 

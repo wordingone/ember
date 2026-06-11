@@ -48,6 +48,7 @@ from timeshare_pretrain import (
     FP19_PACE_S,
 )
 from timeshare_handoff import HandoffMachine
+from receipt_write import checked_write
 
 
 def run_dryrun() -> None:
@@ -272,8 +273,7 @@ def run_dryrun() -> None:
         receipts_dir = os.path.join(REPO, "receipts")
         os.makedirs(receipts_dir, exist_ok=True)
         out_path = os.path.join(receipts_dir, f"eng123-timeshare-dryrun-{ts}.json")
-        with open(out_path, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(receipt, f, sort_keys=True, separators=(",", ": "), indent=2)
+        checked_write(out_path, receipt)
 
         print(f"\n[dryrun] Receipt written: {out_path}")
         print(json.dumps(receipt, indent=2, sort_keys=True))

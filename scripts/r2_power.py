@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from g1_paired import load_samples
 from power import mde_paired_rates, power_mc_feed, power_mc_paired
+from receipt_write import checked_write
 
 NC = "B:/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
@@ -57,8 +58,7 @@ def main():
     }
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/r2-power-prereg-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"R2_POWER_DONE {out}")
 

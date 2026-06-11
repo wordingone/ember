@@ -36,6 +36,7 @@ NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (ARC_TRAIN, RECEIPTS, extract_code, execute_batch,  # noqa: E402
                       generate, load_model, load_tasks)
+from receipt_write import checked_write  # noqa: E402
 
 SAMPLES = f"{RECEIPTS}/t1-full-chunked-samples.jsonl"  # t2_r1 glob-compatible
 PROGRESS = f"{RECEIPTS}/t1-chunked-progress.json"
@@ -172,8 +173,7 @@ def main():
     receipt = aggregate_receipt(args, ts)
     receipt["chunks"] = progress.get("chunk_stats", [])
     path = f"{RECEIPTS}/t1-full-{ts}.json"
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(path, receipt)
     print(json.dumps(receipt["summary"], indent=2))
     print("T1_CHUNKED_DONE")
 

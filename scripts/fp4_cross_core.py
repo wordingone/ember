@@ -28,6 +28,7 @@ import random
 from datetime import datetime, timezone
 
 from frontier import stratum
+from receipt_write import checked_write
 
 NC_WIN = "B:/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC_WIN}/receipts"
@@ -141,8 +142,7 @@ def main():
                              "MTP-on-own arm; round-3 GPU window",
     }
     out = f"{RECEIPTS}/fp4-cross-core-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"FP4_CROSS_CORE_DONE {out}")
 

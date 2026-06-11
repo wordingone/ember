@@ -37,6 +37,8 @@ import os
 import time
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
 SOLVE_STUB = "\n\ndef solve(grid):\n    return [[0]]\n"  # sandbox gadget
@@ -415,8 +417,7 @@ def main():
         "train_secs": secs, "adapter": out_dir,
     }
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", receipt)
     print(json.dumps({k: v for k, v in receipt.items()
                       if k != "reward_trajectory"}, indent=2, default=str))
     print("T2_GRPO_DONE")

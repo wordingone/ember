@@ -33,6 +33,8 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
+from receipt_write import checked_write
+
 # ---------------------------------------------------------------------------
 # Governor constants (inline copy — byte-equivalent to governor.py)
 # ---------------------------------------------------------------------------
@@ -99,8 +101,7 @@ def _default_output_path():
 
 def _write_receipt(path: Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(data, f, indent=2)
+    checked_write(str(path), data)
     print(f"RECEIPT: {path}")
 
 

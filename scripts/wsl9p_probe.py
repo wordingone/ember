@@ -74,6 +74,8 @@ import platform
 from datetime import datetime, timezone
 from pathlib import Path
 
+from receipt_write import checked_write
+
 REPS = 3
 RNG_SEED = 16
 
@@ -417,8 +419,7 @@ def main():
     if output_path:
         try:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8", newline="\n") as f:
-                f.write(output_json)
+            checked_write(output_path, receipt)
             print(f"Receipt written to {output_path}", file=sys.stderr)
             written = True
         except Exception as e:

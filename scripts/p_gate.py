@@ -43,6 +43,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from receipt_write import checked_write
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -345,8 +347,7 @@ def run_p_gate(pre_receipt_path, post_receipt_path, args=None) -> dict:
 
     receipt_path = _RECEIPTS / f"p-gate-{ts}.json"
     # FAIL-CLOSED: assertions verified above; write receipt only on clean path
-    with open(receipt_path, "w") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(receipt_path, receipt)
     print(f"[p_gate] receipt: {receipt_path}", flush=True)
     return receipt
 

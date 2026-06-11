@@ -34,6 +34,9 @@ import sys
 import time
 from datetime import datetime, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from receipt_write import checked_write  # noqa: E402 (eng #107)
+
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 if os.name == "nt":
     NC = "B:/M/avir/leo/state/nc-ladder"
@@ -162,8 +165,7 @@ def main():
     receipt["pacing"] = pacing_snapshot()  # fp-14 convention, at write time
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/t2-r2w-{args.arm}-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps({k: receipt[k] for k in
                       ("arm", "tag", "frontier_filter", "dry_run")}, indent=2))
     print(f"T2_R2W_DONE {out}")

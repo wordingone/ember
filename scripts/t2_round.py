@@ -40,6 +40,7 @@ sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (ARC_TRAIN, extract_code, execute_batch, load_tasks,  # noqa: E402
                       pacing_snapshot, sample_model, task_prompt)
 from ledger_license import effective_class, parse_allow, stamp  # noqa: E402 (eng #70)
+from receipt_write import checked_write  # noqa: E402
 
 LEDGER = f"{NC}/ledger/episodes.jsonl"
 CONTROL_POOL = f"{NC}/ledger/control_pool.jsonl"
@@ -343,8 +344,7 @@ def main():
     # at WRITE time so sampling/eval sleeps are included.
     receipt["pacing"] = pacing_snapshot()
     path = f"{RECEIPTS}/t2-{tag}-{ts}.json"
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(path, receipt)
     print(json.dumps({k: v for k, v in receipt.items() if k != "ts"},
                      indent=2, default=str))
     print("T2_ROUND_DONE")

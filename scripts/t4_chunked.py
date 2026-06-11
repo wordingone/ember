@@ -46,6 +46,7 @@ try:
     from stats_exact import build_exact_block as _build_exact_block  # noqa: E402
 except ImportError:
     _build_exact_block = None
+from receipt_write import checked_write  # noqa: E402
 
 
 def atomic_write(path, obj):
@@ -248,8 +249,7 @@ def main():
                "arms": arms_sum, **deltas,
                **( {"exact": _exact_block} if _exact_block is not None else {})}
     path = f"{RECEIPTS}/{tag}-{ts}.json"
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(path, receipt)
     print(json.dumps({"arms": arms_sum, **deltas,
                       "stopped_early": bool(stop_reason)}, indent=2))
     print("T4_CHUNKED_DONE")

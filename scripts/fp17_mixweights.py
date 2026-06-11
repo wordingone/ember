@@ -44,6 +44,8 @@ import os
 import sys
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
 TMP = "/tmp/fp17-views"
@@ -184,8 +186,7 @@ def main():
                   "source); chaining caveat carries over"],
     }
     out = f"{RECEIPTS}/fp17-mixweights-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"FP17_MIXWEIGHTS_DONE {out}")
 

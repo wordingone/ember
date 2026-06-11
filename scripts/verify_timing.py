@@ -25,6 +25,7 @@ NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import execute_batch  # noqa: E402
 from w1_mbpp import SOLVE_STUB, load_split  # noqa: E402
+from receipt_write import checked_write  # noqa: E402
 
 RECEIPTS = f"{NC}/receipts"
 
@@ -101,8 +102,7 @@ def main():
             (gen_secs / n_gen) / (serial_secs / len(res_serial)), 1),
     }
     out = f"{RECEIPTS}/verify-timing-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"VERIFY_TIMING_DONE {out}", flush=True)
 

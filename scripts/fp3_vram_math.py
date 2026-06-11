@@ -22,6 +22,8 @@ import json
 import os
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC_WIN = "B:/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC_WIN}/receipts"
 GOV_SRC = f"{RECEIPTS}/t2-r1w-q3-grpo-20260610T223426Z.json"
@@ -77,8 +79,7 @@ def main():
         },
     }
     out = f"{RECEIPTS}/fp3-vram-derivation-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"FP3_VRAM_DONE {out}")
 

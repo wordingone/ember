@@ -13,6 +13,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 RECEIPT_PATH = "/mnt/b/M/avir/leo/state/nc-ladder/receipts/t0-preflight.json"
 ARC_DIR = "/mnt/b/M/the-search/incoming/arc-agi1-visa/ARC-AGI"
 
@@ -119,8 +121,7 @@ check("arc_corpus", arc_corpus)
 check("disk", disk)
 
 os.makedirs(os.path.dirname(RECEIPT_PATH), exist_ok=True)
-with open(RECEIPT_PATH, "w", encoding="utf-8", newline="\n") as f:
-    json.dump(receipt, f, indent=2)
+checked_write(RECEIPT_PATH, receipt)
 
 print(json.dumps(receipt, indent=2))
 print("T0_PREFLIGHT_DONE")

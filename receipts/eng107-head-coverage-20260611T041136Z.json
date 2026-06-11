@@ -1,0 +1,76 @@
+{
+  "ticket": "ENG107-HEAD-COVERAGE",
+  "ts": "20260611T041136Z",
+  "issue": "#107",
+  "scope": "checked_write adoption \u2014 current-head coverage audit (post-rebase onto b1ae584, after #141/#136 merges)",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "master_sha_rebased_onto": "b1ae584",
+  "branch_head_sha_pre_commit": "9309105c14fe63e3e2db64ad462132ecc72c8641",
+  "total_writer_sites_found": 49,
+  "total_writer_sites_wired": 49,
+  "files_with_wired_sites": 48,
+  "new_sites_this_pass": [
+    "scripts/t2_r2w.py (receipt write at main exit \u2014 created by the round-2 data-path correction after the prior head)",
+    "scripts/fp15_bandtransfer.py (receipt write added by #133)"
+  ],
+  "rebase_conflict_resolutions": [
+    "scripts/w1_mbpp.py: #136 pacing snapshot line kept + #107 checked_write swap applied (additive, both intents preserved)"
+  ],
+  "selftest_harness_fix": "fp14_pacing_selftest.py check 3b asserted the pre-#107 literal json.dump write form in t2_round.py and broke once the site was swapped; write-site assert now tolerates both forms (same pattern as w1_pacing_selftest). Ordering invariant unchanged. NOTE: the prior PR-body claim fp4-fp17 PASS at branch head was inaccurate for fp14 \u2014 corrected in the PR body.",
+  "selftest_sweep": {
+    "pass": [
+      "fp12_band",
+      "fp13_concentration",
+      "fp15_bandtransfer",
+      "fp16_census",
+      "fp17_mixweights",
+      "fp18_promptdiv",
+      "fp19_bench",
+      "fp23_probe_prereg",
+      "fp3_vram_math",
+      "fp4_cross_core",
+      "fp6_provenance",
+      "fp7_revalue",
+      "fp8_vgate",
+      "fp9_parity",
+      "fp14_pacing_selftest",
+      "frontier",
+      "g1_paired",
+      "governor",
+      "kernel_replay",
+      "ledger_dedup",
+      "ledger_license",
+      "power",
+      "p_gate",
+      "d_gate",
+      "r2_arms",
+      "receipt_check",
+      "receipt_fp",
+      "receipt_write",
+      "stats_exact",
+      "t2_grpo",
+      "t2_mtp",
+      "timeshare_handoff",
+      "timeshare_pretrain",
+      "t_native_smoke",
+      "vbits",
+      "v_compare",
+      "v_extended",
+      "v_reachguard",
+      "v_soundness_probe",
+      "w1_humaneval",
+      "w1_pacing_selftest",
+      "wsl9p_probe"
+    ],
+    "environment_limited": {
+      "t1_probe": "module-level POSIX resource import \u2014 selftest requires WSL; identical on master, not a branch defect"
+    }
+  },
+  "legacy_sweep_current": {
+    "receipts_scanned": 126,
+    "receipts_with_findings": 11,
+    "MISSING_REQUIRED": 16,
+    "MISSING_SHA_CONVENTION": 2,
+    "baseline_delta": "baseline was 14+2 across 10/92; the one new finding-bearing receipt is eng105-verify-20260611T023239Z.json (2 findings), hand-written before the schema floor existed \u2014 legacy class, report-only"
+  }
+}

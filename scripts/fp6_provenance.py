@@ -26,6 +26,8 @@ import json
 import sys
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC_WIN = "B:/M/avir/leo/state/nc-ladder"
 LEDGER = f"{NC_WIN}/ledger/episodes.jsonl"
 CONTROL = f"{NC_WIN}/ledger/control_pool.jsonl"
@@ -168,8 +170,7 @@ def main():
                      "(easy 2/mid 4/frontier 8 caps applied at build)",
     }
     out = f"{RECEIPTS}/fp6-provenance-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"FP6_PROVENANCE_DONE {out}")
 

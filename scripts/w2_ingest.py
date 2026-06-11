@@ -27,6 +27,7 @@ import os
 from datetime import datetime, timezone
 
 from ledger_license import census as license_census, stamp  # eng #70
+from receipt_write import checked_write
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
@@ -125,8 +126,7 @@ def main():
 
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/w2-ingest-{receipt['ts']}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print("W2_INGEST_DONE")
 

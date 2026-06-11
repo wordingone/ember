@@ -37,6 +37,8 @@ import os
 import sys
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
 SOLVE_STUB = "\n\ndef solve(grid):\n    return [[0]]\n"  # sandbox gadget
@@ -155,8 +157,7 @@ def main():
                "flags_file": flags_file,
                "quarantine": "GATE decision on this receipt — no auto-"
                              "removal from ledger"}
-    with open(f"{RECEIPTS}/v-extended-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(f"{RECEIPTS}/v-extended-{ts}.json", receipt)
     print(json.dumps(receipt, indent=2))
     print("V_EXTENDED_DONE")
 

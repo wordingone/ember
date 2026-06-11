@@ -35,6 +35,7 @@ from t1_probe import (THROTTLE_S, decode_pacer, execute_batch,  # noqa: E402
                       pacing_snapshot)
 from t4_eval import bootstrap_ci  # noqa: E402
 from v_compare import strict_harness  # noqa: E402 (eng #76)
+from receipt_write import checked_write  # noqa: E402
 
 RECEIPTS = f"{NC}/receipts"
 SOLVE_STUB = "\n\ndef solve(grid):\n    return [[0]]\n"  # satisfies sandbox gadget
@@ -296,8 +297,7 @@ def main():
     # fp-14 (#129): measured governor pacing at WRITE time (after sampling
     # + verify + ext-verify) — same convention as t2_round/t2_r2w.
     receipt["pacing"] = pacing_snapshot()
-    with open(f"{RECEIPTS}/w1-floor{tagpart}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(f"{RECEIPTS}/w1-floor{tagpart}-{ts}.json", receipt)
     print(json.dumps({k: receipt[k] for k in
                       ("n_tasks", "k", "feed_tasks", "feed_pct", "feed_ci95",
                        "verified_samples", "verified_sample_pct",
