@@ -1,0 +1,134 @@
+{
+  "ticket": "ENG36-CORPUS-ASSEMBLY",
+  "ts": "20260611T052337Z",
+  "issue": "wordingone/ember#130",
+  "sources": [
+    {
+      "source": "fineweb_edu",
+      "ts": "20260611T044544Z",
+      "fp22_row": 2,
+      "license_class": "odc-by-1.0",
+      "docs_kept": 1549860,
+      "text_bytes_kept": 7400001608,
+      "text_chars_kept": 7361935304,
+      "bytes_on_disk": 2532354648,
+      "n_shards": 8,
+      "manifest_mirror": "corpus-manifests\\fineweb_edu-manifest-20260611T044544Z.json",
+      "manifest_sha256": "7ac65979854775d5fa71b5928bfc7aa301dadedc1ce07a6e7c16bb550626e197",
+      "receipt": "receipts\\eng36-fineweb_edu-20260611T044544Z.json",
+      "url_pin": {
+        "config": "sample-10BT",
+        "dataset": "HuggingFaceFW/fineweb-edu",
+        "revision_sha": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
+        "split": "train",
+        "url": "https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu/tree/87f09149ef4734204d70ed1d046ddc9ca3f2b8f9"
+      }
+    },
+    {
+      "source": "wikipedia_en",
+      "ts": "20260611T045542Z",
+      "fp22_row": 3,
+      "license_class": "cc-by-sa-4.0",
+      "docs_kept": 813598,
+      "text_bytes_kept": 3000005917,
+      "text_chars_kept": 2988323733,
+      "bytes_on_disk": 1007063319,
+      "n_shards": 4,
+      "manifest_mirror": "corpus-manifests\\wikipedia_en-manifest-20260611T045542Z.json",
+      "manifest_sha256": "3d33c10da0ab4e1591616e221ca6411377c14e81c844e6ea6c1bce7d55c55abd",
+      "receipt": "receipts\\eng36-wikipedia_en-20260611T045542Z.json",
+      "url_pin": {
+        "config": "20231101.en",
+        "dataset": "wikimedia/wikipedia",
+        "revision_sha": "b04c8d1ceb2f5cd4588862100d08de323dccfbaa",
+        "split": "train",
+        "url": "https://huggingface.co/datasets/wikimedia/wikipedia/tree/b04c8d1ceb2f5cd4588862100d08de323dccfbaa"
+      }
+    },
+    {
+      "source": "gutenberg_en",
+      "ts": "20260611T050315Z",
+      "fp22_row": 4,
+      "license_class": "public-domain",
+      "docs_kept": 4510,
+      "text_bytes_kept": 1900007704,
+      "text_chars_kept": 1891271565,
+      "bytes_on_disk": 629065899,
+      "n_shards": 2,
+      "manifest_mirror": "corpus-manifests\\gutenberg_en-manifest-20260611T050315Z.json",
+      "manifest_sha256": "ceb22ac3fcd4ecc6664f880b1a3410c6dd13193186bd56c0692c5dee651cf2d4",
+      "receipt": "receipts\\eng36-gutenberg_en-20260611T050315Z.json",
+      "url_pin": {
+        "config": null,
+        "dataset": "manu/project_gutenberg",
+        "revision_sha": "164853d214065df26a630ee1ab91a0c39e461caf",
+        "split": "en",
+        "url": "https://huggingface.co/datasets/manu/project_gutenberg/tree/164853d214065df26a630ee1ab91a0c39e461caf"
+      }
+    },
+    {
+      "source": "ledger_mit",
+      "ts": "20260611T044523Z",
+      "fp22_row": 5,
+      "license_class": "arc-dsl-mit",
+      "docs_kept": 780,
+      "text_bytes_kept": 521867,
+      "text_chars_kept": 521867,
+      "bytes_on_disk": 80038,
+      "n_shards": 1,
+      "manifest_mirror": "corpus-manifests\\ledger_mit-manifest-20260611T044523Z.json",
+      "manifest_sha256": "d42826b8062ce226883a53cf51d5954c50ab007d91e7d735992c492748d5da5e",
+      "receipt": "receipts\\eng36-ledger_mit-20260611T044523Z.json",
+      "url_pin": {
+        "dataset": "local nc-ladder ledger (read-only)",
+        "ledger_sha256": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+        "path": "B:/M/avir/leo/state/nc-ladder/ledger/episodes.jsonl"
+      }
+    },
+    {
+      "source": "code_github_clean",
+      "ts": "20260611T051128Z",
+      "fp22_row": 1,
+      "license_class": "permissive-per-file",
+      "docs_kept": 1867710,
+      "text_bytes_kept": 13000000267,
+      "text_chars_kept": 12924848571,
+      "bytes_on_disk": 2487277903,
+      "n_shards": 14,
+      "manifest_mirror": "corpus-manifests\\code_github_clean-manifest-20260611T051128Z.json",
+      "manifest_sha256": "5aa29ff07b1fa97c21e5bd788da04def7342550e49c5a51d868bdd45b3b384df",
+      "receipt": "receipts\\eng36-code_github_clean-20260611T051128Z.json",
+      "url_pin": {
+        "config": null,
+        "dataset": "codeparrot/github-code-clean",
+        "load_path": "parquet-direct data/train-*.parquet at pinned revision (legacy script loader unsupported by datasets 4.1.1)",
+        "revision_sha": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+        "split": "train",
+        "url": "https://huggingface.co/datasets/codeparrot/github-code-clean/tree/c48d40f9e70f0196f8236901ee35807f7d6c44c0"
+      }
+    }
+  ],
+  "totals": {
+    "docs_kept": 4236458,
+    "text_bytes_kept": 25300537363,
+    "bytes_on_disk": 6655841807,
+    "n_sources": 5
+  },
+  "bars": {
+    "hard_bar_bytes": 100000000000,
+    "hard_bar_pass": true,
+    "raw_target_bytes": 30000000000,
+    "raw_target_note": "total text 25300537363 vs ~30GB soft target \u2014 report-only"
+  },
+  "tokens_pending_tokenizer_freeze": true,
+  "est_tokens_heuristic": {
+    "code": 4062663166,
+    "prose": 3324328440,
+    "total": 7386991606,
+    "code_fraction": 0.55
+  },
+  "est_tokens_note": "HEURISTIC ONLY \u2014 chars/token prose ~3.7, code ~3.2; binding token counts wait for the frozen train-on-sample tokenizer (fp-22)",
+  "verification": "all shards re-hashed sha256 against manifests; manifest mirrors re-hashed against per-source receipts; docs_kept == shard sums; fail-closed BEFORE this write",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "no_gpu": true
+}

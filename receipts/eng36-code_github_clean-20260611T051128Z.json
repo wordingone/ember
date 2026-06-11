@@ -1,0 +1,43 @@
+{
+  "ticket": "ENG36-CORPUS-CODE_GITHUB_CLEAN",
+  "ts": "20260611T051128Z",
+  "issue": "wordingone/ember#130",
+  "source": "code_github_clean",
+  "url_pin": {
+    "dataset": "codeparrot/github-code-clean",
+    "config": null,
+    "split": "train",
+    "revision_sha": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+    "url": "https://huggingface.co/datasets/codeparrot/github-code-clean/tree/c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+    "load_path": "parquet-direct data/train-*.parquet at pinned revision (legacy script loader unsupported by datasets 4.1.1)"
+  },
+  "license_stamp": {
+    "class": "permissive-per-file",
+    "basis": "per-file `license` field re-verified at ingest against the strict permissive allow-list, fail-closed (missing/unknown/copyleft = reject); SUBSTITUTION for fp-22 \u00a71 row 1 \u2014 the-stack-v2 is references-only and the issue's march-sample fallback has no per-file license metadata (both fail the stamp AC); EXTERNAL-CITED upstream detection + our per-row stamp"
+  },
+  "deviation": "fp-22 \u00a71 row-1 DEVIATION: source = codeparrot/github-code-clean. Basis: the-stack-v2 references-only (no local pull) + the-stack march-sample lacks per-file license metadata -> both fail the per-file license-stamp AC; codeparrot satisfies it with a per-row license field re-verified fail-closed. Acked by the gate-holder (mail 14530) before any pull; --ack-code-source is the mechanical gate.",
+  "counts": {
+    "docs_in": 2888877,
+    "docs_kept": 1867710,
+    "dups_dropped": 0,
+    "license_rejected": 1021167,
+    "empty_skipped": 0,
+    "text_bytes_kept": 13000000267,
+    "text_chars_kept": 12924848571
+  },
+  "dedup": {
+    "method": "doc-level exact sha256 over utf-8 text, source-local",
+    "docs_before": 1867710,
+    "docs_after": 1867710
+  },
+  "n_shards": 14,
+  "bytes_on_disk_total": 2487277903,
+  "manifest_path": "B:/M/avir/eli/state/ember-eng/corpus-v0\\code_github_clean\\manifest.json",
+  "manifest_mirror_in_repo": "corpus-manifests\\code_github_clean-manifest-20260611T051128Z.json",
+  "manifest_sha256": "5aa29ff07b1fa97c21e5bd788da04def7342550e49c5a51d868bdd45b3b384df",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "tokens_pending_tokenizer_freeze": true,
+  "est_tokens_heuristic": 3250000066,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "no_gpu": true
+}
