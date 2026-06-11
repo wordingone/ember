@@ -2,3 +2,4 @@
 # shard sha256 chains). git must NEVER rewrite line endings at checkout.
 corpus-manifests/** -text
 receipts/** -text
+tokenizer/** -text
