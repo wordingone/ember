@@ -146,6 +146,12 @@ SOURCES = {
                           "per-row stamp"),
         "fp22_row": 1,
         "requires_ack": True,
+        # datasets 4.1.1 refuses the repo's legacy loading script
+        # ("Dataset scripts are no longer supported, but found
+        # github-code-clean.py"); the data itself is parquet-native
+        # (880 shards under data/). Same dataset, same pinned revision —
+        # only the load path changes. Disclosed in mail 14542.
+        "parquet_glob": "data/train-*.parquet",
         # audit-§6 deviation record (gate-holder ack, mail 14530) — copied
         # verbatim into the manifest + receipt by acquire().
         "deviation": ("fp-22 §1 row-1 DEVIATION: source = "
@@ -292,6 +298,15 @@ def ingest_stream(records, *, text_field, byte_budget, writer,
 
 def hf_records(spec, revision):
     from datasets import load_dataset
+    if spec.get("parquet_glob"):
+        # Parquet-direct load of the SAME dataset at the SAME pinned
+        # revision (the @revision in the hf:// URL is load-bearing, not
+        # just recorded). Used where the repo ships a legacy loading
+        # script that datasets 4.1.1 refuses to run.
+        data_files = (f"hf://datasets/{spec['dataset']}@{revision}/"
+                      f"{spec['parquet_glob']}")
+        return load_dataset("parquet", data_files=data_files,
+                            split="train", streaming=True)
     kwargs = {"split": spec["split"], "streaming": True,
               "revision": revision}
     if spec["config"]:
@@ -335,6 +350,11 @@ def acquire(source, out_root, byte_budget=None, shard_bytes=1_000_000_000):
             "url": (f"https://huggingface.co/datasets/{spec['dataset']}"
                     f"/tree/{revision}"),
         }
+        if spec.get("parquet_glob"):
+            url_pin["load_path"] = (
+                f"parquet-direct {spec['parquet_glob']} at pinned "
+                f"revision (legacy script loader unsupported by "
+                f"datasets 4.1.1)")
         records = hf_records(spec, revision)
     elif spec["kind"] == "ledger":
         ledger_path = f"{NC}/ledger/episodes.jsonl"

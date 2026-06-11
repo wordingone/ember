@@ -1,0 +1,41 @@
+{
+  "ticket": "ENG36-CORPUS-GUTENBERG_EN",
+  "ts": "20260611T050315Z",
+  "issue": "wordingone/ember#130",
+  "source": "gutenberg_en",
+  "url_pin": {
+    "dataset": "manu/project_gutenberg",
+    "config": null,
+    "split": "en",
+    "revision_sha": "164853d214065df26a630ee1ab91a0c39e461caf",
+    "url": "https://huggingface.co/datasets/manu/project_gutenberg/tree/164853d214065df26a630ee1ab91a0c39e461caf"
+  },
+  "license_stamp": {
+    "class": "public-domain",
+    "basis": "Project Gutenberg books, English split (public-domain basis per the PG corpus; dataset card manu/project_gutenberg); fp-22 \u00a71 row 4. Packaging note: first choice deepmind/pg19 is a script-based HF dataset, unloadable under datasets 4.x ('Dataset scripts are no longer supported') \u2014 this parquet-native packaging is the eng-36 survey's named alternate, same PD basis"
+  },
+  "counts": {
+    "docs_in": 7194,
+    "docs_kept": 4510,
+    "dups_dropped": 2684,
+    "license_rejected": 0,
+    "empty_skipped": 0,
+    "text_bytes_kept": 1900007704,
+    "text_chars_kept": 1891271565
+  },
+  "dedup": {
+    "method": "doc-level exact sha256 over utf-8 text, source-local",
+    "docs_before": 7194,
+    "docs_after": 4510
+  },
+  "n_shards": 2,
+  "bytes_on_disk_total": 629065899,
+  "manifest_path": "B:/M/avir/eli/state/ember-eng/corpus-v0\\gutenberg_en\\manifest.json",
+  "manifest_mirror_in_repo": "corpus-manifests\\gutenberg_en-manifest-20260611T050315Z.json",
+  "manifest_sha256": "ceb22ac3fcd4ecc6664f880b1a3410c6dd13193186bd56c0692c5dee651cf2d4",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "tokens_pending_tokenizer_freeze": true,
+  "est_tokens_heuristic": 475001926,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "no_gpu": true
+}

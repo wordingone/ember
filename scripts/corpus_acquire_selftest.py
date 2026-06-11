@@ -133,6 +133,16 @@ def main():
     assert '"sha_convention": SHA_CONVENTION' in src
     assert "effective_class(rec) == \"arc-dsl-mit\"" in src, \
         "ledger slice must classify via the fp-6 single source"
+    # parquet-direct load path (mail 14542): same dataset, same pinned
+    # revision — the @revision must be inside the hf:// data_files URL
+    # (load-bearing pin), and the registry must route the code source
+    # through it since its legacy script loader is unsupported.
+    assert ca.SOURCES["code_github_clean"].get("parquet_glob") == \
+        "data/train-*.parquet"
+    assert "hf://datasets/{spec['dataset']}@{revision}/" in src, \
+        "revision pin must be load-bearing in the parquet-direct URL"
+    assert 'url_pin["load_path"]' in src, \
+        "manifest must record the parquet-direct load path"
     checks["source_wiring"] = True
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
