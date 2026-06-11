@@ -276,6 +276,96 @@ def count_tokens(tok_path, manifests, out_root,
     return per_source
 
 
+def recount_disabled_matching(census_receipt, out_root):
+    """eng #195 deviation remedy (Leo 14628, decision frozen pre-census):
+    re-derive real_token_counts under the PRODUCTION encode semantics —
+    added-token literal matching DISABLED — and emit a superseding
+    tokenizer-freeze receipt. Same assembly pin, same tokenizer bytes (the
+    sha-pinned tokenizer.json is untouched on disk); only the counting
+    instrument's semantics change, aligned to the TOKEN-SHARDS-V0 band
+    contract (text never yields ids 0..7). The census receipt (matching
+    ENABLED, diagnostic) rides along as the deviation's size evidence.
+
+    NOT a re-freeze: no sampling, no training, no tokenizer bytes written.
+    The --freeze one-shot refusal is untouched."""
+    from token_shards_v0 import ENCODE_SEMANTICS, _production_tokenizer
+
+    prior = existing_freeze_receipts(REPO)
+    if not prior:
+        raise SystemExit("recount: no production freeze receipt to "
+                         "re-derive from")
+    base_path = prior[-1]
+    base_sha = file_sha256(base_path)
+    base = json.load(open(base_path, encoding="utf-8"))
+    pinned_assembly_receipt(REPO)
+    if base.get("assembly_receipt_sha256") != ASSEMBLY_RECEIPT_SHA256:
+        raise SystemExit("recount: base freeze pins a different assembly "
+                         "receipt — refusing")
+    census_path = os.path.join(REPO, census_receipt) \
+        if not os.path.isabs(census_receipt) else census_receipt
+    if not os.path.exists(census_path):
+        raise SystemExit(f"recount: census receipt absent: {census_path} — "
+                         f"the deviation must be sized before the "
+                         f"re-derivation lands")
+    census_sha = file_sha256(census_path)
+
+    manifests = load_manifests(REPO)
+    tok = _production_tokenizer(REPO, base, match_added_tokens=False)
+    per_source = {}
+    for src in sorted(manifests):
+        m, _ = manifests[src]
+        corpus_dir = os.path.join(out_root, src)
+        n, batch, bbytes = 0, [], 0
+        for text in iter_shard_docs(m, corpus_dir):
+            batch.append(text)
+            bbytes += len(text)
+            if len(batch) >= 512 or bbytes >= 32_000_000:
+                n += sum(len(e.ids) for e in tok.encode_batch(batch))
+                batch, bbytes = [], 0
+        if batch:
+            n += sum(len(e.ids) for e in tok.encode_batch(batch))
+        per_source[src] = n
+        print(f"[recount] {src}: {n} tokens", flush=True)
+    new_total = sum(per_source.values())
+    old_counts = base.get("real_token_counts") or {}
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    receipt = dict(base)
+    receipt.update({
+        "ts": ts,
+        "real_token_counts": {**per_source, "total": new_total},
+        "encode_semantics": ENCODE_SEMANTICS,
+        "derived_from": {"name": os.path.basename(base_path),
+                         "sha256": base_sha},
+        "deviation_note": {
+            "reason": ("text-borne special-token literals: under "
+                       "matching-ENABLED encoding, added-token literals in "
+                       "raw corpus text matched to reserved ids 0..7 and "
+                       "were absorbed into real_token_counts — ids the "
+                       "TOKEN-SHARDS-V0 band contract refuses from text. "
+                       "Counts re-derived with matching DISABLED "
+                       "(contract-aligned; Leo 14628, decision frozen "
+                       "pre-census)"),
+            "old_real_token_counts": old_counts,
+            "total_delta_vs_old": new_total - (old_counts.get("total") or 0),
+            "census_receipt": {"name": os.path.basename(census_path),
+                               "sha256": census_sha},
+        },
+    })
+    rh = dict(base.get("resolves_heuristic") or {})
+    rh["real_total"] = new_total
+    receipt["resolves_heuristic"] = rh
+
+    out = os.path.join(REPO, "receipts", f"tokenizer-freeze-{ts}.json")
+    checked_write(out, receipt)
+    print(f"[recount] TOTAL real tokens: {new_total} "
+          f"(was {old_counts.get('total')}, "
+          f"delta {new_total - (old_counts.get('total') or 0)})", flush=True)
+    print(f"[recount] receipt: {out}")
+    print("TOKENIZER_RECOUNT_DONE")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out-root", default=OUT_ROOT_DEFAULT)
@@ -284,7 +374,19 @@ def main():
     ap.add_argument("--freeze", action="store_true",
                     help="required to run — this writes the ONE frozen "
                          "v0 tokenizer (no re-freeze path)")
+    ap.add_argument("--recount", metavar="CENSUS_RECEIPT",
+                    help="re-derive real_token_counts under the production "
+                         "encode semantics (added-token matching disabled, "
+                         "token_shards_v0.ENCODE_SEMANTICS) and emit a "
+                         "superseding freeze receipt; takes the special-id "
+                         "census receipt path as deviation-size evidence. "
+                         "No sampling / no training / tokenizer bytes "
+                         "untouched.")
     args, _unknown = ap.parse_known_args()
+
+    if args.recount:
+        recount_disabled_matching(args.recount, args.out_root)
+        return
 
     if not args.freeze:
         raise SystemExit("tokenizer_freeze: pass --freeze explicitly "
