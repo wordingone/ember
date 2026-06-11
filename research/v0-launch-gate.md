@@ -18,11 +18,23 @@ the user by name.
 
 ## Dispatch rule
 
-The v0 pretrain shim (`v0_pretrain.py`, to be built with G-config) embeds
+The v0 pretrain shim (`scripts/v0_pretrain_launch_gate.py`, **BUILT**) embeds
 this table as assertions: it loads each named receipt, receipt_checks it,
-verifies the pins (assembly sha inside the tokenizer receipt; governor
-block inside its own config), and refuses with the failing G-row named.
-Same fail-closed grammar as fp25_surfaceb select mode.
+verifies the pins (assembly sha byte-true == the pin AND inside the
+tokenizer receipt; governor block inside its own config via
+`v0_config_check --launch`), computes the budget against the deadline, and
+refuses with the failing G-row(s) named. Same fail-closed grammar as
+fp25_surfaceb select mode. `--emit` writes a dated `v0-launch-gate-<ts>.json`
+receipt (checked-write: the emitted receipt must itself pass receipt_check);
+`--selftest` proves the fail-closed branches on mutated pins.
+
+The #167 trainer (timeshare_pretrain.py extended against the frozen config)
+is dispatched ONLY when this gate exits 0 (`V0_LAUNCH_GATE_GREEN`). As of
+2026-06-11T07:54Z the gate is GREEN on 6/7 rows and refuses on exactly
+**G-prereg** (no `fp26-prereg-*.json` frozen receipt yet) — receipt
+`v0-launch-gate-20260611T075419Z.json`. Launch is one row from green: the
+fp-26 round-3 prereg freeze (blocked on the monitor's MDE-wording reply,
+mail 14582 ask #2) flips G-prereg and the gate goes launch-green.
 
 ## Sequence to green (critical path, in order)
 
