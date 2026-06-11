@@ -1,0 +1,183 @@
+{
+  "ticket": "ENG123-TIMESHARE-DRYRUN",
+  "ts": "20260611T033538Z",
+  "issue": "wordingone/ember#123",
+  "scope": "CPU dry-run segment pair \u2014 no GPU, no daemon, interlock active",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "interlock": {
+    "mode": "default_closed",
+    "live_flag": false,
+    "ember_gate_authorized": false,
+    "refusal_line": "TIMESHARE_LAUNCH_INTERLOCK_REFUSED: GPU/real-pretrain path blocked. Requires EMBER_GATE_AUTHORIZED=1 (env) AND --live (flag). Real v0 pretrain fires only on fp-22's gate. [authorized=False, live=False]",
+    "verdict": "INTERLOCK_BLOCKED_GPU_PATH"
+  },
+  "governor_floor": {
+    "source": "fp19_bench.py (fp-19 frozen 2026-06-11, commit be76095)",
+    "vram_fraction_floor": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_floor": 0.05,
+    "note": "governor.preflight() not called (CPU dry-run path); fp19 constants carried in receipt as the governing floor"
+  },
+  "segment_A": {
+    "segment_id": "seg-A",
+    "steps": 261,
+    "tokens": 66816,
+    "wall_s": 15.015,
+    "tok_per_s": 4449.9,
+    "loss_first": 1.138674,
+    "loss_last": 0.8503,
+    "pacing": {
+      "throttle_s": 0.0,
+      "throttle_steps": 0,
+      "pace_s": 13.05,
+      "pace_steps": 261,
+      "pacing_total_s": 13.05,
+      "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s"
+    },
+    "checkpoint_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_pr7jmtgo\\checkpoints\\step-00000261"
+  },
+  "handoff": {
+    "checkpoint_out": {
+      "event": "checkpoint_out",
+      "segment_id": "seg-A",
+      "ckpt_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_pr7jmtgo\\checkpoints\\step-00000261",
+      "ckpt_files": {
+        "model.pt": "4fc72395eaeb634117f2528242467a0dea2e2c31a5cbb0112a817ca83f3e528d",
+        "optimizer.pt": "783296fd9246e9a20ecec2b8e46168a9931fb8484f0dabe6195d9ce058460849",
+        "rng.pt": "c571e04c6a3b81599a5349dd8fdbccc93cbb98d2eb058b822e3132c7fef29b42"
+      },
+      "pacing": {
+        "tokens_so_far": 66816,
+        "steps_so_far": 261,
+        "wall_s": 15.015,
+        "tok_per_s": 4449.9,
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s"
+      },
+      "from": "PRETRAIN_HOLDS_GPU",
+      "to": "CHECKPOINT_OUT",
+      "ts": "20260611T033554Z"
+    },
+    "open_window": {
+      "event": "open_window",
+      "round_id": "round-dryrun",
+      "pacing": {
+        "tokens_so_far": 66816,
+        "steps_so_far": 261,
+        "wall_s": 15.015,
+        "tok_per_s": 4449.9,
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s"
+      },
+      "from": "CHECKPOINT_OUT",
+      "to": "WINDOW_OPEN",
+      "ts": "20260611T033554Z"
+    },
+    "close_window": {
+      "event": "close_window",
+      "round_id": "round-dryrun",
+      "jobs_terminal": [
+        "dryrun-noop-job-01"
+      ],
+      "pacing": {
+        "tokens_so_far": 66816,
+        "steps_so_far": 261,
+        "wall_s": 15.065,
+        "tok_per_s": 4435.1,
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s"
+      },
+      "from": "WINDOW_OPEN",
+      "to": "WINDOW_CLOSED",
+      "ts": "20260611T033554Z"
+    },
+    "resume_pretrain": {
+      "event": "resume_pretrain",
+      "segment_id": "seg-A",
+      "ckpt_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_pr7jmtgo\\checkpoints\\step-00000261",
+      "ckpt_files": {
+        "model.pt": "4fc72395eaeb634117f2528242467a0dea2e2c31a5cbb0112a817ca83f3e528d",
+        "optimizer.pt": "783296fd9246e9a20ecec2b8e46168a9931fb8484f0dabe6195d9ce058460849",
+        "rng.pt": "c571e04c6a3b81599a5349dd8fdbccc93cbb98d2eb058b822e3132c7fef29b42"
+      },
+      "pacing": {
+        "tokens_so_far": 66816,
+        "steps_so_far": 261,
+        "wall_s": 15.065,
+        "tok_per_s": 4435.1,
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s"
+      },
+      "from": "WINDOW_CLOSED",
+      "to": "PRETRAIN_HOLDS_GPU",
+      "ts": "20260611T033555Z"
+    },
+    "state_sequence": [
+      "PRETRAIN_HOLDS_GPU",
+      "CHECKPOINT_OUT",
+      "WINDOW_OPEN",
+      "WINDOW_CLOSED",
+      "PRETRAIN_HOLDS_GPU"
+    ],
+    "never_concurrent": true
+  },
+  "segment_B": {
+    "segment_id": "seg-B",
+    "steps": 262,
+    "tokens": 67072,
+    "wall_s": 15.016,
+    "tok_per_s": 4466.6,
+    "loss_first": 1.040478,
+    "loss_last": 1.024668,
+    "pacing": {
+      "throttle_s": 0.0,
+      "throttle_steps": 0,
+      "pace_s": 13.1,
+      "pace_steps": 262,
+      "pacing_total_s": 13.1,
+      "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s"
+    }
+  },
+  "resume_integrity": {
+    "pass": true,
+    "verdict": "CLOSE",
+    "loss_pre_checkpoint": 0.8503000140190125,
+    "loss_post_resume": 1.040477991104126,
+    "rel_diff": 0.22365985,
+    "rtol": 2.0,
+    "note": "CLOSE: within rtol tolerance"
+  },
+  "resume_safety_determination": {
+    "ticket": "TIMESHARE-RESUME-VERIFY",
+    "ts": "20260611T033610Z",
+    "issue": "wordingone/ember#123",
+    "scope": "post-failure resume-safety determination (safe resume vs restart-from-scratch)",
+    "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+    "run_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_pr7jmtgo",
+    "checkpoints_scanned": 1,
+    "checkpoints_valid": 1,
+    "checkpoints": [
+      {
+        "dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_pr7jmtgo\\checkpoints\\step-00000261",
+        "valid": true,
+        "step": 261,
+        "error": null,
+        "files": {
+          "model.pt": "4fc72395eaeb634117f2528242467a0dea2e2c31a5cbb0112a817ca83f3e528d",
+          "optimizer.pt": "783296fd9246e9a20ecec2b8e46168a9931fb8484f0dabe6195d9ce058460849",
+          "rng.pt": "c571e04c6a3b81599a5349dd8fdbccc93cbb98d2eb058b822e3132c7fef29b42"
+        }
+      }
+    ],
+    "orphan_tmp_dirs": [],
+    "latest_valid": {
+      "dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_pr7jmtgo\\checkpoints\\step-00000261",
+      "step": 261,
+      "files": {
+        "model.pt": "4fc72395eaeb634117f2528242467a0dea2e2c31a5cbb0112a817ca83f3e528d",
+        "optimizer.pt": "783296fd9246e9a20ecec2b8e46168a9931fb8484f0dabe6195d9ce058460849",
+        "rng.pt": "c571e04c6a3b81599a5349dd8fdbccc93cbb98d2eb058b822e3132c7fef29b42"
+      }
+    },
+    "pass": true,
+    "verdict": "SAFE_RESUME"
+  },
+  "pass": true,
+  "verdict": "DRYRUN_COMPLETE"
+}

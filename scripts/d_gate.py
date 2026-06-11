@@ -35,6 +35,9 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+# receipt_write is in the same scripts/ dir; path inserted below at call site.
+from receipt_write import checked_write
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -368,8 +371,7 @@ def run_d_gate(artifact_path: Path, args) -> dict:
 
     artifact_stem = artifact_path.stem[:32].replace("/", "_").replace("\\", "_")
     receipt_path = _RECEIPTS / f"d-gate-{artifact_stem}-{ts}.json"
-    with open(receipt_path, "w") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(receipt_path, receipt)
     print(f"[d_gate] receipt: {receipt_path}", flush=True)
     return receipt
 
