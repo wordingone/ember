@@ -107,6 +107,9 @@ def main():
         "ticket": "ENG140-VIEWPATH-SELFTEST", "ts": ts,
         "issue": "wordingone/ember#140",
         "checks": checks,
+        "sha_convention": ("sha256 over on-disk raw bytes "
+                           "(binary read, no line-ending normalization) — "
+                           "the convention file_sha256 is pinned against"),
         "default_path_unchanged": ("no --view-path = legacy round-1 "
                                    "behavior (regenerate wcode-r1.jsonl "
                                    "from ledger, arm-A-identical build)"),
