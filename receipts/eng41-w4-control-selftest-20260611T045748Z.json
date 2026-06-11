@@ -1,0 +1,14 @@
+{
+  "ticket": "ENG41-W4-CONTROL-SELFTEST",
+  "ts": "20260611T045748Z",
+  "issue": "wordingone/ember#151",
+  "checks": {
+    "control_pairs": true,
+    "w4_eval_wiring": true,
+    "repair_roundtrip_and_refusals": true,
+    "repair_wiring": true
+  },
+  "finding": "literal 'trained' guard meant the r2 five-arm G1 receipt carried no control deltas (Kai mail 14529); STATE needs arm-minus-base AND arm-minus-control per trained arm",
+  "repair_validity": "seeded CIs (seed=7) make recomputation deterministic: the repair tool refuses unless it reproduces the original base deltas + pass rates exactly from the same samples",
+  "dispatch_note": "repaired receipt vs post-patch rerun for the in-flight G1 run is the gate-holder's call (14529 names both); powered t5 must not launch from a receipt lacking control legs"
+}
