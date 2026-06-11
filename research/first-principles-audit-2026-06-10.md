@@ -814,3 +814,66 @@ block), then re-derive s from the next natural sampling run (piggyback;
 no GPU run launched for this alone) and resolve the fp-9 scope
 qualifier: either parity-as-operated + edge-real-compute both quoted, or
 collapse back to parity everywhere. Closing PR mints fp-15.
+
+## 8.20 fp-12 (#78): the upvalued band is STABLE (conditional) — the last cheap-sampler rationale survives
+
+**Question (minted by §8.17):** fp-9 retired the efficiency rationale;
+the band (easy-for-small / hard-for-big, +60.9 bits) is the last
+surviving cheap-sampler reason. Is membership a stable task property or
+sampling noise?
+
+**Premise correction (modified-spec rule, recorded — adversarially
+confirmed factually correct):** issue #78 said the 1.5B was sampled
+twice. The receipts say otherwise: the two INDEPENDENT samplings on disk
+are both 3B — q3 (k=8, seed 14) and q3-focus (k=24, seed 15, the 59
+tasks at k8-rate ≤ 0.75). The 1.5B (q15) exists once (k=8, seed 14). So
+the test holds the q15 coordinate FIXED and varies only the hard-for-big
+(3B) coordinate; the easy-for-small coordinate's stability is UNTESTED
+and named as a gap. The verdict asymmetry follows from band membership
+being a CONJUNCTION: either coordinate being noise kills the band
+outright, so a NOISE verdict here is decisive; a STABLE verdict is
+CONDITIONAL on the untested half.
+
+**Method (`scripts/fp12_band.py`, selftest PASS, receipt
+`fp12-band-20260611T010835Z.json`, CPU-from-receipts):** band membership
+computed twice — q15×q3-k8 vs q15×q3focus-k24 — over the 59 joint tasks,
+using fp-7's exact predicate (s15>0 AND laplace_phat(3B) <
+laplace_phat(1.5B)). Cohen's kappa + Jaccard + task-label permutation
+p (seed 16, 10k). Posterior-probability variant (P(p3<p15) ≥ 0.8 under
+Beta posteriors, deterministic grid) controls small-k flicker.
+Bits-weighted stability quoted. **Adversarial 2-lens verify (Haiku)
+before gate: BOTH CLEAN** — all membership counts (13/14/8), kappa,
+p-value, and rate-drift reproduced independently; the selection-bias
+direction confirmed (focus selection on the LOW-rate k8 tasks + their
+regression UP at k24 SUPPRESSES agreement, so the measured kappa is a
+conservative LOWER bound); the conjunction-verdict logic confirmed sound.
+
+**Verdict — STABLE (conditional), by the pre-registered rule:**
+- band membership kappa **0.472**, permutation **p=0.0003** (≫ chance;
+  Jaccard 0.421, 8 of ~13–14 shared);
+- posterior variant agrees: kappa **0.477**, p=0.0018;
+- bits-weighted: **72.2%** of the k8 leg's upvalued bits (40.1 of 55.5)
+  stay upvalued under the k24 leg.
+
+**Consequences:** the targeting filter is JUSTIFIED — the band is a real
+asymmetric-capability pocket (tasks the 1.5B finds routine that the 3B
+finds rare), not sampling noise, on the resampled coordinate. This is
+the one surviving cheap-sampler rationale: fp-9 killed bulk-feed
+efficiency, fp-6 made license the bulk-sampler decider, and fp-12 keeps
+the band as a TARGETED-feed reason — sample the 1.5B specifically for
+its band tasks even when the 3B is the consolidator. Conditionality is
+explicit: a single-sampled q15 coordinate means the band's small-core
+half is assumed stable, not shown; the selection bias makes the result
+conservative (true stability ≥ measured). No round design is committed
+here — the band enters round-3 sampling design as an input, not a
+frozen arm.
+
+**Successor minted (fp-15):** the band is stable but its small-core
+coordinate is untested — and more deeply, the band was defined by a
++60.9-bit valuation that itself assumed the 3B consolidator. Does the
+band PREDICT anything beyond its own definition — i.e. do band-targeted
+1.5B episodes, when actually consolidated, produce more transfer per
+GPU-minute than matched non-band episodes? That is the band's first
+FALSIFIABLE downstream claim (G1-delta on a band-vs-nonband split),
+deferred to a round that trains, but pre-registerable now from the
+existing episode pool. Closing PR mints fp-16.
