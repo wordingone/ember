@@ -35,6 +35,8 @@ import torch
 from timeshare_pretrain import (
     save_checkpoint,
     load_checkpoint,
+    read_manifest,
+    verify_resume,
     capture_rng,
     restore_rng,
     pacing_snapshot,
@@ -89,7 +91,7 @@ def run_dryrun() -> None:
         TARGET_SEG_S = 15.0  # 15 s per segment for ~30 s total (CPU; pace dominates)
         seg_a_tokens = 0
 
-        while time.perf_counter() - seg_a_start if False else True:
+        while True:
             t_now = time.perf_counter()
             if t_now - t_seg_a_start >= TARGET_SEG_S:
                 break
@@ -117,12 +119,15 @@ def run_dryrun() -> None:
             extra={"last_loss": seg_a_losses[-1], "segment_id": "seg-A"},
         )
 
+        ckpt_manifest = read_manifest(ckpt_dir)
+
         hm = HandoffMachine(state_dir)
         co_record = hm.checkpoint_out(
             "seg-A", ckpt_dir,
             tokens_so_far=seg_a_tokens,
             steps_so_far=seg_a_steps,
             wall_s=seg_a_wall,
+            ckpt_files=ckpt_manifest["files"],
         )
         print(f"[dryrun] CHECKPOINT_OUT at step {seg_a_steps}, loss={seg_a_losses[-1]:.6f}")
 
@@ -153,6 +158,7 @@ def run_dryrun() -> None:
             tokens_so_far=seg_a_tokens,
             steps_so_far=seg_a_steps,
             wall_s=seg_a_wall + 0.05,
+            ckpt_files=mf["files"],
         )
         print(f"[dryrun] RESUME_PRETRAIN (checkpoint state restored)")
 
@@ -189,6 +195,11 @@ def run_dryrun() -> None:
         resume_integrity = check_resume_integrity(
             [seg_a_losses[-1]], [seg_b_losses[0]], rtol=2.0)
         print(f"[dryrun] resume_integrity verdict: {resume_integrity['verdict']}")
+
+        # ---- Post-failure resume-safety determination over the run dir ----
+        resume_safety = verify_resume(run_dir)
+        print(f"[dryrun] resume_safety verdict: {resume_safety['verdict']} "
+              f"(latest_valid step={resume_safety['latest_valid']['step'] if resume_safety['latest_valid'] else None})")
 
         # ---- Build receipt ----
         receipt: dict = {
@@ -253,6 +264,7 @@ def run_dryrun() -> None:
                 "pacing": seg_b_pacing,
             },
             "resume_integrity": resume_integrity,
+            "resume_safety_determination": resume_safety,
             "pass": True,
             "verdict": "DRYRUN_COMPLETE",
         }

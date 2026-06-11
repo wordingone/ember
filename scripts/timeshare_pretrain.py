@@ -225,6 +225,78 @@ def load_checkpoint(ckpt_dir: str) -> tuple[dict, dict, dict, dict]:
     return model_state, optimizer_state, rng_state, manifest
 
 
+def read_manifest(ckpt_dir: str) -> dict:
+    """Read a checkpoint's manifest.json (no tensor loads, no hash verify)."""
+    with open(os.path.join(ckpt_dir, "manifest.json"), "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def verify_resume(run_dir: str) -> dict:
+    """Post-failure resume-safety determination (fail-closed).
+
+    Scans run_dir/checkpoints, validates every checkpoint's manifest + per-file
+    sha256, and emits an explicit verdict distinguishing safe resume from
+    restart-from-scratch:
+
+      SAFE_RESUME           — at least one fully hash-valid checkpoint exists;
+                              latest_valid names the resume target (dir, step,
+                              per-file hashes).
+      RESTART_FROM_SCRATCH  — no valid checkpoint (none written, all corrupt,
+                              or only orphan .tmp dirs from aborted writes).
+
+    Orphan .tmp directories (aborted atomic writes) are reported and are never
+    resume-eligible. Any defect (missing manifest, missing file, sha mismatch,
+    malformed json) marks that checkpoint invalid — fail-closed, never a guess.
+    """
+    base = os.path.join(run_dir, "checkpoints")
+    entries = sorted(os.listdir(base)) if os.path.isdir(base) else []
+    checkpoints: list[dict[str, Any]] = []
+    orphan_tmp: list[str] = []
+    for name in entries:
+        p = os.path.join(base, name)
+        if name.endswith(".tmp"):
+            orphan_tmp.append(p)
+            continue
+        if not os.path.isdir(p):
+            continue
+        rec: dict[str, Any] = {"dir": p, "valid": False, "step": None, "error": None}
+        try:
+            manifest = read_manifest(p)
+            for fname, expected in manifest["files"].items():
+                actual = _sha256_file(os.path.join(p, fname))
+                if actual != expected:
+                    raise ValueError(
+                        f"sha256 mismatch on {fname}: expected={expected} actual={actual}")
+            rec["valid"] = True
+            rec["step"] = manifest["step"]
+            rec["files"] = manifest["files"]
+        except Exception as e:  # noqa: BLE001 — any defect = invalid, fail-closed
+            rec["error"] = f"{type(e).__name__}: {e}"
+        checkpoints.append(rec)
+    valid = [c for c in checkpoints if c["valid"]]
+    latest = max(valid, key=lambda c: c["step"]) if valid else None
+    return {
+        "ticket": "TIMESHARE-RESUME-VERIFY",
+        "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "issue": "wordingone/ember#123",
+        "scope": "post-failure resume-safety determination (safe resume vs restart-from-scratch)",
+        "sha_convention": (
+            "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
+        ),
+        "run_dir": run_dir,
+        "checkpoints_scanned": len(checkpoints),
+        "checkpoints_valid": len(valid),
+        "checkpoints": checkpoints,
+        "orphan_tmp_dirs": orphan_tmp,
+        "latest_valid": (
+            {"dir": latest["dir"], "step": latest["step"], "files": latest["files"]}
+            if latest else None
+        ),
+        "pass": True,
+        "verdict": "SAFE_RESUME" if latest else "RESTART_FROM_SCRATCH",
+    }
+
+
 # ---------------------------------------------------------------------------
 # RNG capture / restore (CPU paths; CUDA path gated by has_cuda)
 # ---------------------------------------------------------------------------
@@ -426,12 +498,21 @@ def run_segment(
     resume_receipt: dict | None = None
     loss_before_ckpt: list[float] = []
 
+    resume_checkpoint: dict | None = None
     if resume_ckpt_dir is not None:
         m_state, o_state, r_state, manifest = load_checkpoint(resume_ckpt_dir)
         model.load_state_dict(m_state)
         optimizer.load_state_dict(o_state)
         restore_rng(r_state)
         resume_step = manifest["step"]
+        # Checkpoint-in record: load_checkpoint verified every per-file sha256
+        # (fail-closed above), so reaching this line means hashes matched.
+        resume_checkpoint = {
+            "ckpt_dir": resume_ckpt_dir,
+            "step": manifest["step"],
+            "files": manifest["files"],
+            "hash_verified": True,
+        }
         # First step after resume — record loss for continuity check.
         # We do NOT train yet; run one forward pass to get reference loss.
         if tiny_cpu or not live:
@@ -507,6 +588,7 @@ def run_segment(
         "pacing": pacing,
         "governor": gov_receipt,
         "last_checkpoint": last_ckpt_dir,
+        "resume_checkpoint": resume_checkpoint,
         "resume_integrity": resume_receipt,
         "sha_convention": (
             "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
@@ -671,6 +753,31 @@ def _selftest() -> None:
         _, _, _, clean_manifest = load_checkpoint(clean_ckpt)
         assert clean_manifest["step"] == 99, clean_manifest
 
+        # ---- verify_resume: safe-resume vs restart-from-scratch determination ----
+        # Layout now: step-00000005 (valid), step-00000099 (valid). Corrupt the
+        # older one and plant an orphan .tmp; the determination must name step 99
+        # as the safe-resume target, mark step 5 invalid, and never count the .tmp.
+        with open(os.path.join(ckpt_dir, "model.pt"), "ab") as f:
+            f.write(b"\x00")  # corrupt step-5 model.pt (sha mismatch)
+        orphan = os.path.join(tmpdir, "checkpoints", "step-00000123.tmp")
+        os.makedirs(orphan, exist_ok=True)
+
+        vr = verify_resume(tmpdir)
+        assert vr["verdict"] == "SAFE_RESUME", vr
+        assert vr["checkpoints_scanned"] == 2, vr["checkpoints_scanned"]
+        assert vr["checkpoints_valid"] == 1, vr["checkpoints_valid"]
+        assert vr["latest_valid"]["step"] == 99, vr["latest_valid"]
+        assert len(vr["orphan_tmp_dirs"]) == 1, vr["orphan_tmp_dirs"]
+        corrupt_rec = [c for c in vr["checkpoints"] if not c["valid"]]
+        assert len(corrupt_rec) == 1 and "sha256 mismatch" in corrupt_rec[0]["error"], corrupt_rec
+
+        # Empty run dir → restart-from-scratch, fail-closed.
+        empty_dir = os.path.join(tmpdir, "empty-run")
+        os.makedirs(empty_dir, exist_ok=True)
+        vr_empty = verify_resume(empty_dir)
+        assert vr_empty["verdict"] == "RESTART_FROM_SCRATCH", vr_empty
+        assert vr_empty["latest_valid"] is None, vr_empty
+
         print("TIMESHARE_PRETRAIN_SELFTEST_PASS")
 
     finally:
@@ -696,10 +803,19 @@ def main(argv: list[str] | None = None) -> None:
                     help="Segment label for receipts")
     ap.add_argument("--resume-ckpt", default=None,
                     help="Checkpoint directory to resume from")
+    ap.add_argument("--verify-resume", action="store_true",
+                    help="Scan --run-dir checkpoints and print the safe-resume "
+                         "vs restart-from-scratch determination (no training)")
     args = ap.parse_args(argv)
 
     if args.selftest:
         _selftest()
+        return
+
+    if args.verify_resume:
+        if not args.run_dir:
+            raise SystemExit("--verify-resume requires --run-dir")
+        print(json.dumps(verify_resume(args.run_dir), indent=2, sort_keys=True))
         return
 
     if args.live:

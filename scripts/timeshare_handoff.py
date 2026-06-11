@@ -217,16 +217,21 @@ class HandoffMachine:
         tokens_so_far: int = 0,
         steps_so_far: int = 0,
         wall_s: float = 0.0,
+        ckpt_files: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """PRETRAIN_HOLDS_GPU → CHECKPOINT_OUT.
 
         Records that the pretrain has written a checkpoint and released the GPU.
         Round windows may only open after this transition completes.
+        ckpt_files: per-file sha256 map from the checkpoint manifest — carried
+        in the transition record so the handoff receipt names the artifact by
+        path AND hash, not path alone.
         """
         record: dict[str, Any] = {
             "event": "checkpoint_out",
             "segment_id": segment_id,
             "ckpt_dir": ckpt_dir,
+            "ckpt_files": ckpt_files,
             "pacing": _pacing_block(tokens_so_far, steps_so_far, wall_s),
         }
         self._transition(STATE_PRETRAIN_HOLDS, STATE_CHECKPOINT_OUT, record)
@@ -336,11 +341,15 @@ class HandoffMachine:
         steps_so_far: int = 0,
         wall_s: float = 0.0,
         live: bool = False,
+        ckpt_files: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """WINDOW_CLOSED → PRETRAIN_HOLDS_GPU (resume).
 
         Requires WINDOW_CLOSED with zero in-flight jobs (enforced by transition
         guard + pre-check). If live=True, also validates the launch interlock.
+        ckpt_files: per-file sha256 map of the checkpoint being resumed from
+        (verified by load_checkpoint) — the checkpoint-in record carries the
+        artifact path AND hashes.
         """
         # Extra check: confirm zero in-flight (belt + suspenders).
         in_flight = [
@@ -359,6 +368,7 @@ class HandoffMachine:
             "event": "resume_pretrain",
             "segment_id": segment_id,
             "ckpt_dir": ckpt_dir,
+            "ckpt_files": ckpt_files,
             "pacing": _pacing_block(tokens_so_far, steps_so_far, wall_s),
         }
         self._transition(STATE_WINDOW_CLOSED, STATE_PRETRAIN_HOLDS, record)
@@ -409,8 +419,10 @@ def _selftest() -> None:
         hm = HandoffMachine(os.path.join(tmpdir, "state-pass"))
         assert hm.current_state == STATE_PRETRAIN_HOLDS, hm.current_state
 
+        fake_hashes = {"model.pt": "a" * 64, "optimizer.pt": "b" * 64, "rng.pt": "c" * 64}
         hm.checkpoint_out("seg-A", "/fake/ckpt/step-00000050",
-                          tokens_so_far=1000, steps_so_far=50, wall_s=10.0)
+                          tokens_so_far=1000, steps_so_far=50, wall_s=10.0,
+                          ckpt_files=fake_hashes)
         assert hm.current_state == STATE_CHECKPOINT_OUT, hm.current_state
 
         hm.open_window("round-2",
@@ -427,13 +439,19 @@ def _selftest() -> None:
         assert hm.current_state == STATE_WINDOW_CLOSED, hm.current_state
 
         hm.resume_pretrain("seg-A", "/fake/ckpt/step-00000050",
-                           tokens_so_far=1000, steps_so_far=50, wall_s=15.5)
+                           tokens_so_far=1000, steps_so_far=50, wall_s=15.5,
+                           ckpt_files=fake_hashes)
         assert hm.current_state == STATE_PRETRAIN_HOLDS, hm.current_state
 
         # Receipt snapshot after full cycle.
         snap = hm.receipt_snapshot()
         assert snap["pass"], snap
         assert snap["n_transitions"] == 4, snap["n_transitions"]
+        # Checkpoint-out and checkpoint-in records carry artifact path + hashes.
+        co_rec = snap["transitions"][0]
+        rp_rec = snap["transitions"][3]
+        assert co_rec["event"] == "checkpoint_out" and co_rec["ckpt_files"] == fake_hashes, co_rec
+        assert rp_rec["event"] == "resume_pretrain" and rp_rec["ckpt_files"] == fake_hashes, rp_rec
 
         # ---- FAIL branch 1: window open without checkpoint-out ----
         hm_f1 = HandoffMachine(os.path.join(tmpdir, "state-fail1"))
