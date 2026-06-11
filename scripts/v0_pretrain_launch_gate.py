@@ -26,6 +26,7 @@ NC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(NC, "scripts"))
 from receipt_check import validate_receipt          # noqa: E402
 import v0_config_check                              # noqa: E402
+import fp26_prereg                                  # noqa: E402
 
 # ---- binding pins (changing any of these is a contract change) -----------
 ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
@@ -151,7 +152,16 @@ def g_prereg():
         return "BLOCKED", d
     if not d.get("prereg_frozen"):
         return "BLOCKED", f"{name} lacks prereg_frozen:true"
-    return "GREEN", f"{name} frozen"
+    # eng-48 (#181): the frozen receipt existing + prereg_frozen:true is NOT
+    # sufficient — the prereg's PREMISES must still hold (decision-artifact
+    # sha, pinned premise receipts, support receipts). Without this call the
+    # row was fail-OPEN (same class as eng-46): a drifted premise passed
+    # silently. check_premises() is fail-closed; any violation blocks.
+    premise_violations = fp26_prereg.check_premises(NC)
+    if premise_violations:
+        return "BLOCKED", (f"{name} frozen but prereg premises FAIL: "
+                           f"{premise_violations}")
+    return "GREEN", f"{name} frozen; premises hold"
 
 
 ROWS = ["G-corpus", "G-tokenizer", "G-config", "G-governor",
@@ -242,6 +252,17 @@ def _selftest():
     cands = glob.glob(f"{NC}/{FP26_PREREG_GLOB}")
     if not cands:
         assert g_prereg()[0] == "BLOCKED", g_prereg()
+    else:
+        # eng-48 (#181): a frozen receipt present is GREEN only if the prereg
+        # premises hold. A drifted premise (mutated decision sha) MUST flip
+        # the row to BLOCKED — proves G-prereg is no longer fail-open.
+        assert g_prereg()[0] == "GREEN", g_prereg()
+        _good_dsha = fp26_prereg.DECISION_SHA
+        fp26_prereg.DECISION_SHA = "0" * 64
+        st, dt = g_prereg()
+        assert st == "BLOCKED" and "premises FAIL" in dt, (st, dt)
+        fp26_prereg.DECISION_SHA = _good_dsha
+        assert g_prereg()[0] == "GREEN", g_prereg()
     # mutation: wrong assembly pin -> G-corpus blocks (fail-closed)
     global ASSEMBLY_SHA
     good = ASSEMBLY_SHA
