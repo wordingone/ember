@@ -88,3 +88,22 @@ round-2 day (06-12) with the v0 pretrain timeshare (eng-33) untouched.
   the sampling receipt; that receipt carries no pacing block (w1 write
   not wired — eng-37/#129). fp-20 re-pinned to the first instrumented
   w1 receipt; the t2-class receipts carry the block as specified.
+- **2026-06-11 (pre-rerun, GRPO pool clarification — pinned BEFORE the
+  certified GRPO rerun):** the #112 GRPO wrapper declared a theta
+  (0, 0.5] frontier filter but t2_grpo's prompt pool ignored it
+  (informational-only — kai 14511; load-bearing fix = eng-39/#142).
+  CALL: the certified round-2 GRPO arm uses the wrapper's declared
+  theta (0, 0.5] LIVE-frontier set strictly — NO dead (rate-0) tasks —
+  because that is the closest executable reading of the frozen
+  declaration, and expanding the pool after seeing round-2 sampling
+  data is the goalpost-move the freeze bans. The r1 precedent
+  ("dead ×4 — RL can crack what SFT can't imitate") is recorded as the
+  counterargument; dead-task GRPO = a NAMED round-3 arm candidate, not
+  a silent round-2 expansion.
+- **2026-06-11 (arm certification status):** sft + control receipts
+  certified once the w2-ingest-proof companion receipt landed
+  (byte-append proven in-receipt). mtp + grpo first runs =
+  PRE-GATE/QUARANTINED (receipt-integrity: wrapper claims not tied to
+  executed data path — kai 14508/14511); certified reruns dispatch
+  after eng-38 (#140) / eng-39 (#142) merge. G1 (w4_r2_g1) HOLDS until
+  the certified arm set is complete.

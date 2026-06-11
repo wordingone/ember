@@ -128,7 +128,7 @@ p_gate (#124, merged).
 | leg | artifact | state |
 |-----|----------|-------|
 | config | fp-19 envelope + v0 pin | GATED (receipt) |
-| schedule/timeshare | eng-33 harness (#125) | MERGED (live leg binds BIT_EXACT resume) |
+| schedule/timeshare | eng-33 harness (#125) | MERGED (CPU selftest BIT_EXACT; dry-run continuity CLOSE at rtol=2.0; live/GPU resume-integrity RECEIPT required at the v0 run — kai 14510) |
 | corpus | eng-36 (#130) receipts: per-source license + sha + dedup + token counts | OPEN (Eli, GO) |
 | tokenizer | trained + frozen + sha-stamped pre-step-0 | OPEN (rides eng-36 sample) |
 | world | this doc §2–§3 (curriculum generator = fp-23 prereg + eng slice) | THIS DOC |

@@ -1,0 +1,29 @@
+{
+  "ticket": "W2-INGEST-PROOF",
+  "ts": "20260611T035410Z",
+  "companion_to": "w2-ingest-20260611T030647Z.json",
+  "answers": "kai mail 14499 item 2 / 14504 \u2014 ledger transition proof as a receipt FILE (the prefix-sha verification was previously in STATE/audit prose only)",
+  "sha_convention": "sha256 over raw bytes on disk as-is (binary read, 65536-byte chunks)",
+  "input_samples_file": {
+    "path": "receipts/w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl",
+    "sha256": "c1b7dff80e1245b761b82aabe6b15cc2cc46dbac626015052b66739427768ecc"
+  },
+  "episodes": {
+    "bytes_before": 10307446,
+    "sha256_before": "e2d4e8c7521360043011d7615377814cb3e262846beef8180d840ef2ec438166",
+    "bytes_after": 10668556,
+    "sha256_after": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+    "prefix_sha256_of_first_10307446_bytes_now": "e2d4e8c7521360043011d7615377814cb3e262846beef8180d840ef2ec438166",
+    "byte_append_proven": true
+  },
+  "control_pool": {
+    "bytes_before": 9959105,
+    "sha256_before": "4248ce5539f12f4bfa7faf8333d624bb57005835f767e38a21ea6636c62e607c",
+    "bytes_after": 10093114,
+    "sha256_after": "9aa2c8d150ec3fcdaa06b28b9f9db63b6fb436829612d41dc8b483ed85d523da",
+    "prefix_sha256_of_first_9959105_bytes_now": "4248ce5539f12f4bfa7faf8333d624bb57005835f767e38a21ea6636c62e607c",
+    "byte_append_proven": true
+  },
+  "append_semantics": "w2_ingest -> t2_round.append_jsonl (key-dedup on task:sha(src); 807 verified rows -> 278 NEW episodes appended, 153 fails-with-src -> 98 NEW control rows; dedup drops = rows whose key already existed from round-1)",
+  "crosscheck_explanation": "eng25-dedup-view-20260611T030744Z fp16_crosscheck overall_match=false is EXPECTED-ON-GROWTH: 48 clusters bridge qwen-research and round-2 on-policy rows (global union-find merges via near-dup bridges; exact counts in eng127-ac receipts) \u2014 the static fp-16 pin describes the pre-r2 snapshot; PIN_STALE semantics = eng-34/#127."
+}
