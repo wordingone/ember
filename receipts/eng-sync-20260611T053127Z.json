@@ -1,0 +1,3 @@
+{"ticket":"ENG-SYNC","ts":"20260611T053127Z","open":2,"closed":39,
+"closed_without_merged_pr":[],
+"open_issues":[{"number":130,"title":"eng-36: v0 corpus acquisition — license-clean ~7.4B-token mix, receipts per source (fp-22 eng half)","updatedAt":"2026-06-11T03:26:42Z"},{"number":128,"title":"eng-35: P-gate live probe leg — r1w-q3-mtp boundary pair across daemon restart (HOLD for Leo dispatch order)","updatedAt":"2026-06-11T03:26:09Z"}]}

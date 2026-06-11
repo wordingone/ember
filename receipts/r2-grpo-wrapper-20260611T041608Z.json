@@ -1,0 +1,72 @@
+{
+  "all_verified": false,
+  "arm": "grpo",
+  "beta": 0.04,
+  "calibration": null,
+  "delegation": {
+    "argv": [
+      "t2_grpo.py",
+      "--model",
+      "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "--tag",
+      "r2-q3-grpo",
+      "--max-steps",
+      "60",
+      "--num-generations",
+      "8",
+      "--beta",
+      "0.04",
+      "--lr",
+      "5e-06",
+      "--temp",
+      "0.8",
+      "--reward",
+      "binary",
+      "--task-list",
+      "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/grpo-r2-tasks.json",
+      "--round",
+      "2",
+      "--wrapper-receipt",
+      "/mnt/b/M/avir/leo/state/nc-ladder/receipts/r2-grpo-wrapper-20260611T041608Z.json",
+      "--gate-token-present",
+      "--selection-basis",
+      "frontier_filter theta=0.5 over ledger solve rates (r2_arms.solve_rates_from_ledger, ledger+control_pool); all_verified=False; mbpp:* only; prereg \u00a75 pin: live-frontier strictly, no dead/ledger-absent tasks",
+      "--stats-from",
+      "/mnt/b/M/avir/leo/state/nc-ladder/receipts/w1-floor-q3-20260610T203401Z-samples.jsonl",
+      "/mnt/b/M/avir/leo/state/nc-ladder/receipts/w1-floor-q3-focus-20260610T210228Z-samples.jsonl",
+      "/mnt/b/M/avir/leo/state/nc-ladder/receipts/w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl"
+    ],
+    "entry": "t2_grpo"
+  },
+  "frontier_filter": {
+    "episodes_filtered": 2150,
+    "episodes_total": 3143,
+    "tasks_filtered": 1938,
+    "tasks_total": 2021
+  },
+  "gate_token_present": true,
+  "lr": 5e-06,
+  "max_steps": 60,
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "no_training_launched_by_wrapper": true,
+  "num_generations": 8,
+  "reward": "binary",
+  "selected_tasks": {
+    "n_keys": 29,
+    "path": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/grpo-r2-tasks.json",
+    "sha256": "c30818c8f7d220f68d2f91acaf5cd90e78767edd37663164e91fb274c417a1bf"
+  },
+  "selection_basis": "frontier_filter theta=0.5 over ledger solve rates (r2_arms.solve_rates_from_ledger, ledger+control_pool); all_verified=False; mbpp:* only; prereg \u00a75 pin: live-frontier strictly, no dead/ledger-absent tasks",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "stats_from": [
+    "/mnt/b/M/avir/leo/state/nc-ladder/receipts/w1-floor-q3-20260610T203401Z-samples.jsonl",
+    "/mnt/b/M/avir/leo/state/nc-ladder/receipts/w1-floor-q3-focus-20260610T210228Z-samples.jsonl",
+    "/mnt/b/M/avir/leo/state/nc-ladder/receipts/w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl"
+  ],
+  "stats_note": "WARNING: round-2 w1 receipts not found; falling back to round-1 receipts. Run the round-2 w1 floor probe first for accurate stratification.",
+  "tag": "r2-q3-grpo",
+  "temp": 0.8,
+  "theta": 0.5,
+  "ticket": "NC0-T2-R2-GRPO-WRAPPER",
+  "ts": "20260611T041608Z"
+}

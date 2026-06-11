@@ -117,7 +117,7 @@ Limit taxonomy used below — a row must name exactly which limit binds:
 - **Limit class:** SCHED (interruption risk to the multi-day run), settled
   as an evidence row. Was "observational (58/439 = 13.2% lifetime)" —
   that framing mixed eras and read fail-closed refusals as waste.
-- **Taxonomy** `[R — receipts/fp32-r10-taxonomy-20260611T152522Z.json,
+- **Taxonomy** `[R — receipts/fp32-r10-taxonomy-20260611T153307Z.json,
   store snapshot sha-pinned]`: June ember-era 30/285 failed → 8
   NON-EMBER-TRACK (build scripts via daemon) + 2 MISUSE-CLASS (mail
   one-offs) + 14 FAST-FAIL-BOUNDED (next dispatch ≤600 s — setup-class

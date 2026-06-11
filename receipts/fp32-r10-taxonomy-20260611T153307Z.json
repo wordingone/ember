@@ -1,6 +1,6 @@
 {
   "ticket": "FP32-R10-TAXONOMY",
-  "ts": "20260611T152522Z",
+  "ts": "20260611T153307Z",
   "issue": 234,
   "store": {
     "path": "~/.avir/train/jobs.json (WSL Ubuntu, auto-resolved)",
@@ -278,7 +278,7 @@
     "pessimistic_interruptions_per_day": 0.364,
     "pessimistic_interruptions_v0_run": 1.22,
     "v0_run_days_basis": 3.352,
-    "cost_per_interruption": "bounded by one checkpoint interval + restart overhead \u2014 resume is bit-exact (receipts/v0ext-selftest-20260611T150308Z.json); cadence decision stays measure-first (#231)"
+    "cost_per_interruption": "bounded by one checkpoint interval + restart overhead \u2014 resume is bit-exact (receipts/v0ext-selftest-20260611T074545Z.json); cadence decision stays measure-first (#231)"
   },
   "caveats": [
     "gap_to_next_dispatch is an operator-iteration bound, not a hard process-lifetime bound (dispatches can overlap); it only ever classifies TOWARD benign, never evidences a death",

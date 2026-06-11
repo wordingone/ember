@@ -1,0 +1,46 @@
+{
+  "ticket": "FP12-BAND",
+  "ts": "20260611T010941Z",
+  "premise_correction": "issue #78 said the 1.5B was sampled twice; receipts show the two independent samplings are both 3B (k=8 seed14 / k=24 seed15). The tested coordinate is hard-for-big; the easy-for-small coordinate is single-sampled and stays a NAMED GAP.",
+  "legs": {
+    "q15": "w1-floor-q15-20260610T202511Z-samples.jsonl",
+    "q3_k8": "w1-floor-q3-20260610T203401Z-samples.jsonl",
+    "q3_focus_k24": "w1-floor-q3-focus-20260610T210228Z-samples.jsonl"
+  },
+  "joint_tasks": 59,
+  "band_membership": {
+    "n_k8_leg": 13,
+    "n_k24_leg": 14,
+    "n_both": 8,
+    "jaccard": 0.4211,
+    "kappa": 0.4719,
+    "perm_p_one_sided": 0.0003
+  },
+  "posterior_variant": {
+    "rule": "P(p3 < p15) >= 0.8 (Beta posteriors, grid integration)",
+    "n_k8_leg": 8,
+    "n_k24_leg": 10,
+    "n_both": 5,
+    "jaccard": 0.3846,
+    "kappa": 0.4767,
+    "perm_p_one_sided": 0.0018
+  },
+  "bits_weighted": {
+    "upvalued_bits_k8_leg_on_joint": 55.5,
+    "still_upvalued_under_k24": 40.1,
+    "stable_fraction": 0.7219
+  },
+  "raw_3b_coordinate_context": {
+    "strata_agreement": "37/59",
+    "mean_rate_k8_leg": 0.3347,
+    "mean_rate_k24_leg": 0.3863,
+    "note": "k8-selected tasks drifting UP at k24 = regression to the mean from selection on the k8 leg"
+  },
+  "verdict": "STABLE-conditional",
+  "verdict_rule": "STABLE iff kappa>0 AND perm p<0.05 on the raw predicate; STABLE is CONDITIONAL on the untested q15 coordinate; NOISE kills the targeting filter outright (both coordinates required)",
+  "flags": [
+    "selection bias: the 59 tasks were chosen ON the k8 leg (rate<=0.75) \u2014 regression to the mean biases agreement DOWN; stable verdict conservative, noise verdict must mind this",
+    "q15 coordinate single-sampled \u2014 band stability tested on the 3B half only",
+    "conditional n=59 (the hard-subset overlap), per the issue"
+  ]
+}

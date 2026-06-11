@@ -160,7 +160,7 @@
    "equation_or_invariant": "pessimistic_interruptions(v0) = (unknown_failures/era_days) * run_days = (4/11.0) * 3.352 = 1.22; cost_per_interruption <= checkpoint_interval + restart (resume bit-exact)",
    "metric": "June ember-era failure classes; evidenced mid-run deaths; pessimistic interruptions per v0 run",
    "baseline": "June era 30/285 failed -> 8 NON-EMBER + 2 MISUSE + 14 FAST-FAIL-BOUNDED (gap<=600s) + 2 ROOT-CAUSED + 4 UNKNOWN-EVIDENCE-EXPIRED; evidenced mid-run deaths = 0; pessimistic budget 0.364/day -> 1.22 per 3.352-day run",
-   "baseline_provenance": "receipts/fp32-r10-taxonomy-20260611T152522Z.json (store snapshot sha-pinned); resume evidence receipts/v0ext-selftest-20260611T150308Z.json",
+   "baseline_provenance": "receipts/fp32-r10-taxonomy-20260611T153307Z.json (store snapshot sha-pinned); resume evidence receipts/v0ext-selftest-20260611T074545Z.json",
    "intervention": "none on the daemon (fail-closed refusals are the contract working); per-job log_name already retains evidence forward; checkpoint cadence stays #231 measure-first with this row as its interruption-rate input",
    "expected_sign": "n/a (evidence row)",
    "kill_condition": "row re-opens if any v0 segment dies mid-run without a receipted root cause",
