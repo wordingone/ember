@@ -1,0 +1,60 @@
+{
+  "ticket": "FP26-ROUND3-PREREG",
+  "ts": "20260611T081213Z",
+  "round": 3,
+  "prereg_frozen": true,
+  "decision": {
+    "shape": "b-owned-core-in-dist-accumulation",
+    "description": "v0 owned-core pretrain (NC2-own, c03-qat frozen config) -> fp-22 verify-floor world -> accumulation rounds; eval distribution == train distribution by construction",
+    "why_not_re_attempt_transfer": "fp-25 receipted that re-running transfer at the 98-episode budget in the same world is DEAD; (b)'s world is in-dist by design so the ceiling does not bind it",
+    "kill_rule": "if the v0 owned core cannot clear a K1-equivalent verify floor in the fp-22 world even with curriculum synthesis (the NC2-own rung-level kill), DEMOTE to fallback (a)",
+    "fallback_a": {
+      "shape": "borrowed-core-round3-deeper-world",
+      "world": "MBPP+HumanEval union (164 untouched tasks, same harness)",
+      "pre_freeze_obligation": "a frontier-depth coverage receipt (fp25b-cov shape) gated BEFORE any (a) prereg freeze"
+    },
+    "frontier_depth_obligation_for_b": "the v0 world's task-pool coverage run \u2014 executable only post-v0-pretrain; a DEFERRED post-checkpoint receipt, not a launch blocker (gated as an obligation, not a precondition)"
+  },
+  "wording_resolution": {
+    "primary_verdict": "OOD-TRANSFER-CEILING scoped to the preregistered floor",
+    "scope": "no detected >=13-21pp transfer effect on N=17 held-out frontier tasks at the 98-episode budget",
+    "must_not_propagate_as": [
+      "no small transfer exists",
+      "architecture-level evidence"
+    ],
+    "underpowered": "UNDERPOWERED-AT-FLOOR is a CAVEAT, not the primary verdict; the receipt reports the MDE and the claim is budget/floor-scoped",
+    "robustness": "the round-3 decision rests on the floor-scoped reading and holds whether or not a sub-floor transfer effect exists, because (b)'s world is in-dist by construction and does not depend on transfer at all",
+    "source": "Kai 14589 (resolves 14582 ask #2)"
+  },
+  "premises": {
+    "decision_artifact": {
+      "path": "research/fp26-round3-shape-decision.md",
+      "sha256": "5ef7cc20f22168878f139af00e6ac9a75d43c758ffd2b3eb181372c50081c939"
+    },
+    "surface_a_recipe_learns": {
+      "receipt": "fp25-indist-20260611T060416Z.json",
+      "sha256": "c6a318a184934744a97617f37dbe51c47dcc9e8cbe87a6c8e746390c307a276a"
+    },
+    "surface_b_transfer_ceiling": {
+      "receipt": "fp25b-surfaceb-20260611T063604Z.json",
+      "sha256": "50c24afe86dc2ebcd6c06d339ed677bcb236f26ded36ef62165d00b309d8ebd0"
+    },
+    "support_receipts": [
+      "eng36-assembly-20260611T052337Z.json",
+      "fp19-bench-20260611T024648Z.json",
+      "tokenizer-freeze-20260611T060423Z.json"
+    ]
+  },
+  "binds": {
+    "v0_pretrain": "the round-3 training dispatch this prereg authorizes",
+    "fp21b_132": "retargets to the owned core's FIRST sampling round",
+    "fp20c_146": "retargets to the owned core's FIRST sampling round",
+    "fp24_139": "fires on real v0 checkpoints (same launch)"
+  },
+  "result": {
+    "verdict": "FROZEN",
+    "shape": "b-owned-core-in-dist-accumulation"
+  },
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}

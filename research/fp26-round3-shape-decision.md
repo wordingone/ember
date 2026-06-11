@@ -58,17 +58,38 @@ curriculum synthesis (the NC2-own rung-level kill), the borrowed core
 returns as the instrument, in the MBPP+HumanEval union world, WITH a
 frontier-depth coverage receipt gated before any prereg freeze.
 
+## Monitor wording resolution (Kai 14589 — closes AC item 4)
+
+The B-surface premise wording is RESOLVED. `OOD-TRANSFER-CEILING` is
+acceptable **only as scoped to the preregistered floor**: no detected
+≥13–21pp transfer effect on N=17 held-out frontier tasks at the
+98-episode budget. It must NOT be propagated as "no small transfer
+exists" or as architecture-level evidence. UNDERPOWERED-AT-FLOOR is a
+**caveat**, not the primary verdict, because the receipt reports the MDE
+and the claim is budget/floor-scoped. The fp-26 prereg carries this
+scoping verbatim; the round-3 decision rests on the floor-scoped reading,
+which does not over-claim and is robust to the power caveat (the
+recommendation holds whether or not a sub-floor transfer effect exists,
+because (b)'s world is in-dist by construction and does not depend on
+transfer at all).
+
 ## AC checklist (from #166)
 
 - [x] World chosen + rationale (this artifact; world = fp-22 verify-floor
       world on the owned corpus)
-- [ ] Frontier-depth receipt for the chosen world — for (b) this is the
-      v0 world's task-pool coverage run, executable only post-v0-pretrain;
-      the fallback (a) world keeps the fp25b-cov-shape coverage obligation
-- [ ] Round-3 prereg frozen BEFORE any training dispatch (post-tokenizer-
-      freeze; will cite this artifact + the open MDE-wording resolution)
-- [ ] Monitor audit of the B-surface wording incorporated (14582 ask #2)
+- [~] Frontier-depth receipt for the chosen world — for (b) this is the
+      v0 world's task-pool coverage run, **executable only post-v0-pretrain**
+      (preregistered obligation, gated by `fp26_prereg.py` as a deferred
+      post-checkpoint receipt); the fallback (a) world keeps the
+      fp25b-cov-shape coverage obligation BEFORE any (a) prereg freeze
+- [x] Round-3 prereg frozen BEFORE any training dispatch — `fp26_prereg.py
+      --freeze` emits `fp26-prereg-<ts>.json` (`prereg_frozen:true`),
+      pinning this artifact + the two fp-25 premise receipts (tamper-guarded)
+- [x] Monitor audit of the B-surface wording incorporated (14582 ask #2 /
+      14589 — section above)
 
-*Owner: Leo (#166 / task #49). Status: DRAFT pending monitor reply; the
-recommendation does not change the critical path (tokenizer freeze →
-v0 launch) and requires no new dispatch today.*
+*Owner: Leo (#166 / task #49). Status: FROZEN. Round-3 shape = (b)
+owned-core in-dist accumulation (v0 pretrain → fp-22 verify-floor world →
+accumulation rounds, eval=train by construction); kill rule → fallback (a)
+with its own pre-freeze coverage obligation. The frontier-depth receipt
+for (b) is a deferred post-v0-checkpoint obligation, not a launch blocker.*
