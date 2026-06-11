@@ -136,7 +136,7 @@ def replay_builds():
     flags = load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"])
     n_pre = len(arm)
     arm = ext_clean(arm, flags)
-    with open(f"{TMP}/wcode-r1.jsonl", "w") as f:
+    with open(f"{TMP}/wcode-r1.jsonl", "w", encoding="utf-8", newline="\n") as f:
         for r in arm:
             f.write(json.dumps(r) + "\n")
     caps = caps_from_records(arm)
@@ -184,7 +184,7 @@ def main():
                   "source); chaining caveat carries over"],
     }
     out = f"{RECEIPTS}/fp17-mixweights-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"FP17_MIXWEIGHTS_DONE {out}")

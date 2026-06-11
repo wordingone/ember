@@ -258,7 +258,7 @@ def main():
               f"{tmo} timeout", flush=True)
 
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(samples_path, "w") as sf:
+    with open(samples_path, "w", encoding="utf-8", newline="\n") as sf:
         for row in rows:
             sf.write(json.dumps(row) + "\n")
 
@@ -287,7 +287,7 @@ def main():
                                                    outcomes_by_task)
     if ext_block is not None:
         receipt["ext_verify"] = ext_block
-    with open(f"{RECEIPTS}/w1-floor{tagpart}-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/w1-floor{tagpart}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in
                       ("n_tasks", "k", "feed_tasks", "feed_pct", "feed_ci95",

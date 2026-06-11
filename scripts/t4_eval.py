@@ -193,7 +193,7 @@ def main():
     os.makedirs(RECEIPTS, exist_ok=True)
 
     arm_solved = {}
-    with open(samples_path, "w") as sf:
+    with open(samples_path, "w", encoding="utf-8", newline="\n") as sf:
         for arm in args.arms:
             adapter, prefix = arm_cfg[arm]
             if adapter and not os.path.isdir(adapter):
@@ -222,7 +222,7 @@ def main():
             arm_solved["core_meta"], arm_solved["control"])
 
     path = f"{RECEIPTS}/t4-r{args.round}-{args.surface}-seed{args.seed}-{ts}.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: v for k, v in receipt.items()
                       if k in ("arms", "delta_meta_minus_core_ci95",

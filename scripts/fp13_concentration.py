@@ -266,7 +266,7 @@ def main():
         ],
     }
     out = f"{RECEIPTS}/fp13-concentration-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"FP13_CONCENTRATION_DONE {out}")

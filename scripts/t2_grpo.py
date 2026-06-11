@@ -333,7 +333,7 @@ def main():
         "train_secs": secs, "adapter": out_dir,
     }
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: v for k, v in receipt.items()
                       if k != "reward_trajectory"}, indent=2, default=str))

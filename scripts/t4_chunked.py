@@ -46,7 +46,7 @@ from t4_eval import (ADAPTERS, RECEIPTS, SURFACES, bootstrap_ci,  # noqa: E402
 
 def atomic_write(path, obj):
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         json.dump(obj, f, indent=2)
     os.replace(tmp, path)
 
@@ -215,7 +215,7 @@ def main():
                "stop_reason": stop_reason,
                "arms": arms_sum, **deltas}
     path = f"{RECEIPTS}/{tag}-{ts}.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({"arms": arms_sum, **deltas,
                       "stopped_early": bool(stop_reason)}, indent=2))

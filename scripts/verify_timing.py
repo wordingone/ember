@@ -101,7 +101,7 @@ def main():
             (gen_secs / n_gen) / (serial_secs / len(res_serial)), 1),
     }
     out = f"{RECEIPTS}/verify-timing-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"VERIFY_TIMING_DONE {out}", flush=True)

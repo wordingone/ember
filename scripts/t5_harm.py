@@ -154,7 +154,7 @@ def main():
 
     os.makedirs(RECEIPTS, exist_ok=True)
     with open(f"{RECEIPTS}/t5-r{args.round}{args.tag_suffix}-{ts}.json",
-              "w") as f:
+              "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in receipt
                       if k in ("arms", "delta_meta_minus_core_ci95",

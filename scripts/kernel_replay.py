@@ -239,10 +239,10 @@ def _selftest():
         receipt["delta_meta_minus_control_ci95"] = replay_paired_delta_ci(
             solved["core_meta"], solved["control"])
         rp = os.path.join(td, f"{tag}-00000000T000000Z.json")
-        with open(rp, "w") as f:
+        with open(rp, "w", encoding="utf-8", newline="\n") as f:
             json.dump(receipt, f)
         for suffix, rows in (("chunks", chunks), ("samples", samples)):
-            with open(os.path.join(td, f"{tag}-{suffix}.jsonl"), "w") as f:
+            with open(os.path.join(td, f"{tag}-{suffix}.jsonl"), "w", encoding="utf-8", newline="\n") as f:
                 for r in rows:
                     f.write(json.dumps(r) + "\n")
 
@@ -262,7 +262,7 @@ def _selftest():
 
         # (3) tampering caught
         receipt["arms"]["core_only"]["solve_any_pct"] += 1.0
-        with open(rp, "w") as f:
+        with open(rp, "w", encoding="utf-8", newline="\n") as f:
             json.dump(receipt, f)
         assert replay_receipt(rp) is False
     print("KERNEL_REPLAY_SELFTEST_PASS")

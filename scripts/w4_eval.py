@@ -136,7 +136,7 @@ def main():
     os.makedirs(RECEIPTS, exist_ok=True)
 
     arm_vec, arm_stats = {}, {}
-    with open(samples_path, "w") as sf:
+    with open(samples_path, "w", encoding="utf-8", newline="\n") as sf:
         for name, adapter in arms:
             print(f"[w4] arm {name} adapter={adapter}", flush=True)
             rows, stats = run_arm(name, adapter, args.model, problems, args)
@@ -163,7 +163,7 @@ def main():
         receipt["deltas"]["trained_minus_control_ci95"] = \
             paired_delta_ci(arm_vec["trained"], arm_vec["control"])
 
-    with open(f"{RECEIPTS}/w4-eval{tagpart}-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/w4-eval{tagpart}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({"arms": arm_stats, "deltas": receipt["deltas"]},
                      indent=2))

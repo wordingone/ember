@@ -103,7 +103,7 @@ def main():
                           f"{VIEWS}/wcode-r1.jsonl")
     arm_recs = ext_clean(arm_recs,
                          load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"]))
-    with open(f"{VIEWS}/wcode-r1.jsonl", "w") as vf:
+    with open(f"{VIEWS}/wcode-r1.jsonl", "w", encoding="utf-8", newline="\n") as vf:
         for r in arm_recs:
             vf.write(json.dumps(r) + "\n")
     caps = caps_from_records(arm_recs)
@@ -203,7 +203,7 @@ def main():
         "aux_heads_file": "mtp_aux_heads.pt (scaffold — unused at inference)",
     }
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2, default=str))
     print("T2_MTP_DONE")

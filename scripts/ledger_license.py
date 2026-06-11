@@ -124,7 +124,7 @@ def backfill_view(ledger_path, view_path):
     if d:
         os.makedirs(d, exist_ok=True)
     conflicts = 0
-    with open(view_path, "w", encoding="utf-8") as f:
+    with open(view_path, "w", encoding="utf-8", newline="\n") as f:
         for r in recs:
             cls, cls_basis = classify(r)
             if r.get("license_class"):
@@ -202,7 +202,7 @@ def main():
                          "abort")
     os.makedirs(args.receipt_dir, exist_ok=True)
     out = f"{args.receipt_dir}/eng20-license-view-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"ENG20_LICENSE_VIEW_DONE {out}")
@@ -265,7 +265,7 @@ def _selftest():
                   "sampler": "Qwen/Qwen2.5-Coder-3B-Instruct"})
     fd, p = tempfile.mkstemp(suffix=".jsonl")
     os.close(fd)
-    with open(p, "w", encoding="utf-8") as f:
+    with open(p, "w", encoding="utf-8", newline="\n") as f:
         for r in rows2:
             f.write(json.dumps(r) + "\n")
     before = sha256_file(p)

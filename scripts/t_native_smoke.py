@@ -99,7 +99,7 @@ def _default_output_path():
 
 def _write_receipt(path: Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(data, f, indent=2)
     print(f"RECEIPT: {path}")
 

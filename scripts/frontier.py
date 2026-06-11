@@ -214,7 +214,7 @@ def _selftest():
     import tempfile as _tf
     with _tf.TemporaryDirectory() as td:
         fp = _os.path.join(td, "v-ext-flags-x.jsonl")
-        with open(fp, "w") as f:
+        with open(fp, "w", encoding="utf-8", newline="\n") as f:
             f.write(_json.dumps({"key": "k1", "timeout": False}) + "\n")
             f.write(_json.dumps({"key": "k2", "timeout": True}) + "\n")
         flags = load_ext_flags([fp])

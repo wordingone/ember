@@ -340,7 +340,7 @@ def main():
 
     os.makedirs(RECEIPTS, exist_ok=True)
     path = f"{RECEIPTS}/t2-{tag}-{ts}.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: v for k, v in receipt.items() if k != "ts"},
                      indent=2, default=str))
