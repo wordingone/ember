@@ -1,0 +1,122 @@
+{
+  "ticket": "ARCADE-HARNESS",
+  "ts": "20260610T233720Z",
+  "args": {
+    "envs_dir": "B:/M/avir/eli/environment_files",
+    "receipts_dir": "B:/M/avir/leo/state/nc-ladder/receipts",
+    "games": null,
+    "max_steps": 200,
+    "seed": 16,
+    "tag": "random-smoke"
+  },
+  "engine": "arc_agi OFFLINE + arcengine (local, no network)",
+  "judge": "engine GameState + levels_completed only",
+  "baseline_ref": {
+    "repo": "dolphin-in-a-coma/arc-agi-3-just-explore",
+    "license": "MIT (GitHub API, 2026-06-10)",
+    "commit": "c2d98318ecca",
+    "code_vendored": false
+  },
+  "n_games": 20,
+  "n_ran": 2,
+  "n_errors": 18,
+  "wins": 0,
+  "games_with_level_progress": 1,
+  "total_steps": 400,
+  "per_game": [
+    {
+      "game": "bp35",
+      "error": "make returned None"
+    },
+    {
+      "game": "dc22",
+      "error": "make returned None"
+    },
+    {
+      "game": "ft09",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 0,
+      "levels_completed": 1,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.08
+    },
+    {
+      "game": "g50t",
+      "error": "make returned None"
+    },
+    {
+      "game": "lf52",
+      "error": "make returned None"
+    },
+    {
+      "game": "lp85",
+      "error": "make returned None"
+    },
+    {
+      "game": "ls20",
+      "policy": "random",
+      "seed": 16,
+      "steps": 200,
+      "resets": 1,
+      "levels_completed": 0,
+      "final_state": "NOT_FINISHED",
+      "win": false,
+      "elapsed_s": 0.1
+    },
+    {
+      "game": "m0r0",
+      "error": "make returned None"
+    },
+    {
+      "game": "r11l",
+      "error": "make returned None"
+    },
+    {
+      "game": "re86",
+      "error": "make returned None"
+    },
+    {
+      "game": "s5i5",
+      "error": "make returned None"
+    },
+    {
+      "game": "sb26",
+      "error": "make returned None"
+    },
+    {
+      "game": "sc25",
+      "error": "make returned None"
+    },
+    {
+      "game": "sk48",
+      "error": "make returned None"
+    },
+    {
+      "game": "sp80",
+      "error": "make returned None"
+    },
+    {
+      "game": "su15",
+      "error": "make returned None"
+    },
+    {
+      "game": "tn36",
+      "error": "make returned None"
+    },
+    {
+      "game": "tu93",
+      "error": "make returned None"
+    },
+    {
+      "game": "vc33",
+      "error": "make returned None"
+    },
+    {
+      "game": "wa30",
+      "error": "make returned None"
+    }
+  ]
+}
