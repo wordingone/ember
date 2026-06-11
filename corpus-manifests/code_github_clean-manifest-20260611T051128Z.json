@@ -1,0 +1,139 @@
+{
+  "byte_budget": 13000000000,
+  "counts": {
+    "docs_in": 2888877,
+    "docs_kept": 1867710,
+    "dups_dropped": 0,
+    "empty_skipped": 0,
+    "license_rejected": 1021167,
+    "text_bytes_kept": 13000000267,
+    "text_chars_kept": 12924848571
+  },
+  "dedup": {
+    "docs_after": 1867710,
+    "docs_before": 1867710,
+    "method": "doc-level exact sha256 over utf-8 text, source-local"
+  },
+  "deviation": "fp-22 \u00a71 row-1 DEVIATION: source = codeparrot/github-code-clean. Basis: the-stack-v2 references-only (no local pull) + the-stack march-sample lacks per-file license metadata -> both fail the per-file license-stamp AC; codeparrot satisfies it with a per-row license field re-verified fail-closed. Acked by the gate-holder (mail 14530) before any pull; --ack-code-source is the mechanical gate.",
+  "est_tokens_heuristic": 3250000066,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "fp22_row": 1,
+  "license_stamp": {
+    "basis": "per-file `license` field re-verified at ingest against the strict permissive allow-list, fail-closed (missing/unknown/copyleft = reject); SUBSTITUTION for fp-22 \u00a71 row 1 \u2014 the-stack-v2 is references-only and the issue's march-sample fallback has no per-file license metadata (both fail the stamp AC); EXTERNAL-CITED upstream detection + our per-row stamp",
+    "class": "permissive-per-file"
+  },
+  "out_dir_windows": "B:/M/avir/eli/state/ember-eng/corpus-v0\\code_github_clean",
+  "out_dir_wsl": "/mnt/b/M/avir/eli/state/ember-eng/corpus-v0/code_github_clean",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "shards": [
+    {
+      "bytes_on_disk": 181427530,
+      "bytes_uncompressed": 1000009729,
+      "docs": 138317,
+      "file": "code_github_clean-00000.jsonl.zst",
+      "sha256": "71ec4259d4c2b4656a9b84b228ff0ebdc36e84112e5ac7c21742a04e96fe58ae"
+    },
+    {
+      "bytes_on_disk": 180957650,
+      "bytes_uncompressed": 1000102723,
+      "docs": 136039,
+      "file": "code_github_clean-00001.jsonl.zst",
+      "sha256": "2ec600d549daf268d3cdd7af3a380282775ac488cda31c060c4ba66861ca834a"
+    },
+    {
+      "bytes_on_disk": 181261303,
+      "bytes_uncompressed": 1000025392,
+      "docs": 134456,
+      "file": "code_github_clean-00002.jsonl.zst",
+      "sha256": "1b85dd5a33b1f43a4432f72773b471edb3841433e6bf06eded427794f2a33cb8"
+    },
+    {
+      "bytes_on_disk": 181236988,
+      "bytes_uncompressed": 1000000338,
+      "docs": 136440,
+      "file": "code_github_clean-00003.jsonl.zst",
+      "sha256": "c30e5c7b3588f3fa34ae20a6f8eb2e17a94c83d4d3feb705a336d5d74227979b"
+    },
+    {
+      "bytes_on_disk": 179634362,
+      "bytes_uncompressed": 1000084887,
+      "docs": 136040,
+      "file": "code_github_clean-00004.jsonl.zst",
+      "sha256": "08f15b2a10c5cab461367b0ae2a5f4c02d219f57db53e370bcbd04129dd49dca"
+    },
+    {
+      "bytes_on_disk": 181059662,
+      "bytes_uncompressed": 1000013578,
+      "docs": 135406,
+      "file": "code_github_clean-00005.jsonl.zst",
+      "sha256": "5c6284ac01f945cea11f4b7bd56be01352dc9908eb3f43df260e813c8004a1d5"
+    },
+    {
+      "bytes_on_disk": 182349674,
+      "bytes_uncompressed": 1000028050,
+      "docs": 138047,
+      "file": "code_github_clean-00006.jsonl.zst",
+      "sha256": "eee8e7f356b487ba6e50962bd1e5a7881f52bc373c4dc39ec1739643171e4c62"
+    },
+    {
+      "bytes_on_disk": 181893321,
+      "bytes_uncompressed": 1000006421,
+      "docs": 137957,
+      "file": "code_github_clean-00007.jsonl.zst",
+      "sha256": "b85283eae15ac30389f44313f304aacc5939ed23176acdc51856bbca16274e31"
+    },
+    {
+      "bytes_on_disk": 181179231,
+      "bytes_uncompressed": 1000044094,
+      "docs": 136566,
+      "file": "code_github_clean-00008.jsonl.zst",
+      "sha256": "b0807146f817cfa28d6cb2d6ee8b13994c6dc5a8544dc6f849970865dc82bd64"
+    },
+    {
+      "bytes_on_disk": 180075662,
+      "bytes_uncompressed": 1000002734,
+      "docs": 133376,
+      "file": "code_github_clean-00009.jsonl.zst",
+      "sha256": "3e1e26d6c6f6773f0f5f0f029d8315967b90585cc6d64d5c8df18ce9a1a0661f"
+    },
+    {
+      "bytes_on_disk": 179899827,
+      "bytes_uncompressed": 1000002498,
+      "docs": 135382,
+      "file": "code_github_clean-00010.jsonl.zst",
+      "sha256": "366b94f87762c7f4ca1e5c0d026db7d4c9b4b95a5c3fbc6c8f987d646291df2a"
+    },
+    {
+      "bytes_on_disk": 180429669,
+      "bytes_uncompressed": 1000002438,
+      "docs": 134625,
+      "file": "code_github_clean-00011.jsonl.zst",
+      "sha256": "881e94d1851f0d3f18ba8bca2e9bbed4a382975bb1c170c350b53d122272c6dd"
+    },
+    {
+      "bytes_on_disk": 182563572,
+      "bytes_uncompressed": 1000002394,
+      "docs": 135866,
+      "file": "code_github_clean-00012.jsonl.zst",
+      "sha256": "64b47db885e6fd44bc81137e59a4b0190f082a05dd5e97c8d292ced6b89ac93a"
+    },
+    {
+      "bytes_on_disk": 133309452,
+      "bytes_uncompressed": 735814971,
+      "docs": 99193,
+      "file": "code_github_clean-00013.jsonl.zst",
+      "sha256": "35c3b6ea92d67dbccd37107d917293d97b0a310806f6f7a72f693a131c6c7f63"
+    }
+  ],
+  "source": "code_github_clean",
+  "tokens_pending_tokenizer_freeze": true,
+  "ts": "20260611T051128Z",
+  "url_pin": {
+    "config": null,
+    "dataset": "codeparrot/github-code-clean",
+    "load_path": "parquet-direct data/train-*.parquet at pinned revision (legacy script loader unsupported by datasets 4.1.1)",
+    "revision_sha": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+    "split": "train",
+    "url": "https://huggingface.co/datasets/codeparrot/github-code-clean/tree/c48d40f9e70f0196f8236901ee35807f7d6c44c0"
+  }
+}

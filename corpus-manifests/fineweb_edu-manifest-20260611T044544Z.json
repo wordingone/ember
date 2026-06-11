@@ -1,0 +1,95 @@
+{
+  "byte_budget": 7400000000,
+  "counts": {
+    "docs_in": 1558904,
+    "docs_kept": 1549860,
+    "dups_dropped": 9044,
+    "empty_skipped": 0,
+    "license_rejected": 0,
+    "text_bytes_kept": 7400001608,
+    "text_chars_kept": 7361935304
+  },
+  "dedup": {
+    "docs_after": 1549860,
+    "docs_before": 1558904,
+    "method": "doc-level exact sha256 over utf-8 text, source-local"
+  },
+  "est_tokens_heuristic": 1850000402,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "fp22_row": 2,
+  "license_stamp": {
+    "basis": "dataset-level ODC-By 1.0 (FineWeb-Edu card); EXTERNAL-CITED per fp-22 \u00a71 row 2",
+    "class": "odc-by-1.0"
+  },
+  "out_dir_windows": "B:/M/avir/eli/state/ember-eng/corpus-v0\\fineweb_edu",
+  "out_dir_wsl": "/mnt/b/M/avir/eli/state/ember-eng/corpus-v0/fineweb_edu",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "shards": [
+    {
+      "bytes_on_disk": 340049350,
+      "bytes_uncompressed": 1000000959,
+      "docs": 208402,
+      "file": "fineweb_edu-00000.jsonl.zst",
+      "sha256": "29fce0972e2a2bed36855c78c673449cad71c4d6acf552c401bc9bd1118b7d8a"
+    },
+    {
+      "bytes_on_disk": 340096034,
+      "bytes_uncompressed": 1000001262,
+      "docs": 207999,
+      "file": "fineweb_edu-00001.jsonl.zst",
+      "sha256": "471ea599dff8a665833aa7c949ddad16eb333c742f46af00d26bd9245f74491a"
+    },
+    {
+      "bytes_on_disk": 340296383,
+      "bytes_uncompressed": 1000000149,
+      "docs": 207115,
+      "file": "fineweb_edu-00002.jsonl.zst",
+      "sha256": "275300a108e60f2ddaf66918764fc529213e9f91d2030f0fa4b597176cd2cd1f"
+    },
+    {
+      "bytes_on_disk": 339584569,
+      "bytes_uncompressed": 1000003112,
+      "docs": 207542,
+      "file": "fineweb_edu-00003.jsonl.zst",
+      "sha256": "beb786b12a1218e83e45e3d74c11b06f2282f5b0aaeb7b06a4f294ec445d6fff"
+    },
+    {
+      "bytes_on_disk": 339832081,
+      "bytes_uncompressed": 1000001560,
+      "docs": 211634,
+      "file": "fineweb_edu-00004.jsonl.zst",
+      "sha256": "af3bd4a7bc45796db6e5e5131270b456f6347fe57143326be06e30dda873706c"
+    },
+    {
+      "bytes_on_disk": 339117458,
+      "bytes_uncompressed": 1000010840,
+      "docs": 205555,
+      "file": "fineweb_edu-00005.jsonl.zst",
+      "sha256": "85a1f68b7ff2b9f190e0c8cf9ff4627f8182beb4b0183fc864fb6fa4c46ecff8"
+    },
+    {
+      "bytes_on_disk": 338925266,
+      "bytes_uncompressed": 1000026954,
+      "docs": 207638,
+      "file": "fineweb_edu-00006.jsonl.zst",
+      "sha256": "0c62441903bff023a630eacf41e33612b928f6e164d365b6d298349f1d8dcc41"
+    },
+    {
+      "bytes_on_disk": 154453507,
+      "bytes_uncompressed": 455995273,
+      "docs": 93975,
+      "file": "fineweb_edu-00007.jsonl.zst",
+      "sha256": "cf016d6ff78ebc0ebc826d94fabd5cb6c6bfd0fd2da10b593b9598f21963b81d"
+    }
+  ],
+  "source": "fineweb_edu",
+  "tokens_pending_tokenizer_freeze": true,
+  "ts": "20260611T044544Z",
+  "url_pin": {
+    "config": "sample-10BT",
+    "dataset": "HuggingFaceFW/fineweb-edu",
+    "revision_sha": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
+    "split": "train",
+    "url": "https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu/tree/87f09149ef4734204d70ed1d046ddc9ca3f2b8f9"
+  }
+}

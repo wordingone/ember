@@ -1,0 +1,53 @@
+{
+  "byte_budget": 1900000000,
+  "counts": {
+    "docs_in": 7194,
+    "docs_kept": 4510,
+    "dups_dropped": 2684,
+    "empty_skipped": 0,
+    "license_rejected": 0,
+    "text_bytes_kept": 1900007704,
+    "text_chars_kept": 1891271565
+  },
+  "dedup": {
+    "docs_after": 4510,
+    "docs_before": 7194,
+    "method": "doc-level exact sha256 over utf-8 text, source-local"
+  },
+  "est_tokens_heuristic": 475001926,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "fp22_row": 4,
+  "license_stamp": {
+    "basis": "Project Gutenberg books, English split (public-domain basis per the PG corpus; dataset card manu/project_gutenberg); fp-22 \u00a71 row 4. Packaging note: first choice deepmind/pg19 is a script-based HF dataset, unloadable under datasets 4.x ('Dataset scripts are no longer supported') \u2014 this parquet-native packaging is the eng-36 survey's named alternate, same PD basis",
+    "class": "public-domain"
+  },
+  "out_dir_windows": "B:/M/avir/eli/state/ember-eng/corpus-v0\\gutenberg_en",
+  "out_dir_wsl": "/mnt/b/M/avir/eli/state/ember-eng/corpus-v0/gutenberg_en",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "shards": [
+    {
+      "bytes_on_disk": 324030247,
+      "bytes_uncompressed": 1000832250,
+      "docs": 2324,
+      "file": "gutenberg_en-00000.jsonl.zst",
+      "sha256": "03175aae4ede85a49314dbdf4aab0dfbb740b03fd2b9f8aee4fa168fb18b06d8"
+    },
+    {
+      "bytes_on_disk": 305035652,
+      "bytes_uncompressed": 941559802,
+      "docs": 2186,
+      "file": "gutenberg_en-00001.jsonl.zst",
+      "sha256": "d29f927892d271a7f70497fc65b291a4979ba5026a67787bdb478cd75878d142"
+    }
+  ],
+  "source": "gutenberg_en",
+  "tokens_pending_tokenizer_freeze": true,
+  "ts": "20260611T050315Z",
+  "url_pin": {
+    "config": null,
+    "dataset": "manu/project_gutenberg",
+    "revision_sha": "164853d214065df26a630ee1ab91a0c39e461caf",
+    "split": "en",
+    "url": "https://huggingface.co/datasets/manu/project_gutenberg/tree/164853d214065df26a630ee1ab91a0c39e461caf"
+  }
+}
