@@ -75,6 +75,41 @@ R1_LEGS = {
 }
 
 
+# ---- world-applicability pin (PRE-DATA amendment 2026-06-11, refs #132;
+# added BEFORE any round-3 sampling receipt exists) ----
+# The bars (RATIO_BAR/PERM_N/SEED) and the R1 band legs are DERIVED ON
+# the borrowed-core w1-MBPP world. The fp-26 shape decision
+# (research/fp26-round3-shape-decision.md) makes the next sampling round
+# most likely the OWNED core in the fp-22 world. Cross-world application
+# of these bars + borrowed band legs would be silent methodological
+# breakage; the executor refuses it mechanically: sampling from a
+# different model/world -> NOT-APPLICABLE-WORLD-CHANGED (fresh prong-A
+# derivation required in the new world; the issue retargets, the bars do
+# NOT carry).
+WORLD_PIN = {"model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+             "world": "w1-mbpp"}
+
+
+def check_sampling_world(sampling_samples_path):
+    """Gate the round-3 sampling source against WORLD_PIN via its sibling
+    receipt's args.model. Returns (verdict_or_None, detail); None =
+    applicable, proceed."""
+    rp = sampling_samples_path.replace("-samples.jsonl", ".json")
+    if rp == sampling_samples_path or not os.path.exists(rp):
+        return ("PROTOCOL-FLAG",
+                f"no sibling receipt for {sampling_samples_path} — world "
+                f"unverifiable, refusing to apply borrowed-world bars")
+    rec = json.load(open(rp, encoding="utf-8"))
+    model = rec.get("args", {}).get("model")
+    if model != WORLD_PIN["model"]:
+        return ("NOT-APPLICABLE-WORLD-CHANGED",
+                f"sampling model {model!r} != pinned "
+                f"{WORLD_PIN['model']!r} — fp-21b bars/band-legs are "
+                f"borrowed-world artifacts; derive a fresh prong-A prereg "
+                f"in the new world")
+    return (None, "world pin intact")
+
+
 def check_r2_pin(r2_receipt_path):
     """Tamper guard: the committed fp-21 receipt must carry exactly the
     pinned round-2 result. Returns mismatch list (empty = intact)."""
@@ -135,8 +170,26 @@ def _selftest():
     assert "DIES" in d["consequence"]
     assert decide_21b({"verdict": "INCOMPUTABLE"})["verdict"] == \
         "PROTOCOL-FLAG"
-    # r2 pin guard: matching receipt passes, tampered ratio caught
+    # world-applicability gate: pinned model passes; foreign model ->
+    # NOT-APPLICABLE-WORLD-CHANGED; missing sibling -> PROTOCOL-FLAG
     import tempfile
+    import os as _os
+    with tempfile.TemporaryDirectory() as td:
+        sp = _os.path.join(td, "x-samples.jsonl")
+        open(sp, "w", encoding="utf-8").write("{}\n")
+        v, _d = check_sampling_world(sp)
+        assert v == "PROTOCOL-FLAG", v
+        rp = _os.path.join(td, "x.json")
+        json.dump({"args": {"model": WORLD_PIN["model"]}},
+                  open(rp, "w", encoding="utf-8"))
+        v, _d = check_sampling_world(sp)
+        assert v is None, v
+        json.dump({"args": {"model": "ember-v0-0.37b"}},
+                  open(rp, "w", encoding="utf-8"))
+        v, _d = check_sampling_world(sp)
+        assert v == "NOT-APPLICABLE-WORLD-CHANGED", v
+
+    # r2 pin guard: matching receipt passes, tampered ratio caught
     good = {"result": {"ratio": 1.341, "verdict": "INCONCLUSIVE"},
             "perm_p": 0.104}
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
@@ -186,6 +239,21 @@ def main():
         return
     NC = os.path.dirname(HERE)
     R = f"{NC}/receipts"
+    world_verdict, world_detail = check_sampling_world(a.sampling)
+    if world_verdict:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        refusal = {"ticket": "FP21B-WORLD-GATE", "ts": ts,
+                   "sampling": os.path.basename(a.sampling),
+                   "world_pin": WORLD_PIN,
+                   "result": {"verdict": world_verdict,
+                              "detail": world_detail},
+                   "sha_convention": ("file shas = sha256 over on-disk "
+                                      "raw bytes")}
+        out = f"{R}/fp21b-world-gate-{ts}.json"
+        checked_write(out, refusal)
+        print(json.dumps(refusal["result"], indent=2))
+        print(f"FP21B_WORLD_GATE_REFUSAL {out}")
+        return
     mism = check_r2_pin(f"{R}/{R2_RECEIPT}")
     if mism:
         raise SystemExit(f"fp21b: round-2 pin mismatch {mism} — refusing "
