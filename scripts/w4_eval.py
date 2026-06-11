@@ -64,6 +64,24 @@ def task_pass_vector(rows, order):
     return [passed[tid] for tid in order]
 
 
+def control_pairs(arm_vec):
+    """Every non-base/non-control arm paired against control. Pure.
+
+    eng #151 (G1 live audit, mail 14529): the control comparison was
+    guarded by a literal 'trained' arm name, so the r2 five-arm record
+    (base/sft/mtp/grpo/control) produced NO control deltas — and STATE's
+    decision rule needs arm-minus-base AND arm-minus-control per trained
+    arm. This is the single source of the pairing rule, used by both the
+    bootstrap deltas block and the exact-method paired outcomes. The r1
+    literal key is subsumed by construction: an arm named 'trained'
+    still yields trained_minus_control_ci95.
+    """
+    if "control" not in arm_vec:
+        return {}
+    return {f"{name}_minus_control_ci95": (arm_vec[name], arm_vec["control"])
+            for name in arm_vec if name not in ("base", "control")}
+
+
 def run_arm(name, adapter, model_id, problems, args):
     model, tok = load_model(model_id, adapter=adapter)
     user_texts, meta = [], []
@@ -164,9 +182,8 @@ def main():
             if name != "base":
                 receipt["deltas"][f"{name}_minus_base_ci95"] = \
                     paired_delta_ci(arm_vec[name], arm_vec["base"])
-    if "trained" in arm_vec and "control" in arm_vec:
-        receipt["deltas"]["trained_minus_control_ci95"] = \
-            paired_delta_ci(arm_vec["trained"], arm_vec["control"])
+    for key, (a, b) in control_pairs(arm_vec).items():
+        receipt["deltas"][key] = paired_delta_ci(a, b)
     # Additive exact-method sub-block (Wilson + Newcombe + MDE); bootstrap and
     # all existing fields are unchanged; early-stop logic not present in w4.
     if _build_exact_block is not None and len(problems) > 0:
@@ -177,9 +194,7 @@ def main():
                 if name != "base":
                     _paired_outcomes[f"{name}_minus_base_ci95"] = (
                         arm_vec[name], arm_vec["base"])
-        if "trained" in arm_vec and "control" in arm_vec:
-            _paired_outcomes["trained_minus_control_ci95"] = (
-                arm_vec["trained"], arm_vec["control"])
+        _paired_outcomes.update(control_pairs(arm_vec))
         receipt["exact"] = _build_exact_block(
             _succ_by_arm, _paired_outcomes, len(problems))
 
