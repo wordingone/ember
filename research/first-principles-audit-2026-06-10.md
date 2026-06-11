@@ -1049,3 +1049,51 @@ also near-dup, the "augmentation provides prompt diversity" rationale
 is a false-accept and dedup-collapse re-enters as the simpler lever.
 fp-18 = prompt-side diversity within exact-dup completion groups,
 measurable from the same build views now.
+
+## 8.24 fp-18 (#100): prompt-side diversity within exact-dup groups — the dedup-collapse rejection STANDS
+
+**Question (minted by §8.23):** §8.23's prereg rejected dedup-collapse
+on the unmeasured claim that prompts over a duplicated completion are
+diverse. Measure it; pre-register the failure rule BEFORE running.
+
+**Pre-registration (frozen in-script before the measuring run):**
+false-accept iff BOTH prongs trip — P1: within-group prompt near-dup
+pair fraction ≥ 0.50 (cos ≥ 0.95, the standing bar); P2: within ≥ 2×
+the between-group sampled baseline (anchors out ARC-grid FORMAT
+texture — high cosine alone may be a property of the prompt format,
+not of duplication).
+
+**Method (`scripts/fp18_promptdiv.py`, selftest PASS, receipt
+`fp18-promptdiv-20260611T021320Z.json`, daemon eval d59caf48):** replay
+build A exactly as fp-17 (same build_dataset call); group by ASSISTANT
+completion; pairwise 3-gram-bag cosine over PROMPTS within each
+multi-group (2,306 pairs across 390 groups / 1,519 examples — counts
+cross-match the fp-17 receipt exactly) + seeded 5,000-pair
+between-group baseline.
+
+**Verdict — false-accept does NOT fire; the rationale STANDS:**
+- P1: within-group near-dup fraction **0.0234** (2.3% ≪ 50%) — prompts
+  over duplicated completions are NOT predominantly near-dup. The
+  re-arc augmentation genuinely provides prompt diversity.
+- P2 alone trips (ratio 23.4× over the 0.001 between baseline) —
+  same-task prompts are naturally more similar than random cross-group
+  pairs, which is exactly why the rule required BOTH prongs.
+- Distribution view: within median cosine 0.4555 vs between 0.396 —
+  within-group prompt diversity is close to the build's whole prompt
+  space. p95 0.90 tail noted (5% of within pairs are highly similar)
+  but far from the bar.
+
+**Consequence:** cluster-cap remains the round-3 choice unamended; the
+fp-17 prereg's rejection of dedup-collapse is now MEASURED, not
+assumed. No adversarial workflow re-run: machinery byte-identical to
+fp-17's verified single source, verdict no-amendment-shaped; the one
+load-bearing cross-check (390/1,519 vs fp-17) verified directly.
+
+**Successor minted (fp-19):** owned-core feasibility envelope under the
+June-22 deadline (user directive 2026-06-11) — receipts-grade compute
+arithmetic for NC2-own v0: measured 4090 throughput (governed
+micro-benchmark, not paper claims) × candidate configs (0.1–0.3B
+ternary/QAT) × token budgets vs days remaining × a world whose verify
+floor a small core clears. Verdict = envelope table + a named v0
+config, or a kill that escalates hardware per the NC2-own rung-kill
+rule.
