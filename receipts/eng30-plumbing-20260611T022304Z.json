@@ -1,0 +1,96 @@
+{
+  "ticket": "eng-30",
+  "issue": 106,
+  "ts": "20260611T022304Z",
+  "selftest": "R2_ARMS_SELFTEST_PASS",
+  "py_compile": {
+    "r2_arms.py": "PASS",
+    "t2_r2_sft.py": "PASS",
+    "t2_r2_mtp.py": "PASS",
+    "t2_r2_grpo.py": "PASS"
+  },
+  "ast_parse": {
+    "r2_arms.py": "PASS",
+    "t2_r2_sft.py": "PASS",
+    "t2_r2_mtp.py": "PASS",
+    "t2_r2_grpo.py": "PASS"
+  },
+  "arm_configs_tag_suffix_q15": {
+    "sft": {
+      "arm": "sft",
+      "status": "concrete",
+      "script": "scripts/t2_round.py",
+      "entry": "t2_round",
+      "tag": "r2-q15-sft",
+      "argv": [
+        "--round", "2",
+        "--train-only",
+        "--model", "Qwen/Qwen2.5-Coder-3B-Instruct",
+        "--tag-suffix", "-r2-q15"
+      ]
+    },
+    "mtp": {
+      "arm": "mtp",
+      "status": "concrete",
+      "script": "scripts/t2_mtp.py",
+      "entry": "t2_mtp",
+      "tag": "r2-q15-mtp",
+      "argv": [
+        "--model", "Qwen/Qwen2.5-Coder-3B-Instruct",
+        "--tag", "r2-q15-mtp"
+      ],
+      "trainer_extension_note": "t2_mtp.py reads from ledger/views/wcode-r1.jsonl (hardcoded path). Round-2 wrapper pre-writes the r2 frontier-filtered view and installs it at that path (with backup). A --view-path argument to t2_mtp.py would avoid view stomping; that is a one-line trainer extension not applied per new-files-only constraint. Arm is otherwise fully concrete: MTPTrainer exists in t2_mtp.py and is production-validated."
+    },
+    "grpo": {
+      "arm": "grpo",
+      "status": "concrete",
+      "script": "scripts/t2_grpo.py",
+      "entry": "t2_grpo",
+      "tag": "r2-q15-grpo",
+      "argv": [
+        "--model", "Qwen/Qwen2.5-Coder-3B-Instruct",
+        "--max-steps", "60",
+        "--num-generations", "8",
+        "--beta", "0.04",
+        "--lr", "5e-6",
+        "--temp", "0.8",
+        "--reward", "binary",
+        "--tag", "r2-q15-grpo"
+      ]
+    }
+  },
+  "frontier_filter_dryrun": {
+    "solve_rate_definition": "verified_count / (verified_count + failed_count) where verified_count = rows in ledger/episodes.jsonl for that task, failed_count = rows in ledger/control_pool.jsonl for that task. Tasks with rate=0 (all failed, none verified) are excluded by the open lower bound. Tasks with rate=1 (all verified, none failed) are excluded by theta=0.5. Only tasks with rate in (0, 0.5] pass the filter.",
+    "theta_0.5": {
+      "tasks": 1936,
+      "episodes": 2106
+    },
+    "all_verified": {
+      "tasks": 2018,
+      "episodes": 2865
+    },
+    "ledger_total_rows": 2865,
+    "control_pool_total_rows": 2931,
+    "total_tasks_with_any_data": 2029
+  },
+  "calibration_single_source": "calibrate.calibration_block + w1_mbpp.elicit_prompt (imported, not reimplemented); r2_arms.brier() is a thin wrapper over calibrate.calibration_block",
+  "mtp_arm_status": "concrete — t2_mtp.MTPTrainer exists and is production-validated; round-2 wrapper pre-writes the frontier-filtered wcode view to the path t2_mtp reads. One-line extension (--view-path) would cleanly separate r1/r2 views without file overwrite; noted in PR.",
+  "sha_convention": "eng receipts hash the CRLF rendering; git content LF; same text (per eng-23 receipt note)",
+  "no_training_launched": true,
+  "ledger_sha256_before": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+  "ledger_sha256_after": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+  "ledger_byte_unchanged": true,
+  "launch_interlock": {
+    "present_in_all_3_wrappers": true,
+    "mechanism": "module-level _require_gate_token() executes on import; SystemExit(1) if --leo-gate-token is absent or empty. Fires before any dataset build or training delegation.",
+    "verified_by": "manual execution of each wrapper without --leo-gate-token; all three exit 1 with the interlock message"
+  },
+  "new_files": [
+    "scripts/r2_arms.py",
+    "scripts/t2_r2_sft.py",
+    "scripts/t2_r2_mtp.py",
+    "scripts/t2_r2_grpo.py",
+    "receipts/eng30-plumbing-20260611T022304Z.json"
+  ],
+  "existing_files_modified": 0
+}
