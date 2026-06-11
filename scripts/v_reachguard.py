@@ -3,7 +3,8 @@
 Closes the SECOND live-confirmed false-accept class from the soundness probe
 set (receipt ts 20260611T000301Z): a submitted program reaches
 non-allow-listed objects (os, the underlying builtins, file handles) by
-WALKING the CPython object graph instead of importing them — the classic
+traversing the CPython object graph instead of importing them — reaching
+non-allow-listed objects via attribute chains such as:
 
     ().__class__.__base__.__subclasses__()      # enumerate every loaded class
     fn.__globals__['__builtins__']['__import__'] # reach the underlying importer
