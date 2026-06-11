@@ -877,3 +877,59 @@ GPU-minute than matched non-band episodes? That is the band's first
 FALSIFIABLE downstream claim (G1-delta on a band-vs-nonband split),
 deferred to a round that trains, but pre-registerable now from the
 existing episode pool. Closing PR mints fp-16.
+
+## 8.21 fp-13 (#85): the seed mass is a MONOCULTURE — the majority class is the diluted, not the diluter
+
+**Question (minted by §8.18):** fp-10 demoted the Qwen minority's style
+signature; the 67% MAJORITY (1,909 arc-dsl-MIT episodes — single-author
+Hodel DSL code, 399 originals + 1,510 re-arc variants) was never probed
+for ITS concentration. A from-scratch core inherits the DOMINANT
+distribution.
+
+**Method (`scripts/fp13_concentration.py`, selftest PASS, receipt
+`fp13-concentration-20260611T012048Z.json`, daemon eval 3131e77c —
+within-corpus by design, since cross-world separability is
+domain-confounded):** (1) effective-N: exact-dup count + near-dup
+clusters (3-gram-bag cosine ≥ 0.95, union-find) + a chaining-FREE
+design-effect ESS; (2) intra-class dispersion in the fp-10 feature
+space, pooled z-scored, with the two MBPP classes as same-space
+calibration; (3) frozen bar from #85: effective-unique < 30% OR arc
+dispersion < 0.5× qwen dispersion → CONCENTRATED.
+
+**Verdict — CONCENTRATED, both prongs independently:**
+- **Effective-N collapse:** exact-unique **780/1,909** (59% of rows are
+  byte-duplicates of another episode — re-arc variants re-verify the
+  same program text on different grids; realized expansion 4.78× from
+  399 originals). Near-dup clusters at cos≥0.95: **9** (fraction 0.0047
+  vs the 0.30 bar). Chaining honesty (added after a local diagnostic):
+  the giant component (1,884) is chain-merged — only 14.1% of its
+  sampled pairs are DIRECTLY ≥0.95 — but its median direct cosine is
+  **0.921**, a genuine near-dup neighborhood, and the chaining-free
+  **ESS ≈ 1.1** (ρ=0.9076): at the 3-gram texture level the seed mass
+  behaves like ONE independent sample.
+- **Dispersion:** arc-dsl 11.6 vs qwen-mbpp 32.2 vs human-mbpp 34.0
+  (pooled z-space) — ratio **0.361 < 0.5**. Within-class trigram cosine
+  0.908 vs 0.500/0.401.
+
+**The inversion this finds:** the contamination worry pointed at the
+model-output class; the receipts point back. The Qwen W-code class —
+demoted for style signature at fp-10 — is the most texture-DIVERSE
+class in the ledger; the human seed mass is the monoculture. Partly the
+DSL's nature (shared imports, fixed call discipline) — but that IS what
+a next-token learner sees. The bits ledger is NOT inflated (seed rows
+carry zero bits; all 573.2 bits are W-code) — only ROW-COUNT claims are.
+
+**Consequences (binding, per the frozen bar):** every "1,909" quote
+carries effective-N alongside (exact 780; texture ESS ~1.1); §8.15d
+dilution preferences re-rank — the majority class is the diluTED, not
+the diluTER; NC2-own diversity burden falls on W-code + human-reference
++ other-world classes; round-design corpus claims read evidence, not
+rows.
+
+**Successor minted (fp-16):** make dedup-aware accounting the STANDING
+census — effective composition class-by-class (exact-unique + ESS per
+class, the full ledger and control pool), which standing claims change
+when episodes are counted as evidence rather than rows, and a named
+ingest-side mechanism (dedup-cluster stamp at ingest — eng slice
+candidate) so future builds can weight by evidence. CPU-from-ledger.
+Closing PR mints fp-17.
