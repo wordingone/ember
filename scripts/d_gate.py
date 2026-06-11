@@ -353,17 +353,24 @@ def run_d_gate(artifact_path: Path, args) -> dict:
             "adapter-quarantined-rerun": seed,
             "adapter-restored": seed,
             "seed_matched": True},
-        "n_tasks": n_tasks,
+        # effective task count = the evaluated vectors' length (the CLI
+        # --n-tasks 0 sentinel means "full split" and must never reach
+        # the divisor: caught live 2026-06-11, job cb003e88
+        # ZeroDivisionError after a clean PASS run — receipt lost)
+        "n_tasks": len(vec_base),
+        "n_tasks_requested": n_tasks,
         "k": k,
         "arms": {
-            "base": {"pass_sum": sum(vec_base), "pass_rate": sum(vec_base) / n_tasks},
-            "adapter": {"pass_sum": sum(vec_adapter), "pass_rate": sum(vec_adapter) / n_tasks},
+            "base": {"pass_sum": sum(vec_base),
+                     "pass_rate": sum(vec_base) / len(vec_base)},
+            "adapter": {"pass_sum": sum(vec_adapter),
+                        "pass_rate": sum(vec_adapter) / len(vec_adapter)},
             "adapter-quarantined-rerun": {
                 "pass_sum": sum(vec_quarantined),
-                "pass_rate": sum(vec_quarantined) / n_tasks},
+                "pass_rate": sum(vec_quarantined) / len(vec_quarantined)},
             "adapter-restored": {
                 "pass_sum": sum(vec_restored),
-                "pass_rate": sum(vec_restored) / n_tasks},
+                "pass_rate": sum(vec_restored) / len(vec_restored)},
         },
         "gain_with": {
             "value": round(gain_with_raw, 6),
