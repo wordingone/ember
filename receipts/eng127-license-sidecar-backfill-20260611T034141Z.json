@@ -1,0 +1,50 @@
+{
+  "ticket": "ENG127-LICENSE-SIDECAR-BACKFILL",
+  "ts": "20260611T034141Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ac1_rule": "sampler BASE+ADAPTER_PATH under adapters/ dir resolves via BASE; basis sampler-stamp-with-own-adapter:<base>+<tag>",
+  "ac2_rule": "STAMPED UNKNOWN with sampler-unmapped: basis re-classified on read via effective_class()",
+  "mapping_source": "fp6_provenance.classify + ledger_license.effective_class (AC1+AC2)",
+  "ledger": {
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/episodes.jsonl",
+    "sha256_before": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+    "sha256_after": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+    "byte_unchanged": true
+  },
+  "control_pool": {
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/control_pool.jsonl",
+    "sha256_before": "9aa2c8d150ec3fcdaa06b28b9f9db63b6fb436829612d41dc8b483ed85d523da",
+    "sha256_after": "9aa2c8d150ec3fcdaa06b28b9f9db63b6fb436829612d41dc8b483ed85d523da",
+    "byte_unchanged": true
+  },
+  "main_files_byte_unchanged": true,
+  "by_license_before": {
+    "episodes": {
+      "UNKNOWN": 278,
+      "UNSTAMPED": 2865
+    },
+    "control_pool": {
+      "UNKNOWN": 98,
+      "UNSTAMPED": 2931
+    }
+  },
+  "by_license_after": {
+    "episodes": {
+      "arc-dsl-mit": 1909,
+      "qwen-research": 1234
+    },
+    "control_pool": {
+      "arc-dsl-mit": 1909,
+      "qwen-research": 1120
+    }
+  },
+  "r2_rows_reclassified": {
+    "episodes": 278,
+    "control_pool": 98,
+    "total": 376,
+    "resolved_to": "qwen-research",
+    "sampler_pattern": "Qwen/Qwen2.5-Coder-3B-Instruct+<adapters_dir>/r1w-q3-mtp"
+  },
+  "view_written": "B:/M/avir/leo/state/nc-ladder/ledger/views/license-class.jsonl",
+  "control_view_written": "B:/M/avir/leo/state/nc-ladder/ledger/views/license-class-control.jsonl"
+}

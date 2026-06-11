@@ -65,8 +65,25 @@ def stamp(rec):
 
 
 def effective_class(rec):
-    """Stamped field wins; unstamped (pre-#70) records classify on the fly."""
-    return rec.get("license_class") or classify(rec)[0]
+    """Stamped field wins; unstamped (pre-#70) records classify on the fly.
+
+    AC2: a STAMPED UNKNOWN whose license_basis starts with 'sampler-unmapped:'
+    is a recorded classification FAILURE, not a license fact — re-classify on
+    read using the current classify() (which may now resolve the sampler via
+    the adapter-mapping AC1 rule).  Stamped non-UNKNOWN classes still win.
+    """
+    cls = rec.get("license_class")
+    if cls and cls != "UNKNOWN":
+        return cls
+    if cls == "UNKNOWN":
+        basis = rec.get("license_basis", "")
+        if basis.startswith("sampler-unmapped:"):
+            # Recorded classification failure — re-classify now.
+            return classify(rec)[0]
+        # UNKNOWN for other reasons (no-provenance, etc.) — no re-classify.
+        return "UNKNOWN"
+    # Unstamped — classify on the fly.
+    return classify(rec)[0]
 
 
 def parse_allow(spec):
@@ -233,6 +250,37 @@ def _selftest():
         pass
     assert effective_class({"origin": "seed-dsl-orig"}) == "arc-dsl-mit"
     assert effective_class({}) == "UNKNOWN"
+
+    # AC2 selftest — both branches pinned:
+    # Branch A: STAMPED UNKNOWN with sampler-unmapped: basis -> re-classify
+    # Use WSL-style path (as stored by w2_ingest on Linux/WSL)
+    import re as _re_test2
+    from fp6_provenance import ADAPTERS_DIR
+    wsl_adapters = _re_test2.sub(
+        r"^([a-zA-Z]):/",
+        lambda m: f"/mnt/{m.group(1).lower()}/",
+        ADAPTERS_DIR.replace("\\", "/")
+    )
+    adapter_wsl = wsl_adapters + "/r1w-q3-mtp"
+    rec_stamped_unknown = {
+        "sampler": f"Qwen/Qwen2.5-Coder-3B-Instruct+{adapter_wsl}",
+        "license_class": "UNKNOWN",
+        "license_basis": "sampler-unmapped:Qwen/Qwen2.5-Coder-3B-Instruct+r1w-q3-mtp",
+    }
+    # After AC1 is live, classify() resolves this to qwen-research;
+    # effective_class must follow suit (AC2 re-classify on read).
+    assert effective_class(rec_stamped_unknown) == "qwen-research", (
+        f"AC2 branch-A: expected qwen-research, got {effective_class(rec_stamped_unknown)!r}"
+    )
+    # Branch B: STAMPED non-UNKNOWN (e.g. arc-dsl-mit) — must still win.
+    rec_stamped_known = {
+        "sampler": "Qwen/Qwen2.5-Coder-3B-Instruct",  # would classify qwen-research
+        "license_class": "arc-dsl-mit",
+        "license_basis": "stamped-manually",
+    }
+    assert effective_class(rec_stamped_known) == "arc-dsl-mit", (
+        f"AC2 branch-B: stamped non-UNKNOWN must win; got {effective_class(rec_stamped_known)!r}"
+    )
 
     # --- fail-closed: UNKNOWN never allow-listable; typos error out ---
     for bad in ("UNKNOWN", "arc-dsl-mit,UNKNOWN", "mit", "", " , "):

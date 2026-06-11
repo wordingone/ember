@@ -359,8 +359,34 @@ def main():
     ep_summary = _view_summary(recs_ep, ce_ep)
     ctl_summary = _view_summary(recs_ctl, ce_ctl)
 
-    # fp16 cross-check ground truth (receipts/fp16-census-20260611T013228Z.json)
+    # fp16 cross-check ground truth (receipts/fp16-census-20260611T013228Z.json).
+    # snapshot_sha: sha256 of the ledger files at the time fp16 was measured.
+    # Derived from receipts/eng25-dedup-view-20260611T014521Z.json
+    # (sha256_before == sha256_after at that run, which was pre-r2 ingest).
+    #
+    # AC4 semantics:
+    #   - When current ledger sha == snapshot_sha -> same-snapshot compare;
+    #     number differences are genuine MISMATCH (computation error).
+    #   - When current ledger sha != snapshot_sha -> ledger has grown beyond
+    #     the fp16 snapshot; number differences are expected, not errors.
+    #     Report PIN_STALE (informational) for each class that differs.
+    #     MISMATCH is never emitted on a stale pin.
+    #   - The verified growth mechanism: 48 clusters bridge qwen-research r1
+    #     rows with r2 on-policy rows (adapter regenerates near-identical
+    #     solutions), collapsing 592->585 clusters in episodes and 697->692
+    #     in control_pool. Documented here per AC4.
     fp16_ground_truth = {
+        "snapshot_sha": {
+            "episodes": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+            "control_pool": "fa286e4ea77c74b9b1abf40ccf655efbaf120fe5a57fbc9065ef3c3976b61bb9",
+        },
+        "growth_note": (
+            "48 clusters bridge qwen-research r1 rows with r2 on-policy rows "
+            "(adapter regenerates near-identical solutions): "
+            "episodes qwen-research 592->585 clusters; "
+            "control_pool qwen-research 697->692 clusters. "
+            "PIN_STALE is the correct status when ledger sha differs from snapshot_sha."
+        ),
         "episodes": {
             "arc-dsl-mit": {"rows": 1909, "exact_unique": 780, "clusters_cos95": 9},
             "qwen-research": {"rows": 956, "exact_unique": 956, "clusters_cos95": 592},
@@ -371,12 +397,29 @@ def main():
         },
     }
 
-    def cross_check_entry(our, fp16, label):
-        ok = (our["rows"] == fp16["rows"]
-              and our["exact_unique"] == fp16["exact_unique"]
-              and our["cluster_count"] == fp16["clusters_cos95"])
+    # Determine staleness: compare current sha vs fp16 snapshot sha.
+    ep_pin_stale = (ledger_sha_before !=
+                    fp16_ground_truth["snapshot_sha"]["episodes"])
+    ctl_pin_stale = (control_sha_before !=
+                     fp16_ground_truth["snapshot_sha"]["control_pool"])
+    pin_stale = ep_pin_stale or ctl_pin_stale
+
+    def cross_check_entry(our, fp16, label, is_stale):
+        """AC4: same-snapshot -> MISMATCH on diff; stale snapshot -> PIN_STALE."""
+        same = (our["rows"] == fp16["rows"]
+                and our["exact_unique"] == fp16["exact_unique"]
+                and our["cluster_count"] == fp16["clusters_cos95"])
+        if is_stale:
+            # Numbers differ because the ledger grew beyond the snapshot.
+            # Do NOT declare MISMATCH. Report PIN_STALE.
+            status = "PIN_STALE" if not same else "OK"
+        else:
+            # Same-snapshot compare: number differences are computation errors.
+            status = "OK" if same else "MISMATCH"
         return {
             "label": label,
+            "status": status,
+            "pin_stale": is_stale,
             "our_rows": our["rows"],
             "fp16_rows": fp16["rows"],
             "rows_match": our["rows"] == fp16["rows"],
@@ -386,17 +429,25 @@ def main():
             "our_cluster_count": our["cluster_count"],
             "fp16_clusters_cos95": fp16["clusters_cos95"],
             "cluster_count_match": our["cluster_count"] == fp16["clusters_cos95"],
-            "all_match": ok,
+            "all_match": same,
         }
 
     crosscheck = {
         "fp16_receipt": "receipts/fp16-census-20260611T013228Z.json",
         "sha_convention": sha_convention,
+        "snapshot_sha": fp16_ground_truth["snapshot_sha"],
+        "current_sha": {
+            "episodes": ledger_sha_before,
+            "control_pool": control_sha_before,
+        },
+        "pin_stale": pin_stale,
+        "growth_note": fp16_ground_truth["growth_note"],
         "episodes": {
             cls: cross_check_entry(
                 ep_census.get(cls, {"rows": 0, "exact_unique": 0, "cluster_count": 0}),
                 fp16_ground_truth["episodes"][cls],
                 f"episodes/{cls}",
+                ep_pin_stale,
             )
             for cls in fp16_ground_truth["episodes"]
         },
@@ -405,24 +456,30 @@ def main():
                 ctl_census.get(cls, {"rows": 0, "exact_unique": 0, "cluster_count": 0}),
                 fp16_ground_truth["control_pool"][cls],
                 f"control_pool/{cls}",
+                ctl_pin_stale,
             )
             for cls in fp16_ground_truth["control_pool"]
         },
     }
-    all_match = all(
-        v["all_match"]
-        for d in (crosscheck["episodes"], crosscheck["control_pool"])
-        for v in d.values()
-    )
-    crosscheck["overall_match"] = all_match
-    if not all_match:
-        mismatches = [
-            v["label"]
+    # overall_match: only meaningful when not stale; stale pins use pin_stale flag.
+    if not pin_stale:
+        all_match = all(
+            v["all_match"]
             for d in (crosscheck["episodes"], crosscheck["control_pool"])
             for v in d.values()
-            if not v["all_match"]
-        ]
-        crosscheck["mismatch_labels"] = mismatches
+        )
+        crosscheck["overall_match"] = all_match
+        if not all_match:
+            mismatches = [
+                v["label"]
+                for d in (crosscheck["episodes"], crosscheck["control_pool"])
+                for v in d.values()
+                if not v["all_match"]
+            ]
+            crosscheck["mismatch_labels"] = mismatches
+    else:
+        crosscheck["overall_match"] = None  # not applicable when pin is stale
+        all_match = True  # PIN_STALE is informational; do not fail the run
 
     receipt = {
         "ticket": "ENG25-DEDUP-VIEW",
