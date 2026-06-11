@@ -30,6 +30,14 @@ Updated: 2026-06-11 ~06:25 — **fp-25 Surface B: coverage terminal + floor refu
 
 Substrate name: **ember** (user, 2026-06-09). Trained artifacts are ember-r1, ember-r2, … (= `adapters/r{N}`). nc-ladder remains the experiment plumbing name.
 
+## 2026-06-11 ~14:45Z — stop-gate pass: queue-jump #132 -> #225 (E1b gate built, PR #228 merged)
+
+Gate fired with #132 lowest. Queue-jump justification: #132's executors are built+frozen (fp21b_prereg.py + fp21b_scope_132.py, scope PR #197); its fire input (round-3 sampling receipt) cannot exist before a round-3 runs, and producing a fallback-(a) borrowed round-3 NOW would contradict the frozen fp-26 (b) owned-core registration. #225 held the only buildable fire-time gap among open Leo-class items: the E1b prereg (#227) froze the loss-match rule with no executor applying it.
+
+Built: scripts/fp32_e1b_gate.py (PR #228 @50da138, selftest PASS — 3 verdict branches + 8 refusal classes). Audits the future eng-54 FP32-E1B-LOSSMATCH pair receipt: identical pins across legs (shard sha / seed / seq / 10,485,760-token budget / byte-equal governor), B=4 frozen-lr baseline, ladder {16,24}, B=24 margin held in the REAL trainer, exact scaled-lr retry. Verdicts PASS / PASS-SCALED-LR / FAIL(deviation killed).
+
+Every open Leo-class carrier now has its fire-time executor merged: #132(fp21b) #205(fp27b) #208(fp28) #210(sp2b) #214(sp3) #218(fp30) #223(fp24) #225(fp32_e1b_gate). All blocked on external triggers only (Eli census -> recount chain, owned-core run, 06-22).
+
 ## 2026-06-11 ~14:35Z — fp-32: bottleneck ledger landed + first receipted gain (PR #226, merged)
 
 Directive (mail 14633, relayed): diagnose GPU bottlenecks end-to-end, challenge from first principles, prove >=1 measurable gain, don't touch the launch path. Carrier #225; Kai proof gate at kai/state/ember-audits/fp32-bottleneck-proof-gate-2026-06-11.md.
