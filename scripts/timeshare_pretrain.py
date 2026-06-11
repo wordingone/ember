@@ -1143,6 +1143,11 @@ def run_v0_segment(
     if live:
         _check_launch_interlock(live=live)
         gov_receipt = _apply_governor()
+        if shard_dir is None:
+            raise SystemExit(
+                "TIMESHARE_V0_LIVE_NO_SHARDS: live pretrain requires a real "
+                "shard_dir of packed uint16 shards; refusing to fabricate "
+                "synthetic tokens on the live/GPU path (eng-54 #194).")
     else:
         gov_receipt = {
             "mode": "cpu_dryrun",
@@ -1165,8 +1170,10 @@ def run_v0_segment(
     model, vocab, hidden, n_mtp = build_v0_model(cfg, live=live,
                                                  tiny_dims=tiny_dims)
 
-    # --- packed-shard loader (synthetic fixture for the dry-run) ---
+    # --- packed-shard loader (synthetic fixture for the dry-run ONLY; the
+    #     live path already refused shard_dir is None above, eng-54 #194) ---
     if shard_dir is None:
+        assert not live, "live path must refuse synthetic shards (eng-54)"
         shard_dir = os.path.join(run_dir, "shards")
         os.makedirs(shard_dir, exist_ok=True)
         import numpy as np
@@ -1785,6 +1792,98 @@ def _selftest_v0ext() -> None:
         else:
             os.environ["EMBER_GATE_AUTHORIZED"] = _saved_env
 
+    # ---- 7. live-routing (eng-54 #194): CPU dry-route, no GPU --------------
+    # main(--live) must dispatch run_v0_segment(real shard_dir), NOT
+    # run_segment (synthetic torch.randint), and must refuse when no shard dir
+    # is supplied. The real trainer + pre-run check are stubbed so nothing
+    # touches a GPU; this asserts ROUTING only.
+    _route: dict = {}
+
+    class _RouteStop(Exception):
+        pass
+
+    def _stub_v0(run_dir, cfg, **kw):
+        _route["v0"] = {"live": kw.get("live"),
+                        "shard_dir": kw.get("shard_dir"),
+                        "n_steps": kw.get("n_steps"),
+                        "total_steps": kw.get("total_steps")}
+        raise _RouteStop()
+
+    def _stub_seg(run_dir, steps, **kw):
+        _route["seg"] = {"live": kw.get("live"), "tiny_cpu": kw.get("tiny_cpu")}
+        raise _RouteStop()
+
+    _g = globals()
+    _saved_fns = {k: _g.get(k) for k in
+                  ("run_v0_segment", "run_segment", "_check_launch_interlock")}
+    _rd = tempfile.mkdtemp(prefix="v0_route_")
+    try:
+        _g["run_v0_segment"] = _stub_v0
+        _g["run_segment"] = _stub_seg
+        _g["_check_launch_interlock"] = lambda **k: None
+
+        # 7a: --live with no --shard-dir refuses; no trainer dispatched.
+        _route.clear()
+        _no_shards = False
+        try:
+            main(["--live", "--steps", "1", "--run-dir", _rd])
+        except SystemExit as e:
+            _no_shards = "TIMESHARE_V0_LIVE_NO_SHARDS" in str(e)
+        assert _no_shards, "--live must refuse without --shard-dir (eng-54)"
+        assert "v0" not in _route and "seg" not in _route, \
+            "no trainer may dispatch when --live lacks shards (eng-54)"
+
+        # 7b: --live --shard-dir routes to run_v0_segment(live, real dir),
+        #     never the synthetic run_segment path.
+        _route.clear()
+        try:
+            main(["--live", "--shard-dir", "/tmp/ember-shards-xyz",
+                  "--steps", "3", "--total-steps", "9", "--run-dir", _rd])
+        except _RouteStop:
+            pass
+        assert _route.get("v0"), "--live must dispatch run_v0_segment (eng-54)"
+        assert _route["v0"]["live"] is True
+        assert _route["v0"]["shard_dir"] == "/tmp/ember-shards-xyz"
+        assert _route["v0"]["total_steps"] == 9
+        assert "seg" not in _route, \
+            "live path must NOT fall through to synthetic run_segment (eng-54)"
+
+        # 7c: no --live still uses the synthetic CPU smoke (run_segment).
+        _route.clear()
+        try:
+            main(["--steps", "1", "--run-dir", _rd])
+        except _RouteStop:
+            pass
+        assert _route.get("seg"), "non-live must dispatch run_segment (eng-54)"
+        assert _route["seg"]["live"] is False
+        assert _route["seg"]["tiny_cpu"] is True
+        assert "v0" not in _route
+    finally:
+        for _k, _v in _saved_fns.items():
+            _g[_k] = _v
+        shutil.rmtree(_rd, ignore_errors=True)
+
+    # 7d: the trainer itself refuses synthetic fabrication on the live path
+    #     (deepest strict default; pre-run check + governor stubbed, no GPU,
+    #     no model build — the refusal fires before build_v0_model).
+    _saved_fns2 = {k: globals().get(k) for k in
+                   ("_check_launch_interlock", "_apply_governor")}
+    try:
+        globals()["_check_launch_interlock"] = lambda **k: None
+        globals()["_apply_governor"] = lambda: {}
+        _deep_refused = False
+        try:
+            run_v0_segment(os.path.join(tempfile.gettempdir(), "v0_guard_unused"),
+                           load_contract(), n_steps=1, live=True,
+                           shard_dir=None)
+        except SystemExit as e:
+            _deep_refused = "TIMESHARE_V0_LIVE_NO_SHARDS" in str(e)
+        assert _deep_refused, \
+            "run_v0_segment(live, shard_dir=None) must refuse (eng-54)"
+    finally:
+        for _k, _v in _saved_fns2.items():
+            globals()[_k] = _v
+
     from receipt_write import checked_write
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(repo, "receipts", f"v0ext-selftest-{ts}.json")
@@ -1818,6 +1917,15 @@ def main(argv: list[str] | None = None) -> None:
                     help="Segment label for receipts")
     ap.add_argument("--resume-ckpt", default=None,
                     help="Checkpoint directory to resume from")
+    ap.add_argument("--shard-dir", default=None,
+                    help="Directory of real packed uint16 shards for the live "
+                         "v0 path (REQUIRED with --live; synthetic tokens are "
+                         "refused on the live path)")
+    ap.add_argument("--total-steps", type=int, default=None,
+                    help="Total planned steps for the WSD schedule denominator "
+                         "(defaults to --steps)")
+    ap.add_argument("--checkpoint-every", type=int, default=50,
+                    help="Checkpoint cadence in optimizer steps (live v0 path)")
     ap.add_argument("--verify-resume", action="store_true",
                     help="Scan --run-dir checkpoints and print the safe-resume "
                          "vs restart-from-scratch determination (no training)")
@@ -1859,16 +1967,48 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.live:
-        _check_launch_interlock(live=True)
+        # eng-54 (#194): the production --live path dispatches the real v0
+        # survivor-stack trainer (run_v0_segment) against REAL packed shards —
+        # NOT run_segment, whose token source is torch.randint synthetic noise.
+        # Spending a governed GPU window on synthetic tokens is the failure this
+        # routing fix closes. --shard-dir is mandatory (strict default); the
+        # env+flag+launch-readiness pre-run check and the governor both fire
+        # inside run_v0_segment(live=True).
+        if not args.shard_dir:
+            raise SystemExit(
+                "TIMESHARE_V0_LIVE_NO_SHARDS: --live requires --shard-dir "
+                "(a directory of real packed uint16 shards). Refusing to "
+                "dispatch the live/GPU path on synthetic tokens (eng-54 #194).")
+        _check_launch_interlock(live=True)  # fast refusal before torch import
+        run_dir = args.run_dir or tempfile.mkdtemp(prefix="v0_live_")
+        cfg = load_contract()
+        receipt = run_v0_segment(
+            run_dir, cfg,
+            n_steps=args.steps,
+            total_steps=args.total_steps or args.steps,
+            live=True,
+            shard_dir=args.shard_dir,
+            resume_ckpt_dir=args.resume_ckpt,
+            checkpoint_every=args.checkpoint_every,
+            segment_id=args.segment_id,
+        )
+        from receipt_write import checked_write
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        out = os.path.join(repo, "receipts", f"v0-live-{receipt['ts']}.json")
+        checked_write(out, receipt)
+        print(json.dumps(receipt, indent=2, sort_keys=True))
+        print(f"[v0-live] receipt: {out}")
+        return
 
+    # non-live: CPU smoke against the synthetic survivor path (unchanged).
     run_dir = args.run_dir or tempfile.mkdtemp(prefix="timeshare_run_")
     receipt = run_segment(
         run_dir,
         args.steps,
-        live=args.live,
+        live=False,
         resume_ckpt_dir=args.resume_ckpt,
         segment_id=args.segment_id,
-        tiny_cpu=not args.live,
+        tiny_cpu=True,
     )
     print(json.dumps(receipt, indent=2, sort_keys=True))
 
