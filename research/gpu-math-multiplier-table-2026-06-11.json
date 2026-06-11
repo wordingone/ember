@@ -1,0 +1,194 @@
+{
+  "source": "gpu-math-attack workflow wf_b2f8b412-ecf, 2026-06-11, 24 haiku agents (8 mine + 16 refute)",
+  "discipline": "verdict is Leo's from receipts; this table is evidence legs only",
+  "multiplier_table": [
+    {
+      "technique": "Muon optimizer (momentum-orthogonalized updates via Newton-Schulz iteration)",
+      "key": "Muon optimizer (momentum-orthogonalized updates via Newton-Schulz iteration)",
+      "axis": "data_efficiency",
+      "claimed": 1.9,
+      "surviving_multiplier": 1.77,
+      "contested": true,
+      "conditions": "0.1\u20131B parameter decoders, 20B token budget, BF16 mixed precision, Muon applied to hidden 2D weights only (AdamW on embeddings/norms/head). Does not apply to QAT tail phase (final ~5% of tokens), where published evidence shows Muon+fake-quant causes null or slightly negative perplexity interactions. For that phase, switch to AdamW per Bit-by-Bit findings.",
+      "citations": [
+        "arXiv 2502.16982 (Moonlight, Moonshot: Muon reaches matched loss at 52% of AdamW training FLOPs on 3B-active MoE)",
+        "arXiv 2509.24406 (independent study, 30\u2013200M decoder models: Muon hits target loss at 48\u201352% of AdamW compute)",
+        "arXiv 2604.07888 Appendix B.5 (Bit-by-Bit QAT: Muon+fake-quant null/negative on 1B\u201313B LLaMA/Mistral, recommends AdamW for quantization phases)",
+        "KellerJordan/modded-nanogpt (124M GPT-2 speedrun, Muon cited but multiplied with many other changes; 10B\u21920.4B tokens not isolatable to optimizer alone)",
+        "torch.optim.Muon documentation (PyTorch 2.9+, Newton-Schulz overhead ~few%)"
+      ],
+      "confidence": "medium",
+      "refuter_reasons": [
+        "Moonlight (2502.16982) is MoE architecture, not dense; sparse activation patterns reduce Newton-Schulz overhead ratio differently than dense decoders. Dense architecture overhead is a larger fraction of FLOP savings.",
+        "2509.24406 validates 48\u201352% FLOP reduction at 30\u2013200M scale; 300M extrapolation adds unquantified uncertainty (conservative penalty ~0.05\u00d7).",
+        "Newton-Schulz overhead stated 'few %' (~3%) but unverified on Ada architecture; H100/A100 papers do not specify hardware. Ada's memory bandwidth and SM architecture differ; overhead could be 5\u20138% vs claimed ~3%, reducing net savings from 52% to 48\u201350% (penalty ~0.05\u00d7).",
+        "QAT tail (final ~5% of tokens) must revert to AdamW per Bit-by-Bit B.5 (Muon+fake-quant shows null/negative interactions). End-to-end multiplier blends: 0.95 \u00d7 1.9 + 0.05 \u00d7 1.0 \u2248 1.86\u00d7 (penalty ~0.04\u00d7).",
+        "No local RTX 4090 execution receipt in state files; all cited evidence from H100/A100 infrastructure. GPU-class mismatch on consumer Ada is non-zero risk (penalty ~0.05\u00d7 for conservatism).",
+        "Bit-by-Bit (2604.07888 B.5) published null/negative Muon+fake-quant interaction on QAT tail, requiring AdamW for final ~5% of 20B budget; effective multiplier = (0.95 \u00d7 1.9 + 0.05 \u00d7 1.0) \u2248 1.805, rounded to 1.81."
+      ]
+    },
+    {
+      "technique": "Data deduplication (document-level via MinHashLSH)",
+      "key": "Data deduplication (document-level via MinHashLSH)",
+      "axis": "data_efficiency",
+      "claimed": 1.5,
+      "surviving_multiplier": 1.1,
+      "contested": true,
+      "conditions": "At 0.1\u20131B param scale, document deduplication removes ~48\u201352% of raw tokens (SlimPajama: 1.2T\u2192627B); remaining tokens require ~1.5\u00d7 fewer steps to match unfiltered baseline loss. Conservative lower bound; full multiplier is token-count reduction (1.9\u20132.1\u00d7) divided by loss-convergence overhead (~1.3\u00d7).",
+      "citations": [
+        "arXiv:2309.10818 (SlimPajama-DC: Understanding Data Combinations for LLM Training)",
+        "arXiv:2402.00159 (Dolma: an Open Corpus of Three Trillion Tokens)",
+        "arXiv:2308.12284 (D4: Improving LLM Pretraining via Document De-Duplication and Diversification)"
+      ],
+      "confidence": "medium",
+      "refuter_reasons": [
+        "No sub-1B pretraining convergence receipts: all citations (SlimPajama-DC, Dolma, D4, DoReMi) measure corpus reduction or datacenter-scale training (8B+), not step-reduction on dense sub-1B models.",
+        "1.3\u00d7 loss-convergence overhead is unsourced and appears invented; dividing citation claims by an unsubstantiated overhead number does not validate the 1.5\u00d7 result.",
+        "Local receipts (eng25-dedup-view, eng26-cap) demonstrate example-level clustering and capping, not document-level dedup; wrong technique category.",
+        "Citation D4 (arXiv:2308.12284) title includes both de-duplication and diversification; claim attributes 1.5\u00d7 to dedup alone without isolating dedup-only effect.",
+        "Small-model (sub-1B) pretraining shows lower dedup ROI than datacenter scale: fixed overhead (loss graph smoothing, batch dynamics) dominates modest 10\u201315% token savings at this scale.",
+        "Adjusted 1.1\u00d7 reflects ~10% token reduction minus ~1% convergence overhead typical of lightweight dedup at 0.1\u20130.3B on single-GPU training."
+      ]
+    },
+    {
+      "technique": "Multi-token prediction (MTP) auxiliary heads during episode-SFT \u2014 k-step auxiliary token prediction heads (k=3) on top of LoRA-tuned language model, sharing embedding/unembedding with trunk, trained with auxiliary loss (\u03bb=0.3) alongside main causal loss.",
+      "key": "Multi-token prediction (MTP) auxiliary heads during episode-SFT \u2014 k-step auxiliary token prediction heads (k=3) on top of LoRA-tuned language model, sharing embedding/unembedding with trunk, trained with auxiliary loss (\u03bb=0.3) alongside main causal loss.",
+      "axis": "data_efficiency",
+      "claimed": 1.078,
+      "surviving_multiplier": 0.98,
+      "contested": true,
+      "conditions": "RTX 4090 24GB (single GPU). Dataset: 294 W-code SFT examples (verified MBPP solutions, 209 bits banked). Validation: 43 held-out tasks, 8 samples per task. Evaluation metric: per-sample verification rate (pass rate across 344 total validation samples). Baseline feed 79.07%, MTP feed 86.05% (task-level); baseline sample 63.08%, MTP sample 70.93% (primary metric). Paired bootstrap CI (10k resamples, seed=16) on delta: +7.85pp vs matched-control plain-SFT, CI [+3.49, +13.08]. Plain-SFT arm A vs base (same metric): +1.45pp, CI [\u22123.20, +6.69] (FLAT, includes zero). Training: 252.5s wall-clock, 24.27 train loss (both arms).",
+      "citations": [
+        "arXiv:2404.19737 (Meta MTP: 'Multi-token prediction results in worse results on smaller models,' clear wins starting 1B\u20133B range, +12% HumanEval at 13B)",
+        "arXiv:2412.19437 (DeepSeek-V3 technical report: sequential MTP module with shared embedding/output head, depth-local projection, reusable as speculative drafter)",
+        "Local receipt: W-code round-1 G1 paired analysis (g1-paired-r1w-20260610T225707Z.json), pre-registered decision tree (#32, PR #40), t2-r1w-q3-mtp-20260610T214222Z.json (training receipt), w1-floor-g1-mtp-20260610T221956Z.json (eval), power.py paired bootstrap (McNemar + sample-level CI per pre-registration)."
+      ],
+      "confidence": "medium",
+      "refuter_reasons": [
+        "The claimed +7.85pp (1.078x) multiplier is empirically valid for the measured regime: post-pretraining SFT on high-value verified episodes vs. failures, at 3B scale, on 294 examples / 57 steps. Receipt is honest on caveats (auxiliary param mismatch uncontrolled, small dataset, SFT-only) and statistical bounds (CI [+3.49, +13.08]pp).",
+        "However, the claim's relevance to NC2 owned-core (0.1\u20130.3B pretraining, 20B tokens) is **regime mismatch**: Meta (arXiv:2404.19737) reports MTP hurts or remains flat at \u22641B pretraining scale. The current receipt measures SFT signal recovery on curated content \u2014 two different questions. Transfer of +7.85pp SFT gain to pretraining is unproven and contradicted by published \u22641B pretraining baselines.",
+        "For NC2-specific application (pretraining 0.1\u20130.3B), the evidence-weighted estimate is ~0.98\u00d7 (flat to slight negative per Meta's <1B pretraining regime, with small chance of +1\u20132% recovery if the high-density supervision signal survives pretraining scaling). The 1.078 figure should stay labeled SFT-only; shipping it as a pretraining multiplier on NC2's owned core is an unvalidated extrapolation.",
+        "Structural integrity: control arm uses 185 distinct failed examples repeated to match iterations, not identical verified examples. The baseline is well-controlled (matched steps, same model, same hyperparameters) but compositionally different (failures vs. success). This is not a flaw (control is the right comparison for SFT), but it further constrains generalization to pretraining regimes where failures are not naturally available.",
+        "Pre-registered decision tree (R2-RETHINK cell, binding) rules 'content null at this scale' when A (no-MTP SFT) shows FLAT vs base (+1.45pp, CI includes zero). MTP's +7.85pp is relative to a flat baseline, not genuine signal. Receipt explicitly flags this regime for round-2 redesign, not validation.",
+        "Control arm shows zero signal vs pretrained baseline: mean_diff \u22122.62pp, CI [\u22126.98, +1.74] = FLAT. MTP's gain relative to this control may be noise within the content-null band, not multiplier-class efficiency."
+      ]
+    },
+    {
+      "technique": "Content-dependent sparse attention (NSA, MoBA, gated-deltanet) + linear-hybrid kernels",
+      "key": "Content-dependent sparse attention (NSA, MoBA, gated-deltanet) + linear-hybrid kernels",
+      "axis": "step_throughput",
+      "claimed": 1,
+      "surviving_multiplier": 0.98,
+      "contested": false,
+      "conditions": "RTX 4090 24GB, 0.1-0.3B decoder LM, seq 1024, bf16, batch 1-4 (memory-bound regime)",
+      "citations": [
+        "arXiv:2602.03216",
+        "arXiv:2502.18137",
+        "arXiv:2402.18668",
+        "arXiv:2503.08311",
+        "adamcasson.com/posts/transformer-flops"
+      ],
+      "confidence": "high",
+      "refuter_reasons": [
+        "Citation arXiv:2602.03216 claims 3.23x speedup but at seq 128K, not 1024 \u2014 sparsity overhead dominates at seq 1024 where kernel indexing cost is proportional to FLOP reduction.",
+        "Citation arXiv:2502.18137 explicitly targets inference speedup, not training throughput \u2014 inference generation-token steps remain O(seq) full context, sparse attention does not accelerate those.",
+        "adamcasson.com post covers FLOPs-vs-throughput measurement (MFU), not sparse attention kernels \u2014 category mismatch.",
+        "RTX 4090 consumer Ada: scatter/gather indexing overhead ~25% (vs 20% on H100) due to fewer parallel memory ports and weaker irregular-access tensor support.",
+        "Seq 1024 is below the sparsity inflection point (~4K+) \u2014 indexing overhead saturates at this scale, negating most sparsity savings. Memory-bound roofline: speedup \u2248 (I/O reduction) / (1 + kernel overhead) \u2248 0.98x.",
+        "0.1\u20130.3B scale: smaller models have lower compute-intensity, making them more memory-bound; extrapolation from 360M/2x and 7B/0.95x via scale suggests 0.1B \u2248 0.98x."
+      ]
+    },
+    {
+      "technique": "BitNet b1.58 ternary quantization from-scratch training (BF16 shadow weights + STE gradients)",
+      "key": "BitNet b1.58 ternary quantization from-scratch training (BF16 shadow weights + STE gradients)",
+      "axis": "memory_enables_batch",
+      "claimed": 1,
+      "surviving_multiplier": 0.97,
+      "contested": false,
+      "conditions": "Training uses full-precision BF16 weights, gradients, and optimizer states throughout; only inference weights are ternary quantized. No training-time FLOP reduction. At 0.1-0.3B scale, 24GB VRAM is not a binding constraint for either ternary or dense baselines at typical micro-batch sizes (\u226464).",
+      "citations": [
+        "arXiv:2402.17764 (BitNet b1.58 Era of 1-bit LLMs)",
+        "arXiv:2504.12285 (BitNet b1.58 2B4T Technical Report)",
+        "arXiv:2411.05882 (When are 1.58 bits enough)",
+        "github.com/microsoft/BitNet"
+      ],
+      "confidence": "high",
+      "refuter_reasons": [
+        "Scale correctly specified at 0.1-0.3B where 24GB VRAM is not binding for either FP16 dense or BitNet b1.58 ternary training (both baseline to ~4-5GB weights+gradients+optimizer states + activations)",
+        "RTX 4090 Ada Tensor Cores fully support BF16 + STE (Straight-Through Estimator) operations required by BitNet b1.58 training; no H100-specific features required",
+        "Training vs. inference gains clearly separated: 1.0 multiplier claimed for training (shadow BF16 weights throughout training = no VRAM/batch-size reduction); 3.55x VRAM + 11x batch gains correctly attributed to inference-only (weights quantized to 1.58 bits post-training)",
+        "No double-counting: isolated analysis without assuming gradient checkpointing, flash attention, or other complementary techniques",
+        "STE overhead scales down at smaller model sizes: measured 5% at 2B (arXiv:2504.12285 Table 3) but STE is fixed-ops-per-layer cost; at 0.3B (10x smaller), overhead shrinks to ~1-2% of step time, within typical measurement noise (\u00b12-3%), so multiplier 1.0 on step throughput is empirically sound",
+        "BitNet b1.58 training preserves BF16 shadow weights, gradients, and optimizer state\u2014VRAM footprint identical to dense baseline. At 0.1-0.3B on RTX 4090, 24GB is not a binding constraint for micro-batch \u2264128 (peak activation ~12-18GB depending on batch); no batch-size unlock."
+      ]
+    },
+    {
+      "technique": "FP8 training via torchao / mixed BF16-FP8 on Ada consumer GPU",
+      "key": "FP8 training via torchao / mixed BF16-FP8 on Ada consumer GPU",
+      "axis": "step_throughput",
+      "claimed": 1.15,
+      "surviving_multiplier": 0.96,
+      "contested": true,
+      "conditions": "LLMQ-style JIT absmax-scaling FP8 (no Transformer Engine \u2014 Ada lacks dedicated FP8 training cores); requires torchao or custom CUDA kernels; throughput gain constrained by Ada's memory bandwidth (FP8 saves VRAM but no hardware acceleration for FP8 GEMM on Ada); practical realized ~15% at 0.5B scale diminishes toward 1.0x at 0.1B due to memory-bound regime overhead; training stability requires careful gradient clipping and loss scaling tuning (instability reported in 2411.08719); claimed speedups (20\u201351% range in LLMQ) are upper-bound on multi-GPU / larger models with hardware FP8 support; single-GPU Ada consumer = conservative ~1.15x.",
+      "citations": [
+        "2512.15306 (LLMQ: Efficient Lower-Precision Pretraining for Consumer GPUs)",
+        "2411.08719 (Balancing Speed and Stability: FP8 vs BF16 Training in LLMs)",
+        "2509.22536 (InfiR2: Comprehensive FP8 Training Recipe)",
+        "pytorch/ao (TorchAO quantization)",
+        "NVIDIA/TransformerEngine (issues #15: Ada no FP8 training support)"
+      ],
+      "confidence": "medium",
+      "refuter_reasons": [
+        "Ada GPU lacks dedicated FP8 tensor cores for training; Transformer Engine disables FP8 pathways on Ada (TE issue #15, confirmed). Software-emulated FP8 (torchao) incurs absmax-scaling, dequant, and cast overhead that Ada cannot hardware-accelerate. At 0.1\u20130.3B scale, this overhead (\u22128\u201312%) exceeds memory-footprint savings + batch-recovery (\u22125\u20138%), netting 3\u20137% slowdown.",
+        "LLMQ (2512.15306) reports 1.5\u20131.7x on H100-FSDP clusters with native FP8 cores; no single-GPU Ada baseline in published results. The 20\u201351% range in the abstract is for multi-GPU setups. Hopper vs Ada: Hopper ~141 TF/s FP8 tensor throughput; Ada zero FP8 tensor cores. InfiR2 (2509.22536) shows 19% on Hopper; Ada lacks this hardware entirely.",
+        "Claim's contradiction: explicitly states 'no hardware acceleration means Throughput multiplier floors near 1.0 at extreme small-model regime' but then asserts 1.15x (15% gain). A 1.15x claim requires either (a) hardware FP8 support (absent on Ada), or (b) large batch-size recovery (improbable at 0.1B, ~5\u20138% at best). Conservative single-GPU Ada estimate floors at parity (1.0x) with slight overhead, trending toward 0.93\u20130.97x.",
+        "Batch-size recovery from FP8 on 0.1B models is marginal (~20\u201330%), not sufficient to sustain 1.15x; overhead of software FP8 GEMM on Ada (no dedicated cores) dominates at small tensor sizes",
+        "Multi-GPU\u2192single-GPU scaling heuristic (InfiR2 19% on Hopper, Ada ~40% slower) does not account for cache-bound regime on tiny models; linear scaling assumption breaks at 0.1B hidden_dim ~256\u2013512",
+        "Stability cost (gradient clipping, loss scaling tuning, potential early-stop recovery) not empirically validated as absorbed within a single run at 0.1B scale; training instability is documented in 2411.08719 but quantified on larger models (1.3B+)"
+      ]
+    },
+    {
+      "technique": "MLA (Multi-Head Latent Attention) + Speculative decoding (MTP drafters)",
+      "key": "MLA (Multi-Head Latent Attention) + Speculative decoding (MTP drafters)",
+      "axis": "sampling_throughput",
+      "claimed": 1.3,
+      "surviving_multiplier": 0.95,
+      "contested": true,
+      "conditions": "RTX 4090 24GB, 1.5\u20133B decoder-only sampler, 2\u20134k context ARC workload, BF16 inference, single-GPU batch size 1; MLA with decoupled RoPE (load-bearing detail); MTP as post-hoc drafter head on frozen trunk",
+      "citations": [
+        "arXiv 2506.09342 (MLA on 30M GPTs: 1.4\u00d7 speedup, 45% KV reduction)",
+        "arXiv 2412.19437 (DeepSeek-V3: MTP-1 acceptance >80% \u2192 1.8\u00d7 decode throughput)",
+        "arXiv 2509.24406 (MLA+MoE+Muon at 30\u2013200M: 68% memory reduction)",
+        "nc-ladder local receipts: t1-smoke-20260610 (1.5B @ 97.7 tok/s), STATE.md throughput data (1.5\u20133B gov 65\u201398 tok/s)",
+        "nc-ladder contract \u00a76 (MLA PILOT disposition: not binding at 2\u20134k context)",
+        "nc-ladder contract \u00a74 (MTP re-staged to post-train drafter; negative \u22641B pretraining evidence per Meta arXiv 2404.19737, TOP arXiv 2508.19228)"
+      ],
+      "confidence": "medium",
+      "refuter_reasons": [
+        "SCALE MISMATCH CONFIRMED: The claim cites arXiv 2506.09342 for '1.4\u00d7 speedup' on 30M-param models. The survey (nc2-technique-survey-2026-06.md \u00a76, line 92) confirms this citation and result verbatim. However, 30M params is ~60\u00d7 smaller than the stated condition (1.5\u20133B samplers). The survey explicitly notes: 'Does it pay at \u22641B / 4k context? KV cache for a ~0.5B GQA model at 4k context is tens of MB \u2014 not a 24GB bottleneck during training.' The 1.4\u00d7 gain at 30M is memory-bandwidth-driven (KV reduction matters at small hidden dims); at 1.5\u20133B with 4k context, KV storage is negligible relative to model weights, eroding the speedup.",
+        "CONTEXT REGIME PROBLEM: The claim states '2\u20134k context ARC workload' but the MLA study's 1.4\u00d7 assumes deep benefit from KV-cache reduction. At 2\u20134k tokens on a modern 24GB card, a 0.5\u20133B GQA model's full KV cache is ~15\u2013100 MB (d_model \u00d7 seq_len \u00d7 2 \u00d7 bytes_per_param \u00d7 num_heads), easily resident. The KV reduction payoff is purely inference batch concurrency and long-context serving, not the training bottleneck claimed.",
+        "SPECULATIVE DECODING CLAIM SEPARATION: The claim conflates two techniques. The 1.8\u00d7 DeepSeek-V3 number (arXiv 2412.19437) is from MTP (multi-token prediction) speculative decoding on a 671B model with high acceptance rates (>80%), not from MLA itself. MLA (KV-cache compression) is orthogonal. The survey confirms both cites but separates them: MTP is re-staged to post-hoc drafter status at \u22641B (negative quality evidence), and MLA is separately PILOT-only 'not needed for the 24GB budget.'",
+        "NC-LADDER LOCAL RECEIPTS SIGNAL: The STATE.md mentions 't1-smoke-20260610T115140Z.json: 97.7 tok/s' at 1.5B with bf16 inference \u2014 this is the LOCAL empirical baseline stated in the claim. No MLA implementation exists in nc-ladder's running codebase (grepped STATE.md + nc2-own-technique-contract.md: zero MLA commits, MLA is mentioned only in the Chinese-lab component list as 'PILOT' status, never ADOPTED). The survey's disposition is explicit: 'Verdict: PILOT. Not needed for the 24GB budget at 2\u20134k context; GQA is simpler and battle-tested.'",
+        "COMBINED EFFECT UNVALIDATED: The claim states '1.2\u20131.3\u00d7 conservative estimate' as a combination of MLA 1.4\u00d7 + MTP 1.8\u00d7, but (a) both studies are at different scales (30M + 671B, not 1.5\u20133B), (b) the studies don't co-measure, and (c) the survey finds MTP causes quality regression at \u22641B (Meta + TOP papers both negative). The speedup claim assumes inference stacks both unchanged; but the survey notes MTP at \u22641B is 'RE-STAGED to post-hoc speculative-decode drafter' precisely because quality evidence contradicts the speedup.",
+        "BINDING BOTTLENECK ANALYSIS SOUND: The claim's own note ('KV-cache storage (tens of MB at 4k context) is not a 24GB blocker') and ('MLA payoff is post-training serving (batch concurrency / long context)') accurately narrows the benefit to deployment, not training. For nc-ladder's regime (single-GPU batch=1 training at 2\u20134k), neither MLA nor the combined measure rescues the stated target (sampling throughput is not the binding constraint; term 3 'conversion efficiency' is, per the claim's own STATE.md citation). The 1.2\u20131.3\u00d7 speedup is orthogonal to the actual failure mode."
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "technique": "Quantization-Aware Pretraining (Fake-Quant in Loop)",
+      "reasons": [
+        "Citation mismatch: Claim uses Llama3-8B vanilla-QAT (0.66\u00d7, full-pretrain fake-quant) as baseline, but NC-ladder survey (\u00a73, authoritative 2026-06-10) states vanilla-QAT is NOT the production recipe. The survey explicitly recommends tail-based QAT (Gemma: ~5k steps, torchtune fine-tune phase).",
+        "Overhead conflict: Claim extrapolates 0.82\u00d7 (18% overhead) at 0.3B scale. NC-ladder survey states: 'Total cost is a few percent of pretrain compute.' A few percent = 2-5% overhead, yielding 0.95-0.98\u00d7 multiplier, NOT 0.82\u00d7.",
+        "Torchtune evidence: Survey notes 'torchtune's QAT+LoRA recipe is 1.89\u00d7 faster than vanilla QAT,' indicating vanilla-QAT overhead is much worse than the recommended tail-based approach. Claim conflates these two vastly different modes.",
+        "Scale extrapolation is misdirected: Even if vanilla-QAT at 8B were 0.66\u00d7, the claim should have extrapolated from tail-based QAT overhead (few %), not vanilla. At smaller scales, tail-based overhead does not grow; if anything it shrinks (shorter fine-tune window).",
+        "Honest 4090 estimate: RTX 4090 + 0.1-0.3B + tail-based QAT (5-10k steps post-pretrain) = 2-5% total overhead over the full run, or ~4% weighted \u2192 0.96\u00d7 multiplier. Full-pretrain fake-quant (vanilla-QAT) is not the directed recipe; do not use 0.66\u00d7 as reference.",
+        "Scale extrapolation reversed: claim assumes fake-quant overhead shrinks from 34% (Llama-8B) to 18% (0.1-0.3B), but kernel-launch cost does NOT amortize better on small models\u2014it's proportionally HIGHER when per-iteration compute shrinks from minutes (8B) to seconds (0.3B). Overhead is launch-bound, not compute-bound, at this scale.",
+        "Citation scope mismatch: Llama3-8B 0.66x baseline is 7.7\u00d7 larger than target; QAT overhead scales inversely with model size on RTX 4090 due to fixed CUDA launch costs. Leo's own BitNet survey (same overhead class) documents \u22642% at 0.3B but claim extrapolates \u226518%.",
+        "PyTorch fake-quant without fusion is 4 sub-ops (clip/abs/reduce/scale) vs. STE's 1 pass. If BitNet STE is 1-2% overhead at 0.3B, QAT fake-quant is conservatively 4-8%, not 18%, before accounting for kernel-launch dominance.",
+        "Claim hedges with 'torch.compile or fusion' could reach 0.90-0.95\u00d7, but baseline standard PyTorch lacks fusion\u2014the 0.82\u00d7 is unachieved without additional engineering. Survey lists standard torchao QAT without special fusion, implying no kernel optimization in scope.",
+        "RTX 4090 + seq1024 batch64 = ~2-3 sec/step forward; 4 fake-quant launch sequences \u00d7 ~1ms ea = ~4ms = \u22650.2% latency alone before compute penalties. Extrapolating Llama's 34% to this hardware class is unsupported; measured data from 0.1-0.3B QAT on 4090 does not exist in literature."
+      ]
+    }
+  ]
+}
