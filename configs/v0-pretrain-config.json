@@ -1,7 +1,8 @@
 {
   "ticket": "V0-PRETRAIN-CONFIG",
-  "version": 1,
+  "version": 2,
   "frozen": "2026-06-11T07:20Z",
+  "v2_delta": "2026-06-11T07:28Z — G-tokenizer green (PR #164 merged): tokenizer_receipt named; real token total recorded with the absorb decision. No other field changed.",
   "basis": "fp19-bench-20260611T024648Z (c03-qat receipted pace) + research/gpu-math-multiplier-table-v2-2026-06-11.json (survivor stack) + nc2-own-technique-contract.md (directed components) + research/v0-launch-gate.md (G-config row)",
 
   "model": {
@@ -63,8 +64,10 @@
 
   "data": {
     "source": "tokenized v0 corpus (assembly receipt sha a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2)",
-    "tokenizer_receipt": null,
+    "tokenizer_receipt": "tokenizer-freeze-20260611T060423Z.json",
     "tokenizer_receipt_rule": "null = LAUNCH BLOCKED. Must name the committed TOKENIZER-FREEZE-V0 receipt (receipt_check PASS, assembly-sha pin match, reserved multimodal band verified, real token counts). The launch shim fail-closes on null.",
+    "real_token_total": 6973632296,
+    "token_shortfall_decision": "real 6.974B vs compute-optimal 7.367B = -5.3%; ABSORBED at gate (PR #164 signoff): data-efficiency survivors cover it with margin, WSD permits receipted continuation, a top-up would re-open assembly + re-freeze the tokenizer",
     "packing": "sequence packing / no-pad batching REQUIRED at tokenization-shard time (v2 table survivor; effective-token waste at seq 1024 otherwise)",
     "token_budget": {
       "compute_optimal": 7367086080,

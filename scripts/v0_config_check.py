@@ -79,13 +79,22 @@ def check(cfg, launch=False):
 
 
 def _selftest():
+    import copy
     cfg = json.load(open(CONFIG, encoding="utf-8"))
     assert check(cfg) == [], check(cfg)
-    # launch mode must block while tokenizer_receipt is null
-    lv = check(cfg, launch=True)
+    # launch mode must block when tokenizer_receipt is null (tested on a
+    # mutated copy — the live config named the receipt at G-tokenizer
+    # green, PR #164)
+    blocked = copy.deepcopy(cfg)
+    blocked["data"]["tokenizer_receipt"] = None
+    lv = check(blocked, launch=True)
     assert any("LAUNCH BLOCKED" in x for x in lv), lv
+    # and block when the named receipt is not on disk
+    ghost = copy.deepcopy(cfg)
+    ghost["data"]["tokenizer_receipt"] = "no-such-receipt.json"
+    lv = check(ghost, launch=True)
+    assert any("not on disk" in x for x in lv), lv
     # mutations are caught
-    import copy
     bad = copy.deepcopy(cfg)
     bad["model"]["hidden"] = 2048
     assert any("c03 pin" in x for x in check(bad))
