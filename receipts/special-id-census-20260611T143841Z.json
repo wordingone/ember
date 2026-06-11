@@ -1,0 +1,115 @@
+{
+  "ticket": "SPECIAL-ID-CENSUS-V0",
+  "ts": "20260611T143841Z",
+  "semantics": "added-token literal matching ENABLED (legacy counting semantics) \u2014 measures how many ids 0..7 raw corpus text yields; sizes the deviation for the matching-disabled re-derivation (Leo 14628, decision frozen pre-census)",
+  "per_source": {
+    "code_github_clean": {
+      "docs": 1867710,
+      "content_tokens": 4053253613,
+      "low_id_tokens": {
+        "0": 1,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      },
+      "docs_with_low_ids": 1,
+      "oob_tokens": 0,
+      "docs_with_oob": 0,
+      "freeze_content_tokens": 4053253613,
+      "matches_freeze": true
+    },
+    "fineweb_edu": {
+      "docs": 1549860,
+      "content_tokens": 1666837787,
+      "low_id_tokens": {
+        "0": 1,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      },
+      "docs_with_low_ids": 1,
+      "oob_tokens": 0,
+      "docs_with_oob": 0,
+      "freeze_content_tokens": 1666837787,
+      "matches_freeze": true
+    },
+    "wikipedia_en": {
+      "docs": 813598,
+      "content_tokens": 747194257,
+      "low_id_tokens": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      },
+      "docs_with_low_ids": 0,
+      "oob_tokens": 0,
+      "docs_with_oob": 0,
+      "freeze_content_tokens": 747194257,
+      "matches_freeze": true
+    },
+    "gutenberg_en": {
+      "docs": 4510,
+      "content_tokens": 506114061,
+      "low_id_tokens": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      },
+      "docs_with_low_ids": 0,
+      "oob_tokens": 0,
+      "docs_with_oob": 0,
+      "freeze_content_tokens": 506114061,
+      "matches_freeze": true
+    },
+    "ledger_mit": {
+      "docs": 780,
+      "content_tokens": 232578,
+      "low_id_tokens": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      },
+      "docs_with_low_ids": 0,
+      "oob_tokens": 0,
+      "docs_with_oob": 0,
+      "freeze_content_tokens": 232578,
+      "matches_freeze": true
+    }
+  },
+  "total_low_id_tokens": 2,
+  "premises": {
+    "assembly_receipt": {
+      "name": "eng36-assembly-20260611T052337Z.json",
+      "sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2"
+    },
+    "tokenizer_freeze_receipt": {
+      "name": "tokenizer-freeze-20260611T060423Z.json",
+      "sha256": "cefd8238e5ff414273a0954be4399262aad064a8cb312356dca43d6e4a4e009e"
+    }
+  },
+  "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; shard + receipt paths carry the git -text pin",
+  "no_gpu": true
+}

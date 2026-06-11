@@ -1,0 +1,117 @@
+{
+  "ticket": "TOKENIZER-FREEZE-V0",
+  "ts": "20260611T154111Z",
+  "spec": "fp-22 \u00a71: 32k vocab (fp-19 pin), trained on stratified ~1GB sample of the v0 corpus, frozen pre-step-0, sha-stamped into every checkpoint receipt",
+  "vocab_size": 32000,
+  "special_tokens": [
+    "<|endoftext|>",
+    "<boi>",
+    "<eoi>",
+    "<image_soft>",
+    "<boa>",
+    "<eoa>",
+    "<audio_soft>",
+    "<video_soft>"
+  ],
+  "reserved_band": {
+    "<|endoftext|>": 0,
+    "<boi>": 1,
+    "<eoi>": 2,
+    "<image_soft>": 3,
+    "<boa>": 4,
+    "<eoa>": 5,
+    "<audio_soft>": 6,
+    "<video_soft>": 7
+  },
+  "reserved_band_basis": "NC2 own-technique contract component 8, v0 LOCK #1: reserved vocab band with pre-assigned multimodal delimiter/placeholder ids (gemma-4 pattern, research/gemma4-unified-architecture.md); v0 text-only \u2014 ids never produced by training data, verified post-train",
+  "model": "ByteLevel BPE (HF tokenizers)",
+  "sample_budget_bytes": 1000000000,
+  "sample_path": "B:/M/avir/eli/state/ember-eng/corpus-v0\\tokenizer\\sample.txt",
+  "sample_sha256": "b86c9b9cae0a45a331f958a4bfbdd3731bed333d66755fd874f59d59ca77eb3a",
+  "strata": [
+    {
+      "source": "code_github_clean",
+      "budget_bytes": 513823089,
+      "docs_sampled": 73250,
+      "docs_seen": 1831226,
+      "bytes_sampled": 513921472,
+      "manifest_mirror_sha256": "5aa29ff07b1fa97c21e5bd788da04def7342550e49c5a51d868bdd45b3b384df"
+    },
+    {
+      "source": "fineweb_edu",
+      "budget_bytes": 292483969,
+      "docs_sampled": 61236,
+      "docs_seen": 1530876,
+      "bytes_sampled": 292487924,
+      "manifest_mirror_sha256": "7ac65979854775d5fa71b5928bfc7aa301dadedc1ce07a6e7c16bb550626e197"
+    },
+    {
+      "source": "gutenberg_en",
+      "budget_bytes": 75097523,
+      "docs_sampled": 165,
+      "docs_seen": 4101,
+      "bytes_sampled": 75289232,
+      "manifest_mirror_sha256": "ceb22ac3fcd4ecc6664f880b1a3410c6dd13193186bd56c0692c5dee651cf2d4"
+    },
+    {
+      "source": "ledger_mit",
+      "budget_bytes": 20626,
+      "docs_sampled": 32,
+      "docs_seen": 780,
+      "bytes_sampled": 19495,
+      "manifest_mirror_sha256": "d42826b8062ce226883a53cf51d5954c50ab007d91e7d735992c492748d5da5e"
+    },
+    {
+      "source": "wikipedia_en",
+      "budget_bytes": 118574790,
+      "docs_sampled": 31892,
+      "docs_seen": 797276,
+      "bytes_sampled": 118575714,
+      "manifest_mirror_sha256": "3d33c10da0ab4e1591616e221ca6411377c14e81c844e6ea6c1bce7d55c55abd"
+    }
+  ],
+  "assembly_receipt": "receipts\\eng36-assembly-20260611T052337Z.json",
+  "assembly_receipt_sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+  "assembly_pin_basis": "eng #160 AC-1 (Kai 14560): freeze runs ONLY against the merged assembly receipt, pinned by name + sha256, verified before any sampling work",
+  "real_token_counts": {
+    "code_github_clean": 4053253615,
+    "fineweb_edu": 1666837789,
+    "gutenberg_en": 506114061,
+    "ledger_mit": 232578,
+    "wikipedia_en": 747194257,
+    "total": 6973632300
+  },
+  "tokens_pending_tokenizer_freeze": false,
+  "resolves_heuristic": {
+    "heuristic_total": 7386991606,
+    "real_total": 6973632300,
+    "note": "real counts from the frozen tokenizer over every corpus doc (content tokens, no specials); the assembly receipt's HEURISTIC-ONLY estimate is superseded by this field"
+  },
+  "tokenizer_json_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+  "tokenizer_repo_path": "tokenizer\\tokenizer.json",
+  "frozen_pre_step0": true,
+  "determinism": "stride sampling in frozen shard order, no RNG; BPE train on the fixed sample \u2014 selftest pins byte-identical double-train",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "no_gpu": true,
+  "encode_semantics": "added-token-matching-disabled-v1: production encoding loads the frozen tokenizer.json (on-disk bytes sha-pinned, unchanged) with its added_tokens table stripped IN MEMORY, so special literals occurring in source text tokenize as ordinary byte-level pieces; ids 0..7 are unreachable from text by construction (band tokens are absent from the BPE merges) and every literal is probe-encoded at build to prove it. Doc-boundary separator id 0 is writer-inserted only. (Leo 14628: the band contract is supreme; the counting instrument aligns to it.)",
+  "derived_from": {
+    "name": "tokenizer-freeze-20260611T060423Z.json",
+    "sha256": "cefd8238e5ff414273a0954be4399262aad064a8cb312356dca43d6e4a4e009e"
+  },
+  "deviation_note": {
+    "reason": "text-borne special-token literals: under matching-ENABLED encoding, added-token literals in raw corpus text matched to reserved ids 0..7 and were absorbed into real_token_counts \u2014 ids the TOKEN-SHARDS-V0 band contract refuses from text. Counts re-derived with matching DISABLED (contract-aligned; Leo 14628, decision frozen pre-census)",
+    "old_real_token_counts": {
+      "code_github_clean": 4053253613,
+      "fineweb_edu": 1666837787,
+      "gutenberg_en": 506114061,
+      "ledger_mit": 232578,
+      "wikipedia_en": 747194257,
+      "total": 6973632296
+    },
+    "total_delta_vs_old": 4,
+    "census_receipt": {
+      "name": "special-id-census-20260611T143841Z.json",
+      "sha256": "dabe30c3efd07d0f1ed16eb2fe5c1e2cc8c0cd20f7a467ae9f8e1b9be94fa0a2"
+    }
+  }
+}
