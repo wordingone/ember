@@ -112,7 +112,7 @@ def main():
                      "(easy 2/mid 4/frontier 8 caps applied at build)",
     }
     out = f"{RECEIPTS}/fp6-provenance-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"FP6_PROVENANCE_DONE {out}")
@@ -146,7 +146,7 @@ def _selftest():
             {"origin": "seed-dsl-orig"}]
     import tempfile, os
     fd, p = tempfile.mkstemp(suffix=".jsonl"); os.close(fd)
-    with open(p, "w", encoding="utf-8") as f:
+    with open(p, "w", encoding="utf-8", newline="\n") as f:
         for r in rows:
             f.write(j.dumps(r) + "\n")
     c = census(p); os.unlink(p)

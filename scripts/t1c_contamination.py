@@ -211,9 +211,9 @@ def main():
                "summary": summary}
     base = f"{RECEIPTS}/t1c-contamination-{ts}"
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(base + ".json", "w") as f:
+    with open(base + ".json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
-    with open(base + "-rows.jsonl", "w") as f:
+    with open(base + "-rows.jsonl", "w", encoding="utf-8", newline="\n") as f:
         for r in all_rows:
             f.write(json.dumps(r) + "\n")
     print(json.dumps(summary, indent=2))

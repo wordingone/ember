@@ -214,7 +214,7 @@ def main():
                 "required false-negative field",
     }
     out = f"{RECEIPTS}/fp8-vgate-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"FP8_VGATE_DONE {out}")

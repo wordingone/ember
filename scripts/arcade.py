@@ -191,7 +191,7 @@ def main():
     }
     os.makedirs(args.receipts_dir, exist_ok=True)
     path = f"{args.receipts_dir}/arcade-{args.tag}-{ts}.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in
                       ("n_games", "n_ran", "n_errors", "wins",

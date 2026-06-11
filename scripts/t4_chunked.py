@@ -50,7 +50,7 @@ except ImportError:
 
 def atomic_write(path, obj):
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         json.dump(obj, f, indent=2)
     os.replace(tmp, path)
 
@@ -248,7 +248,7 @@ def main():
                "arms": arms_sum, **deltas,
                **( {"exact": _exact_block} if _exact_block is not None else {})}
     path = f"{RECEIPTS}/{tag}-{ts}.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({"arms": arms_sum, **deltas,
                       "stopped_early": bool(stop_reason)}, indent=2))

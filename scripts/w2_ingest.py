@@ -125,7 +125,7 @@ def main():
 
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/w2-ingest-{receipt['ts']}.json"
-    with open(out, "w") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print("W2_INGEST_DONE")

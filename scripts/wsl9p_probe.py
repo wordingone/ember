@@ -417,7 +417,7 @@ def main():
     if output_path:
         try:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w") as f:
+            with open(output_path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(output_json)
             print(f"Receipt written to {output_path}", file=sys.stderr)
             written = True

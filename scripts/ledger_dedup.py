@@ -253,7 +253,7 @@ def build_view(ledger_path, view_path):
     if d:
         os.makedirs(d, exist_ok=True)
 
-    with open(view_path, "w", encoding="utf-8") as f:
+    with open(view_path, "w", encoding="utf-8", newline="\n") as f:
         for r, ce in zip(recs, cluster_entries):
             row = {
                 "key": r["key"],
@@ -464,7 +464,7 @@ def main():
 
     os.makedirs(args.receipt_dir, exist_ok=True)
     out = os.path.join(args.receipt_dir, f"eng25-dedup-view-{ts}.json")
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     status = "ENG25_DEDUP_VIEW_DONE" if all_match else "ENG25_DEDUP_VIEW_DONE_CROSSCHECK_MISMATCH"
@@ -543,7 +543,7 @@ def _selftest():
             {"key": "t3:c", "task": "t3", "src": near,  # near dup
              "origin": "seed-dsl-orig"},
         ]
-        with open(ledger_p, "w", encoding="utf-8") as f:
+        with open(ledger_p, "w", encoding="utf-8", newline="\n") as f:
             for r in test_recs:
                 f.write(json.dumps(r) + "\n")
         sha_before = sha256_file(ledger_p)
@@ -591,7 +591,7 @@ def _selftest():
             {"key": "s4:d", "task": "s4", "src": near, "origin": "seed-dsl-orig"},   # near-dup of s1:a
         ]
         # Write existing + new rows to ledger (simulates post-append state)
-        with open(sled_p, "w", encoding="utf-8") as f:
+        with open(sled_p, "w", encoding="utf-8", newline="\n") as f:
             for r in existing + new_rows:
                 f.write(json.dumps(r) + "\n")
         # Write existing rows' view first (simulates pre-append view state)
@@ -599,7 +599,7 @@ def _selftest():
         recs_existing = existing
         ce_existing = _build_cluster_index(recs_existing)
         # Write partial view for the existing rows
-        with open(sview_p, "w", encoding="utf-8") as f:
+        with open(sview_p, "w", encoding="utf-8", newline="\n") as f:
             for r, ce in zip(recs_existing, ce_existing):
                 f.write(json.dumps({
                     "key": r["key"], "task": r["task"],
@@ -654,7 +654,7 @@ def _selftest():
              "origin": "seed-dsl-orig"}
             for i in range(10)
         ]
-        with open(ledger_p2, "w", encoding="utf-8") as f:
+        with open(ledger_p2, "w", encoding="utf-8", newline="\n") as f:
             for r in test_recs2:
                 f.write(json.dumps(r) + "\n")
         build_view(ledger_p2, view_p2a)

@@ -440,7 +440,7 @@ def main():
         ok, report = selftest()
         receipt["selftest_ok"] = ok
         receipt["cases"] = report
-        with open(receipt_path, "w") as f:
+        with open(receipt_path, "w", encoding="utf-8", newline="\n") as f:
             json.dump(receipt, f, indent=2)
         print(json.dumps(report, indent=2))
         print(f"SELFTEST {'PASS' if ok else 'FAIL'}")
@@ -470,7 +470,7 @@ def main():
 
     samples_path = receipt_path.replace(".json", "-samples.jsonl")
     per_task = {}
-    with open(samples_path, "w") as f:
+    with open(samples_path, "w", encoding="utf-8", newline="\n") as f:
         for i, m in enumerate(job_meta):
             if m.get("extracted"):
                 r = results[m["job_idx"]]
@@ -497,7 +497,7 @@ def main():
     }
     if GOV:
         receipt["governor"] = dict(GOV)
-    with open(receipt_path, "w") as f:
+    with open(receipt_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt["summary"], indent=2))
     print("T1_PROBE_DONE")

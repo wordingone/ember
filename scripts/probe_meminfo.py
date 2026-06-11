@@ -34,7 +34,7 @@ else:
 
 ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 path = f"{NC}/receipts/probe-meminfo-{ts}.json"
-with open(path, "w") as f:
+with open(path, "w", encoding="utf-8", newline="\n") as f:
     json.dump(out, f, indent=2)
 print(json.dumps(out, indent=2))
 print("PROBE_MEMINFO_DONE", file=sys.stderr)

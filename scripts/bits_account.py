@@ -75,7 +75,7 @@ def main():
     }
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/bits-account-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"BITS_ACCOUNT_DONE {out}")

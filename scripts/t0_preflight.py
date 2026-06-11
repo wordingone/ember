@@ -119,7 +119,7 @@ check("arc_corpus", arc_corpus)
 check("disk", disk)
 
 os.makedirs(os.path.dirname(RECEIPT_PATH), exist_ok=True)
-with open(RECEIPT_PATH, "w") as f:
+with open(RECEIPT_PATH, "w", encoding="utf-8", newline="\n") as f:
     json.dump(receipt, f, indent=2)
 
 print(json.dumps(receipt, indent=2))

@@ -65,7 +65,7 @@ def load_progress(fp):
 
 def save_progress(p):
     tmp = PROGRESS + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         json.dump(p, f, indent=2)
     os.replace(tmp, PROGRESS)
 
@@ -172,7 +172,7 @@ def main():
     receipt = aggregate_receipt(args, ts)
     receipt["chunks"] = progress.get("chunk_stats", [])
     path = f"{RECEIPTS}/t1-full-{ts}.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt["summary"], indent=2))
     print("T1_CHUNKED_DONE")

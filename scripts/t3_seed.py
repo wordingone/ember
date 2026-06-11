@@ -291,7 +291,7 @@ def main():
         "secs": round(time.time() - t0, 1),
     }
     path = f"{RECEIPTS}/t3-seed-{ts}.json"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in
                       ("episodes_total", "episodes_written_new")}, indent=2))

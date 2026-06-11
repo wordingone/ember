@@ -121,7 +121,7 @@ def _smoke():
                        "expected, all others re-verify",
     }
     out = f"{RECEIPTS}/eng21-smoke-{ts}.json"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print(f"ENG21_SMOKE_DONE {out}")

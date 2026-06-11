@@ -40,7 +40,7 @@ def write_view(src_path, view_path, prefix="mbpp:"):
             if r["task"].startswith(prefix):
                 recs.append(r)
     os.makedirs(os.path.dirname(view_path), exist_ok=True)
-    with open(view_path, "w") as f:
+    with open(view_path, "w", encoding="utf-8", newline="\n") as f:
         for r in recs:
             f.write(json.dumps(r) + "\n")
     return recs
@@ -91,7 +91,7 @@ def main():
         lic_block = {"allow": sorted(allow),
                      "world_before_by_class": pre_census,
                      "world_before": n_pre, "world_after": len(arm_recs)}
-    with open(f"{VIEWS}/wcode-r1.jsonl", "w") as vf:
+    with open(f"{VIEWS}/wcode-r1.jsonl", "w", encoding="utf-8", newline="\n") as vf:
         for r in arm_recs:
             vf.write(json.dumps(r) + "\n")
     caps = caps_from_records(arm_recs)
@@ -104,7 +104,7 @@ def main():
         if allow:  # eng #70: control view license-filtered too
             n_ctl = len(ctrl_recs)
             ctrl_recs = filter_records(ctrl_recs, allow)
-            with open(f"{VIEWS}/wcode-r1-control.jsonl", "w") as vf:
+            with open(f"{VIEWS}/wcode-r1-control.jsonl", "w", encoding="utf-8", newline="\n") as vf:
                 for r in ctrl_recs:
                     vf.write(json.dumps(r) + "\n")
             lic_block["control_before"] = n_ctl
@@ -146,7 +146,7 @@ def main():
         receipt["adapter"] = f"{ADAPTERS}/{tag}"
 
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t2-{tag}-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/t2-{tag}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: v for k, v in receipt.items() if k != "frontier"},
                      indent=2, default=str))

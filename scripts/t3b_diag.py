@@ -187,7 +187,7 @@ def main():
                "n_tasks": N_TASKS, "pairs_per_task": PAIRS_PER_TASK,
                "diff_ub": 0.5, "results": results, "verdict": verdict}
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t3b-diag-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/t3b-diag-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({"verdict": verdict}))
     print("T3B_DIAG_DONE")

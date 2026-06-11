@@ -143,7 +143,7 @@ def main():
     flags_file = None
     if flags:
         flags_file = f"v-ext-flags-{ts}.jsonl"
-        with open(f"{RECEIPTS}/{flags_file}", "w") as f:
+        with open(f"{RECEIPTS}/{flags_file}", "w", encoding="utf-8", newline="\n") as f:
             for fl in flags:
                 f.write(json.dumps(fl) + "\n")
 
@@ -155,7 +155,7 @@ def main():
                "flags_file": flags_file,
                "quarantine": "GATE decision on this receipt — no auto-"
                              "removal from ledger"}
-    with open(f"{RECEIPTS}/v-extended-{ts}.json", "w") as f:
+    with open(f"{RECEIPTS}/v-extended-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps(receipt, indent=2))
     print("V_EXTENDED_DONE")
