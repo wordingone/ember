@@ -1,0 +1,98 @@
+{
+  "ticket": "V0-PRETRAIN-CONFIG",
+  "version": 1,
+  "frozen": "2026-06-11T07:20Z",
+  "basis": "fp19-bench-20260611T024648Z (c03-qat receipted pace) + research/gpu-math-multiplier-table-v2-2026-06-11.json (survivor stack) + nc2-own-technique-contract.md (directed components) + research/v0-launch-gate.md (G-config row)",
+
+  "model": {
+    "name": "ember-v0",
+    "shape": "c03",
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "vocab": 32000,
+    "vocab_rule": "MUST equal the frozen tokenizer's real vocab size from the TOKENIZER-FREEZE-V0 receipt; 32000 is the expected value, the receipt is binding",
+    "seq": 1024,
+    "tied_embeddings": true,
+    "grad_checkpointing": true,
+    "params_estimate": 368354304
+  },
+
+  "precision": {
+    "base": "bf16",
+    "qat": {
+      "enabled": true,
+      "scheme": "int8-grid fake-quant STE on linear weights (fp19_bench shape)",
+      "receipted_tax": "0.928x paced vs bf16 (fp19-bench c03-qat 18737.7 vs c03-bf16 20201.2)",
+      "component_contract": "#1 QAT — quantization-native pretrain, not post-hoc PTQ"
+    },
+    "excluded": {
+      "fp8": "receipted-negative: v2 table surviving 0.98 on Ada at this scale",
+      "ternary_v0": "c01-scale variant only; v0 = c03-qat per fp19-envelope"
+    }
+  },
+
+  "objective": {
+    "primary": "next-token CE",
+    "ce_impl": "chunked/fused cross-entropy (Liger FLCE or cut-CE class) — the vocab-logit memory term does not shrink with model size; v2 table survivor",
+    "mtp_aux_heads": {
+      "enabled": true,
+      "n_heads": 2,
+      "weight": 0.3,
+      "component_contract": "#5 MTP — denser signal per token at a <=7.4B-token budget",
+      "fallback": "if the MTP-head implementation fails its selftest, v0 launches CE-only and the deviation is RECEIPTED + the component re-enters at v0.1 — never silently dropped"
+    }
+  },
+
+  "optimizer": {
+    "hidden_2d": "Muon (momentum-orthogonalized, Newton-Schulz) — v2 table surviving 1.35 data-efficiency",
+    "embeddings_norms_head": "AdamW",
+    "lr_adamw": 3e-4,
+    "lr_muon": 0.02,
+    "weight_decay": 0.1,
+    "fallback": "AdamW-everything if Muon impl fails selftest; deviation RECEIPTED, Muon re-enters at first checkpoint window"
+  },
+
+  "schedule": {
+    "type": "WSD (warmup-stable-decay)",
+    "warmup_frac": 0.01,
+    "stable_until_frac": 0.85,
+    "decay_to_lr_frac": 0.10,
+    "rationale": "cheap intermediate checkpoints during the stable phase (fp-23/fp-24 probes ride them); v2 table survivor"
+  },
+
+  "data": {
+    "source": "tokenized v0 corpus (assembly receipt sha a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2)",
+    "tokenizer_receipt": null,
+    "tokenizer_receipt_rule": "null = LAUNCH BLOCKED. Must name the committed TOKENIZER-FREEZE-V0 receipt (receipt_check PASS, assembly-sha pin match, reserved multimodal band verified, real token counts). The launch shim fail-closes on null.",
+    "packing": "sequence packing / no-pad batching REQUIRED at tokenization-shard time (v2 table survivor; effective-token waste at seq 1024 otherwise)",
+    "token_budget": {
+      "compute_optimal": 7367086080,
+      "rule": "train to compute-optimal in the stable phase; WSD checkpoints allow over-train continuation as a separate receipted decision"
+    }
+  },
+
+  "throughput": {
+    "batch": 4,
+    "compile": "torch.compile (TorchInductor) on the train step; fallback eager if compile fails on the QAT graph — deviation RECEIPTED",
+    "excluded": {
+      "sparse_attention": "receipted-negative at seq 1024 (v2 table 0.98)",
+      "machete_kernels": "Hopper-only — not on the 4090 candidate set"
+    }
+  },
+
+  "governor": {
+    "vram_fraction": 0.80,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05,
+    "budget_math_uses": "tok_s_paced",
+    "rule": "FLOOR values pinned from fp19_bench; env layer may TIGHTEN, never loosen; fix-forward on a headroom violation is BANNED — kill and relaunch governed"
+  },
+
+  "runner": {
+    "base": "scripts/timeshare_pretrain.py (eng-33: checkpoint/resume/interlock/governor floor — exists)",
+    "extension_needed": "Muon split-optimizer, WSD schedule, chunked-CE, MTP aux heads, tokenized-corpus loader with packing (eng item; implement against THIS contract, choices are frozen here not in the impl)",
+    "interlock": "EMBER_GATE_AUTHORIZED=1 + --live (unchanged)",
+    "checkpoint_probes": "fp-23 prereg attached; fp-24 (#139) fires on real checkpoints; fp-21b (#132) + fp-20c (#146) fire on the first sampling round"
+  }
+}
