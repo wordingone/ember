@@ -1,0 +1,138 @@
+{
+  "governor_floor": {
+    "margin_gib_floor": 1.5,
+    "note": "governor.preflight() not called (CPU dry-run path); fp19 constants carried in receipt as the governing floor",
+    "pace_s_floor": 0.05,
+    "source": "fp19_bench.py (fp-19 frozen 2026-06-11, commit be76095)",
+    "vram_fraction_floor": 0.8
+  },
+  "handoff": {
+    "checkpoint_out": {
+      "ckpt_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_u64vrsal\\checkpoints\\step-00000264",
+      "event": "checkpoint_out",
+      "from": "PRETRAIN_HOLDS_GPU",
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 264,
+        "tok_per_s": 4493.0,
+        "tokens_so_far": 67584,
+        "wall_s": 15.042
+      },
+      "segment_id": "seg-A",
+      "to": "CHECKPOINT_OUT",
+      "ts": "20260611T030457Z"
+    },
+    "close_window": {
+      "event": "close_window",
+      "from": "WINDOW_OPEN",
+      "jobs_terminal": [
+        "dryrun-noop-job-01"
+      ],
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 264,
+        "tok_per_s": 4478.1,
+        "tokens_so_far": 67584,
+        "wall_s": 15.092
+      },
+      "round_id": "round-dryrun",
+      "to": "WINDOW_CLOSED",
+      "ts": "20260611T030457Z"
+    },
+    "never_concurrent": true,
+    "open_window": {
+      "event": "open_window",
+      "from": "CHECKPOINT_OUT",
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 264,
+        "tok_per_s": 4493.0,
+        "tokens_so_far": 67584,
+        "wall_s": 15.042
+      },
+      "round_id": "round-dryrun",
+      "to": "WINDOW_OPEN",
+      "ts": "20260611T030457Z"
+    },
+    "resume_pretrain": {
+      "ckpt_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_u64vrsal\\checkpoints\\step-00000264",
+      "event": "resume_pretrain",
+      "from": "WINDOW_CLOSED",
+      "pacing": {
+        "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+        "steps_so_far": 264,
+        "tok_per_s": 4478.1,
+        "tokens_so_far": 67584,
+        "wall_s": 15.092
+      },
+      "segment_id": "seg-A",
+      "to": "PRETRAIN_HOLDS_GPU",
+      "ts": "20260611T030457Z"
+    },
+    "state_sequence": [
+      "PRETRAIN_HOLDS_GPU",
+      "CHECKPOINT_OUT",
+      "WINDOW_OPEN",
+      "WINDOW_CLOSED",
+      "PRETRAIN_HOLDS_GPU"
+    ]
+  },
+  "interlock": {
+    "ember_gate_authorized": false,
+    "live_flag": false,
+    "mode": "default_closed",
+    "refusal_line": "TIMESHARE_LAUNCH_INTERLOCK_REFUSED: GPU/real-pretrain path blocked. Requires EMBER_GATE_AUTHORIZED=1 (env) AND --live (flag). Real v0 pretrain fires only on fp-22's gate. [authorized=False, live=False]",
+    "verdict": "INTERLOCK_BLOCKED_GPU_PATH"
+  },
+  "issue": "wordingone/ember#123",
+  "pass": true,
+  "resume_integrity": {
+    "loss_post_resume": 1.037726640701294,
+    "loss_pre_checkpoint": 0.9408131837844849,
+    "note": "CLOSE: within rtol tolerance",
+    "pass": true,
+    "rel_diff": 0.10301031,
+    "rtol": 2.0,
+    "verdict": "CLOSE"
+  },
+  "scope": "CPU dry-run segment pair \u2014 no GPU, no daemon, interlock active",
+  "segment_A": {
+    "checkpoint_dir": "C:\\Users\\Admin\\AppData\\Local\\Temp\\timeshare_dryrun_u64vrsal\\checkpoints\\step-00000264",
+    "loss_first": 1.138674,
+    "loss_last": 0.940813,
+    "pacing": {
+      "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+      "pace_s": 13.2,
+      "pace_steps": 264,
+      "pacing_total_s": 13.2,
+      "throttle_s": 0.0,
+      "throttle_steps": 0
+    },
+    "segment_id": "seg-A",
+    "steps": 264,
+    "tok_per_s": 4493.0,
+    "tokens": 67584,
+    "wall_s": 15.042
+  },
+  "segment_B": {
+    "loss_first": 1.037727,
+    "loss_last": 1.048815,
+    "pacing": {
+      "convention": "pacing_total_s = wall time in governor/pacing sleeps; compute-only wall = elapsed - pacing_total_s",
+      "pace_s": 13.2,
+      "pace_steps": 264,
+      "pacing_total_s": 13.2,
+      "throttle_s": 0.0,
+      "throttle_steps": 0
+    },
+    "segment_id": "seg-B",
+    "steps": 264,
+    "tok_per_s": 4505.5,
+    "tokens": 67584,
+    "wall_s": 15.0
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "ticket": "ENG123-TIMESHARE-DRYRUN",
+  "ts": "20260611T030441Z",
+  "verdict": "DRYRUN_COMPLETE"
+}
