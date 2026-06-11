@@ -71,10 +71,16 @@ def main():
     assert n_sleeps == 2, f"unmetered sleep sites appeared: {n_sleeps}"
     checks["t1_probe_wiring"] = True
 
-    # 3b. t2_round snapshots at WRITE time (after the sampling block)
+    # 3b. t2_round snapshots at WRITE time (after the sampling block).
+    # Write-site assert tolerates both the pre-#107 direct json.dump form
+    # and the #107 checked_write form (same pattern as w1_pacing_selftest)
+    # — eng-31 swaps the write line, the ordering invariant is unchanged.
     src2 = open(os.path.join(HERE, "t2_round.py"), encoding="utf-8").read()
     snap_pos = src2.index('receipt["pacing"] = pacing_snapshot()')
-    write_pos = src2.index("json.dump(receipt, f, indent=2)")
+    write_m = re.search(r"json\.dump\(receipt, f, indent=2\)"
+                        r"|checked_write\(path, receipt\)", src2)
+    assert write_m, "t2_round receipt write site not found"
+    write_pos = write_m.start()
     sample_pos = src2.index('receipt["sampling"]')
     assert sample_pos < snap_pos < write_pos, \
         "pacing snapshot must be taken after sampling, before write"

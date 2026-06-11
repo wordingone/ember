@@ -24,9 +24,13 @@ Emits receipts/fp15-bandtransfer-<ts>.json or the STAGED sentinel if the
 round-2 inputs are absent.
 """
 import json
+import os
 import random
 import sys
 from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from receipt_write import checked_write  # noqa: E402 (eng #107)
 
 RATIO_BAR = 1.5
 PERM_N = 10000
@@ -219,8 +223,7 @@ def main():
         "prong_b_rule": "fires round-3 ONLY on PREDICTIVE (frozen)",
     }
     out = f"{R}/fp15-bandtransfer-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"FP15_BANDTRANSFER_DONE {out}")
 
