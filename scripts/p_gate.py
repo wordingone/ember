@@ -145,12 +145,25 @@ def _load_receipt(path) -> dict:
             raise ValueError(f"p_gate: receipt JSON parse error {p}: {e}")
 
 
+class GainExtractionError(ValueError):
+    """Raised when no recognized gain shape is present in a receipt.
+
+    eng-46 (#175): the old code returned gain 0.0 with CI [-1, 1] here, which
+    auto-passed the CI containment leg (0.0 is in [-1, 1] for every pre CI). A
+    gain leg that cannot be extracted must NEVER silently pass — extraction is
+    fail-closed and the gate converts this to a verdict FAIL with a named
+    reason."""
+
+
 def _extract_gain_ci(receipt: dict, arm_name: str = None) -> dict:
     """Extract (gain_value, exact_ci_lo, exact_ci_hi) from a receipt.
 
     Supports both w4_eval receipt shape and d_gate receipt shape.
     For w4_eval: looks in receipt['deltas'] for arm-minus-base delta.
     For p_gate synthetic: expects receipt['gain'] dict.
+
+    Raises GainExtractionError if none of the recognized shapes is present
+    (fail-closed — no 0.0 / [-1, 1] default).
     """
     # Try d_gate receipt shape first (gain_with field)
     if "gain_with" in receipt:
@@ -183,8 +196,12 @@ def _extract_gain_ci(receipt: dict, arm_name: str = None) -> dict:
             "exact_ci_lo": g.get("exact_ci_lo", -1.0),
             "exact_ci_hi": g.get("exact_ci_hi", 1.0),
         }
-    # Fallback: return zeros
-    return {"gain_value": 0.0, "exact_ci_lo": -1.0, "exact_ci_hi": 1.0}
+    # FAIL-CLOSED (eng-46 #175): no recognized gain shape. Refuse the old
+    # 0.0 / [-1, 1] default — it auto-passed the CI containment leg.
+    raise GainExtractionError(
+        "no recognized gain shape in receipt "
+        f"(ticket={receipt.get('ticket')!r}, ts={receipt.get('ts')!r}); "
+        "looked for 'gain_with', 'deltas'+arm_name, and 'gain'")
 
 
 def _extract_continuity_stamps(receipt: dict) -> dict:
@@ -228,6 +245,36 @@ def _check_interlock(args) -> None:
 # Gate logic
 # ---------------------------------------------------------------------------
 
+def _fail_extraction_receipt(ts, pre_path, post_path, arm_name, reason) -> dict:
+    """Write a fail-closed FAIL receipt when a gain leg cannot be extracted.
+
+    eng-46 (#175): a parser miss on either leg forces verdict FAIL with the
+    named reason FAIL_BY_GAIN_EXTRACTION — never a silent auto-pass."""
+    failure_reasons = [f"FAIL_BY_GAIN_EXTRACTION: {reason}"]
+    print(f"[p_gate] verdict: FAIL", flush=True)
+    for r in failure_reasons:
+        print(f"[p_gate] {r}", flush=True)
+    receipt = {
+        "ticket": "P-GATE",
+        "issue": "#114",
+        "scope": "cross-session-boundary-persistence-pair",
+        "ts": ts,
+        "sha_convention": SHA_CONVENTION,
+        "mode": "assemble-verify",
+        "pre_receipt": str(pre_path),
+        "post_receipt": str(post_path),
+        "arm_name": arm_name,
+        "gain_extraction_ok": False,
+        "failure_reasons": failure_reasons,
+        "verdict": "FAIL",
+        "pass": False,
+    }
+    receipt_path = _RECEIPTS / f"p-gate-{ts}.json"
+    checked_write(receipt_path, receipt)
+    print(f"[p_gate] receipt: {receipt_path}", flush=True)
+    return receipt
+
+
 def run_p_gate(pre_receipt_path, post_receipt_path, args=None) -> dict:
     """Assemble and verify a pre/post receipt pair. Returns receipt dict.
 
@@ -244,9 +291,17 @@ def run_p_gate(pre_receipt_path, post_receipt_path, args=None) -> dict:
 
     arm_name = (args and getattr(args, "arm_name", None)) or "adapter"
 
-    # ---- Extract gain CIs ----
-    pre_gain = _extract_gain_ci(pre_receipt, arm_name)
-    post_gain = _extract_gain_ci(post_receipt, arm_name)
+    # ---- Extract gain CIs (FAIL-CLOSED on a parser miss, eng-46 #175) ----
+    try:
+        pre_gain = _extract_gain_ci(pre_receipt, arm_name)
+    except GainExtractionError as e:
+        return _fail_extraction_receipt(ts, pre_path, post_path, arm_name,
+                                        f"pre receipt: {e}")
+    try:
+        post_gain = _extract_gain_ci(post_receipt, arm_name)
+    except GainExtractionError as e:
+        return _fail_extraction_receipt(ts, pre_path, post_path, arm_name,
+                                        f"post receipt: {e}")
 
     # ---- Extract continuity stamps ----
     pre_stamps = _extract_continuity_stamps(pre_receipt)
@@ -471,6 +526,54 @@ def _selftest():
     check("fail_same_pid_reason",
           any("FAIL_BY_SAME_PID" in fr for fr in r4["failure_reasons"]),
           f"failure_reasons={r4['failure_reasons']}")
+
+    # ---- Case 5: FAIL-CLOSED by gain extraction miss (eng-46 #175) ----
+    # A receipt with continuity stamps but NO recognized gain shape
+    # (no gain_with / deltas / gain) must force verdict FAIL — never the old
+    # 0.0/[-1,1] auto-pass. Cover both legs (post-miss and pre-miss).
+    def _no_gain_receipt(ts_, ledger, adapter, pid) -> dict:
+        return {
+            "ticket": "SYNTHETIC-NO-GAIN",
+            "ts": ts_,
+            "sha_convention": SHA_CONVENTION,
+            "continuity_stamps": {
+                "ledger_sha256": ledger,
+                "adapter_sha256": adapter,
+                "daemon_pid": pid,
+            },
+        }
+
+    # 5a: post leg has no gain shape -> extractor raises -> gate FAIL
+    post_r5 = _no_gain_receipt(post_ts, sha_ledger, sha_adapter, 2002)
+    post_p5 = _write_receipt(post_r5)
+    r5 = run_p_gate(pre_p, post_p5)
+    check("fail_extraction_post_verdict", not r5["pass"],
+          f"expected FAIL on post gain-extraction miss; got {r5['verdict']}")
+    check("fail_extraction_post_reason",
+          any("FAIL_BY_GAIN_EXTRACTION" in fr for fr in r5["failure_reasons"]),
+          f"failure_reasons={r5['failure_reasons']}")
+    check("fail_extraction_post_no_default_pass",
+          r5.get("gain_extraction_ok") is False,
+          "gain_extraction_ok must be False on a parser miss")
+
+    # 5b: pre leg has no gain shape -> extractor raises -> gate FAIL
+    pre_r5 = _no_gain_receipt(pre_ts, sha_ledger, sha_adapter, 1001)
+    pre_p5 = _write_receipt(pre_r5)
+    r5b = run_p_gate(pre_p5, post_p)
+    check("fail_extraction_pre_verdict", not r5b["pass"],
+          f"expected FAIL on pre gain-extraction miss; got {r5b['verdict']}")
+    check("fail_extraction_pre_reason",
+          any("FAIL_BY_GAIN_EXTRACTION" in fr for fr in r5b["failure_reasons"]),
+          f"failure_reasons={r5b['failure_reasons']}")
+
+    # 5c: the extractor itself raises (no silent default) — the unit guarantee
+    raised = False
+    try:
+        _extract_gain_ci({"ticket": "X", "ts": pre_ts}, "adapter")
+    except GainExtractionError:
+        raised = True
+    check("extractor_raises_on_no_match", raised,
+          "_extract_gain_ci must raise GainExtractionError, not return a default")
 
     # ---- Summary ----
     if fails:
