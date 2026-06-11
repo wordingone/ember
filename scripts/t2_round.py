@@ -1,5 +1,12 @@
 """t2_round.py — NC0 T2: one expert-iteration round.
 
+GOVERNOR NOTE (Kai S5-A 14589): LEGACY round-execution script — NOT a governed
+v0 launch surface. Dispatched THROUGH the train-daemon, which applies the
+resource governor at the dispatch layer (EMBER_VRAM_FRACTION / EMBER_VRAM_MARGIN_GB
+in the daemon env, not inline). The inline-governed v0 launch surface is
+scripts/timeshare_pretrain.py. A missing-inline-marker flag here is expected,
+not a launch-surface defect.
+
 Phases: (1) acquire episodes — either ingest a T1 samples JSONL (round 1,
 no resample) or sample k programs/task from base+adapter_{N-1}; verified
 episodes append to the ledger. (2) build SFT dataset from the full ledger.

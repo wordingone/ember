@@ -1,5 +1,13 @@
 """t1_probe.py — NC0 T1: CORE_ONLY probe on ARC-AGI-1 (the never-run Stage 0').
 
+GOVERNOR NOTE (Kai S5-A 14589): LEGACY round-0/1 probe — NOT a governed v0
+launch surface. When run for real it is dispatched THROUGH the train-daemon,
+which applies the resource governor at the dispatch layer (EMBER_VRAM_FRACTION
+/ EMBER_VRAM_MARGIN_GB set in the daemon env, not inline here). The inline-
+governed v0 launch surface is scripts/timeshare_pretrain.py (_apply_governor +
+EMBER_GATE_AUTHORIZED=1 + --live interlock). A missing-inline-marker flag on
+this file is expected and not a launch-surface defect.
+
 Samples k Python programs per task from a frozen local model, executes them in
 a sandboxed pool, verifies against each task's own train pairs (R5 ground
 truth), and records solve on the held test pair (recorded, never fed back).
