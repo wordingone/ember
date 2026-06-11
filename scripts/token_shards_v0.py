@@ -53,6 +53,13 @@ SHA_CONVENTION = ("sha256 over the exact on-disk file bytes, no normalization; "
 
 TICKET = "TOKEN-SHARDS-V0"
 
+# ---- producer pins (eng-50 #185): the frozen inputs the writer reads ------
+ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
+TOKENIZER_FREEZE_RECEIPT = "tokenizer-freeze-20260611T060423Z.json"
+SHARD_DIR = "shards"                       # nc-relative output dir for .bin
+SHARD_TOKEN_CAP = 256 * 1024 * 1024        # 256Mi tokens/shard (~512 MiB uint16)
+DOC_TEXT_FIELD = "text"                     # corpus JSONL doc content field
+
 
 def _sha(path):
     with open(path, "rb") as f:
@@ -216,6 +223,181 @@ def validate_shards_receipt(d, nc=NC):
 
 
 # ---------------------------------------------------------------------------
+# Production writer (eng-50 #185). build-now; the --emit run against the real
+# corpus is HELD pending the shard-production call. emit=False is a dry count
+# (no files written); emit=True writes the uint16 shards + a receipt that
+# passes validate_shards_receipt above.
+# ---------------------------------------------------------------------------
+def _utc_ts():
+    import datetime
+    return datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y%m%dT%H%M%SZ")
+
+
+def _load_pinned(nc, name):
+    """Load + receipt_check a pinned input receipt; return (sha256, dict).
+    Fail-closed: raises on miss or receipt_check failure."""
+    p = f"{nc}/receipts/{name}"
+    if not os.path.exists(p):
+        raise FileNotFoundError(f"pinned receipt missing: {name}")
+    d = json.load(open(p, encoding="utf-8"))
+    f = validate_receipt(d)
+    if f:
+        raise ValueError(f"pinned receipt {name} fails receipt_check: {f}")
+    return _sha(p), d
+
+
+def _iter_docs(path):
+    """Yield each document's text from a .jsonl.zst (or plain .jsonl) shard."""
+    import io
+    with open(path, "rb") as fh:
+        if str(path).endswith(".zst"):
+            import zstandard
+            reader = zstandard.ZstdDecompressor().stream_reader(fh)
+            stream = io.TextIOWrapper(reader, encoding="utf-8")
+        else:
+            stream = io.TextIOWrapper(fh, encoding="utf-8")
+        for line in stream:
+            line = line.strip()
+            if not line:
+                continue
+            doc = json.loads(line)
+            t = doc.get(DOC_TEXT_FIELD)
+            if t is None:
+                raise ValueError(f"{path}: doc missing {DOC_TEXT_FIELD!r}")
+            yield t
+
+
+def _resolve_sources(nc, assembly):
+    """From the assembly receipt -> ordered [(source, [shard paths])] in fp22
+    stream order. Each per-source manifest is sha-pinned by the assembly; each
+    corpus shard is sha-verified against its manifest before it is read
+    (fail-closed input integrity). Only exercised on the --emit production run."""
+    rows = sorted(assembly.get("sources", []),
+                  key=lambda s: s.get("fp22_row", 1 << 30))
+    out = []
+    for s in rows:
+        src = s["source"]
+        man_path = f"{nc}/{s['manifest_mirror'].replace(chr(92), '/')}"
+        if _sha(man_path) != s["manifest_sha256"]:
+            raise ValueError(f"{src}: manifest sha drift {man_path}")
+        man = json.load(open(man_path, encoding="utf-8"))
+        base = (man.get("out_dir_windows") or "").replace(chr(92), "/")
+        paths = []
+        for sh in man.get("shards", []):
+            fp = f"{base}/{sh['file']}"
+            if not os.path.exists(fp):              # fall back to nc-sibling layout
+                fp = f"{nc}/../corpus-v0/{src}/{sh['file']}"
+            if _sha(fp) != sh["sha256"]:
+                raise ValueError(f"{src}/{sh['file']}: corpus shard sha drift")
+            paths.append(fp)
+        out.append((src, paths))
+    return out
+
+
+def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
+                      token_cap=SHARD_TOKEN_CAP, emit=False,
+                      assembly_name=ASSEMBLY_RECEIPT,
+                      tokfreeze_name=TOKENIZER_FREEZE_RECEIPT):
+    """Encode the frozen corpus into flat uint16 packed shards + return a
+    TOKEN-SHARDS-V0 receipt.
+
+    encode_fn: text -> list[int]. Default = the frozen tokenizer (production).
+    Every produced id must land in [8, VOCAB_SIZE) — reserved ids 0..7 and
+    out-of-vocab ids are REFUSED (raise), so the reserved multimodal band can
+    never originate from source text. A separator id 0 is appended after each
+    document. emit=True writes the shards; emit=False is a dry count.
+    """
+    import numpy as np
+    asm_sha, assembly = _load_pinned(nc, assembly_name)
+    tok_sha, tokfreeze = _load_pinned(nc, tokfreeze_name)
+    tok_json_rel = (tokfreeze.get("tokenizer_repo_path")
+                    or "tokenizer/tokenizer.json").replace(chr(92), "/")
+    tok_json_sha = tokfreeze.get("tokenizer_json_sha256")
+    tok_json_path = f"{nc}/{tok_json_rel}"
+    if encode_fn is None:                            # production encoder
+        if not os.path.exists(tok_json_path) or _sha(tok_json_path) != tok_json_sha:
+            raise ValueError("tokenizer.json missing or sha drift vs freeze "
+                             "receipt — refusing to tokenize")
+        from tokenizers import Tokenizer
+        _tk = Tokenizer.from_file(tok_json_path)
+
+        def encode_fn(t):                            # noqa: E306
+            return _tk.encode(t, add_special_tokens=False).ids
+    if sources is None:
+        sources = _resolve_sources(nc, assembly)
+
+    out_abs = f"{nc}/{out_dir}"
+    if emit:
+        os.makedirs(out_abs, exist_ok=True)
+    per_source, shards = {}, []
+    buf, shard_idx = [], 0
+
+    def _emit_shard(tokens):
+        nonlocal shard_idx
+        name = f"v0-{shard_idx:05d}.bin"
+        arr = np.asarray(tokens, dtype="<u2")
+        if emit:
+            arr.tofile(f"{out_abs}/{name}")
+            sha = _sha(f"{out_abs}/{name}")
+        else:
+            sha = hashlib.sha256(arr.tobytes()).hexdigest()
+        shards.append({"name": name, "sha256": sha, "n_tokens": len(tokens)})
+        shard_idx += 1
+
+    for src, shard_paths in sources:
+        c_content = c_sep = 0
+        for sp in shard_paths:
+            for text in _iter_docs(sp):
+                ids = encode_fn(text)
+                for tid in ids:
+                    if tid < 8 or tid >= VOCAB_SIZE:
+                        raise ValueError(
+                            f"{src}: token id {tid} outside [8,{VOCAB_SIZE}) — "
+                            "reserved band 0..7 / oov must never come from text")
+                buf.extend(ids)
+                buf.append(SEPARATOR_ID)              # doc boundary
+                c_content += len(ids)
+                c_sep += 1
+                while len(buf) >= token_cap:
+                    _emit_shard(buf[:token_cap])
+                    del buf[:token_cap]
+        per_source[src] = {"content_tokens": c_content,
+                           "separator_tokens": c_sep,
+                           "stream_tokens": c_content + c_sep}
+    if buf:
+        _emit_shard(buf)
+
+    total = sum(s["n_tokens"] for s in shards)
+    n_windows = (total - BLOCK_LEN) // SEQ + 1 if total >= BLOCK_LEN else 0
+    return {
+        "ticket": TICKET,
+        "ts": _utc_ts(),
+        "shard_dir": out_dir,
+        "shards": shards,
+        "total_stream_tokens": total,
+        "per_source": per_source,
+        "separator_id": SEPARATOR_ID,
+        "reserved_band_guard": {
+            "reserved_ids": RESERVED_IDS, "max_id_lt": VOCAB_SIZE,
+            # reaching here without raising == no reserved id ever appeared
+            "reserved_ids_observed_in_stream": 0,
+        },
+        "loader_windows": {"seq": SEQ, "n_mtp": N_MTP,
+                           "block_len": BLOCK_LEN, "n_windows": n_windows},
+        "premises": {
+            "assembly_receipt": {"name": assembly_name, "sha256": asm_sha},
+            "tokenizer_freeze_receipt": {"name": tokfreeze_name,
+                                         "sha256": tok_sha},
+            "tokenizer_json": {"path": tok_json_rel, "sha256": tok_json_sha},
+        },
+        "sha_convention": SHA_CONVENTION,
+        "emit": bool(emit),
+        "no_gpu": True,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Selftest — hermetic; builds a synthetic shard set in a temp dir. Reads/writes
 # NO production corpus and emits no production data.
 # ---------------------------------------------------------------------------
@@ -338,6 +520,77 @@ def _selftest():
     print("TOKEN_SHARDS_V0_VALIDATOR_SELFTEST_PASS")
 
 
+def _selftest_writer():
+    """End-to-end writer selftest on a SYNTHETIC corpus (real zstd read + the
+    real chunk/separator/uint16 path), with an injected encoder. Reads/writes
+    no production data; the emitted fixture receipt must pass the eng-49
+    validator."""
+    import json as _json
+    import tempfile
+    import zstandard
+
+    def _toy_encode(t):
+        return [8 + (ord(c) % 100) for c in t]     # all ids in [8, 108)
+
+    with tempfile.TemporaryDirectory() as td:
+        os.makedirs(f"{td}/receipts")
+        os.makedirs(f"{td}/tokenizer")
+        os.makedirs(f"{td}/corpus")
+        with open(f"{td}/tokenizer/tokenizer.json", "w", encoding="utf-8") as fh:
+            fh.write('{"model":"fixture"}')
+        tj_sha = _sha(f"{td}/tokenizer/tokenizer.json")
+        _json.dump({"ticket": "FIX-ASM", "ts": "20260101T000000Z"},
+                   open(f"{td}/receipts/fixture-assembly.json", "w"))
+        _json.dump({"ticket": "FIX-TOK", "ts": "20260101T000000Z",
+                    "tokenizer_repo_path": "tokenizer/tokenizer.json",
+                    "tokenizer_json_sha256": tj_sha, "sha_convention": "fixture"},
+                   open(f"{td}/receipts/fixture-tokfreeze.json", "w"))
+
+        def _write_corpus(src, docs):
+            p = f"{td}/corpus/{src}.jsonl.zst"
+            payload = "\n".join(_json.dumps({"text": t, "source": src})
+                                for t in docs).encode("utf-8")
+            with open(p, "wb") as fh:
+                fh.write(zstandard.ZstdCompressor().compress(payload))
+            return p
+        # one 300-char doc per source -> 1505 stream tokens > block_len 1027
+        sources = [(s, [_write_corpus(s, ["x" * 300])])
+                   for s in sorted(EXPECTED_SOURCES)]
+
+        receipt = produce_shards_v0(
+            td, encode_fn=_toy_encode, sources=sources, out_dir="shards",
+            token_cap=600, emit=True,
+            assembly_name="fixture-assembly.json",
+            tokfreeze_name="fixture-tokfreeze.json")
+
+        # the writer's own receipt must pass the eng-49 validator end-to-end
+        assert receipt["ticket"] == TICKET
+        assert validate_shards_receipt(receipt, td) == [], \
+            validate_shards_receipt(receipt, td)
+        assert set(receipt["per_source"]) == EXPECTED_SOURCES
+        assert receipt["total_stream_tokens"] >= BLOCK_LEN
+        assert receipt["loader_windows"]["n_windows"] >= 1
+        assert len(receipt["shards"]) >= 2, "token_cap should force >1 shard"
+        for s in receipt["shards"]:                # flat uint16: bytes == n*2
+            sz = os.path.getsize(f"{td}/shards/{s['name']}")
+            assert sz == s["n_tokens"] * BYTES_PER_TOKEN, (s, sz)
+        assert all(c["separator_tokens"] == 1            # one separator per doc
+                   for c in receipt["per_source"].values())
+
+        # reserved-band guard: an encoder emitting a reserved id must RAISE
+        raised = False
+        try:
+            produce_shards_v0(td, encode_fn=lambda t: [5], sources=sources[:1],
+                              out_dir="shards2", token_cap=600, emit=False,
+                              assembly_name="fixture-assembly.json",
+                              tokfreeze_name="fixture-tokfreeze.json")
+        except ValueError as e:
+            raised = "reserved band" in str(e) or "outside" in str(e)
+        assert raised, "a reserved/oov id must be refused by the writer"
+
+    print("TOKEN_SHARDS_V0_WRITER_SELFTEST_PASS")
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="TOKEN-SHARDS-V0 receipt contract + fail-closed validator "
@@ -346,9 +599,15 @@ def main():
     ap.add_argument("--validate", metavar="RECEIPT",
                     help="fail-closed validate a token-shards-v0 receipt against "
                          "the on-disk shards (exit non-zero on any violation)")
+    ap.add_argument("--emit", action="store_true",
+                    help="PRODUCTION: read the frozen corpus, write uint16 .bin "
+                         "shards, and emit a checked TOKEN-SHARDS-V0 receipt. "
+                         "HELD pending the shard-production call — do not run "
+                         "until that HOLD is lifted.")
     a = ap.parse_args()
     if a.selftest:
         _selftest()
+        _selftest_writer()
         return
     if a.validate:
         d = json.load(open(a.validate, encoding="utf-8"))
@@ -359,9 +618,23 @@ def main():
             raise SystemExit(1)
         print("TOKEN_SHARDS_V0_RECEIPT_VALID")
         return
-    print("TOKEN_SHARDS_V0_STAGED — pass --selftest or --validate <receipt>. "
-          "Production writer (corpus->uint16 shards) is eng-50; its run is "
-          "HELD pending the shard-production call.")
+    if a.emit:
+        from receipt_write import checked_write       # noqa: E402
+        receipt = produce_shards_v0(NC, emit=True)
+        out = f"{NC}/receipts/token-shards-v0-{receipt['ts']}.json"
+        checked_write(out, receipt)
+        viol = validate_shards_receipt(
+            json.load(open(out, encoding="utf-8")), NC)
+        if viol:
+            raise SystemExit(f"emitted shard receipt FAILS contract: {viol}")
+        print(f"TOKEN_SHARDS_V0_EMITTED {os.path.relpath(out, NC)} "
+              f"({receipt['total_stream_tokens']:,} stream tokens, "
+              f"{len(receipt['shards'])} shards)")
+        return
+    print("TOKEN_SHARDS_V0_STAGED — pass --selftest, --validate <receipt>, or "
+          "--emit (production; HELD pending the shard-production call). The "
+          "writer reads the frozen corpus -> uint16 shards; emit is the only "
+          "path that touches production data.")
 
 
 if __name__ == "__main__":
