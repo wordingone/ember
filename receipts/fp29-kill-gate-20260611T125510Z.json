@@ -1,0 +1,68 @@
+{
+  "ticket": "FP29-KILL-SYNTHESIS-GATE",
+  "ts": "20260611T125510Z",
+  "issue": 200,
+  "reconciliation": "fp-26 'even with curriculum synthesis' is now a RECEIPTED VALIDITY PRECONDITION on fp-23/fp-24 KILL verdicts; composes around the frozen files, mutates neither",
+  "synthesis_definition": "L1/L2-grammar episodes (fp-23 ops, TRAIN buckets 10-99 only) mixed into the continued pretrain inside the 2B->4B retry window; probe buckets 0-9 untouched",
+  "synthesis_required_fields": [
+    "ticket",
+    "ts",
+    "window",
+    "episodes_generated",
+    "bucket_range_assert",
+    "ops_in_grammar_assert",
+    "probe_buckets_untouched_assert",
+    "ingestion_manifest_sha256"
+  ],
+  "tighten_only": {
+    "floor_rate": 1.0,
+    "floor_checkpoint": "2B",
+    "retry_checkpoint": "4B",
+    "bar_moved": false,
+    "new_pass_path": false,
+    "kill_gains_precondition": true
+  },
+  "pins": {
+    "fp26_decision": {
+      "path": "research/fp26-round3-shape-decision.md",
+      "sha256": "5ef7cc20f22168878f139af00e6ac9a75d43c758ffd2b3eb181372c50081c939"
+    },
+    "fp23_frozen_constants": {
+      "FLOOR_RATE": 1.0,
+      "FLOOR_CHECKPOINT": "2B",
+      "RETRY_CHECKPOINT": "4B"
+    }
+  },
+  "gate_branches": {
+    "pass_through": {
+      "gate": "PASS-THROUGH",
+      "verdict": "RETRY-AT-4B",
+      "note": "gate binds only the kill path (tighten-only)"
+    },
+    "kill_unreceipted": {
+      "gate": "KILL-REFUSED-SYNTHESIS-UNRECEIPTED",
+      "verdict": "KILL",
+      "note": "fp-26 kill clause 'even with curriculum synthesis' never exercised: no synthesis receipt for the 2B->4B window. The rung-kill cannot escalate; the next protocol step is the synthesis attempt, not the escalation."
+    },
+    "kill_malformed": {
+      "gate": "KILL-REFUSED-SYNTHESIS-MALFORMED",
+      "verdict": "KILL",
+      "findings": [
+        "episodes_generated must be int > 0, got 0"
+      ]
+    },
+    "kill_valid": {
+      "gate": "KILL-VALID",
+      "verdict": "KILL",
+      "synthesis_ticket": "CURRICULUM-SYNTHESIS-2B4B",
+      "ingestion_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "note": "precondition exercised + receipted; the rung-kill may surface to the user (fp-24 escalation framing)"
+    }
+  },
+  "result": {
+    "verdict": "RECONCILED",
+    "kill_requires_synthesis_receipt": true
+  },
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}
