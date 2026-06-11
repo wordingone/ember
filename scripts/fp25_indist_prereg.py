@@ -270,6 +270,82 @@ def validate_receipt(rec):
     return sorted(f for f in RECEIPT_REQUIRED_FIELDS if f not in rec)
 
 
+def _norm_tid(x):
+    """w4_eval writes integer tids; the sft view stores 'mbpp:NNN'. Normalize
+    either to the integer id so the Surface-A task-set assert is format-robust
+    regardless of which side carries the prefix."""
+    return int(str(x).split(":")[-1])
+
+
+def adapter_provenance(samples_path):
+    """arm -> sampler string (model[+adapter]) from the eval samples rows —
+    records what was ACTUALLY evaluated per arm, in file (= arm) order."""
+    prov = {}
+    with open(samples_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            r = json.loads(line)
+            arm = r.get("arm")
+            if arm and arm not in prov:
+                prov[arm] = r.get("sampler")
+    return prov
+
+
+def build_fp25_receipt(samples_path, recall_view, surface, ts):
+    """BINDING Surface-A receipt builder, fail-closed (Kai 14548/14551). Only
+    Surface A (train-task recall) has a binding executor; Surface B held-out
+    needs its own disjointness-proven executor and is refused here. Asserts,
+    in order: surface == A; the recall view yields exactly EXPECTED_RECALL_TASKS
+    ids; the EVALUATED task set equals those ids (a wrong samples file cannot
+    mint a plausible receipt); every (arm,task) carries exactly EVAL_K samples
+    (k bound from the data); the verdict computes; the receipt carries every
+    RECEIPT_REQUIRED_FIELD (validate_receipt). Returns the receipt dict."""
+    if surface != "A-recall":
+        raise SystemExit("fp25: only Surface A (train-task recall) has a "
+                         "binding executor; Surface B held-out needs its own "
+                         "disjointness-proven executor (staged) — refused "
+                         "fail-closed")
+    recall_ids = recall_task_ids(recall_view)
+    if len(recall_ids) != EXPECTED_RECALL_TASKS:
+        raise SystemExit(f"fp25: recall view has {len(recall_ids)} tasks, "
+                         f"expected {EXPECTED_RECALL_TASKS} ({recall_view})")
+    tab, _order = load_tab(samples_path)
+    want = {_norm_tid(t) for t in recall_ids}
+    got = {_norm_tid(t) for arm in tab for t in tab[arm]}
+    if got != want:
+        raise SystemExit(
+            f"fp25: evaluated task set != the {len(want)} recall tasks "
+            f"(missing {sorted(want - got)[:5]}, extra {sorted(got - want)[:5]})")
+    for arm in tab:
+        for t, vec in tab[arm].items():
+            if len(vec) != EVAL_K:
+                raise SystemExit(f"fp25: k mismatch arm {arm} task {t}: "
+                                 f"{len(vec)} samples != EVAL_K {EVAL_K}")
+    verdict = decide_recall(tab)
+    if "error" in verdict:
+        raise SystemExit(f"fp25: {verdict['error']}")
+    receipt = {
+        "ticket": "FP25-INDIST", "ts": ts,
+        "surface": "A-recall",
+        "arms": sorted(tab),
+        "k": EVAL_K, "seed": EVAL_SEED,
+        "recall_task_ids_sha256": ids_sha256(recall_ids),
+        "recall_task_count": len(recall_ids),
+        "samples_file": os.path.basename(samples_path),
+        "adapter_provenance": adapter_provenance(samples_path),
+        "basis": ("round-2 OOD-null decomposition: train-task recall (the "
+                  "EXACT 28 frontier MBPP-train tasks) as the memorization "
+                  "floor / null-detector; g1_paired per-sample-rate binding"),
+        "result": verdict,
+    }
+    missing = validate_receipt(receipt)
+    if missing:
+        raise SystemExit(f"fp25: receipt missing required fields {missing}")
+    return receipt
+
+
 def _selftest():
     # recall-id extraction + sha determinism on a synthetic view
     import tempfile
@@ -354,6 +430,49 @@ def _selftest():
     miss = validate_receipt({"surface": "A-recall"})
     assert "samples_file" in miss and "recall_task_ids_sha256" in miss
     assert validate_receipt({f: 1 for f in RECEIPT_REQUIRED_FIELDS}) == []
+
+    # BINDING executor (Surface A): synthetic 28-task recall view + samples.
+    # Proves the receipt carries every required field, the task-set + k asserts
+    # bind, B-heldout is refused, and a wrong samples file cannot mint one.
+    rids = [f"mbpp:{1000 + i}" for i in range(EXPECTED_RECALL_TASKS)]
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False,
+                                     encoding="utf-8") as vf:
+        for t in rids:
+            vf.write(json.dumps({"task": t, "verified": True}) + "\n")
+        view_p = vf.name
+
+    def _mk_samples(task_ids, k=EVAL_K):
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False,
+                                         encoding="utf-8") as sf:
+            for arm in ARM_SET:
+                strong = arm in ("sft", "mtp")
+                for t in task_ids:
+                    for j in range(k):
+                        ok = strong or (j == 0)
+                        sf.write(json.dumps({"arm": arm, "tid": _norm_tid(t),
+                                             "verified": bool(ok),
+                                             "sampler": f"M+{arm}"}) + "\n")
+            return sf.name
+
+    sp = _mk_samples(rids)
+    rec = build_fp25_receipt(sp, view_p, "A-recall", "20260611T000000Z")
+    assert validate_receipt(rec) == [], rec
+    assert rec["arms"] == sorted(ARM_SET)
+    assert rec["k"] == EVAL_K and rec["seed"] == EVAL_SEED
+    assert rec["recall_task_count"] == EXPECTED_RECALL_TASKS
+    assert set(rec["adapter_provenance"]) == set(ARM_SET)
+
+    def _refuses(samples, view, surface):
+        try:
+            build_fp25_receipt(samples, view, surface, "t")
+        except SystemExit:
+            return True
+        return False
+    assert _refuses(sp, view_p, "B-heldout")          # B has no binding executor
+    assert _refuses(_mk_samples(rids[:-1]), view_p, "A-recall")  # wrong task set
+    assert _refuses(_mk_samples(rids, k=EVAL_K - 1), view_p, "A-recall")  # k mismatch
+    os.unlink(view_p)
+    os.unlink(sp)
     print("FP25_INDIST_PREREG_SELFTEST_PASS")
 
 
@@ -364,29 +483,23 @@ def main():
                                        "(w4_eval format, the 28 recall tasks)")
     ap.add_argument("--surface", default="A-recall",
                     choices=("A-recall", "B-heldout"))
+    ap.add_argument("--recall-view", default=None,
+                    help="override the recall view path (default RECALL_VIEW "
+                         "under the nc-ladder root)")
     a, _ = ap.parse_known_args()
     if not a.samples:
         print("FP25_INDIST_PREREG_STAGED (no in-distribution eval receipt "
               "exists yet; split + methods + decide() frozen in this file — "
-              "the executor runs decide() when the 28-task recall eval lands)")
+              "the binding executor runs when the 28-task recall eval lands)")
         return
-    tab, _order = load_tab(a.samples)
-    verdict = decide_recall(tab)
-    if "error" in verdict:
-        raise SystemExit(f"fp25: {verdict['error']}")
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    receipt = {"ticket": "FP25-INDIST", "ts": ts,
-               "samples_file": os.path.basename(a.samples),
-               "surface": a.surface,
-               "basis": ("round-2 OOD-null decomposition: train-task recall "
-                         "(28 frontier MBPP-train tasks) as the memorization "
-                         "floor / null-detector; g1_paired per-sample-rate "
-                         "binding"),
-               "result": verdict}
     NC = os.path.dirname(HERE)
+    view = a.recall_view or f"{NC}/{RECALL_VIEW}"
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    receipt = build_fp25_receipt(a.samples, view, a.surface, ts)
     out = f"{NC}/receipts/fp25-indist-{ts}.json"
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
+    verdict = receipt["result"]
     print(json.dumps({"verdict": verdict["verdict"],
                       "arm_learns_vs_base": verdict["arm_learns_vs_base"],
                       "owned_core_gate": verdict["owned_core_gate"]}, indent=2))
