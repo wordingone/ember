@@ -1279,3 +1279,25 @@ the-search's standalone-helps/multi-task-hurts pair is the honest
 prior). Successor sp-2 staged on NC1a entry. One adoption applies
 immediately: round verdicts gain the "killed too fast?" budget-audit
 column from round-3 on.
+
+## 8.32 fp-23 (#135): checkpoint-probe prereg FROZEN before pretrain step 0
+
+**The fp-15 discipline applied to the owned core:** the analysis that
+will judge the v0 checkpoints is now executable BEFORE any checkpoint
+exists (`scripts/fp23_probe_prereg.py`, selftest PASS, staged sentinel
++ un-freeze guard in main). Pinned: L1 grammar (10 deterministic ops,
+int lists 4–12, fixed NL templates — no paraphrase pool, the floor
+does not measure paraphrase robustness), sha1-bucket held-out split
+(probe buckets 0–9, train 10–99 — leakage impossible by construction,
+~10% verified in selftest), generator seed 23, probe = 100 tasks ×
+k≤16 × 5s timeout, receipt schema floor (16 required fields incl.
+tokenizer/corpus shas + pacing + governor + adapter-none assert), and
+the decision procedure verbatim: 1B=INFO, 2B PASS/RETRY-AT-4B,
+4B PASS/KILL (kill only with a recorded 2B fail — a 4B fail without
+the 2B leg is PROTOCOL-VIOLATION, the probe is mandatory). Wilson CI
+quoted on task-level proportions alongside the binding rate; rate
+convention = pacing-INCLUDED governed minutes (fp-14).
+
+**Successor:** fp-24 — execute the verdicts on the real 1B/2B/4B
+checkpoint receipts (receipt-gated on the v0 run; the spectral
+information-only fields from sp-1 ride the same schema).
