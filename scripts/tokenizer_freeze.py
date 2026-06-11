@@ -12,11 +12,22 @@ eng-36 assembly receipt, so the sample is a pure function of the corpus
 + the budgets). ByteLevel BPE training on a fixed sample is
 deterministic; the selftest pins byte-identical double-train.
 
+eng #160 ACs on top of the prep harness:
+  - AC-1: the production freeze pins the MERGED eng-36 assembly receipt
+    by name AND sha256 (Kai 14560) — absent/drifted = refuse before any
+    sampling work;
+  - AC-2: freeze receipt carries the reserved multimodal special-token
+    band (NC2 contract component 8, v0 LOCK #1 — gemma-4 pattern,
+    fixed ids verified post-train) and REAL per-source + total token
+    counts from the frozen tokenizer, resolving the assembly receipt's
+    HEURISTIC-ONLY estimate (tokens_pending_tokenizer_freeze -> false).
+
 Fail-closed interlocks:
-  - refuses to run without corpus-manifests/ + a green assembly receipt
-    (eng-36 must be GATED/merged first — launch order);
+  - refuses to run without corpus-manifests/ + the PINNED assembly
+    receipt (eng-36 must be GATED/merged first — launch order);
   - refuses if a freeze receipt already exists (frozen = frozen; one
     tokenizer for v0, no re-freeze path);
+  - reserved band verified at its pre-assigned ids post-train;
   - sample sha256 + per-source strata + tokenizer.json sha256 all land
     in the freeze receipt via checked_write.
 
@@ -42,7 +53,27 @@ OUT_ROOT_DEFAULT = "B:/M/avir/eli/state/ember-eng/corpus-v0"
 
 VOCAB_SIZE = 32_000  # fp-19 config pin: "vocab 32k"
 SAMPLE_BUDGET_BYTES = 1_000_000_000  # fp-22: "stratified ~1GB sample"
-SPECIAL_TOKENS = ["<|endoftext|>"]  # minimal; documented in the receipt
+
+# Reserved multimodal special-token band — NC2 own-technique contract
+# component 8, v0 LOCK #1 ("Reserved vocab band with pre-assigned
+# multimodal delimiter/placeholder token IDs"); names follow the
+# gemma-4 deep-dive pattern (research/gemma4-unified-architecture.md:
+# boi/eoi/image_soft/boa/eoa/audio_soft/video_soft). v0 is text-only —
+# the IDs are pre-assigned, never produced by training data; the
+# embedder that splices over them is a proven retrofit. Fixed
+# positions: BpeTrainer assigns special tokens the FIRST ids in list
+# order, so the band is ids 0..7 by construction (verified post-train,
+# fail-closed).
+SPECIAL_TOKENS = ["<|endoftext|>", "<boi>", "<eoi>", "<image_soft>",
+                  "<boa>", "<eoa>", "<audio_soft>", "<video_soft>"]
+RESERVED_BAND = {t: i for i, t in enumerate(SPECIAL_TOKENS)}
+
+# eng #160 AC-1 (Kai 14560 assembly-sha gate): the production freeze
+# runs ONLY against the merged eng-36 assembly receipt, pinned BY
+# sha256. Absent or mismatching -> refuse before any sampling work.
+ASSEMBLY_RECEIPT_BASENAME = "eng36-assembly-20260611T052337Z.json"
+ASSEMBLY_RECEIPT_SHA256 = \
+    "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2"
 
 SHA_CONVENTION = ("sha256 over on-disk raw bytes "
                   "(binary read, no line-ending normalization)")
@@ -122,25 +153,40 @@ def load_manifests(repo):
     return out
 
 
-def latest_assembly_receipt(repo):
-    cands = sorted(glob.glob(
-        os.path.join(repo, "receipts", "eng36-assembly-*.json")))
-    if not cands:
-        raise SystemExit("tokenizer_freeze: no eng36-assembly receipt — "
-                         "the corpus is not assembly-verified")
-    return cands[-1]
+def pinned_assembly_receipt(repo):
+    """eng #160 AC-1: the ONE merged assembly receipt, by name AND
+    sha256. Absent or byte-drifted -> refuse (Kai 14560)."""
+    path = os.path.join(repo, "receipts", ASSEMBLY_RECEIPT_BASENAME)
+    if not os.path.exists(path):
+        raise SystemExit(f"tokenizer_freeze: pinned assembly receipt "
+                         f"absent: {ASSEMBLY_RECEIPT_BASENAME} — the "
+                         f"merged eng-36 corpus is the only valid input")
+    got = file_sha256(path)
+    if got != ASSEMBLY_RECEIPT_SHA256:
+        raise SystemExit(f"tokenizer_freeze: assembly receipt sha "
+                         f"mismatch ({got[:12]} != pinned "
+                         f"{ASSEMBLY_RECEIPT_SHA256[:12]}) — refusing "
+                         f"to freeze against drifted corpus state")
+    return path
 
 
 def existing_freeze_receipts(repo):
-    return sorted(glob.glob(
-        os.path.join(repo, "receipts", "tokenizer-freeze-*.json")))
+    """Production freeze receipts ONLY (tokenizer-freeze-<ts>.json).
+    Selftest receipts share the prefix and must NOT trip the re-freeze
+    refusal — match the exact ts shape."""
+    import re
+    pat = re.compile(r"^tokenizer-freeze-\d{8}T\d{6}Z\.json$")
+    return sorted(
+        p for p in glob.glob(
+            os.path.join(repo, "receipts", "tokenizer-freeze-*.json"))
+        if pat.match(os.path.basename(p)))
 
 
 def build_sample(repo, out_root, budget_total):
     """Stratified sample across all sources. Returns
     (sample_path, strata_rows, assembly_path)."""
     manifests = load_manifests(repo)
-    assembly_path = latest_assembly_receipt(repo)
+    assembly_path = pinned_assembly_receipt(repo)
     assembly = json.load(open(assembly_path, encoding="utf-8"))
     asm_sources = {r["source"] for r in assembly["sources"]}
     if set(manifests) != asm_sources:
@@ -174,7 +220,7 @@ def build_sample(repo, out_root, budget_total):
             })
             print(f"[sample] {src}: {len(texts)} docs / {kept} bytes "
                   f"(budget {budgets[src]})", flush=True)
-    return sample_path, strata, assembly_path
+    return sample_path, strata, assembly_path, manifests
 
 
 def train_tokenizer(sample_path, vocab_size, tok_dir):
@@ -189,6 +235,45 @@ def train_tokenizer(sample_path, vocab_size, tok_dir):
     out = os.path.join(tok_dir, "tokenizer.json")
     tok.save(out)
     return out
+
+
+def verify_reserved_band(tok_path):
+    """Post-train fail-closed check that the reserved multimodal band
+    sits at its pre-assigned ids (NC2 v0 LOCK #1)."""
+    from tokenizers import Tokenizer
+    tok = Tokenizer.from_file(tok_path)
+    got = {t: tok.token_to_id(t) for t in SPECIAL_TOKENS}
+    if got != RESERVED_BAND:
+        raise SystemExit(f"tokenizer_freeze: reserved band drifted: "
+                         f"{got} != {RESERVED_BAND}")
+    return got
+
+
+def count_tokens(tok_path, manifests, out_root,
+                 batch_docs=512, batch_bytes=32_000_000):
+    """REAL token count per source with the frozen tokenizer (eng #160
+    AC-2: resolves the bytes/chars heuristic; tokens_pending_tokenizer_
+    freeze -> resolved). Batches are bounded by docs AND bytes so
+    book-sized records cannot blow memory. Counts are content tokens
+    (no specials injected)."""
+    from tokenizers import Tokenizer
+    tok = Tokenizer.from_file(tok_path)
+    per_source = {}
+    for src in sorted(manifests):
+        m, _ = manifests[src]
+        corpus_dir = os.path.join(out_root, src)
+        n, batch, bbytes = 0, [], 0
+        for text in iter_shard_docs(m, corpus_dir):
+            batch.append(text)
+            bbytes += len(text)
+            if len(batch) >= batch_docs or bbytes >= batch_bytes:
+                n += sum(len(e.ids) for e in tok.encode_batch(batch))
+                batch, bbytes = [], 0
+        if batch:
+            n += sum(len(e.ids) for e in tok.encode_batch(batch))
+        per_source[src] = n
+        print(f"[count] {src}: {n} tokens", flush=True)
+    return per_source
 
 
 def main():
@@ -211,7 +296,7 @@ def main():
                          f"re-freeze path")
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    sample_path, strata, assembly_path = build_sample(
+    sample_path, strata, assembly_path, manifests = build_sample(
         REPO, args.out_root, args.budget)
     sample_sha = file_sha256(sample_path)
     print(f"[sample] sha256 {sample_sha}", flush=True)
@@ -220,6 +305,16 @@ def main():
     tok_path = train_tokenizer(sample_path, args.vocab, tok_dir)
     tok_sha = file_sha256(tok_path)
     print(f"[train] tokenizer.json sha256 {tok_sha}", flush=True)
+
+    band = verify_reserved_band(tok_path)
+    print(f"[band] reserved multimodal band verified: {band}", flush=True)
+
+    per_source_tokens = count_tokens(tok_path, manifests, args.out_root)
+    real_total = sum(per_source_tokens.values())
+    assembly = json.load(open(assembly_path, encoding="utf-8"))
+    heuristic_total = assembly["est_tokens_heuristic"]["total"]
+    print(f"[count] TOTAL real tokens: {real_total} "
+          f"(heuristic was {heuristic_total})", flush=True)
 
     # repo copy: the artifact every checkpoint receipt stamps
     repo_tok = os.path.join(REPO, "tokenizer", "tokenizer.json")
@@ -237,12 +332,35 @@ def main():
                  "sha-stamped into every checkpoint receipt"),
         "vocab_size": args.vocab,
         "special_tokens": SPECIAL_TOKENS,
+        "reserved_band": band,
+        "reserved_band_basis": ("NC2 own-technique contract component 8, "
+                                "v0 LOCK #1: reserved vocab band with "
+                                "pre-assigned multimodal delimiter/"
+                                "placeholder ids (gemma-4 pattern, "
+                                "research/gemma4-unified-architecture.md); "
+                                "v0 text-only — ids never produced by "
+                                "training data, verified post-train"),
         "model": "ByteLevel BPE (HF tokenizers)",
         "sample_budget_bytes": args.budget,
         "sample_path": sample_path,
         "sample_sha256": sample_sha,
         "strata": strata,
         "assembly_receipt": os.path.relpath(assembly_path, REPO),
+        "assembly_receipt_sha256": ASSEMBLY_RECEIPT_SHA256,
+        "assembly_pin_basis": ("eng #160 AC-1 (Kai 14560): freeze runs "
+                               "ONLY against the merged assembly receipt, "
+                               "pinned by name + sha256, verified before "
+                               "any sampling work"),
+        "real_token_counts": {**per_source_tokens, "total": real_total},
+        "tokens_pending_tokenizer_freeze": False,
+        "resolves_heuristic": {
+            "heuristic_total": heuristic_total,
+            "real_total": real_total,
+            "note": ("real counts from the frozen tokenizer over every "
+                     "corpus doc (content tokens, no specials); the "
+                     "assembly receipt's HEURISTIC-ONLY estimate is "
+                     "superseded by this field"),
+        },
         "tokenizer_json_sha256": tok_sha,
         "tokenizer_repo_path": os.path.relpath(repo_tok, REPO),
         "frozen_pre_step0": True,
@@ -256,8 +374,8 @@ def main():
     checked_write(out, receipt)
     print(json.dumps({"vocab_size": args.vocab, "sample_sha256": sample_sha,
                       "tokenizer_json_sha256": tok_sha,
-                      "strata": [{s['source']: s['bytes_sampled']}
-                                 for s in strata]}, indent=2))
+                      "real_token_counts": receipt["real_token_counts"],
+                      "reserved_band": band}, indent=2))
     print(f"[freeze] receipt: {out}")
     print("TOKENIZER_FREEZE_DONE")
 

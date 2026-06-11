@@ -97,7 +97,60 @@ def main():
         tok = Tokenizer.from_file(p1)
         enc = tok.encode("def f0(x): return x + 0")
         assert len(enc.ids) > 0
+        # NC2 v0 LOCK #1: the 8-token band sits at ids 0..7 exactly
+        band = tf.verify_reserved_band(p1)
+        assert band == tf.RESERVED_BAND
+        assert band == {t: i for i, t in enumerate(tf.SPECIAL_TOKENS)}
+        assert len(tf.SPECIAL_TOKENS) == 8 and \
+            tf.SPECIAL_TOKENS[0] == "<|endoftext|>"
+        assert set(tf.SPECIAL_TOKENS[1:]) == {
+            "<boi>", "<eoi>", "<image_soft>", "<boa>", "<eoa>",
+            "<audio_soft>", "<video_soft>"}, "gemma-pattern 7-token band"
+        # count_tokens == direct encode sum over the same fixture docs
+        docs = [f"def f{i}(x): return x + {i}" for i in range(40)]
+        m = make_fixture_source(td, "cnt", docs)
+        per = tf.count_tokens(p1, {"cnt": (m, "unused-mirror-path")},
+                              td, batch_docs=7, batch_bytes=200)
+        want = sum(len(e.ids) for e in tok.encode_batch(docs))
+        assert per == {"cnt": want}, (per, want)
     checks["double_train_byte_identical"] = True
+    checks["reserved_band_fixed_ids"] = True
+    checks["count_tokens_exact"] = True
+
+    # 3a. re-freeze refusal matches PRODUCTION receipts only — selftest
+    # receipts share the filename prefix and must not trip it
+    with tempfile.TemporaryDirectory() as td:
+        rdir = os.path.join(td, "receipts")
+        os.makedirs(rdir)
+        open(os.path.join(
+            rdir, "tokenizer-freeze-selftest-20260611T000000Z.json"),
+            "w").close()
+        assert tf.existing_freeze_receipts(td) == [], \
+            "selftest receipt must not trip the re-freeze refusal"
+        prod = os.path.join(rdir, "tokenizer-freeze-20260611T000000Z.json")
+        open(prod, "w").close()
+        assert [os.path.basename(p)
+                for p in tf.existing_freeze_receipts(td)] == \
+            ["tokenizer-freeze-20260611T000000Z.json"]
+    checks["refreeze_refusal_scoped_to_production"] = True
+
+    # 3b. assembly-sha pin behavior (eng #160 AC-1, Kai 14560)
+    with tempfile.TemporaryDirectory() as td:
+        os.makedirs(os.path.join(td, "receipts"))
+        try:
+            tf.pinned_assembly_receipt(td)
+            raise AssertionError("absent assembly receipt must refuse")
+        except SystemExit as e:
+            assert "absent" in str(e)
+        p = os.path.join(td, "receipts", tf.ASSEMBLY_RECEIPT_BASENAME)
+        with open(p, "wb") as f:
+            f.write(b'{"tampered": true}')
+        try:
+            tf.pinned_assembly_receipt(td)
+            raise AssertionError("drifted assembly receipt must refuse")
+        except SystemExit as e:
+            assert "sha" in str(e) and "mismatch" in str(e)
+    checks["assembly_pin_fail_closed"] = True
 
     # 4. fail-closed wiring (source asserts — behavior pinned above)
     src = open(os.path.join(HERE, "tokenizer_freeze.py"),
@@ -105,18 +158,31 @@ def main():
     assert 'if not args.freeze:' in src and '"--freeze"' in src
     assert "freeze receipt already exists" in src
     assert "no corpus-manifests/ mirrors" in src
-    assert "no eng36-assembly receipt" in src
+    assert "pinned_assembly_receipt(repo)" in src, \
+        "build_sample must consume the PINNED assembly receipt"
+    assert "latest_assembly_receipt" not in src, \
+        "the latest-glob assembly lookup must be gone (pin-only)"
     assert '"sample_sha256": sample_sha' in src
     assert '"tokenizer_json_sha256": tok_sha' in src
     assert '"strata": strata' in src
+    assert '"reserved_band": band' in src
+    assert '"assembly_receipt_sha256": ASSEMBLY_RECEIPT_SHA256' in src
+    assert '"tokens_pending_tokenizer_freeze": False' in src
+    assert '"real_token_counts"' in src and '"resolves_heuristic"' in src
     assert '"sha_convention": SHA_CONVENTION' in src
     assert "checked_write(out, receipt)" in src
     assert tf.VOCAB_SIZE == 32_000, "fp-19 pin: vocab 32k"
+    assert len(tf.ASSEMBLY_RECEIPT_SHA256) == 64
     main_src = src.split("def main():")[1]
     pos_prior = main_src.index("existing_freeze_receipts")
     pos_sample = main_src.index("build_sample")
     assert pos_prior < pos_sample, \
         "re-freeze refusal must precede any sampling work"
+    # band verification + token counting happen BEFORE the receipt write
+    pos_band = main_src.index("verify_reserved_band")
+    pos_count = main_src.index("count_tokens")
+    pos_write = main_src.index("checked_write(out, receipt)")
+    assert pos_band < pos_write and pos_count < pos_write
     checks["fail_closed_wiring"] = True
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
