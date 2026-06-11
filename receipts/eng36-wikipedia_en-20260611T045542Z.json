@@ -1,0 +1,41 @@
+{
+  "ticket": "ENG36-CORPUS-WIKIPEDIA_EN",
+  "ts": "20260611T045542Z",
+  "issue": "wordingone/ember#130",
+  "source": "wikipedia_en",
+  "url_pin": {
+    "dataset": "wikimedia/wikipedia",
+    "config": "20231101.en",
+    "split": "train",
+    "revision_sha": "b04c8d1ceb2f5cd4588862100d08de323dccfbaa",
+    "url": "https://huggingface.co/datasets/wikimedia/wikipedia/tree/b04c8d1ceb2f5cd4588862100d08de323dccfbaa"
+  },
+  "license_stamp": {
+    "class": "cc-by-sa-4.0",
+    "basis": "dataset-level CC-BY-SA (wikimedia/wikipedia card); share-alike note carried per fp-22 \u00a71 row 3 (weights-not-derivative = HYPOTHESIS there; the note rides the manifest either way)"
+  },
+  "counts": {
+    "docs_in": 813734,
+    "docs_kept": 813598,
+    "dups_dropped": 136,
+    "license_rejected": 0,
+    "empty_skipped": 0,
+    "text_bytes_kept": 3000005917,
+    "text_chars_kept": 2988323733
+  },
+  "dedup": {
+    "method": "doc-level exact sha256 over utf-8 text, source-local",
+    "docs_before": 813734,
+    "docs_after": 813598
+  },
+  "n_shards": 4,
+  "bytes_on_disk_total": 1007063319,
+  "manifest_path": "B:/M/avir/eli/state/ember-eng/corpus-v0\\wikipedia_en\\manifest.json",
+  "manifest_mirror_in_repo": "corpus-manifests\\wikipedia_en-manifest-20260611T045542Z.json",
+  "manifest_sha256": "3d33c10da0ab4e1591616e221ca6411377c14e81c844e6ea6c1bce7d55c55abd",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "tokens_pending_tokenizer_freeze": true,
+  "est_tokens_heuristic": 750001479,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "no_gpu": true
+}

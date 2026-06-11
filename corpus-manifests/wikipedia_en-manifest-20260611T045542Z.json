@@ -1,0 +1,67 @@
+{
+  "byte_budget": 3000000000,
+  "counts": {
+    "docs_in": 813734,
+    "docs_kept": 813598,
+    "dups_dropped": 136,
+    "empty_skipped": 0,
+    "license_rejected": 0,
+    "text_bytes_kept": 3000005917,
+    "text_chars_kept": 2988323733
+  },
+  "dedup": {
+    "docs_after": 813598,
+    "docs_before": 813734,
+    "method": "doc-level exact sha256 over utf-8 text, source-local"
+  },
+  "est_tokens_heuristic": 750001479,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "fp22_row": 3,
+  "license_stamp": {
+    "basis": "dataset-level CC-BY-SA (wikimedia/wikipedia card); share-alike note carried per fp-22 \u00a71 row 3 (weights-not-derivative = HYPOTHESIS there; the note rides the manifest either way)",
+    "class": "cc-by-sa-4.0"
+  },
+  "out_dir_windows": "B:/M/avir/eli/state/ember-eng/corpus-v0\\wikipedia_en",
+  "out_dir_wsl": "/mnt/b/M/avir/eli/state/ember-eng/corpus-v0/wikipedia_en",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "shards": [
+    {
+      "bytes_on_disk": 332710435,
+      "bytes_uncompressed": 1000057165,
+      "docs": 229814,
+      "file": "wikipedia_en-00000.jsonl.zst",
+      "sha256": "4977be5873d7997930a66e6aec268415c764cf172ae9ac2f1009c1bca55a94fd"
+    },
+    {
+      "bytes_on_disk": 330336717,
+      "bytes_uncompressed": 1000006491,
+      "docs": 276274,
+      "file": "wikipedia_en-00001.jsonl.zst",
+      "sha256": "400a3588a135bd95dd9c0694d4c537790b9d0995aaf241b2c020777bc022c68f"
+    },
+    {
+      "bytes_on_disk": 327543615,
+      "bytes_uncompressed": 1000001305,
+      "docs": 291511,
+      "file": "wikipedia_en-00002.jsonl.zst",
+      "sha256": "126facf950b1f895f16c9f9853b5f3fedf62631614e582b92c2677a453b1a0f9"
+    },
+    {
+      "bytes_on_disk": 16472552,
+      "bytes_uncompressed": 51331263,
+      "docs": 15999,
+      "file": "wikipedia_en-00003.jsonl.zst",
+      "sha256": "e1ac0739add3e1b7d28376f3bd801c33ab57c4fe91ba75910cf8d68c2fbb3e0f"
+    }
+  ],
+  "source": "wikipedia_en",
+  "tokens_pending_tokenizer_freeze": true,
+  "ts": "20260611T045542Z",
+  "url_pin": {
+    "config": "20231101.en",
+    "dataset": "wikimedia/wikipedia",
+    "revision_sha": "b04c8d1ceb2f5cd4588862100d08de323dccfbaa",
+    "split": "train",
+    "url": "https://huggingface.co/datasets/wikimedia/wikipedia/tree/b04c8d1ceb2f5cd4588862100d08de323dccfbaa"
+  }
+}

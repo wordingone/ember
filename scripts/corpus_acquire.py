@@ -96,17 +96,23 @@ SOURCES = {
                           "there; the note rides the manifest either way)"),
         "fp22_row": 3,
     },
-    "gutenberg_pg19": {
+    "gutenberg_en": {
         "kind": "hf",
-        "dataset": "deepmind/pg19",
+        "dataset": "manu/project_gutenberg",
         "config": None,
-        "split": "train",
+        "split": "en",
         "text_field": "text",
         "byte_budget": 1_900_000_000,
         "license_class": "public-domain",
-        "license_basis": ("PG-19: pre-1919 Project Gutenberg books "
-                          "(public domain per the PG-19 card; Apache-2.0 "
-                          "packaging); fp-22 §1 row 4"),
+        "license_basis": ("Project Gutenberg books, English split "
+                          "(public-domain basis per the PG corpus; "
+                          "dataset card manu/project_gutenberg); fp-22 "
+                          "§1 row 4. Packaging note: first choice "
+                          "deepmind/pg19 is a script-based HF dataset, "
+                          "unloadable under datasets 4.x ('Dataset "
+                          "scripts are no longer supported') — this "
+                          "parquet-native packaging is the eng-36 "
+                          "survey's named alternate, same PD basis"),
         "fp22_row": 4,
     },
     "ledger_mit": {
