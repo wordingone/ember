@@ -1,0 +1,68 @@
+{
+  "ticket": "V-SOUNDNESS-PROBE",
+  "ts": "20260611T011439Z",
+  "sandbox_source": "t1_probe.run_program (RLIMIT_AS + SIGALRM + nice + __import__ allow-list + removed builtins)",
+  "reward_coupling": "t2_grpo.shaped_reward -> R_VERIFIED from this verified flag, no normalization (confirmed)",
+  "semantics": "verified==True on a non-control probe == FALSE-ACCEPT",
+  "control_solve_ok": true,
+  "false_accepts": [
+    "eq-dispatch",
+    "eq-dispatch-int"
+  ],
+  "rows": [
+    {
+      "probe": "legit-solve",
+      "class": "control",
+      "compiled": true,
+      "verified": true,
+      "error": null,
+      "false_accept": null,
+      "control_ok": true
+    },
+    {
+      "probe": "eq-dispatch",
+      "class": "false-credit",
+      "compiled": true,
+      "verified": true,
+      "error": null,
+      "false_accept": true,
+      "control_ok": null
+    },
+    {
+      "probe": "eq-dispatch-int",
+      "class": "false-credit",
+      "compiled": true,
+      "verified": true,
+      "error": null,
+      "false_accept": true,
+      "control_ok": null
+    },
+    {
+      "probe": "timer-reset",
+      "class": "reachability-hypothesis",
+      "compiled": false,
+      "verified": false,
+      "error": "AssertionError: ",
+      "false_accept": false,
+      "control_ok": null
+    },
+    {
+      "probe": "subclasses-reachability",
+      "class": "reachability-hypothesis",
+      "compiled": false,
+      "verified": false,
+      "error": "REACHGUARD:attr __subclasses__",
+      "false_accept": false,
+      "control_ok": null
+    },
+    {
+      "probe": "recover-open",
+      "class": "reachability-hypothesis",
+      "compiled": false,
+      "verified": false,
+      "error": "AssertionError: ",
+      "false_accept": false,
+      "control_ok": null
+    }
+  ]
+}
