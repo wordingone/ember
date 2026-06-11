@@ -28,6 +28,7 @@ AST: python -c "import ast; ast.parse(open('scripts/t2_r2w.py').read())"
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -47,6 +48,25 @@ CONTROL_POOL = f"{NC}/ledger/control_pool.jsonl"
 ADAPTERS = f"{NC}/adapters"
 
 THETA = 0.5  # prereg §1.2 frozen
+
+SHA_CONVENTION = ("sha256 over on-disk raw bytes "
+                  "(binary read, no line-ending normalization)")
+
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _view_entry(path, rows):
+    """Receipt entry for a view file ALREADY written to disk — the sha
+    is taken from the on-disk bytes post-write, so a downstream
+    consumer's --expected-view-sha256 can be pinned straight from the
+    certified receipt (eng #150)."""
+    return {"path": path, "rows": rows, "sha256": file_sha256(path)}
 
 
 def _require_gate_token():
@@ -69,14 +89,18 @@ _gate_token = _require_gate_token()
 def build_sft_examples(allow=None):
     """Regenerate W-code views from the CURRENT ledger, ext-clean, apply
     the frozen theta filter, build the dataset. Returns
-    (examples, counts, info_block). Deterministic from ledger state —
-    the control arm recomputes this to mirror counts."""
+    (examples, counts, info_block, views). Deterministic from ledger
+    state — the control arm recomputes this to mirror counts. `views`
+    maps each view filename written here to its post-write
+    path/rows/sha256 entry (eng #150)."""
     from frontier import ext_clean, load_ext_flags
     from r2_arms import frontier_filter, solve_rates_from_ledger
     from t2_round import build_dataset
     from t2_wcode import write_view
 
     arm_recs = write_view(LEDGER, f"{VIEWS}/wcode-r2.jsonl")
+    views = {"wcode-r2.jsonl":
+             _view_entry(f"{VIEWS}/wcode-r2.jsonl", len(arm_recs))}
     arm_recs = ext_clean(arm_recs,
                          load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"]))
 
@@ -87,6 +111,7 @@ def build_sft_examples(allow=None):
     with open(view_path, "w", encoding="utf-8", newline="\n") as vf:
         for r in filtered:
             vf.write(json.dumps(r) + "\n")
+    views["wcode-r2-sft.jsonl"] = _view_entry(view_path, len(filtered))
 
     examples, counts = build_dataset(view_path, license_allow=allow)
     info = {
@@ -99,7 +124,7 @@ def build_sft_examples(allow=None):
         "dataset_tasks": len(counts),
         "rates_source": "r2_arms.solve_rates_from_ledger(ledger+control_pool)",
     }
-    return examples, counts, info
+    return examples, counts, info, views
 
 
 def main():
@@ -125,12 +150,14 @@ def main():
     clean = args.tag_suffix.lstrip("-")
     tag = f"r2-{clean}-{args.arm}"
 
-    sft_examples, sft_counts, info = build_sft_examples(allow)
+    sft_examples, sft_counts, info, views = build_sft_examples(allow)
 
     if args.arm == "sft":
         examples, counts = sft_examples, sft_counts
     else:
         ctrl_recs = write_view(CONTROL_POOL, f"{VIEWS}/wcode-r2-control.jsonl")
+        views["wcode-r2-control.jsonl"] = _view_entry(
+            f"{VIEWS}/wcode-r2-control.jsonl", len(ctrl_recs))
         examples, counts = build_dataset(f"{VIEWS}/wcode-r2-control.jsonl",
                                          match_counts=sft_counts,
                                          license_allow=allow)
@@ -150,6 +177,8 @@ def main():
                       "delegated to full-ledger flat-cap build; this runner "
                       "trains the registered W-code theta-filtered set"),
         "frontier_filter": info,
+        "views_written": views,
+        "sha_convention": SHA_CONVENTION,
         "dry_run": args.dry_run,
     }
 
