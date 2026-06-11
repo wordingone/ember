@@ -31,7 +31,8 @@ from datetime import datetime, timezone
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (THROTTLE_S, decode_pacer, execute_batch,  # noqa: E402
-                      extract_code, load_model)
+                      extract_code, load_model, pacing_reset,
+                      pacing_snapshot)
 from t4_eval import bootstrap_ci  # noqa: E402
 from v_compare import strict_harness  # noqa: E402 (eng #76)
 
@@ -135,6 +136,11 @@ def main():
                          "tests (eng #11): additive ext_verified per sample; "
                          "feed/floor semantics unchanged")
     args, _unknown = ap.parse_known_args()  # daemon appends args; ignore them
+
+    # fp-14 (#129): per-run pacing — reset at run start so the receipt's
+    # pacing block measures THIS run (w1 may be runpy-driven by wrappers;
+    # whole-job accumulation would blend runs).
+    pacing_reset()
 
     problems = load_split(args.split, args.n_tasks or None)
     if args.focus_from:
@@ -287,6 +293,9 @@ def main():
                                                    outcomes_by_task)
     if ext_block is not None:
         receipt["ext_verify"] = ext_block
+    # fp-14 (#129): measured governor pacing at WRITE time (after sampling
+    # + verify + ext-verify) — same convention as t2_round/t2_r2w.
+    receipt["pacing"] = pacing_snapshot()
     with open(f"{RECEIPTS}/w1-floor{tagpart}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(receipt, f, indent=2)
     print(json.dumps({k: receipt[k] for k in

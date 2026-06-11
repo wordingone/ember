@@ -1,0 +1,13 @@
+{
+  "ticket": "ENG129-W1-PACING-SELFTEST",
+  "ts": "20260611T034032Z",
+  "issue": "wordingone/ember#129",
+  "checks": {
+    "import_wiring": true,
+    "reset_at_run_start": true,
+    "write_time_ordering": true,
+    "per_run_semantics": true
+  },
+  "behavior_change": "none \u2014 receipt-only addition; no argparse change, so no args_fp shift (w1 receipts carry no args_fp field; schema gains top-level 'pacing' key only)",
+  "fp20_tie": "fp-20 is re-pinned to the first instrumented w1 receipt; this wiring makes the next w1 run that receipt"
+}
