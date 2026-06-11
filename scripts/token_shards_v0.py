@@ -91,6 +91,34 @@ def _check_premise(nc, key, sub, out):
         out.append(f"premise {key}: sha drift {_sha(p)[:12]} != {sha[:12]}")
 
 
+def _scan_uint16_shard(path):
+    """Re-derive reserved-band / range / parity facts from the ACTUAL shard
+    bytes — never trust the receipt's declared reserved_ids_observed_in_stream
+    (eng-53 #192: that field was a self-report; a shard could declare 0 while
+    its bytes carried reserved ids).
+
+    A shard is a flat little-endian uint16 stream. Returns
+    (odd_bytes, reserved_count, oob_count):
+      odd_bytes      - byte length is not a multiple of 2 (not a uint16 stream);
+                       getsize//2 would silently floor the dangling byte.
+      reserved_count - count of ids in the reserved multimodal band 1..7
+                       (id 0 is the legitimate doc separator; allowed).
+      oob_count      - count of ids >= VOCAB_SIZE (out of vocab).
+    numpy-vectorized (zero-copy frombuffer); runs once at gate time over the
+    packed shards, so a multi-GB scan stays sub-second per shard after I/O.
+    """
+    import numpy as np
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    odd = (len(raw) % BYTES_PER_TOKEN) != 0
+    n = len(raw) // BYTES_PER_TOKEN
+    arr = np.frombuffer(raw[:n * BYTES_PER_TOKEN], dtype="<u2")
+    lo, hi = RESERVED_IDS[0], RESERVED_IDS[-1]      # 1..7
+    reserved = int(np.count_nonzero((arr >= lo) & (arr <= hi)))
+    oob = int(np.count_nonzero(arr >= VOCAB_SIZE))
+    return odd, reserved, oob
+
+
 def validate_shards_receipt(d, nc=NC):
     """Return a list of violations (empty = the shard contract holds).
 
@@ -126,6 +154,7 @@ def validate_shards_receipt(d, nc=NC):
     shard_dir = d.get("shard_dir")
     shards = d.get("shards")
     derived_total = 0
+    scanned_reserved = 0          # reserved ids 1..7 re-derived from shard bytes
     shards_ok = isinstance(shards, list) and shards and isinstance(shard_dir, str)
     if not shards_ok:
         v.append("shard_dir/shards missing or empty")
@@ -153,6 +182,19 @@ def validate_shards_receipt(d, nc=NC):
             disk_nt = os.path.getsize(fp) // BYTES_PER_TOKEN
             if disk_nt != nt:
                 v.append(f"shard[{i}] {name} n_tokens {nt} != bytes/2 {disk_nt}")
+            # byte-true scan: re-derive reserved/oob/parity from the bytes, do
+            # NOT trust the declared reserved_ids_observed_in_stream (eng-53).
+            odd, res_n, oob_n = _scan_uint16_shard(fp)
+            if odd:
+                v.append(f"shard[{i}] {name} odd byte length "
+                         f"{os.path.getsize(fp)} (not a uint16 stream)")
+            if res_n:
+                v.append(f"shard[{i}] {name} {res_n} reserved-band id(s) "
+                         "(1..7) present in stream bytes")
+            if oob_n:
+                v.append(f"shard[{i}] {name} {oob_n} id(s) >= {VOCAB_SIZE} "
+                         "present in stream bytes")
+            scanned_reserved += res_n
             derived_total += nt
 
     # total stream tokens == sum of shard token counts, and a loadable stream
@@ -202,6 +244,13 @@ def validate_shards_receipt(d, nc=NC):
     if g.get("reserved_ids_observed_in_stream") != 0:
         v.append("reserved_band_guard.reserved_ids_observed_in_stream != 0 "
                  "(multimodal ids 1..7 must never appear from source text)")
+    # cross-check the declared field against the byte-true scan: a receipt that
+    # declares 0 while its shard bytes carry reserved ids must FAIL (eng-53).
+    if shards_ok and isinstance(g.get("reserved_ids_observed_in_stream"), int) \
+       and g["reserved_ids_observed_in_stream"] != scanned_reserved:
+        v.append("reserved_band_guard.reserved_ids_observed_in_stream "
+                 f"{g['reserved_ids_observed_in_stream']} != byte-scanned "
+                 f"{scanned_reserved}")
 
     # loader window math, re-derived from the byte-true token total
     lw = d.get("loader_windows") or {}
@@ -516,6 +565,42 @@ def _selftest():
         assert any("premise assembly_receipt" in x for x in _bad(_prem_sha))
         assert any("tokenizer_json" in x for x in _bad(_tok_sha))
         assert any("MISSING_SHA_CONVENTION" in x for x in _bad(_no_sha_conv))
+
+        # --- eng-53: byte-true reserved/range/parity scan (NOT the declared
+        # field). Each mutation rewrites shard 0's BYTES and updates its sha so
+        # the sha-match passes and the BYTE SCAN is what fires; the receipt
+        # still declares reserved_ids_observed_in_stream == 0 throughout.
+        good0_ids = [8 + (i % 100) for i in range(n0)]   # == _write_shard bytes
+
+        def _restore0():
+            with open(f"{td}/shards/v0-00000.bin", "wb") as fh:
+                fh.write(b"".join(struct.pack("<H", x) for x in good0_ids))
+
+        def _reserved_in_bytes(d):
+            ids = list(good0_ids)
+            ids[5] = 1                               # reserved-band id in bytes
+            with open(f"{td}/shards/v0-00000.bin", "wb") as fh:
+                fh.write(b"".join(struct.pack("<H", x) for x in ids))
+            d["shards"][0]["sha256"] = _sha(f"{td}/shards/v0-00000.bin")
+
+        def _oob_in_bytes(d):
+            ids = list(good0_ids)
+            ids[7] = 35000                           # id >= VOCAB_SIZE in bytes
+            with open(f"{td}/shards/v0-00000.bin", "wb") as fh:
+                fh.write(b"".join(struct.pack("<H", x) for x in ids))
+            d["shards"][0]["sha256"] = _sha(f"{td}/shards/v0-00000.bin")
+
+        def _odd_bytes(d):
+            with open(f"{td}/shards/v0-00000.bin", "ab") as fh:
+                fh.write(b"\x00")                    # dangling byte -> odd length
+            d["shards"][0]["sha256"] = _sha(f"{td}/shards/v0-00000.bin")
+
+        assert any("reserved-band id" in x for x in _bad(_reserved_in_bytes))
+        _restore0()
+        assert any(f">= {VOCAB_SIZE}" in x for x in _bad(_oob_in_bytes))
+        _restore0()
+        assert any("odd byte length" in x for x in _bad(_odd_bytes))
+        _restore0()
 
     print("TOKEN_SHARDS_V0_VALIDATOR_SELFTEST_PASS")
 
