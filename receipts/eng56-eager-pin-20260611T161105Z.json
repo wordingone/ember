@@ -1,0 +1,27 @@
+{
+  "ticket": "ENG-56-EAGER-PIN",
+  "ts": "20260611T161105Z",
+  "issue": 229,
+  "pin": "configs/v0-pretrain-config.json throughput.compile",
+  "old": "torch.compile (TorchInductor) on the train step; fallback eager if compile fails on the QAT graph \u2014 deviation RECEIPTED",
+  "new": "DISABLED \u2014 eager only. torch.compile (TorchInductor) raises an R3 dynamo NameError on the QAT graph in this env; the trainer calls no torch.compile, so the prior 'fallback eager \u2014 deviation RECEIPTED' promise had no backing receipt. This pin makes the field true to the eager code path. Registered deviation: receipts/eng56-eager-pin-20260611T161105Z.json",
+  "r3_basis": "torch.compile (TorchInductor) raises an R3 dynamo NameError on the QAT graph in this env; the eager trainer calls no torch.compile (grep-verified zero call sites in scripts/timeshare_pretrain.py and scripts/v0_config_check.py). The prior config field promised a RECEIPTED eager fallback with no backing receipt \u2014 this registration makes the field true to the eager code path.",
+  "r3_cite": [
+    {
+      "receipt": "fp32-step-econ-20260611T142831Z.json",
+      "sha256": "4fc2e2d37f4de55f5f22e98e1b4c166be9a4924221f063c372ce22a5f795b4a1",
+      "evidence": "cell b24-ckpt-compile raised NameError: name 'torch' is not defined (torch.compile dynamo failure in env)"
+    },
+    {
+      "receipt": "fp32-r10-taxonomy-20260611T153307Z.json",
+      "sha256": "34f303098896322e49d51bf54be294e9e6f26abb5b69aa6996a7b84105e76d14",
+      "evidence": "R3 torch.compile dynamo NameError root-cause taxonomy + per-cell containment"
+    }
+  ],
+  "trainer_eager_verified": "zero torch.compile call sites in scripts/timeshare_pretrain.py and scripts/v0_config_check.py",
+  "gate_impact": "launch gate scripts/v0_pretrain_launch_gate.py does NOT read throughput.compile \u2014 this is config-truth / provenance, not a gate predicate; lands pre-live so the field's promise is true at launch",
+  "sequencing": "post-shard-rerun, pre-launch-gate (Leo 14648)",
+  "rides_with_e1b": false,
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}
