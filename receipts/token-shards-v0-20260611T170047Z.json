@@ -1,0 +1,210 @@
+{
+  "ticket": "TOKEN-SHARDS-V0",
+  "ts": "20260611T170047Z",
+  "shard_dir": "../shards-v0",
+  "shards": [
+    {
+      "name": "v0-00000.bin",
+      "sha256": "2ada751e4f1a9612b57cf21d95deec09d8230690f52a9892a69b9c665b231ca5",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00001.bin",
+      "sha256": "0a529f8425e268dfbf61870f121381f2eae1c5e5ebc298804013d54324c36e81",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00002.bin",
+      "sha256": "4efeb973ee7667d4ce9356d0bd9c478f9a33252733c2d01361e5f7a8b472d89f",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00003.bin",
+      "sha256": "c9dc5cafa7a806384a200c26a51a7e11a3483019e9bb177dc4afed11eba18d0c",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00004.bin",
+      "sha256": "6f87138445b43b9669869deaca8ab07702b8dd0ebebd54d186cf3c3bf18134fb",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00005.bin",
+      "sha256": "990aa39342ddde2d5f839f9c766fa09f0924a66cb460629e6273425a7525d603",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00006.bin",
+      "sha256": "8da2dab4c68907f4643c6fba8d0b82ab0611584247c3e95e58109f34dfed10b7",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00007.bin",
+      "sha256": "d2456d659bbcd46a9becf08512660008f4742cf853e5ac0aaed90edc66ecbccd",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00008.bin",
+      "sha256": "a0851ffadf70046e9d74fcce1aefdbeb68c826a3dce5e7100de68c66104d93e4",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00009.bin",
+      "sha256": "73ba58e42bd827ae4d111ffb7c54b67fbb0b2300b0d3eb243d65302ff4f2407d",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00010.bin",
+      "sha256": "ceb2fcfa59e505ae8496eb55d71e89abf24577013ea50439f6eeef562533cd99",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00011.bin",
+      "sha256": "f15ec3e7951ec0e6b32daa38968fadb5a5890bf69e55236667056336161b798b",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00012.bin",
+      "sha256": "55556e9bf1fe4f4653417dd48fa048d824b45aba21be565699b947edb269badf",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00013.bin",
+      "sha256": "90977814b3f5b35decfa1d37262c818b92069971a2c24d04db1a8944873f5e0d",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00014.bin",
+      "sha256": "28a53ddf00bbf8940b92662c1982b1259a1cc102e2b20fa1a8f3bac47652d90c",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00015.bin",
+      "sha256": "204f935c7b827634cfbf51ad00ad2be1161f123a87b93c79ed6ecd40b008b5ad",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00016.bin",
+      "sha256": "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00017.bin",
+      "sha256": "39618f4adfcca860c1faab43bb86660dbfb621c0635794565371826e59719a69",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00018.bin",
+      "sha256": "3bb6dbbabc4e6eec2d62a6798956d74175f2af3d1b848d2b59eeccd043976553",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00019.bin",
+      "sha256": "207b2b81c83bed4978b9877f33acf27b3e497338c9b3bbf6fd0b847360866a72",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00020.bin",
+      "sha256": "6683296395568e6b40b03ad8320ded457f3278bf1124c4831311e10c5de1bbb4",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00021.bin",
+      "sha256": "6b9f3d68714a54d48e9916b7de68b1f38afb53a6046189e2a0cce7d7a23189c5",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00022.bin",
+      "sha256": "f5f7da6149461604db34ba5b567b94e9955d97d27845b58df5e76d76077b23b1",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00023.bin",
+      "sha256": "cd58fa76d65350622739e5c788e8bd82c7d3eccd302837afcc7d812472cba7c1",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00024.bin",
+      "sha256": "028e718b21054ee4dd62af20c6e07db07f9e8186367530f8dc85be8162c8e085",
+      "n_tokens": 268435456
+    },
+    {
+      "name": "v0-00025.bin",
+      "sha256": "d2bc5c37a48a33ec40bc3358a9a84f11dda0c19ab82d37e09606c2d202ed106f",
+      "n_tokens": 266982358
+    }
+  ],
+  "total_stream_tokens": 6977868758,
+  "content_total_tokens": 6973632300,
+  "freeze_reproduction": {
+    "freeze_total": 6973632300,
+    "content_total_tokens": 6973632300,
+    "separator_tokens": 4236458,
+    "total_match": true
+  },
+  "per_source": {
+    "code_github_clean": {
+      "content_tokens": 4053253615,
+      "separator_tokens": 1867710,
+      "stream_tokens": 4055121325
+    },
+    "fineweb_edu": {
+      "content_tokens": 1666837789,
+      "separator_tokens": 1549860,
+      "stream_tokens": 1668387649
+    },
+    "wikipedia_en": {
+      "content_tokens": 747194257,
+      "separator_tokens": 813598,
+      "stream_tokens": 748007855
+    },
+    "gutenberg_en": {
+      "content_tokens": 506114061,
+      "separator_tokens": 4510,
+      "stream_tokens": 506118571
+    },
+    "ledger_mit": {
+      "content_tokens": 232578,
+      "separator_tokens": 780,
+      "stream_tokens": 233358
+    }
+  },
+  "separator_id": 0,
+  "encode_semantics": "added-token-matching-disabled-v1: production encoding loads the frozen tokenizer.json (on-disk bytes sha-pinned, unchanged) with its added_tokens table stripped IN MEMORY, so special literals occurring in source text tokenize as ordinary byte-level pieces; ids 0..7 are unreachable from text by construction (band tokens are absent from the BPE merges) and every literal is probe-encoded at build to prove it. Doc-boundary separator id 0 is writer-inserted only. (Leo 14628: the band contract is supreme; the counting instrument aligns to it.)",
+  "reserved_band_guard": {
+    "reserved_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "max_id_lt": 32000,
+    "reserved_ids_observed_in_stream": 0
+  },
+  "loader_windows": {
+    "seq": 1024,
+    "n_mtp": 2,
+    "block_len": 1027,
+    "n_windows": 6814324
+  },
+  "premises": {
+    "assembly_receipt": {
+      "name": "eng36-assembly-20260611T052337Z.json",
+      "sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2"
+    },
+    "tokenizer_freeze_receipt": {
+      "name": "tokenizer-freeze-20260611T154111Z.json",
+      "sha256": "1e2da479d09f896d1ef15cece19255347aff2bc78a450b4160905579910e56ee"
+    },
+    "tokenizer_json": {
+      "path": "tokenizer/tokenizer.json",
+      "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+    }
+  },
+  "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; shard + receipt paths carry the git -text pin",
+  "emit": true,
+  "no_gpu": true
+}
