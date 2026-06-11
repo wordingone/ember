@@ -1,0 +1,147 @@
+{
+  "ticket": "ENG25-DEDUP-VIEW",
+  "ts": "20260611T014521Z",
+  "single_source_imports": {
+    "fp13_concentration": [
+      "row_normalize",
+      "near_dup_edges",
+      "union_find_clusters",
+      "NEAR_DUP_COS"
+    ],
+    "fp10_idiom": [
+      "trigram_bag"
+    ],
+    "fp6_provenance": [
+      "classify"
+    ]
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ledger": {
+    "path": "ledger/episodes.jsonl",
+    "sha256_before": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+    "sha256_after": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+    "byte_unchanged": true
+  },
+  "control_pool": {
+    "path": "ledger/control_pool.jsonl",
+    "sha256_before": "fa286e4ea77c74b9b1abf40ccf655efbaf120fe5a57fbc9065ef3c3976b61bb9",
+    "sha256_after": "fa286e4ea77c74b9b1abf40ccf655efbaf120fe5a57fbc9065ef3c3976b61bb9",
+    "byte_unchanged": true
+  },
+  "main_files_byte_unchanged": true,
+  "episodes_view": {
+    "path": "ledger/views/dedup-cluster.jsonl",
+    "rows": 2865,
+    "summary": {
+      "total_rows": 2865,
+      "exact_dup_count": 1129,
+      "cluster_count": 601,
+      "cluster_size_max": 1884,
+      "cluster_size_median": 1
+    },
+    "per_class_census": {
+      "arc-dsl-mit": {
+        "rows": 1909,
+        "exact_unique": 780,
+        "cluster_count": 9,
+        "largest_cluster_size": 1884,
+        "median_cluster_size": 4
+      },
+      "qwen-research": {
+        "rows": 956,
+        "exact_unique": 956,
+        "cluster_count": 592,
+        "largest_cluster_size": 187,
+        "median_cluster_size": 1
+      }
+    }
+  },
+  "control_view": {
+    "path": "ledger/views/dedup-cluster-control.jsonl",
+    "rows": 2931,
+    "summary": {
+      "total_rows": 2931,
+      "exact_dup_count": 1522,
+      "cluster_count": 703,
+      "cluster_size_max": 1884,
+      "cluster_size_median": 1
+    },
+    "per_class_census": {
+      "arc-dsl-mit": {
+        "rows": 1909,
+        "exact_unique": 387,
+        "cluster_count": 6,
+        "largest_cluster_size": 1884,
+        "median_cluster_size": 6
+      },
+      "qwen-research": {
+        "rows": 1022,
+        "exact_unique": 1022,
+        "cluster_count": 697,
+        "largest_cluster_size": 151,
+        "median_cluster_size": 1
+      }
+    }
+  },
+  "fp16_crosscheck": {
+    "fp16_receipt": "receipts/fp16-census-20260611T013228Z.json",
+    "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+    "episodes": {
+      "arc-dsl-mit": {
+        "label": "episodes/arc-dsl-mit",
+        "our_rows": 1909,
+        "fp16_rows": 1909,
+        "rows_match": true,
+        "our_exact_unique": 780,
+        "fp16_exact_unique": 780,
+        "exact_unique_match": true,
+        "our_cluster_count": 9,
+        "fp16_clusters_cos95": 9,
+        "cluster_count_match": true,
+        "all_match": true
+      },
+      "qwen-research": {
+        "label": "episodes/qwen-research",
+        "our_rows": 956,
+        "fp16_rows": 956,
+        "rows_match": true,
+        "our_exact_unique": 956,
+        "fp16_exact_unique": 956,
+        "exact_unique_match": true,
+        "our_cluster_count": 592,
+        "fp16_clusters_cos95": 592,
+        "cluster_count_match": true,
+        "all_match": true
+      }
+    },
+    "control_pool": {
+      "arc-dsl-mit": {
+        "label": "control_pool/arc-dsl-mit",
+        "our_rows": 1909,
+        "fp16_rows": 1909,
+        "rows_match": true,
+        "our_exact_unique": 387,
+        "fp16_exact_unique": 387,
+        "exact_unique_match": true,
+        "our_cluster_count": 6,
+        "fp16_clusters_cos95": 6,
+        "cluster_count_match": true,
+        "all_match": true
+      },
+      "qwen-research": {
+        "label": "control_pool/qwen-research",
+        "our_rows": 1022,
+        "fp16_rows": 1022,
+        "rows_match": true,
+        "our_exact_unique": 1022,
+        "fp16_exact_unique": 1022,
+        "exact_unique_match": true,
+        "our_cluster_count": 697,
+        "fp16_clusters_cos95": 697,
+        "cluster_count_match": true,
+        "all_match": true
+      }
+    },
+    "overall_match": true
+  }
+}
