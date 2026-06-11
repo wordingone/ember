@@ -12,3 +12,8 @@ __pycache__/
 # Generated at import by unsloth; swept into c843f87 by accident (Kai 14667).
 scripts/unsloth_compiled_cache/
 *.stackdump
+
+# Runtime/session artifacts — never gate evidence
+state/
+.eng-stop-gate-off
+receipts/eng-sync-*.json
