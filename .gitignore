@@ -8,3 +8,7 @@ vendor/
 
 __pycache__/
 *.tmp
+
+# Generated at import by unsloth; swept into c843f87 by accident (Kai 14667).
+scripts/unsloth_compiled_cache/
+*.stackdump
