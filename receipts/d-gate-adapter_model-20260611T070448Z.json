@@ -1,0 +1,112 @@
+{
+  "ticket": "D-GATE",
+  "issue": "#114",
+  "scope": "artifact-quarantine-falsifier",
+  "ts": "20260611T070448Z",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "artifact_path": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-sft/adapter_model.safetensors",
+  "artifact_sha256_pre_move": "15239a71538b9c2860df197c18bc73019528c1866bc7d712af4b083ed4a5f6d8",
+  "artifact_sha256_post_restore": "15239a71538b9c2860df197c18bc73019528c1866bc7d712af4b083ed4a5f6d8",
+  "byte_identity_verified": true,
+  "quarantine_path": "/mnt/b/M/avir/leo/state/nc-ladder/state/quarantine/20260611T070900Z/adapter_model.safetensors",
+  "surface": "fp25-recall-28-trained",
+  "split": "train",
+  "task_ids_file": "fp25-recall-task-ids.txt",
+  "seed_protocol": {
+    "base": 16,
+    "adapter": 16,
+    "adapter-quarantined-rerun": 16,
+    "adapter-restored": 16,
+    "seed_matched": true
+  },
+  "n_tasks": 28,
+  "n_tasks_requested": 0,
+  "k": 8,
+  "arms": {
+    "base": {
+      "pass_sum": 21,
+      "pass_rate": 0.75
+    },
+    "adapter": {
+      "pass_sum": 28,
+      "pass_rate": 1.0
+    },
+    "adapter-quarantined-rerun": {
+      "pass_sum": 21,
+      "pass_rate": 0.75
+    },
+    "adapter-restored": {
+      "pass_sum": 28,
+      "pass_rate": 1.0
+    }
+  },
+  "gain_with": {
+    "value": 0.25,
+    "exact_ci": {
+      "method": "newcombe_paired_1998",
+      "b": 7,
+      "c": 0,
+      "n": 28,
+      "lo": 0.077542,
+      "hi": 0.433557,
+      "conf": 0.95
+    },
+    "bootstrap_ci": {
+      "observed": 0.25,
+      "lo": 0.107143,
+      "hi": 0.428571,
+      "n_boot": 2000,
+      "conf": 0.95
+    }
+  },
+  "gain_without": {
+    "value": 0.0,
+    "exact_ci": {
+      "method": "newcombe_paired_1998",
+      "b": 0,
+      "c": 0,
+      "n": 28,
+      "lo": -0.120643,
+      "hi": 0.120643,
+      "conf": 0.95
+    },
+    "bootstrap_ci": {
+      "observed": 0.0,
+      "lo": 0.0,
+      "hi": 0.0,
+      "n_boot": 2000,
+      "conf": 0.95
+    }
+  },
+  "gain_restored": {
+    "value": 0.25,
+    "exact_ci": {
+      "method": "newcombe_paired_1998",
+      "b": 7,
+      "c": 0,
+      "n": 28,
+      "lo": 0.077542,
+      "hi": 0.433557,
+      "conf": 0.95
+    },
+    "bootstrap_ci": {
+      "observed": 0.25,
+      "lo": 0.107143,
+      "hi": 0.428571,
+      "n_boot": 2000,
+      "conf": 0.95
+    }
+  },
+  "verdict_components": {
+    "collapse_ok": true,
+    "restore_ok": true,
+    "byte_identity_ok": true,
+    "gain_with_point": 0.25,
+    "gain_without_ci_lo": -0.120643,
+    "gain_without_ci_hi": 0.120643,
+    "gain_restored_ci_lo": 0.077542,
+    "gain_restored_ci_hi": 0.433557
+  },
+  "verdict": "PASS",
+  "pass": true
+}
