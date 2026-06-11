@@ -16,4 +16,3 @@ scripts/unsloth_compiled_cache/
 # Runtime/session artifacts — never gate evidence
 state/
 .eng-stop-gate-off
-receipts/eng-sync-*.json

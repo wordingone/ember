@@ -1,0 +1,3 @@
+{"ticket":"ENG-SYNC","ts":"20260611T160832Z","open":3,"closed":54,
+"closed_without_merged_pr":[{"issue":194,"merged_closing_prs":"0"}],
+"open_issues":[{"number":229,"title":"eng-56 (re-scoped): config-truth eager pin — throughput.compile promise vs eager trainer (R3, post-G-shards)","updatedAt":"2026-06-11T15:11:44Z"},{"number":195,"title":"eng-47: production token shards + governed v0 pretrain dispatch (launch gate GREEN 7/7)","updatedAt":"2026-06-11T12:33:40Z"},{"number":128,"title":"eng-35: P-gate live probe leg — r1w-q3-mtp boundary pair across daemon restart (HOLD for Leo dispatch order)","updatedAt":"2026-06-11T03:26:09Z"}]}
