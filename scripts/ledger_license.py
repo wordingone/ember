@@ -10,11 +10,12 @@ episodes MECHANICALLY. Three pieces:
                      (w2_ingest + t2_round call this; the class mapping is
                      imported from fp6_provenance.classify — single source
                      of truth, never duplicated here).
-  backfill_view      sidecar VIEW (ledger/views/license-class.jsonl) mapping
-                     every EXISTING record key -> class. The ledger stays
-                     append-only: backfill writes the view, never rewrites
-                     episodes.jsonl (the receipt carries sha256 before/after
-                     as the byte-unchanged proof).
+  backfill_view      sidecar VIEWs (ledger/views/license-class.jsonl +
+                     license-class-control.jsonl, eng #80) mapping every
+                     EXISTING record key -> class. Ledger AND control pool
+                     stay append-only: backfill writes the views, never
+                     rewrites the source files (the receipt carries sha256
+                     before/after for both as the byte-unchanged proof).
   filter_records     allow-list filter for dataset builds. UNKNOWN is
                      FAIL-CLOSED: parse_allow refuses it in an allow-list,
                      so filtered builds always drop UNKNOWN records.
@@ -148,6 +149,8 @@ def main():
     ap.add_argument("--control-pool", default=f"{NC}/ledger/control_pool.jsonl")
     ap.add_argument("--view-out",
                     default=f"{NC}/ledger/views/license-class.jsonl")
+    ap.add_argument("--control-view-out",  # eng #80
+                    default=f"{NC}/ledger/views/license-class-control.jsonl")
     ap.add_argument("--receipt-dir", default=f"{NC}/receipts")
     ap.add_argument("--license-allow", default="arc-dsl-mit,apache-2.0",
                     help="allow-list the receipt's before/after demo uses")
@@ -155,9 +158,12 @@ def main():
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sha_before = sha256_file(args.ledger)
+    ctl_sha_before = sha256_file(args.control_pool)
     recs, conflicts = backfill_view(args.ledger, args.view_out)
-    ctl = load_jsonl(args.control_pool)
+    ctl, ctl_conflicts = backfill_view(args.control_pool,
+                                       args.control_view_out)  # eng #80
     sha_after = sha256_file(args.ledger)
+    ctl_sha_after = sha256_file(args.control_pool)
 
     allow = parse_allow(args.license_allow)
     kept = filter_records(recs, allow)
@@ -173,6 +179,13 @@ def main():
         "ledger_sha256_after": sha_after,
         "ledger_byte_unchanged": sha_before == sha_after,
         "stamp_conflicts": conflicts,
+        "control_pool": args.control_pool,
+        "control_view": args.control_view_out,
+        "control_view_rows": len(ctl),
+        "control_sha256_before": ctl_sha_before,
+        "control_sha256_after": ctl_sha_after,
+        "control_byte_unchanged": ctl_sha_before == ctl_sha_after,
+        "control_stamp_conflicts": ctl_conflicts,
         "episodes_by_class": census(recs),
         "control_pool_by_class": census(ctl),
         "filter_demo": {
@@ -182,9 +195,11 @@ def main():
             "control_pool": {"before": len(ctl), "after": len(ctl_kept)},
         },
     }
-    if not receipt["ledger_byte_unchanged"]:
-        raise SystemExit("ledger_license: ledger sha256 CHANGED during "
-                         "backfill — append-only invariant violated, abort")
+    if not (receipt["ledger_byte_unchanged"]
+            and receipt["control_byte_unchanged"]):
+        raise SystemExit("ledger_license: ledger/control sha256 CHANGED "
+                         "during backfill — append-only invariant violated, "
+                         "abort")
     os.makedirs(args.receipt_dir, exist_ok=True)
     out = f"{args.receipt_dir}/eng20-license-view-{ts}.json"
     with open(out, "w", encoding="utf-8") as f:
@@ -232,12 +247,12 @@ def _selftest():
             {"sampler": "Qwen/Qwen2.5-Coder-1.5B-Instruct"},  # apache-2.0
             {"origin": "seed-dsl-orig"},                      # arc-dsl-mit
             {"origin": "seed-verifier-rearc-v2"},             # arc-dsl-mit
-            {"origin": "seed-control-wrongtask"},             # UNKNOWN
+            {"origin": "seed-control-wrongtask"},  # arc-dsl-mit (eng #80)
             {}]                                               # UNKNOWN
-    assert census(rows) == {"UNKNOWN": 2, "apache-2.0": 1,
-                            "arc-dsl-mit": 2, "qwen-research": 1}
+    assert census(rows) == {"UNKNOWN": 1, "apache-2.0": 1,
+                            "arc-dsl-mit": 3, "qwen-research": 1}
     kept = filter_records(rows, parse_allow("arc-dsl-mit,apache-2.0"))
-    assert len(kept) == 3
+    assert len(kept) == 4
     assert all(effective_class(k) != "UNKNOWN" for k in kept)
     assert len(filter_records(rows, parse_allow("qwen-research"))) == 1
     assert len(filter_records(rows, parse_allow("apache-2.0"))) == 1
@@ -261,7 +276,8 @@ def _selftest():
     assert sha256_file(p) == before
     assert {x["key"] for x in view} == {x["key"] for x in rows2}
     assert view[2]["license_class"] == "arc-dsl-mit"
-    assert view[4]["license_class"] == "UNKNOWN"
+    assert view[4]["license_class"] == "arc-dsl-mit"  # wrongtask (eng #80)
+    assert view[5]["license_class"] == "UNKNOWN"
     assert conflicts == 1
     assert view[6]["license_basis"].startswith("CONFLICT(")
     os.unlink(p)
