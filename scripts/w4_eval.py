@@ -36,6 +36,7 @@ try:
     from stats_exact import build_exact_block as _build_exact_block  # noqa: E402
 except ImportError:
     _build_exact_block = None
+from receipt_write import checked_write  # noqa: E402
 
 RECEIPTS = f"{NC}/receipts"
 
@@ -182,8 +183,7 @@ def main():
         receipt["exact"] = _build_exact_block(
             _succ_by_arm, _paired_outcomes, len(problems))
 
-    with open(f"{RECEIPTS}/w4-eval{tagpart}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(f"{RECEIPTS}/w4-eval{tagpart}-{ts}.json", receipt)
     print(json.dumps({"arms": arm_stats, "deltas": receipt["deltas"]},
                      indent=2))
     print("W4_EVAL_DONE")

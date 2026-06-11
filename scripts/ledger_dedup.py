@@ -60,6 +60,7 @@ from fp13_concentration import (  # noqa: E402
 )
 from fp10_idiom import trigram_bag  # noqa: E402
 from fp6_provenance import classify  # noqa: E402
+from receipt_write import checked_write  # noqa: E402
 
 
 def sha256_file(path):
@@ -521,8 +522,7 @@ def main():
 
     os.makedirs(args.receipt_dir, exist_ok=True)
     out = os.path.join(args.receipt_dir, f"eng25-dedup-view-{ts}.json")
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     status = "ENG25_DEDUP_VIEW_DONE" if all_match else "ENG25_DEDUP_VIEW_DONE_CROSSCHECK_MISMATCH"
     print(f"{status} {out}")

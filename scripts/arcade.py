@@ -36,6 +36,8 @@ import sys
 import time
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 GRID = 64  # ARC-AGI-3 frame is 64x64; clicks address that plane
 
@@ -191,8 +193,7 @@ def main():
     }
     os.makedirs(args.receipts_dir, exist_ok=True)
     path = f"{args.receipts_dir}/arcade-{args.tag}-{ts}.json"
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(path, receipt)
     print(json.dumps({k: receipt[k] for k in
                       ("n_games", "n_ran", "n_errors", "wins",
                        "games_with_level_progress", "total_steps")},

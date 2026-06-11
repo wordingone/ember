@@ -67,6 +67,7 @@ from v_compare import strict_harness  # noqa: E402 — pure logic, same scripts 
 from t1_probe import (THROTTLE_S, decode_pacer, execute_batch,  # noqa: E402
                       extract_code, load_model)
 from t4_eval import bootstrap_ci  # noqa: E402
+from receipt_write import checked_write  # noqa: E402
 
 RECEIPTS = f"{NC}/receipts"
 SOLVE_STUB = "\n\ndef solve(grid):\n    return [[0]]\n"  # satisfies sandbox gadget
@@ -316,8 +317,7 @@ def main():
                                                    outcomes_by_task)
     if ext_block is not None:
         receipt["ext_verify"] = ext_block
-    with open(f"{RECEIPTS}/w1-humaneval{tagpart}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(f"{RECEIPTS}/w1-humaneval{tagpart}-{ts}.json", receipt)
     print(json.dumps({k: receipt[k] for k in
                       ("n_tasks", "k", "feed_tasks", "feed_pct", "feed_ci95",
                        "verified_samples", "verified_sample_pct",

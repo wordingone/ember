@@ -61,4 +61,10 @@ import json,sys
 rows=json.load(sys.stdin)
 for r in sorted(rows,key=lambda x:x['number']):
     print(f'  open #{r[\"number\"]}: {r[\"title\"]}')" 2>/dev/null || true
+
+# Receipt-schema sweep (report-only; fail-closed lives at write time via checked_write)
+echo "--- receipt_check sweep (report-only) ---"
+python scripts/receipt_check.py --all receipts 2>&1 || true
+echo "--- end receipt_check sweep ---"
+
 echo "ENG_SYNC_DONE (receipt: receipts/eng-sync-$TS.json)"

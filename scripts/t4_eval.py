@@ -35,6 +35,7 @@ sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (MAX_PROMPT_TOKENS, THROTTLE_S, decode_pacer,  # noqa: E402
                       extract_code, execute_batch, load_model, load_tasks,
                       task_prompt)
+from receipt_write import checked_write  # noqa: E402
 
 ARC_EVAL = "/mnt/b/M/the-search/incoming/arc-agi1-visa/ARC-AGI/data/evaluation"
 # Second held-out surface: training only ever touches ARC-1 training tasks,
@@ -222,8 +223,7 @@ def main():
             arm_solved["core_meta"], arm_solved["control"])
 
     path = f"{RECEIPTS}/t4-r{args.round}-{args.surface}-seed{args.seed}-{ts}.json"
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(path, receipt)
     print(json.dumps({k: v for k, v in receipt.items()
                       if k in ("arms", "delta_meta_minus_core_ci95",
                                "delta_meta_minus_control_ci95")}, indent=2))

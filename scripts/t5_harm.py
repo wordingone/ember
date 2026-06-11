@@ -27,6 +27,7 @@ sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (THROTTLE_S, decode_pacer, execute_batch,  # noqa: E402
                       extract_code, load_model)
 from t4_eval import bootstrap_ci, paired_delta_ci  # noqa: E402
+from receipt_write import checked_write  # noqa: E402
 
 ADAPTERS = f"{NC}/adapters"
 RECEIPTS = f"{NC}/receipts"
@@ -153,9 +154,8 @@ def main():
         receipt["harm_flag"] = receipt["delta_meta_minus_core_ci95"][1] < 0
 
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t5-r{args.round}{args.tag_suffix}-{ts}.json",
-              "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(f"{RECEIPTS}/t5-r{args.round}{args.tag_suffix}-{ts}.json",
+                  receipt)
     print(json.dumps({k: receipt[k] for k in receipt
                       if k in ("arms", "delta_meta_minus_core_ci95",
                                "harm_flag")}, indent=2))

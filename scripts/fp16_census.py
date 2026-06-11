@@ -19,6 +19,8 @@ import json
 import sys
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC_WIN = "B:/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC_WIN}/receipts"
 FILES = {"episodes": f"{NC_WIN}/ledger/episodes.jsonl",
@@ -114,8 +116,7 @@ def main():
         ],
     }
     out = f"{RECEIPTS}/fp16-census-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"FP16_CENSUS_DONE {out}")
 

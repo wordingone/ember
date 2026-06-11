@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 # Single source of truth (#57). fp6_provenance.py lands via PR #72 — this
 # module MUST merge after it (hard import, no fallback, by design).
 from fp6_provenance import LICENSE_BY_SAMPLER, classify
+from receipt_write import checked_write
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 
@@ -219,8 +220,7 @@ def main():
                          "abort")
     os.makedirs(args.receipt_dir, exist_ok=True)
     out = f"{args.receipt_dir}/eng20-license-view-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"ENG20_LICENSE_VIEW_DONE {out}")
 

@@ -43,6 +43,8 @@ import json
 import sys
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
 LEDGER = f"{NC}/ledger/episodes.jsonl"
@@ -214,8 +216,7 @@ def main():
                 "required false-negative field",
     }
     out = f"{RECEIPTS}/fp8-vgate-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"FP8_VGATE_DONE {out}")
 

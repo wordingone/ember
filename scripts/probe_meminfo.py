@@ -13,6 +13,7 @@ import sys
 from datetime import datetime, timezone
 
 import torch
+from receipt_write import checked_write
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 out = {"ticket": "NC0-r1-diag", "cuda_available": torch.cuda.is_available()}
@@ -34,7 +35,6 @@ else:
 
 ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 path = f"{NC}/receipts/probe-meminfo-{ts}.json"
-with open(path, "w", encoding="utf-8", newline="\n") as f:
-    json.dump(out, f, indent=2)
+checked_write(path, out)
 print(json.dumps(out, indent=2))
 print("PROBE_MEMINFO_DONE", file=sys.stderr)

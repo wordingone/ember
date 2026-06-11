@@ -29,6 +29,7 @@ import json
 import sys
 
 from fp8_vgate import CANON_SRC, split_assert  # single source (#63)
+from receipt_write import checked_write
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
@@ -121,8 +122,7 @@ def _smoke():
                        "expected, all others re-verify",
     }
     out = f"{RECEIPTS}/eng21-smoke-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"ENG21_SMOKE_DONE {out}")
 

@@ -36,6 +36,8 @@ import os
 import time
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
 VIEWS = f"{NC}/ledger/views"
@@ -203,8 +205,7 @@ def main():
         "aux_heads_file": "mtp_aux_heads.pt (scaffold — unused at inference)",
     }
     os.makedirs(RECEIPTS, exist_ok=True)
-    with open(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(f"{RECEIPTS}/t2-{args.tag}-{ts}.json", receipt)
     print(json.dumps(receipt, indent=2, default=str))
     print("T2_MTP_DONE")
 

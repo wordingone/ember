@@ -18,6 +18,8 @@ import json
 import os
 from datetime import datetime, timezone
 
+from receipt_write import checked_write
+
 from frontier import (ext_clean, fpr_corrected_bits, load_ext_flags,
                       report_block)
 from power import wilson
@@ -75,8 +77,7 @@ def main():
     }
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/bits-account-{ts}.json"
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(receipt, f, indent=2)
+    checked_write(out, receipt)
     print(json.dumps(receipt, indent=2))
     print(f"BITS_ACCOUNT_DONE {out}")
 
