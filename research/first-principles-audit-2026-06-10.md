@@ -933,3 +933,52 @@ when episodes are counted as evidence rather than rows, and a named
 ingest-side mechanism (dedup-cluster stamp at ingest — eng slice
 candidate) so future builds can weight by evidence. CPU-from-ledger.
 Closing PR mints fp-17.
+
+## 8.22 fp-16 (#94): the standing census — the "67% majority" INVERTS under dedup accounting
+
+**Question (minted by §8.21):** row-count claims are quoted as if rows
+were independent evidence. What is the ledger's effective composition,
+and which standing claims change when episodes count as evidence?
+
+**Method (`scripts/fp16_census.py`, selftest PASS, receipt
+`fp16-census-20260611T013228Z.json`, CPU-from-ledger, mapping =
+fp6_provenance.classify single-source):** per (file, class): rows /
+exact-unique srcs / near-dup clusters (cos≥0.95 + fp-13 chaining
+diagnostic) / design-effect ESS, over episodes.jsonl AND
+control_pool.jsonl.
+
+**The census (episodes | control pool):**
+- arc-dsl-mit: 1,909 rows → **780** exact-unique → 9 clusters, ρ=0.908,
+  ESS 1.1 | 1,909 rows → **387** exact-unique (controls reuse solver
+  texts even more heavily) → 6 clusters, ρ=0.912.
+- qwen-research: 956 rows → **956** exact-unique (ZERO duplicate
+  generations) → 592 clusters (largest 187 — same-task re-samples
+  converge mildly), ρ=0.500, ESS 2.0 | 1,022 → 1,022 → 697 clusters,
+  ρ=0.492.
+- Ledger totals: 2,865 rows → **1,736** exact-unique → texture-ESS ~3.1.
+
+**Flipped claim (binding rule fires):** the "67% arc-dsl majority"
+holds for ROWS (66.6%) and INVERTS at exact-unique — **qwen-research is
+the majority class by effective programs (956 of 1,736, 55.1%)**. The
+canonical corpus quote from here on: by rows arc-dsl 67/33; by evidence
+qwen 55/45. Together with §8.21's inversion: the seed mass dominates
+rows, the model-output class dominates evidence.
+
+**ESS honesty note:** under equicorrelation ESS ≈ 1/ρ once n·ρ ≫ 1 —
+it is a texture-HOMOGENEITY index, not a sample size for any estimator
+(flag carried). Exact-unique is the load-bearing dedup number; eval
+deltas (G1/K2) bootstrap on task-level eval surfaces and are NOT
+affected; where row-duplication actually binds is TRAINING (steps over
+near-dup rows = implicit upweighting of the monoculture).
+
+**Mechanism named (eng-25, minted on gate):** ingest-side dedup-cluster
+stamp — cluster key + exact-dup flag per row as a sidecar view (eng-20
+shape, files byte-unchanged) so builds can weight by evidence.
+
+**Successor minted (fp-17):** the place duplication binds — implicit
+training-mix weights. What fraction of a round's SFT steps train on
+near-duplicate text under the current t2 build (arc-dsl 67% of rows but
+~45% of evidence), and does the build need evidence-weighted sampling
+(consumes the eng-25 stamp)? Quantifiable from build views now;
+verdict = the implicit-weight table + a pre-registered choice for
+round-3. Closing PR mints fp-18.
