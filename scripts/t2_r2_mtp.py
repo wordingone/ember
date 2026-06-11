@@ -5,21 +5,13 @@ MTP-aux SFT arm for round-2. Delegates to t2_mtp.py (eng #4) via import.
 Launch interlock: requires --leo-gate-token=<non-empty>. Any dispatch
 without this token raises SystemExit(1) before any dataset or training work.
 
-MTP note: t2_mtp.main() reads its dataset from the view file at
-  NC/ledger/views/wcode-r1.jsonl  (hardcoded in t2_mtp.py).
-For round-2 the correct view is wcode-r2.jsonl. Since the new-files-only
-constraint forbids editing t2_mtp.py, this wrapper pre-writes the view to
-the expected path (wcode-r1.jsonl — overwriting the round-1 view in place)
-before delegating. This is safe only if the round-1 view is not needed
-concurrently; the caller is responsible for sequencing.
-
-PR honesty note: if overwriting wcode-r1.jsonl is unacceptable, the MTP
-arm requires a one-line addition to t2_mtp.py (a --view-path argument) to
-avoid stomping the round-1 view. That constitutes a trainer extension
-(single argument). The arm config is otherwise fully concrete; training
-machinery exists and works. This wrapper is the complete round-2 envelope
-pending that one parameter addition if the caller wants to preserve the r1
-view.
+MTP note (eng #140, Kai r2 audit): the original install-at-r1-path
+delegation was broken — t2_mtp regenerated wcode-r1.jsonl from the full
+ledger before building, so the wrapper's filtered view never reached
+training (live evidence: r2-mtp-wrapper-20260611T033826Z vs
+t2-r2-q3-mtp-20260611T034305Z). t2_mtp now accepts --view-path; this
+wrapper writes the filtered view to wcode-r2.jsonl and passes it
+explicitly. wcode-r1.jsonl is never touched.
 
 Calibration (zero marginal GPU, single source = calibrate.py + w1_mbpp).
 Frontier weighting via r2_arms.frontier_filter (single source = r2_arms.py).
@@ -125,11 +117,8 @@ def main():
         flush=True,
     )
 
-    # --- Write the frontier-filtered view for t2_mtp.main() ---
-    # t2_mtp reads from VIEWS/wcode-r1.jsonl. We write a round-2 filtered
-    # view to VIEWS/wcode-r2.jsonl AND (to satisfy the hardcoded path)
-    # symlink/overwrite wcode-r1.jsonl.
-    # See PR honesty note in module docstring.
+    # --- Write the frontier-filtered round-2 view (eng #140) ---
+    # Passed to t2_mtp via --view-path; wcode-r1.jsonl is never touched.
     os.makedirs(VIEWS, exist_ok=True)
     view_r2 = os.path.join(VIEWS, "wcode-r2.jsonl")
     # Filter: only mbpp:* tasks (W-code world)
@@ -138,24 +127,17 @@ def main():
     with open(view_r2, "w", newline="\n") as f:
         for ep in wcode_eps:
             f.write(json.dumps(ep) + "\n")
+    import hashlib
+    h = hashlib.sha256()
+    with open(view_r2, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    view_r2_sha256 = h.hexdigest()
     print(
         f"[t2_r2_mtp] wrote round-2 view: {view_r2} "
-        f"({len(wcode_eps)} wcode episodes)",
+        f"({len(wcode_eps)} wcode episodes, sha256={view_r2_sha256[:12]}...)",
         flush=True,
     )
-
-    # Overwrite the path t2_mtp.main() reads from with our round-2 view.
-    # Backup the round-1 view first.
-    view_r1 = os.path.join(VIEWS, "wcode-r1.jsonl")
-    view_r1_backup = os.path.join(VIEWS, "wcode-r1.jsonl.r2-backup")
-    if os.path.exists(view_r1) and not os.path.exists(view_r1_backup):
-        import shutil
-        shutil.copy2(view_r1, view_r1_backup)
-        print(f"[t2_r2_mtp] backed up r1 view -> {view_r1_backup}", flush=True)
-    import shutil
-    shutil.copy2(view_r2, view_r1)
-    print(f"[t2_r2_mtp] installed r2 view at r1 path for t2_mtp delegation",
-          flush=True)
 
     # --- Calibration plan (zero marginal GPU) ---
     calibration_receipt = None
@@ -179,6 +161,20 @@ def main():
     # --- Receipt ---
     os.makedirs(RECEIPTS, exist_ok=True)
     receipt_path = f"{RECEIPTS}/r2-mtp-wrapper-{ts}.json"
+
+    # eng #140 delegation argv: explicit view path + receipt linkage.
+    delegate_argv = [
+        "t2_mtp.py",
+        "--model", args.model,
+        "--tag", tag,
+        "--k-aux", str(args.k_aux),
+        "--lam", str(args.lam),
+        "--view-path", view_r2,
+        "--round", "2",
+        "--wrapper-receipt", receipt_path,
+        "--gate-token-present",
+    ] + extra
+
     pre_receipt = {
         "ticket": "NC0-T2-R2-MTP-WRAPPER",
         "arm": "mtp",
@@ -198,26 +194,21 @@ def main():
             "episodes_total": len(episodes),
         },
         "view_r2": view_r2,
-        "view_r1_backup": view_r1_backup if os.path.exists(view_r1_backup) else None,
+        "view_r2_rows": len(wcode_eps),
+        "view_r2_sha256": view_r2_sha256,
+        "sha_convention": ("sha256 over on-disk raw bytes "
+                           "(binary read, no line-ending normalization)"),
         "calibration": calibration_receipt,
         "no_training_launched_by_wrapper": True,
-        "mtp_trainer_extension_note": (
-            "t2_mtp.py reads from wcode-r1.jsonl (hardcoded). "
-            "Round-2 wrapper installs the r2 view at that path. "
-            "A --view-path argument to t2_mtp.py would avoid this; "
-            "that is a one-line trainer extension (not implemented per "
-            "new-files-only constraint). The backup at wcode-r1.jsonl.r2-backup "
-            "preserves the round-1 view."
+        "view_plumb_note": (
+            "eng #140: t2_mtp consumes --view-path explicitly; the prior "
+            "install-at-wcode-r1.jsonl delegation was overwritten by "
+            "t2_mtp's ledger regeneration and never reached training. "
+            "wcode-r1.jsonl is no longer touched by this wrapper."
         ),
         "delegation": {
             "entry": "t2_mtp",
-            "argv": [
-                "t2_mtp.py",
-                "--model", args.model,
-                "--tag", tag,
-                "--k-aux", str(args.k_aux),
-                "--lam", str(args.lam),
-            ] + extra,
+            "argv": delegate_argv,
         },
     }
     with open(receipt_path, "w", newline="\n") as f:
@@ -225,13 +216,7 @@ def main():
     print(f"[t2_r2_mtp] pre-receipt: {receipt_path}", flush=True)
 
     # --- Delegate to t2_mtp ---
-    sys.argv = [
-        "t2_mtp.py",
-        "--model", args.model,
-        "--tag", tag,
-        "--k-aux", str(args.k_aux),
-        "--lam", str(args.lam),
-    ] + extra
+    sys.argv = delegate_argv
     print(f"[t2_r2_mtp] delegating: sys.argv={sys.argv}", flush=True)
     runpy.run_path(
         f"{NC}/scripts/t2_mtp.py",

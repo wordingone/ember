@@ -31,6 +31,7 @@ that aligns aux depth d with target token t+1+d.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -42,6 +43,34 @@ VIEWS = f"{NC}/ledger/views"
 K_AUX = 3
 LAMBDA = 0.3
 IGNORE = -100
+
+SHA_CONVENTION = ("sha256 over on-disk raw bytes "
+                  "(binary read, no line-ending normalization)")
+
+
+def load_view_records(path):
+    """Load ledger records from an explicit view file (eng #140).
+
+    Pure JSONL reader — no regeneration, no ledger access. Used when the
+    caller (e.g. the round-2 wrapper) installs a pre-filtered view and the
+    arm must train on exactly that set."""
+    records = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                records.append(json.loads(line))
+    if not records:
+        raise SystemExit(f"t2_mtp: --view-path {path} is empty — refusing")
+    return records
+
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def shift_for_depth(labels, d, ignore=IGNORE):
@@ -73,6 +102,24 @@ def main():
     ap.add_argument("--tag", default="r1w-q3-mtp")
     ap.add_argument("--k-aux", type=int, default=K_AUX)
     ap.add_argument("--lam", type=float, default=LAMBDA)
+    # eng #140 (Kai r2 audit): the round-2 wrapper installed its filtered
+    # view at wcode-r1.jsonl, but this script regenerated that file from the
+    # full ledger before building — the filtered set never reached training.
+    # --view-path makes the caller's view explicit and load-bearing.
+    # args_fp note: these new keys shift fingerprints for ALL runs vs
+    # pre-#140 receipts (same acknowledged class as eng #26/#70);
+    # comparisons pin tags, not fingerprints.
+    ap.add_argument("--view-path", default=None,
+                    help="explicit view file to train on (no regeneration); "
+                         "default None = legacy behavior (regenerate "
+                         "wcode-r1.jsonl from the ledger)")
+    ap.add_argument("--round", type=int, default=1,
+                    help="round number recorded in the receipt")
+    ap.add_argument("--wrapper-receipt", default=None,
+                    help="path of the dispatching wrapper's receipt, "
+                         "recorded for linkage")
+    ap.add_argument("--gate-token-present", action="store_true",
+                    help="set by the round-2 wrapper after its interlock")
     args, _unknown = ap.parse_known_args()  # daemon appends args
 
     import sys
@@ -96,20 +143,38 @@ def main():
     from t2_round import ADAPTERS, LORA, build_dataset
     from t2_wcode import write_view
 
-    # identical dataset to arm A — the arm delta is the aux loss only.
     # eng #11: same ext-clean quarantine at build as t2_wcode.
+    # eng #140: with --view-path the caller's view is load-bearing — load it
+    # as-is, never regenerate, never touch wcode-r1.jsonl. Legacy path
+    # (no --view-path) keeps the round-1 behavior: regenerate from the
+    # ledger (identical dataset to arm A — the arm delta is the aux loss).
     from frontier import ext_clean, load_ext_flags
-    arm_recs = write_view(f"{NC}/ledger/episodes.jsonl",
-                          f"{VIEWS}/wcode-r1.jsonl")
+    if args.view_path:
+        view_path = args.view_path
+        arm_recs = load_view_records(view_path)
+    else:
+        view_path = f"{VIEWS}/wcode-r1.jsonl"
+        arm_recs = write_view(f"{NC}/ledger/episodes.jsonl", view_path)
+    n_pre_ext = len(arm_recs)
     arm_recs = ext_clean(arm_recs,
                          load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"]))
-    with open(f"{VIEWS}/wcode-r1.jsonl", "w", encoding="utf-8", newline="\n") as vf:
+    with open(view_path, "w", encoding="utf-8", newline="\n") as vf:
         for r in arm_recs:
             vf.write(json.dumps(r) + "\n")
     caps = caps_from_records(arm_recs)
-    examples, counts = build_dataset(f"{VIEWS}/wcode-r1.jsonl", cap=caps)
+    examples, counts = build_dataset(view_path, cap=caps)
     if not examples:
         raise SystemExit("t2_mtp: empty dataset — ingest first")
+    view_block = {
+        "path": view_path,
+        "source": ("explicit --view-path (caller-installed view, "
+                   "no regeneration)") if args.view_path
+                  else "regenerated from ledger (legacy round-1 path)",
+        "rows_pre_ext_clean": n_pre_ext,
+        "rows_built": len(arm_recs),
+        "ext_clean_dropped": n_pre_ext - len(arm_recs),
+        "sha256": file_sha256(view_path),
+    }
 
     try:
         model_path = snapshot_download(args.model, local_files_only=True)
@@ -187,13 +252,34 @@ def main():
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     from receipt_fp import args_fingerprint  # eng #10
+    # eng #140: dataset-identity is a NAMED claim with a basis, never an
+    # unconditional literal. Legacy path = by-construction identical to
+    # arm A (same write_view -> ext_clean -> caps build); explicit-view
+    # path = whatever the wrapper installed, claim false.
+    if args.view_path:
+        identity_claim = {
+            "claim": False,
+            "basis": ("explicit --view-path: dataset is the "
+                      "caller-installed view, not arm A's build"),
+        }
+    else:
+        identity_claim = {
+            "claim": True, "arm": "A (t2_wcode r1w)",
+            "basis": ("by-construction: same "
+                      "write_view(ledger)->ext_clean->caps_from_records->"
+                      "build_dataset path as arm A"),
+        }
     receipt = {
         "ticket": "NC0-T2-MTP", "ts": ts, "args": vars(args),
         "args_fp": args_fingerprint(vars(args)),
-        "world": "mbpp", "round": 1,
+        "world": "mbpp", "round": args.round,
+        "sha_convention": SHA_CONVENTION,
+        "gate_token_present": args.gate_token_present,
+        "wrapper_receipt": args.wrapper_receipt,
         "governor": governor_block,
+        "view": view_block,
         "dataset": {"n_examples": len(examples), "n_tasks": len(counts),
-                    "identical_to_arm_A": True},
+                    "identical_to_arm_A": identity_claim},
         "train_loss": round(res.training_loss, 4),
         "lm_loss_first5": loss_log["lm"][:5],
         "lm_loss_last5": loss_log["lm"][-5:],
