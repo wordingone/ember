@@ -51,8 +51,11 @@ def classify(rec):
     origin = str(rec.get("origin", ""))
     # seed-dsl-* = arc-dsl solvers; seed-verifier-rearc-* = re-arc verifier
     # programs (also Hodel, also MIT, vendored — t3_seed.py header). Both
-    # are HUMAN code, not model output.
-    if origin.startswith("seed-dsl") or origin.startswith("seed-verifier-rearc"):
+    # are HUMAN code, not model output. seed-control-wrongtask (eng #80) =
+    # the SAME intact solver text on mismatched pairs (t3_seed Phase D:
+    # src = progs[wrong]) — license rides on the text, so MIT too.
+    if origin.startswith(("seed-dsl", "seed-verifier-rearc",
+                          "seed-control-wrongtask")):
         return "arc-dsl-mit", f"origin:{origin}"
     return "UNKNOWN", f"no-provenance(origin={origin or 'absent'})"
 
@@ -127,8 +130,13 @@ def _selftest():
     # seed-dsl origin (orig + aug variants) -> MIT
     assert classify({"origin": "seed-dsl-orig"})[0] == "arc-dsl-mit"
     assert classify({"origin": "seed-verifier-rearc-v2"})[0] == "arc-dsl-mit"
-    # control-pool origins stay UNKNOWN-visible (not silently MIT)
-    assert classify({"origin": "seed-control-wrongtask"})[0] == "UNKNOWN"
+    # control-pool wrongtask rows = intact arc-dsl solver text on mismatched
+    # pairs (t3_seed Phase D: src = progs[wrong]) -> MIT (eng #80; was
+    # UNKNOWN-visible before the t3_seed source audit)
+    lic, basis = classify({"origin": "seed-control-wrongtask"})
+    assert lic == "arc-dsl-mit" and basis == "origin:seed-control-wrongtask"
+    # other unrecognized origins still UNKNOWN-visible
+    assert classify({"origin": "some-future-origin"})[0] == "UNKNOWN"
     # nothing -> UNKNOWN
     assert classify({})[0] == "UNKNOWN"
     # census math on constructed rows
