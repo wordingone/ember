@@ -64,7 +64,7 @@ ROOT_CAUSED = {
                  "live, fixed same session; successful re-run receipted "
                  "receipts/d-gate-adapter_model-20260611T070448Z.json"),
 }
-RESUME_EVIDENCE = "receipts/v0ext-selftest-20260611T150308Z.json"
+RESUME_EVIDENCE = "receipts/v0ext-selftest-20260611T074545Z.json"
 V0_RUN_DAYS = 3.352                    # fp-32 b24 projection (ledger R1)
 
 
