@@ -1,7 +1,0 @@
-{
-  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
-  "dataset": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r2.jsonl",
-  "script": "/mnt/b/M/avir/leo/state/nc-ladder/scripts/g1_r2w_base.py",
-  "output_dir": "/mnt/b/M/avir/leo/state/nc-ladder/receipts",
-  "hyperparams": {}
-}
