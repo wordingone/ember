@@ -108,20 +108,121 @@ def _selftest():
     print("FP15_BANDTRANSFER_SELFTEST_PASS")
 
 
+def _per_task_stats(samples_path):
+    """samples jsonl -> {task: (verified, sampled)}."""
+    stats = {}
+    with open(samples_path, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            v, n = stats.get(row["task"], (0, 0))
+            stats[row["task"]] = (v + (1 if row.get("verified") else 0), n + 1)
+    return stats
+
+
 def main():
+    """fp-21 (#120): the receipt join, implemented at fire time on real
+    round-2 fields. The analysis above (split_yield/perm_pvalue/verdict,
+    RATIO_BAR/PERM_N/SEED) is the FROZEN prereg — untouched here.
+
+    JOIN CHOICES (declared before any yield was computed; recorded
+    in-receipt):
+      - band inputs: ROUND-1 per-task stats from the three fp12-receipt-
+        pinned samples files; q3 side = POOLED k8 + focus-k24 (all round-1
+        stats, no leg selection — fp-12 showed the two legs disagree,
+        jaccard 0.42; pooling avoids an outcome-dependent leg pick).
+      - universe: tasks sampled in round-2 WITH joint round-1 coverage
+        (n15>0 and n3>0 — band_member needs both posteriors);
+        out-of-universe counts recorded, never silently dropped.
+      - new_verified: round==2 rows in ledger/episodes.jsonl per task
+        (post-dedup banked NEW episodes = the accumulation the loop kept).
+      - k_sampled: round-2 sample rows per task (k=8 by prereg pin).
+    """
     import argparse
+    import os
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sampling")
-    ap.add_argument("--r1-stats")
+    ap.add_argument("--sampling", help="round-2 w1 *-samples.jsonl")
+    ap.add_argument("--ledger", default=None)
     a, _ = ap.parse_known_args()
     if not a.sampling:
         print("FP15_BANDTRANSFER_STAGED (no round-2 sampling receipt yet; "
               "prereg frozen in this file — fp-21 runs it)")
         return
-    # fp-21 wires the real receipt fields here; predicate import pinned:
-    from fp12_band import band_member  # noqa: F401 — frozen single source
-    raise SystemExit("fp-21 implements the receipt join on real round-2 "
-                     "fields; running before then would un-freeze the spec")
+    from fp12_band import band_member  # frozen single source
+
+    NC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ledger = a.ledger or f"{NC}/ledger/episodes.jsonl"
+    R = f"{NC}/receipts"
+    legs = {  # pinned in receipts/fp12-band-20260611T010941Z.json
+        "q15": f"{R}/w1-floor-q15-20260610T202511Z-samples.jsonl",
+        "q3_k8": f"{R}/w1-floor-q3-20260610T203401Z-samples.jsonl",
+        "q3_focus_k24": f"{R}/w1-floor-q3-focus-20260610T210228Z-samples.jsonl",
+    }
+    s15 = _per_task_stats(legs["q15"])
+    q3a = _per_task_stats(legs["q3_k8"])
+    q3b = _per_task_stats(legs["q3_focus_k24"])
+    q3 = {}
+    for t in set(q3a) | set(q3b):
+        va, na = q3a.get(t, (0, 0))
+        vb, nb = q3b.get(t, (0, 0))
+        q3[t] = (va + vb, na + nb)
+
+    r2_k = {}
+    with open(a.sampling, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                t = json.loads(line)["task"]
+                r2_k[t] = r2_k.get(t, 0) + 1
+    new_v = {}
+    with open(ledger, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            if rec.get("round") == 2 and rec.get("verified"):
+                new_v[rec["task"]] = new_v.get(rec["task"], 0) + 1
+
+    tasks, no_joint = [], []
+    for t, k in sorted(r2_k.items()):
+        v15, n15 = s15.get(t, (0, 0))
+        v3, n3 = q3.get(t, (0, 0))
+        if n15 == 0 or n3 == 0:
+            no_joint.append(t)
+            continue
+        tasks.append({"task": t, "band": band_member(v15, n15, v3, n3),
+                      "k_sampled": k, "new_verified": new_v.get(t, 0)})
+
+    p, obs = perm_pvalue(tasks)
+    v = verdict(obs, p)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    receipt = {
+        "ticket": "FP15-BANDTRANSFER", "ts": ts, "prong": "A",
+        "frozen_bars": {"ratio_bar": RATIO_BAR, "perm_n": PERM_N,
+                        "seed": SEED},
+        "join": {
+            "band_inputs": legs,
+            "q3_side": "POOLED k8 + focus-k24 (declared pre-yield; "
+                       "no outcome-dependent leg pick)",
+            "new_verified_source": "ledger round==2 verified rows "
+                                   "(post-dedup banked NEW)",
+            "sampling": os.path.basename(a.sampling),
+        },
+        "universe": {"r2_sampled_tasks": len(r2_k),
+                     "joint_coverage_tasks": len(tasks),
+                     "no_joint_round1_stats": len(no_joint),
+                     "band_tasks": sum(1 for t in tasks if t["band"]),
+                     "nonband_tasks": sum(1 for t in tasks if not t["band"])},
+        "observed": obs,
+        "perm_p": p,
+        "result": v,
+        "prong_b_rule": "fires round-3 ONLY on PREDICTIVE (frozen)",
+    }
+    out = f"{R}/fp15-bandtransfer-{ts}.json"
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(receipt, f, indent=2)
+    print(json.dumps(receipt, indent=2))
+    print(f"FP15_BANDTRANSFER_DONE {out}")
 
 
 if __name__ == "__main__":

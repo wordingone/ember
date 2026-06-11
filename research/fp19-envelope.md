@@ -1,5 +1,17 @@
 # fp-19 — owned-core feasibility envelope (VERDICT: non-empty; v0 named)
 
+**Evidence class / certification status (artifact-local, per the
+adopted design-zone boundary):** the measured throughput legs and the
+envelope arithmetic are **RECEIPTED** (executed local bench,
+`fp19-bench-20260611T024648Z.json`). The v0 architecture and optimizer
+RATIONALE (why this config, Muon-as-upside, QAT-native) is
+**HYPOTHESIS / FABLE-DERIVED — NEEDS INDEPENDENT RECEIPT** except where
+a row cites an external paper; the discharge path is the 1B/2B/4B floor
+checkpoints + the fp-22 world probes (named experiments, not prose).
+The multiplier table is Haiku/Fable-family MINED EVIDENCE with
+citations — an attack surface, not a certification. Certification
+comes only from executed receipts.
+
 Frozen 2026-06-11 (#111). Inputs: MEASURED bench receipt
 `fp19-bench-20260611T024648Z.json` (daemon eval b839e851, governed:
 VRAM fraction 0.80, margin assert ≥1.5 GiB held, paced duty cycle;
