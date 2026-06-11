@@ -1,6 +1,7 @@
 {
   "ticket": "ENG20-LICENSE-VIEW",
   "ts": "20260611T002458Z",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
   "mapping_source": "fp6_provenance.classify (#57, single source)",
   "known_classes": [
     "apache-2.0",

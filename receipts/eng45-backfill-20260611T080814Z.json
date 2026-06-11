@@ -1,0 +1,34 @@
+{
+  "ticket": "ENG45-BACKFILL-SHA-CONVENTION",
+  "ts": "20260611T080814Z",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": "#172",
+  "method": "scripted backfill via receipt_write.checked_write; sha_convention inserted after 'ts'; sha256 values re-read from disk and asserted byte-unchanged",
+  "n_targets": 2,
+  "n_backfilled": 2,
+  "n_skipped": 0,
+  "files": [
+    {
+      "file": "eng20-license-view-20260611T002458Z.json",
+      "action": "BACKFILLED",
+      "sha_fields": [
+        "ledger_sha256_after",
+        "ledger_sha256_before"
+      ],
+      "sha_values_unchanged": true,
+      "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
+    },
+    {
+      "file": "eng20-license-view-20260611T004457Z.json",
+      "action": "BACKFILLED",
+      "sha_fields": [
+        "control_sha256_after",
+        "control_sha256_before",
+        "ledger_sha256_after",
+        "ledger_sha256_before"
+      ],
+      "sha_values_unchanged": true,
+      "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
+    }
+  ]
+}
