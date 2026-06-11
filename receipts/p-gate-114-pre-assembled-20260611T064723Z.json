@@ -1,0 +1,61 @@
+{
+  "ticket": "P-GATE-114-ASSEMBLED",
+  "epoch": "pre",
+  "ts": "20260611T064719Z",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "binding": "per-sample mean_diff (mtp - base), g1_paired; containment vs the PRE bootstrap_ci95 (declared pre-computation in p_gate_assemble_114.py)",
+  "gain": {
+    "value": 0.0523,
+    "exact_ci_lo": 0.0058,
+    "exact_ci_hi": 0.1047
+  },
+  "feed_quoted": {
+    "arm": 37,
+    "ref": 39,
+    "discordant_ref_only_b": 3,
+    "discordant_arm_only_c": 1,
+    "mcnemar_p": 0.625,
+    "newcombe_ci95": [
+      -0.191,
+      0.097
+    ],
+    "flag": "FLAT"
+  },
+  "legs": {
+    "base": "w1-floor-g1-base-20260610T215814Z",
+    "mtp": "w1-floor-g1-mtp-20260610T221956Z"
+  },
+  "continuity_stamps": {
+    "ledger_sha256": "6328ff74992b839539d50aa773652f7267dba3ac586b07e4d9691603a1cac3fa",
+    "adapter_sha256": "57a2897b50c2a97dae4efb4fb2948cea0d352ea79ab3b87512894d7e659dbd59",
+    "adapter_files": {
+      "adapter_model.safetensors": {
+        "sha256": "57a2897b50c2a97dae4efb4fb2948cea0d352ea79ab3b87512894d7e659dbd59",
+        "bytes": 239536272,
+        "mtime_utc": "20260610T214222Z"
+      },
+      "mtp_aux_heads.pt": {
+        "sha256": "a03acc37e9aa99b39e94ee2794d4fac304d7024e9517cad9056e9aeb828de549",
+        "bytes": 25167742,
+        "mtime_utc": "20260610T214222Z"
+      },
+      "adapter_config.json": {
+        "sha256": "6a365249c4c710260924267241f75e5ed1c0f438a098261aa516159440391cd3",
+        "bytes": 1281,
+        "mtime_utc": "20260610T214222Z"
+      }
+    },
+    "daemon_pid": 11889,
+    "job_pids": {
+      "base": {
+        "job": "201913fb",
+        "pid": 11479
+      },
+      "mtp": {
+        "job": "dabd9e73",
+        "pid": 11889
+      }
+    }
+  },
+  "boundary": "pre jobs 2026-06-10 21:55/22:17Z ran under the pre-restart daemon (current daemon start ~2026-06-11 02:21Z, uptime arithmetic; job records persist in the cumulative store); post jobs 2026-06-11 06:39/06:42Z under the current daemon; every leg = own OS process, fresh from-disk load"
+}
