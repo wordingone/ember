@@ -31,6 +31,7 @@ shaping table.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -39,6 +40,40 @@ from datetime import datetime, timezone
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
 SOLVE_STUB = "\n\ndef solve(grid):\n    return [[0]]\n"  # sandbox gadget
+
+SHA_CONVENTION = ("sha256 over on-disk raw bytes "
+                  "(binary read, no line-ending normalization)")
+
+
+def load_task_list(path):
+    """Load a JSON list of task keys (e.g. ["mbpp:12", ...]) — eng #142.
+    Fail-closed on empty or non-list content."""
+    with open(path, encoding="utf-8") as f:
+        keys = json.load(f)
+    if not isinstance(keys, list) or not keys:
+        raise SystemExit(
+            f"t2_grpo: --task-list {path} must be a non-empty JSON list")
+    return [str(k) for k in keys]
+
+
+def select_problems(problems, task_keys):
+    """Restrict the MBPP problem pool to the selected task keys (eng #142).
+    Returns (selected, missing_keys) — missing = keys with no matching
+    problem in the split (counted in the receipt, fail-closed upstream if
+    the selection empties the pool)."""
+    wanted = set(task_keys)
+    selected = [p for p in problems if f"mbpp:{p['id']}" in wanted]
+    found = {f"mbpp:{p['id']}" for p in selected}
+    missing = sorted(wanted - found)
+    return selected, missing
+
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 STRATUM_REPEATS = {"easy": 1, "mid": 2, "frontier": 4, "dead": 4}
 R_VERIFIED = 1.0
@@ -171,6 +206,25 @@ def main():
                     help="binary = pre-registered eng #13 shaping table; "
                          "partial = per-assert fraction (row-9 arm, eng #15;"
                          " training-only — THE GATE STAYS BINARY)")
+    # eng #142 (Kai r2 audit): the round-2 wrapper computed a frontier
+    # filter but nothing consumed it — build_prompt_rows took every MBPP
+    # train problem. --task-list makes the caller's selection load-bearing.
+    # args_fp note: these new keys shift fingerprints for ALL runs vs
+    # pre-#142 receipts (same acknowledged class as eng #26/#70);
+    # comparisons pin tags, not fingerprints.
+    ap.add_argument("--task-list", default=None,
+                    help="JSON file of task keys restricting the prompt "
+                         "pool; default None = legacy full-pool behavior")
+    ap.add_argument("--round", type=int, default=1,
+                    help="round number recorded in the receipt")
+    ap.add_argument("--wrapper-receipt", default=None,
+                    help="path of the dispatching wrapper's receipt, "
+                         "recorded for linkage")
+    ap.add_argument("--gate-token-present", action="store_true",
+                    help="set by the round-2 wrapper after its interlock")
+    ap.add_argument("--selection-basis", default=None,
+                    help="free-string provenance of the task selection "
+                         "(e.g. theta filter parameters), recorded verbatim")
     args, _unknown = ap.parse_known_args()  # daemon appends args
 
     import sys
@@ -262,6 +316,29 @@ def main():
           f"{_lm.weight.dtype}", flush=True)
 
     problems = load_split("train")
+    # eng #142: restrict the pool BEFORE the reward map and prompt rows so
+    # the caller's selection is load-bearing end to end.
+    task_selection = {"mode": "full-pool", "n_pool": len(problems),
+                      "n_selected": len(problems)}
+    if args.task_list:
+        keys = load_task_list(args.task_list)
+        n_pool = len(problems)
+        problems, missing = select_problems(problems, keys)
+        if not problems:
+            raise SystemExit(
+                f"t2_grpo: --task-list {args.task_list} selected 0 problems "
+                f"from the split — refusing")
+        task_selection = {
+            "mode": "task-list",
+            "path": args.task_list,
+            "n_keys": len(keys),
+            "n_pool": n_pool,
+            "n_selected": len(problems),
+            "n_missing_keys": len(missing),
+            "sha256": file_sha256(args.task_list),
+        }
+        print(f"[t2_grpo] task selection: {len(problems)}/{n_pool} problems "
+              f"({len(missing)} keys unmatched)", flush=True)
     problems_by_id = {p["id"]: p for p in problems}
     if args.reward == "partial":
         # Fail-closed (adversarial-review finding): a zero-assert problem in
@@ -321,7 +398,12 @@ def main():
         "ticket": "NC0-T2-GRPO", "ts": ts, "args": vars(args),
         "args_fp": args_fingerprint(vars(args)),
         "governor": governor_block,
-        "world": "mbpp", "round": 1, "reward_mode": args.reward,
+        "world": "mbpp", "round": args.round, "reward_mode": args.reward,
+        "sha_convention": SHA_CONVENTION,
+        "gate_token_present": args.gate_token_present,
+        "wrapper_receipt": args.wrapper_receipt,
+        "selection_basis": args.selection_basis,
+        "task_selection": task_selection,
         "comparator": "strict (fp8 canon, no coercion) — eng #76",
         "prompt_rows": len(rows),
         "prompt_mix": {st: sum(1 for r in rows if r["stratum"] == st)
@@ -377,6 +459,27 @@ def _selftest():
     assert "assert g(2) in {1, 2}" in joined  # non-== untouched
     assert instrument_tests(["\n".join(tests)]) == ["\n".join(tests)], \
         "joined multi-statement string must pass through unparsed"
+    # eng #142: task-list restriction — selection + missing-key accounting
+    probs = [{"id": 1}, {"id": 2}, {"id": 3}]
+    sel, missing = select_problems(probs, ["mbpp:1", "mbpp:3", "mbpp:99"])
+    assert [p["id"] for p in sel] == [1, 3]
+    assert missing == ["mbpp:99"]
+    sel2, missing2 = select_problems(probs, ["mbpp:7"])
+    assert sel2 == [] and missing2 == ["mbpp:7"]
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tl = os.path.join(td, "tasks.json")
+        with open(tl, "w", encoding="utf-8") as f:
+            json.dump(["mbpp:1", "mbpp:2"], f)
+        assert load_task_list(tl) == ["mbpp:1", "mbpp:2"]
+        bad = os.path.join(td, "empty.json")
+        with open(bad, "w", encoding="utf-8") as f:
+            json.dump([], f)
+        try:
+            load_task_list(bad)
+            raise AssertionError("empty task list must refuse")
+        except SystemExit:
+            pass
     print("T2_GRPO_SELFTEST_PASS")
 
 
