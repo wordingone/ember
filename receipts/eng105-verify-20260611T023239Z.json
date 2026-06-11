@@ -1,0 +1,88 @@
+{
+  "receipt": "eng105-verify-20260611T023239Z",
+  "issue": "wordingone/ember#105 (eng-29)",
+  "scope": "train-daemon per-job eval/export log files + train-live dispatch guard (default-closed, per-dispatch allow_during_train opt-in)",
+  "target_file": "B:/M/avir/infra/train-daemon/server.py",
+  "target_sha256_post_edit": "433346ac7582cfdc24740e7921c8fbdfa0bff854c40d25d7933a7458030f8490",
+  "sha_convention": "sha256 over on-disk raw bytes; file(1) reports server.py as UTF-8 text with LF line endings (no CRLF); log-file hashes likewise over raw on-disk bytes",
+  "py_compile": "OK",
+  "spec": "research/eng105-daemon-diff-spec.md — 5 hunks, eval/export paths only, train path byte-identical except additive log_name field; signed off by gate owner before edit (mail 14478)",
+  "rollout": {
+    "zero_inflight_window": true,
+    "shutdown": "POST /shutdown (self-refusing while jobs run) honored; connection-closed-on-success is expected and pre-existing (os._exit(0) terminates before the HTTP response completes)",
+    "relaunch": "train_daemon_start; 414 persisted jobs loaded across the restart",
+    "daemon_health_post_verification": { "status": "ok", "running": 0, "total_jobs": 418, "delta_jobs_from_relaunch": 4 }
+  },
+  "checks": {
+    "A_legacy_fallback": {
+      "what": "pre-restart persisted job (no log_name field) must resolve through the new reader path to the legacy shared log name",
+      "job": "052db486",
+      "type": "eval",
+      "persisted_pre_restart": true,
+      "log_name_field": "absent (GET /jobs/052db486 created pre-edit)",
+      "reader": "GET /jobs/052db486/logs?lines=3 against the post-edit daemon",
+      "resolved_log": "eval.log (legacy shared)",
+      "evidence_last_line": "FP18_PROMPTDIV_DONE /mnt/b/M/avir/leo/state/nc-ladder/receipts/fp18-promptdiv-20260611T021320Z.json",
+      "matches_on_disk_eval_log_tail": true,
+      "legacy_eval_log_lines": 44,
+      "legacy_eval_log_sha256": "d66cba757f9ad5f64c0f1e7ab6f56e8e53c671037d63fb590c1306c2225aea33",
+      "pass": true
+    },
+    "B_per_job_logs_two_concurrent_evals": {
+      "what": "two concurrent CPU eval sub-jobs of one parent must land in distinct per-job log files, neither truncated",
+      "parent_job": "64094d19",
+      "output_dir": "/mnt/b/M/avir/leo/state/wasm-build/runs/stepE",
+      "subs": [
+        {
+          "job": "bea09f85", "pid": 15022, "status": "completed",
+          "log": "eval-bea09f85.log", "lines": 10,
+          "first_line": "ENG105-PROBE pid=15022 start argv=['--lora-path', '/mnt/b/M/avir/leo/state/wasm-build/runs/stepE']",
+          "last_line": "ENG105-PROBE pid=15022 done",
+          "sha256": "477da7e925df6cc60d08e32a4b6aabb490fe10ca3b239b6e17551c377c115df6"
+        },
+        {
+          "job": "c772b0c3", "pid": 15026, "status": "completed",
+          "log": "eval-c772b0c3.log", "lines": 10,
+          "first_line": "ENG105-PROBE pid=15026 start argv=['--lora-path', '/mnt/b/M/avir/leo/state/wasm-build/runs/stepE']",
+          "last_line": "ENG105-PROBE pid=15026 done",
+          "sha256": "7401db1fe17e891d6430848c2315b616c576833c0ed5ffdc58d1e4f4910d9472"
+        }
+      ],
+      "dispatched_concurrently": true,
+      "distinct_files": true,
+      "neither_truncated": "each log carries its own start + 8 ticks + done (10 lines), pid-tagged, no interleaving",
+      "legacy_shared_eval_log_untouched_by_new_evals": true,
+      "pass": true
+    },
+    "C_dispatch_guard_409": {
+      "what": "eval dispatch while a train job is live must be refused with HTTP 409 unless allow_during_train=true",
+      "live_train_job": "cabfdd34", "live_train_pid": 15037,
+      "dispatch": "train_eval MCP (allow_during_train absent, default false)",
+      "http_status": 409,
+      "detail": "train job cabfdd34 live — eval dispatch refused (log/resource contention); set allow_during_train=true to override",
+      "pass": true
+    },
+    "D_override_allow_during_train": {
+      "what": "same dispatch with allow_during_train=true must run to completion during the live train job",
+      "dispatch": "POST /jobs/{parent}/eval with body {\"eval_script\": probe_eval.py, \"allow_during_train\": true} while cabfdd34 running",
+      "job": "0e7d3707", "pid": 15042, "status": "completed",
+      "log": "eval-0e7d3707.log", "lines": 10,
+      "sha256": "f5484e72f522a2fda86bb5664d2113f62c8dee5d61bc396790a045332c1f1fe1",
+      "complete_start_to_done": true,
+      "pass": true
+    }
+  },
+  "train_path_unchanged": {
+    "claim": "train job behavior byte-identical except the additive log_name field",
+    "evidence": "post-edit train probe cabfdd34 wrote train.log at its output_dir (B:/M/avir/eli/state/ember-eng/eng105/models/probe/train.log) exactly as before; start->done complete"
+  },
+  "probes": {
+    "eval_script": "B:/M/avir/eli/state/ember-eng/eng105/probe_eval.py (8-tick CPU marker probe, no GPU, no model)",
+    "train_script": "B:/M/avir/eli/state/ember-eng/eng105/probe_train_sleep.py (45s sleep, no GPU, no model)"
+  },
+  "notes": [
+    "PRE-EXISTING, not introduced by this change: create_job derives cwd=<script grandparent>/scripts and returns 500 if that dir is absent; worked around for the probe by creating B:/M/avir/eli/state/ember-eng/scripts. Daemon nit, out of #105 scope.",
+    "PRE-EXISTING: /shutdown success presents as connection-closed (os._exit(0) before response flush).",
+    "Verification unblocks the deferred t1_chunked/w1 runtime-import concurrent-eval checks (spec rollout note)."
+  ]
+}
