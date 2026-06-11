@@ -1,0 +1,52 @@
+{
+  "ticket": "P-GATE",
+  "issue": "#114",
+  "scope": "cross-session-boundary-persistence-pair",
+  "ts": "20260611T025422Z",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "mode": "assemble-verify",
+  "pre_receipt": "C:\\Users\\Admin\\AppData\\Local\\Temp\\tmpmqh126cd\\receipt.json",
+  "post_receipt": "C:\\Users\\Admin\\AppData\\Local\\Temp\\tmpv4ui5glq\\receipt.json",
+  "arm_name": "adapter",
+  "pre_gain": {
+    "gain_value": 0.25,
+    "exact_ci_lo": 0.1,
+    "exact_ci_hi": 0.4
+  },
+  "post_gain": {
+    "gain_value": 0.22,
+    "exact_ci_lo": 0.05,
+    "exact_ci_hi": 0.38
+  },
+  "continuity_stamps": {
+    "pre": {
+      "ledger_sha256": "b555546d1dc88f89388d2ef915cf4313f11d0c9413f4a464f7204d1d338b85f5",
+      "adapter_sha256": "9b8b64ed8694cd7e5a401f5cc0e58f688d0e61fd4c50078e003992e91b982156",
+      "daemon_pid": 1001
+    },
+    "post": {
+      "ledger_sha256": "b555546d1dc88f89388d2ef915cf4313f11d0c9413f4a464f7204d1d338b85f5",
+      "adapter_sha256": "9b8b64ed8694cd7e5a401f5cc0e58f688d0e61fd4c50078e003992e91b982156",
+      "daemon_pid": 1001
+    }
+  },
+  "continuity_checks": {
+    "ledger_sha256_unchanged": true,
+    "adapter_sha256_unchanged": true,
+    "pids_differ": false,
+    "post_gain_in_pre_ci": true
+  },
+  "verdict_components": {
+    "post_gain_value": 0.22,
+    "pre_gain_ci_lo": 0.1,
+    "pre_gain_ci_hi": 0.4,
+    "ledger_unchanged": true,
+    "adapter_unchanged": true,
+    "pids_differ": false
+  },
+  "failure_reasons": [
+    "FAIL_BY_SAME_PID: pre_pid=1001 post_pid=1001 \u2014 session boundary not real"
+  ],
+  "verdict": "FAIL",
+  "pass": false
+}
