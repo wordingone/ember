@@ -1,0 +1,41 @@
+{
+  "ticket": "ENG36-CORPUS-FINEWEB_EDU",
+  "ts": "20260611T044544Z",
+  "issue": "wordingone/ember#130",
+  "source": "fineweb_edu",
+  "url_pin": {
+    "dataset": "HuggingFaceFW/fineweb-edu",
+    "config": "sample-10BT",
+    "split": "train",
+    "revision_sha": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
+    "url": "https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu/tree/87f09149ef4734204d70ed1d046ddc9ca3f2b8f9"
+  },
+  "license_stamp": {
+    "class": "odc-by-1.0",
+    "basis": "dataset-level ODC-By 1.0 (FineWeb-Edu card); EXTERNAL-CITED per fp-22 \u00a71 row 2"
+  },
+  "counts": {
+    "docs_in": 1558904,
+    "docs_kept": 1549860,
+    "dups_dropped": 9044,
+    "license_rejected": 0,
+    "empty_skipped": 0,
+    "text_bytes_kept": 7400001608,
+    "text_chars_kept": 7361935304
+  },
+  "dedup": {
+    "method": "doc-level exact sha256 over utf-8 text, source-local",
+    "docs_before": 1558904,
+    "docs_after": 1549860
+  },
+  "n_shards": 8,
+  "bytes_on_disk_total": 2532354648,
+  "manifest_path": "B:/M/avir/eli/state/ember-eng/corpus-v0\\fineweb_edu\\manifest.json",
+  "manifest_mirror_in_repo": "corpus-manifests\\fineweb_edu-manifest-20260611T044544Z.json",
+  "manifest_sha256": "7ac65979854775d5fa71b5928bfc7aa301dadedc1ce07a6e7c16bb550626e197",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "tokens_pending_tokenizer_freeze": true,
+  "est_tokens_heuristic": 1850000402,
+  "est_tokens_note": "bytes/4 HEURISTIC ONLY, not the AC token count \u2014 v0-tokenizer counts land after the tokenizer trains on the stratified corpus sample and freezes (fp-22 \u00a71, mail 14523)",
+  "no_gpu": true
+}

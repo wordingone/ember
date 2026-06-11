@@ -140,6 +140,17 @@ SOURCES = {
                           "per-row stamp"),
         "fp22_row": 1,
         "requires_ack": True,
+        # audit-§6 deviation record (gate-holder ack, mail 14530) — copied
+        # verbatim into the manifest + receipt by acquire().
+        "deviation": ("fp-22 §1 row-1 DEVIATION: source = "
+                      "codeparrot/github-code-clean. Basis: the-stack-v2 "
+                      "references-only (no local pull) + the-stack "
+                      "march-sample lacks per-file license metadata -> "
+                      "both fail the per-file license-stamp AC; codeparrot "
+                      "satisfies it with a per-row license field "
+                      "re-verified fail-closed. Acked by the gate-holder "
+                      "(mail 14530) before any pull; --ack-code-source is "
+                      "the mechanical gate."),
     },
 }
 
@@ -351,6 +362,7 @@ def acquire(source, out_root, byte_budget=None, shard_bytes=1_000_000_000):
             "class": spec["license_class"],
             "basis": spec["license_basis"],
         },
+        **({"deviation": spec["deviation"]} if "deviation" in spec else {}),
         "byte_budget": budget,
         "counts": counts,
         "dedup": {
@@ -391,6 +403,7 @@ def acquire(source, out_root, byte_budget=None, shard_bytes=1_000_000_000):
         "source": source,
         "url_pin": url_pin,
         "license_stamp": manifest["license_stamp"],
+        **({"deviation": spec["deviation"]} if "deviation" in spec else {}),
         "counts": counts,
         "dedup": manifest["dedup"],
         "n_shards": len(shards),
