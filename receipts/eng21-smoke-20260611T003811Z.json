@@ -1,0 +1,27 @@
+{
+  "ticket": "ENG21-SMOKE",
+  "ts": "20260611T003811Z",
+  "comparator": "strict (fp8 canon, no coercion) \u2014 eng #76",
+  "harness_shape": "w1_mbpp production (joined tests, one job/episode)",
+  "n_episodes": 956,
+  "skipped_no_problem": 0,
+  "reverified": 954,
+  "flipped": 2,
+  "flips": [
+    {
+      "key": "mbpp:783:712c936ed6a6b809",
+      "task": "mbpp:783",
+      "bits": 1.0875,
+      "stratum": "mid",
+      "error": "AssertionError: strict-verify: kind mismatch (== passed, canonical forms differ)"
+    },
+    {
+      "key": "mbpp:783:396f2a559c467409",
+      "task": "mbpp:783",
+      "bits": 1.0875,
+      "stratum": "mid",
+      "error": "AssertionError: strict-verify: kind mismatch (== passed, canonical forms differ)"
+    }
+  ],
+  "expectation": "fp8-vgate-20260611T001730Z: 2 container-kind flips expected, all others re-verify"
+}
