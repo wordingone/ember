@@ -1,0 +1,17 @@
+{
+  "ticket": "TOKENIZER-FREEZE-SELFTEST",
+  "ts": "20260611T060319Z",
+  "checks": {
+    "stratified_budgets": true,
+    "sample_source_deterministic": true,
+    "double_train_byte_identical": true,
+    "reserved_band_fixed_ids": true,
+    "count_tokens_exact": true,
+    "assembly_pin_fail_closed": true,
+    "fail_closed_wiring": true
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "note": "harness prep for the fp-22 tokenizer leg (launch order: eng-36 gate -> tokenizer freeze); the PRODUCTION freeze runs only after the corpus gate, via --freeze",
+  "no_network": true,
+  "no_gpu": true
+}
