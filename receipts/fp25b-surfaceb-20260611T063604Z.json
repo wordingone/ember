@@ -1,0 +1,133 @@
+{
+  "ticket": "FP25B-SURFACEB",
+  "ts": "20260611T063604Z",
+  "surface": "B-heldout",
+  "arms": [
+    "base",
+    "control",
+    "grpo",
+    "mtp",
+    "sft"
+  ],
+  "k": 8,
+  "seed": 23,
+  "selection_src_seed": 16,
+  "heldout_task_ids_sha256": "d7fb2fa7e7165489069e4ef0450b790f1c8126a0a5010ea406f4e9d1f2f99adc",
+  "heldout_task_count": 17,
+  "sha_convention": "id-set shas = sha256 over the sorted task-id strings joined by \\n, utf-8 (ids_sha256); file shas = sha256 over on-disk raw bytes",
+  "disjointness_overlap": [],
+  "a_pin": {
+    "receipt": "fp25-indist-20260611T060416Z.json",
+    "verdict": "RECIPE-LEARNS",
+    "arm_learns_vs_base": {
+      "sft": true,
+      "mtp": true,
+      "grpo": true
+    },
+    "verified_intact": true
+  },
+  "samples_file": [
+    "w4-eval-fp25b-train-20260611T062752Z-samples.jsonl",
+    "w4-eval-fp25b-val-20260611T063117Z-samples.jsonl"
+  ],
+  "b_eval_receipts": {
+    "w4-eval-fp25b-train-20260611T062752Z.json": "train",
+    "w4-eval-fp25b-val-20260611T063117Z.json": "validation"
+  },
+  "adapter_provenance": {
+    "base": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "sft": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-sft",
+    "mtp": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-mtp",
+    "grpo": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-grpo",
+    "control": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-control"
+  },
+  "basis": "fp-25 Surface B: held-out frontier, amendment 2 (mails 14575 + post-14580 pool expansion \u2014 S1 fp25b-cov train-pool frontier + S2 r2w-q3 validation frontier, base-only selection, union-disjoint, fresh-seed binding eval); composes with the certified Surface-A RECIPE-LEARNS via decide_generalize",
+  "blocks": {
+    "sft": {
+      "pair": "sft - base",
+      "n_tasks": 17,
+      "feed": {
+        "arm": 11,
+        "ref": 15,
+        "discordant_ref_only_b": 4,
+        "discordant_arm_only_c": 0,
+        "mcnemar_p": 0.125,
+        "newcombe_ci95": [
+          -0.4842,
+          0.0533
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0294,
+        "bootstrap_ci95": [
+          -0.1838,
+          0.1029
+        ],
+        "mde": 0.2135,
+        "flag": "FLAT"
+      }
+    },
+    "mtp": {
+      "pair": "mtp - base",
+      "n_tasks": 17,
+      "feed": {
+        "arm": 13,
+        "ref": 15,
+        "discordant_ref_only_b": 2,
+        "discordant_arm_only_c": 0,
+        "mcnemar_p": 0.5,
+        "newcombe_ci95": [
+          -0.3697,
+          0.1478
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0074,
+        "bootstrap_ci95": [
+          -0.0882,
+          0.0956
+        ],
+        "mde": 0.1325,
+        "flag": "FLAT"
+      }
+    },
+    "grpo": {
+      "pair": "grpo - base",
+      "n_tasks": 17,
+      "feed": {
+        "arm": 17,
+        "ref": 15,
+        "discordant_ref_only_b": 0,
+        "discordant_arm_only_c": 2,
+        "mcnemar_p": 0.5,
+        "newcombe_ci95": [
+          -0.0852,
+          0.3434
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0662,
+        "bootstrap_ci95": [
+          -0.0221,
+          0.1544
+        ],
+        "mde": 0.1278,
+        "flag": "FLAT"
+      }
+    }
+  },
+  "result": {
+    "surface": "B-heldout",
+    "verdict": "OOD-TRANSFER-CEILING",
+    "provenance": "receipt-derived (fp-25 eval), not Fable-derived",
+    "arm_generalizes_vs_base": {
+      "sft": false,
+      "mtp": false,
+      "grpo": false
+    },
+    "validation_null_reading": "EXPLAINED as a data-scale/transfer ceiling; benign for the owned core (its in-dist corpus is orders larger) but flagged as data-scale at 98 examples, not a mechanism win"
+  }
+}

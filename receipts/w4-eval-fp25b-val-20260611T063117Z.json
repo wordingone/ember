@@ -1,0 +1,211 @@
+{
+  "ticket": "W4-EVAL",
+  "ts": "20260611T063117Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "arm": [
+      "base=",
+      "sft=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-sft",
+      "mtp=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-mtp",
+      "grpo=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-grpo",
+      "control=/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-control"
+    ],
+    "split": "validation",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 23,
+    "tag": "fp25b-val",
+    "task_ids_file": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/fp25b-heldout-val-ids.txt"
+  },
+  "n_tasks": 10,
+  "k": 8,
+  "arms": {
+    "base": {
+      "pass_any_pct": 80.0,
+      "pass_ci95": [
+        50.0,
+        100.0
+      ],
+      "gen_secs": 50.9,
+      "extraction_fail": 0,
+      "programs": 80
+    },
+    "sft": {
+      "pass_any_pct": 50.0,
+      "pass_ci95": [
+        20.0,
+        80.0
+      ],
+      "gen_secs": 42.4,
+      "extraction_fail": 0,
+      "programs": 80
+    },
+    "mtp": {
+      "pass_any_pct": 60.0,
+      "pass_ci95": [
+        30.0,
+        90.0
+      ],
+      "gen_secs": 30.3,
+      "extraction_fail": 0,
+      "programs": 80
+    },
+    "grpo": {
+      "pass_any_pct": 100.0,
+      "pass_ci95": [
+        100.0,
+        100.0
+      ],
+      "gen_secs": 42.6,
+      "extraction_fail": 0,
+      "programs": 80
+    },
+    "control": {
+      "pass_any_pct": 50.0,
+      "pass_ci95": [
+        20.0,
+        80.0
+      ],
+      "gen_secs": 42.3,
+      "extraction_fail": 0,
+      "programs": 80
+    }
+  },
+  "deltas": {
+    "sft_minus_base_ci95": [
+      -60.0,
+      0.0
+    ],
+    "mtp_minus_base_ci95": [
+      -50.0,
+      0.0
+    ],
+    "grpo_minus_base_ci95": [
+      0.0,
+      50.0
+    ],
+    "control_minus_base_ci95": [
+      -60.0,
+      0.0
+    ],
+    "sft_minus_control_ci95": [
+      -30.0,
+      30.0
+    ],
+    "mtp_minus_control_ci95": [
+      -20.0,
+      40.0
+    ],
+    "grpo_minus_control_ci95": [
+      20.0,
+      80.0
+    ]
+  },
+  "samples_file": "w4-eval-fp25b-val-20260611T063117Z-samples.jsonl",
+  "split_discipline": "validation=heldout only; train=world pool; test=t5-harm-only",
+  "exact": {
+    "per_arm_wilson_ci": {
+      "base": {
+        "lo": 0.490162,
+        "hi": 0.943318,
+        "k": 8,
+        "n": 10
+      },
+      "sft": {
+        "lo": 0.236593,
+        "hi": 0.763407,
+        "k": 5,
+        "n": 10
+      },
+      "mtp": {
+        "lo": 0.312674,
+        "hi": 0.83182,
+        "k": 6,
+        "n": 10
+      },
+      "grpo": {
+        "lo": 0.722467,
+        "hi": 1.0,
+        "k": 10,
+        "n": 10
+      },
+      "control": {
+        "lo": 0.236593,
+        "hi": 0.763407,
+        "k": 5,
+        "n": 10
+      }
+    },
+    "paired_newcombe_ci": {
+      "sft_minus_base_ci95": {
+        "lo": -0.603222,
+        "hi": 0.037592,
+        "b": 0,
+        "c": 3,
+        "n": 10
+      },
+      "mtp_minus_base_ci95": {
+        "lo": -0.509838,
+        "hi": 0.112353,
+        "b": 0,
+        "c": 2,
+        "n": 10
+      },
+      "grpo_minus_base_ci95": {
+        "lo": -0.112353,
+        "hi": 0.509838,
+        "b": 2,
+        "c": 0,
+        "n": 10
+      },
+      "control_minus_base_ci95": {
+        "lo": -0.603222,
+        "hi": 0.037592,
+        "b": 0,
+        "c": 3,
+        "n": 10
+      },
+      "sft_minus_control_ci95": {
+        "lo": -0.315042,
+        "hi": 0.315042,
+        "b": 1,
+        "c": 1,
+        "n": 10
+      },
+      "mtp_minus_control_ci95": {
+        "lo": -0.236225,
+        "hi": 0.420536,
+        "b": 2,
+        "c": 1,
+        "n": 10
+      },
+      "grpo_minus_control_ci95": {
+        "lo": 0.117367,
+        "hi": 0.763407,
+        "b": 5,
+        "c": 0,
+        "n": 10
+      }
+    },
+    "mde": {
+      "binom_p0_baseline_n": {
+        "p0": 0.8,
+        "n": 10,
+        "mde": 0.354376
+      },
+      "paired_disc05_n": {
+        "disc_rate": 0.05,
+        "n": 10,
+        "mde": 0.198102
+      },
+      "paired_disc10_n": {
+        "disc_rate": 0.1,
+        "n": 10,
+        "mde": 0.280159
+      }
+    }
+  }
+}
