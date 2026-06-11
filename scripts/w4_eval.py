@@ -32,6 +32,10 @@ sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import execute_batch, extract_code, load_model  # noqa: E402
 from t4_eval import bootstrap_ci, paired_delta_ci  # noqa: E402
 from w1_mbpp import SOLVE_STUB, generate_chat, load_split, problem_prompt  # noqa: E402
+try:
+    from stats_exact import build_exact_block as _build_exact_block  # noqa: E402
+except ImportError:
+    _build_exact_block = None
 
 RECEIPTS = f"{NC}/receipts"
 
@@ -162,6 +166,21 @@ def main():
     if "trained" in arm_vec and "control" in arm_vec:
         receipt["deltas"]["trained_minus_control_ci95"] = \
             paired_delta_ci(arm_vec["trained"], arm_vec["control"])
+    # Additive exact-method sub-block (Wilson + Newcombe + MDE); bootstrap and
+    # all existing fields are unchanged; early-stop logic not present in w4.
+    if _build_exact_block is not None and len(problems) > 0:
+        _succ_by_arm = {name: sum(arm_vec[name]) for name in arm_vec}
+        _paired_outcomes = {}
+        if "base" in arm_vec:
+            for name in arm_vec:
+                if name != "base":
+                    _paired_outcomes[f"{name}_minus_base_ci95"] = (
+                        arm_vec[name], arm_vec["base"])
+        if "trained" in arm_vec and "control" in arm_vec:
+            _paired_outcomes["trained_minus_control_ci95"] = (
+                arm_vec["trained"], arm_vec["control"])
+        receipt["exact"] = _build_exact_block(
+            _succ_by_arm, _paired_outcomes, len(problems))
 
     with open(f"{RECEIPTS}/w4-eval{tagpart}-{ts}.json", "w") as f:
         json.dump(receipt, f, indent=2)

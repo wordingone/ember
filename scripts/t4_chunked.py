@@ -42,6 +42,10 @@ sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import load_tasks  # noqa: E402
 from t4_eval import (ADAPTERS, RECEIPTS, SURFACES, bootstrap_ci,  # noqa: E402
                      fewshot_messages, paired_delta_ci, run_arm)
+try:
+    from stats_exact import build_exact_block as _build_exact_block  # noqa: E402
+except ImportError:
+    _build_exact_block = None
 
 
 def atomic_write(path, obj):
@@ -207,13 +211,42 @@ def main():
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     arms_sum, deltas, n_done = summarize(len(chunks))
+    # Additive exact-method sub-block (Wilson + Newcombe + MDE); falls back
+    # gracefully if stats_exact is unavailable — no existing field is modified,
+    # early-stop still keys off bootstrap CIs exactly as before.
+    _exact_block = None
+    if _build_exact_block is not None and n_done > 0:
+        _succ_by_arm = {
+            arm: sum(acc[arm][i]["solved"] for i in
+                     [t["id"] for t in tasks[:len(chunks) * args.chunk_size]
+                      if t["id"] in acc.get(arm, {})])
+            for arm in args.arms if arm not in skipped_arms
+        }
+        _ids_common = [
+            t["id"] for t in tasks[:len(chunks) * args.chunk_size]
+            if all(t["id"] in acc.get(a, {}) for a in args.arms
+                   if a not in skipped_arms)
+        ]
+        _paired_outcomes = {}
+        sbarm = {arm: [int(acc[arm][i]["solved"]) for i in _ids_common]
+                 for arm in args.arms if arm not in skipped_arms
+                 and all(i in acc.get(arm, {}) for i in _ids_common)}
+        if "core_meta" in sbarm and "core_only" in sbarm:
+            _paired_outcomes["delta_meta_minus_core_ci95"] = (
+                sbarm["core_meta"], sbarm["core_only"])
+        if "core_meta" in sbarm and "control" in sbarm:
+            _paired_outcomes["delta_meta_minus_control_ci95"] = (
+                sbarm["core_meta"], sbarm["control"])
+        _exact_block = _build_exact_block(_succ_by_arm, _paired_outcomes,
+                                          n_done)
     receipt = {"ticket": "NC0-T4-CHUNKED", "round": args.round, "ts": ts,
                "surface": args.surface, "tag_suffix": args.tag_suffix,
                "args": {k: v for k, v in vars(args).items() if k != "arms"},
                "n_tasks_done": n_done,
                "stopped_early": bool(stop_reason),
                "stop_reason": stop_reason,
-               "arms": arms_sum, **deltas}
+               "arms": arms_sum, **deltas,
+               **( {"exact": _exact_block} if _exact_block is not None else {})}
     path = f"{RECEIPTS}/{tag}-{ts}.json"
     with open(path, "w") as f:
         json.dump(receipt, f, indent=2)
