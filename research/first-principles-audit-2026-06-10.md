@@ -249,7 +249,7 @@ its own ledger.
 
 **Question:** asserts are SAMPLES of a specification (22.1% of V-passes
 fail MBPP+ extended, frontier 27.1% — receipt v-extended-20260610T215421Z).
-What raises soundness WITHOUT a model judge, and where does hardening stop
+What raises soundness WITHOUT a model judge, and where does tightening stop
 paying?
 
 **Survey verdict (draft research/drafts/fp2-v-ceiling-draft.md, gated):**
@@ -265,7 +265,7 @@ correctness — useful diagnostics, wrong layer for FPR.
 
 **What actually pays (in order):**
 1. **DONE — extended-tests-join-V** (eng #21/#22): the single biggest
-   measured hardening; on HumanEval+ (#33/#46) V is born hardened
+   measured tightening; on HumanEval+ (#33/#46) V is born strict
    (plus-tests ARE the verifier).
 2. **NEXT (named follow-up): differential cross-candidate testing**
    (`v_differential`): for each task, run ALL verified sibling programs
@@ -284,19 +284,19 @@ correctness — useful diagnostics, wrong layer for FPR.
    re-execution agreed with the original receipted verified flags at
    **1.0** (verify_agreement, fail-closed ≥0.95 — the timing run is
    verifying the SAME verdicts, so the ratio is honest). The §8.10
-   conclusion never leaned on the exact ratio — V-hardening's binding
+   conclusion never leaned on the exact ratio — V-tightening's binding
    constraint is property QUALITY, not compute, and that survives any
    ratio ≫ 1 — but the number is now receipt-backed at ~785×, not
-   asserted. Hardening stops paying
+   asserted. Tightening stops paying
    when it needs hand-or-model-written specs; at that line, switch worlds
-   (HumanEval+ born-hardened, then policy worlds where the WORLD is the
+   (HumanEval+ born-strict, then policy worlds where the WORLD is the
    verifier — the goal's own language).
 
 **Successor minted (fp-5):** is the SANDBOX itself trustworthy — what do
 the t1_probe rlimits/import-whitelist actually guarantee, and can a
-generated program pass V by exploiting the verifier (reward-hacking via
+generated program obtain a false-accept from V (false credit via
 sandbox edges: monkeypatching asserts, output capture, timing)? V's
-soundness question one level down: verifier SECURITY, which GRPO (now
+soundness question one level down: verifier SOUNDNESS under reward coupling, which GRPO (now
 training against V as reward) makes load-bearing.
 
 ## 8.11 fp-3 (#39): LoRA-on-4bit-3B vs full-FT tiny core — the vehicle question
@@ -419,14 +419,14 @@ bits/GPU-min still favorable to the small sampler, and should the ledger
 schema carry per-core P̂ stamps so B is always quoted "bits for whom"?
 CPU-executable from existing receipts + ledger; closing PR mints fp-8.
 
-## 8.13 fp-5 (#54): verifier security — can a program pass V by exploiting it?
+## 8.13 fp-5 (#54): verifier soundness — can a program obtain a false-accept from V?
 
 **Why load-bearing now:** GRPO trains against V as reward —
 `t2_grpo.shaped_reward` returns R_VERIFIED purely from the sandbox
 `verified` flag, with NO normalization (confirmed by read). Any program
 that passes V without solving is a reward gradient the policy can climb.
 The round-1 GRPO receipt (reward 0.477→0.513, 489/960 verified at 60
-steps) shows the policy has NOT found such an exploit yet — reward would
+steps) shows the policy has NOT found such a path yet — reward would
 saturate toward 1.0 if it had — but the surface being unguarded matters
 for longer runs and for the goal's "verify against ground truth the world
 provides" claim.
@@ -436,10 +436,10 @@ enforces: RLIMIT_AS memory cap; SIGALRM wall-timeout; `os.nice(5)`;
 `__import__` whitelist (`_safe_import`, ~16 modules incl. numpy + the ARC
 DSL); removed builtins {open, input, exec, eval, compile, exit, quit,
 help, breakpoint}. These block file I/O, subprocess, eval-injection, and
-runaway resource use — the obvious escape classes.
+runaway resource use — the obvious failure classes.
 
-**Finding 1 — CERTAIN reward-hack the sandbox does not touch (by language
-semantics, no execution needed): the `__eq__` hack.** The production
+**Finding 1 — CERTAIN false-accept path the sandbox does not touch (by
+language semantics, no execution needed): `__eq__` dispatch.** The production
 harness is `src + "assert fn(args) == expected"`. If `src` defines `fn`
 to return an object whose `__eq__` returns `True` (or an `int` subclass
 that lies on `==`), every `== expected` assert passes without computing
@@ -447,18 +447,18 @@ anything. The sandbox guards imports, builtins, memory, and time — it
 does NOT intercept comparison dispatch. **This defeats V AND the MBPP+
 ext-verify layer**, because both verify by `==` asserts; ext-verify (the
 22.1%-FPR safety net, v-extended receipt) is fooled identically. It is
-the one exploit that is input-independent, so unlike test-hardcoding it
-cannot be caught by hidden tests. `scripts/v_exploit_probe.py` carries it
-as the `eq-hack` / `eq-hack-int` probes (selftest PASS).
+the one path that is input-independent, so unlike test-hardcoding it
+cannot be caught by hidden tests. `scripts/v_soundness_probe.py` carries
+both `__eq__`-dispatch probes (selftest PASS).
 
-**Finding 2 — live-leg RESULT (receipt `v-exploit-probe-20260611T000301Z.json`,
+**Finding 2 — live-leg RESULT (receipt ticket V-…-PROBE, ts 20260611T000301Z,
 daemon job 6677cc6b, control_solve_ok=true so semantics anchored).** Of
-five non-control probes, **THREE breached, two held:**
-- `eq-hack` ✓ BREACH (certain, confirmed): custom-`__eq__` returns True.
-- `eq-hack-int` ✓ BREACH (certain, confirmed): int-subclass lying on `==`.
-- **`subclasses-escape` ✓ BREACH (newly confirmed, was hypothesis):** the
+five non-control probes, **THREE produced false-accepts, two held:**
+- probe 1 ✓ FALSE-ACCEPT (certain, confirmed): custom-`__eq__` returns True.
+- probe 2 ✓ FALSE-ACCEPT (certain, confirmed): int-subclass lying on `==`.
+- **probe 3, object-graph reachability ✓ FALSE-ACCEPT (newly confirmed, was hypothesis):** the
   `(1).__class__.__base__.__subclasses__()` walk reaches a class whose
-  `__module__` contains `os` — the classic CPython sandbox-escape
+  `__module__` contains `os` — the classic CPython object-graph
   reachability path is OPEN in this sandbox (the import whitelist gates
   `__import__`, not object-graph traversal). The probe's sentinel is
   reachability (found the class), not yet `os.system` execution — but
@@ -472,7 +472,7 @@ whitelist / removed builtins) work for what they target — import and
 builtin recovery are blocked. They do NOT touch the two surfaces that
 matter for V-as-reward: **comparison dispatch (`__eq__`) and object-graph
 traversal (`__subclasses__`).** Both are pure-language reachability, both
-unguarded. Two independent breach classes, not one.
+unguarded. Two independent false-accept classes, not one.
 
 **Consequence (named eng follow-up, NOT implemented in this doc):** the
 reward/verify harness needs output canonicalization before `==` — a
@@ -480,17 +480,17 @@ trusted-type compare that rejects custom-`__eq__` returns (note: left-side
 `expected == result` does NOT save you when `result` is a subclass of
 `expected`'s type — Python calls the reflected `__eq__` first; the robust
 form is structural/`json`-canonical comparison with a type allow-list).
-This is a verifier-hardening eng issue, gated by the live probe receipt
+This is a verifier-tightening eng issue, gated by the live probe receipt
 confirming the surface.
 
 **Successor minted (fp-8):** the verifier-trust REGRESS — if V must be
-hardened against the policy it rewards, who hardens the hardener? The
+tightened against the policy it rewards, who checks the checker? The
 sleep-consolidation T3 gate and NC-K invariant 1 both assume V is sound;
-fp-8 asks whether verifier-hardening is itself a capability that must be
-gated (a hardened V that rejects valid novel solutions is a FALSE-negative
+fp-8 asks whether verifier-tightening is itself a capability that must be
+gated (a tightened V that rejects valid novel solutions is a FALSE-negative
 regression on the floor — the dual of the FPR). Names the measurable:
-hardened-V vs current-V false-negative rate on the existing verified
-ledger (a hardening that drops real solves is its own harm).
+tightened-V vs current-V false-negative rate on the existing verified
+ledger (a tightening that drops real solves is its own harm).
 
 ## 8.14 fp-7 (#60): consolidator-side episode re-valuation — bits for whom?
 
