@@ -236,6 +236,32 @@ EXEC_WORKERS = max(2, min(6, (os.cpu_count() or 8) - 2))
 PACE_EVERY = int(os.environ.get("EMBER_DECODE_PAUSE_EVERY", "32"))
 PACE_S = float(os.environ.get("EMBER_DECODE_PAUSE_S", "0.5"))
 
+# fp-14 (#88): pacing meter — governor sleep time accumulated and exposed so
+# receipts can carry MEASURED pacing instead of the fp-11 reconstruction.
+# Monotone since import (whole-job semantics); callers may pacing_reset().
+PACING = {"throttle_s": 0.0, "throttle_sleeps": 0,
+          "pacer_s": 0.0, "pacer_sleeps": 0}
+
+
+def _pace_record(kind, seconds):
+    PACING[f"{kind}_s"] = round(PACING[f"{kind}_s"] + seconds, 4)
+    PACING[f"{kind}_sleeps"] += 1
+
+
+def pacing_reset():
+    for k in PACING:
+        PACING[k] = 0.0 if k.endswith("_s") else 0
+
+
+def pacing_snapshot():
+    """Copy for receipts: total governor sleep seconds by class + the
+    convention note fp-9/fp-11 need to resolve the wall-clock qualifier."""
+    snap = dict(PACING)
+    snap["pacing_total_s"] = round(snap["throttle_s"] + snap["pacer_s"], 4)
+    snap["convention"] = ("governed wall-clock = compute + this pacing; "
+                          "subtract pacing_total_s for compute-only views")
+    return snap
+
 
 def decode_pacer():
     """StoppingCriteriaList that sleeps PACE_S every PACE_EVERY decode steps
@@ -250,6 +276,7 @@ def decode_pacer():
             self.n += 1
             if PACE_EVERY > 0 and self.n % PACE_EVERY == 0:
                 time.sleep(PACE_S)
+                _pace_record("pacer", PACE_S)
             return False
 
     return StoppingCriteriaList([_Pacer()])
@@ -385,6 +412,7 @@ def generate(model, tok, tasks, k, batch_size, max_new, temp, seed):
         print(f"GEN {done}/{len(prompts)} "
               f"({gen_tokens / max(time.time() - t0, 1):.0f} tok/s)", flush=True)
         time.sleep(THROTTLE_S)  # headroom rule: GPU never pegged wall-to-wall
+        _pace_record("throttle", THROTTLE_S)
     return gen_meta, completions, meta, gen_tokens, time.time() - t0
 
 

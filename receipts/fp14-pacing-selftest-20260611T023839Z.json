@@ -1,0 +1,12 @@
+{
+  "ticket": "FP14-PACING-SELFTEST",
+  "ts": "20260611T023839Z",
+  "checks": {
+    "meter_math": true,
+    "snapshot_purity": true,
+    "t1_probe_wiring": true,
+    "t2_round_wiring_write_time": true
+  },
+  "settlement_leg": "fires on the first instrumented sampling run (round-2); fp-20 mints at #88 close to carry it",
+  "fp11_tie": "fp-11 modeled pacing by reconstruction; this meter replaces the model with measurement on every future t2 receipt"
+}

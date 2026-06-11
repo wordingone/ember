@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (ARC_TRAIN, extract_code, execute_batch, load_tasks,  # noqa: E402
-                      sample_model, task_prompt)
+                      pacing_snapshot, sample_model, task_prompt)
 from ledger_license import effective_class, parse_allow, stamp  # noqa: E402 (eng #70)
 
 LEDGER = f"{NC}/ledger/episodes.jsonl"
@@ -339,6 +339,9 @@ def main():
         receipt["adapter"] = f"{ADAPTERS}/{tag}"
 
     os.makedirs(RECEIPTS, exist_ok=True)
+    # fp-14 (#88): measured governor pacing, whole-job accumulation — taken
+    # at WRITE time so sampling/eval sleeps are included.
+    receipt["pacing"] = pacing_snapshot()
     path = f"{RECEIPTS}/t2-{tag}-{ts}.json"
     with open(path, "w") as f:
         json.dump(receipt, f, indent=2)
