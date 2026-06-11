@@ -417,6 +417,30 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
     if buf:
         _emit_shard(buf)
 
+    # fail-closed: content tokens must reproduce the FROZEN real_token_counts
+    # (#195 AC: "grand total == 6,973,632,296" + "fail-closed if the total
+    # drifts"). real_token_counts is CONTENT only — no doc separators — so the
+    # packed stream total is larger by the doc count; compare content, not
+    # stream. A per-source mismatch always refuses; the grand-total check fires
+    # only once every frozen source is present (partial/slice runs skip it).
+    freeze_counts = tokfreeze.get("real_token_counts") or {}
+    content_total = sum(c["content_tokens"] for c in per_source.values())
+    sep_total = sum(c["separator_tokens"] for c in per_source.values())
+    freeze_total = freeze_counts.get("total")
+    fz_sources = {k for k in freeze_counts if k != "total"}
+    drift = []
+    for src, c in per_source.items():
+        exp = freeze_counts.get(src)
+        if exp is not None and c["content_tokens"] != exp:
+            drift.append(f"{src} content {c['content_tokens']} != freeze {exp}")
+    covered = bool(fz_sources) and set(per_source) >= fz_sources
+    if covered and freeze_total is not None and content_total != freeze_total:
+        drift.append(f"content_total {content_total} != freeze total "
+                     f"{freeze_total}")
+    if drift:
+        raise ValueError("TOKEN-SHARDS-V0 freeze reproduction FAILED: "
+                         + "; ".join(drift))
+
     total = sum(s["n_tokens"] for s in shards)
     n_windows = (total - BLOCK_LEN) // SEQ + 1 if total >= BLOCK_LEN else 0
     return {
@@ -425,6 +449,14 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
         "shard_dir": out_dir,
         "shards": shards,
         "total_stream_tokens": total,
+        "content_total_tokens": content_total,
+        "freeze_reproduction": {
+            "freeze_total": freeze_total,
+            "content_total_tokens": content_total,
+            "separator_tokens": sep_total,
+            "total_match": bool(covered and freeze_total is not None
+                                and content_total == freeze_total),
+        },
         "per_source": per_source,
         "separator_id": SEPARATOR_ID,
         "reserved_band_guard": {
@@ -689,6 +721,11 @@ def main():
                          "shards, and emit a checked TOKEN-SHARDS-V0 receipt. "
                          "HELD pending the shard-production call — do not run "
                          "until that HOLD is lifted.")
+    ap.add_argument("--out", default=SHARD_DIR,
+                    help="shard output dir, relative to the repo (default "
+                         f"{SHARD_DIR!r}). Use an out-of-tree path like "
+                         "'../shards-v0' so the ~14 GB packed shards stay out "
+                         "of git; the receipt records this as shard_dir.")
     a = ap.parse_args()
     if a.selftest:
         _selftest()
@@ -705,7 +742,7 @@ def main():
         return
     if a.emit:
         from receipt_write import checked_write       # noqa: E402
-        receipt = produce_shards_v0(NC, emit=True)
+        receipt = produce_shards_v0(NC, emit=True, out_dir=a.out)
         out = f"{NC}/receipts/token-shards-v0-{receipt['ts']}.json"
         checked_write(out, receipt)
         viol = validate_shards_receipt(
