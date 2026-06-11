@@ -51,15 +51,24 @@ def main():
     ap.add_argument("--model", default="Qwen/Qwen2.5-Coder-3B-Instruct")
     ap.add_argument("--control", action="store_true")
     ap.add_argument("--tag", default="r1w-q3")
+    # NOTE: shifts args_fp vs pre-#70 receipts (schema fingerprint; tags pin
+    # comparisons) — same acknowledged shift as eng #26's --reward.
+    ap.add_argument("--license-allow", default=None,
+                    help="comma list of license classes the views keep "
+                         "(eng #70); default = no filter; UNKNOWN is "
+                         "fail-closed (never allow-listable)")
     args, _unknown = ap.parse_known_args()  # daemon appends args; ignore them
 
     import sys
     sys.path.insert(0, f"{NC}/scripts")
     from frontier import caps_from_records, ext_clean, load_ext_flags, \
         report_block
+    from ledger_license import census as license_census, filter_records, \
+        parse_allow
     from t2_round import CONTROL_POOL, LEDGER, ADAPTERS, build_dataset, \
         train_lora
 
+    allow = parse_allow(args.license_allow) if args.license_allow else None
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     tag = args.tag + ("-control" if args.control else "")
 
@@ -72,10 +81,19 @@ def main():
     flags = load_ext_flags([f"{RECEIPTS}/v-ext-flags-*.jsonl"])
     n_before = len(arm_recs)
     arm_recs = ext_clean(arm_recs, flags)
+    ext_excluded = n_before - len(arm_recs)
+    lic_block = None
+    if allow:  # eng #70: license filter AT BUILD, same pattern as ext_clean —
+        # the rewritten view below is the license-filtered artifact.
+        pre_census = license_census(arm_recs)
+        n_pre = len(arm_recs)
+        arm_recs = filter_records(arm_recs, allow)
+        lic_block = {"allow": sorted(allow),
+                     "world_before_by_class": pre_census,
+                     "world_before": n_pre, "world_after": len(arm_recs)}
     with open(f"{VIEWS}/wcode-r1.jsonl", "w") as vf:
         for r in arm_recs:
             vf.write(json.dumps(r) + "\n")
-    ext_excluded = n_before - len(arm_recs)
     caps = caps_from_records(arm_recs)
 
     match_texts = None
@@ -83,6 +101,14 @@ def main():
         arm_examples, verified_counts = build_dataset(
             f"{VIEWS}/wcode-r1.jsonl", cap=caps)
         ctrl_recs = write_view(CONTROL_POOL, f"{VIEWS}/wcode-r1-control.jsonl")
+        if allow:  # eng #70: control view license-filtered too
+            n_ctl = len(ctrl_recs)
+            ctrl_recs = filter_records(ctrl_recs, allow)
+            with open(f"{VIEWS}/wcode-r1-control.jsonl", "w") as vf:
+                for r in ctrl_recs:
+                    vf.write(json.dumps(r) + "\n")
+            lic_block["control_before"] = n_ctl
+            lic_block["control_after"] = len(ctrl_recs)
         examples, counts = build_dataset(f"{VIEWS}/wcode-r1-control.jsonl",
                                          match_counts=verified_counts)
         # G2 matched budget = matched OPTIMIZER STEPS: mirror arm A's
@@ -106,6 +132,8 @@ def main():
                            "n_tasks": len(counts)},
                "excluded": "ARC seed episodes (off-policy DSL, t5 harm "
                            "receipt 20260610T203520Z)"}
+    if lic_block:  # eng #70: filter visibility — never a silent cap
+        receipt["license_filter"] = lic_block
     if not examples:
         receipt["verdict"] = "EMPTY-DATASET (gate before training)"
     else:
