@@ -19,10 +19,10 @@ This module owns the gate-side half (eng-49 / #183):
     consistent and re-derivable from the bytes. Any miss is a violation.
 
 The PRODUCTION WRITER (corpus zstd -> frozen tokenizer -> uint16 `.bin`
-shards + this receipt) is the deferred half (eng-50): build-now, and its
-`--emit` run stays HELD pending the shard-production call. This module
-deliberately ships NO corpus-reading / shard-writing path — it produces no
-data; it only defines + enforces the contract the writer must satisfy.
+shards + this receipt) is the eng-50 half below (`produce_shards_v0`); its
+`--emit` run is governed by the Step-1 chain (HOLD lifted 2026-06-11, Leo
+14620). `--census` is the read-only diagnostic that sizes the text-borne
+special-literal deviation (Leo 14628).
 """
 import argparse
 import hashlib
@@ -344,6 +344,64 @@ def _resolve_sources(nc, assembly):
     return out
 
 
+ENCODE_BATCH_DOCS = 512                    # mirror tokenizer_freeze.count_tokens
+ENCODE_BATCH_BYTES = 32_000_000            # bounded by docs AND chars
+
+ENCODE_SEMANTICS = (
+    "added-token-matching-disabled-v1: production encoding loads the frozen "
+    "tokenizer.json (on-disk bytes sha-pinned, unchanged) with its "
+    "added_tokens table stripped IN MEMORY, so special literals occurring in "
+    "source text tokenize as ordinary byte-level pieces; ids 0..7 are "
+    "unreachable from text by construction (band tokens are absent from the "
+    "BPE merges) and every literal is probe-encoded at build to prove it. "
+    "Doc-boundary separator id 0 is writer-inserted only. (Leo 14628: the "
+    "band contract is supreme; the counting instrument aligns to it.)")
+
+
+def _production_tokenizer(nc, tokfreeze, match_added_tokens):
+    """Load the sha-pinned frozen tokenizer for corpus encoding.
+
+    match_added_tokens=False is the PRODUCTION semantics (ENCODE_SEMANTICS):
+    the added_tokens table is stripped in memory and each special literal is
+    probe-encoded to prove no id < 8 can originate from text.
+    match_added_tokens=True is the legacy/diagnostic semantics (census): the
+    tokenizer as-frozen, where added-token literals in raw text match to
+    their reserved ids — exactly the deviation being measured."""
+    tok_json_rel = (tokfreeze.get("tokenizer_repo_path")
+                    or "tokenizer/tokenizer.json").replace(chr(92), "/")
+    tok_json_sha = tokfreeze.get("tokenizer_json_sha256")
+    tok_json_path = f"{nc}/{tok_json_rel}"
+    if not os.path.exists(tok_json_path) or _sha(tok_json_path) != tok_json_sha:
+        raise ValueError("tokenizer.json missing or sha drift vs freeze "
+                         "receipt — refusing to tokenize")
+    from tokenizers import Tokenizer
+    if match_added_tokens:
+        return Tokenizer.from_file(tok_json_path)
+    d = json.load(open(tok_json_path, encoding="utf-8"))
+    literals = [a["content"] for a in d.get("added_tokens", [])]
+    d["added_tokens"] = []
+    tk = Tokenizer.from_str(json.dumps(d))
+    for lit in literals:                  # fail-closed strip verification
+        bad = [i for i in tk.encode(lit, add_special_tokens=False).ids
+               if i < 8]
+        if bad:
+            raise ValueError(f"added-token strip failed: literal {lit!r} "
+                             f"still encodes to reserved id(s) {bad}")
+    return tk
+
+
+def _encode_batch_factory(nc, tokfreeze, encode_fn, match_added_tokens=False):
+    """Bounded-batch encoder: texts -> list[list[int]] in input order.
+    Production path = frozen tokenizer via encode_batch (the call shape
+    tokenizer_freeze.count_tokens uses — GIL-releasing, parallel across
+    docs, id-identical per doc to encode()). An injected encode_fn
+    (selftests) is wrapped per-doc."""
+    if encode_fn is not None:
+        return lambda texts: [encode_fn(t) for t in texts]
+    tk = _production_tokenizer(nc, tokfreeze, match_added_tokens)
+    return lambda texts: [e.ids for e in tk.encode_batch(texts)]
+
+
 def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
                       token_cap=SHARD_TOKEN_CAP, emit=False,
                       assembly_name=ASSEMBLY_RECEIPT,
@@ -351,28 +409,27 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
     """Encode the frozen corpus into flat uint16 packed shards + return a
     TOKEN-SHARDS-V0 receipt.
 
-    encode_fn: text -> list[int]. Default = the frozen tokenizer (production).
-    Every produced id must land in [8, VOCAB_SIZE) — reserved ids 0..7 and
-    out-of-vocab ids are REFUSED (raise), so the reserved multimodal band can
-    never originate from source text. A separator id 0 is appended after each
-    document. emit=True writes the shards; emit=False is a dry count.
-    """
+    encode_fn: text -> list[int]. Default = the frozen tokenizer under
+    ENCODE_SEMANTICS (added-token matching disabled), batched via
+    encode_batch. Every produced id must land in [8, VOCAB_SIZE) — reserved
+    ids 0..7 and out-of-vocab ids are REFUSED (raise), so the reserved
+    multimodal band can never originate from source text. A separator id 0
+    is appended after each document. emit=True writes the shards;
+    emit=False is a dry count.
+
+    The shard buffer is a list of uint16 numpy chunks, never a Python int
+    list: the 2026-06-11 production run buffered ~256Mi Python ints
+    (~10 GB working set), got working-set-trimmed, and crawled ~7 h on
+    page-ins with zero progress output. ~2 bytes/token now, and every
+    emitted shard logs."""
     import numpy as np
     asm_sha, assembly = _load_pinned(nc, assembly_name)
     tok_sha, tokfreeze = _load_pinned(nc, tokfreeze_name)
     tok_json_rel = (tokfreeze.get("tokenizer_repo_path")
                     or "tokenizer/tokenizer.json").replace(chr(92), "/")
     tok_json_sha = tokfreeze.get("tokenizer_json_sha256")
-    tok_json_path = f"{nc}/{tok_json_rel}"
-    if encode_fn is None:                            # production encoder
-        if not os.path.exists(tok_json_path) or _sha(tok_json_path) != tok_json_sha:
-            raise ValueError("tokenizer.json missing or sha drift vs freeze "
-                             "receipt — refusing to tokenize")
-        from tokenizers import Tokenizer
-        _tk = Tokenizer.from_file(tok_json_path)
-
-        def encode_fn(t):                            # noqa: E306
-            return _tk.encode(t, add_special_tokens=False).ids
+    encode_batch_fn = _encode_batch_factory(nc, tokfreeze, encode_fn,
+                                            match_added_tokens=False)
     if sources is None:
         sources = _resolve_sources(nc, assembly)
 
@@ -380,42 +437,71 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
     if emit:
         os.makedirs(out_abs, exist_ok=True)
     per_source, shards = {}, []
-    buf, shard_idx = [], 0
+    chunks, buf_len, shard_idx = [], 0, 0            # uint16 ndarray chunks
+    sep_arr = np.asarray([SEPARATOR_ID], dtype="<u2")
 
-    def _emit_shard(tokens):
+    def _emit_shard(arr):
         nonlocal shard_idx
         name = f"v0-{shard_idx:05d}.bin"
-        arr = np.asarray(tokens, dtype="<u2")
         if emit:
             arr.tofile(f"{out_abs}/{name}")
             sha = _sha(f"{out_abs}/{name}")
         else:
             sha = hashlib.sha256(arr.tobytes()).hexdigest()
-        shards.append({"name": name, "sha256": sha, "n_tokens": len(tokens)})
+        shards.append({"name": name, "sha256": sha, "n_tokens": int(arr.size)})
         shard_idx += 1
+        print(f"[emit] {name} ({arr.size:,} tokens)", flush=True)
+
+    def _drain(final=False):
+        nonlocal chunks, buf_len
+        while buf_len >= token_cap:
+            big = chunks[0] if len(chunks) == 1 else np.concatenate(chunks)
+            _emit_shard(big[:token_cap])
+            big = big[token_cap:]
+            chunks, buf_len = ([big] if big.size else []), int(big.size)
+        if final and buf_len:
+            big = chunks[0] if len(chunks) == 1 else np.concatenate(chunks)
+            _emit_shard(big)
+            chunks, buf_len = [], 0
+
+    def _ingest(src, texts, counters):
+        """Encode one bounded batch; per-doc range check + doc separator."""
+        nonlocal buf_len
+        for ids in encode_batch_fn(texts):
+            arr = np.asarray(ids, dtype=np.int64)
+            if arr.size:
+                bad = (arr < 8) | (arr >= VOCAB_SIZE)
+                if bad.any():
+                    tid = int(arr[int(np.argmax(bad))])
+                    raise ValueError(
+                        f"{src}: token id {tid} outside [8,{VOCAB_SIZE}) — "
+                        "reserved band 0..7 / oov must never come from text")
+                chunks.append(arr.astype("<u2"))
+            chunks.append(sep_arr)                    # doc boundary
+            buf_len += int(arr.size) + 1
+            counters[0] += int(arr.size)
+            counters[1] += 1
+        _drain()
 
     for src, shard_paths in sources:
-        c_content = c_sep = 0
+        counters = [0, 0]                             # [content, separators]
+        batch, bbytes = [], 0
         for sp in shard_paths:
             for text in _iter_docs(sp):
-                ids = encode_fn(text)
-                for tid in ids:
-                    if tid < 8 or tid >= VOCAB_SIZE:
-                        raise ValueError(
-                            f"{src}: token id {tid} outside [8,{VOCAB_SIZE}) — "
-                            "reserved band 0..7 / oov must never come from text")
-                buf.extend(ids)
-                buf.append(SEPARATOR_ID)              # doc boundary
-                c_content += len(ids)
-                c_sep += 1
-                while len(buf) >= token_cap:
-                    _emit_shard(buf[:token_cap])
-                    del buf[:token_cap]
-        per_source[src] = {"content_tokens": c_content,
-                           "separator_tokens": c_sep,
-                           "stream_tokens": c_content + c_sep}
-    if buf:
-        _emit_shard(buf)
+                batch.append(text)
+                bbytes += len(text)
+                if (len(batch) >= ENCODE_BATCH_DOCS
+                        or bbytes >= ENCODE_BATCH_BYTES):
+                    _ingest(src, batch, counters)
+                    batch, bbytes = [], 0
+        if batch:
+            _ingest(src, batch, counters)
+        per_source[src] = {"content_tokens": counters[0],
+                           "separator_tokens": counters[1],
+                           "stream_tokens": counters[0] + counters[1]}
+        print(f"[source] {src}: {counters[0]:,} content tokens / "
+              f"{counters[1]:,} docs", flush=True)
+    _drain(final=True)
 
     # fail-closed: content tokens must reproduce the FROZEN real_token_counts
     # (#195 AC: "grand total == 6,973,632,296" + "fail-closed if the total
@@ -459,6 +545,8 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
         },
         "per_source": per_source,
         "separator_id": SEPARATOR_ID,
+        "encode_semantics": (ENCODE_SEMANTICS if encode_fn is None
+                             else "injected-encoder (selftest)"),
         "reserved_band_guard": {
             "reserved_ids": RESERVED_IDS, "max_id_lt": VOCAB_SIZE,
             # reaching here without raising == no reserved id ever appeared
@@ -476,6 +564,73 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
         "emit": bool(emit),
         "no_gpu": True,
     }
+
+
+def census_special_ids(nc, encode_fn=None, sources=None,
+                       assembly_name=ASSEMBLY_RECEIPT,
+                       tokfreeze_name=TOKENIZER_FREEZE_RECEIPT):
+    """Read-only diagnostic (Leo 14628 — sizes the deviation, decides
+    nothing): per source, count text-borne ids in the guarded bands under
+    the LEGACY matching-ENABLED semantics — reserved/separator ids 0..7
+    (added-token literals in raw corpus text match to their ids; the writer
+    REFUSES them) and out-of-vocab ids. Content totals are recounted under
+    the same semantics, so per-source agreement with the prior freeze
+    receipt's real_token_counts cross-checks the instrument. Writes nothing,
+    raises on nothing; returns {source: stats}."""
+    import numpy as np
+    _, assembly = _load_pinned(nc, assembly_name)
+    _, tokfreeze = _load_pinned(nc, tokfreeze_name)
+    enc = _encode_batch_factory(nc, tokfreeze, encode_fn,
+                                match_added_tokens=True)
+    if sources is None:
+        sources = _resolve_sources(nc, assembly)
+    freeze_counts = tokfreeze.get("real_token_counts") or {}
+    out = {}
+    for src, shard_paths in sources:
+        st = {"docs": 0, "content_tokens": 0,
+              "low_id_tokens": {str(i): 0 for i in range(8)},
+              "docs_with_low_ids": 0,
+              "oob_tokens": 0, "docs_with_oob": 0}
+
+        def _take(texts, st=st):
+            for ids in enc(texts):
+                arr = np.asarray(ids, dtype=np.int64)
+                st["docs"] += 1
+                st["content_tokens"] += int(arr.size)
+                if not arr.size:
+                    continue
+                low = arr[arr < 8]
+                if low.size:
+                    st["docs_with_low_ids"] += 1
+                    for i, n in zip(*np.unique(low, return_counts=True)):
+                        st["low_id_tokens"][str(int(i))] += int(n)
+                n_oob = int(np.count_nonzero(arr >= VOCAB_SIZE))
+                if n_oob:
+                    st["oob_tokens"] += n_oob
+                    st["docs_with_oob"] += 1
+
+        batch, bbytes = [], 0
+        for sp in shard_paths:
+            for text in _iter_docs(sp):
+                batch.append(text)
+                bbytes += len(text)
+                if (len(batch) >= ENCODE_BATCH_DOCS
+                        or bbytes >= ENCODE_BATCH_BYTES):
+                    _take(batch)
+                    batch, bbytes = [], 0
+        if batch:
+            _take(batch)
+        exp = freeze_counts.get(src)
+        st["freeze_content_tokens"] = exp
+        st["matches_freeze"] = (None if exp is None
+                                else exp == st["content_tokens"])
+        out[src] = st
+        print(f"[census] {src}: docs={st['docs']:,} "
+              f"content={st['content_tokens']:,} "
+              f"low={ {k: v for k, v in st['low_id_tokens'].items() if v} } "
+              f"oob={st['oob_tokens']} matches_freeze={st['matches_freeze']}",
+              flush=True)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -705,6 +860,22 @@ def _selftest_writer():
             raised = "reserved band" in str(e) or "outside" in str(e)
         assert raised, "a reserved/oov id must be refused by the writer"
 
+        # census (diagnostic): COUNTS guarded ids instead of raising
+        cen = census_special_ids(td, encode_fn=_toy_encode, sources=sources,
+                                 assembly_name="fixture-assembly.json",
+                                 tokfreeze_name="fixture-tokfreeze.json")
+        assert set(cen) == EXPECTED_SOURCES
+        assert all(st["low_id_tokens"] == {str(i): 0 for i in range(8)}
+                   and st["oob_tokens"] == 0 for st in cen.values()), cen
+        cen2 = census_special_ids(td, encode_fn=lambda t: [5, 8, 0, 40000],
+                                  sources=sources[:1],
+                                  assembly_name="fixture-assembly.json",
+                                  tokfreeze_name="fixture-tokfreeze.json")
+        st = next(iter(cen2.values()))
+        assert st["low_id_tokens"]["5"] == 1 and st["low_id_tokens"]["0"] == 1
+        assert st["docs_with_low_ids"] == 1 and st["oob_tokens"] == 1
+        assert st["content_tokens"] == 4 and st["docs"] == 1
+
     print("TOKEN_SHARDS_V0_WRITER_SELFTEST_PASS")
 
 
@@ -719,8 +890,14 @@ def main():
     ap.add_argument("--emit", action="store_true",
                     help="PRODUCTION: read the frozen corpus, write uint16 .bin "
                          "shards, and emit a checked TOKEN-SHARDS-V0 receipt. "
-                         "HELD pending the shard-production call — do not run "
-                         "until that HOLD is lifted.")
+                         "Governed by the Step-1 chain (HOLD lifted "
+                         "2026-06-11, Leo 14620).")
+    ap.add_argument("--census", action="store_true",
+                    help="read-only diagnostic: per-source counts of "
+                         "text-borne guarded ids (0..7 / oov) under legacy "
+                         "matching-ENABLED semantics + content totals vs the "
+                         "frozen counts; writes receipts/special-id-census-"
+                         "<ts>.json")
     ap.add_argument("--out", default=SHARD_DIR,
                     help="shard output dir, relative to the repo (default "
                          f"{SHARD_DIR!r}). Use an out-of-tree path like "
@@ -739,6 +916,38 @@ def main():
                 print(f"SHARD CONTRACT VIOLATION: {x}")
             raise SystemExit(1)
         print("TOKEN_SHARDS_V0_RECEIPT_VALID")
+        return
+    if a.census:
+        from receipt_write import checked_write       # noqa: E402
+        per_source = census_special_ids(NC)
+        low_total = sum(sum(s["low_id_tokens"].values())
+                        for s in per_source.values())
+        payload = {
+            "ticket": "SPECIAL-ID-CENSUS-V0",
+            "ts": _utc_ts(),
+            "semantics": ("added-token literal matching ENABLED (legacy "
+                          "counting semantics) — measures how many ids 0..7 "
+                          "raw corpus text yields; sizes the deviation for "
+                          "the matching-disabled re-derivation (Leo 14628, "
+                          "decision frozen pre-census)"),
+            "per_source": per_source,
+            "total_low_id_tokens": low_total,
+            "premises": {
+                "assembly_receipt": {
+                    "name": ASSEMBLY_RECEIPT,
+                    "sha256": _sha(f"{NC}/receipts/{ASSEMBLY_RECEIPT}")},
+                "tokenizer_freeze_receipt": {
+                    "name": TOKENIZER_FREEZE_RECEIPT,
+                    "sha256": _sha(
+                        f"{NC}/receipts/{TOKENIZER_FREEZE_RECEIPT}")},
+            },
+            "sha_convention": SHA_CONVENTION,
+            "no_gpu": True,
+        }
+        out = f"{NC}/receipts/special-id-census-{payload['ts']}.json"
+        checked_write(out, payload)
+        print(f"SPECIAL_ID_CENSUS_DONE {os.path.relpath(out, NC)} "
+              f"({low_total:,} text-borne low ids)")
         return
     if a.emit:
         from receipt_write import checked_write       # noqa: E402
