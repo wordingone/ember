@@ -113,6 +113,26 @@ Limit taxonomy used below — a row must name exactly which limit binds:
   to B:; or accept the stall at sparse cadence.
 - **Kill:** first P-own-resume receipt shows ckpt wall ≤5% of segment wall.
 
+### R10 — daemon failures: no evidenced mid-run threat; interruption budget bounded [R] (fp-32c, #234)
+- **Limit class:** SCHED (interruption risk to the multi-day run), settled
+  as an evidence row. Was "observational (58/439 = 13.2% lifetime)" —
+  that framing mixed eras and read fail-closed refusals as waste.
+- **Taxonomy** `[R — receipts/fp32-r10-taxonomy-20260611T152522Z.json,
+  store snapshot sha-pinned]`: June ember-era 30/285 failed → 8
+  NON-EMBER-TRACK (build scripts via daemon) + 2 MISUSE-CLASS (mail
+  one-offs) + 14 FAST-FAIL-BOUNDED (next dispatch ≤600 s — setup-class
+  iteration, e.g. the 5-in-8-min t2_grpo cluster) + 2 ROOT-CAUSED (R3
+  bench crash; D-gate divisor bug, both fixed + receipted) + 4
+  UNKNOWN-EVIDENCE-EXPIRED (pre-log_name shared-log overwrite).
+  **Evidenced spontaneous mid-run deaths: 0.**
+- **Budget (pessimistic — every unknown counted as a death):** 4/11.0
+  era-days = 0.364/day → **1.22 interruptions over the 3.352-day v0
+  run**, each costing ≤ one checkpoint interval + restart (resume
+  bit-exact, v0ext receipt). This row is the interruption-rate INPUT to
+  R5/#231's cadence decision: even at the pessimistic rate, cadence-cost
+  trades against ~1.2 expected losses, not a crashloop.
+- **Re-open:** any v0 segment dying mid-run without a receipted root cause.
+
 ## 2. Rows — round loop (fires at first owned-core accumulation round)
 
 ### R6 — round wall is generation-dominated ~10:1

@@ -1,0 +1,291 @@
+{
+  "ticket": "FP32-R10-TAXONOMY",
+  "ts": "20260611T152522Z",
+  "issue": 234,
+  "store": {
+    "path": "~/.avir/train/jobs.json (WSL Ubuntu, auto-resolved)",
+    "sha256": "b41e4e3a92b0b8c01f291c081f86dcdce1453f9ca0e25357b77f5d4c7fa47ff2",
+    "n_jobs": 441,
+    "read_note": "store mutates with every dispatch \u2014 the sha pins the exact snapshot analyzed"
+  },
+  "analysis": {
+    "era_table": {
+      "2026-03": {
+        "total": 156,
+        "failed": 29
+      },
+      "2026-06": {
+        "total": 285,
+        "failed": 30
+      }
+    },
+    "june_failure_rows": [
+      {
+        "job_id": "4a9eb720",
+        "script": "kern_build_em2.py",
+        "started_at": "2026-06-01T07:40:40.596012+00:00",
+        "gap_to_next_dispatch_s": 557929.5,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "75a10fa5",
+        "script": "install_rust_and_rebuild.py",
+        "started_at": "2026-06-07T20:26:57.974527+00:00",
+        "gap_to_next_dispatch_s": 1531.1,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "468c3208",
+        "script": "build_web_fast.py",
+        "started_at": "2026-06-07T21:50:06.033851+00:00",
+        "gap_to_next_dispatch_s": 2026.1,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "37e6bba4",
+        "script": "fix_java_and_rebuild_66.py",
+        "started_at": "2026-06-08T04:13:11.722908+00:00",
+        "gap_to_next_dispatch_s": 3918.0,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "c87e3837",
+        "script": "diag_66_w16_facts.py",
+        "started_at": "2026-06-08T15:29:42.586313+00:00",
+        "gap_to_next_dispatch_s": 27.1,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "f1e59dea",
+        "script": "rebuild_66_stepF_elif_parsers.py",
+        "started_at": "2026-06-08T21:27:13.906106+00:00",
+        "gap_to_next_dispatch_s": 60.6,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "d592c478",
+        "script": "rebuild_66_stepG_run_build.py",
+        "started_at": "2026-06-08T21:32:40.508906+00:00",
+        "gap_to_next_dispatch_s": 35.9,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "17382dec",
+        "script": "get_wG_log.py",
+        "started_at": "2026-06-08T21:40:18.071195+00:00",
+        "gap_to_next_dispatch_s": 23.8,
+        "class": "NON-EMBER-TRACK",
+        "basis": "script outside nc-ladder \u2014 counts toward daemon reliability denominator only"
+      },
+      {
+        "job_id": "8dc960f2",
+        "script": "check_mail.py",
+        "started_at": "2026-06-08T22:25:53.500889+00:00",
+        "gap_to_next_dispatch_s": 11.7,
+        "class": "MISUSE-CLASS",
+        "basis": "daemon used as a WSL shell \u2014 not a training job; no launch relevance"
+      },
+      {
+        "job_id": "88b9a110",
+        "script": "peek_mail_check.py",
+        "started_at": "2026-06-09T01:28:17.286811+00:00",
+        "gap_to_next_dispatch_s": 49.1,
+        "class": "MISUSE-CLASS",
+        "basis": "daemon used as a WSL shell \u2014 not a training job; no launch relevance"
+      },
+      {
+        "job_id": "a3cf3acb",
+        "script": "t1_probe.py --mode selftest",
+        "started_at": "2026-06-09T22:32:22.269414+00:00",
+        "gap_to_next_dispatch_s": 88.0,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 88.0s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "7d64eb85",
+        "script": "t1_selftest.py",
+        "started_at": "2026-06-09T22:33:50.231750+00:00",
+        "gap_to_next_dispatch_s": 30.3,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 30.3s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "b140cdb0",
+        "script": "t1_smoke.py",
+        "started_at": "2026-06-09T22:34:43.846921+00:00",
+        "gap_to_next_dispatch_s": 505.3,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 505.3s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "57e1d01f",
+        "script": "t1_full.py",
+        "started_at": "2026-06-10T00:15:17.812359+00:00",
+        "gap_to_next_dispatch_s": 336.8,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 336.8s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "5a3736cd",
+        "script": "t3_seed.py",
+        "started_at": "2026-06-10T00:20:54.661607+00:00",
+        "gap_to_next_dispatch_s": 101.3,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 101.3s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "0cb82c79",
+        "script": "t2_r1_trainonly.py",
+        "started_at": "2026-06-10T03:26:20.839837+00:00",
+        "gap_to_next_dispatch_s": 829.0,
+        "class": "UNKNOWN-EVIDENCE-EXPIRED",
+        "basis": "pre-log_name job; legacy shared log overwritten \u2014 cannot classify; treated as mid-run death in the pessimistic interruption budget"
+      },
+      {
+        "job_id": "1fbfbb77",
+        "script": "t2_r1_trainonly.py",
+        "started_at": "2026-06-10T03:40:09.820528+00:00",
+        "gap_to_next_dispatch_s": 911.6,
+        "class": "UNKNOWN-EVIDENCE-EXPIRED",
+        "basis": "pre-log_name job; legacy shared log overwritten \u2014 cannot classify; treated as mid-run death in the pessimistic interruption budget"
+      },
+      {
+        "job_id": "18b1fc3f",
+        "script": "t2_r1_trainonly.py",
+        "started_at": "2026-06-10T03:55:21.460818+00:00",
+        "gap_to_next_dispatch_s": 2031.6,
+        "class": "UNKNOWN-EVIDENCE-EXPIRED",
+        "basis": "pre-log_name job; legacy shared log overwritten \u2014 cannot classify; treated as mid-run death in the pessimistic interruption budget"
+      },
+      {
+        "job_id": "9ca1b8be",
+        "script": "t2_r1_trainonly.py",
+        "started_at": "2026-06-10T04:29:13.035388+00:00",
+        "gap_to_next_dispatch_s": 342.2,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 342.2s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "c2f5720e",
+        "script": "t2_r1_q15.py",
+        "started_at": "2026-06-10T11:57:32.034114+00:00",
+        "gap_to_next_dispatch_s": 47.2,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 47.2s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "e3d7c490",
+        "script": "t4_r1_q15_s14.py",
+        "started_at": "2026-06-10T12:41:15.837427+00:00",
+        "gap_to_next_dispatch_s": 1007.3,
+        "class": "UNKNOWN-EVIDENCE-EXPIRED",
+        "basis": "pre-log_name job; legacy shared log overwritten \u2014 cannot classify; treated as mid-run death in the pessimistic interruption budget"
+      },
+      {
+        "job_id": "a04654a3",
+        "script": "t2_wcode_control.py",
+        "started_at": "2026-06-10T21:21:15.262228+00:00",
+        "gap_to_next_dispatch_s": 417.3,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 417.3s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "474440aa",
+        "script": "t2_mtp.py",
+        "started_at": "2026-06-10T21:34:47.409519+00:00",
+        "gap_to_next_dispatch_s": 160.5,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 160.5s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "e8013346",
+        "script": "t2_grpo.py",
+        "started_at": "2026-06-10T21:43:07.965771+00:00",
+        "gap_to_next_dispatch_s": 175.1,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 175.1s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "e68e6ae8",
+        "script": "t2_grpo.py",
+        "started_at": "2026-06-10T21:46:03.049617+00:00",
+        "gap_to_next_dispatch_s": 201.1,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 201.1s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "4b763324",
+        "script": "t2_grpo.py",
+        "started_at": "2026-06-10T21:49:24.147842+00:00",
+        "gap_to_next_dispatch_s": 63.4,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 63.4s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "dcfd0e53",
+        "script": "t2_grpo.py",
+        "started_at": "2026-06-10T21:50:27.525614+00:00",
+        "gap_to_next_dispatch_s": 88.1,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 88.1s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "e75e2ae6",
+        "script": "t2_grpo.py",
+        "started_at": "2026-06-10T21:51:55.582631+00:00",
+        "gap_to_next_dispatch_s": 131.3,
+        "class": "FAST-FAIL-BOUNDED",
+        "basis": "next dispatch 131.3s after start \u2014 operator fast-fail iteration (setup-class)"
+      },
+      {
+        "job_id": "cb003e88",
+        "script": "dgate_sft_recall.py",
+        "started_at": "2026-06-11T06:54:17.955187+00:00",
+        "gap_to_next_dispatch_s": 630.5,
+        "class": "ROOT-CAUSED",
+        "basis": "D-gate harness effective-count divisor bug \u2014 caught live, fixed same session; successful re-run receipted receipts/d-gate-adapter_model-20260611T070448Z.json"
+      },
+      {
+        "job_id": "93e74934",
+        "script": "fp32_step_econ_bench.py",
+        "started_at": "2026-06-11T14:23:32.746180+00:00",
+        "gap_to_next_dispatch_s": 206.8,
+        "class": "ROOT-CAUSED",
+        "basis": "R3 torch.compile dynamo NameError at bench cell \u2014 root-caused, per-cell containment added; receipts/fp32-step-econ-20260611T142831Z.json"
+      }
+    ],
+    "class_counts": {
+      "NON-EMBER-TRACK": 8,
+      "MISUSE-CLASS": 2,
+      "FAST-FAIL-BOUNDED": 14,
+      "UNKNOWN-EVIDENCE-EXPIRED": 4,
+      "ROOT-CAUSED": 2
+    }
+  },
+  "interruption_budget": {
+    "evidenced_midrun_deaths_june_ember": 0,
+    "note_on_evidence": "evidenced count is 0 by construction (no death was evidenced); UNKNOWN rows are the honest residue \u2014 not evidence of deaths, unclassifiable, budgeted pessimistically",
+    "june_ember_failures": 20,
+    "unknown_rows": 4,
+    "observed_span_days": 11.0,
+    "pessimistic_interruptions_per_day": 0.364,
+    "pessimistic_interruptions_v0_run": 1.22,
+    "v0_run_days_basis": 3.352,
+    "cost_per_interruption": "bounded by one checkpoint interval + restart overhead \u2014 resume is bit-exact (receipts/v0ext-selftest-20260611T150308Z.json); cadence decision stays measure-first (#231)"
+  },
+  "caveats": [
+    "gap_to_next_dispatch is an operator-iteration bound, not a hard process-lifetime bound (dispatches can overlap); it only ever classifies TOWARD benign, never evidences a death",
+    "pre-log_name failures have expired logs (legacy shared-log overwrite) \u2014 per-job log_name now retains evidence forward",
+    "March era is a different project (pre-ember) \u2014 reported in the era table, excluded from launch-relevant classification"
+  ],
+  "provenance_rule": "every row re-derived from the named store snapshot's fields by this script's arithmetic \u2014 no free-typed numbers",
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}
