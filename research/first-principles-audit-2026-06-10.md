@@ -1115,3 +1115,34 @@ verdict itself** — on the first instrumented sampling run (round-2),
 quote measured pacing_total_s, re-run the fp-9 cost-parity under the
 measured (not modeled) compute-only view, and resolve the "as operated
 under the governor" qualifier.
+
+## 8.26 fp-19 (#111): the owned-core envelope is NON-EMPTY — v0 named, rung-kill does not fire
+
+**Question (minted by §8.24, deadline-critical):** what owned-core
+config fits the remaining continuous-GPU days, receipts-grade?
+
+**Method:** measured (never paper-claimed) training-step throughput,
+`scripts/fp19_bench.py` (selftest PASS) via daemon eval b839e851,
+governed (fraction 0.80, margin assert, paced duty; budget = paced
+rate); plus the gpu-math-attack workflow's refuter-adjusted multiplier
+table (24 Haiku agents; saved `.claude/workflows/gpu-math-attack.js`;
+table persisted to research/).
+
+**Result (receipt `fp19-bench-20260611T024648Z.json`):** 0.1B = 19×
+compute-optimal margin in 8 days (55k paced tok/s); **0.37B = 1.9×
+(compute-optimal FITS)**; QAT/ternary STE overhead ~5% — the
+quantization-native contract component is effectively free at this
+scale. Multiplier table survivors: Muon 1.77× data-efficiency
+(strongest, contested → treated as upside not load-bearing), doc-dedup
+1.1×, everything else ≈1.0 or a cost; QAT-as-speedup REJECTED by the
+refuters (it is a cost, not a multiplier); our MTP SFT receipt honestly
+split from sub-1B PRETRAIN claims (regime mismatch).
+
+**Verdict:** envelope NON-EMPTY → no hardware escalation. v0 =
+0.37B/QAT/Muon-with-AdamW-switch-rule/7.4B tokens, checkpoints at
+1B/2B/4B; full table + config in `research/fp19-envelope.md`.
+
+**Successors:** fp-22 = v0 corpus + verify-floor world (license-clean
+mix per §8.15d; the world a 0.3B core can clear). eng-33 = timeshare
+checkpoint-resume harness (map §3 named it for when fp-19 landed a
+config — it did).

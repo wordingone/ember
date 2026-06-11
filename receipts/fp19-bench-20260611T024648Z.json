@@ -1,0 +1,151 @@
+{
+  "ticket": "FP19-BENCH",
+  "ts": "20260611T024648Z",
+  "device": "RTX 4090 (governed)",
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05,
+    "budget_math_uses": "tok_s_paced"
+  },
+  "results": {
+    "c01-bf16": {
+      "params": 99139200,
+      "params_formula_est": 79462400,
+      "batch": 8,
+      "seq": 1024,
+      "timed_steps": 10,
+      "tok_s_paced": 55063.8,
+      "tok_s_raw": 82937.7,
+      "free_vram_gib_post_warmup": 17.23,
+      "envelope_paced": {
+        "7d": {
+          "achievable_tokens": 33302571691,
+          "needed_compute_optimal": 1982784000,
+          "ratio": 16.8
+        },
+        "8d": {
+          "achievable_tokens": 38060081932,
+          "needed_compute_optimal": 1982784000,
+          "ratio": 19.2
+        }
+      }
+    },
+    "c01-qat": {
+      "params": 99139200,
+      "params_formula_est": 79462400,
+      "batch": 8,
+      "seq": 1024,
+      "timed_steps": 10,
+      "tok_s_paced": 52026.6,
+      "tok_s_raw": 76234.5,
+      "free_vram_gib_post_warmup": 17.09,
+      "envelope_paced": {
+        "7d": {
+          "achievable_tokens": 31465700061,
+          "needed_compute_optimal": 1982784000,
+          "ratio": 15.87
+        },
+        "8d": {
+          "achievable_tokens": 35960800070,
+          "needed_compute_optimal": 1982784000,
+          "ratio": 18.14
+        }
+      }
+    },
+    "c01-ternary": {
+      "params": 99139200,
+      "params_formula_est": 79462400,
+      "batch": 8,
+      "seq": 1024,
+      "timed_steps": 10,
+      "tok_s_paced": 53302.4,
+      "tok_s_raw": 79005.4,
+      "free_vram_gib_post_warmup": 17.09,
+      "envelope_paced": {
+        "7d": {
+          "achievable_tokens": 32237293450,
+          "needed_compute_optimal": 1982784000,
+          "ratio": 16.26
+        },
+        "8d": {
+          "achievable_tokens": 36842621085,
+          "needed_compute_optimal": 1982784000,
+          "ratio": 18.58
+        }
+      }
+    },
+    "c03-bf16": {
+      "params": 368354304,
+      "params_formula_est": 284426240,
+      "batch": 4,
+      "seq": 1024,
+      "timed_steps": 10,
+      "tok_s_paced": 20201.2,
+      "tok_s_raw": 26813.2,
+      "free_vram_gib_post_warmup": 17.18,
+      "envelope_paced": {
+        "7d": {
+          "achievable_tokens": 12217659088,
+          "needed_compute_optimal": 7367086080,
+          "ratio": 1.66
+        },
+        "8d": {
+          "achievable_tokens": 13963038958,
+          "needed_compute_optimal": 7367086080,
+          "ratio": 1.9
+        }
+      }
+    },
+    "c03-qat": {
+      "params": 368354304,
+      "params_formula_est": 284426240,
+      "batch": 4,
+      "seq": 1024,
+      "timed_steps": 10,
+      "tok_s_paced": 18737.7,
+      "tok_s_raw": 24294.7,
+      "free_vram_gib_post_warmup": 17.19,
+      "envelope_paced": {
+        "7d": {
+          "achievable_tokens": 11332587673,
+          "needed_compute_optimal": 7367086080,
+          "ratio": 1.54
+        },
+        "8d": {
+          "achievable_tokens": 12951528770,
+          "needed_compute_optimal": 7367086080,
+          "ratio": 1.76
+        }
+      }
+    },
+    "c03-ternary": {
+      "params": 368354304,
+      "params_formula_est": 284426240,
+      "batch": 4,
+      "seq": 1024,
+      "timed_steps": 10,
+      "tok_s_paced": 19508.9,
+      "tok_s_raw": 25607.2,
+      "free_vram_gib_post_warmup": 17.19,
+      "envelope_paced": {
+        "7d": {
+          "achievable_tokens": 11798998007,
+          "needed_compute_optimal": 7367086080,
+          "ratio": 1.6
+        },
+        "8d": {
+          "achievable_tokens": 13484569151,
+          "needed_compute_optimal": 7367086080,
+          "ratio": 1.83
+        }
+      }
+    }
+  },
+  "flags": [
+    "qat/ternary are STE weight-transform proxies, NOT fused low-bit kernels \u2014 overhead shape is honest, absolute speedups from real kernels are NOT claimed",
+    "synthetic random batches \u2014 no data pipeline; tok/s is an UPPER bound on corpus-fed throughput",
+    "gradient checkpointing ON (memory-for-compute trade is part of the measured rate)",
+    "compute-optimal reference 20 tok/param; over-training beyond it is allowed by the envelope, under-training is the binding direction"
+  ]
+}
