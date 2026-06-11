@@ -1,0 +1,129 @@
+{
+  "ticket": "SP3-TERMINAL-AUDIT",
+  "ts": "20260611T135708Z",
+  "issue": 206,
+  "table": "research/june22-critical-path.md section 1 (+ 8a/8b split)",
+  "rows": [
+    {
+      "id": 1,
+      "condition": "Runs locally",
+      "verdict": "RECEIPTED",
+      "receipts": [
+        {
+          "path": "receipts/t2-r2w-sft-20260611T032047Z.json",
+          "sha256": "5277b667eb3a54501434835b6bcee420b173e8afb01862a240875c43ca22a6f5"
+        },
+        {
+          "path": "receipts/w4-eval-r2w-q3-20260611T044559Z.json",
+          "sha256": "a36a9b8f73eaa75de5cd60c85df81f25fb0ff8f260d08fe770f52013012409c2"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "condition": "Generates verified experience",
+      "verdict": "RECEIPTED",
+      "receipts": [
+        {
+          "path": "receipts/v-soundness-probe-20260611T011439Z.json",
+          "sha256": "baaafb14494c03adac5944671061ce8339b4839d644bc4d0cab574a4e866016b"
+        },
+        {
+          "path": "ledger/views/grpo-r2-tasks.json",
+          "sha256": "c30818c8f7d220f68d2f91acaf5cd90e78767edd37663164e91fb274c417a1bf"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "condition": "Trains/updates from it",
+      "verdict": "RECEIPTED",
+      "receipts": [
+        {
+          "path": "receipts/t2-r2-q3-mtp-20260611T044201Z.json",
+          "sha256": "cf2d5269f363258437158eca11c2bba6c1ce4b9aaf862888af6f54349a08e826"
+        },
+        {
+          "path": "receipts/r2-mtp-wrapper-20260611T043952Z.json",
+          "sha256": "effd29a27ac75623d73b754a6009400d15537c0faa7ef0bad5d78953dc76a458"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "condition": "Improves held-out transfer (decomposed: in-dist LEARNS + floor-scoped transfer ceiling \u2014 fp-25 wording)",
+      "verdict": "RECEIPTED",
+      "receipts": [
+        {
+          "path": "receipts/fp25-indist-20260611T060416Z.json",
+          "sha256": "c6a318a184934744a97617f37dbe51c47dcc9e8cbe87a6c8e746390c307a276a"
+        },
+        {
+          "path": "receipts/fp25b-surfaceb-20260611T063604Z.json",
+          "sha256": "50c24afe86dc2ebcd6c06d339ed677bcb236f26ded36ef62165d00b309d8ebd0"
+        },
+        {
+          "path": "receipts/g1-r2w-verdict-20260611T050209Z.json",
+          "sha256": "ef44410339d14b07134b83afc96d993cac05990443b8bbdd715e5afc6160de06"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "condition": "Beats matched control",
+      "verdict": "RECEIPTED",
+      "receipts": [
+        {
+          "path": "receipts/g1-r2w-verdict-20260611T050209Z.json",
+          "sha256": "ef44410339d14b07134b83afc96d993cac05990443b8bbdd715e5afc6160de06"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "condition": "Gain disappears on deletion (standing D-gate)",
+      "verdict": "RECEIPTED",
+      "receipts": [
+        {
+          "path": "receipts/d-gate-adapter_model-20260611T070448Z.json",
+          "sha256": "6bcc0e8fb08986fd6a27cc326d806123f07b96115fa7eee9b9cbf68ad6426ea4"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "condition": "Persists across sessions (standing P-gate)",
+      "verdict": "RECEIPTED",
+      "receipts": [
+        {
+          "path": "receipts/p-gate-20260611T081931Z.json",
+          "sha256": "e770f5d7c636920cf1adc0b68dcfcc72dbe83995a6eec97d14c333607eace9de"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "condition": "8a loop-machinery: one full round, zero cloud calls in the loop path (config-only receipt)",
+      "verdict": "GAP-NAMED",
+      "gaps": [
+        "requires >=1 of 'receipts/round-local-loop-*.json' (receipt_check-clean AND git-tracked); found 0"
+      ]
+    },
+    {
+      "id": 9,
+      "condition": "8b owned substrate at v0 scale: launch gate + shards + checkpoint floor verdict + owned micro-loop receipt",
+      "verdict": "GAP-NAMED",
+      "gaps": [
+        "requires >=1 of 'receipts/fp24-verdict-*.json' (receipt_check-clean AND git-tracked); found 0",
+        "requires >=1 of 'receipts/own-r1-*.json' (receipt_check-clean AND git-tracked); found 0"
+      ]
+    }
+  ],
+  "result": {
+    "verdict": "GAPS-OPEN",
+    "n_receipted": 7,
+    "n_gaps": 2
+  },
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}

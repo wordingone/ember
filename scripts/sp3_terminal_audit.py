@@ -76,12 +76,31 @@ def _sha(path):
         return hashlib.sha256(f.read()).hexdigest()
 
 
-def audit_row(row, nc=NC):
+def _tracked(nc):
+    """Set of git-tracked relative paths (forward-slash). Evidence that
+    is not committed can NEVER satisfy a row — the 132420Z receipt bound
+    untracked local files and a clean checkout reproduced a different
+    verdict (Kai 14631). Portability is enforced, not remembered."""
+    import subprocess
+    out = subprocess.run(["git", "-C", nc, "ls-files"],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        return None                      # not a git tree (selftest tmpdir)
+    return set(out.stdout.splitlines())
+
+
+def audit_row(row, nc=NC, tracked=None):
     """RECEIPTED (every requirement satisfied, all matched .json
-    receipt_check PASS) or GAP-NAMED (each unmet requirement quoted)."""
+    receipt_check PASS, every match git-tracked) or GAP-NAMED (each
+    unmet requirement quoted)."""
+    if tracked is None:
+        tracked = _tracked(nc)
     bound, gaps = [], []
     for pat, min_count in row["requires"]:
         hits = sorted(globmod.glob(f"{nc}/{pat}"))
+        if tracked is not None:
+            hits = [h for h in hits
+                    if os.path.relpath(h, nc).replace("\\", "/") in tracked]
         ok = []
         for h in hits:
             if h.endswith(".json") and "receipts/" in h.replace("\\", "/"):
@@ -94,7 +113,8 @@ def audit_row(row, nc=NC):
             ok.append(h)
         if len(ok) < min_count:
             gaps.append(f"requires >={min_count} of '{pat}' "
-                        f"(receipt_check-clean); found {len(ok)}")
+                        f"(receipt_check-clean AND git-tracked); "
+                        f"found {len(ok)}")
         else:
             # bind the NEWEST matches (ts-sorted names): a later receipt
             # supersedes an earlier one on the same surface (Kai 14541
@@ -109,7 +129,8 @@ def audit_row(row, nc=NC):
 
 
 def run_audit(nc=NC):
-    rows = [audit_row(r, nc) for r in ROWS]
+    tracked = _tracked(nc)
+    rows = [audit_row(r, nc, tracked=tracked) for r in ROWS]
     return {
         "ticket": "SP3-TERMINAL-AUDIT",
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
@@ -163,6 +184,21 @@ def _selftest():
                         "requires": (("receipts/good-1.json", 1),)},
                        nc=td)["receipts"][0]["sha256"]
         assert s1 != s2, "sha must track bytes"
+    # untracked evidence can never satisfy a row (Kai 14631 class):
+    # inject a tracked-set that excludes the only matching receipt
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as td2:
+        os.makedirs(f"{td2}/receipts")
+        json.dump({"ticket": "x", "ts": "x"},
+                  open(f"{td2}/receipts/good-1.json", "w"))
+        r_untracked = audit_row({"id": 9, "condition": "c",
+                                 "requires": (("receipts/good-*.json", 1),)},
+                                nc=td2, tracked=set())
+        assert r_untracked["verdict"] == "GAP-NAMED", r_untracked
+        r_tracked = audit_row({"id": 9, "condition": "c",
+                               "requires": (("receipts/good-*.json", 1),)},
+                              nc=td2, tracked={"receipts/good-1.json"})
+        assert r_tracked["verdict"] == "RECEIPTED", r_tracked
     # live-tree smoke: the audit runs and rows 6/7 (standing gates) bind
     live = run_audit()
     assert validate_receipt(live) == [], validate_receipt(live)
