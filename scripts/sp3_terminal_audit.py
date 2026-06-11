@@ -1,0 +1,201 @@
+"""sp3_terminal_audit.py — June-22 terminal-condition audit harness
+(#206). The critical-path map commits: "06-22: terminal-condition audit
+against THIS table; every row quoted with its receipt or its named gap.
+No row blurred." This makes that audit MECHANICAL: rows are frozen
+requirement specs; the run binds each to receipts (path + sha +
+receipt_check PASS) or emits the named gap verbatim. Zero free-text
+verdict words — a row is RECEIPTED or GAP-NAMED, nothing else.
+
+Row requirements are receipt GLOB patterns + minimum counts (+ optional
+exact-path sha pins). Globs rather than hardcoded status: the table's
+truth changes as receipts land; the REQUIREMENTS are what's frozen.
+Tightening a row's requirements before 06-20 is a visible PR diff, never
+a run-time judgment call.
+
+`--selftest` pure-logic on temp fixtures (receipted row / gap row /
+receipt_check-dirty row / sha-drift row — all branches). `--run` audits
+the live tree and emits the audit receipt; intended for 06-22 but
+runnable any day (it reports the gaps still open — that IS the signal).
+"""
+import argparse
+import glob as globmod
+import hashlib
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+NC = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+from receipt_write import checked_write               # noqa: E402
+from receipt_check import validate_receipt             # noqa: E402
+
+SHA_CONVENTION = ("file shas = sha256 over the exact on-disk raw bytes, no "
+                  "normalization")
+
+# ---- frozen rows (the §1 persistence-clause table, as requirements) --
+# req entry: (glob_relative_to_nc, min_count). Globs may also be exact
+# paths. All matched receipts must receipt_check PASS (json files only).
+ROWS = (
+    {"id": 1, "condition": "Runs locally",
+     "requires": (("receipts/t2-*.json", 1),
+                  ("receipts/w4-eval-*.json", 1))},
+    {"id": 2, "condition": "Generates verified experience",
+     "requires": (("receipts/v-soundness-probe-*.json", 1),
+                  ("ledger/views/grpo-r2-tasks.json", 1))},
+    {"id": 3, "condition": "Trains/updates from it",
+     "requires": (("receipts/t2-r2-*.json", 1),
+                  ("receipts/r2-*wrapper-*.json", 1))},
+    {"id": 4, "condition": "Improves held-out transfer (decomposed: "
+                           "in-dist LEARNS + floor-scoped transfer "
+                           "ceiling — fp-25 wording)",
+     "requires": (("receipts/fp25-indist-*.json", 1),
+                  ("receipts/fp25b-surfaceb-*.json", 1),
+                  ("receipts/g1-r2w-verdict-*.json", 1))},
+    {"id": 5, "condition": "Beats matched control",
+     "requires": (("receipts/g1-r2w-verdict-*.json", 1),)},
+    {"id": 6, "condition": "Gain disappears on deletion (standing D-gate)",
+     "requires": (("receipts/d-gate-*.json", 1),)},
+    {"id": 7, "condition": "Persists across sessions (standing P-gate)",
+     "requires": (("receipts/p-gate-*.json", 1),)},
+    {"id": 8, "condition": "8a loop-machinery: one full round, zero cloud "
+                           "calls in the loop path (config-only receipt)",
+     "requires": (("receipts/round-local-loop-*.json", 1),)},
+    {"id": 9, "condition": "8b owned substrate at v0 scale: launch gate + "
+                           "shards + checkpoint floor verdict + owned "
+                           "micro-loop receipt",
+     "requires": (("receipts/v0-launch-gate-*.json", 1),
+                  ("receipts/fp24-verdict-*.json", 1),
+                  ("receipts/own-r1-*.json", 1))},
+)
+
+
+def _sha(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def audit_row(row, nc=NC):
+    """RECEIPTED (every requirement satisfied, all matched .json
+    receipt_check PASS) or GAP-NAMED (each unmet requirement quoted)."""
+    bound, gaps = [], []
+    for pat, min_count in row["requires"]:
+        hits = sorted(globmod.glob(f"{nc}/{pat}"))
+        ok = []
+        for h in hits:
+            if h.endswith(".json") and "receipts/" in h.replace("\\", "/"):
+                try:
+                    d = json.load(open(h, encoding="utf-8"))
+                except Exception:
+                    continue
+                if validate_receipt(d):
+                    continue            # dirty receipts never satisfy a row
+            ok.append(h)
+        if len(ok) < min_count:
+            gaps.append(f"requires >={min_count} of '{pat}' "
+                        f"(receipt_check-clean); found {len(ok)}")
+        else:
+            bound.extend({"path": os.path.relpath(p, nc).replace("\\", "/"),
+                          "sha256": _sha(p)} for p in ok[:min_count])
+    if gaps:
+        return {"id": row["id"], "condition": row["condition"],
+                "verdict": "GAP-NAMED", "gaps": gaps}
+    return {"id": row["id"], "condition": row["condition"],
+            "verdict": "RECEIPTED", "receipts": bound}
+
+
+def run_audit(nc=NC):
+    rows = [audit_row(r, nc) for r in ROWS]
+    return {
+        "ticket": "SP3-TERMINAL-AUDIT",
+        "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "issue": 206,
+        "table": "research/june22-critical-path.md section 1 (+ 8a/8b split)",
+        "rows": rows,
+        "result": {
+            "verdict": ("ALL-RECEIPTED"
+                        if all(r["verdict"] == "RECEIPTED" for r in rows)
+                        else "GAPS-OPEN"),
+            "n_receipted": sum(r["verdict"] == "RECEIPTED" for r in rows),
+            "n_gaps": sum(r["verdict"] == "GAP-NAMED" for r in rows),
+        },
+        "sha_convention": SHA_CONVENTION,
+        "no_gpu": True,
+    }
+
+
+def _selftest():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        os.makedirs(f"{td}/receipts")
+        # clean receipt satisfies; dirty receipt does not; ledger file is
+        # a non-receipt requirement satisfied by existence
+        json.dump({"ticket": "x", "ts": "x"},
+                  open(f"{td}/receipts/good-1.json", "w"))
+        json.dump({"ts": "x"},                       # missing ticket = dirty
+                  open(f"{td}/receipts/dirty-1.json", "w"))
+        os.makedirs(f"{td}/ledger")
+        open(f"{td}/ledger/view.json", "w").write("{}")
+        r_ok = audit_row({"id": 1, "condition": "c",
+                          "requires": (("receipts/good-*.json", 1),
+                                       ("ledger/view.json", 1))}, nc=td)
+        assert r_ok["verdict"] == "RECEIPTED", r_ok
+        assert all("sha256" in b for b in r_ok["receipts"])
+        r_gap = audit_row({"id": 2, "condition": "c",
+                           "requires": (("receipts/absent-*.json", 1),)},
+                          nc=td)
+        assert r_gap["verdict"] == "GAP-NAMED" and r_gap["gaps"], r_gap
+        r_dirty = audit_row({"id": 3, "condition": "c",
+                             "requires": (("receipts/dirty-*.json", 1),)},
+                            nc=td)
+        assert r_dirty["verdict"] == "GAP-NAMED", r_dirty
+        # sha binding is byte-true: rewriting the file changes the bound sha
+        s1 = audit_row({"id": 4, "condition": "c",
+                        "requires": (("receipts/good-1.json", 1),)},
+                       nc=td)["receipts"][0]["sha256"]
+        json.dump({"ticket": "x", "ts": "y"},
+                  open(f"{td}/receipts/good-1.json", "w"))
+        s2 = audit_row({"id": 4, "condition": "c",
+                        "requires": (("receipts/good-1.json", 1),)},
+                       nc=td)["receipts"][0]["sha256"]
+        assert s1 != s2, "sha must track bytes"
+    # live-tree smoke: the audit runs and rows 6/7 (standing gates) bind
+    live = run_audit()
+    assert validate_receipt(live) == [], validate_receipt(live)
+    by_id = {r["id"]: r for r in live["rows"]}
+    assert by_id[6]["verdict"] == "RECEIPTED", by_id[6]   # d-gate receipt
+    assert by_id[7]["verdict"] == "RECEIPTED", by_id[7]   # p-gate receipt
+    assert by_id[8]["verdict"] == "GAP-NAMED"             # 8a not yet run
+    print("SP3_TERMINAL_AUDIT_SELFTEST_PASS")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--run", action="store_true")
+    a = ap.parse_args()
+    if a.selftest:
+        _selftest()
+        return
+    if not a.run:
+        print("SP3_TERMINAL_AUDIT_STAGED (--run audits the live tree; "
+              "intended 2026-06-22, runnable any day)")
+        return
+    receipt = run_audit()
+    out = f"{NC}/receipts/sp3-terminal-audit-{receipt['ts']}.json"
+    checked_write(out, receipt)
+    reloaded = json.load(open(out, encoding="utf-8"))
+    f = validate_receipt(reloaded)
+    if f:
+        raise SystemExit(f"emitted audit receipt FAILS receipt_check: {f}")
+    for r in receipt["rows"]:
+        tag = ("RECEIPTED" if r["verdict"] == "RECEIPTED"
+               else "GAP-NAMED: " + "; ".join(r["gaps"]))
+        print(f"row {r['id']}: {tag}")
+    print(json.dumps(receipt["result"], indent=2))
+    print(f"SP3_TERMINAL_AUDIT_DONE {os.path.relpath(out, NC)}")
+
+
+if __name__ == "__main__":
+    main()
