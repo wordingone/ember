@@ -104,6 +104,7 @@ def make_reward_fn(problems_by_id, counter, mode="binary"):
     reward per shaped_reward_partial (fraction passed). Sandbox cost
     multiplies by the assert count (~3x on MBPP); execute_batch pools."""
     from t1_probe import execute_batch, extract_code
+    from v_compare import STRICT_SRC, instrument_tests  # eng #76
 
     def verify_reward(prompts, completions, task_id=None, **kwargs):
         srcs = [extract_code(completion_text(c)) for c in completions]
@@ -114,11 +115,14 @@ def make_reward_fn(problems_by_id, counter, mode="binary"):
             p = problems_by_id[int(task_id[i])]
             # p["tests"] elements are top-level MBPP assert statements;
             # each is independently executable after imports + src.
-            tests = p["tests"] if mode == "partial" \
-                else ["\n".join(p["tests"])]
+            # eng #76: instrument BEFORE joining — split_assert parses only
+            # single statements, so the strict rewrite is per-test.
+            strict_tests = instrument_tests(p["tests"])
+            tests = strict_tests if mode == "partial" \
+                else ["\n".join(strict_tests)]
             for t in tests:
                 harness = "\n".join(p["imports"]) + "\n" + src + "\n" + \
-                    t + SOLVE_STUB
+                    STRICT_SRC + "\n" + t + SOLVE_STUB
                 jobs.append((harness, [], []))
                 idx.append(i)
         results = execute_batch(jobs) if jobs else []
@@ -318,6 +322,7 @@ def main():
         "args_fp": args_fingerprint(vars(args)),
         "governor": governor_block,
         "world": "mbpp", "round": 1, "reward_mode": args.reward,
+        "comparator": "strict (fp8 canon, no coercion) — eng #76",
         "prompt_rows": len(rows),
         "prompt_mix": {st: sum(1 for r in rows if r["stratum"] == st)
                        for st in STRATUM_REPEATS},
@@ -362,6 +367,16 @@ def _selftest():
         st = stratum(*stats[f"mbpp:{tid}"])
         mix[tid] = STRATUM_REPEATS[st]
     assert mix == {1: 1, 2: 4, 3: 4, 4: 2}
+    # eng #76: reward harness uses the strict comparator — instrumented
+    # per-test BEFORE the binary-mode join (joined strings don't parse as
+    # single asserts, so a post-join rewrite would silently no-op)
+    from v_compare import instrument_tests
+    tests = ["assert f(1) == [1]", "assert g(2) in {1, 2}"]
+    joined = "\n".join(instrument_tests(tests))
+    assert "_v_check((f(1)), ([1]))" in joined
+    assert "assert g(2) in {1, 2}" in joined  # non-== untouched
+    assert instrument_tests(["\n".join(tests)]) == ["\n".join(tests)], \
+        "joined multi-statement string must pass through unparsed"
     print("T2_GRPO_SELFTEST_PASS")
 
 

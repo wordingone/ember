@@ -33,6 +33,7 @@ sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (THROTTLE_S, decode_pacer, execute_batch,  # noqa: E402
                       extract_code, load_model)
 from t4_eval import bootstrap_ci  # noqa: E402
+from v_compare import strict_harness  # noqa: E402 (eng #76)
 
 RECEIPTS = f"{NC}/receipts"
 SOLVE_STUB = "\n\ndef solve(grid):\n    return [[0]]\n"  # satisfies sandbox gadget
@@ -181,8 +182,10 @@ def main():
             job_meta.append((pid, None))
             continue
         p = by_id[pid]
-        harness = "\n".join(p["imports"]) + "\n" + src + "\n" + \
-            "\n".join(p["tests"]) + SOLVE_STUB
+        # eng #76: strict comparator in the production verify path — ==
+        # asserts rewritten through the fp8 canon; measured false-negative
+        # cost 0.21% flips / 2.2 bits (fp8-vgate receipt), strict adopted.
+        harness = strict_harness(p["imports"], src, p["tests"], SOLVE_STUB)
         jobs.append((harness, [], []))
         job_meta.append((pid, src))
 
@@ -264,6 +267,7 @@ def main():
     n_verified_samples = sum(passed_by_task.values())
     receipt = {
         "ticket": "W1-FLOOR", "ts": ts, "args": vars(args),
+        "comparator": "strict (fp8 canon, no coercion) — eng #76",
         "n_tasks": len(problems), "k": args.k,
         "feed_tasks": sum(task_pass),
         "feed_pct": round(100 * sum(task_pass) / len(task_pass), 2),
