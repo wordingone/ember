@@ -55,7 +55,7 @@ TICKET = "TOKEN-SHARDS-V0"
 
 # ---- producer pins (eng-50 #185): the frozen inputs the writer reads ------
 ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
-TOKENIZER_FREEZE_RECEIPT = "tokenizer-freeze-20260611T060423Z.json"
+TOKENIZER_FREEZE_RECEIPT = "tokenizer-freeze-20260611T154111Z.json"
 SHARD_DIR = "shards"                       # nc-relative output dir for .bin
 SHARD_TOKEN_CAP = 256 * 1024 * 1024        # 256Mi tokens/shard (~512 MiB uint16)
 DOC_TEXT_FIELD = "text"                     # corpus JSONL doc content field
