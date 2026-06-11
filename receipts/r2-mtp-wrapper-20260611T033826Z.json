@@ -1,0 +1,38 @@
+{
+  "all_verified": false,
+  "arm": "mtp",
+  "calibration": null,
+  "delegation": {
+    "argv": [
+      "t2_mtp.py",
+      "--model",
+      "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "--tag",
+      "r2-q3-mtp",
+      "--k-aux",
+      "3",
+      "--lam",
+      "0.3"
+    ],
+    "entry": "t2_mtp"
+  },
+  "frontier_filter": {
+    "episodes_filtered": 2150,
+    "episodes_total": 3143,
+    "tasks_filtered": 1938,
+    "tasks_total": 2021,
+    "wcode_episodes_filtered": 241
+  },
+  "gate_token_present": true,
+  "k_aux": 3,
+  "lam": 0.3,
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "mtp_trainer_extension_note": "t2_mtp.py reads from wcode-r1.jsonl (hardcoded). Round-2 wrapper installs the r2 view at that path. A --view-path argument to t2_mtp.py would avoid this; that is a one-line trainer extension (not implemented per new-files-only constraint). The backup at wcode-r1.jsonl.r2-backup preserves the round-1 view.",
+  "no_training_launched_by_wrapper": true,
+  "tag": "r2-q3-mtp",
+  "theta": 0.5,
+  "ticket": "NC0-T2-R2-MTP-WRAPPER",
+  "ts": "20260611T033826Z",
+  "view_r1_backup": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r1.jsonl.r2-backup",
+  "view_r2": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r2.jsonl"
+}
