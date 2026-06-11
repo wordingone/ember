@@ -1,0 +1,135 @@
+{
+  "ticket": "FP32-STEP-ECON",
+  "ts": "20260611T142831Z",
+  "issue": 225,
+  "shape": "c03 (frozen v0: hidden 1024, layers 20, heads 16, seq 1024) variant qat",
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05,
+    "note": "pace/fraction/margin identical to the fp19 baseline \u2014 amortized by batch, never loosened"
+  },
+  "live_freeze_receipt": "tokenizer-freeze-20260611T060423Z.json",
+  "cells": [
+    {
+      "cell": "b4-ckpt-eager",
+      "batch": 4,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": false,
+      "variant": "qat",
+      "timed_steps": 10,
+      "free_vram_gib_post_warmup": 17.18,
+      "status": "OK",
+      "tok_s_paced": 17899.0,
+      "tok_s_raw": 22903.1,
+      "pacing_tax": 0.2185
+    },
+    {
+      "cell": "b8-ckpt-eager",
+      "batch": 8,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": false,
+      "variant": "qat",
+      "timed_steps": 10,
+      "free_vram_gib_post_warmup": 14.95,
+      "status": "OK",
+      "tok_s_paced": 23087.9,
+      "tok_s_raw": 26875.0,
+      "pacing_tax": 0.1409
+    },
+    {
+      "cell": "b16-ckpt-eager",
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": false,
+      "variant": "qat",
+      "timed_steps": 10,
+      "free_vram_gib_post_warmup": 10.83,
+      "status": "OK",
+      "tok_s_paced": 23474.3,
+      "tok_s_raw": 25285.7,
+      "pacing_tax": 0.0716
+    },
+    {
+      "cell": "b24-ckpt-eager",
+      "batch": 24,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": false,
+      "variant": "qat",
+      "timed_steps": 10,
+      "free_vram_gib_post_warmup": 5.15,
+      "status": "OK",
+      "tok_s_paced": 24078.9,
+      "tok_s_raw": 25319.3,
+      "pacing_tax": 0.049
+    },
+    {
+      "cell": "b32-ckpt-eager",
+      "batch": 32,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": false,
+      "variant": "qat",
+      "timed_steps": 10,
+      "status": "SKIPPED-OOM"
+    },
+    {
+      "cell": "b16-nockpt-eager",
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": false,
+      "variant": "qat",
+      "timed_steps": 10,
+      "status": "SKIPPED-OOM"
+    },
+    {
+      "cell": "b32-nockpt-eager",
+      "batch": 32,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": false,
+      "variant": "qat",
+      "timed_steps": 10,
+      "status": "SKIPPED-OOM"
+    },
+    {
+      "cell": "b24-ckpt-compile",
+      "batch": 24,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "status": "CELL-ERROR",
+      "error": "NameError: name 'torch' is not defined"
+    }
+  ],
+  "result": {
+    "anchor": {
+      "receipt": "fp19-bench-20260611T024648Z.json",
+      "expected_tok_s_paced": 18737.7,
+      "measured_tok_s_paced": 17899.0,
+      "drift_pct": -4.48,
+      "anchor_ok": true
+    },
+    "best_safe": {
+      "cell": "b24-ckpt-eager",
+      "tok_s_paced": 24078.9,
+      "speedup_vs_anchor": 1.345
+    },
+    "projection_live_total": {
+      "real_token_total": 6973632296,
+      "v0_days_at_anchor": 4.509,
+      "v0_days_at_best": 3.352,
+      "days_saved": 1.157
+    },
+    "verdict": "GAIN"
+  },
+  "deviation_note": "a GAIN here is EVIDENCE for a registered deviation to configs/v0-pretrain-config.json throughput.batch (+ optimizer-coupling note); it changes NOTHING by itself \u2014 the config stays frozen until the deviation PR lands through the gate",
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization"
+}
