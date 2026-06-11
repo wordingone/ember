@@ -1,0 +1,82 @@
+{
+  "ticket": "ENG26-CAP",
+  "ts": "20260611T021302Z",
+  "leg": "B_cap_run",
+  "description": "cluster-cap applied to arc_round build; same DEFAULT_CAPS table {easy:2,mid:4,frontier:8,dead:8} applied at dedup-cluster level using eng-25 stamp (dedup-cluster.jsonl)",
+  "freshness": {
+    "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+    "committed_view_sha256": "d88018ec80d97d71bf490e6da6d50d621a2aa896599a100cd35eee693d18c850",
+    "fresh_backfill_sha256": "d88018ec80d97d71bf490e6da6d50d621a2aa896599a100cd35eee693d18c850",
+    "byte_identical": true
+  },
+  "caps_used": {
+    "easy": 2,
+    "mid": 4,
+    "frontier": 8,
+    "dead": 8
+  },
+  "examples_before_cluster_cap": 2321,
+  "examples_after_cluster_cap": 394,
+  "weight_table_after_cap": {
+    "examples": 394,
+    "exact_unique_completions": 375,
+    "steps_on_duplicated_text": 26,
+    "dup_step_fraction": 0.066,
+    "exact_group_sizes_top5": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "implicit_weight_max": 4,
+    "implicit_weight_median": 1,
+    "near_dup_clusters_cos95": 320,
+    "cluster_example_sizes_top5": [
+      8,
+      5,
+      4,
+      4,
+      4
+    ],
+    "giant_cluster_step_share": 0.0203,
+    "largest_cluster_chaining_diag": null
+  },
+  "cap_stats": {
+    "clusters_total": 322,
+    "clusters_cap_bound": 4,
+    "examples_before_cluster_cap": 2321,
+    "examples_after_cluster_cap": 394,
+    "per_stratum_before": {
+      "easy": 230,
+      "mid": 89,
+      "frontier": 93,
+      "dead": 1909
+    },
+    "per_stratum_after": {
+      "easy": 227,
+      "mid": 89,
+      "frontier": 45,
+      "dead": 33
+    },
+    "caps_used": {
+      "easy": 2,
+      "mid": 4,
+      "frontier": 8,
+      "dead": 8
+    },
+    "stratum_rank_rule": "best member-task stratum = min cap rank: frontier(0)>dead(1)>mid(2)>easy(3); frontier preferred over dead on tie (both cap=8)"
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "sha_before": {
+    "episodes_jsonl": "e2d4e8c7521360043011d7615377814cb3e262846beef8180d840ef2ec438166",
+    "control_pool_jsonl": "4248ce5539f12f4bfa7faf8333d624bb57005835f767e38a21ea6636c62e607c",
+    "dedup_cluster_jsonl": "d88018ec80d97d71bf490e6da6d50d621a2aa896599a100cd35eee693d18c850"
+  },
+  "sha_after": {
+    "episodes_jsonl": "e2d4e8c7521360043011d7615377814cb3e262846beef8180d840ef2ec438166",
+    "control_pool_jsonl": "4248ce5539f12f4bfa7faf8333d624bb57005835f767e38a21ea6636c62e607c",
+    "dedup_cluster_jsonl": "d88018ec80d97d71bf490e6da6d50d621a2aa896599a100cd35eee693d18c850"
+  },
+  "views_byte_unchanged": true
+}
