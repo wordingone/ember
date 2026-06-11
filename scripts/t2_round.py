@@ -303,6 +303,13 @@ def main():
                 args.seed + args.round)
         receipt["episodes_verified_new"] = append_jsonl(LEDGER, verified)
         receipt["control_pool_new"] = append_jsonl(CONTROL_POOL, failed)
+        # eng #97: dedup-cluster sidecar stamps — sidecar-only writes;
+        # LEDGER and CONTROL_POOL bytes above are completely untouched.
+        from ledger_dedup import stamp_dedup_sidecar
+        _views = f"{NC}/ledger/views"
+        stamp_dedup_sidecar(LEDGER, f"{_views}/dedup-cluster.jsonl", verified)
+        stamp_dedup_sidecar(CONTROL_POOL,
+                            f"{_views}/dedup-cluster-control.jsonl", failed)
 
     # dataset
     if args.control:

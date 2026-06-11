@@ -115,6 +115,13 @@ def main():
         from t2_round import CONTROL_POOL, LEDGER, append_jsonl
         receipt["episodes_added"] = append_jsonl(LEDGER, verified)
         receipt["control_added"] = append_jsonl(CONTROL_POOL, failed)
+        # eng #97: dedup-cluster sidecar stamps — sidecar-only writes;
+        # LEDGER and CONTROL_POOL bytes above are completely untouched.
+        from ledger_dedup import stamp_dedup_sidecar
+        NC_VIEWS = f"{NC}/ledger/views"
+        stamp_dedup_sidecar(LEDGER, f"{NC_VIEWS}/dedup-cluster.jsonl", verified)
+        stamp_dedup_sidecar(CONTROL_POOL,
+                            f"{NC_VIEWS}/dedup-cluster-control.jsonl", failed)
 
     os.makedirs(RECEIPTS, exist_ok=True)
     out = f"{RECEIPTS}/w2-ingest-{receipt['ts']}.json"
