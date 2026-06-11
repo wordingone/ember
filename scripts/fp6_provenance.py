@@ -31,6 +31,10 @@ LEDGER = f"{NC_WIN}/ledger/episodes.jsonl"
 CONTROL = f"{NC_WIN}/ledger/control_pool.jsonl"
 RECEIPTS = f"{NC_WIN}/receipts"
 
+# Adapters directory (relative to NC_WIN) — paths under here are OUR own
+# fine-tuned adapters; the license of their outputs follows the BASE model.
+ADAPTERS_DIR = f"{NC_WIN}/adapters"
+
 LICENSE_BY_SAMPLER = {
     "Qwen/Qwen2.5-Coder-3B-Instruct": "qwen-research",
     "Qwen/Qwen2.5-Coder-1.5B-Instruct": "apache-2.0",
@@ -38,12 +42,64 @@ LICENSE_BY_SAMPLER = {
     "unsloth/Qwen2.5-Coder-7B-Instruct-bnb-4bit": "apache-2.0",
 }
 
+import os as _os
+import re as _re
+
+
+def _adapter_tag(adapter_path):
+    """Return the last path component of an adapter path as the adapter tag."""
+    return _os.path.basename(adapter_path.rstrip("/\\"))
+
+
+def _canon_path(p):
+    """Canonicalize path for prefix comparison.
+
+    Converts both Windows-style 'B:/M/...' and WSL-style '/mnt/b/M/...'
+    to a lowercase forward-slash form with a consistent drive prefix, so
+    that ADAPTERS_DIR (Windows path) and sampler paths (WSL /mnt/ path)
+    resolve to the same canonical string.
+
+    Examples:
+      'B:/M/avir/...'            -> 'b/M/avir/...'
+      '/mnt/b/M/avir/...'        -> 'b/M/avir/...'
+    """
+    p = p.replace("\\", "/").strip()
+    # WSL mount: /mnt/X/... -> X/...
+    m = _re.match(r"^/mnt/([a-zA-Z])/(.*)", p)
+    if m:
+        return m.group(1).lower() + "/" + m.group(2)
+    # Windows drive: X:/... -> x/...
+    m = _re.match(r"^([a-zA-Z]):/?(.*)", p)
+    if m:
+        return m.group(1).lower() + "/" + m.group(2)
+    return p
+
 
 def classify(rec):
     """-> (license_class, basis). Precedence: explicit sampler stamp >
-    seed-dsl origin > unknown (fail-visible, never silently clean)."""
+    seed-dsl origin > unknown (fail-visible, never silently clean).
+
+    AC1: sampler of form '<BASE>+<ADAPTER_PATH>' where ADAPTER_PATH is
+    under ADAPTERS_DIR resolves via BASE.  Basis is
+    'sampler-stamp-with-own-adapter:<base>+<adapter-tag>'.
+    Unknown bases still produce UNKNOWN (fail-visible).
+    Both Windows ('B:/M/...') and WSL ('/mnt/b/M/...') adapter paths
+    are recognized via _canon_path normalization.
+    """
     sampler = rec.get("sampler")
     if sampler:
+        # AC1: adapter-suffixed sampler — '<BASE>+<ADAPTER_PATH>'
+        if "+" in sampler:
+            base, adapter_path = sampler.split("+", 1)
+            canon_adapter = _canon_path(adapter_path)
+            canon_adapters_dir = _canon_path(ADAPTERS_DIR)
+            if canon_adapter.startswith(canon_adapters_dir + "/") or \
+                    canon_adapter == canon_adapters_dir:
+                lic = LICENSE_BY_SAMPLER.get(base)
+                tag = _adapter_tag(adapter_path)
+                if lic:
+                    return lic, f"sampler-stamp-with-own-adapter:{base}+{tag}"
+                return "UNKNOWN", f"sampler-unmapped:{base}+{tag}"
         lic = LICENSE_BY_SAMPLER.get(sampler)
         if lic:
             return lic, f"sampler-stamp:{sampler}"
@@ -127,6 +183,42 @@ def _selftest():
     # unmapped sampler is VISIBLE, not silently clean
     lic, basis = classify({"sampler": "some/other-model"})
     assert lic == "UNKNOWN" and "unmapped" in basis
+
+    # AC1: adapter-suffixed sampler — known base -> resolves via base (branch A)
+    # Test with Windows-style path (ADAPTERS_DIR format)
+    adapter_win = ADAPTERS_DIR.replace("\\", "/") + "/r1w-q3-mtp"
+    lic, basis = classify({
+        "sampler": f"Qwen/Qwen2.5-Coder-3B-Instruct+{adapter_win}"
+    })
+    assert lic == "qwen-research", f"AC1 branch-A (win) lic wrong: {lic}"
+    assert basis == "sampler-stamp-with-own-adapter:Qwen/Qwen2.5-Coder-3B-Instruct+r1w-q3-mtp", \
+        f"AC1 branch-A (win) basis wrong: {basis}"
+    # AC1: WSL-style path (/mnt/b/...) must also match ADAPTERS_DIR
+    # Derive WSL equivalent: B:/M/... -> /mnt/b/M/...
+    import re as _re_test
+    wsl_adapters = _re_test.sub(
+        r"^([a-zA-Z]):/", lambda m: f"/mnt/{m.group(1).lower()}/",
+        ADAPTERS_DIR.replace("\\", "/")
+    )
+    adapter_wsl = wsl_adapters + "/r1w-q3-mtp"
+    lic_wsl, basis_wsl = classify({
+        "sampler": f"Qwen/Qwen2.5-Coder-3B-Instruct+{adapter_wsl}"
+    })
+    assert lic_wsl == "qwen-research", f"AC1 branch-A (wsl) lic wrong: {lic_wsl}"
+    assert basis_wsl == "sampler-stamp-with-own-adapter:Qwen/Qwen2.5-Coder-3B-Instruct+r1w-q3-mtp", \
+        f"AC1 branch-A (wsl) basis wrong: {basis_wsl}"
+    # AC1: unknown base + own adapter -> UNKNOWN (fail-visible, not silent)
+    lic2, basis2 = classify({
+        "sampler": f"some/unknown-base+{adapter_wsl}"
+    })
+    assert lic2 == "UNKNOWN" and "unmapped" in basis2, \
+        f"AC1 unknown-base should be UNKNOWN: {lic2!r} {basis2!r}"
+    # AC1: adapter path NOT under ADAPTERS_DIR -> treated as plain sampler (unmapped)
+    lic3, basis3 = classify({
+        "sampler": "Qwen/Qwen2.5-Coder-3B-Instruct+/some/other/path/adapter"
+    })
+    assert lic3 == "UNKNOWN" and "unmapped" in basis3, \
+        f"AC1 foreign-adapter-path should be UNKNOWN: {lic3!r} {basis3!r}"
     # seed-dsl origin (orig + aug variants) -> MIT
     assert classify({"origin": "seed-dsl-orig"})[0] == "arc-dsl-mit"
     assert classify({"origin": "seed-verifier-rearc-v2"})[0] == "arc-dsl-mit"

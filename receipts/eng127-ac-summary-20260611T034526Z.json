@@ -1,0 +1,56 @@
+{
+  "ticket": "ENG127-AC-SUMMARY",
+  "ts": "20260611T034526Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "issue": "127",
+  "ac1": {
+    "description": "fp6_provenance.classify: sampler BASE+ADAPTER_PATH under adapters/ resolves via BASE; basis sampler-stamp-with-own-adapter:<base>+<adapter-tag>; unknown bases still UNKNOWN",
+    "example_input_sampler": "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1w-q3-mtp",
+    "example_resolved_class": "qwen-research",
+    "example_resolved_basis": "sampler-stamp-with-own-adapter:Qwen/Qwen2.5-Coder-3B-Instruct+r1w-q3-mtp",
+    "path_normalization": "Windows B:/... and /mnt/b/... paths both recognized via _canon_path()",
+    "selftest_marker": "FP6_PROVENANCE_SELFTEST_PASS"
+  },
+  "ac2": {
+    "description": "ledger_license.effective_class: STAMPED UNKNOWN with sampler-unmapped: basis re-classifies on read; stamped non-UNKNOWN wins",
+    "branches_pinned": true,
+    "branch_A": "stamped UNKNOWN + sampler-unmapped: -> re-classify via classify() -> qwen-research",
+    "branch_B": "stamped non-UNKNOWN (arc-dsl-mit) -> unchanged",
+    "selftest_marker": "LEDGER_LICENSE_SELFTEST_PASS"
+  },
+  "ac3": {
+    "description": "Fresh license sidecar backfill: 960 r2 rows_read (278 ep + 98 ctl added to ledger after frontier cap) -> qwen-research via AC1+AC2",
+    "r2_rows_in_ledger": {
+      "episodes": 278,
+      "control_pool": 98,
+      "total": 376
+    },
+    "resolved_to": "qwen-research",
+    "by_license_before_episodes": {"UNKNOWN": 278, "UNSTAMPED": 2865},
+    "by_license_before_control": {"UNKNOWN": 98, "UNSTAMPED": 2931},
+    "by_license_after_episodes": {"arc-dsl-mit": 1909, "qwen-research": 1234},
+    "by_license_after_control": {"arc-dsl-mit": 1909, "qwen-research": 1120},
+    "receipt_file": "receipts/eng127-license-sidecar-backfill-20260611T034141Z.json"
+  },
+  "ac4": {
+    "description": "ledger_dedup fp16 crosscheck: PIN_STALE when sha differs; MISMATCH only on same-snapshot compare",
+    "pin_stale_confirmed": true,
+    "bridge_clusters_episodes": 48,
+    "bridge_clusters_control": 22,
+    "actual_cluster_counts": {
+      "episodes_qwen_current": 725,
+      "episodes_qwen_fp16_pin": 592,
+      "control_qwen_current": 745,
+      "control_qwen_fp16_pin": 697
+    },
+    "discrepancy_from_issue_estimate": "Issue text 592->585/697->692 was speculative; actual: 725/745 due to r2 adding 140/53 pure-new clusters beyond the 48/22 bridging rows. 48 bridge clusters reduce episode count by 7 (732 without bridging -> 725). Documented in ledger_dedup.py fp16_ground_truth.growth_note.",
+    "receipt_file": "receipts/eng25-dedup-view-20260611T034209Z.json",
+    "selftest_marker": "LEDGER_DEDUP_SELFTEST_PASS"
+  },
+  "ac5": {
+    "description": "Main ledger files byte-untouched throughout all AC3+AC4 operations",
+    "episodes_sha256": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+    "control_sha256": "9aa2c8d150ec3fcdaa06b28b9f9db63b6fb436829612d41dc8b483ed85d523da",
+    "byte_unchanged_asserted": true
+  }
+}

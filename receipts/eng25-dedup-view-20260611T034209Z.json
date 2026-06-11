@@ -1,0 +1,165 @@
+{
+  "ticket": "ENG25-DEDUP-VIEW",
+  "ts": "20260611T034209Z",
+  "single_source_imports": {
+    "fp13_concentration": [
+      "row_normalize",
+      "near_dup_edges",
+      "union_find_clusters",
+      "NEAR_DUP_COS"
+    ],
+    "fp10_idiom": [
+      "trigram_bag"
+    ],
+    "fp6_provenance": [
+      "classify"
+    ]
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ledger": {
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/episodes.jsonl",
+    "sha256_before": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+    "sha256_after": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+    "byte_unchanged": true
+  },
+  "control_pool": {
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/control_pool.jsonl",
+    "sha256_before": "9aa2c8d150ec3fcdaa06b28b9f9db63b6fb436829612d41dc8b483ed85d523da",
+    "sha256_after": "9aa2c8d150ec3fcdaa06b28b9f9db63b6fb436829612d41dc8b483ed85d523da",
+    "byte_unchanged": true
+  },
+  "main_files_byte_unchanged": true,
+  "episodes_view": {
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/views/dedup-cluster.jsonl",
+    "rows": 3143,
+    "summary": {
+      "total_rows": 3143,
+      "exact_dup_count": 1132,
+      "cluster_count": 734,
+      "cluster_size_max": 1884,
+      "cluster_size_median": 1
+    },
+    "per_class_census": {
+      "arc-dsl-mit": {
+        "rows": 1909,
+        "exact_unique": 780,
+        "cluster_count": 9,
+        "largest_cluster_size": 1884,
+        "median_cluster_size": 4
+      },
+      "qwen-research": {
+        "rows": 1234,
+        "exact_unique": 1231,
+        "cluster_count": 725,
+        "largest_cluster_size": 267,
+        "median_cluster_size": 1
+      }
+    }
+  },
+  "control_view": {
+    "path": "B:/M/avir/leo/state/nc-ladder/ledger/views/dedup-cluster-control.jsonl",
+    "rows": 3029,
+    "summary": {
+      "total_rows": 3029,
+      "exact_dup_count": 1522,
+      "cluster_count": 751,
+      "cluster_size_max": 1884,
+      "cluster_size_median": 1
+    },
+    "per_class_census": {
+      "arc-dsl-mit": {
+        "rows": 1909,
+        "exact_unique": 387,
+        "cluster_count": 6,
+        "largest_cluster_size": 1884,
+        "median_cluster_size": 6
+      },
+      "qwen-research": {
+        "rows": 1120,
+        "exact_unique": 1120,
+        "cluster_count": 745,
+        "largest_cluster_size": 168,
+        "median_cluster_size": 1
+      }
+    }
+  },
+  "fp16_crosscheck": {
+    "fp16_receipt": "receipts/fp16-census-20260611T013228Z.json",
+    "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+    "snapshot_sha": {
+      "episodes": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+      "control_pool": "fa286e4ea77c74b9b1abf40ccf655efbaf120fe5a57fbc9065ef3c3976b61bb9"
+    },
+    "current_sha": {
+      "episodes": "21bc798f99a700756cc5dcd5953d8b8cd9841340058554dbd1f08714a8464604",
+      "control_pool": "9aa2c8d150ec3fcdaa06b28b9f9db63b6fb436829612d41dc8b483ed85d523da"
+    },
+    "pin_stale": true,
+    "growth_note": "48 clusters bridge qwen-research r1 rows with r2 on-policy rows (adapter regenerates near-identical solutions): episodes qwen-research 592->585 clusters; control_pool qwen-research 697->692 clusters. PIN_STALE is the correct status when ledger sha differs from snapshot_sha.",
+    "episodes": {
+      "arc-dsl-mit": {
+        "label": "episodes/arc-dsl-mit",
+        "status": "OK",
+        "pin_stale": true,
+        "our_rows": 1909,
+        "fp16_rows": 1909,
+        "rows_match": true,
+        "our_exact_unique": 780,
+        "fp16_exact_unique": 780,
+        "exact_unique_match": true,
+        "our_cluster_count": 9,
+        "fp16_clusters_cos95": 9,
+        "cluster_count_match": true,
+        "all_match": true
+      },
+      "qwen-research": {
+        "label": "episodes/qwen-research",
+        "status": "PIN_STALE",
+        "pin_stale": true,
+        "our_rows": 1234,
+        "fp16_rows": 956,
+        "rows_match": false,
+        "our_exact_unique": 1231,
+        "fp16_exact_unique": 956,
+        "exact_unique_match": false,
+        "our_cluster_count": 725,
+        "fp16_clusters_cos95": 592,
+        "cluster_count_match": false,
+        "all_match": false
+      }
+    },
+    "control_pool": {
+      "arc-dsl-mit": {
+        "label": "control_pool/arc-dsl-mit",
+        "status": "OK",
+        "pin_stale": true,
+        "our_rows": 1909,
+        "fp16_rows": 1909,
+        "rows_match": true,
+        "our_exact_unique": 387,
+        "fp16_exact_unique": 387,
+        "exact_unique_match": true,
+        "our_cluster_count": 6,
+        "fp16_clusters_cos95": 6,
+        "cluster_count_match": true,
+        "all_match": true
+      },
+      "qwen-research": {
+        "label": "control_pool/qwen-research",
+        "status": "PIN_STALE",
+        "pin_stale": true,
+        "our_rows": 1120,
+        "fp16_rows": 1022,
+        "rows_match": false,
+        "our_exact_unique": 1120,
+        "fp16_exact_unique": 1022,
+        "exact_unique_match": false,
+        "our_cluster_count": 745,
+        "fp16_clusters_cos95": 697,
+        "cluster_count_match": false,
+        "all_match": false
+      }
+    },
+    "overall_match": null
+  }
+}
