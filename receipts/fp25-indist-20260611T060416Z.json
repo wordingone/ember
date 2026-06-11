@@ -1,6 +1,6 @@
 {
   "ticket": "FP25-INDIST",
-  "ts": "20260611T055959Z",
+  "ts": "20260611T060416Z",
   "surface": "A-recall",
   "arms": [
     "base",
@@ -12,6 +12,7 @@
   "k": 8,
   "seed": 16,
   "recall_task_ids_sha256": "0837b98209c80269b6567a2e12bccf6ef68e79edf10fbfa970c6976ce5b34601",
+  "sha_convention": "recall_task_ids_sha256 = sha256 over the sorted task-id strings joined by \\n, utf-8 (ids_sha256); file shas elsewhere in the chain are over on-disk raw bytes",
   "recall_task_count": 28,
   "samples_file": "w4-eval-fp25-recall-20260611T054801Z-samples.jsonl",
   "adapter_provenance": {

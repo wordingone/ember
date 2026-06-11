@@ -125,9 +125,13 @@ RECEIPT_REQUIRED_FIELDS = (
     "surface",                 # "A-recall" | "B-heldout"
     "arms", "k", "seed",
     "recall_task_ids_sha256",  # sha of the sorted 28-id set (Surface A)
+    "sha_convention",          # receipt_check: every *_sha256 needs this
     "samples_file",
     "adapter_provenance",      # arm -> adapter path (base = none)
 )
+SHA_CONVENTION = ("recall_task_ids_sha256 = sha256 over the sorted task-id "
+                  "strings joined by \\n, utf-8 (ids_sha256); file shas "
+                  "elsewhere in the chain are over on-disk raw bytes")
 
 
 def recall_task_ids(view_path):
@@ -332,6 +336,7 @@ def build_fp25_receipt(samples_path, recall_view, surface, ts):
         "arms": sorted(tab),
         "k": EVAL_K, "seed": EVAL_SEED,
         "recall_task_ids_sha256": ids_sha256(recall_ids),
+        "sha_convention": SHA_CONVENTION,
         "recall_task_count": len(recall_ids),
         "samples_file": os.path.basename(samples_path),
         "adapter_provenance": adapter_provenance(samples_path),
@@ -457,6 +462,7 @@ def _selftest():
     sp = _mk_samples(rids)
     rec = build_fp25_receipt(sp, view_p, "A-recall", "20260611T000000Z")
     assert validate_receipt(rec) == [], rec
+    assert rec["sha_convention"] == SHA_CONVENTION  # receipt_check gate
     assert rec["arms"] == sorted(ARM_SET)
     assert rec["k"] == EVAL_K and rec["seed"] == EVAL_SEED
     assert rec["recall_task_count"] == EXPECTED_RECALL_TASKS
