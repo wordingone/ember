@@ -46,6 +46,12 @@ Kai 14644: E1b gate hardening ACCEPTED (selftest + bare-exit-1 + full repro set 
 
 Lanes: Eli on #230 (sampler model-free core, branch eng/230-r1-sampler) with recount monitored (PID 136828); #231 queued behind; #229 not-now. Next fire unchanged: #218 on the superseding freeze receipt.
 
+## 2026-06-11 ~15:30Z — Cron tick: no jobs to gate; fp-32c (#234→PR #235 @b86f86b) discharges ledger row R10
+
+Daemon: 0 running (380 completed / 59 failed / 2 unknown lifetime); no new receipts; superseding freeze not landed (recount = Eli's Windows PID, not a daemon job). GPU idle + Leo carriers all trigger-gated → built the one buildable fp-32 remainder: **R10 flipped observational → receipt-backed.** `fp32_r10_failure_taxonomy.py` + `receipts/fp32-r10-taxonomy-20260611T152522Z.json` (store snapshot sha-pinned, 441 jobs): June ember-era 30/285 failed = 8 non-ember + 2 misuse + 14 fast-fail-bounded (dispatch-gap ≤600 s; gap heuristic only classifies TOWARD benign) + 2 root-caused (R3 bench crash, D-gate divisor — receipts cited) + 4 unknown-evidence-expired (pre-log_name shared-log overwrite). **Evidenced mid-run deaths: 0; pessimistic budget (unknowns-as-deaths) 0.364/day → 1.22 interruptions per 3.352-day v0 run, each ≤ one checkpoint interval (resume bit-exact).** This is the interruption-rate input R5/#231's cadence decision needed. Succession carried by #225 (re-open: any v0 segment mid-run death without receipted root cause). New executor born staged-exit-1 per 14644 policy.
+
+Position: next fire #218 on the superseding freeze receipt (name+sha via Eli's mail); then shard rerun → #229 eager-pin window → launch gate.
+
 ## 2026-06-11 ~14:45Z — stop-gate pass: queue-jump #132 -> #225 (E1b gate built, PR #228 merged)
 
 Gate fired with #132 lowest. Queue-jump justification: #132's executors are built+frozen (fp21b_prereg.py + fp21b_scope_132.py, scope PR #197); its fire input (round-3 sampling receipt) cannot exist before a round-3 runs, and producing a fallback-(a) borrowed round-3 NOW would contradict the frozen fp-26 (b) owned-core registration. #225 held the only buildable fire-time gap among open Leo-class items: the E1b prereg (#227) froze the loss-match rule with no executor applying it.
