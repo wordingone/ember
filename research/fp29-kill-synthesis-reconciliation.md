@@ -27,8 +27,11 @@ handing the work back before the wall-breaking step was attempted.
 - **Non-KILL verdicts → PASS-THROUGH** untouched (PASS / RETRY-AT-4B / INFO /
   PROTOCOL-VIOLATION / INVALID-RECEIPT / INCOMPUTABLE all demonstrated).
 - **KILL + no synthesis receipt → KILL-REFUSED-SYNTHESIS-UNRECEIPTED.** The
-  rung-kill cannot escalate; the next protocol step is to RUN the synthesis
-  attempt.
+  rung-kill cannot escalate. Precision (fp-22 forbids a third retry): the
+  refusal does NOT authorize a third probe — it surfaces an
+  execution-discipline violation to the user (the mandated lever was skipped
+  in its window). fp-27 makes the synthesis MANDATORY-IN-WINDOW on a 2B
+  RETRY, so this state is unreachable under correct execution.
 - **KILL + malformed receipt → KILL-REFUSED-SYNTHESIS-MALFORMED** (findings
   named, fail-closed).
 - **KILL + well-formed receipt → KILL-VALID** — only now may fp-24's
