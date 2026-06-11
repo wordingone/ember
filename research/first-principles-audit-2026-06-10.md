@@ -611,3 +611,56 @@ fires from existing files. = fp-10.
 is the W-code ledger text Qwen-idiom-marked enough that a from-scratch
 core trained on it inherits a detectable signature? AUC + top features +
 the dilution-mix consequence quantified. Closing PR mints fp-11.
+
+## 8.16 fp-8 (#63): verifier-change regression gate — the checker is checked by the ledger
+
+**Question (minted by §8.13):** tightening V's comparator (the named fix
+for the confirmed false-accept paths) is itself a change with a failure
+mode — a comparator that rejects valid solutions is a FALSE-NEGATIVE
+regression on the measured floor, the dual of the 22.1% ext-FPR. Who
+checks the checker?
+
+**Answer — the existing verified ledger does, and the gate now exists as
+an artifact (`scripts/fp8_vgate.py`, selftest PASS, receipt
+`fp8-vgate-20260611T001730Z.json`).** Every verified W-code episode's
+asserts re-executed in the production sandbox under (a) raw `==` and (b)
+a reference strict comparator (exact-type-tagged leaves, kind-tagged
+containers, unknown types refuse to normalize — the refusal is precisely
+what closes the `__eq__` false-accept path, because a lying object never
+reaches builtin comparison). Flip causes classified in-harness and
+transported through the sandbox error field.
+
+**Finding — the strictness is nearly free on the real ledger:**
+- **Flip rate 0.21%** (2/956 episodes; 3,024 assert-jobs), both flips
+  `container-kind` (tuple-vs-list inside an `==`-equal value), both
+  mid-stratum; **bits cost 2.2 / 573.2 (0.4%).**
+- **Zero `unknown-type` flips** — no episode in the ledger returns a
+  custom-`__eq__` object; the false-credit class exists as a reachable
+  path (fp-5 live probes) but has NOT been learned by the policy
+  (consistent with GRPO reward at 0.51, not saturating toward 1.0).
+- **Zero raw re-execution disagreements** — the ledger's verified flags
+  reproduce exactly (independently corroborates verify-timing's 1.0
+  agreement). 160/3,184 asserts are non-`==` shapes (counted, excluded,
+  fail-visible).
+
+**Consequences:** (1) the production comparator adoption (eng follow-up)
+is UNBLOCKED with measured cost — the named eng issue ships the strict
+compare and re-runs this gate as its acceptance receipt, deciding the two
+container-kind flips explicitly (accept the 2.2-bit loss or add a single
+tuple/list coercion rule). (2) The standing rule fp-8 asked for is now
+mechanical: **verifier edits are artifacts under NC-K invariant-1, and
+this receipt's flip_rate + bits_cost is the required false-negative
+field.** (3) Caveat carried: the regression corpus itself is ~22%
+ext-impure; a comparator change interacting with the impure mass could
+hide there — variant run on ext-clean episodes is one flag-file join away
+if ever load-bearing.
+
+**Successor minted (fp-11):** the denominator under every efficiency
+number — bits/GPU-min, the 1.07× re-valued ratio, the 785× gen/verify
+ratio — is GOVERNED wall-clock (decode pacer + inter-batch throttle +
+duty-cycle pauses inflate it by design). Is the cross-core comparison
+robust to the pacing profile, or does the governor distort it (e.g. if
+pacing overhead is fixed-per-batch, the smaller/faster core absorbs
+proportionally more)? CPU-from-receipts: receipts carry gen_secs +
+tok/s + batch counts; pacer parameters are code constants. Closing PR
+mints fp-12.
