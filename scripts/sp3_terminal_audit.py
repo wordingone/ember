@@ -96,8 +96,11 @@ def audit_row(row, nc=NC):
             gaps.append(f"requires >={min_count} of '{pat}' "
                         f"(receipt_check-clean); found {len(ok)}")
         else:
+            # bind the NEWEST matches (ts-sorted names): a later receipt
+            # supersedes an earlier one on the same surface (Kai 14541
+            # precedent — binding the earliest quoted a superseded verdict)
             bound.extend({"path": os.path.relpath(p, nc).replace("\\", "/"),
-                          "sha256": _sha(p)} for p in ok[:min_count])
+                          "sha256": _sha(p)} for p in ok[-min_count:])
     if gaps:
         return {"id": row["id"], "condition": row["condition"],
                 "verdict": "GAP-NAMED", "gaps": gaps}

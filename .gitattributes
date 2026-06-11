@@ -7,3 +7,8 @@ tokenizer/** -text
 # artifact's sha256 over exact on-disk bytes); CRLF normalization on Windows
 # checkouts drifts those bytes and fails the prereg premise. Pin -text (eng-47).
 research/** -text
+# ledger views + probe sets are sha-bound by audit receipts (sp-3/fp-28 bind
+# byte-true sha256); CRLF conversion on fresh checkouts drifts the bytes vs
+# the recorded sha. Pin -text (same class as the eng-47 research/** pin).
+ledger/** -text
+probes/** -text

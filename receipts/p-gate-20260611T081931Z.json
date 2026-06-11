@@ -1,0 +1,17 @@
+{
+  "ticket": "P-GATE",
+  "issue": "#114",
+  "scope": "cross-session-boundary-persistence-pair",
+  "ts": "20260611T081931Z",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "mode": "assemble-verify",
+  "pre_receipt": "C:\\WINDOWS\\TEMP\\tmp78reymta\\receipt.json",
+  "post_receipt": "C:\\WINDOWS\\TEMP\\tmpvq70k8jt\\receipt.json",
+  "arm_name": "adapter",
+  "gain_extraction_ok": false,
+  "failure_reasons": [
+    "FAIL_BY_GAIN_EXTRACTION: pre receipt: no recognized gain shape in receipt (ticket='SYNTHETIC-NO-GAIN', ts='20260611T000000Z'); looked for 'gain_with', 'deltas'+arm_name, and 'gain'"
+  ],
+  "verdict": "FAIL",
+  "pass": false
+}

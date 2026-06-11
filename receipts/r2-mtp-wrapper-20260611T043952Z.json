@@ -1,0 +1,49 @@
+{
+  "arm": "mtp",
+  "calibration": null,
+  "dataset_identity": {
+    "arm": "r2-q3-sft (t2_r2w sft arm)",
+    "basis": "by-construction: this arm trains on the SAME view file the sft arm wrote (no copy, no rebuild), sha-pinned here; t2_mtp re-hashes it at build time and asserts equality with this pin, cross-checks rows + n_examples against the certified sft receipt, and mirrors the sft build shape (flat cap + license_allow) \u2014 all fail-closed before training. theta + ext_clean were applied by the sft arm at view-write time.",
+    "claim": true,
+    "sft_receipt": "/mnt/b/M/avir/leo/state/nc-ladder/receipts/t2-r2w-sft-20260611T032047Z.json",
+    "view_path": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r2-sft.jsonl",
+    "view_rows": 205,
+    "view_sha256": "092efebbb2eb40be7826b7b845b63be2dc83d34c710e378d7f501183732f5a63"
+  },
+  "delegation": {
+    "argv": [
+      "t2_mtp.py",
+      "--model",
+      "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "--tag",
+      "r2-q3-mtp",
+      "--k-aux",
+      "3",
+      "--lam",
+      "0.3",
+      "--view-path",
+      "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r2-sft.jsonl",
+      "--sft-receipt",
+      "/mnt/b/M/avir/leo/state/nc-ladder/receipts/t2-r2w-sft-20260611T032047Z.json",
+      "--expected-view-sha256",
+      "092efebbb2eb40be7826b7b845b63be2dc83d34c710e378d7f501183732f5a63",
+      "--round",
+      "2",
+      "--wrapper-receipt",
+      "/mnt/b/M/avir/leo/state/nc-ladder/receipts/r2-mtp-wrapper-20260611T043952Z.json",
+      "--gate-token-present"
+    ],
+    "entry": "t2_mtp"
+  },
+  "gate_token_present": true,
+  "k_aux": 3,
+  "lam": 0.3,
+  "license_allow": null,
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "no_training_launched_by_wrapper": true,
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "tag": "r2-q3-mtp",
+  "ticket": "NC0-T2-R2-MTP-WRAPPER",
+  "ts": "20260611T043952Z",
+  "view_plumb_note": "eng #140 (gate rework, option b): the wrapper builds no view and applies no filter \u2014 it consumes wcode-r2-sft.jsonl, fail-closed if absent. The first fix's self-built view skipped ext_clean (row-level confound vs the sft arm); the original delegation was overwritten by t2_mtp's ledger regeneration and never reached training. wcode-r1.jsonl is never touched by this wrapper."
+}

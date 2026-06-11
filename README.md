@@ -26,7 +26,11 @@ tasks, control below base) with a **floor-scoped transfer ceiling** at the
 tested episode budget (fp-25 decomposition). The registered round-3 shape is
 **(b) owned-core in-dist accumulation** (fp-26 prereg, frozen).
 
-**Staged for the first owned-core v0 training run.** The live critical path:
+**Staged for the first owned-core v0 training run — currently BLOCKED on
+G-shards** (the first shard run was refused by the writer's band guard,
+which exposed a count-semantics conflict; the re-derived freeze + shard
+rerun are in flight). The live critical path, each step a precondition of
+the next:
 
 1. shard emission (`scripts/token_shards_v0.py --emit`) → `TOKEN-SHARDS-V0`
    receipt reproducing the frozen token total (pinned in the

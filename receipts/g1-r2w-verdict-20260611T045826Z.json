@@ -1,0 +1,242 @@
+{
+  "ticket": "G1-R2W-VERDICT",
+  "ts": "20260611T045826Z",
+  "samples_file": "w4-eval-r2w-q3-20260611T044559Z-samples.jsonl",
+  "w4_receipt": "w4-eval-r2w-q3-20260611T044559Z.json",
+  "basis": "repairs Kai 14528: w4_eval omits <trained>_minus_control (literal-name condition); recomputed from per-sample rows with g1_paired.compare (r1 pre-registered methods: Newcombe feed + 10k bootstrap seed-16 per-sample rate)",
+  "n_tasks": 43,
+  "advance_rule": "PRIMARY per-sample-rate UP vs base AND vs control; powered-t5 harm_flag (separate leg) must be false before round-3 default",
+  "advancing_arms_pre_t5": [],
+  "base_delta_crosscheck_mismatches": [
+    {
+      "arm": "sft",
+      "mine": [
+        -0.244,
+        0.0586
+      ],
+      "w4_eval": [
+        -20.93,
+        0.0
+      ]
+    },
+    {
+      "arm": "mtp",
+      "mine": [
+        -0.2178,
+        0.0779
+      ],
+      "w4_eval": [
+        -16.28,
+        0.0
+      ]
+    },
+    {
+      "arm": "grpo",
+      "mine": [
+        -0.1635,
+        0.1161
+      ],
+      "w4_eval": [
+        -11.63,
+        4.65
+      ]
+    }
+  ],
+  "decisions": {
+    "sft": {
+      "advances_on_primary_sample_rate": false,
+      "feed_newcombe_both_up": false,
+      "metric_agreement": true,
+      "note": "ADVANCE on the primary per-sample-rate gains metric requires UP vs base AND vs control; powered-t5 harm_flag (separate leg) must also be false before round-3 default."
+    },
+    "mtp": {
+      "advances_on_primary_sample_rate": false,
+      "feed_newcombe_both_up": false,
+      "metric_agreement": true,
+      "note": "ADVANCE on the primary per-sample-rate gains metric requires UP vs base AND vs control; powered-t5 harm_flag (separate leg) must also be false before round-3 default."
+    },
+    "grpo": {
+      "advances_on_primary_sample_rate": false,
+      "feed_newcombe_both_up": false,
+      "metric_agreement": true,
+      "note": "ADVANCE on the primary per-sample-rate gains metric requires UP vs base AND vs control; powered-t5 harm_flag (separate leg) must also be false before round-3 default."
+    }
+  },
+  "blocks": {
+    "control_minus_base": {
+      "pair": "control - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 38,
+        "ref": 39,
+        "discordant_ref_only_b": 1,
+        "discordant_arm_only_c": 0,
+        "mcnemar_p": 1.0,
+        "newcombe_ci95": [
+          -0.1635,
+          0.1161
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0349,
+        "bootstrap_ci95": [
+          -0.0262,
+          0.0959
+        ],
+        "mde": 0.0882,
+        "flag": "FLAT"
+      }
+    },
+    "sft_minus_base": {
+      "pair": "sft - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 35,
+        "ref": 39,
+        "discordant_ref_only_b": 5,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 0.2188,
+        "newcombe_ci95": [
+          -0.244,
+          0.0586
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0174,
+        "bootstrap_ci95": [
+          -0.032,
+          0.0698
+        ],
+        "mde": 0.0742,
+        "flag": "FLAT"
+      }
+    },
+    "sft_minus_control": {
+      "pair": "sft - control",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 35,
+        "ref": 38,
+        "discordant_ref_only_b": 4,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 0.375,
+        "newcombe_ci95": [
+          -0.2245,
+          0.0863
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0174,
+        "bootstrap_ci95": [
+          -0.0785,
+          0.0465
+        ],
+        "mde": 0.0907,
+        "flag": "FLAT"
+      }
+    },
+    "mtp_minus_base": {
+      "pair": "mtp - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 36,
+        "ref": 39,
+        "discordant_ref_only_b": 3,
+        "discordant_arm_only_c": 0,
+        "mcnemar_p": 0.25,
+        "newcombe_ci95": [
+          -0.2178,
+          0.0779
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": 0.0174,
+        "bootstrap_ci95": [
+          -0.0407,
+          0.0698
+        ],
+        "mde": 0.0812,
+        "flag": "FLAT"
+      }
+    },
+    "mtp_minus_control": {
+      "pair": "mtp - control",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 36,
+        "ref": 38,
+        "discordant_ref_only_b": 2,
+        "discordant_arm_only_c": 0,
+        "mcnemar_p": 0.5,
+        "newcombe_ci95": [
+          -0.1983,
+          0.1057
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0174,
+        "bootstrap_ci95": [
+          -0.0698,
+          0.0291
+        ],
+        "mde": 0.0714,
+        "flag": "FLAT"
+      }
+    },
+    "grpo_minus_base": {
+      "pair": "grpo - base",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 38,
+        "ref": 39,
+        "discordant_ref_only_b": 2,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 1.0,
+        "newcombe_ci95": [
+          -0.1635,
+          0.1161
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0349,
+        "bootstrap_ci95": [
+          -0.0959,
+          0.0262
+        ],
+        "mde": 0.0882,
+        "flag": "FLAT"
+      }
+    },
+    "grpo_minus_control": {
+      "pair": "grpo - control",
+      "n_tasks": 43,
+      "feed": {
+        "arm": 38,
+        "ref": 38,
+        "discordant_ref_only_b": 1,
+        "discordant_arm_only_c": 1,
+        "mcnemar_p": 1.0,
+        "newcombe_ci95": [
+          -0.1443,
+          0.1443
+        ],
+        "flag": "FLAT"
+      },
+      "sample": {
+        "mean_diff": -0.0698,
+        "bootstrap_ci95": [
+          -0.1453,
+          -0.0029
+        ],
+        "mde": 0.1051,
+        "flag": "DOWN"
+      }
+    }
+  }
+}
