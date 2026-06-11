@@ -1,0 +1,42 @@
+{
+  "ticket": "ENG20-LICENSE-VIEW",
+  "ts": "20260611T002458Z",
+  "mapping_source": "fp6_provenance.classify (#57, single source)",
+  "known_classes": [
+    "apache-2.0",
+    "arc-dsl-mit",
+    "qwen-research"
+  ],
+  "ledger": "ledger/episodes.jsonl",
+  "view": "ledger/views/license-class.jsonl",
+  "view_rows": 2865,
+  "ledger_sha256_before": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+  "ledger_sha256_after": "763d785803dfc85b1a6876d8ffc1810134145848f9db4be8a3f6cfe5d4a25368",
+  "ledger_byte_unchanged": true,
+  "stamp_conflicts": 0,
+  "episodes_by_class": {
+    "arc-dsl-mit": 1909,
+    "qwen-research": 956
+  },
+  "control_pool_by_class": {
+    "UNKNOWN": 1909,
+    "qwen-research": 1022
+  },
+  "filter_demo": {
+    "allow": [
+      "apache-2.0",
+      "arc-dsl-mit"
+    ],
+    "episodes": {
+      "before": 2865,
+      "after": 1909,
+      "excluded_by_class": {
+        "qwen-research": 956
+      }
+    },
+    "control_pool": {
+      "before": 2931,
+      "after": 0
+    }
+  }
+}

@@ -39,6 +39,7 @@ NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 sys.path.insert(0, f"{NC}/scripts")
 from t1_probe import (ARC_TRAIN, extract_code, execute_batch, load_tasks,  # noqa: E402
                       sample_model, task_prompt)
+from ledger_license import effective_class, parse_allow, stamp  # noqa: E402 (eng #70)
 
 LEDGER = f"{NC}/ledger/episodes.jsonl"
 CONTROL_POOL = f"{NC}/ledger/control_pool.jsonl"
@@ -82,6 +83,10 @@ def ingest_samples(samples_path, round_n):
             rec = {"key": f"{row['task']}:{sha(row['src'])}",
                    "task": row["task"], "src": row["src"],
                    "round": round_n, "solved": bool(row.get("solved"))}
+            for field in ("sampler", "origin"):  # provenance passthrough
+                if row.get(field):
+                    rec[field] = row[field]
+            stamp(rec)  # eng #70: license_class at ingest
             (verified if row.get("verified") else failed).append(rec)
     return verified, failed
 
@@ -103,19 +108,30 @@ def sample_round(model_id, adapter, k, round_n, batch_size, seed):
     verified, failed = [], []
     for (task_id, src), r in zip(metas, results):
         rec = {"key": f"{task_id}:{sha(src)}", "task": task_id, "src": src,
-               "round": round_n, "solved": bool(r.get("solved"))}
+               "round": round_n, "solved": bool(r.get("solved")),
+               # v3 provenance: origin = model[+adapter]; sampler kept as the
+               # passthrough field fp6_provenance's class mapping keys on.
+               "origin": model_id + (f"+{os.path.basename(adapter)}"
+                                     if adapter else ""),
+               "sampler": model_id}
+        stamp(rec)  # eng #70: license_class at ingest
         (verified if r.get("verified") else failed).append(rec)
     return verified, failed, {"gen_tokens": int(gen_tokens),
                               "gen_secs": round(secs, 1),
                               "programs": len(jobs)}
 
 
-def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None):
+def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None,
+                  license_allow=None):
     """Returns chat examples. match_counts: {task: n} to mirror (control).
 
     cap: int (flat ceiling) OR {task: n} dict (bits-weighted per-task caps
     from frontier.caps_from_records, eng #5 — easy mass discounted, frontier
     kept deep; tasks absent from the dict fall back to MAX_PER_TASK).
+
+    license_allow (eng #70): set of allowed license classes from
+    ledger_license.parse_allow, or None for no filter (default unchanged).
+    UNKNOWN-class records never pass an active filter (fail-closed).
 
     Records carrying inline "pairs" (seed episodes from t3_seed, incl. re-arc
     augmented variants like "tid#a2") render their prompt from those pairs;
@@ -125,6 +141,9 @@ def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None):
     with open(ledger_path) as f:
         for line in f:
             r = json.loads(line)
+            if license_allow is not None and \
+                    effective_class(r) not in license_allow:
+                continue
             by_task.setdefault(r["task"], []).append(r)
     tasks = {t["id"]: t for t in load_tasks(ARC_TRAIN)}
     examples, counts = [], {}
@@ -251,7 +270,15 @@ def main():
                     help="adapter/receipt tag suffix per core, e.g. '-q15' "
                          "(small-core re-stage 2026-06-10; keeps 7B artifacts "
                          "untouched)")
+    # NOTE: this flag shifts args_fp vs pre-#70 receipts (vars(args) gains
+    # the key) — args_fp is a schema fingerprint; comparisons pin tags, not
+    # fingerprints. Same acknowledged shift as eng #26's --reward.
+    ap.add_argument("--license-allow", default=None,
+                    help="comma list of license classes to keep at dataset "
+                         "build (eng #70); default = no filter; UNKNOWN is "
+                         "fail-closed (never allow-listable)")
     args = ap.parse_args()
+    allow = parse_allow(args.license_allow) if args.license_allow else None
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     tag = f"r{args.round}{args.tag_suffix}" + ("-control" if args.control else "")
@@ -279,13 +306,21 @@ def main():
 
     # dataset
     if args.control:
-        _, verified_counts = build_dataset(LEDGER)
+        _, verified_counts = build_dataset(LEDGER, license_allow=allow)
         examples, counts = build_dataset(CONTROL_POOL,
-                                         match_counts=verified_counts)
+                                         match_counts=verified_counts,
+                                         license_allow=allow)
     else:
-        examples, counts = build_dataset(LEDGER)
+        examples, counts = build_dataset(LEDGER, license_allow=allow)
     receipt["dataset"] = {"n_examples": len(examples),
                           "n_tasks": len(counts)}
+    if allow:  # eng #70: filter visibility — never a silent cap
+        from ledger_license import census as license_census, load_jsonl
+        receipt["license_filter"] = {
+            "allow": sorted(allow),
+            "episodes_by_class": license_census(load_jsonl(LEDGER)),
+            "control_pool_by_class": license_census(load_jsonl(CONTROL_POOL)),
+        }
 
     if not examples:
         receipt["verdict"] = "EMPTY-DATASET (K1 territory — gate before training)"

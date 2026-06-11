@@ -36,6 +36,7 @@ blanket-receipt semantics below.
 | `round` | round 1 (seed) |
 | `pairs`, `test` | non-ARC world (V used the task's own asserts) |
 | `solved` | equals `verified` where the world has no held-back test (W-code) |
+| `license_class`, `license_basis` | (eng #70) pre-stamping record — derivable by `fp6_provenance.classify` from `sampler`/`origin`; the sidecar view `ledger/views/license-class.jsonl` carries the backfilled mapping. New appends stamp at ingest. |
 
 ## Status of the existing 1,909 seed entries
 

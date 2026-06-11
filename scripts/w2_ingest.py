@@ -14,8 +14,9 @@ sampler saw (mbpp:* keys are not in ARC_TRAIN — without an inline prompt they
 would be silently skipped), and "sampler" for per-teacher G3 leave-set-out.
 
 Receipt: receipts/w2-ingest-<ts>.json. Pure conversion logic is import-light
-(stdlib only) so it unit-tests anywhere; t2_round (-> t1_probe -> torch) is
-imported inside main() only.
+(stdlib + the stdlib-only ledger_license/fp6_provenance siblings) so it
+unit-tests anywhere; t2_round (-> t1_probe -> torch) is imported inside
+main() only.
 """
 
 import argparse
@@ -24,6 +25,8 @@ import hashlib
 import json
 import os
 from datetime import datetime, timezone
+
+from ledger_license import census as license_census, stamp  # eng #70
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
@@ -58,6 +61,7 @@ def samples_to_records(rows, round_n, ts="", receipt=""):
         for field in ("prompt", "sampler"):
             if row.get(field):
                 rec[field] = row[field]
+        stamp(rec)  # eng #70: license_class/license_basis at ingest
         (verified if row.get("verified") else failed).append(rec)
     return verified, failed
 
@@ -104,6 +108,7 @@ def main():
                "control_records": len(failed),
                "samplers": sorted({r.get("sampler", "?") for r in
                                    verified + failed}),
+               "by_license": license_census(verified + failed),  # eng #70
                "frontier": report_block(verified),
                "dry_run": args.dry_run}
     if not args.dry_run:
