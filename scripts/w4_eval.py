@@ -41,6 +41,42 @@ from receipt_write import checked_write  # noqa: E402
 RECEIPTS = f"{NC}/receipts"
 
 
+def filter_problems_by_ids(problems, task_ids_file):
+    """Filter problems to exact task ids from file (one per line, stripped).
+    If file given, returns filtered list (fail-closed on absent ids).
+    If file is None, returns problems unchanged (backward-compatible).
+    Expects each line to be 'NNN' or 'mbpp:NNN'; strips 'mbpp:' prefix.
+    """
+    if task_ids_file is None:
+        return problems
+
+    requested_ids = set()
+    with open(task_ids_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                # Strip 'mbpp:' prefix if present
+                if line.startswith("mbpp:"):
+                    line = line[5:]
+                try:
+                    requested_ids.add(int(line))
+                except ValueError:
+                    raise SystemExit(
+                        f"w4: bad task id in {task_ids_file}: {line!r} "
+                        f"(want NNN or mbpp:NNN)")
+
+    # Check all requested ids are present
+    problem_ids = {p["id"] for p in problems}
+    missing = requested_ids - problem_ids
+    if missing:
+        raise SystemExit(
+            f"w4: requested task ids not in split: {sorted(missing)}")
+
+    # Filter to exact subset
+    filtered = [p for p in problems if p["id"] in requested_ids]
+    return filtered
+
+
 def parse_arms(specs):
     """['base=', 'trained=/x'] -> [('base', None), ('trained', '/x')]. Pure."""
     arms = []
@@ -145,10 +181,14 @@ def main():
     ap.add_argument("--temp", type=float, default=0.8)
     ap.add_argument("--seed", type=int, default=14)
     ap.add_argument("--tag", default="", help="receipt tag (e.g. r2w-q3)")
+    ap.add_argument("--task-ids-file", default=None,
+                    help="optional file: one task id per line (NNN or mbpp:NNN); "
+                         "if given, filter problems to exact subset")
     args, _unknown = ap.parse_known_args()  # daemon appends args; ignore them
 
     arms = parse_arms(args.arm)
     problems = load_split(args.split, args.n_tasks or None)
+    problems = filter_problems_by_ids(problems, args.task_ids_file)
     order = [p["id"] for p in problems]
     print(f"w4 heldout eval: {len(problems)} tasks x k={args.k} "
           f"arms={[n for n, _ in arms]} model={args.model}", flush=True)
