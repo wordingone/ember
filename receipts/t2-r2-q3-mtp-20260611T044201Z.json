@@ -1,0 +1,85 @@
+{
+  "ticket": "NC0-T2-MTP",
+  "ts": "20260611T044201Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "tag": "r2-q3-mtp",
+    "k_aux": 3,
+    "lam": 0.3,
+    "view_path": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r2-sft.jsonl",
+    "round": 2,
+    "wrapper_receipt": "/mnt/b/M/avir/leo/state/nc-ladder/receipts/r2-mtp-wrapper-20260611T043952Z.json",
+    "gate_token_present": true,
+    "license_allow": null,
+    "sft_receipt": "/mnt/b/M/avir/leo/state/nc-ladder/receipts/t2-r2w-sft-20260611T032047Z.json",
+    "expected_view_sha256": "092efebbb2eb40be7826b7b845b63be2dc83d34c710e378d7f501183732f5a63"
+  },
+  "args_fp": "775b7702390329e7",
+  "world": "mbpp",
+  "round": 2,
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "gate_token_present": true,
+  "wrapper_receipt": "/mnt/b/M/avir/leo/state/nc-ladder/receipts/r2-mtp-wrapper-20260611T043952Z.json",
+  "governor": {
+    "vram_fraction": 0.85,
+    "free_gb": 24.1,
+    "total_gb": 25.76,
+    "margin_gb": 4.0
+  },
+  "view": {
+    "path": "/mnt/b/M/avir/leo/state/nc-ladder/ledger/views/wcode-r2-sft.jsonl",
+    "source": "explicit --view-path (caller-installed view, no regeneration, no rewrite; ext-clean guard passed)",
+    "rows_pre_ext_clean": 205,
+    "rows_built": 205,
+    "ext_clean_dropped": 0,
+    "build_shape": "sft-mirror: flat default cap + license_allow",
+    "license_allow": null,
+    "sha256": "092efebbb2eb40be7826b7b845b63be2dc83d34c710e378d7f501183732f5a63"
+  },
+  "dataset": {
+    "n_examples": 98,
+    "n_tasks": 28,
+    "identity_claim": {
+      "claim": true,
+      "arm": "r2-q3-sft",
+      "basis": "sha-pinned to sft arm view wcode-r2-sft.jsonl: build-time training_view_sha256 == dispatcher pin; view rows == sft receipt view_rows_after_theta; n_examples == sft receipt dataset_examples \u2014 all asserted fail-closed before training",
+      "training_view_sha256": "092efebbb2eb40be7826b7b845b63be2dc83d34c710e378d7f501183732f5a63",
+      "expected_view_sha256": "092efebbb2eb40be7826b7b845b63be2dc83d34c710e378d7f501183732f5a63",
+      "sft_receipt": "/mnt/b/M/avir/leo/state/nc-ladder/receipts/t2-r2w-sft-20260611T032047Z.json",
+      "sft_view_rows_after_theta": 205,
+      "sft_dataset_examples": 98
+    }
+  },
+  "train_loss": 34.0304,
+  "lm_loss_first5": [
+    1.1399,
+    1.3914,
+    2.5878,
+    1.0904,
+    1.3231
+  ],
+  "lm_loss_last5": [
+    0.1297,
+    0.3033,
+    0.1077,
+    0.3015,
+    0.2848
+  ],
+  "aux_loss_first5": [
+    11.9312,
+    11.9312,
+    11.9312,
+    11.9312,
+    11.9312
+  ],
+  "aux_loss_last5": [
+    3.3956,
+    4.2689,
+    3.1805,
+    3.2652,
+    3.7515
+  ],
+  "train_secs": 85.6,
+  "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-mtp",
+  "aux_heads_file": "mtp_aux_heads.pt (scaffold \u2014 unused at inference)"
+}
