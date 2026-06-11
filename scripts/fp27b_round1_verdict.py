@@ -219,6 +219,13 @@ def _selftest():
     assert rf["result"]["power"]["mde80_one_sided"] == 0.0634  # 2.485*(.05/1.96)
     assert "0.0634" in rf["result"]["flat_caveat"]
     assert validate_receipt(rf) == [], validate_receipt(rf)
+    # staged refusal is NONZERO (audit policy 14644): bare and half-armed
+    # invocations must not be readable as success by any machine caller
+    import subprocess
+    for argv in ([], ["--sampling", "only-one.json"]):
+        p = subprocess.run([sys.executable, os.path.abspath(__file__)] + argv,
+                           capture_output=True, text=True)
+        assert p.returncode == 1 and "STAGED" in p.stdout, (argv, p.returncode)
     print("FP27B_ROUND1_VERDICT_SELFTEST_PASS")
 
 
@@ -232,9 +239,13 @@ def main():
         _selftest()
         return
     if not (a.sampling and a.gate):
+        # Staged exit is NONZERO: this is an evidence-promotion gate (it
+        # emits the round verdict), exactly the class the audit policy
+        # (mail 14644) forbids from exiting 0 without evidence. Covered
+        # by the staged-refusal subprocess check in --selftest.
         print("FP27B_ROUND1_VERDICT_STAGED (refuses until the round-1 "
               "sampling + round-gate receipts exist; both required)")
-        return
+        raise SystemExit(1)
     sr = json.load(open(a.sampling, encoding="utf-8"))
     gr = json.load(open(a.gate, encoding="utf-8"))
     f = check_sampling(sr) + check_gate(gr)
