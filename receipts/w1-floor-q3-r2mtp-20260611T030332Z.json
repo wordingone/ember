@@ -1,0 +1,69 @@
+{
+  "ticket": "W1-FLOOR",
+  "ts": "20260611T030332Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1w-q3-mtp",
+    "split": "train",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 18,
+    "tag": "q3-r2mtp",
+    "calibrate": true,
+    "focus_from": null,
+    "focus_max_rate": 0.75,
+    "ext_verify": true
+  },
+  "comparator": "strict (fp8 canon, no coercion) \u2014 eng #76",
+  "n_tasks": 120,
+  "k": 8,
+  "feed_tasks": 111,
+  "feed_pct": 92.5,
+  "feed_ci95": [
+    87.5,
+    96.67
+  ],
+  "verified_samples": 807,
+  "verified_sample_pct": 84.06,
+  "extraction_fail": 0,
+  "gen_secs": 315.9,
+  "samples_file": "w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl",
+  "split_discipline": "train=world pool, validation=heldout, test=t5-harm-only",
+  "calibration": {
+    "elicited": 120,
+    "parsed": 120,
+    "brier": 0.1384,
+    "brier_base_rate_ref": 0.134,
+    "skill_vs_base_rate": -0.0044,
+    "reliability": [
+      {
+        "bin": "[0.4,0.6)",
+        "mean_p": 0.5,
+        "observed": 1.0,
+        "n": 8
+      },
+      {
+        "bin": "[0.6,0.8)",
+        "mean_p": 0.7118,
+        "observed": 0.7721,
+        "n": 136
+      },
+      {
+        "bin": "[0.8,1.0)",
+        "mean_p": 0.902,
+        "observed": 0.8505,
+        "n": 816
+      }
+    ]
+  },
+  "ext_verify": {
+    "v_passed_samples": 807,
+    "ext_covered": 741,
+    "ext_wrong": 128,
+    "ext_timeout": 17,
+    "fpr": 0.1727
+  }
+}

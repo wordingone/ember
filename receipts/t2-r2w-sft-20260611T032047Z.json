@@ -1,0 +1,43 @@
+{
+  "ticket": "NC0-T2-R2W",
+  "arm": "sft",
+  "tag": "r2-q3-sft",
+  "ts": "20260611T032047Z",
+  "round": 2,
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "gate_token_present": true,
+  "deviation": "prereg-\u00a71.2 data-path correction: #112 t2_r2_sft delegated to full-ledger flat-cap build; this runner trains the registered W-code theta-filtered set",
+  "frontier_filter": {
+    "theta": 0.5,
+    "view_rows_wcode": 1047,
+    "view_rows_after_theta": 205,
+    "tasks_wcode": 110,
+    "tasks_after_theta": 28,
+    "dataset_examples": 98,
+    "dataset_tasks": 28,
+    "rates_source": "r2_arms.solve_rates_from_ledger(ledger+control_pool)"
+  },
+  "dry_run": false,
+  "training": {
+    "train_loss": 0.2233,
+    "steps": 93,
+    "n_examples": 98,
+    "n_texts_after_repeat": 490,
+    "governor": {
+      "vram_fraction": 0.85,
+      "free_gb": 24.1,
+      "total_gb": 25.76,
+      "margin_gb": 4.0
+    },
+    "secs": 453.7
+  },
+  "adapter": "/mnt/b/M/avir/leo/state/nc-ladder/adapters/r2-q3-sft",
+  "pacing": {
+    "throttle_s": 0.0,
+    "throttle_sleeps": 0,
+    "pacer_s": 0.0,
+    "pacer_sleeps": 0,
+    "pacing_total_s": 0.0,
+    "convention": "governed wall-clock = compute + this pacing; subtract pacing_total_s for compute-only views"
+  }
+}

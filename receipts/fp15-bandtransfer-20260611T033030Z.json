@@ -1,0 +1,50 @@
+{
+  "ticket": "FP15-BANDTRANSFER",
+  "ts": "20260611T033030Z",
+  "prong": "A",
+  "frozen_bars": {
+    "ratio_bar": 1.5,
+    "perm_n": 10000,
+    "seed": 17
+  },
+  "join": {
+    "band_inputs": {
+      "q15": "B:\\M\\avir\\leo\\state\\nc-ladder/receipts/w1-floor-q15-20260610T202511Z-samples.jsonl",
+      "q3_k8": "B:\\M\\avir\\leo\\state\\nc-ladder/receipts/w1-floor-q3-20260610T203401Z-samples.jsonl",
+      "q3_focus_k24": "B:\\M\\avir\\leo\\state\\nc-ladder/receipts/w1-floor-q3-focus-20260610T210228Z-samples.jsonl"
+    },
+    "q3_side": "POOLED k8 + focus-k24 (declared pre-yield; no outcome-dependent leg pick)",
+    "new_verified_source": "ledger round==2 verified rows (post-dedup banked NEW)",
+    "sampling": "w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl"
+  },
+  "universe": {
+    "r2_sampled_tasks": 120,
+    "joint_coverage_tasks": 120,
+    "no_joint_round1_stats": 0,
+    "band_tasks": 19,
+    "nonband_tasks": 101
+  },
+  "observed": {
+    "band": {
+      "tasks": 19,
+      "k": 152,
+      "verified": 56,
+      "yield": 0.3684210526315789
+    },
+    "nonband": {
+      "tasks": 101,
+      "k": 808,
+      "verified": 222,
+      "yield": 0.2747524752475248
+    }
+  },
+  "perm_p": 0.1035,
+  "result": {
+    "verdict": "INCONCLUSIVE",
+    "ratio": 1.341,
+    "perm_p": 0.1035,
+    "bar": 1.5,
+    "prong_b": "does not fire"
+  },
+  "prong_b_rule": "fires round-3 ONLY on PREDICTIVE (frozen)"
+}

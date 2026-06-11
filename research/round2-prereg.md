@@ -69,3 +69,22 @@ the dispatch. Token appears in receipts; any run carrying it without
 Sampling ≈ governed hours (k=8 × pool at q3 pace with pacing);
 arms ≈ r1-scale minutes each; evals ≈ w4/t5 windows. Fits the map's
 round-2 day (06-12) with the v0 pretrain timeshare (eng-33) untouched.
+
+## 5. Deviation registry (post-launch, per audit-§6)
+
+- **2026-06-11 (pre-arms, post-sampling): sft/control data path.** The
+  §1.2 line "sft — t2_r2_sft" named the #112 wrapper; at the launch
+  gate that wrapper's delegation was found to build from the FULL mixed
+  ledger with flat caps (its theta filter computed but never consumed —
+  not the registered arm). Corrected runner `scripts/t2_r2w.py` trains
+  the registered semantics: W-code view (regenerated from current
+  ledger) → ext-clean → theta (0, 0.5] via r2_arms single-source rates
+  → flat MAX_PER_TASK cap → train_lora; control mirrors the sft
+  per-task counts from the W control pool. Arm SEMANTICS unchanged from
+  §1.2; only the executing script differs. mtp/grpo dispatch via the
+  #112 wrappers as written (data paths verified correct in source).
+  Evidence: t2-r2w-sft dry-run + live receipts; audit §8.29.
+- **2026-06-11: fp-20 settlement surface.** §1.3 said fp-20 settles on
+  the sampling receipt; that receipt carries no pacing block (w1 write
+  not wired — eng-37/#129). fp-20 re-pinned to the first instrumented
+  w1 receipt; the t2-class receipts carry the block as specified.

@@ -1,0 +1,57 @@
+{
+  "ticket": "W2-INGEST",
+  "ts": "20260611T030647Z",
+  "args": {
+    "samples": [
+      "/mnt/b/M/avir/leo/state/nc-ladder/receipts/w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl"
+    ],
+    "round": 2,
+    "dry_run": false
+  },
+  "files": [
+    "w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl"
+  ],
+  "rows_read": 960,
+  "verified_records": 807,
+  "control_records": 153,
+  "samplers": [
+    "Qwen/Qwen2.5-Coder-3B-Instruct+/mnt/b/M/avir/leo/state/nc-ladder/adapters/r1w-q3-mtp"
+  ],
+  "by_license": {
+    "UNKNOWN": 960
+  },
+  "frontier": {
+    "easy": {
+      "tasks": 95,
+      "episodes": 751,
+      "post_cap": 183,
+      "dropped": 568,
+      "bits_banked": 30.87
+    },
+    "mid": {
+      "tasks": 9,
+      "episodes": 45,
+      "post_cap": 29,
+      "dropped": 16,
+      "bits_banked": 20.58
+    },
+    "frontier": {
+      "tasks": 7,
+      "episodes": 11,
+      "post_cap": 10,
+      "dropped": 1,
+      "bits_banked": 19.12
+    },
+    "dead": {
+      "tasks": 0,
+      "episodes": 0,
+      "post_cap": 0,
+      "dropped": 0,
+      "bits_banked": 0.0
+    },
+    "total_bits_banked": 70.57
+  },
+  "dry_run": false,
+  "episodes_added": 278,
+  "control_added": 98
+}

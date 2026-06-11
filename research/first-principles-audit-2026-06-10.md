@@ -1146,3 +1146,84 @@ split from sub-1B PRETRAIN claims (regime mismatch).
 mix per §8.15d; the world a 0.3B core can clear). eng-33 = timeshare
 checkpoint-resume harness (map §3 named it for when fp-19 landed a
 config — it did).
+
+## 8.27 fp-20 (#116): pacing settlement — meter LIVE on t2 receipts; named surface re-pinned (deviation recorded)
+
+**Question (fp-14's successor):** settle the fp-9 "as operated"
+qualifier on the first instrumented round-2 sampling receipt.
+
+**What the receipts say:** the round-2 sampling receipt
+(`w1-floor-q3-r2mtp-20260611T030332Z.json`) carries NO pacing block —
+fp-14 (#115) wired `pacing_snapshot()` into `t2_round` only, while
+`w1_mbpp` generates through the same paced t1_probe path (decode_pacer
++ THROTTLE_S imports verified in source) but never snapshots at write.
+The run WAS governed (pacing in-path); the measurement wasn't
+persisted. Meanwhile the first round-2 t2-class receipt
+(`t2-r2w-sft-20260611T032047Z.json`) DOES carry the block, write-time
+stamped — all zeros, which is the honest measurement for a
+training-only arm (the fp-14 meter instruments generation pacing;
+no generation ran in-process).
+
+**Verdict:** INCOMPUTABLE-ON-NAMED-SURFACE this round; the meter
+itself is verified live and write-time ordered. Instrumentation gap →
+eng-37 (#129, minted + mailed). Settlement re-pinned to the first
+instrumented w1 receipt (next sampling run executes it).
+
+**Successor:** fp-20b — execute the settlement on the first w1 receipt
+carrying the block; quote pacing_total_s / wall fraction as the
+"as operated" number.
+
+## 8.28 fp-21 (#120): band-transfer prong-A — INCONCLUSIVE at the frozen bars; prong B does not fire
+
+**Method:** the frozen fp-15 prereg executed unmodified (bars 1.5 /
+p<0.05 / seed 17 / 10k perms); fp-21 implemented only the receipt join,
+choices declared in-receipt BEFORE yields were computed: q3 side =
+POOLED k8+focus-k24 (no outcome-dependent leg pick; fp-12 showed leg
+jaccard 0.42), new_verified = post-dedup banked round-2 ledger rows,
+universe = 120/120 r2 tasks with joint round-1 coverage.
+
+**Result (receipt `fp15-bandtransfer-20260611T033030Z.json`):** band
+19 tasks yield 0.368 vs nonband 101 tasks 0.275 — ratio 1.341 < 1.5
+bar, perm p = 0.104 > 0.05. **INCONCLUSIVE**: direction favors the
+band (+34% yield) but does not clear the pre-registered bar. Prong B
+(matched band/nonband training arms) does NOT fire for round-3 — the
+frozen rule held against a suggestive-but-unproven direction.
+
+**Successor:** fp-21b — re-execute prong-A on round-3 sampling
+receipts (same frozen bars; pooled-q3 join now precedent). If round-3
+also lands (1/1.5, 1.5) the question dies as
+NOT-PREDICTIVE-AT-THIS-SCALE.
+
+## 8.29 Round-2 launch gate executed + one gate-miss caught at launch (eng-30 sft data path)
+
+Launch token `r2-prereg-20260611-leo` issued after: (a) prereg merged
+(a21d216+841db); (b) sampling receipt gated — args pin EXACT vs §1.1,
+ledger byte-append verified by prefix-sha (episodes 10,307,446B prefix
+e2d4e8c7…, control 9,959,105B prefix 4248ce55… both intact), ingest
++278/+98 (`w2-ingest` receipt), fresh eng-25 backfill
+(`eng25-dedup-view-20260611T030744Z.json`, main files byte-untouched);
+(c) governed dispatch via the daemon train window.
+
+The backfill's fp16 crosscheck MISMATCH (qwen clusters 592→585 /
+697→692) was investigated to mechanism: 48 clusters now bridge
+qwen-research rows with round-2 on-policy rows (the adapter regenerates
+near-identical solutions → global union-find merges) — the static
+fp-16 pin is legitimately stale after ledger growth, the fresh view is
+correct. PIN_STALE semantics → eng-34 (#127). The same investigation
+surfaced all 960 r2 rows stamped license_class=UNKNOWN
+(adapter-suffixed sampler unmapped in fp6) → also #127; `parse_allow`
+is fail-closed so no silent filtering occurred (no --license-allow on
+the r2 arms, same as r1).
+
+**Gate-miss (mine, Class gate-gap):** at launch I found the #112
+`t2_r2_sft` delegation builds from the FULL mixed ledger flat-cap —
+its own theta filter never reaches training; control would mirror the
+wrong set. My #112 gate verified interlock + receipt shape
+(config-only PR) but not the data path against the registered arm.
+Fix-forward: `scripts/t2_r2w.py` (deviation recorded in-receipt +
+prereg appendix) implements the registered semantics (W view +
+ext-clean + theta(0,0.5] + matched control); dry-run receipted before
+live; mtp/grpo correct as built (verified in source). Lesson: a
+config-only gate on arm plumbing must trace the DATA PATH from the
+registered arm definition to the train call, not just interlocks and
+receipt fields.
