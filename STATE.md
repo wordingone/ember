@@ -30,6 +30,14 @@ Updated: 2026-06-11 ~06:25 — **fp-25 Surface B: coverage terminal + floor refu
 
 Substrate name: **ember** (user, 2026-06-09). Trained artifacts are ember-r1, ember-r2, … (= `adapters/r{N}`). nc-ladder remains the experiment plumbing name.
 
+## 2026-06-11 ~14:58Z — E1b gate hardened (Kai 14639, PR #232) + eng parallel lane minted (#229/#230/#231)
+
+Kai checkpoint 14639 flagged fail-open surfaces in fp32_e1b_gate.py @f3076ae: bare-invocation exit 0; ticket/seq present-but-unenforced; nonsense step accounting accepted; retry-after-pass accepted; shard premise an opaque string. All 7 required items closed in PR #232 @a73f915 (selftest PASS, staged exit now 1). The repro set also exposed a bug in MY check: tokens==budget is impossible at B=24 (10,485,760 % 24576 != 0) — replaced with steps==ceil(budget/(B*seq)) exact accounting. Shard premise now BOUND: pair names the TOKEN-SHARDS-V0 receipt; gate requires git-tracked + clean + correct ticket, re-derives shard_set_sha256 from its bytes, total_stream_tokens must equal the LIVE freeze total (fp-30 binder) — stale-shard pairs can never certify the deviation. Prereg contract section appended; decision rule unchanged.
+
+Eli 14640: census CLEAN (special-id-census-20260611T143841Z — 2 reserved ids corpus-wide; recount delta will be tiny), recount RUNNING (PID 136828). His queue was 1 pipeline + 1 hold = under the >=5 bar; minted his proposed parallel off-critical-path lane from my fp-32 rows: #229 eng-56 eager-fallback clause (R3, de-risks dispatch), #230 eng-57 round-1 sampler economics (R6), #231 eng-58 ckpt write locality measure-first (R5). Mailed numbers (14641); sequencing #229 first; recount lane stays priority.
+
+Next fire unchanged: #218 on the superseding freeze receipt (name+sha via Eli's mail).
+
 ## 2026-06-11 ~14:45Z — stop-gate pass: queue-jump #132 -> #225 (E1b gate built, PR #228 merged)
 
 Gate fired with #132 lowest. Queue-jump justification: #132's executors are built+frozen (fp21b_prereg.py + fp21b_scope_132.py, scope PR #197); its fire input (round-3 sampling receipt) cannot exist before a round-3 runs, and producing a fallback-(a) borrowed round-3 NOW would contradict the frozen fp-26 (b) owned-core registration. #225 held the only buildable fire-time gap among open Leo-class items: the E1b prereg (#227) froze the loss-match rule with no executor applying it.
