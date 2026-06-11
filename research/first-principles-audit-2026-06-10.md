@@ -276,16 +276,18 @@ correctness — useful diagnostics, wrong layer for FPR.
    produce, ~ms cost. Known limit, stated: dead/frontier tasks have few
    siblings — exactly where FPR is worst, coverage is thinnest; it
    complements, never replaces, extended tests.
-3. **Compute headroom (HYPOTHESIS — no timing receipt existed at first
-   writing; Kai S2-A 14444 caught the original "receipt"/"~100×"
-   wording):** sandbox verification is hypothesized far cheaper than
-   generation; the measured ratio comes from `scripts/verify_timing.py`
-   (staged — re-executes a receipted samples file's harnesses and
-   compares wall time against that same run's receipted gen_secs;
-   dispatches in the next free eval window). The §8.10 conclusion does
-   not lean on the exact ratio — V-hardening's binding constraint is
-   property QUALITY, not compute, which survives any ratio ≫ 1 and takes
-   its number from the receipt when it lands. Hardening stops paying
+3. **Compute headroom (MEASURED — receipt `verify-timing-20260611T000148Z.json`,
+   restoring the number Kai S2-A 14444 correctly demoted from the
+   unsupported "~100×" prose):** sandbox verification is **785.5× cheaper
+   than generation, pooled** (0.52 ms/sample verify vs 410.76 ms/sample
+   generation, over the 344-sample base G1 floor; 495.7× serial). The
+   re-execution agreed with the original receipted verified flags at
+   **1.0** (verify_agreement, fail-closed ≥0.95 — the timing run is
+   verifying the SAME verdicts, so the ratio is honest). The §8.10
+   conclusion never leaned on the exact ratio — V-hardening's binding
+   constraint is property QUALITY, not compute, and that survives any
+   ratio ≫ 1 — but the number is now receipt-backed at ~785×, not
+   asserted. Hardening stops paying
    when it needs hand-or-model-written specs; at that line, switch worlds
    (HumanEval+ born-hardened, then policy worlds where the WORLD is the
    verifier — the goal's own language).
