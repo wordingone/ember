@@ -30,6 +30,21 @@ Updated: 2026-06-11 ~06:25 — **fp-25 Surface B: coverage terminal + floor refu
 
 Substrate name: **ember** (user, 2026-06-09). Trained artifacts are ember-r1, ember-r2, … (= `adapters/r{N}`). nc-ladder remains the experiment plumbing name.
 
+## 2026-06-11 ~14:35Z — fp-32: bottleneck ledger landed + first receipted gain (PR #226, merged)
+
+Directive (mail 14633, relayed): diagnose GPU bottlenecks end-to-end, challenge from first principles, prove >=1 measurable gain, don't touch the launch path. Carrier #225; Kai proof gate at kai/state/ember-audits/fp32-bottleneck-proof-gate-2026-06-11.md.
+
+Landed (PR #226 @1a5d0b0):
+- Ledger: research/fp32-bottleneck-ledger.json (10 rows, gate schema) + research/fp32-gpu-bottleneck-ledger.md (analysis). 4 receipt-backed / 4 hypothesis / 2 killed-by-arithmetic (9p loader, round-trainer share).
+- Baselines: fp32_baseline_miner.py -> receipts/fp32-baselines-20260611T142515Z.json (6/6 rows mined from named receipts; Kai spot-check 14635 matched all arithmetic).
+- PROOF (R1+R2): fp32_step_econ_bench.py governed on the idle-GPU census window. Frozen throughput.batch=4 = inherited bench default. Anchor reproduced (-4.48%); b24 = 24,078.9 tok/s paced = 1.345x; pacing tax 21.9% -> 4.9%; projected v0 pretrain 4.509 -> 3.352 days (-1.157 wall-days). receipts/fp32-step-econ-20260611T142831Z.json.
+- R3 receipted: torch.compile FAILS in daemon env (dynamo x transformers output_capturing NameError) -> launch trainer takes the config's eager-fallback deviation clause; eager raw ~25-27k = planning ceiling.
+- Config UNCHANGED. Deviation PR gated behind E1b (loss-match pair, real shards, B=4 vs B=16/24, frozen lr first) — queued behind #218 re-freeze. Conservative candidate B=16 (10.83 GiB free; real trainer adds Muon/MTP/loader VRAM the bench doesn't carry).
+
+Also this window: PR #224 merged (fp27b round-1 verdict executor + sp2b persistence gates, staged fail-closed — #205/#210 fire-time executors now exist).
+
+Position unchanged on the critical path: census (PID 72540, Eli) -> recount -> superseding freeze -> #218 deviations -> shard rerun -> launch gate -> --live. fp-32 E1b inserts after shards, before --live.
+
 ## Current rung
 
 NC0 — verified-experience weight accumulation (expert iteration), world = ARC-AGI-1 code-synthesis.
