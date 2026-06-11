@@ -1,0 +1,26 @@
+{
+  "ticket": "VERIFY-TIMING",
+  "ts": "20260611T000148Z",
+  "flag_origin": "kai checkpoint 14444 S2-A on research/first-principles-audit-2026-06-10.md:279",
+  "samples_file": "w1-floor-g1-base-20260610T215814Z-samples.jsonl",
+  "gen_receipt": "w1-floor-g1-base-20260610T215814Z.json",
+  "n_jobs": 344,
+  "skipped": 0,
+  "verify_agreement": 1.0,
+  "pool": {
+    "secs": 0.18,
+    "per_sample_ms": 0.52
+  },
+  "serial": {
+    "n": 64,
+    "secs": 0.05,
+    "per_sample_ms": 0.83
+  },
+  "generation": {
+    "secs": 141.3,
+    "n_samples": 344,
+    "per_sample_ms": 410.76
+  },
+  "ratio_gen_over_verify_pool": 785.5,
+  "ratio_gen_over_verify_serial": 495.7
+}

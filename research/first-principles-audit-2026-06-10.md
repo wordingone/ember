@@ -449,16 +449,28 @@ the one exploit that is input-independent, so unlike test-hardcoding it
 cannot be caught by hidden tests. `scripts/v_exploit_probe.py` carries it
 as the `eq-hack` / `eq-hack-int` probes (selftest PASS).
 
-**Finding 2 — HYPOTHESES requiring the live sandbox (staged, not
-claimed):** timeout-disable (re-import `signal`, off-whitelist), the
-`__subclasses__` module-walk escape (numpy's import graph loads many
-classes — reachability is empirical), and removed-builtin recovery. These
-are probes in the same script with uniform semantics — **`verified==True`
-on a non-control probe == BREACH** — anchored by a `legit-solve` control.
-Live leg runs the POSIX sandbox (resource/SIGALRM/fork) in a WSL CPU
-window via the daemon (batched with `verify_timing.py`); receipt
-`v-exploit-probe-<ts>.json` decides each hypothesis. NOT run on Windows
-(no `resource`/`SIGALRM`).
+**Finding 2 — live-leg RESULT (receipt `v-exploit-probe-20260611T000301Z.json`,
+daemon job 6677cc6b, control_solve_ok=true so semantics anchored).** Of
+five non-control probes, **THREE breached, two held:**
+- `eq-hack` ✓ BREACH (certain, confirmed): custom-`__eq__` returns True.
+- `eq-hack-int` ✓ BREACH (certain, confirmed): int-subclass lying on `==`.
+- **`subclasses-escape` ✓ BREACH (newly confirmed, was hypothesis):** the
+  `(1).__class__.__base__.__subclasses__()` walk reaches a class whose
+  `__module__` contains `os` — the classic CPython sandbox-escape
+  reachability path is OPEN in this sandbox (the import whitelist gates
+  `__import__`, not object-graph traversal). The probe's sentinel is
+  reachability (found the class), not yet `os.system` execution — but
+  reachability is the load-bearing precondition, and it holds.
+- `timeout-disable` HELD (AssertionError — `signal` off-whitelist blocked
+  the re-import, sandbox correct).
+- `recover-open` HELD (AssertionError — removed builtin stays removed).
+
+Reading: the sandbox's stated guards (RLIMIT_AS / SIGALRM / `__import__`
+whitelist / removed builtins) work for what they target — import and
+builtin recovery are blocked. They do NOT touch the two surfaces that
+matter for V-as-reward: **comparison dispatch (`__eq__`) and object-graph
+traversal (`__subclasses__`).** Both are pure-language reachability, both
+unguarded. Two independent breach classes, not one.
 
 **Consequence (named eng follow-up, NOT implemented in this doc):** the
 reward/verify harness needs output canonicalization before `==` — a
