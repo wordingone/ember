@@ -77,7 +77,7 @@
 
   "throughput": {
     "batch": 4,
-    "compile": "torch.compile (TorchInductor) on the train step; fallback eager if compile fails on the QAT graph — deviation RECEIPTED",
+    "compile": "DISABLED — eager only. torch.compile (TorchInductor) raises an R3 dynamo NameError on the QAT graph in this env; the trainer calls no torch.compile, so the prior 'fallback eager — deviation RECEIPTED' promise had no backing receipt. This pin makes the field true to the eager code path. Registered deviation: receipts/eng56-eager-pin-20260611T161105Z.json",
     "excluded": {
       "sparse_attention": "receipted-negative at seq 1024 (v2 table 0.98)",
       "machete_kernels": "Hopper-only — not on the 4090 candidate set"
