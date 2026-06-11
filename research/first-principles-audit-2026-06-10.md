@@ -1097,3 +1097,21 @@ ternary/QAT) × token budgets vs days remaining × a world whose verify
 floor a small core clears. Verdict = envelope table + a named v0
 config, or a kill that escalates hardware per the NC2-own rung-kill
 rule.
+
+## 8.25 fp-14 (#88): pacing made measurable — instrumentation half shipped, settlement rides round-2
+
+**Tracker-forced (stop gate):** #88's settlement needs a sampling run;
+the instrumentation half is GPU-free and shipped now. t1_probe gains a
+PACING meter (throttle + decode-pacer sleep accumulation; reset/snapshot
+API, snapshot = pure copy + the fp-9/fp-11 convention note); every
+governor sleep site is metered (selftest asserts site-adjacency and that
+exactly the two known sleep sites exist); t2_round receipts carry
+`pacing` at WRITE time (after sampling — a creation-time snapshot would
+record zeros; caught in self-review). fp-11's reconstruction
+(pacer_secs modeling) is replaced by measurement on every future t2
+receipt. Selftest receipt `fp14-pacing-selftest-*.json` (meter math,
+snapshot purity, wiring positions). **Successor (fp-20): the settlement
+verdict itself** — on the first instrumented sampling run (round-2),
+quote measured pacing_total_s, re-run the fp-9 cost-parity under the
+measured (not modeled) compute-only view, and resolve the "as operated
+under the governor" qualifier.
