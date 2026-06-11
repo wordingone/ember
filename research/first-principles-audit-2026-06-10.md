@@ -1227,3 +1227,35 @@ live; mtp/grpo correct as built (verified in source). Lesson: a
 config-only gate on arm plumbing must trace the DATA PATH from the
 registered arm definition to the train call, not just interlocks and
 receipt fields.
+
+## 8.30 fp-22 (#122): v0 corpus + verify-floor world FROZEN — the launch gate is fully named
+
+**Question (fp-19's successor, deadline-critical):** what does the
+owned 0.37B core train ON, and in WHAT world must it clear a verify
+floor — decided before the GPU window opens.
+
+**Decisions (research/fp22-corpus-world.md):** license-clean ~7.4B-token
+mix (stack-v2-permissive code majority + FineWeb-Edu + Wikipedia +
+Gutenberg + own MIT-clean ledger slice; qwen-research class EXCLUDED;
+fail-closed license stamps at ingest; doc-dedup receipts close the
+fp-17 channel corpus-side); 32k tokenizer trained on a corpus sample,
+frozen pre-step-0, sha-stamped into every checkpoint receipt; world =
+synthetic program-curriculum (L1 deterministic transforms / L2
+compositions / L3 our-receipted MBPP-easy band) with exact-output
+verification + MBPP validation-43 as the held-out cross-core surface.
+
+**Binding floor (frozen):** ≥1 verified L1 episode per governed
+GPU-minute at k≤16 by the 2B-token checkpoint; one pre-registered
+retry at 4B; second FAIL → rung-kill fires (core scale → user
+escalation per NC2-own). No silent bar movement.
+
+**Evidence discipline:** every load-bearing choice carries an
+artifact-local class (RECEIPTED / EXTERNAL-CITED / HYPOTHESIS /
+FABLE-DERIVED-QUARANTINED) + a named discharge experiment — the
+checkpoint probes discharge the two biggest hypotheses (0.37B clears
+L1 by 2B tokens; code-heavy mix). Per Jun-via-Kai 14492: ambition
+maximal, certification only by receipts.
+
+**Successors:** fp-23 (probe-analysis + curriculum-generator prereg,
+frozen before pretrain step 0) + eng-36 (#130, acquisition — already
+minted + mailed).
