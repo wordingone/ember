@@ -112,7 +112,38 @@ def verdict(ci_low, ci_high):
     return "FLAT"
 
 
+def power_annotation(ci_low, ci_high):
+    """REPORTING ONLY (fp-27c, #240) — the frozen verdict vocabulary is
+    untouched. Derived from the SAME normal SE that produced the CI
+    (half = 1.96*se), so no new statistical model enters the receipt:
+    mde80 = (1.645 + 0.84) * se is the smallest effect this gate detects
+    at 80% power, one-sided 5% (fp-32 R8: the round gate is N-capped at
+    the frozen N=100 — GPU-hours cannot buy resolution here)."""
+    half = (ci_high - ci_low) / 2.0
+    se = half / 1.96
+    return {
+        "n_frozen": fp27.ROUNDGATE_N,
+        "ci95_half_width": round(half, 4),
+        "mde80_one_sided": round((1.645 + 0.84) * se, 4),
+        "basis": "fp-32 R8 (verdict instrument is STAT-limited); "
+                 "reporting only — verdict rule frozen in fp-27",
+    }
+
+
 def build_receipt(ts, sr, gr):
+    v = verdict(gr["ci_low"], gr["ci_high"])
+    power = power_annotation(gr["ci_low"], gr["ci_high"])
+    result = {"verdict": v,
+              "gain": gr["gain"],
+              "ci": [gr["ci_low"], gr["ci_high"]],
+              "power": power,
+              "never_a_rung_kill": True}
+    if v == "FLAT":
+        result["flat_caveat"] = (
+            f"FLAT at this width detects only effects >= "
+            f"{power['mde80_one_sided']} — read as 'no effect >= "
+            f"{power['mde80_one_sided']} demonstrated', never 'no effect' "
+            f"(fp-25 power lesson, mechanized)")
     return {
         "ticket": "FP27B-ROUND1-VERDICT",
         "ts": ts,
@@ -122,10 +153,7 @@ def build_receipt(ts, sr, gr):
         "gate_ticket": gr["ticket"],
         "split_audited": True,
         "fp20c_pacing_block": sr["pacing"],
-        "result": {"verdict": verdict(gr["ci_low"], gr["ci_high"]),
-                   "gain": gr["gain"],
-                   "ci": [gr["ci_low"], gr["ci_high"]],
-                   "never_a_rung_kill": True},
+        "result": result,
         "sha_convention": SHA_CONVENTION,
         "no_gpu": True,
     }
@@ -177,6 +205,20 @@ def _selftest():
     r = build_receipt("20260101T000000Z", sr, gr)
     assert validate_receipt(r) == [], validate_receipt(r)
     assert r["result"]["verdict"] == "GAIN"
+    # power annotation (fp-27c, #240): reporting only, derived from the
+    # CI's own SE. GAIN carries power but NO flat caveat.
+    p = r["result"]["power"]
+    assert p["n_frozen"] == fp27.ROUNDGATE_N
+    assert p["ci95_half_width"] == 0.085          # (0.19-0.02)/2
+    assert p["mde80_one_sided"] == 0.1078, p      # 2.485*(0.085/1.96)
+    assert "flat_caveat" not in r["result"]
+    # FLAT carries the mechanized fp-25 caveat with the derived mde80
+    rf = build_receipt("20260101T000000Z", sr,
+                       dict(gr, gain=0.0, ci_low=-0.05, ci_high=0.05))
+    assert rf["result"]["verdict"] == "FLAT"
+    assert rf["result"]["power"]["mde80_one_sided"] == 0.0634  # 2.485*(.05/1.96)
+    assert "0.0634" in rf["result"]["flat_caveat"]
+    assert validate_receipt(rf) == [], validate_receipt(rf)
     print("FP27B_ROUND1_VERDICT_SELFTEST_PASS")
 
 
