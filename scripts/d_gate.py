@@ -179,7 +179,11 @@ def _check_interlock(args) -> None:
 
 def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
                   k: int, seed: int, args) -> list:
-    """Run a real w4_eval arm leg. REQUIRES interlock clearance."""
+    """Run a real w4_eval arm leg. REQUIRES interlock clearance.
+
+    Parametrized by args.split (default "validation") and args.task_ids_file
+    (default None). If task_ids_file is set, filters problems via w4_eval.
+    """
     _check_interlock(args)
     # Import w4_eval machinery (same scripts dir)
     scripts_dir = str(_HERE)
@@ -196,8 +200,15 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     a.max_new = 512
     a.temp = 0.8
     a.seed = seed
-    from w4_eval import load_split, task_pass_vector  # noqa: E402
-    problems = load_split("validation", n_tasks or None)
+    from w4_eval import load_split, task_pass_vector, filter_problems_by_ids  # noqa: E402
+
+    args_split = getattr(args, "split", "validation")
+    task_ids_file = getattr(args, "task_ids_file", None)
+
+    problems = load_split(args_split, n_tasks or None)
+    if task_ids_file is not None:
+        problems = filter_problems_by_ids(problems, task_ids_file)
+
     order = [p["id"] for p in problems]
     rows, _ = w4_eval.run_arm(arm_name, adapter_path or None, model,
                               problems, a)
@@ -240,10 +251,17 @@ def run_d_gate(artifact_path: Path, args) -> dict:
 
     # ---- 3. Arm: adapter (with artifact) ----
     print("[d_gate] arm: adapter", flush=True)
+    # peft loads the adapter DIR; the quarantined artifact (sha-verified,
+    # moved) is the weights FILE inside it. Loading the dir with the
+    # weights file quarantined fails closed (peft raises on missing
+    # safetensors), which is exactly the unload semantics the gate needs.
+    adapter_load_path = (artifact_path.parent
+                         if use_real and artifact_path.is_file()
+                         else artifact_path)
     adapter_path_str = str(artifact_path) if use_real else None
     if use_real:
-        vec_adapter = _run_real_arm("adapter", artifact_path, model,
-                                    n_tasks, k, seed + 1, args)
+        vec_adapter = _run_real_arm("adapter", adapter_load_path, model,
+                                    n_tasks, k, seed, args)
     else:
         # Synthetic: adapter arm improves pass rate meaningfully
         vec_adapter = _synthetic_arm_eval(n_tasks, 0.60, seed + 1)
@@ -261,7 +279,7 @@ def run_d_gate(artifact_path: Path, args) -> dict:
     print("[d_gate] arm: adapter-quarantined-rerun", flush=True)
     if use_real:
         vec_quarantined = _run_real_arm("adapter-quarantined-rerun", None,
-                                        model, n_tasks, k, seed + 2, args)
+                                        model, n_tasks, k, seed, args)
     else:
         # Synthetic: gain should collapse (env drift scenario not present)
         vec_quarantined = _synthetic_arm_eval(n_tasks, 0.41, seed + 2)
@@ -287,8 +305,8 @@ def run_d_gate(artifact_path: Path, args) -> dict:
     # ---- 7. Arm: adapter-restored ----
     print("[d_gate] arm: adapter-restored", flush=True)
     if use_real:
-        vec_restored = _run_real_arm("adapter-restored", artifact_path,
-                                     model, n_tasks, k, seed + 3, args)
+        vec_restored = _run_real_arm("adapter-restored", adapter_load_path,
+                                     model, n_tasks, k, seed, args)
     else:
         # Synthetic: matches adapter arm (reproduces within CI)
         vec_restored = _synthetic_arm_eval(n_tasks, 0.60, seed + 3)
@@ -312,6 +330,10 @@ def run_d_gate(artifact_path: Path, args) -> dict:
           f"byte_identity_ok={byte_identity_ok} verdict={verdict}", flush=True)
 
     # ---- 9. Build receipt ----
+    args_split = getattr(args, "split", "validation")
+    task_ids_file = getattr(args, "task_ids_file", None)
+    task_ids_file_basename = Path(task_ids_file).name if task_ids_file else None
+
     receipt = {
         "ticket": "D-GATE",
         "issue": "#114",
@@ -324,10 +346,13 @@ def run_d_gate(artifact_path: Path, args) -> dict:
         "byte_identity_verified": byte_identity_ok,
         "quarantine_path": str(quarantine_dest),
         "surface": surface,
+        "split": args_split,
+        "task_ids_file": task_ids_file_basename,
         "seed_protocol": {
-            "base": seed, "adapter": seed + 1,
-            "adapter-quarantined-rerun": seed + 2,
-            "adapter-restored": seed + 3},
+            "base": seed, "adapter": seed,
+            "adapter-quarantined-rerun": seed,
+            "adapter-restored": seed,
+            "seed_matched": True},
         "n_tasks": n_tasks,
         "k": k,
         "arms": {
@@ -534,6 +559,10 @@ def _main():
     ap.add_argument("--model",
                     default="Qwen/Qwen2.5-Coder-3B-Instruct")
     ap.add_argument("--surface", default="mbpp-validation")
+    ap.add_argument("--split", default="validation",
+                    help="Problem split to load (default: validation)")
+    ap.add_argument("--task-ids-file", default=None,
+                    help="File with task IDs to evaluate (one per line, optional)")
     ap.add_argument("--n-tasks", type=int, default=0,
                     help="0 = full validation split")
     ap.add_argument("--k", type=int, default=8)
