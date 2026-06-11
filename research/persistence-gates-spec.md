@@ -70,3 +70,24 @@ bench in the post-RELEASED daemon queue.
 
 *Owner: Leo (spec; task #36). Harness: eng-32 (Eli). First receipts:
 round-2 gate + the immediate r1w-q3-mtp P-gate probe.*
+
+## Addendum 2026-06-11 — first-instance retarget on round-2 reality
+
+Round-2 G1 advanced nothing (advancing_arms=[], g1-r2w verdict), so the
+original "D-gate rides the round gate's promoted artifact" has no round-2
+target. Retarget, no protocol change:
+
+- **First D-gate instance:** the Surface-A RECIPE-LEARNS claim — sft
+  adapter (`adapters/r2-q3-sft`) on the 28-task recall view, seed
+  protocol of `fp25-indist-20260611T060416Z`. Claim under test: the
+  +75.9pp recall gain is carried by the adapter FILE. Legs {base, sft,
+  sft-quarantined-rerun, sft-restored} per the protocol table; runs when
+  eng-32's `d_gate.py` lands (quarantine semantics need the harness —
+  not hand-rolled with raw w4_eval, which would hard-crash on a missing
+  adapter path instead of producing the rerun leg).
+- **First P-gate receipt:** unchanged target (#114: g1_r1w_mtp re-run,
+  same args/seed 16) — claimed-then-retracted by the engineer 2026-06-11
+  (mails 14503/14505, round-2 arms held the GPU). Still pending; queue
+  position = directly after the fp-25 Surface-B legs terminalize. The
+  2026-06-10 post-crash daemon restarts satisfy the session boundary vs
+  the r1 G1 receipt; PID stamps prove it.
