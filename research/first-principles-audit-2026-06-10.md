@@ -760,3 +760,57 @@ distribution: if arc-dsl separates from MBPP-human FAR above the bar
 (plausible — one author, one DSL idiom), the larger style-monoculture
 risk in NC2-own is the seed mass, not the demoted Qwen share. Same
 instrument, one config change. Closing PR mints fp-14.
+
+## 8.19 fp-11 (#75): the wall-clock denominator is NOT verdict-neutral — fp-9's parity is convention-scoped
+
+**Question (minted by §8.16):** every efficiency number on the record
+(bits/GPU-min, the fp-9 parity verdict, the 785.5× gen-vs-verify ratio)
+divides by GOVERNED wall-clock — generation time that includes deliberate
+pacing (headroom rule). The same absolute pause is a larger FRACTION of
+the faster core's wall. Does any headline ordering flip when the
+denominator is re-accounted?
+
+**Method (`scripts/fp11_denominator.py`, selftest PASS, receipt
+`fp11-denominator-20260611T010052Z.json`, CPU-from-receipts):** three
+accountings — A1 as-receipted; A2 throttle-exact (inter-batch sleep is
+exactly computable: 120 batches × 0.6 s = 72.0 s per leg, 19.8% of the
+1.5B's wall vs 16.8% of the 3B's); A3 pacer-modeled (decode-pacer fires
+reconstructed from the samples files via the generate_chat length-sort;
+completion tokens MODELED from src char lengths — flag carried). The
+fp-9 bootstrap CI rescales EXACTLY by s=(G3′/G3)/(G15′/G15) because
+denominators are constants inside every draw. Internal cross-checks:
+sampler-valued bits re-derive fp-1's 244.3/233.5 exactly. **Adversarial
+3-lens verification (Haiku fleet) before gate:** algebra and arithmetic
+lenses CLEAN (all ~60 receipt values reproduced independently); the
+model-bias lens caught one real channel — extraction-fail rows assumed
+max_new tokens, and the legs have UNEQUAL fail counts (q15 1, q3 0) —
+now BRACKETED in the receipt (none_sensitivity), not just flagged.
+
+**Verdict — NOT-ROBUST, by the pre-registered rule:**
+- **bits/min ORDERING is robust:** 1.5B > 3B sampler-valued under all
+  three accountings (40.3/32.7 → 50.2/39.3 → 94.9/63.5).
+- **The fp-9 parity verdict is NOT:** cost-parity at A1 (point 1.02
+  [0.867, 1.203]) and A2 (1.058 [0.899, 1.248]); **edge-real at A3**
+  (1.238 [1.052, 1.46]; None-bracket twin 1.18 [1.003, 1.392] —
+  knife-edge but both brackets agree).
+
+**Reading (the record's convention, decided here):** the governed
+wall-clock stays the HEADLINE denominator — the governor is mandatory
+policy on this box, so as-operated cost is the true price of an episode
+here, and under it fp-9's parity stands. But A3 says the INTRINSIC
+compute economics may differ: pacing overhead (≈37% of the 1.5B's wall
+vs ≈32% of the 3B's, modeled) plausibly hides a real cheap-sampler edge.
+Every future quote of the parity verdict carries the scope qualifier
+"as operated under the governor." No downstream decision changes today:
+the license axis (fp-6) and a possible compute edge point the SAME way —
+the 1.5B is both the unencumbered core and the cheaper-or-equal one.
+Context: the 785.5× gen-vs-verify ratio rescales to 630×/333× under
+A2/A3 — the orders-of-magnitude conclusion is untouched.
+
+**Successor minted (fp-14):** settle A3 with MEASUREMENT — pacing is
+currently invisible to receipts. Instrument the generation paths to
+record throttle_secs + pacer fire counts exactly (receipts-grade pacing
+block), then re-derive s from the next natural sampling run (piggyback;
+no GPU run launched for this alone) and resolve the fp-9 scope
+qualifier: either parity-as-operated + edge-real-compute both quoted, or
+collapse back to parity everywhere. Closing PR mints fp-15.
