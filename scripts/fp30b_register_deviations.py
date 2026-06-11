@@ -275,8 +275,25 @@ def _fixture(td, new_freeze=False):
                        f"tokenizer-freeze-20260102T000000Z.json", "w"))
 
 
+def _live_snapshot():
+    """shas of every live surface apply() can write + the receipts listing.
+
+    Used to prove --selftest never touches the live tree (Kai 14662: the old
+    live-tree apply(nc=NC) probe became a mutation path the moment fp30 went
+    RED — test/executor boundary must hold on green AND red trees)."""
+    snap = {}
+    for rel in (fp30.CONFIG, fp30.GATE):
+        p = f"{NC}/{rel}"
+        snap[rel] = _sha(p) if os.path.exists(p) else None
+    rdir = f"{NC}/receipts"
+    snap["receipts_listing"] = tuple(sorted(os.listdir(rdir))) \
+        if os.path.isdir(rdir) else None
+    return snap
+
+
 def _selftest():
     import tempfile
+    live_before = _live_snapshot()
     # refusal: green tree has nothing to register
     with tempfile.TemporaryDirectory() as td:
         _fixture(td, new_freeze=False)
@@ -336,13 +353,14 @@ def _selftest():
             raise AssertionError("second apply must refuse")
         except Refusal:
             pass
-    # live tree TODAY must refuse (fp30 green pre-re-freeze) — proves the
-    # executor cannot fire early
-    try:
-        apply(nc=NC)
-        raise AssertionError("live tree must refuse while fp30 is green")
-    except Refusal as e:
-        assert "GREEN" in str(e) or "census" in str(e), e
+    # live-tree contact is READ-ONLY (Kai 14662): the old apply(nc=NC) probe
+    # assumed fp30 GREEN forces a refusal — when fp30 went RED at the freeze
+    # supersession it became a live mutation path. fp30.check is the only
+    # live probe now; its result is intentionally unasserted (selftest must
+    # pass on green AND red trees — mutation semantics are fixture-only).
+    fp30.check(NC)
+    assert _live_snapshot() == live_before, \
+        "SELFTEST PURITY VIOLATION: live tree changed during --selftest"
     print("FP30B_REGISTER_SELFTEST_PASS")
 
 

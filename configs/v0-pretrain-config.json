@@ -64,7 +64,7 @@
 
   "data": {
     "source": "tokenized v0 corpus (assembly receipt sha a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2)",
-    "tokenizer_receipt": "tokenizer-freeze-20260611T060423Z.json",
+    "tokenizer_receipt": "tokenizer-freeze-20260611T154111Z.json",
     "tokenizer_receipt_rule": "null = LAUNCH BLOCKED. Must name the committed TOKENIZER-FREEZE-V0 receipt (receipt_check PASS, assembly-sha pin match, reserved multimodal band verified, real token counts). The launch shim fail-closes on null.",
     "real_token_total": 6973632300,
     "token_shortfall_decision": "real 6.974B vs compute-optimal 7.367B = -5.3%; ABSORBED at gate (PR #164 signoff): data-efficiency survivors cover it with margin, WSD permits receipted continuation, a top-up would re-open assembly + re-freeze the tokenizer",
