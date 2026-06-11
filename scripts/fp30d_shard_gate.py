@@ -187,7 +187,7 @@ def fire(nc=NC, receipt=None):
             print(f"FP30D_REFUSAL: {f}")
         raise SystemExit(1)
     out = f"{nc}/receipts/fp30d-shard-gate-{verdict['ts']}.json"
-    checked_write(verdict, out)
+    checked_write(out, verdict)
     for f in v:
         print(f"  VIOLATION: {f}")
     print(f"FP30D_SHARD_GATE_{verdict['verdict']} {os.path.relpath(out, nc)}")
