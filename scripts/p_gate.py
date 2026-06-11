@@ -165,37 +165,64 @@ def _extract_gain_ci(receipt: dict, arm_name: str = None) -> dict:
     Raises GainExtractionError if none of the recognized shapes is present
     (fail-closed — no 0.0 / [-1, 1] default).
     """
-    # Try d_gate receipt shape first (gain_with field)
+    # Try d_gate receipt shape first (gain_with field). eng-51 (#186): a
+    # matched shape must yield a REAL (value, CI) or raise — the old
+    # g.get("value", 0.0) / [-1, 1] default auto-passed the CI leg whenever
+    # the shape key was present but its fields were missing (eng-46 closed
+    # only the no-shape case). Within-shape default is the same fail-open.
     if "gain_with" in receipt:
         g = receipt["gain_with"]
-        return {
-            "gain_value": g.get("value", 0.0),
-            "exact_ci_lo": g.get("exact_ci", {}).get("lo", -1.0),
-            "exact_ci_hi": g.get("exact_ci", {}).get("hi", 1.0),
-        }
+        ci = g.get("exact_ci") if isinstance(g, dict) else None
+        if not isinstance(g, dict) or "value" not in g or \
+           not isinstance(ci, dict) or "lo" not in ci or "hi" not in ci:
+            raise GainExtractionError(
+                "gain_with shape present but missing value/exact_ci.lo/hi "
+                f"(ticket={receipt.get('ticket')!r}); refusing 0.0/[-1,1] "
+                "default")
+        return {"gain_value": g["value"],
+                "exact_ci_lo": ci["lo"], "exact_ci_hi": ci["hi"]}
     # Try w4_eval receipt shape (deltas block)
     if "deltas" in receipt and arm_name:
         key = f"{arm_name}_minus_base_ci95"
         if key in receipt["deltas"]:
             ci = receipt["deltas"][key]
-            # bootstrap_ci95 is [lo, hi]
-            lo = ci[0] if isinstance(ci, list) else ci.get("lo", -1.0)
-            hi = ci[1] if isinstance(ci, list) else ci.get("hi", 1.0)
-            # Point estimate: average of arm and base pass_any_pct if available
+            if isinstance(ci, list):
+                if len(ci) != 2:
+                    raise GainExtractionError(
+                        f"deltas[{key!r}] list is not [lo, hi]: {ci!r}")
+                lo, hi = ci[0], ci[1]
+            elif isinstance(ci, dict) and "lo" in ci and "hi" in ci:
+                lo, hi = ci["lo"], ci["hi"]
+            else:
+                raise GainExtractionError(
+                    f"deltas[{key!r}] CI is not [lo, hi] or {{lo, hi}}: {ci!r}")
+            # Point estimate: arm-minus-base pass_any_pct. Both arms must carry
+            # pass_any_pct — eng-51: refuse the old 0.0 point default when they
+            # don't (a matched CI with a fabricated 0.0 gain is still a partial
+            # fail-open of the point leg).
             arms = receipt.get("arms", {})
-            gain_val = 0.0
-            if arm_name in arms and "base" in arms:
-                gain_val = (arms[arm_name]["pass_any_pct"] -
-                            arms["base"]["pass_any_pct"]) / 100.0
+            if not (isinstance(arms.get(arm_name), dict) and
+                    isinstance(arms.get("base"), dict) and
+                    "pass_any_pct" in arms[arm_name] and
+                    "pass_any_pct" in arms["base"]):
+                raise GainExtractionError(
+                    f"deltas shape matched {key!r} but arms[{arm_name!r}]/"
+                    "arms['base'].pass_any_pct missing; refusing 0.0 point "
+                    "default")
+            gain_val = (arms[arm_name]["pass_any_pct"] -
+                        arms["base"]["pass_any_pct"]) / 100.0
             return {"gain_value": gain_val, "exact_ci_lo": lo, "exact_ci_hi": hi}
     # Fall back to synthetic/test receipt shape
     if "gain" in receipt:
         g = receipt["gain"]
-        return {
-            "gain_value": g.get("value", 0.0),
-            "exact_ci_lo": g.get("exact_ci_lo", -1.0),
-            "exact_ci_hi": g.get("exact_ci_hi", 1.0),
-        }
+        if not isinstance(g, dict) or "value" not in g or \
+           "exact_ci_lo" not in g or "exact_ci_hi" not in g:
+            raise GainExtractionError(
+                "gain shape present but missing value/exact_ci_lo/exact_ci_hi "
+                f"(ticket={receipt.get('ticket')!r}); refusing 0.0/[-1,1] "
+                "default")
+        return {"gain_value": g["value"],
+                "exact_ci_lo": g["exact_ci_lo"], "exact_ci_hi": g["exact_ci_hi"]}
     # FAIL-CLOSED (eng-46 #175): no recognized gain shape. Refuse the old
     # 0.0 / [-1, 1] default — it auto-passed the CI containment leg.
     raise GainExtractionError(
@@ -574,6 +601,49 @@ def _selftest():
         raised = True
     check("extractor_raises_on_no_match", raised,
           "_extract_gain_ci must raise GainExtractionError, not return a default")
+
+    # ---- Case 6: within-shape FAIL-CLOSED (eng-51 #186) ----
+    # eng-46 closed the no-shape case; a matched shape whose fields are missing
+    # must ALSO raise, never default to 0.0/[-1,1] (which auto-passed the CI
+    # containment leg). And well-formed shapes must still extract unchanged.
+    def _raises(receipt, arm=None):
+        try:
+            _extract_gain_ci(receipt, arm)
+            return False
+        except GainExtractionError:
+            return True
+
+    check("gain_with_empty_raises",
+          _raises({"ticket": "X", "ts": pre_ts, "gain_with": {}}),
+          "empty gain_with must raise, not default to 0.0/[-1,1]")
+    check("gain_with_no_ci_raises",
+          _raises({"ticket": "X", "ts": pre_ts, "gain_with": {"value": 0.25}}),
+          "gain_with missing exact_ci must raise")
+    check("gain_empty_raises",
+          _raises({"ticket": "X", "ts": pre_ts, "gain": {}}),
+          "empty gain must raise, not default to 0.0/[-1,1]")
+    check("deltas_no_arms_raises",
+          _raises({"ticket": "X", "ts": pre_ts,
+                   "deltas": {"adapter_minus_base_ci95": [0.01, 0.2]}},
+                  "adapter"),
+          "deltas CI matched but arms.pass_any_pct missing must raise")
+    # regression: well-formed shapes still extract (mirrors the real #114
+    # d-gate gain_with: value 0.25, exact_ci [0.077542, 0.433557])
+    gw = _extract_gain_ci({"ticket": "X", "ts": pre_ts, "gain_with":
+                           {"value": 0.25,
+                            "exact_ci": {"lo": 0.077542, "hi": 0.433557}}})
+    check("gain_with_wellformed_extracts",
+          gw == {"gain_value": 0.25, "exact_ci_lo": 0.077542,
+                 "exact_ci_hi": 0.433557},
+          f"well-formed gain_with mis-extracted: {gw}")
+    gd = _extract_gain_ci({"ticket": "X", "ts": pre_ts,
+                           "deltas": {"adapter_minus_base_ci95": [0.05, 0.45]},
+                           "arms": {"adapter": {"pass_any_pct": 100.0},
+                                    "base": {"pass_any_pct": 75.0}}}, "adapter")
+    check("deltas_wellformed_extracts",
+          abs(gd["gain_value"] - 0.25) < 1e-9 and gd["exact_ci_lo"] == 0.05
+          and gd["exact_ci_hi"] == 0.45,
+          f"well-formed deltas mis-extracted: {gd}")
 
     # ---- Summary ----
     if fails:
