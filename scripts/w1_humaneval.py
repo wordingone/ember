@@ -14,6 +14,9 @@ Split discipline (K3 independence):
 Per-sample rows persist src, so verified samples are harvestable as ledger
 episodes (task keys `mbpp:<id>`) once W-code ledger ingest lands.
 Receipt: receipts/w1-humaneval-<model-tag><suffix>-<ts>.json
+
+== asserts now route through the strict comparator (v_compare, single source,
+eng-21 semantics); execution path is the guarded sandbox (t1_probe.run_program).
 """
 
 import os
@@ -31,6 +34,12 @@ from datetime import datetime, timezone
 
 import sys
 if "--selftest" in sys.argv:
+    import os as _os
+    _scripts_dir = _os.path.dirname(_os.path.abspath(__file__))
+    if _scripts_dir not in sys.path:
+        sys.path.insert(0, _scripts_dir)
+    import v_compare as _vc
+
     def k3_split(task_id):
         parts = str(task_id).split("/")
         idx = int(parts[1]) if len(parts) >= 2 else int(task_id)
@@ -39,10 +48,22 @@ if "--selftest" in sys.argv:
     heldout = sum(1 for i in range(164) if k3_split(f"HumanEval/{i}") == "heldout")
     harm = sum(1 for i in range(164) if k3_split(f"HumanEval/{i}") == "harm")
     assert train == 99 and heldout == 33 and harm == 32
+    # strict harness assembly (pure logic — no torch/datasets/t1_probe needed)
+    _STUB = "\n\ndef solve(grid):\n    return [[0]]\n"
+    _h = _vc.strict_harness(["import math"],
+                             "def f(x):\n    return x * 2\n",
+                             ["assert f(2) == 4"], _STUB)
+    assert _h.index("import math") < _h.index("def f(x):"), "import before src"
+    assert _h.index("def f(x):") < _h.index("def _v_check"), "src before preamble"
+    assert _h.index("def _v_check") < _h.index("_v_check((f(2)), (4))"), \
+        "preamble before instrumented test"
+    assert _h.index("_v_check((f(2)), (4))") < _h.index("def solve(grid):"), \
+        "test before stub"
     print("W1_HUMANEVAL_SELFTEST_PASS")
     sys.exit(0)
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 sys.path.insert(0, f"{NC}/scripts")
+from v_compare import strict_harness  # noqa: E402 — pure logic, same scripts dir
 from t1_probe import (THROTTLE_S, decode_pacer, execute_batch,  # noqa: E402
                       extract_code, load_model)
 from t4_eval import bootstrap_ci  # noqa: E402
@@ -194,8 +215,7 @@ def main():
             job_meta.append((pid, None))
             continue
         p = by_id[pid]
-        harness = "\n".join(p["imports"]) + "\n" + src + "\n" + \
-            "\n".join(p["tests"]) + SOLVE_STUB
+        harness = strict_harness(p["imports"], src, p["tests"], SOLVE_STUB)
         jobs.append((harness, [], []))
         job_meta.append((pid, src))
 

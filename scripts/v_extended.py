@@ -24,21 +24,56 @@ Coverage is reported, never silent: ledger tasks absent from MBPP+
 
 Receipt: receipts/v-extended-<ts>.json. Selftest: `--selftest`
 (Windows-safe: FPR math + harness assembly).
+
+== asserts now route through the strict comparator (v_compare, single source,
+eng-21 semantics); execution path is the guarded sandbox (t1_probe.run_program).
+w1_humaneval's --ext-verify path imports build_harness from this module, so
+that path is tightened automatically (single source, no second wiring).
 """
 
 import argparse
 import json
 import os
+import sys
 from datetime import datetime, timezone
 
 NC = "/mnt/b/M/avir/leo/state/nc-ladder"
 RECEIPTS = f"{NC}/receipts"
 SOLVE_STUB = "\n\ndef solve(grid):\n    return [[0]]\n"  # sandbox gadget
 
+# STRICT_SRC and split_assert are imported at call sites below so this module
+# remains selftest-safe on Windows without NC/scripts on sys.path.
+
 
 def build_harness(src, plus_test, imports=()):
-    """Candidate src + MBPP+ extended test code (calls candidate by name)."""
-    return "\n".join(imports) + "\n" + src + "\n" + plus_test + SOLVE_STUB
+    """Candidate src + MBPP+ extended test code, with strict comparator preamble.
+
+    plus_test is the MBPP+ `test` field — a multi-line code blob. Top-level
+    single-line `assert L == R` statements (column-0 only) are rewritten to
+    `_v_check((L), (R))` (eng-21 semantics, v_compare single source). Indented
+    asserts — e.g. inside a for-loop — pass verbatim; rewriting them to a
+    top-level _v_check call would drop the indent and produce a SyntaxError
+    (= false flips). Non-== shapes and setup lines also pass verbatim.
+    """
+    # Late import so _selftest() (pure logic) works without NC/scripts.
+    _scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+    if _scripts not in sys.path:
+        sys.path.insert(0, _scripts)
+    from v_compare import STRICT_SRC  # noqa: PLC0415
+    from fp8_vgate import split_assert  # noqa: PLC0415
+
+    instrumented = []
+    for line in plus_test.splitlines():
+        # Only rewrite top-level (column-0) single assert L == R lines.
+        if line.lstrip() == line and line.startswith("assert "):
+            pair = split_assert(line)
+            if pair is not None:
+                instrumented.append(f"_v_check(({pair[0]}), ({pair[1]}))")
+                continue
+        instrumented.append(line)
+    tests_block = "\n".join(instrumented)
+    return ("\n".join(imports) + "\n" + src + "\n" + STRICT_SRC + "\n" +
+            tests_block + SOLVE_STUB)
 
 
 def fpr_block(rows):
@@ -62,7 +97,6 @@ def main():
     ap.add_argument("--view", default=f"{NC}/ledger/views/wcode-r1.jsonl")
     args, _unknown = ap.parse_known_args()  # daemon appends args
 
-    import sys
     sys.path.insert(0, f"{NC}/scripts")
     from datasets import load_dataset
     from t1_probe import execute_batch
@@ -128,9 +162,41 @@ def main():
 
 
 def _selftest():
-    h = build_harness("def f(): pass", "assert f() is None", ["import math"])
-    assert h.startswith("import math\ndef f(): pass\nassert")
-    assert h.endswith(SOLVE_STUB)
+    # (a) top-level `assert f(2) == 4` gets rewritten to a _v_check call
+    h_top = build_harness("def f(x):\n    return x * 2\n",
+                          "assert f(2) == 4", [])
+    assert "_v_check((f(2)), (4))" in h_top, \
+        "top-level == assert must be instrumented"
+    assert "def _v_check" in h_top, "STRICT_SRC preamble must be present"
+
+    # (b) INDENTED assert inside a for-loop passes verbatim; harness compiles
+    indented_block = "for i in [2]:\n    assert f(i) == i * 2"
+    h_ind = build_harness("def f(x):\n    return x * 2\n",
+                          indented_block, [])
+    assert "    assert f(i) == i * 2" in h_ind, \
+        "indented assert must pass verbatim (no indent-drop false flip)"
+    assert "_v_check((f(i))" not in h_ind, \
+        "indented assert must NOT be rewritten"
+    # compile() confirms the harness is syntactically valid
+    compile(h_ind, "<selftest-indented>", "exec")
+
+    # (c) non-== asserts and setup lines pass verbatim
+    mixed = ("x = 5\nassert f(x) is not None\nassert f(0) == 0\n"
+             "assert math.isclose(f(1), 2.0)")
+    h_mix = build_harness("def f(x):\n    return x * 2\n", mixed, ["import math"])
+    assert "x = 5" in h_mix, "setup line must pass verbatim"
+    assert "assert f(x) is not None" in h_mix, "is-not-None assert verbatim"
+    assert "_v_check((f(0)), (0))" in h_mix, "top-level == rewritten"
+    assert "assert math.isclose(f(1), 2.0)" in h_mix, \
+        "isclose assert passes verbatim"
+
+    # (d) STRICT_SRC present between src and test block
+    h_ord = build_harness("def f(x):\n    return x\n", "assert f(1) == 1", [])
+    assert h_ord.index("def f(x):") < h_ord.index("def _v_check") \
+        < h_ord.index("_v_check((f(1)), (1))") < h_ord.index("def solve(grid):"), \
+        "order: src / STRICT_SRC / tests / stub"
+
+    # (e) keep all existing fpr_block assertions
     rows = ([{"task": "mbpp:1", "stratum": "easy", "ext_ok": True,
               "timeout": False}] * 8
             + [{"task": "mbpp:2", "stratum": "frontier", "ext_ok": False,
@@ -149,8 +215,7 @@ def _selftest():
 
 
 if __name__ == "__main__":
-    import sys as _sys
-    if "--selftest" in _sys.argv:
+    if "--selftest" in sys.argv:
         _selftest()
     else:
         main()
