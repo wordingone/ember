@@ -1,0 +1,86 @@
+{
+  "ticket": "FP33-E2-FULL-TUNE-CEILING",
+  "ts": "20260612T034610Z",
+  "model": {
+    "id": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-3B-Instruct/snapshots/488639f1ff808d1d3d0ba301aef8c11461451ec5",
+    "n_params": 3085938688,
+    "params_b": 3.086,
+    "vocab": 151936
+  },
+  "config": {
+    "seq": 1024,
+    "optimizer": "paged_adamw_8bit",
+    "dtype": "bfloat16",
+    "grad_checkpointing": true
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "versions": {
+    "torch": "2.6.0+cu124",
+    "cuda": "12.4",
+    "bitsandbytes": "0.49.2"
+  },
+  "probe_results": [
+    {
+      "batch": 1,
+      "status": "OK",
+      "avg_step_ms": 1560.09,
+      "tok_s": 656.4,
+      "allocated_gib": 6.25,
+      "reserved_gib": 14.3,
+      "free_gib_post_warmup": 4.12,
+      "step_ms_list": [
+        1528.15,
+        1622.88,
+        1503.39,
+        1613.44,
+        1461.23,
+        1548.32,
+        1615.56,
+        1587.78
+      ]
+    },
+    {
+      "batch": 2,
+      "status": "OK",
+      "avg_step_ms": 2078.28,
+      "tok_s": 985.4,
+      "allocated_gib": 6.54,
+      "reserved_gib": 13.97,
+      "free_gib_post_warmup": 4.45,
+      "step_ms_list": [
+        2055.73,
+        2048.91,
+        2044.48,
+        2044.22,
+        2052.08,
+        2072.44,
+        2138.18,
+        2170.22
+      ]
+    },
+    {
+      "batch": 4,
+      "status": "MARGIN_VIOLATED:1.06GiB"
+    },
+    {
+      "batch": 8,
+      "status": "OOM:CUDA out of memory. Tried to allocate 4.64 GiB. GPU 0 has a total capacity of 23.99 GiB of which 3.63 GiB is free. Process 665 has 17179869184.00 GiB memory in use. 19.19 GiB allowed; Of the allocated memory 14.17 GiB is allocated by PyTorch, and 679.03 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+    }
+  ],
+  "max_ok_batch": 2,
+  "verdict": "FITS_BATCH_2",
+  "verdict_detail": "Full fine-tune of Qwen/Qwen2.5-Coder-3B-Instruct (3.086B) fits at batch=2, seq=1024 with paged_adamw_8bit + grad_ckpt. Throughput: 985 tok/s.",
+  "method": "cuda.Event step timing (CUPTI-free), OOM boundary by ascending batch probe",
+  "flags": [
+    "bf16 weights + gradient checkpointing ON",
+    "optimizer: paged_adamw_8bit",
+    "synthetic batches \u2014 no dataloader",
+    "binary probe: stop at first OOM",
+    "live run 12c050e7 NOT touched"
+  ]
+}
