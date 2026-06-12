@@ -1,0 +1,3 @@
+{"ticket":"ENG-SYNC","ts":"20260612T033921Z","open":3,"closed":56,
+"closed_without_merged_pr":[{"issue":229,"merged_closing_prs":"0"},{"issue":194,"merged_closing_prs":"0"}],
+"open_issues":[{"number":268,"title":"eng: GSM8K-200 greedy exact-match eval harness leg (fp-33 A3-ii prerequisite)","updatedAt":"2026-06-12T03:38:35Z"},{"number":254,"title":"eng: heartbeat runner — deterministic round-lifecycle machine (docs/heartbeat-runner-spec-v0.md)","updatedAt":"2026-06-12T00:34:59Z"},{"number":128,"title":"eng-35: P-gate live probe leg — r1w-q3-mtp boundary pair across daemon restart (HOLD for Leo dispatch order)","updatedAt":"2026-06-11T03:26:09Z"}]}

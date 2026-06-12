@@ -1,0 +1,3 @@
+{"ticket":"ENG-SYNC","ts":"20260612T053346Z","open":2,"closed":58,
+"closed_without_merged_pr":[{"issue":229,"merged_closing_prs":"0"},{"issue":194,"merged_closing_prs":"0"}],
+"open_issues":[{"number":271,"title":"eng: wire registry_gate.py as dispatch precondition + build proxy-speedrun harness (#256 eng half, behind fp-33 E4/E5)","updatedAt":"2026-06-12T03:42:54Z"},{"number":128,"title":"eng-35: P-gate live probe leg — r1w-q3-mtp boundary pair across daemon restart (HOLD for Leo dispatch order)","updatedAt":"2026-06-11T03:26:09Z"}]}
