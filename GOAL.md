@@ -216,38 +216,34 @@ Only the user retires this goal, by name.
 
 ---
 
-## E2B-SURPASS MILESTONE (user, 2026-06-12 — amendment; the goal above stands unchanged)
+## E2B-SURPASS MILESTONE (user, 2026-06-12; rewritten same day per user — loop semantics + surpass definition fixed)
 
 Ember's owned core — pretrained from scratch on this machine, no borrowed
-weights load-bearing — surpasses Gemma E2B by June 22, 2026, reached by
-constantly looping the solve cycle: identify the current binding constraint
-at SOTA level (GPU-kernel or mathematical-architecture of the network and its
-pretraining requirements), solve it, prove the gain with a paired receipt,
-burn it into the technique registry (docs/technique-registry.md), and apply
-it to the live run at the next segment boundary; incrementally increasing
-core size only when receipts show SIZE — not technique — is the binding
-constraint at the current scale; and spending the GPU-time budget by measured
-yield: highest receipted multiplier per governed GPU-hour runs first.
+weights load-bearing — surpasses Gemma E2B **at being ember** by June 22,
+2026.
 
-- **SURPASS (binding receipt):** paired eval, same local harness/k/seeds —
-  owned core beats local Gemma E2B on the verify-floor world (paired CI
-  excluding 0) AND parity-or-better on the pinned public slices (fp-33
-  prereg freezes the slice list). No prose verdicts.
-- **OWNED (binding):** from-scratch weights. Open-base vehicles are rehearsal
-  and scaffolding per the standing goal's own language; they inform but
-  cannot satisfy this milestone.
-- **SIZE LADDER (binding):** a size increase is itself a gated artifact —
-  receipt must show the technique stack saturated at the current size
-  (registry ADOPT rows consumed, verify-floor ceiling measured) before
-  params grow; growth is incremental, never a jump past what the 24GB
-  envelope trains comfortably (E2 receipt).
-- **BUDGET-TIME (binding):** the GPU allocation order is re-derived from
-  receipts at every segment boundary (v0 segments vs experiment-loop bursts
-  vs eval); idle GPU during an open milestone is a named failure; the
-  governor + headroom rule cap everything regardless.
-- **CALIBRATION (pinned at adoption, receipts-only honesty):** deterministic
-  path with currently-identified solves ≈ 4–10 weeks; the June-22 deadline
-  stands as the forcing target — the gap between them is exactly what the
-  solve loop must close. If 06-22 arrives short, the distance to E2B is
-  measured and committed as a receipt and the loop continues unchanged;
-  only the user moves the date or the bar, by name.
+**SURPASS IN WHAT (binding — both legs, paired against E2B swapped into
+ember's own harness, same worlds, same governed budgets):**
+1. **Ember-work:** the verify-floor worlds and the self-curriculum
+   accumulation loop — ember's core produces verified, transferring,
+   deletion-surviving gains where E2B-in-the-same-seat does not, at matched
+   compute.
+2. **Founder-likeness:** communicable with, and has agency — runs its event
+   stream (mail, files, job receipts, schedule), initiates and completes its
+   own work with receipts, answers when spoken to. Ember does these duties
+   measurably better than E2B in the same seat. (This leg pulls the NC-K
+   resident-kernel rung into the milestone's critical path.)
+Receipts only; fp-33 freezes the paired protocol before any verdict.
+
+**LOOP (binding on Leo):** receiving this goal means looping until the
+surpass receipt exists — gate the latest receipts, solve the current binding
+constraint (GPU-kernel or mathematical-architecture, burned into
+docs/technique-registry.md), launch the next governed job, re-derive GPU
+allocation at each segment boundary. Idle with this milestone open is a
+named failure. Core size grows only when receipts show size — not technique —
+is the binding constraint.
+
+**CALIBRATION (pinned, receipts-only honesty):** deterministic estimate at
+adoption ≈ 4–10 weeks of governed solve-loop; June-22 is the forcing target;
+shortfall on the date = a measured-distance receipt and the loop continues
+unchanged. Only the user moves the date, the bar, or retires this — by name.
