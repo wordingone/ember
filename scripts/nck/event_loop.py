@@ -272,16 +272,46 @@ class MailSource(EventSource):
         self.signal_path = signal_path
         self.db_path = db_path
         self.identity = identity
-        self._last_id: int = 0  # highest message ID already emitted this session
+        # D1: initialize cursor to the current max id so the first poll never
+        # re-emits the entire broadcast history of a large DB.
+        self._last_id: int = self._query_max_id()
+
+    def _query_max_id(self) -> int:
+        """Return MAX(id) for messages addressed to this identity (0 if DB absent)."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cur = conn.execute(
+                    "SELECT COALESCE(MAX(id), 0) FROM messages "
+                    "WHERE LOWER(to_id) = LOWER(?) OR to_id = 'all'",
+                    (self.identity,),
+                )
+                return cur.fetchone()[0]
+            finally:
+                conn.close()
+        except (OSError, sqlite3.DatabaseError):
+            return 0
 
     def _read_signal(self) -> int:
-        """Return latest message ID from the signal file (0 if absent/empty/unparseable)."""
+        """Return signal value to compare against _last_id.
+
+        - Absent or empty signal: 0 (no poll).
+        - Integer content: the parsed id.
+        - Non-integer content (D2: old-binary timestamp format): _last_id + 1,
+          so signal_id > _last_id triggers the DB poll; _last_id deduplicates
+          any messages already emitted.
+        """
         try:
             with open(self.signal_path, "r", encoding="utf-8") as f:
                 raw = f.read().strip()
-                return int(raw) if raw else 0
-        except (OSError, ValueError):
+        except OSError:
             return 0
+        if not raw:
+            return 0
+        try:
+            return int(raw)
+        except ValueError:
+            return self._last_id + 1
 
     def poll(self) -> Iterator[Event]:
         signal_id = self._read_signal()
