@@ -1,5 +1,16 @@
 # Compute-ceiling program v1 — shatter the local training ceiling (2026-06-12)
 
+**v1.2 (user order 2:33 PM LA, executed 2:34 PM):** run 12c050e7 STOPPED
+(train_cancel, kill-receipted, daemon alive, GPU freed at ~1.3B tokens
+paid). User rule, BINDING: **no training run >1 hour until the ceiling
+problems are solved.** Runs are measurement instruments until the shatter
+criterion is met — producing checkpoints on an unproven path is datacenter
+economics imported onto a residency machine; on one machine, iteration
+speed IS the research capability. §4 rule 3's boundary decision is
+DISSOLVED (no live run); the next pretrain exists only through gate 9 with
+the full lever stack receipted + the ENG/ARCH architecture verdict. All
+lever benches now run in full governed windows (<1h each).
+
 User directive 21:15Z (binding, NO DEFERRAL): "unless you explicitly solve
 the local full training compute bottleneck completely and utterly shatter
 the ceiling, ember's not gonna get anywhere. Everything downstream, even
