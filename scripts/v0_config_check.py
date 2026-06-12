@@ -25,7 +25,7 @@ def check(cfg, launch=False):
     # c03 shape pinned (fp19-bench receipted)
     for f, want in (("hidden", 1024), ("layers", 20), ("heads", 16),
                     ("seq", 1024), ("tied_embeddings", True),
-                    ("grad_checkpointing", True)):
+                    ("grad_checkpointing", False)):  # PR #298 NONE arm
         if m.get(f) != want:
             v.append(f"model.{f} != {want} (c03 pin broken)")
     # param pin = the MEASURED c03 count from fp19-bench (its receipt also

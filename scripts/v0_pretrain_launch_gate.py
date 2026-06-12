@@ -168,6 +168,69 @@ def g_budget(launch_date):
                      f"{ENVELOPE_DAYS_FLOOR} d unstacked envelope")
 
 
+def _check_efficiency_receipt(d):
+    """Pure logic: validate a parsed efficiency receipt dict against H1 schema.
+    Returns list of violation strings (empty = clean)."""
+    violations = []
+    levers = d.get("levers")
+    if not isinstance(levers, dict):
+        violations.append("'levers' field missing or not a dict")
+        return violations
+    missing = EFFICIENCY_LEVERS - levers.keys()
+    if missing:
+        violations.append(f"levers missing: {sorted(missing)}")
+    for key, entry in levers.items():
+        if not isinstance(entry, dict):
+            violations.append(f"lever '{key}': entry must be a dict")
+            continue
+        status = entry.get("status")
+        if status not in EFFICIENCY_STATUSES:
+            violations.append(
+                f"lever '{key}': invalid status {status!r} "
+                f"(must be one of {sorted(EFFICIENCY_STATUSES)})")
+            continue
+        if status in ("receipted-APPLIED", "receipted-KILLED"):
+            if not entry.get("receipt"):
+                violations.append(
+                    f"lever '{key}' status {status}: missing 'receipt' pointer")
+        elif status == "WAIVED":
+            cost = entry.get("wall_days_cost")
+            if cost is None:
+                violations.append(
+                    f"lever '{key}' WAIVED: missing 'wall_days_cost' "
+                    f"(silent waiver is gate FAIL — H1)")
+            elif not isinstance(cost, (int, float)) or cost <= 0:
+                violations.append(
+                    f"lever '{key}' WAIVED: 'wall_days_cost' must be "
+                    f"a positive number, got {cost!r}")
+    return violations
+
+
+def g_efficiency():
+    # H1 (docs/hardest-problems-register-v1.md): every known throughput lever
+    # must be enumerated before any governed job >12 GPU-h dispatches.
+    # No receipt -> BLOCKED (makes the 12c050e7 silent-skip impossible).
+    cands = sorted(glob.glob(f"{NC}/{EFFICIENCY_RECEIPT_GLOB}"))
+    if not cands:
+        return "BLOCKED", (
+            "no launch-efficiency-*.json receipt — throughput levers not "
+            "enumerated; any WAIVED lever must carry an explicit wall_days_cost "
+            "(H1: docs/hardest-problems-register-v1.md)")
+    name = os.path.basename(cands[-1])
+    ok, d = _receipt_clean(name)
+    if not ok:
+        return "BLOCKED", d
+    violations = _check_efficiency_receipt(d)
+    if violations:
+        return "BLOCKED", f"{name} efficiency receipt FAIL: {violations}"
+    levers = d["levers"]
+    applied = [k for k, v in levers.items() if v["status"] == "receipted-APPLIED"]
+    killed = [k for k, v in levers.items() if v["status"] == "receipted-KILLED"]
+    waived = [k for k, v in levers.items() if v["status"] == "WAIVED"]
+    return "GREEN", (f"{name}: applied={applied}, killed={killed}, "
+                     f"waived={[(k, levers[k]['wall_days_cost']) for k in waived]}")
+
+
 def g_prereg():
     cands = sorted(glob.glob(f"{NC}/{FP26_PREREG_GLOB}"))
     if not cands:
@@ -192,8 +255,24 @@ def g_prereg():
     return "GREEN", f"{name} frozen; premises hold"
 
 
+EFFICIENCY_RECEIPT_GLOB = "receipts/launch-efficiency-*.json"
+# All levers that must be enumerated before any governed run >12 GPU-h.
+# Each must carry status receipted-APPLIED|receipted-KILLED (with receipt
+# pointer) or WAIVED (with explicit wall_days_cost > 0 — the price must be
+# written down before the run starts). Silent WAIVED = gate FAIL (H1).
+EFFICIENCY_LEVERS: frozenset = frozenset({
+    "batch_size",         # L2: optimal batch from step-econ sweep
+    "checkpointing_off",  # L5: grad-ckpt disabled
+    "fused_muon",         # L3: NS5 chain fused via torch.compile
+    "fp8_matmul",         # L4: fp8 weight-cache linears
+    "torch_compile",      # L6: full-step torch.compile
+    "duty_cycle",         # L7: pacing duty-cycle from live run log
+})
+EFFICIENCY_STATUSES = frozenset({
+    "receipted-APPLIED", "receipted-KILLED", "WAIVED"})
+
 ROWS = ["G-corpus", "G-tokenizer", "G-shards", "G-config", "G-governor",
-        "G-world", "G-budget", "G-prereg"]
+        "G-world", "G-budget", "G-prereg", "G-efficiency"]
 
 
 def gate(launch_date):
@@ -216,6 +295,8 @@ def gate(launch_date):
             st, dt = g_budget(launch_date)
         elif name == "G-prereg":
             st, dt = g_prereg()
+        elif name == "G-efficiency":
+            st, dt = g_efficiency()
         out.append((name, st, dt))
     return out
 
@@ -316,7 +397,45 @@ def _selftest():
     bad = copy.deepcopy(cfg)
     bad["governor"]["vram_fraction"] = 0.95
     assert v0_config_check.check(bad) != []
-    # gate composition returns all rows
+    # g_efficiency pure-logic tests (H1 — docs/hardest-problems-register-v1.md)
+    _all_levers_applied = {k: {"status": "receipted-APPLIED", "receipt": "x.json"}
+                           for k in EFFICIENCY_LEVERS}
+    # PASS: all levers applied
+    assert _check_efficiency_receipt({"levers": _all_levers_applied}) == [], \
+        _check_efficiency_receipt({"levers": _all_levers_applied})
+    # PASS: waiver with explicit price (the 12c050e7 corrected case)
+    waived_with_price = copy.deepcopy(_all_levers_applied)
+    waived_with_price["batch_size"] = {"status": "WAIVED", "wall_days_cost": 1.157}
+    assert _check_efficiency_receipt({"levers": waived_with_price}) == [], \
+        _check_efficiency_receipt({"levers": waived_with_price})
+    # FAIL: 12c050e7 negative — WAIVED without wall_days_cost (silent skip)
+    silent_waiver = copy.deepcopy(_all_levers_applied)
+    silent_waiver["batch_size"] = {"status": "WAIVED"}
+    v = _check_efficiency_receipt({"levers": silent_waiver})
+    assert any("wall_days_cost" in msg and "H1" in msg for msg in v), v
+    # FAIL: lever absent from enumeration
+    incomplete = {k: v for k, v in _all_levers_applied.items()
+                  if k != "duty_cycle"}
+    v2 = _check_efficiency_receipt({"levers": incomplete})
+    assert any("duty_cycle" in msg for msg in v2), v2
+    # FAIL: receipted-APPLIED missing receipt pointer
+    no_ptr = copy.deepcopy(_all_levers_applied)
+    no_ptr["batch_size"] = {"status": "receipted-APPLIED"}
+    v3 = _check_efficiency_receipt({"levers": no_ptr})
+    assert any("batch_size" in msg and "receipt" in msg for msg in v3), v3
+    # FAIL: invalid status
+    bad_status = copy.deepcopy(_all_levers_applied)
+    bad_status["batch_size"] = {"status": "IGNORED"}
+    v4 = _check_efficiency_receipt({"levers": bad_status})
+    assert any("invalid status" in msg for msg in v4), v4
+    # g_efficiency() time-robust: BLOCKED iff no receipt on disk
+    eff_cands = glob.glob(f"{NC}/{EFFICIENCY_RECEIPT_GLOB}")
+    if not eff_cands:
+        st, dt = g_efficiency()
+        assert st == "BLOCKED" and "levers not enumerated" in dt, (st, dt)
+    else:
+        assert g_efficiency()[0] in ("GREEN", "BLOCKED")
+    # gate composition returns all rows (now 9 rows)
     rows = gate(date(2026, 6, 11))
     assert [r[0] for r in rows] == ROWS
     print("V0_LAUNCH_GATE_SELFTEST_PASS")

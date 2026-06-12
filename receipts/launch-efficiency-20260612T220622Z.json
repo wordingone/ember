@@ -1,0 +1,38 @@
+{
+  "ticket": "V0-LAUNCH-EFFICIENCY",
+  "ts": "20260612T220622Z",
+  "issue": 349,
+  "note": "H0 compute-ceiling lever state as of 2026-06-12; L7 duty-cycle pending live run stop \u2014 WAIVED with priced cost.",
+  "levers": {
+    "batch_size": {
+      "status": "receipted-APPLIED",
+      "receipt": "fp32-step-econ-20260612T213856Z.json",
+      "note": "B=16 best_safe 24667 tok/s 1.335x vs anchor; b16-ckpt-eager"
+    },
+    "checkpointing_off": {
+      "status": "receipted-KILLED",
+      "receipt": "fp32-step-econ-20260612T213856Z.json",
+      "note": "SKIPPED-OOM at B=16-nockpt; KILL confirmed \u2014 c03 VRAM constraint"
+    },
+    "fused_muon": {
+      "status": "receipted-APPLIED",
+      "receipt": "fp35-fused-muon-kernel-ab-20260612T215202Z.json",
+      "note": "MUON_FUSED_VIABLE 1.0885x; NS5 equiv PASS"
+    },
+    "fp8_matmul": {
+      "status": "receipted-KILLED",
+      "receipt": "fp35c-weight-cache-ab-20260612T214509Z.json",
+      "note": "FAIL 0.867x at c03 widths (K=1024 shapes); width-conditional architecture constraint"
+    },
+    "torch_compile": {
+      "status": "receipted-APPLIED",
+      "receipt": "fp32-l6-compile-ab-20260612T215844Z.json",
+      "note": "COMPILE_VIABLE 1.272x vs b16-eager; 1.699x vs anchor; Jude breakeven 1.337x (under \u2192 STOP+REDESIGN hardens)"
+    },
+    "duty_cycle": {
+      "status": "WAIVED",
+      "wall_days_cost": 0.05,
+      "note": "L7 duty-cycle log from stopped run 12c050e7 not yet extracted; cost = MFU measurement uncertainty on the next run (nominal 0.05 wall-days); receipt will be updated when L7 is filed"
+    }
+  }
+}
