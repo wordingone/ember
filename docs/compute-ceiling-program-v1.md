@@ -1,8 +1,11 @@
 # Compute-ceiling program v1 — shatter the local training ceiling (2026-06-12)
 
 **v1.2 (user order 2:33 PM LA, executed 2:34 PM):** run 12c050e7 STOPPED
-(train_cancel, kill-receipted, daemon alive, GPU freed at ~1.3B tokens
-paid). User rule, BINDING: **no training run >1 hour until the ceiling
+(train_cancel, kill-receipted, daemon alive, GPU freed at step 150k;
+~614M content tokens, ~8,872 tok/s production throughput — see
+fp37-l7-duty-cycle-20260612T222145Z.json. Earlier "~1.3B tokens paid"
+was derived from the FP19 benchmark rate ~18k tok/s, not from the actual
+production path which includes MTP+chunked CE+Muon; correction receipted). User rule, BINDING: **no training run >1 hour until the ceiling
 problems are solved.** Runs are measurement instruments until the shatter
 criterion is met — producing checkpoints on an unproven path is datacenter
 economics imported onto a residency machine; on one machine, iteration
@@ -69,8 +72,9 @@ arithmetic intensity — batch and fusion are how it climbs the roofline.
 | L4 | fp8 native route (fp-35c) | — | **KILLED at c03 widths (receipt fp35c-...214509Z: mean 0.867×; width-conditional — 1.15× on K1024→N4096, loses on N1024 outputs). ARCH datapoint: wider hidden flips fp8 positive** |
 | L5 | Checkpointing OFF | — | **KILLED: every no-ckpt cell SKIPPED-OOM at B≥16 under the 0.80 cap (same receipt as L2) — activations don't fit on 24GB at useful batch** |
 | L6 | torch.compile (MSVC env fixed — cl.exe existed; Triton x86-path discovery bug) | 1.1–1.3× (QAT elementwise fusion) | compile test PASS; bench cell after L3 |
-| L7 | Duty cycle: loader/ckpt/eval stalls in REAL run | unknown — measure | mine from stopped-run logs (Leo, on eli's log receipt) |
+| L7 | Duty cycle: loader/ckpt/eval stalls in REAL run | unknown — measure | **RECEIPTED (fp37-l7-duty-cycle-20260612T222145Z): loader=1.02%, ckpt-I/O=0.04%, stall_wall_days=0.097d for full 1.7M-step run — HARNESS gap, architecture-independent; informs c04 harness budget** |
 | L8 | Data/objective efficiency (H2) | effective-compute multiplier, unbounded | round-design constraint |
+| L9 | Flash/SDPA attention (no S² score materialization → enables no-ckpt at higher batch) | c04-grid proj 40,631 tok/s at B=39 (2.27× anchor) | **KILLED (fp38-l9-flash-ab-20260612T223639Z): OOM at B=39, B=33, B=26 — flash removes attention score tensor but activation+residual budget for MLP layers still OOM at c03 hidden=1024 under 0.80 cap. ARCH: same binding constraint as L5 kill. Grid projection assumed flash enables no-ckpt; empirically false at c03 widths.** |
 
 **Compound arithmetic after round 1 of receipts (21:50Z, jude-verified
 15067 — CONDITIONAL):** mechanical stack = 1.3354 (batch, receipted) ×

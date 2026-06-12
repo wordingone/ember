@@ -1,0 +1,119 @@
+{
+  "ticket": "FP37-L7-DUTY-CYCLE-v2",
+  "ts": "20260612T222145Z",
+  "lever": "L7",
+  "issue": 225,
+  "job_id": "12c050e7",
+  "scope": "harness-side stalls: loader/checkpoint-I/O \u2014 GPU anatomy receipted in E4; scope per leo mail 15070",
+  "run_dir": "B:\\M\\avir\\eli\\state\\ember-eng\\runs\\v0-r1s1",
+  "job_started_at": "2026-06-12T01:30:50Z",
+  "result": {
+    "intervals": [
+      {
+        "to_step": 25000,
+        "steps": 25000,
+        "wall_s": 11944.0,
+        "s_per_step": 0.47776,
+        "tok_s": 8573.3,
+        "checkpoint_bytes": 1932414148
+      },
+      {
+        "to_step": 50000,
+        "steps": 25000,
+        "wall_s": 11639.0,
+        "s_per_step": 0.46556,
+        "tok_s": 8798.0,
+        "checkpoint_bytes": 1932414148
+      },
+      {
+        "to_step": 75000,
+        "steps": 25000,
+        "wall_s": 11512.0,
+        "s_per_step": 0.46048,
+        "tok_s": 8895.1,
+        "checkpoint_bytes": 1932414148
+      },
+      {
+        "to_step": 100000,
+        "steps": 25000,
+        "wall_s": 11380.0,
+        "s_per_step": 0.4552,
+        "tok_s": 8998.2,
+        "checkpoint_bytes": 1932414148
+      },
+      {
+        "to_step": 125000,
+        "steps": 25000,
+        "wall_s": 11613.0,
+        "s_per_step": 0.46452,
+        "tok_s": 8817.7,
+        "checkpoint_bytes": 1932414148
+      },
+      {
+        "to_step": 150000,
+        "steps": 25000,
+        "wall_s": 11564.0,
+        "s_per_step": 0.46256,
+        "tok_s": 8855.1,
+        "checkpoint_bytes": 1932414148
+      }
+    ],
+    "steady_state": {
+      "intervals_used": 5,
+      "avg_s_per_step": 0.46166,
+      "avg_tok_s_paced": 8872.3
+    },
+    "e4_baseline": {
+      "receipt": "fp33-e4-profiler-20260612T032739Z.json",
+      "compute_ms_per_step": 406.75,
+      "governor_s_per_step": 0.05,
+      "expected_s_per_step": 0.45675,
+      "expected_tok_s": 8967.7
+    },
+    "stall_attribution": {
+      "total_gap_s_per_step": 0.00491,
+      "loader_stall_s_per_step": 0.00472,
+      "ckpt_amortized_s_per_step": 0.00019,
+      "ckpt_write_est_s": 4.83,
+      "ckpt_bytes_total": 1932414148
+    },
+    "duty_cycle_pct": {
+      "gpu_compute": 88.11,
+      "governor_sleep": 10.83,
+      "loader_stall": 1.02,
+      "ckpt_io": 0.04,
+      "note": "gpu_compute + governor + loader + ckpt \u2248 100%"
+    },
+    "wall_days_impact": {
+      "total_steps": 1702547,
+      "steps_completed": 150000,
+      "stall_wall_days_full_run": 0.0968,
+      "note": "loader+ckpt stall cost for the full 1.7M-step c03 run \u2014 feeds c04 harness gap budget"
+    }
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "batch=4, seq=1024, tokens_per_step=4096",
+    "checkpoints: 6 written, every 25000 steps",
+    "first interval excluded from steady-state (startup overhead)",
+    "ckpt write speed estimated at 400 MB/s (WSL2 NTFS floor)",
+    "e4_baseline: fp33-e4-profiler-20260612T032739Z.json (GPU phases, synthetic)"
+  ],
+  "reconciliation_note": {
+    "status": "RESOLVED",
+    "gap_factor": 2.0,
+    "checkpoint_tok_s": 8872.3,
+    "ceiling_doc_assumed_tok_s": 18472.2,
+    "explanation": "The FP19 benchmark (fp32-step-econ, fp19-bench) measures a simplified forward: LlamaForCausalLM(input_ids, labels) + AdamW, no MTP, standard CE. The actual 12c050e7 production run uses the full v0 harness: manual backbone forward + 2 MTP heads + chunked CE (ce_fn) + Muon split optimizer. The extra computation (~2 MTP CE passes + optimizer overhead) accounts for the ~2x throughput gap. Both rates are correct for their respective paths; they are not comparable. The FP19 benchmark rate is the lever bench anchor (fast iteration); the production rate (8,872 tok/s) is the actual training speed.",
+    "corrected_tokens_paid": 614400000,
+    "ceiling_doc_old": "~1.3B tokens paid (derived from FP19 benchmark rate)",
+    "ceiling_doc_correction": "~614M tokens (step 150000 x 4096 tok/step); corrected in compute-ceiling-program-v1.md",
+    "production_tok_s_source": "fp37-l7-duty-cycle-20260612T222145Z.json (6-checkpoint steady-state)",
+    "benchmark_tok_s_source": "fp19-bench-20260611T024648Z.json (c03-qat paced, simple forward)"
+  },
+  "ts_corrected": "20260612T223550Z"
+}
