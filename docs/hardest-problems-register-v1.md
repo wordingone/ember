@@ -94,20 +94,35 @@ the sum is nowhere. If round-1 is FLAT at n=100 (likely under H2), the
 confirm leg needs n≥400 (MDE 3.85pp) — eval cost scales, GPU-serial, and
 the window may not close by 06-22.
 
-**Proof obligation (REWRITTEN after the user stopped 12c050e7, 2:34 PM LA
-06-12):** the old premise (run ticking toward an ~06-16 terminal) is gone.
-The path is now ceiling-first by construction: lever benches (tonight,
-each <1h) → ENG/ARCH verdict → IF criterion met, ONE gate-9-compliant
-pretrain (≤1 governed day at ≥3.3×, re-using the ~1.3B tokens paid only if
-the resume path certifies AND the architecture survives) → floor → rounds
-→ S5. Skeleton arithmetic: criterion certified by 06-13 morning → compliant
-pretrain lands ~06-14/15 → ~7 days of round budget before 06-22 — the date
-SURVIVES the stop if the levers deliver; an ARCH kill (redesign + retrain)
-compresses rounds to ~4-5 days — tight, honest. The schedule-feasibility
-receipt fires when the first bench receipts land and replaces this
-skeleton with measured numbers. Owner: Leo, on eli's receipts.
+**Proof obligation (MEASURED REWRITE, 3:50 PM LA 06-12 — the promised
+schedule-feasibility note; supersedes the skeleton):** the bench receipts
+landed and the ARCH kill FIRED: mechanical stack exhausted at 1.85×
+bench-path (@9236963), L9 flash dead at projected batches (fp38-l9), and
+the production path measured 2× under every bench anchor (fp37-l7-v2;
+proxy anchors banned, C-7). The path to 06-22 is now c04-redesign-serial,
+five receipt-gated legs with measured-or-priced durations:
 
-**Status:** OPEN — skeleton in; measured note rides tonight's benches.
+1. **Tonight 06-12:** production-path cell = true F (eli, <1h, GO'd
+   15078); L9 completion b16/b8-nockpt-flash (<1h).
+2. **06-13 AM:** fp-39 recalibration (Leo, mechanical on leg-1 receipts) +
+   activation-model refit; density-A/B mix manifests frozen (eli proposes,
+   Leo gates); density A/B = 4 cells ≈ 4 governed hours.
+3. **06-13:** c04 design + harness build (flash/SDPA module, optimizer
+   ≤15% wall, compile-resident, MTP/CE priced — ENG build, the least
+   receipted leg: ~1 eli-day, the honest schedule risk) → #353 design
+   benches (<1h/cell) → §3 gate: budget/tok_s ≤ 24h on the PRODUCTION
+   path, budget per fp-38 row × density verdict.
+4. **06-14/15:** IF §3 passes → ONE gate-9-compliant pretrain (≤1 governed
+   day). The 614M paid tokens are dead weight (wrong architecture).
+5. **06-15/16 → 06-22:** floor probe → round-1 (n=400 class per
+   power-helper MDE) → gain rounds: ~6 round-days — survives IFF legs 2-3
+   hold their day. Slip >1 day on the c04 build, or a density-A/B verdict
+   that no (P,budget) row passes §3, puts S5-by-06-22 mathematically out
+   of LOCAL reach → program §4.5 fires: priced scale-out residual to the
+   user, never a silently relaxed criterion.
+
+**Status:** ACTIVE — leg 1 in flight; this entry re-prices at every leg
+receipt. Owner: Leo, on eli's receipts.
 
 ## H4 — O6: verifier-free judgment (formalization open problem)
 
