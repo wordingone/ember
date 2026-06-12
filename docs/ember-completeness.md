@@ -36,13 +36,26 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C22 | S7 | corpus: journals/papers/experiment-logs/letters (PD-first) | per-item URL-pin+sha+license; vault-style manifests | — | GATED:C21 |
 | C23 | S7 | causal-chain extraction → synthetic reasoning/world-model datasets | extraction pipeline receipt; synthetic set passes verifier | — | GATED:C22 |
 
+| C24 | S2 | fp-36b: frozen 1B INFO frame executed on the real probe receipt (#328) | verdict receipt via proven chain (#336) | — | GATED:1B-checkpoint |
+| C25 | S5 | sp-6b: B3 replay-rig execution on both seats (#282) | replay receipts, both seats, same worlds/budgets | — | GATED:C8,C10 |
+| C26 | S1 | fp-35: band prediction → allocation policy (#273) | policy doc + receipt vs measured bands | — | GATED:fp-34-prong-A |
+| C27 | S1 | fp-32: GPU bottleneck ledger + one measured gain (#225) | ledger + before/after bench receipt | — | GATED:per-label |
+| C28 | S2 | fp-24b: floor verdict on first real checkpoint probe receipts (#223) | fp24_verdict receipt on real probes | — | GATED:1B-checkpoint |
+| C29 | S6 | sp-3b: 06-22 terminal audit run (#214) | every row receipted or gap named to user | — | GATED:2026-06-22 |
+| C30 | S2 | sp-2b: first P-own-resume + D-round receipts vs sp-2 spec (#210) | gated receipts pair | — | GATED:trigger |
+| C31 | S2 | fp-27b: round-1 execution verdicts on real owned-core round receipts (#205) | verdict receipts | — | GATED:round-1-dispatch |
+| C32 | S6 | eng-35: P-gate live probe leg across daemon restart (#128) | boundary-pair receipt | — | GATED:Leo-dispatch-order (HOLD is mine to lift) |
+
 ## Coverage sweeps (the manifest is complete only when these are swept)
 
 Enumeration sources still to sweep into rows — owner Leo, one sweep per
 BUILD tick until exhausted; each sweep appends rows or records "no new
 pieces" with the source named:
 
-- [ ] wordingone/ember open+closed issues (all 8 label classes)
+- [x] wordingone/ember OPEN issues — swept 2026-06-12T15:25Z: 10 open; #329→C3,
+      #328→C24, #282→C25, #273→C26, #225→C27, #223→C28, #214→C29, #210→C30,
+      #205→C31, #128→C32. CLOSED issues still to sweep (next line).
+- [ ] wordingone/ember CLOSED issues (completed pieces whose receipts the tally should count)
 - [ ] docs/technique-registry.md (every row → C2 sub-rows)
 - [ ] STATE.md pending layers (≥2 always listed)
 - [ ] fp-* / sp-* protocol docs (every standing obligation)
