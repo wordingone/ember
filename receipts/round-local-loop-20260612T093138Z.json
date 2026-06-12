@@ -1,0 +1,105 @@
+{
+  "ticket": "ROUND-LOCAL-LOOP",
+  "label": "LOOP-PATH-LOCALITY-MANIFEST",
+  "ts": "20260612T093138Z",
+  "commit_sha": "9bbeadd3e897237b114fbc9bf6e652f9cd61e9ef",
+  "sources": {
+    "t2_round_py": {
+      "path": "B:\\M\\avir\\eli\\state\\ember-eng\\repo30\\scripts\\t2_round.py",
+      "sha256": "d6efe4d097c664648e34d5ccf5277e7fd7bba583b42de694470f3fdb573f7587"
+    },
+    "heartbeat_runner_py": {
+      "path": "B:\\M\\avir\\eli\\state\\ember-eng\\repo30\\scripts\\heartbeat_runner.py",
+      "sha256": "778be6c9521c04c86bf7f57a29f141475b51fe519537eaf9423b63155cf53c5a"
+    }
+  },
+  "locality_manifest": {
+    "hf_hub_offline_lines": [
+      {
+        "line": 34,
+        "text": "os.environ.setdefault(\"HF_HUB_OFFLINE\", \"1\")"
+      }
+    ],
+    "transformers_offline_lines": [
+      {
+        "line": 35,
+        "text": "os.environ.setdefault(\"TRANSFORMERS_OFFLINE\", \"1\")"
+      }
+    ],
+    "local_files_only_lines": [
+      {
+        "line": 218,
+        "text": "model_path = snapshot_download(model_id, local_files_only=True)"
+      }
+    ],
+    "nc_path_lines": [
+      {
+        "line": 45,
+        "text": "NC = \"/mnt/b/M/avir/leo/state/nc-ladder\""
+      },
+      {
+        "line": 52,
+        "text": "LEDGER = f\"{NC}/ledger/episodes.jsonl\""
+      },
+      {
+        "line": 53,
+        "text": "CONTROL_POOL = f\"{NC}/ledger/control_pool.jsonl\""
+      },
+      {
+        "line": 54,
+        "text": "ADAPTERS = f\"{NC}/adapters\""
+      },
+      {
+        "line": 55,
+        "text": "RECEIPTS = f\"{NC}/receipts\""
+      }
+    ],
+    "network_calls_found": [],
+    "leg_endpoints": {
+      "sample_round": [
+        "tasks = load_tasks(ARC_TRAIN)",
+        "\"origin\": model_id + (f\"+{os.path.basename(adapter)}\""
+      ],
+      "ingest_samples": [
+        "def ingest_samples(samples_path, round_n):",
+        "with open(samples_path) as f:"
+      ],
+      "build_dataset": [
+        "def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None,",
+        "others look up the task in ARC_TRAIN.",
+        "with open(ledger_path) as f:",
+        "tasks = {t[\"id\"]: t for t in load_tasks(ARC_TRAIN)}"
+      ],
+      "train_lora": [
+        "def train_lora(model_id, examples, out_dir, seed=3407, match_texts=None):",
+        "model_path = snapshot_download(model_id, local_files_only=True)",
+        "model_path = model_id",
+        "model_name=model_path, max_seq_length=LORA[\"max_seq\"],",
+        "output_dir=out_dir + \"-ckpt\", per_device_train_batch_size=1,",
+        "model.save_pretrained(out_dir)",
+        "tok.save_pretrained(out_dir)"
+      ]
+    }
+  },
+  "zero_cloud_assert": {
+    "offline_enforced": true,
+    "network_calls_found_count": 0,
+    "zero_cloud": true,
+    "derivation": "source-bytes scan (eng-53 pattern) \u2014 not a self-reported flag or runtime check"
+  },
+  "selftest": {
+    "exit_code": 0,
+    "elapsed_s": 0.16,
+    "pass": true,
+    "receipt": null
+  },
+  "flags": [
+    "config-only dry_run=True \u2014 loop path exercised, no GPU dispatch",
+    "locality manifest derived from source bytes (eng-53 pattern)",
+    "sp-3 terminal-audit row 8 of 9 \u2014 loop-path locality",
+    "round-1 semantics NOT claimed (fp-23 floor chain not yet satisfied)",
+    "live run 12c050e7 NOT touched"
+  ],
+  "live_run_untouched": "12c050e7",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
+}
