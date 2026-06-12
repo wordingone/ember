@@ -86,6 +86,22 @@ completeness). The ARCH-residual reading stands as the LEAN, pending two
 receipts: hidden-1024 fp8-hostile (L4), activations OOM past B=16 (L5),
 NS-chain wall-share (L3 target).
 
+**VERDICT HARDENED 22:00Z (3:00 PM LA) — every factor now receipted:**
+L3 fused-muon = 1.0885× (NS5 equivalence PASS, receipt ...215202Z); L6
+compile = 1.272× over b16-eager (receipt ...215844Z) — UNDER the 1.337×
+breakeven. Measured compound: b16+compile = 1.699× over anchor; ×L3 if
+multiplicative ≈ **1.85× over anchor — the mechanical stack is EXHAUSTED
+at ~56% of the 3.3× criterion.** c03 cannot be trained ≤1 governed day on
+this card by engineering alone. **STOP + REDESIGN is the program's
+recommendation, mathematically hard.** Successor: c04 design constraints
+doc (receipt-derived: fp8-positive shape policy per the per-shape A/B
+data; params/activation budget fitting no-ckpt at the batch knee on
+24GB; fusable-or-replaced optimizer; compile-resident from step 0;
+per-shape fp8 A/B at DESIGN time, before any pretrain). E1b cert KILLED —
+superseded (it certified lr-scaling for the dead config). L7 narrows to
+HARNESS-side stalls only (loader/ckpt/eval — architecture-independent,
+informs the c04 harness).
+
 Compound mechanical target (L1×L3×L4×L5 mid-estimates): **≥3.3×, stretch
 ~5× with L2/L6 → ≥72k tok/s paced → 7B-token c03 pretrain in ~27h.** That
 is the shatter criterion v1: **pretrain-from-scratch ≤ 1 governed day.**

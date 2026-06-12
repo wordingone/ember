@@ -1,0 +1,51 @@
+{
+  "ticket": "FP32-L6-COMPILE-AB",
+  "ts": "20260612T215844Z",
+  "lever": "L6",
+  "issue": 225,
+  "verdict": "COMPILE_VIABLE",
+  "prior_receipt": "fp32-step-econ-20260612T213856Z.json",
+  "baseline": {
+    "anchor_cell": "b4-ckpt-eager",
+    "anchor_tok_s_paced": 18472.2,
+    "best_eager_cell": "b16-ckpt-eager",
+    "best_eager_tok_s_paced": 24667.3,
+    "speedup_b16_vs_anchor": 1.3354
+  },
+  "compile_cell": {
+    "cell": "b16-ckpt-compile",
+    "batch": 16,
+    "seq": 1024,
+    "grad_checkpointing": true,
+    "compiled": true,
+    "variant": "qat",
+    "timed_steps": 10,
+    "warmup_reps": 8,
+    "free_vram_gib_post_warmup": 15.04,
+    "status": "OK",
+    "tok_s_paced": 31377.4,
+    "tok_s_raw": 34700.2,
+    "pacing_tax": 0.0958
+  },
+  "multipliers": {
+    "compile_vs_anchor": 1.6986,
+    "compile_vs_b16_eager": 1.272,
+    "viable_bar_vs_eager": 1.02
+  },
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.10.0+cu126"
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "c03 shapes (hidden=1024, layers=20, heads=16, ffn=4096, seq=1024)",
+    "compile: torch.compile(model) default backend (inductor/reduce-overhead)",
+    "warmup_compile=8 (inductor JIT compile on first steps)",
+    "viable_bar: compile_vs_eager >= 1.02",
+    "governor rails HOLD \u2014 never loosened"
+  ]
+}
