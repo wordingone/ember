@@ -255,19 +255,19 @@ Borrowed-core NC0 is rehearsal; ember's end-state is owned mass, not owned delta
 
 ## Branch registry — every staged-not-fired bet carries a fire-condition (collab-audit U2, 2026-06-10)
 
-No registered branch may exist without a fire-condition or review date. Verdict-class events report NET FLOW (rows added/retired since last verdict), not just size. Consolidation rule (user backlog concern 2026-06-10): a method-variant of an existing experiment is an ARM of that row, never a new row. Kills require the user, by name.
+POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing fire-condition below carries a power note; zero/nonzero floor clauses read receipts as Wilson bounds (all-zero at n=100 = ≤3.6% at 95%, never "0%"); sizing clauses cite a power_helper receipt (#346) before launch. No registered branch may exist without a fire-condition or review date. Verdict-class events report NET FLOW (rows added/retired since last verdict), not just size. Consolidation rule (user backlog concern 2026-06-10): a method-variant of an existing experiment is an ARM of that row, never a new row. Kills require the user, by name.
 
 | # | Branch | Fires when | Status |
 |---|---|---|---|
-| 1 | `t4_r1_q3_s15.py` (seed-15 replication) | q3 s14 final receipt NONZERO (likely — ccd554ac) | staged |
+| 1 | `t4_r1_q3_s15.py` (seed-15 replication) | q3 s14 final receipt NONZERO (likely — ccd554ac) [power note: NONZERO/all-zero read per review §2 — all-zero = ≤3.6% Wilson, not 0%] | staged |
 | 2 | `t4_r1_q3_arc2_s14.py` (ARC-2 transfer) | s15 completes | staged |
 | 3 | `t5_r1_q3.py` (harm suite) | arc2 completes | staged |
-| 4 | `w1_floor_q15/q3.py` (W-code floor probes) | s14 ALL-ZERO → immediate; NONZERO → first idle window post-chain (W-code = second-world admission either way) | staged |
-| 5 | `w2_ingest` + `w4_eval` (W-code round) | w1 floor receipt > 0 | built, gated on 4 |
+| 4 | `w1_floor_q15/q3.py` (W-code floor probes) | s14 ALL-ZERO → immediate; NONZERO → first idle window post-chain (W-code = second-world admission either way) [power note: §2 Wilson read on floor receipts] | staged |
+| 5 | `w2_ingest` + `w4_eval` (W-code round) | w1 floor receipt > 0 [power note: §2 — a single success in n=100 has Wilson 95% CI ~(0.3%, 5.4%); ">0" admits the world, claims no rate] | built, gated on 4 |
 | 6 | Teacher-admission probe (w1 + ~7B coder, ~5GB pull) | W-code admitted AND feed math favors a teacher | registered |
 | 7 | `t1c_run_q15.py` (contamination) | first idle window post round-1 chain | staged |
 | 8 | 7B retained four-arm evals (chunked, ~11h paced) | overnight idle windows; REVIEW 2026-06-17 — kill candidate if small-core verdicts moot it | staged |
-| 9 | Round-2 self-generation (`t2_round --round 2`) | round-1 verdict gated; k from verify% | REQUIRED for goal — design arms per `research/bottleneck-conversion-2026-06-10.md` §2: plain SFT (baseline) vs MTP-aux-SFT vs GRPO-on-verifier-reward (3B is above the 1.5B GRPO floor; control_pool = contrast material); + frontier-weighting choice (audit §3: all-verified vs solve-rate∈(0,θ] episodes — easy-mass self-distillation guard); + calibration instrumentation (audit §8: per-task P(verify) predicted pre-sampling, Brier-scored against V post-hoc — judgment's verifiable core, zero marginal GPU; world status decided on the data); method variants are ARMS of this row, never new rows |
+| 9 | Round-2 self-generation (`t2_round --round 2`) | round-1 verdict gated; k from verify% [power note: round-2 eval n sized via power_helper receipt (#346) BEFORE launch per review §3 — prereg without it does not freeze] | REQUIRED for goal — design arms per `research/bottleneck-conversion-2026-06-10.md` §2: plain SFT (baseline) vs MTP-aux-SFT vs GRPO-on-verifier-reward (3B is above the 1.5B GRPO floor; control_pool = contrast material); + frontier-weighting choice (audit §3: all-verified vs solve-rate∈(0,θ] episodes — easy-mass self-distillation guard); + calibration instrumentation (audit §8: per-task P(verify) predicted pre-sampling, Brier-scored against V post-hoc — judgment's verifiable core, zero marginal GPU; world status decided on the data); method variants are ARMS of this row, never new rows |
 | 10 | NC1c IFC world build | NC0 verdict lands | registered |
 | 11 | NC1d ARC-AGI-3 policy world | NC0 verdict lands | registered |
 | 12 | NC-K kernel detail design | NC0 verdict lands (contract + map on disk) | registered |
@@ -275,7 +275,7 @@ No registered branch may exist without a fire-condition or review date. Verdict-
 | 14 | Kernel v1.0 freeze (formalization §9b) | round-1 verdict + episode/receipt schema stability review | spec on disk (`docs/kernel-v1-freeze-spec.md`, 637231a); gap 4 (replay) BUILT+EXERCISED: `kernel_replay.py` 20/20 fields on both verdict receipts, mode A daemon-gated; gap 1 (schema) CLOSED by spec 2026-06-10: `docs/ledger-schema-v3.md` — one schema w/ documented-absence semantics, NO ledger rewrite (append-only preserved; 1,909 seed entries valid via blanket t3 receipt), w2_ingest patched to emit v3 (explicit verified/ts/origin/receipt — caught BOTH old schemas missing the freeze-member-3 receipt reference; unit-checked). Remaining gaps: fingerprint universality, governor extraction (both deferred until ARC chain idle — staged-job module-edit hazard) |
 | 15 | HF weights upload | first verdict-bearing adapter | standing |
 | 16 | OpenMDW SDG corpus intake (Cosmos 3) | NC2-own entry | registered |
-| 17 | W-swe (SWE-bench/SWE-smith repo-scale code world) | W-code loop turns AND a core clears a measurable SWE-class floor | registered (world-choice §7; HLE evaluated same pass — REJECTED, answer-key V) |
+| 17 | W-swe (SWE-bench/SWE-smith repo-scale code world) | W-code loop turns AND a core clears a measurable SWE-class floor [power note: §2 Wilson read] | registered (world-choice §7; HLE evaluated same pass — REJECTED, answer-key V) |
 | 18 | Release-scan (exteroception §6 — bounded sweep over named feeds → typed candidates → WATCHING rows) | RECURRING: every idle tick that advances the wait-window queue; "no candidates" is a recorded outcome | standing (first execution was user-sourced DiffusionGemma → contract row 9 — the baseline to beat) |
 | 19 | DiffusionGemma sampler probe (contract row 9a: w1-style MBPP floor, DiffusionGemma vs Qwen-3B, measured F) | idle GPU window AND W-code admitted (probe rides the w1 harness) | registered (~18GB pull, on-PC, no escalation) |
 
