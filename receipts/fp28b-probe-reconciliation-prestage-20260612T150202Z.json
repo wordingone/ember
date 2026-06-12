@@ -1,0 +1,28 @@
+{
+  "ticket": "FP28B-PROBE-RECONCILIATION-PRESTAGE",
+  "ts": "20260612T150202Z",
+  "issue": 208,
+  "decision": "checkpoint_probe keeps frozen set 105fd370... for trajectory comparability. fp28_v0_coverage.py seed23 set (91170123...) runs as a SEPARATE eval pass at 1B checkpoint.",
+  "deployment_plan": [
+    "Step A: checkpoint_probe.py at 1B \u2014 produces 105fd370 receipt (unchanged).",
+    "Step B: separate probe eval over seed23 set \u2192 feed receipt to fp28_v0_coverage.py --emit \u2192 discharges fp-26(b) coverage obligation.",
+    "Both receipts commit in the same 1B PR. Independent \u2014 no dependency."
+  ],
+  "seed23_probe_set": {
+    "path": "probes/l1-probe-set-seed23.json",
+    "sha256": "911701233ad229edd4b8279ada78a1b6b0e20e09426bd9576be5147a3415b0a4",
+    "sha_prefix": "911701233ad229ed",
+    "drift": false,
+    "n_tasks": 100
+  },
+  "checkpoint_probe_set": {
+    "sha_prefix": "105fd3700b2f684b",
+    "sha256": "105fd3700b2f684b88576a627477685d0d5937f875d7d0578c39fce706584ea4",
+    "n_tasks": 100,
+    "policy": "UNCHANGED \u2014 trajectory comparability requires consistency"
+  },
+  "sets_differ": true,
+  "root_cause_of_divergence": "Both use fp23.GENERATOR_SEED=23 but checkpoint_probe._build_probe_set() cycles L1_OPS in a different draw loop than fp28_v0_coverage.materialize_probe_set(), producing different tasks.",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "no_gpu": true
+}
