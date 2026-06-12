@@ -1,0 +1,64 @@
+{
+  "ticket": "FP33-E5-FP8-BENCH",
+  "ts": "20260612T033056Z",
+  "versions": {
+    "torch": "2.6.0+cu124",
+    "torchao": "0.16.0",
+    "cuda": "12.4"
+  },
+  "config": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "batch": 4,
+    "seq": 1024,
+    "vocab": 32000
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "bf16": {
+    "variant": "bf16",
+    "tok_s_paced": 9593.5,
+    "tok_s_raw": 10974.2,
+    "avg_step_ms": 373.24,
+    "free_vram_gib_post_warmup": 16.94,
+    "timed_steps": 15,
+    "step_ms_list": [
+      322.54,
+      393.91,
+      304.43,
+      402.56,
+      399.75,
+      461.6,
+      399.42,
+      373.91,
+      394.15,
+      297.89,
+      395.19,
+      375.19,
+      384.92,
+      393.71,
+      299.42
+    ]
+  },
+  "fp8_rowwise": null,
+  "speedup_paced": null,
+  "verdict": "KERNEL_ROUTE",
+  "verdict_reason": "fp8 bench error: RuntimeError: cutlass cannot initialize",
+  "decision_rule": {
+    "ADOPT": "fp8 active AND >= 1.2x paced speedup",
+    "MARGINAL": "fp8 active AND 1.1x <= speedup < 1.2x",
+    "KERNEL_ROUTE": "silent fallback OR speedup < 1.1x"
+  },
+  "method": "cuda.Event step timing, CUPTI-free",
+  "flags": [
+    "grad checkpointing ON for both variants",
+    "embedding + lm_head excluded from fp8 (tied weights)",
+    "fp8_active_check inspects module class names (Float8Linear)",
+    "synthetic batches \u2014 no dataloader overhead",
+    "live run 12c050e7 NOT touched"
+  ]
+}
