@@ -25,21 +25,41 @@ CLOSED_JSON=$(gh issue list --label eng --state closed \
 # NOTE: must use GraphQL directly — `gh issue view --json` FLATTENS the
 # closing-PR refs and drops the `merged` field (every closure looked like a
 # violation; bug surfaced by Kai checkpoint 14424 S1-C follow-up 2026-06-10).
+# NOTE 2 (#323): closedByPullRequestsReferences is ALSO empty when GitHub
+# closes the issue via the squash-commit message keyword ("Closes #N" in the
+# squash title) — the common path here. Fallback: the CLOSED_EVENT closer.
+# Closer = Commit (oid recorded) or merged PullRequest -> legitimate;
+# closer null / query failure -> genuine violation (manual button-close).
 OWNER=$(gh repo view --json owner --jq .owner.login)
 NAME=$(gh repo view --json name --jq .name)
 VIOLATIONS="["
+COMMIT_CLOSED="["
 first=1
+cfirst=1
 for n in $(echo "$CLOSED_JSON" | grep -o '"number":[0-9]*' | grep -o '[0-9]*' || true); do
   prs=$(gh api graphql -f query="query{repository(owner:\"$OWNER\",name:\"$NAME\"){issue(number:$n){closedByPullRequestsReferences(first:20){nodes{merged}}}}}" \
         --jq '[.data.repository.issue.closedByPullRequestsReferences.nodes[] | select(.merged==true)] | length' \
         2>/dev/null || echo "QUERY_FAIL")
   if [ "$prs" = "0" ] || [ "$prs" = "QUERY_FAIL" ]; then
-    [ $first -eq 0 ] && VIOLATIONS="$VIOLATIONS,"
-    VIOLATIONS="$VIOLATIONS{\"issue\":$n,\"merged_closing_prs\":\"$prs\"}"
-    first=0
+    closer=$(gh api graphql -f query="query{repository(owner:\"$OWNER\",name:\"$NAME\"){issue(number:$n){timelineItems(itemTypes:CLOSED_EVENT,last:1){nodes{... on ClosedEvent{closer{__typename ... on Commit{oid} ... on PullRequest{number merged}}}}}}}}" \
+        --jq '.data.repository.issue.timelineItems.nodes[0].closer | if .==null then "null" elif .__typename=="Commit" then "commit:"+.oid elif (.__typename=="PullRequest" and .merged==true) then "pr:"+(.number|tostring) else "other" end' \
+        2>/dev/null || echo "QUERY_FAIL")
+    case "$closer" in
+      commit:*|pr:*)
+        [ $cfirst -eq 0 ] && COMMIT_CLOSED="$COMMIT_CLOSED,"
+        COMMIT_CLOSED="$COMMIT_CLOSED{\"issue\":$n,\"closed_by\":\"$closer\"}"
+        cfirst=0
+        ;;
+      *)
+        [ $first -eq 0 ] && VIOLATIONS="$VIOLATIONS,"
+        VIOLATIONS="$VIOLATIONS{\"issue\":$n,\"merged_closing_prs\":\"$prs\",\"closer\":\"$closer\"}"
+        first=0
+        ;;
+    esac
   fi
 done
 VIOLATIONS="$VIOLATIONS]"
+COMMIT_CLOSED="$COMMIT_CLOSED]"
 
 OPEN_N=$(echo "$OPEN_JSON" | { grep -o '"number":[0-9]*' || true; } | wc -l | tr -d ' ')
 CLOSED_N=$(echo "$CLOSED_JSON" | { grep -o '"number":[0-9]*' || true; } | wc -l | tr -d ' ')
@@ -48,6 +68,7 @@ mkdir -p receipts
 cat > "receipts/eng-sync-$TS.json" <<EOF
 {"ticket":"ENG-SYNC","ts":"$TS","open":$OPEN_N,"closed":$CLOSED_N,
 "closed_without_merged_pr":$VIOLATIONS,
+"closed_by_commit":$COMMIT_CLOSED,
 "open_issues":$OPEN_JSON}
 EOF
 
