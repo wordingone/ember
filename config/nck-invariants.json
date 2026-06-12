@@ -4,27 +4,27 @@
     {
       "label": "three-test-gain-gate",
       "path": "docs/formalization-v0.md",
-      "sha256": "0c04354de86b20c9e4c364a2a2f87ca728f39e815ecc6b2d7437072c2ac9c0d8"
+      "sha256": "b1ae91f916bdec5074f26ffde6e7bdfa2f1b506f8c8eb936927a334cccd66f05"
     },
     {
       "label": "governor-headroom-config",
       "path": "configs/v0-pretrain-config.json",
-      "sha256": "9690a42c88fb42781a457394b9bf6cbd8a6a572fa4ee0d358dc12c293714ecb6"
+      "sha256": "b253979025f8692998b0e54c659b7a6945abf40ee9fd2d8293ed3291338a8caa"
     },
     {
       "label": "goal-md",
       "path": "GOAL.md",
-      "sha256": "7fcb593b96a9b4b461951f09c7f2e233e607872e48a6c7ac010f8b44efca6f21"
+      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
     },
     {
       "label": "receipts-only-truth-statement",
       "path": "GOAL.md",
-      "sha256": "7fcb593b96a9b4b461951f09c7f2e233e607872e48a6c7ac010f8b44efca6f21"
+      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
     },
     {
       "label": "invariants-py",
       "path": "scripts/nck/invariants.py",
-      "sha256": "0221354c9a5ab7ac6d0e0eff5a25ce554c1daaf076128dcfe5dfdd9590940ae0"
+      "sha256": "7bbf1ae76dfd6a331ceed1fc67e7fe75a2c567e130e25dc6ee211e80c33d8320"
     },
     {
       "label": "nck-invariants-manifest",
