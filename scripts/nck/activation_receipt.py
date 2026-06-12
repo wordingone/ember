@@ -143,45 +143,79 @@ def _audit_config(path: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _load_pre_activation_baseline(receipts_dir: Path) -> dict:
-    """Find selective-recompute-ab receipt(s) to use as pre-activation baseline.
+def _load_pre_activation_baseline(receipts_dir: Path, boundary_step: int) -> dict:
+    """Find v0-live TIMESHARE-V0-SEGMENT receipts with global_step_end <= boundary_step
+    as the PRIMARY pre-activation throughput baseline (same machinery as the post window,
+    inverted filter — live-vs-live so the derived_multiplier is technique-clean).
 
-    Uses the full-ckpt arm measurement from the A/B bench as the named
-    pre-activation throughput reference (grad-ckpt ON, c03 shapes).
+    Also loads the A/B bench full-ckpt arm as a SECONDARY cross-check (bench conditions,
+    not live; never used for the derived_multiplier computation).
     """
-    pattern = "selective-recompute-ab-*.json"
-    paths = sorted(receipts_dir.glob(pattern))
-    if not paths:
-        return {"found": False, "receipts": [], "mean_tok_s": None}
+    # Primary: v0-live receipts before the boundary (grad-ckpt ON segments)
+    all_live = sorted(receipts_dir.glob("v0-live-*.json"))
+    pre_receipts: list[dict] = []
+    for p in all_live:
+        try:
+            data = json.loads(p.read_bytes())
+        except Exception:
+            continue
+        if data.get("ticket") != "TIMESHARE-V0-SEGMENT":
+            continue
+        if data.get("mode") != "live":
+            continue
+        global_step_end = data.get("global_step_end", 0) or 0
+        if global_step_end <= boundary_step and global_step_end > 0:
+            tokens = data.get("tokens_this_segment", 0) or 0
+            wall = data.get("wall_s") or 0.0
+            if tokens > 0 and wall > 0:
+                pre_receipts.append({
+                    "path": str(p.relative_to(REPO_ROOT) if p.is_relative_to(REPO_ROOT) else p),
+                    "sha256": _sha256_file(p),
+                    "resume_step": data.get("resume_step"),
+                    "global_step_end": global_step_end,
+                    "tok_s": round(tokens / wall, 1),
+                })
 
-    tok_s_vals: list[float] = []
-    receipt_refs: list[dict] = []
-    for p in paths:
-        data = json.loads(p.read_bytes())
-        arm_agg = data.get("arm_aggregate", {})
-        full_ckpt = arm_agg.get("full-ckpt", {})
-        tok_s = full_ckpt.get("mean_tokens_per_s")
-        if tok_s is not None:
-            tok_s_vals.append(tok_s)
-        receipt_refs.append({
-            "path": str(p.relative_to(REPO_ROOT) if p.is_relative_to(REPO_ROOT) else p),
-            "sha256": _sha256_file(p),
-            "full_ckpt_mean_tok_s": tok_s,
-        })
+    # Secondary: A/B bench full-ckpt arm (cross-check only — bench conditions)
+    ab_secondary: dict | None = None
+    for p in sorted(receipts_dir.glob("selective-recompute-ab-*.json")):
+        try:
+            data = json.loads(p.read_bytes())
+            tok_s = data.get("arm_aggregate", {}).get("full-ckpt", {}).get("mean_tokens_per_s")
+            if tok_s is not None:
+                ab_secondary = {
+                    "path": str(p.relative_to(REPO_ROOT) if p.is_relative_to(REPO_ROOT) else p),
+                    "sha256": _sha256_file(p),
+                    "full_ckpt_mean_tok_s": tok_s,
+                    "note": "A/B bench (synthetic batches, bench conditions) — cross-check only",
+                }
+                break
+        except Exception:
+            continue
 
-    if not tok_s_vals:
-        return {"found": bool(paths), "receipts": receipt_refs, "mean_tok_s": None}
+    if not pre_receipts:
+        return {
+            "found": False,
+            "source": "v0-live pre-boundary segments",
+            "receipts": [],
+            "mean_tok_s": None,
+            "ab_secondary": ab_secondary,
+        }
 
+    tok_s_vals = [r["tok_s"] for r in pre_receipts]
     mean = sum(tok_s_vals) / len(tok_s_vals)
+    std = (
+        math.sqrt(sum((x - mean) ** 2 for x in tok_s_vals) / len(tok_s_vals))
+        if len(tok_s_vals) > 1 else 0.0
+    )
     return {
         "found": True,
-        "source": "full-ckpt arm of selective-recompute-ab (grad-ckpt ON, c03 shapes)",
-        "receipts": receipt_refs,
+        "source": f"v0-live TIMESHARE-V0-SEGMENT global_step_end <= {boundary_step}",
+        "n": len(pre_receipts),
         "mean_tok_s": round(mean, 1),
-        "std_tok_s": round(
-            math.sqrt(sum((x - mean) ** 2 for x in tok_s_vals) / len(tok_s_vals)), 1
-        ) if len(tok_s_vals) > 1 else 0.0,
-        "n": len(tok_s_vals),
+        "std_tok_s": round(std, 1),
+        "receipts": pre_receipts,
+        "ab_secondary": ab_secondary,
     }
 
 
@@ -393,24 +427,51 @@ def _check_governed(post_receipts: list[dict]) -> dict:
 
 
 def _check_health(run_dir: Path, boundary_step: int, post_receipts: list[dict]) -> dict:
-    """Verify >=500 consecutive steps and zero FATAL halt receipts."""
-    halt_receipts = sorted(run_dir.glob("halt-*.json"))
-    fatal_halts: list[str] = []
-    for p in halt_receipts:
+    """Verify >=500 consecutive steps and zero FATAL halt receipts in the post window.
+
+    Halts are classified by step field (preferred) or ts comparison with the earliest
+    post-activation receipt. Only post-boundary halts are fatal; pre-boundary halts
+    are recorded informationally so they don't block a valid activation receipt.
+    """
+    halt_paths = sorted(run_dir.glob("halt-*.json"))
+
+    # Earliest post-activation ts for ts-based fallback classification
+    post_ts_min: str | None = None
+    if post_receipts:
+        ts_vals = [r["ts"] for r in post_receipts if r.get("ts")]
+        if ts_vals:
+            post_ts_min = min(ts_vals)
+
+    pre_boundary_halts: list[str] = []
+    post_boundary_halts: list[str] = []
+
+    for p in halt_paths:
         try:
             data = json.loads(p.read_bytes())
-            ts = data.get("ts", "")
         except Exception:
             continue
-        # Consider any halt receipt in the run_dir as a FATAL candidate
-        fatal_halts.append(str(p.name))
+        halt_step = (data.get("global_step") or data.get("step")
+                     or data.get("global_step_end"))
+        halt_ts = data.get("ts", "")
+
+        in_post_window = False
+        if halt_step is not None:
+            in_post_window = int(halt_step) >= boundary_step
+        elif post_ts_min and halt_ts:
+            in_post_window = halt_ts >= post_ts_min
+
+        if in_post_window:
+            post_boundary_halts.append(str(p.name))
+        else:
+            pre_boundary_halts.append(str(p.name))
 
     total_steps = sum(r.get("steps", 0) or 0 for r in post_receipts)
     return {
         "post_steps_consecutive": total_steps,
         "meets_floor": total_steps >= MIN_POST_STEPS,
-        "halt_receipts_found": fatal_halts,
-        "zero_fatal": len(fatal_halts) == 0,
+        "pre_boundary_halts": pre_boundary_halts,   # informational only
+        "post_boundary_halts": post_boundary_halts,  # fatal if any
+        "zero_fatal": len(post_boundary_halts) == 0,
     }
 
 
@@ -470,9 +531,12 @@ def main() -> int:
     print(f"trigger: class={trigger['class']!r}")
 
     # --- pre-activation baseline ---
-    pre_baseline = _load_pre_activation_baseline(receipts_dir)
+    pre_baseline = _load_pre_activation_baseline(receipts_dir, boundary_step)
     if not pre_baseline["found"]:
-        print("ACTIVATION_RECEIPT_NO_PRE_BASELINE: no selective-recompute-ab receipt found")
+        print(
+            f"ACTIVATION_RECEIPT_NO_PRE_BASELINE: no v0-live receipts with "
+            f"global_step_end <= {boundary_step} found"
+        )
         return 1
     print(
         f"pre_baseline: {pre_baseline.get('mean_tok_s')} tok/s "
@@ -525,7 +589,7 @@ def main() -> int:
     # --- health ---
     health = _check_health(run_dir, boundary_step, post_window["receipts"])
     if not health["zero_fatal"]:
-        print(f"ACTIVATION_RECEIPT_HALT_DETECTED: {health['halt_receipts_found']}")
+        print(f"ACTIVATION_RECEIPT_HALT_DETECTED: {health['post_boundary_halts']}")
         return 1
     if not health["meets_floor"]:
         print(
@@ -632,9 +696,11 @@ def _selftest() -> int:
         proof_on = _audit_config(cfg_on_path)
         assert not proof_on["grad_checkpointing_false"], "should detect grad-ckpt ON"
 
-        # --- 3. Synthetic pre-activation receipts dir ---
+        # --- 3. Pre-activation baseline: primary from v0-live receipts, A/B as secondary ---
         pre_dir = tmpdir / "receipts_pre"
         pre_dir.mkdir()
+
+        # A/B bench receipt (secondary cross-check only)
         ab_receipt = {
             "ticket": "SELECTIVE_RECOMPUTE_AB",
             "ts": "20260612T063250Z",
@@ -647,9 +713,46 @@ def _selftest() -> int:
         (pre_dir / "selective-recompute-ab-20260612T063250Z.json").write_text(
             json.dumps(ab_receipt), encoding="utf-8"
         )
-        baseline = _load_pre_activation_baseline(pre_dir)
-        assert baseline["found"], "should find pre-activation receipt"
-        assert abs(baseline["mean_tok_s"] - 12272.7) < 0.1, "mean tok/s mismatch"
+
+        # No live pre receipts yet → found=False (A/B bench is secondary, not primary)
+        baseline_no_live = _load_pre_activation_baseline(pre_dir, 50000)
+        assert not baseline_no_live["found"], "should not find pre-baseline without live receipts"
+        assert baseline_no_live["ab_secondary"] is not None, "A/B secondary should be present"
+
+        # Add live pre receipts (global_step_end <= 50000)
+        def _make_v0_live_pre(fname: str, resume: int, end: int, tok_s: float) -> None:
+            tokens = (end - resume) * 4 * 1024
+            wall = tokens / tok_s
+            (pre_dir / fname).write_text(json.dumps({
+                "ticket": "TIMESHARE-V0-SEGMENT", "mode": "live",
+                "ts": "20260611T090000Z",
+                "resume_step": resume, "global_step_end": end,
+                "steps": end - resume,
+                "tokens_this_segment": tokens, "wall_s": wall,
+                "governor": {"vram_fraction": 0.80, "margin_gib_floor": 1.5,
+                             "pace_s_per_step": 0.05},
+                "components": {"optimizer": {"mode": "muon_split"}},
+                "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+            }), encoding="utf-8")
+
+        _make_v0_live_pre("v0-live-pre-A.json", 40000, 45000, 12100.0)
+        _make_v0_live_pre("v0-live-pre-B.json", 45000, 50000, 12450.0)
+
+        baseline = _load_pre_activation_baseline(pre_dir, 50000)
+        assert baseline["found"], "should find pre-activation live receipts"
+        assert baseline["n"] == 2, f"expected 2 pre receipts, got {baseline['n']}"
+        expected_mean = (12100.0 + 12450.0) / 2
+        assert abs(baseline["mean_tok_s"] - expected_mean) < 0.2, "mean tok/s mismatch"
+        assert baseline["ab_secondary"] is not None, "A/B secondary should still be present"
+        # A post-boundary receipt should NOT count as pre
+        (pre_dir / "v0-live-post-spy.json").write_text(json.dumps({
+            "ticket": "TIMESHARE-V0-SEGMENT", "mode": "live", "ts": "20260613T120000Z",
+            "resume_step": 50000, "global_step_end": 50300, "steps": 300,
+            "tokens_this_segment": 300 * 4 * 1024, "wall_s": 10.0,
+            "governor": {}, "components": {}, "sha_convention": "",
+        }), encoding="utf-8")
+        baseline2 = _load_pre_activation_baseline(pre_dir, 50000)
+        assert baseline2["n"] == 2, "post-boundary receipt must not be counted in pre"
 
         # --- 4. Synthetic post-activation receipts (3 × 300 steps = 900 > 500) ---
         post_dir = tmpdir / "receipts_post"
@@ -757,19 +860,33 @@ def _selftest() -> int:
         )
         assert not gov_bad["pass"], "should detect vram violation"
 
-        # --- 8. Health check ---
+        # --- 8. Health check — halt boundary filter ---
         run_dir_tmp = tmpdir / "run_dir_clean"
         run_dir_tmp.mkdir()
         health = _check_health(run_dir_tmp, 50000, post["receipts"])
         assert health["zero_fatal"], "no halt receipts = zero_fatal"
         assert health["meets_floor"], "900 steps >= 500"
+        assert health["pre_boundary_halts"] == [], "no pre-boundary halts"
+        assert health["post_boundary_halts"] == [], "no post-boundary halts"
 
-        # Health with halt receipt
-        halt_path = run_dir_tmp / "halt-20260613T120000Z.json"
-        halt_path.write_text(json.dumps({"ticket": "HALT", "ts": "20260613T120000Z"}),
-                              encoding="utf-8")
-        health_halt = _check_health(run_dir_tmp, 50000, post["receipts"])
-        assert not health_halt["zero_fatal"], "halt receipt detected"
+        # Pre-boundary halt (global_step < 50000) — informational only, must NOT block
+        pre_halt = run_dir_tmp / "halt-pre-20260611T100000Z.json"
+        pre_halt.write_text(json.dumps({
+            "ticket": "HALT", "ts": "20260611T100000Z", "global_step": 45000,
+        }), encoding="utf-8")
+        health_pre = _check_health(run_dir_tmp, 50000, post["receipts"])
+        assert health_pre["zero_fatal"], "pre-boundary halt must not block"
+        assert len(health_pre["pre_boundary_halts"]) == 1, "pre halt logged informationally"
+        assert health_pre["post_boundary_halts"] == [], "no post halts"
+
+        # Post-boundary halt (global_step >= 50000) — fatal, must block
+        post_halt = run_dir_tmp / "halt-post-20260613T120000Z.json"
+        post_halt.write_text(json.dumps({
+            "ticket": "HALT", "ts": "20260613T120000Z", "global_step": 51000,
+        }), encoding="utf-8")
+        health_post = _check_health(run_dir_tmp, 50000, post["receipts"])
+        assert not health_post["zero_fatal"], "post-boundary halt must block"
+        assert len(health_post["post_boundary_halts"]) == 1, "post halt counted as fatal"
 
         # --- 9. Derived multiplier ---
         pre_mean_test = 12272.7
