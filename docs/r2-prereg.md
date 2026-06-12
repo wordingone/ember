@@ -1,5 +1,17 @@
 # W-code round-2 pre-registration (#36)
 
+**METHOD AMENDMENT (2026-06-12, pre-data — gate-stats-review-v1 §1/§5):**
+the Phase-E "paired bootstrap" clauses are superseded by the exact methods
+(bootstrap retired on zero-inflated binary rates): G1/t5 paired analyses
+report discordant counts b/c with exact McNemar + Newcombe-paired bounds;
+single-arm floors read as Wilson intervals. The quoted MDE 3.48pp predates
+the canonical helper — at fire time the MDE is RE-DERIVED via
+`scripts/power_helper.py --receipt` at the measured base pass@k (grid
+pre-staged: receipts/power-helper-20260612T2106*.json — n=100 p0=2%
+→ 10.16pp, n=257 → 5.17pp, n=400 → 3.85pp Newcombe-paired at 80% power).
+Decision rules, arms, thresholds, and seeds are UNTOUCHED — this amends the
+interval method and the power citation only.
+
 Committed BEFORE any round-2 train/sample dispatch (binding). Consumes, by
 receipt: G1 paired verdict `g1-paired-r1w-20260610T222435Z` (cell
 R2-RETHINK on plain-SFT, D3 overlay UP — MTP advances), t5
