@@ -42,6 +42,7 @@ LEGACY_EXEMPT: frozenset[str] = frozenset({
     "native-smoke-20260610T230236Z.json",         # pre-R1: no ticket/ts
     "native-smoke-20260610T230645Z.json",         # pre-R1: no ticket/ts
     "probe-meminfo-20260610T043457Z.json",        # pre-R1: no ticket
+    "sp6b-tooling-dryrun-20260612T155736Z.json", # superseded by 192300Z emission (ticket field added there; kai flag 14982)
     "t4-r1-q15-arc1-seed14-progress.json",       # pre-R1: training progress artifact, no ticket/ts
     "t4-r1-q3-arc1-seed14-progress.json",        # pre-R1: training progress artifact, no ticket/ts
     "t4-r1-q3-arc1-seed15-progress.json",        # pre-R1: training progress artifact, no ticket/ts
