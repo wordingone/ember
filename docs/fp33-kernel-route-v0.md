@@ -72,6 +72,20 @@ machine; the wall is broken by building the kernel path ourselves. Owner: Leo
   weight-cache autograd.Function; A/B end-to-end step receipt; honest prize:
   down-proj is a minority of step time, expect low-single-digit % end-to-end —
   worth one cheap build given 1.24x is stable and composable with no-ckpt.**
+- **fp-35g build A/B: PARK (2026-06-12, gated, PR #308).** Receipt
+  fp35g-width-cond-fp8-ab-20260612T074129Z: end-to-end 0.9994x vs bf16
+  (seeds 0.973/1.005/1.021), below the 1.02x accept bar. down_proj ≈15% of
+  step time at c03 → Amdahl ceiling from the isolated 1.24x is ~1.03x;
+  per-step activation casts consume it. **The fp8 ladder at c03 is CLOSED —
+  every rung measured: P1 PASS, cast-heavy FAIL 0.45x, weight-cache FAIL
+  0.843x, fp35d isolated-kernel VIABLE 1.24x, fp35g end-to-end PARK 0.9994x.
+  Registry row fp8-custom-kernel-sm89 → PARK (not KILL: the kernel is
+  proven; the c03 prize is below measurement noise). Revival fires at the
+  next-width config, where K≥4096 sites carry a larger GEMM share — sized
+  then by the same A/B protocol, no re-litigation at c03.** Remaining
+  kernel-axis candidate at c03: fused-muon-kernel (optimizer 11.3% E4
+  share, unprobed) — next when GPU bench windows are free; B-leg seat
+  binding outranks it on the June-22 critical path.
 - **P2 — CUTLASS-direct build in WSL2: UNBUILT (fallback).** Fires only if
   native-side integration hits a wall (e.g. WSL2-resident daemon coupling
   that can't move native). Receipt bar unchanged: micro-bench + kernel-name
