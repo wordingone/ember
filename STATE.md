@@ -326,3 +326,12 @@ No registered branch may exist without a fire-condition or review date. Verdict-
 ## Receipts
 
 `B:/M/avir/leo/state/nc-ladder/receipts/` (JSONL/JSON per job; gate from these only).
+
+## 2026-06-12 ~14:41Z — BUILD tick: gates #332 GO + #333 GO; #334 sequenced behind jude adversarial verify
+- #332 (NCK e2e, b61d3f7): selftest a-f reproduced in worktree; live-mail leg corroborated DB-side (14837). GO -> Eli squashes; closes #331. Manifest C8 -> DONE on merge.
+- #333 (fp-29 generator): selftest + independent dry-run n=120 seed=23 reproduced exact manifest sha 25a51c14... GO. Row 9 + manifest C6 discharged on merge.
+- #334 (row 8 hygiene): Eli raced jude's 14845 assignment — converted to jude adversarially verifying LEGACY_EXEMPT (mail 14848); gate waits on her receipt. Row 2 DISCHARGED (jude rehearsal receipt fp24-rehearsal-20260612T143500Z, all branches PASS).
+- INFRA-6 minted (mail 14843): mail_check unread is cursor-eaten by watcher — read_at-based fix, Eli, outranks prep work. Root cause of fleet "not responding".
+- Goal numeric closure live (a1c9bec): subgoals S1-S6 + completeness manifest (docs/ember-completeness.md, 20 rows + coverage sweeps) + tally spec; goal auto-inject hook-guaranteed (avir 33b76c6). Statuslines + canonical watcher stop-gate fleet-wide (avir 17cc7d0).
+- Run 12c050e7: step-00100000 landed 14:26Z, cadence nominal (mira 14839).
+- Next: tally script eng issue mint; manifest coverage sweep 1 (issue tracker); gate worktrees 332/333 cleanup after merges; #208 decision note (row 3).
