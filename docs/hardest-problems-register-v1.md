@@ -94,13 +94,20 @@ the sum is nowhere. If round-1 is FLAT at n=100 (likely under H2), the
 confirm leg needs n≥400 (MDE 3.85pp) — eval cost scales, GPU-serial, and
 the window may not close by 06-22.
 
-**Proof obligation:** a receipted schedule-feasibility note — measured leg
-durations summed against the calendar, slack quantified, the
-first-leg-that-doesn't-fit named — BEFORE the 09:00Z checkpoint fires the
-chain. Owner: Leo, tonight. This is H1 applied to the calendar instead of
-the GPU.
+**Proof obligation (REWRITTEN after the user stopped 12c050e7, 2:34 PM LA
+06-12):** the old premise (run ticking toward an ~06-16 terminal) is gone.
+The path is now ceiling-first by construction: lever benches (tonight,
+each <1h) → ENG/ARCH verdict → IF criterion met, ONE gate-9-compliant
+pretrain (≤1 governed day at ≥3.3×, re-using the ~1.3B tokens paid only if
+the resume path certifies AND the architecture survives) → floor → rounds
+→ S5. Skeleton arithmetic: criterion certified by 06-13 morning → compliant
+pretrain lands ~06-14/15 → ~7 days of round budget before 06-22 — the date
+SURVIVES the stop if the levers deliver; an ARCH kill (redesign + retrain)
+compresses rounds to ~4-5 days — tight, honest. The schedule-feasibility
+receipt fires when the first bench receipts land and replaces this
+skeleton with measured numbers. Owner: Leo, on eli's receipts.
 
-**Status:** OPEN — minted as the next wait-window artifact.
+**Status:** OPEN — skeleton in; measured note rides tonight's benches.
 
 ## H4 — O6: verifier-free judgment (formalization open problem)
 
