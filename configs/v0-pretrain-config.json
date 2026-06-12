@@ -97,5 +97,10 @@
     "extension_needed": "Muon split-optimizer, WSD schedule, chunked-CE, MTP aux heads, tokenized-corpus loader with packing (eng item; implement against THIS contract, choices are frozen here not in the impl)",
     "interlock": "EMBER_GATE_AUTHORIZED=1 + --live (unchanged)",
     "checkpoint_probes": "fp-23 prereg attached; fp-24 (#139) fires on real checkpoints; fp-21b (#132) + fp-20c (#146) fire on the first sampling round"
+  },
+
+  "registry": {
+    "note": "Corroboration declaration — 12c050e7 runs all four ADOPT rows; this block makes registry_gate.py exit 0 on crash-resume dispatch.",
+    "consumes": ["muon", "wsd-schedule", "qat", "governor-pacing"]
   }
 }
