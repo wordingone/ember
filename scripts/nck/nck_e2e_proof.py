@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """sp-7: NC-K harness END-TO-END live proof (Closes #331).
 
-Proves the avir-cli port has a functioning e2e chain by exercising five
+Proves the avir-cli port has a functioning e2e chain by exercising six
 consecutive stages with the ember mailbox identity:
 
-  Stage 1: boot-checksum    verify_at_boot() succeeds; records verified file shas
-  Stage 2: mail consume     MailSource reads a test message from a fixture DB;
-                            D1 flood guard + D2 timestamp rails verified
-  Stage 3: seat dispatch    mail event routed through seat_adapter.make_seat_core;
-                            stub generate_fn produces a completion; dispatch confirmed
-  Stage 4: CU console verb  ConsoleSource injected line echoes through registry;
-                            console_write tool confirmed dispatched
-  Stage 5: terminal receipt NCK-E2E receipt binds stage receipts by sha256
+  Stage 1:  boot-checksum       verify_at_boot() succeeds; records verified file shas
+  Stage 2a: mail-consume-fix    MailSource reads a fixture DB; D1/D2 guards verified
+  Stage 2b: mail-consume-live   MailSource reads a REAL mail from the production
+                                 mailbox DB (B:/M/avir/mailbox/mailbox.db) using the
+                                 real signals/ember file; sent via mailbox binary
+  Stage 3:  seat dispatch       mail event routed through seat_adapter.make_seat_core;
+                                 stub generate_fn produces a completion; dispatch confirmed
+  Stage 4:  CU console verb     ConsoleSource injected line echoes through registry;
+                                 console_write tool confirmed dispatched
+  Stage 5:  terminal receipt    NCK-E2E receipt binds stage receipts by sha256
 
 AC:
 1. boot-checksum stage passes (real verify_at_boot, no _skip_invariant_check)
 2. MailSource emits mail_arrived for test message; D1 cold-start no-flood proven;
    D2 non-integer signal format triggers DB poll
+2b. MailSource emits mail_arrived for a REAL mail sent to ember via the production
+    mailbox binary; DB path = B:/M/avir/mailbox/mailbox.db; signal path = signals/ember
 3. seat_adapter.make_seat_core routes event; stub generate_fn returns a completion;
    parse_actions returns list (empty = valid mute baseline)
 4. console_write dispatched for injected console line; echo confirmed in output
@@ -44,6 +48,11 @@ from pathlib import Path
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
+
+# Production mailbox paths — Stage 2b (live-mailbox leg)
+_MAILBOX_BIN = Path("B:/M/avir/infra/mailbox/target/release/mailbox.exe")
+_MAILBOX_PROD_DB = "B:/M/avir/mailbox/mailbox.db"
+_MAILBOX_SIGNAL_DIR = "B:/M/avir/infra/mailbox/signals"
 
 from nck.event_loop import (
     ConsoleSource,
@@ -85,6 +94,57 @@ def _get_commit_sha() -> str:
         return r.stdout.strip()
     except Exception:
         return "unknown"
+
+
+def _send_mail_via_binary(
+    from_id: str, to: str, subject: str, body: str, channel: str = "direct"
+) -> dict:
+    """Send mail by piping a JSON-RPC tools/call to mailbox.exe stdin.
+
+    The binary reads JSON-RPC lines from stdin and exits cleanly when stdin
+    closes (subprocess.run EOF).  Returns the parsed tool result dict
+    (contains {id, sent_at} on success).  Raises RuntimeError on failure.
+    """
+    request = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "mail_send",
+            "arguments": {
+                "to": to,
+                "subject": subject,
+                "body": body,
+                "channel": channel,
+            },
+        },
+    })
+    result = subprocess.run(
+        [str(_MAILBOX_BIN), "--identity", from_id],
+        input=request + "\n",
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if result.returncode not in (0, 1):
+        raise RuntimeError(
+            f"mailbox.exe exited {result.returncode}: {result.stderr.strip()}"
+        )
+    stdout = result.stdout.strip()
+    if not stdout:
+        raise RuntimeError(
+            f"mailbox.exe returned no output (stderr: {result.stderr.strip()!r})"
+        )
+    response = json.loads(stdout)
+    content_text = (
+        response.get("result", {})
+                .get("content", [{}])[0]
+                .get("text", "{}")
+    )
+    parsed = json.loads(content_text)
+    if "isError" in response.get("result", {}) or "isError" in parsed:
+        raise RuntimeError(f"mailbox send error: {content_text}")
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +284,80 @@ def stage_mail_consume(tmp_dir: str) -> dict:
         "event_kind": ev.kind,
         "last_id_advanced": True,
         "mail_event_payload_keys": sorted(ev.payload.keys()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stage 2b: Mail consume — live production mailbox
+# ---------------------------------------------------------------------------
+
+def stage_mail_consume_live() -> dict:
+    """Stage-2b: MailSource reads a REAL mail from the production mailbox DB.
+
+    Sends a test mail to ember via the mailbox binary (JSON-RPC stdin),
+    then verifies MailSource detects and emits the mail_arrived event using
+    the production DB (B:/M/avir/mailbox/mailbox.db) and real signal file
+    (B:/M/avir/infra/mailbox/signals/ember).
+
+    Fails closed: any assertion failure → exception → stage FAIL.
+    """
+    signal_path = os.path.join(_MAILBOX_SIGNAL_DIR, "ember")
+
+    # Construct MailSource BEFORE sending — anchors _last_id to current max.
+    # Any events already pending in the signal drain first so the baseline is clean.
+    src = MailSource(
+        signal_path=signal_path,
+        db_path=_MAILBOX_PROD_DB,
+        identity="ember",
+    )
+    # Drain stale signal (empty or stale value pointing past _last_id).
+    _ = list(src.poll())
+    pre_send_last_id = src._last_id
+
+    # Send a real test mail to ember via the production mailbox binary.
+    unique_subject = f"nck-e2e-live-probe-{int(time.time())}"
+    sent = _send_mail_via_binary(
+        from_id="eli",
+        to="ember",
+        subject=unique_subject,
+        body="NCK e2e live-mailbox leg proof — automated test",
+    )
+    sent_id: int = sent.get("id", -1)
+    assert sent_id > 0, f"mailbox send returned unexpected id: {sent}"
+
+    # Binary writes signal file synchronously; brief yield for filesystem flush.
+    time.sleep(0.3)
+
+    # Poll — signal should now contain sent_id > pre_send_last_id.
+    events = list(src.poll())
+
+    # Filter to our specific test mail by unique subject (guards against concurrent
+    # 'all' broadcasts or other ember-targeted mail arriving at the same instant).
+    our_events = [e for e in events if e.payload.get("subject") == unique_subject]
+    assert len(our_events) == 1, (
+        f"Expected exactly 1 event for subject={unique_subject!r}, "
+        f"got {len(our_events)}: {[(e.payload.get('id'), e.payload.get('subject')) for e in events]}"
+    )
+    ev = our_events[0]
+    assert ev.source == "mail", f"source mismatch: {ev.source!r}"
+    assert ev.kind == "mail_arrived", f"kind mismatch: {ev.kind!r}"
+    assert ev.payload.get("id") == sent_id, (
+        f"id mismatch: event.id={ev.payload.get('id')} sent_id={sent_id}"
+    )
+
+    return {
+        "stage": "mail_consume_live",
+        "pass": True,
+        "db_path": _MAILBOX_PROD_DB,
+        "signal_path": signal_path,
+        "identity": "ember",
+        "pre_send_last_id": pre_send_last_id,
+        "sent_mail_id": sent_id,
+        "sent_subject": unique_subject,
+        "event_id": ev.payload.get("id"),
+        "event_from": ev.payload.get("from"),
+        "event_kind": ev.kind,
+        "note": "live mailbox leg — real mail to ember via production DB + signal file",
     }
 
 
@@ -419,13 +553,19 @@ def run_selftest() -> int:
     if probe not in written:
         failures.append(f"(e) echo: {probe!r} not in {written!r}")
 
+    # (f) Live-mailbox leg infrastructure: binary present + prod DB exists
+    if not _MAILBOX_BIN.is_file():
+        failures.append(f"(f) mailbox binary not found: {_MAILBOX_BIN}")
+    if not os.path.isfile(_MAILBOX_PROD_DB):
+        failures.append(f"(f) production DB not found: {_MAILBOX_PROD_DB}")
+
     if failures:
         print("NCK_E2E_PROOF_SELFTEST FAIL")
         for f in failures:
             print(f"  {f}")
         return 1
 
-    print("NCK_E2E_PROOF_SELFTEST PASS (cases: a b c d e)")
+    print("NCK_E2E_PROOF_SELFTEST PASS (cases: a b c d e f)")
     return 0
 
 
@@ -452,7 +592,7 @@ def main() -> int:
     stage_receipts: dict[str, dict] = {}
 
     # Stage 1: Boot-checksum (real verify_at_boot)
-    print("\n[1/4] Boot-checksum (real verify_at_boot — no skip flag)...")
+    print("\n[1/5] Boot-checksum (real verify_at_boot — no skip flag)...")
     try:
         s1 = stage_boot_checksum()
         stage_receipts["boot_checksum"] = s1
@@ -463,8 +603,8 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="nck-e2e-mail-") as mail_tmp:
 
-        # Stage 2: Mail consume
-        print("\n[2/4] Mail consume (fixture DB + signal D1/D2)...")
+        # Stage 2a: Mail consume (fixture — D1/D2 proof)
+        print("\n[2/5] Mail consume fixture (D1 flood-guard + D2 timestamp path)...")
         try:
             s2 = stage_mail_consume(mail_tmp)
             stage_receipts["mail_consume"] = s2
@@ -476,8 +616,21 @@ def main() -> int:
             print(f"  FAIL: {exc}")
             return 1
 
+    # Stage 2b: Mail consume live (production mailbox DB + real signal file)
+    print("\n[3/5] Mail consume live (production DB -> MailSource -> mail_arrived)...")
+    try:
+        s2b = stage_mail_consume_live()
+        stage_receipts["mail_consume_live"] = s2b
+        print(
+            f"  PASS: sent_id={s2b['sent_mail_id']}, "
+            f"event_id={s2b['event_id']}, from={s2b['event_from']!r}"
+        )
+    except (AssertionError, Exception) as exc:
+        print(f"  FAIL: {exc}")
+        return 1
+
     # Stage 3: Seat dispatch
-    print("\n[3/4] Seat dispatch (stub generate_fn via seat_adapter)...")
+    print("\n[4/5] Seat dispatch (stub generate_fn via seat_adapter)...")
     try:
         s3 = stage_seat_dispatch()
         stage_receipts["seat_dispatch"] = s3
@@ -490,7 +643,7 @@ def main() -> int:
         return 1
 
     # Stage 4: CU console
-    print("\n[4/4] CU console verb (ConsoleSource + console_write dispatch)...")
+    print("\n[5/5] CU console verb (ConsoleSource + console_write dispatch)...")
     try:
         s4 = stage_cu_console()
         stage_receipts["cu_console"] = s4
@@ -516,13 +669,21 @@ def main() -> int:
         "ts": ts,
         "commit_sha": commit_sha,
         "identity": "ember",
-        "chain": ["boot_checksum", "mail_consume", "seat_dispatch", "cu_console"],
+        "chain": [
+            "boot_checksum",
+            "mail_consume",
+            "mail_consume_live",
+            "seat_dispatch",
+            "cu_console",
+        ],
         "all_stages_pass": all_pass,
         "stage_receipts": stage_receipts,
         "stage_receipt_shas": stage_receipt_shas,
         "flags": [
             "boot-checksum: real verify_at_boot() — no _skip_invariant_check",
             "mail-consume: fixture SQLite DB + signal file; D1 cold-start no-flood + D2 timestamp path",
+            "mail-consume-live: REAL mail to ember via production mailbox binary; "
+            "DB=B:/M/avir/mailbox/mailbox.db; signal=signals/ember",
             "seat-dispatch: stub generate_fn; mute output is valid baseline for raw pretrain core",
             "cu-console: ConsoleSource injected line → stub_core console_write → dispatched",
             "live run 12c050e7 NOT touched",
