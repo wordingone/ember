@@ -1,9 +1,14 @@
-# ember GOAL (adopted 2026-06-10, user via /goal — session-scoped hook; re-issue verbatim each session until satisfied)
+# ember GOAL (re-adopted 2026-06-12, user via /goal — session-scoped hook; re-issue verbatim each session until satisfied)
 
 Supersedes the 2026-06-09 nc-ladder goal (whose three-test terminal condition
 is now the per-artifact gain gate inside this goal — every gain must pass it).
+2026-06-12 re-adoption amends the 2026-06-10 text: worlds list expanded
+(research tasks, experiments, retrieval, routing), HARNESS clause added
+(avir-cli clean-room port = ember's visible harness; resident + mailbox +
+computer-use communicability), delegation rail added, and the E2B-SURPASS
+MILESTONE + LOOP made part of the goal text itself.
 
-GOAL (verbatim, user-adopted):
+GOAL (verbatim, user-adopted 2026-06-12):
 
 Build the mind that is missing from Avir, and own every layer of it: a
 substrate that runs, trains, and improves on this machine alone — its weights
@@ -11,10 +16,11 @@ eventually pretrained from scratch here (quantization-native, efficient by
 every technique worth stealing, multimodal-unified, SDEK as its operating
 system), so that nothing load-bearing is borrowed from Anthropic, Alibaba, or
 Google. It improves the only honest way: by acting in worlds it can inspect —
-grids, programs, games, buildings — verifying its own work against ground
-truth the world itself provides, and burning only verified experience into
-itself, where every gain must survive held-out transfer, beat a matched
-control, and disappear when the artifact is deleted. It stays: it accumulates
+grids, programs, games, buildings, research tasks, experiments, retrieval,
+routing, etc. — verifying its own work against ground truth the world itself
+provides, and burning only verified experience into itself, where every gain
+must survive held-out transfer, beat a matched control, and disappear when
+the artifact is deleted. It stays: it accumulates
 across sessions instead of being born again each morning, and what it learned
 yesterday is measurably load-bearing tomorrow. Every claim about it is proven
 by receipts from executed local jobs, never by anyone's prose — mine included.
@@ -213,3 +219,52 @@ AUTHORITY: Leo executes solo, spawning subagents/agent teams as needed (user
 hardware, >100GB disk, or anything leaving this PC — and escalation never
 pauses local work that can proceed. Cron = this goal only (user 2026-06-10).
 Only the user retires this goal, by name.
+
+---
+
+## E2B-SURPASS MILESTONE (user, 2026-06-12; rewritten same day per user — loop semantics + surpass definition fixed)
+
+Ember's owned core — pretrained from scratch on this machine, no borrowed
+weights load-bearing — surpasses Gemma E2B **at being ember** by June 22,
+2026.
+
+**SURPASS IN WHAT (binding — both legs, paired against E2B swapped into
+ember's own harness, same worlds, same governed budgets):**
+1. **Ember-work:** the verify-floor worlds and the self-curriculum
+   accumulation loop — ember's core produces verified, transferring,
+   deletion-surviving gains where E2B-in-the-same-seat does not, at matched
+   compute.
+2. **Founder-likeness:** communicable with, and has agency — runs its event
+   stream (mail, files, job receipts, schedule), initiates and completes its
+   own work with receipts, answers when spoken to. Ember does these duties
+   measurably better than E2B in the same seat. (This leg pulls the NC-K
+   resident-kernel rung into the milestone's critical path.)
+Receipts only; fp-33 freezes the paired protocol before any verdict.
+
+**LOOP (binding on Leo):** receiving this goal means looping until the
+surpass receipt exists — gate the latest receipts, solve the current binding
+constraint (GPU-kernel or mathematical-architecture, burned into
+docs/technique-registry.md), launch the next governed job, re-derive GPU
+allocation at each segment boundary. Idle with this milestone open is a
+named failure. Core size grows only when receipts show size — not technique —
+is the binding constraint.
+
+**CALIBRATION (pinned, receipts-only honesty):** deterministic estimate at
+adoption ≈ 4–10 weeks of governed solve-loop; June-22 is the forcing target;
+shortfall on the date = a measured-distance receipt and the loop continues
+unchanged. Only the user moves the date, the bar, or retires this — by name.
+
+**HARNESS CLAUSE (user, in the 2026-06-12 /goal verbatim):** "avir-cli must
+be clean room ported as ember's visible harness and interface, and ember must
+be resident and fully communicatable with via mailbox and me or you also able
+to communicate and interact via computer use." Operative reading: NC-K's seed
+is no longer 'avir-cli compressed to invariants' only — the CLEAN-ROOM PORT of
+avir-cli becomes ember's visible harness/interface; ember gets a mailbox
+identity (founders.yaml — cross-founder coordination required) and must be
+reachable by the user directly AND by Leo via the computer-use skill surface.
+Founder-likeness leg of the milestone is evaluated through this harness.
+
+**DELEGATION RAIL (user, same verbatim):** "Always delegate to other
+founders. use skills if they become unreachable." — execution routes to
+founders first; founder unreachable → founder-poke/restart skills, then own
+governed subagents (Haiku-class) as the fallback, Leo gates everything.
