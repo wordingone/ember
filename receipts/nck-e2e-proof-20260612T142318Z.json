@@ -1,0 +1,129 @@
+{
+  "ticket": "NCK-E2E-PROOF",
+  "label": "NCK-E2E-PROOF-BOUND-CHAIN",
+  "ts": "20260612T142318Z",
+  "commit_sha": "edbf00be32f2056e8b952fc65c7c6d3b6e7a6f17",
+  "identity": "ember",
+  "chain": [
+    "boot_checksum",
+    "mail_consume",
+    "mail_consume_live",
+    "seat_dispatch",
+    "cu_console"
+  ],
+  "all_stages_pass": true,
+  "stage_receipts": {
+    "boot_checksum": {
+      "stage": "boot_checksum",
+      "pass": true,
+      "manifest_path": "B:\\M\\avir\\eli\\state\\ember-eng\\repo30\\config\\nck-invariants.json",
+      "entries_checked": 6,
+      "verified": [
+        {
+          "path": "docs/formalization-v0.md",
+          "label": "three-test-gain-gate",
+          "sha256": "b1ae91f916bdec5074f26ffde6e7bdfa2f1b506f8c8eb936927a334cccd66f05",
+          "match": true
+        },
+        {
+          "path": "configs/v0-pretrain-config.json",
+          "label": "governor-headroom-config",
+          "sha256": "92cf1b21946f9397d6964ca6d21bddae4c21a8cd1f33640d7ef69f669e3c6960",
+          "match": true
+        },
+        {
+          "path": "GOAL.md",
+          "label": "goal-md",
+          "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b",
+          "match": true
+        },
+        {
+          "path": "GOAL.md",
+          "label": "receipts-only-truth-statement",
+          "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b",
+          "match": true
+        },
+        {
+          "path": "scripts/nck/invariants.py",
+          "label": "invariants-py",
+          "sha256": "7bbf1ae76dfd6a331ceed1fc67e7fe75a2c567e130e25dc6ee211e80c33d8320",
+          "match": true
+        },
+        {
+          "path": "config/nck-invariants.json",
+          "label": "nck-invariants-manifest",
+          "sha256": "SELF",
+          "note": "baseline-comparison"
+        }
+      ]
+    },
+    "mail_consume": {
+      "stage": "mail_consume",
+      "pass": true,
+      "d1_no_flood": true,
+      "d2_timestamp_path": true,
+      "event_id": 2,
+      "event_from": "leo",
+      "event_subject": "nck-e2e-proof-mail",
+      "event_kind": "mail_arrived",
+      "last_id_advanced": true,
+      "mail_event_payload_keys": [
+        "body",
+        "channel",
+        "from",
+        "id",
+        "subject"
+      ]
+    },
+    "mail_consume_live": {
+      "stage": "mail_consume_live",
+      "pass": true,
+      "db_path": "B:/M/avir/mailbox/mailbox.db",
+      "signal_path": "B:/M/avir/infra/mailbox/signals\\ember",
+      "identity": "ember",
+      "pre_send_last_id": 14636,
+      "sent_mail_id": 14837,
+      "sent_subject": "nck-e2e-live-probe-1781274198",
+      "event_id": 14837,
+      "event_from": "eli",
+      "event_kind": "mail_arrived",
+      "note": "live mailbox leg \u2014 real mail to ember via production DB + signal file"
+    },
+    "seat_dispatch": {
+      "stage": "seat_dispatch",
+      "pass": true,
+      "template_hash": "0a085406cff23321fc71f3e1a50a6f64b79a72fe69498339c4b4752f90b480f9",
+      "episode_id": "M1",
+      "event_kind": "mail_arrived",
+      "actions_returned": 0,
+      "generate_fn": "stub (returns 'no-action')",
+      "note": "mute/no-action output is baseline datum for raw pretrain core"
+    },
+    "cu_console": {
+      "stage": "cu_console",
+      "pass": true,
+      "probe_line": "nck-e2e-proof-console-poke",
+      "echo_confirmed": true,
+      "output_len": 45,
+      "tool_dispatched": "console_write"
+    }
+  },
+  "stage_receipt_shas": {
+    "boot_checksum": "5c53f2232d704a3c2beafea994d9b1e4bd7f45d94c44ac8357a65c57c76465ad",
+    "mail_consume": "fe3c9dbab0793a03e2bd4408b4df210cecc6e85deb07d13d86ce17c529326ee9",
+    "mail_consume_live": "2620f40269d17650bf15a32d05a96c82304086b2d7250fbfe7ab82fe46db7a94",
+    "seat_dispatch": "0008cb9e6e08b4edcc34cd6883e15ddd46e525dedad79034e14d1f751b6a4907",
+    "cu_console": "d6082d906dfe881fb39e7243710e436eed78452755c02f6a1a9c4e7ebdd58b26"
+  },
+  "flags": [
+    "boot-checksum: real verify_at_boot() \u2014 no _skip_invariant_check",
+    "mail-consume: fixture SQLite DB + signal file; D1 cold-start no-flood + D2 timestamp path",
+    "mail-consume-live: REAL mail to ember via production mailbox binary; DB=B:/M/avir/mailbox/mailbox.db; signal=signals/ember",
+    "seat-dispatch: stub generate_fn; mute output is valid baseline for raw pretrain core",
+    "cu-console: ConsoleSource injected line \u2192 stub_core console_write \u2192 dispatched",
+    "live run 12c050e7 NOT touched",
+    "no GPU dispatch \u2014 CPU/idle-only proof of plumbing"
+  ],
+  "live_run_untouched": "12c050e7",
+  "sha_convention": "stage_receipt_shas: sha256 over UTF-8 JSON (sort_keys=True); file hashes in boot_checksum: sha256 over on-disk raw bytes (binary read)"
+}
