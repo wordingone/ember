@@ -1,5 +1,17 @@
 # c04 candidate grid v1 — fp-37 (#352) arithmetic (2026-06-12, ~3:10 PM LA)
 
+> **FALSIFICATION NOTE (3:45 PM LA, receipt fp38-l9-flash-ab-20260612T223639Z):**
+> the no-ckpt+flash knee rows below are DEAD at c03 widths — flash cells
+> OOM'd at B=39/33/26. The activation model undercounts (modeled ~20 B/unit
+> vs ≥~28 measured); F-1's 40,631 tok/s projection is falsified. What
+> stands: FLOP/token and tokens/day arithmetic (ckpt rows), and F-2's joint
+> (P × budget) constraint — which only tightens. L9 completion cells
+> (b16/b8-nockpt-flash, never measured) decide revive-at-reduced-batch vs
+> KILL-at-all-batches. SECOND correction (fp37-l7-v2 reconciliation): the
+> F anchor is BENCH-PATH (Llama+AdamW proxy); production path (MTP+chunked
+> CE+Muon) measured ~2× slower on the dead run — all tokens/day columns are
+> optimistic until the production-path cell lands (fp-39 recalibrates).
+
 Receipt: `receipts/c04-grid-20260612T220829Z.json` (`scripts/c04_grid.py`,
 selftest anchors reproduce c03: P=284.4M, 2.21G FLOP/tok, 69.3 TFLOPS
 sustained from the compiled-cell receipt, and the b16-nockpt OOM boundary).

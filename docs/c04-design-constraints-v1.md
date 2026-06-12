@@ -49,6 +49,17 @@ token stays within budget for §3's wall-clock gate. Wider-not-deeper is
 the receipt-backed prior (arithmetic intensity + fp8 shape behavior +
 launch-overhead amortization), but the GRID decides, not the prior.
 
+**C-7. Production-path benching (added 3:45 PM LA, fp37-l7-v2
+reconciliation):** the FP19/fp32 bench cells measured a PROXY class
+(LlamaForCausalLM + AdamW, no MTP, standard CE); the production path
+(manual backbone + MTP heads + chunked CE + Muon split) ran ~2× slower
+(8,872 vs ~18k tok/s, receipt fp37-l7-duty-cycle-v2-...223550Z).
+Constraint: every §3 gate receipt and every design bench runs the
+PRODUCTION class — proxy-class anchors are banned from gate arithmetic
+(legitimate only for fast lever iteration, labeled bench-path). The c04
+design also prices its MTP/CE choice: the MTP-head + CE share appears as
+a named line-item in the §3 receipt, never as invisible overhead.
+
 ## 2. What c04 inherits unchanged
 
 Owned tokenizer + shards (TOKEN-SHARDS-V0), curriculum/floor protocol

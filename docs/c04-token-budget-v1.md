@@ -5,6 +5,15 @@ receipt-chained to the fp-37 grid — selftest anchors reproduce the #352
 table). Recalibrates mechanically on eli's measured L9 flash F via
 `--f-sustained` (fp-39 carries that).
 
+> **RECALIBRATION CAVEAT (3:45 PM LA):** this table is anchored to the
+> BENCH-PATH F (Llama+AdamW proxy). The production path measured ~2× slower
+> on the dead run (fp37-l7-v2 reconciliation), and the no-ckpt knees are
+> falsified (fp38-l9 OOM rows) — so every "afford/1d" is optimistic and
+> every multiplier is UNDERSTATED until the production-path cell lands
+> (fp-39, C-7). Direction survives: the gap scales all rows equally, so
+> c03-shape remains the smallest-multiplier candidate by ~5.5× over the
+> next row; in ckpt mode at bench-path F it affords ~2.9B/day → mult ≈1.9×.
+
 ## The derivation
 
 The §3 criterion (budget ÷ tok/s_paced ≤ 24 governed hours) makes the budget
