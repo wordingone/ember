@@ -9,7 +9,7 @@
     {
       "label": "governor-headroom-config",
       "path": "configs/v0-pretrain-config.json",
-      "sha256": "b253979025f8692998b0e54c659b7a6945abf40ee9fd2d8293ed3291338a8caa"
+      "sha256": "c4de2c2a1ac8408d5b945bef78b9939722a2f2810d95c400102c49c0cda23564"
     },
     {
       "label": "goal-md",
