@@ -1,0 +1,16 @@
+{
+  "ticket": "C10",
+  "ts": "2026-06-12T21:31:33Z",
+  "resident_pid": 58996,
+  "started_at": "2026-06-12T21:01:00Z",
+  "elapsed_min": 30,
+  "clock_origin": "20:58Z (leo gate clock, first spawn); restarted 21:01Z for DB path fix; 30min from restart satisfied 21:31Z",
+  "mail_event_receipt": "state/nck-event-receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json",
+  "mail_event_id": 15038,
+  "heartbeat_path": "state/nck-heartbeat.txt",
+  "heartbeat_mtime": "2026-06-12T21:31:00Z",
+  "rss_mib": 23.4,
+  "gpu": false,
+  "supersedes": "receipts/c10-resident-live-20260612T213002Z.json",
+  "status": "PASS"
+}

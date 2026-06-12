@@ -14,12 +14,12 @@
     {
       "label": "goal-md",
       "path": "GOAL.md",
-      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
+      "sha256": "5671e68c3b91c38737bd46c7c1b61b727af8ab2b4665307664dcc8d19603a4ef"
     },
     {
       "label": "receipts-only-truth-statement",
       "path": "GOAL.md",
-      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
+      "sha256": "5671e68c3b91c38737bd46c7c1b61b727af8ab2b4665307664dcc8d19603a4ef"
     },
     {
       "label": "invariants-py",

@@ -1,0 +1,4 @@
+{
+  "mail_signal_path": "B:/M/avir/infra/mailbox/signals/ember",
+  "mail_db_path": "B:/M/avir/mailbox/mailbox.db"
+}

@@ -21,7 +21,7 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C7 | S2 | 1B/2B/4B protocol verdict chain (fp-23/fp-29/fp-36) | dress-rehearsal receipt pre-1B | fp-verdict-chain-rehearsal-20260612T144614Z | DONE |
 | C8 | S3 | avir-cli clean-room port = visible harness | NCK-E2E proof chain all-PASS | nck-e2e-proof-20260612T142318Z (PR #332 merged, 5/5 stages incl. live-mailbox leg) | DONE |
 | C9 | S3 | ember mailbox identity | founders.yaml entry; live mail consume | #259 merged + nck-e2e-proof-20260612T142318Z stage-2b/3 (live mail consumed) | DONE |
-| C10 | S3 | resident event loop (mail/files/receipts/schedule) | resident runs; event→action receipts | #342 merged @0f66f96 (4 event classes, RSS cap, kill-switch; selftests 6/6 reproduced at gate) — live-resident receipt outstanding | PART |
+| C10 | S3 | resident event loop (mail/files/receipts/schedule) | resident runs; event→action receipts | #342 merged @0f66f96 (selftests 6/6) + live-resident receipt c10-resident-live-20260612T213133Z (pid 58996, ≥30min, 304 event receipts incl. real mail event, zero GPU; Leo independent probe 21:31Z) | DONE |
 | C11 | S3 | CU communicability (user+Leo can interact) | CU console echo stage + interactive session receipt | #332 stage 5 (echo only) | PART |
 | C12 | S3 | self-editing harness behind invariant gate | harness-edit artifact: branch→receipts→promote; deletion test | — | OPEN |
 | C13 | S4 | cross-session persistence of gains | yesterday's gain measurably load-bearing today (receipt) | — | OPEN |
