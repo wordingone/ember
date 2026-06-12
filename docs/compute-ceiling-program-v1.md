@@ -72,16 +72,19 @@ arithmetic intensity — batch and fusion are how it climbs the roofline.
 | L7 | Duty cycle: loader/ckpt/eval stalls in REAL run | unknown — measure | mine from stopped-run logs (Leo, on eli's log receipt) |
 | L8 | Data/objective efficiency (H2) | effective-compute multiplier, unbounded | round-design constraint |
 
-**Compound arithmetic after round 1 of receipts (21:50Z):** ceiling of the
-remaining mechanical stack = 1.335 (batch, landed) × ≤1.85 (L3 perfect
-fusion bound) × ~1.2 (L6 estimate) ≈ **≤2.96× — the mechanical stack
-CANNOT reach the 3.3× shatter criterion on c03 even with perfect L3.**
-The residual is ARCH-tagged from three independent receipts: hidden-1024
-is fp8-hostile (L4), activation-heavy beyond B=16 on 24GB (L5), and
-NS-chain wall-share (L3 target). Unless L3 overdelivers beyond its
-physics bound, the three-way decision converges on STOP + REDESIGN: a
-core whose widths are fp8-positive, whose activations fit no-ckpt at the
-batch knee, and whose optimizer fuses — designed FOR the levers.
+**Compound arithmetic after round 1 of receipts (21:50Z, jude-verified
+15067 — CONDITIONAL):** mechanical stack = 1.3354 (batch, receipted) ×
+≤1.848 (L3 physics bound from 45.9% wall-share) × L6. At the L6 estimate
+range 1.1–1.3×, compound = 2.71–3.21× < 3.3× criterion. **Jude's gap
+(accepted): L6 is ESTIMATED, not receipted — breakeven is L6=1.337×, only
+3% above the range ceiling, so the STOP+REDESIGN conclusion is NOT
+hardened until the L3 and L6 receipts land** (both running/queued, <1h).
+Corrections from his verdict: fp8 FLOP-weighted mean is 0.957× (not the
+unweighted 0.867×) — verdict direction unchanged, both FAIL; L5 KILL is
+defensible but the sweep lacks b4/b8-nockpt reference cells (queued for
+completeness). The ARCH-residual reading stands as the LEAN, pending two
+receipts: hidden-1024 fp8-hostile (L4), activations OOM past B=16 (L5),
+NS-chain wall-share (L3 target).
 
 Compound mechanical target (L1×L3×L4×L5 mid-estimates): **≥3.3×, stretch
 ~5× with L2/L6 → ≥72k tok/s paced → 7B-token c03 pretrain in ~27h.** That
