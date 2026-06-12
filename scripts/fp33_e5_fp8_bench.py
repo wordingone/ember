@@ -112,7 +112,7 @@ def bench_variant(use_fp8: bool):
         from torchao.float8 import convert_to_float8_training, Float8LinearConfig
         from torchao.float8.config import ScalingType
         # Rowwise scaling: dynamic scale per row (highest accuracy FP8 mode)
-        config = Float8LinearConfig.from_recipe_name("ROWWISE")
+        config = Float8LinearConfig.from_recipe_name("rowwise")
         # Exclude embedding + lm_head (tied; not suitable for FP8)
         def _filter(mod, fqn):
             return fqn not in ("model.embed_tokens", "lm_head")
