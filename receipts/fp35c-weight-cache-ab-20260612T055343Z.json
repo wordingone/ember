@@ -1,0 +1,132 @@
+{
+  "ticket": "FP35C-WEIGHT-CACHE-AB",
+  "ts": "20260612T055343Z",
+  "variant": "weight-cache",
+  "issue": "#289",
+  "verdict": "FAIL",
+  "verdict_reason": "weight-cache fp8 0.843x <= 1.0x (still slower than bf16 at c03 widths)",
+  "runtime": {
+    "python": "C:\\Program Files\\Python310\\python.exe",
+    "torch": "2.10.0+cu126",
+    "cuda": "12.6",
+    "device": "NVIDIA GeForce RTX 4090",
+    "sm": "89"
+  },
+  "config": {
+    "hidden": 1024,
+    "mlp_dim": 4096,
+    "batch": 4,
+    "seq": 1024,
+    "M_tokens": 4096,
+    "seeds": [
+      16,
+      17,
+      18
+    ],
+    "warmup_reps": 5,
+    "bench_reps": 20,
+    "vram_fraction": 0.8,
+    "cast_count_per_step": 2,
+    "cast_count_cast_heavy": 4,
+    "stability_recipe": "\u00b5nit-Scaling-default-unit-scale-1.0",
+    "fp8_dtype": "float8_e4m3fn",
+    "gate_assertions": [
+      "no-nan",
+      "no-inf",
+      "saturation-<10pct",
+      "rel-err<0.5-vs-bf16"
+    ]
+  },
+  "results": {
+    "16": {
+      "hidden_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 4096,
+        "t_bf16_ms": 2.726,
+        "t_fp8_wc_ms": 2.872,
+        "measured_multiplier": 0.9492
+      },
+      "output_proj": {
+        "M": 4096,
+        "K": 4096,
+        "N": 1024,
+        "t_bf16_ms": 2.116,
+        "t_fp8_wc_ms": 0.972,
+        "measured_multiplier": 2.1764
+      },
+      "qkv_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 1024,
+        "t_bf16_ms": 0.345,
+        "t_fp8_wc_ms": 1.126,
+        "measured_multiplier": 0.3063
+      }
+    },
+    "17": {
+      "hidden_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 4096,
+        "t_bf16_ms": 2.187,
+        "t_fp8_wc_ms": 2.987,
+        "measured_multiplier": 0.7321
+      },
+      "output_proj": {
+        "M": 4096,
+        "K": 4096,
+        "N": 1024,
+        "t_bf16_ms": 2.762,
+        "t_fp8_wc_ms": 3.295,
+        "measured_multiplier": 0.8381
+      },
+      "qkv_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 1024,
+        "t_bf16_ms": 0.786,
+        "t_fp8_wc_ms": 2.004,
+        "measured_multiplier": 0.3924
+      }
+    },
+    "18": {
+      "hidden_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 4096,
+        "t_bf16_ms": 2.715,
+        "t_fp8_wc_ms": 2.922,
+        "measured_multiplier": 0.9289
+      },
+      "output_proj": {
+        "M": 4096,
+        "K": 4096,
+        "N": 1024,
+        "t_bf16_ms": 2.732,
+        "t_fp8_wc_ms": 3.243,
+        "measured_multiplier": 0.8425
+      },
+      "qkv_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 1024,
+        "t_bf16_ms": 0.836,
+        "t_fp8_wc_ms": 1.994,
+        "measured_multiplier": 0.4192
+      }
+    }
+  },
+  "measured_multiplier": 0.8428,
+  "predecessor_receipt": "fp33-fp8-linear-ab-20260612T051338Z.json",
+  "predecessor_multiplier": 0.4504,
+  "registry_row": "fp8-custom-kernel-sm89",
+  "fallback_condition": "if FAIL: width-conditional row \u2014 fp8 wins at K>=4096 (output_proj seed16: 1.94x in #284) but fails at K=1024 (hidden_proj, qkv_proj). Record per fp33-kernel-route-v0.md.",
+  "flags": [
+    "native-Windows Python (not WSL2 daemon)",
+    "live run 12c050e7 NOT touched",
+    "weight fp8 cached at bench-init (not re-quantized per step)",
+    "grad-ckpt recompute path: recompute_x=True arm",
+    "stability-recipe: \u00b5nit-Scaling (2502.05967) unit-scale=1.0"
+  ]
+}
