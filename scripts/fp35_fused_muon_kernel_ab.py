@@ -149,6 +149,34 @@ def _ns5_baseline(G):
 # Warmup_steps (5) absorb the tracing cost; bench_steps measure steady-state.
 _ns5_fused = torch.compile(_ns5_baseline, mode="reduce-overhead", fullgraph=False)
 
+_EQUIV_TOL = 1e-3
+
+
+def _check_ns5_equiv(fused_fn, tol: float = _EQUIV_TOL, device: str = "cpu") -> float:
+    """NS5 baseline vs fused_fn numeric equivalence on device. Returns max-abs delta.
+
+    Raises SystemExit with MUON_FUSED_EQUIV_FAIL if delta exceeds tol, refusing the bench.
+    Uses a small shape on CPU (selftest), representative c03 shape on CUDA (main).
+    """
+    shape = (64, 128) if device == "cpu" else (1024, 4096)
+    torch.manual_seed(7)
+    G = torch.randn(*shape, dtype=torch.float32, device=device)
+    with torch.no_grad():
+        X_base = _ns5_baseline(G.to(device))
+        if device != "cpu":
+            torch.cuda.synchronize()
+        X_fuse = fused_fn(G.to(device))
+        if device != "cpu":
+            torch.cuda.synchronize()
+    delta = (X_base - X_fuse).abs().max().item()
+    if delta > tol:
+        raise SystemExit(
+            f"MUON_FUSED_EQUIV_FAIL: ns5 baseline vs fused max-abs-delta="
+            f"{delta:.2e} > tol={tol:.2e} — "
+            "compiled kernel numerics diverged, bench refused"
+        )
+    return delta
+
 
 # ---------------------------------------------------------------------------
 # Muon optimizer factory
@@ -393,6 +421,19 @@ def main():
     print(f"  seeds: {SEEDS}, warmup={WARMUP_REPS}, bench={BENCH_REPS}", flush=True)
     print(f"  fused arm: torch.compile(ns5, mode='reduce-overhead')", flush=True)
 
+    # GPU-side NS5 equivalence check — must pass before bench may proceed.
+    # Catches torch.compile miscompile / fusion-reorder on this specific GPU/driver.
+    # CPU inductor is unavailable on Windows without MSVC, so this is the only
+    # place where fused kernel numerics are validated.
+    print("  Checking NS5 equiv on CUDA (1024×4096, seed=7)...", flush=True)
+    ns5_equiv_max_abs_delta = _check_ns5_equiv(_ns5_fused, tol=_EQUIV_TOL, device="cuda")
+    print(
+        f"  NS5 equiv PASS: max_abs_delta={ns5_equiv_max_abs_delta:.2e} "
+        f"(tol={_EQUIV_TOL:.2e})",
+        flush=True,
+    )
+    torch.cuda.empty_cache()
+
     results: dict[str, list[dict]] = {arm: [] for arm in arms}
 
     for arm in arms:
@@ -486,6 +527,13 @@ def main():
         "arm_aggregate": arm_agg,
         "per_seed_results": {arm: results[arm] for arm in arms},
         "measured_multiplier_vs_baseline": fused_mm,
+        "ns5_equiv_check": {
+            "max_abs_delta": round(ns5_equiv_max_abs_delta, 8),
+            "tolerance": _EQUIV_TOL,
+            "shape_tested": [1024, 4096],
+            "seed": 7,
+            "pass": True,
+        },
         "flags": [
             "c03 shapes (v0 training config — same as E4 profiler)",
             f"live run {LIVE_RUN_SHA} NOT touched",
@@ -574,7 +622,21 @@ def _selftest():
         else:
             raise
 
-    # 7. Muon optimizer builds and steps with baseline NS (CPU tensors, 2D param)
+    # 7. _check_ns5_equiv PASS path: baseline vs baseline on CPU -> delta=0
+    delta_ok = _check_ns5_equiv(_ns5_baseline, tol=1e-3, device="cpu")
+    assert delta_ok < 1e-3, f"baseline vs baseline delta unexpectedly large: {delta_ok:.2e}"
+
+    # 8. _check_ns5_equiv FAIL path: monkeypatched fused fn with large delta
+    def _bad_ns5(G):
+        return _ns5_baseline(G) * 2.0  # wildly wrong output
+    try:
+        _check_ns5_equiv(_bad_ns5, tol=1e-3, device="cpu")
+        raise AssertionError("FAIL path did not raise SystemExit")
+    except SystemExit as se:
+        assert "MUON_FUSED_EQUIV_FAIL" in str(se), \
+            f"wrong SystemExit message: {se}"
+
+    # 9. Muon optimizer builds and steps with baseline NS (CPU tensors, 2D param)
     for arm in ("muon-baseline", "muon-fused"):
         torch.manual_seed(0)
         p = nn.Parameter(torch.randn(8, 8))
@@ -587,7 +649,7 @@ def _selftest():
         opt.step()
         assert not torch.equal(before, p.data), f"{arm}: Muon step was a no-op"
 
-    # 7. split_param_groups routing: 2D non-embed non-head -> Muon
+    # 10. split_param_groups routing: 2D non-embed non-head -> Muon
     class _FakeModel(nn.Module):
         def __init__(self):
             super().__init__()
@@ -605,7 +667,7 @@ def _selftest():
     assert "lm_head"       in adamw_names, f"lm_head not in AdamW: {adamw_names}"
     assert "bias"          in adamw_names, f"bias not in AdamW: {adamw_names}"
 
-    # 8. NS coefficients match timeshare_pretrain.py values
+    # 11. NS coefficients match timeshare_pretrain.py values
     assert _NS_A == 3.4445 and _NS_B == -4.7750 and _NS_C == 2.0315, \
         f"NS coefficients drifted: a={_NS_A}, b={_NS_B}, c={_NS_C}"
 
