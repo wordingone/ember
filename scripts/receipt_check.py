@@ -29,6 +29,27 @@ import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Legacy-exempt list (Row 8 — receipt hygiene triage 2026-06-12)
+#
+# Files in receipts/ that predate the R1 (ticket/ts required) schema floor.
+# --all mode skips them silently; --file remains strict (fail-closed on demand).
+# To add a new entry: append the basename + one-line reason. Never remove.
+# ---------------------------------------------------------------------------
+
+LEGACY_EXEMPT: frozenset[str] = frozenset({
+    "eng105-verify-20260611T023239Z.json",       # pre-R1: no ticket/ts
+    "grpo-attempts-fail-20260610.json",           # pre-R1: no ticket
+    "native-smoke-20260610T230236Z.json",         # pre-R1: no ticket/ts
+    "native-smoke-20260610T230645Z.json",         # pre-R1: no ticket/ts
+    "probe-meminfo-20260610T043457Z.json",        # pre-R1: no ticket
+    "t4-r1-q15-arc1-seed14-progress.json",       # pre-R1: training progress artifact, no ticket/ts
+    "t4-r1-q3-arc1-seed14-progress.json",        # pre-R1: training progress artifact, no ticket/ts
+    "t4-r1-q3-arc1-seed15-progress.json",        # pre-R1: training progress artifact, no ticket/ts
+    "train_config.json",                          # not a receipt — training harness config in receipts/
+    "wsl9p-probe-2026-06-10T225917Z.json",       # pre-R1: no ticket/ts
+})
+
+# ---------------------------------------------------------------------------
 # Schema rules
 # ---------------------------------------------------------------------------
 
@@ -133,8 +154,12 @@ def run_all(receipts_dir: str) -> int:
     total_files = 0
     files_with_findings = 0
 
+    grandfathered = 0
     for fpath in files:
         total_files += 1
+        if fpath.name in LEGACY_EXEMPT:
+            grandfathered += 1
+            continue
         d, err = _load_json(str(fpath))
         if err:
             print(f"  PARSE_ERROR {fpath.name}: {err}")
@@ -152,6 +177,7 @@ def run_all(receipts_dir: str) -> int:
                 print(f"    {f}")
 
     print(f"\nreceipt_check --all: {total_files} receipts scanned, "
+          f"{grandfathered} grandfathered (LEGACY_EXEMPT), "
           f"{files_with_findings} with findings")
     if violation_counts:
         print("  Violation counts by class:")
