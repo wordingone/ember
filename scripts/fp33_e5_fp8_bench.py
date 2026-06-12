@@ -184,7 +184,13 @@ def main():
         raise RuntimeError(f"bf16 baseline failed: {err}")
 
     print("[E5] benching fp8_rowwise ...", flush=True)
-    fp8_result, _, err = bench_variant(use_fp8=True)
+    try:
+        fp8_result, _, err = bench_variant(use_fp8=True)
+    except RuntimeError as exc:
+        # cutlass cannot initialize, CUDA driver error, etc. — hard failure
+        fp8_result = None
+        err = f"RuntimeError: {exc}"
+        print(f"[E5] fp8 bench raised RuntimeError: {exc}", flush=True)
 
     # Determine verdict
     if err:
