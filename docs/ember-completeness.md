@@ -53,6 +53,7 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C38 | S1 | technique registry + dispatch-gate wiring (#256/#271) | registry_gate.py as dispatch precondition; proxy-speedrun harness | registry receipts | PART |
 | C39 | S1 | zero-cloud loop receipt (#212) | one full round config-only + loop-path locality manifest | eng-55 receipt | DONE |
 | C40 | S1 | GPU efficiency registry execution (#284/#289/#294/#296/#298/#301/#305) | fp8 width-conditional dispatch, recompute NONE adoption, cuda-graph A/B — each receipted | per-issue bench receipts | DONE |
+| C41 | S1 | technique-registry verdict closure | zero CANDIDATE/WATCH rows left in technique-registry.jsonl: each reaches TESTED/ADOPT/KILL via the speedrun proxy protocol, per-row receipts bound; tally walks the jsonl as a sub-manifest | technique-registry.jsonl rows | PART (4 ADOPT in v0; 11 CANDIDATE + 1 WATCH open) |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
 
@@ -64,7 +65,11 @@ pieces" with the source named:
       #328→C24, #282→C25, #273→C26, #225→C27, #223→C28, #214→C29, #210→C30,
       #205→C31, #128→C32. CLOSED issues still to sweep (next line).
 - [x] wordingone/ember CLOSED issues — swept 2026-06-12T15:5xZ via Haiku enumeration (143 closed, #1-#337): credit rows C33-C40 added; C14/C15 upgraded (seat shakedowns); research-era eng-1..17/fp-1..25 pieces already embodied in C4/C5/C18/C35 — no new rows. Enumeration: docs/closed-issues-enumeration.txt
-- [ ] docs/technique-registry.md (every row → C2 sub-rows)
+- [x] docs/technique-registry.md — swept 2026-06-12T15:55Z: registry is
+      machine-readable (technique-registry.jsonl), so one closure row C41
+      covers all 16 seed entries as a sub-manifest (tally walks the jsonl);
+      C3 (fused-muon) and C40 (executed rows) already pin the receipted ones.
+      No per-technique manifest rows — the registry IS the row source.
 - [ ] STATE.md pending layers (≥2 always listed)
 - [ ] fp-* / sp-* protocol docs (every standing obligation)
 - [ ] GOAL.md reading notes (each binding clause → testable row)
