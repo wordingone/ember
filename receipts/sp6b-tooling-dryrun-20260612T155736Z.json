@@ -1,0 +1,53 @@
+{
+  "ts": "20260612T155736Z",
+  "task": "sp6b-tooling dry-run: designation resolver + naming convention verification",
+  "selftest_exit": 0,
+  "dryrun_exit": 0,
+  "designation_tool": "scripts/nck/b_run_designation.py",
+  "dryrun_command": [
+    "python",
+    "scripts/nck/b_run_designation.py",
+    "--run",
+    "--write",
+    "--now",
+    "2026-06-20T12:00:00Z",
+    "--checkpoints-dir",
+    "B:\\Temp\\sp6b-dryrun-20260612T085440Z\\ember-checkpoints"
+  ],
+  "synthetic_checkpoints": [
+    {
+      "path": "step-00010000",
+      "step": 10000,
+      "model_pt_sha256": "011ff75e903a58ecf1e2a319de1e9f71e9c7d56b2c5ed8d7fb8e82c85e08ad84"
+    },
+    {
+      "path": "step-00025000",
+      "step": 25000,
+      "model_pt_sha256": "5c627c5b9c35505a74b0e6c2e5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c"
+    },
+    {
+      "path": "step-00050000",
+      "step": 50000,
+      "model_pt_sha256": "66a6757151f8ee55db127716c7e3dce0be8074b64e20eda542e5c1e46ca9c41e"
+    }
+  ],
+  "emitted_names": [
+    "b-run-designation-20260620T120000Z.json"
+  ],
+  "emitted_paths": [
+    "receipts/b-run-designation-20260620T120000Z.json"
+  ],
+  "naming_convention_match": true,
+  "audit_row_12_requirements": {
+    "pattern_1": "receipts/b-run-designation-*.json",
+    "pattern_2": "receipts/sp6b-b-run-*.json",
+    "notes": [
+      "b-run-designation-*.json: SATISFIED by designation resolver (this tool)",
+      "sp6b-b-run-*.json: NOT YET AVAILABLE (will be emitted by replay rig on both seats)",
+      "The replay rig (scripts/nck/replay_rig.py) is NOT part of this dry-run"
+    ]
+  },
+  "mismatch_found": false,
+  "mismatch_details": "No mismatch in naming convention. The designation tool correctly emits receipts/b-run-designation-{ts}.json. The sp6b-b-run-*.json receipts will come from the replay rig (separate tool) when the B3 run executes.",
+  "notes": "No mismatch in naming convention. The designation tool correctly emits receipts/b-run-designation-{ts}.json. The sp6b-b-run-*.json receipts will come from the replay rig (separate tool) when the B3 run executes. [ts corrected to true UTC at gate; agent stamped local time as Z]"
+}

@@ -228,7 +228,9 @@ def _selftest():
     by_id = {r["id"]: r for r in live["rows"]}
     assert by_id[6]["verdict"] == "RECEIPTED", by_id[6]   # d-gate receipt
     assert by_id[7]["verdict"] == "RECEIPTED", by_id[7]   # p-gate receipt
-    assert by_id[8]["verdict"] == "GAP-NAMED"             # 8a not yet run
+    assert by_id[8]["verdict"] == "RECEIPTED", by_id[8]   # 8a now run
+    assert by_id[9]["verdict"] == "GAP-NAMED", by_id[9]   # 8b open
+    assert by_id[12]["verdict"] == "GAP-NAMED", by_id[12] # B3 open
     print("SP3_TERMINAL_AUDIT_SELFTEST_PASS")
 
 
