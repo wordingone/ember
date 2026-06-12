@@ -1,0 +1,25 @@
+{
+  "ticket": "NONE-ARM-298",
+  "ts": "20260612T174042Z",
+  "issue": 298,
+  "pr": 300,
+  "pr_merge_sha": "1b6454f93df3f0d80693ab09f60d7bc4324e7146",
+  "pr_merged_at": "2026-06-12T06:56:28Z",
+  "pr_title": "eng: adopt NONE arm \u2014 disable grad-ckpt in v0 at next WSD resume (Closes #298)",
+  "config_change": "configs/v0-pretrain-config.json: grad_checkpointing set to false",
+  "margin_assert": {
+    "none_arm_peak_vram_gib": 8.245,
+    "total_vram_gib": 23.99,
+    "governor_fraction": 0.8,
+    "allowed_vram_gib": 19.19,
+    "headroom_gib": 10.9,
+    "governor_floor_gib": 1.5,
+    "headroom_ok": true
+  },
+  "ab_bench_context_receipt": "selective-recompute-ab-20260612T063250Z",
+  "ab_bench_context_issue": 296,
+  "none_arm_speedup": "1.213x vs full-ckpt control (14884 tok/s vs 12273 tok/s)",
+  "source": "PR #300 body (inline margin-assert figures + merge SHA)",
+  "nc_k_manifests_repinned": true,
+  "verify_at_boot_pass": true
+}
