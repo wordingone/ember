@@ -14,6 +14,12 @@ Invariant config block (fail-closed):
 Stub status:
   MailSource         -> NotImplementedError (see issue #259: mailbox identity not yet landed)
   stub_core          -> rule-based Python function, NO model, trivially swappable
+
+Boot-checksum layer (issue #261):
+  verify_at_boot() from scripts/nck/invariants.py is called in NCKEventLoop.__init__
+  after validate_invariant_config().  Any protected-path mismatch -> SystemExit.
+  The invariants import is guarded: if the module is absent, the loop fails closed
+  (absent invariants layer = refuse to start).
 """
 
 from __future__ import annotations
@@ -26,6 +32,20 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterator
+
+# Boot-checksum layer — imported here so the import itself is a startup check.
+# If invariants.py is absent, the ImportError propagates and the loop refuses to start.
+try:
+    from nck.invariants import verify_at_boot as _verify_at_boot
+except ImportError:
+    try:
+        from invariants import verify_at_boot as _verify_at_boot  # type: ignore[no-redef]
+    except ImportError as _exc:
+        import sys
+        raise SystemExit(
+            f"INVARIANT_REFUSE: cannot import verify_at_boot from invariants module: {_exc}. "
+            "The boot-checksum layer (issue #261) must be present. Boot refused."
+        ) from _exc
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +486,12 @@ class NCKEventLoop:
 
     def __init__(self, config: dict[str, Any]) -> None:
         validate_invariant_config(config)
+        # Boot-checksum layer (issue #261): verify protected-path checksums.
+        # Fail-closed: any mismatch -> SystemExit naming the mismatched path.
+        # skip_invariant_check is a test-only escape hatch (selftest fixtures use
+        # temp dirs where the protected paths do not exist).
+        if not config.get("_skip_invariant_check", False):
+            _verify_at_boot()
         self.config = config
         self.registry = ToolRegistry()
         self.sources: list[EventSource] = []

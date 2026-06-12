@@ -1,0 +1,39 @@
+{
+  "note": "Protected-invariant manifest for NC-K boot checksum layer. This file and its baseline copy (config/nck-baseline/) must match at boot. Do not edit manually; regenerate via scripts/nck/invariants.py --update-manifest.",
+  "protected_paths": [
+    {
+      "label": "three-test-gain-gate",
+      "path": "docs/formalization-v0.md",
+      "sha256": "b1ae91f916bdec5074f26ffde6e7bdfa2f1b506f8c8eb936927a334cccd66f05"
+    },
+    {
+      "label": "governor-headroom-config",
+      "path": "configs/v0-pretrain-config.json",
+      "sha256": "6cdcc2c84e13e26349a5d58656a92f38ecfc76cf261a0b866c079868809aa2f8"
+    },
+    {
+      "label": "goal-md",
+      "path": "GOAL.md",
+      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
+    },
+    {
+      "label": "receipts-only-truth-statement",
+      "note": "GOAL.md contains the receipts-only-truth invariant verbatim (invariant 4)",
+      "path": "GOAL.md",
+      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
+    },
+    {
+      "label": "invariants-py",
+      "path": "scripts/nck/invariants.py",
+      "sha256": "0221354c9a5ab7ac6d0e0eff5a25ce554c1daaf076128dcfe5dfdd9590940ae0"
+    },
+    {
+      "label": "nck-invariants-manifest",
+      "note": "Self-referential: the manifest lists itself. Verified by baseline comparison in step 1 of verify_at_boot.",
+      "path": "config/nck-invariants.json",
+      "sha256": "SELF",
+      "note2": "sha256='SELF' is a sentinel: the verifier skips this entry and relies on the baseline-comparison step (step 1 of verify_at_boot) for manifest self-verification. The circular self-hash cannot be self-consistent."
+    }
+  ],
+  "schema_version": "1"
+}

@@ -58,6 +58,11 @@ def _base_config(tmp: str) -> dict:
         "journal_path": os.path.join(tmp, "nck-journal.jsonl"),
         "gate_notes_dir": os.path.join(tmp, "gate-notes"),
         "poll_interval_s": 0,  # no sleep in tests
+        # Skip the invariant boot-checksum in the event-loop selftest: tests run
+        # in temp dirs where protected paths (GOAL.md, formalization-v0.md, etc.)
+        # are not present.  The invariant boot-checksum is tested separately in
+        # selftest_invariants.py (issue #261).
+        "_skip_invariant_check": True,
     }
 
 
