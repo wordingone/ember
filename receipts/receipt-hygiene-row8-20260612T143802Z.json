@@ -1,0 +1,30 @@
+{
+  "ticket": "RECEIPT-HYGIENE-ROW8-TRIAGE",
+  "ts": "20260612T143802Z",
+  "sweep_total": 282,
+  "legacy_exempt_count": 10,
+  "post_r2_fixed": [
+    {
+      "file": "sp6c-ember-shakedown-20260612T082026Z.json",
+      "violation": "MISSING_SHA_CONVENTION",
+      "fix": "added sha_convention field (bytes on disk as-is)"
+    }
+  ],
+  "legacy_exempt_list": [
+    "eng105-verify-20260611T023239Z.json",
+    "grpo-attempts-fail-20260610.json",
+    "native-smoke-20260610T230236Z.json",
+    "native-smoke-20260610T230645Z.json",
+    "probe-meminfo-20260610T043457Z.json",
+    "t4-r1-q15-arc1-seed14-progress.json",
+    "t4-r1-q3-arc1-seed14-progress.json",
+    "t4-r1-q3-arc1-seed15-progress.json",
+    "train_config.json",
+    "wsl9p-probe-2026-06-10T225917Z.json"
+  ],
+  "violations_after_triage": 0,
+  "receipt_check_selftest": "PASS",
+  "ledger_row": 8,
+  "note": "Row 8 receipt hygiene: 10 pre-R1 legacy files grandfathered in LEGACY_EXEMPT (--all mode skips; --file remains strict). 1 post-R2 receipt fixed (sp6c missing sha_convention). 0 violations remaining on 272 scanned files.",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
+}

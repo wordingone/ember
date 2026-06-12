@@ -27,7 +27,7 @@
     "episode_id": "M1",
     "prompt_len": 2381,
     "completion_len_run1": 255,
-    "completion_sample_run1": "\u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a "
+    "completion_sample_run1": "Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ Ċ "
   },
   "battery": {
     "n_pass": 4,
@@ -221,10 +221,11 @@
     "SHAKEDOWN-NOT-B-RUN: proves binding + replay-identity mechanics",
     "raw pretrain base-model: zero conforming lines IS the baseline datum",
     "CPU inference: device=cpu, dtype=bfloat16, KV-cache greedy loop",
-    "checkpoint read from a COPY \u2014 live file handles on v0-r1s1 never held",
+    "checkpoint read from a COPY — live file handles on v0-r1s1 never held",
     "live run 12c050e7 NOT touched",
     "template_hash frozen -- any edit voids the B-run",
     "zero edits to frozen battery/encodings/template"
   ],
-  "live_run_untouched": "12c050e7"
+  "live_run_untouched": "12c050e7",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
 }
