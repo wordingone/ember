@@ -74,6 +74,14 @@ def main() -> int:
             fails.append(f"(a) designated step {rec['designated']['step']}, want 50000")
         if len(rec["candidates"]) != 5:
             fails.append(f"(a) scanned {len(rec['candidates'])} candidates, want 5")
+        # receipt_check R2: sha-bearing receipt must carry sha_convention
+        try:
+            from receipt_check import validate_receipt
+            errs = validate_receipt(rec)
+            if any("SHA_CONVENTION" in e for e in errs):
+                fails.append(f"(a) designation record receipt_check-dirty: {errs}")
+        except ImportError:
+            fails.append("(a) receipt_check not importable for R2 assert")
         # (b) determinism
         rec2 = resolve([root], IN_WINDOW)
         if rec != rec2:

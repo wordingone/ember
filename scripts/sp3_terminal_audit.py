@@ -68,6 +68,29 @@ ROWS = (
      "requires": (("receipts/v0-launch-gate-*.json", 1),
                   ("receipts/fp24-verdict-*.json", 1),
                   ("receipts/own-r1-*.json", 1))},
+    # ---- B-leg (founder-likeness / E2B-surpass) rows — added 2026-06-12,
+    # inside the pre-06-20 tightening window. The goal has TWO legs and
+    # rows 1-9 audit only the ember-work leg; without these the 06-22
+    # audit could read all-green while silent on the surpass comparison.
+    # Non-json evidence binds by tracked-existence + sha (pins the frozen
+    # bytes the B-run depends on).
+    {"id": 10, "condition": "B-leg instruments frozen: duty battery "
+                            "(content + encodings), seat-adapter contract, "
+                            "B-run designation rule",
+     "requires": (("docs/sp6-duty-battery.jsonl", 1),
+                  ("docs/sp6-duty-battery-encodings.jsonl", 1),
+                  ("docs/sp6c-seat-adapter-v0.md", 1),
+                  ("docs/sp6b-designation-rule-v0.md", 1))},
+    {"id": 11, "condition": "B-leg seats bound: shakedown receipts for "
+                            "BOTH seats (E2B + ember), template hash pinned",
+     "requires": (("receipts/sp6c-e2b-shakedown-*.json", 1),
+                  ("receipts/sp6c-ember-shakedown-*.json", 1))},
+    {"id": 12, "condition": "B3 executed: designation receipt (frozen rule, "
+                            "in-window) + B-run receipt (paired battery "
+                            "both seats, McNemar exact — the surpass "
+                            "comparison itself)",
+     "requires": (("receipts/b-run-designation-*.json", 1),
+                  ("receipts/sp6b-b-run-*.json", 1))},
 )
 
 

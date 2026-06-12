@@ -160,6 +160,8 @@ def resolve(
 
     return {
         "ticket": "SP6B-B-RUN-DESIGNATION",
+        "sha_convention": ("sha256 over on-disk raw bytes (binary read, "
+                           "no line-ending normalization)"),
         "rule_version": RULE_VERSION,
         "rule_doc_sha256": _sha256_file(RULE_DOC),
         "resolved_at": now.strftime("%Y%m%dT%H%M%SZ"),
