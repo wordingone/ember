@@ -67,7 +67,7 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C52 | S3 | scaffolding-off residency test (goal terminal clause: founders/cloud off, mind persists + improves) | scripted: all founder/cloud scaffolding halted, ember runs N events + 1 verified gain solo, receipted | spec FROZEN docs/c52-scaffold-off-test-v1.md (120-min window, A1-A3 attestations, 12-episode sp6b-class battery, own-r1 gain leg, content-hash bound) | GATED:C10,C13 |
 | C53 | S1 | fp-34 owned-band chain (fp34-owned-band-prereg-v1.md = sub-manifest) | band-freeze receipt + selftest; prong-A yield+verdict (GATED:round-2-sampling); prong-B (GATED:prong-A-PREDICTIVE) | fp34_band_owned.py receipts | OPEN (freeze+selftest pre-stageable) |
 | C54 | S5 | fp-33 B-leg instruments (B1 mail round-trip, B2 agency battery, B4 evals-through-harness) | each leg's paired receipt per fp33-surpass-prereg-v1.md bars (B1 ≥4/5 + >E2B; B2 ≥4/5 + >E2B; B4 dispatch both sides) | — | GATED:C15 |
-| C55 | S5 | surpass pre-stage pair: GSM8K-200 greedy harness (A3-ii) + B3 duty-battery spec frozen BEFORE first B-run | harness selftest receipt; duty-battery spec doc (20 episodes + expected-verb table) committed pre-execution | — | OPEN (pre-stageable NOW) |
+| C55 | S5 | surpass pre-stage pair: GSM8K-200 greedy harness (A3-ii) + B3 duty-battery spec frozen BEFORE first B-run | harness selftest receipt; duty-battery spec doc (20 episodes + expected-verb table) committed pre-execution | #343 merged @380254f (GSM8K_EVAL_SELFTEST PASS reproduced at gate) + docs/sp6b-duty-battery-spec-v1.md frozen @d2147eb, adversarially passed + v1.1 amendments in PR #345 | DONE |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
 

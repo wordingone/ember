@@ -1,0 +1,88 @@
+{
+  "ticket": "C52-ADVERSARIAL-PASS",
+  "ts": "20260612T175700Z",
+  "spec_file": "docs/c52-scaffold-off-test-v1.md",
+  "spec_sha256": "98bee091c03b3d7834e0966286544ea2bffb772dee12d56403f4333af1111eb0",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "pass_type": "adversarial: attestation loopholes A1-A3, injector-identity edge cases, gain-leg goalpost risks",
+  "findings": [
+    {
+      "id": "C52-F1",
+      "attestation": "A1",
+      "class": "ATTESTATION_LOOPHOLE",
+      "severity": "MEDIUM",
+      "finding": "'founders off' has two sub-checks: (a) process snapshot (zero claude.exe/codex sessions interacting) and (b) sqlite outbound count == 0. These are independent: a founder process could be alive without sending mail (a passes, b fails) or a scheduled mail could fire after the snapshot (a passes, b fails). The two checks are not coupled in time.",
+      "fix": "Sample both checks at the same timestamp; add a continuous outbound monitor for the full 120-min window, not just a start/end count."
+    },
+    {
+      "id": "C52-F2",
+      "attestation": "A2",
+      "class": "ATTESTATION_LOOPHOLE",
+      "severity": "HIGH",
+      "finding": "Config-level check (zero cloud endpoints in config) does not equal runtime check (zero cloud calls made). A resident loop could dynamically load a cloud endpoint at runtime not listed in the static config. Network audit line in receipt must be a captured runtime network trace, not a config inspection.",
+      "fix": "Require a runtime network capture (e.g. strace/netstat log) proving zero external connections during the window, not just config inspection."
+    },
+    {
+      "id": "C52-F3",
+      "attestation": "A3",
+      "class": "MECHANISM_ERROR",
+      "severity": "HIGH",
+      "finding": "'git status pre/post: no commits or working-tree mutations authored outside ember's own resident process' \u2014 git status does not show commit authorship. Outside commits already pushed would not appear in git status. To verify no outside-authored commits, git log --since=<start> with author filter is required.",
+      "fix": "Replace git status with: git log --since=<window_start> --until=<window_end> --format='%H %an' to verify all commits in window authored by ember's process identity."
+    },
+    {
+      "id": "C52-F4",
+      "attestation": "A1",
+      "class": "INJECTOR_IDENTITY_EDGE_CASE",
+      "severity": "HIGH",
+      "finding": "Injector identity is not named in the spec. A1 excludes 'injector identity' from founder outbound count, but if the injector sends mails using a founder identity (e.g. as leo), ember's MAIL_REPLY responses to the injector would be counted as outbound from ember to leo \u2014 not excluded. Misattribution would fail A1 incorrectly.",
+      "fix": "Name the injector identity explicitly in the spec (e.g. 'injector' or a dedicated mailbox sender id). Require the replay rig to use a non-founder sender id."
+    },
+    {
+      "id": "C52-F5",
+      "attestation": "A1",
+      "class": "INJECTOR_IDENTITY_EDGE_CASE",
+      "severity": "MEDIUM",
+      "finding": "Ember's MAIL_REPLY responses to the injector are outbound mails from ember. The A1 exclusion covers injector-sent mails (injector as sender), not mails sent TO the injector (injector as recipient). If the spec intends ember's event-leg replies to NOT count against A1's founder-outbound check, this needs explicit carve-out.",
+      "fix": "Clarify: 'outbound count == 0 excludes mails whose recipient is the injector identity (event-leg replies are expected)'."
+    },
+    {
+      "id": "C52-F6",
+      "gain_leg": true,
+      "class": "GOALPOST_RISK",
+      "severity": "HIGH",
+      "finding": "The held-out bucket for gain measurement must be frozen BEFORE the micro-round starts. The spec says 'paired pre/post on the round's held-out bucket' but does not specify when the bucket is frozen. If selected after the round, cherry-picking a favorable bucket is possible.",
+      "fix": "Require: held-out bucket sha256 recorded in the receipt BEFORE round start (pre-round attestation). Mismatch between pre-bound sha and post-round evaluation sha = FAIL."
+    },
+    {
+      "id": "C52-F7",
+      "gain_leg": true,
+      "class": "GOALPOST_RISK",
+      "severity": "MEDIUM",
+      "finding": "Ground truth source for the micro-round's verify step is not specified. If fetched from a cloud endpoint, it violates A2 (cloud off in loop path). If locally cached, the cache provenance must be frozen pre-window.",
+      "fix": "Specify ground truth source: either (a) a locally pinned file with sha256 in the receipt, or (b) the existing ledger/view mechanism (already local). Prohibit runtime cloud fetch."
+    },
+    {
+      "id": "C52-F8",
+      "gain_leg": true,
+      "class": "GOALPOST_RISK",
+      "severity": "LOW",
+      "finding": "Micro-round duration is not bounded. If the round takes >120 min it cannot complete inside the window. The spec allows the gain leg to run 'inside the window' with a 120-min window but no cap on round duration.",
+      "fix": "Add: micro-round must complete within <T> min of window start (e.g. leave 20 min for gain measurement). Or: state that if micro-round does not complete inside window, C52 = FAIL."
+    },
+    {
+      "id": "C52-F9",
+      "attestation": "general",
+      "class": "ATTESTATION_LOOPHOLE",
+      "severity": "MEDIUM",
+      "finding": "Timestamps in the receipt are self-attested by the orchestrator that assembles the receipt. No independent timestamp source required (e.g. signed clock, git commit timestamp). An orchestrator controlling receipt assembly could falsify window boundaries.",
+      "fix": "Anchor window start/end to verifiable external markers: git commit sha at start (pre-state) + end (post-state), both sha256-bound in the receipt."
+    }
+  ],
+  "finding_count": 9,
+  "severity_summary": {
+    "HIGH": 4,
+    "MEDIUM": 4,
+    "LOW": 1
+  }
+}
