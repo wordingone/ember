@@ -64,14 +64,24 @@ arithmetic intensity — batch and fusion are how it climbs the roofline.
 
 | # | Lever | Expected (basis) | Status → action |
 |---|---|---|---|
-| L1 | B=24 (+lr cert E1b) | 1.345× (MEASURED) | cert at 1B-ckpt boundary, <1h |
-| L2 | B-ladder beyond 24 (B=32/48 to VRAM/compute knee) | unknown, bench is cheap | NEW bench cell |
-| L3 | Fused-muon NS chain (#329) | optimizer wall 45.9%→bw-bound fusion; step 1.3–1.6× if phase halves | BENCH NOW (governed window beside live run — fp33 precedent) |
-| L4 | fp8 native route (fp-35c successor) | backward = 56.5% GPU; GEMM ~2× → step 1.3–1.5× | integration A/B, beat-bf16 bar stands |
-| L5 | Checkpointing OFF (recompute tax ~25% of fwd+bwd) | 1.15–1.25× if VRAM fits (17.2 GiB free at B=4!) | NEW bench cell |
-| L6 | torch.compile on native-Windows path (daemon env failure = wall to break, not accept) | 1.1–1.3× (QAT elementwise fusion) | break-the-wall item |
-| L7 | Duty cycle: loader/ckpt/eval stalls in REAL run (benches exclude by design) | unknown — measure | mine from 12c050e7 logs |
-| L8 | Data/objective efficiency (H2: selection, replay, easy-mass discount) | effective-compute multiplier, unbounded | round-design constraint |
+| L1+L2 | Batch axis | — | **LANDED 1.335× (knee receipt fp32-step-econ-...213856Z: B=16 24,667 tok/s; B=24 plateau 24,645; B≥32 OOM — axis EXHAUSTED at 1.335×)** |
+| L3 | Fused-muon NS chain (#329) | optimizer wall 45.9%; perfect fusion bounds at 1.85× | first KILL pre-MSVC (Triton VS-discovery bug, receipt ...213247Z); env-fixed retry RUNNING |
+| L4 | fp8 native route (fp-35c) | — | **KILLED at c03 widths (receipt fp35c-...214509Z: mean 0.867×; width-conditional — 1.15× on K1024→N4096, loses on N1024 outputs). ARCH datapoint: wider hidden flips fp8 positive** |
+| L5 | Checkpointing OFF | — | **KILLED: every no-ckpt cell SKIPPED-OOM at B≥16 under the 0.80 cap (same receipt as L2) — activations don't fit on 24GB at useful batch** |
+| L6 | torch.compile (MSVC env fixed — cl.exe existed; Triton x86-path discovery bug) | 1.1–1.3× (QAT elementwise fusion) | compile test PASS; bench cell after L3 |
+| L7 | Duty cycle: loader/ckpt/eval stalls in REAL run | unknown — measure | mine from stopped-run logs (Leo, on eli's log receipt) |
+| L8 | Data/objective efficiency (H2) | effective-compute multiplier, unbounded | round-design constraint |
+
+**Compound arithmetic after round 1 of receipts (21:50Z):** ceiling of the
+remaining mechanical stack = 1.335 (batch, landed) × ≤1.85 (L3 perfect
+fusion bound) × ~1.2 (L6 estimate) ≈ **≤2.96× — the mechanical stack
+CANNOT reach the 3.3× shatter criterion on c03 even with perfect L3.**
+The residual is ARCH-tagged from three independent receipts: hidden-1024
+is fp8-hostile (L4), activation-heavy beyond B=16 on 24GB (L5), and
+NS-chain wall-share (L3 target). Unless L3 overdelivers beyond its
+physics bound, the three-way decision converges on STOP + REDESIGN: a
+core whose widths are fp8-positive, whose activations fit no-ckpt at the
+batch knee, and whose optimizer fuses — designed FOR the levers.
 
 Compound mechanical target (L1×L3×L4×L5 mid-estimates): **≥3.3×, stretch
 ~5× with L2/L6 → ≥72k tok/s paced → 7B-token c03 pretrain in ~27h.** That
