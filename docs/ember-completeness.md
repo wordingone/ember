@@ -54,6 +54,14 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C39 | S1 | zero-cloud loop receipt (#212) | one full round config-only + loop-path locality manifest | round-local-loop-20260612T094223Z (sp3 row 8a binds it) | DONE |
 | C40 | S1 | GPU efficiency registry execution (#284/#289/#294/#296/#298/#301/#305) | fp8 width-conditional dispatch, recompute NONE adoption, cuda-graph A/B — each receipted | 6/7 receipts verified (jude R2); #298 receipt MISSING from tree — locate or re-run | PART |
 | C41 | S1 | technique-registry verdict closure | zero CANDIDATE/WATCH rows left in technique-registry.jsonl: each reaches TESTED/ADOPT/KILL via the speedrun proxy protocol, per-row receipts bound; tally walks the jsonl as a sub-manifest | technique-registry.jsonl rows | PART (4 ADOPT in v0; 11 CANDIDATE + 1 WATCH open) |
+| C42 | S2 | round-1 verdict on the small core (t2 train → t4 four-arm chain) | verdict receipt: floor measured or fallback verdict (q15 floor-unmeasurable receipted; 3B fallback chain c9b26f8e) | t1-smoke-20260610T115140Z + q15 verdict receipts; 3B chain receipts pending | PART |
+| C43 | S2 | round-2 SELF-GENERATED episodes round (STATE: REQUIRED for goal) | t2_round --round 2 on r1 adapter; design arms per bottleneck-conversion §2; calibration instrumented | — | GATED:round-1-verdict |
+| C44 | S6 | contamination probe executed (t1c, active core) | continuation-membership signal ≤5pp and zero ID-recall hits, receipted | staged (t1c_run_q15.py) | GATED:idle-window-post-r1 |
+| C45 | S2 | W-code second world admission (w1 floor → w2 ingest → w4 heldout gate) | w1 floor receipt F>0; ingest receipt; w4 paired deltas | chain BUILT + unit-checked; floor receipt pending | GATED:w1-floor-receipt |
+| C46 | S3 | NC-K kernel v1.0 freeze | freeze per docs/kernel-v1-freeze-spec.md; replay + schema receipts | kernel_replay 20/20 both verdicts; ledger-schema-v3 spec'd | GATED:round-1-verdict+schema-review |
+| C47 | S2 | additional worlds (NC1c IFC, NC1d ARC-3 policy) | world admission floor per formalization §7 | — | GATED:NC0-verdict |
+| C48 | S2 | gate-stats correctness (exact methods for zero-inflated n=100; power notes) | Wilson/Newcombe-paired adopted; round-2 sized BEFORE launch; receipted review | — | OPEN |
+| C49 | S2 | teacher-admission probe (feed-per-GPU-hour, sampler provenance) | admission receipt per teacher-system §7b | — | GATED:C45+feed-math |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
 
@@ -70,7 +78,13 @@ pieces" with the source named:
       covers all 16 seed entries as a sub-manifest (tally walks the jsonl);
       C3 (fused-muon) and C40 (executed rows) already pin the receipted ones.
       No per-technique manifest rows — the registry IS the row source.
-- [ ] STATE.md pending layers (≥2 always listed)
+- [x] STATE.md pending layers + branch registry — swept 2026-06-12T16:35Z:
+      rows C42-C49 added (round-1 verdict, round-2 self-gen [goal-REQUIRED],
+      t1c contamination, W-code world, kernel freeze, NC1c/d, gate-stats,
+      teacher admission). No-new-piece: 7B retained evals (review 06-17 kill
+      candidate), HF upload (standing), release-scan/DiffusionGemma
+      (standing exteroception, not completion-bound), config rollout
+      (user-gated, not an ember piece).
 - [ ] fp-* / sp-* protocol docs (every standing obligation)
 - [ ] GOAL.md reading notes (each binding clause → testable row)
 - [ ] work-ahead-ledger rows (parents must map to rows here)

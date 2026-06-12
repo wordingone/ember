@@ -1,0 +1,38 @@
+{
+  "ticket": "PREREG-FREEZE-PROOF",
+  "ts": "2026-06-12T16:32:04Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "note": "Composite receipt binding sha256 of each frozen protocol doc to the git commit that froze it, proving freeze BEFORE data window. Minted by jude from existing git/receipt evidence, no new runs.",
+  "freezes": {
+    "fp-23": {
+      "issue": 135,
+      "pr": 138,
+      "file": "scripts/fp23_probe_prereg.py",
+      "fp23_probe_prereg_py_sha256": "6f9ef6cb4acb53ee724220fc0543a0fa6e8bfa1342d03db4faea09e17867b03f",
+      "freeze_commit": "affcbb514e3ee3a12d97195b96c5090c9e9a5cd2",
+      "freeze_date_utc": "2026-06-11T03:46:49Z",
+      "pre_data_proof": "un-freeze guard exits 1 when --checkpoint-receipt supplied (verified); freeze_date before first training receipt (829b135, 2026-06-10)",
+      "data_window": "pretrain step 0 (run 12c050e7)"
+    },
+    "fp-31": {
+      "issue": 220,
+      "pr": 221,
+      "file": "scripts/fp31_l2_grammar.py",
+      "fp31_l2_grammar_py_sha256": "cca51834e6a32f24844770d1332eaa6d5f82ee33025534ce6a22c198a6d328f7",
+      "freeze_commit": "7204f97525aaf46fd19ee3250d471b84c7800c65",
+      "freeze_date_utc": "2026-06-11T13:45:00Z",
+      "pre_data_proof": "commit message verbatim: before any L2 materialization; no L2 episode receipt in tree predates freeze",
+      "data_window": "L2 grammar materialization (fp-27b round-1, trigger-gated)"
+    },
+    "fp-36": {
+      "issue": 326,
+      "pr": 327,
+      "file": "docs/fp36-1b-info-interpretation-v0.md",
+      "fp36_1b_info_interpretation_v0_md_sha256": "3c8ab8b587e0b31e699b03a51bd11e0a719cb3ecad6c4b99e3d7cf10ca8d46b0",
+      "freeze_commit": "8b38bd7887998ecce51072c1c7d6025bea518f4b",
+      "freeze_date_utc": "2026-06-12T12:16:03Z",
+      "pre_data_proof": "fp24-verdict-1B-*.json absent from receipts/ (verified); fp36_consistency.py pre-data assertion confirmed PASS; commit message: FROZEN pre-data",
+      "data_window": "1B checkpoint verdict receipt (fp24-verdict-1B-*)"
+    }
+  }
+}
