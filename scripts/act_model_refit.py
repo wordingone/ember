@@ -25,8 +25,10 @@ C = {
         (26, True,  "OOM",  "fp38-l9-flash-ab-20260612T223639Z b26-nockpt-flash"),
         (33, True,  "OOM",  "fp38-l9-flash-ab-20260612T223639Z b33-nockpt-flash"),
         (39, True,  "OOM",  "fp38-l9-flash-ab-20260612T223639Z b39-nockpt-flash"),
+        (16, True,  "OOM",  "fp38c-l9-eager-20260612T231505Z b16-nockpt-flash-eager (decisive row, consumed)"),
+        (8,  True,  "FIT",  "fp38c-l9-eager-20260612T231505Z b8-nockpt-flash-eager OK 27894.6 tok/s (bench-path)"),
     ],
-    "pending_cells": [(16, True), (8, True)],   # eli completion cells (mail 15078)
+    "pending_cells": [(8, True)],   # production-stack b8-flash (MTP activations) — mail 15082 rider
 }
 
 def budget_bytes():
@@ -64,16 +66,17 @@ def decisions(lo, hi):
 
 def selftest():
     lo, hi, _ = interval()
-    # b26-flash OOM forces a > ~30 (vs the falsified 20 B/unit grid constant)
-    assert 29.0 < lo < 32.0, lo
+    # v2 (fp38c rows consumed): b16-flash OOM is the binding lower bound ~48.9
+    # (the row the v1 emission predicted DECISIVE at 45.6 — confirmed, OOM side);
+    # b8-flash FIT is the binding upper bound ~97.9. Grid's 20 B/unit excluded.
+    assert 47.0 < lo < 51.0, lo
     assert lo > 20.0, "grid constant 20 B/unit must be OUTSIDE the interval"
-    # b4-noflash FIT gives the (weak) upper bound ~134
-    assert 120.0 < hi < 150.0, hi
-    d = decisions(lo, hi)
-    b16 = next(x for x in d if x["B"] == 16)
-    assert "DECISIVE" in b16["verdict"], b16   # b16-flash splits the interval
+    assert 95.0 < hi < 100.0, hi
+    assert lo < hi, (lo, hi)   # observations stay mutually consistent
+    # no-ckpt knee at the refit interval: B=8 fits, B=16 does not -> knee in [8,16)
+    assert decisions(lo, hi), "pending production-b8 cell must be enumerated"
     print("ACT_REFIT_SELFTEST_PASS  (a in (%.1f, %.1f) B/unit; grid's 20 excluded; "
-          "b16-flash decisive)" % (lo, hi))
+          "v1 decisive-cell prediction confirmed by fp38c)" % (lo, hi))
 
 def main():
     ap = argparse.ArgumentParser()

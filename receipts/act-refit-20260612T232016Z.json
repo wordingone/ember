@@ -1,0 +1,130 @@
+{
+ "ticket": "FP-39-ACT-REFIT",
+ "ts": "20260612T232016Z",
+ "issue": 359,
+ "constants": {
+  "h": 1024,
+  "d": 20,
+  "heads": 16,
+  "S": 1024,
+  "gov_cap_gib": 19.200000000000003,
+  "margin_gib": 1.5,
+  "static_gib": 2.41,
+  "obs": [
+   [
+    4,
+    false,
+    "FIT",
+    "12c050e7 ran no-ckpt B=4 (configs/v0-pretrain-config.json)"
+   ],
+   [
+    16,
+    false,
+    "OOM",
+    "fp32-step-econ-20260612T213856Z b16-nockpt SKIPPED-OOM"
+   ],
+   [
+    26,
+    true,
+    "OOM",
+    "fp38-l9-flash-ab-20260612T223639Z b26-nockpt-flash"
+   ],
+   [
+    33,
+    true,
+    "OOM",
+    "fp38-l9-flash-ab-20260612T223639Z b33-nockpt-flash"
+   ],
+   [
+    39,
+    true,
+    "OOM",
+    "fp38-l9-flash-ab-20260612T223639Z b39-nockpt-flash"
+   ],
+   [
+    16,
+    true,
+    "OOM",
+    "fp38c-l9-eager-20260612T231505Z b16-nockpt-flash-eager (decisive row, consumed)"
+   ],
+   [
+    8,
+    true,
+    "FIT",
+    "fp38c-l9-eager-20260612T231505Z b8-nockpt-flash-eager OK 27894.6 tok/s (bench-path)"
+   ]
+  ],
+  "pending_cells": [
+   [
+    8,
+    true
+   ]
+  ]
+ },
+ "budget_gib": 15.29,
+ "a_interval_bytes_per_unit": [
+  48.9,
+  97.9
+ ],
+ "grid_constant_falsified": 20.0,
+ "observation_rows": [
+  {
+   "B": 4,
+   "flash": false,
+   "outcome": "FIT",
+   "a_threshold": 131.7,
+   "src": "12c050e7 ran no-ckpt B=4 (configs/v0-pretrain-config.json)"
+  },
+  {
+   "B": 16,
+   "flash": false,
+   "outcome": "OOM",
+   "a_threshold": -15.1,
+   "src": "fp32-step-econ-20260612T213856Z b16-nockpt SKIPPED-OOM"
+  },
+  {
+   "B": 26,
+   "flash": true,
+   "outcome": "OOM",
+   "a_threshold": 30.1,
+   "src": "fp38-l9-flash-ab-20260612T223639Z b26-nockpt-flash"
+  },
+  {
+   "B": 33,
+   "flash": true,
+   "outcome": "OOM",
+   "a_threshold": 23.7,
+   "src": "fp38-l9-flash-ab-20260612T223639Z b33-nockpt-flash"
+  },
+  {
+   "B": 39,
+   "flash": true,
+   "outcome": "OOM",
+   "a_threshold": 20.1,
+   "src": "fp38-l9-flash-ab-20260612T223639Z b39-nockpt-flash"
+  },
+  {
+   "B": 16,
+   "flash": true,
+   "outcome": "OOM",
+   "a_threshold": 48.9,
+   "src": "fp38c-l9-eager-20260612T231505Z b16-nockpt-flash-eager (decisive row, consumed)"
+  },
+  {
+   "B": 8,
+   "flash": true,
+   "outcome": "FIT",
+   "a_threshold": 97.9,
+   "src": "fp38c-l9-eager-20260612T231505Z b8-nockpt-flash-eager OK 27894.6 tok/s (bench-path)"
+  }
+ ],
+ "pending_cell_decisions": [
+  {
+   "B": 8,
+   "flash": true,
+   "a_threshold": 97.9,
+   "verdict": "DECISIVE - outcome splits the interval at a=97.9"
+  }
+ ],
+ "reading": "no-ckpt knee for ANY candidate = solve a*units(B) <= budget at the refit a; until b16/b8-flash land, use a_lo (optimistic bound) and label knees PROVISIONAL"
+}
