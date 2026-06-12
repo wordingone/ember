@@ -26,18 +26,22 @@ machine; the wall is broken by building the kernel path ourselves. Owner: Leo
 
 ## Route ladder (cheapest probe first; each rung = receipt before the next)
 
-- **P1 — native-Windows torch probe (cheap, ~minutes):** does
-  `torch._scaled_mm` initialize CUTLASS under native Windows torch (non-WSL2)?
-  E5's failure is environment-bound; if native Windows works, the route is
-  "run FP8 jobs native-side" and NO kernel authoring is needed for the mm
-  itself (integration work remains). Receipt: one fp8 mm + kernel-name trace.
-- **P2 — CUTLASS-direct build in WSL2:** build the fp8 GEMM extension against
-  the env's CUDA 12.4 (bypassing torch's prebuilt dispatch). Receipt: same
-  micro-bench, SASS/kernel-name proof of fp8 tensor-core engagement.
-- **P3 — Triton rowwise fp8 mm (authored):** known caveat triton#5583 (Triton
-  fp8 slower than CUTLASS _scaled_mm on Ada) — acceptable ONLY if P1+P2 fail;
-  the bar is then beating BF16, not beating CUTLASS. Paired with backward
-  phase-split probe to size the true GEMM fraction.
+- **P1 — native-Windows torch probe: PASS (2026-06-12, gated).** Receipt
+  fp33-p1-native-fp8-probe-20260612T044036Z: kernel-name trace
+  `sm89_xmma_gemm_e4m3bf16_..._5x_cublas` on native Windows torch
+  2.10.0+cu126 — fp8 tensor cores engage via cuBLAS, no CUTLASS init failure.
+  E5's wall was environment-bound (WSL2 torch 2.6.0+cu124), as hypothesized.
+  **Route resolved: fp8 training jobs run native-Windows-side; the work that
+  remains is INTEGRATION (contract below), not kernel authoring.**
+- **P2 — CUTLASS-direct build in WSL2: UNBUILT (fallback).** Fires only if
+  native-side integration hits a wall (e.g. WSL2-resident daemon coupling
+  that can't move native). Receipt bar unchanged: micro-bench + kernel-name
+  proof of fp8 tensor-core engagement.
+- **P3 — Triton rowwise fp8 mm (authored): UNBUILT (fallback).** Known caveat
+  triton#5583 (Triton fp8 slower than CUTLASS _scaled_mm on Ada) — acceptable
+  ONLY if P1-route integration AND P2 fail; the bar is then beating BF16, not
+  beating CUTLASS. Paired with backward phase-split probe to size the true
+  GEMM fraction.
 - **Stability recipe (parallel, math axis):** µnit Scaling (2502.05967,
   hp-free FP8 at small widths) is the default; InfiR2 (2509.22536) the
   fallback; To-FP8-and-Back (2405.18710) failure modes become gate
