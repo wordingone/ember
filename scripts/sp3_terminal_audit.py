@@ -76,11 +76,12 @@ ROWS = (
     # bytes the B-run depends on).
     {"id": 10, "condition": "B-leg instruments frozen: duty battery "
                             "(content + encodings), seat-adapter contract, "
-                            "B-run designation rule",
+                            "B-run designation rule, frozen episode spec v1",
      "requires": (("docs/sp6-duty-battery.jsonl", 1),
                   ("docs/sp6-duty-battery-encodings.jsonl", 1),
                   ("docs/sp6c-seat-adapter-v0.md", 1),
-                  ("docs/sp6b-designation-rule-v0.md", 1))},
+                  ("docs/sp6b-designation-rule-v0.md", 1),
+                  ("docs/sp6b-duty-battery-spec-v1.md", 1))},
     {"id": 11, "condition": "B-leg seats bound: shakedown receipts for "
                             "BOTH seats (E2B + ember), template hash pinned",
      "requires": (("receipts/sp6c-e2b-shakedown-*.json", 1),
@@ -89,8 +90,13 @@ ROWS = (
                             "in-window) + B-run receipt (paired battery "
                             "both seats, McNemar exact — the surpass "
                             "comparison itself)",
+     # field pin (3rd element): spec-v1 §pass/fail freezes "replay rig must
+     # record sha256 of THIS file in the receipt; mismatch = run void" — a
+     # B-run receipt minted against a tampered/stale battery can NEVER
+     # satisfy this row.
      "requires": (("receipts/b-run-designation-*.json", 1),
-                  ("receipts/sp6b-b-run-*.json", 1))},
+                  ("receipts/sp6b-b-run-*.json", 1,
+                   {"battery_sha256": "docs/sp6b-duty-battery-spec-v1.md"}))},
 )
 
 
@@ -119,7 +125,9 @@ def audit_row(row, nc=NC, tracked=None):
     if tracked is None:
         tracked = _tracked(nc)
     bound, gaps = [], []
-    for pat, min_count in row["requires"]:
+    for req in row["requires"]:
+        pat, min_count = req[0], req[1]
+        field_pins = req[2] if len(req) > 2 else None
         hits = sorted(globmod.glob(f"{nc}/{pat}"))
         if tracked is not None:
             hits = [h for h in hits
@@ -133,10 +141,29 @@ def audit_row(row, nc=NC, tracked=None):
                     continue
                 if validate_receipt(d):
                     continue            # dirty receipts never satisfy a row
+                if field_pins:
+                    # receipt field must equal sha256 of the pinned file's
+                    # CURRENT bytes; missing field or drift = run void
+                    pin_ok = True
+                    for field, pinned in field_pins.items():
+                        try:
+                            want = _sha(os.path.join(nc, pinned))
+                        except OSError:
+                            pin_ok = False
+                            break
+                        if d.get(field) != want:
+                            pin_ok = False
+                            break
+                    if not pin_ok:
+                        continue
             ok.append(h)
         if len(ok) < min_count:
+            pin_note = ""
+            if field_pins:
+                pin_note = "; field pins: " + ", ".join(
+                    f"{f}==sha256({p})" for f, p in field_pins.items())
             gaps.append(f"requires >={min_count} of '{pat}' "
-                        f"(receipt_check-clean AND git-tracked); "
+                        f"(receipt_check-clean AND git-tracked{pin_note}); "
                         f"found {len(ok)}")
         else:
             # bind the NEWEST matches (ts-sorted names): a later receipt
@@ -207,6 +234,36 @@ def _selftest():
                         "requires": (("receipts/good-1.json", 1),)},
                        nc=td)["receipts"][0]["sha256"]
         assert s1 != s2, "sha must track bytes"
+    # field pin (spec-v1 battery binding): the receipt must carry the
+    # pinned file's CURRENT sha256; stale sha or missing field = run void
+    with tempfile.TemporaryDirectory() as td3:
+        os.makedirs(f"{td3}/receipts")
+        os.makedirs(f"{td3}/docs")
+        open(f"{td3}/docs/battery.md", "w").write("frozen battery v1")
+        good = hashlib.sha256(b"frozen battery v1").hexdigest()
+        sc = SHA_CONVENTION
+        json.dump({"ticket": "x", "ts": "x", "battery_sha256": good,
+                   "sha_convention": sc},
+                  open(f"{td3}/receipts/sp6b-b-run-a-1.json", "w"))
+        json.dump({"ticket": "x", "ts": "x", "battery_sha256": "0" * 64,
+                   "sha_convention": sc},
+                  open(f"{td3}/receipts/sp6b-b-run-b-1.json", "w"))
+        json.dump({"ticket": "x", "ts": "x"},
+                  open(f"{td3}/receipts/sp6b-b-run-c-1.json", "w"))
+        pin = {"battery_sha256": "docs/battery.md"}
+        r_pin = audit_row(
+            {"id": 12, "condition": "c",
+             "requires": (("receipts/sp6b-b-run-a-*.json", 1, pin),)}, nc=td3)
+        assert r_pin["verdict"] == "RECEIPTED", r_pin
+        r_drift = audit_row(
+            {"id": 12, "condition": "c",
+             "requires": (("receipts/sp6b-b-run-b-*.json", 1, pin),)}, nc=td3)
+        assert r_drift["verdict"] == "GAP-NAMED", r_drift
+        assert "field pins" in r_drift["gaps"][0], r_drift
+        r_nofield = audit_row(
+            {"id": 12, "condition": "c",
+             "requires": (("receipts/sp6b-b-run-c-*.json", 1, pin),)}, nc=td3)
+        assert r_nofield["verdict"] == "GAP-NAMED", r_nofield
     # untracked evidence can never satisfy a row (Kai 14631 class):
     # inject a tracked-set that excludes the only matching receipt
     import tempfile as _tf
