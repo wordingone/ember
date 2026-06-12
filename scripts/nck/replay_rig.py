@@ -23,6 +23,7 @@ NEVER writes outside tempdirs unless --write is present on CLI.
 """
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
@@ -186,8 +187,9 @@ def materialize(episode: dict[str, Any], sandbox_dir: str) -> None:
     - content_json: written as compact JSON (no trailing newline beyond what
       json.dumps produces — compact means no indent, separators=(',', ':')).
     - content_text: written verbatim (bytes as-is in UTF-8).
-    - mtime_offset_s: applied via os.utime; offset is relative to REPLAY_EPOCH,
-      NOT wall-clock time, for full determinism.
+    - mtime: ALWAYS pinned to REPLAY_EPOCH + mtime_offset_s (offset 0 pins to
+      the epoch itself). Wall-clock mtimes would leak nondeterminism into any
+      seat prompt that renders file ages (sp-6c contract).
 
     Refuses absolute relpaths or '..' traversal (raises RigRefuse).
     """
@@ -210,9 +212,8 @@ def materialize(episode: dict[str, Any], sandbox_dir: str) -> None:
             )
 
         offset: int = fx.get("mtime_offset_s", 0)
-        if offset != 0:
-            target_mtime = REPLAY_EPOCH + offset
-            os.utime(str(dest), (target_mtime, target_mtime))
+        target_mtime = REPLAY_EPOCH + offset
+        os.utime(str(dest), (target_mtime, target_mtime))
 
 
 # ---------------------------------------------------------------------------
@@ -305,21 +306,40 @@ def _make_noop_registry() -> ToolRegistry:
 # ---------------------------------------------------------------------------
 
 
+def _core_accepts_sandbox(core: Callable[..., Any]) -> bool:
+    """True when core declares >=3 positional parameters (sp-6c seat-core
+    protocol: core(event, registry, sandbox_dir)). 2-param cores (stub_core)
+    keep the original call shape."""
+    try:
+        sig = inspect.signature(core)
+    except (TypeError, ValueError):
+        return False
+    positional = [
+        p for p in sig.parameters.values()
+        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+    ]
+    return len(positional) >= 3
+
+
 def replay_episode(
     episode: dict[str, Any],
-    core: Callable[[Event, ToolRegistry], list[Action]],
+    core: Callable[..., list[Action]],
     sandbox_dir: str,
 ) -> list[Action]:
     """Replay one episode: feed each event to core, collect emitted Actions.
 
     - Registry is fresh (no-op recorders) — no live filesystem outside sandbox.
     - Actions are returned in the order they were emitted across all events.
+    - Cores declaring a third positional parameter receive sandbox_dir
+      (sp-6c seat protocol — seats render world state from the sandbox).
     """
     registry = _make_noop_registry()
     events = build_events(episode, sandbox_dir)
+    takes_sandbox = _core_accepts_sandbox(core)
     collected: list[Action] = []
     for event in events:
-        actions = core(event, registry)
+        actions = core(event, registry, sandbox_dir) if takes_sandbox \
+            else core(event, registry)
         collected.extend(actions)
     return collected
 
@@ -335,6 +355,9 @@ def _normalize_target(action: Action, event: Event, sandbox_dir: str) -> str:
     1. args['target'] — use verbatim.
     2. args['to']:
        - If equals event.payload['from'] → 'sender'
+       - If the LITERAL string 'sender' without matching the event's actual
+         sender → 'literal-sender' (deictic guard: a seat must name the real
+         sender; emitting the word 'sender' must not match '^sender$')
        - If equals 'owner' or REPLAY_OWNER → 'owner'
        - Else → raw value
     3. args['path'] — path RELATIVE to sandbox_dir (forward slashes).
@@ -348,6 +371,8 @@ def _normalize_target(action: Action, event: Event, sandbox_dir: str) -> str:
         evt_from = event.payload.get("from") if event else None
         if evt_from is not None and to_val == evt_from:
             return "sender"
+        if to_val == "sender":
+            return "literal-sender"
         if to_val == "owner" or to_val == REPLAY_OWNER:
             return "owner"
         return str(to_val)
