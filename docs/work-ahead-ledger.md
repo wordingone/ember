@@ -26,7 +26,7 @@ always "X is happening, moving on to Y while X happens."
 | 12 | ~~manifest pointer fixes from jude's sweep~~ DISCHARGED | R1+R2 applied @e4d27ef/@de9e88e; jude receipt-minting round in flight (14886) | Leo | numeric closure |
 | 13 | ~~B3 duty-battery spec freeze~~ DISCHARGED | docs/sp6b-duty-battery-spec-v1.md FROZEN (20 episodes, 6 verb classes, decoy guards, content-hash binding); jude adversarial pass queued pre-first-run | Leo | C55/#fp-33 |
 | 14 | ~~GSM8K-200 harness issue~~ DISCHARGED (minted #341) | AC in issue: greedy determinism check, receipt schema, selftest fixtures, pinned data, governed; rides Eli queue after #340 | Leo mint / Eli build | C55/#fp-33 |
-| 15 | ~~fp34 pre-stage~~ HALF-DISCHARGED: selftest PASS (Leo-run 16:48Z); freeze NOT fired — q15 round-1 is all-zero, so the one-shot freeze (refuses overwrite) would pin a degenerate EMPTY band; freeze fires on the 3B fallback round-1 verdict with nonzero per-task stats | trigger: 3B-r1-verdict-nonzero | Leo | C53 |
+| 15 | ~~fp34 pre-stage~~ HALF-DISCHARGED: selftest PASS (Leo-run 16:48Z); freeze HELD — daemon check 16:55Z: NO 3B chain in flight (q3 chain COMPLETED 06-10, verdict all-zero on ARC, world moved to W-code; STATE line 146). Per fp34 prereg the freeze input = OWNED-core round-1 per-task stats, which exist only post-1B-checkpoint | trigger: owned-core-round-1-stats-receipt | Leo | C53 |
 | 10 | ~~Eli loop: cron turn-generator~~ DISCHARGED | cron-tick-prompt.md written at eli/state/; CronCreate :26 (GATE) + :56 (BUILD) wired; receipt: ledger-row7-row10-20260612T140836Z.json | Eli | loop-eng doc |
 
 Standing row classes (refill sources when the table runs low): verdict-chain
