@@ -44,6 +44,24 @@ machine; the wall is broken by building the kernel path ourselves. Owner: Leo
   If that fails too at c03 widths, the honest fallback is fp8-at-larger-width
   (the technique scales INTO the next config, not out of this one) — recorded
   as a width-conditional row, not a route abandonment.
+- **Integration A/B round 2 — weight-cache variant: FAIL (2026-06-12, gated).**
+  Receipt fp35c-weight-cache-ab-20260612T055343Z: 0.843x mean. The cast
+  diagnosis was right (0.45 → 0.84 by removing weight casts) but the gap does
+  not close at K=1024. The K=4096 output_proj numbers are UNSTABLE
+  (2.18x / 0.84x / 0.84x across seeds {16,17,18}) — that is a measurement
+  problem, not a dispatch design input. **fp-35d (next, cheap): steady-state
+  micro-bench of the K=4096 shapes only — ≥20 warmup iters, ≥100 timed iters,
+  report p50/p90 per seed; bar for building width-conditional dispatch =
+  stable ≥1.2x at p50 across all 3 seeds. No dispatch code before that
+  receipt.** fp8 at c03 widths is otherwise parked: two variants measured
+  dead; the row stays CANDIDATE for larger-width configs.
+- **Re-prioritized target order (post-fp8, by E4 share):** (1)
+  selective-recompute — spend the measured 17.2 GiB free headroom on cached
+  activations to cut the recompute share inside backward's 56.5% (new
+  registry row; needs E4b recompute-fraction split first); (2)
+  cuda-graph-step — launch overhead inside the 11.3% optimizer/step share
+  ("cheapest, test first" already on its row); (3) fp-35d as above. Each is
+  an A/B step-time receipt at fixed config before any adoption.
 - **P2 — CUTLASS-direct build in WSL2: UNBUILT (fallback).** Fires only if
   native-side integration hits a wall (e.g. WSL2-resident daemon coupling
   that can't move native). Receipt bar unchanged: micro-bench + kernel-name
