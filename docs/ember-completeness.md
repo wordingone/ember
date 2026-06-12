@@ -15,24 +15,24 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C1 | S1 | from-scratch pretrain run (12c050e7 lineage) | run completes; checkpoints cadence receipts | checkpoint receipts | PART (run live, step-100000) |
 | C2 | S1 | NC2-own component contract (QAT/ternary/sub-quadratic/MTP/small-core) | each component has an executed receipt or registry verdict | docs/technique-registry.md rows | PART |
 | C3 | S1 | fused Muon NS5 kernel A/B | governed bench receipt; ns5_equiv_check PASS | pending #329 (MSVC install) | GATED:#329 |
-| C4 | S2 | verified-episode ledger (L1) | episodes pass verifier; manifest sha-bound | l1 episode receipts | PART |
-| C5 | S2 | three-test gain gate (transfer/control/deletion) | gate script + one full gated gain | fp-24/fp-24b receipts | PART |
-| C6 | S2 | self-curriculum generator | dry-run on frozen L1/L2 grammar; manifest-sha conformance | ledger row 9 (Eli) | OPEN |
-| C7 | S2 | 1B/2B/4B protocol verdict chain (fp-23/fp-29/fp-36) | dress-rehearsal receipt pre-1B | ledger row 2 (jude, mail 14830) | OPEN |
+| C4 | S2 | verified-episode ledger (L1) | episodes pass verifier; manifest sha-bound | MISSING — L1-episode-verification receipt to mint (jude 14866) | PART |
+| C5 | S2 | three-test gain gate (transfer/control/deletion) | gate script + one full gated gain | fp-verdict-chain-rehearsal-20260612T144614Z | PART |
+| C6 | S2 | self-curriculum generator | dry-run on frozen L1/L2 grammar; manifest-sha conformance | fp29-curriculum-dryrun-20260612T143048Z | DONE |
+| C7 | S2 | 1B/2B/4B protocol verdict chain (fp-23/fp-29/fp-36) | dress-rehearsal receipt pre-1B | fp-verdict-chain-rehearsal-20260612T144614Z | DONE |
 | C8 | S3 | avir-cli clean-room port = visible harness | NCK-E2E proof chain all-PASS | nck-e2e-proof-20260612T142318Z | PART (PR #332 at gate) |
 | C9 | S3 | ember mailbox identity | founders.yaml entry; live mail consume | merged (#259) + #332 stage 3 | PART |
 | C10 | S3 | resident event loop (mail/files/receipts/schedule) | resident runs; event→action receipts | — | OPEN |
 | C11 | S3 | CU communicability (user+Leo can interact) | CU console echo stage + interactive session receipt | #332 stage 5 (echo only) | PART |
 | C12 | S3 | self-editing harness behind invariant gate | harness-edit artifact: branch→receipts→promote; deletion test | — | OPEN |
 | C13 | S4 | cross-session persistence of gains | yesterday's gain measurably load-bearing today (receipt) | — | OPEN |
-| C14 | S5 | fp-33 paired-protocol freeze (#255: E1-E5 engine + envelope) | protocol doc frozen pre-verdict | fp-33 docs/receipts | PART |
+| C14 | S5 | fp-33 paired-protocol freeze (#255: E1-E5 engine + envelope) | protocol doc frozen pre-verdict | fp33-e1-open-base-inventory-20260612T033709Z | PART |
 | C15 | S5 | E2B-in-ember-seat baseline (#307 seat contract; #311 E2B SHAKEDOWN; #313 ember SHAKEDOWN; #268 GSM8K leg) | full paired battery, same worlds, governed | seat shakedown receipts | PART |
 | C16 | S5 | surpass receipts (both legs) | ember > E2B: ember-work + founder-likeness | — | GATED:C15 |
 | C17 | S6 | five un-removable invariants in code | protected paths + boot-time checksum verify | #332 stage 1 (boot_checksum) | PART |
-| C18 | S6 | resource governor on every job | VRAM frac + margin assert + pacer receipts | governed-launch receipts | DONE |
-| C19 | S2 | probe-set reconciliation (seed23 vs checkpoint_probe) | decision note + seed23 ride receipt | ledger row 3 | OPEN |
-| C20 | S6 | receipt hygiene: receipt_check green fleet-wide | sweep receipt, 0 failing (or grandfathered list) | PR #334 + jude triage 14849 | PART (at gate) |
-| C21 | S7 | retrieval substrate (KG turboquant VDB) — S7 prerequisite | parity+compression receipts on real corpus queries; on-demand CLI | mira INFRA-5 proto receipts | PART |
+| C18 | S6 | resource governor on every job | VRAM frac + margin assert + pacer receipts | v0-launch-gate-20260611T075419Z | DONE |
+| C19 | S2 | probe-set reconciliation (seed23 vs checkpoint_probe) | decision note + seed23 ride receipt | fp28b-probe-reconciliation-prestage-20260612T150202Z | DONE |
+| C20 | S6 | receipt hygiene: receipt_check green fleet-wide | sweep receipt, 0 failing (or grandfathered list) | receipt-hygiene-row8-20260612T143802Z | DONE |
+| C21 | S7 | retrieval substrate (KG turboquant VDB) — S7 prerequisite | parity+compression receipts on real corpus queries; on-demand CLI | mira/state/infra5-proto (outside tree — in-tree receipt due at v1) | PART |
 | C22 | S7 | corpus: journals/papers/experiment-logs/letters (PD-first) | per-item URL-pin+sha+license; vault-style manifests | — | GATED:C21 |
 | C23 | S7 | causal-chain extraction → synthetic reasoning/world-model datasets | extraction pipeline receipt; synthetic set passes verifier | — | GATED:C22 |
 
