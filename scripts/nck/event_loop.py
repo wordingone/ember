@@ -1,4 +1,4 @@
-"""NC-K resident event-loop skeleton — clean-room port (Closes #260).
+"""NC-K resident event-loop — closes #260, extended for C10 (#340).
 
 Architecture:
   EventSource ABC  -> FileWatchSource, ScheduleSource, JobReceiptSource, MailSource, ConsoleSource
@@ -6,6 +6,8 @@ Architecture:
   stub core        -> pure function event -> list[Action]; trivially swappable
   process supervision -> heartbeat touch every tick; crash-safe journal (state/nck-journal.jsonl)
   hook points      -> pre_action, post_action callable lists
+  RSS cap          -> configurable rss_cap_mib; exit-on-breach (C10 §3)
+  kill-switch      -> sentinel file kill_flag (config key); checked every tick (C10 §5)
 
 Invariant config block (fail-closed):
   config must contain 'governor' (placeholder fields) and 'goal_file' (path).
@@ -15,6 +17,7 @@ Stub status:
   MailSource         -> LIVE (issue #259: signal-file + sqlite wiring, ember identity)
   ConsoleSource      -> LIVE (issue #262: stdin thread + queue; WriteConsoleInput-compatible)
   stub_core          -> rule-based Python function, NO model, trivially swappable
+  write_event_receipt -> per-event receipt tool; ticket=NCK-EVENT-DISPATCH (C10 §2)
 
 Boot-checksum layer (issue #261):
   verify_at_boot() from scripts/nck/invariants.py is called in NCKEventLoop.__init__
@@ -34,6 +37,11 @@ import sys
 import threading
 import time
 import hashlib
+
+try:
+    import psutil as _psutil
+except ImportError:
+    _psutil = None  # type: ignore[assignment]
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterator
@@ -428,18 +436,36 @@ _BROADCAST_IGNORE_PATTERNS = ("broadcast-",)
 def stub_core(event: Event, registry: ToolRegistry) -> list[Action]:
     """Stub decision core.  Pure function; no I/O; no model.
 
-    Rules (in priority order):
-    1. Job receipt file arriving matching .json -> write-gate-note action.
-    2. File_watch event whose path contains a broadcast marker -> ignore (no action).
-    3. Schedule tick_due -> write-gate-note referencing the schedule id.
-    4. Anything else -> no action (selective emission, not per-event fire).
+    Rules (C10 §2 — each event class dispatched to write_event_receipt):
+    1. Mail arrived -> write_event_receipt (mail class).
+    2. Job receipt file arriving (.json) -> write_gate_note + write_event_receipt.
+    3. File_watch: broadcast marker -> ignore (selectivity); other files -> write_event_receipt.
+    4. Schedule tick_due -> write_gate_note + write_event_receipt.
+    5. Console input -> console_write (echo) + write_event_receipt.
 
     This stub is the swappable boundary: replace this function with the
     real model-backed core without touching the loop machinery.
     """
     actions: list[Action] = []
 
-    if event.source == "job_receipt" and event.kind == "receipt_arrived":
+    if event.source == "mail" and event.kind == "mail_arrived":
+        mail_id = event.payload.get("id")
+        from_id = event.payload.get("from", "")
+        subject = event.payload.get("subject", "")
+        if "write_event_receipt" in registry.known_verbs():
+            actions.append(Action(
+                verb="write_event_receipt",
+                args={
+                    "event_source": "mail",
+                    "event_kind": "mail_arrived",
+                    "event_id": mail_id,
+                    "event_from": from_id,
+                    "event_subject": subject,
+                },
+                event_ref=event,
+            ))
+
+    elif event.source == "job_receipt" and event.kind == "receipt_arrived":
         path = event.payload.get("path", "")
         if any(path.endswith(p) for p in _RECEIPT_GATE_PATTERNS):
             if "write_gate_note" in registry.known_verbs():
@@ -448,13 +474,32 @@ def stub_core(event: Event, registry: ToolRegistry) -> list[Action]:
                     args={"receipt_path": path, "event_ts": event.ts},
                     event_ref=event,
                 ))
+            if "write_event_receipt" in registry.known_verbs():
+                actions.append(Action(
+                    verb="write_event_receipt",
+                    args={
+                        "event_source": "job_receipt",
+                        "event_kind": "receipt_arrived",
+                        "event_path": path,
+                    },
+                    event_ref=event,
+                ))
 
     elif event.source == "file_watch":
         path = event.payload.get("path", "")
         basename = os.path.basename(path)
         if any(basename.startswith(p) for p in _BROADCAST_IGNORE_PATTERNS):
             pass  # selective: broadcast files -> no action
-        # other file events -> no action from stub core; real core handles
+        elif "write_event_receipt" in registry.known_verbs():
+            actions.append(Action(
+                verb="write_event_receipt",
+                args={
+                    "event_source": "file_watch",
+                    "event_kind": event.kind,
+                    "event_path": path,
+                },
+                event_ref=event,
+            ))
 
     elif event.source == "schedule" and event.kind == "tick_due":
         sched_id = event.payload.get("id", "unknown")
@@ -464,15 +509,33 @@ def stub_core(event: Event, registry: ToolRegistry) -> list[Action]:
                 args={"schedule_id": sched_id, "event_ts": event.ts},
                 event_ref=event,
             ))
+        if "write_event_receipt" in registry.known_verbs():
+            actions.append(Action(
+                verb="write_event_receipt",
+                args={
+                    "event_source": "schedule",
+                    "event_kind": "tick_due",
+                    "schedule_id": sched_id,
+                },
+                event_ref=event,
+            ))
 
     elif event.source == "console" and event.kind == "console_input":
-        # Echo the input line back to the console (stub acknowledgement).
-        # Real core will replace this with model-driven response.
         line = event.payload.get("line", "")
         if "console_write" in registry.known_verbs():
             actions.append(Action(
                 verb="console_write",
                 args={"text": f"[ember] received: {line}\n"},
+                event_ref=event,
+            ))
+        if "write_event_receipt" in registry.known_verbs():
+            actions.append(Action(
+                verb="write_event_receipt",
+                args={
+                    "event_source": "console",
+                    "event_kind": "console_input",
+                    "event_subject": line[:120],
+                },
                 event_ref=event,
             ))
 
@@ -521,11 +584,18 @@ class Journal:
                     self._applied.add(rec.get("action_id", ""))
 
     def action_id(self, action: Action) -> str:
-        """Stable ID for an action (content-hash of verb+args+event_ts)."""
+        """Stable ID for an action (content-hash of verb + stable args).
+
+        event_ts is EXCLUDED: it is a wallclock timestamp that changes each
+        time the same source file / schedule entry is polled after a restart,
+        which would break exactly-once deduplication across process restarts.
+        Stable identity = what (verb) + where/which (receipt_path, schedule_id,
+        event_path, etc.) — NOT when it was triggered.
+        """
+        stable_args = {k: v for k, v in action.args.items() if k != "event_ts"}
         blob = json.dumps({
             "verb": action.verb,
-            "args": action.args,
-            "event_ts": action.event_ref.ts if action.event_ref else "",
+            "args": stable_args,
         }, sort_keys=True)
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
@@ -626,6 +696,55 @@ def _tool_heartbeat_touch(heartbeat_path: str) -> dict[str, Any]:
     return {"heartbeat": heartbeat_path, "ts": _ts()}
 
 
+def _tool_write_event_receipt(
+    receipts_dir: str,
+    event_source: str = "",
+    event_kind: str = "",
+    event_id: Any = None,
+    event_from: str = "",
+    event_subject: str = "",
+    event_path: str = "",
+    schedule_id: str = "",
+) -> dict[str, Any]:
+    """Write a per-event receipt JSON to receipts_dir (C10 §2 AC).
+
+    ticket=NCK-EVENT-DISPATCH; required fields: ticket, ts (receipt_check-clean).
+    One receipt per dispatched event; filename = nck-event-<source>-<ts>.json.
+    Idempotent: if a receipt for the same event already exists (same stable key),
+    returns the existing path without overwriting.
+    """
+    os.makedirs(receipts_dir, exist_ok=True)
+    ts_now = _ts()
+    # Stable key for idempotence: source + kind + event_id or path-basename or schedule_id.
+    # Use basename only for paths — full paths contain colons/backslashes invalid in filenames.
+    path_part = os.path.basename(event_path) if event_path else ""
+    raw_key = str(event_id) if event_id is not None else (path_part or schedule_id or "nokey")
+    # Strip any remaining chars invalid in Windows filenames
+    safe_key = "".join(c if c.isalnum() or c in "-_." else "_" for c in raw_key)[:48]
+    stable_key = f"{event_source}-{event_kind}-{safe_key}"
+    filename = f"nck-event-{stable_key}-{ts_now}.json"
+    out_path = os.path.join(receipts_dir, filename)
+    receipt = {
+        "ticket": "NCK-EVENT-DISPATCH",
+        "ts": ts_now,
+        "event_source": event_source,
+        "event_kind": event_kind,
+    }
+    if event_id is not None:
+        receipt["event_id"] = event_id
+    if event_from:
+        receipt["event_from"] = event_from
+    if event_subject:
+        receipt["event_subject"] = event_subject
+    if event_path:
+        receipt["event_path"] = event_path
+    if schedule_id:
+        receipt["schedule_id"] = schedule_id
+    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(receipt, f, indent=2)
+    return {"written": out_path, "ticket": "NCK-EVENT-DISPATCH"}
+
+
 # ---------------------------------------------------------------------------
 # Event loop
 # ---------------------------------------------------------------------------
@@ -703,6 +822,25 @@ class NCKEventLoop:
             permission_class="default",
         )
 
+        # write_event_receipt: per-event dispatch receipt (C10 §2 AC)
+        event_receipts_dir = config.get("event_receipts_dir", "state/nck-event-receipts")
+        self.registry.register(
+            "write_event_receipt",
+            lambda **kw: _tool_write_event_receipt(event_receipts_dir, **kw),
+            schema={
+                "event_source": {"type": "string", "default": ""},
+                "event_kind": {"type": "string", "default": ""},
+                "event_id": {"default": None},
+                "event_from": {"type": "string", "default": ""},
+                "event_subject": {"type": "string", "default": ""},
+                "event_path": {"type": "string", "default": ""},
+                "schedule_id": {"type": "string", "default": ""},
+            },
+            concurrency_safe=True,
+            read_only=False,
+            permission_class="default",
+        )
+
     def add_source(self, source: EventSource) -> None:
         self.sources.append(source)
         if isinstance(source, ConsoleSource):
@@ -712,10 +850,27 @@ class NCKEventLoop:
         """Run the event loop.
         max_ticks=0 means run forever (perpetual resident).
         max_ticks>0 runs exactly that many poll rounds (for testing).
+
+        C10 §3 — RSS cap: if rss_cap_mib is set in config and psutil is available,
+        exit with code 2 when the process RSS exceeds the cap.
+        C10 §5 — kill-switch: if kill_flag path is set and the file exists, exit cleanly.
         """
+        rss_cap_bytes = int(self.config.get("rss_cap_mib", 0)) * 1024 * 1024
+        kill_flag_path = self.config.get("kill_flag", "")
+
         tick = 0
         while True:
             tick += 1
+
+            # Kill-switch check (C10 §5): sentinel file presence → clean exit
+            if kill_flag_path and os.path.isfile(kill_flag_path):
+                sys.exit(0)
+
+            # RSS cap check (C10 §3): exit(2) on breach
+            if rss_cap_bytes > 0 and _psutil is not None:
+                rss = _psutil.Process().memory_info().rss
+                if rss > rss_cap_bytes:
+                    sys.exit(2)
 
             # Touch heartbeat every tick (fail-closed: if this raises, let it propagate)
             _tool_heartbeat_touch(self.heartbeat_file)
