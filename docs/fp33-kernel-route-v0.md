@@ -33,6 +33,17 @@ machine; the wall is broken by building the kernel path ourselves. Owner: Leo
   E5's wall was environment-bound (WSL2 torch 2.6.0+cu124), as hypothesized.
   **Route resolved: fp8 training jobs run native-Windows-side; the work that
   remains is INTEGRATION (contract below), not kernel authoring.**
+- **Integration A/B round 1 — cast-heavy variant: FAIL (2026-06-12, gated).**
+  Receipt fp33-fp8-linear-ab-20260612T051338Z: 0.45x mean across seeds
+  {16,17,18} × 3 c03 shapes — the 3-4 dtype casts per backward mm dominate at
+  K=1024 (raw _scaled_mm wins only at K=4096, and inconsistently). Stability
+  gates all PASS, so the kill is throughput-only. Adoption blocked by the WSD
+  segment guard, registry unpromoted. **Next variant (cheapest unprobed):
+  pre-quantized weight cache — cast weights to fp8 ONCE at init, per-step
+  casts drop to activations only (1-2 ops); same A/B protocol, same bars.**
+  If that fails too at c03 widths, the honest fallback is fp8-at-larger-width
+  (the technique scales INTO the next config, not out of this one) — recorded
+  as a width-conditional row, not a route abandonment.
 - **P2 — CUTLASS-direct build in WSL2: UNBUILT (fallback).** Fires only if
   native-side integration hits a wall (e.g. WSL2-resident daemon coupling
   that can't move native). Receipt bar unchanged: micro-bench + kernel-name
