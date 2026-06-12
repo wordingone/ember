@@ -1,8 +1,9 @@
 {
   "ticket": "V0-PRETRAIN-CONFIG",
-  "version": 2,
+  "version": 3,
   "frozen": "2026-06-11T07:20Z",
   "v2_delta": "2026-06-11T07:28Z — G-tokenizer green (PR #164 merged): tokenizer_receipt named; real token total recorded with the absorb decision. No other field changed.",
+  "v3_delta": "2026-06-12 — NONE arm adoption (PR #298): grad_checkpointing disabled at next WSD segment boundary/resume. A/B bench receipt: receipts/selective-recompute-ab-20260612T063250Z.json (none=1.213x vs full-ckpt). Margin-assert: 8.245 GiB peak / 23.99 GiB total / 19.19 GiB at 0.80 fraction = 10.9 GiB headroom >> 1.5 GiB floor.",
   "basis": "fp19-bench-20260611T024648Z (c03-qat receipted pace) + research/gpu-math-multiplier-table-v2-2026-06-11.json (survivor stack) + nc2-own-technique-contract.md (directed components) + research/v0-launch-gate.md (G-config row)",
 
   "model": {
@@ -15,7 +16,8 @@
     "vocab_rule": "MUST equal the frozen tokenizer's real vocab size from the TOKENIZER-FREEZE-V0 receipt; 32000 is the expected value, the receipt is binding",
     "seq": 1024,
     "tied_embeddings": true,
-    "grad_checkpointing": true,
+    "grad_checkpointing": false,
+    "grad_ckpt_disabled_by": "PR #298: NONE arm 1.213x vs full-ckpt; margin_assert_receipt: receipts/selective-recompute-ab-20260612T063250Z.json",
     "params_estimate": 368354304
   },
 
@@ -101,6 +103,6 @@
 
   "registry": {
     "note": "Corroboration declaration — 12c050e7 runs all four ADOPT rows; this block makes registry_gate.py exit 0 on crash-resume dispatch.",
-    "consumes": ["muon", "wsd-schedule", "qat", "governor-pacing"]
+    "consumes": ["muon", "wsd-schedule", "qat", "governor-pacing", "selective-recompute"]
   }
 }
