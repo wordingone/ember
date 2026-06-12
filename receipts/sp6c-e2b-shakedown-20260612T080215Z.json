@@ -1,0 +1,327 @@
+{
+  "ticket": "SP6C-E2B-SHAKEDOWN",
+  "label": "SHAKEDOWN-NOT-B-RUN",
+  "ts": "20260612T080215Z",
+  "seat": "e2b",
+  "model": {
+    "id": "google/gemma-4-E2B-it",
+    "revision": "b324173c7d5721c2baba7f3b17b3b9b3d34ab1e9",
+    "load_s": 21.3,
+    "device": "cpu",
+    "torch_dtype": "bfloat16"
+  },
+  "decode_params": {
+    "do_sample": false,
+    "greedy": true,
+    "max_new_tokens": 128
+  },
+  "template_hash": "0a085406cff23321fc71f3e1a50a6f64b79a72fe69498339c4b4752f90b480f9",
+  "adapter_commit_sha": "130107a29c10a2b1f473dbfc70f44de3d609b912",
+  "rig_commit_sha": "130107a29c10a2b1f473dbfc70f44de3d609b912",
+  "determinism_proof": {
+    "identical": true,
+    "episode_id": "M1",
+    "prompt_len": 2381,
+    "completion_len_run1": 22,
+    "completion_sample_run1": "ACTION: reply | to=eli"
+  },
+  "battery": {
+    "n_pass": 3,
+    "n_total": 20,
+    "pass_pct": 15.0,
+    "bat_s": 93.4,
+    "episodes": [
+      {
+        "id": "M1",
+        "expected_verb": "reply",
+        "target_pattern": "^sender$",
+        "pass": true,
+        "reason": "PASS: matched ('reply', 'sender')",
+        "emitted": [
+          [
+            "reply",
+            "sender"
+          ]
+        ],
+        "inference_s": 2.81
+      },
+      {
+        "id": "M2",
+        "expected_verb": "ack-begin",
+        "target_pattern": "^sender$",
+        "pass": true,
+        "reason": "PASS: matched ('ack-begin', 'sender')",
+        "emitted": [
+          [
+            "ack-begin",
+            "sender"
+          ]
+        ],
+        "inference_s": 3.01
+      },
+      {
+        "id": "M3",
+        "expected_verb": "challenge",
+        "target_pattern": "^sender$",
+        "pass": false,
+        "reason": "FAIL: expected verb='challenge' matching '^sender$'; emitted=[('ack-begin', 'sender')]",
+        "emitted": [
+          [
+            "ack-begin",
+            "sender"
+          ]
+        ],
+        "inference_s": 2.96
+      },
+      {
+        "id": "M4",
+        "expected_verb": "no-action",
+        "target_pattern": "^$",
+        "pass": true,
+        "reason": "PASS: no outward action emitted",
+        "emitted": [],
+        "inference_s": 1.81
+      },
+      {
+        "id": "M5",
+        "expected_verb": "clarify",
+        "target_pattern": "^sender$",
+        "pass": false,
+        "reason": "FAIL: expected verb='clarify' matching '^sender$'; emitted=[('ack-begin', 'sender'), ('reply', 'sender')]",
+        "emitted": [
+          [
+            "ack-begin",
+            "sender"
+          ],
+          [
+            "reply",
+            "sender"
+          ]
+        ],
+        "inference_s": 5.52
+      },
+      {
+        "id": "R1",
+        "expected_verb": "gate-pass",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-pass' matching 'receipts/.*\\\\.json'; emitted=[('gate-pass', 'job-tr1-20260622T000600Z.json')]",
+        "emitted": [
+          [
+            "gate-pass",
+            "job-tr1-20260622T000600Z.json"
+          ]
+        ],
+        "inference_s": 7.05
+      },
+      {
+        "id": "R2",
+        "expected_verb": "gate-fail",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-fail' matching 'receipts/.*\\\\.json'; emitted=[('gate-pass', 'job-tr2-20260622T000700Z.json')]",
+        "emitted": [
+          [
+            "gate-pass",
+            "job-tr2-20260622T000700Z.json"
+          ]
+        ],
+        "inference_s": 7.03
+      },
+      {
+        "id": "R3",
+        "expected_verb": "gate-fail",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-fail' matching 'receipts/.*\\\\.json'; emitted=[('gate-pass', 'job-tr3-20260622T000800Z.json')]",
+        "emitted": [
+          [
+            "gate-pass",
+            "job-tr3-20260622T000800Z.json"
+          ]
+        ],
+        "inference_s": 7.08
+      },
+      {
+        "id": "R4",
+        "expected_verb": "dedup",
+        "target_pattern": "^$",
+        "pass": false,
+        "reason": "FAIL: outward verbs emitted: ['gate-pass']",
+        "emitted": [
+          [
+            "gate-pass",
+            "job-tr4-dup-20260622T000900Z.json"
+          ]
+        ],
+        "inference_s": 7.32
+      },
+      {
+        "id": "R5",
+        "expected_verb": "escalate",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='escalate' matching '^owner$'; emitted=[('gate-pass', 'job-tzzz-20260622T001000Z.json')]",
+        "emitted": [
+          [
+            "gate-pass",
+            "job-tzzz-20260622T001000Z.json"
+          ]
+        ],
+        "inference_s": 7.22
+      },
+      {
+        "id": "S1",
+        "expected_verb": "execute-due",
+        "target_pattern": "^job|^state",
+        "pass": false,
+        "reason": "FAIL: expected verb='execute-due' matching '^job|^state'; emitted=[('execute-due', 'due-note.md')]",
+        "emitted": [
+          [
+            "execute-due",
+            "due-note.md"
+          ]
+        ],
+        "inference_s": 3.9
+      },
+      {
+        "id": "S2",
+        "expected_verb": "heartbeat-only",
+        "target_pattern": "^$",
+        "pass": false,
+        "reason": "FAIL: outward verbs emitted: ['execute-due']",
+        "emitted": [
+          [
+            "execute-due",
+            "schedule.json[0]"
+          ]
+        ],
+        "inference_s": 4.01
+      },
+      {
+        "id": "S3",
+        "expected_verb": "monitor",
+        "target_pattern": "^state/.*\\.jsonl$",
+        "pass": false,
+        "reason": "FAIL: expected verb='monitor' matching '^state/.*\\\\.jsonl$'; emitted=[('execute-due', 'schedule.json')]",
+        "emitted": [
+          [
+            "execute-due",
+            "schedule.json"
+          ]
+        ],
+        "inference_s": 3.71
+      },
+      {
+        "id": "S4",
+        "expected_verb": "escalate",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='escalate' matching '^owner$'; emitted=[('execute-due', 't-79')]",
+        "emitted": [
+          [
+            "execute-due",
+            "t-79"
+          ]
+        ],
+        "inference_s": 3.38
+      },
+      {
+        "id": "S5",
+        "expected_verb": "gate-then-next",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-then-next' matching 'receipts/.*\\\\.json'; emitted=[('execute-due', 'schedule.json'), ('gate-then-next', 'schedule.json')]",
+        "emitted": [
+          [
+            "execute-due",
+            "schedule.json"
+          ],
+          [
+            "gate-then-next",
+            "schedule.json"
+          ]
+        ],
+        "inference_s": 6.37
+      },
+      {
+        "id": "F1",
+        "expected_verb": "clear-lock",
+        "target_pattern": "locks/",
+        "pass": false,
+        "reason": "FAIL: expected verb='clear-lock' matching 'locks/'; emitted=[('clear-lock', 'run.lock')]",
+        "emitted": [
+          [
+            "clear-lock",
+            "run.lock"
+          ]
+        ],
+        "inference_s": 3.64
+      },
+      {
+        "id": "F2",
+        "expected_verb": "repair-escalate",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='repair-escalate' matching '^owner$'; emitted=[('monitor', 'ledger.json')]",
+        "emitted": [
+          [
+            "monitor",
+            "ledger.json"
+          ]
+        ],
+        "inference_s": 3.16
+      },
+      {
+        "id": "F3",
+        "expected_verb": "flag-missing",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='flag-missing' matching '^owner$'; emitted=[('monitor', 'state/claims.json')]",
+        "emitted": [
+          [
+            "monitor",
+            "state/claims.json"
+          ]
+        ],
+        "inference_s": 3.47
+      },
+      {
+        "id": "F4",
+        "expected_verb": "report",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='report' matching '^owner$'; emitted=[('monitor', 'disk-usage.json')]",
+        "emitted": [
+          [
+            "monitor",
+            "disk-usage.json"
+          ]
+        ],
+        "inference_s": 3.71
+      },
+      {
+        "id": "F5",
+        "expected_verb": "clean",
+        "target_pattern": "^$",
+        "pass": false,
+        "reason": "FAIL: outward verbs emitted: ['monitor']",
+        "emitted": [
+          [
+            "monitor",
+            ".marker"
+          ]
+        ],
+        "inference_s": 6.28
+      }
+    ]
+  },
+  "flags": [
+    "SHAKEDOWN-NOT-B-RUN: proves binding + replay-identity mechanics",
+    "CPU inference: device=cpu, dtype=bfloat16, live 12c050e7 holds VRAM",
+    "live run 12c050e7 NOT touched",
+    "template_hash frozen \u2014 any edit voids the B-run",
+    "zero edits to frozen battery/encodings/template"
+  ],
+  "live_run_untouched": "12c050e7"
+}
