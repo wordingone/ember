@@ -103,6 +103,6 @@
 
   "registry": {
     "note": "Corroboration declaration — 12c050e7 runs all four ADOPT rows; this block makes registry_gate.py exit 0 on crash-resume dispatch.",
-    "consumes": ["muon", "wsd-schedule", "qat", "governor-pacing"]
+    "consumes": ["muon", "wsd-schedule", "qat", "governor-pacing", "selective-recompute"]
   }
 }
