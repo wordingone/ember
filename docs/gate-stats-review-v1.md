@@ -19,7 +19,8 @@ per-task quantities (e.g. bits/episode), never for the binary pass rates.
 ## 2. Replacements (exact/score methods, all closed-form)
 
 - **Single-arm success rate:** Wilson score interval. Anchor case: 0/100
-  successes → 95% Wilson upper bound ≈ 3.6% (rule-of-three gives 3.0%) —
+  successes → 95% Wilson upper bound = 3.6993% exact (rule-of-three 3.0%;
+  jude anchor receipt gate-stats-346-20260612T202900Z — fixtures pin 0.036993) —
   i.e. "all-zero" certifies the TRUE rate only below ~4%, which is why
   all-zero floors are reported as "≤3.6% at 95%" and never as "0%".
 - **Paired arm difference (same tasks, two arms):** Newcombe paired
@@ -34,9 +35,9 @@ per-task quantities (e.g. bits/episode), never for the binary pass rates.
 ## 3. Power floor (the missing audit §6 note)
 
 With n=100 paired tasks and baseline ~2%, only LARGE deltas are detectable:
-roughly, the discordant-pair binomial needs b+c ≥ ~8 with strong asymmetry
-before exact McNemar can reach p<0.05 — so deltas under ~6pp are invisible
-at this n. Consequence, binding: **a null verdict at n=100 near p≈0 is a
+roughly, the discordant-pair binomial needs b+c ≥ 6 all-one-side (exact p=0.03125;
+b+c=5 gives 0.0625 — FAIL) before exact McNemar reaches p<0.05 — so deltas
+under ~6pp are invisible at this n (jude receipt gate-stats-346-20260612T202900Z). Consequence, binding: **a null verdict at n=100 near p≈0 is a
 power statement, not an equivalence claim.** Every null gate must say
 "underpowered below Xpp" with X from the helper (§4). Round-2 eval sizing
 uses the helper BEFORE launch: pick n so the prereg'd minimum interesting
