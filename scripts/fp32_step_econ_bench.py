@@ -73,8 +73,12 @@ CELLS = (
     (16, True, False),
     (24, True, False),
     (32, True, False),
+    (48, True, False),          # L2 — B-ladder knee probe
+    (4, False, False),           # L5 completeness
+    (8, False, False),           # L5 completeness
     (16, False, False),
     (32, False, False),
+    (48, False, False),         # L5 — checkpointing-OFF knee probe
 )
 SHA_CONVENTION = ("file shas = sha256 over the exact on-disk raw bytes, no "
                   "normalization")
