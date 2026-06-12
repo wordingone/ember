@@ -268,3 +268,41 @@ Founder-likeness leg of the milestone is evaluated through this harness.
 founders. use skills if they become unreachable." — execution routes to
 founders first; founder unreachable → founder-poke/restart skills, then own
 governed subagents (Haiku-class) as the fallback, Leo gates everything.
+
+---
+
+## NUMERIC CLOSURE (user 2026-06-12) — subgoals + completeness tally
+
+User directive: completion must be concluded "numerically and measurably and
+undeniably" by a tallying system over EVERY piece of context already planned
+or known about ember — not just the weights, not just the training, not just
+the harness. Structure:
+
+**SUBGOALS (each = a manifest section with its own tally):**
+- S1 owned core — from-scratch pretrain, NC2-own component contract honored.
+- S2 accumulation loop — self-generated verified episodes; three-test gate
+  (held-out transfer, matched control, deletion) on every gain.
+- S3 harness / NC-K — avir-cli clean-room port as visible harness; resident
+  event loop; mailbox identity; CU reachability; self-edit behind invariants.
+- S4 persistence — cross-session accumulation measurably load-bearing.
+- S5 surpass — fp-33 paired E2B protocol, both legs (ember-work,
+  founder-likeness), receipts.
+- S6 invariants + governance — the five un-removables enforced in code,
+  boot-checksummed.
+
+**COMPLETENESS MANIFEST:** `docs/ember-completeness.md` enumerates every
+planned/known piece (id, subgoal, AC, test, receipt pointer, status). A
+planned piece absent from the manifest is itself a gate violation — planning
+and manifest-entry are the same act from now on.
+
+**TALLY:** `scripts/ember_tally.py` (eng) walks the manifest, verifies each
+row's receipt exists AND passes its named check, emits
+`receipts/tally-<ts>.json` {total, implemented, pct, missing[]}. The tally
+receipt is the only completion authority; prose claims void. GOAL satisfied
+⇔ tally pct=100 AND the S5 surpass receipt exists.
+
+**LOOP DIRECTIVE (binding restatement):** while pct<100 — gate finished
+receipts → solve the binding constraint → launch the next governed job →
+delegate per the delegation rail → re-derive at each segment boundary.
+Auto-inject: the session-start hook now injects this GOAL verbatim every
+session (manual resumes included), so no resume path can drop it.
