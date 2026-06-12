@@ -1,7 +1,7 @@
 """NC-K resident event-loop skeleton — clean-room port (Closes #260).
 
 Architecture:
-  EventSource ABC  -> FileWatchSource, ScheduleSource, JobReceiptSource, MailSource (STUB)
+  EventSource ABC  -> FileWatchSource, ScheduleSource, JobReceiptSource, MailSource
   dispatch loop    -> pull events, route through TOOL REGISTRY
   stub core        -> pure function event -> list[Action]; trivially swappable
   process supervision -> heartbeat touch every tick; crash-safe journal (state/nck-journal.jsonl)
@@ -12,7 +12,7 @@ Invariant config block (fail-closed):
   Loop refuses to start on missing/invalid config.
 
 Stub status:
-  MailSource         -> NotImplementedError (see issue #259: mailbox identity not yet landed)
+  MailSource         -> LIVE (issue #259: signal-file + sqlite wiring, ember identity)
   stub_core          -> rule-based Python function, NO model, trivially swappable
 
 Boot-checksum layer (issue #261):
@@ -27,6 +27,7 @@ from __future__ import annotations
 import abc
 import json
 import os
+import sqlite3
 import time
 import hashlib
 from dataclasses import dataclass, field
@@ -251,19 +252,100 @@ class JobReceiptSource(EventSource):
 
 
 class MailSource(EventSource):
-    """STUB — mailbox identity not yet landed.
+    """Poll the ember signal file and emit mail_arrived events from the mailbox DB.
 
-    See issue #259 (ember mailbox identity: founders.yaml + signal wiring).
-    Once #259 lands and the signal-file wiring exists, replace this stub
-    with a real FileWatchSource over the ember signal file.
+    Implements issue #259: ember mailbox identity + founders.yaml signal wiring.
+    Emits Event(source="mail", kind="mail_arrived", payload={id,from,subject,body,channel})
+    per the frozen sp6 interface (docs/sp6-duty-battery-v0.md §Encoding half).
+
+    signal_path  — path to the founder's signal file (written by mailbox binary on new mail)
+    db_path      — path to mailbox.db (SQLite)
+    identity     — founder identity string used as to_id filter (default "ember")
     """
 
+    def __init__(
+        self,
+        signal_path: str,
+        db_path: str,
+        identity: str = "ember",
+    ) -> None:
+        self.signal_path = signal_path
+        self.db_path = db_path
+        self.identity = identity
+        # D1: initialize cursor to the current max id so the first poll never
+        # re-emits the entire broadcast history of a large DB.
+        self._last_id: int = self._query_max_id()
+
+    def _query_max_id(self) -> int:
+        """Return MAX(id) for messages addressed to this identity (0 if DB absent)."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cur = conn.execute(
+                    "SELECT COALESCE(MAX(id), 0) FROM messages "
+                    "WHERE LOWER(to_id) = LOWER(?) OR to_id = 'all'",
+                    (self.identity,),
+                )
+                return cur.fetchone()[0]
+            finally:
+                conn.close()
+        except (OSError, sqlite3.DatabaseError):
+            return 0
+
+    def _read_signal(self) -> int:
+        """Return signal value to compare against _last_id.
+
+        - Absent or empty signal: 0 (no poll).
+        - Integer content: the parsed id.
+        - Non-integer content (D2: old-binary timestamp format): _last_id + 1,
+          so signal_id > _last_id triggers the DB poll; _last_id deduplicates
+          any messages already emitted.
+        """
+        try:
+            with open(self.signal_path, "r", encoding="utf-8") as f:
+                raw = f.read().strip()
+        except OSError:
+            return 0
+        if not raw:
+            return 0
+        try:
+            return int(raw)
+        except ValueError:
+            return self._last_id + 1
+
     def poll(self) -> Iterator[Event]:
-        raise NotImplementedError(
-            "MailSource is a stub pending issue #259 "
-            "(ember mailbox identity + founders.yaml signal wiring). "
-            "Wire a FileWatchSource over the ember signal file once #259 lands."
-        )
+        signal_id = self._read_signal()
+        if signal_id <= self._last_id:
+            return
+        try:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cur = conn.execute(
+                    "SELECT id, from_id, subject, body, channel FROM messages "
+                    "WHERE id > ? AND (LOWER(to_id) = LOWER(?) OR to_id = 'all') "
+                    "ORDER BY id ASC",
+                    (self._last_id, self.identity),
+                )
+                rows = cur.fetchall()
+            finally:
+                conn.close()
+        except (OSError, sqlite3.DatabaseError):
+            return
+        for row in rows:
+            msg_id, from_id, subject, body, channel = row
+            yield Event(
+                source="mail",
+                kind="mail_arrived",
+                payload={
+                    "id": msg_id,
+                    "from": from_id,
+                    "subject": subject,
+                    "body": body,
+                    "channel": channel,
+                },
+            )
+            if msg_id > self._last_id:
+                self._last_id = msg_id
 
 
 # ---------------------------------------------------------------------------
@@ -549,12 +631,9 @@ class NCKEventLoop:
             # Poll all sources
             events: list[Event] = []
             for source in self.sources:
-                # MailSource raises NotImplementedError; skip gracefully here
-                # so other sources still work while #259 is open.
                 try:
                     events.extend(source.poll())
                 except NotImplementedError:
-                    # Stub mail source — expected until #259 lands.
                     pass
 
             # For each event, run the stub core to get actions

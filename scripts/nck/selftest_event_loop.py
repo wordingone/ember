@@ -1,21 +1,24 @@
 """NCK event-loop selftest.
 
-Runs 6 cases in a temp dir.  No network, no GPU, no model.
+Runs 8 cases in a temp dir.  No network, no GPU, no model.
 Prints: NCK_EVENT_LOOP_SELFTEST PASS/FAIL with case names.
 
 Cases:
-  (a) obligating_event   — receipt file -> gate-note action emitted + journaled
-  (b) non_obligating     — broadcast file -> NO action (selectivity)
-  (c) crash_resume       — kill after journal-write-before, restart, exactly-once execute
-  (d) unknown_verb       — refused; journal has refusal record
-  (e) heartbeat_advances — heartbeat file advances on each tick
-  (f) missing_invariant  — loop refuses to start without governor block
+  (a) obligating_event         — receipt file -> gate-note action emitted + journaled
+  (b) non_obligating           — broadcast file -> NO action (selectivity)
+  (c) crash_resume             — kill after journal-write-before, restart, exactly-once execute
+  (d) unknown_verb             — refused; journal has refusal record
+  (e) heartbeat_advances       — heartbeat file advances on each tick
+  (f) missing_invariant        — loop refuses to start without governor block
+  (g) mailsource_cold_no_flood — cold-start with pre-existing history emits NOTHING until new mail
+  (h) mailsource_timestamp_sig — timestamp-format signal still fires the DB poll (D2 fix)
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import time
@@ -406,6 +409,118 @@ def case_f_missing_invariant(tmp: str) -> tuple[bool, str]:
 
 
 # ---------------------------------------------------------------------------
+# Helpers for MailSource cases
+# ---------------------------------------------------------------------------
+
+def _make_maildb(path: str, rows: list[tuple]) -> None:
+    """Create a minimal mailbox.db with the messages table and insert rows.
+
+    rows: list of (id, from_id, to_id, subject, body, channel)
+    """
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE messages "
+        "(id INTEGER PRIMARY KEY, from_id TEXT, to_id TEXT, "
+        " subject TEXT, body TEXT, channel TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?)", rows
+    )
+    conn.commit()
+    conn.close()
+
+
+def _write_signal(path: str, content: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+# ---------------------------------------------------------------------------
+# Case (g): cold-start — pre-existing history emits NOTHING until new mail
+# ---------------------------------------------------------------------------
+
+def case_g_mailsource_cold_no_flood(tmp: str) -> tuple[bool, str]:
+    db_path = os.path.join(tmp, "mailbox.db")
+    signal_path = os.path.join(tmp, "signal_ember")
+
+    # Pre-populate DB with history: direct + broadcast messages to ember
+    _make_maildb(db_path, [
+        (1, "leo", "ember", "old msg 1", "body1", "direct"),
+        (2, "sage", "all", "broadcast 1", "bcast1", "broadcast"),
+        (3, "leo", "ember", "old msg 2", "body2", "direct"),
+        (5, "sage", "all", "broadcast 2", "bcast2", "broadcast"),
+    ])
+
+    # Write signal with current max id — simulates watcher firing on boot
+    _write_signal(signal_path, "5")
+
+    ms = MailSource(signal_path, db_path, identity="ember")
+
+    # First poll: must emit NOTHING (all history is before _last_id)
+    events = list(ms.poll())
+    if events:
+        ids = [e.payload["id"] for e in events]
+        return False, f"D1 regression: cold-start emitted {len(events)} event(s) {ids}"
+
+    # Add a genuinely new message and advance the signal
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO messages VALUES (6, 'leo', 'ember', 'new msg', 'new body', 'direct')"
+    )
+    conn.commit()
+    conn.close()
+    _write_signal(signal_path, "6")
+
+    events = list(ms.poll())
+    if len(events) != 1:
+        return False, f"expected 1 event for new message, got {len(events)}"
+    if events[0].payload["id"] != 6:
+        return False, f"expected id=6, got {events[0].payload['id']}"
+
+    return True, "cold-start emits nothing until new mail (D1 proven)"
+
+
+# ---------------------------------------------------------------------------
+# Case (h): timestamp-format signal fires the DB poll (D2 fix)
+# ---------------------------------------------------------------------------
+
+def case_h_mailsource_timestamp_sig(tmp: str) -> tuple[bool, str]:
+    db_path = os.path.join(tmp, "mailbox_h.db")
+    signal_path = os.path.join(tmp, "signal_ember_h")
+
+    # Seed the DB with one existing message so _last_id inits to 1
+    _make_maildb(db_path, [
+        (1, "leo", "ember", "old", "oldbody", "direct"),
+    ])
+    _write_signal(signal_path, "1")
+
+    ms = MailSource(signal_path, db_path, identity="ember")
+    # Confirm _last_id initialized to 1 and first poll emits nothing
+    if list(ms.poll()):
+        return False, "unexpected emission on first poll with signal=1"
+
+    # Add new message but write a TIMESTAMP-format signal (old-binary behavior)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO messages VALUES (2, 'sage', 'ember', 'new', 'newbody', 'direct')"
+    )
+    conn.commit()
+    conn.close()
+    _write_signal(signal_path, "20260612T051338Z")  # timestamp format, not an int
+
+    # D2 fix: timestamp → ADVANCE → poll fires → yields message id=2
+    events = list(ms.poll())
+    if len(events) != 1:
+        return False, (
+            f"D2 regression: timestamp signal yielded {len(events)} event(s), expected 1"
+        )
+    if events[0].payload["id"] != 2:
+        return False, f"expected id=2, got {events[0].payload['id']}"
+
+    return True, "timestamp-format signal fires DB poll; _last_id deduplicates (D2 proven)"
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -416,6 +531,8 @@ CASES = [
     ("d_unknown_verb", case_d_unknown_verb),
     ("e_heartbeat_advances", case_e_heartbeat_advances),
     ("f_missing_invariant", case_f_missing_invariant),
+    ("g_mailsource_cold_no_flood", case_g_mailsource_cold_no_flood),
+    ("h_mailsource_timestamp_sig", case_h_mailsource_timestamp_sig),
 ]
 
 
