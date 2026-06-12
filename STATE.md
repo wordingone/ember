@@ -327,6 +327,12 @@ POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing 
 
 `B:/M/avir/leo/state/nc-ladder/receipts/` (JSONL/JSON per job; gate from these only).
 
+## 2026-06-12 ~21:45Z — RUN 12c050e7 STOPPED BY USER ORDER (2:33 PM LA) + CEILING-FIRST RECONCILIATION
+
+User directive verbatim class: "just stop the current run. solve all the problems before you touch a run that goes over an hour max." Executed 21:34Z: kill receipt written FIRST (vigil/kill-receipts.jsonl), then train_cancel 12c050e7 (status: cancelled, daemon alive, GPU freed, ~1.3B tokens paid into on-disk partial checkpoints). BINDING RULE: no training run >1h until compute-ceiling-program-v1.md shatter criterion is met (doc v1.2 @e1aa0af).
+
+TRIGGER RECONCILIATION (stop event flips fire-condition referents — re-derived, not cached): every condition that said "1B checkpoint / terminal v0 / checkpoint probe receipts of 12c050e7" now reads "first checkpoint of the next GATE-9-COMPLIANT pretrain" — #205 (round-1 verdicts), #223 (fp-24b floor), #328 (fp-36b INFO frame), #210 (sp-2b resume receipts), #282 (sp-6b B3), fp34 freeze, C24-C28 chain. NONE fire on the killed run's partials: fp-27 base policy requires PASS-floored >=4B (1.3B fails even the calendar fallback), and a ~2h floor probe on a possibly-dead architecture violates the 1h rule's spirit — the partials stay on disk as ARCH-verdict evidence only, probed only on explicit user call. #128 HOLD becomes moot-pending-next-run. Eng lane: ceiling program (L-levers) is the ONLY GPU consumer; first receipts: L3 KILLED pre-MSVC (Triton needs cl.exe — MSVC Build Tools install GO'd, unlocks L3+L6), L2/L5 grid (B=4..48 x ckpt-on/off) RUNNING in full window.
+
 ## 2026-06-12 ~14:41Z — BUILD tick: gates #332 GO + #333 GO; #334 sequenced behind jude adversarial verify
 - #332 (NCK e2e, b61d3f7): selftest a-f reproduced in worktree; live-mail leg corroborated DB-side (14837). GO -> Eli squashes; closes #331. Manifest C8 -> DONE on merge.
 - #333 (fp-29 generator): selftest + independent dry-run n=120 seed=23 reproduced exact manifest sha 25a51c14... GO. Row 9 + manifest C6 discharged on merge.
