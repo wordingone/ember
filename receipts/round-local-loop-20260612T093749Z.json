@@ -1,12 +1,12 @@
 {
   "ticket": "ROUND-LOCAL-LOOP",
   "label": "LOOP-PATH-LOCALITY-MANIFEST",
-  "ts": "20260612T093138Z",
-  "commit_sha": "9bbeadd3e897237b114fbc9bf6e652f9cd61e9ef",
+  "ts": "20260612T093749Z",
+  "commit_sha": "4c103cf74901e453849875384d84d3c20801d9dc",
   "sources": {
     "t2_round_py": {
       "path": "B:\\M\\avir\\eli\\state\\ember-eng\\repo30\\scripts\\t2_round.py",
-      "sha256": "d6efe4d097c664648e34d5ccf5277e7fd7bba583b42de694470f3fdb573f7587"
+      "sha256": "30b0287c1274326a9634267fb998b578a7e34955d006c651dc17438382113804"
     },
     "heartbeat_runner_py": {
       "path": "B:\\M\\avir\\eli\\state\\ember-eng\\repo30\\scripts\\heartbeat_runner.py",
@@ -89,7 +89,7 @@
   },
   "selftest": {
     "exit_code": 0,
-    "elapsed_s": 0.16,
+    "elapsed_s": 0.15,
     "pass": true,
     "receipt": null
   },
