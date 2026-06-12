@@ -1,0 +1,156 @@
+{
+  "ticket": "PROXY_SPEEDRUN_BASELINE",
+  "ts": "20260612T054435Z",
+  "arm": "baseline",
+  "config_sha": "052d201aa93931bf",
+  "config": {
+    "arm": "baseline",
+    "hidden": 512,
+    "layers": 12,
+    "heads": 8,
+    "ffn": 2048,
+    "vocab": 32000,
+    "seq": 512,
+    "batch": 8,
+    "steps": 500,
+    "optimizer": "AdamW",
+    "lr": 0.001,
+    "bf16": true,
+    "grad_checkpointing": true,
+    "shard_files": [
+      "v0-00000.bin",
+      "v0-00001.bin"
+    ],
+    "seeds": [
+      16,
+      17,
+      18
+    ]
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05,
+    "free_gib_at_launch": 22.45,
+    "total_gib": 23.99
+  },
+  "per_seed": [
+    {
+      "seed": 16,
+      "final_loss": 5.752282,
+      "mean_last10_loss": 5.81341,
+      "step_count": 500,
+      "tokens_processed": 2048000,
+      "wall_clock_s": 83.27,
+      "tokens_per_s": 24595.6,
+      "loss_first": 10.46804,
+      "loss_trajectory_20step": [
+        10.468,
+        7.2947,
+        7.2373,
+        7.1026,
+        7.5238,
+        7.3343,
+        6.9458,
+        6.5356,
+        6.7156,
+        6.5593,
+        6.351,
+        6.5795,
+        6.1328,
+        6.45,
+        6.5028,
+        5.6672,
+        6.2068,
+        6.2852,
+        5.7418,
+        6.1584
+      ]
+    },
+    {
+      "seed": 17,
+      "final_loss": 5.585827,
+      "mean_last10_loss": 5.855079,
+      "step_count": 500,
+      "tokens_processed": 2048000,
+      "wall_clock_s": 82.61,
+      "tokens_per_s": 24791.2,
+      "loss_first": 10.455135,
+      "loss_trajectory_20step": [
+        10.4551,
+        7.5367,
+        7.1769,
+        7.3554,
+        7.0516,
+        6.9397,
+        6.9448,
+        6.5039,
+        6.8464,
+        6.5463,
+        6.4302,
+        6.0897,
+        6.3071,
+        6.0028,
+        5.9962,
+        5.8882,
+        5.902,
+        6.0544,
+        6.3331,
+        5.7864
+      ]
+    },
+    {
+      "seed": 18,
+      "final_loss": 5.866196,
+      "mean_last10_loss": 5.902579,
+      "step_count": 500,
+      "tokens_processed": 2048000,
+      "wall_clock_s": 82.93,
+      "tokens_per_s": 24694.1,
+      "loss_first": 10.455422,
+      "loss_trajectory_20step": [
+        10.4554,
+        6.9972,
+        7.4764,
+        7.1546,
+        7.1192,
+        6.4631,
+        6.9637,
+        6.8049,
+        6.6102,
+        5.9002,
+        6.385,
+        6.2263,
+        6.2552,
+        6.3175,
+        6.0004,
+        5.9977,
+        6.0145,
+        6.1073,
+        5.9094,
+        6.2263
+      ]
+    }
+  ],
+  "aggregate": {
+    "n_seeds": 3,
+    "mean_final_loss": 5.734768,
+    "mean_wall_clock_s": 82.94,
+    "mean_tokens_per_s": 24693.6,
+    "total_tokens": 6144000
+  },
+  "frozen_target": {
+    "loss": 5.734768,
+    "steps_baseline": 500,
+    "tokens_per_seed_baseline": 2048000,
+    "wall_clock_s_baseline": 82.94,
+    "note": "Baseline mean final loss at STEPS steps. measured_multiplier for arm X = baseline_wall_clock / arm_wall_clock_to_this_loss."
+  },
+  "flags": [
+    "plain AdamW + bf16 \u2014 no registry techniques",
+    "grad checkpointing ON",
+    "tied embeddings (embed + lm_head share weights)",
+    "shard slice pinned: v0-00000.bin + v0-00001.bin",
+    "live run 12c050e7 NOT touched"
+  ]
+}

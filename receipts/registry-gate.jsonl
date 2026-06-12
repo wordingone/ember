@@ -1,0 +1,1 @@
+{"ts": "2026-06-12T05:42:39+00:00", "config_path": "configs/v0-pretrain-config.json", "ok": false, "missing": ["muon", "wsd-schedule", "qat", "governor-pacing"], "invalid_exemptions": [], "contradicted": [], "warns": [], "adopt_rows": ["muon", "wsd-schedule", "qat", "governor-pacing"]}

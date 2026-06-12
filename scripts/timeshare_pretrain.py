@@ -107,6 +107,25 @@ def _check_launch_interlock(*, live: bool) -> None:
         print(msg)
         raise SystemExit(msg)
 
+    # Registry gate (issue #271 / sp-7): every ADOPT row must be consumed
+    # by the dispatch config or exempted with a valid receipt.
+    # reference: docs/registry-dispatch-gate-spec-v0.md
+    # Receipt appended to receipts/registry-gate.jsonl by the script.
+    import subprocess as _sp
+    _rg_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "registry_gate.py")
+    _rg = _sp.run(
+        [sys.executable, _rg_script, "--config", CONTRACT_PATH],
+        capture_output=True, text=True,
+    )
+    if _rg.returncode != 0:
+        msg = (
+            "REGISTRY_GATE_REFUSED: one or more ADOPT rows unconsumed. "
+            f"{_rg.stdout.strip()} {_rg.stderr.strip()}"
+        )
+        print(msg)
+        raise SystemExit(msg)
+
 
 # ---------------------------------------------------------------------------
 # Governor consumption (GPU path only; imported lazily to stay CPU-safe)
