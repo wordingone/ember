@@ -17,8 +17,8 @@ always "X is happening, moving on to Y while X happens."
 | 2 | ~~2B-verdict-chain dress rehearsal~~ DISCHARGED | jude receipt fp24-rehearsal-20260612T143500Z + PR #336 merged (all 6 chains PASS) | jude + Eli | #223/#328 |
 | 3 | ~~#208 probe-set reconciliation~~ DISCHARGED | PR #338 merged (closes #208): checkpoint_probe keeps 105fd370, seed23 rides 1B as separate fp28 coverage pass | Leo decide / Eli stage | #208 |
 | 4 | ~~fp-36 Band-A pre-stage~~ DISCHARGED | plumbing dry-run = #336 chains B/E (merged); dispatch template = docs/band-a-4b-dispatch-template.md | Leo | #328 |
-| 5 | sp-6b designation-window tooling dry-run (window 06-20..21) | b_run_designation.py + selftest exercised on synthetic inputs; receipts/sp6b-b-run-* naming convention verified vs sp-3 row 12 | Leo | #282 |
-| 6 | sp-3b audit tightenings before 06-20 | any sp-3 harness gap found during rows 1-5 lands as a tightening PR pre-window | Leo | #214 |
+| 5 | ~~sp-6b designation-window tooling dry-run~~ DISCHARGED | receipts/sp6b-tooling-dryrun-20260612T155736Z.json (Haiku agent, Leo-gated @97418ec): selftest 7/7, synthetic dry-run exit 0, b-run-designation-* naming matches audit row 12; sp6b-b-run-* comes from replay_rig at B3 time | Leo | #282 |
+| 6 | sp-3b audit tightenings before 06-20 (standing until window) | first tightening landed @97418ec: selftest tracks row-8 RECEIPTED (kai flag 14869); further gaps found pre-window land the same way | Leo | #214 |
 | 7 | ~~Registry PARK revival configs staged~~ DISCHARGED | fp8-revival-next-width-v1.json at repo30/ledger/; revival cond: K≥4096 sites → next-width config A/B; registry row PARK quoted. Receipt: ledger-row7-row10-20260612T140836Z.json | Eli | registry |
 | 8 | ~~Receipt hygiene~~ DISCHARGED | PR #334 merged (LEGACY_EXEMPT 9 + sp6c fix; jude adversarial verify PASS; clean-tree repro 260/9/0) | Eli + jude | R2 |
 | 9 | ~~fp-29 synthesis-window prep~~ DISCHARGED | PR #333 merged (sha 25a51c14… reproduced at gate) | Eli (Leo gated) | fp-29/#200 |
