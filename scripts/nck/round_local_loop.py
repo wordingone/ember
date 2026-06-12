@@ -60,6 +60,16 @@ def _sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _check_no_crlf(path: Path) -> list[int]:
+    """Return list of 1-based line numbers containing CRLF. Empty = clean."""
+    crlf_lines: list[int] = []
+    with open(path, "rb") as f:
+        for i, line in enumerate(f, 1):
+            if b"\r\n" in line:
+                crlf_lines.append(i)
+    return crlf_lines
+
+
 def _extract_leg_body(src_lines: list[str], leg_name: str) -> list[str]:
     """Extract lines of a top-level function body by exact name."""
     in_func = False
@@ -234,6 +244,14 @@ def main() -> int:
         return 1
     if not HEARTBEAT_PATH.exists():
         print(f"ROUND_LOCAL_LOOP_NO_RUNNER: heartbeat_runner.py not found at {HEARTBEAT_PATH}")
+        return 1
+
+    # Drift-guard: t2_round.py must be LF-only (*.py text eol=lf in .gitattributes)
+    crlf_lines = _check_no_crlf(T2_ROUND_PATH)
+    if crlf_lines:
+        print(f"CRLF_DRIFT_DETECTED: t2_round.py has CRLF on {len(crlf_lines)} line(s): "
+              f"{crlf_lines[:5]}{'...' if len(crlf_lines) > 5 else ''}")
+        print("  Fix: git checkout -- scripts/t2_round.py (or normalize CRLF→LF)")
         return 1
 
     # AC2+3: source-byte audit (eng-53 pattern — facts from bytes, not flags)

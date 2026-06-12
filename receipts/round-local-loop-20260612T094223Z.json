@@ -1,8 +1,8 @@
 {
   "ticket": "ROUND-LOCAL-LOOP",
   "label": "LOOP-PATH-LOCALITY-MANIFEST",
-  "ts": "20260612T093749Z",
-  "commit_sha": "4c103cf74901e453849875384d84d3c20801d9dc",
+  "ts": "20260612T094223Z",
+  "commit_sha": "b05a7e378c98c2f8e9b05a18fceaa17b276ca85e",
   "sources": {
     "t2_round_py": {
       "path": "B:\\M\\avir\\eli\\state\\ember-eng\\repo30\\scripts\\t2_round.py",
@@ -89,7 +89,7 @@
   },
   "selftest": {
     "exit_code": 0,
-    "elapsed_s": 0.15,
+    "elapsed_s": 0.13,
     "pass": true,
     "receipt": null
   },
