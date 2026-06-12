@@ -89,7 +89,14 @@ BASE_POLICY = {
 # split partition (inside fp-23's frozen envelope — see docstring)
 TRAIN_BUCKETS = (10, 89)             # inclusive; sampling + episodes
 ROUNDGATE_BUCKETS = (90, 99)         # inclusive; eval only, never trained
-ROUNDGATE_N = 100                    # instances materialized for the gate
+# METHOD AMENDMENT 2026-06-12 (pre-data; gate-stats-review-v1 §5 + H2):
+# ROUNDGATE_N 100 -> 400. At n=100, p0≈2% the gate MDE is 10.16pp
+# (power-helper-20260612T210637Z) — a round whose plausible movement is
+# under the gate's MDE is unfalsifiable by design. n=400 gives 3.85pp
+# (power-helper-20260612T210645Z). Round-1 has produced NO data (no run
+# exists); amendment window is clean per the r2-prereg precedent.
+# Superseding prereg receipt emitted at amendment time.
+ROUNDGATE_N = 400                    # instances materialized for the gate
 # sampling pins (frozen NOW, before any owned-core sampling exists)
 SAMPLING = {
     "n_tasks_l1": 200,

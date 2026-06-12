@@ -1,4 +1,4 @@
-"""fp32_baseline_miner.py — deterministic GPU-economics baseline
+"""fp32_baseline_miner.py â€” deterministic GPU-economics baseline
 extraction from EXISTING receipts (#225, fp-32 deliverable 1 input).
 
 Every number in the fp-32 bottleneck ledger must be provenance-tagged
@@ -9,18 +9,18 @@ binding each row to its source (path + the fields used). No model
 self-report anywhere in the chain.
 
 Rows mined:
-  gen   — newest w1-humaneval sampling receipt: s/sample, verified
+  gen   â€” newest w1-humaneval sampling receipt: s/sample, verified
           episodes per generation-minute (the floor instrument's unit).
-  pace  — fp20b-settle: as-operated pacing fraction of generation wall.
-  bits  — fp11-denominator: sampler-valued bits per generation minute
+  pace  â€” fp20b-settle: as-operated pacing fraction of generation wall.
+  bits  â€” fp11-denominator: sampler-valued bits per generation minute
           (A1 accounting; the existing instrument for Kai's
           signal-density hypothesis).
-  train — newest t2-r2 training receipt: train seconds per example;
+  train â€” newest t2-r2 training receipt: train seconds per example;
           gen:train wall ratio for the round loop.
-  step  — fp19-bench c03-qat: paced/raw tok/s, derived pacing tax,
+  step  â€” fp19-bench c03-qat: paced/raw tok/s, derived pacing tax,
           projected v0 wall-days against the LIVE freeze total (fp-30
-          binder — never a stale literal).
-  power — w4-eval measured CI95 widths (the live eval instrument's
+          binder â€” never a stale literal).
+  power â€” w4-eval measured CI95 widths (the live eval instrument's
           resolution) + exact normal-approx MDE table for the frozen
           fp-27 round-gate N=100 at a range of discordance rates
           (paired-difference half-width 1.96*sqrt(disc/N); MDE at 80%
@@ -45,7 +45,7 @@ import fp30_total_consistency as fp30                   # noqa: E402
 
 SHA_CONVENTION = ("file shas = sha256 over the exact on-disk raw bytes, no "
                   "normalization")
-ROUNDGATE_N = 100              # fp-27 frozen
+ROUNDGATE_N = 400              # fp-27 amended 2026-06-12 (n=100->400, MDE 3.85pp; power-helper receipts)
 DISC_GRID = (0.1, 0.2, 0.3, 0.5)
 
 
@@ -187,7 +187,7 @@ def run(nc=NC):
                                     if r.get("status") != "OK"]},
         "provenance_rule": "every numeric field re-derived from the named "
                            "source receipt's named fields by this script's "
-                           "arithmetic — no free-typed numbers",
+                           "arithmetic â€” no free-typed numbers",
         "sha_convention": SHA_CONVENTION,
         "no_gpu": True,
     }
@@ -197,9 +197,11 @@ def _selftest():
     # MDE math: disc 0.2 at N=100 -> se=0.04472; half-width 8.8pp
     t = mde_table()
     by = {r["discordance"]: r for r in t}
-    assert by[0.2]["ci95_half_width_pp"] == 8.8, by[0.2]
-    assert by[0.2]["mde80_one_sided_pp"] == 11.1, by[0.2]
-    assert by[0.5]["ci95_half_width_pp"] == 13.9, by[0.5]
+    # anchors at n=400 (fp-27 amendment 2026-06-12; exactly half the n=100
+    # widths — se scales 1/sqrt(n))
+    assert by[0.2]["ci95_half_width_pp"] == 4.4, by[0.2]
+    assert by[0.2]["mde80_one_sided_pp"] == 5.6, by[0.2]
+    assert by[0.5]["ci95_half_width_pp"] == 6.9, by[0.5]
     # miner on fixtures
     import tempfile
     with tempfile.TemporaryDirectory() as td:
