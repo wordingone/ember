@@ -30,6 +30,7 @@ Live: python fp24_verdict.py --checkpoint 2B --receipt <probe.json>
 """
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -48,6 +49,17 @@ import fp23_probe_prereg as fp23  # noqa: E402
 _CHECKPOINT_TOKENS = {"1B": 1_000_000_000, "2B": 2_000_000_000,
                       "4B": 4_000_000_000}
 _TOKEN_TOL = 0.25  # +/-25% of the named checkpoint's nominal token count
+
+# Protocol probe receipts (1B+) must bind the bytes that produced the
+# measurement: protocol_sha (fp23_probe_prereg commit) and harness_sha
+# (emitter commit) must each be a real git object sha. A receipt carrying
+# "uncommitted"/"unknown"/empty is unprovable and therefore VOID — the
+# standing rule set at the PR #318 gate (2026-06-12), where the step-25000
+# PRE-protocol probe shipped harness_sha="uncommitted" and was accepted
+# once as INFO-class with the gap named. At protocol checkpoints the gap
+# is disqualifying, enforced here fail-closed.
+_BINDING_FIELDS = ("protocol_sha", "harness_sha")
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$|^[0-9a-f]{64}$")
 
 
 def _prior_fail_at_2b(prior_2b_verdict):
@@ -81,6 +93,18 @@ def run_verdict(checkpoint, receipt, prior_2b_verdict=None):
         return {"verdict": "INVALID-RECEIPT",
                 "flag": "adapter_none_assert is false/absent — a probe with "
                         "an adapter loaded does not measure the core"}
+
+    # harness binding (VOID rule, PR #318 gate): the emitting harness and
+    # the frozen protocol must each bind to a real commit sha or the
+    # measurement cannot be re-derived from the repo.
+    for field in _BINDING_FIELDS:
+        val = str(receipt.get(field) or "")
+        if not _SHA_RE.fullmatch(val):
+            return {"verdict": "INVALID-RECEIPT",
+                    "flag": f"{field} unbound ({val!r}) — a protocol probe "
+                            "receipt must bind its emitting bytes to a git "
+                            "sha; harness_sha=uncommitted is VOID at "
+                            "protocol checkpoints (PR #318 gate rule)"}
 
     # coarse token sanity (named checkpoint vs receipt's count)
     nominal = _CHECKPOINT_TOKENS[checkpoint]
@@ -145,6 +169,8 @@ def _selftest():
     full["checkpoint_tokens"] = 2_000_000_000
     full["l1_tasks_any_verified"] = 50
     full["l1_tasks_total"] = 100
+    full["protocol_sha"] = "a" * 40
+    full["harness_sha"] = "b" * 64
 
     def rec(**kw):
         r = dict(full)
@@ -195,6 +221,22 @@ def _selftest():
     r = run_verdict("2B", rec(adapter_none_assert=False,
                               l1_verified_episodes=30, l1_governed_minutes=20))
     assert r["verdict"] == "INVALID-RECEIPT", r
+
+    # harness binding VOID rule (PR #318 gate): uncommitted harness sha
+    r = run_verdict("2B", rec(harness_sha="uncommitted",
+                              l1_verified_episodes=30, l1_governed_minutes=20))
+    assert r["verdict"] == "INVALID-RECEIPT" and "harness_sha" in r["flag"], r
+
+    # absent protocol_sha is the same refusal
+    no_proto = rec(l1_verified_episodes=30, l1_governed_minutes=20)
+    del no_proto["protocol_sha"]
+    r = run_verdict("2B", no_proto)
+    assert r["verdict"] == "INVALID-RECEIPT" and "protocol_sha" in r["flag"], r
+
+    # non-hex garbage is refused too (binding must LOOK like a git sha)
+    r = run_verdict("2B", rec(harness_sha="HEAD",
+                              l1_verified_episodes=30, l1_governed_minutes=20))
+    assert r["verdict"] == "INVALID-RECEIPT" and "harness_sha" in r["flag"], r
 
     # zero governed minutes -> INCOMPUTABLE (via frozen decide())
     r = run_verdict("2B", rec(l1_verified_episodes=5, l1_governed_minutes=0))
