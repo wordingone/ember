@@ -331,6 +331,27 @@ def _get_file_commit_sha(rel_path: str) -> str:
         return "unknown"
 
 
+def _protocol_flag(step: int, checkpoint_tokens: int) -> str:
+    """Step-aware fp-23 protocol flag: pre-1B / 1B INFO / 2B+ floor."""
+    _1B = 1_000_000_000
+    _2B = 2_000_000_000
+    if checkpoint_tokens < _1B:
+        return (
+            f"pre-protocol checkpoint: step={step}, tokens={checkpoint_tokens:,} — "
+            f"decide() does not apply"
+        )
+    elif checkpoint_tokens < _2B:
+        return (
+            f"1B INFO checkpoint: step={step}, tokens={checkpoint_tokens:,} — "
+            f"decide() INFO only; floor activates at 2B"
+        )
+    else:
+        return (
+            f"floor checkpoint: step={step}, tokens={checkpoint_tokens:,} — "
+            f"fp-23 decide() applies (floor={fp23.FLOOR_RATE} /governed-min)"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Probe runner
 # ---------------------------------------------------------------------------
@@ -442,6 +463,14 @@ def _selftest() -> None:
     # fp-23 schema: all 16 required fields mapped in this script
     required = set(fp23.RECEIPT_REQUIRED_FIELDS)
     assert required  # nonempty sanity
+
+    # Protocol flag is step-aware
+    pre_flag = _protocol_flag(25000, 102_400_000)         # pre-1B (step-25k)
+    info_flag = _protocol_flag(245000, 1_003_520_000)     # 1B window
+    floor_flag = _protocol_flag(490000, 2_007_040_000)    # 2B+ floor
+    assert "does not apply" in pre_flag, f"pre-1B flag wrong: {pre_flag}"
+    assert "INFO" in info_flag, f"1B flag wrong: {info_flag}"
+    assert "decide() applies" in floor_flag, f"2B+ flag wrong: {floor_flag}"
 
     print("SP_CHECKPOINT_PROBE_SELFTEST_PASS")
 
@@ -616,7 +645,7 @@ def main() -> int:
             "checkpoint read from COPY — no live file handles on v0-r1s1",
             "live run 12c050e7 untouched",
             f"fp-23 protocol frozen before pretrain step 0 (protocol_sha={protocol_sha[:16]}...)",
-            f"pre-floor checkpoint: step={step}, tokens={checkpoint_tokens:,} — fp-23 decide() INFO only",
+            _protocol_flag(step, checkpoint_tokens),
             "L2 and MBPP-43 fields = 0 (not probed at this checkpoint window)",
         ],
         "live_run_untouched": "12c050e7",
