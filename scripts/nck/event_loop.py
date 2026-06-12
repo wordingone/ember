@@ -1,7 +1,7 @@
 """NC-K resident event-loop skeleton — clean-room port (Closes #260).
 
 Architecture:
-  EventSource ABC  -> FileWatchSource, ScheduleSource, JobReceiptSource, MailSource
+  EventSource ABC  -> FileWatchSource, ScheduleSource, JobReceiptSource, MailSource, ConsoleSource
   dispatch loop    -> pull events, route through TOOL REGISTRY
   stub core        -> pure function event -> list[Action]; trivially swappable
   process supervision -> heartbeat touch every tick; crash-safe journal (state/nck-journal.jsonl)
@@ -13,6 +13,7 @@ Invariant config block (fail-closed):
 
 Stub status:
   MailSource         -> LIVE (issue #259: signal-file + sqlite wiring, ember identity)
+  ConsoleSource      -> LIVE (issue #262: stdin thread + queue; WriteConsoleInput-compatible)
   stub_core          -> rule-based Python function, NO model, trivially swappable
 
 Boot-checksum layer (issue #261):
@@ -27,7 +28,10 @@ from __future__ import annotations
 import abc
 import json
 import os
+import queue
 import sqlite3
+import sys
+import threading
 import time
 import hashlib
 from dataclasses import dataclass, field
@@ -348,6 +352,69 @@ class MailSource(EventSource):
                 self._last_id = msg_id
 
 
+class ConsoleSource(EventSource):
+    """Read text lines from stdin in a background thread; emit console_input events.
+
+    Implements issue #262: CU console surface (sp-5 §4).
+
+    The reader thread blocks on sys.stdin.readline(); the main poll() drains
+    a thread-safe queue each tick — so the event loop never blocks on stdin.
+    This is WriteConsoleInput-compatible: any process (CU, founder-poke) can
+    inject lines into stdin and they arrive here as events.
+
+    output_stream — where console_write tool sends output (default sys.stdout).
+    stdin_stream  — injected in tests; default sys.stdin.
+    """
+
+    def __init__(
+        self,
+        output_stream=None,
+        stdin_stream=None,
+    ) -> None:
+        self._out = output_stream or sys.stdout
+        self._q: queue.Queue[str] = queue.Queue()
+        self._stdin = stdin_stream or sys.stdin
+        self._thread = threading.Thread(
+            target=self._reader,
+            daemon=True,
+            name="nck-console-reader",
+        )
+        self._thread.start()
+
+    def _reader(self) -> None:
+        """Background thread: read lines from stdin and put them on the queue."""
+        try:
+            for line in self._stdin:
+                self._q.put(line.rstrip("\n").rstrip("\r"))
+        except (OSError, ValueError):
+            pass
+
+    def poll(self) -> Iterator[Event]:
+        while True:
+            try:
+                line = self._q.get_nowait()
+            except queue.Empty:
+                break
+            yield Event(
+                source="console",
+                kind="console_input",
+                payload={"line": line},
+            )
+
+    def write(self, text: str) -> None:
+        """Write text to the output stream (used by console_write tool)."""
+        self._out.write(text)
+        self._out.flush()
+
+
+def _tool_console_write(console_source, text: str = "") -> dict[str, Any]:
+    """Write text to the CU console output.  Registered as 'console_write' tool."""
+    if console_source is None:
+        return {"written": False, "reason": "no console source configured"}
+    console_source.write(text)
+    return {"written": True, "chars": len(text)}
+
+
 # ---------------------------------------------------------------------------
 # Stub core — pure function: event -> list[Action]
 # Rule-based; NO model; trivially swappable for the real model core.
@@ -395,6 +462,17 @@ def stub_core(event: Event, registry: ToolRegistry) -> list[Action]:
             actions.append(Action(
                 verb="write_gate_note",
                 args={"schedule_id": sched_id, "event_ts": event.ts},
+                event_ref=event,
+            ))
+
+    elif event.source == "console" and event.kind == "console_input":
+        # Echo the input line back to the console (stub acknowledgement).
+        # Real core will replace this with model-driven response.
+        line = event.payload.get("line", "")
+        if "console_write" in registry.known_verbs():
+            actions.append(Action(
+                verb="console_write",
+                args={"text": f"[ember] received: {line}\n"},
                 event_ref=event,
             ))
 
@@ -613,8 +691,22 @@ class NCKEventLoop:
             permission_class="default",
         )
 
+        # CU console (issue #262): registered always; effective when console source present.
+        # _console_source is set by add_source() when a ConsoleSource is added.
+        self._console_source: ConsoleSource | None = None
+        self.registry.register(
+            "console_write",
+            lambda **kw: _tool_console_write(self._console_source, **kw),
+            schema={"text": {"type": "string", "default": ""}},
+            concurrency_safe=True,
+            read_only=False,
+            permission_class="default",
+        )
+
     def add_source(self, source: EventSource) -> None:
         self.sources.append(source)
+        if isinstance(source, ConsoleSource):
+            self._console_source = source
 
     def run(self, max_ticks: int = 0) -> None:
         """Run the event loop.
