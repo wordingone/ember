@@ -213,3 +213,41 @@ AUTHORITY: Leo executes solo, spawning subagents/agent teams as needed (user
 hardware, >100GB disk, or anything leaving this PC — and escalation never
 pauses local work that can proceed. Cron = this goal only (user 2026-06-10).
 Only the user retires this goal, by name.
+
+---
+
+## E2B-SURPASS MILESTONE (user, 2026-06-12 — amendment; the goal above stands unchanged)
+
+Ember's owned core — pretrained from scratch on this machine, no borrowed
+weights load-bearing — surpasses Gemma E2B by June 22, 2026, reached by
+constantly looping the solve cycle: identify the current binding constraint
+at SOTA level (GPU-kernel or mathematical-architecture of the network and its
+pretraining requirements), solve it, prove the gain with a paired receipt,
+burn it into the technique registry (docs/technique-registry.md), and apply
+it to the live run at the next segment boundary; incrementally increasing
+core size only when receipts show SIZE — not technique — is the binding
+constraint at the current scale; and spending the GPU-time budget by measured
+yield: highest receipted multiplier per governed GPU-hour runs first.
+
+- **SURPASS (binding receipt):** paired eval, same local harness/k/seeds —
+  owned core beats local Gemma E2B on the verify-floor world (paired CI
+  excluding 0) AND parity-or-better on the pinned public slices (fp-33
+  prereg freezes the slice list). No prose verdicts.
+- **OWNED (binding):** from-scratch weights. Open-base vehicles are rehearsal
+  and scaffolding per the standing goal's own language; they inform but
+  cannot satisfy this milestone.
+- **SIZE LADDER (binding):** a size increase is itself a gated artifact —
+  receipt must show the technique stack saturated at the current size
+  (registry ADOPT rows consumed, verify-floor ceiling measured) before
+  params grow; growth is incremental, never a jump past what the 24GB
+  envelope trains comfortably (E2 receipt).
+- **BUDGET-TIME (binding):** the GPU allocation order is re-derived from
+  receipts at every segment boundary (v0 segments vs experiment-loop bursts
+  vs eval); idle GPU during an open milestone is a named failure; the
+  governor + headroom rule cap everything regardless.
+- **CALIBRATION (pinned at adoption, receipts-only honesty):** deterministic
+  path with currently-identified solves ≈ 4–10 weeks; the June-22 deadline
+  stands as the forcing target — the gap between them is exactly what the
+  solve loop must close. If 06-22 arrives short, the distance to E2B is
+  measured and committed as a receipt and the loop continues unchanged;
+  only the user moves the date or the bar, by name.
