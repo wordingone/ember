@@ -1,4 +1,4 @@
-# Compounding Codex — permanent, receipt-gated pretraining-optimization registry
+# Technique Registry — permanent, receipt-gated pretraining-optimization registry
 
 User directive 2026-06-12 (chat, verbatim intent): this line of inquiry is
 "exhaustively tested and stored permanently as compounding techniques for
@@ -6,7 +6,7 @@ further optimizing pretraining, as much as only physics will allow. It's a GPU
 kernel level problem as much as a mathematical architecture of the network and
 its pretraining requirements."
 
-This file + `compounding-codex-registry.jsonl` are that permanent store. The
+This file + `technique-registry.jsonl` are that permanent store. The
 registry is machine-readable so the dispatch gate can ENFORCE it: a training
 run admits only if its config consumes every ADOPT row or carries a receipted
 exemption (fp-33 enforcement clause).
@@ -55,7 +55,7 @@ experiments beat human records. Our local equivalent:
 - **Kill is data:** KILLed techniques stay in the registry with their receipt —
   the negative result is part of the permanent store.
 
-## Registry schema (`compounding-codex-registry.jsonl`, append-only)
+## Registry schema (`technique-registry.jsonl`, append-only)
 
 `{id, axis, claim, physics_ceiling, proxy_protocol, receipts[], measured_multiplier,
 composes_with[], conflicts[], status: CANDIDATE|TESTED|ADOPT|KILL, source}`
