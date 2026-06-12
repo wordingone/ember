@@ -12,6 +12,13 @@ research/** -text
 # the recorded sha. Pin -text (same class as the eng-47 research/** pin).
 ledger/** -text
 probes/** -text
+# nck-protected paths: sha256 hashes in nck-invariants.json are load-bearing;
+# git must not rewrite line endings at checkout (same class as eng-47 research/**).
+GOAL.md -text
+docs/formalization-v0.md -text
+configs/v0-pretrain-config.json -text
+config/nck-invariants.json -text
+config/nck-baseline/** -text
 # scripts and hooks: enforce LF (prevents CRLF creep on Windows checkouts)
 *.sh text eol=lf
 *.py text eol=lf

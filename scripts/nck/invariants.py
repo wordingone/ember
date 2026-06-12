@@ -38,6 +38,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from typing import Any
 
@@ -86,6 +87,27 @@ def _sha256_file(path: str) -> str:
 
 def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _sha256_git_blob(repo_root: str, rel_path: str) -> str:
+    """Return hex sha256 of the committed git-blob bytes for rel_path at HEAD.
+
+    Uses 'git show HEAD:<rel_path>' so the hash is computed against the bytes
+    that git stores in the object database — platform-independent regardless of
+    core.autocrlf / .gitattributes checkout conversion.  Raises RuntimeError if
+    git show fails (path not committed, not a git repo, etc.).
+    """
+    result = subprocess.run(
+        ["git", "show", f"HEAD:{rel_path}"],
+        capture_output=True,
+        cwd=repo_root,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"git show HEAD:{rel_path} failed (exit {result.returncode}): "
+            + result.stderr.decode("utf-8", errors="replace").strip()
+        )
+    return hashlib.sha256(result.stdout).hexdigest()
 
 
 def _load_manifest(path: str) -> dict[str, Any]:
@@ -419,16 +441,32 @@ if __name__ == "__main__":
             sys.exit(1)
         with open(MANIFEST_PATH, "r", encoding="utf-8") as _f:
             _existing = json.load(_f)
-        _pairs = [
-            (e["path"], e.get("label", e["path"]))
-            for e in _existing.get("protected_paths", [])
-        ]
-        _entries = compute_manifest_entries(_repo_root, _pairs)
+
+        # Re-hash each entry using git-blob bytes (HEAD), preserving all fields.
+        # Entries with sha256=="SELF" are self-referential (the manifest lists
+        # itself); they cannot be meaningfully hashed and are preserved as-is.
+        _entries = []
+        for _entry in _existing.get("protected_paths", []):
+            _rel_path = _entry.get("path", "")
+            _expected = _entry.get("sha256", "")
+            if _expected == "SELF":
+                # Self-referential entry: preserve verbatim.
+                _entries.append(dict(_entry))
+                print(f"  {_entry.get('label', _rel_path)}: SELF (skipped — baseline comparison covers this)")
+                continue
+            if not _rel_path:
+                print(f"WARNING: entry missing 'path', skipping: {_entry}", file=sys.stderr)
+                _entries.append(dict(_entry))
+                continue
+            _sha = _sha256_git_blob(_repo_root, _rel_path)
+            _updated = dict(_entry)
+            _updated["sha256"] = _sha
+            _entries.append(_updated)
+            print(f"  {_entry.get('label', _rel_path)}: {_sha}")
+
         write_manifest_and_baseline(MANIFEST_PATH, BASELINE_MANIFEST_PATH, _entries)
         print(f"Manifest updated: {MANIFEST_PATH}")
         print(f"Baseline updated: {BASELINE_MANIFEST_PATH}")
-        for e in _entries:
-            print(f"  {e['label']}: {e['sha256']}")
         sys.exit(0)
     else:
         parser.print_help()
