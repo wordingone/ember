@@ -19,8 +19,8 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C5 | S2 | three-test gain gate (transfer/control/deletion) | gate script + one full gated gain | fp-verdict-chain-rehearsal-20260612T144614Z | PART |
 | C6 | S2 | self-curriculum generator | dry-run on frozen L1/L2 grammar; manifest-sha conformance | fp29-curriculum-dryrun-20260612T143048Z | DONE |
 | C7 | S2 | 1B/2B/4B protocol verdict chain (fp-23/fp-29/fp-36) | dress-rehearsal receipt pre-1B | fp-verdict-chain-rehearsal-20260612T144614Z | DONE |
-| C8 | S3 | avir-cli clean-room port = visible harness | NCK-E2E proof chain all-PASS | nck-e2e-proof-20260612T142318Z | PART (PR #332 at gate) |
-| C9 | S3 | ember mailbox identity | founders.yaml entry; live mail consume | merged (#259) + #332 stage 3 | PART |
+| C8 | S3 | avir-cli clean-room port = visible harness | NCK-E2E proof chain all-PASS | nck-e2e-proof-20260612T142318Z (PR #332 merged, 5/5 stages incl. live-mailbox leg) | DONE |
+| C9 | S3 | ember mailbox identity | founders.yaml entry; live mail consume | #259 merged + nck-e2e-proof-20260612T142318Z stage-2b/3 (live mail consumed) | DONE |
 | C10 | S3 | resident event loop (mail/files/receipts/schedule) | resident runs; event→action receipts | — | OPEN |
 | C11 | S3 | CU communicability (user+Leo can interact) | CU console echo stage + interactive session receipt | #332 stage 5 (echo only) | PART |
 | C12 | S3 | self-editing harness behind invariant gate | harness-edit artifact: branch→receipts→promote; deletion test | — | OPEN |
