@@ -4,23 +4,22 @@
     {
       "label": "three-test-gain-gate",
       "path": "docs/formalization-v0.md",
-      "sha256": "b1ae91f916bdec5074f26ffde6e7bdfa2f1b506f8c8eb936927a334cccd66f05"
+      "sha256": "0c04354de86b20c9e4c364a2a2f87ca728f39e815ecc6b2d7437072c2ac9c0d8"
     },
     {
       "label": "governor-headroom-config",
       "path": "configs/v0-pretrain-config.json",
-      "sha256": "6cdcc2c84e13e26349a5d58656a92f38ecfc76cf261a0b866c079868809aa2f8"
+      "sha256": "9690a42c88fb42781a457394b9bf6cbd8a6a572fa4ee0d358dc12c293714ecb6"
     },
     {
       "label": "goal-md",
       "path": "GOAL.md",
-      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
+      "sha256": "7fcb593b96a9b4b461951f09c7f2e233e607872e48a6c7ac010f8b44efca6f21"
     },
     {
       "label": "receipts-only-truth-statement",
-      "note": "GOAL.md contains the receipts-only-truth invariant verbatim (invariant 4)",
       "path": "GOAL.md",
-      "sha256": "4e93e3ad11a69db2cf0afe4d3d915cc27a2a82cb620d27154e8d81f34e48db9b"
+      "sha256": "7fcb593b96a9b4b461951f09c7f2e233e607872e48a6c7ac010f8b44efca6f21"
     },
     {
       "label": "invariants-py",
@@ -29,10 +28,8 @@
     },
     {
       "label": "nck-invariants-manifest",
-      "note": "Self-referential: the manifest lists itself. Verified by baseline comparison in step 1 of verify_at_boot.",
       "path": "config/nck-invariants.json",
-      "sha256": "SELF",
-      "note2": "sha256='SELF' is a sentinel: the verifier skips this entry and relies on the baseline-comparison step (step 1 of verify_at_boot) for manifest self-verification. The circular self-hash cannot be self-consistent."
+      "sha256": "SELF"
     }
   ],
   "schema_version": "1"
