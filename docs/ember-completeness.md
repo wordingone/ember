@@ -62,6 +62,10 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C47 | S2 | additional worlds (NC1c IFC, NC1d ARC-3 policy) | world admission floor per formalization §7 | — | GATED:NC0-verdict |
 | C48 | S2 | gate-stats correctness (exact methods for zero-inflated n=100; power notes) | Wilson/Newcombe-paired adopted; round-2 sized BEFORE launch; receipted review | — | OPEN |
 | C49 | S2 | teacher-admission probe (feed-per-GPU-hour, sampler provenance) | admission receipt per teacher-system §7b | — | GATED:C45+feed-math |
+| C50 | S1 | SDEK as ember's operating system (goal clause) | SDEK layer named in the component contract + an executed receipt showing SDEK-mediated operation | — | OPEN |
+| C51 | S1 | multimodal-unified core (goal clause) | modality plan in NC2-own contract + first multimodal episode verified | — | GATED:C2-contract-row |
+| C52 | S3 | scaffolding-off residency test (goal terminal clause: founders/cloud off, mind persists + improves) | scripted: all founder/cloud scaffolding halted, ember runs N events + 1 verified gain solo, receipted | — | GATED:C10,C13 |
+| C53 | S1 | fp-34 prong A: band measurement (named as C26's gate; no row existed) | measured band receipts on the active core | — | OPEN |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
 
@@ -86,8 +90,14 @@ pieces" with the source named:
       (standing exteroception, not completion-bound), config rollout
       (user-gated, not an ember piece).
 - [ ] fp-* / sp-* protocol docs (every standing obligation)
-- [ ] GOAL.md reading notes (each binding clause → testable row)
-- [ ] work-ahead-ledger rows (parents must map to rows here)
+- [x] GOAL.md reading notes — swept 2026-06-12T16:38Z: C50 (SDEK-as-OS),
+      C51 (multimodal-unified), C52 (scaffolding-off residency test) added;
+      deletion-test/persistence/both-legs/receipts-only clauses already
+      rowed (C5/C13/C16/C20). C53 added (fp-34 prong A was a named gate
+      with no row).
+- [x] work-ahead-ledger rows — swept 2026-06-12T16:38Z: open rows 5 (#282
+      → C25) and 6 (#214 → C29) both map; discharged rows map via their
+      merged PRs (C6/C7/C19/C20). No unmapped parents.
 
 Tally script AC (to be minted as eng issue): parse this table; for each row
 with a receipt pointer, locate + validate (receipt_check pass + named AC
