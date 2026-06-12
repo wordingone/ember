@@ -10,6 +10,23 @@ OBLIGATION (what must exist on disk before resources commit), and honest
 status. Ranked by what binds the goal soonest. Rule: an entry leaves this
 register only by receipt, never by prose.
 
+## H0 — The local training compute ceiling (user 21:15Z: NO DEFERRAL)
+
+**Problem:** at the measured ceiling (17,899 tok/s paced live config) a
+7B-token c03 pretrain costs 3.4–4.5 wall-days — ember gets ~2 iterations
+before 06-22 and zero design-space exploration. Everything downstream,
+including ember's nature, is gated on shattering this.
+
+**Proof obligation + program:** `docs/compute-ceiling-program-v1.md` —
+roofline MFU math, 8-lever stack (each lands by single-variable A/B
+receipt), shatter criterion v1 = pretrain-from-scratch ≤1 governed day
+(≥3.3× compound, stretch 5×), no-defer rule: ≥1 lever in flight at every
+tick until met or all levers receipted-KILLED.
+
+**Status:** OPEN — program active, eli lane #1, first benches in governed
+windows beside the live run tonight; 1B-ckpt boundary (~09:00Z) = first
+certified-lever entry point via receipted resume decision (user owns).
+
 ## H1 — Pre-commitment optimality (the missed requirement; now a gate class)
 
 **Problem:** scarce-resource commitments (GPU wall-clock, founder token
