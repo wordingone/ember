@@ -1,5 +1,21 @@
 # Compute-ceiling program v1 — shatter the local training ceiling (2026-06-12)
 
+**v1.4 (4:30 PM LA — production anchor receipted; PR #362):** every prior
+anchor was BENCH-PATH (Llama+AdamW proxy; C-7 ban now in force). The
+PRODUCTION stack (MTP+chunked-CE+Muon) measured: **best cell B16+ckpt+
+compile = 19,228 tok/s paced → 7B in 4.2 governed days; gap factor 2.11×.**
+Compile on prod = 1.159× (B16) / 0.994× (B4 — Muon-dominated). L9 flash
+RESOLVED: revives at B8 no-ckpt (fits, 9.3 GiB free) but MTP halves the
+bench-path benefit (0.4997×) → 13,938 tok/s = 0.725× of the B16 ceiling —
+available, NOT dominant. **L10 minted (#363): optimizer swap — Muon
+36.01% of wall at B16-compile (70.91% at B4), fused-AdamW row 0.18%;
+bound ~1.5× → ~29k tok/s → 7B ≈ 2.8d.** §3-arithmetic consequence: the
+≤1-day criterion closes ONLY as (L10 × curated-budget cut): c03-class ×
+~2–2.5B verified-dense tokens ≈ 1 governed day at the L10 bound — the
+density A/B (GO'd, manifests pre-frozen) is THE remaining gate on the c04
+pick. Provisional re-pricing receipts: act-refit-...232016Z (a ∈ (48.9,
+97.9) B/unit), c04-budget-...232016Z (production F 42.5 TFLOPS).
+
 **v1.2 (user order 2:33 PM LA, executed 2:34 PM):** run 12c050e7 STOPPED
 (train_cancel, kill-receipted, daemon alive, GPU freed at step 150k;
 ~614M content tokens, ~8,872 tok/s production throughput — see

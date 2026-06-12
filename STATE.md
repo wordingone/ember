@@ -327,6 +327,14 @@ POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing 
 
 `B:/M/avir/leo/state/nc-ladder/receipts/` (JSONL/JSON per job; gate from these only).
 
+## 2026-06-12 ~23:30Z — PRODUCTION ANCHOR RECEIPTED (4:30 PM LA): ceiling re-priced, L9 resolved, L10 minted
+
+- **PR #362 signed off** (rebase verified only-new-work; fp38b → INCONCLUSIVE-CELL-ERROR; fp38c proxy-labeled; wall-days were receipt-correct, mail-table-only error). Production stack measured: **B16+ckpt+compile 19,228 tok/s = 7B in 4.2d; bench→prod gap 2.11×; compile 1.159× (B16) / 0.994× (B4)**.
+- **L9 RESOLVED via fp38d rider (production class):** B8-flash-nockpt FITS (9.3 GiB free) at 13,938 tok/s — MTP halves the bench benefit (0.4997×, structural) → 0.725× of the B16 ceiling. Available, not dominant. My act-refit v2 consumed the fp38c rows: a ∈ (48.9, 97.9) B/unit, v1's decisive-cell prediction confirmed.
+- **L10 minted (#363, eng):** Muon 36.01% wall at B16-compile / 70.91% at B4, fused-AdamW 0.18% — swap A/B on production stack w/ loss-equivalence leg; bound ~1.5× → ~29k tok/s → 7B ≈ 2.8d.
+- **§3 arithmetic (program v1.4):** criterion ≤1 day closes only as L10 × curated-budget: c03-class × ~2–2.5B dense tokens. **Density A/B = THE remaining gate on the c04 pick** — GO'd with 5 conditions (manifests frozen pre-dispatch, 2 seeds, cross-eval, probes, caveats named).
+- Mira: pool root-cause executing (alive post-escalation).
+
 ## 2026-06-12 ~22:50Z — BUILD tick (3:50 PM LA): L9 KILLED + proxy-anchor correction gated; H3 measured rewrite
 
 - **L9 flash KILLED at projected batches (PR #361 @c01eaf3, signed off):** OOM B=39/33/26 — grid activation model undercounts (≥~28 B/unit measured vs 20 modeled); F-1 projection falsified. Lever not fully priced: b16/b8-nockpt-flash never measured — completion cells ride eli's next window.
