@@ -166,3 +166,37 @@ Gate-9 (#349) variant: any c04 pretrain ≥12 GPU-h that cites bulk corpus witho
 - **Eli:** shard prep (arm B tokenization) + training harness + receipt emission
 - **Leo:** approve this spec (gate before freeze), gate the verdict, update c04 budget doc at fp-39-recalibrated rates
 - **Order:** fp-39 prod bench first → recalibrate budget table → then density A/B bench
+
+---
+
+## 9. Leo gate addenda (GATED-GO conditions, mail 15082, 2026-06-12)
+
+Dispatch authorized after PR #362 merges. Five binding conditions:
+
+**(a) 2 seeds per arm, 4 cells total.** Arm A runs seed 0 + seed 1; Arm B
+runs seed 0 + seed 1. Seeds determine shard-stream shuffle order only
+(deterministic tokenization otherwise). Report per-seed W-code rates and
+their mean.
+
+**(b) Cross-eval both held-outs per arm.** Each arm cell is evaluated on
+BOTH held-out sets (domain-fit: in-distribution W-code prompts; competence:
+held-out W-code prompts from a different domain). This separates memorization
+from generalization.
+
+**(c) Probes at 50% and 100% of token budget (slope, not a point).** Record
+W-code rate at 50M tokens and 100M tokens per arm. An early-training density
+edge that flattens by 100M cannot be extrapolated to the full pretrain;
+slope direction is recorded in the receipt (rising / flat / falling).
+
+**(d) Mix manifests sha-pinned and committed before first dispatch.** Two
+manifest files (shard IDs + sampling weights, sha-pinned over raw bytes) must
+be committed to the repo BEFORE any cell launches. No mix edits are permitted
+after the first cell starts — the freeze is the single-variable guarantee.
+Dispatch is blocked until this commit exists.
+
+**(e) Receipt must name both caveats explicitly:**
+- `code_fraction` is a PROXY for the verified-density axis — the actual
+  verification status of shards is not re-audited in this bench.
+- `c01→c03 scale transfer` is an assumption — density signal at c01
+  (hidden=640, 79M params) may not hold at c03 (hidden=1024, 284M params);
+  verdict is directional, not a precision estimate at production scale.

@@ -3,8 +3,8 @@
   "ts": "20260612T230120Z",
   "lever": "L9",
   "issue": 225,
-  "verdict": "L9_KILLED_ALL_BATCHES",
-  "arch_note": "ALL-CELL-ERROR: compiled cells failed (likely transformers NameError). Re-run with corrected compile wrapper to get OOM/viable verdict.",
+  "verdict": "INCONCLUSIVE-CELL-ERROR",
+  "arch_note": "ALL-CELL-ERROR: compiled cells failed (transformers output_capturing NameError \u2014 LlamaForCausalLM without gradient_checkpointing triggers a different code path that resists all tested compile workarounds). No OOM/viable verdict is derivable from CELL-ERROR rows. Measured truth: fp38c-l9-eager receipts (B16=OOM, B8=27895 tok/s, verdict L9_REVIVE_B8). See fp38c for the definitive ARCH answer.",
   "prior_receipts": {
     "fp38_l9": "fp38-l9-flash-ab-20260612T223639Z.json",
     "fp32_l6": "fp32-l6-compile-ab-20260612T215844Z.json"

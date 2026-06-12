@@ -81,6 +81,9 @@
     "batch ladder: (16, 8)",
     "eager (no compile) \u2014 compile blocked by transformers output_capturing NameError at no-ckpt",
     "warmup_eager=3",
-    "governor rails HOLD \u2014 never loosened"
-  ]
+    "governor rails HOLD \u2014 never loosened",
+    "PROXY CLASS: bench-path only (LlamaForCausalLM, no MTP heads) \u2014 B8 FIT provisional for production (MTP activations add memory pressure)"
+  ],
+  "receipt_class": "BENCH-PATH-PROXY",
+  "rider_required": "b8-nockpt-flash-prod \u2014 verify B8 flash fit on full production stack (LlamaModel+MTP+chunkedCE+Muon)"
 }
