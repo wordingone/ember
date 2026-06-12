@@ -22,8 +22,11 @@ always "X is happening, moving on to Y while X happens."
 | 7 | ~~Registry PARK revival configs staged~~ DISCHARGED | fp8-revival-next-width-v1.json at repo30/ledger/; revival cond: K≥4096 sites → next-width config A/B; registry row PARK quoted. Receipt: ledger-row7-row10-20260612T140836Z.json | Eli | registry |
 | 8 | ~~Receipt hygiene~~ DISCHARGED | PR #334 merged (LEGACY_EXEMPT 9 + sp6c fix; jude adversarial verify PASS; clean-tree repro 260/9/0) | Eli + jude | R2 |
 | 9 | ~~fp-29 synthesis-window prep~~ DISCHARGED | PR #333 merged (sha 25a51c14… reproduced at gate) | Eli (Leo gated) | fp-29/#200 |
-| 11 | manifest closed-issues coverage sweep | every closed ember issue mapped to a manifest row or recorded no-new-piece; tally credits receipted DONE rows | Leo | numeric closure |
-| 12 | manifest pointer fixes from jude's sweep | every PART/DONE row pointer resolves to a file (jude receipt pending, mail 14863) | Leo | numeric closure |
+| 11 | ~~manifest closed-issues coverage sweep~~ DISCHARGED | C33-C40 credited; all 7 enumeration sources swept by 16:42Z — manifest denominator FULLY ENUMERATED (53→55 rows) | Leo | numeric closure |
+| 12 | ~~manifest pointer fixes from jude's sweep~~ DISCHARGED | R1+R2 applied @e4d27ef/@de9e88e; jude receipt-minting round in flight (14886) | Leo | numeric closure |
+| 13 | B3 duty-battery spec freeze (C55 half 1 — MUST precede first B-run) | spec doc: 20 frozen duty episodes + expected-verb table, committed; fp33-surpass-prereg names it | Leo | C55/#fp-33 |
+| 14 | GSM8K-200 greedy exact-match harness (C55 half 2, A3-ii prerequisite) | eng issue minted with AC (selftest + receipt schema); rides Eli queue after #340 | Leo mint / Eli build | C55/#fp-33 |
+| 15 | fp34 band-freeze + selftest pre-stage (C53 pre-stageable half) | fp34_band_owned.py freeze on round-1 receipts + --selftest receipt | Leo dispatch / jude verify | C53 |
 | 10 | ~~Eli loop: cron turn-generator~~ DISCHARGED | cron-tick-prompt.md written at eli/state/; CronCreate :26 (GATE) + :56 (BUILD) wired; receipt: ledger-row7-row10-20260612T140836Z.json | Eli | loop-eng doc |
 
 Standing row classes (refill sources when the table runs low): verdict-chain

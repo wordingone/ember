@@ -55,17 +55,19 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C40 | S1 | GPU efficiency registry execution (#284/#289/#294/#296/#298/#301/#305) | fp8 width-conditional dispatch, recompute NONE adoption, cuda-graph A/B — each receipted | 6/7 receipts verified (jude R2); #298 receipt MISSING from tree — locate or re-run | PART |
 | C41 | S1 | technique-registry verdict closure | zero CANDIDATE/WATCH rows left in technique-registry.jsonl: each reaches TESTED/ADOPT/KILL via the speedrun proxy protocol, per-row receipts bound; tally walks the jsonl as a sub-manifest | technique-registry.jsonl rows | PART (4 ADOPT in v0; 11 CANDIDATE + 1 WATCH open) |
 | C42 | S2 | round-1 verdict on the small core (t2 train → t4 four-arm chain) | verdict receipt: floor measured or fallback verdict (q15 floor-unmeasurable receipted; 3B fallback chain c9b26f8e) | t1-smoke-20260610T115140Z + q15 verdict receipts; 3B chain receipts pending | PART |
-| C43 | S2 | round-2 SELF-GENERATED episodes round (STATE: REQUIRED for goal) | t2_round --round 2 on r1 adapter; design arms per bottleneck-conversion §2; calibration instrumented | — | GATED:round-1-verdict |
+| C43 | S2 | round-2 SELF-GENERATED episodes round (STATE: REQUIRED for goal) | ALL r2-prereg.md phases receipted (doc = sub-manifest: S sampling/top-up/calibration/ingest; T arms MTP/control-MTP/plain-SFT; E G1+t5+HumanEval-probe; verdict cell named) | r2-prereg.md phases | GATED:round-1-verdict |
 | C44 | S6 | contamination probe executed (t1c, active core) | continuation-membership signal ≤5pp and zero ID-recall hits, receipted | staged (t1c_run_q15.py) | GATED:idle-window-post-r1 |
 | C45 | S2 | W-code second world admission (w1 floor → w2 ingest → w4 heldout gate) | w1 floor receipt F>0; ingest receipt; w4 paired deltas | chain BUILT + unit-checked; floor receipt pending | GATED:w1-floor-receipt |
 | C46 | S3 | NC-K kernel v1.0 freeze | freeze per docs/kernel-v1-freeze-spec.md; replay + schema receipts | kernel_replay 20/20 both verdicts; ledger-schema-v3 spec'd | GATED:round-1-verdict+schema-review |
-| C47 | S2 | additional worlds (NC1c IFC, NC1d ARC-3 policy) | world admission floor per formalization §7 | — | GATED:NC0-verdict |
+| C47 | S2 | additional worlds (NC1c IFC, NC1d ARC-3 policy) | admission floor per formalization §7; NC1d instrument = arcade-floor-prereg.md as sub-manifest (generation/execution/baseline/admission/ledger-ingest/candidate-pool receipts) | arcade-floor-prereg.md | GATED:NC0-verdict |
 | C48 | S2 | gate-stats correctness (exact methods for zero-inflated n=100; power notes) | Wilson/Newcombe-paired adopted; round-2 sized BEFORE launch; receipted review | — | OPEN |
 | C49 | S2 | teacher-admission probe (feed-per-GPU-hour, sampler provenance) | admission receipt per teacher-system §7b | — | GATED:C45+feed-math |
 | C50 | S1 | SDEK as ember's operating system (goal clause) | SDEK layer named in the component contract + an executed receipt showing SDEK-mediated operation | — | OPEN |
 | C51 | S1 | multimodal-unified core (goal clause) | modality plan in NC2-own contract + first multimodal episode verified | — | GATED:C2-contract-row |
 | C52 | S3 | scaffolding-off residency test (goal terminal clause: founders/cloud off, mind persists + improves) | scripted: all founder/cloud scaffolding halted, ember runs N events + 1 verified gain solo, receipted | — | GATED:C10,C13 |
-| C53 | S1 | fp-34 prong A: band measurement (named as C26's gate; no row existed) | measured band receipts on the active core | — | OPEN |
+| C53 | S1 | fp-34 owned-band chain (fp34-owned-band-prereg-v1.md = sub-manifest) | band-freeze receipt + selftest; prong-A yield+verdict (GATED:round-2-sampling); prong-B (GATED:prong-A-PREDICTIVE) | fp34_band_owned.py receipts | OPEN (freeze+selftest pre-stageable) |
+| C54 | S5 | fp-33 B-leg instruments (B1 mail round-trip, B2 agency battery, B4 evals-through-harness) | each leg's paired receipt per fp33-surpass-prereg-v1.md bars (B1 ≥4/5 + >E2B; B2 ≥4/5 + >E2B; B4 dispatch both sides) | — | GATED:C15 |
+| C55 | S5 | surpass pre-stage pair: GSM8K-200 greedy harness (A3-ii) + B3 duty-battery spec frozen BEFORE first B-run | harness selftest receipt; duty-battery spec doc (20 episodes + expected-verb table) committed pre-execution | — | OPEN (pre-stageable NOW) |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
 
@@ -89,7 +91,13 @@ pieces" with the source named:
       candidate), HF upload (standing), release-scan/DiffusionGemma
       (standing exteroception, not completion-bound), config rollout
       (user-gated, not an ember piece).
-- [ ] fp-* / sp-* protocol docs (every standing obligation)
+- [x] fp-*/sp-* protocol docs — swept 2026-06-12T16:42Z (Haiku agent, 63K
+      tok, gated): r2-prereg/arcade-floor/fp34 obligations folded as
+      SUB-MANIFESTS into C43/C47/C53 (one row per round, doc carries the
+      phases — C41 pattern); fp-33 B-legs → C54; pre-stageable successors
+      (GSM8K harness + duty-battery spec freeze) → C55. ALL SEVEN
+      enumeration sources now swept — the denominator is fully enumerated;
+      only receipts (or new planning) move the tally from here.
 - [x] GOAL.md reading notes — swept 2026-06-12T16:38Z: C50 (SDEK-as-OS),
       C51 (multimodal-unified), C52 (scaffolding-off residency test) added;
       deletion-test/persistence/both-legs/receipts-only clauses already
