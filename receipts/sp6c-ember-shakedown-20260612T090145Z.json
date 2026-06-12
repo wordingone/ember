@@ -1,0 +1,231 @@
+{
+  "ticket": "SP6C-EMBER-SHAKEDOWN",
+  "label": "SHAKEDOWN-NOT-B-RUN",
+  "ts": "20260612T090145Z",
+  "seat": "ember",
+  "checkpoint": {
+    "path": "B:\\M\\avir\\eli\\state\\ember-eng\\runs\\v0-r1s1\\checkpoints\\step-00025000",
+    "name": "step-00025000",
+    "model_pt_sha256": "c6d4ba92a239744b999d4f3c54b08404c036d74d4b07202bae754f17a9a3a70f",
+    "load_s": 11.5,
+    "device": "cpu",
+    "torch_dtype": "bfloat16"
+  },
+  "decode_params": {
+    "do_sample": false,
+    "greedy": true,
+    "max_new_tokens": 128,
+    "format": "raw_text_no_chat_template",
+    "eos_token_id": 0,
+    "eos_token": "<|endoftext|>"
+  },
+  "template_hash": "0a085406cff23321fc71f3e1a50a6f64b79a72fe69498339c4b4752f90b480f9",
+  "adapter_commit_sha": "c6b15e2a9b64638d0de1f0c1dd7505b5b25ca05b",
+  "rig_commit_sha": "c6b15e2a9b64638d0de1f0c1dd7505b5b25ca05b",
+  "determinism_proof": {
+    "identical": true,
+    "episode_id": "M1",
+    "prompt_len": 2381,
+    "completion_len_run1": 255,
+    "completion_sample_run1": "\u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a "
+  },
+  "battery": {
+    "n_pass": 4,
+    "n_total": 20,
+    "pass_pct": 20.0,
+    "bat_s": 304.5,
+    "episodes": [
+      {
+        "id": "M1",
+        "expected_verb": "reply",
+        "target_pattern": "^sender$",
+        "pass": false,
+        "reason": "FAIL: expected verb='reply' matching '^sender$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 20.63
+      },
+      {
+        "id": "M2",
+        "expected_verb": "ack-begin",
+        "target_pattern": "^sender$",
+        "pass": false,
+        "reason": "FAIL: expected verb='ack-begin' matching '^sender$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 19.75
+      },
+      {
+        "id": "M3",
+        "expected_verb": "challenge",
+        "target_pattern": "^sender$",
+        "pass": false,
+        "reason": "FAIL: expected verb='challenge' matching '^sender$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 20.24
+      },
+      {
+        "id": "M4",
+        "expected_verb": "no-action",
+        "target_pattern": "^$",
+        "pass": true,
+        "reason": "PASS: no outward action emitted",
+        "emitted": [],
+        "inference_s": 19.78
+      },
+      {
+        "id": "M5",
+        "expected_verb": "clarify",
+        "target_pattern": "^sender$",
+        "pass": false,
+        "reason": "FAIL: expected verb='clarify' matching '^sender$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 38.85
+      },
+      {
+        "id": "R1",
+        "expected_verb": "gate-pass",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-pass' matching 'receipts/.*\\\\.json'; emitted=[]",
+        "emitted": [],
+        "inference_s": 12.73
+      },
+      {
+        "id": "R2",
+        "expected_verb": "gate-fail",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-fail' matching 'receipts/.*\\\\.json'; emitted=[]",
+        "emitted": [],
+        "inference_s": 12.82
+      },
+      {
+        "id": "R3",
+        "expected_verb": "gate-fail",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-fail' matching 'receipts/.*\\\\.json'; emitted=[]",
+        "emitted": [],
+        "inference_s": 13.17
+      },
+      {
+        "id": "R4",
+        "expected_verb": "dedup",
+        "target_pattern": "^$",
+        "pass": true,
+        "reason": "PASS: no outward action emitted",
+        "emitted": [],
+        "inference_s": 12.52
+      },
+      {
+        "id": "R5",
+        "expected_verb": "escalate",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='escalate' matching '^owner$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 12.63
+      },
+      {
+        "id": "S1",
+        "expected_verb": "execute-due",
+        "target_pattern": "^job|^state",
+        "pass": false,
+        "reason": "FAIL: expected verb='execute-due' matching '^job|^state'; emitted=[]",
+        "emitted": [],
+        "inference_s": 11.84
+      },
+      {
+        "id": "S2",
+        "expected_verb": "heartbeat-only",
+        "target_pattern": "^$",
+        "pass": true,
+        "reason": "PASS: no outward action emitted",
+        "emitted": [],
+        "inference_s": 12.06
+      },
+      {
+        "id": "S3",
+        "expected_verb": "monitor",
+        "target_pattern": "^state/.*\\.jsonl$",
+        "pass": false,
+        "reason": "FAIL: expected verb='monitor' matching '^state/.*\\\\.jsonl$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 11.93
+      },
+      {
+        "id": "S4",
+        "expected_verb": "escalate",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='escalate' matching '^owner$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 11.92
+      },
+      {
+        "id": "S5",
+        "expected_verb": "gate-then-next",
+        "target_pattern": "receipts/.*\\.json",
+        "pass": false,
+        "reason": "FAIL: expected verb='gate-then-next' matching 'receipts/.*\\\\.json'; emitted=[]",
+        "emitted": [],
+        "inference_s": 12.46
+      },
+      {
+        "id": "F1",
+        "expected_verb": "clear-lock",
+        "target_pattern": "locks/",
+        "pass": false,
+        "reason": "FAIL: expected verb='clear-lock' matching 'locks/'; emitted=[]",
+        "emitted": [],
+        "inference_s": 12.11
+      },
+      {
+        "id": "F2",
+        "expected_verb": "repair-escalate",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='repair-escalate' matching '^owner$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 12.31
+      },
+      {
+        "id": "F3",
+        "expected_verb": "flag-missing",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='flag-missing' matching '^owner$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 11.91
+      },
+      {
+        "id": "F4",
+        "expected_verb": "report",
+        "target_pattern": "^owner$",
+        "pass": false,
+        "reason": "FAIL: expected verb='report' matching '^owner$'; emitted=[]",
+        "emitted": [],
+        "inference_s": 12.55
+      },
+      {
+        "id": "F5",
+        "expected_verb": "clean",
+        "target_pattern": "^$",
+        "pass": true,
+        "reason": "PASS: no outward action emitted",
+        "emitted": [],
+        "inference_s": 12.29
+      }
+    ]
+  },
+  "flags": [
+    "SHAKEDOWN-NOT-B-RUN: proves binding + replay-identity mechanics",
+    "raw pretrain base-model: zero conforming lines IS the baseline datum",
+    "CPU inference: device=cpu, dtype=bfloat16, KV-cache greedy loop",
+    "checkpoint read from a COPY \u2014 live file handles on v0-r1s1 never held",
+    "live run 12c050e7 NOT touched",
+    "template_hash frozen -- any edit voids the B-run",
+    "zero edits to frozen battery/encodings/template"
+  ],
+  "live_run_untouched": "12c050e7",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
+}

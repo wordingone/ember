@@ -290,6 +290,7 @@ def main() -> int:
             "zero edits to frozen battery/encodings/template",
         ],
         "live_run_untouched": "12c050e7",
+        "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
     }
 
     if write:
