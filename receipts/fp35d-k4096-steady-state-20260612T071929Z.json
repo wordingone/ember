@@ -1,0 +1,81 @@
+{
+  "ticket": "FP35D-K4096-STEADY-STATE",
+  "ts": "20260612T071929Z",
+  "issue": "#294",
+  "verdict": "WIDTH_COND_VIABLE",
+  "verdict_reason": "all-seed p50 bar MET (>=1.2x): [1.241, 1.247, 1.2466]; stability=PASS",
+  "shape": {
+    "M": 4096,
+    "K": 4096,
+    "N": 1024,
+    "label": "output_proj"
+  },
+  "protocol": {
+    "warmup_reps": 20,
+    "bench_reps": 100,
+    "variant": "weight-cache (w_fp8 cached at init, cast x per-rep)"
+  },
+  "governor": {
+    "total_gib": 23.988,
+    "free_gib_at_launch": 23.988,
+    "budget_gib": 19.19,
+    "margin_gib": 23.988
+  },
+  "runtime": {
+    "python": "C:\\Program Files\\Python310\\python.exe",
+    "torch": "2.10.0+cu126",
+    "cuda": "12.6",
+    "device": "NVIDIA GeForce RTX 4090",
+    "sm": "89"
+  },
+  "results": [
+    {
+      "seed": 16,
+      "bf16_p50_ms": 0.2109,
+      "bf16_p90_ms": 0.212,
+      "fp8_p50_ms": 0.17,
+      "fp8_p90_ms": 0.1731,
+      "mm_p50": 1.241,
+      "mm_p90": 1.2249,
+      "stability_pass": true,
+      "has_nan": false,
+      "has_inf": false,
+      "sat_frac": 0.0,
+      "rel_err": 0.037647
+    },
+    {
+      "seed": 17,
+      "bf16_p50_ms": 0.212,
+      "bf16_p90_ms": 0.213,
+      "fp8_p50_ms": 0.17,
+      "fp8_p90_ms": 0.1731,
+      "mm_p50": 1.247,
+      "mm_p90": 1.2308,
+      "stability_pass": true,
+      "has_nan": false,
+      "has_inf": false,
+      "sat_frac": 0.0,
+      "rel_err": 0.037666
+    },
+    {
+      "seed": 18,
+      "bf16_p50_ms": 0.212,
+      "bf16_p90_ms": 0.213,
+      "fp8_p50_ms": 0.17,
+      "fp8_p90_ms": 0.1741,
+      "mm_p50": 1.2466,
+      "mm_p90": 1.2235,
+      "stability_pass": true,
+      "has_nan": false,
+      "has_inf": false,
+      "sat_frac": 0.0,
+      "rel_err": 0.037659
+    }
+  ],
+  "bar": "all-seed p50 MM >= 1.2x AND all stability PASS",
+  "flags": [
+    "native-Windows Python (not WSL2 daemon)",
+    "live run 12c050e7 NOT touched",
+    "weight fp8 cached at bench-init"
+  ]
+}
