@@ -62,6 +62,16 @@ machine; the wall is broken by building the kernel path ourselves. Owner: Leo
   cuda-graph-step — launch overhead inside the 11.3% optimizer/step share
   ("cheapest, test first" already on its row); (3) fp-35d as above. Each is
   an A/B step-time receipt at fixed config before any adoption.
+- **Ladder outcomes (2026-06-12, all gated):** selective-recompute RESOLVED
+  to no-ckpt — 1.213x ADOPTED-pending-segment (PR #300 staged the config; the
+  activation receipt flips it). cuda-graph-step KILLED at c03 — 0.931x, sync
+  overhead beats launch savings, +1.8 GiB static cost (revival = larger
+  config). fp-35d WIDTH_COND_VIABLE — stable 1.24x p50 at K=4096, all seeds;
+  fp35c's anomaly was rep-count noise. **Next build (fp-35g): width-conditional
+  fp8 dispatch — wrap ONLY K≥4096 linears (c03: the MLP down-proj) with the
+  weight-cache autograd.Function; A/B end-to-end step receipt; honest prize:
+  down-proj is a minority of step time, expect low-single-digit % end-to-end —
+  worth one cheap build given 1.24x is stable and composable with no-ckpt.**
 - **P2 — CUTLASS-direct build in WSL2: UNBUILT (fallback).** Fires only if
   native-side integration hits a wall (e.g. WSL2-resident daemon coupling
   that can't move native). Receipt bar unchanged: micro-bench + kernel-name
