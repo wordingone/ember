@@ -1,0 +1,62 @@
+{
+  "ticket": "SP-CHECKPOINT-PROBE",
+  "label": "CHECKPOINT-PROBE-step-25000-102M-tokens",
+  "ts": "20260612T090913Z",
+  "seat": "ember",
+  "checkpoint_tokens": 102400000,
+  "step": 25000,
+  "tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+  "corpus_manifest_sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+  "adapter_none_assert": true,
+  "pacing": {
+    "pace_s_per_step": 0.05,
+    "step_count": 25600,
+    "pacing_s": 1280.0
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "probe_seed": 23,
+  "probe_set_sha256": "105fd3700b2f684b88576a627477685d0d5937f875d7d0578c39fce706584ea4",
+  "l1_verified_episodes": 0,
+  "l1_governed_minutes": 51.685,
+  "l1_tasks_any_verified": 0,
+  "l1_tasks_total": 100,
+  "l2_verified_episodes": 0,
+  "mbpp43_verified_samples": 0,
+  "checkpoint": {
+    "dir": "B:\\M\\avir\\eli\\state\\ember-eng\\runs\\v0-r1s1\\checkpoints\\step-00025000",
+    "name": "step-00025000",
+    "step": 25000,
+    "model_pt_sha256": "c6d4ba92a239744b999d4f3c54b08404c036d74d4b07202bae754f17a9a3a70f",
+    "load_s": 7.8,
+    "device": "cpu",
+    "torch_dtype": "bfloat16"
+  },
+  "decode_params": {
+    "max_new_tokens": 64,
+    "greedy": true,
+    "eos_token_id": 0,
+    "format": "raw_text_no_chat_template"
+  },
+  "probe_params": {
+    "k": 4,
+    "probe_n": 100,
+    "candidate_timeout_s": 5
+  },
+  "protocol_sha": "affcbb514e3ee3a12d97195b96c5090c9e9a5cd2",
+  "harness_sha": "uncommitted",
+  "adapter_commit_sha": "c6b15e2a9b64638d0de1f0c1dd7505b5b25ca05b",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "flags": [
+    "CPU inference: device=cpu, dtype=bfloat16",
+    "checkpoint read from COPY \u2014 no live file handles on v0-r1s1",
+    "live run 12c050e7 untouched",
+    "fp-23 protocol frozen before pretrain step 0 (protocol_sha=affcbb514e3ee3a1...)",
+    "pre-floor checkpoint: step=25000, tokens=102,400,000 \u2014 fp-23 decide() INFO only",
+    "L2 and MBPP-43 fields = 0 (not probed at this checkpoint window)"
+  ],
+  "live_run_untouched": "12c050e7"
+}
