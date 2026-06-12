@@ -1,0 +1,13 @@
+{
+  "tests": {
+    "T1_chain_complete": "PASS",
+    "T1_full_round": "PASS",
+    "T2_corrupt_terminal_receipt": "PASS",
+    "T3_missing_probe_artifact": "PASS",
+    "T4_governor_stripped": "PASS",
+    "T5_heartbeat_blocked": "PASS"
+  },
+  "ticket": "HEARTBEAT-RUNNER-SELFTEST",
+  "ts": "20260612T045619Z",
+  "verdict": "PASS"
+}
