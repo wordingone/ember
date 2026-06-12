@@ -25,8 +25,8 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C11 | S3 | CU communicability (user+Leo can interact) | CU console echo stage + interactive session receipt | #332 stage 5 (echo only) | PART |
 | C12 | S3 | self-editing harness behind invariant gate | harness-edit artifact: branch→receipts→promote; deletion test | — | OPEN |
 | C13 | S4 | cross-session persistence of gains | yesterday's gain measurably load-bearing today (receipt) | — | OPEN |
-| C14 | S5 | fp-33 paired-protocol freeze | protocol doc frozen pre-verdict | fp-33 | PART |
-| C15 | S5 | E2B-in-ember-seat baseline | E2B swapped into same harness, same worlds, governed | — | GATED:C8,C10 |
+| C14 | S5 | fp-33 paired-protocol freeze (#255: E1-E5 engine + envelope) | protocol doc frozen pre-verdict | fp-33 docs/receipts | PART |
+| C15 | S5 | E2B-in-ember-seat baseline (#307 seat contract; #311 E2B SHAKEDOWN; #313 ember SHAKEDOWN; #268 GSM8K leg) | full paired battery, same worlds, governed | seat shakedown receipts | PART |
 | C16 | S5 | surpass receipts (both legs) | ember > E2B: ember-work + founder-likeness | — | GATED:C15 |
 | C17 | S6 | five un-removable invariants in code | protected paths + boot-time checksum verify | #332 stage 1 (boot_checksum) | PART |
 | C18 | S6 | resource governor on every job | VRAM frac + margin assert + pacer receipts | governed-launch receipts | DONE |
@@ -45,6 +45,14 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C30 | S2 | sp-2b: first P-own-resume + D-round receipts vs sp-2 spec (#210) | gated receipts pair | — | GATED:trigger |
 | C31 | S2 | fp-27b: round-1 execution verdicts on real owned-core round receipts (#205) | verdict receipts | — | GATED:round-1-dispatch |
 | C32 | S6 | eng-35: P-gate live probe leg across daemon restart (#128) | boundary-pair receipt | — | GATED:Leo-dispatch-order (HOLD is mine to lift) |
+| C33 | S1 | v0 corpus + tokenizer freeze + token shards (#130/#160/#185/#195) | license-clean mix receipts; freeze interlock; TOKEN-SHARDS-V0; launch gate 7/7 GREEN | corpus/freeze/shard receipts | DONE |
+| C34 | S6 | fail-closed launch-rail stack (#181/#183/#186/#190/#192) | gate enforces prereg premises + shards byte-scan + live interlock | eng receipts per issue | DONE |
+| C35 | S2 | verify-path soundness hardening (#76/#86/#92) | strict comparator adopted + object-graph reachability guard on all verify surfaces | eng receipts | DONE |
+| C36 | S4 | D/P persistence-gates harness (#114/#175/#186; sp-2 #201) | gates fail-closed; real owned-core receipts ride sp-2b (#210=C30) | p_gate/d_gate receipts | PART |
+| C37 | S2 | protocol freezes pre-data (#135 fp-23; #198 fp-27; #220 fp-31; #326 fp-36) | each frozen BEFORE its data window | prereg docs/receipts | DONE |
+| C38 | S1 | technique registry + dispatch-gate wiring (#256/#271) | registry_gate.py as dispatch precondition; proxy-speedrun harness | registry receipts | PART |
+| C39 | S1 | zero-cloud loop receipt (#212) | one full round config-only + loop-path locality manifest | eng-55 receipt | DONE |
+| C40 | S1 | GPU efficiency registry execution (#284/#289/#294/#296/#298/#301/#305) | fp8 width-conditional dispatch, recompute NONE adoption, cuda-graph A/B — each receipted | per-issue bench receipts | DONE |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
 
@@ -55,7 +63,7 @@ pieces" with the source named:
 - [x] wordingone/ember OPEN issues — swept 2026-06-12T15:25Z: 10 open; #329→C3,
       #328→C24, #282→C25, #273→C26, #225→C27, #223→C28, #214→C29, #210→C30,
       #205→C31, #128→C32. CLOSED issues still to sweep (next line).
-- [ ] wordingone/ember CLOSED issues (completed pieces whose receipts the tally should count)
+- [x] wordingone/ember CLOSED issues — swept 2026-06-12T15:5xZ via Haiku enumeration (143 closed, #1-#337): credit rows C33-C40 added; C14/C15 upgraded (seat shakedowns); research-era eng-1..17/fp-1..25 pieces already embodied in C4/C5/C18/C35 — no new rows. Enumeration: docs/closed-issues-enumeration.txt
 - [ ] docs/technique-registry.md (every row → C2 sub-rows)
 - [ ] STATE.md pending layers (≥2 always listed)
 - [ ] fp-* / sp-* protocol docs (every standing obligation)

@@ -1,0 +1,144 @@
+1|eng|2026-06-10|eng-1: formalize verifier-bits objective
+2|eng|2026-06-10|eng-2: gate-stats correctness review + power helper
+3|eng|2026-06-10|eng-3: GRPO arm script (t2_grpo) — verifier-reward round-2 arm
+4|eng|2026-06-10|eng-4: MTP-aux-SFT arm — k-step aux heads on LoRA episode-SFT
+5|eng|2026-06-10|eng-5: frontier filter — solve-rate posterior + threshold
+6|eng|2026-06-10|eng-6: calibration instrumentation — P(verify) elicitation + Brier
+7|eng|2026-06-10|eng-7: W-code V hardening — extended tests + FPR estimator
+8|eng|2026-06-10|eng-8: kernel_replay resumed-run robustness
+9|eng|2026-06-10|eng-9: governor extraction to module
+10|eng|2026-06-10|eng-10: args-fingerprint universality on t2/t5 receipts
+21|eng|2026-06-10|eng-11: V-hardening consequence — ext-failed episode exclusion in dataset builds + bits re-account
+23|eng|2026-06-10|eng-12: external stack survey — AI2/OLMo, NOUS, Cognitive Computations, Unsloth, vLLM/llama.cpp, EuroHPC-LUMI (full-stack ownership pins)
+24|eng|2026-06-10|eng-13: GRPO attempt 6 — activation upcast in TRL forward (Float into lm_head with all-bf16 params)
+25|eng|2026-06-10|eng-14: governor inline->module swap (t1_probe/t2_round/t2_mtp) — post-chain window
+26|eng|2026-06-10|eng-15: GRPO per-assert partial-credit reward variant (row-9 arm)
+27|eng|2026-06-10|eng-16: WSL audit probes — 9P-share measurement + native-Windows torch smoke (audit §8.8)
+28|eng|2026-06-10|eng-17: NC2 recipe-stack assembly — Muon/BitNet/QAT/MTP/replay pins + smoke-scale validation plans
+29|math|2026-06-10|math-1: round-2 power pre-registration — paired-design MDE on validation-43, choose k
+30|math|2026-06-10|math-2: FPR-corrected bits accounting with uncertainty (vbits extension)
+31|math|2026-06-10|math-3: calibration skill decomposition + per-round detection budget
+32|reasoning|2026-06-10|reasoning-1: G1 verdict decision tree — pre-register BEFORE paired deltas are computed
+33|reasoning|2026-06-10|reasoning-2: next-world admission analysis (world-choice criteria applied)
+34|spec|2026-06-10|spec-1: NC-K kernel rung spec v0 — resident loop + self-editing harness behind invariant gate
+35|spec|2026-06-10|spec-2: sleep-consolidation mechanism spec v0 (SDEK three timescales, concrete)
+36|spec|2026-06-10|spec-3: round-2 W-code pre-registration (arms, n/k, ext-clean path, t5 binding)
+37|first-principles|2026-06-10|fp-1: is 3B the smallest core that clears the floor — or does smaller-core x larger-k win per joule?
+38|first-principles|2026-06-10|fp-2: what is V's ceiling — is assert-verification the right shape for ground truth?
+39|first-principles|2026-06-10|fp-3: LoRA-on-quantized-3B vs full-FT of a tiny core at matched budget — which moves the floor?
+46|eng|2026-06-10|eng-18: HumanEval+ admission probe (w1_humaneval.py, probe-first per #33)
+47|eng|2026-06-10|eng-19: ARC-AGI-3 arcade harness (floor probe rides on it)
+52|first-principles|2026-06-10|fp-4: is on-policy-ness core-size-transferable — small sampler feeding larger consolidator, or same-core-only?
+54|first-principles|2026-06-10|fp-5: verifier security — can a program pass V by exploiting the sandbox (reward-hacking surface, now load-bearing under GRPO)?
+57|first-principles|2026-06-11|fp-6 [first-principles] Qwen lock-in beyond license: ledger idiom contamination + outputs-as-training-data licensing read
+60|first-principles|2026-06-10|fp-7 [first-principles] consolidator-side episode re-valuation — bits are sampler-relative (fp-4 finding)
+63|first-principles|2026-06-11|fp-8 [first-principles]: verifier-change regression gate — false-negative cost of comparator tightening
+68|first-principles|2026-06-11|fp-9 [first-principles]: is the re-valued 1.07x distinguishable from parity — bootstrap CI + ext-FPR propagation
+70|eng|2026-06-11|eng-20: ledger license-class stamping + license-filtered dataset views (fp-6 consequence)
+71|spec|2026-06-11|spec: ARC-AGI-3 arcade floor-probe pre-registration (rides #47 harness)
+73|first-principles|2026-06-11|fp-10 [first-principles]: run the pre-registered idiom-separability probe — is the W-code ledger text detectably Qwen-marked?
+75|first-principles|2026-06-11|fp-11 [first-principles]: governed-wall-clock denominator — does pacing distort cross-core efficiency numbers?
+76|eng|2026-06-11|eng-21: adopt the strict comparator in the production verify path (fp-8-gated, measured cost 0.21%)
+78|first-principles|2026-06-11|fp-12 [first-principles]: is the upvalued targeting band stable across independent samplings, or noise?
+80|eng|2026-06-11|eng-22: control-pool provenance stamps — restore G2 control material under license-clean builds
+85|first-principles|2026-06-11|fp-13 [first-principles]: majority-class concentration — effective sample size and style dispersion of the 1,909 arc-dsl-MIT seed episodes
+86|eng|2026-06-11|eng-23: object-graph reachability guard in the sandbox — close the second confirmed false-accept class
+88|first-principles|2026-06-11|fp-14 [first-principles]: measured-pacing settlement — make pacing visible to receipts and resolve the fp-9 scope qualifier
+90|first-principles|2026-06-11|fp-15 [first-principles]: does the upvalued band PREDICT downstream transfer — band-vs-nonband G1-delta per GPU-minute?
+92|eng|2026-06-11|eng-24: strict comparator + reachability guard on the w1_humaneval and v_extended verify surfaces
+94|first-principles|2026-06-11|fp-16 [first-principles]: dedup-aware accounting as the standing census — count evidence, not rows
+96|first-principles|2026-06-11|fp-17 [first-principles]: implicit training-mix weights under duplication — what does a round's SFT actually upweight?
+97|eng|2026-06-11|eng-25: ingest-side dedup-cluster stamp — sidecar view, files byte-unchanged
+100|first-principles|2026-06-11|[first-principles] fp-18: prompt-side diversity within exact-dup completion groups — does the dedup-collapse rejection rest on a false-accept?
+101|eng|2026-06-11|[eng] eng-26: cluster-cap build path in build_dataset (consumes the eng-25 dedup-cluster stamp)
+103|eng|2026-06-11|[eng] eng-27: receipt/view byte-stability + receipt-schema floor
+104|eng|2026-06-11|[eng] eng-28: exact-method gate stats — Wilson/Newcombe CIs + MDE power helper, additive behind a flag
+105|eng|2026-06-11|[eng] eng-29: daemon per-job eval logs + train-live dispatch guard (kills the shared eval.log truncation hazard)
+106|eng|2026-06-11|[eng] eng-30: round-2 arm plumbing — build now, fire on verdict (config-only launch day)
+107|eng|2026-06-11|[eng] eng-31: receipt_check fail-closed adoption (successor to #103)
+111|first-principles|2026-06-11|[first-principles] fp-19: owned-core feasibility envelope under the June-22 deadline
+114|eng|2026-06-11|[eng] eng-32: D-gate + P-gate harness (persistence-gates spec implementation)
+116|first-principles|2026-06-11|[first-principles] fp-20: pacing settlement verdict on the first instrumented sampling run
+117|spec|2026-06-11|[spec] sp-1: mine the-search component catalog + constraint map for ember-applicable structures (user pointer 2026-06-11)
+120|first-principles|2026-06-11|[first-principles] fp-21: execute the frozen band-transfer prereg on round-2 receipts
+122|first-principles|2026-06-11|[first-principles] fp-22: v0 corpus + verify-floor world for the owned 0.37B core
+123|eng|2026-06-11|[eng] eng-33: GPU timeshare checkpoint-resume harness for the v0 pretrain
+127|eng|2026-06-11|eng-34: fp6 provenance — adapter-suffixed sampler mapping + sampler-unmapped re-classify + crosscheck PIN_STALE semantics
+129|eng|2026-06-11|eng-37: wire fp-14 pacing_snapshot into w1_mbpp receipt write
+130|eng|2026-06-11|eng-36: v0 corpus acquisition — license-clean ~7.4B-token mix, receipts per source (fp-22 eng half)
+131|math|2026-06-11|[first-principles] fp-20b: pacing settlement on the first INSTRUMENTED w1 receipt
+132|math|2026-06-12|[first-principles] fp-21b: band-transfer prong-A re-execution on round-3 sampling receipts
+135|math|2026-06-11|[first-principles] fp-23: checkpoint-probe analysis + curriculum-generator prereg — frozen BEFORE pretrain step 0
+139|math|2026-06-11|[first-principles] fp-24: execute checkpoint-probe verdicts on the real v0 1B/2B/4B receipts
+140|eng|2026-06-11|eng-38: explicit --view-path plumb for t2_mtp + honest terminal receipt (r2 MTP wrapper view install was overwritten)
+142|eng|2026-06-11|eng-39: make the r2 GRPO wrapper's selected task set load-bearing in t2_grpo + honest terminal receipt
+146|math|2026-06-11|[first-principles] fp-20c: pacing-fraction stability re-check on round-3 sampling receipt
+150|eng|2026-06-11|eng-40: t2_r2w receipt carries the written view's sha256 (closes the r3 identity chain at the source)
+151|eng|2026-06-11|eng-41: w4_eval G1 receipt misses per-arm control deltas (literal 'trained' guard) — generic control comparison + repair tool
+154|first-principles|2026-06-11|fp-25 [first-principles]: round-2 OOD-null decomposition — does the verify-floor recipe LEARN in-distribution (even if it doesn't transfer)?
+160||2026-06-11|eng-42: tokenizer freeze on the merged v0 corpus — production freeze interlocked on the assembly receipt sha
+166|first-principles|2026-06-11|[first-principles] fp-26: round-3 shape under the receipted transfer ceiling + frontier exhaustion
+167|eng|2026-06-11|eng-43: v0 trainer survivor-stack extension against the frozen config contract
+168|eng|2026-06-11|eng-44: tokenized-corpus per-source mix stats receipt (post-freeze successor)
+172|eng|2026-06-11|eng-45: eng-20 license-view emitter must write sha_convention (2 pre-enforcement receipts fail receipt_check --all)
+175|eng|2026-06-11|eng-46: p_gate.py _extract_gain_ci is fail-OPEN on parser miss — make it fail-closed before P-gate is a standing rail
+179|eng|2026-06-11|eng-47: research/** byte-stability pin — fp26_prereg decision-artifact CRLF drift fails the prereg premise on Windows checkouts
+181|eng|2026-06-11|eng-48: v0_pretrain_launch_gate G-prereg is fail-OPEN — must call fp26_prereg.check_premises(), not just receipt-existence + prereg_frozen
+183|eng|2026-06-11|eng-49: G-shards launch-gate row + TOKEN-SHARDS-V0 receipt contract (gate must refuse --live until packed shards exist)
+185|eng|2026-06-11|eng-50: TOKEN-SHARDS-V0 production writer (corpus zstd -> frozen tokenizer -> uint16 .bin shards + receipt) — build-now, --emit run HELD
+186|eng|2026-06-11|eng-51: p_gate _extract_gain_ci within-shape fail-closed (matched gain_with/gain must yield real value+CI or raise)
+190|eng|2026-06-11|eng-52: live-trainer interlock must ENFORCE v0_pretrain_launch_gate (gate is currently decorative — meta-fail-open on GPU dispatch)
+192|eng|2026-06-11|eng-53: G-shards validator must byte-scan uint16 stream (reserved 1..7 / oob / odd-length) — close the trust-the-declared-field fail-open
+194|eng|2026-06-11|eng-54: v0-live trainer routing — production --live must dispatch run_v0_segment(real shards), not run_segment()/torch.randint (blocked-by #190)
+195|eng|2026-06-12|eng-47: production token shards + governed v0 pretrain dispatch (launch gate GREEN 7/7)
+198||2026-06-11|[first-principles] fp-27: owned-core accumulation round-1 prereg — frozen BEFORE checkpoint-1
+199||2026-06-11|[first-principles] fp-28: v0-world frontier-depth coverage executor — the fp-26(b) deferred obligation, staged fail-closed
+200||2026-06-11|[first-principles] fp-29: kill-rule curriculum-synthesis precondition — reconcile fp-26 wording with the frozen fp-23 decide() protocol
+201||2026-06-11|[spec] sp-2: D/P-gate owned-core instances — persistence gates across the multi-day governed pretrain
+206||2026-06-11|[spec] sp-3: June-22 terminal-condition audit harness — row-by-row receipt binder
+208|trigger-gated|2026-06-12|[first-principles] fp-28b: coverage-obligation discharge on the first real checkpoint eval receipt (trigger-gated)
+212|eng|2026-06-12|eng-55: 8a zero-cloud loop receipt — one full round config-only with a loop-path locality manifest
+213||2026-06-11|[spec] sp-4: README + docs index refresh to the v0 owned-core state (Kai 14625, non-blocking)
+216||2026-06-11|[first-principles] fp-30: token-total consistency validator — every pin tracks the live tokenizer-freeze receipt
+218||2026-06-12|[first-principles] fp-30b: deviation registration on the re-derived freeze (trigger: new tokenizer-freeze receipt lands)
+220||2026-06-11|[first-principles] fp-31: L2 composition grammar typing freeze — chainability, empty-list folds, draw order (before any L2 materialization)
+229|eng|2026-06-11|eng-56 (re-scoped): config-truth eager pin — throughput.compile promise vs eager trainer (R3, post-G-shards)
+230|eng|2026-06-11|eng-57: owned-core round-1 sampler economics — per-stream stop, bucketed lengths, batch refill (R6)
+231|eng|2026-06-11|eng-58: checkpoint write locality — measure first, stage to WSL ext4 + async copy only if it binds (R5)
+234||2026-06-12|fp-32c [first-principles]: R10 daemon-failure taxonomy — launch-interruption evidence from the job store
+238||2026-06-12|fp-30c [first-principles]: deviation-registration executor — #218's apply-half made mechanical + fail-closed
+240||2026-06-12|fp-27c [first-principles]: power annotation on the round-1 verdict instrument — underpowered-FLAT made unmistakable (reporting only)
+247||2026-06-12|fp-30d [first-principles]: shard-rerun gate vs corrected freeze — G-shards flip (successor of #218)
+248||2026-06-11|[first-principles] fp-30e: launch-provenance hygiene — tokenizer-of-record repoint, fp30b selftest purity, c843f87 noise removal
+251||2026-06-11|[first-principles] fp-30d-prep: composed shard-rerun gate executor — live-freeze binding closes the stale-emission gap
+253||2026-06-12|[first-principles] fp-32d: E1b pair-receipt assembler — the missing link between leg runs and the gate
+254|eng|2026-06-12|eng: heartbeat runner — deterministic round-lifecycle machine (docs/heartbeat-runner-spec-v0.md)
+255||2026-06-12|fp-33: E2B-surpass-by-06-22 — kernel-level engine + envelope re-derivation (E1-E5)
+256||2026-06-12|Technique registry: dispatch-gate enforcement hook + ember-speedrun proxy harness
+257||2026-06-12|sp-5: NC-K harness — avir-cli clean-room port spec (ember's visible interface; resident mailbox identity; CU surface)
+259||2026-06-12|eng: ember mailbox identity — founders.yaml + signal wiring (sp-5 §4; infra-coupled, cross-founder coordination)
+260||2026-06-12|eng: resident event-loop skeleton with stub core (sp-5 §2-§3)
+261||2026-06-12|eng+logic: protected-invariant boot-checksum layer (sp-5 §5)
+262||2026-06-12|eng: CU console surface (sp-5 §4)
+264||2026-06-12|[first-principles] fp-34: band-predictiveness re-instantiation on owned-core rounds
+268|eng|2026-06-12|eng: GSM8K-200 greedy exact-match eval harness leg (fp-33 A3-ii prerequisite)
+269|spec|2026-06-12|spec: sp-6 — fp-33 B3 duty-battery episode set + expected-verb table (freeze before first B-run)
+271|eng|2026-06-12|eng: wire registry_gate.py as dispatch precondition + build proxy-speedrun harness (#256 eng half, behind fp-33 E4/E5)
+284|first-principles|2026-06-12|[first-principles] fp-35b: fp8 native-route integration A/B — segment receipt before live adoption (trigger: Eli integration receipt)
+289|first-principles|2026-06-12|[first-principles] fp-35c: fp8 weight-cache variant A/B — cast weights once at init (trigger: Eli variant receipt)
+294|first-principles|2026-06-12|[first-principles] fp-35d: K=4096 steady-state fp8 micro-bench — measurement gate for width-conditional dispatch (trigger: Eli bench receipt)
+296|eng|2026-06-12|eng: selective-recompute A/B — cache-attn vs full-ckpt vs none-if-fits (E4b recompute split)
+298|eng|2026-06-12|eng: adopt NONE arm — disable grad-ckpt in v0 at next WSD segment resume
+301|eng|2026-06-12|eng: cuda-graph-step A/B — graph-capture vs eager step-time at c03 shapes
+305|first-principles|2026-06-12|[first-principles] fp-35g: width-conditional fp8 dispatch build — wrap K>=4096 linears only (trigger: Eli build receipt)
+307|spec|2026-06-12|[spec] sp-6c: seat-adapter contract — frozen prompt template + output grammar + deterministic parser (B3 instrument)
+311||2026-06-12|[eng] sp-6b E2B seat: bind gemma-e2b generate_fn into seat_adapter + full-battery SHAKEDOWN receipt (#282 trigger half)
+313|eng|2026-06-12|[eng] sp-6b ember seat: bind NC-K sampler over checkpoint step-00025000 into seat_adapter + SHAKEDOWN receipt (#282 trigger, ember half)
+316|eng|2026-06-12|eng-56: checkpoint probe — fp-23 curriculum L1 eval on step-25000 and step-50000 (fires #223 fp-24b trigger)
+320|trigger-gated|2026-06-12|eng: selective-recompute ACTIVATION receipt at next natural boundary (live leg of fp-35e adoption; #225 AC4)
+323||2026-06-12|spec: eng_sync closed-without-PR detector — commit-closer fallback (6x false GATE-VIOLATION)
+326||2026-06-12|[first-principles] fp-36: pre-registered interpretation frame for the 1B INFO probe (freeze before the data arrives)
+331|eng|2026-06-12|[spec] sp-7: NC-K harness END-TO-END live proof — the avir-cli port has component selftests but zero e2e receipt
+335|eng|2026-06-12|eng: 2B-verdict-chain dress rehearsal — fp24 -> fp29 -> fp36 end-to-end on synthetic fixtures before real 1B arrives
+337|eng|2026-06-12|ember_tally.py — completeness tally over docs/ember-completeness.md (numeric closure, per user direction)
+TOTAL_CLOSED=143
