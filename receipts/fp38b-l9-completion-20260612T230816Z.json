@@ -1,0 +1,73 @@
+{
+  "ticket": "FP38B-L9-COMPLETION",
+  "ts": "20260612T230816Z",
+  "lever": "L9",
+  "issue": 225,
+  "verdict": "L9_KILLED_ALL_BATCHES",
+  "arch_note": "ALL-CELL-ERROR: compiled cells failed (likely transformers NameError). Re-run with corrected compile wrapper to get OOM/viable verdict.",
+  "prior_receipts": {
+    "fp38_l9": "fp38-l9-flash-ab-20260612T223639Z.json",
+    "fp32_l6": "fp32-l6-compile-ab-20260612T215844Z.json"
+  },
+  "baseline": {
+    "anchor_cell": "b4-ckpt-eager",
+    "anchor_tok_s_paced": 18472.2,
+    "compiled_l6_tok_s_paced": 31377.4,
+    "fp38_oom_batches": [
+      39,
+      33,
+      26
+    ]
+  },
+  "cells": [
+    {
+      "cell": "b16-nockpt-flash-compile",
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": true,
+      "flash_sdpa": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "status": "CELL-ERROR",
+      "error": "NameError: name 'torch' is not defined"
+    },
+    {
+      "cell": "b8-nockpt-flash-compile",
+      "batch": 8,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": true,
+      "flash_sdpa": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "status": "CELL-ERROR",
+      "error": "NameError: name 'torch' is not defined"
+    }
+  ],
+  "best_cell": null,
+  "multipliers": {
+    "vs_anchor": null,
+    "vs_l6_compiled": null
+  },
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.6.0+cu124"
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "c03 shapes (hidden=1024, layers=20, heads=16, ffn=4096, seq=1024)",
+    "flash/SDPA: torch.nn.attention.sdpa_kernel flash+efficient backends",
+    "no gradient checkpointing",
+    "batch ladder: (16, 8) (extending fp38 which covered 39/33/26)",
+    "compile: torch.compile(model) default backend",
+    "warmup_compile=8",
+    "governor rails HOLD \u2014 never loosened"
+  ]
+}
