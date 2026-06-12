@@ -80,6 +80,22 @@ Misses are receipted KILLs that name the physics (bw-bound, VRAM, lr).
    (~09:00Z) is the first boundary where certified levers may enter via a
    registered, receipted restart decision — arithmetic presented to the
    user, who owns the restart call.
+3b. **ENG/ARCH verdict tags (v1.1, user 21:21Z — "if its architecture
+   makes the training speed lukewarm... the owned core is going to be
+   wrong anyways"):** every lever receipt tags its finding ENG (removable
+   by engineering: fusing, batching, precision routing) or ARCH (intrinsic
+   to c03's design: QAT fake-quant tax, Muon NS chain structure, hidden-
+   1024 arithmetic intensity). The checkpoint does NOT validate the
+   architecture — only the lever receipts can. **Architecture-kill
+   trigger:** if c03 cannot reach the shatter criterion with ALL ENG
+   levers applied (i.e. the residual gap is ARCH-tagged), c03 is the wrong
+   core; the boundary decision becomes three-way — continue / certified
+   resume / STOP + architecture redesign (NC2 recipe-stack pins: Muon
+   variant, BitNet-class, QAT placement, replay — already a registered
+   wait-window item). What survives an ARCH kill: shards/tokenizer,
+   curriculum + floor protocol, verifier/receipt/gate stack, W-code world,
+   round design — the owned SYSTEM. What dies: the config and its
+   checkpoints. A kill here is data, not a stopping signal.
 4. Safety rails unmoved: governor fraction/margin/pacing are the floor;
    the pacing tax is a deliberate rail, not a lever. 100% wall-to-wall
    stays banned.

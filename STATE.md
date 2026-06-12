@@ -255,11 +255,11 @@ Borrowed-core NC0 is rehearsal; ember's end-state is owned mass, not owned delta
 
 ## Branch registry — every staged-not-fired bet carries a fire-condition (collab-audit U2, 2026-06-10)
 
-POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing fire-condition below carries a power note; zero/nonzero floor clauses read receipts as Wilson bounds (all-zero at n=100 = ≤3.6% at 95%, never "0%"); sizing clauses cite a power_helper receipt (#346) before launch. No registered branch may exist without a fire-condition or review date. Verdict-class events report NET FLOW (rows added/retired since last verdict), not just size. Consolidation rule (user backlog concern 2026-06-10): a method-variant of an existing experiment is an ARM of that row, never a new row. Kills require the user, by name.
+POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing fire-condition below carries a power note; zero/nonzero floor clauses read receipts as Wilson bounds (all-zero at n=100 = ≤3.7% at 95% (exact 3.6993%), never "0%"); sizing clauses cite a power_helper receipt (#346) before launch. No registered branch may exist without a fire-condition or review date. Verdict-class events report NET FLOW (rows added/retired since last verdict), not just size. Consolidation rule (user backlog concern 2026-06-10): a method-variant of an existing experiment is an ARM of that row, never a new row. Kills require the user, by name.
 
 | # | Branch | Fires when | Status |
 |---|---|---|---|
-| 1 | `t4_r1_q3_s15.py` (seed-15 replication) | q3 s14 final receipt NONZERO (likely — ccd554ac) [power note: NONZERO/all-zero read per review §2 — all-zero = ≤3.6% Wilson, not 0%] | staged |
+| 1 | `t4_r1_q3_s15.py` (seed-15 replication) | q3 s14 final receipt NONZERO (likely — ccd554ac) [power note: NONZERO/all-zero read per review §2 — all-zero = ≤3.7% Wilson (3.6993%), not 0%] | staged |
 | 2 | `t4_r1_q3_arc2_s14.py` (ARC-2 transfer) | s15 completes | staged |
 | 3 | `t5_r1_q3.py` (harm suite) | arc2 completes | staged |
 | 4 | `w1_floor_q15/q3.py` (W-code floor probes) | s14 ALL-ZERO → immediate; NONZERO → first idle window post-chain (W-code = second-world admission either way) [power note: §2 Wilson read on floor receipts] | staged |

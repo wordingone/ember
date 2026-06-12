@@ -22,7 +22,7 @@ per-task quantities (e.g. bits/episode), never for the binary pass rates.
   successes → 95% Wilson upper bound = 3.6993% exact (rule-of-three 3.0%;
   jude anchor receipt gate-stats-346-20260612T202900Z — fixtures pin 0.036993) —
   i.e. "all-zero" certifies the TRUE rate only below ~4%, which is why
-  all-zero floors are reported as "≤3.6% at 95%" and never as "0%".
+  all-zero floors are reported as "≤3.7% at 95%" (exact 3.6993%) and never as "0%".
 - **Paired arm difference (same tasks, two arms):** Newcombe paired
   square-and-add on Wilson bounds, or exact McNemar on the discordant pairs.
   The discordant count is the ONLY information-bearing quantity — report
@@ -48,7 +48,7 @@ evidence-of-presence only.
 
 `scripts/power_helper.py` — inputs (n, p0, alpha, power) → MDE table for
 Wilson/Newcombe/McNemar; selftest fixtures pin the anchor cases (0/100 →
-3.57% Wilson upper; rule-of-three parity; McNemar b+c minimum at p<0.05).
+3.6993% Wilson upper (receipt-pinned); rule-of-three parity; McNemar b+c minimum at p<0.05).
 All gate receipts citing power MUST cite a helper receipt, never hand
 arithmetic (mine included — the §3 numbers above are design anchors and are
 superseded by the first helper receipt).

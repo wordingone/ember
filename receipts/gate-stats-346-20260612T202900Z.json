@@ -1,0 +1,42 @@
+{
+  "ticket": "#346",
+  "ts": "20260612T202900Z",
+  "sha": "9b747b2",
+  "method": "gate-stats-anchor-computation",
+  "runner": "jude",
+  "n": 100,
+  "alpha": 0.05,
+  "anchors": {
+    "a_wilson_95_upper_0_of_100": {
+      "value": 0.036993498,
+      "pct": 3.6993,
+      "formula": "z**2 / (n + z**2)",
+      "z_used": 1.95996398,
+      "note": "Doc says ~3.6%, leo mail says ~0.0357 — exact Wilson is 0.036993 (3.70%). Both prior estimates are approximations."
+    },
+    "b_rule_of_three_3_over_n": {
+      "value": 0.03,
+      "pct": 3.0,
+      "formula": "3/n"
+    },
+    "c_mcnemar_min_discordant_exact_twosided_p_lt_0.05": {
+      "min_bc": 6,
+      "worst_case": "all-one-side (b=b+c, c=0)",
+      "formula": "p = 2*(0.5)^(b+c)",
+      "sweep_bc_5_to_10": {
+        "b+c=5":  {"p_exact": 0.0625,     "p_lt_0.05": false},
+        "b+c=6":  {"p_exact": 0.03125,    "p_lt_0.05": true},
+        "b+c=7":  {"p_exact": 0.015625,   "p_lt_0.05": true},
+        "b+c=8":  {"p_exact": 0.0078125,  "p_lt_0.05": true},
+        "b+c=9":  {"p_exact": 0.00390625, "p_lt_0.05": true},
+        "b+c=10": {"p_exact": 0.001953125,"p_lt_0.05": true}
+      }
+    }
+  },
+  "notes": [
+    "Wilson upper: exact formula z^2/(n+z^2) with scipy.stats.norm.ppf(0.975).",
+    "Rule-of-three: 3/100 = 3.00% — Wilson (3.70%) is the binding upper bound.",
+    "McNemar all-one-side: min b+c=6 for two-sided p<0.05. b+c=5 gives p=0.0625 (FAIL).",
+    "A null verdict at n=100 near p~=0 is underpowered: deltas below ~6pp invisible."
+  ]
+}
