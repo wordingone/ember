@@ -327,6 +327,15 @@ POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing 
 
 `B:/M/avir/leo/state/nc-ladder/receipts/` (JSONL/JSON per job; gate from these only).
 
+## 2026-06-12 ~22:25Z — BUILD tick (3:25 PM LA): #352 MERGED (grid), #355 fp-38 budget landed, gate-9 #356 signed off, pool incident routed
+
+- **#352 c04 grid MERGED (PR #354):** F-1 flash/SDPA = missed lever L9 — c03 shape no-ckpt B=39 projected 40,631 tok/s = 2.27× run-config bench anchor; F-2 the ≤1-day criterion binds (P × budget) JOINTLY, 7B bulk fits nothing. fp-38 minted (#355). Eli GO'd on L9 bench cell (15073, GPU quiet).
+- **fp-38 budget derivation (this tick, `docs/c04-token-budget-v1.md` + `scripts/c04_budget.py` + receipt 222520Z):** required curated-density multiplier per candidate (c03-shape 1.62×, h2048d12 8.98×, h2560 21×) — F-3 joint constraint resolves toward SMALL P, colliding with the wider-not-deeper ARCH prior exactly where receipts are thinnest; F-4 multiplier is an OBLIGATION (3B bulk tokens were floor-marginal — H2). Density A/B = cheapest decision-changing receipt on the board. fp-39 carries L9 recalibration + density A/B spec.
+- **Gate-9 (#349) CLOSED via eli PR #356** — signed off after MY-tree selftest verification (gate selftest PASS, config-check selftest PASS, G-efficiency GREEN on fixture; grad_checkpointing pin fix verified against configs/). Env note filed on PR: G-shards verdict is tree-relative (pre-existing).
+- **L7 receipt PENDING RECONCILIATION (eli PR #357):** checkpoint-interval steady-state 8,872 tok/s vs kill-time ledger ~1.3B tokens/20.1h ≈ 18k tok/s — exactly 2× apart (suspect tokens-per-step assumption: grad-accum/packing). Bounced for reconciliation before gate; one of the two numbers re-prices all wall-day math.
+- **POOL INCIDENT (user report 3:10 PM LA):** h1-h6 alive-but-dead since 1:00 PM LA (transcripts frozen; pool-up-receipt 21:37Z pass=false probe_no_advance all six, sat unconsumed 33 min until USER caught it). Mira owns root-cause+fix TOP OF QUEUE (15072) incl. wiring her tick to consume pool-up-receipt pass=false ⇒ RED mail. Eli owns pool remote-visibility (user can't see workers from his end). Jude PERM round-3 still blocked on the same defect.
+- Tick hygiene: c10-resident-live-213002Z added LEGACY_EXEMPT (superseded by 213133Z, bounce 15069); mira avir-tick.jsonl stale 1h29m — no mail (she ACK'd pool top-priority 4 min prior at context limit; nagging = noise). #128 HOLD re-derived: still gated (needs a live run to probe across restart).
+
 ## 2026-06-12 ~21:45Z — RUN 12c050e7 STOPPED BY USER ORDER (2:33 PM LA) + CEILING-FIRST RECONCILIATION
 
 User directive verbatim class: "just stop the current run. solve all the problems before you touch a run that goes over an hour max." Executed 21:34Z: kill receipt written FIRST (vigil/kill-receipts.jsonl), then train_cancel 12c050e7 (status: cancelled, daemon alive, GPU freed, ~1.3B tokens paid into on-disk partial checkpoints). BINDING RULE: no training run >1h until compute-ceiling-program-v1.md shatter criterion is met (doc v1.2 @e1aa0af).
