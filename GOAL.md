@@ -278,6 +278,10 @@ undeniably" by a tallying system over EVERY piece of context already planned
 or known about ember — not just the weights, not just the training, not just
 the harness. Structure:
 
+**SUBGOAL CONTRACT (user 2026-06-12, pre-finalization):** every subgoal must
+DIRECTLY contribute to the main goal on completion — no subgoal exists whose
+100% state leaves the main goal unmoved. One subgoal is DATA-THREADED (S7).
+
 **SUBGOALS (each = a manifest section with its own tally):**
 - S1 owned core — from-scratch pretrain, NC2-own component contract honored.
 - S2 accumulation loop — self-generated verified episodes; three-test gate
@@ -289,6 +293,21 @@ the harness. Structure:
   founder-likeness), receipts.
 - S6 invariants + governance — the five un-removables enforced in code,
   boot-checksummed.
+- S7 data-threaded (user 2026-06-12): the corpus classes critically valuable
+  to all founders, avir, and ember — research journals, research papers,
+  experiment logs, and LETTERS (communication between people/groups) — any
+  format from any point in human civilization history, each a
+  multi-dimensional datapoint (the vault overdefinition principle applied
+  beyond buildings). Historical/older material is nearly all public domain:
+  highly accessible, but lacking SOTA digital-verification examples — both
+  facts recorded per item. Pipeline: collect (URL-pin+sha, license/PD
+  status) → parse → label → causal-chain extraction from journals/papers →
+  SYNTHETIC datasets for ember's latent reasoning + world-modeling.
+  HARD PREREQUISITE (user, binding): the SOTA-optimized storage+retrieval
+  substrate (KG turboquant VDB, knowledge-ops spec) must hold BEFORE this
+  subgoal counts as contributing — without it the completed corpus is
+  token-detrimental and unuseful to ember. S7 tally rows are
+  GATED:retrieval-substrate until that receipt exists.
 
 **COMPLETENESS MANIFEST:** `docs/ember-completeness.md` enumerates every
 planned/known piece (id, subgoal, AC, test, receipt pointer, status). A

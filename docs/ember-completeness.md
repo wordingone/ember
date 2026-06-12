@@ -31,7 +31,10 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C17 | S6 | five un-removable invariants in code | protected paths + boot-time checksum verify | #332 stage 1 (boot_checksum) | PART |
 | C18 | S6 | resource governor on every job | VRAM frac + margin assert + pacer receipts | governed-launch receipts | DONE |
 | C19 | S2 | probe-set reconciliation (seed23 vs checkpoint_probe) | decision note + seed23 ride receipt | ledger row 3 | OPEN |
-| C20 | S6 | receipt hygiene: receipt_check green fleet-wide | sweep receipt, 0 failing (or grandfathered list) | ledger row 8 | OPEN |
+| C20 | S6 | receipt hygiene: receipt_check green fleet-wide | sweep receipt, 0 failing (or grandfathered list) | PR #334 + jude triage 14849 | PART (at gate) |
+| C21 | S7 | retrieval substrate (KG turboquant VDB) — S7 prerequisite | parity+compression receipts on real corpus queries; on-demand CLI | mira INFRA-5 proto receipts | PART |
+| C22 | S7 | corpus: journals/papers/experiment-logs/letters (PD-first) | per-item URL-pin+sha+license; vault-style manifests | — | GATED:C21 |
+| C23 | S7 | causal-chain extraction → synthetic reasoning/world-model datasets | extraction pipeline receipt; synthetic set passes verifier | — | GATED:C22 |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
 
