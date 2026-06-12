@@ -1,0 +1,124 @@
+{
+  "ticket": "FP33-FP8-LINEAR-AB",
+  "ts": "20260612T051338Z",
+  "verdict": "FAIL",
+  "issue": "#284",
+  "runtime": {
+    "python": "C:\\Program Files\\Python310\\python.exe",
+    "torch": "2.10.0+cu126",
+    "cuda": "12.6",
+    "device": "NVIDIA GeForce RTX 4090",
+    "sm": "89"
+  },
+  "config": {
+    "hidden": 1024,
+    "mlp_dim": 4096,
+    "batch": 4,
+    "seq": 1024,
+    "M_tokens": 4096,
+    "seeds": [
+      16,
+      17,
+      18
+    ],
+    "warmup_reps": 5,
+    "bench_reps": 20,
+    "vram_fraction": 0.8,
+    "stability_recipe": "\u00b5nit-Scaling-default-unit-scale-1.0",
+    "fp8_dtype": "float8_e4m3fn",
+    "gate_assertions": [
+      "no-nan",
+      "no-inf",
+      "saturation-<10pct",
+      "rel-err<0.5-vs-bf16"
+    ]
+  },
+  "results": {
+    "16": {
+      "hidden_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 4096,
+        "t_bf16_ms": 2.802,
+        "t_fp8_ms": 7.06,
+        "measured_multiplier": 0.3968
+      },
+      "output_proj": {
+        "M": 4096,
+        "K": 4096,
+        "N": 1024,
+        "t_bf16_ms": 2.664,
+        "t_fp8_ms": 1.372,
+        "measured_multiplier": 1.9419
+      },
+      "qkv_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 1024,
+        "t_bf16_ms": 0.376,
+        "t_fp8_ms": 4.193,
+        "measured_multiplier": 0.0896
+      }
+    },
+    "17": {
+      "hidden_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 4096,
+        "t_bf16_ms": 2.762,
+        "t_fp8_ms": 7.148,
+        "measured_multiplier": 0.3864
+      },
+      "output_proj": {
+        "M": 4096,
+        "K": 4096,
+        "N": 1024,
+        "t_bf16_ms": 2.721,
+        "t_fp8_ms": 7.275,
+        "measured_multiplier": 0.374
+      },
+      "qkv_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 1024,
+        "t_bf16_ms": 0.807,
+        "t_fp8_ms": 4.431,
+        "measured_multiplier": 0.1822
+      }
+    },
+    "18": {
+      "hidden_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 4096,
+        "t_bf16_ms": 0.902,
+        "t_fp8_ms": 5.052,
+        "measured_multiplier": 0.1785
+      },
+      "output_proj": {
+        "M": 4096,
+        "K": 4096,
+        "N": 1024,
+        "t_bf16_ms": 2.771,
+        "t_fp8_ms": 7.371,
+        "measured_multiplier": 0.376
+      },
+      "qkv_proj": {
+        "M": 4096,
+        "K": 1024,
+        "N": 1024,
+        "t_bf16_ms": 0.835,
+        "t_fp8_ms": 6.531,
+        "measured_multiplier": 0.1279
+      }
+    }
+  },
+  "measured_multiplier": 0.4504,
+  "registry_row": "fp8-custom-kernel-sm89",
+  "flags": [
+    "native-Windows Python (not WSL2 daemon)",
+    "live run 12c050e7 NOT touched",
+    "grad-ckpt recompute path: recompute_x=True arm",
+    "stability-recipe: \u00b5nit-Scaling (2502.05967) unit-scale=1.0"
+  ]
+}
