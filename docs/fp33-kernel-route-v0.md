@@ -18,10 +18,11 @@ machine; the wall is broken by building the kernel path ourselves. Owner: Leo
 2. **Forward GEMMs (20.2%)** — same kernel, second integration site.
 3. **Optimizer + launch overhead (11.3%)** — cuda-graph-step row; untouched
    until FP8 lands (smaller prize, and graphs interact with governor pacing).
-   OPEN DISCREPANCY: E4 names the optimizer phase "AdamW" while the registry
-   muon row claims "in v0 baseline" — Eli to confirm the LIVE v0 optimizer;
-   if v0 runs AdamW, the muon ADOPT row's receipt field is wrong and must be
-   corrected (registry truth) before the dispatch gate is wired.
+   DISCREPANCY RESOLVED (eli mail 14746): live 12c050e7 runs
+   optimizer.mode=muon_split (2 Muon + 6 AdamW groups,
+   v0ext-dryrun-20260611T074548Z.json) — the E4 script's "AdamW" label was
+   wrong, the registry muon row was right; its receipt field now cites the
+   dry-run receipt. fused-muon-kernel row therefore targets a REAL phase.
 
 ## Route ladder (cheapest probe first; each rung = receipt before the next)
 
