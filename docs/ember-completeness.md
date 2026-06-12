@@ -45,14 +45,14 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C30 | S2 | sp-2b: first P-own-resume + D-round receipts vs sp-2 spec (#210) | gated receipts pair | — | GATED:trigger |
 | C31 | S2 | fp-27b: round-1 execution verdicts on real owned-core round receipts (#205) | verdict receipts | — | GATED:round-1-dispatch |
 | C32 | S6 | eng-35: P-gate live probe leg across daemon restart (#128) | boundary-pair receipt | — | GATED:Leo-dispatch-order (HOLD is mine to lift) |
-| C33 | S1 | v0 corpus + tokenizer freeze + token shards (#130/#160/#185/#195) | license-clean mix receipts; freeze interlock; TOKEN-SHARDS-V0; launch gate 7/7 GREEN | corpus/freeze/shard receipts | DONE |
-| C34 | S6 | fail-closed launch-rail stack (#181/#183/#186/#190/#192) | gate enforces prereg premises + shards byte-scan + live interlock | eng receipts per issue | DONE |
-| C35 | S2 | verify-path soundness hardening (#76/#86/#92) | strict comparator adopted + object-graph reachability guard on all verify surfaces | eng receipts | DONE |
-| C36 | S4 | D/P persistence-gates harness (#114/#175/#186; sp-2 #201) | gates fail-closed; real owned-core receipts ride sp-2b (#210=C30) | p_gate/d_gate receipts | PART |
-| C37 | S2 | protocol freezes pre-data (#135 fp-23; #198 fp-27; #220 fp-31; #326 fp-36) | each frozen BEFORE its data window | prereg docs/receipts | DONE |
-| C38 | S1 | technique registry + dispatch-gate wiring (#256/#271) | registry_gate.py as dispatch precondition; proxy-speedrun harness | registry receipts | PART |
-| C39 | S1 | zero-cloud loop receipt (#212) | one full round config-only + loop-path locality manifest | eng-55 receipt | DONE |
-| C40 | S1 | GPU efficiency registry execution (#284/#289/#294/#296/#298/#301/#305) | fp8 width-conditional dispatch, recompute NONE adoption, cuda-graph A/B — each receipted | per-issue bench receipts | DONE |
+| C33 | S1 | v0 corpus + tokenizer freeze + token shards (#130/#160/#185/#195) | license-clean mix receipts; freeze interlock; TOKEN-SHARDS-V0; launch gate 7/7 GREEN | eng36-assembly-20260611T052337Z (+ tokenizer-freeze, token-shards-v0 receipts) | DONE |
+| C34 | S6 | fail-closed launch-rail stack (#181/#183/#186/#190/#192) | gate enforces prereg premises + shards byte-scan + live interlock | v0-launch-gate-20260611T075419Z (live 7/7); per-issue receipt mapping MISSING (jude R2) | PART |
+| C35 | S2 | verify-path soundness hardening (#76/#86/#92) | strict comparator adopted + object-graph reachability guard on all verify surfaces | v-soundness-probe / v-exploit-probe / v-extended receipts (no issue field — coverage-vs-AC confirm pending, jude) | PART |
+| C36 | S4 | D/P persistence-gates harness (#114/#175/#186; sp-2 #201) | gates fail-closed; real owned-core receipts ride sp-2b (#210=C30) | p-gate-20260611T081931Z + d-gate-adapter_model-20260611T070448Z (#175/#201 receipts not found) | PART |
+| C37 | S2 | protocol freezes pre-data (#135 fp-23; #198 fp-27; #220 fp-31; #326 fp-36) | each frozen BEFORE its data window | fp27-prereg-20260611T155902Z; fp-23/31/36 frozen as docs only — composite freeze receipt (doc-sha + git-date) to mint (jude) | PART |
+| C38 | S1 | technique registry + dispatch-gate wiring (#256/#271) | registry_gate.py as dispatch precondition; proxy-speedrun harness | proxy-speedrun-baseline-20260612T054435Z; registry-gate.jsonl lacks ticket field (fails receipt_check — fix named) | PART |
+| C39 | S1 | zero-cloud loop receipt (#212) | one full round config-only + loop-path locality manifest | round-local-loop-20260612T094223Z (sp3 row 8a binds it) | DONE |
+| C40 | S1 | GPU efficiency registry execution (#284/#289/#294/#296/#298/#301/#305) | fp8 width-conditional dispatch, recompute NONE adoption, cuda-graph A/B — each receipted | 6/7 receipts verified (jude R2); #298 receipt MISSING from tree — locate or re-run | PART |
 | C41 | S1 | technique-registry verdict closure | zero CANDIDATE/WATCH rows left in technique-registry.jsonl: each reaches TESTED/ADOPT/KILL via the speedrun proxy protocol, per-row receipts bound; tally walks the jsonl as a sub-manifest | technique-registry.jsonl rows | PART (4 ADOPT in v0; 11 CANDIDATE + 1 WATCH open) |
 
 ## Coverage sweeps (the manifest is complete only when these are swept)
