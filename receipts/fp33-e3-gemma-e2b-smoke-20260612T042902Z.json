@@ -1,0 +1,120 @@
+{
+  "ticket": "FP33-E3-GEMMA-E2B-SMOKE",
+  "run_type": "PROPER",
+  "ts": "20260612T042902Z",
+  "model": {
+    "id": "google/gemma-4-E2B-it",
+    "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--google--gemma-4-E2B-it/snapshots/b324173c7d5721c2baba7f3b17b3b9b3d34ab1e9",
+    "n_params_b": 5.104,
+    "load_s": 62.3,
+    "alloc_gib": 9.51
+  },
+  "runtime": {
+    "python": "/mnt/c/Users/Admin/.venvs/csi-eval/bin/python",
+    "transformers": "5.11.0",
+    "gemma4_keys": [
+      "gemma4",
+      "gemma4_assistant",
+      "gemma4_audio",
+      "gemma4_text",
+      "gemma4_unified",
+      "gemma4_unified_assistant",
+      "gemma4_unified_audio",
+      "gemma4_unified_text",
+      "gemma4_unified_vision",
+      "gemma4_vision"
+    ]
+  },
+  "eval": {
+    "split": "validation",
+    "n_tasks": 10,
+    "k": 1,
+    "temp": 0.1,
+    "seed": 42,
+    "max_new_tokens": 512
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s": 0.05
+  },
+  "results": {
+    "n_pass": 10,
+    "n_total": 10,
+    "pass_pct": 100.0,
+    "n_extract_fail": 0,
+    "gen_secs": 185.78,
+    "passed_task_ids": [
+      554,
+      555,
+      556,
+      557,
+      558,
+      559,
+      560,
+      562,
+      563,
+      564
+    ]
+  },
+  "task_rows": [
+    {
+      "task_id": 554,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 555,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 556,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 557,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 558,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 559,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 560,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 562,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 563,
+      "verified": true,
+      "error": null
+    },
+    {
+      "task_id": 564,
+      "verified": true,
+      "error": null
+    }
+  ],
+  "comparator": "strict_harness=yes",
+  "flags": [
+    "PROPER RUN: google/gemma-4-E2B-it in csi-eval venv",
+    "csi-eval transformers=5.11.0 (gemma4 supported)",
+    "validation split = heldout eval surface (never used in SFT)",
+    "smoke: k=1, N=10 \u2014 not a full floor measurement",
+    "live run 12c050e7 NOT touched"
+  ]
+}

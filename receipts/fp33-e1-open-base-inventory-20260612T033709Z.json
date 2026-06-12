@@ -1,0 +1,240 @@
+{
+  "ticket": "FP33-E1-OPEN-BASE-INVENTORY",
+  "ts": "20260612T033709Z",
+  "scan_elapsed_s": 13.38,
+  "scan_roots": {
+    "/home/jun/.cache/huggingface/hub": {
+      "found": 0,
+      "fresh": 0
+    },
+    "/mnt/c/Users/Admin/.cache/huggingface/hub": {
+      "found": 11,
+      "fresh": 11
+    },
+    "/mnt/b/M/avir/leo/state/nc-ladder": {
+      "found": 0,
+      "fresh": 0
+    },
+    "/mnt/b/M/avir/kai/state": {
+      "found": 0,
+      "fresh": 0
+    },
+    "/mnt/b/M/avir/mira/state": {
+      "found": 0,
+      "fresh": 0
+    },
+    "/mnt/b/M/avir/sage/state": {
+      "found": 0,
+      "fresh": 0
+    },
+    "/mnt/b/M/avir/jude/state": {
+      "found": 0,
+      "fresh": 0
+    },
+    "/mnt/b/M/models": {
+      "found": 0,
+      "fresh": 0
+    }
+  },
+  "total_found": 11,
+  "viable_count": 1,
+  "models": [
+    {
+      "model_id": "google/gemma-4-E2B-it",
+      "model_type": "gemma4",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--google--gemma-4-E2B-it/snapshots/b324173c7d5721c2baba7f3b17b3b9b3d34ab1e9",
+      "on_disk": true,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 1,
+      "weight_bytes": 10246621918,
+      "weight_gib": 9.54,
+      "license": "unknown",
+      "config_sha256": "1b28f3d2c3100f6c594754b81107428bd7b822a7f48272ca681dae9d2ec38330",
+      "architectures": [
+        "Gemma4ForConditionalGeneration"
+      ],
+      "viability": "TOO_SMALL"
+    },
+    {
+      "model_id": "google/gemma-4-E2B-it-assistant",
+      "model_type": "gemma4_assistant",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--google--gemma-4-E2B-it-assistant/snapshots/5810c41a67974da9c7bd6f3e6c69d5d13854d9f0",
+      "on_disk": true,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 1,
+      "weight_bytes": 157565344,
+      "weight_gib": 0.15,
+      "license": "unknown",
+      "config_sha256": "7f42f559a6a69ffaeaf6b61a1ece3a562a2ed5ad00b8d30f16917ba5ab1bcbe9",
+      "architectures": [
+        "Gemma4AssistantForCausalLM"
+      ],
+      "viability": "TOO_SMALL"
+    },
+    {
+      "model_id": "google/gemma-4-E2B-it-assistant",
+      "model_type": "gemma4_assistant",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--google--gemma-4-E2B-it-assistant/snapshots/be0358c16076890848a1344a34209aa7c1df7587",
+      "on_disk": true,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 1,
+      "weight_bytes": 157565344,
+      "weight_gib": 0.15,
+      "license": "unknown",
+      "config_sha256": "7f42f559a6a69ffaeaf6b61a1ece3a562a2ed5ad00b8d30f16917ba5ab1bcbe9",
+      "architectures": [
+        "Gemma4AssistantForCausalLM"
+      ],
+      "viability": "TOO_SMALL"
+    },
+    {
+      "model_id": "google/gemma-4-E4B-it",
+      "model_type": "gemma4",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--google--gemma-4-E4B-it/snapshots/3555bddc93a623db8887dd2e52123facc45ade77",
+      "on_disk": false,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 0,
+      "weight_bytes": 0,
+      "weight_gib": 0.0,
+      "license": "unknown",
+      "config_sha256": "33b10c02df3c2e8536cf323d29d53262aaa2f4d11dbe19bc729373fbe90295d4",
+      "architectures": [
+        "Gemma4ForConditionalGeneration"
+      ],
+      "viability": "ONE_PULL"
+    },
+    {
+      "model_id": "google/gemma-4-E4B-it",
+      "model_type": "gemma4",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--google--gemma-4-E4B-it/snapshots/d6436b3d62967e1af08bbb046c6300b2a9ae8e85",
+      "on_disk": false,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 0,
+      "weight_bytes": 0,
+      "weight_gib": 0.0,
+      "license": "unknown",
+      "config_sha256": "33b10c02df3c2e8536cf323d29d53262aaa2f4d11dbe19bc729373fbe90295d4",
+      "architectures": [
+        "Gemma4ForConditionalGeneration"
+      ],
+      "viability": "ONE_PULL"
+    },
+    {
+      "model_id": "google/gemma-4-E4B-it-assistant",
+      "model_type": "gemma4_assistant",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--google--gemma-4-E4B-it-assistant/snapshots/4a5c666f89be588c72e0b3a9b49c118513cedff6",
+      "on_disk": true,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 1,
+      "weight_bytes": 159138208,
+      "weight_gib": 0.15,
+      "license": "unknown",
+      "config_sha256": "13cdf5418e5a89cf951717a953cd11cef4e5c2743c4767e9e5dd72802954f822",
+      "architectures": [
+        "Gemma4AssistantForCausalLM"
+      ],
+      "viability": "TOO_SMALL"
+    },
+    {
+      "model_id": "onnx-community/gemma-4-E4B-it-ONNX",
+      "model_type": "gemma4",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--onnx-community--gemma-4-E4B-it-ONNX/snapshots/843f250f23bc91754def1e0f0db390dacd1e6b05",
+      "on_disk": false,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 0,
+      "weight_bytes": 0,
+      "weight_gib": 0.0,
+      "license": "apache 2.0",
+      "config_sha256": "3251c77df50bccec2037f7e06a023105aeacbc89b784d990b1d279fc83ff9b1f",
+      "architectures": [
+        "Gemma4ForConditionalGeneration"
+      ],
+      "viability": "ONE_PULL"
+    },
+    {
+      "model_id": "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "model_type": "qwen2",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-3B-Instruct/snapshots/488639f1ff808d1d3d0ba301aef8c11461451ec5",
+      "on_disk": true,
+      "params": 2274246656,
+      "params_b": 2.274,
+      "weight_files_count": 2,
+      "weight_bytes": 6171927000,
+      "weight_gib": 5.75,
+      "license": "unknown",
+      "config_sha256": "8f85440a3222d18772e964b1ef0b4b1574a1c5e6260c99aa23fcddd05c28b8ae",
+      "architectures": [
+        "Qwen2ForCausalLM"
+      ],
+      "viability": "VIABLE"
+    },
+    {
+      "model_id": "sentence-transformers/all-MiniLM-L6-v2",
+      "model_type": "bert",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+      "on_disk": true,
+      "params": 22341888,
+      "params_b": 0.022,
+      "weight_files_count": 1,
+      "weight_bytes": 90868376,
+      "weight_gib": 0.08,
+      "license": "apache-2.0",
+      "config_sha256": "953f9c0d463486b10a6871cc2fd59f223b2c70184f49815e7efbcab5d8908b41",
+      "architectures": [
+        "BertModel"
+      ],
+      "viability": "TOO_SMALL"
+    },
+    {
+      "model_id": "unsloth/gemma-3-4b-it-unsloth-bnb-4bit",
+      "model_type": "gemma3",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--unsloth--gemma-3-4b-it-unsloth-bnb-4bit/snapshots/316726ca0bd24aa323bfaf86e8a379ee1176d1fe",
+      "on_disk": true,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 1,
+      "weight_bytes": 4562294331,
+      "weight_gib": 4.25,
+      "license": "unknown",
+      "config_sha256": "c1b4fc169daa99b4a33a9797615065b0968573630bf5f99921835b49a8946f4a",
+      "architectures": [
+        "Gemma3ForConditionalGeneration"
+      ],
+      "viability": "TOO_SMALL"
+    },
+    {
+      "model_id": "unsloth/gemma-3n-e2b-it-unsloth-bnb-4bit",
+      "model_type": "gemma3n",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--unsloth--gemma-3n-e2b-it-unsloth-bnb-4bit/snapshots/3d26ffdd2276698f582562bf01511aa625bc6f30",
+      "on_disk": true,
+      "params": null,
+      "params_b": null,
+      "weight_files_count": 3,
+      "weight_bytes": 8113480411,
+      "weight_gib": 7.56,
+      "license": "unknown",
+      "config_sha256": "98e2e769242eee9801801795f310971e8a22494127cef92470d854c70952609b",
+      "architectures": [
+        "Gemma3nForConditionalGeneration"
+      ],
+      "viability": "TOO_SMALL"
+    }
+  ],
+  "viable_summary": [
+    {
+      "model_id": "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "params_b": 2.274,
+      "weight_gib": 5.75,
+      "license": "unknown",
+      "path": "/mnt/c/Users/Admin/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-3B-Instruct/snapshots/488639f1ff808d1d3d0ba301aef8c11461451ec5"
+    }
+  ],
+  "decision": "E2B-SURPASS target is ember v0 (0.37B c03-qat). Open base = highest-quality on-disk model <=3B params, license-open, same or smaller scale. E2 will measure full-tune ceiling at 24GB vs this base."
+}

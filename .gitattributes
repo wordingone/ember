@@ -12,3 +12,6 @@ research/** -text
 # the recorded sha. Pin -text (same class as the eng-47 research/** pin).
 ledger/** -text
 probes/** -text
+# scripts and hooks: enforce LF (prevents CRLF creep on Windows checkouts)
+*.sh text eol=lf
+*.py text eol=lf
