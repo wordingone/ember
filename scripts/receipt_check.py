@@ -107,6 +107,11 @@ def _count_violations(d: dict) -> list[str]:
 
 def validate_receipt(d: dict) -> list[str]:
     """Validate a parsed receipt dict. Returns list of finding strings (empty = clean)."""
+    if not isinstance(d, dict):
+        return [
+            f"INVALID_TYPE: expected dict, got {type(d).__name__} — "
+            "was the receipt serialized (json.dumps) before passing to checked_write?"
+        ]
     findings = []
 
     # R1: required fields
@@ -297,6 +302,15 @@ def _selftest() -> int:
     finally:
         import shutil
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # --- Case 6: non-dict passed to validate_receipt must return INVALID_TYPE ---
+    # Replicates the bug: caller passes json.dumps(obj) string instead of dict.
+    str_input = '{"ticket": "T", "ts": "20260611T000000Z"}'
+    type_findings = validate_receipt(str_input)  # type: ignore[arg-type]
+    if not type_findings or not type_findings[0].startswith("INVALID_TYPE"):
+        failures.append(
+            "Case 6 FAIL: string passed to validate_receipt should return INVALID_TYPE finding"
+        )
 
     if failures:
         for f in failures:
