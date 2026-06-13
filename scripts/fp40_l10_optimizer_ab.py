@@ -49,7 +49,7 @@ WEIGHT_DECAY = 0.1
 WARMUP_COMPILE = 8
 TIMED = 10
 EQUIV_STEPS = 100
-EQUIV_THRESHOLD = 0.10          # nats — delta at step 100 to pass equivalence
+EQUIV_THRESHOLD_FLOOR = 0.10    # nats — floor; actual threshold derived from seed noise
 
 PRIOR_FP39B_TOK_S = 19227.8     # anchor from fp39b receipt
 PRIOR_FP39B_MUON_PCT = 36.01    # Muon wall share from fp39b
@@ -277,12 +277,17 @@ def bench_cell(opt_key, ns_steps, fused_side, full_adamw):
         return out
 
 
-def equiv_leg(baseline_losses, opt_key, ns_steps, fused_side, full_adamw):
-    """Run EQUIV_STEPS steps with fixed seed, compare loss curve to baseline."""
+def equiv_leg(baseline_losses, noise_floor, derived_threshold, opt_key, ns_steps, fused_side, full_adamw):
+    """Run EQUIV_STEPS steps with seed=42, compare loss curve to baseline (also seed=42).
+
+    equiv_pass requires |delta@100| <= derived_threshold AND no monotonic increase
+    across checkpoints [10, 25, 50, 100].
+    """
     import torch
     cfg = fp19.CONFIGS["c03"]
 
-    out = {"cell": opt_key, "equiv_steps": EQUIV_STEPS, "equiv_threshold": EQUIV_THRESHOLD}
+    out = {"cell": opt_key, "equiv_steps": EQUIV_STEPS,
+           "equiv_noise_floor_nats": noise_floor, "equiv_derived_threshold_nats": derived_threshold}
     try:
         backbone, head, mtp_heads, opts = _build_model_and_opts(
             ns_steps, fused_side, full_adamw, cfg)
@@ -348,12 +353,21 @@ def equiv_leg(baseline_losses, opt_key, ns_steps, fused_side, full_adamw):
                 delta_at[cp] = round(losses[cp - 1] - baseline_losses[cp - 1], 6)
 
         final_delta = delta_at.get(EQUIV_STEPS, None)
-        equiv_pass = (final_delta is not None and abs(final_delta) <= EQUIV_THRESHOLD)
+        trend_diverging = (
+            10 in delta_at and 25 in delta_at and 50 in delta_at and 100 in delta_at and
+            delta_at[10] < delta_at[25] < delta_at[50] < delta_at[100]
+        )
+        equiv_pass = (
+            final_delta is not None
+            and abs(final_delta) <= derived_threshold
+            and not trend_diverging
+        )
 
         out.update(
             status="OK",
             losses_at=delta_at,
             final_delta=final_delta,
+            trend_diverging=trend_diverging,
             equiv_pass=equiv_pass,
         )
 
@@ -374,9 +388,17 @@ def equiv_leg(baseline_losses, opt_key, ns_steps, fused_side, full_adamw):
         return out
 
 
-def _equiv_baseline_run():
-    """Run baseline (muon_split) for EQUIV_STEPS steps, return loss curve."""
+def _equiv_noise_floor():
+    """Run muon_split baseline twice (seeds 42 and 43) from the same post-warmup state.
+
+    Both seeded runs start from identical model + optimizer state (snapshotted after warmup).
+    noise_floor = |loss_seed42@100 - loss_seed43@100|; this is pure data-seed variance.
+    derived_threshold = max(EQUIV_THRESHOLD_FLOOR, noise_floor).
+
+    Returns dict: noise_floor, derived_threshold, baseline_losses (seed=42 curve for equiv_leg).
+    """
     import torch
+    import copy
     cfg = fp19.CONFIGS["c03"]
 
     backbone, head, mtp_heads, opts = _build_model_and_opts(5, False, False, cfg)
@@ -412,30 +434,54 @@ def _equiv_baseline_run():
         for opt in opts.values():
             opt.zero_grad(set_to_none=True)
 
-    torch.manual_seed(42)
-    losses = []
-    for step in range(EQUIV_STEPS):
-        ids = torch.randint(0, VOCAB, (16, SEQ), device="cuda")
-        tgt0 = torch.roll(ids, -1, dims=1)
-        tgt_mtp = [torch.roll(ids, -(k + 2), dims=1) for k in range(MTP_N_HEADS)]
-        saved = fp19._apply_fake_quant(backbone, VARIANT)
-        hidden = fwd_raw(ids)
-        h_flat = hidden.reshape(-1, hidden.shape[-1])
-        primary_ce, _ = ce_fn(h_flat, head.weight, tgt0.reshape(-1), chunk_tokens=1024)
-        mtp_ces = [ce_fn(h_flat, mh.weight, tgt_mtp[k].reshape(-1), chunk_tokens=1024)[0]
-                   for k, mh in enumerate(mtp_heads)]
-        loss = ts.mtp_total_loss(primary_ce, mtp_ces, MTP_WEIGHT)
-        fp19._restore(saved)
-        loss.backward()
-        for opt in opts.values():
-            opt.step()
-        for opt in opts.values():
-            opt.zero_grad(set_to_none=True)
-        losses.append(round(loss.item(), 6))
+    # snapshot post-warmup state so both seeded runs start identically
+    model_snap = {k: v.detach().clone() for k, v in backbone.state_dict().items()}
+    head_snap = {k: v.detach().clone() for k, v in head.state_dict().items()}
+    mtp_snap = {k: v.detach().clone() for k, v in mtp_heads.state_dict().items()}
+    opt_snaps = {k: copy.deepcopy(opt.state_dict()) for k, opt in opts.items()}
+
+    def _seeded_run(data_seed):
+        backbone.load_state_dict(model_snap)
+        head.load_state_dict(head_snap)
+        mtp_heads.load_state_dict(mtp_snap)
+        for k, opt in opts.items():
+            opt.load_state_dict(opt_snaps[k])
+        torch.manual_seed(data_seed)
+        run_losses = []
+        for _ in range(EQUIV_STEPS):
+            ids = torch.randint(0, VOCAB, (16, SEQ), device="cuda")
+            tgt0 = torch.roll(ids, -1, dims=1)
+            tgt_mtp = [torch.roll(ids, -(k + 2), dims=1) for k in range(MTP_N_HEADS)]
+            saved = fp19._apply_fake_quant(backbone, VARIANT)
+            hidden = fwd_raw(ids)
+            h_flat = hidden.reshape(-1, hidden.shape[-1])
+            primary_ce, _ = ce_fn(h_flat, head.weight, tgt0.reshape(-1), chunk_tokens=1024)
+            mtp_ces = [ce_fn(h_flat, mh.weight, tgt_mtp[k].reshape(-1), chunk_tokens=1024)[0]
+                       for k, mh in enumerate(mtp_heads)]
+            loss = ts.mtp_total_loss(primary_ce, mtp_ces, MTP_WEIGHT)
+            fp19._restore(saved)
+            loss.backward()
+            for opt in opts.values():
+                opt.step()
+            for opt in opts.values():
+                opt.zero_grad(set_to_none=True)
+            run_losses.append(round(loss.item(), 6))
+        return run_losses
+
+    losses_42 = _seeded_run(42)
+    losses_43 = _seeded_run(43)
+
+    noise_floor = round(abs(losses_42[-1] - losses_43[-1]), 6)
+    derived_threshold = round(max(EQUIV_THRESHOLD_FLOOR, noise_floor), 6)
 
     del backbone, head, mtp_heads, opts
     torch.cuda.empty_cache()
-    return losses
+
+    return {
+        "noise_floor": noise_floor,
+        "derived_threshold": derived_threshold,
+        "baseline_losses": losses_42,
+    }
 
 
 def main():
@@ -467,18 +513,23 @@ def main():
         and c.get("optimizer_wall_pct", 100.0) < baseline_opt_pct
     ]
 
+    nf = None
     if equiv_candidates:
         print(f"\n[fp40] EQUIV leg — {len(equiv_candidates)} candidates ...", flush=True)
-        print(f"[fp40]   running baseline loss curve ({EQUIV_STEPS} steps) ...", flush=True)
-        baseline_losses = _equiv_baseline_run()
-        print(f"[fp40]   baseline final loss: {baseline_losses[-1]:.4f}", flush=True)
+        print(f"[fp40]   noise-floor run: baseline seeds 42+43 ({EQUIV_STEPS} steps each) ...",
+              flush=True)
+        nf = _equiv_noise_floor()
+        print(f"[fp40]   noise_floor={nf['noise_floor']:.6f} "
+              f"derived_threshold={nf['derived_threshold']:.6f}", flush=True)
 
         for cand in equiv_candidates:
             print(f"[fp40]   equiv cell {cand['cell']} ...", flush=True)
             _, ns_s, fs, fa = next(x for x in CELLS if x[0] == cand["cell"])
-            eq = equiv_leg(baseline_losses, cand["cell"], ns_s, fs, fa)
+            eq = equiv_leg(nf["baseline_losses"], nf["noise_floor"], nf["derived_threshold"],
+                           cand["cell"], ns_s, fs, fa)
             print(f"[fp40]   equiv {cand['cell']}: pass={eq.get('equiv_pass')} "
-                  f"delta@100={eq.get('final_delta')}", flush=True)
+                  f"delta@100={eq.get('final_delta')} trend_diverging={eq.get('trend_diverging')}",
+                  flush=True)
             equiv_results[cand["cell"]] = eq
 
     ts_now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -515,7 +566,9 @@ def main():
         "equiv_results": equiv_results,
         "c3_candidates": c3_candidates,
         "verdict": verdict,
-        "equiv_threshold_nats": EQUIV_THRESHOLD,
+        "equiv_threshold_floor_nats": EQUIV_THRESHOLD_FLOOR,
+        "equiv_noise_floor_nats": nf["noise_floor"] if nf else None,
+        "equiv_derived_threshold_nats": nf["derived_threshold"] if nf else None,
         "runtime": {
             "device": torch.cuda.get_device_name(0),
             "torch": torch.__version__,
@@ -532,7 +585,9 @@ def main():
             "CE: chunked_cross_entropy (chunk_tokens=1024)",
             "compile: torch.compile(_backbone_call wrapper, unwrapped forward)",
             f"phase timing: CUDA events per phase",
-            f"EQUIV: {EQUIV_STEPS} steps, seed=42, threshold={EQUIV_THRESHOLD} nats",
+            f"EQUIV: {EQUIV_STEPS} steps, seeds 42+43 noise-floor, floor={EQUIV_THRESHOLD_FLOOR} nats",
+            "EQUIV pass requires |delta@100| <= derived_threshold AND no monotonic increase across [10,25,50,100]",
+            "100-step horizon; full-horizon equivalence unproven",
             "governor rails HOLD — never loosened",
             "proxy cells banned (C-7)",
         ],
