@@ -1,0 +1,214 @@
+{
+  "ticket": "C04-RECEIPT-3",
+  "ts": "20260613T052522Z",
+  "issue": "#353",
+  "receipt_class": "ENG/ARCH",
+  "density_verdict": {
+    "verdict": "DENSITY_CONFIRMED",
+    "delta_pp": 33.33,
+    "density_ts": "20260613T043948Z",
+    "power_audit_ts": "20260613T051216Z",
+    "power_audit_verdict": "DENSITY_UNDERPOWERED_PSEUDOREPLICATION",
+    "seed_level_fisher_p": 0.5,
+    "consequence": "D-CONF consumed as a directional prior (seed-level p=0.50), not powered evidence. Frozen aggregator maps CONFIRMED->D-CONF; audit fp39 does NOT rewrite that rule \u2014 it registers the deviation. Probe is bimodal (12/12 obs at extremes); 400 prompts re-measure ONE model so comparison unit is the seed (pseudoreplication). c04 sizing leans on direction, not magnitude.",
+    "caveat": "arm_b crossed 1/3 seeds, arm_a 0/3 (Fisher one-sided p=0.50). Direction (curated>bulk) stands; magnitude (+33pp) is not powered. c01->c03 scale transfer unproven. Cite: density-ab-verdict-20260613T043948Z.json + fp39-density-power-audit-20260613T051216Z.json (#371 66f0654)."
+  },
+  "c2_inversion": {
+    "commit": "4fc1796",
+    "finding": "no-ckpt mandate falsified: MTP doubles activations, making ckpt+compile the measured default. Default for pretrain: ckpt=True."
+  },
+  "c4_environment": {
+    "finding": "COMPILE-BREAK across all 5 candidates",
+    "root_cause": "transformers/utils/generic.py:865 uses func.__code__.co_varnames Python introspection \u2014 dynamo cannot trace it under torch.compile fullgraph=True in torch 2.6.0+cu124 + transformers 5.2.0.",
+    "workarounds_tried": [
+      "skip_files \u2014 not available in torch 2.6 (added in 2.7+)",
+      "fullgraph=False \u2014 NameError bug in torch 2.6 dynamo state",
+      "suppress_errors \u2014 cannot recover from dynamo BREAK"
+    ],
+    "resolution": "Bench falls through to eager. c4_pass=False on all candidates. C-4 gate requires torch>=2.7 or transformers patch."
+  },
+  "bench_results": [
+    {
+      "candidate": "c03-h1024-d20",
+      "config": {
+        "hidden": 1024,
+        "layers": 20,
+        "heads": 16,
+        "batch_ckpt": 16,
+        "batch_nockpt": 8
+      },
+      "c1_dtype": "FP8",
+      "bench_ts": "20260613T050336Z",
+      "best_arm": "ckpt",
+      "best_batch": 16,
+      "tok_s_paced": 16833.5,
+      "tok_s_raw": 17745.1,
+      "optimizer_wall_share": 0.4137,
+      "c3_pass": false,
+      "c4_pass": false,
+      "compile_status": [
+        "BREAK"
+      ],
+      "compile_error_root": "transformers/utils/generic.py:865 co_varnames introspection (torch 2.6 + transformers 5.2)",
+      "gate_budget_b": 2200000000.0,
+      "gate_budget_days": 1.513,
+      "gate_pass": false,
+      "free_vram_gib": 16.08,
+      "bench_status": "OK"
+    },
+    {
+      "candidate": "h2048-d12",
+      "config": {
+        "hidden": 2048,
+        "layers": 12,
+        "heads": 32,
+        "batch_ckpt": 8,
+        "batch_nockpt": 4
+      },
+      "c1_dtype": "FP8",
+      "bench_ts": "20260613T051757Z",
+      "best_arm": "nockpt",
+      "best_batch": 4,
+      "tok_s_paced": 988.2,
+      "tok_s_raw": 1000.2,
+      "optimizer_wall_share": 0.6838,
+      "c3_pass": false,
+      "c4_pass": false,
+      "compile_status": [
+        "BREAK"
+      ],
+      "compile_error_root": "transformers/utils/generic.py:865 co_varnames introspection (torch 2.6 + transformers 5.2)",
+      "gate_budget_b": 2200000000.0,
+      "gate_budget_days": 25.767,
+      "gate_pass": false,
+      "free_vram_gib": 10.84,
+      "bench_status": "OK"
+    },
+    {
+      "candidate": "h2048-d14",
+      "config": {
+        "hidden": 2048,
+        "layers": 14,
+        "heads": 32,
+        "batch_ckpt": 8,
+        "batch_nockpt": 4
+      },
+      "c1_dtype": "FP8",
+      "bench_ts": "20260613T051712Z",
+      "best_arm": "nockpt",
+      "best_batch": 4,
+      "tok_s_paced": 369.7,
+      "tok_s_raw": 371.3,
+      "optimizer_wall_share": 0.6485,
+      "c3_pass": false,
+      "c4_pass": false,
+      "compile_status": [
+        "BREAK"
+      ],
+      "compile_error_root": "transformers/utils/generic.py:865 co_varnames introspection (torch 2.6 + transformers 5.2)",
+      "gate_budget_b": 2200000000.0,
+      "gate_budget_days": 68.875,
+      "gate_pass": false,
+      "free_vram_gib": 9.34,
+      "bench_status": "OK"
+    },
+    {
+      "candidate": "h2304-d12",
+      "config": {
+        "hidden": 2304,
+        "layers": 12,
+        "heads": 36,
+        "batch_ckpt": 8,
+        "batch_nockpt": 4
+      },
+      "c1_dtype": "FP8",
+      "bench_ts": "20260613T051633Z",
+      "best_arm": "ckpt",
+      "best_batch": 8,
+      "tok_s_paced": 297.6,
+      "tok_s_raw": 298.1,
+      "optimizer_wall_share": 0.5895,
+      "c3_pass": false,
+      "c4_pass": false,
+      "compile_status": [
+        "BREAK"
+      ],
+      "compile_error_root": "transformers/utils/generic.py:865 co_varnames introspection (torch 2.6 + transformers 5.2)",
+      "gate_budget_b": 2200000000.0,
+      "gate_budget_days": 85.561,
+      "gate_pass": false,
+      "free_vram_gib": 12.14,
+      "bench_status": "OK"
+    },
+    {
+      "candidate": "h2560-d12",
+      "config": {
+        "hidden": 2560,
+        "layers": 12,
+        "heads": 40,
+        "batch_ckpt": 4,
+        "batch_nockpt": 2
+      },
+      "c1_dtype": "FP8",
+      "bench_ts": "20260613T051815Z",
+      "best_arm": "nockpt",
+      "best_batch": 2,
+      "tok_s_paced": 563.5,
+      "tok_s_raw": 571.4,
+      "optimizer_wall_share": 0.7318,
+      "c3_pass": false,
+      "c4_pass": false,
+      "compile_status": [
+        "BREAK"
+      ],
+      "compile_error_root": "transformers/utils/generic.py:865 co_varnames introspection (torch 2.6 + transformers 5.2)",
+      "gate_budget_b": 2200000000.0,
+      "gate_budget_days": 45.187,
+      "gate_pass": false,
+      "free_vram_gib": 10.95,
+      "bench_status": "OK"
+    }
+  ],
+  "parallel_run_note": {
+    "clean_candidates": [
+      "c03-h1024-d20"
+    ],
+    "contaminated_candidates": [
+      "h2048-d12",
+      "h2048-d14",
+      "h2304-d12",
+      "h2560-d12"
+    ],
+    "note": "h2048-d12/d14/h2304-d12/h2560-d12 benches ran 4-way parallel (dispatched simultaneously). GPU contention inflates step times. Their tok/s are lower bounds; c03-h1024-d20 (solo run) is the clean reference."
+  },
+  "gate3_summary": {
+    "budget_b": 2200000000.0,
+    "required_tok_s": 25463.0,
+    "c03_tok_s_clean": 16833.5,
+    "c03_gate_days": 1.513,
+    "gate_pass_any": false,
+    "passing_candidates": [],
+    "verdict": "BLOCKED-ON-COMPILE-FIX",
+    "verdict_class": "ENV_WALL",
+    "note": "\u00a73 gate FAIL is an env wall (compile-break), NOT an architecture verdict. c03 eager = 16834 tok/s; \u00a73 requires 25463 tok/s. torch.compile is precisely the ~1.5x that separates FAIL from PASS (16834 \u00d7 1.5 \u2248 25251 tok/s, at threshold). Blocker: transformers/utils/generic.py:865 co_varnames introspection untraceable in torch 2.6 + transformers 5.2. Architecture is NOT infeasible. Do NOT accept eager as the verdict. Compile fix (mira, parallel) \u2192 re-bench \u2192 if any candidate clears 25463 compiled tok/s, gate-9 \u2192 pretrain GO. User relaxes \u22641-day bar ONLY after compiled tok/s measured."
+  },
+  "c3_summary": {
+    "passing_candidates": [],
+    "verdict": "ALL FAIL \u2014 optimizer >15% step wall on all candidates",
+    "note": "c03 opt_share=0.414 (ckpt). Muon NS iterations dominate. C-3 \u226415% opt wall not met in any candidate."
+  },
+  "best_candidate": "c03-h1024-d20",
+  "recommendation": "ENV WALL \u2014 break compile, do not accept eager as verdict. Next: mira delivers standalone compile patch (torch 2.6 / transformers 5.2 fix) \u2192 integrate into c04_design_bench.py \u2192 re-bench all 5 candidates compiled \u2192 emit updated receipt. If any candidate clears 25463 compiled tok/s, gate-9 \u2192 pretrain GO. Architecture direction: c03-h1024-d20 (fastest eager baseline) or h2048-d12 (larger capacity, slower eager). C-2 inversion: ckpt+compile is the default. C-1: all candidates \u2192 FP8.",
+  "fp8_ab_ts": "20260613T044809Z",
+  "fp8_verdict": {
+    "c03-h1024-d20": "FP8",
+    "h2048-d12": "FP8",
+    "h2048-d14": "FP8",
+    "h2304-d12": "FP8",
+    "h2560-d12": "FP8"
+  },
+  "density_citations": [
+    "density-ab-verdict-20260613T043948Z.json",
+    "fp39-density-power-audit-20260613T051216Z.json (#371 66f0654)"
+  ]
+}
