@@ -1,0 +1,24 @@
+﻿{
+    "ts":  "20260613T042553Z",
+    "ticket":  "eng-368",
+    "ac_met":  true,
+    "notes":  "3-state concurrent refcount selftest: daemon holds lock with 2 concurrent jobs; Windows guard REFUSES until active_jobs reaches 0 (lock unlinked); guard correctly writes own lock entry on acquire. Daemon-side server.py lock integrate commit: 0ea479a. Windows-side guard: scripts/gpu_lock_guard.py.",
+    "test":  "gpu_lock_selftest",
+    "states":  [
+                   {
+                       "result":  "REFUSED",
+                       "pass":  true,
+                       "state":  "active_jobs=2, daemon alive"
+                   },
+                   {
+                       "result":  "REFUSED",
+                       "pass":  true,
+                       "state":  "active_jobs=1, daemon alive"
+                   },
+                   {
+                       "result":  "ACQUIRED",
+                       "pass":  true,
+                       "state":  "lock clear (active_jobs=0 → unlinked)"
+                   }
+               ]
+}
