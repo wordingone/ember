@@ -33,6 +33,7 @@ sys.path.insert(0, HERE)
 import fp19_bench as fp19          # noqa: E402
 from receipt_write import checked_write   # noqa: E402
 import timeshare_pretrain as ts    # noqa: E402
+import c04_dynamo_patch            # noqa: E402
 
 RECEIPTS = os.path.join(NC, "receipts")
 
@@ -166,23 +167,62 @@ def _bench_cell(cfg: dict, candidate_name: str, batch: int, grad_ckpt: bool,
     try:
         backbone, head, mtp_heads, opts = _build_model(cfg, grad_ckpt)
         backbone.train(); head.train(); mtp_heads.train()
-        ce_fn = ts.chunked_cross_entropy
+
+        # Apply dynamo patches (BLOCKER-1: chunked_ce; BLOCKER-2: co_varnames wrapper).
+        # Compile = correctness/C-4 signal only; speedup is 1.024x on this hardware.
+        c04_dynamo_patch.apply()
+        c04_dynamo_patch.apply_compile_patch(backbone)
+        ce_fn = ts.chunked_cross_entropy  # now patched to dynamo-safe version
 
         # Apply fake_quant ONCE before compile — not per-step (model.modules()
         # iteration is not dynamo-traceable inside a compiled step function).
         if variant != "bf16":
             fp19._apply_fake_quant(backbone, variant)
 
+        # Forward-only compilation: time.perf_counter() inside full step breaks fullgraph.
+        # backward() and optimizer step remain outside the compiled region.
+        def fwd_fn(ids, tgt0, tgt_m):
+            hidden = backbone(input_ids=ids).last_hidden_state
+            h_flat = hidden.reshape(-1, hidden.shape[-1])
+            primary_ce, _ = ce_fn(h_flat, head.weight, tgt0.reshape(-1), chunk_tokens=1024)
+            mtp_ces = [ce_fn(h_flat, mh.weight, tgt_m[k].reshape(-1), chunk_tokens=1024)[0]
+                       for k in range(MTP_N_HEADS)]
+            return ts.mtp_total_loss(primary_ce, mtp_ces, MTP_WEIGHT)
+
+        compile_status = "SKIP"
+        fwd_call = fwd_fn
+        _compile_warmup_done = False
+        if compiled:
+            fwd_compiled = torch.compile(fwd_fn, fullgraph=True)
+            print(f"[c04_bench] {cell_name}: compiling ...", flush=True)
+            try:
+                ids_t  = torch.randint(0, VOCAB, (batch, SEQ), device="cuda")
+                tgt0_t = torch.roll(ids_t, -1, dims=1)
+                tgtm_t = [torch.roll(ids_t, -(k + 2), dims=1) for k in range(MTP_N_HEADS)]
+                loss_t = fwd_compiled(ids_t, tgt0_t, tgtm_t)
+                loss_t.backward()
+                for o in opts.values():
+                    o.zero_grad(set_to_none=True)
+                compile_status = "PASS"
+                fwd_call = fwd_compiled
+                _compile_warmup_done = True
+            except torch._dynamo.exc.Unsupported as e:
+                compile_status = "BREAK"
+                out["compile_error"] = str(e)[:300]
+                print(f"[c04_bench] {cell_name}: COMPILE-BREAK — falling back to eager", flush=True)
+            except Exception as e:
+                compile_status = "ERROR"
+                out["compile_error"] = str(e)[:300]
+                out["status"] = "COMPILE-ERROR"
+                return out
+        out["compile_status"] = compile_status
+        out["c4_pass"] = (compile_status == "PASS")
+
         def step():
             ids  = torch.randint(0, VOCAB, (batch, SEQ), device="cuda")
             tgt0 = torch.roll(ids, -1, dims=1)
             tgt_mtp = [torch.roll(ids, -(k + 2), dims=1) for k in range(MTP_N_HEADS)]
-            hidden = backbone(input_ids=ids).last_hidden_state
-            h_flat = hidden.reshape(-1, hidden.shape[-1])
-            primary_ce, _ = ce_fn(h_flat, head.weight, tgt0.reshape(-1), chunk_tokens=1024)
-            mtp_ces = [ce_fn(h_flat, mh.weight, tgt_mtp[k].reshape(-1), chunk_tokens=1024)[0]
-                       for k, mh in enumerate(mtp_heads)]
-            loss = ts.mtp_total_loss(primary_ce, mtp_ces, MTP_WEIGHT)
+            loss = fwd_call(ids, tgt0, tgt_mtp)
             loss.backward()
             t_opt_start = time.perf_counter()
             for o in opts.values():
@@ -192,33 +232,11 @@ def _bench_cell(cfg: dict, candidate_name: str, batch: int, grad_ckpt: bool,
                 o.zero_grad(set_to_none=True)
             return t_opt
 
-        compile_status = "SKIP"
-        step_fn = step
-        if compiled:
-            step_fn_c = torch.compile(step, fullgraph=True)
-            print(f"[c04_bench] {cell_name}: compiling ...", flush=True)
-            try:
-                step_fn_c()
-                compile_status = "PASS"
-                step_fn = step_fn_c
-            except torch._dynamo.exc.Unsupported as e:
-                compile_status = "BREAK"
-                out["compile_error"] = str(e)[:300]
-                print(f"[c04_bench] {cell_name}: COMPILE-BREAK — falling back to eager", flush=True)
-                step_fn = step
-            except Exception as e:
-                compile_status = "ERROR"
-                out["compile_error"] = str(e)[:300]
-                out["status"] = "COMPILE-ERROR"
-                return out
-        out["compile_status"] = compile_status
-        out["c4_pass"] = (compile_status == "PASS")
-
         print(f"[c04_bench] {cell_name}: warmup {WARMUP} ...", flush=True)
-        # When compile_status=="PASS", first step already ran during compilation.
-        remaining_warmup = WARMUP - (1 if compile_status == "PASS" else 0)
+        # When _compile_warmup_done, one fwd+bwd already ran during compilation.
+        remaining_warmup = WARMUP - (1 if _compile_warmup_done else 0)
         for i in range(remaining_warmup):
-            step_fn()
+            step()
             print(f"[c04_bench]   warmup {i+1}/{remaining_warmup}", flush=True)
 
         torch.cuda.synchronize()
@@ -234,7 +252,7 @@ def _bench_cell(cfg: dict, candidate_name: str, batch: int, grad_ckpt: bool,
         t0 = time.perf_counter()
         for _ in range(TIMED):
             t_step_start = time.perf_counter()
-            t_opt = step_fn()
+            t_opt = step()
             torch.cuda.synchronize()
             t_step = time.perf_counter() - t_step_start
             time.sleep(PACE_S)
