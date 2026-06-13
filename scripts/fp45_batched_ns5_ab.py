@@ -125,7 +125,7 @@ def _ns5_batched(G_batch):
     X = G_batch.to(torch.float32)  # [n, m, k]
     transposed = False
     if X.shape[1] > X.shape[2]:    # transpose along param dims, not batch
-        X = X.transpose(1, 2)
+        X = X.transpose(1, 2).contiguous()  # contiguous: same summation order as per-param path
         transposed = True
     # Per-param norm: [n,1,1]
     norms = X.flatten(1).norm(dim=-1).view(-1, 1, 1) + _NS_EPS
@@ -143,7 +143,7 @@ def _check_ns5_equiv(device="cpu") -> dict:
     """Verify batched NS5 matches per-param on 3 c03-representative shapes."""
     import torch
     results = {}
-    shapes = [(64, 128), (1024, 1024), (4096, 1024)] if device != "cpu" else [(64, 128), (128, 64)]
+    shapes = [(64, 128), (1024, 1024), (4096, 1024), (32000, 1024)] if device != "cpu" else [(64, 128), (128, 64)]
     for shape in shapes:
         torch.manual_seed(42)
         g = torch.randn(*shape, dtype=torch.float32, device=device)
@@ -209,6 +209,7 @@ def _build_muon_batched():
         def __init__(self, params, lr=LR_MUON, momentum=0.95, nesterov=True, weight_decay=0.0):
             super().__init__(params, dict(lr=lr, momentum=momentum, nesterov=nesterov, weight_decay=weight_decay))
             self._last_ns_ms = 0.0
+            self._per_shape_ns_ms: Dict[str, float] = {}
             self._shape_groups: Dict[tuple, List] = {}  # populated on first step
 
         @torch.no_grad()
@@ -251,7 +252,10 @@ def _build_muon_batched():
                     upd = _ns5_batched(upd)
                     ns_event_end.record()
                     torch.cuda.synchronize()
-                    self._last_ns_ms += ns_event_start.elapsed_time(ns_event_end)
+                    _shape_ms = ns_event_start.elapsed_time(ns_event_end)
+                    self._last_ns_ms += _shape_ms
+                    _sk = str(shape)
+                    self._per_shape_ns_ms[_sk] = self._per_shape_ns_ms.get(_sk, 0.0) + _shape_ms
 
                     # Apply updates
                     m_sq = max(1.0, shape[0] / shape[1]) ** 0.5
@@ -262,6 +266,7 @@ def _build_muon_batched():
 
         def reset_ns_timer(self):
             self._last_ns_ms = 0.0
+            self._per_shape_ns_ms = {}
 
     return _MuonBatched
 
