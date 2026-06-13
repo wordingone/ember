@@ -35,6 +35,35 @@ NOT a clean COMMIT_ADAMW. But that does **not** route to the user yet:
 So the true critical path after fp44 lands is **eli dispatching the batched-NS5
 bench** (PR #390 harness), not the fp44 verdict. eli has this queued.
 
+## UPDATE 2026-06-13 ~13:08Z — run4 landed: batched-NS5 RAN and fell SHORT
+
+The deciding lever resolved on real data; the picture moved.
+
+- **Footprint wall broken** (eli `empty_cache` after warmup; hyp-A confirmed —
+  reserved caching-allocator held step-1 NS5 transients, never a leak). batch=16
+  now runs complete timed steps.
+- **batched-NS5-Muon = 7212 tok/s — 3.5× SHORT of §3** (25463); ns5_equiv
+  2.8e-7 > 2e-7 on (4096,1024). The torch.stack batching is 5.8× SLOWER than the
+  sequential fp40 baseline (NS phase 1648ms vs 285ms) — batching backfired
+  (bandwidth-bound, GiB intermediates). `c04_optimizer_pick` →
+  ESCALATE_TORCH_OR_TRADEOFF (batched-NS5 ran-and-short, P2 consults fp44).
+- **The escalation is HELD (break-the-wall) — one lever untried before Jun:**
+  the optimizer step runs EAGER/uncompiled (PROBE 2: plain Python `step()`
+  outside the compiled `fwd_fn` region). It has NO backward, so the 08:10Z
+  compile falsification (`Tensor.backward()` Unsupported on torch 2.6) does NOT
+  apply — `torch.compile` on the optimizer step may compile cleanly on torch 2.6
+  and deliver the 3-4× the NS phase needs WITHOUT the torch≥2.7 env bump. NS5
+  already transposes to min-dim (PROBE 3) — that lever is spent.
+
+Pre-escalation order now:
+1. eli compiles the optimizer step (+ per-shape-group bmm, not all-stack).
+2. compiled+per-group step clears §3 → COMMIT_MUON_BATCHED, Muon kept, NO Jun
+   escalation. gate-9 muon_batched authorization verified open (PR #405).
+3. ONLY if it still can't clear §3 → torch≥2.7 is the genuine Jun tradeoff below
+   (env-risk for Muon's thin/jude-flagged quality edge vs AdamW free at 0.919d).
+   The measured Muon number is now 7212-class, not 19223 — refresh the ESCALATE
+   numbers from eli's compiled-step receipt before presenting to Jun.
+
 ## Verdict → action (verified composition)
 
 | fp44 verdict | batched-NS5 state | pick output | action |
