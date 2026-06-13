@@ -25,7 +25,7 @@ not when someone notices.
 | #273 | fp-35 band→allocation | prereg frozen; policy emits on round-1 stats | n/a (prereg) | fp-34 prong-A PREDICTIVE (round-1 stats) | pretrain |
 | #282 | sp-6b B3 replay both seats | sp6b v1.1 + duty-battery spec + sp6c seat-adapter FROZEN | n/a (spec) | ember ckpt resident in NC-K + E2B adapter (06-20..21) | pretrain ckpt |
 | #328 | fp-36b 1B INFO frame | frozen 1B INFO frame (fp-36b) | n/a (frame) | real 1B probe receipt | pretrain ckpt |
-| #359 | fp-39 budget/grid recal + density A/B spec | spec frozen; `act_model_refit.py` (ledger r18) | — | density A/B verdict (LANDED) — **RECHECK** | see note |
+| ~~#359~~ | ~~fp-39 budget/grid recal + density A/B spec~~ **CLOSED 06-13** | both halves delivered + consumed; adjudicated by `fp39-density-power-audit` | — | n/a — disposed | done |
 | #372 | fp-41 powered density A/B | graded-probe + multi-seed prereg | n/a (prereg) | a POWERED density run (current was underpowered) | GPU (density) |
 | #377 | fp-44 horizon optimizer-equiv | `fp44_horizon_equiv_gate.py` | **PASS** | fp44 horizon-equiv receipt (job 57706bdc RUNNING) | **imminent** |
 
@@ -35,20 +35,22 @@ issues): `sp3_terminal_audit.py` (#214, fires 06-22), `fp33_surpass_verdict.py`
 
 ## Reads off this table
 
-- **7 of 9 gate on the pretrain receipt chain.** Nothing the verdict side can
-  do advances them; the lever is getting to pretrain. The c04→gate-9 chain is
+- **7 of 8 open issues gate on the pretrain receipt chain** (#359 closed 06-13).
+  Nothing the verdict side can do advances them; the lever is getting to pretrain. The c04→gate-9 chain is
   that lever and it is now frozen + coherent (STATE 08:34Z).
 - **#377 (fp-44) is the nearest fire** — its gate is built and green; it
   executes the moment job 57706bdc emits its receipt. That receipt is also the
   P1/P2 input to `c04_optimizer_pick`. One landing, two unblocks.
-- **#359 / #372 are density-coupled and need a focused recheck.** The density
-  A/B verdict (`density-ab-verdict-20260613T043948Z.json`) and power audit
-  (`fp39-density-power-audit-20260613T051216Z.json`) have LANDED; the audit
-  found the +33pp result underpowered (seed-level Fisher p=0.50,
-  pseudoreplication — 12/12 bimodal). That is exactly *why* #372 (powered
-  density A/B) is open. Whether #359's spec/recalibration deliverable is now
-  dischargeable on the landed verdict is the next verdict-side question to
-  settle — flagged, not assumed.
+- **#359 SETTLED + CLOSED (06-13).** Both halves delivered + consumed:
+  half-1 recalibration re-priced f_sustained 69.3→42.5 TFLOPS (`c04-budget`
+  f_scale=0.613, 38.7% deviation >> 10% trigger) → feeds the §3 budget the c04
+  pick uses (`c04-receipt3` budget_b=2.2e9, req_tok_s=25463); half-2 density A/B
+  verdict DENSITY_CONFIRMED directional (33.33pp@100%), adjudicated underpowered
+  by `fp39-density-power-audit` (bimodal probe → seed is the unit not the prompt;
+  n=400 prompt-independence = pseudoreplication; seed-level p=0.50). D-CONF
+  consumed as a directional prior, hedged by the 2.2B cap + user ≤1-day bar.
+  POWERED confirmation continues under **#372** (the audit's named hardening
+  successor: graded probe + more seeds), GPU-gated.
 
 ## What "done" looks like per issue
 
