@@ -23,7 +23,7 @@ Governor rails: VRAM_FRACTION=0.80, MARGIN_GIB=1.5, PACE_S=0.05.
 
 NS phase timed with cuda.Event inside optimizer.step() — includes full
 NS5 computation across all shape groups. Equiv check: batched vs baseline
-max-abs-delta must be <1e-3 on representative c03 shapes.
+max-abs-delta must be <2e-7 on representative c03 shapes (fp35 bar, Leo mail 15347).
 
 Selftest: python fp45_batched_ns5_ab.py --selftest
   Marker: FP45_BATCHED_NS5_SELFTEST_PASS
@@ -76,7 +76,7 @@ WEIGHT_DECAY = 0.1
 _NS_A, _NS_B, _NS_C = 3.4445, -4.7750, 2.0315
 _NS_STEPS = 5
 _NS_EPS   = 1e-7
-_EQUIV_TOL = 1e-3
+_EQUIV_TOL = 2e-7   # fp35 bar — Leo mail 15347 binding guard
 
 # §3 gate
 SEC_3_TOK_S  = 25_463.0
@@ -103,7 +103,7 @@ def _ns5_per_param(G):
     X = G.to(torch.float32)
     transposed = False
     if X.shape[0] > X.shape[1]:
-        X = X.T
+        X = X.T.contiguous()   # contiguous → same norm summation order as batched path
         transposed = True
     X = X / (X.norm() + _NS_EPS)
     for _ in range(_NS_STEPS):
