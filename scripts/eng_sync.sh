@@ -19,7 +19,7 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 OPEN_JSON=$(gh issue list --label eng --state open \
   --json number,title,updatedAt --limit 100)
 CLOSED_JSON=$(gh issue list --label eng --state closed \
-  --json number,title --limit 100)
+  --json number,title,stateReason --limit 100)
 
 # closed-without-merged-PR check (violation) — per-issue query.
 # NOTE: must use GraphQL directly — `gh issue view --json` FLATTENS the
@@ -36,7 +36,11 @@ VIOLATIONS="["
 COMMIT_CLOSED="["
 first=1
 cfirst=1
-for n in $(echo "$CLOSED_JSON" | grep -o '"number":[0-9]*' | grep -o '[0-9]*' || true); do
+# NOTE 3 (#369, 2026-06-13): stateReason==NOT_PLANNED is an INTENTIONAL closure
+# (duplicate / won't-do), not a silent drop of completed work. The violation we
+# hunt is COMPLETED-without-merged-PR. Exempt NOT_PLANNED from the loop so a
+# legitimate dup-close (e.g. #369 = dup of #368) does not false-flag every tick.
+for n in $(echo "$CLOSED_JSON" | jq -r '.[] | select(.stateReason != "NOT_PLANNED") | .number' || true); do
   prs=$(gh api graphql -f query="query{repository(owner:\"$OWNER\",name:\"$NAME\"){issue(number:$n){closedByPullRequestsReferences(first:20){nodes{merged}}}}}" \
         --jq '[.data.repository.issue.closedByPullRequestsReferences.nodes[] | select(.merged==true)] | length' \
         2>/dev/null || echo "QUERY_FAIL")
