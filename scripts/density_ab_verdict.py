@@ -10,6 +10,10 @@ Verdict classes (directional; n=2 per arm, no formal power):
   DENSITY_REVERSED   — arm A > arm B at 100pct  (mixed corpus wins)
   DENSITY_FLAT       — |delta| <= 0.5pp (indistinguishable at this n)
   INCOMPLETE         — fewer than 4 valid cells in receipts dir
+
+c04 routing: route() from c04_pick_rehearsal.py is called with the density axis
+(D-CONF if DENSITY_CONFIRMED or DENSITY_MARGINAL, D-BELOW otherwise) to produce
+c04 pick decisions for all L10 outcomes — table and cap logic stay in one place.
 """
 import glob
 import json
@@ -21,6 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NC = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from receipt_write import checked_write                # noqa: E402
+from c04_pick_rehearsal import route                   # noqa: E402
 
 RECEIPTS = f"{NC}/receipts"
 TICKET = "DENSITY-AB-V1"
@@ -29,6 +34,15 @@ TICKET = "DENSITY-AB-V1"
 CONFIRM_THRESHOLD_PP = 2.0
 # |delta| <= this = FLAT
 FLAT_THRESHOLD_PP = 0.5
+
+# cap applied by route() at L10-FULL band-low: budget must be <=1.05 x tok_s x day
+# 2.2B at 25.6k tok/s (PASS), 2.5B = 1.13d (MARGINAL). Table v1.1.
+_C04_BUDGET_HI_PASS = 2.2e9
+
+
+def _density_to_axis(verdict):
+    """Map density verdict to c04-pick-table density axis (D-CONF or D-BELOW)."""
+    return "D-CONF" if verdict in ("DENSITY_CONFIRMED", "DENSITY_MARGINAL") else "D-BELOW"
 
 
 def _load_cell_receipts():
@@ -77,6 +91,7 @@ def main():
             "verdict": "INCOMPLETE",
             "missing_cells": [f"arm-{a}-seed{s}" for a, s in missing],
             "available_cells": [f"arm-{a}-seed{s}" for a, s in sorted(cells.keys())],
+            "c04_pick": None,
         }
         out = f"{RECEIPTS}/density-ab-verdict-{ts_now}.json"
         checked_write(out, receipt)
@@ -121,6 +136,12 @@ def main():
     else:
         verdict = "DENSITY_REVERSED"
 
+    density_axis = _density_to_axis(verdict)
+    c04_pick = {
+        l10: route(l10, density_axis, budget_hi=_C04_BUDGET_HI_PASS if l10 == "FULL" else None)
+        for l10 in ("FULL", "PART", "FAIL")
+    }
+
     receipt = {
         "ticket": "DENSITY-AB-VERDICT",
         "ts": ts_now,
@@ -146,10 +167,16 @@ def main():
             "confirm_pp": CONFIRM_THRESHOLD_PP,
             "flat_pp": FLAT_THRESHOLD_PP,
         },
+        "c04_pick": {
+            "density_axis": density_axis,
+            "budget_hi_cap": _C04_BUDGET_HI_PASS,
+            "routes": c04_pick,
+        },
         "caveats": [
             "code_fraction is a PROXY for the verified-density axis",
             "c01→c03 scale transfer is an assumption (directional, not precision)",
             f"n=2 seeds per arm — no formal statistical power; verdict is directional only",
+            "c04_pick routes from c04_pick_rehearsal.route() — table v1.1, PASS cap=2.2B at L10-FULL",
         ],
     }
 
@@ -161,6 +188,7 @@ def main():
         "delta_pp_100pct": delta_pp_100,
         "arm_a_mean_wcode_100": mean_a_100,
         "arm_b_mean_wcode_100": mean_b_100,
+        "c04_pick_L10_FULL": c04_pick["FULL"],
     }, indent=2))
     print(f"DENSITY_AB_VERDICT_DONE {os.path.relpath(out, NC)}")
 
