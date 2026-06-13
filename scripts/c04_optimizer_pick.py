@@ -22,7 +22,7 @@ THE FROZEN PRECEDENCE (best -> last-resort):
                           ns5_equiv max_abs_delta <= 2e-7.
                           Best: design-preserving (keeps Muon), no env change,
                           S3 met -> fp44 AdamW/Muon comparison is MOOT.
-  P2 (batched-NS5 short or absent) consult fp44 horizon-equiv:
+  P2 (batched-NS5 RAN and fell short, OR was ruled out) consult fp44:
      COMMIT_ADAMW         fp44 == COMMIT_ADAMW (|delta|<=noise or AdamW-lower)
                           AND ADAMW_TOK_S >= 25463. S3 cleared free, no env
                           change, quality equivalent. CHEAPER than torch bump.
@@ -32,7 +32,16 @@ THE FROZEN PRECEDENCE (best -> last-resort):
                           needs the torch>=2.7 compile lever (shared-env major
                           bump) OR accept AdamW's quality gap. USER decides.
      HOLD                 fp44 == HOLD_INCONCLUSIVE (diverging / crossover).
-  PENDING                 neither deciding receipt present.
+  PENDING                 batched-NS5 ABSENT-and-still-expected (ns5_pending),
+                          regardless of fp44's verdict. The dispatch order is
+                          fp44 FIRST, batched-NS5 second; committing the P2
+                          fp44-fallback while the Muon-preferred P1 lever is
+                          merely not-yet-run would prematurely abandon a
+                          strictly-dominating option (batched-NS5-Muon is the
+                          SAME optimizer by ns5_equiv, at >= AdamW throughput).
+                          Hold for it. Only an explicit ns5_pending=False
+                          (eli/user ruled batched-NS5 out) lets fp44 decide
+                          alone. Also PENDING if fp44 itself is absent/mismatch.
 
 Only the user moves the threshold or the precedence. Pure stdlib; reuses
 fp44_horizon_equiv_gate.score_receipt() for the equiv leg.
@@ -122,10 +131,16 @@ def _load_batched_ns5(receipts_dir=RECEIPTS):
 
 # ---- the frozen pick --------------------------------------------------------
 
-def pick(batched_ns5_receipt, fp44_score):
+def pick(batched_ns5_receipt, fp44_score, ns5_pending=True):
     """The frozen precedence. Inputs:
        batched_ns5_receipt: dict or None (production batched-NS5 bench)
        fp44_score: dict from fp44.score_receipt(), or None if no fp44 receipt
+       ns5_pending: True (default) iff the batched-NS5 bench is still EXPECTED
+         to run (eli's plan: fp44 first, batched-NS5 second). When True and the
+         batched-NS5 receipt is absent, the pick HOLDS at PENDING regardless of
+         fp44 -- committing the P2 fp44-fallback now would prematurely abandon
+         the strictly-dominating Muon-preferred P1 lever. Pass False only when
+         eli/user has explicitly ruled batched-NS5 out, letting fp44 decide alone.
     Returns the pick dict."""
     bns5_paced = _batched_ns5_paced(batched_ns5_receipt)
     bns5_equiv = _ns5_equiv_max_delta(batched_ns5_receipt)
@@ -152,7 +167,25 @@ def pick(batched_ns5_receipt, fp44_score):
         bns5_note = "batched-NS5 SHORT (" + "; ".join(short_reason) + ")"
         bns5_distance = max(0.0, S3_THRESHOLD - bns5_paced)
     else:
-        bns5_note = "batched-NS5 bench ABSENT"
+        # batched-NS5 ABSENT. If it is still expected, HOLD — do NOT let the
+        # fp44 fallback (P2) fire and abandon the Muon-preferred P1 lever before
+        # it has even run. fp44's verdict is informational here, never deciding.
+        if ns5_pending:
+            f44 = ("absent" if not fp44_score
+                   else fp44_score.get("verdict", fp44_score.get("status")))
+            return {
+                "pick": "PENDING",
+                "s3_met": False,
+                "detail": (f"batched-NS5 bench ABSENT but still expected "
+                           f"(ns5_pending); fp44={f44} is informational only. "
+                           "Holding for the Muon-preferred P1 lever — batched-NS5"
+                           "-Muon strictly dominates AdamW when it clears (same "
+                           "optimizer by ns5_equiv, >= AdamW throughput). Pass "
+                           "ns5_pending=False to let fp44 decide alone."),
+                "measured_distance": None,
+                "fp44_informational": f44,
+            }
+        bns5_note = "batched-NS5 bench ABSENT (ruled out by caller)"
         bns5_distance = None
 
     # P2 — consult fp44 horizon-equiv.
@@ -203,13 +236,14 @@ def pick(batched_ns5_receipt, fp44_score):
     }
 
 
-def analyze(receipts_dir=RECEIPTS):
+def analyze(receipts_dir=RECEIPTS, ns5_pending=True):
     bns5 = _load_batched_ns5(receipts_dir)
     fp44_r = fp44._load_receipt()
     fp44_score = fp44.score_receipt(fp44_r) if fp44_r else None
-    result = pick(bns5, fp44_score)
+    result = pick(bns5, fp44_score, ns5_pending=ns5_pending)
     result["ticket"] = "C04-OPTIMIZER-PICK"
     result["s3_threshold_tok_s"] = round(S3_THRESHOLD, 1)
+    result["ns5_pending"] = ns5_pending
     result["inputs"] = {
         "batched_ns5_receipt": bns5.get("ts") if bns5 else None,
         "fp44_receipt": fp44_r.get("ts") if fp44_r else None,
@@ -285,6 +319,26 @@ def selftest():
     print(f"  PENDING (ns5 absent, fp44 schema-mismatch) -> {r['pick']} "
           f"[{'PASS' if cond else 'FAIL'}]"); ok &= cond
 
+    # BUG-CATCH: batched-NS5 absent-but-EXPECTED + fp44 COMMIT_ADAMW must HOLD,
+    # NOT prematurely commit the fp44 fallback before the Muon-preferred P1 runs.
+    # (fp44 lands FIRST in eli's dispatch order; this is the live window.)
+    r = pick(None, _fp44_synth("COMMIT_ADAMW"))   # ns5_pending defaults True
+    cond = r["pick"] == "PENDING" and not r["s3_met"] and r.get("fp44_informational") == "COMMIT_ADAMW"
+    print(f"  BUG-CATCH ns5-absent-expected + fp44 AdamW -> {r['pick']} (HOLD) "
+          f"[{'PASS' if cond else 'FAIL'}]"); ok &= cond
+
+    # Hold regardless of fp44 verdict: absent-expected + fp44 ESCALATE -> PENDING.
+    r = pick(None, _fp44_synth("ESCALATE_USER_TRADEOFF"))
+    cond = r["pick"] == "PENDING"
+    print(f"  hold-regardless ns5-absent + fp44 ESCALATE -> {r['pick']} "
+          f"[{'PASS' if cond else 'FAIL'}]"); ok &= cond
+
+    # Ruled-out escape: absent + ns5_pending=False + fp44 COMMIT_ADAMW -> COMMIT_ADAMW.
+    r = pick(None, _fp44_synth("COMMIT_ADAMW"), ns5_pending=False)
+    cond = r["pick"] == "COMMIT_ADAMW" and r["s3_met"]
+    print(f"  ruled-out ns5_pending=False + fp44 AdamW -> {r['pick']} "
+          f"[{'PASS' if cond else 'FAIL'}]"); ok &= cond
+
     # loader tolerance: arm_aggregate form.
     paced = _batched_ns5_paced({"arm_aggregate": {"muon-batched": {"mean_tokens_per_s": 25500.0}}})
     cond = paced == 25500.0
@@ -304,10 +358,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--receipts", default=RECEIPTS)
+    ap.add_argument("--ns5-ruled-out", action="store_true",
+                    help="batched-NS5 bench will NOT run (eli/user ruled out); "
+                         "let fp44 decide alone instead of holding at PENDING.")
     args = ap.parse_args()
     if args.selftest:
         sys.exit(0 if selftest() else 1)
-    result = analyze(args.receipts)
+    result = analyze(args.receipts, ns5_pending=not args.ns5_ruled_out)
     print(json.dumps(result, indent=1))
 
 
