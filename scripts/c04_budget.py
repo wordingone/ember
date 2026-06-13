@@ -11,6 +11,14 @@ is receipt-pinned or ESTIMATE-flagged. Recalibrates on the measured L9 F via
 """
 import argparse, json, os, time
 
+# Resolve repo-relative paths against the nc-ladder root (scripts/..), so the
+# selftest/emit work from ANY cwd — e.g. an isolated pool-worker dir. Caught by
+# the 2026-06-13 pool integration run: relative "receipts/..." only resolved
+# from the repo root, so the selftest failed under isolation (and would fail CI).
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def _resolve(path):
+    return path if os.path.isabs(path) else os.path.join(_REPO_ROOT, path)
+
 CONSTANTS = {
     # receipt-pinned
     "grid_receipt": "receipts/c04-grid-20260612T220829Z.json",
@@ -31,7 +39,7 @@ CONSTANTS = {
 }
 
 def load_rows(path):
-    d = json.load(open(path))
+    d = json.load(open(_resolve(path)))
     rows = [r for r in d["grid_flash"] if r["mode"] == "nockpt"]
     return rows, d["sustained_flops_anchor"]
 
@@ -94,7 +102,7 @@ def main():
     s = json.dumps(out, indent=1)
     print(s[:1800])
     if a.emit:
-        p = "receipts/c04-budget-%s.json" % out["ts"]
+        p = _resolve("receipts/c04-budget-%s.json" % out["ts"])
         open(p, "w").write(s)
         print("RECEIPT:", p)
 
