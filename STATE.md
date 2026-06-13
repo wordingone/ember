@@ -327,6 +327,12 @@ POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing 
 
 `B:/M/avir/leo/state/nc-ladder/receipts/` (JSONL/JSON per job; gate from these only).
 
+## 2026-06-13 ~01:10Z — POOL OUTAGE CLOSED (6:10 PM LA): all 6 workers PROBE_ACK + PERM-TEST pass
+
+- **Outage 1:00 PM → 6:01 PM (~5h) CLOSED.** Root cause receipted (kill-receipts line 218): missing `hN/.claude/settings.local.json` → CC MCP-trust dialog blocked every turn pre-watcher. Fix: pool-up pre-seed @c30f117. Evidence: 6× PROBE_ACK 01:01Z + 6× PERM-TEST pass=True 01:03-04Z. ACs accepted; AC#2 grew=true literal WAIVED (JSONL-growth probe = false negative — workers don't write transcripts to the expected project dirs, mystery assigned). Mira follow-up GO'd: mail-round-trip probe + transcript-location find + receipt-path uniformity.
+- **c04 harness scaffold MERGED (PR #364, signed off):** real plumbing (muon_split/fused-adamw, attn backends, zero-recompile assert, C-7 line-items). H3 leg 3 = STARTED not DONE — closes on first governed zero-break #363 cell.
+- Jude round-4 staged (h1 allow=run-selftest, h2 deny=WebSearch), fires post-restart; pool-green precondition now met.
+
 ## 2026-06-13 ~00:45Z — RUNNING JOBS + fleet reconciliation (5:45 PM LA)
 
 - **Density A/B cells (eli, eng/225-density-ab-v1):** arm-a-seed0 bb4b7a03 + arm-a-seed1 5b0bdc72 + arm-b-seed1 273a8bf4 all healthy at step 1000/12207; arm-b-seed0 queued solo (concurrent dispatch hit VRAM floor — governor SKIPPED clean; daemon no-queue behavior on eli's hygiene list). Receipts ~3h. bb4b7a03 "stall" was a monitor false alarm (status API showed step 1000). Manifests frozen pre-dispatch: arm-a 8047e5be ≠ arm-b 557365f5 (collision assert now mechanical after eli caught the source-sequential-shard flaw — Arm A rebuilt as proportional interleave, spec v1.1).
