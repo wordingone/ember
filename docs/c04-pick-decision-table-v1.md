@@ -24,9 +24,16 @@ Muon wall-share 36.01%; criterion = pretrain ≤ 1 governed day (program §3).
 
 ## The table (pick = row · column)
 
+> **v1.1 corner amendment (rehearsal receipt c04-pick-rehearsal-...011829Z,
+> caught pre-live-receipts):** the PASS cell carries an INTERNAL BUDGET CAP
+> — budget ≤ 1.05 × measured tok/s × 86,400. At the L10 band's low end
+> (25.6k tok/s) that is 2.2B; the curated band's 2.5B top is then 1.13 d =
+> MARGINAL, not PASS. Verdict scripts apply the cap (import
+> `c04_pick_rehearsal.route`), never the band top.
+
 | | D-CONF | D-BELOW |
 |---|---|---|
-| **L10-FULL** | **PASS:** c03-class (h1024 d20, ckpt+compile+swap) × ~2.2–2.5B curated ≈ **1.0 governed day** → §3 receipt → gate-9 → pretrain dispatches | FAIL by ~2.3× (5.7B ÷ 2.5B/day) → §4.5 residual |
+| **L10-FULL** | **PASS:** c03-class (h1024 d20, ckpt+compile+swap) × curated budget ≤ cap (2.2B at band-low) ≈ **≤1.05 governed day** → §3 receipt → gate-9 → pretrain dispatches | FAIL by ~2.3× (5.7B ÷ 2.5B/day) → §4.5 residual |
 | **L10-PART** | MARGINAL: 2.0B ÷ 1.93B/day ≈ 1.04–1.3 d → present the fraction to the user — only he relaxes ≤1-day | FAIL ~3× → §4.5 |
 | **L10-FAIL** | 2.0–2.5B ÷ 1.66B/day ≈ 1.2–1.5 d → user fraction call | FAIL ~3.4× → §4.5 |
 

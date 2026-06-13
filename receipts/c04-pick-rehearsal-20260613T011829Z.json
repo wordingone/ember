@@ -1,0 +1,37 @@
+{
+ "ticket": "C04-PICK-REHEARSAL",
+ "ts": "20260613T011829Z",
+ "routes": {
+  "FULLxD-CONF": {
+   "cell": "MARGINAL->user-fraction-call",
+   "days": 1.13,
+   "action": "present wall-day fraction to the user; only he relaxes the <=1-day bar"
+  },
+  "FULLxD-BELOW": {
+   "cell": "FAIL->4.5-residual",
+   "days": 2.57,
+   "action": "present priced residual (2nd GPU / cloud burst / priced waiver); never relax silently"
+  },
+  "PARTxD-CONF": {
+   "cell": "MARGINAL->user-fraction-call",
+   "days": 1.3,
+   "action": "present wall-day fraction to the user; only he relaxes the <=1-day bar"
+  },
+  "PARTxD-BELOW": {
+   "cell": "FAIL->4.5-residual",
+   "days": 2.95,
+   "action": "present priced residual (2nd GPU / cloud burst / priced waiver); never relax silently"
+  },
+  "FAILxD-CONF": {
+   "cell": "MARGINAL->user-fraction-call",
+   "days": 1.5,
+   "action": "present wall-day fraction to the user; only he relaxes the <=1-day bar"
+  },
+  "FAILxD-BELOW": {
+   "cell": "FAIL->4.5-residual",
+   "days": 3.43,
+   "action": "present priced residual (2nd GPU / cloud burst / priced waiver); never relax silently"
+  }
+ },
+ "corner_finding": "PASS at L10-FULL-low (25.6k tok/s) requires budget<=2.2B; at 2.5B it is 1.13d = MARGINAL \u2014 decision table v1.1 records this"
+}
