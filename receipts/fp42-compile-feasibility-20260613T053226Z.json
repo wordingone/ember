@@ -1,0 +1,75 @@
+{
+  "ticket": "FP42-COMPILE-FEASIBILITY",
+  "ts": "20260613T053226Z",
+  "issue": 374,
+  "s3_threshold_tok_s": 25463.0,
+  "budget_tokens": 2200000000.0,
+  "assumptions": {
+    "realistic_compile_x": 1.5,
+    "realistic_fusedmuon_x": 1.5,
+    "max_plausible_per_lever_x": 2.0,
+    "model": "tok_s' = tok_s / ((1-opt_share)/s_c + opt_share/s_m); compile speeds model only, fused-muon speeds optimizer only"
+  },
+  "candidates": {
+    "c03-h1024-d20": {
+      "tok_s_eager": 16833.5,
+      "opt_wall_share": 0.4137,
+      "contaminated": false,
+      "required_compile_alone_x": 2.37,
+      "required_fusedmuon_x_at_compile_1.5": 1.531,
+      "proj_tok_s_compile1.5_fused1.5": 25250.2,
+      "proj_clears_s3_at_realistic": false,
+      "class": "FEASIBLE-JOINT-COMPILE+FUSEDMUON"
+    },
+    "h2048-d12": {
+      "tok_s_eager": 252.1,
+      "opt_wall_share": 0.7427,
+      "contaminated": true,
+      "required_compile_alone_x": null,
+      "required_fusedmuon_x_at_compile_1.5": null,
+      "proj_tok_s_compile1.5_fused1.5": 378.1,
+      "proj_clears_s3_at_realistic": false,
+      "class": "CONTAMINATED-NEEDS-SOLO-REBENCH"
+    },
+    "h2048-d14": {
+      "tok_s_eager": 312.8,
+      "opt_wall_share": 0.455,
+      "contaminated": true,
+      "required_compile_alone_x": null,
+      "required_fusedmuon_x_at_compile_1.5": null,
+      "proj_tok_s_compile1.5_fused1.5": 469.2,
+      "proj_clears_s3_at_realistic": false,
+      "class": "CONTAMINATED-NEEDS-SOLO-REBENCH"
+    },
+    "h2304-d12": {
+      "tok_s_eager": 297.6,
+      "opt_wall_share": 0.5895,
+      "contaminated": true,
+      "required_compile_alone_x": null,
+      "required_fusedmuon_x_at_compile_1.5": null,
+      "proj_tok_s_compile1.5_fused1.5": 446.4,
+      "proj_clears_s3_at_realistic": false,
+      "class": "CONTAMINATED-NEEDS-SOLO-REBENCH"
+    },
+    "h2560-d12": {
+      "tok_s_eager": 295.3,
+      "opt_wall_share": 0.6505,
+      "contaminated": true,
+      "required_compile_alone_x": null,
+      "required_fusedmuon_x_at_compile_1.5": null,
+      "proj_tok_s_compile1.5_fused1.5": 443.0,
+      "proj_clears_s3_at_realistic": false,
+      "class": "CONTAMINATED-NEEDS-SOLO-REBENCH"
+    }
+  },
+  "clean_reference_candidates": [
+    "c03-h1024-d20"
+  ],
+  "finding": "Compile alone is INSUFFICIENT: for c03 (opt_share 0.41) compile-alone needs s_c>=2.37x (implausible). \u00a73 clears only with BOTH compile AND fused-muon, each ~1.5x \u2014 but 1.5/1.5 lands at 25251, 0.8% SHORT of 25463 (thin margin; one lever must slightly over-deliver, e.g. fused 1.53x at compile 1.5x). #329 (fused-muon) is therefore LOAD-BEARING on the critical path, not a side optimization.",
+  "decision_rule": "Break BOTH walls: #373 (compile) + #329 (fused-muon). Re-bench c03 SOLO compiled+fused. Clean-re-bench the 4 contaminated candidates (parallel dispatch made their tok_s lower-bounds only). Escalation trigger: ONLY if a real compiled+fused solo re-bench is still < 25463 tok/s does the <=1-day bar become the user's call (wall-day fraction). Budget cut is NOT ours \u2014 only the user reduces scope.",
+  "caveats": [
+    "s_c/s_m independence + multiplicativity is an approximation; binding verdict = measured re-bench",
+    "4 of 5 candidates contaminated by 4-way parallel GPU dispatch (tok_s = lower bounds)",
+    "c03 solo is the only valid \u00a73 reference in this batch"
+  ]
+}
