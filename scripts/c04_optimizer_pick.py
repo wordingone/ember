@@ -119,6 +119,8 @@ def _load_batched_ns5(receipts_dir=RECEIPTS):
             r = json.load(open(p, encoding="utf-8"))
         except Exception:
             continue
+        if not isinstance(r, dict):
+            continue
         tk = str(r.get("ticket", "")).lower()
         name = os.path.basename(p).lower()
         is_bns5 = ("batched" in tk and "ns5" in tk) or ("batched-ns5" in name) \
