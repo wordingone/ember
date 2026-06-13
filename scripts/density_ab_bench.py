@@ -305,7 +305,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arm", required=True, choices=("a", "b"),
                     help="Arm A = bulk v0 mix; Arm B = curated code-only")
-    ap.add_argument("--seed", required=True, type=int, choices=(0, 1),
+    ap.add_argument("--seed", required=True, type=int, choices=(0, 1, 2),
                     help="Training seed (weight init + batch shuffle)")
     args, _ = ap.parse_known_args()
 
