@@ -347,15 +347,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="c04 batched-NS5 production bench")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--run", action="store_true", help="Run bench and emit receipt (GPU required)")
-    args = ap.parse_args()
+    args, _ = ap.parse_known_args()
 
     if args.selftest:
         selftest()
-    elif args.run:
+    else:
         path = run_and_emit()
         print(f"Receipt: {path}")
-    else:
-        ap.print_help()
 
 
 if __name__ == "__main__":
