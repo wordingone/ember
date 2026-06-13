@@ -139,6 +139,20 @@ def decide(muon_traj, adamw_traj, noise_floor, T=TERMINAL_STEP):
         "adamw_days": round(2.2e9 / ADAMW_TOK_S / 86400, 3)}
 
 
+def _is_source_fp44(ticket, basename=""):
+    """True iff this is eli's SOURCE optimizer-equiv receipt (the A/B the gate
+    scores), NOT the gate's OWN verdict output (FP44-HORIZON-EQUIV-GATE), which
+    also contains 'horizon'+'equiv' and would otherwise win on a newer ts and
+    SCHEMA_MISMATCH. The discriminator is 'optimizer' (source) vs 'gate' (output);
+    the filename guard is belt-and-suspenders against future ticket drift."""
+    tk = str(ticket or "").lower()
+    nm = str(basename or "").lower()
+    if "horizon-equiv-gate" in nm:           # the gate's own output file, never an input
+        return False
+    return tk == "fp44-horizon-optimizer-equiv" \
+        or ("horizon" in tk and "optimizer" in tk and "equiv" in tk)
+
+
 def _load_receipt():
     chosen = None
     for p in sorted(glob.glob(f"{RECEIPTS}/*.json")):
@@ -146,8 +160,7 @@ def _load_receipt():
             r = json.load(open(p))
         except Exception:
             continue
-        tk = str(r.get("ticket", "")).lower()
-        if "horizon" in tk and "equiv" in tk or r.get("ticket") == "FP44-HORIZON-OPTIMIZER-EQUIV":
+        if _is_source_fp44(r.get("ticket"), os.path.basename(p)):
             if chosen is None or r.get("ts", "") > chosen.get("ts", ""):
                 chosen = r
     return chosen
@@ -340,6 +353,16 @@ def selftest():
     c_sm = sm.get("status") == "SCHEMA_MISMATCH"
     print(f"  [{'PASS' if c_sm else 'FAIL'}] unknown arms -> SCHEMA_MISMATCH")
     ok = ok and c_sm
+
+    # discovery discriminator: source receipt picked, gate's OWN output excluded
+    # (regression: both contain horizon+equiv; the gate-output newer ts won and
+    #  SCHEMA_MISMATCHed, silently poisoning the pick the moment batched-NS5 lands)
+    c_src = (_is_source_fp44("FP44-HORIZON-OPTIMIZER-EQUIV")
+             and not _is_source_fp44("FP44-HORIZON-EQUIV-GATE")
+             and not _is_source_fp44("FP44-HORIZON-EQUIV-GATE",
+                                     "fp44-horizon-equiv-gate-20260613T111057Z.json"))
+    print(f"  [{'PASS' if c_src else 'FAIL'}] discovery picks SOURCE, excludes gate-output")
+    ok = ok and c_src
 
     print("FP44_HORIZON_EQUIV_GATE_SELFTEST_" + ("PASS" if ok else "FAIL"))
     return ok
