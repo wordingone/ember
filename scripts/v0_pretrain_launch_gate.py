@@ -168,10 +168,26 @@ def g_budget(launch_date):
                      f"{ENVELOPE_DAYS_FLOOR} d unstacked envelope")
 
 
+def _config_sha256():
+    """Return sha256 of the live v0 pretrain config (sort_keys for stability)."""
+    with open(v0_config_check.CONFIG, encoding="utf-8") as f:
+        cfg = json.load(f)
+    return hashlib.sha256(json.dumps(cfg, sort_keys=True).encode()).hexdigest()
+
+
 def _check_efficiency_receipt(d):
     """Pure logic: validate a parsed efficiency receipt dict against H1 schema.
     Returns list of violation strings (empty = clean)."""
     violations = []
+    if not d.get("licenses_config"):
+        violations.append(
+            "missing 'licenses_config' — receipt must name the arch config it "
+            "enumerates levers FOR (e.g. 'c03-qat-v0'); prevents cross-arch "
+            "stale licensing (#365)")
+    if not d.get("config_sha256"):
+        violations.append(
+            "missing 'config_sha256' — receipt must carry sha256 of the launch "
+            "config it was authored against (#365)")
     levers = d.get("levers")
     if not isinstance(levers, dict):
         violations.append("'levers' field missing or not a dict")
@@ -223,6 +239,14 @@ def g_efficiency():
     violations = _check_efficiency_receipt(d)
     if violations:
         return "BLOCKED", f"{name} efficiency receipt FAIL: {violations}"
+    # Cross-arch binding check: receipt must have been authored for the live config.
+    receipt_sha = d.get("config_sha256", "")
+    live_sha = _config_sha256()
+    if receipt_sha != live_sha:
+        return "BLOCKED", (
+            f"{name} config_sha256 mismatch — receipt licenses '{d.get('licenses_config')}' "
+            f"(sha ...{receipt_sha[-8:]}), live config sha ...{live_sha[-8:]}; "
+            "re-emit efficiency receipt against the current launch config (#365)")
     levers = d["levers"]
     applied = [k for k, v in levers.items() if v["status"] == "receipted-APPLIED"]
     killed = [k for k, v in levers.items() if v["status"] == "receipted-KILLED"]
@@ -348,6 +372,7 @@ def _print(rows):
 
 
 def _selftest():
+    global NC
     from datetime import date
     # green-today rows (these are the frozen contract; if one breaks the
     # contract drifted and the selftest SHOULD fail)
@@ -400,34 +425,70 @@ def _selftest():
     # g_efficiency pure-logic tests (H1 — docs/hardest-problems-register-v1.md)
     _all_levers_applied = {k: {"status": "receipted-APPLIED", "receipt": "x.json"}
                            for k in EFFICIENCY_LEVERS}
-    # PASS: all levers applied
-    assert _check_efficiency_receipt({"levers": _all_levers_applied}) == [], \
-        _check_efficiency_receipt({"levers": _all_levers_applied})
+    _bound = {"licenses_config": "c03-qat-v0", "config_sha256": "a" * 64,
+              "levers": _all_levers_applied}
+    # PASS: all levers applied with config binding
+    assert _check_efficiency_receipt(_bound) == [], _check_efficiency_receipt(_bound)
     # PASS: waiver with explicit price (the 12c050e7 corrected case)
     waived_with_price = copy.deepcopy(_all_levers_applied)
     waived_with_price["batch_size"] = {"status": "WAIVED", "wall_days_cost": 1.157}
-    assert _check_efficiency_receipt({"levers": waived_with_price}) == [], \
-        _check_efficiency_receipt({"levers": waived_with_price})
+    assert _check_efficiency_receipt({**_bound, "levers": waived_with_price}) == [], \
+        _check_efficiency_receipt({**_bound, "levers": waived_with_price})
     # FAIL: 12c050e7 negative — WAIVED without wall_days_cost (silent skip)
     silent_waiver = copy.deepcopy(_all_levers_applied)
     silent_waiver["batch_size"] = {"status": "WAIVED"}
-    v = _check_efficiency_receipt({"levers": silent_waiver})
+    v = _check_efficiency_receipt({**_bound, "levers": silent_waiver})
     assert any("wall_days_cost" in msg and "H1" in msg for msg in v), v
     # FAIL: lever absent from enumeration
-    incomplete = {k: v for k, v in _all_levers_applied.items()
+    incomplete = {k: val for k, val in _all_levers_applied.items()
                   if k != "duty_cycle"}
-    v2 = _check_efficiency_receipt({"levers": incomplete})
+    v2 = _check_efficiency_receipt({**_bound, "levers": incomplete})
     assert any("duty_cycle" in msg for msg in v2), v2
     # FAIL: receipted-APPLIED missing receipt pointer
     no_ptr = copy.deepcopy(_all_levers_applied)
     no_ptr["batch_size"] = {"status": "receipted-APPLIED"}
-    v3 = _check_efficiency_receipt({"levers": no_ptr})
+    v3 = _check_efficiency_receipt({**_bound, "levers": no_ptr})
     assert any("batch_size" in msg and "receipt" in msg for msg in v3), v3
     # FAIL: invalid status
     bad_status = copy.deepcopy(_all_levers_applied)
     bad_status["batch_size"] = {"status": "IGNORED"}
-    v4 = _check_efficiency_receipt({"levers": bad_status})
+    v4 = _check_efficiency_receipt({**_bound, "levers": bad_status})
     assert any("invalid status" in msg for msg in v4), v4
+    # FAIL: missing licenses_config
+    no_lic = {"levers": _all_levers_applied}
+    v5 = _check_efficiency_receipt(no_lic)
+    assert any("licenses_config" in msg for msg in v5), v5
+    # FAIL: missing config_sha256
+    no_sha = {"licenses_config": "c03-qat-v0", "levers": _all_levers_applied}
+    v6 = _check_efficiency_receipt(no_sha)
+    assert any("config_sha256" in msg for msg in v6), v6
+    # PASS: both fields present (pure schema check — sha value not validated here)
+    both = {"licenses_config": "c03-qat-v0", "config_sha256": "a" * 64,
+            "levers": _all_levers_applied}
+    assert _check_efficiency_receipt(both) == [], _check_efficiency_receipt(both)
+    # g_efficiency() live config-bind: BLOCKED on sha mismatch (today-case fixture)
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        fake_receipts = os.path.join(td, "receipts")
+        os.makedirs(fake_receipts)
+        mismatched = {"ticket": "V0-LAUNCH-EFFICIENCY",
+                      "ts": "20260612T220622Z",
+                      "sha_convention": "bytes on disk as-is",
+                      "licenses_config": "c03-qat-v0",
+                      "config_sha256": "0" * 64,  # wrong sha — today-case
+                      "levers": _all_levers_applied}
+        p = os.path.join(fake_receipts, "launch-efficiency-20260612T220622Z.json")
+        with open(p, "w") as f:
+            json.dump(mismatched, f)
+        # patch NC directly; self-import under __main__ would load a second copy
+        # and patching it would not affect the globals that g_efficiency() reads
+        old_nc = NC
+        NC = td
+        try:
+            st_m, dt_m = g_efficiency()
+            assert st_m == "BLOCKED" and "config_sha256 mismatch" in dt_m, (st_m, dt_m)
+        finally:
+            NC = old_nc
     # g_efficiency() time-robust: BLOCKED iff no receipt on disk
     eff_cands = glob.glob(f"{NC}/{EFFICIENCY_RECEIPT_GLOB}")
     if not eff_cands:
