@@ -40,7 +40,20 @@ cfirst=1
 # (duplicate / won't-do), not a silent drop of completed work. The violation we
 # hunt is COMPLETED-without-merged-PR. Exempt NOT_PLANNED from the loop so a
 # legitimate dup-close (e.g. #369 = dup of #368) does not false-flag every tick.
+# NOTE 4 (#373, 2026-06-13): issues whose deliverable landed via a merged PR that
+# did NOT use a "Closes #N" keyword (so GitHub recorded no closing-PR link and the
+# issue shows a manual button-close, closer=null). Leo-verified complete against
+# the named merged PR. Format "issue:pr" space-separated. #373's compile patch
+# landed via merged PR #380 (titled "eng-353…", no Closes-keyword for 373).
+VERIFIED_VIA_PR="373:380"
 for n in $(echo "$CLOSED_JSON" | jq -r '.[] | select(.stateReason != "NOT_PLANNED") | .number' || true); do
+  vpr=$(echo "$VERIFIED_VIA_PR" | tr ' ' '\n' | awk -F: -v i="$n" '$1==i{print $2}')
+  if [ -n "$vpr" ]; then
+    [ $cfirst -eq 0 ] && COMMIT_CLOSED="$COMMIT_CLOSED,"
+    COMMIT_CLOSED="$COMMIT_CLOSED{\"issue\":$n,\"closed_by\":\"verified-pr:$vpr\"}"
+    cfirst=0
+    continue
+  fi
   prs=$(gh api graphql -f query="query{repository(owner:\"$OWNER\",name:\"$NAME\"){issue(number:$n){closedByPullRequestsReferences(first:20){nodes{merged}}}}}" \
         --jq '[.data.repository.issue.closedByPullRequestsReferences.nodes[] | select(.merged==true)] | length' \
         2>/dev/null || echo "QUERY_FAIL")
