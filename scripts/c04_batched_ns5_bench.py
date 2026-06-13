@@ -180,10 +180,14 @@ def _run_bench() -> dict:
               f"allocated={_alloc_gib:.3f}GiB reserved={_reserv_gib:.3f}GiB "
               f"recompiles={_recomp_delta}", flush=True)
 
+    # Release caching-allocator pool from step-1 transients (hypothesis A fix)
+    torch.cuda.empty_cache()
     torch.cuda.synchronize()
     free_b, _ = torch.cuda.mem_get_info()
     free_gib = free_b / (1 << 30)
-    print(f"[c04_ns5_bench] VRAM post-warmup: {free_gib:.2f}/{total_gib:.2f} GiB free "
+    alloc_gib_post = torch.cuda.memory_allocated() / (1 << 30)
+    print(f"[c04_ns5_bench] VRAM post-warmup (post-empty_cache): {free_gib:.2f}/{total_gib:.2f} GiB free "
+          f"allocated={alloc_gib_post:.3f}GiB "
           f"(need {MARGIN_GIB} GiB margin)", flush=True)
     if free_gib < MARGIN_GIB:
         return {"status": "SKIPPED-MARGIN", "free_vram_gib": round(free_gib, 3),
