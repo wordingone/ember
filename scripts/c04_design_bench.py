@@ -74,10 +74,13 @@ def _find_budget_b() -> float:
         return DEFAULT_BUDGET_B
     try:
         r = json.loads(receipts[-1].read_text())
-        # budget_b may be stored as 'budget_b' or inferred from the c04 pick
         b = r.get("budget_b") or r.get("planned_budget_b")
         if b:
             return float(b)
+        # c04_pick.budget_hi_cap is the cap for the FULL/PASS route
+        hi_cap = r.get("c04_pick", {}).get("budget_hi_cap")
+        if hi_cap:
+            return float(hi_cap)
     except Exception:
         pass
     return DEFAULT_BUDGET_B
@@ -165,18 +168,21 @@ def _bench_cell(cfg: dict, candidate_name: str, batch: int, grad_ckpt: bool,
         backbone.train(); head.train(); mtp_heads.train()
         ce_fn = ts.chunked_cross_entropy
 
+        # Apply fake_quant ONCE before compile — not per-step (model.modules()
+        # iteration is not dynamo-traceable inside a compiled step function).
+        if variant != "bf16":
+            fp19._apply_fake_quant(backbone, variant)
+
         def step():
             ids  = torch.randint(0, VOCAB, (batch, SEQ), device="cuda")
             tgt0 = torch.roll(ids, -1, dims=1)
             tgt_mtp = [torch.roll(ids, -(k + 2), dims=1) for k in range(MTP_N_HEADS)]
-            saved = fp19._apply_fake_quant(backbone, variant)
             hidden = backbone(input_ids=ids).last_hidden_state
             h_flat = hidden.reshape(-1, hidden.shape[-1])
             primary_ce, _ = ce_fn(h_flat, head.weight, tgt0.reshape(-1), chunk_tokens=1024)
             mtp_ces = [ce_fn(h_flat, mh.weight, tgt_mtp[k].reshape(-1), chunk_tokens=1024)[0]
                        for k, mh in enumerate(mtp_heads)]
             loss = ts.mtp_total_loss(primary_ce, mtp_ces, MTP_WEIGHT)
-            fp19._restore(saved)
             loss.backward()
             t_opt_start = time.perf_counter()
             for o in opts.values():
@@ -186,24 +192,34 @@ def _bench_cell(cfg: dict, candidate_name: str, batch: int, grad_ckpt: bool,
                 o.zero_grad(set_to_none=True)
             return t_opt
 
+        compile_status = "SKIP"
+        step_fn = step
         if compiled:
-            step_fn = torch.compile(step, fullgraph=True)
+            step_fn_c = torch.compile(step, fullgraph=True)
             print(f"[c04_bench] {cell_name}: compiling ...", flush=True)
             try:
-                step_fn()
+                step_fn_c()
+                compile_status = "PASS"
+                step_fn = step_fn_c
             except torch._dynamo.exc.Unsupported as e:
-                out["status"] = "COMPILE-BREAK"
-                out["error"] = str(e)[:300]
+                compile_status = "BREAK"
+                out["compile_error"] = str(e)[:300]
+                print(f"[c04_bench] {cell_name}: COMPILE-BREAK — falling back to eager", flush=True)
+                step_fn = step
+            except Exception as e:
+                compile_status = "ERROR"
+                out["compile_error"] = str(e)[:300]
+                out["status"] = "COMPILE-ERROR"
                 return out
-        else:
-            step_fn = step
+        out["compile_status"] = compile_status
+        out["c4_pass"] = (compile_status == "PASS")
 
         print(f"[c04_bench] {cell_name}: warmup {WARMUP} ...", flush=True)
-        opt_times = []
-        for i in range(WARMUP):
-            t_opt = step_fn()
-            opt_times.append(t_opt)
-            print(f"[c04_bench]   warmup {i+1}/{WARMUP}", flush=True)
+        # When compile_status=="PASS", first step already ran during compilation.
+        remaining_warmup = WARMUP - (1 if compile_status == "PASS" else 0)
+        for i in range(remaining_warmup):
+            step_fn()
+            print(f"[c04_bench]   warmup {i+1}/{remaining_warmup}", flush=True)
 
         torch.cuda.synchronize()
         free_b, _ = torch.cuda.mem_get_info()
@@ -303,6 +319,7 @@ def main(candidate_name: str | None = None):
         r = _bench_cell(cfg, name, batch, grad_ckpt=grad_ckpt,
                         compiled=True, variant="qat")
         print(f"[c04_bench] {arm}: {r.get('status')} "
+              f"compile={r.get('compile_status','N/A')} c4={r.get('c4_pass','?')} "
               f"tok/s={r.get('tok_s_paced','?')} "
               f"opt_share={r.get('optimizer_wall_share','?')}",
               flush=True)
