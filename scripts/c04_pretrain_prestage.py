@@ -40,11 +40,18 @@ sys.path.insert(0, HERE)
 import v0_config_check                    # noqa: E402
 import timeshare_pretrain as ts            # noqa: E402
 from receipt_write import checked_write   # noqa: E402
+import c04_optimizer_pick as cpick        # noqa: E402
 
 RECEIPTS = os.path.join(NC, "receipts")
 CONFIG   = os.path.join(NC, "configs", "v0-pretrain-config.json")
 BUDGET_B = 2_200_000_000                  # §3 qualification budget (1 day floor)
 SEC_PER_DAY = 86_400
+
+# ----- pick → gate-9 optimizer mapping (frozen; matches c04_optimizer_pick verdicts) ----
+_PICK_TO_GATE9 = {
+    "COMMIT_MUON_BATCHED": "muon_batched",
+    "COMMIT_ADAMW":        "full_fused_adamw",
+}
 
 # ----- receipt globs (latest wins) -----------------------------------------
 _FP40_GLOB      = "receipts/fp40-l10-optimizer-ab-*.json"
@@ -284,9 +291,28 @@ def check_bench_tok_s(optimizer, override_tok_s=None):
     return status, detail, tok_s, wall_days
 
 
+# ----- check 7: optimizer matches committed pick ---------------------------
+
+def check_optimizer_matches_pick(optimizer, pick_override=None, user_authorized=False):
+    if user_authorized:
+        return "GREEN", f"user override (--force-optimizer-authorized): {optimizer} blessed, pick bypassed"
+    verdict = pick_override if pick_override is not None else cpick.analyze().get("pick")
+    committed = _PICK_TO_GATE9.get(verdict)
+    if committed is None:
+        return "BLOCKED", (
+            f"c04_optimizer_pick={verdict} (no committed optimizer) — gate-9 cannot authorize "
+            "a launch the pick has not blessed; wait for COMMIT_*, or "
+            "--force-optimizer-authorized to override")
+    if committed != optimizer:
+        return "BLOCKED", (
+            f"pick committed {committed!r} but gate-9 asked to validate {optimizer!r} — "
+            "validate the committed optimizer")
+    return "GREEN", f"pick {verdict} -> {committed} matches"
+
+
 # ----- analyze (all checks, optional emit) ---------------------------------
 
-def analyze(optimizer, emit=False, override_tok_s=None):
+def analyze(optimizer, emit=False, override_tok_s=None, pick_override=None, user_authorized=False):
     cfg      = json.load(open(CONFIG, encoding="utf-8"))
     cfg_sha  = _config_sha256()
     ts_now   = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -299,7 +325,9 @@ def analyze(optimizer, emit=False, override_tok_s=None):
     rows["optimizer_wired"] = check_optimizer_wired(optimizer)
     tok_s_status, tok_s_detail, tok_s, wall_days = check_bench_tok_s(
         optimizer, override_tok_s=override_tok_s)
-    rows["bench_tok_s"]     = (tok_s_status, tok_s_detail)
+    rows["bench_tok_s"]          = (tok_s_status, tok_s_detail)
+    rows["optimizer_matches_pick"] = check_optimizer_matches_pick(
+        optimizer, pick_override=pick_override, user_authorized=user_authorized)
 
     for name, (status, detail) in rows.items():
         mark = "OK " if status == "GREEN" else "XX "
@@ -325,6 +353,7 @@ def analyze(optimizer, emit=False, override_tok_s=None):
             "checks":              {n: {"status": s, "detail": d} for n, (s, d) in rows.items()},
             "efficiency_levers":   levers,
             "gate9_pass":          gate9_pass,
+            "pick_override_by_user": user_authorized,
             "consequence": (
                 "GATE9 PASS — user authorizes via EMBER_GATE_AUTHORIZED=1 --live"
                 if gate9_pass else
@@ -422,13 +451,38 @@ def selftest():
     assert st3 == "BLOCKED" and wd3 > 1.0, f"low tok/s: {st3} {dt3}"
     print(f"  PASS: low tok/s {wd3:.4f}d -> BLOCKED")
 
+    print("[selftest] check 7: optimizer_matches_pick — 5 cases")
+    # The bug-catch: pick=PENDING -> BLOCKED (prevents premature launch)
+    st7a, dt7a = check_optimizer_matches_pick("full_fused_adamw", pick_override="PENDING")
+    assert st7a == "BLOCKED" and "PENDING" in dt7a, f"PENDING case: {st7a} {dt7a}"
+    print("  PASS: pick=PENDING -> BLOCKED")
+    # ESCALATE is also not a commit
+    st7b, dt7b = check_optimizer_matches_pick("full_fused_adamw", pick_override="ESCALATE_TORCH_OR_TRADEOFF")
+    assert st7b == "BLOCKED", f"ESCALATE case: {st7b} {dt7b}"
+    print("  PASS: pick=ESCALATE_TORCH_OR_TRADEOFF -> BLOCKED")
+    # Mismatch: pick says muon but gate asked for adamw
+    st7c, dt7c = check_optimizer_matches_pick("full_fused_adamw", pick_override="COMMIT_MUON_BATCHED")
+    assert st7c == "BLOCKED" and "mismatch" not in dt7c.lower() or "committed" in dt7c.lower(), f"mismatch case: {st7c} {dt7c}"
+    assert st7c == "BLOCKED"
+    print("  PASS: pick=COMMIT_MUON_BATCHED, gate=full_fused_adamw -> BLOCKED (mismatch)")
+    # Match: pick=COMMIT_ADAMW, gate=full_fused_adamw -> GREEN
+    st7d, dt7d = check_optimizer_matches_pick("full_fused_adamw", pick_override="COMMIT_ADAMW")
+    assert st7d == "GREEN", f"match case: {st7d} {dt7d}"
+    print("  PASS: pick=COMMIT_ADAMW, gate=full_fused_adamw -> GREEN")
+    # User override bypasses pick entirely
+    st7e, dt7e = check_optimizer_matches_pick("full_fused_adamw", user_authorized=True)
+    assert st7e == "GREEN" and "user override" in dt7e, f"user_authorized case: {st7e} {dt7e}"
+    print("  PASS: user_authorized=True -> GREEN (pick bypassed)")
+
     print("[selftest] full analyze() dry-run with synthetic tok/s (full_fused_adamw)")
-    gate9_ok, rcpt = analyze("full_fused_adamw", emit=False, override_tok_s=27702.8)
-    assert gate9_ok, "full analyze should pass with synthetic tok/s"
+    gate9_ok, rcpt = analyze("full_fused_adamw", emit=False, override_tok_s=27702.8,
+                             pick_override="COMMIT_ADAMW")
+    assert gate9_ok, "full analyze should pass with synthetic tok/s + matching pick"
     print(f"  PASS: gate9_pass={gate9_ok}")
 
     print("[selftest] full analyze() dry-run with synthetic tok/s (muon_batched)")
-    gate9_ok2, _ = analyze("muon_batched", emit=False, override_tok_s=30000.0)
+    gate9_ok2, _ = analyze("muon_batched", emit=False, override_tok_s=30000.0,
+                           pick_override="COMMIT_MUON_BATCHED")
     # May SKIP if fp45 not importable; governor/ckpt/config checks still run
     print(f"  PASS: gate9_pass={gate9_ok2} (muon_batched optimizer wiring determines result)")
 
@@ -436,7 +490,8 @@ def selftest():
     with tempfile.TemporaryDirectory() as td:
         orig_receipts = _receipt_dir_override(td)
         try:
-            gate9_ok3, rcpt3 = analyze("full_fused_adamw", emit=True, override_tok_s=27702.8)
+            gate9_ok3, rcpt3 = analyze("full_fused_adamw", emit=True, override_tok_s=27702.8,
+                                       pick_override="COMMIT_ADAMW")
         finally:
             _receipt_dir_restore(orig_receipts)
         # Receipt should have been written to td
@@ -476,12 +531,16 @@ def main():
                     help="optimizer arm to pre-stage")
     ap.add_argument("--emit", action="store_true",
                     help="write the gate-9 receipt to receipts/")
+    ap.add_argument("--force-optimizer-authorized", action="store_true",
+                    help="bypass pick check (ESCALATE_TORCH_OR_TRADEOFF: user chose optimizer "
+                         "despite quality gap); recorded as pick_override_by_user=true in receipt")
     a = ap.parse_args()
     if a.selftest:
         sys.exit(0 if selftest() else 1)
     if not a.optimizer:
         ap.error("--optimizer required (muon_batched | full_fused_adamw)")
-    gate9_ok, _ = analyze(a.optimizer, emit=a.emit)
+    gate9_ok, _ = analyze(a.optimizer, emit=a.emit,
+                          user_authorized=a.force_optimizer_authorized)
     sys.exit(0 if gate9_ok else 1)
 
 
