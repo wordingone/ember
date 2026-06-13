@@ -1,0 +1,59 @@
+{
+  "ticket": "C04-DYNAMO-PATCH",
+  "issue": "#373",
+  "ts": "2026-06-13T06:12:00Z",
+  "candidate": "h2048-d12",
+  "config": {"hidden": 2048, "layers": 12, "heads": 32, "batch_nockpt": 8},
+  "env": {
+    "torch": "2.6.0+cu124",
+    "transformers": "5.2.0",
+    "gpu": "RTX 4090"
+  },
+  "patch_file": "leo/state/nc-ladder/scripts/c04_dynamo_patch.py",
+  "patch_interface": ["apply()", "apply_compile_patch(backbone)"],
+  "blockers_fixed": [
+    {
+      "blocker": "timeshare_pretrain.chunked_cross_entropy",
+      "root_cause": "int(mask.sum()) CPU sync + data-dependent 'if n_valid==0:' branch -> UserError: Could not guard on data-dependent expression Eq(u0, 0)",
+      "fix": "tensor accumulation for n_valid, torch.where replaces data-dependent branch",
+      "probe": "c04_compile_probe6.py TEST-1: PASS"
+    },
+    {
+      "blocker": "LlamaModel.forward @merge_with_config_defaults decorator",
+      "root_cause": "func.__code__.co_varnames.__contains__('use_cache') at generic.py:865 -- __code__ introspection not dynamo-traceable",
+      "fix": "inspect.unwrap(backbone.forward.__func__) strips decorator wrapper; LlamaModel.forward handles use_cache=None via self.config.use_cache internally",
+      "probe": "c04_compile_probe7.py TEST-0+TEST-1: PASS"
+    }
+  ],
+  "remaining_limitation": {
+    "issue": "Tensor.backward() inside fullgraph=True is Unsupported in torch 2.6",
+    "effect": "compile scope limited to forward-only; loss.backward() must remain outside compiled region",
+    "workaround": "compile fwd_fn (backbone+CE+mtp_loss) separately; backward+optimizer outside",
+    "probe": "c04_compile_probe7.py TEST-2: FAIL-Unsupported: Tensor.backward"
+  },
+  "bench_results": {
+    "batch": 8,
+    "seq": 1024,
+    "mtp_heads": 2,
+    "eager_tok_s": 4737,
+    "compiled_fwd_only_tok_s": 4850,
+    "speedup": 1.024,
+    "compile_status": "PASS (forward-only fullgraph=True)"
+  },
+  "assessment": {
+    "speedup_achieved": "1.024x",
+    "speedup_target": "1.5x (per leo mail 15333)",
+    "gap": "1.5x target NOT achievable from torch.compile in torch 2.6 on h2048-d12",
+    "root_cause_of_low_speedup": "RTX 4090 + torch 2.6 + transformers 5.2 already uses FlashAttention + cuBLAS optimal kernels; inductor kernel fusion has minimal room on large matmul-dominated LLM forward passes",
+    "mode_reduce_overhead_result": "OOM at batch=8 (CUDA graph recording overhead exhausts VRAM)",
+    "implication": "compile lever contributes ~2%, not the 1.5x assumed in fp-42 two-lever plan; §3 gate plan needs revision"
+  },
+  "eli_integration_notes": "Apply both patch functions before torch.compile. Compile fwd_fn (forward-only, no backward in compiled region). In _bench_cell: extract fwd portion into separate closure, compile that, call loss.backward() + opts.step() outside the compiled region. The bench loop timing is unaffected (t_opt measured outside as before).",
+  "probes": [
+    "c04_compile_probe6.py (job d680a26f): blocker identification",
+    "c04_compile_probe7.py (job 29254bd8): patch verification",
+    "c04_compile_probe8.py (job 6d16669e): fwd-only compile + bench batch=4",
+    "c04_compile_probe9.py (job df6f4a22): fwd-only compile batch=8 + reduce-overhead"
+  ],
+  "receipt_class": "ENG"
+}
