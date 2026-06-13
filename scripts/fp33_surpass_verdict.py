@@ -128,11 +128,23 @@ def matched_compute(receipt, tol=COMPUTE_TOL):
 def _deltas(receipt):
     """Extract per-task deltas (ember - E2B) from a paired receipt."""
     if isinstance(receipt.get("per_task_delta"), list):
-        return [float(x) for x in receipt["per_task_delta"]]
+        out = []
+        for x in receipt["per_task_delta"]:
+            try:
+                out.append(float(x))
+            except (ValueError, TypeError):
+                pass
+        return out
     em = receipt.get("per_task_ember")
     z = receipt.get("per_task_e2b")
     if isinstance(em, list) and isinstance(z, list) and len(em) == len(z):
-        return [float(a) - float(b) for a, b in zip(em, z)]
+        out = []
+        for a, b in zip(em, z):
+            try:
+                out.append(float(a) - float(b))
+            except (ValueError, TypeError):
+                pass
+        return out
     return []
 
 
@@ -231,7 +243,10 @@ def eval_A3(r):
         deltas = _deltas(s)
         if not deltas:
             return _invalid("A3", f"slice '{name}' has no per-task deltas")
-        mde = float(s.get("mde", 0.0))
+        try:
+            mde = float(s.get("mde", 0.0))
+        except (ValueError, TypeError):
+            return _invalid("A3", f"slice '{name}' has non-numeric mde")
         lo, hi, mean = paired_bootstrap_ci(deltas)
         parity = lo > -mde            # parity-or-better
         sub[name] = (parity, lo, hi, mean, mde)
@@ -254,13 +269,19 @@ def eval_B1(r):
         em, z = sum(ev), sum(zv)
         b, c = _discordant(ev, zv)
     else:
-        em = int(r.get("ember_correct", -1))
-        z = int(r.get("e2b_correct", -1))
+        try:
+            em = int(r.get("ember_correct", -1))
+            z = int(r.get("e2b_correct", -1))
+        except (ValueError, TypeError):
+            return _invalid("B1", "ember_correct/e2b_correct non-numeric")
         if em < 0 or z < 0:
             return _invalid("B1", "missing ember_probe_pass/e2b_probe_pass "
                                   "vectors or ember_correct/e2b_correct counts")
         disc = r.get("discordant", {})
-        b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
+        try:
+            b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
+        except (ValueError, TypeError):
+            return _invalid("B1", "discordant b/c non-numeric")
     if em < 4:
         return _fail("B1", f"ember {em}/5 < 4 floor", distance=4 - em)
     if em <= z:
@@ -282,8 +303,11 @@ def eval_B2(r):
     if vec:
         em, z = sum(vec[0]), sum(vec[1])
     else:
-        em = int(r.get("ember_done", -1))
-        z = int(r.get("e2b_done", -1))
+        try:
+            em = int(r.get("ember_done", -1))
+            z = int(r.get("e2b_done", -1))
+        except (ValueError, TypeError):
+            return _invalid("B2", "ember_done/e2b_done non-numeric")
         if em < 0 or z < 0:
             return _invalid("B2", "missing ember_action_done/e2b_action_done "
                                   "vectors or ember_done/e2b_done counts")
@@ -307,7 +331,10 @@ def eval_B3(r):
         if not isinstance(disc, dict):
             return _invalid("B3", "missing ember_episode_pass/e2b_episode_pass "
                                   "vectors or discordant {b,c}")
-        b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
+        try:
+            b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
+        except (ValueError, TypeError):
+            return _invalid("B3", "discordant b/c non-numeric")
     p = mcnemar_exact_p(b, c)
     if b > c and p < MCNEMAR_ALPHA:
         return _pass("B3", f"ember strictly better, McNemar p={p:.4f} (b={b},c={c})")
@@ -349,6 +376,8 @@ def load_leg_receipts(receipts_dir):
             with open(path, "r", encoding="utf-8") as fh:
                 r = json.load(fh)
         except Exception:
+            continue
+        if not isinstance(r, dict):
             continue
         leg = r.get("leg")
         if leg in LEGS:
