@@ -48,6 +48,29 @@ load-bearing candidates for an LM substrate:
 
 (Claims are The Search's own, on toy tasks — labeled, not yet ember-validated.)
 
+### Citation lineage — required on every Search→ember import (Jun 2026-06-13)
+
+Per the standing citation policy (`docs/citation-policy-search-to-ember.md`):
+code lifted from The Search into ember cites either its direct prior or its
+complete predecessors, and MARKS the most unique element. For the import set
+above:
+
+- **Delta-rule forward model** (`step0778.py`/`step0785.py`) — DIRECT prior:
+  Widrow & Hoff (1960), LMS / delta rule (`W -= eta·outer(error, input)` IS the
+  delta rule). Upstream: Hebb (1949), Rosenblatt (1958).
+- **Fold memory** (`fluxcore_torch.py`) — competitive learning / SOM (Kohonen
+  1982), Hopfield (1982), Oja's rule (1982).
+- **AtomicFold** (`atomic_fold.py`) — predictive coding (Rao & Ballard 1999),
+  target-prop (Lee 2015), feedback alignment (Lillicrap 2016). **[UNIQUE]**
+  attention-weights-as-credit-signal.
+- **Living Seed** — RTRL (Williams & Zipser 1989), equilibrium-prop (Scellier &
+  Bengio 2017), Forward-Forward (Hinton 2022). **[UNIQUE]** no-separable-step R2
+  form.
+- **[UNIQUE — MOST]** local-fused-update × **quantization-native low-bit
+  weights**: validated by no one. Predecessors = the delta-rule line × quantized
+  training (Gupta 2015 stochastic rounding; QAT, Jacob 2018). This coupling is
+  the owned substrate's deep open problem — ember earns its verdict, borrows none.
+
 ## Why autograd/Adam is the thing being replaced (miner #2, R2)
 
 R2 = "∄ decomposition F = F_c ∘ F_u into independent compute and update."
