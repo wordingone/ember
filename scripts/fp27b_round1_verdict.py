@@ -226,6 +226,15 @@ def _selftest():
         p = subprocess.run([sys.executable, os.path.abspath(__file__)] + argv,
                            capture_output=True, text=True)
         assert p.returncode == 1 and "STAGED" in p.stdout, (argv, p.returncode)
+    # execution-readiness binding contract (#205): the scorer reads these frozen
+    # prereg pins BY NAME (check_sampling/check_gate). Assert they exist so a
+    # (forbidden) prereg rename is caught HERE — at selftest time, pre-pretrain —
+    # not as a KeyError at post-pretrain round-1 execution when receipts are
+    # expensive. Same class as the gate-9 same-basename guard.
+    for key in ("seed", "k", "n_tasks_l1", "n_tasks_l2"):
+        assert key in fp27.SAMPLING, f"prereg SAMPLING missing pin '{key}' the scorer binds to"
+    assert isinstance(fp27.ROUNDGATE_N, int) and fp27.ROUNDGATE_N > 0, "ROUNDGATE_N desync"
+    assert len(fp27.ROUNDGATE_BUCKETS) == 2, "ROUNDGATE_BUCKETS shape desync"
     print("FP27B_ROUND1_VERDICT_SELFTEST_PASS")
 
 
