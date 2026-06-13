@@ -18,12 +18,22 @@ per-shape product beats bf16; otherwise bf16 stays and the lever is
 receipted-killed for c04 too. No width is chosen FOR fp8 without the
 receipt.
 
-**C-2. Activation budget (L5 OOM cells, fp32-step-econ-...213856Z):** c03
-could not run no-ckpt at ANY useful batch on 24GB — a permanent ~33%
-recompute tax. c04 MUST fit no-checkpoint at its measured batch knee:
-params(bf16/qat) + optimizer state + activations(B_knee, seq) ≤ 0.80 ×
-24GB − 1.5GB margin. This is an equation the candidate grid must satisfy
-on paper first, then by a measured warmup cell.
+**C-2. Activation budget — INVERTED by production measurement (v1.2,
+2026-06-13, fp39b vs fp38d):** the original c03-derived mandate ("c04 MUST
+fit no-checkpoint at its batch knee", to escape the ~33% recompute tax) is
+FALSIFIED on the production stack. Measured: B16+ckpt+compile = **19,228
+tok/s** (fp39b) vs B8-flash-no-ckpt = **13,938 tok/s** (fp38d) — ckpt+compile
+is **1.38× FASTER**. Reason: MTP heads + chunked-CE double the activation
+budget, so no-ckpt only fits at B=8 (small-batch, launch-overhead-heavy),
+while ckpt permits B=16. The recompute tax is real but SMALLER than the
+batch-halving penalty no-ckpt forces under MTP. **Corrected constraint: c04
+picks ckpt-vs-no-ckpt by MEASURED production throughput at the design bench,
+not by mandate; current evidence favors CKPT+compile.** The memory equation
+(params + optimizer + activations ≤ 0.80×24GB − 1.5GB margin) still bounds
+the no-ckpt OPTION; it is no longer a requirement. A candidate whose
+no-ckpt knee beats its ckpt throughput on the production stack adopts
+no-ckpt; otherwise ckpt+compile is the default. The §3 bench measures both
+arms for the surviving shape.
 
 **C-3. Optimizer wall-share (fp33-e4-profiler + fp35-fused-muon-kernel-ab
 ...215202Z):** c03's Muon NS chain held 45.9% of step wall; compile-fusing
