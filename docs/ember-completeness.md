@@ -27,7 +27,7 @@ covered), OPEN (no receipt), GATED:<trigger> (blocked on a named trigger).
 | C13 | S4 | cross-session persistence of gains | yesterday's gain measurably load-bearing today (receipt) | — | OPEN |
 | C14 | S5 | fp-33 paired-protocol freeze (#255: E1-E5 engine + envelope) | protocol doc frozen pre-verdict | fp33-e1-open-base-inventory-20260612T033709Z | PART |
 | C15 | S5 | E2B-in-ember-seat baseline (#307 seat contract; #311 E2B SHAKEDOWN; #313 ember SHAKEDOWN; #268 GSM8K leg) | full paired battery, same worlds, governed | seat shakedown receipts | PART |
-| C16 | S5 | surpass receipts (both legs) | ember > E2B: ember-work + founder-likeness | — | GATED:C15 |
+| C16 | S5 | surpass receipts (both legs) | ember > E2B: ember-work + founder-likeness | verdict machine staged: scripts/fp33_surpass_verdict.py (A1..B4 conjunction, McNemar + paired-bootstrap 10k, selftest 17/17) + research/fp33-surpass-verdict-gate.md; emits the surpass receipt on leg data | GATED:C15 |
 | C17 | S6 | five un-removable invariants in code | protected paths + boot-time checksum verify | #332 stage 1 (boot_checksum) | PART |
 | C18 | S6 | resource governor on every job | VRAM frac + margin assert + pacer receipts | v0-launch-gate-20260611T075419Z | DONE |
 | C19 | S2 | probe-set reconciliation (seed23 vs checkpoint_probe) | decision note + seed23 ride receipt | fp28b-probe-reconciliation-prestage-20260612T150202Z | DONE |
