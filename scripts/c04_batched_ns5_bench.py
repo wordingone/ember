@@ -240,7 +240,7 @@ def run_and_emit() -> Path:
     }
     os.makedirs(RECEIPTS, exist_ok=True)
     path = os.path.join(RECEIPTS, f"c04-batched-ns5-bench-{receipt['ts']}.json")
-    checked_write(path, json.dumps(receipt, indent=2))
+    checked_write(path, receipt)
     print(f"[c04_ns5_bench] receipt: {path}", flush=True)
     gate = receipt.get("gate", {})
     verb = "GATE-PASS" if gate.get("gate_pass") else "GATE-FAIL"
