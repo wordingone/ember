@@ -1,0 +1,52 @@
+{
+  "ticket": "C04-DESIGN-BENCH",
+  "ts": "20260613T045101Z",
+  "issue": "#353",
+  "candidate": "h2048-d14",
+  "config": {
+    "hidden": 2048,
+    "layers": 14,
+    "heads": 32,
+    "batch_ckpt": 8,
+    "batch_nockpt": 4
+  },
+  "c1_dtype": "FP8",
+  "cells": [
+    {
+      "cell": "h2048-d14-b8-ckpt-compile-prod",
+      "candidate": "h2048-d14",
+      "batch": 8,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": true,
+      "optimizer": "muon_split",
+      "mtp_heads": 2,
+      "variant": "qat",
+      "receipt_class": "PRODUCTION",
+      "status": "COMPILE-BREAK",
+      "error": "call_method GetAttrVariable(GetSetDescriptorVariable(), co_varnames) __contains__ [ConstantVariable(str: 'use_cache')] {}\n\nfrom user code:\n   File \"/mnt/b/M/avir/eli/state/ember-eng/repo30/scripts/c04_design_bench.py\", line 173, in step\n    hidden = backbone(input_ids=ids).last_hidden_state\n  File \""
+    },
+    {
+      "cell": "h2048-d14-b4-nockpt-compile-prod",
+      "candidate": "h2048-d14",
+      "batch": 4,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": true,
+      "optimizer": "muon_split",
+      "mtp_heads": 2,
+      "variant": "qat",
+      "receipt_class": "PRODUCTION",
+      "status": "COMPILE-BREAK",
+      "error": "call_method GetAttrVariable(GetSetDescriptorVariable(), co_varnames) __contains__ [ConstantVariable(str: 'use_cache')] {}\n\nfrom user code:\n   File \"/mnt/b/M/avir/eli/state/ember-eng/repo30/scripts/c04_design_bench.py\", line 173, in step\n    hidden = backbone(input_ids=ids).last_hidden_state\n  File \""
+    }
+  ],
+  "best_cell": null,
+  "gate": {
+    "budget_b": 7000000000.0,
+    "tok_s_paced": 0.0,
+    "budget_days": Infinity,
+    "gate_pass": false
+  },
+  "receipt_class": "ENG/ARCH"
+}
