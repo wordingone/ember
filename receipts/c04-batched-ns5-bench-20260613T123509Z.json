@@ -1,0 +1,55 @@
+{
+  "ticket": "C04-BATCHED-NS5-BENCH",
+  "ts": "20260613T123509Z",
+  "candidate": "c03-h1024-d20",
+  "config": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "batch": 16,
+    "seq": 1024
+  },
+  "bench_reps": 20,
+  "compiled": true,
+  "grad_checkpointing": true,
+  "c1_dtype": "QAT",
+  "harness_sha": "629ea9f956ebc6d77804408e0fc40e9c6c171f443024603d1f0eb3222484d072",
+  "status": "OK",
+  "compile_status": "PASS",
+  "n_muon_params": 142,
+  "tok_s_paced": 7212.1,
+  "tok_s_raw": 7374.4,
+  "mean_step_ms": 2221.54,
+  "optimizer_wall_share": 0.928,
+  "mean_opt_wall_ms": 2061.54,
+  "mean_ns_phase_ms": 1648.52,
+  "free_vram_gib_post_warmup": 19.23,
+  "ns5_equiv": {
+    "per_shape": {
+      "(64, 128)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(1024, 1024)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(4096, 1024)": {
+        "max_abs_delta": 2.8e-07,
+        "pass": false
+      }
+    },
+    "max_abs_delta": 2.8e-07,
+    "gate_pass": false,
+    "gate_tol": 2e-07
+  },
+  "gate": {
+    "tok_s_paced": 7212.1,
+    "tok_s_threshold": 25463.0,
+    "tok_s_pass": false,
+    "ns5_max_delta": 2.8e-07,
+    "ns5_threshold": 2e-07,
+    "ns5_pass": false,
+    "gate_pass": false
+  }
+}
