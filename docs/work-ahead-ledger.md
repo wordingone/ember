@@ -34,6 +34,24 @@ always "X is happening, moving on to Y while X happens."
 | 19 | ~~n=400 round-1 eval battery prep~~ DISCHARGED | fp27 METHOD AMENDMENT pre-data (r2-prereg precedent): ROUNDGATE_N 100→400 (MDE 10.16pp→3.85pp, power-helper receipts cited in code); fp32_baseline_miner anchors updated (half-widths halve, 1/√n); superseding prereg FROZEN receipts/fp27-prereg-20260612T234831Z.json; battery is GENERATED (buckets 90-99, fp-23 envelope untouched) so n=400 materializes at gate time — no static manifest needed | Leo (jude verify queued) | H2 / #205 |
 | 20 | c04 §3 gate fixture prep (G-efficiency consumes c04-class launch-efficiency receipts; stage the fixture once c04 design freezes — premature before #353) | fixture + selftest rows | Eli (Leo gates) | #353 (GATED: c04 design) |
 
+**Rows 1–20 are the PRE-PIVOT pretrain chain.** After Jun's 2026-06-13 strategic
+pivot (HOLD the first real pretrain; open the owned-substrate depth track), all
+pretrain-downstream rows are HOLD-gated; only row 6 (sp-3b audit tightenings,
+standing till 06-20) and row 20 (c04 fixture — now moot under the HOLD) remain.
+The active goal's pre-stageable work is the depth-track table below; BUILD ticks
+consume IT top-down until the HOLD lifts.
+
+## Depth track — owned substrate (ACTIVE, post-2026-06-13 pivot, parent #104)
+
+| # | Row | Artifact + AC | Owner | Status |
+|---|-----|---------------|-------|--------|
+| DT-1 | delta-rule diagnostic prereg | docs/delta-rule-diagnostic-prereg.md (c234d6a): parity band, warm+cold arms, measured exact-layer criterion, verdict→action map — FROZEN before any receipt | Leo | **DONE** |
+| DT-2 | citation policy Search→ember | docs/citation-policy-search-to-ember.md (e7e4601) + lineage bound into the diagnostic + eli's code (15442) | Leo | **DONE** |
+| DT-3 | scale-probe prereg — does the owned fused-update track backprop next-token loss 10–50M → 0.37B? | probe template + band | Leo | GATED: DT-1 diagnostic PASS |
+| DT-4 | retro-citation audit — scan nc-ladder for already-imported Search-origin code lacking the new header (grep hit t0/t1/t1c/t4/arcade — verify real-import vs incidental string-match) | audit note + remediation list | Leo audit / Eli remediate | unblocked (low yield) |
+| DT-5 | runtime-axis (tinytorch) minimal-engine scope — what ember must own above cuBLAS/tensors | scope doc | Leo | GATED: forced-autograd boundary measured (Jun: NOT premature rewrite) |
+| DT-6 | loop-economics gate explicit (kai 15051) — a diagnostic PASS must read as verified-signal-per-GPU-hour, not "it ran"; the equal-wall-clock band IS that metric — make it explicit in the verdict prose | prereg amendment | Leo | unblocked |
+
 Standing row classes (refill sources when the table runs low): verdict-chain
 dress rehearsals for any upcoming trigger; window prep for any dated item;
 audit harness tightenings; registry revival staging; receipt hygiene;

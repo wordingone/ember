@@ -40,6 +40,16 @@ Parity is at EQUAL wall-clock, NOT equal steps — the local rule runs more step
 in the same time (no ~500ms backward). Loss-at-equal-time is the honest test;
 loss-at-equal-steps would hide the entire throughput thesis.
 
+## Loop-economics framing (kai 15051 — additive, does not change the band)
+The equal-wall-clock parity band IS the loop-economics gate: it measures
+next-token learning per GPU-hour, not "the model ran." A PASS means the owned
+fused-update produces equal-or-better verified learning signal per wall-clock
+GPU-hour than backprop — kai's "verified signal per GPU-hour" objective, made
+the deciding quantity. A merely-runnable owned core that loses on this metric is
+a FAIL here, by design: the whole point of owning the optimizer/runtime is to
+raise effective local learning rate under the single-4090 residency constraint,
+not to relabel a borrowed-economics run as owned.
+
 ## Citation lineage (required, per policy)
 `docs/citation-policy-search-to-ember.md`: header = source step0778/step0785;
 direct prior Widrow-Hoff (1960); [UNIQUE] warm-init delta-rule × next-token LM,
