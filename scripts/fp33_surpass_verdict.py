@@ -141,6 +141,30 @@ def _ci_excludes_zero_favor(deltas):
     return (lo > 0.0, lo, hi, mean)
 
 
+def _paired_pass(r, ekey, zkey):
+    """Return (ember 0/1 list, e2b 0/1 list) if both present, equal-length, ≥1.
+
+    The B-leg instruments (sp6b-replay-rig, density_ab_b1/b2) emit per-item
+    pass/fail VECTORS per seat — NOT pre-counted discordant pairs (the rig
+    explicitly defers McNemar to 'the fp-33 prereg scorer', i.e. here). This
+    derives counts + discordant pairs from those paired vectors.
+    """
+    em, z = r.get(ekey), r.get(zkey)
+    if isinstance(em, list) and isinstance(z, list) and em and len(em) == len(z):
+        return ([1 if x else 0 for x in em], [1 if x else 0 for x in z])
+    return None
+
+
+def _discordant(em, z):
+    """McNemar discordant counts from paired 0/1 vectors.
+
+    b = ember-pass / E2B-fail; c = ember-fail / E2B-pass.
+    """
+    b = sum(1 for e, x in zip(em, z) if e and not x)
+    c = sum(1 for e, x in zip(em, z) if (not e) and x)
+    return b, c
+
+
 # ---- per-leg evaluators -----------------------------------------------------
 # Each returns dict: {leg, status: PASS|FAIL|INVALID|PENDING, detail, distance}
 def eval_A1(r):
@@ -223,18 +247,26 @@ def eval_A3(r):
 def eval_B1(r):
     if r is None:
         return _pending("B1", "answers-when-spoken-to (5 probes)")
-    em = int(r.get("ember_correct", -1))
-    z = int(r.get("e2b_correct", -1))
-    if em < 0 or z < 0:
-        return _invalid("B1", "missing ember_correct/e2b_correct")
+    # Accept paired per-probe vectors (harness-native) or scalar counts.
+    vec = _paired_pass(r, "ember_probe_pass", "e2b_probe_pass")
+    if vec:
+        ev, zv = vec
+        em, z = sum(ev), sum(zv)
+        b, c = _discordant(ev, zv)
+    else:
+        em = int(r.get("ember_correct", -1))
+        z = int(r.get("e2b_correct", -1))
+        if em < 0 or z < 0:
+            return _invalid("B1", "missing ember_probe_pass/e2b_probe_pass "
+                                  "vectors or ember_correct/e2b_correct counts")
+        disc = r.get("discordant", {})
+        b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
     if em < 4:
         return _fail("B1", f"ember {em}/5 < 4 floor", distance=4 - em)
     if em <= z:
         return _fail("B1", f"ember {em} not > E2B {z}", distance=(z - em) + 1)
     both_imperfect = em < 5 and z < 5
     if both_imperfect:
-        disc = r.get("discordant", {})
-        b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
         p = mcnemar_exact_p(b, c)
         if not (b > c and p < MCNEMAR_ALPHA):
             return _fail("B1", f"both imperfect, McNemar p={p:.4f} (b={b},c={c}) "
@@ -246,10 +278,15 @@ def eval_B1(r):
 def eval_B2(r):
     if r is None:
         return _pending("B2", "agency (5 obligated actions)")
-    em = int(r.get("ember_done", -1))
-    z = int(r.get("e2b_done", -1))
-    if em < 0 or z < 0:
-        return _invalid("B2", "missing ember_done/e2b_done")
+    vec = _paired_pass(r, "ember_action_done", "e2b_action_done")
+    if vec:
+        em, z = sum(vec[0]), sum(vec[1])
+    else:
+        em = int(r.get("ember_done", -1))
+        z = int(r.get("e2b_done", -1))
+        if em < 0 or z < 0:
+            return _invalid("B2", "missing ember_action_done/e2b_action_done "
+                                  "vectors or ember_done/e2b_done counts")
     if em < 4:
         return _fail("B2", f"ember {em}/5 < 4 floor", distance=4 - em)
     if em <= z:
@@ -260,10 +297,17 @@ def eval_B2(r):
 def eval_B3(r):
     if r is None:
         return _pending("B3", "duty battery (20 episodes, McNemar)")
-    disc = r.get("discordant")
-    if not isinstance(disc, dict):
-        return _invalid("B3", "missing discordant {b,c}")
-    b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
+    # Harness-native: paired per-episode pass vectors (sp6b-replay-rig output,
+    # one per seat) → derive discordant here. Fallback: pre-counted {b,c}.
+    vec = _paired_pass(r, "ember_episode_pass", "e2b_episode_pass")
+    if vec:
+        b, c = _discordant(vec[0], vec[1])
+    else:
+        disc = r.get("discordant")
+        if not isinstance(disc, dict):
+            return _invalid("B3", "missing ember_episode_pass/e2b_episode_pass "
+                                  "vectors or discordant {b,c}")
+        b, c = int(disc.get("b", 0)), int(disc.get("c", 0))
     p = mcnemar_exact_p(b, c)
     if b > c and p < MCNEMAR_ALPHA:
         return _pass("B3", f"ember strictly better, McNemar p={p:.4f} (b={b},c={c})")
@@ -470,6 +514,48 @@ def selftest():
     chk("bootstrap constant +0.5 → lo>0", lo > 0)
     lo2, _, _ = paired_bootstrap_ci([1.0, -1.0] * 20)
     chk("bootstrap zero-centered → lo<0", lo2 < 0)
+
+    # 10. harness-native VECTOR path (sp6b-replay-rig emits per-episode pass
+    #     vectors per seat, NOT pre-counted {b,c}). B3 from paired vectors:
+    r = _synth_all_pass()
+    # 20 episodes: ember passes 18, e2b passes 5; discordant b=14,c=1 → sig
+    ember_ep = [1] * 18 + [0] * 2
+    e2b_ep =   [1] * 4 + [0] * 11 + [1] * 1 + [0] * 4   # 5 passes, arranged
+    r["B3"] = {"leg": "B3", "ember_episode_pass": ember_ep,
+               "e2b_episode_pass": e2b_ep}
+    v10 = aggregate(r)
+    chk("B3 from paired vectors → PASS", v10["legs"]["B3"]["status"] == "PASS")
+    # B1 from paired probe vectors — passing path is ember perfect 5/5 vs <5.
+    r2 = _synth_all_pass()
+    r2["B1"] = {"leg": "B1",
+                "ember_probe_pass": [1, 1, 1, 1, 1],   # 5/5 (perfect)
+                "e2b_probe_pass":   [1, 0, 0, 0, 0]}   # 1/5
+    v10b = aggregate(r2)
+    chk("B1 vectors (5/5 vs 1/5, perfect) → PASS",
+        v10b["legs"]["B1"]["status"] == "PASS")
+    # PROPERTY (frozen prereg, n=5): when BOTH imperfect the McNemar bar is
+    # unreachable (max discordant b=5,c=0 → p=0.0625 > 0.05), so ember 4/5 vs
+    # imperfect e2b FAILS B1 — faithful to the frozen bar, not a scorer choice.
+    r2b = _synth_all_pass()
+    r2b["B1"] = {"leg": "B1",
+                 "ember_probe_pass": [1, 1, 1, 1, 0],   # 4/5
+                 "e2b_probe_pass":   [0, 0, 0, 1, 0]}   # 1/5 (both imperfect)
+    v10b2 = aggregate(r2b)
+    chk("B1 both-imperfect 4/5 @n=5 (McNemar unreachable) → FAIL",
+        v10b2["legs"]["B1"]["status"] == "FAIL")
+    # B2 from paired action vectors
+    r3 = _synth_all_pass()
+    r3["B2"] = {"leg": "B2",
+                "ember_action_done": [1, 1, 1, 1, 1],
+                "e2b_action_done":   [1, 1, 0, 0, 0]}
+    v10c = aggregate(r3)
+    chk("B2 from paired vectors (5/5 vs 2/5) → PASS",
+        v10c["legs"]["B2"]["status"] == "PASS")
+    # vector path agrees with pre-counted {b,c} (same discordant → same verdict)
+    rv = {"leg": "B3", "ember_episode_pass": [1, 1, 1, 0], "e2b_episode_pass": [0, 0, 0, 1]}
+    rc = {"leg": "B3", "discordant": {"b": 3, "c": 1}}
+    chk("B3 vector ≡ pre-counted {b,c}",
+        eval_B3(rv)["status"] == eval_B3(rc)["status"])
 
     passed = sum(1 for _, ok in checks if ok)
     total = len(checks)

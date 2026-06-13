@@ -57,11 +57,24 @@ A2: {leg:"A2", ember_three_test:{held_out_transfer,matched_control,deletion},
      e2b_three_test:{...}, per_task_delta:[...transfer Δ...], compute:{...}}
 A3: {leg:"A3", slices:{mbpp:{per_task_delta:[...],mde}, gsm8k200:{...,mde}},
      compute:{...}}
-B1: {leg:"B1", ember_correct:int(/5), e2b_correct:int, discordant:{b,c}?}
-B2: {leg:"B2", ember_done:int(/5), e2b_done:int}
-B3: {leg:"B3", episodes:20, discordant:{b,c}}   # b=ember✓/E2B✗, c=ember✗/E2B✓
+B1: {leg:"B1", ember_probe_pass:[0/1×5], e2b_probe_pass:[0/1×5]}   # harness-native
+    | or scalar: {ember_correct:int(/5), e2b_correct:int, discordant:{b,c}?}
+B2: {leg:"B2", ember_action_done:[0/1×5], e2b_action_done:[0/1×5]}  # harness-native
+    | or scalar: {ember_done:int(/5), e2b_done:int}
+B3: {leg:"B3", ember_episode_pass:[0/1×20], e2b_episode_pass:[0/1×20]}  # harness-native
+    | or pre-counted: {discordant:{b,c}}   # b=ember✓/E2B✗, c=ember✗/E2B✓
 B4: {leg:"B4", receipt_exists:true, dispatched_through_harness:true}
 ```
+
+**B-leg vectors are the harness-native form.** The sp6b-replay-rig (B3) and the
+B1/B2 instruments emit per-item pass/fail VECTORS per seat — the rig explicitly
+defers McNemar to "the fp-33 prereg scorer" (here). The scorer pairs the two
+seats' vectors and derives the discordant counts (b,c) itself; pre-counted
+{b,c} is also accepted. **Frozen-bar property (n=5):** B1/B2 with 5 probes and
+*both* seats imperfect can't reach McNemar p<0.05 (max discordant b=5,c=0 →
+p=0.0625), so B1/B2 effectively require ember perfect (5/5) whenever the
+opponent is imperfect. This is the frozen prereg's bar, not a scorer choice —
+only the user moves it.
 
 Multiple receipts for one leg → latest by filename wins. Missing leg → PENDING.
 
