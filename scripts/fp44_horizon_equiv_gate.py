@@ -72,8 +72,9 @@ ADAMW_ARM_KEYS = ("adamw", "full_fused_adamw", "fused_adamw")
 
 
 def _traj(arm):
-    """Pull the {step: val_loss} trajectory from an arm block, tolerant of keys."""
-    for k in ("val_loss", "val_loss_nats", "losses_at", "val_loss_at"):
+    """Pull the {step: val_loss} trajectory from an arm block, tolerant of keys.
+    `val_losses` (plural) is eli's eng/329c spelling; the rest are doc spellings."""
+    for k in ("val_loss", "val_losses", "val_loss_nats", "losses_at", "val_loss_at"):
         if isinstance(arm.get(k), dict):
             return {str(s): float(v) for s, v in arm[k].items() if v is not None}
     return {}
@@ -159,6 +160,12 @@ def score_receipt(r):
     arms = r.get("arms") or r.get("cells") or {}
     if isinstance(arms, list):  # cells-as-list fallback
         arms = {c.get("arm") or c.get("cell"): c for c in arms}
+    if not arms:
+        # eli's eng/329c schema: no `arms` block — per-arm results sit at the top
+        # level as {muon,adamw}_result, each {arm, val_losses, ...}. Build the
+        # arms map from any *_result dict carrying an `arm` label + a trajectory.
+        arms = {v["arm"]: v for k, v in r.items()
+                if k.endswith("_result") and isinstance(v, dict) and v.get("arm")}
     muon = _pick_arm(arms, MUON_ARM_KEYS)
     adamw = _pick_arm(arms, ADAMW_ARM_KEYS)
     if not muon or not adamw:
@@ -170,8 +177,12 @@ def score_receipt(r):
     # silently miss a real ~0.6-nat floor and fall back to DEFAULT 0.05 — a far
     # TIGHTER floor that would FALSE-ESCALATE a within-noise delta to a user
     # decision (delta -0.3 is equivalent under 0.6 but Muon-better under 0.05).
+    # eli nests the derived floor under noise_floor_run.{derived_threshold,
+    # noise_floor}; top-level spellings are the doc convention. Read both.
+    nfr = r.get("noise_floor_run") if isinstance(r.get("noise_floor_run"), dict) else {}
     derived = (r.get("noise_floor_nats") or r.get("derived_threshold_nats")
-               or r.get("noise_floor") or r.get("derived_threshold") or 0.0)
+               or r.get("noise_floor") or r.get("derived_threshold")
+               or nfr.get("derived_threshold") or nfr.get("noise_floor") or 0.0)
     seed_spread = _seed_spread_at_T(adamw) or _seed_spread_at_T(muon) or 0.0
     floor_candidates = {"derived": float(derived),
                         "seed_spread": float(seed_spread),
@@ -302,6 +313,27 @@ def selftest():
     print(f"  [{'PASS' if c_def else 'FAIL'}] no derived floor -> source 'default' (red flag) "
           f"src={s_def.get('noise_floor_source')}")
     ok = ok and c_def
+
+    # eli's eng/329c REAL schema (the exact shape of the landed receipt
+    # fp44-horizon-optimizer-equiv-20260613T102516Z): NO `arms` block — per-arm
+    # {muon,adamw}_result with val_losses (plural); noise floor nested under
+    # noise_floor_run.derived_threshold. Locks the loader against regression.
+    r_eli = {"ticket": "FP44-HORIZON-OPTIMIZER-EQUIV",
+             "noise_floor_run": {"derived_threshold": 0.605468, "noise_floor": 0.605468},
+             "muon_result": {"arm": "muon_split_baseline",
+                             "val_losses": {"250": 8.86, "500": 7.74, "1000": 6.38,
+                                            "1500": 7.08, "2000": 6.2305}},
+             "adamw_result": {"arm": "full_fused_adamw",
+                              "val_losses": {"250": 9.39, "500": 8.98, "1000": 7.32,
+                                             "1500": 7.39, "2000": 6.9766}}}
+    s_eli = score_receipt(r_eli)
+    c_eli = (s_eli.get("status") == "SCORED"
+             and s_eli.get("verdict") == "ESCALATE_USER_TRADEOFF"
+             and s_eli.get("noise_floor_source") == "derived"
+             and abs(s_eli.get("noise_floor", 0) - 0.605468) < 1e-6)
+    print(f"  [{'PASS' if c_eli else 'FAIL'}] eli real schema (muon_result/adamw_result/"
+          f"noise_floor_run) -> {s_eli.get('verdict')} src={s_eli.get('noise_floor_source')}")
+    ok = ok and c_eli
 
     # schema-mismatch path
     sm = score_receipt({"arms": {"sgd": {"val_loss": {"2000": 1.0}}}})
