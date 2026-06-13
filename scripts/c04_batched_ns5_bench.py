@@ -180,6 +180,12 @@ def _run_bench() -> dict:
               f"allocated={_alloc_gib:.3f}GiB reserved={_reserv_gib:.3f}GiB "
               f"recompiles={_recomp_delta}", flush=True)
 
+    # Per-shape NS timing from last warmup step (diagnostic — which group eats the NS budget)
+    if muon_opt and hasattr(muon_opt, '_per_shape_ns_ms') and muon_opt._per_shape_ns_ms:
+        print(f"[c04_ns5_bench] per-shape NS timing (last warmup step):", flush=True)
+        for _sh, _ms in sorted(muon_opt._per_shape_ns_ms.items()):
+            print(f"[c04_ns5_bench]   {_sh}: {_ms:.2f}ms", flush=True)
+
     # Release caching-allocator pool from step-1 transients (hypothesis A fix)
     torch.cuda.empty_cache()
     torch.cuda.synchronize()
@@ -198,12 +204,17 @@ def _run_bench() -> dict:
     # Timed bench
     print(f"[c04_ns5_bench] bench {TIMED} steps ...", flush=True)
     step_times, opt_wall_times, ns_times = [], [], []
+    per_shape_ns_accum: dict = {}
     t0 = time.perf_counter()
     for i in range(TIMED):
         t_s = time.perf_counter()
         t_opt, ns_ms = step()
         torch.cuda.synchronize()
         t_step = time.perf_counter() - t_s
+        # Capture per-shape timing before next reset_ns_timer clears it
+        if muon_opt and hasattr(muon_opt, '_per_shape_ns_ms'):
+            for _sh, _ms in muon_opt._per_shape_ns_ms.items():
+                per_shape_ns_accum[_sh] = per_shape_ns_accum.get(_sh, 0.0) + _ms
         time.sleep(PACE_S)
         step_times.append(t_step)
         opt_wall_times.append(t_opt)
@@ -231,6 +242,14 @@ def _run_bench() -> dict:
     tok_s_gate = tok_s_paced >= GATE_TOK_S
     gate_pass  = tok_s_gate and ns5_gate
 
+    per_shape_ns_mean_ms = {
+        sh: round(total / TIMED, 2) for sh, total in sorted(per_shape_ns_accum.items())
+    } if per_shape_ns_accum else {}
+    if per_shape_ns_mean_ms:
+        print(f"[c04_ns5_bench] per-shape NS mean over {TIMED} steps:", flush=True)
+        for _sh, _ms in per_shape_ns_mean_ms.items():
+            print(f"[c04_ns5_bench]   {_sh}: {_ms:.2f}ms", flush=True)
+
     result = {
         "status": "OK",
         "compile_status": compile_status,
@@ -241,6 +260,7 @@ def _run_bench() -> dict:
         "optimizer_wall_share": round(opt_wall_share, 4),
         "mean_opt_wall_ms": round(mean_opt * 1000, 2),
         "mean_ns_phase_ms":  round(mean_ns_ms, 2),
+        "per_shape_ns_phase_mean_ms": per_shape_ns_mean_ms,
         "free_vram_gib_post_warmup": round(free_gib, 2),
         "ns5_equiv": {
             "per_shape": ns5_eq,
