@@ -80,7 +80,7 @@ def _run_bench() -> dict:
     backbone, head, mtp_heads = fp45._build_model(grad_ckpt=GRAD_CKPT)
     backbone.train(); head.train(); mtp_heads.train()
 
-    muon_opt, adamw_opt, n_muon = fp45._build_opts(backbone, head, mtp_heads, "muon-batched")
+    muon_opt, adamw_opt, n_muon = fp45._build_opts(backbone, head, mtp_heads, "muon-batched", compiled_ns5=True)
 
     # BLOCKER-1 (chunked_ce cpu-sync) + BLOCKER-2 (co_varnames decorator)
     c04_dynamo_patch.apply()
@@ -138,16 +138,21 @@ def _run_bench() -> dict:
         tgt_m = [torch.roll(ids, -(k + 2), dims=1) for k in range(fp45.MTP_N_HEADS)]
         loss = fwd_call(ids, tgt0, tgt_m)
         loss.backward()
-        t_opt_start = time.perf_counter()
+        t_muon_start = time.perf_counter()
         if muon_opt:
             muon_opt.reset_ns_timer()
             muon_opt.step()
+        t_muon = time.perf_counter() - t_muon_start
+        t_adamw_start = time.perf_counter()
         adamw_opt.step()
-        t_opt = time.perf_counter() - t_opt_start
+        t_adamw = time.perf_counter() - t_adamw_start
+        t_opt = t_muon + t_adamw
         ns_ms = muon_opt._last_ns_ms if muon_opt else 0.0
+        mom_ms = muon_opt._last_momentum_ms if muon_opt and hasattr(muon_opt, '_last_momentum_ms') else 0.0
+        upd_ms = muon_opt._last_update_ms if muon_opt and hasattr(muon_opt, '_last_update_ms') else 0.0
         if muon_opt: muon_opt.zero_grad(set_to_none=True)
         adamw_opt.zero_grad(set_to_none=True)
-        return t_opt, ns_ms
+        return t_opt, t_muon, t_adamw, ns_ms, mom_ms, upd_ms
 
     # Warmup (compile already ran one fwd+bwd if PASS)
     remaining_warmup = WARMUP - (1 if compile_status == "PASS" else 0)
@@ -203,12 +208,13 @@ def _run_bench() -> dict:
 
     # Timed bench
     print(f"[c04_ns5_bench] bench {TIMED} steps ...", flush=True)
-    step_times, opt_wall_times, ns_times = [], [], []
+    step_times, opt_wall_times, muon_wall_times, adamw_wall_times = [], [], [], []
+    ns_times, mom_times, upd_times = [], [], []
     per_shape_ns_accum: dict = {}
     t0 = time.perf_counter()
     for i in range(TIMED):
         t_s = time.perf_counter()
-        t_opt, ns_ms = step()
+        t_opt, t_muon, t_adamw, ns_ms, mom_ms, upd_ms = step()
         torch.cuda.synchronize()
         t_step = time.perf_counter() - t_s
         # Capture per-shape timing before next reset_ns_timer clears it
@@ -218,10 +224,15 @@ def _run_bench() -> dict:
         time.sleep(PACE_S)
         step_times.append(t_step)
         opt_wall_times.append(t_opt)
+        muon_wall_times.append(t_muon)
+        adamw_wall_times.append(t_adamw)
         ns_times.append(ns_ms)
+        mom_times.append(mom_ms)
+        upd_times.append(upd_ms)
         if (i + 1) % 5 == 0:
             print(f"[c04_ns5_bench]   step {i+1}/{TIMED} "
-                  f"step={t_step*1000:.1f}ms opt={t_opt*1000:.1f}ms ns={ns_ms:.1f}ms", flush=True)
+                  f"step={t_step*1000:.1f}ms muon={t_muon*1000:.1f}ms adamw={t_adamw*1000:.1f}ms "
+                  f"ns={ns_ms:.1f}ms mom={mom_ms:.1f}ms upd={upd_ms:.1f}ms", flush=True)
 
     total_dt = time.perf_counter() - t0
     toks = TIMED * BATCH * fp45.SEQ
@@ -229,7 +240,11 @@ def _run_bench() -> dict:
     tok_s_raw   = toks / (total_dt - TIMED * PACE_S)
     mean_step   = sum(step_times) / len(step_times)
     mean_opt    = sum(opt_wall_times) / len(opt_wall_times)
+    mean_muon   = sum(muon_wall_times) / len(muon_wall_times)
+    mean_adamw  = sum(adamw_wall_times) / len(adamw_wall_times)
     mean_ns_ms  = sum(ns_times) / len(ns_times)
+    mean_mom_ms = sum(mom_times) / len(mom_times)
+    mean_upd_ms = sum(upd_times) / len(upd_times)
     opt_wall_share = mean_opt / mean_step if mean_step > 0 else 0.0
 
     # Per-shape NS5 equiv check (batched vs per-param, GPU)
@@ -250,16 +265,28 @@ def _run_bench() -> dict:
         for _sh, _ms in per_shape_ns_mean_ms.items():
             print(f"[c04_ns5_bench]   {_sh}: {_ms:.2f}ms", flush=True)
 
+    other_muon_ms = mean_muon * 1000 - mean_ns_ms - mean_mom_ms - mean_upd_ms
+    print(f"[c04_ns5_bench] opt breakdown: "
+          f"muon_wall={mean_muon*1000:.1f}ms "
+          f"(ns={mean_ns_ms:.1f} mom={mean_mom_ms:.1f} upd={mean_upd_ms:.1f} other={other_muon_ms:.1f}) "
+          f"adamw={mean_adamw*1000:.1f}ms", flush=True)
+
     result = {
         "status": "OK",
         "compile_status": compile_status,
+        "compiled_ns5": True,
         "n_muon_params": n_muon,
         "tok_s_paced": round(tok_s_paced, 1),
         "tok_s_raw":   round(tok_s_raw, 1),
         "mean_step_ms": round(mean_step * 1000, 2),
         "optimizer_wall_share": round(opt_wall_share, 4),
         "mean_opt_wall_ms": round(mean_opt * 1000, 2),
+        "mean_muon_wall_ms": round(mean_muon * 1000, 2),
+        "mean_adamw_wall_ms": round(mean_adamw * 1000, 2),
         "mean_ns_phase_ms":  round(mean_ns_ms, 2),
+        "mean_momentum_ms":  round(mean_mom_ms, 2),
+        "mean_update_ms":    round(mean_upd_ms, 2),
+        "mean_other_muon_ms": round(other_muon_ms, 2),
         "per_shape_ns_phase_mean_ms": per_shape_ns_mean_ms,
         "free_vram_gib_post_warmup": round(free_gib, 2),
         "ns5_equiv": {
