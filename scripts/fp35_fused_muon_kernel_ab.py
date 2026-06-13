@@ -24,8 +24,10 @@ Live run 12c050e7 NOT touched.
 Selftest: python fp35_fused_muon_kernel_ab.py --selftest
   Marker: MUON_FUSED_AB_SELFTEST_PASS
 
-Run: python fp35_fused_muon_kernel_ab.py
-  NOT via train MCP. Native Windows Python only.
+Run: via train MCP (WSL2/CUDA). Uses synthetic data — no shard dependency.
+  Previous Windows-Python attempt failed: TRITON_NO_C_COMPILER (no gcc on host).
+  WSL2 has gcc; torch.compile(ns5, fullgraph=False) works without the transformers
+  co_varnames issue (we compile only the standalone NS5 function, not LlamaModel).
 
 Arm-first ordering: all muon-baseline seeds first, then all muon-fused seeds (prevents
 a fused-variant failure from polluting the CUDA context of control measurements).
@@ -59,9 +61,6 @@ BENCH_REPS  = 20
 
 SEEDS = [16, 17, 18]
 
-SHARD_DIR   = os.path.join(os.path.dirname(NC), "shards-v0")
-SHARD_FILES = ["v0-00000.bin", "v0-00001.bin"]
-
 # Governor rails (fp19 floor — never relax)
 VRAM_FRACTION = 0.80
 MARGIN_GIB    = 1.5
@@ -91,36 +90,19 @@ def _harness_sha() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Shard-backed dataset
+# Synthetic batch generator (no shard dependency — timing bench only)
 # ---------------------------------------------------------------------------
 
-class ShardDataset:
-    def __init__(self, shard_dir: str, shard_files: list[str], seq: int, seed: int):
-        import numpy as np
-        chunks = []
-        for fname in shard_files:
-            p = os.path.join(shard_dir, fname)
-            if not os.path.exists(p):
-                raise FileNotFoundError(f"shard not found: {p}")
-            chunks.append(np.memmap(p, dtype=np.uint16, mode="r"))
-        self._tokens = np.concatenate([c.astype(np.int64) for c in chunks])
+class SyntheticDataset:
+    def __init__(self, vocab: int, seq: int, seed: int):
+        self._vocab = vocab
         self._seq = seq
-        self._n = len(self._tokens) - seq - 1
-        rng = np.random.default_rng(seed)
-        self._order = rng.permutation(self._n)
-        self._pos = 0
+        self._rng = torch.Generator()
+        self._rng.manual_seed(seed)
 
     def next_batch(self, batch: int):
-        import numpy as np
-        idxs = []
-        for _ in range(batch):
-            if self._pos >= len(self._order):
-                self._pos = 0
-            idxs.append(self._order[self._pos])
-            self._pos += 1
-        rows = np.stack([self._tokens[i: i + self._seq + 1] for i in idxs])
-        x = torch.from_numpy(rows[:, :-1].copy()).long()
-        y = torch.from_numpy(rows[:, 1:].copy()).long()
+        x = torch.randint(0, self._vocab, (batch, self._seq), generator=self._rng)
+        y = torch.randint(0, self._vocab, (batch, self._seq), generator=self._rng)
         return x, y
 
 
@@ -302,7 +284,7 @@ def measure_arm(seed: int, arm: str) -> dict:
         return {"arm": arm, "seed": seed, "error": f"OPT_BUILD_ERROR: {e}",
                 "measured_multiplier": None}
 
-    dataset = ShardDataset(SHARD_DIR, SHARD_FILES, SEQ, seed)
+    dataset = SyntheticDataset(VOCAB, SEQ, seed)
 
     # Warmup — absorbs torch.compile tracing cost for fused arm
     for _ in range(WARMUP_REPS):
@@ -392,11 +374,6 @@ def main():
         "total_gib": round(total_b / (1 << 30), 2),
     }
 
-    for fname in SHARD_FILES:
-        p = os.path.join(SHARD_DIR, fname)
-        if not os.path.exists(p):
-            raise SystemExit(f"MUON_FUSED_AB_SHARD_MISSING: {p}")
-
     arms = ["muon-baseline", "muon-fused"]
     config = {
         "hidden": HIDDEN, "layers": LAYERS, "heads": HEADS,
@@ -409,7 +386,7 @@ def main():
         "muon_lr": 0.02, "muon_momentum": 0.95, "muon_nesterov": True,
         "muon_weight_decay": 0.1, "adamw_lr": 3e-4, "adamw_weight_decay": 0.1,
         "compile_mode": "reduce-overhead",
-        "shard_files": SHARD_FILES,
+        "data": "synthetic (timing bench — no shard dependency)",
     }
 
     print(
@@ -545,6 +522,8 @@ def main():
             "split optimizer: Muon on 2D non-embed non-head; AdamW on rest",
             "VIABLE bar: mean MM >= 1.02; below bar -> PARK with receipt",
             "sha_convention: sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+            "data: synthetic (torch.randint) — timing bench; no shard dependency",
+            "platform: WSL2 CUDA via train MCP (prior Windows attempt: TRITON_NO_C_COMPILER)",
         ],
         "live_run_untouched": LIVE_RUN_SHA,
         "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
@@ -670,6 +649,18 @@ def _selftest():
     # 11. NS coefficients match timeshare_pretrain.py values
     assert _NS_A == 3.4445 and _NS_B == -4.7750 and _NS_C == 2.0315, \
         f"NS coefficients drifted: a={_NS_A}, b={_NS_B}, c={_NS_C}"
+
+    # 12. SyntheticDataset: correct shapes, reproducible with same seed
+    ds1 = SyntheticDataset(vocab=100, seq=8, seed=42)
+    ds2 = SyntheticDataset(vocab=100, seq=8, seed=42)
+    x1, y1 = ds1.next_batch(2)
+    x2, y2 = ds2.next_batch(2)
+    assert x1.shape == (2, 8), f"SyntheticDataset x shape: {x1.shape}"
+    assert y1.shape == (2, 8), f"SyntheticDataset y shape: {y1.shape}"
+    assert torch.equal(x1, x2) and torch.equal(y1, y2), \
+        "SyntheticDataset not reproducible with same seed"
+    assert x1.max().item() < 100 and x1.min().item() >= 0, \
+        "SyntheticDataset tokens out of vocab range"
 
     print("MUON_FUSED_AB_SELFTEST_PASS")
 
