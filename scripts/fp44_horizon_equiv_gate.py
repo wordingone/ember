@@ -152,25 +152,38 @@ def _load_receipt():
     return chosen
 
 
-def analyze():
-    r = _load_receipt()
-    if r is None:
-        print(json.dumps({"verdict": "NO_RECEIPT_YET",
-                          "note": "fp-44 horizon-equiv receipt not on disk; gate frozen + selftested"}))
-        sys.exit(2)
+def score_receipt(r):
+    """Full receipt → verdict pipeline (loader + arm-pick + noise-floor + decide).
+    Returns a dict with status SCORED / SCHEMA_MISMATCH. Pure (no I/O) so the
+    selftest can exercise the whole path on synthetic receipts."""
     arms = r.get("arms") or r.get("cells") or {}
     if isinstance(arms, list):  # cells-as-list fallback
         arms = {c.get("arm") or c.get("cell"): c for c in arms}
     muon = _pick_arm(arms, MUON_ARM_KEYS)
     adamw = _pick_arm(arms, ADAMW_ARM_KEYS)
     if not muon or not adamw:
-        print(json.dumps({"verdict": "SCHEMA_MISMATCH", "arms_seen": list(arms.keys())}))
-        sys.exit(2)
+        return {"status": "SCHEMA_MISMATCH", "arms_seen": list(arms.keys())}
     mt, at = _traj(muon), _traj(adamw)
     derived = r.get("noise_floor_nats") or r.get("derived_threshold_nats") or 0.0
     seed_spread = _seed_spread_at_T(adamw) or _seed_spread_at_T(muon) or 0.0
     noise_floor = max(float(derived), float(seed_spread), DEFAULT_NOISE_FLOOR)
     verdict, detail = decide(mt, at, noise_floor)
+    return {"status": "SCORED", "verdict": verdict, "detail": detail,
+            "noise_floor": noise_floor, "muon_traj": mt, "adamw_traj": at}
+
+
+def analyze():
+    r = _load_receipt()
+    if r is None:
+        print(json.dumps({"verdict": "NO_RECEIPT_YET",
+                          "note": "fp-44 horizon-equiv receipt not on disk; gate frozen + selftested"}))
+        sys.exit(2)
+    s = score_receipt(r)
+    if s["status"] != "SCORED":
+        print(json.dumps(s))
+        sys.exit(2)
+    verdict, detail, noise_floor, mt, at = (
+        s["verdict"], s["detail"], s["noise_floor"], s["muon_traj"], s["adamw_traj"])
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     receipt = {
@@ -219,6 +232,44 @@ def selftest():
     c_floor = (max(0.2, 0.0, DEFAULT_NOISE_FLOOR) == 0.2)
     print(f"  [{'PASS' if c_floor else 'FAIL'}] noise_floor = max(derived, seed_spread, default)")
     ok = ok and c_floor
+
+    # FULL-PIPELINE cases on synthetic receipts matching eli's eng/329c protocol
+    # (Phase-1 noise floor + Phase-2 muon_split_baseline & full_fused_adamw arms,
+    # val_loss @{250,500,1000,1500,2000}). Exercises score_receipt (loader +
+    # arm-pick + noise-floor assembly), which the decide() cases above do not.
+    def _rcpt(muon2k, adamw2k, nf=None, adamw_seeds=None):
+        steps = {"250": 2.2, "500": 1.8, "1000": 1.4, "1500": 1.2}
+        m = dict(steps, **{"2000": muon2k})
+        a = dict(steps, **{"2000": adamw2k})
+        r = {"ticket": "FP44-HORIZON-OPTIMIZER-EQUIV",
+             "arms": {"muon_split_baseline": {"val_loss": m},
+                      "full_fused_adamw": {"val_loss": a}}}
+        if nf is not None:
+            r["noise_floor_nats"] = nf
+        if adamw_seeds is not None:
+            r["arms"]["full_fused_adamw"]["seed_val_loss_at_T"] = adamw_seeds
+        return r
+    pipe = [
+        (_rcpt(1.00, 1.00, nf=0.08), "COMMIT_ADAMW", None, "receipt equiv (nf=0.08) -> AdamW"),
+        (_rcpt(0.50, 1.00, nf=0.08), "ESCALATE_USER_TRADEOFF", None, "receipt muon-ahead -> tradeoff"),
+        # no derived floor; adamw seed spread [1.0,1.3] std~0.212 sets the floor, so
+        # a muon=1.15 vs adamw=1.00 (delta 0.15) is WITHIN noise -> COMMIT_ADAMW
+        (_rcpt(1.15, 1.00, adamw_seeds=[1.0, 1.3]), "COMMIT_ADAMW", 0.21, "receipt seed-std floor -> AdamW"),
+    ]
+    for r, exp_v, exp_nf, lbl in pipe:
+        s = score_receipt(r)
+        match = s.get("status") == "SCORED" and s.get("verdict") == exp_v
+        if exp_nf is not None:
+            match = match and abs(s.get("noise_floor", 0) - exp_nf) < 0.02
+        ok = ok and match
+        print(f"  [{'PASS' if match else 'FAIL'}] {lbl}: {s.get('verdict', s.get('status'))}"
+              + (f" nf={s.get('noise_floor'):.3f}" if "noise_floor" in s else ""))
+    # schema-mismatch path
+    sm = score_receipt({"arms": {"sgd": {"val_loss": {"2000": 1.0}}}})
+    c_sm = sm.get("status") == "SCHEMA_MISMATCH"
+    print(f"  [{'PASS' if c_sm else 'FAIL'}] unknown arms -> SCHEMA_MISMATCH")
+    ok = ok and c_sm
+
     print("FP44_HORIZON_EQUIV_GATE_SELFTEST_" + ("PASS" if ok else "FAIL"))
     return ok
 
