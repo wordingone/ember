@@ -75,7 +75,9 @@ def _parse_candidates() -> list[dict]:
         d = int(d_m.group(1))
         # Infer heads: h/64 for standard MHA (min 16)
         heads = max(16, h // 64)
-        candidates.append({"name": name_col.replace(" ", "-"), "hidden": h, "layers": d,
+        prefix = "c03-" if "c03" in name_col else ""
+        cname = f"{prefix}h{h}-d{d}"
+        candidates.append({"name": cname, "hidden": h, "layers": d,
                            "heads": heads, "mlp_dim": 4 * h})
 
     return candidates if candidates else _hardcoded_candidates()
@@ -113,8 +115,8 @@ def _gemm_shapes(cand: dict) -> list[tuple[str, int, int]]:
 
 
 def _gemm_flops(M: int, K: int, N: int) -> int:
-    """FLOPs for one forward + backward pass of a (M,K) @ (K,N) GEMM."""
-    return 6 * M * K * N  # fwd (2MKN) + bwd_x (2MKN) + bwd_w (2MKN)
+    """FLOPs for one forward pass of a (M,K) @ (K,N) GEMM (2MKN)."""
+    return 2 * M * K * N
 
 
 # ---------------------------------------------------------------------------
@@ -136,22 +138,16 @@ def _bench_gemm_arm(x, weight, weight_fp8_KN, weight_fp8_NK, scale_one,
     import torch
 
     def _step():
-        if x.grad is not None:
-            x.grad.zero_()
-        if use_fp8:
-            a_fp8 = x.to(torch.float8_e4m3fn)
-            sa = torch.tensor(1.0, dtype=torch.float32, device=x.device)
-            out = torch._scaled_mm(a_fp8, weight_fp8_KN, scale_a=sa, scale_b=scale_one,
-                                   out_dtype=torch.bfloat16)
-            loss = out.sum()
-            loss.backward()
-            # backward needs grad_out cast
-            if x.grad is not None:
-                x.grad.zero_()
-        else:
-            out = x @ weight.t()
-            loss = out.sum()
-            loss.backward()
+        # Forward-only: _scaled_mm backward not implemented on Windows torch 2.x.
+        # Forward GEMM ratio is representative for the C-1 dtype decision.
+        with torch.no_grad():
+            if use_fp8:
+                a_fp8 = x.to(torch.float8_e4m3fn)
+                sa = torch.tensor(1.0, dtype=torch.float32, device=x.device)
+                _ = torch._scaled_mm(a_fp8, weight_fp8_KN, scale_a=sa, scale_b=scale_one,
+                                     out_dtype=torch.bfloat16)
+            else:
+                _ = x @ weight.t()
         torch.cuda.synchronize()
 
     for _ in range(WARMUP_REPS):
@@ -177,7 +173,7 @@ def _run_candidate_fp8_ab(cand: dict) -> dict:
     for seed in SEEDS:
         for (shape_name, K, N) in shapes:
             torch.manual_seed(seed)
-            x = torch.randn(M, K, dtype=torch.bfloat16, device="cuda", requires_grad=True)
+            x = torch.randn(M, K, dtype=torch.bfloat16, device="cuda")
             w = torch.randn(N, K, dtype=torch.bfloat16, device="cuda")
             scale_one = torch.tensor(1.0, dtype=torch.float32, device="cuda")
 
