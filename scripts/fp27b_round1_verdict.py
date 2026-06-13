@@ -117,8 +117,12 @@ def power_annotation(ci_low, ci_high):
     untouched. Derived from the SAME normal SE that produced the CI
     (half = 1.96*se), so no new statistical model enters the receipt:
     mde80 = (1.645 + 0.84) * se is the smallest effect this gate detects
-    at 80% power, one-sided 5% (fp-32 R8: the round gate is N-capped at
-    the frozen N=100 — GPU-hours cannot buy resolution here)."""
+    at 80% power, one-sided 5%. The round gate's N was amended 100 -> 400
+    (fp-27 prereg superseding freeze, ledger row 19): at n=100, p0~2% the
+    MDE was 10.16pp (a real gain under it is unfalsifiable by design); n=400
+    tightens it to ~3.85pp (half-widths halve, 1/sqrt(n)). n_frozen below
+    reads fp27.ROUNDGATE_N (=400) by reference, so this annotation tracks the
+    amended power automatically -- no hardcoded N to drift."""
     half = (ci_high - ci_low) / 2.0
     se = half / 1.96
     return {
