@@ -1,0 +1,52 @@
+{
+  "ticket": "C48-GATE-STATS-REVIEW",
+  "ts": "20260613T042018Z",
+  "rung": "C48",
+  "subgoal": "S2",
+  "title": "gate-stats correctness: exact methods for zero-inflated n=100; Wilson/Newcombe-paired adopted; round-2 sized before launch; receipted review",
+  "verdict": "DISCHARGED",
+  "method": "leo gate consolidation \u2014 pointers grepped live + receipt contents read (not asserted)",
+  "clause_1_exact_methods_adopted": {
+    "status": "ADOPTED",
+    "round2_wcode_verdict_path": "g1_r2w_verdict.py -> g1_paired.compare -> power.newcombe_paired_delta (task-level Newcombe-paired)",
+    "wilson_mcnemar_home": "g1_paired.py (per-arm Wilson CI + McNemar exact)",
+    "stats_exact_importers": [
+      "d_gate.py",
+      "p_gate.py",
+      "fp27_round1_prereg.py",
+      "power_helper.py",
+      "w4_eval.py",
+      "w4_r2_g1.py",
+      "t4_chunked.py",
+      "corpus_mix_selftest.py"
+    ],
+    "exact_methods_available": [
+      "per_arm_wilson_ci",
+      "paired_newcombe_ci",
+      "paired_mde",
+      "mcnemar_exact"
+    ]
+  },
+  "clause_2_round2_sized_before_launch": {
+    "status": "SIZED (pre-registered #29)",
+    "receipt": "r2-power-prereg-20260611T021546Z.json",
+    "n_tasks": 43,
+    "base_mean_rate": 0.657,
+    "rates_source": "w1-floor-g1-base-20260610T215814Z-samples.jsonl",
+    "contents": "MDE-by-k (k=8,16,24,32) + MC power grid (sample-level + task-level any-of-k) + null-rejection rate; frozen BEFORE round-2 from g1-base empirical rates"
+  },
+  "clause_3_receipted_review": {
+    "status": "REVIEWED",
+    "receipt": "gate-stats-346-20260612T202900Z.json",
+    "reviewer": "jude",
+    "wilson_upper_0of100_pct": 3.7,
+    "rule_of_three_pct": 3.0,
+    "mcnemar_min_discordant_for_p_lt_0p05": 6,
+    "power_caveat": "null verdict at n=100 near p~=0 is underpowered: deltas below ~6pp invisible; the round-2 response is k-scaling (r2-power MDE-by-k), not larger n alone"
+  },
+  "mde_definition_note": "power_helper anchors (n100=10.16pp, n400=3.85pp at p0=2%) vs stats_exact paired_mde (n100=8.9pp, n200=6.3pp) differ by MDE DEFINITION (per-arm vs paired, p0 assumption) \u2014 both documented, not in conflict",
+  "caveats": [
+    "review consolidation, not a new experiment",
+    "adoption verified by live grep of the verdict path; sizing + review receipt contents read directly"
+  ]
+}
