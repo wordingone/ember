@@ -99,6 +99,13 @@ def _run_bench() -> dict:
                 for k in range(fp45.MTP_N_HEADS)]
         return ts.mtp_total_loss(pce, mces, fp45.MTP_WEIGHT)
 
+    # Pre-warmup GPU cleanliness probe
+    torch.cuda.synchronize()
+    free_b_pre, total_b = torch.cuda.mem_get_info()
+    free_gib_pre = free_b_pre / (1 << 30)
+    total_gib    = total_b    / (1 << 30)
+    print(f"[c04_ns5_bench] VRAM pre-compile: {free_gib_pre:.2f}/{total_gib:.2f} GiB free", flush=True)
+
     print(f"[c04_ns5_bench] {CANDIDATE}: compiling fwd ...", flush=True)
     compile_status = "SKIP"
     fwd_call = fwd_fn
@@ -111,9 +118,13 @@ def _run_bench() -> dict:
         loss_t.backward()
         for o in [muon_opt, adamw_opt]:
             if o: o.zero_grad(set_to_none=True)
+        # Release compile-trial temporaries before warmup loop
+        del ids_t, tgt0_t, tgtm_t, loss_t
+        torch.cuda.empty_cache()
         compile_status = "PASS"
         fwd_call = fwd_compiled
-        print(f"[c04_ns5_bench] compile PASS", flush=True)
+        free_b_post_compile, _ = torch.cuda.mem_get_info()
+        print(f"[c04_ns5_bench] compile PASS  post-compile free: {free_b_post_compile/(1<<30):.2f} GiB", flush=True)
     except torch._dynamo.exc.Unsupported as e:
         compile_status = "BREAK"
         print(f"[c04_ns5_bench] COMPILE-BREAK: {e!s:.200}", flush=True)
@@ -148,8 +159,12 @@ def _run_bench() -> dict:
     torch.cuda.synchronize()
     free_b, _ = torch.cuda.mem_get_info()
     free_gib = free_b / (1 << 30)
+    print(f"[c04_ns5_bench] VRAM post-warmup: {free_gib:.2f}/{total_gib:.2f} GiB free "
+          f"(need {MARGIN_GIB} GiB margin)", flush=True)
     if free_gib < MARGIN_GIB:
-        return {"status": "SKIPPED-MARGIN", "free_vram_gib": round(free_gib, 2),
+        return {"status": "SKIPPED-MARGIN", "free_vram_gib": round(free_gib, 3),
+                "total_vram_gib": round(total_gib, 2),
+                "free_vram_gib_pre_compile": round(free_gib_pre, 3),
                 "compile_status": compile_status}
 
     # Timed bench
