@@ -76,7 +76,7 @@ def _traj(arm):
     `val_losses` (plural) is eli's eng/329c spelling; the rest are doc spellings."""
     for k in ("val_loss", "val_losses", "val_loss_nats", "losses_at", "val_loss_at"):
         if isinstance(arm.get(k), dict):
-            return {str(s): float(v) for s, v in arm[k].items() if v is not None}
+            return {str(s): float(v) for s, v in arm[k].items() if isinstance(v, (int, float))}
     return {}
 
 
@@ -84,9 +84,11 @@ def _seed_spread_at_T(arm, T=TERMINAL_STEP):
     """Paired-seed std of val_loss at T, if the arm carries per-seed values."""
     for k in ("seed_val_loss_at_T", "seed_val_loss", f"seed_val_loss_{T}"):
         v = arm.get(k)
-        if isinstance(v, list) and len(v) >= 2:
-            m = sum(v) / len(v)
-            return (sum((x - m) ** 2 for x in v) / (len(v) - 1)) ** 0.5
+        if isinstance(v, list):
+            v = [x for x in v if isinstance(x, (int, float))]
+            if len(v) >= 2:
+                m = sum(v) / len(v)
+                return (sum((x - m) ** 2 for x in v) / (len(v) - 1)) ** 0.5
     return None
 
 
@@ -177,7 +179,7 @@ def score_receipt(r):
     selftest can exercise the whole path on synthetic receipts."""
     arms = r.get("arms") or r.get("cells") or {}
     if isinstance(arms, list):  # cells-as-list fallback
-        arms = {c.get("arm") or c.get("cell"): c for c in arms}
+        arms = {c.get("arm") or c.get("cell"): c for c in arms if isinstance(c, dict)}
     if not arms:
         # eli's eng/329c schema: no `arms` block — per-arm results sit at the top
         # level as {muon,adamw}_result, each {arm, val_losses, ...}. Build the
@@ -202,7 +204,11 @@ def score_receipt(r):
                or r.get("noise_floor") or r.get("derived_threshold")
                or nfr.get("derived_threshold") or nfr.get("noise_floor") or 0.0)
     seed_spread = _seed_spread_at_T(adamw) or _seed_spread_at_T(muon) or 0.0
-    floor_candidates = {"derived": float(derived),
+    try:
+        derived_float = float(derived)
+    except (ValueError, TypeError):
+        derived_float = 0.0
+    floor_candidates = {"derived": derived_float,
                         "seed_spread": float(seed_spread),
                         "default": DEFAULT_NOISE_FLOOR}
     noise_floor = max(floor_candidates.values())
