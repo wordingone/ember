@@ -230,19 +230,26 @@ def check_optimizer_wired(optimizer):
             return "BLOCKED", f"AdamW instantiation failed: {e}"
         return "GREEN", "full_fused_adamw: AdamW available + instantiated"
     elif optimizer == "muon_batched":
-        # The _MuonBatched class is defined in fp45_batched_ns5_ab.
-        # Verify it can be imported from the branch scripts.
+        # fp45_batched_ns5_ab ships factory functions, not a top-level class.
+        # Verify via the real API: _build_muon_batched() + _ns5_batched() present,
+        # then construct through the factory and smoke a CPU step.
         try:
             import fp45_batched_ns5_ab as fp45
-            if not hasattr(fp45, "_MuonBatched"):
-                return "BLOCKED", "fp45_batched_ns5_ab._MuonBatched not found"
-            # Smoke instantiation with CPU params
+            if not (hasattr(fp45, "_build_muon_batched") and
+                    hasattr(fp45, "_ns5_batched")):
+                return "BLOCKED", (
+                    "fp45_batched_ns5_ab missing _build_muon_batched or _ns5_batched"
+                )
             import torch
-            p = torch.nn.Linear(4, 4, bias=False)
-            fp45._MuonBatched([p.weight], lr=0.02)
+            MuonBatched = fp45._build_muon_batched()
+            p = torch.nn.Parameter(torch.randn(4, 4))
+            opt = MuonBatched([p], lr=0.02)
+            p.grad = torch.randn_like(p)
+            opt.step()
+            opt.zero_grad(set_to_none=True)
         except Exception as e:
-            return "BLOCKED", f"_MuonBatched instantiation failed: {e}"
-        return "GREEN", "muon_batched: _MuonBatched imported + instantiated (CPU)"
+            return "BLOCKED", f"muon_batched wiring check failed: {e}"
+        return "GREEN", "muon_batched: _build_muon_batched+_ns5_batched present, step() smoke (CPU)"
     else:
         return "BLOCKED", f"unknown optimizer {optimizer!r}"
 
@@ -483,8 +490,8 @@ def selftest():
     print("[selftest] full analyze() dry-run with synthetic tok/s (muon_batched)")
     gate9_ok2, _ = analyze("muon_batched", emit=False, override_tok_s=30000.0,
                            pick_override="COMMIT_MUON_BATCHED")
-    # May SKIP if fp45 not importable; governor/ckpt/config checks still run
-    print(f"  PASS: gate9_pass={gate9_ok2} (muon_batched optimizer wiring determines result)")
+    assert gate9_ok2, "muon_batched green path must pass post-#329"
+    print(f"  PASS: gate9_pass={gate9_ok2}")
 
     print("[selftest] emit dry-run to tempdir with synthetic tok/s")
     with tempfile.TemporaryDirectory() as td:
