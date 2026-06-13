@@ -164,12 +164,26 @@ def score_receipt(r):
     if not muon or not adamw:
         return {"status": "SCHEMA_MISMATCH", "arms_seen": list(arms.keys())}
     mt, at = _traj(muon), _traj(adamw)
-    derived = r.get("noise_floor_nats") or r.get("derived_threshold_nats") or 0.0
+    # noise-floor reader — tolerant across key spellings. eli's Phase-1 harness
+    # log prints `noise_floor=` / `derived_threshold=` (NO _nats suffix); the
+    # receipt may carry either spelling. Reading ONLY the _nats variants would
+    # silently miss a real ~0.6-nat floor and fall back to DEFAULT 0.05 — a far
+    # TIGHTER floor that would FALSE-ESCALATE a within-noise delta to a user
+    # decision (delta -0.3 is equivalent under 0.6 but Muon-better under 0.05).
+    derived = (r.get("noise_floor_nats") or r.get("derived_threshold_nats")
+               or r.get("noise_floor") or r.get("derived_threshold") or 0.0)
     seed_spread = _seed_spread_at_T(adamw) or _seed_spread_at_T(muon) or 0.0
-    noise_floor = max(float(derived), float(seed_spread), DEFAULT_NOISE_FLOOR)
+    floor_candidates = {"derived": float(derived),
+                        "seed_spread": float(seed_spread),
+                        "default": DEFAULT_NOISE_FLOOR}
+    noise_floor = max(floor_candidates.values())
+    # source is the RED FLAG: "default" means no derived floor was read — if a
+    # Phase-1 noise floor was expected, that signals a schema/key mismatch.
+    noise_floor_source = max(floor_candidates, key=floor_candidates.get)
     verdict, detail = decide(mt, at, noise_floor)
     return {"status": "SCORED", "verdict": verdict, "detail": detail,
-            "noise_floor": noise_floor, "muon_traj": mt, "adamw_traj": at}
+            "noise_floor": noise_floor, "noise_floor_source": noise_floor_source,
+            "muon_traj": mt, "adamw_traj": at}
 
 
 def analyze():
@@ -189,7 +203,8 @@ def analyze():
     receipt = {
         "ticket": "FP44-HORIZON-EQUIV-GATE", "ts": ts, "issue": 377,
         "scored_receipt_ts": r.get("ts"), "verdict": verdict, "detail": detail,
-        "noise_floor_nats": noise_floor, "terminal_step": TERMINAL_STEP,
+        "noise_floor_nats": noise_floor,
+        "noise_floor_source": s.get("noise_floor_source"), "terminal_step": TERMINAL_STEP,
         "muon_val_loss_traj": mt, "adamw_val_loss_traj": at,
         "s3_threshold_tok_s": round(S3_THRESHOLD, 1),
         "consequence": {
@@ -264,6 +279,30 @@ def selftest():
         ok = ok and match
         print(f"  [{'PASS' if match else 'FAIL'}] {lbl}: {s.get('verdict', s.get('status'))}"
               + (f" nf={s.get('noise_floor'):.3f}" if "noise_floor" in s else ""))
+    # noise-floor field-name tolerance: receipt carries `noise_floor` (NO _nats
+    # — eli's Phase-1 log spelling). muon=1.0 adamw=1.3 (delta=-0.3, Muon lower):
+    # with the 0.605 floor READ -> COMMIT_ADAMW (within noise); if the field were
+    # MISSED -> default 0.05 -> would ESCALATE. Proves the field is consumed AND
+    # noise_floor_source flags it 'derived', not 'default'.
+    r_nf = {"ticket": "FP44-HORIZON-OPTIMIZER-EQUIV", "noise_floor": 0.605,
+            "arms": {"muon_split_baseline": {"val_loss": {"250": 2.2, "1000": 1.4, "2000": 1.0}},
+                     "full_fused_adamw":   {"val_loss": {"250": 2.2, "1000": 1.5, "2000": 1.3}}}}
+    s_nf = score_receipt(r_nf)
+    c_nf = (s_nf.get("verdict") == "COMMIT_ADAMW"
+            and abs(s_nf.get("noise_floor", 0) - 0.605) < 1e-9
+            and s_nf.get("noise_floor_source") == "derived")
+    print(f"  [{'PASS' if c_nf else 'FAIL'}] noise_floor (no _nats) consumed -> "
+          f"{s_nf.get('verdict')} nf={s_nf.get('noise_floor')} src={s_nf.get('noise_floor_source')}")
+    ok = ok and c_nf
+    # default-fallback flag: no derived floor + no seed spread -> source 'default'
+    s_def = score_receipt({"ticket": "x-horizon-equiv",
+                           "arms": {"muon": {"val_loss": {"2000": 1.0}},
+                                    "adamw": {"val_loss": {"2000": 1.0}}}})
+    c_def = s_def.get("noise_floor_source") == "default" and s_def.get("noise_floor") == DEFAULT_NOISE_FLOOR
+    print(f"  [{'PASS' if c_def else 'FAIL'}] no derived floor -> source 'default' (red flag) "
+          f"src={s_def.get('noise_floor_source')}")
+    ok = ok and c_def
+
     # schema-mismatch path
     sm = score_receipt({"arms": {"sgd": {"val_loss": {"2000": 1.0}}}})
     c_sm = sm.get("status") == "SCHEMA_MISMATCH"
