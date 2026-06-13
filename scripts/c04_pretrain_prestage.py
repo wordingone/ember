@@ -264,8 +264,13 @@ def lookup_bench_tok_s(optimizer):
             return None, "fp40-l10-optimizer-ab receipt not found"
         d = json.load(open(cands[-1]))
         for cell in d.get("cells", []):
+            if not isinstance(cell, dict):
+                continue
             if cell.get("cell") == "full_fused_adamw" or cell.get("optimizer") == "full_fused_adamw":
-                tok_s = float(cell.get("tok_s_paced", 0))
+                try:
+                    tok_s = float(cell.get("tok_s_paced", 0))
+                except (ValueError, TypeError):
+                    tok_s = 0
                 if tok_s > 0:
                     return tok_s, os.path.basename(cands[-1])
         return None, f"{os.path.basename(cands[-1])}: full_fused_adamw cell not found or tok_s=0"
@@ -274,7 +279,10 @@ def lookup_bench_tok_s(optimizer):
         if not cands:
             return None, "c04-batched-ns5-bench receipt not found (dispatch c04_batched_ns5_bench.py --run first)"
         d = json.load(open(cands[-1]))
-        tok_s = float(d.get("tok_s_paced", 0))
+        try:
+            tok_s = float(d.get("tok_s_paced", 0))
+        except (ValueError, TypeError):
+            tok_s = 0
         if tok_s <= 0:
             return None, f"{os.path.basename(cands[-1])}: tok_s_paced=0"
         return tok_s, os.path.basename(cands[-1])
