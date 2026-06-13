@@ -5,15 +5,18 @@ computes per-arm mean wcode_rate at 50% and 100% probe points, delta in percenta
 points, slope direction, and emits a verdict receipt.
 
 Verdict classes (directional; n=2 per arm, no formal power):
-  DENSITY_CONFIRMED  — arm B (code-only) > arm A (bulk-mix) by >2pp at 100pct
-  DENSITY_MARGINAL   — arm B > arm A by 0..2pp at 100pct
-  DENSITY_REVERSED   — arm A > arm B at 100pct  (mixed corpus wins)
-  DENSITY_FLAT       — |delta| <= 0.5pp (indistinguishable at this n)
+  DENSITY_CONFIRMED  — arm B (code-only) > arm A (bulk-mix) by >2pp at 100pct, BOTH seeds agree
+  DENSITY_MARGINAL   — arm B > arm A by 0..2pp at 100pct, both seeds agree
+  DENSITY_REVERSED   — arm A > arm B at 100pct, both seeds agree (mixed corpus wins)
+  DENSITY_FLAT       — |delta| <= 0.5pp, both seeds agree (indistinguishable at this n)
+  NO_VERDICT         — seeds disagree on direction; third seed required before any axis mapping
   INCOMPLETE         — fewer than 4 valid cells in receipts dir
 
-c04 routing: route() from c04_pick_rehearsal.py is called with the density axis
-(D-CONF if DENSITY_CONFIRMED or DENSITY_MARGINAL, D-BELOW otherwise) to produce
-c04 pick decisions for all L10 outcomes — table and cap logic stay in one place.
+c04 routing: route() from c04_pick_rehearsal.py is called with the density axis.
+Only DENSITY_CONFIRMED maps to D-CONF (clears n=400 MDE in both seeds, directionally
+agreeing). All under-MDE results (MARGINAL/REVERSED/FLAT) map to D-BELOW. NO_VERDICT
+exits non-zero with no c04_pick block — spec rule 4, table must not fire on seed
+disagreement.
 """
 import glob
 import json
@@ -41,8 +44,12 @@ _C04_BUDGET_HI_PASS = 2.2e9
 
 
 def _density_to_axis(verdict):
-    """Map density verdict to c04-pick-table density axis (D-CONF or D-BELOW)."""
-    return "D-CONF" if verdict in ("DENSITY_CONFIRMED", "DENSITY_MARGINAL") else "D-BELOW"
+    """Map density verdict to c04-pick-table density axis.
+    Only DENSITY_CONFIRMED clears the n=400 MDE in both seeds → D-CONF.
+    All under-MDE outcomes (MARGINAL/REVERSED/FLAT) → D-BELOW.
+    NO_VERDICT must never reach this function.
+    """
+    return "D-CONF" if verdict == "DENSITY_CONFIRMED" else "D-BELOW"
 
 
 def _load_cell_receipts():
@@ -124,7 +131,39 @@ def main():
     delta_pp_100 = round((mean_b_100 - mean_a_100) * 100, 2) if (mean_b_100 is not None and mean_a_100 is not None) else None
     delta_pp_50 = round((mean_b_50 - mean_a_50) * 100, 2) if (mean_b_50 is not None and mean_a_50 is not None) else None
 
-    # Classify
+    # Spec rule 4: check per-seed direction agreement at 100pct before classifying.
+    # If seed 0 and seed 1 disagree (one has B>A, other has A>=B) → NO_VERDICT.
+    a0_wr100 = rows[("a", 0)]["wcode_100pct"]
+    a1_wr100 = rows[("a", 1)]["wcode_100pct"]
+    b0_wr100 = rows[("b", 0)]["wcode_100pct"]
+    b1_wr100 = rows[("b", 1)]["wcode_100pct"]
+    seed_agreement = None
+    seed_disagree = False
+    if all(v is not None for v in (a0_wr100, a1_wr100, b0_wr100, b1_wr100)):
+        s0_b_wins = b0_wr100 > a0_wr100
+        s1_b_wins = b1_wr100 > a1_wr100
+        seed_disagree = s0_b_wins != s1_b_wins
+        seed_agreement = {"seed0_b_wins": s0_b_wins, "seed1_b_wins": s1_b_wins}
+
+    if seed_disagree:
+        receipt = {
+            "ticket": "DENSITY-AB-VERDICT",
+            "ts": ts_now,
+            "issue": 225,
+            "verdict": "NO_VERDICT",
+            "reason": "seeds disagree on direction at 100pct — spec rule 4 demands third seed before axis mapping",
+            "seed_agreement": seed_agreement,
+            "delta_pp_100pct": delta_pp_100,
+            "delta_pp_50pct": delta_pp_50,
+            "c04_pick": None,
+        }
+        out = f"{RECEIPTS}/density-ab-verdict-{ts_now}.json"
+        checked_write(out, receipt)
+        print(json.dumps({"verdict": "NO_VERDICT",
+                          "error": "seed disagreement — third seed required before c04 pick"}))
+        sys.exit(1)
+
+    # Classify (both seeds agree on direction)
     if delta_pp_100 is None:
         verdict = "INCOMPLETE"
     elif abs(delta_pp_100) <= FLAT_THRESHOLD_PP:
