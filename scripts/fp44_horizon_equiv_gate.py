@@ -141,16 +141,21 @@ def decide(muon_traj, adamw_traj, noise_floor, T=TERMINAL_STEP):
 
 def _is_source_fp44(ticket, basename=""):
     """True iff this is eli's SOURCE optimizer-equiv receipt (the A/B the gate
-    scores), NOT the gate's OWN verdict output (FP44-HORIZON-EQUIV-GATE), which
-    also contains 'horizon'+'equiv' and would otherwise win on a newer ts and
-    SCHEMA_MISMATCH. The discriminator is 'optimizer' (source) vs 'gate' (output);
-    the filename guard is belt-and-suspenders against future ticket drift."""
+    scores), NOT the gate's OWN verdict output, which also contains
+    'horizon'+'equiv' and would otherwise win on a newer ts and SCHEMA_MISMATCH.
+
+    Hardened per jude's PR #401 flags: the gate's outputs are the only fp44
+    receipts whose ticket ends '-GATE' (FP44-HORIZON-EQUIV-GATE) -- so exclude by
+    SUFFIX, which also catches a future 'FP44-HORIZON-OPTIMIZER-EQUIV-GATE' that
+    the old 'optimizer'-substring rule let through (FLAG-A). Then accept any
+    fp44 horizon+equiv source WITHOUT requiring 'optimizer', so a future
+    'FP44-HORIZON-EQUIV-V2' source isn't wrongly excluded (FLAG-B). Filename
+    guard stays as belt-and-suspenders."""
     tk = str(ticket or "").lower()
     nm = str(basename or "").lower()
-    if "horizon-equiv-gate" in nm:           # the gate's own output file, never an input
+    if tk.endswith("-gate") or "horizon-equiv-gate" in nm:   # gate's own output, never an input
         return False
-    return tk == "fp44-horizon-optimizer-equiv" \
-        or ("horizon" in tk and "optimizer" in tk and "equiv" in tk)
+    return tk.startswith("fp44") and "horizon" in tk and "equiv" in tk
 
 
 def _load_receipt():
@@ -360,8 +365,12 @@ def selftest():
     c_src = (_is_source_fp44("FP44-HORIZON-OPTIMIZER-EQUIV")
              and not _is_source_fp44("FP44-HORIZON-EQUIV-GATE")
              and not _is_source_fp44("FP44-HORIZON-EQUIV-GATE",
-                                     "fp44-horizon-equiv-gate-20260613T111057Z.json"))
-    print(f"  [{'PASS' if c_src else 'FAIL'}] discovery picks SOURCE, excludes gate-output")
+                                     "fp44-horizon-equiv-gate-20260613T111057Z.json")
+             # jude PR#401 FLAG-A: a future gate output that DOES contain 'optimizer'
+             and not _is_source_fp44("FP44-HORIZON-OPTIMIZER-EQUIV-GATE")
+             # jude PR#401 FLAG-B: a future source WITHOUT 'optimizer' must still match
+             and _is_source_fp44("FP44-HORIZON-EQUIV-V2"))
+    print(f"  [{'PASS' if c_src else 'FAIL'}] discovery picks SOURCE, excludes gate-output (-GATE suffix; FLAG-A/B)")
     ok = ok and c_src
 
     print("FP44_HORIZON_EQUIV_GATE_SELFTEST_" + ("PASS" if ok else "FAIL"))
