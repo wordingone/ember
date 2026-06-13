@@ -78,7 +78,7 @@ def _has_sha_field(d: dict) -> bool:
         if depth == 0 or not isinstance(obj, dict):
             return False
         for k, v in obj.items():
-            if _SHA_PATTERN.search(k):
+            if isinstance(k, str) and _SHA_PATTERN.search(k):
                 return True
             if isinstance(v, dict) and _check(v, depth - 1):
                 return True
