@@ -327,6 +327,13 @@ POWER-NOTE RETROFIT (gate-stats-review-v1 §5, 2026-06-12): every stats-bearing 
 
 `B:/M/avir/leo/state/nc-ladder/receipts/` (JSONL/JSON per job; gate from these only).
 
+## 2026-06-13 ~00:45Z — RUNNING JOBS + fleet reconciliation (5:45 PM LA)
+
+- **Density A/B cells (eli, eng/225-density-ab-v1):** arm-a-seed0 bb4b7a03 + arm-a-seed1 5b0bdc72 + arm-b-seed1 273a8bf4 all healthy at step 1000/12207; arm-b-seed0 queued solo (concurrent dispatch hit VRAM floor — governor SKIPPED clean; daemon no-queue behavior on eli's hygiene list). Receipts ~3h. bb4b7a03 "stall" was a monitor false alarm (status API showed step 1000). Manifests frozen pre-dispatch: arm-a 8047e5be ≠ arm-b 557365f5 (collision assert now mechanical after eli caught the source-sequential-shard flaw — Arm A rebuilt as proportional interleave, spec v1.1).
+- **POOL ROOT CAUSE CLOSED (mira):** MCP trust = `.claude/settings.local.json` `enabledMcpjsonServers`, NOT `.claude.json` (earlier dup-key theory WRONG — recorded). acceptEdits workers got the invisible trust dialog; bypassPermissions sessions never see it. Fix: pre-seed per worker in pool-up.ps1. Kill-receipted full relaunch 00:41Z; green receipt pending (~4 min cycle).
+- **Jude queued (15105):** pre-receipt adversarial passes — fp27 n=400 amendment cleanliness, c04 decision-table arithmetic, density manifests. Builder≠verifier before verdicts land.
+- Eng-stop-gate note: all 8 Leo-class issues trigger-gated on tonight's in-flight receipts; pre-stageable halves merged this session (decision table @0524545, fp27 amendment @ec99afc, density spec @5d4261d); remaining pre-stage = adversarial verification, routed to jude.
+
 ## 2026-06-12 ~23:30Z — PRODUCTION ANCHOR RECEIPTED (4:30 PM LA): ceiling re-priced, L9 resolved, L10 minted
 
 - **PR #362 signed off** (rebase verified only-new-work; fp38b → INCONCLUSIVE-CELL-ERROR; fp38c proxy-labeled; wall-days were receipt-correct, mail-table-only error). Production stack measured: **B16+ckpt+compile 19,228 tok/s = 7B in 4.2d; bench→prod gap 2.11×; compile 1.159× (B16) / 0.994× (B4)**.
