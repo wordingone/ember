@@ -111,6 +111,25 @@ ROWS = (
                             "A1..B4 == SURPASS",
      "requires": (("receipts/fp33-surpass-verdict-*.json", 1,
                    {"verdict": {"eq": "SURPASS"}}),)},
+    # ---- completion-condition #1 (added 2026-06-13, pre-06-20 window). The
+    # goal's COMPLETION is TWO conditions: (#1) ember_tally.py reads 100% on
+    # docs/ember-completeness.md AND (#2) the surpass receipt (row 13). Rows
+    # 1-12 audit per-leg WORK; row 13 binds condition #2; NOTHING bound
+    # condition #1 — and the 55-row completeness manifest has a DIFFERENT
+    # (larger) denominator than these hand-curated rows, so ALL-RECEIPTED here
+    # is NOT tally==100%. The audit could read all-green while ember_tally
+    # reads <100%. ember_tally emits receipts/tally-<ts>.json with
+    # pct_implemented = round(implemented/total*100, 1); ==100 iff every
+    # manifest piece is DONE + receipt-clean (so it also implies missing==[]).
+    # Pin is int 100 (==100.0 in Python — the field is a rounded float).
+    # Rounding note: for total < ~2000 no implemented<total rounds up to 100.0
+    # (at the 55-row manifest 54/55=98.2); revisit if the manifest grows past
+    # ~2000 rows, where 99.95% would round to 100.0.
+    {"id": 14, "condition": "ember completeness tally (goal completion-"
+                            "condition #1): ember_tally pct_implemented == 100 "
+                            "on docs/ember-completeness.md",
+     "requires": (("receipts/tally-*.json", 1,
+                   {"pct_implemented": {"eq": 100}}),)},
 )
 
 
@@ -303,6 +322,22 @@ def _selftest():
                            1, eqpin),)}, nc=td3)
         assert r_eq_bad["verdict"] == "GAP-NAMED", r_eq_bad
         assert "verdict==SURPASS" in r_eq_bad["gaps"][0], r_eq_bad
+        # condition-#1 pin (row 14): tally pct_implemented==100 RECEIPTED;
+        # <100 GAP-NAMED. Also exercises int-pin vs float-100.0 (==100).
+        json.dump({"ticket": "x", "ts": "x", "pct_implemented": 100.0},
+                  open(f"{td3}/receipts/tally-good-1.json", "w"))
+        json.dump({"ticket": "x", "ts": "x", "pct_implemented": 98.2},
+                  open(f"{td3}/receipts/tally-bad-1.json", "w"))
+        tpin = {"pct_implemented": {"eq": 100}}
+        r_t_ok = audit_row(
+            {"id": 14, "condition": "c",
+             "requires": (("receipts/tally-good-*.json", 1, tpin),)}, nc=td3)
+        assert r_t_ok["verdict"] == "RECEIPTED", r_t_ok
+        r_t_bad = audit_row(
+            {"id": 14, "condition": "c",
+             "requires": (("receipts/tally-bad-*.json", 1, tpin),)}, nc=td3)
+        assert r_t_bad["verdict"] == "GAP-NAMED", r_t_bad
+        assert "pct_implemented==100" in r_t_bad["gaps"][0], r_t_bad
     # untracked evidence can never satisfy a row (Kai 14631 class):
     # inject a tracked-set that excludes the only matching receipt
     import tempfile as _tf
@@ -328,6 +363,7 @@ def _selftest():
     assert by_id[9]["verdict"] == "GAP-NAMED", by_id[9]   # 8b open
     assert by_id[12]["verdict"] == "GAP-NAMED", by_id[12] # B3 open
     assert by_id[13]["verdict"] == "GAP-NAMED", by_id[13] # surpass verdict open
+    assert by_id[14]["verdict"] == "GAP-NAMED", by_id[14] # tally 100% open
     print("SP3_TERMINAL_AUDIT_SELFTEST_PASS")
 
 
