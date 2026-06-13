@@ -97,6 +97,20 @@ ROWS = (
      "requires": (("receipts/b-run-designation-*.json", 1),
                   ("receipts/sp6b-b-run-*.json", 1,
                    {"battery_sha256": "docs/sp6b-duty-battery-spec-v1.md"}))},
+    # ---- the OUTCOME row (added 2026-06-13, pre-06-20 window). Rows 10-12
+    # bind B-leg PROCESS (instruments frozen, seats bound, B3 executed); none
+    # bind the actual surpass VERDICT. The goal's 2nd completion condition is
+    # "an S5 E2B-surpass receipt exists" = fp33_surpass_verdict emitting
+    # SURPASS (the conjunction A1∧A2∧A3∧B1∧B2∧B3∧B4). The {"eq":"SURPASS"}
+    # value-pin transitively requires all 7 legs PASS — the aggregator emits
+    # SURPASS only when every leg clears its frozen bar. Without this row the
+    # 06-22 audit could read ALL-RECEIPTED while the surpass comparison was
+    # never computed or fell short.
+    {"id": 13, "condition": "E2B-SURPASS verdict (goal completion-condition "
+                            "#2): fp33_surpass_verdict conjunction "
+                            "A1..B4 == SURPASS",
+     "requires": (("receipts/fp33-surpass-verdict-*.json", 1,
+                   {"verdict": {"eq": "SURPASS"}}),)},
 )
 
 
@@ -142,15 +156,20 @@ def audit_row(row, nc=NC, tracked=None):
                 if validate_receipt(d):
                     continue            # dirty receipts never satisfy a row
                 if field_pins:
-                    # receipt field must equal sha256 of the pinned file's
-                    # CURRENT bytes; missing field or drift = run void
+                    # receipt field must equal either sha256 of the pinned
+                    # file's CURRENT bytes (string pin) or a literal value
+                    # ({"eq": value} pin — e.g. verdict=="SURPASS"); missing
+                    # field, drift, or value-mismatch = run void.
                     pin_ok = True
                     for field, pinned in field_pins.items():
-                        try:
-                            want = _sha(os.path.join(nc, pinned))
-                        except OSError:
-                            pin_ok = False
-                            break
+                        if isinstance(pinned, dict) and "eq" in pinned:
+                            want = pinned["eq"]
+                        else:
+                            try:
+                                want = _sha(os.path.join(nc, pinned))
+                            except OSError:
+                                pin_ok = False
+                                break
                         if d.get(field) != want:
                             pin_ok = False
                             break
@@ -161,7 +180,9 @@ def audit_row(row, nc=NC, tracked=None):
             pin_note = ""
             if field_pins:
                 pin_note = "; field pins: " + ", ".join(
-                    f"{f}==sha256({p})" for f, p in field_pins.items())
+                    (f"{f}=={p['eq']}" if isinstance(p, dict) and "eq" in p
+                     else f"{f}==sha256({p})")
+                    for f, p in field_pins.items())
             gaps.append(f"requires >={min_count} of '{pat}' "
                         f"(receipt_check-clean AND git-tracked{pin_note}); "
                         f"found {len(ok)}")
@@ -264,6 +285,24 @@ def _selftest():
             {"id": 12, "condition": "c",
              "requires": (("receipts/sp6b-b-run-c-*.json", 1, pin),)}, nc=td3)
         assert r_nofield["verdict"] == "GAP-NAMED", r_nofield
+        # literal-value pin ({"eq": V}): receipt field must equal the literal
+        # (the surpass verdict==SURPASS outcome check, row 13)
+        json.dump({"ticket": "x", "ts": "x", "verdict": "SURPASS"},
+                  open(f"{td3}/receipts/fp33-surpass-verdict-good-1.json", "w"))
+        json.dump({"ticket": "x", "ts": "x", "verdict": "INCOMPLETE"},
+                  open(f"{td3}/receipts/fp33-surpass-verdict-bad-1.json", "w"))
+        eqpin = {"verdict": {"eq": "SURPASS"}}
+        r_eq_ok = audit_row(
+            {"id": 13, "condition": "c",
+             "requires": (("receipts/fp33-surpass-verdict-good-*.json",
+                           1, eqpin),)}, nc=td3)
+        assert r_eq_ok["verdict"] == "RECEIPTED", r_eq_ok
+        r_eq_bad = audit_row(
+            {"id": 13, "condition": "c",
+             "requires": (("receipts/fp33-surpass-verdict-bad-*.json",
+                           1, eqpin),)}, nc=td3)
+        assert r_eq_bad["verdict"] == "GAP-NAMED", r_eq_bad
+        assert "verdict==SURPASS" in r_eq_bad["gaps"][0], r_eq_bad
     # untracked evidence can never satisfy a row (Kai 14631 class):
     # inject a tracked-set that excludes the only matching receipt
     import tempfile as _tf
@@ -288,6 +327,7 @@ def _selftest():
     assert by_id[8]["verdict"] == "RECEIPTED", by_id[8]   # 8a now run
     assert by_id[9]["verdict"] == "GAP-NAMED", by_id[9]   # 8b open
     assert by_id[12]["verdict"] == "GAP-NAMED", by_id[12] # B3 open
+    assert by_id[13]["verdict"] == "GAP-NAMED", by_id[13] # surpass verdict open
     print("SP3_TERMINAL_AUDIT_SELFTEST_PASS")
 
 
