@@ -95,7 +95,7 @@ def _run_bench() -> dict:
         hidden = backbone(input_ids=ids).last_hidden_state
         h_flat = hidden.reshape(-1, hidden.shape[-1])
         pce, _ = ce_fn(h_flat, head.weight, tgt0.reshape(-1), chunk_tokens=1024)
-        mces = [ce_fn(h_flat, mh.weight, tgt_m[k].reshape(-1), chunk_tokens=1024)[0]
+        mces = [ce_fn(h_flat, mtp_heads[k].weight, tgt_m[k].reshape(-1), chunk_tokens=1024)[0]
                 for k in range(fp45.MTP_N_HEADS)]
         return ts.mtp_total_loss(pce, mces, fp45.MTP_WEIGHT)
 
