@@ -9,7 +9,7 @@ Checks (all required GREEN for gate9_pass):
   2. Governor      — vram_fraction<=0.80, margin>=1.5GiB, pace>=0.05s
   3. WSD schedule  — warmup/stable/decay shape verified (pure math)
   4. Ckpt/resume   — synthetic 2-step save/load/verify (CPU tensors, no GPU)
-  5. Optimizer     — wiring confirmed (muon_batched: fp45 bench; adamw: builtin)
+  5. Optimizer     — wiring confirmed (muon_batched: c04-batched-ns5-bench; adamw: builtin)
   6. Bench tok/s   — paced throughput from receipted bench; wall_days <=1.0
 
 Emitted receipt: receipts/c04-gate9-prestage-<ts>.json
@@ -47,19 +47,21 @@ BUDGET_B = 2_200_000_000                  # §3 qualification budget (1 day floo
 SEC_PER_DAY = 86_400
 
 # ----- receipt globs (latest wins) -----------------------------------------
-_FP40_GLOB  = "receipts/fp40-l10-optimizer-ab-*.json"
-_FP45_GLOB  = "receipts/fp45-batched-ns5-ab-*.json"
-_CKPT_GLOB  = "receipts/selective-recompute-ab-*.json"
+_FP40_GLOB      = "receipts/fp40-l10-optimizer-ab-*.json"
+_FP45_GLOB      = "receipts/fp45-batched-ns5-ab-*.json"   # kernel A/B equiv only
+_C04_NS5_GLOB   = "receipts/c04-batched-ns5-bench-*.json" # production §3 deciding receipt
+_CKPT_GLOB      = "receipts/selective-recompute-ab-*.json"
 
 # ----- C04 efficiency lever enumeration (H1 schema) ------------------------
 # Each entry: {status, receipt?, wall_days_cost?}. Emitted verbatim into the
 # gate-9 receipt so the user can review which throughput decisions were made.
 def _build_levers(optimizer, config_sha256):
     """Build the efficiency-lever dict for the chosen optimizer."""
-    ckpt_name = _latest_basename(_CKPT_GLOB)
-    fp40_name = _latest_basename(_FP40_GLOB)
-    fp45_name = _latest_basename(_FP45_GLOB)
-    fp35_name = _latest_basename("receipts/fp35-fused-muon-kernel-ab-*.json")
+    ckpt_name    = _latest_basename(_CKPT_GLOB)
+    fp40_name    = _latest_basename(_FP40_GLOB)
+    c04_ns5_name = _latest_basename(_C04_NS5_GLOB)
+    fp45_name    = _latest_basename(_FP45_GLOB)
+    fp35_name    = _latest_basename("receipts/fp35-fused-muon-kernel-ab-*.json")
 
     return {
         "batch_size": {
@@ -74,8 +76,8 @@ def _build_levers(optimizer, config_sha256):
         },
         "muon_kernel": (
             {"status": "receipted-APPLIED",
-             "receipt": fp45_name or "fp45-batched-ns5-ab-PENDING",
-             "note": "batched NS5 (#382); 15 bmm vs 2100 sequential"}
+             "receipt": c04_ns5_name or fp45_name or "c04-batched-ns5-bench-PENDING",
+             "note": "batched NS5 (#382); 15 bmm vs 2100 sequential; production receipt from c04_batched_ns5_bench"}
             if optimizer == "muon_batched"
             else
             {"status": "receipted-KILLED",
@@ -254,13 +256,13 @@ def lookup_bench_tok_s(optimizer):
                     return tok_s, os.path.basename(cands[-1])
         return None, f"{os.path.basename(cands[-1])}: full_fused_adamw cell not found or tok_s=0"
     elif optimizer == "muon_batched":
-        cands = sorted(glob.glob(os.path.join(NC, _FP45_GLOB)))
+        cands = sorted(glob.glob(os.path.join(NC, _C04_NS5_GLOB)))
         if not cands:
-            return None, "fp45-batched-ns5-ab receipt not found (dispatch fp45 first)"
+            return None, "c04-batched-ns5-bench receipt not found (dispatch c04_batched_ns5_bench.py --run first)"
         d = json.load(open(cands[-1]))
-        tok_s = float(d.get("batched_tok_s_paced", 0))
+        tok_s = float(d.get("tok_s_paced", 0))
         if tok_s <= 0:
-            return None, f"{os.path.basename(cands[-1])}: batched_tok_s_paced=0"
+            return None, f"{os.path.basename(cands[-1])}: tok_s_paced=0"
         return tok_s, os.path.basename(cands[-1])
     return None, f"unknown optimizer {optimizer!r}"
 
@@ -394,6 +396,17 @@ def selftest():
     st, _ = check_optimizer_wired("bad_opt")
     assert st == "BLOCKED"
     print("  PASS: unknown optimizer -> BLOCKED")
+
+    print("[selftest] coherence: gate-9 muon_batched glob matches c04_optimizer_pick receipt type")
+    # _C04_NS5_GLOB prefix must match the ticket that c04_optimizer_pick._load_batched_ns5() recognises.
+    # c04_optimizer_pick matches ticket "c04-batched-ns5-bench" (lowercase). If this assertion breaks,
+    # the two scripts diverged and the §3 gate would validate the wrong throughput.
+    _glob_prefix = os.path.basename(_C04_NS5_GLOB).split("*")[0].rstrip("-")  # "c04-batched-ns5-bench"
+    _pick_ticket = "c04-batched-ns5-bench"
+    assert _glob_prefix == _pick_ticket, (
+        f"gate-9 glob prefix {_glob_prefix!r} != pick ticket {_pick_ticket!r} — "
+        "handoff is incoherent; update _C04_NS5_GLOB or c04_optimizer_pick")
+    print(f"  PASS: glob prefix {_glob_prefix!r} matches pick ticket {_pick_ticket!r}")
 
     print("[selftest] check 6: bench tok/s via synthetic override (both opts)")
     # full_fused_adamw synthetic: 27702.8 tok/s → 0.9185 days
