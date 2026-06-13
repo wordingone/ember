@@ -152,9 +152,30 @@ def _run_bench() -> dict:
     # Warmup (compile already ran one fwd+bwd if PASS)
     remaining_warmup = WARMUP - (1 if compile_status == "PASS" else 0)
     print(f"[c04_ns5_bench] warmup {remaining_warmup} ...", flush=True)
+    try:
+        import torch._dynamo.utils as _dyn_utils
+        _has_dynamo_counters = True
+    except Exception:
+        _has_dynamo_counters = False
+
     for i in range(remaining_warmup):
+        torch.cuda.synchronize()
+        _free_pre, _ = torch.cuda.mem_get_info()
+        _recomp_pre = sum(
+            v for k, v in _dyn_utils.counters["stats"].items() if "recompile" in k.lower()
+        ) if _has_dynamo_counters else -1
         step()
-        print(f"[c04_ns5_bench]   warmup {i+1}/{remaining_warmup}", flush=True)
+        torch.cuda.synchronize()
+        _free_post, _ = torch.cuda.mem_get_info()
+        _recomp_post = sum(
+            v for k, v in _dyn_utils.counters["stats"].items() if "recompile" in k.lower()
+        ) if _has_dynamo_counters else -1
+        _delta_gib = (_free_pre - _free_post) / (1 << 30)
+        _recomp_delta = _recomp_post - _recomp_pre
+        print(f"[c04_ns5_bench]   warmup {i+1}/{remaining_warmup} "
+              f"vram_delta={_delta_gib:+.3f}GiB "
+              f"free_after={_free_post/(1<<30):.2f}GiB "
+              f"recompiles={_recomp_delta}", flush=True)
 
     torch.cuda.synchronize()
     free_b, _ = torch.cuda.mem_get_info()
