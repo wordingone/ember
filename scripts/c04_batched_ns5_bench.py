@@ -172,9 +172,12 @@ def _run_bench() -> dict:
         ) if _has_dynamo_counters else -1
         _delta_gib = (_free_pre - _free_post) / (1 << 30)
         _recomp_delta = _recomp_post - _recomp_pre
+        _alloc_gib   = torch.cuda.memory_allocated() / (1 << 30)
+        _reserv_gib  = torch.cuda.memory_reserved()  / (1 << 30)
         print(f"[c04_ns5_bench]   warmup {i+1}/{remaining_warmup} "
               f"vram_delta={_delta_gib:+.3f}GiB "
               f"free_after={_free_post/(1<<30):.2f}GiB "
+              f"allocated={_alloc_gib:.3f}GiB reserved={_reserv_gib:.3f}GiB "
               f"recompiles={_recomp_delta}", flush=True)
 
     torch.cuda.synchronize()
