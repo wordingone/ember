@@ -201,11 +201,12 @@ def _build_muon_baseline():
     return _MuonBaseline
 
 
-def _build_muon_batched(compiled_ns5: bool = False):
+def _build_muon_batched(compiled_ns5: bool = False, measure: bool = True):
     """Shape-grouped batched Muon (new kernel).
 
-    compiled_ns5=True: wraps _ns5_batched in torch.compile (Lever 1 — optimizer step
-    has no backward so torch-2.6 backward() compile limit doesn't apply).
+    compiled_ns5=True: wraps _ns5_batched in torch.compile (Lever 1).
+    measure=False: strips all cuda.Event/synchronize from step() for clean production
+                   throughput measurement (no instrumentation overhead in the hot path).
     """
     import torch
 
@@ -214,7 +215,7 @@ def _build_muon_batched(compiled_ns5: bool = False):
         try:
             _ns5_fn = torch.compile(_ns5_batched, fullgraph=True)
         except Exception:
-            _ns5_fn = _ns5_batched  # fall back if compile unavailable
+            _ns5_fn = _ns5_batched
 
     class _MuonBatched(torch.optim.Optimizer):
         def __init__(self, params, lr=LR_MUON, momentum=0.95, nesterov=True, weight_decay=0.0):
@@ -223,67 +224,64 @@ def _build_muon_batched(compiled_ns5: bool = False):
             self._last_momentum_ms = 0.0
             self._last_update_ms = 0.0
             self._per_shape_ns_ms: Dict[str, float] = {}
-            self._shape_groups: Dict[tuple, List] = {}  # populated on first step
 
         @torch.no_grad()
         def step(self, closure=None):
             import torch
-            ev_s = torch.cuda.Event(enable_timing=True)
-            ev_e = torch.cuda.Event(enable_timing=True)
+            if measure:
+                ev_s = torch.cuda.Event(enable_timing=True)
+                ev_e = torch.cuda.Event(enable_timing=True)
             for group in self.param_groups:
                 lr = group["lr"]; mom = group["momentum"]
                 nesterov = group["nesterov"]; wd = group["weight_decay"]
 
-                # Group active params by shape
                 by_shape: Dict[tuple, List] = {}
                 for p in group["params"]:
                     if p.grad is None:
                         continue
                     by_shape.setdefault(tuple(p.shape), []).append(p)
 
-                # Process each shape group with batched NS5
                 for shape, ps in by_shape.items():
-                    grads = torch.stack([p.grad.float() for p in ps])  # [n,m,k]
+                    grads = torch.stack([p.grad.float() for p in ps])
                     bufs  = []
                     for p in ps:
                         state = self.state[p]
                         if "momentum_buffer" not in state:
                             state["momentum_buffer"] = torch.zeros_like(p, dtype=torch.float32)
                         bufs.append(state["momentum_buffer"])
-                    bufs_t = torch.stack(bufs)  # [n,m,k]
+                    bufs_t = torch.stack(bufs)
 
-                    # Momentum update — timed
-                    ev_s.record()
+                    if measure:
+                        ev_s.record()
                     bufs_t.mul_(mom).add_(grads)
                     upd = grads.add(bufs_t, alpha=mom) if nesterov else bufs_t.clone()
-                    ev_e.record()
-                    torch.cuda.synchronize()
-                    self._last_momentum_ms += ev_s.elapsed_time(ev_e)
+                    if measure:
+                        ev_e.record(); torch.cuda.synchronize()
+                        self._last_momentum_ms += ev_s.elapsed_time(ev_e)
 
-                    # Write updated buffers back before NS5 (in-place-safe)
                     for i, p in enumerate(ps):
                         self.state[p]["momentum_buffer"].copy_(bufs_t[i])
 
-                    # Batched NS5 — timed per shape group
-                    ev_s.record()
+                    if measure:
+                        ev_s.record()
                     upd = _ns5_fn(upd)
-                    ev_e.record()
-                    torch.cuda.synchronize()
-                    _shape_ms = ev_s.elapsed_time(ev_e)
-                    self._last_ns_ms += _shape_ms
-                    _sk = str(shape)
-                    self._per_shape_ns_ms[_sk] = self._per_shape_ns_ms.get(_sk, 0.0) + _shape_ms
+                    if measure:
+                        ev_e.record(); torch.cuda.synchronize()
+                        _shape_ms = ev_s.elapsed_time(ev_e)
+                        self._last_ns_ms += _shape_ms
+                        _sk = str(shape)
+                        self._per_shape_ns_ms[_sk] = self._per_shape_ns_ms.get(_sk, 0.0) + _shape_ms
 
-                    # Param update — timed
                     m_sq = max(1.0, shape[0] / shape[1]) ** 0.5
-                    ev_s.record()
+                    if measure:
+                        ev_s.record()
                     for i, p in enumerate(ps):
                         if wd:
                             p.mul_(1.0 - lr * wd)
                         p.add_(upd[i].to(p.dtype), alpha=-lr * m_sq)
-                    ev_e.record()
-                    torch.cuda.synchronize()
-                    self._last_update_ms += ev_s.elapsed_time(ev_e)
+                    if measure:
+                        ev_e.record(); torch.cuda.synchronize()
+                        self._last_update_ms += ev_s.elapsed_time(ev_e)
 
         def reset_ns_timer(self):
             self._last_ns_ms = 0.0
@@ -316,7 +314,7 @@ def _build_model(grad_ckpt: bool):
     return backbone, head, mtp_heads
 
 
-def _build_opts(backbone, head, mtp_heads, arm: str, compiled_ns5: bool = False):
+def _build_opts(backbone, head, mtp_heads, arm: str, compiled_ns5: bool = False, measure: bool = True):
     import torch
     all_params = dict(backbone.named_parameters())
     for i, mh in enumerate(mtp_heads):
@@ -332,7 +330,7 @@ def _build_opts(backbone, head, mtp_heads, arm: str, compiled_ns5: bool = False)
     if arm == "muon-baseline":
         MuonCls = _build_muon_baseline()
     else:
-        MuonCls = _build_muon_batched(compiled_ns5=compiled_ns5)
+        MuonCls = _build_muon_batched(compiled_ns5=compiled_ns5, measure=measure)
 
     muon_opt = MuonCls(muon_p, lr=LR_MUON, weight_decay=WEIGHT_DECAY) if muon_p else None
     adamw_opt = torch.optim.AdamW(adamw_p, lr=LR_ADAMW, weight_decay=WEIGHT_DECAY)
