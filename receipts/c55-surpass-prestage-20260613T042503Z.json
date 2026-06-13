@@ -1,0 +1,26 @@
+{
+  "ticket": "C55-SURPASS-PRESTAGE",
+  "ts": "20260613T042503Z",
+  "rung": "C55",
+  "subgoal": "S5",
+  "title": "surpass pre-stage pair: GSM8K-200 greedy harness (A3-ii) + B3 duty-battery spec frozen BEFORE first B-run",
+  "verdict": "DISCHARGED (pre-stage only \u2014 NOT the surpass receipt itself; the E2B-surpass run is a separate future gate)",
+  "method": "leo gate consolidation \u2014 artifacts verified live (selftest re-run + doc stat + merge-commit checked)",
+  "deliverable_1_gsm8k_harness": {
+    "status": "LANDED",
+    "selftest": "GSM8K_EVAL_SELFTEST PASS (re-run live this gate)",
+    "script": "scripts/gsm8k_eval.py",
+    "merge": "#343 via commit 380254f (eng #341: GSM8K-200 greedy exact-match harness)"
+  },
+  "deliverable_2_duty_battery_spec": {
+    "status": "FROZEN pre-execution",
+    "doc": "docs/sp6b-duty-battery-spec-v1.md (7844 bytes, frozen @d2147eb)",
+    "amendments": "v1.1 \u2014 20 adversarial findings resolved, PR #345 MERGED (a961c24, 2026-06-12T18:25:47Z)",
+    "contents": "20 episodes + expected-verb table, committed BEFORE first B-run (prereg discipline)"
+  },
+  "s5_note": "this is S5's first implemented rung (surpass PRE-STAGE). The S5 SURPASS RECEIPT (E2B surpass by June 22) remains a separate downstream gate \u2014 the harness + battery spec being frozen pre-run is the precondition, not the surpass itself.",
+  "caveats": [
+    "pre-stage discharge, not the surpass result",
+    "harness selftest reproduced at this gate; spec-doc + merge-commit existence verified, not asserted"
+  ]
+}
