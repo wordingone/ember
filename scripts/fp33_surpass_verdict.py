@@ -557,6 +557,27 @@ def selftest():
     chk("B3 vector ≡ pre-counted {b,c}",
         eval_B3(rv)["status"] == eval_B3(rc)["status"])
 
+    # 11. A-leg per-seat paired form (harnesses are per-seat: fp33_a3ii_gsm8k,
+    #     density_ab_a1/a2 emit one seat each → leg receipt carries both seats'
+    #     per-task arrays; _deltas derives ember−E2B). Lock that branch.
+    r = _synth_all_pass()
+    r["A1"] = {"leg": "A1", "compute": _synth_all_pass()["A1"]["compute"],
+               "per_task_ember": [0.9] * 30, "per_task_e2b": [0.6] * 30}  # +0.3
+    v11 = aggregate(r)
+    chk("A1 per-seat paired (ember .9 vs e2b .6) → PASS",
+        v11["legs"]["A1"]["status"] == "PASS")
+    # A3 slice carrying per-seat arrays (GSM8K binary pass per task)
+    r2 = _synth_all_pass()
+    r2["A3"] = {"leg": "A3", "compute": _synth_all_pass()["A3"]["compute"],
+                "slices": {
+                    "mbpp": {"per_task_ember": [1] * 25 + [0] * 5,
+                             "per_task_e2b": [1] * 22 + [0] * 8, "mde": 0.10},
+                    "gsm8k200": {"per_task_ember": [1] * 20 + [0] * 10,
+                                 "per_task_e2b": [1] * 18 + [0] * 12, "mde": 0.10}}}
+    v11b = aggregate(r2)
+    chk("A3 slices per-seat paired → PASS",
+        v11b["legs"]["A3"]["status"] == "PASS")
+
     passed = sum(1 for _, ok in checks if ok)
     total = len(checks)
     for name, ok in checks:
