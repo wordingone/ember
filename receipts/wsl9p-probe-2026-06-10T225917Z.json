@@ -1,0 +1,128 @@
+{
+  "schema": "wsl9p_probe_v1",
+  "timestamp": "2026-06-10T22:59:17Z",
+  "rng_seed": 16,
+  "reps": 3,
+  "concurrent_caveat": "",
+  "platform_info": {
+    "python": "3.12.3",
+    "platform": "linux",
+    "node": "DESKTOPHH",
+    "system": "Linux",
+    "release": "6.6.87.2-microsoft-standard-WSL2",
+    "uname_sysname": "Linux",
+    "uname_release": "6.6.87.2-microsoft-standard-WSL2",
+    "uname_machine": "x86_64"
+  },
+  "results": {
+    "/tmp": {
+      "seq_write_10m": {
+        "reps_ms": [
+          9.72,
+          8.35,
+          8.14
+        ],
+        "median_ms": 8.35
+      },
+      "seq_write_100m": {
+        "reps_ms": [
+          130.36,
+          77.0,
+          84.75
+        ],
+        "median_ms": 84.75
+      },
+      "seq_read_10m": {
+        "reps_ms": [
+          1.27,
+          1.29,
+          1.32
+        ],
+        "median_ms": 1.29
+      },
+      "seq_read_100m": {
+        "reps_ms": [
+          7.73,
+          7.86,
+          7.34
+        ],
+        "median_ms": 7.73
+      },
+      "random_io_1gb": {
+        "reps_ms": [
+          3.1,
+          3.35,
+          3.0
+        ],
+        "median_ms": 3.1
+      },
+      "parallel_read_10m": {
+        "reps_ms": [
+          2.76,
+          2.95,
+          2.61
+        ],
+        "median_ms": 2.76
+      }
+    },
+    "/mnt/b": {
+      "seq_write_10m": {
+        "reps_ms": [
+          83.78,
+          84.23,
+          83.09
+        ],
+        "median_ms": 83.78
+      },
+      "seq_write_100m": {
+        "reps_ms": [
+          819.36,
+          871.13,
+          856.55
+        ],
+        "median_ms": 856.55
+      },
+      "seq_read_10m": {
+        "reps_ms": [
+          83.02,
+          79.88,
+          79.7
+        ],
+        "median_ms": 79.88
+      },
+      "seq_read_100m": {
+        "reps_ms": [
+          844.33,
+          748.64,
+          828.03
+        ],
+        "median_ms": 828.03
+      },
+      "random_io_1gb": {
+        "reps_ms": [
+          173.32,
+          184.5,
+          166.75
+        ],
+        "median_ms": 173.32
+      },
+      "parallel_read_10m": {
+        "reps_ms": [
+          94.07,
+          97.62,
+          94.18
+        ],
+        "median_ms": 94.18
+      }
+    }
+  },
+  "penalties_pct": {
+    "seq_write_10m": 903.4,
+    "seq_write_100m": 910.7,
+    "seq_read_10m": 6092.2,
+    "seq_read_100m": 10611.9,
+    "random_io_1gb": 5491.0,
+    "parallel_read_10m": 3312.3
+  },
+  "verdict": "9P penalty >20% on 6/6 ops (seq_write_10m, seq_write_100m, seq_read_10m, seq_read_100m, random_io_1gb, parallel_read_10m)"
+}

@@ -1,0 +1,333 @@
+{
+  "ticket": "EMBER-RESIDENT-TRAINING-GATE",
+  "ts": "20260620T181235Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_truth": {
+    "repo": "<local-path>",
+    "git_head": "e80700d836e54e09a550f910707f356851a3586a",
+    "goal_path": "<local-path>",
+    "goal_source_sha256": "339145c8046c5fb1d6492064fd8924c04373a8c9085ad3cdc61e5ca38dbaa95d",
+    "debt_ledger_path": "<local-path>",
+    "debt_ledger_sha256": "aeb37ea770fe193bf29fb900a462b5119af462f437624832fd680ba6293dd4b9",
+    "repo_sync_status": "LOCAL_GOAL_PRESENT_AND_HASHED",
+    "goal_authority": {
+      "status": "PASS",
+      "goal_path": "GOAL.md",
+      "goal_sha256": "339145c8046c5fb1d6492064fd8924c04373a8c9085ad3cdc61e5ca38dbaa95d",
+      "required_goal_markers": [
+        "Authority And Precedence",
+        "Current Blocker Packet",
+        "resident_training_gate_status",
+        "RLM, iGRPO, and the clean-room"
+      ],
+      "superseded_parallel_specs": [
+        {
+          "path": "docs/ember-mvp-v0.md",
+          "status": "SUPERSEDED_STUB",
+          "sha256": "84cc07134a613366798b29199ab1de2c464cf4a06ae266264f16d5cc8a4000f8",
+          "markers_present": {
+            "superseded": true,
+            "sole_active_goal": true,
+            "scope_not_reduced": true,
+            "resident_gate": true
+          }
+        },
+        {
+          "path": "docs/20260617-maximally-viable-product.md",
+          "status": "SUPERSEDED_STUB",
+          "sha256": "84cc07134a613366798b29199ab1de2c464cf4a06ae266264f16d5cc8a4000f8",
+          "markers_present": {
+            "superseded": true,
+            "sole_active_goal": true,
+            "scope_not_reduced": true,
+            "resident_gate": true
+          }
+        }
+      ],
+      "one_goal_file_rule": "GOAL.md is the only active Ember goal/control document; superseded docs are imported history, not clearance surfaces."
+    }
+  },
+  "paper_sources": {
+    "index_path": "<local-path>",
+    "index_sha256": "7e626f2530c2a5a9b97715799f914ef237416e500a0d49d20961cd7151fd1bcb",
+    "papers": [
+      {
+        "kind": "RLM",
+        "title": "Recursive Language Models",
+        "arxiv_id": "2512.24601",
+        "receipt_path": "<local-path>",
+        "receipt_sha256": "c4269512252f339d8e2df19b09f64cb3e057e18ee50da3d3c3c11390286b3886",
+        "declared_pdf_sha256": "8567362c22768d9b50d4a4a8d63bb28dda2c2b2051be30d67f70f645170429ca",
+        "declared_source_sha256": "9893bffd48ed6e0bf65c40745b54bcc898476af3a3c8f49e384fe9160b30915e",
+        "files": {
+          "pdf": {
+            "path": "<local-path>",
+            "sha256": "8567362c22768d9b50d4a4a8d63bb28dda2c2b2051be30d67f70f645170429ca",
+            "bytes": 9942446
+          },
+          "source": {
+            "path": "<local-path>",
+            "sha256": "9893bffd48ed6e0bf65c40745b54bcc898476af3a3c8f49e384fe9160b30915e",
+            "bytes": 10425638
+          },
+          "abs_html": {
+            "path": "<local-path>",
+            "sha256": "a82c188a4c8ee6be9f9565ba71f838acb0022d83ef6a24a38ca6e4698e875d65",
+            "bytes": 45849
+          }
+        },
+        "mechanism_extraction": {
+          "kind": "RLM",
+          "abstract_sha256": "691e7d1df824577a03e1858e1f57a3e21770b1ab30f138c8edaf87f091ecf7bf",
+          "mechanism_primitives": [
+            "treat long/large workspace context as an external environment",
+            "programmatically inspect and decompose state into snippets",
+            "recursively call the model over selected snippets",
+            "aggregate sub-results into a final answer or action",
+            "post-train around the recursive interface rather than only prompting it"
+          ],
+          "local_ember_map": {
+            "environment": "workspace goals, receipts, harness state, task rows, and evaluator outputs",
+            "recursive_call": "bounded native goal-organ subcalls over selected state snippets",
+            "learned_part": "policy deciding what to inspect/decompose/call/aggregate",
+            "forbidden_analogy": "ordinary Codex file reading or a hard-coded router is not RLM training"
+          },
+          "assumptions_that_do_not_automatically_hold_locally": [
+            "large-model benchmark gains transfer to Ember's resident scale",
+            "paper tasks match Ember's harness/action setting",
+            "prompted recursion equals learned resident policy",
+            "reward availability implies safe/private heldout access"
+          ]
+        }
+      },
+      {
+        "kind": "iGRPO",
+        "title": "iGRPO: Self-Feedback-Driven LLM Reasoning",
+        "arxiv_id": "2602.09000",
+        "receipt_path": "<local-path>",
+        "receipt_sha256": "14f2b4ac1041db31700af2db2485b60015e24a4537b86a906033fd6efd4a5a25",
+        "declared_pdf_sha256": "64816e01828791bf222fbb89bb33f08a92cd6ae84673d1915f24f84d867560b9",
+        "declared_source_sha256": "55bb474224024f7c6e03d0e6ac06349949bf2f55f60d58ed90510239cf21cad6",
+        "files": {
+          "pdf": {
+            "path": "<local-path>",
+            "sha256": "64816e01828791bf222fbb89bb33f08a92cd6ae84673d1915f24f84d867560b9",
+            "bytes": 1333030
+          },
+          "source": {
+            "path": "<local-path>",
+            "sha256": "55bb474224024f7c6e03d0e6ac06349949bf2f55f60d58ed90510239cf21cad6",
+            "bytes": 1486834
+          },
+          "abs_html": {
+            "path": "<local-path>",
+            "sha256": "d0f11dd5f1e37da0c99d6f1fae3d88117d45bd13153ee8e55bcdded466ebe991",
+            "bytes": 47829
+          }
+        },
+        "mechanism_extraction": {
+          "kind": "iGRPO",
+          "abstract_sha256": "76073d91d62e9b29338b11f0a831bb93f3535cec6c4e0bae037d0c6b86b9c8f9",
+          "mechanism_primitives": [
+            "sample multiple exploratory drafts under one task budget",
+            "score drafts with the same scalar verifier/reward used for optimization",
+            "select the highest-reward draft",
+            "condition a second refinement stage on the selected draft",
+            "apply a GRPO-style update on draft-conditioned refinements under matched rollout budget",
+            "ablate against plain GRPO/fixed prompting to prove the wrapper is load-bearing"
+          ],
+          "local_ember_map": {
+            "reward": "verifier score from heldout/evaluator rows and gate checks",
+            "best_draft": "best attempted next-action or solution trace selected by verifier reward",
+            "learned_part": "policy update from best-draft-conditioned refinements",
+            "forbidden_analogy": "reranking, prompt repair, or historical GRPO receipts without a new update step do not satisfy iGRPO"
+          },
+          "assumptions_that_do_not_automatically_hold_locally": [
+            "large-model benchmark gains transfer to Ember's resident scale",
+            "paper tasks match Ember's harness/action setting",
+            "prompted recursion equals learned resident policy",
+            "reward availability implies safe/private heldout access"
+          ]
+        }
+      }
+    ],
+    "forced_goal_mode_rule": "Before implementing, evaluating, or claiming RLM/iGRPO in Ember goal mode, read the stored paper receipts and at least the abstract/PDF source for both papers; cite exact paths and hashes in the attempt receipt."
+  },
+  "mechanism_to_implementation_map": {
+    "RLM": {
+      "kind": "RLM",
+      "abstract_sha256": "691e7d1df824577a03e1858e1f57a3e21770b1ab30f138c8edaf87f091ecf7bf",
+      "mechanism_primitives": [
+        "treat long/large workspace context as an external environment",
+        "programmatically inspect and decompose state into snippets",
+        "recursively call the model over selected snippets",
+        "aggregate sub-results into a final answer or action",
+        "post-train around the recursive interface rather than only prompting it"
+      ],
+      "local_ember_map": {
+        "environment": "workspace goals, receipts, harness state, task rows, and evaluator outputs",
+        "recursive_call": "bounded native goal-organ subcalls over selected state snippets",
+        "learned_part": "policy deciding what to inspect/decompose/call/aggregate",
+        "forbidden_analogy": "ordinary Codex file reading or a hard-coded router is not RLM training"
+      },
+      "assumptions_that_do_not_automatically_hold_locally": [
+        "large-model benchmark gains transfer to Ember's resident scale",
+        "paper tasks match Ember's harness/action setting",
+        "prompted recursion equals learned resident policy",
+        "reward availability implies safe/private heldout access"
+      ]
+    },
+    "iGRPO": {
+      "kind": "iGRPO",
+      "abstract_sha256": "76073d91d62e9b29338b11f0a831bb93f3535cec6c4e0bae037d0c6b86b9c8f9",
+      "mechanism_primitives": [
+        "sample multiple exploratory drafts under one task budget",
+        "score drafts with the same scalar verifier/reward used for optimization",
+        "select the highest-reward draft",
+        "condition a second refinement stage on the selected draft",
+        "apply a GRPO-style update on draft-conditioned refinements under matched rollout budget",
+        "ablate against plain GRPO/fixed prompting to prove the wrapper is load-bearing"
+      ],
+      "local_ember_map": {
+        "reward": "verifier score from heldout/evaluator rows and gate checks",
+        "best_draft": "best attempted next-action or solution trace selected by verifier reward",
+        "learned_part": "policy update from best-draft-conditioned refinements",
+        "forbidden_analogy": "reranking, prompt repair, or historical GRPO receipts without a new update step do not satisfy iGRPO"
+      },
+      "assumptions_that_do_not_automatically_hold_locally": [
+        "large-model benchmark gains transfer to Ember's resident scale",
+        "paper tasks match Ember's harness/action setting",
+        "prompted recursion equals learned resident policy",
+        "reward availability implies safe/private heldout access"
+      ]
+    }
+  },
+  "clean_room_harness_identity": {
+    "status": "PRESENT_AS_CLEAN_ROOM_HARNESS_EVIDENCE",
+    "files": [
+      {
+        "path": "docs/sp5-nck-harness-port-spec-v0.md",
+        "sha256": "d8a759cce710d2c297b0650da98277f12e9a8ddc5eceac8aa6fc294fc2bc1d2d",
+        "bytes": 5367
+      },
+      {
+        "path": "docs/nck-event-loop-v0.md",
+        "sha256": "a77f6fbe85a7688614fb721f73ecaf9e9278ca1f306a3faaea14226a8dd8ab71",
+        "bytes": 6425
+      },
+      {
+        "path": "docs/nck-invariants-v0.md",
+        "sha256": "e819cd8dbb6b563f6c22a6489291135e7731cd2c65a92c60fc1a27e70637a433",
+        "bytes": 10006
+      },
+      {
+        "path": "scripts/nck/event_loop.py",
+        "sha256": "0bd7fb03feebf10904e836c507d4e97cfbfc438494212a4210012af4520993f7",
+        "bytes": 35913
+      },
+      {
+        "path": "scripts/nck/invariants.py",
+        "sha256": "7bbf1ae76dfd6a331ceed1fc67e7fe75a2c567e130e25dc6ee211e80c33d8320",
+        "bytes": 18903
+      },
+      {
+        "path": "scripts/nck/nck_e2e_proof.py",
+        "sha256": "04bdbe8e03aa7141ddf3ff071b6b37e17ec3096122d1e83bac9acb992177edae",
+        "bytes": 26578
+      },
+      {
+        "path": "receipts/nck-e2e-proof-20260612T142318Z.json",
+        "sha256": "af050deca9ae8e5dcc6f5cdf45677497fdefd93916cdc3b77536c18357c98fea",
+        "bytes": 4824
+      }
+    ],
+    "nck_e2e_proof": {
+      "path": "<local-path>",
+      "ticket": "NCK-E2E-PROOF",
+      "all_stages_pass": true,
+      "chain": [
+        "boot_checksum",
+        "mail_consume",
+        "mail_consume_live",
+        "seat_dispatch",
+        "cu_console"
+      ],
+      "identity": "ember"
+    },
+    "note": "Harness evidence is not a learned RLM/iGRPO resident-training organ by itself."
+  },
+  "resident_training_candidate_manifest_path": null,
+  "resident_training_candidate": null,
+  "a_b_c_deleted_contract": {
+    "A": "same task/evaluator/harness envelope with no native goal organ and no resident-training update",
+    "B": "clean-room harness plus fixed hand-authored or prompt/rule policy, but no learned RLM/iGRPO update",
+    "C": "same harness with model-learned RLM/iGRPO update that changes later action selection or task performance",
+    "Deleted": "C with native organ, recursive-query policy, verifier-conditioned update, or harness action channel removed",
+    "pass_rule": "C beats A and B; Deleted degrades or blocks; budgets/evaluator/data/seeds matched; per-row scores present"
+  },
+  "component_status": {
+    "goal_authority_and_superseded_specs": "PASS",
+    "paper_source_preflight": "PASS",
+    "clean_room_harness_interface": "PASS",
+    "candidate_resident_training_manifest": "BLOCKED",
+    "native_goal_organ": "BLOCKED",
+    "recursive_query_policy": "BLOCKED",
+    "verifier_conditioned_update": "BLOCKED",
+    "a_b_c_deleted_evaluator": "BLOCKED",
+    "deletion_sensitive_improvement": "BLOCKED"
+  },
+  "errors": [
+    "candidate_manifest.missing"
+  ],
+  "invalid_codes": [
+    "resident_training_candidate_missing"
+  ],
+  "next_blocker": "resident-training candidate manifest and implementation",
+  "next_command_if_blocked": "python scripts\\ember_resident_training_gate.py --out <local-path> --candidate-manifest <resident-training-candidate.json>",
+  "code_vs_docs_metric": {
+    "rows": [
+      {
+        "path": "GOAL.md",
+        "category": "documentation_receipt_spec",
+        "added_lines": 2,
+        "deleted_lines": 3
+      },
+      {
+        "path": "docs\\ember-mvp-v0.md",
+        "category": "documentation_receipt_spec",
+        "added_lines": 6,
+        "deleted_lines": 1016
+      },
+      {
+        "path": "docs\\20260617-maximally-viable-product.md",
+        "category": "documentation_receipt_spec",
+        "added_lines": 6,
+        "deleted_lines": 1062
+      },
+      {
+        "path": "docs\\ember-debt-ledger.md",
+        "category": "documentation_receipt_spec",
+        "added_lines": 1,
+        "deleted_lines": 1
+      },
+      {
+        "path": "scripts\\ember_resident_training_gate.py",
+        "category": "code",
+        "added_lines": 633,
+        "deleted_lines": 0
+      },
+      {
+        "path": "scripts\\ember_resident_training_gate_selftest.py",
+        "category": "code_test",
+        "added_lines": 13,
+        "deleted_lines": 0
+      }
+    ],
+    "code_added_lines": 633,
+    "code_test_added_lines": 13,
+    "documentation_receipt_spec_added_lines": 15,
+    "other_added_lines": 0
+  },
+  "resident_training_gate_status": "BLOCKED",
+  "verdict": "RESIDENT_TRAINING_GATE_BLOCKED"
+}

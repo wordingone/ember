@@ -1,0 +1,36 @@
+{
+  "ticket": "FP-VERDICT-CHAIN-REHEARSAL",
+  "ts": "20260612T144614Z",
+  "chains_exercised": [
+    "A_2B_PASS_verdict",
+    "A_fp29_gate",
+    "B_2B_RETRY_verdict",
+    "B_4B_KILL_verdict",
+    "B_fp29_gate",
+    "C_fp29_gate",
+    "D_fp29_gate",
+    "E_4B_LATE_PASS_verdict",
+    "E_fp29_gate",
+    "F_fp36_consistency"
+  ],
+  "outcomes": {
+    "A_2B_PASS_verdict": "PASS",
+    "A_fp29_gate": "PASS-THROUGH",
+    "B_2B_RETRY_verdict": "RETRY-AT-4B",
+    "B_4B_KILL_verdict": "KILL",
+    "B_fp29_gate": "KILL-REFUSED-SYNTHESIS-UNRECEIPTED",
+    "C_fp29_gate": "KILL-REFUSED-SYNTHESIS-MALFORMED",
+    "D_fp29_gate": "KILL-VALID",
+    "E_4B_LATE_PASS_verdict": "PASS",
+    "E_fp29_gate": "PASS-THROUGH",
+    "F_fp36_consistency": "PASS"
+  },
+  "errors": [],
+  "all_chains_pass": true,
+  "fp36_consistency": "PASS",
+  "manifest_sha_used": "0000000000000000000000000000000000000000000000000000000000000000",
+  "wiring_breaks": 0,
+  "note": "Dress rehearsal for 2B verdict chain (fp24 -> fp29 -> fp36). Synthetic probe receipts cover all verdict/gate branches. No GPU. No real checkpoint consumed. Executed before real 1B checkpoint (~step 244k). WIRING-GUIDANCE: run_verdict() prior_2b_verdict arg is a verdict STRING ('RETRY-AT-4B'), not the full dict \u2014 callers using a prior verdict dict must extract .get('verdict') or .get('result',{}).get('verdict') first (as main() does via pv.get('result',pv).get('verdict')).",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "no_gpu": true
+}

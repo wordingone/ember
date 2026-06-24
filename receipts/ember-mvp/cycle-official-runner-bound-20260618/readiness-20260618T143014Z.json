@@ -1,0 +1,59 @@
+{
+  "ticket": "EMBER-MVP-READINESS",
+  "ts": "20260618T143014Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "cycle_receipt_path": "<local-path>",
+  "requirements": [
+    "cycle.accepted",
+    "cycle.observation_and_latent_bound",
+    "cycle.replay_and_rollback_bound",
+    "sandbox.production_runner",
+    "sandbox.required_probes_pass",
+    "governor.real_gpu_training",
+    "governor.hashable_artifact",
+    "assimilation.durable_artifact",
+    "state_substrate.local_commit_replayable",
+    "benchmark.real_mle_tasks_executed",
+    "benchmark.per_task_scores_present",
+    "benchmark.external_delta_positive",
+    "wheel.real_equal_budget_run",
+    "wheel.arm_contracts_valid",
+    "wheel.ordering_c_gt_b_gt_a"
+  ],
+  "failed_requirements": [
+    "benchmark.real_mle_tasks_executed",
+    "benchmark.per_task_scores_present",
+    "benchmark.external_delta_positive",
+    "wheel.real_equal_budget_run",
+    "wheel.ordering_c_gt_b_gt_a"
+  ],
+  "benchmark_public_test_proxy": {
+    "ready": false
+  },
+  "benchmark_frozen_heldout": {
+    "ready": false
+  },
+  "benchmark_external_heldout": {
+    "ready": false
+  },
+  "wheel_public_test_proxy": {
+    "ready": false
+  },
+  "wheel_frozen_heldout": {
+    "ready": false
+  },
+  "verdict": "NOT_READY",
+  "growth_failures": [
+    "growth.repeated_positive_cycles"
+  ],
+  "growth_verdict": "GROWTH_BLOCKED",
+  "linked_receipts": {
+    "sandbox": "<local-path>",
+    "gpu_governor": "<local-path>",
+    "state_substrate": "<local-path>",
+    "observation": "<local-path>",
+    "benchmark": "<local-path>",
+    "wheel": "<local-path>"
+  }
+}

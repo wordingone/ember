@@ -1,0 +1,147 @@
+{
+  "api_spend_usd": 0,
+  "changed_judgments": [
+    {
+      "arm": "C",
+      "instance_id": 25,
+      "judge": "strict_local_visual",
+      "leaderboard_identical": false,
+      "pass": true,
+      "rationale": "Includes KDE/rug/box overlay, PSD band fills, Poincare contours, marginal histograms, and SD annotations, but layout, PSD shape/colors/bands, distributions, axes, and Poincare data geometry differ substantially from gold.",
+      "rubric_identical": true,
+      "score": 61
+    }
+  ],
+  "expected_score_bias": "lower_or_equal_than_gpt4o_not_inflated",
+  "judge_surface": "gpt-5.x_subagent_strict_visual_regrade",
+  "leaderboard_identical": false,
+  "paid_api_surface_used": false,
+  "rubric_identical": true,
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "supersedes": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-visual-judgments-20260622T190500Z.json",
+  "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-VISUAL-JUDGMENTS",
+  "ts": "20260622T191500Z",
+  "verdict": "SCIENCEAGENTBENCH_ZERO_COST_VISUAL_JUDGMENTS_PASS",
+  "visual_judgments": [
+    {
+      "arm": "B",
+      "instance_id": 4,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction is a trivial flat line with unrelated title and axes; it does not resemble the gold elk spatial KDE, convex hull, clustered scatter, or colorbars.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "C",
+      "instance_id": 4,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": true,
+      "rationale": "Predicted figure captures the main elk spatial pattern, convex hull, coordinate range, scatter distribution, and density hotspot location. However it differs substantially in title/axis labeling, aspect/layout, colorbar scales and labels, background KDE appearance, and point coloring/clustering semantics versus the gold. Overall resemblance is adequate but not close.",
+      "rubric_identical": true,
+      "score": 68
+    },
+    {
+      "arm": "B",
+      "instance_id": 24,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction is a blank instruction-only baseline with a flat line and none of the required ECG, R-peak/outlier markers, heart-rate trace, heartbeat overlay, or histogram structure from the gold figure.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "C",
+      "instance_id": 24,
+      "judge": "strict_local_visual",
+      "leaderboard_identical": false,
+      "pass": true,
+      "rationale": "Prediction now matches the gold's four-panel ECG summary concept: ECG trace/markers, heartbeat overlay, heart-rate time series, and histogram. However layout proportions, styling, titles, colors, axes, statistics, and data appearance differ substantially; predicted heart-rate range/spikes and mean are not visually consistent with gold. Task similarity is solid but not identical.",
+      "rubric_identical": true,
+      "score": 72
+    },
+    {
+      "arm": "B",
+      "instance_id": 25,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction is a single flat instruction-only baseline line plot with unrelated title, axes, data, and layout. It does not reproduce any of the gold HRV multi-panel content: RR histogram, PSD bands, or Poincare plot.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "C",
+      "instance_id": 25,
+      "judge": "strict_local_visual",
+      "leaderboard_identical": false,
+      "pass": true,
+      "rationale": "Includes KDE/rug/box overlay, PSD band fills, Poincare contours, marginal histograms, and SD annotations, but layout, PSD shape/colors/bands, distributions, axes, and Poincare data geometry differ substantially from gold.",
+      "rubric_identical": true,
+      "score": 61
+    },
+    {
+      "arm": "A",
+      "instance_id": 4,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "Deleted",
+      "instance_id": 4,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "A",
+      "instance_id": 24,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "Deleted",
+      "instance_id": 24,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "A",
+      "instance_id": 25,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "Deleted",
+      "instance_id": 25,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    }
+  ]
+}

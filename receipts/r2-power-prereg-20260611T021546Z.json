@@ -1,0 +1,66 @@
+{
+  "ticket": "R2-POWER-PREREG",
+  "ts": "20260611T021546Z",
+  "rates_source": "w1-floor-g1-base-20260610T215814Z-samples.jsonl",
+  "n_tasks": 43,
+  "base_mean_rate": 0.657,
+  "assumption": "homogeneous per-sample shift; binomial sampling noise only (heterogeneous true effects widen SE \u2014 MDEs are optimistic lower bounds)",
+  "mde_sample_level_by_k": {
+    "8": 0.0607,
+    "16": 0.0427,
+    "24": 0.0348,
+    "32": 0.0301
+  },
+  "power_sample_level": {
+    "k=8": {
+      "+3pp": 0.133,
+      "+5pp": 0.259,
+      "+8pp": 0.525
+    },
+    "k=16": {
+      "+3pp": 0.197,
+      "+5pp": 0.443,
+      "+8pp": 0.815
+    },
+    "k=24": {
+      "+3pp": 0.283,
+      "+5pp": 0.618,
+      "+8pp": 0.927
+    },
+    "k=32": {
+      "+3pp": 0.35,
+      "+5pp": 0.732,
+      "+8pp": 0.978
+    }
+  },
+  "power_task_feed": {
+    "k=8": {
+      "+3pp": 0.01,
+      "+5pp": 0.036,
+      "+8pp": 0.1
+    },
+    "k=16": {
+      "+3pp": 0.004,
+      "+5pp": 0.013,
+      "+8pp": 0.034
+    },
+    "k=24": {
+      "+3pp": 0.001,
+      "+5pp": 0.004,
+      "+8pp": 0.008
+    },
+    "k=32": {
+      "+3pp": 0.0,
+      "+5pp": 0.0,
+      "+8pp": 0.002
+    }
+  },
+  "null_rejection_rate": {
+    "k=8": 0.052,
+    "k=16": 0.053,
+    "k=24": 0.053,
+    "k=32": 0.049
+  },
+  "sims_per_cell": 2000,
+  "seed": 16
+}

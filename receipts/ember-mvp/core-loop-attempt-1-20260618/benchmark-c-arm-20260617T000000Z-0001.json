@@ -1,0 +1,115 @@
+{
+  "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN",
+  "ts": "20260618T151654Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ],
+    "official_leaderboard_comparable": false
+  },
+  "fixture_only": false,
+  "frozen_before_execution": true,
+  "source_root": "<local-path>",
+  "data_root": "<local-path>",
+  "submission_root": "<local-path>",
+  "wheel_arm": {
+    "id": "C",
+    "name": "full-mvp-loop",
+    "uses_dream_loop": true,
+    "uses_latent_branch": true,
+    "uses_state_commit": true,
+    "uses_replay": true
+  },
+  "preflight": {
+    "verdict": "BLOCKED",
+    "prepared_data_ready": false,
+    "candidate_submissions_ready": true,
+    "receipt_path": "<local-path>",
+    "auto_sample_submission": false,
+    "bootstrap_receipt_path": null
+  },
+  "freeze_manifest_sha256": "sha256:081a83aa5e595b176977781896ead6d0c05dfb57a4f7bec208afdaa2e868005b",
+  "freeze_manifest_path": "<local-path>",
+  "real_mle_tasks_executed": false,
+  "blocked_reason": "official_grading_preflight_failed",
+  "missing_prepared_assets": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [
+        "gold_submission"
+      ],
+      "dataset_paths": {
+        "answers": "detecting-insults-in-social-commentary/prepared/private/test.csv",
+        "gold_submission": "detecting-insults-in-social-commentary/prepared/private/gold_submission.csv",
+        "sample_submission": "detecting-insults-in-social-commentary/prepared/public/sample_submission_null.csv"
+      }
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "random-acts-of-pizza/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "random-acts-of-pizza/prepared/public/sampleSubmission.csv"
+      }
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "spooky-author-identification/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "spooky-author-identification/prepared/public/sample_submission.csv"
+      }
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "nomad2018-predict-transparent-conductors/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "nomad2018-predict-transparent-conductors/prepared/public/sample_submission.csv"
+      }
+    },
+    {
+      "task_id": "leaf-classification",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "leaf-classification/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "leaf-classification/prepared/public/sample_submission.csv"
+      }
+    }
+  ],
+  "missing_candidate_submissions": [],
+  "task_results": [],
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "BLOCKED",
+  "mode": "official-abc-wheel-runner-arm-c"
+}

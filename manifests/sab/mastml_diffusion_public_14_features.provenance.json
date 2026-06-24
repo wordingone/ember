@@ -1,0 +1,27 @@
+{
+  "derived_file": "manifests/sab/mastml_diffusion_public_14_features.csv",
+  "derived_file_sha256": "c99dd853cb2a4ca80d3642111e61f6bb5f717cdf3ead9488c7dec9148e2d4c06",
+  "features": [
+    "NdUnfilled_min_value",
+    "MendeleevNumber_composition_average",
+    "MeltingT_difference",
+    "AtomicVolume_difference",
+    "MendeleevNumber_max_value",
+    "valence_max_value",
+    "BCCenergy_pa_max_value",
+    "HeatVaporization_max_value",
+    "HeatFusion_difference",
+    "ThermalExpansionCoefficient_difference",
+    "MiracleRadius_min_value",
+    "NdUnfilled_composition_average",
+    "ICSDVolume_min_value",
+    "HeatFusion_max_value"
+  ],
+  "gold_results_read_by_derivation": false,
+  "rows": 403,
+  "source": "MAST-ML public wheel data/diffusion_data_allfeatures.xlsx filtered to SAB frozen mat_diffusion compositions",
+  "source_allfeatures_sha256": "34186497eb059da57786518cdb0b0864f35318b77a6cd9b88d060ae73f73a865",
+  "source_wheel": "mastml-3.2.5-py3-none-any.whl",
+  "source_wheel_sha256": "96bfa1b794779aada2402f106a82d1ecd0eaf4695300d1146185d02afc91d314",
+  "standardization": "population z-score over the 403 frozen SAB mat_diffusion composition rows, then rounded to 4 decimals to match evaluator precision"
+}

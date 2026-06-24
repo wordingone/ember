@@ -1,0 +1,22 @@
+{
+  "ticket": "C04-BATCHED-NS5-BENCH",
+  "ts": "20260613T123123Z",
+  "candidate": "c03-h1024-d20",
+  "config": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "batch": 16,
+    "seq": 1024
+  },
+  "bench_reps": 20,
+  "compiled": true,
+  "grad_checkpointing": true,
+  "c1_dtype": "QAT",
+  "harness_sha": "3744c9adf6d50bf24c3bea19030f4a0b0b4c557cca36e924f82e95fce938e555",
+  "status": "SKIPPED-MARGIN",
+  "free_vram_gib": 0.014,
+  "total_vram_gib": 23.99,
+  "free_vram_gib_pre_compile": 20.766,
+  "compile_status": "PASS"
+}

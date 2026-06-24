@@ -1,0 +1,83 @@
+{
+  "ticket": "EMBER-COMPLETENESS-TALLY",
+  "ts": "20260612T203107Z",
+  "issue": 337,
+  "total": 55,
+  "implemented": 12,
+  "part": 15,
+  "gated": 22,
+  "open": 6,
+  "pct_implemented": 21.8,
+  "missing": [
+    {
+      "id": "C12",
+      "reason": null
+    },
+    {
+      "id": "C13",
+      "reason": null
+    },
+    {
+      "id": "C48",
+      "reason": null
+    },
+    {
+      "id": "C50",
+      "reason": null
+    },
+    {
+      "id": "C53",
+      "reason": "open"
+    },
+    {
+      "id": "C55",
+      "reason": "#343 merged @380254f (GSM8K_EVAL_SELFTEST PASS reproduced at gate) + docs/sp6b-duty-battery-spec-v1.md frozen @d2147eb, adversarially passed + v1.1 amendments in PR #345"
+    }
+  ],
+  "per_subgoal": {
+    "S1": {
+      "implemented": 3,
+      "part": 4,
+      "gated": 4,
+      "open": 2
+    },
+    "S2": {
+      "implemented": 5,
+      "part": 3,
+      "gated": 8,
+      "open": 1
+    },
+    "S3": {
+      "implemented": 2,
+      "part": 2,
+      "gated": 2,
+      "open": 1
+    },
+    "S4": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 0,
+      "open": 1
+    },
+    "S5": {
+      "implemented": 0,
+      "part": 2,
+      "gated": 3,
+      "open": 1
+    },
+    "S6": {
+      "implemented": 2,
+      "part": 2,
+      "gated": 3,
+      "open": 0
+    },
+    "S7": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 2,
+      "open": 0
+    }
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "no_gpu": true
+}

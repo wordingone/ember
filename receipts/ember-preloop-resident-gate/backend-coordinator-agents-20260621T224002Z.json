@@ -1,0 +1,488 @@
+{
+  "ticket": "EMBER-AVIR-CLI-BACKEND-COORDINATOR-AGENTS-GATE",
+  "ts": "20260621T224002Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "BACKEND_COORDINATOR_AGENTS_GATE_PASS",
+  "classification": "clean_room_executable_resident_coordination_backend_not_static_agent_list_or_mock_panel",
+  "out_path": "<local-path>",
+  "reference_audit": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984"
+  },
+  "uiux_repl_components_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "44c1a554bd6da097c602a6a675b722486dc462ae620894ec043afbd583a223f1",
+    "ticket": "EMBER-AVIR-CLI-UIUX-REPL-COMPONENTS-GATE",
+    "verdict": "UIUX_REPL_COMPONENTS_GATE_PASS"
+  },
+  "backend_coordinator_agents": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "82759287924ed33454c9dae31e0fb4488b3af0e4b0b6af858fcd4bb0ebeccd11",
+    "copies_avir_code": false,
+    "contract_counts": {
+      "n_components": 23,
+      "n_local": 6,
+      "n_goal_safe_replacement": 16,
+      "n_trigger_gated": 1,
+      "n_unclassified": 0
+    },
+    "components": [
+      {
+        "component": "coordinator/coordinatorMode",
+        "tag": "derivative",
+        "source": "coordinator/coordinatorMode.ts:38",
+        "rationale": "Env var renamed `AVIR_COORDINATOR_MODE` (upstream: `CLAUDE_COORDINATOR_MODE`). User-visible mode-switch messages (\"Entered coordinator mode to match resumed session.\", line 76) contain no brand text. `AVIR_SIMPLE` env var (line 88) similarly renamed.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "coordinator/workerAgent",
+        "tag": "derivative",
+        "source": "coordinator/workerAgent.ts:1",
+        "rationale": "Entirely stubbed: `getCoordinatorAgents(): never[] { return [] }`. Upstream returns built-in coordinator agents; avir returns empty array.",
+        "has_brand_or_cloud_string": false,
+        "disposition": "trigger_gated_cleanroom_component",
+        "action_type": "preserve_worker_contract_but_block_until_resident_agent_pool_exists",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/built-in/claudeCodeGuideAgent",
+        "tag": "derivative",
+        "source": "tools/AgentTool/built-in/claudeCodeGuideAgent.ts:22",
+        "rationale": "Agent type renamed `avir-cli-guide` (from upstream `claude-code-guide`). Prompt text retains upstream product names: \"You are the Claude guide agent\" (line 30), \"Claude Agent SDK\" (lines 36, 53, 60), \"Claude API\" (lines 38, 62). `AVIR_CLI_GUIDE_AGENT_TYPE = 'avir-cli-guide'` (line 21). `whenToUse` mentions \"Can Claude\u2026\", \"Does Claude\u2026\", \"Claude Agent SDK\", \"Claude API\" (visible in Agent tool listing).",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/built-in/exploreAgent",
+        "tag": "derivative",
+        "source": "tools/AgentTool/built-in/exploreAgent.ts:13",
+        "rationale": "System prompt: \"You are a file search specialist for Avir CLI, Anthropic's official CLI for Claude.\" \u2014 avir name substituted but Anthropic brand retained.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/built-in/generalPurposeAgent",
+        "tag": "derivative",
+        "source": "tools/AgentTool/built-in/generalPurposeAgent.ts:3",
+        "rationale": "System prompt prefix: \"You are an agent for Avir CLI, Anthropic's official CLI for Claude.\"",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/built-in/planAgent",
+        "tag": "derivative",
+        "source": "tools/AgentTool/built-in/planAgent.ts:21",
+        "rationale": "System prompt: \"You are a software architect and planning specialist for Avir CLI.\" No Claude brand strings.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/built-in/statuslineSetup",
+        "tag": "derivative",
+        "source": "tools/AgentTool/built-in/statuslineSetup.ts:3",
+        "rationale": "Agent purpose text: \"You are a status line setup agent for Avir CLI.\" JSON schema in prompt has: `\"display_name\": \"string\" // Display name (e.g., \"Claude 3.5 Sonnet\")` (line 43), `\"rate_limits\": { // Optional: Claude.ai subscription usage limits` (line 62, shown to model as context schema), `\"agent\": { // Optional, only present when Claude is started with --agent flag` (line 67), \"can ask Claude to continue to make changes to the status line\" (trailing guidance). Schema example values and comment text are model-visible, not user-visible.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/built-in/verificationAgent",
+        "tag": "identical",
+        "source": "tools/AgentTool/built-in/verificationAgent.ts:22",
+        "rationale": "No avir-specific substitutions. Prompt references `mcp__claude-in-chrome__*` as a browser automation tool name (line 22); this is a technical MCP server name, not a brand string. Prompt is otherwise brand-neutral.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/AgentTool",
+        "tag": "identical",
+        "source": "tools/AgentTool/AgentTool.tsx:1",
+        "rationale": "No brand strings; no avir changes.",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_backend_contract",
+        "action_type": "execute_local_resident_coordination_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/prompt",
+        "tag": "identical",
+        "source": "tools/AgentTool/prompt.ts:1",
+        "rationale": "Agent listing prompt formatter; no brand strings.",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_backend_contract",
+        "action_type": "execute_local_resident_coordination_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/runAgent",
+        "tag": "derivative",
+        "source": "tools/AgentTool/runAgent.ts:1",
+        "rationale": "References `claudeMd` field in context (internal field name); no user-visible brand strings.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AgentTool/builtInAgents",
+        "tag": "derivative",
+        "source": "tools/AgentTool/builtInAgents.ts:1",
+        "rationale": "Registers all built-in agents; includes `claudeCodeGuideAgent` registration path.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "SendMessageTool/SendMessageTool",
+        "tag": "identical",
+        "source": "tools/SendMessageTool/SendMessageTool.ts:589",
+        "rationale": "User-visible confirmation dialog: \"Send a message to Remote Control session X? It arrives as a user prompt on the receiving Claude (possibly another machine) via Anthropic's servers.\" Bridge-mode only; non-operational in local avir.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "SendMessageTool/prompt",
+        "tag": "identical",
+        "source": "tools/SendMessageTool/prompt.ts:1",
+        "rationale": "Tool description shown to model; comment \"Local Claude session's socket\" is model-visible, not user-visible.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "TeamCreateTool",
+        "tag": "identical",
+        "source": "tools/TeamCreateTool/*.ts, tools/TeamDeleteTool/*.ts",
+        "rationale": "No brand strings; no avir changes.",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_backend_contract",
+        "action_type": "execute_local_resident_coordination_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "TeamDeleteTool",
+        "tag": "identical",
+        "source": "tools/TeamCreateTool/*.ts, tools/TeamDeleteTool/*.ts",
+        "rationale": "No brand strings; no avir changes.",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_backend_contract",
+        "action_type": "execute_local_resident_coordination_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "tasks/LocalAgentTask/LocalAgentTask",
+        "tag": "derivative",
+        "source": "tasks/LocalAgentTask/LocalAgentTask.tsx:44",
+        "rationale": "Runs subagents in-process. Comment: \"input_tokens in Claude API is cumulative per turn\" (line 44) \u2014 code comment only, not user-visible. Functional structure adapted for avir's in-process agent model.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "tasks/RemoteAgentTask/RemoteAgentTask",
+        "tag": "identical",
+        "source": "tasks/RemoteAgentTask/RemoteAgentTask.tsx:149",
+        "rationale": "Cloud-remote agent task; non-operational in local avir mode (requires claude.ai subscription). All brand strings unchanged from upstream: \"run /login and sign in with your Claude.ai account (not Console)\" (line 149), \"https://claude.ai/code/onboarding?magic=env-setup\" (line 151), \"The Claude GitHub app must be installed\" (line 157), \"claude.ai URL stays a durable record\" (lines 325, 559, 730).",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "components/CoordinatorAgentStatus",
+        "tag": "derivative",
+        "source": "components/CoordinatorAgentStatus.tsx:34",
+        "rationale": "Avir's coordinator task panel; manages background agent rows, eviction, teammate view navigation. Uses avir state (`AppState.tasks`, `LocalAgentTaskState`). No user-visible brand strings. Structurally adapted from upstream coordinator UI.",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_backend_contract",
+        "action_type": "execute_local_resident_coordination_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "CoordinatorTaskPanel",
+        "tag": "derivative",
+        "source": "components/CoordinatorAgentStatus.tsx:34",
+        "rationale": "Avir's coordinator task panel; manages background agent rows, eviction, teammate view navigation. Uses avir state (`AppState.tasks`, `LocalAgentTaskState`). No user-visible brand strings. Structurally adapted from upstream coordinator UI.",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_backend_contract",
+        "action_type": "execute_local_resident_coordination_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "skills/bundled/scheduleRemoteAgents",
+        "tag": "identical",
+        "source": "skills/bundled/scheduleRemoteAgents.ts:176",
+        "rationale": "CCR remote scheduling skill; non-operational without claude.ai subscription. Heavy upstream brand: \"spawns a fully isolated remote session (CCR) in Anthropic's cloud infrastructure\" (line 176), `https://claude.ai/code/scheduled` (lines 193, 319, 292), `https://claude.ai/settings/connectors` (lines 99, 193, 236, 290), \"authenticate with a claude.ai account first\" (line 341), \"remote claude.ai account\" (line 356), \"Claude GitHub App\" (lines 405, 406, 320).",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "skills/bundled/claudeApi",
+        "tag": "identical",
+        "source": "skills/bundled/claudeApi.ts:184",
+        "rationale": "\"Build apps with the Claude API or Anthropic SDK.\" \u2014 skill description user-visible in `/skills` list.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      },
+      {
+        "component": "skills/bundled/claudeApiContent",
+        "tag": "identical",
+        "source": "skills/bundled/claudeApiContent.ts:38",
+        "rationale": "Constants: `OPUS_NAME: 'Claude Opus 4.6'`, `SONNET_NAME: 'Claude Sonnet 4.6'`, `HAIKU_NAME: 'Claude Haiku 4.5'` (lines 38\u201342); file map keys include `claude-api.md` paths (lines 50\u201374). These are model names and documentation filenames, rendered in skill context.",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_cloud_or_upstream_brand_path_with_local_resident_coordination",
+        "copies_avir_code": false
+      }
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "checks": {
+      "component_count_at_least_audit_floor": true,
+      "all_required_capabilities_present": true,
+      "lifecycle_executes_delegation_worker_completion_and_handoff": true,
+      "built_in_agent_selection_not_single_route": true,
+      "task_panel_reflects_worker_lifecycle": true,
+      "no_unclassified_components": true,
+      "brand_or_cloud_components_are_replaced_or_gated": true
+    },
+    "capability_coverage": {
+      "coordinator_mode": {
+        "required_candidates": [
+          "coordinator/coordinatorMode"
+        ],
+        "matched": [
+          "coordinator/coordinatorMode"
+        ],
+        "status": "PASS"
+      },
+      "built_in_agents": {
+        "required_candidates": [
+          "AgentTool/built-in/exploreAgent",
+          "AgentTool/built-in/generalPurposeAgent",
+          "AgentTool/built-in/planAgent",
+          "AgentTool/built-in/verificationAgent"
+        ],
+        "matched": [
+          "AgentTool/built-in/exploreAgent",
+          "AgentTool/built-in/generalPurposeAgent",
+          "AgentTool/built-in/planAgent",
+          "AgentTool/built-in/verificationAgent"
+        ],
+        "status": "PASS"
+      },
+      "agent_tool_infra": {
+        "required_candidates": [
+          "AgentTool/AgentTool",
+          "AgentTool/prompt",
+          "AgentTool/runAgent",
+          "AgentTool/builtInAgents"
+        ],
+        "matched": [
+          "AgentTool/AgentTool",
+          "AgentTool/prompt",
+          "AgentTool/runAgent",
+          "AgentTool/builtInAgents"
+        ],
+        "status": "PASS"
+      },
+      "message_and_team_tools": {
+        "required_candidates": [
+          "SendMessageTool/SendMessageTool",
+          "SendMessageTool/prompt",
+          "TeamCreateTool",
+          "TeamDeleteTool"
+        ],
+        "matched": [
+          "SendMessageTool/SendMessageTool",
+          "SendMessageTool/prompt",
+          "TeamCreateTool",
+          "TeamDeleteTool"
+        ],
+        "status": "PASS"
+      },
+      "task_lifecycle": {
+        "required_candidates": [
+          "tasks/LocalAgentTask/LocalAgentTask",
+          "tasks/RemoteAgentTask/RemoteAgentTask"
+        ],
+        "matched": [
+          "tasks/LocalAgentTask/LocalAgentTask",
+          "tasks/RemoteAgentTask/RemoteAgentTask"
+        ],
+        "status": "PASS"
+      },
+      "task_panel": {
+        "required_candidates": [
+          "components/CoordinatorAgentStatus"
+        ],
+        "matched": [
+          "components/CoordinatorAgentStatus"
+        ],
+        "status": "PASS"
+      },
+      "skills_surface": {
+        "required_candidates": [
+          "skills/bundled/scheduleRemoteAgents",
+          "skills/bundled/claudeApi",
+          "skills/bundled/claudeApiContent"
+        ],
+        "matched": [
+          "skills/bundled/scheduleRemoteAgents",
+          "skills/bundled/claudeApi",
+          "skills/bundled/claudeApiContent"
+        ],
+        "status": "PASS"
+      }
+    },
+    "lifecycle": {
+      "status": "PASS",
+      "events": [
+        {
+          "event": "task_created",
+          "task_id": "task-1",
+          "agent_id": "explore"
+        },
+        {
+          "event": "task_created",
+          "task_id": "task-2",
+          "agent_id": "plan"
+        },
+        {
+          "event": "task_created",
+          "task_id": "task-3",
+          "agent_id": "general-purpose"
+        },
+        {
+          "event": "task_created",
+          "task_id": "task-4",
+          "agent_id": "verification"
+        },
+        {
+          "event": "task_completed",
+          "task_id": "task-1",
+          "agent_id": "explore"
+        },
+        {
+          "event": "task_completed",
+          "task_id": "task-2",
+          "agent_id": "plan"
+        },
+        {
+          "event": "task_completed",
+          "task_id": "task-3",
+          "agent_id": "general-purpose"
+        },
+        {
+          "event": "task_completed",
+          "task_id": "task-4",
+          "agent_id": "verification"
+        }
+      ],
+      "panel_rows": [
+        {
+          "task_id": "task-1",
+          "agent_id": "explore",
+          "status": "completed",
+          "events": [
+            "created",
+            "assigned:explore",
+            "worker_started",
+            "worker_completed",
+            "result_handoff"
+          ],
+          "has_result": true
+        },
+        {
+          "task_id": "task-2",
+          "agent_id": "plan",
+          "status": "completed",
+          "events": [
+            "created",
+            "assigned:plan",
+            "worker_started",
+            "worker_completed",
+            "result_handoff"
+          ],
+          "has_result": true
+        },
+        {
+          "task_id": "task-3",
+          "agent_id": "general-purpose",
+          "status": "completed",
+          "events": [
+            "created",
+            "assigned:general-purpose",
+            "worker_started",
+            "worker_completed",
+            "result_handoff"
+          ],
+          "has_result": true
+        },
+        {
+          "task_id": "task-4",
+          "agent_id": "verification",
+          "status": "completed",
+          "events": [
+            "created",
+            "assigned:verification",
+            "worker_started",
+            "worker_completed",
+            "result_handoff"
+          ],
+          "has_result": true
+        }
+      ],
+      "agent_count": 4,
+      "task_count": 4,
+      "assigned_agent_ids": [
+        "explore",
+        "general-purpose",
+        "plan",
+        "verification"
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "coordinator_backend_deleted_blocks_delegation": true,
+    "agent_registry_deleted_blocks_selection": true,
+    "worker_lifecycle_deleted_blocks_completion": true,
+    "task_panel_without_backend_is_mock_only": true,
+    "command_registry_alone_insufficient": true,
+    "static_docs_or_agent_list_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete coordinator backend or agent registry; UI/components/commands can remain, but task assignment, worker lifecycle, panel rows, and result handoff fail"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_backend_coordinator_agents_receipt",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 23
+}

@@ -1,0 +1,108 @@
+{
+  "ticket": "V0-PRETRAIN-CONFIG",
+  "version": 3,
+  "frozen": "2026-06-11T07:20Z",
+  "v2_delta": "2026-06-11T07:28Z — G-tokenizer green (PR #164 merged): tokenizer_receipt named; real token total recorded with the absorb decision. No other field changed.",
+  "v3_delta": "2026-06-12 — NONE arm adoption (PR #298): grad_checkpointing disabled at next WSD segment boundary/resume. A/B bench receipt: receipts/selective-recompute-ab-20260612T063250Z.json (none=1.213x vs full-ckpt). Margin-assert: 8.245 GiB peak / 23.99 GiB total / 19.19 GiB at 0.80 fraction = 10.9 GiB headroom >> 1.5 GiB floor.",
+  "basis": "fp19-bench-20260611T024648Z (c03-qat receipted pace) + docs/research/gpu-math-multiplier-table-v2-2026-06-11.json (survivor stack) + nc2-own-technique-contract.md (directed components) + docs/research/v0-launch-gate.md (G-config row)",
+
+  "model": {
+    "name": "ember-v0",
+    "shape": "c03",
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "vocab": 32000,
+    "vocab_rule": "MUST equal the frozen tokenizer's real vocab size from the TOKENIZER-FREEZE-V0 receipt; 32000 is the expected value, the receipt is binding",
+    "seq": 1024,
+    "tied_embeddings": true,
+    "grad_checkpointing": false,
+    "grad_ckpt_disabled_by": "PR #298: NONE arm 1.213x vs full-ckpt; margin_assert_receipt: receipts/selective-recompute-ab-20260612T063250Z.json",
+    "params_estimate": 368354304
+  },
+
+  "precision": {
+    "base": "bf16",
+    "qat": {
+      "enabled": true,
+      "scheme": "int8-grid fake-quant STE on linear weights (fp19_bench shape)",
+      "receipted_tax": "0.928x paced vs bf16 (fp19-bench c03-qat 18737.7 vs c03-bf16 20201.2)",
+      "component_contract": "#1 QAT — quantization-native pretrain, not post-hoc PTQ"
+    },
+    "excluded": {
+      "fp8": "receipted-negative: v2 table surviving 0.98 on Ada at this scale",
+      "ternary_v0": "c01-scale variant only; v0 = c03-qat per fp19-envelope"
+    }
+  },
+
+  "objective": {
+    "primary": "next-token CE",
+    "ce_impl": "chunked/fused cross-entropy (Liger FLCE or cut-CE class) — the vocab-logit memory term does not shrink with model size; v2 table survivor",
+    "mtp_aux_heads": {
+      "enabled": true,
+      "n_heads": 2,
+      "weight": 0.3,
+      "component_contract": "#5 MTP — denser signal per token at a <=7.4B-token budget",
+      "fallback": "if the MTP-head implementation fails its selftest, v0 launches CE-only and the deviation is RECEIPTED + the component re-enters at v0.1 — never silently dropped"
+    }
+  },
+
+  "optimizer": {
+    "hidden_2d": "Muon (momentum-orthogonalized, Newton-Schulz) — v2 table surviving 1.35 data-efficiency",
+    "embeddings_norms_head": "AdamW",
+    "lr_adamw": 3e-4,
+    "lr_muon": 0.02,
+    "weight_decay": 0.1,
+    "fallback": "AdamW-everything if Muon impl fails selftest; deviation RECEIPTED, Muon re-enters at first checkpoint window"
+  },
+
+  "schedule": {
+    "type": "WSD (warmup-stable-decay)",
+    "warmup_frac": 0.01,
+    "stable_until_frac": 0.85,
+    "decay_to_lr_frac": 0.10,
+    "rationale": "cheap intermediate checkpoints during the stable phase (fp-23/fp-24 probes ride them); v2 table survivor"
+  },
+
+  "data": {
+    "source": "tokenized v0 corpus (assembly receipt sha a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2)",
+    "tokenizer_receipt": "tokenizer-freeze-20260611T154111Z.json",
+    "tokenizer_receipt_rule": "null = LAUNCH BLOCKED. Must name the committed TOKENIZER-FREEZE-V0 receipt (receipt_check PASS, assembly-sha pin match, reserved multimodal band verified, real token counts). The launch shim fail-closes on null.",
+    "real_token_total": 6973632300,
+    "token_shortfall_decision": "real 6.974B vs compute-optimal 7.367B = -5.3%; ABSORBED at gate (PR #164 signoff): data-efficiency survivors cover it with margin, WSD permits receipted continuation, a top-up would re-open assembly + re-freeze the tokenizer",
+    "packing": "sequence packing / no-pad batching REQUIRED at tokenization-shard time (v2 table survivor; effective-token waste at seq 1024 otherwise)",
+    "token_budget": {
+      "compute_optimal": 7367086080,
+      "rule": "train to compute-optimal in the stable phase; WSD checkpoints allow over-train continuation as a separate receipted decision"
+    }
+  },
+
+  "throughput": {
+    "batch": 4,
+    "compile": "DISABLED — eager only. torch.compile (TorchInductor) raises an R3 dynamo NameError on the QAT graph in this env; the trainer calls no torch.compile, so the prior 'fallback eager — deviation RECEIPTED' promise had no backing receipt. This pin makes the field true to the eager code path. Registered deviation: receipts/eng56-eager-pin-20260611T161105Z.json",
+    "excluded": {
+      "sparse_attention": "receipted-negative at seq 1024 (v2 table 0.98)",
+      "machete_kernels": "Hopper-only — not on the 4090 candidate set"
+    }
+  },
+
+  "governor": {
+    "vram_fraction": 0.80,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05,
+    "budget_math_uses": "tok_s_paced",
+    "rule": "FLOOR values pinned from fp19_bench; env layer may TIGHTEN, never loosen; fix-forward on a headroom violation is BANNED — kill and relaunch governed"
+  },
+
+  "runner": {
+    "base": "scripts/timeshare_pretrain.py (eng-33: checkpoint/resume/interlock/governor floor — exists)",
+    "extension_needed": "Muon split-optimizer, WSD schedule, chunked-CE, MTP aux heads, tokenized-corpus loader with packing (eng item; implement against THIS contract, choices are frozen here not in the impl)",
+    "interlock": "EMBER_GATE_AUTHORIZED=1 + --live (unchanged)",
+    "checkpoint_probes": "fp-23 prereg attached; fp-24 (#139) fires on real checkpoints; fp-21b (#132) + fp-20c (#146) fire on the first sampling round"
+  },
+
+  "registry": {
+    "note": "Corroboration declaration — 12c050e7 runs all four ADOPT rows; this block makes registry_gate.py exit 0 on crash-resume dispatch.",
+    "consumes": ["muon", "wsd-schedule", "qat", "governor-pacing", "selective-recompute"]
+  }
+}

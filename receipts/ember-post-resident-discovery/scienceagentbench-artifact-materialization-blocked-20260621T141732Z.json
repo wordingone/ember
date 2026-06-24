@@ -1,0 +1,62 @@
+{
+  "artifact_probes": [
+    {
+      "error": "HTTP Error 401: Unauthorized",
+      "error_type": "HTTPError",
+      "final_url": "https://buckeyemailosu-my.sharepoint.com/personal/chen_8336_buckeyemail_osu_edu/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fchen%5F8336%5Fbuckeyemail%5Fosu%5Fedu%2FDocuments%2FResearch%2Fbenchmark%5Fverified%2Ezip&parent=%2Fpersonal%2Fchen%5F8336%5Fbuckeyemail%5Fosu%5Fedu%2FDocuments%2FResearch&ga=1",
+      "method": "HEAD",
+      "ok": false,
+      "range": null,
+      "status": 401
+    },
+    {
+      "error": "HTTP Error 401: Unauthorized",
+      "error_type": "HTTPError",
+      "final_url": "https://buckeyemailosu-my.sharepoint.com/personal/chen_8336_buckeyemail_osu_edu/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fchen%5F8336%5Fbuckeyemail%5Fosu%5Fedu%2FDocuments%2FResearch%2Fbenchmark%5Fverified%2Ezip&parent=%2Fpersonal%2Fchen%5F8336%5Fbuckeyemail%5Fosu%5Fedu%2FDocuments%2FResearch&ga=1",
+      "method": "GET",
+      "ok": false,
+      "range": "bytes=0-0",
+      "status": 401
+    }
+  ],
+  "blocked_reasons": [
+    "sharepoint_artifact_requires_authorized_access"
+  ],
+  "code_vs_docs_metric": {
+    "classification": "during-project artifact-materialization blocked receipt",
+    "receipt_lines": 62,
+    "script_code_lines": 206
+  },
+  "deleted_selector_routing": {
+    "admission_state": "ROUTING_BLOCKED_DELETED_SELECTOR",
+    "reason": "Deleting the native benchmark router prevents a justified route from ScienceAgentBench block to RE-Bench.",
+    "selected": null
+  },
+  "deletion_sensitive": true,
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "802290a4e0cf9134b6f74f4c762a34ffdc0f68217f63e4562c7d5294b9e00fba",
+  "native_operator_routing": {
+    "admission_state": "BLOCKED_ARTIFACT_MATERIALIZATION",
+    "reason": "ScienceAgentBench remains the preferred stronger target, but its verified full artifact is not obtainable by safe unauthenticated local probing.",
+    "selected_before_block": "scienceagentbench"
+  },
+  "next_benchmark": {
+    "next_executable_command": "python scripts\\ember_rebench_admission.py --out receipts\\ember-post-resident-discovery\\rebench-admission-<timestamp>.json",
+    "reason": "GOAL requires RE-Bench admission after a receipted ScienceAgentBench artifact-materialization block.",
+    "selected": "re-bench"
+  },
+  "repo": "<local-path>",
+  "scienceagentbench_artifact_status": {
+    "downloaded_or_unzipped_data_redistributed": false,
+    "expected_local_path": "<local-path>",
+    "expected_name": "benchmark_verified.zip",
+    "full_artifact_exists": false
+  },
+  "sources": {
+    "github_readme_url": "https://raw.githubusercontent.com/OSU-NLP-Group/ScienceAgentBench/main/README.md",
+    "sharepoint_artifact_url": "https://buckeyemailosu-my.sharepoint.com/:<local-path>"
+  },
+  "ticket": "EMBER-SCIENCEAGENTBENCH-ARTIFACT-MATERIALIZATION",
+  "ts": "20260621T141732Z",
+  "verdict": "SCIENCEAGENTBENCH_ARTIFACT_MATERIALIZATION_BLOCKED"
+}

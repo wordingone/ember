@@ -1,0 +1,133 @@
+{
+  "api_spend_usd": 0,
+  "expected_score_bias": "lower_or_equal_than_gpt4o_not_inflated",
+  "judge_surface": "gpt-5.x_subagent_strict_visual_regrade",
+  "leaderboard_identical": false,
+  "rubric_identical": true,
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "supersedes": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-visual-judgments-20260622T180000Z.json",
+  "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-VISUAL-JUDGMENTS",
+  "ts": "20260622T185500Z",
+  "visual_judgments": [
+    {
+      "arm": "B",
+      "instance_id": 4,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction is a trivial flat line with unrelated title and axes; it does not resemble the gold elk spatial KDE, convex hull, clustered scatter, or colorbars.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "C",
+      "instance_id": 4,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": true,
+      "rationale": "Predicted figure captures the main elk spatial pattern, convex hull, coordinate range, scatter distribution, and density hotspot location. However it differs substantially in title/axis labeling, aspect/layout, colorbar scales and labels, background KDE appearance, and point coloring/clustering semantics versus the gold. Overall resemblance is adequate but not close.",
+      "rubric_identical": true,
+      "score": 68
+    },
+    {
+      "arm": "B",
+      "instance_id": 24,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction is a blank instruction-only baseline with a flat line and none of the required ECG, R-peak/outlier markers, heart-rate trace, heartbeat overlay, or histogram structure from the gold figure.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "C",
+      "instance_id": 24,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction shows only a single dense raw ECG-like time-series panel. It misses the gold figure's four-panel layout, z-normalized ECG with quality shading and markers, heart-rate time series with mean line, individual heartbeat overlay, and heart-rate histogram; resemblance is limited to having an ECG signal over time.",
+      "rubric_identical": true,
+      "score": 18
+    },
+    {
+      "arm": "B",
+      "instance_id": 25,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction is a single flat instruction-only baseline line plot with unrelated title, axes, data, and layout. It does not reproduce any of the gold HRV multi-panel content: RR histogram, PSD bands, or Poincare plot.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "C",
+      "instance_id": 25,
+      "judge": "gpt-5.x_subagent_strict_visual_regrade",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "Prediction shows a single ECG signal overview over time, while the gold figure is a three-part HRV visualization with RR interval distribution, PSD frequency bands, and Poincare scatter/density with marginal histograms. It is related to ECG/HRV only thematically but misses the required plot structure, metrics, scales, and visual resemblance.",
+      "rubric_identical": true,
+      "score": 10
+    },
+    {
+      "arm": "A",
+      "instance_id": 4,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "Deleted",
+      "instance_id": 4,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "A",
+      "instance_id": 24,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "Deleted",
+      "instance_id": 24,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "A",
+      "instance_id": 25,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    },
+    {
+      "arm": "Deleted",
+      "instance_id": 25,
+      "judge": "deterministic_missing_output_rule",
+      "leaderboard_identical": false,
+      "pass": false,
+      "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+      "rubric_identical": true,
+      "score": 0
+    }
+  ]
+}

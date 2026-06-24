@@ -1,0 +1,846 @@
+{
+  "ticket": "EMBER-AVIR-CLI-UIUX-REPL-COMPONENTS-GATE",
+  "ts": "20260621T222342Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "UIUX_REPL_COMPONENTS_GATE_PASS",
+  "classification": "clean_room_executable_repl_component_surface_not_screenshot_or_static_docs",
+  "out_path": "receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json",
+  "reference_audit": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57"
+  },
+  "function_slash_commands_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "303749c6dcd3e0e35125a773c6ac1b94781c198135103f25e437f73b9eb851f8",
+    "ticket": "EMBER-AVIR-CLI-FUNCTION-SLASH-COMMANDS-GATE",
+    "verdict": "FUNCTION_SLASH_COMMANDS_GATE_PASS"
+  },
+  "uiux_repl_components": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "c5cd2b67deac2e4401dd5df28684cddc6dcb2e01725f432921cb48950782467c",
+    "copies_avir_code": false,
+    "contract_counts": {
+      "n_components": 61,
+      "n_local": 23,
+      "n_goal_safe_replacement": 35,
+      "n_trigger_gated": 3,
+      "n_unclassified": 0
+    },
+    "components": [
+      {
+        "component": "screens/REPL",
+        "tag": "derivative",
+        "source": "screens/REPL.tsx:1",
+        "rationale": "Main REPL screen; imports avir-specific components (DiagnosticsDisplay, SkillsMenu, ModelPicker) alongside upstream; no direct brand strings but wiring is heavily avir-modified",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "App",
+        "tag": "identical",
+        "source": "components/App.tsx:19",
+        "rationale": "Pure context provider wrapper (FpsMetrics, Stats, AppState); no brand content; structure unchanged",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AutoModeOptInDialog",
+        "tag": "identical",
+        "source": "components/AutoModeOptInDialog.tsx:9",
+        "rationale": "Comment: \"NOTE: This copy is legally reviewed \u2014 do not modify without Legal team approval.\" Brand strings: \"Auto mode lets Claude handle permission prompts automatically \u2014 Claude checks each tool call\u2026\" (line 10)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "AutoUpdater",
+        "tag": "derivative",
+        "source": "components/AutoUpdater.tsx:31",
+        "rationale": "Upstream auto-updater; disabled in avir: `return null; // DISABLED: auto-updater removed` at line 31; dead code below that line",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "ClaudeInChromeOnboarding",
+        "tag": "identical",
+        "source": "components/ClaudeInChromeOnboarding.tsx:59",
+        "rationale": "Entirely Claude-in-Chrome branded: dialog title \"Claude in Chrome (Beta)\" (line 106), \"Claude can browse, click, and type on\" (line 75); component named after upstream product",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "ClaudeMdExternalIncludesDialog",
+        "tag": "identical",
+        "source": "components/ClaudeMdExternalIncludesDialog.tsx:14",
+        "rationale": "Dialog for CLAUDE.md external includes; \"CLAUDE.md\" is a filename reference, not a brand string; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "ConsoleOAuthFlow",
+        "tag": "derivative",
+        "source": "components/ConsoleOAuthFlow.tsx:367",
+        "rationale": "Upstream OAuth flow; one string updated: \"Avir CLI can be used with your Claude subscription or billed based on API usage\" (line 367); remainder including \"Claude account with subscription \u00b7 Pro, Max, Team, or Enterprise\" (line 386) unchanged",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "DesktopHandoff",
+        "tag": "identical",
+        "source": "components/DesktopHandoff.tsx:12",
+        "rationale": "Six \"Claude Desktop\" brand strings (lines 75, 80, 165, 167, 168, 187); hardcoded `claude.ai/api/desktop/*` download URLs (lines 16\u201318); no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "DevBar",
+        "tag": "identical",
+        "source": "components/DevBar.tsx:11",
+        "rationale": "`[ANT-ONLY]` dev debug bar; guard `\"external\" === 'ant'` evaluates to `false` in avir production builds; component never renders at runtime",
+        "has_brand_or_cloud_string": false,
+        "disposition": "trigger_gated_cleanroom_component",
+        "action_type": "preserve_gate_and_render_disabled_local_notice",
+        "copies_avir_code": false
+      },
+      {
+        "component": "DiagnosticsDisplay",
+        "tag": "ours",
+        "source": "components/DiagnosticsDisplay.tsx:17",
+        "rationale": "avir `/diag` command output renderer; renders `DiagnosticsAttachment` type; no upstream equivalent",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "InterruptedByUser",
+        "tag": "identical",
+        "source": "components/InterruptedByUser.tsx:8",
+        "rationale": "Brand string: \"What should Claude do instead?\" (line 8); also contains dead `[ANT-ONLY]` branch",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "IdeOnboardingDialog",
+        "tag": "identical",
+        "source": "components/IdeOnboardingDialog.tsx:89",
+        "rationale": "Brand string: \"Claude has context of N files and \u29c9 selected lines\" (line 89)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "LogSelector",
+        "tag": "identical",
+        "source": "components/LogSelector.tsx:1318",
+        "rationale": "Brand string: \"Claude found these results:\" (line 1318) in agentic log search; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "MCPServerDesktopImportDialog",
+        "tag": "identical",
+        "source": "components/MCPServerDesktopImportDialog.tsx:132",
+        "rationale": "Brand strings: \"Found N MCP servers in Claude Desktop.\" (line 132), dialog title \"Import MCP Servers from Claude Desktop\" (line 177)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "ModelPicker",
+        "tag": "derivative",
+        "source": "components/ModelPicker.tsx:39",
+        "rationale": "Upstream model picker reworked for avir local models; prop `skipSettingsWrite` comment at line 35\u201336 references \"assistant's `.avir/settings.json`\"; `getModelOptions()` returns avir-specific model list",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "Onboarding",
+        "tag": "identical",
+        "source": "components/Onboarding.tsx:74",
+        "rationale": "Brand strings: \"Claude can make mistakes\" (line 74), \"always review Claude's responses\" (line 76); flow includes `ConsoleOAuthFlow` (see above)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "PackageManagerAutoUpdater",
+        "tag": "derivative",
+        "source": "components/PackageManagerAutoUpdater.tsx:1",
+        "rationale": "Avir-specific package manager path handling; references avir in source (grep hit); no equivalent upstream pattern for avir's install layout",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "RemoteCallout",
+        "tag": "identical",
+        "source": "components/RemoteCallout.tsx:49",
+        "rationale": "Brand string: \"(claude.ai/code) or the Claude app, so you can pick up where you left off\" (line 49); rendered in remote/bridge callout",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "ThinkingToggle",
+        "tag": "identical",
+        "source": "components/ThinkingToggle.tsx:33",
+        "rationale": "Brand strings: \"Claude will think before responding\" (line 33), \"Claude will respond without extended thinking\" (line 37)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "agents/AgentDetail",
+        "tag": "identical",
+        "source": "components/agents/AgentDetail.tsx:95",
+        "rationale": "Brand string: \"(tells Claude when to use this agent)\" (line 95)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "agents/AgentsList",
+        "tag": "identical",
+        "source": "components/agents/AgentsList.tsx:245",
+        "rationale": "Brand string: \"Create specialized subagents that Claude can delegate to.\" (line 245)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "agents/AgentsMenu",
+        "tag": "identical",
+        "source": "components/agents/AgentsMenu.tsx:1",
+        "rationale": "Upstream agents menu; no brand strings; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "agents/wizard-steps/LocationStep",
+        "tag": "derivative",
+        "source": "components/agents/new-agent-creation/wizard-steps/LocationStep.tsx:1",
+        "rationale": "Avir-specific `.avir/` path in agent creation wizard",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "agents/wizard-steps/MemoryStep",
+        "tag": "derivative",
+        "source": "components/agents/new-agent-creation/wizard-steps/MemoryStep.tsx:1",
+        "rationale": "Avir-specific memory path in agent creation wizard",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "agents/wizard-steps/*` (8 remaining)",
+        "tag": "identical",
+        "source": "components/agents/new-agent-creation/wizard-steps/*.tsx",
+        "rationale": "Upstream agent creation wizard steps; no avir-specific changes",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "agents/ModelSelector`, `ColorPicker`, `ToolSelector",
+        "tag": "identical",
+        "source": "components/agents/*.tsx",
+        "rationale": "Upstream agent editor sub-components; no avir changes",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "design-system/* (16 files)",
+        "tag": "identical",
+        "source": "components/design-system/*.tsx",
+        "rationale": "Generic UI primitives (Dialog, Byline, Pane, Tabs, ThemedText, etc.); no brand content; no avir changes",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "FeedbackSurvey/FeedbackSurveyView",
+        "tag": "identical",
+        "source": "components/FeedbackSurvey/FeedbackSurveyView.tsx:21",
+        "rationale": "Brand string: \"How is Claude doing this session?\" (line 21) at `DEFAULT_MESSAGE` const",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "FeedbackSurvey/FeedbackSurvey",
+        "tag": "identical",
+        "source": "components/FeedbackSurvey/FeedbackSurvey.tsx:20",
+        "rationale": "Upstream survey state machine; \"\u2713 Thanks for sharing your transcript!\" (line 52) \u2014 no Claude brand",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "FeedbackSurvey/TranscriptSharePrompt",
+        "tag": "identical",
+        "source": "components/FeedbackSurvey/TranscriptSharePrompt.tsx:1",
+        "rationale": "No brand strings; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "grove/Grove",
+        "tag": "identical",
+        "source": "components/grove/Grove.tsx:47",
+        "rationale": "Anthropic consent UX: \"Help improve Claude\" (line 47, 435), \"Accept terms \u00b7 Help improve Claude: ON/OFF\" options (lines 238\u2013244), URL `https://claude.ai/settings/data-privacy-controls` (line 428), \"Consumer Terms and Privacy Policy\" with Anthropic date (line 31)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "HelpV2/General",
+        "tag": "derivative",
+        "source": "components/HelpV2/General.tsx:9",
+        "rationale": "Brand substitution: base64-encoded source shows original \"Claude understands your codebase\u2026\"; compiled output reads \"avir understands your codebase, makes edits with your permission, and executes commands\"",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "HelpV2/HelpV2",
+        "tag": "derivative",
+        "source": "components/HelpV2/HelpV2.tsx:1",
+        "rationale": "Composite help component; references avir (grep hit); modified to reflect avir's command surface",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "HelpV2/Commands",
+        "tag": "identical",
+        "source": "components/HelpV2/Commands.tsx:1",
+        "rationale": "Upstream help commands list; no avir changes",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "hooks/HooksConfigMenu",
+        "tag": "identical",
+        "source": "components/hooks/HooksConfigMenu.tsx:354",
+        "rationale": "Brand string: \"ask Claude.\" (line 354) in disabled-policy note",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "hooks/SelectEventMode",
+        "tag": "derivative",
+        "source": "components/hooks/SelectEventMode.tsx:56",
+        "rationale": "Brand string: \"ask Claude.\" + URL `https://code.claude.com/docs/en/hooks` (line 56); avir grep hit; read-only notice references Claude docs",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "hooks/SelectHookMode",
+        "tag": "identical",
+        "source": "components/hooks/SelectHookMode.tsx:38",
+        "rationale": "Brand string: \"ask Claude.\" (line 38)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "hooks/SelectMatcherMode",
+        "tag": "identical",
+        "source": "components/hooks/SelectMatcherMode.tsx:70",
+        "rationale": "Brand string: \"ask Claude.\" (line 70)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "hooks/ViewHookMode",
+        "tag": "identical",
+        "source": "components/hooks/ViewHookMode.tsx:136",
+        "rationale": "Brand string: \"ask Claude to help.\" (line 136); read-only hook viewer",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "hooks/PromptDialog",
+        "tag": "identical",
+        "source": "components/hooks/PromptDialog.tsx:1",
+        "rationale": "Generic hook prompt dialog; no brand strings",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "LogoV2/Clawd",
+        "tag": "identical",
+        "source": "components/LogoV2/Clawd.tsx:5",
+        "rationale": "\"Clawd\" upstream mascot ASCII character; `ClawdPose` type (arms-up, look-left, look-right, default)",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "LogoV2/AnimatedClawd",
+        "tag": "identical",
+        "source": "components/LogoV2/AnimatedClawd.tsx:28",
+        "rationale": "\"Clawd\" mascot jump/look-around animation sequences; click-triggered",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "LogoV2/AnimatedAsterisk",
+        "tag": "identical",
+        "source": "components/LogoV2/AnimatedAsterisk.tsx:1",
+        "rationale": "Generic animated asterisk; no brand content",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "LogoV2/ChannelsNotice",
+        "tag": "identical",
+        "source": "components/LogoV2/ChannelsNotice.tsx:73",
+        "rationale": "Brand string: \"Channels require claude.ai authentication \u00b7 run /login, then restart\" (line 73); feature-gated behind `KAIROS`/`KAIROS_CHANNELS`",
+        "has_brand_or_cloud_string": true,
+        "disposition": "trigger_gated_cleanroom_component",
+        "action_type": "preserve_gate_and_render_disabled_local_notice",
+        "copies_avir_code": false
+      },
+      {
+        "component": "LogoV2/Opus1mMergeNotice",
+        "tag": "identical",
+        "source": "components/LogoV2/Opus1mMergeNotice.tsx:13",
+        "rationale": "References `isOpus1mMergeEnabled()` and `opus1mMergeNoticeSeenCount`; feature-gated; no user-visible \"Claude\" brand string",
+        "has_brand_or_cloud_string": true,
+        "disposition": "trigger_gated_cleanroom_component",
+        "action_type": "preserve_gate_and_render_disabled_local_notice",
+        "copies_avir_code": false
+      },
+      {
+        "component": "LogoV2/EmergencyTip`, `Feed`, `FeedColumn`, `OverageCreditUpsell",
+        "tag": "identical",
+        "source": "components/LogoV2/*.tsx",
+        "rationale": "Upstream logo/display components; no avir changes",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "mcp/MCPListPanel",
+        "tag": "identical",
+        "source": "components/mcp/MCPListPanel.tsx:399",
+        "rationale": "Brand string: `claude.ai` as section header for claude.ai-type servers (line 399)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "mcp/MCPRemoteServerMenu",
+        "tag": "identical",
+        "source": "components/mcp/MCPRemoteServerMenu.tsx:61",
+        "rationale": "`claudeAI` auth flow state management (variables: `isClaudeAIAuthenticating`, `claudeAIAuthUrl`, etc.); no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "mcp/MCPSettings",
+        "tag": "identical",
+        "source": "components/mcp/MCPSettings.tsx:210",
+        "rationale": "Brand string: `\"claude.ai\"` tab label for claudeai-proxy servers (line 210)",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "mcp/* (11 remaining)",
+        "tag": "identical",
+        "source": "components/mcp/*.tsx",
+        "rationale": "MCP UI sub-components; no brand strings beyond above; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "memory/MemoryFileSelector",
+        "tag": "derivative",
+        "source": "components/memory/MemoryFileSelector.tsx:1",
+        "rationale": "Avir memory file browser; references avir `.avir/` paths (grep hit)",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "permissions/FilePermissionDialog/permissionOptions",
+        "tag": "derivative",
+        "source": "components/permissions/FilePermissionDialog/permissionOptions.tsx:1",
+        "rationale": "Avir-specific permission option strings (grep hit); modified from upstream permission dialog",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "permissions/rules/AddPermissionRules",
+        "tag": "derivative",
+        "source": "components/permissions/rules/AddPermissionRules.tsx:1",
+        "rationale": "Avir-specific permission rule configuration UI (grep hit)",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "permissions/* (51 remaining)",
+        "tag": "identical",
+        "source": "components/permissions/**/*.tsx",
+        "rationale": "Upstream permissions UI (PermissionRequest, FilePermissionDialog, WorkerPendingPermission, etc.); no avir changes",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "PromptInput/* (8 files)",
+        "tag": "identical",
+        "source": "components/PromptInput/*.tsx",
+        "rationale": "Prompt input subsystem (PromptInput, PromptInputFooter, PromptInputHelpMenu, etc.); no brand strings; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "skills/SkillsMenu",
+        "tag": "ours",
+        "source": "components/skills/SkillsMenu.tsx:1",
+        "rationale": "Avir skills system UI (groups by plugin/mcp/file source, shows token estimates); no upstream equivalent",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "Spinner/* (13 files)",
+        "tag": "identical",
+        "source": "components/Spinner*/*.tsx",
+        "rationale": "Upstream spinner/idle-status components; no brand strings; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "messages/* (45 files)",
+        "tag": "identical",
+        "source": "components/messages/**/*.tsx",
+        "rationale": "Message rendering subsystem; no avir-specific changes at component level",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "tasks/* (14 files)",
+        "tag": "identical",
+        "source": "components/tasks/**/*.tsx",
+        "rationale": "Task management UI; no avir changes",
+        "has_brand_or_cloud_string": false,
+        "disposition": "local_cleanroom_component_contract",
+        "action_type": "render_or_route_local_component_contract",
+        "copies_avir_code": false
+      },
+      {
+        "component": "CustomSelect/* (4 files)",
+        "tag": "identical",
+        "source": "components/CustomSelect/*.tsx",
+        "rationale": "Generic select components; no brand strings; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      },
+      {
+        "component": "diff/* (3 files)",
+        "tag": "identical",
+        "source": "components/diff/*.tsx",
+        "rationale": "Diff display components; no brand strings; no avir changes",
+        "has_brand_or_cloud_string": true,
+        "disposition": "goal_safe_replacement_component",
+        "action_type": "replace_upstream_brand_or_cloud_flow_with_local_resident_ui",
+        "copies_avir_code": false
+      }
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "checks": {
+      "component_count_at_least_audit_floor": true,
+      "all_required_affordances_present": true,
+      "all_sample_interactions_route": true,
+      "no_unclassified_components": true,
+      "brand_or_cloud_components_are_replaced_or_gated": true
+    },
+    "interaction_routes": [
+      {
+        "interaction": "type_prompt",
+        "affordance": "prompt_input",
+        "status": "ROUTED",
+        "matched_components": [
+          "PromptInput/*"
+        ]
+      },
+      {
+        "interaction": "render_assistant_message",
+        "affordance": "message_rendering",
+        "status": "ROUTED",
+        "matched_components": [
+          "messages/*"
+        ]
+      },
+      {
+        "interaction": "open_settings",
+        "affordance": "settings_config",
+        "status": "ROUTED",
+        "matched_components": [
+          "mcp/MCPSettings",
+          "hooks/HooksConfigMenu",
+          "memory/MemoryFileSelector"
+        ]
+      },
+      {
+        "interaction": "open_help",
+        "affordance": "help",
+        "status": "ROUTED",
+        "matched_components": [
+          "HelpV2/General",
+          "HelpV2/HelpV2",
+          "HelpV2/Commands"
+        ]
+      },
+      {
+        "interaction": "open_tasks",
+        "affordance": "tasks",
+        "status": "ROUTED",
+        "matched_components": [
+          "tasks/*"
+        ]
+      },
+      {
+        "interaction": "request_permission",
+        "affordance": "permissions",
+        "status": "ROUTED",
+        "matched_components": [
+          "permissions/FilePermissionDialog/permissionOptions",
+          "permissions/rules/AddPermissionRules",
+          "permissions/*"
+        ]
+      },
+      {
+        "interaction": "pick_model",
+        "affordance": "model_picker",
+        "status": "ROUTED",
+        "matched_components": [
+          "ModelPicker"
+        ]
+      },
+      {
+        "interaction": "show_diagnostics",
+        "affordance": "diagnostics",
+        "status": "ROUTED",
+        "matched_components": [
+          "DiagnosticsDisplay"
+        ]
+      },
+      {
+        "interaction": "invoke_slash_command",
+        "affordance": "command_invocation_affordance",
+        "status": "ROUTED",
+        "matched_components": [
+          "HelpV2/Commands",
+          "PromptInput/*"
+        ]
+      }
+    ],
+    "affordance_coverage": {
+      "prompt_input": {
+        "required_candidates": [
+          "PromptInput/*"
+        ],
+        "matched": [
+          "PromptInput/*"
+        ],
+        "status": "PASS"
+      },
+      "message_rendering": {
+        "required_candidates": [
+          "messages/*"
+        ],
+        "matched": [
+          "messages/*"
+        ],
+        "status": "PASS"
+      },
+      "settings_config": {
+        "required_candidates": [
+          "mcp/MCPSettings",
+          "hooks/HooksConfigMenu",
+          "memory/MemoryFileSelector"
+        ],
+        "matched": [
+          "mcp/MCPSettings",
+          "hooks/HooksConfigMenu",
+          "memory/MemoryFileSelector"
+        ],
+        "status": "PASS"
+      },
+      "help": {
+        "required_candidates": [
+          "HelpV2/General",
+          "HelpV2/HelpV2",
+          "HelpV2/Commands"
+        ],
+        "matched": [
+          "HelpV2/General",
+          "HelpV2/HelpV2",
+          "HelpV2/Commands"
+        ],
+        "status": "PASS"
+      },
+      "tasks": {
+        "required_candidates": [
+          "tasks/*"
+        ],
+        "matched": [
+          "tasks/*"
+        ],
+        "status": "PASS"
+      },
+      "permissions": {
+        "required_candidates": [
+          "permissions/FilePermissionDialog/permissionOptions",
+          "permissions/rules/AddPermissionRules",
+          "permissions/*"
+        ],
+        "matched": [
+          "permissions/FilePermissionDialog/permissionOptions",
+          "permissions/rules/AddPermissionRules",
+          "permissions/*"
+        ],
+        "status": "PASS"
+      },
+      "model_picker": {
+        "required_candidates": [
+          "ModelPicker"
+        ],
+        "matched": [
+          "ModelPicker"
+        ],
+        "status": "PASS"
+      },
+      "diagnostics": {
+        "required_candidates": [
+          "DiagnosticsDisplay"
+        ],
+        "matched": [
+          "DiagnosticsDisplay"
+        ],
+        "status": "PASS"
+      },
+      "command_invocation_affordance": {
+        "required_candidates": [
+          "HelpV2/Commands",
+          "PromptInput/*"
+        ],
+        "matched": [
+          "HelpV2/Commands",
+          "PromptInput/*"
+        ],
+        "status": "PASS"
+      }
+    }
+  },
+  "deletion_ablation": {
+    "component_contract_deleted_blocks_prompt_input": true,
+    "component_contract_deleted_blocks_rendering": true,
+    "component_contract_deleted_blocks_settings_help_tasks_permissions_model_diagnostics": true,
+    "command_registry_alone_insufficient": true,
+    "static_docs_or_screenshot_mock_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "method": "delete REPL/component affordance contract; command registry and docs can remain, but user-facing prompt/render/settings/help/tasks/permissions/model/diagnostics routes fail"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_uiux_repl_components_receipt",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 61
+}

@@ -1,0 +1,94 @@
+{
+  "ticket": "EMBER-WHEEL-REAL-RUN",
+  "ts": "20260618T142652Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "fixture_only": false,
+  "real_mle_tasks_executed": false,
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ],
+    "official_leaderboard_comparable": false
+  },
+  "wheel": {
+    "id": "abc-equal-budget-v0",
+    "description": "A direct iteration vs B dream-loop-only vs C full MVP loop"
+  },
+  "arms": [
+    {
+      "id": "A",
+      "name": "direct-benchmark-iteration",
+      "budget_seconds": 3600,
+      "benchmark_receipt": "<local-path>",
+      "real_mle_tasks_executed": false,
+      "normalized_improvement": null,
+      "arm_contract": {
+        "id": "A",
+        "name": "direct-benchmark-iteration",
+        "uses_dream_loop": false,
+        "uses_latent_branch": false,
+        "uses_state_commit": false,
+        "uses_replay": false
+      },
+      "arm_contract_ok": true,
+      "arm_contract_errors": []
+    },
+    {
+      "id": "B",
+      "name": "dream-loop-only",
+      "budget_seconds": 3600,
+      "benchmark_receipt": "<local-path>",
+      "real_mle_tasks_executed": false,
+      "normalized_improvement": null,
+      "arm_contract": {
+        "id": "B",
+        "name": "dream-loop-only",
+        "uses_dream_loop": true,
+        "uses_latent_branch": false,
+        "uses_state_commit": false,
+        "uses_replay": false
+      },
+      "arm_contract_ok": true,
+      "arm_contract_errors": []
+    },
+    {
+      "id": "C",
+      "name": "full-mvp-loop",
+      "budget_seconds": 3600,
+      "benchmark_receipt": "<local-path>",
+      "real_mle_tasks_executed": false,
+      "normalized_improvement": null,
+      "arm_contract": {
+        "id": "C",
+        "name": "full-mvp-loop",
+        "uses_dream_loop": true,
+        "uses_latent_branch": true,
+        "uses_state_commit": true,
+        "uses_replay": true
+      },
+      "arm_contract_ok": true,
+      "arm_contract_errors": []
+    }
+  ],
+  "equal_budget": true,
+  "ordering": "not-C>B>A",
+  "blocked_reason": "benchmark_receipts_not_real",
+  "blocked_arms": [
+    "A",
+    "B",
+    "C"
+  ],
+  "growth_gate": {
+    "growth_allowed": false,
+    "blocked_until_repeated_positive_cycles": 3,
+    "next_cycle_ceiling_hours": 24,
+    "reason": "real repeated positive external benchmark deltas required"
+  },
+  "verdict": "BLOCKED"
+}

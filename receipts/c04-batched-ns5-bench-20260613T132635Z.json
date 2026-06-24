@@ -1,0 +1,71 @@
+{
+  "ticket": "C04-BATCHED-NS5-BENCH",
+  "ts": "20260613T132635Z",
+  "candidate": "c03-h1024-d20",
+  "config": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "batch": 16,
+    "seq": 1024
+  },
+  "bench_reps": 20,
+  "compiled": true,
+  "grad_checkpointing": true,
+  "c1_dtype": "QAT",
+  "harness_sha": "a3261f0ac28719e2fccaae92a0f1a92b802f3d300c18fd34abd17ee4f5c602b2",
+  "status": "OK",
+  "compile_status": "PASS",
+  "compiled_ns5": true,
+  "n_muon_params": 142,
+  "tok_s_paced": 19500.3,
+  "tok_s_raw": 20734.2,
+  "mean_step_ms": 789.99,
+  "optimizer_wall_share": 0.8035,
+  "mean_opt_wall_ms": 634.79,
+  "mean_muon_wall_ms": 633.98,
+  "mean_adamw_wall_ms": 0.81,
+  "mean_ns_phase_ms": 255.99,
+  "mean_momentum_ms": 14.75,
+  "mean_update_ms": 10.38,
+  "mean_other_muon_ms": 352.85,
+  "per_shape_ns_phase_mean_ms": {
+    "(1024, 1024)": 68.22,
+    "(1024, 4096)": 49.61,
+    "(32000, 1024)": 37.07,
+    "(4096, 1024)": 101.1
+  },
+  "free_vram_gib_post_warmup": 19.23,
+  "ns5_equiv": {
+    "per_shape": {
+      "(64, 128)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(1024, 1024)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(4096, 1024)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(32000, 1024)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      }
+    },
+    "max_abs_delta": 0.0,
+    "gate_pass": true,
+    "gate_tol": 2e-07
+  },
+  "gate": {
+    "tok_s_paced": 19500.3,
+    "tok_s_threshold": 25463.0,
+    "tok_s_pass": false,
+    "ns5_max_delta": 0.0,
+    "ns5_threshold": 2e-07,
+    "ns5_pass": true,
+    "gate_pass": false
+  }
+}

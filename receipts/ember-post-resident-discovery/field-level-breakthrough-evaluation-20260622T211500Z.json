@@ -1,0 +1,66 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 1.0,
+    "Deleted": 0.0
+  },
+  "api_spend_usd": 0,
+  "before_transfer_c_score": 0.75,
+  "candidate_safety": {
+    "candidate_workdirs_isolated": true,
+    "gold_programs_read_by_candidate": false,
+    "gold_results_visible_during_candidate_execution": false,
+    "known_unresolved_surface": "none; all frozen stronger-transfer rows have a zero-cost C candidate path",
+    "private_labels_read_by_candidate": false,
+    "test_targets_read_by_candidate": false
+  },
+  "closest_known_prior_or_baseline": "Manual or agent-authored ScienceAgentBench task solution loops with local deterministic/visual regrading; prior D3 multi-task generator receipts in this repo; A/B/Deleted arms in the cited SAB receipts.",
+  "deletion_ablation_evidence": "A/B/Deleted arms remain 0 while C reaches 1.0 on the transfer slice, and deletion of the C candidate generator paths would block or degrade the corresponding receipts; this is slice-level deletion sensitivity, not yet proof of a reusable field-level mechanism.",
+  "deletion_sensitive": true,
+  "evaluated_receipts": [
+    {
+      "path": "receipts\\ember-post-resident-discovery\\scienceagentbench-zero-cost-regrade-loop-20260622T192500Z.json",
+      "role": "six-row ScienceAgentBench completion receipt",
+      "sha256": "e152e729f099c0912805a9e607cfb407ace0276006e81e9f172f4199fecb0bc6"
+    },
+    {
+      "path": "receipts\\ember-post-resident-discovery\\scienceagentbench-stronger-transfer-loop-20260622T204000Z.json",
+      "role": "completed four-row stronger transfer receipt",
+      "sha256": "5d214d7220c3a885d7c7dabfb3146f595ae0f94c698215f79e2d0bfb6d112644"
+    },
+    {
+      "path": "receipts\\ember-post-resident-discovery\\field-level-breakthrough-evaluation-20260622T193500Z.json",
+      "role": "prior field-level refusal and transfer-freeze decision",
+      "sha256": "04d365e0735b53d5e93481f0aac7ba85deb8dd73167dff15fd907cc837350ad5"
+    }
+  ],
+  "field_level_decision": "progress_not_field_breakthrough",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "caa6b8d548655f9d0969a49677586064cc144ce69a565be533b8ba8ef8dadf04",
+  "improved_over_before": true,
+  "leaderboard_dependency": false,
+  "next_executable_command": "Run a connected-cycle audit over the resident neural update, native goal organ, D3/SAB transfer receipts, and candidate generator deletion tests to identify the current load-bearing missing field-level contribution evidence; do not clear goal on SAB transfer completion alone.",
+  "paid_api_surface_used": false,
+  "positive_delta": true,
+  "primary_contribution_class_considered": "benchmark methodology / agent-learning substrate",
+  "reasons_not_field_level": [
+    "The combined SAB receipts prove zero-cost task-slice progress and transfer-slice completion, but not a new or materially improved ML/AI self-improvement mechanism by themselves.",
+    "The ref-index row passes with a train-target prior under a permissive evaluator threshold, which is legitimate zero-cost candidate behavior but not evidence of deep world-rule discovery.",
+    "The experimental band-gap row uses a train-data ExtraTrees model over MODNet features; useful and reproducible, but still a targeted candidate path rather than a native general self-growing operator.",
+    "The decisive native self-growing operator autonomy, connected-cycle selection, durable assimilation, and deletion dependence across the full goal-clear chain remain unaudited in this receipt.",
+    "A field-level breakthrough claim still requires a falsifiable contribution class, closest-prior comparison, reusable artifact, disjoint validation rows, and deletion/ablation evidence showing the contribution itself is load-bearing."
+  ],
+  "repo": "<local-path>",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "stronger_external_benchmark_pair": {
+    "benchmark": "ScienceAgentBench verified local artifact",
+    "dataset_pair": "six-row SAB completion slice plus frozen disjoint deterministic transfer slice over experimental_band_gap, crystalline_compound, ref_index, and pucci datasets",
+    "transfer_receipt": "receipts\\ember-post-resident-discovery\\scienceagentbench-stronger-transfer-loop-20260622T204000Z.json",
+    "transfer_receipt_sha256": "5d214d7220c3a885d7c7dabfb3146f595ae0f94c698215f79e2d0bfb6d112644"
+  },
+  "ticket": "EMBER-FIELD-LEVEL-BREAKTHROUGH-EVALUATION",
+  "transfer_reuse_evidence": "complete_on_current_frozen_transfer_slice_but_not_yet_a_connected_self-growing_ml_ai_breakthrough",
+  "ts": "20260622T211500Z",
+  "verdict": "FIELD_LEVEL_BREAKTHROUGH_NOT_PROVEN_CONNECTED_CYCLE_AUDIT_REQUIRED"
+}

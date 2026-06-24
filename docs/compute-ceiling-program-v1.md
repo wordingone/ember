@@ -1,0 +1,176 @@
+# Compute-ceiling program v1 — shatter the local training ceiling (2026-06-12)
+
+**v1.4 (4:30 PM LA — production anchor receipted; PR #362):** every prior
+anchor was BENCH-PATH (Llama+AdamW proxy; C-7 ban now in force). The
+PRODUCTION stack (MTP+chunked-CE+Muon) measured: **best cell B16+ckpt+
+compile = 19,228 tok/s paced → 7B in 4.2 governed days; gap factor 2.11×.**
+Compile on prod = 1.159× (B16) / 0.994× (B4 — Muon-dominated). L9 flash
+RESOLVED: revives at B8 no-ckpt (fits, 9.3 GiB free) but MTP halves the
+bench-path benefit (0.4997×) → 13,938 tok/s = 0.725× of the B16 ceiling —
+available, NOT dominant. **L10 minted (#363): optimizer swap — Muon
+36.01% of wall at B16-compile (70.91% at B4), fused-AdamW row 0.18%;
+bound ~1.5× → ~29k tok/s → 7B ≈ 2.8d.** §3-arithmetic consequence: the
+≤1-day criterion closes ONLY as (L10 × curated-budget cut): c03-class ×
+~2–2.5B verified-dense tokens ≈ 1 governed day at the L10 bound — the
+density A/B (GO'd, manifests pre-frozen) is THE remaining gate on the c04
+pick. Provisional re-pricing receipts: act-refit-...232016Z (a ∈ (48.9,
+97.9) B/unit), c04-budget-...232016Z (production F 42.5 TFLOPS).
+
+**v1.2 (user order 2:33 PM LA, executed 2:34 PM):** run 12c050e7 STOPPED
+(train_cancel, kill-receipted, daemon alive, GPU freed at step 150k;
+~614M content tokens, ~8,872 tok/s production throughput — see
+fp37-l7-duty-cycle-20260612T222145Z.json. Earlier "~1.3B tokens paid"
+was derived from the FP19 benchmark rate ~18k tok/s, not from the actual
+production path which includes MTP+chunked CE+Muon; correction receipted). User rule, BINDING: **no training run >1 hour until the ceiling
+problems are solved.** Runs are measurement instruments until the shatter
+criterion is met — producing checkpoints on an unproven path is datacenter
+economics imported onto a residency machine; on one machine, iteration
+speed IS the research capability. §4 rule 3's boundary decision is
+DISSOLVED (no live run); the next pretrain exists only through gate 9 with
+the full lever stack receipted + the ENG/ARCH architecture verdict. All
+lever benches now run in full governed windows (<1h each).
+
+User directive 21:15Z (binding, NO DEFERRAL): "unless you explicitly solve
+the local full training compute bottleneck completely and utterly shatter
+the ceiling, ember's not gonna get anywhere. Everything downstream, even
+ember's nature would not be solvable. Deferral for this problem is not an
+option."
+
+Register: this is **H0** — it outranks every other entry. The S5 chain and
+round design are DOWNSTREAM of this program. Reframe accepted: ember's
+nature requires pretrain-from-scratch to be an ITERATION operation (hours,
+overnight at worst), not a multi-day commitment. At today's measured
+ceiling a 7B-token c03 pretrain costs 3.4–4.5 wall-days — at that price we
+get ~2 architecture/data iterations before 06-22 and ZERO exploration of
+ember's design space. That is the real ceiling cost: not wall-clock,
+ITERATIONS.
+
+## 1. The ceiling, from receipts (no vibes)
+
+Baseline (fp32-step-econ-20260611T142831Z, c03 = hidden 1024 / 20 layers /
+seq 1024, QAT variant, governed 0.80/1.5GiB/0.05s):
+
+| cell | tok/s paced | tok/s raw | pacing tax |
+|---|---|---|---|
+| B=4 ckpt eager (LIVE RUN CONFIG) | 17,899 | 22,903 | 21.9% |
+| B=8 | 23,088 | 26,875 | 14.1% |
+| B=24 | 24,079 | ~28k | ~12% |
+
+Phase anatomy (fp33-e4-profiler): wall shares — backward 41.5 / optimizer
+45.9 / forward+QAT ~12; GPU-work shares — backward 56.5 / forward 20.2 /
+QAT 12.0 / optimizer 11.3. **The optimizer phase consumes 45.9% of step
+WALL while doing 11.3% of GPU work — it is launch/memory-bound (Muon
+Newton-Schulz chain, #329's 1008 GB/s bw ceiling claim). That asymmetry is
+the single largest measured inefficiency on the board.**
+
+Known route receipts: fp8 torchao KILLED (0.45×, fp33-fp8-linear-ab); fp8
+NATIVE-Windows route P1 PASS (kernel-name receipt, fp33-p1); fused-muon
+harness MERGED, bench NOT RUN (#329); torch.compile fails in daemon env
+(receipted) — eager pinned; B=24 lr-certification (E1b) never run, <1h cost.
+
+## 2. Mathematical ceiling obligation (roofline)
+
+MFU = (FLOPs/token × tok/s_raw) / peak_FLOPs. FLOPs/token ≈ 8·N_active
+(fwd 2N + bwd 4N + ckpt recompute 2N; N ≈ c03 non-embedding params).
+First-cut: ~28k tok/s raw at N≈0.3B → ~67 TFLOPS sustained → MFU ≈ 30–40%
+against a consumer bf16 peak of 165–210 TFLOPS. **Roofline gap ≈ 2.5–3×
+before any architecture change, on top of the levers below.** Obligation
+(the engineer, receipt): pin GPU model/peak specs + per-phase achieved-vs-peak so
+the gap is a NUMBER, not a range. Small-model caveat: hidden 1024 has low
+arithmetic intensity — batch and fusion are how it climbs the roofline.
+
+## 3. Lever stack — each lands by A/B receipt at c03, compound tracked
+
+| # | Lever | Expected (basis) | Status → action |
+|---|---|---|---|
+| L1+L2 | Batch axis | — | **LANDED 1.335× (knee receipt fp32-step-econ-...213856Z: B=16 24,667 tok/s; B=24 plateau 24,645; B≥32 OOM — axis EXHAUSTED at 1.335×)** |
+| L3 | Fused-muon NS chain (#329) | optimizer wall 45.9%; perfect fusion bounds at 1.85× | first KILL pre-MSVC (Triton VS-discovery bug, receipt ...213247Z); env-fixed retry RUNNING |
+| L4 | fp8 native route (fp-35c) | — | **KILLED at c03 widths (receipt fp35c-...214509Z: mean 0.867×; width-conditional — 1.15× on K1024→N4096, loses on N1024 outputs). ARCH datapoint: wider hidden flips fp8 positive** |
+| L5 | Checkpointing OFF | — | **KILLED: every no-ckpt cell SKIPPED-OOM at B≥16 under the 0.80 cap (same receipt as L2) — activations don't fit on 24GB at useful batch** |
+| L6 | torch.compile (MSVC env fixed — cl.exe existed; Triton x86-path discovery bug) | 1.1–1.3× (QAT elementwise fusion) | compile test PASS; bench cell after L3 |
+| L7 | Duty cycle: loader/ckpt/eval stalls in REAL run | unknown — measure | **RECEIPTED (fp37-l7-duty-cycle-20260612T222145Z): loader=1.02%, ckpt-I/O=0.04%, stall_wall_days=0.097d for full 1.7M-step run — HARNESS gap, architecture-independent; informs c04 harness budget** |
+| L8 | Data/objective efficiency (H2) | effective-compute multiplier, unbounded | round-design constraint |
+| L9 | Flash/SDPA attention (no S² score materialization → enables no-ckpt at higher batch) | c04-grid proj 40,631 tok/s at B=39 (2.27× anchor) | **KILLED (fp38-l9-flash-ab-20260612T223639Z): OOM at B=39, B=33, B=26 — flash removes attention score tensor but activation+residual budget for MLP layers still OOM at c03 hidden=1024 under 0.80 cap. ARCH: same binding constraint as L5 kill. Grid projection assumed flash enables no-ckpt; empirically false at c03 widths.** |
+
+**Compound arithmetic after round 1 of receipts (21:50Z, an agent-verified
+15067 — CONDITIONAL):** mechanical stack = 1.3354 (batch, receipted) ×
+≤1.848 (L3 physics bound from 45.9% wall-share) × L6. At the L6 estimate
+range 1.1–1.3×, compound = 2.71–3.21× < 3.3× criterion. **an agent's gap
+(accepted): L6 is ESTIMATED, not receipted — breakeven is L6=1.337×, only
+3% above the range ceiling, so the STOP+REDESIGN conclusion is NOT
+hardened until the L3 and L6 receipts land** (both running/queued, <1h).
+Corrections from his verdict: fp8 FLOP-weighted mean is 0.957× (not the
+unweighted 0.867×) — verdict direction unchanged, both FAIL; L5 KILL is
+defensible but the sweep lacks b4/b8-nockpt reference cells (queued for
+completeness). The ARCH-residual reading stands as the LEAN, pending two
+receipts: hidden-1024 fp8-hostile (L4), activations OOM past B=16 (L5),
+NS-chain wall-share (L3 target).
+
+**VERDICT HARDENED 22:00Z (3:00 PM LA) — every factor now receipted:**
+L3 fused-muon = 1.0885× (NS5 equivalence PASS, receipt ...215202Z); L6
+compile = 1.272× over b16-eager (receipt ...215844Z) — UNDER the 1.337×
+breakeven. Measured compound: b16+compile = 1.699× over anchor; ×L3 if
+multiplicative ≈ **1.85× over anchor — the mechanical stack is EXHAUSTED
+at ~56% of the 3.3× criterion.** c03 cannot be trained ≤1 governed day on
+this card by engineering alone. **STOP + REDESIGN is the program's
+recommendation, mathematically hard.** Successor: c04 design constraints
+doc (receipt-derived: fp8-positive shape policy per the per-shape A/B
+data; params/activation budget fitting no-ckpt at the batch knee on
+24GB; fusable-or-replaced optimizer; compile-resident from step 0;
+per-shape fp8 A/B at DESIGN time, before any pretrain). E1b cert KILLED —
+superseded (it certified lr-scaling for the dead config). L7 narrows to
+HARNESS-side stalls only (loader/ckpt/eval — architecture-independent,
+informs the c04 harness).
+
+Compound mechanical target (L1×L3×L4×L5 mid-estimates): **≥3.3×, stretch
+~5× with L2/L6 → ≥72k tok/s paced → 7B-token c03 pretrain in ~27h.** That
+is the shatter criterion v1: **pretrain-from-scratch ≤ 1 governed day.**
+Misses are receipted KILLs that name the physics (bw-bound, VRAM, lr).
+
+## 4. Binding rules
+
+1. NO DEFERRAL: at every tick, ≥1 lever must be in flight (bench running,
+   PR open, or receipt landed) until the shatter criterion is met or every
+   lever is receipted-KILLED. "Waiting for the run boundary" is valid ONLY
+   for levers that physically require it (L1 cert, integration swaps);
+   benches ride governed windows beside the live run (fp33 precedent).
+2. Gate 9 (#349) consumes this stack: the NEXT pretrain launches only with
+   every lever applied/killed/waived-priced.
+3. Live run 12c050e7 is NEVER touched mid-flight; the 1B-token checkpoint
+   (~09:00Z) is the first boundary where certified levers may enter via a
+   registered, receipted restart decision — arithmetic presented to the
+   user, who owns the restart call.
+3b. **ENG/ARCH verdict tags (v1.1, user 21:21Z — "if its architecture
+   makes the training speed lukewarm... the owned core is going to be
+   wrong anyways"):** every lever receipt tags its finding ENG (removable
+   by engineering: fusing, batching, precision routing) or ARCH (intrinsic
+   to c03's design: QAT fake-quant tax, Muon NS chain structure, hidden-
+   1024 arithmetic intensity). The checkpoint does NOT validate the
+   architecture — only the lever receipts can. **Architecture-kill
+   trigger:** if c03 cannot reach the shatter criterion with ALL ENG
+   levers applied (i.e. the residual gap is ARCH-tagged), c03 is the wrong
+   core; the boundary decision becomes three-way — continue / certified
+   resume / STOP + architecture redesign (NC2 recipe-stack pins: Muon
+   variant, BitNet-class, QAT placement, replay — already a registered
+   wait-window item). What survives an ARCH kill: shards/tokenizer,
+   curriculum + floor protocol, verifier/receipt/gate stack, W-code world,
+   round design — the owned SYSTEM. What dies: the config and its
+   checkpoints. A kill here is data, not a stopping signal.
+4. Safety rails unmoved: governor fraction/margin/pacing are the floor;
+   the pacing tax is a deliberate rail, not a lever. 100% wall-to-wall
+   stays banned.
+5. Scale-out (second GPU / cloud) is USER-owned; this program's job is to
+   exhaust the local ceiling and present the priced residual, never to
+   assume the purchase.
+
+## 5. Owners
+
+- **the engineer (lane #1, displaces everything):** L3 bench NOW; L2+L5 bench cells
+  (one harness run); GPU-peak receipt (§2); then L4 fp-35c integration A/B.
+- **the lead:** L7 duty-cycle mining from existing run logs; compound ledger
+  (this doc's table updated per receipt); E1b cert + restart arithmetic at
+  the 1B boundary; H2/L8 round-design constraint.
+- **an agent:** adversarial verify on every lever receipt (A/B single-variable
+  discipline, governor identity, seed coverage).
+- **an agent:** run-monitor unchanged; flags any bench-window governor
+  violation as RED immediately.

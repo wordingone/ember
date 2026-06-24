@@ -1,0 +1,11 @@
+{
+  "action_channel": "emit_resident_solution_plan",
+  "bounded_actions": [
+    "read task row",
+    "emit candidate plan",
+    "run verifier/eval adapter"
+  ],
+  "harness_id": "clean_room_nck_resident_interface_min_slice_v1",
+  "provenance_rule": "avir-cli is behavior/provenance source only until clean-room clearance",
+  "source": "repo scripts/nck event loop and invariant receipts; no avir-cli code copied"
+}

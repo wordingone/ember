@@ -1,0 +1,99 @@
+{
+  "api_spend_usd": 0,
+  "audit_receipt": "<local-path>",
+  "audit_receipt_sha256": "6f3fb3970b5525556d65ab7ddfbb85e33e381c978abd3a7da2a37617113d8b3c",
+  "blocked_reasons": [],
+  "bounded_action": {
+    "execute_official_docker": true,
+    "fresh_rows": "receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json",
+    "selected_task_ids": [
+      "task_57",
+      "task_62"
+    ],
+    "type": "delegate_existing_official_d3_a_b_c_deleted_runner"
+  },
+  "candidate_safety": {
+    "fresh_rows_disjoint_from_task65_66": true,
+    "gold_results_visible_during_candidate_execution": false,
+    "manual_codex_selection_for_c_arm": false
+  },
+  "delegate_result": {
+    "command": [
+      "<local-path> Files\\Python310\\python.exe",
+      "scripts/ember_d3_generalized_candidate_exec.py",
+      "--fresh-rows",
+      "receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json",
+      "--out-dir",
+      "receipts\\ember-d3-native-loop\\native-link-task57-62-20260622T221000Z",
+      "--timeout-seconds",
+      "180",
+      "--require-prospective",
+      "--task-id",
+      "task_57",
+      "--task-id",
+      "task_62",
+      "--execute"
+    ],
+    "receipt_path": "<local-path>",
+    "receipt_sha256": "2536349bcc4b6b02a93e3ed44eb6d676224b2319e2141638fec5e4b111eab5b0",
+    "returncode": 0,
+    "stderr_tail": "",
+    "stdout_tail": "{\n  \"aggregate_scores\": {\n    \"A\": 0.0,\n    \"B\": 0.0,\n    \"C\": 1.0,\n    \"Deleted\": 0.0\n  },\n  \"deletion_sensitive\": true,\n  \"errors\": [],\n  \"positive_delta\": true,\n  \"receipt\": \"<local-path>\",\n  \"selected_task_ids\": [\n    \"task_57\",\n    \"task_62\"\n  ],\n  \"verdict\": \"D3_MULTI_TASK_GENERALIZATION_PASS\"\n}\n"
+  },
+  "deletion_sensitive": true,
+  "external_transfer_receipt_summary": {
+    "aggregate_scores": {
+      "A": 0.0,
+      "B": 0.0,
+      "C": 1.0,
+      "Deleted": 0.0
+    },
+    "deletion_sensitive": true,
+    "errors": [],
+    "positive_delta": true,
+    "selected_task_ids": [
+      "task_57",
+      "task_62"
+    ],
+    "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "7b987a74d82fd4e312b7b2f0249c1c587056dc393ba7f4dd5302c0de2f29bcee",
+  "leaderboard_dependency": false,
+  "native_goal_receipt": "<local-path>",
+  "native_goal_receipt_sha256": "11ffcd2bf02786d4cdb434fa3b13b8fc6c52fd0eff0be811c9d13b4ca021fdd8",
+  "native_operator_deleted_blocks_selection": true,
+  "next_executable_command": "Re-run connected-cycle field-level audit against this native-link receipt",
+  "operator_selection": {
+    "blocked_reasons": [],
+    "fresh_rows_path": "<local-path>",
+    "native_goal_organ_verdict": "NATIVE_GOAL_ORGAN_PASS",
+    "resident_component_status_subset": {
+      "deletion_sensitive_improvement": "PASS",
+      "native_goal_organ": "PASS",
+      "neural_parameter_update": "PASS",
+      "verifier_conditioned_update": "PASS"
+    },
+    "resident_gate_verdict": "RESIDENT_TRAINING_GATE_PASS",
+    "selected_blocker": "native_operator_external_transfer_link",
+    "selected_task_ids": [
+      "task_57",
+      "task_62"
+    ],
+    "selection_basis": [
+      "connected-cycle audit blocked_reasons contains native_operator_to_external_transfer_link_missing",
+      "native goal organ receipt verdict is NATIVE_GOAL_ORGAN_PASS",
+      "resident gate component_status native_goal_organ/verifier_conditioned_update/neural_parameter_update are PASS",
+      "fresh row receipt offset54 task55/task56 is disjoint from solved task65/task66 path"
+    ]
+  },
+  "paid_api_surface_used": false,
+  "positive_delta": true,
+  "repo": "<local-path>",
+  "resident_gate_receipt": "<local-path>",
+  "resident_gate_receipt_sha256": "f6992b3ae157f0e698eefd4740805cd5815ac4627da6775986c1183eb228c8a2",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-NATIVE-OPERATOR-EXTERNAL-TRANSFER-LINK",
+  "ts": "20260622T214655Z",
+  "verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_PASS"
+}

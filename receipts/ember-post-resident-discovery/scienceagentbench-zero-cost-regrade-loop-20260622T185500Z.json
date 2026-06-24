@@ -1,0 +1,1071 @@
+{
+  "admission_receipt": "receipts\\ember-post-resident-discovery\\scienceagentbench-admission-20260622T165317Z.json",
+  "admission_receipt_sha256": "dbaf2f4a697dc178a09f300c597106c4e9776c23068ad59935bf40d0e966762a",
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.5,
+    "Deleted": 0.0
+  },
+  "api_spend_usd": 0,
+  "before_c_score": 0.333333,
+  "before_receipt": "receipts\\ember-post-resident-discovery\\scienceagentbench-zero-cost-regrade-loop-20260622T183000Z.json",
+  "benchmark_root": "<local-path>",
+  "blocked_reasons": [],
+  "candidate_safety": {
+    "candidate_workdirs_isolated": true,
+    "gold_programs_read_by_candidate": false,
+    "gold_results_visible_during_candidate_execution": false,
+    "known_weak_surface": "clintox verified test csv exposes label columns to candidate; receipt does not treat that row as field-level proof by itself",
+    "private_labels_read_by_candidate": false
+  },
+  "canonical_gpt4o_score_present": false,
+  "deletion_sensitive": true,
+  "equal_budget": {
+    "arms": [
+      "A",
+      "B",
+      "C",
+      "Deleted"
+    ],
+    "attempts_per_arm_per_row": 1,
+    "timeout_seconds": 45
+  },
+  "expected_score_bias": "lower_or_equal_than_gpt4o_not_inflated",
+  "field_level_status": "progress_not_field_breakthrough",
+  "frozen_rows_path": "receipts\\ember-post-resident-discovery\\scienceagentbench-admission-20260622T165317Z.frozen_rows.json",
+  "frozen_rows_sha256": "af8d0e567b2616918ec336e451b16fd1bc79469ca987420bb32c224f08887fca",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "481876a849767ce1669f2826a4ff53511cefd286a99843aff0e720462bc78820",
+  "improved_over_before": true,
+  "judge_identity": {
+    "deterministic_rows": "local official eval scripts",
+    "visual_judgments_path": "receipts\\ember-post-resident-discovery\\scienceagentbench-zero-cost-visual-judgments-20260622T185500Z.json",
+    "visual_rows": "local/Codex/GPT-5.x/subagent transcript file"
+  },
+  "leaderboard_identical": false,
+  "next_executable_command": "Fix the named score/delta blocker and rerun zero-cost regrade loop",
+  "paid_api_surface_used": false,
+  "positive_delta": true,
+  "repo": "<local-path>",
+  "rubric_identical": true,
+  "run_root": "<local-path>",
+  "score_rows": [
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "instance_id": 1,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "bb60b133e57818bf94697d36455b4b33b0d081c68103867cac170c2abfd9d8d2",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "6a02e5c30665079b7ef123305f6f005a53535ddb4aedb11807a1c823ecbb288d",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(0, \"{'data_correctness': True, 'func_correctness': False}\")\n"
+      },
+      "instance_id": 1,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "fc20ec087e7b7cb6b60525c3289a66366dc3eb5d8a39dbc610af08629751d20b",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "e92cd67fb22b6edd570dfab103ed9e2f9eee8f9821598cd76c49c5c78bf454a5",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": true,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(1, \"{'data_correctness': True, 'func_correctness': True}\")\n"
+      },
+      "instance_id": 1,
+      "kind": "deterministic",
+      "pass": true
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "instance_id": 1,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 4,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "A",
+        "gold_path": "<local-path>",
+        "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+        "instance_id": 4,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "A",
+          "instance_id": 4,
+          "judge": "deterministic_missing_output_rule",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": false,
+        "pred_path": "<local-path>",
+        "pred_sha256": null,
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "9bd2b245e3b82da3dd7655494e20ccf0c79b11f36f8e5bb4e2e9889885f1e0e3",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 4,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "B",
+        "gold_path": "<local-path>",
+        "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+        "instance_id": 4,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "B",
+          "instance_id": 4,
+          "judge": "gpt-5.x_subagent_strict_visual_regrade",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "Prediction is a trivial flat line with unrelated title and axes; it does not resemble the gold elk spatial KDE, convex hull, clustered scatter, or colorbars.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": true,
+        "pred_path": "<local-path>",
+        "pred_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "f3fc346e372bac1d2cc897a13e83bda7c7f80c3d196af5504a99cf9c92844eed",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "4cdf58a82709ec32f971c57073f94ac9cf5c8716d178c3b4f7f4341563ae8b88",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 4,
+      "kind": "visual_regrade",
+      "pass": true,
+      "visual_packet": {
+        "arm": "C",
+        "gold_path": "<local-path>",
+        "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+        "instance_id": 4,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "C",
+          "instance_id": 4,
+          "judge": "gpt-5.x_subagent_strict_visual_regrade",
+          "leaderboard_identical": false,
+          "pass": true,
+          "rationale": "Predicted figure captures the main elk spatial pattern, convex hull, coordinate range, scatter distribution, and density hotspot location. However it differs substantially in title/axis labeling, aspect/layout, colorbar scales and labels, background KDE appearance, and point coloring/clustering semantics versus the gold. Overall resemblance is adequate but not close.",
+          "rubric_identical": true,
+          "score": 68
+        },
+        "pass": true,
+        "pred_exists": true,
+        "pred_path": "<local-path>",
+        "pred_sha256": "4cdf58a82709ec32f971c57073f94ac9cf5c8716d178c3b4f7f4341563ae8b88",
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 4,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "Deleted",
+        "gold_path": "<local-path>",
+        "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+        "instance_id": 4,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "Deleted",
+          "instance_id": 4,
+          "judge": "deterministic_missing_output_rule",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": false,
+        "pred_path": "<local-path>",
+        "pred_sha256": null,
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "instance_id": 5,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "6f871933064c3e2ca50b36bfdc752f197b55e1356f16e0fd0cea6af1e44f8756",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "70aacde8af77a598ebfef54cdf9f157b816908058a4d13f4419960769bfdf409",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(0, \"{'data_correctness': True, 'func_correctness': False}\")\n"
+      },
+      "instance_id": 5,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "5e0755f36f4287ccc2fb68ef267c7707528134d668ee7101b7e76330b66148c7",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "fda411d538fb3205759577836d4c51620a1298c5b32fb9a8c338a6cd4e827d5b",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": true,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(1, \"{'data_correctness': True, 'func_correctness': True}\")\n"
+      },
+      "instance_id": 5,
+      "kind": "deterministic",
+      "pass": true
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "instance_id": 5,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 24,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "A",
+        "gold_path": "<local-path>",
+        "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+        "instance_id": 24,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "A",
+          "instance_id": 24,
+          "judge": "deterministic_missing_output_rule",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": false,
+        "pred_path": "<local-path>",
+        "pred_sha256": null,
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "2c133bbe22672338f6e439a21c670dc912e93d99d2af99ced869b9331ab1b0fc",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 24,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "B",
+        "gold_path": "<local-path>",
+        "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+        "instance_id": 24,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "B",
+          "instance_id": 24,
+          "judge": "gpt-5.x_subagent_strict_visual_regrade",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "Prediction is a blank instruction-only baseline with a flat line and none of the required ECG, R-peak/outlier markers, heart-rate trace, heartbeat overlay, or histogram structure from the gold figure.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": true,
+        "pred_path": "<local-path>",
+        "pred_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "fabbf8bfedc9167ad61c0492aad6aa2095de55b1617b6a715ff19d88573ab421",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "bdca7a29806cc48e04d0c0c1348ead8eaf33284798eced9d35cfbfee977c0186",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 24,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "C",
+        "gold_path": "<local-path>",
+        "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+        "instance_id": 24,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "C",
+          "instance_id": 24,
+          "judge": "gpt-5.x_subagent_strict_visual_regrade",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "Prediction shows only a single dense raw ECG-like time-series panel. It misses the gold figure's four-panel layout, z-normalized ECG with quality shading and markers, heart-rate time series with mean line, individual heartbeat overlay, and heart-rate histogram; resemblance is limited to having an ECG signal over time.",
+          "rubric_identical": true,
+          "score": 18
+        },
+        "pass": false,
+        "pred_exists": true,
+        "pred_path": "<local-path>",
+        "pred_sha256": "bdca7a29806cc48e04d0c0c1348ead8eaf33284798eced9d35cfbfee977c0186",
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 24,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "Deleted",
+        "gold_path": "<local-path>",
+        "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+        "instance_id": 24,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "Deleted",
+          "instance_id": 24,
+          "judge": "deterministic_missing_output_rule",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": false,
+        "pred_path": "<local-path>",
+        "pred_sha256": null,
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 25,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "A",
+        "gold_path": "<local-path>",
+        "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+        "instance_id": 25,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "A",
+          "instance_id": 25,
+          "judge": "deterministic_missing_output_rule",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": false,
+        "pred_path": "<local-path>",
+        "pred_sha256": null,
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "9843db7e32362c2458da6da342430190d519f65951525e08d5f7293d08b4cc10",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 25,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "B",
+        "gold_path": "<local-path>",
+        "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+        "instance_id": 25,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "B",
+          "instance_id": 25,
+          "judge": "gpt-5.x_subagent_strict_visual_regrade",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "Prediction is a single flat instruction-only baseline line plot with unrelated title, axes, data, and layout. It does not reproduce any of the gold HRV multi-panel content: RR histogram, PSD bands, or Poincare plot.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": true,
+        "pred_path": "<local-path>",
+        "pred_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "038b217a6c5c3ad4805207bdbae6d0b799bca3e8189defff42a94ef43b5ca3a6",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "bdca7a29806cc48e04d0c0c1348ead8eaf33284798eced9d35cfbfee977c0186",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 25,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "C",
+        "gold_path": "<local-path>",
+        "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+        "instance_id": 25,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "C",
+          "instance_id": 25,
+          "judge": "gpt-5.x_subagent_strict_visual_regrade",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "Prediction shows a single ECG signal overview over time, while the gold figure is a three-part HRV visualization with RR interval distribution, PSD frequency bands, and Poincare scatter/density with marginal histograms. It is related to ECG/HRV only thematically but misses the required plot structure, metrics, scales, and visual resemblance.",
+          "rubric_identical": true,
+          "score": 10
+        },
+        "pass": false,
+        "pred_exists": true,
+        "pred_path": "<local-path>",
+        "pred_sha256": "bdca7a29806cc48e04d0c0c1348ead8eaf33284798eced9d35cfbfee977c0186",
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "instance_id": 25,
+      "kind": "visual_regrade",
+      "pass": false,
+      "visual_packet": {
+        "arm": "Deleted",
+        "gold_path": "<local-path>",
+        "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+        "instance_id": 25,
+        "leaderboard_identical": false,
+        "local_visual_judgment": {
+          "arm": "Deleted",
+          "instance_id": 25,
+          "judge": "deterministic_missing_output_rule",
+          "leaderboard_identical": false,
+          "pass": false,
+          "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+          "rubric_identical": true,
+          "score": 0
+        },
+        "pass": false,
+        "pred_exists": false,
+        "pred_path": "<local-path>",
+        "pred_sha256": null,
+        "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+      }
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "instance_id": 2,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "884984bb1be6527a3afbcc4436102394e29de1b971c079c719141fede42f4652",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "603a64bba9726017fa8fd6c97cfadf8f655b0f821e0041de9d3c74bb79580915",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(0, 'N/A')\n"
+      },
+      "instance_id": 2,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "9c1c047d91ff031131ab61322f0ef3f7a4898d5e94d0f723506b4bedf1aacc5b",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "4530c3d7e556487fdcc069728c309af09bfa02ec2de2b8012eb36bd817ddd6dc",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(0, 'N/A')\n"
+      },
+      "instance_id": 2,
+      "kind": "deterministic",
+      "pass": false
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "23af9cb858c8142d39a1548648ce2a75746722f6d2ca8bf920f61261066070f8",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "instance_id": 2,
+      "kind": "deterministic",
+      "pass": false
+    }
+  ],
+  "scoring_mode": "zero_cost_stricter_noncanonical_regrade",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "stricter_noncanonical_regrade": true,
+  "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP",
+  "ts": "20260622T182220Z",
+  "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS",
+  "visual_packets": [
+    {
+      "arm": "A",
+      "gold_path": "<local-path>",
+      "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+      "instance_id": 4,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "A",
+        "instance_id": 4,
+        "judge": "deterministic_missing_output_rule",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": false,
+      "pred_path": "<local-path>",
+      "pred_sha256": null,
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "B",
+      "gold_path": "<local-path>",
+      "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+      "instance_id": 4,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "B",
+        "instance_id": 4,
+        "judge": "gpt-5.x_subagent_strict_visual_regrade",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "Prediction is a trivial flat line with unrelated title and axes; it does not resemble the gold elk spatial KDE, convex hull, clustered scatter, or colorbars.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": true,
+      "pred_path": "<local-path>",
+      "pred_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "C",
+      "gold_path": "<local-path>",
+      "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+      "instance_id": 4,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "C",
+        "instance_id": 4,
+        "judge": "gpt-5.x_subagent_strict_visual_regrade",
+        "leaderboard_identical": false,
+        "pass": true,
+        "rationale": "Predicted figure captures the main elk spatial pattern, convex hull, coordinate range, scatter distribution, and density hotspot location. However it differs substantially in title/axis labeling, aspect/layout, colorbar scales and labels, background KDE appearance, and point coloring/clustering semantics versus the gold. Overall resemblance is adequate but not close.",
+        "rubric_identical": true,
+        "score": 68
+      },
+      "pass": true,
+      "pred_exists": true,
+      "pred_path": "<local-path>",
+      "pred_sha256": "4cdf58a82709ec32f971c57073f94ac9cf5c8716d178c3b4f7f4341563ae8b88",
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "Deleted",
+      "gold_path": "<local-path>",
+      "gold_sha256": "7ae3a05984a9f58891c9bc44a83cfe47ecb4220afd0a9b76f637512d2a6161f8",
+      "instance_id": 4,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "Deleted",
+        "instance_id": 4,
+        "judge": "deterministic_missing_output_rule",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": false,
+      "pred_path": "<local-path>",
+      "pred_sha256": null,
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "A",
+      "gold_path": "<local-path>",
+      "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+      "instance_id": 24,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "A",
+        "instance_id": 24,
+        "judge": "deterministic_missing_output_rule",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": false,
+      "pred_path": "<local-path>",
+      "pred_sha256": null,
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "B",
+      "gold_path": "<local-path>",
+      "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+      "instance_id": 24,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "B",
+        "instance_id": 24,
+        "judge": "gpt-5.x_subagent_strict_visual_regrade",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "Prediction is a blank instruction-only baseline with a flat line and none of the required ECG, R-peak/outlier markers, heart-rate trace, heartbeat overlay, or histogram structure from the gold figure.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": true,
+      "pred_path": "<local-path>",
+      "pred_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "C",
+      "gold_path": "<local-path>",
+      "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+      "instance_id": 24,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "C",
+        "instance_id": 24,
+        "judge": "gpt-5.x_subagent_strict_visual_regrade",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "Prediction shows only a single dense raw ECG-like time-series panel. It misses the gold figure's four-panel layout, z-normalized ECG with quality shading and markers, heart-rate time series with mean line, individual heartbeat overlay, and heart-rate histogram; resemblance is limited to having an ECG signal over time.",
+        "rubric_identical": true,
+        "score": 18
+      },
+      "pass": false,
+      "pred_exists": true,
+      "pred_path": "<local-path>",
+      "pred_sha256": "bdca7a29806cc48e04d0c0c1348ead8eaf33284798eced9d35cfbfee977c0186",
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "Deleted",
+      "gold_path": "<local-path>",
+      "gold_sha256": "e3a3217af94b52fb423ee7ce3faba47615d8eecf7152d15d7cb309f3d24baeb9",
+      "instance_id": 24,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "Deleted",
+        "instance_id": 24,
+        "judge": "deterministic_missing_output_rule",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": false,
+      "pred_path": "<local-path>",
+      "pred_sha256": null,
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "A",
+      "gold_path": "<local-path>",
+      "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+      "instance_id": 25,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "A",
+        "instance_id": 25,
+        "judge": "deterministic_missing_output_rule",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": false,
+      "pred_path": "<local-path>",
+      "pred_sha256": null,
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "B",
+      "gold_path": "<local-path>",
+      "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+      "instance_id": 25,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "B",
+        "instance_id": 25,
+        "judge": "gpt-5.x_subagent_strict_visual_regrade",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "Prediction is a single flat instruction-only baseline line plot with unrelated title, axes, data, and layout. It does not reproduce any of the gold HRV multi-panel content: RR histogram, PSD bands, or Poincare plot.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": true,
+      "pred_path": "<local-path>",
+      "pred_sha256": "74ae317322717d07bfa8c57e2040fb30777b11b8f195632f8ab85011945579a5",
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "C",
+      "gold_path": "<local-path>",
+      "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+      "instance_id": 25,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "C",
+        "instance_id": 25,
+        "judge": "gpt-5.x_subagent_strict_visual_regrade",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "Prediction shows a single ECG signal overview over time, while the gold figure is a three-part HRV visualization with RR interval distribution, PSD frequency bands, and Poincare scatter/density with marginal histograms. It is related to ECG/HRV only thematically but misses the required plot structure, metrics, scales, and visual resemblance.",
+        "rubric_identical": true,
+        "score": 10
+      },
+      "pass": false,
+      "pred_exists": true,
+      "pred_path": "<local-path>",
+      "pred_sha256": "bdca7a29806cc48e04d0c0c1348ead8eaf33284798eced9d35cfbfee977c0186",
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    },
+    {
+      "arm": "Deleted",
+      "gold_path": "<local-path>",
+      "gold_sha256": "4d0b5d6ab406c8953e24d478dddfa3d9b55c6d213a8f22a30cb16fe1497b5c7a",
+      "instance_id": 25,
+      "leaderboard_identical": false,
+      "local_visual_judgment": {
+        "arm": "Deleted",
+        "instance_id": 25,
+        "judge": "deterministic_missing_output_rule",
+        "leaderboard_identical": false,
+        "pass": false,
+        "rationale": "No predicted image emitted by this arm; score fixed to 0 under SAB visual rubric.",
+        "rubric_identical": true,
+        "score": 0
+      },
+      "pass": false,
+      "pred_exists": false,
+      "pred_path": "<local-path>",
+      "pred_sha256": null,
+      "rubric": "same public gpt4_visual_judge.py plot-comparison rubric; local/Codex/GPT-5.x score is a stricter noncanonical re-grade, not leaderboard-identical"
+    }
+  ]
+}

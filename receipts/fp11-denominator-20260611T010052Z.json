@@ -1,0 +1,171 @@
+{
+  "ticket": "FP11-DENOMINATOR",
+  "ts": "20260611T010052Z",
+  "constants": {
+    "THROTTLE_S": 0.6,
+    "PACE_EVERY": 32,
+    "PACE_S": 0.5,
+    "CHARS_PER_TOK": 3.5,
+    "FENCE_OVERHEAD": 40
+  },
+  "legs": {
+    "q15": {
+      "wall_secs": 363.9,
+      "n_gens": 960,
+      "batches": 120,
+      "throttle_secs": 72.0,
+      "pacer_secs_modeled": 137.5,
+      "pacer_secs_none0": 130.0,
+      "n_extraction_fail_rows": 1,
+      "mean_src_chars": 148.4,
+      "sampler_valued_bits": 244.3,
+      "A1_secs": 363.9,
+      "A2_secs": 291.9,
+      "A3_secs": 154.4,
+      "A3_none0_secs": 161.9
+    },
+    "q3": {
+      "wall_secs": 428.7,
+      "n_gens": 960,
+      "batches": 120,
+      "throttle_secs": 72.0,
+      "pacer_secs_modeled": 136.0,
+      "pacer_secs_none0": 136.0,
+      "n_extraction_fail_rows": 0,
+      "mean_src_chars": 162.0,
+      "sampler_valued_bits": 233.5,
+      "A1_secs": 428.7,
+      "A2_secs": 356.7,
+      "A3_secs": 220.7,
+      "A3_none0_secs": 220.7
+    }
+  },
+  "accountings": {
+    "A1": {
+      "gen_min": {
+        "q15": 6.065,
+        "q3": 7.145
+      },
+      "bits_per_min_sampler_valued": {
+        "q15": 40.3,
+        "q3": 32.7
+      },
+      "ordering": "q15>q3",
+      "denominator_scale_s": 1.0,
+      "fp9_corrected": {
+        "point": 1.02,
+        "ci95": [
+          0.867,
+          1.203
+        ],
+        "verdict": "cost-parity"
+      },
+      "fp9_uncorrected": {
+        "point": 1.07,
+        "ci95": [
+          0.834,
+          1.367
+        ],
+        "verdict": "cost-parity"
+      }
+    },
+    "A2": {
+      "gen_min": {
+        "q15": 4.865,
+        "q3": 5.945
+      },
+      "bits_per_min_sampler_valued": {
+        "q15": 50.2,
+        "q3": 39.3
+      },
+      "ordering": "q15>q3",
+      "denominator_scale_s": 1.0373,
+      "fp9_corrected": {
+        "point": 1.058,
+        "ci95": [
+          0.899,
+          1.248
+        ],
+        "verdict": "cost-parity"
+      },
+      "fp9_uncorrected": {
+        "point": 1.11,
+        "ci95": [
+          0.865,
+          1.418
+        ],
+        "verdict": "cost-parity"
+      }
+    },
+    "A3": {
+      "gen_min": {
+        "q15": 2.573,
+        "q3": 3.678
+      },
+      "bits_per_min_sampler_valued": {
+        "q15": 94.9,
+        "q3": 63.5
+      },
+      "ordering": "q15>q3",
+      "denominator_scale_s": 1.2133,
+      "fp9_corrected": {
+        "point": 1.238,
+        "ci95": [
+          1.052,
+          1.46
+        ],
+        "verdict": "edge-real"
+      },
+      "fp9_uncorrected": {
+        "point": 1.298,
+        "ci95": [
+          1.012,
+          1.659
+        ],
+        "verdict": "edge-real"
+      }
+    }
+  },
+  "verdict": "NOT-ROBUST",
+  "verdict_rule": "ordering identical AND fp-9 corrected parity verdict unchanged across A1/A2/A3",
+  "a3_none_bracket_settled": true,
+  "none_sensitivity": {
+    "channel": "extraction-fail rows assumed max_new tokens; counts are UNEQUAL across legs (asymmetric model channel)",
+    "none_rows": {
+      "q15": 1,
+      "q3": 0
+    },
+    "s_A3_none0": 1.1571,
+    "fp9_corrected_none0": {
+      "point": 1.18,
+      "ci95": [
+        1.003,
+        1.392
+      ],
+      "verdict": "edge-real"
+    },
+    "bracket_note": "A3 verdict quoted only if BOTH None brackets agree"
+  },
+  "flip_threshold": {
+    "s_star_to_flip_corrected_parity": 1.1534,
+    "q15_compute_share_needed": 0.4463,
+    "extra_q15_pacing_secs_beyond_A3": -8.0,
+    "q15_pacer_hard_ceiling_secs": 960.0,
+    "physically_reachable": true
+  },
+  "verify_timing_ratio_context": {
+    "as_receipted": 785.5,
+    "rescaled_by_q15_compute_share": {
+      "A1": 785.5,
+      "A2": 630.1,
+      "A3": 333.3
+    },
+    "note": "orders-of-magnitude conclusion (generation is the binding resource) untouched by any accounting"
+  },
+  "flags": [
+    "A3 decode-step counts are MODELED from src char lengths (CHARS_PER_TOK + FENCE_OVERHEAD constants); A2 is exact",
+    "extraction-fail None->max_new is an ASYMMETRIC channel (unequal None counts across legs) \u2014 bracketed in none_sensitivity, not just flagged",
+    "pacing env overrides (EMBER_*) not receipted at run time \u2014 code defaults assumed",
+    "fp-9 CI rescaling is exact only because denominators are constants inside every bootstrap draw"
+  ]
+}

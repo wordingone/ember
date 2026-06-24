@@ -1,0 +1,14 @@
+{
+  "ticket": "ENG142-TASKLIST-SELFTEST",
+  "ts": "20260611T040136Z",
+  "issue": "wordingone/ember#142",
+  "checks": {
+    "selection_logic": true,
+    "t2_grpo_wiring": true,
+    "wrapper_wiring": true
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) \u2014 the convention the task-list hash is pinned against",
+  "default_path_unchanged": "no --task-list = legacy full-pool behavior (every MBPP train problem, stratum repetition only)",
+  "pool_pin": "prereg \u00a75 (mail 14514): theta (0,0.5] live-frontier strictly; dead-task GRPO = named round-3 candidate",
+  "quarantine_note": "adapter r2-q3-grpo stays PRE-GATE/QUARANTINED until rerun on the load-bearing selection \u2014 dispatch is the gate-holder's call"
+}

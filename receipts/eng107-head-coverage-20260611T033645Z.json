@@ -1,0 +1,57 @@
+{
+  "ticket": "ENG107-HEAD-COVERAGE",
+  "ts": "20260611T033645Z",
+  "issue": "#107",
+  "scope": "checked_write adoption \u2014 current-head coverage audit (post-rebase onto f3a90a6)",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "master_sha_rebased_onto": "f3a90a6",
+  "branch_head_sha_pre_commit": "3518f713a7578e07e4dc3ff8f6320e2e781ab43a",
+  "total_writer_sites_found": 47,
+  "wired_sites": 47,
+  "wired_files": 46,
+  "delta_new_files_this_pass": {
+    "d_gate.py": {
+      "sites_wired": 1,
+      "classification": "receipt"
+    },
+    "p_gate.py": {
+      "sites_wired": 1,
+      "classification": "receipt"
+    },
+    "timeshare_dryrun.py": {
+      "sites_wired": 1,
+      "classification": "receipt"
+    }
+  },
+  "non_receipt_sites": [
+    {
+      "file": "timeshare_pretrain.py",
+      "line": 191,
+      "write_target": "manifest.json inside run_dir/checkpoints/step-<N>/",
+      "reason": "checkpoint artifact manifest \u2014 tensor artifact index, not a receipts/-style gate receipt; contains sha256 of PT files, not run-level verdict"
+    },
+    {
+      "file": "timeshare_handoff.py",
+      "line": 177,
+      "write_target": "handoff-state.json inside state_dir",
+      "reason": "mutable state-machine file \u2014 appended/overwritten on every transition, never written to receipts/; not a run-level gate receipt"
+    },
+    {
+      "file": "p_gate.py",
+      "line": 418,
+      "write_target": "tmpdir/receipt.json inside _selftest _write_receipt helper",
+      "reason": "selftest synthetic fixture \u2014 written to a tempfile.mkdtemp() dir for test-fixture input to run_p_gate(); not a production receipt path"
+    }
+  ],
+  "selftest_markers": {
+    "RECEIPT_WRITE_SELFTEST_PASS": true,
+    "D_GATE_SELFTEST_PASS": true,
+    "P_GATE_SELFTEST_PASS": true,
+    "TIMESHARE_PRETRAIN_SELFTEST_PASS": true,
+    "TIMESHARE_HANDOFF_SELFTEST_PASS": true,
+    "TIMESHARE_DRYRUN_e2e": "DRYRUN_COMPLETE"
+  },
+  "byte_identity_valid_path": true,
+  "pass": true,
+  "verdict": "HEAD_COVERAGE_COMPLETE"
+}

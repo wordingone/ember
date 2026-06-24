@@ -1,0 +1,1423 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.445025,
+    "C": 1.0,
+    "Deleted": 0.0
+  },
+  "arm_contract": {
+    "A": "no native goal organ; no learned resident proposer; emits no requirements",
+    "B": "fixed instruction-only extractor; no eval-script recursion and no learned resident policy",
+    "C": "resident-trained recursive eval-script policy extracts candidate/output/evaluator requirements",
+    "Deleted": "C with native goal organ and recursive policy removed; emits no requirements"
+  },
+  "before_after": {
+    "after_resident_C": 1.0,
+    "before_baseline_A": 0.0,
+    "before_control_B": 0.445025,
+    "deleted": 0.0
+  },
+  "benchmark_receipt_path": "<local-path>",
+  "benchmark_receipt_sha256": "77c8e606be07fda0135c4f7e55f3c862cd6255a0dea5be21793218e0ae580bca",
+  "code_vs_docs_metric": {
+    "classification": "during-project executable loop receipt; not before-project planning",
+    "loop_script_code_lines": 321,
+    "receipt_lines_predicted": 1423
+  },
+  "deletion_sensitive": true,
+  "equal_budget": {
+    "attempts_per_arm_per_task": 1,
+    "cpu_gpu": "CPU only, no GPU, deterministic local parser per arm",
+    "data_access": "same fresh D3 row object; B/A/Deleted do not use eval_script by policy, C uses the learned resident recursive policy selected by the prior gate",
+    "verifier": "same target parser over external eval_script for every arm"
+  },
+  "errors": [],
+  "external_task_source": {
+    "config": "default",
+    "dataset": "osunlp/D3-Gym",
+    "length": 12,
+    "num_rows_total": 565,
+    "offset": 8,
+    "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
+    "split": "train"
+  },
+  "field_level_status": "progress_not_field_breakthrough",
+  "fresh_rows_path": "<local-path>",
+  "fresh_rows_sha256": "f552e9eb758c2637b4ee5247ba9740b623266e23bb3663542e87140d9c28494c",
+  "git_head": "c8ea3856bae4757c7792f9d8f84a98226f16c5f3",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "5ee744a3b860f9e0e11b4fe34ad0f573566d4c18a021ed3969dbf7b7d8e66417",
+  "limits": [
+    "This proves fresh-row proposer/evaluator-surface expressivity, not full Docker task solving.",
+    "This does not satisfy the final ML/AI field-level breakthrough clear condition."
+  ],
+  "native_goal_organ_load_bearing": true,
+  "next_blocker": "scale from evaluator-requirement extraction to real candidate generation/execution on admitted D3 or ScienceAgentBench tasks",
+  "per_task_rows": [
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_zmat_match.txt",
+            "pred_results/zmat_output.txt"
+          ],
+          "checks": [
+            "semantic_consistency"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "Could not parse any matching indices from pred_zmat_match.txt",
+            "pred_results/pred_zmat_match.txt",
+            "pred_results/zmat_output.txt",
+            "pred_zmat_match.txt",
+            "zmat_output.txt"
+          ],
+          "checks": [
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.1667,
+          "matched_artifacts": [],
+          "matched_checks": [
+            "semantic_consistency"
+          ],
+          "score": 0.0583
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "Could not parse any matching indices from pred_zmat_match.txt",
+            "pred_zmat_match.txt",
+            "zmat_output.txt"
+          ],
+          "matched_checks": [
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 8,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "Could not parse any matching indices from pred_zmat_match.txt",
+          "pred_zmat_match.txt",
+          "zmat_output.txt"
+        ],
+        "checks": [
+          "existence",
+          "non_empty",
+          "numeric_validity",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "cad1b63ad62f5236fc121c7fabe524ccda5e549aae72506f9e724f1d5f0ee95e"
+      },
+      "task_id": "task_9"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json",
+            "pred_results/pred_pltp_f13.pdf",
+            "pred_results/pred_pltp_f13.txt",
+            "pred_results/pred_pltp_vdwtaper.pdf",
+            "pred_results/pred_pltp_vdwtaper.txt"
+          ],
+          "checks": [
+            "column_check",
+            "json_parse"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json",
+            "pred_pltp_f13.pdf",
+            "pred_pltp_f13.txt",
+            "pred_pltp_vdwtaper.pdf",
+            "pred_pltp_vdwtaper.txt",
+            "pred_results/pred_pltp_f13.pdf",
+            "pred_results/pred_pltp_f13.txt",
+            "pred_results/pred_pltp_vdwtaper.pdf",
+            "pred_results/pred_pltp_vdwtaper.txt"
+          ],
+          "checks": [
+            "column_check",
+            "existence",
+            "json_parse",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 0.2,
+          "check_recall": 0.25,
+          "matched_artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json"
+          ],
+          "matched_checks": [
+            "column_check",
+            "json_parse"
+          ],
+          "score": 0.2175
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json",
+            "pred_pltp_f13.pdf",
+            "pred_pltp_f13.txt",
+            "pred_pltp_vdwtaper.pdf",
+            "pred_pltp_vdwtaper.txt"
+          ],
+          "matched_checks": [
+            "column_check",
+            "existence",
+            "json_parse",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 9,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "benchmark/datasets/I-ReaxFF/test/ffield.json",
+          "pred_pltp_f13.pdf",
+          "pred_pltp_f13.txt",
+          "pred_pltp_vdwtaper.pdf",
+          "pred_pltp_vdwtaper.txt"
+        ],
+        "checks": [
+          "column_check",
+          "existence",
+          "json_parse",
+          "non_empty",
+          "numeric_validity",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "1547776861afd61a2128681e2c0dabfaa7838f58b9163e330a0519e5e74107bd"
+      },
+      "task_id": "task_10"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json",
+            "pred_results/pred_nn.json",
+            "pred_results/pred_nn.txt"
+          ],
+          "checks": [
+            "json_parse"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json",
+            "pred_results/pred_nn.json",
+            "pred_results/pred_nn.txt"
+          ],
+          "checks": [
+            "existence",
+            "json_parse",
+            "non_empty",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 1.0,
+          "check_recall": 0.1667,
+          "matched_artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json",
+            "pred_results/pred_nn.json",
+            "pred_results/pred_nn.txt"
+          ],
+          "matched_checks": [
+            "json_parse"
+          ],
+          "score": 0.7083
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "benchmark/datasets/I-ReaxFF/test/ffield.json",
+            "pred_results/pred_nn.json",
+            "pred_results/pred_nn.txt"
+          ],
+          "matched_checks": [
+            "existence",
+            "json_parse",
+            "non_empty",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 10,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "benchmark/datasets/I-ReaxFF/test/ffield.json",
+          "pred_results/pred_nn.json",
+          "pred_results/pred_nn.txt"
+        ],
+        "checks": [
+          "existence",
+          "json_parse",
+          "non_empty",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "e777b54dd03c648ac9bcd47cc66291cbc538c91657d120af2cf55bc2e3623366"
+      },
+      "task_id": "task_11"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_plot_zmat_pes.txt",
+            "pred_results/pred_plot_zmat_pes_surface.txt"
+          ],
+          "checks": [
+            "column_check",
+            "json_parse"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "pred_plot_zmat_pes.txt",
+            "pred_plot_zmat_pes_surface.txt",
+            "pred_results/pred_plot_zmat_pes.txt",
+            "pred_results/pred_plot_zmat_pes_surface.txt"
+          ],
+          "checks": [
+            "column_check",
+            "existence",
+            "json_parse",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.1429,
+          "matched_artifacts": [],
+          "matched_checks": [
+            "column_check"
+          ],
+          "score": 0.05
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "pred_plot_zmat_pes.txt",
+            "pred_plot_zmat_pes_surface.txt"
+          ],
+          "matched_checks": [
+            "column_check",
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 11,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "pred_plot_zmat_pes.txt",
+          "pred_plot_zmat_pes_surface.txt"
+        ],
+        "checks": [
+          "column_check",
+          "existence",
+          "non_empty",
+          "numeric_validity",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "3aa2bd8bc1255cf2f8404fe7df51224dbef55082d757ec3a19fdda83423ac4d0"
+      },
+      "task_id": "task_12"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_plot_atoms.png",
+            "pred_results/pred_plot_atoms_bonds.txt",
+            "pred_results/pred_plot_atoms_forces.txt",
+            "pred_results/pred_plot_atoms_summary.txt"
+          ],
+          "checks": [],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "pred_results/pred_plot_atoms.png",
+            "pred_results/pred_plot_atoms_bonds.txt",
+            "pred_results/pred_plot_atoms_forces.txt",
+            "pred_results/pred_plot_atoms_summary.txt"
+          ],
+          "checks": [
+            "assertion",
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 1.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [
+            "pred_results/pred_plot_atoms.png",
+            "pred_results/pred_plot_atoms_bonds.txt",
+            "pred_results/pred_plot_atoms_forces.txt",
+            "pred_results/pred_plot_atoms_summary.txt"
+          ],
+          "matched_checks": [],
+          "score": 0.65
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "pred_results/pred_plot_atoms.png",
+            "pred_results/pred_plot_atoms_bonds.txt",
+            "pred_results/pred_plot_atoms_forces.txt",
+            "pred_results/pred_plot_atoms_summary.txt"
+          ],
+          "matched_checks": [
+            "assertion",
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 12,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "pred_results/pred_plot_atoms.png",
+          "pred_results/pred_plot_atoms_bonds.txt",
+          "pred_results/pred_plot_atoms_forces.txt",
+          "pred_results/pred_plot_atoms_summary.txt"
+        ],
+        "checks": [
+          "assertion",
+          "existence",
+          "non_empty",
+          "numeric_validity",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "bb2dc6fa3fc9fd44f8db184abf15a4814515e2311f48562a23f268ee38beaaab"
+      },
+      "task_id": "task_13"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_single_point.csv",
+            "pred_results/pred_single_point.txt"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse",
+            "semantic_consistency"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "pred_results/pred_single_point.csv",
+            "pred_results/pred_single_point.txt"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 1.0,
+          "check_recall": 0.5,
+          "matched_artifacts": [
+            "pred_results/pred_single_point.csv",
+            "pred_results/pred_single_point.txt"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse",
+            "semantic_consistency"
+          ],
+          "score": 0.825
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "pred_results/pred_single_point.csv",
+            "pred_results/pred_single_point.txt"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 13,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "pred_results/pred_single_point.csv",
+          "pred_results/pred_single_point.txt"
+        ],
+        "checks": [
+          "column_check",
+          "csv_parse",
+          "existence",
+          "non_empty",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "f29151696eb8b8c5b151a5d399fc882a951e036d2d5a5725586bf0c8881ad7ac"
+      },
+      "task_id": "task_14"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_abc.csv"
+          ],
+          "checks": [
+            "csv_parse"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "pred_abc.csv",
+            "pred_results/pred_abc.csv"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.1667,
+          "matched_artifacts": [],
+          "matched_checks": [
+            "csv_parse"
+          ],
+          "score": 0.0583
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "pred_abc.csv"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 14,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "pred_abc.csv"
+        ],
+        "checks": [
+          "column_check",
+          "csv_parse",
+          "existence",
+          "non_empty",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "1f038e79a2c0e596c3d920c942213785ddc5bb15cd2be7493e728e7310196de6"
+      },
+      "task_id": "task_15"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_compare_dft.csv",
+            "pred_results/pred_compare_dft.png"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "./gold_results/pred_compare_dft.csv",
+            "./gold_results/pred_compare_dft.png",
+            "pred_results/pred_compare_dft.csv",
+            "pred_results/pred_compare_dft.png"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 0.5,
+          "check_recall": 0.3333,
+          "matched_artifacts": [
+            "pred_results/pred_compare_dft.csv",
+            "pred_results/pred_compare_dft.png"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse"
+          ],
+          "score": 0.4417
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "./gold_results/pred_compare_dft.csv",
+            "./gold_results/pred_compare_dft.png",
+            "pred_results/pred_compare_dft.csv",
+            "pred_results/pred_compare_dft.png"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 15,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "./gold_results/pred_compare_dft.csv",
+          "./gold_results/pred_compare_dft.png",
+          "pred_results/pred_compare_dft.csv",
+          "pred_results/pred_compare_dft.png"
+        ],
+        "checks": [
+          "column_check",
+          "csv_parse",
+          "existence",
+          "non_empty",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "962c20a1eb1f003c9f0468150d98841228e13d1fbb441d6176a5f0a57e21f3f2"
+      },
+      "task_id": "task_16"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_sort_atoms_mol.txt"
+          ],
+          "checks": [],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "pred_results/pred_sort_atoms_mol.txt"
+          ],
+          "checks": [
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 1.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [
+            "pred_results/pred_sort_atoms_mol.txt"
+          ],
+          "matched_checks": [],
+          "score": 0.65
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "pred_results/pred_sort_atoms_mol.txt"
+          ],
+          "matched_checks": [
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "fenggo/I-ReaxFF",
+      "source_row_idx": 16,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "pred_results/pred_sort_atoms_mol.txt"
+        ],
+        "checks": [
+          "existence",
+          "non_empty",
+          "numeric_validity",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "040558ac2c51bf3c11f4765f1a75db3a7c4c5f5bb4925d5b9dfe94a87007562d"
+      },
+      "task_id": "task_17"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_illuminate.csv"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse",
+            "semantic_consistency"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "pred_results/pred_illuminate.csv"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 1.0,
+          "check_recall": 0.375,
+          "matched_artifacts": [
+            "pred_results/pred_illuminate.csv"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse",
+            "semantic_consistency"
+          ],
+          "score": 0.7812
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "pred_results/pred_illuminate.csv"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "Jonas-Verhellen/Bayesian-Illumination",
+      "source_row_idx": 17,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "pred_results/pred_illuminate.csv"
+        ],
+        "checks": [
+          "column_check",
+          "csv_parse",
+          "existence",
+          "non_empty",
+          "numeric_validity",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "5d5a0b73ec251ce158f3baf72db551fd8aebfdcab2cfc8c7f73bf788d1bd7e73"
+      },
+      "task_id": "task_18"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "pred_results/pred_get_reactant_bag_other_reactions.csv"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "Missing main output file: pred_get_reactant_bag_other_reactions.csv",
+            "pred_get_reactant_bag_other_reactions.csv",
+            "pred_get_reactant_bag_other_reactions_reaction_idx_{rxn_idx}.csv",
+            "pred_results/pred_get_reactant_bag_other_reactions.csv"
+          ],
+          "checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.2857,
+          "matched_artifacts": [],
+          "matched_checks": [
+            "column_check",
+            "csv_parse"
+          ],
+          "score": 0.1
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "Missing main output file: pred_get_reactant_bag_other_reactions.csv",
+            "pred_get_reactant_bag_other_reactions.csv",
+            "pred_get_reactant_bag_other_reactions_reaction_idx_{rxn_idx}.csv"
+          ],
+          "matched_checks": [
+            "column_check",
+            "csv_parse",
+            "existence",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "TheJacksonLab/OpenMacromolecularGenome",
+      "source_row_idx": 18,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "Missing main output file: pred_get_reactant_bag_other_reactions.csv",
+          "pred_get_reactant_bag_other_reactions.csv",
+          "pred_get_reactant_bag_other_reactions_reaction_idx_{rxn_idx}.csv"
+        ],
+        "checks": [
+          "column_check",
+          "csv_parse",
+          "existence",
+          "non_empty",
+          "numeric_validity",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "ca98beac0ab8aa10fc96ee8df930e21cfe4300a4f1530bf6281df3581bd89a9b"
+      },
+      "task_id": "task_19"
+    },
+    {
+      "arm_predictions": {
+        "A": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        },
+        "B": {
+          "artifacts": [
+            "barrier.csv",
+            "cluster.json",
+            "generated_ts_quality.csv",
+            "pred_results/pred_demo.json",
+            "summary.csv"
+          ],
+          "checks": [
+            "csv_parse",
+            "json_parse",
+            "numeric_validity",
+            "semantic_consistency"
+          ],
+          "policy": "instruction_only"
+        },
+        "C": {
+          "artifacts": [
+            "barrier.csv",
+            "cluster.json",
+            "generated_ts_quality.csv",
+            "pred_results/pred_demo.json",
+            "summary.csv"
+          ],
+          "checks": [
+            "csv_parse",
+            "existence",
+            "json_parse",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "policy": "resident_eval_script_recursive",
+          "resident_policy_trace": "<local-path>"
+        },
+        "Deleted": {
+          "artifacts": [],
+          "checks": [],
+          "policy": "no_native_goal_organ"
+        }
+      },
+      "arm_scores": {
+        "A": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        },
+        "B": {
+          "artifact_recall": 1.0,
+          "check_recall": 0.4286,
+          "matched_artifacts": [
+            "pred_results/pred_demo.json"
+          ],
+          "matched_checks": [
+            "json_parse",
+            "numeric_validity",
+            "semantic_consistency"
+          ],
+          "score": 0.8
+        },
+        "C": {
+          "artifact_recall": 1.0,
+          "check_recall": 1.0,
+          "matched_artifacts": [
+            "pred_results/pred_demo.json"
+          ],
+          "matched_checks": [
+            "existence",
+            "json_parse",
+            "non_empty",
+            "numeric_validity",
+            "numpy_parse",
+            "semantic_consistency",
+            "shape_check"
+          ],
+          "score": 1.0
+        },
+        "Deleted": {
+          "artifact_recall": 0.0,
+          "check_recall": 0.0,
+          "matched_artifacts": [],
+          "matched_checks": [],
+          "score": 0.0
+        }
+      },
+      "c_beats_controls": true,
+      "deleted_degrades": true,
+      "discipline": "Chemistry",
+      "original_repo": "chenruduan/OAReactDiff",
+      "source_row_idx": 19,
+      "split": "fresh_heldout_offset8_len12",
+      "target": {
+        "artifacts": [
+          "pred_results/pred_demo.json"
+        ],
+        "checks": [
+          "existence",
+          "json_parse",
+          "non_empty",
+          "numeric_validity",
+          "numpy_parse",
+          "semantic_consistency",
+          "shape_check"
+        ],
+        "eval_script_sha256": "5372f04260eb58eb21d325266c85fafd17a58701abed6bef3e205b93b2071fe9"
+      },
+      "task_id": "task_20"
+    }
+  ],
+  "positive_delta": true,
+  "repo": "<local-path>",
+  "reproducibility": {
+    "data_hashes": {
+      "fresh_rows_sha256": "f552e9eb758c2637b4ee5247ba9740b623266e23bb3663542e87140d9c28494c",
+      "resident_candidate_manifest_sha256": "9e2edc9b5eb548404486b2d67851e4b67f4f01efeb2ca20dd78386f37bcdb823"
+    },
+    "environment": "python stdlib only",
+    "rerun_command": "python scripts\\ember_d3_native_proposer_loop.py --benchmark-receipt receipts\\ember-post-resident-discovery\\benchmark-discovery-20260621T070500Z.json --technique-receipt receipts\\ember-post-resident-discovery\\past-ember-technique-mining-20260621T070500Z.json --fresh-rows receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset8-len12-20260620T230700Z.json --resident-candidate-manifest receipts\\ember-resident-training-candidate\\candidate-20260620T202624Z\\resident_training_candidate_manifest.json --out receipts\\ember-d3-native-loop\\d3-native-loop-20260621T070500Z.json",
+    "seeds": "deterministic-no-randomness"
+  },
+  "resident_candidate_manifest_path": "<local-path>",
+  "resident_candidate_manifest_sha256": "9e2edc9b5eb548404486b2d67851e4b67f4f01efeb2ca20dd78386f37bcdb823",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "technique_receipt_path": "<local-path>",
+  "technique_receipt_sha256": "e1a8261d9d8b3352351451186700e97f81948340884b03d144bc12057c9102cd",
+  "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP",
+  "ts": "20260621T124008Z",
+  "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"
+}

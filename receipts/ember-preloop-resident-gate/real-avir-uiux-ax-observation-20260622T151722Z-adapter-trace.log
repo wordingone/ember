@@ -1,0 +1,33 @@
+[adapter-boot] pid=62944 AVIR_ADAPTER_TRACE=1 ts=1782141442876
+[adapter-boot] pid=19400 AVIR_ADAPTER_TRACE=1 ts=1782141444701
+[adapter-boot] pid=61708 AVIR_ADAPTER_TRACE=1 ts=1782141444743
+[adapter-boot] pid=48636 AVIR_ADAPTER_TRACE=1 ts=1782141444857
+[adapter-boot] pid=63320 AVIR_ADAPTER_TRACE=1 ts=1782141444894
+[adapter-boot] pid=62716 AVIR_ADAPTER_TRACE=1 ts=1782141444935
+[adapter-boot] pid=60804 AVIR_ADAPTER_TRACE=1 ts=1782141444974
+[adapter-boot] pid=59152 AVIR_ADAPTER_TRACE=1 ts=1782141445082
+[adapter-boot] pid=52184 AVIR_ADAPTER_TRACE=1 ts=1782141445169
+[adapter-boot] pid=56224 AVIR_ADAPTER_TRACE=1 ts=1782141445271
+[adapter-boot] pid=35156 AVIR_ADAPTER_TRACE=1 ts=1782141445304
+[adapter-boot] pid=56784 AVIR_ADAPTER_TRACE=1 ts=1782141445344
+[adapter-boot] pid=35888 AVIR_ADAPTER_TRACE=1 ts=1782141445393
+[adapter-boot] pid=10060 AVIR_ADAPTER_TRACE=1 ts=1782141445429
+[adapter-boot] pid=60156 AVIR_ADAPTER_TRACE=1 ts=1782141445495
+[adapter-boot] pid=55268 AVIR_ADAPTER_TRACE=1 ts=1782141445515
+[adapter-boot] pid=3956 AVIR_ADAPTER_TRACE=1 ts=1782141445550
+[adapter-boot] pid=49352 AVIR_ADAPTER_TRACE=1 ts=1782141445606
+[adapter-boot] pid=57276 AVIR_ADAPTER_TRACE=1 ts=1782141445651
+[adapter-boot] pid=56088 AVIR_ADAPTER_TRACE=1 ts=1782141445674
+[adapter-boot] pid=52908 AVIR_ADAPTER_TRACE=1 ts=1782141445731
+[adapter-trace] state=thinking data={"id":"chatcmpl-020cd891","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data={"id":"chatcmpl-020cd891","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] chunk="OBSERVATION_OK real-avir-uiux-ax loop reached via compiled  state:thinking->thinking think="OBSERVATION_OK real-avir-uiux-ax loop r text=""
+[adapter-trace] state=thinking data={"id":"chatcmpl-020cd891","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data=[DONE]
+[adapter-trace] DONE: reader exhausted
+[adapter-trace] state=thinking data={"id":"chatcmpl-7c40e233","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data={"id":"chatcmpl-7c40e233","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] chunk="OBSERVATION_OK real-avir-uiux-ax loop reached via compiled  state:thinking->thinking think="OBSERVATION_OK real-avir-uiux-ax loop r text=""
+[adapter-trace] state=thinking data={"id":"chatcmpl-7c40e233","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data=[DONE]
+[adapter-trace] DONE: reader exhausted

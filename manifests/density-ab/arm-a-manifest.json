@@ -1,0 +1,84 @@
+{
+  "ticket": "DENSITY-AB-V1",
+  "arm": "a",
+  "arm_label": "bulk-v0-mix",
+  "design": "proportional_interleave_v1.1",
+  "code_fraction": 0.581226,
+  "spec_amendment": "v1.1: contiguous-window-of-v0-00000.bin assumption falsified. v0 shard stream is source-sequential by fp22_row; shards 0-15 are pure code_github_clean. Proportional interleave required for valid null arm.",
+  "shard": {
+    "path": "density-ab-shards/density-ab-arm-a-100M.bin",
+    "sha256": "8047e5be225307277c92d6e674e758468fe70506e96c339976fd9efc450c23a6",
+    "tokens": 100000000,
+    "bytes": 200000000,
+    "dtype": "<u2"
+  },
+  "interleave": {
+    "method": "bresenham_weighted_round_robin",
+    "granularity": "doc",
+    "seed": 42,
+    "ratios": {
+      "code_github_clean": 0.581226,
+      "fineweb_edu": 0.23902,
+      "wikipedia_en": 0.107146,
+      "gutenberg_en": 0.072575,
+      "ledger_mit": 0.000033
+    }
+  },
+  "sources": {
+    "code_github_clean": {
+      "token_budget": 58122562,
+      "tokens_written": 58122562,
+      "files": [
+        {
+          "path": "corpus-v0/code_github_clean/code_github_clean-00000.jsonl.zst",
+          "sha256": "71ec4259d4c2b4656a9b84b228ff0ebdc36e84112e5ac7c21742a04e96fe58ae"
+        }
+      ]
+    },
+    "fineweb_edu": {
+      "token_budget": 23902002,
+      "tokens_written": 23902002,
+      "files": [
+        {
+          "path": "corpus-v0/fineweb_edu/fineweb_edu-00000.jsonl.zst",
+          "sha256": "29fce0972e2a2bed36855c78c673449cad71c4d6acf552c401bc9bd1118b7d8a"
+        }
+      ]
+    },
+    "wikipedia_en": {
+      "token_budget": 10714563,
+      "tokens_written": 10714563,
+      "files": [
+        {
+          "path": "corpus-v0/wikipedia_en/wikipedia_en-00000.jsonl.zst",
+          "sha256": "4977be5873d7997930a66e6aec268415c764cf172ae9ac2f1009c1bca55a94fd"
+        }
+      ]
+    },
+    "gutenberg_en": {
+      "token_budget": 7257538,
+      "tokens_written": 7257538,
+      "files": [
+        {
+          "path": "corpus-v0/gutenberg_en/gutenberg_en-00000.jsonl.zst",
+          "sha256": "03175aae4ede85a49314dbdf4aab0dfbb740b03fd2b9f8aee4fa168fb18b06d8"
+        }
+      ]
+    },
+    "ledger_mit": {
+      "token_budget": 3335,
+      "tokens_written": 3335,
+      "files": [
+        {
+          "path": "corpus-v0/ledger_mit/ledger_mit-00000.jsonl.zst",
+          "sha256": "b6c23875148e0bb60fa0dcac2f50c2db7d2b7a9609d987718df03e470eada43b"
+        }
+      ]
+    }
+  },
+  "prep_script": "scripts/density_ab_prep.py",
+  "prep_script_commit": "cdb9627edaa4eff99256551029326d150956c1db",
+  "frozen_by": "density_ab_prep.py main()",
+  "separator_id": 0,
+  "reserved_ids": [1, 2, 3, 4, 5, 6, 7]
+}

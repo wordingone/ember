@@ -1,0 +1,20 @@
+{
+  "ticket": "ENG24-EXTSTRICT",
+  "ts": "20260611T014818Z",
+  "surface": "v_extended",
+  "description": "zero-new-flips leg: strict comparator on v_extended (v_compare single source, eng-24); top-level-only rewrite, indented asserts pass verbatim",
+  "n_episodes_covered": 845,
+  "n_episodes_uncovered": 111,
+  "n_reverified": 845,
+  "n_flipped": 0,
+  "flips": [],
+  "flips_by_stratum": {},
+  "guard_flips": 0,
+  "flipped_task_ids": [],
+  "timeouts_old": 9,
+  "timeouts_new": 9,
+  "view_file_sha256_before": "30bedcc26f2691627b3185b3eff6ebadcad2fd39013092a34007ab4ee1917c17",
+  "view_file_sha256_after": "30bedcc26f2691627b3185b3eff6ebadcad2fd39013092a34007ab4ee1917c17",
+  "sha_convention": "sha256 over file bytes as on disk (LF, verified no CRLF)",
+  "ledger_and_source_sample_files": "view file opened read-only; byte-unchanged (sha_before == sha_after)"
+}

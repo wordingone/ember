@@ -1,0 +1,77 @@
+{
+  "blocked_reasons": [],
+  "code_vs_docs_metric": {
+    "classification": "during-project artifact-intake command and receipt",
+    "receipt_lines": 77,
+    "script_code_lines": 197
+  },
+  "deleted_selector_routing": {
+    "admission_state": "ROUTING_BLOCKED_DELETED_SELECTOR",
+    "reason": "Deleting the native benchmark router prevents preserving ScienceAgentBench as the selected target during artifact intake.",
+    "selected": null
+  },
+  "deletion_sensitive": true,
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "99a4c211842bec36493f0f6ba4865f48a404f25634099b6339bdc8882a4402c0",
+  "native_operator_routing": {
+    "admission_state": "INTAKE_READY",
+    "reason": "ScienceAgentBench remains selected; this command only validates and materializes the local benchmark artifact needed for admission.",
+    "selected": "scienceagentbench"
+  },
+  "next_executable_command": "python scripts\\ember_scienceagentbench_admission.py --full-artifact <local-path> --out receipts\\ember-post-resident-discovery\\scienceagentbench-admission-<timestamp>.json",
+  "repo": "<local-path>",
+  "scienceagentbench_artifact_status": {
+    "artifact_sha256": "46e715d3b2196d459d2dff52aa487f506a95ec44b44262e82208d086ea879610",
+    "artifact_size_bytes": 1769478786,
+    "copied_to_target": true,
+    "downloaded_or_unzipped_data_redistributed": false,
+    "expected_name": "benchmark_verified.zip",
+    "expected_size_bytes": 1769478786,
+    "extract_dir": "<local-path>",
+    "extract_requested": true,
+    "extracted": true,
+    "extracted_files_sample": [
+      "benchmark\\.DS_Store",
+      "benchmark\\datasets\\.DS_Store",
+      "benchmark\\datasets\\ames\\test.csv",
+      "benchmark\\datasets\\ames\\test.npz",
+      "benchmark\\datasets\\ames\\train.csv",
+      "benchmark\\datasets\\ames\\train.npz",
+      "benchmark\\datasets\\ames\\val.csv",
+      "benchmark\\datasets\\ames\\val.npz",
+      "benchmark\\datasets\\aquatic_toxicity\\Tetrahymena_pyriformis_OCHEM.sdf",
+      "benchmark\\datasets\\aquatic_toxicity\\Tetrahymena_pyriformis_OCHEM_test_ex.sdf",
+      "benchmark\\datasets\\aquatic_toxicity\\tox21\\processed\\data.pt",
+      "benchmark\\datasets\\aquatic_toxicity\\tox21\\processed\\pre_filter.pt",
+      "benchmark\\datasets\\aquatic_toxicity\\tox21\\processed\\pre_transform.pt",
+      "benchmark\\datasets\\aquatic_toxicity\\tox21\\raw\\tox21.csv",
+      "benchmark\\datasets\\BBBC002\\test\\BBBC002_v1_counts.txt",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_340_40x_Tiles_p1175DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_340_40x_Tiles_p1365DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_48_40x_Tiles_p1394DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_48_40x_Tiles_p1583DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_Anillin_40x_Tiles_p1069DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_Anillin_40x_Tiles_p1286DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_mad2_40x_Tiles_p0907DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_mad2_40x_Tiles_p1072DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_nodsRNA_40x_Tiles_p1730DAPI.TIF",
+      "benchmark\\datasets\\BBBC002\\test\\drosophila_kc167_1_images\\CPvalid1_nodsRNA_40x_Tiles_p1745DAPI.TIF"
+    ],
+    "source_exists": true,
+    "source_path": "<local-path>",
+    "target_exists_after": true,
+    "target_exists_before": false,
+    "target_path": "<local-path>",
+    "zip_password_probe": {
+      "encrypted_entry_count": 845,
+      "file_count": 955,
+      "first_file": "benchmark/.DS_Store",
+      "ok": true,
+      "password_probe_bytes_read": 32
+    }
+  },
+  "sha_convention": "bytes on disk/as fetched as-is; text hashes are UTF-8 encoded",
+  "ticket": "EMBER-SCIENCEAGENTBENCH-ARTIFACT-INTAKE",
+  "ts": "20260622T165246Z",
+  "verdict": "SCIENCEAGENTBENCH_ARTIFACT_INTAKE_READY"
+}

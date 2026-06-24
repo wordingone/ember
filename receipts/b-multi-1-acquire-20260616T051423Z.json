@@ -1,0 +1,18 @@
+{
+  "ticket": "B-MULTI-1-ACQUIRE",
+  "ts": "20260616T051423Z",
+  "pair_count": 500,
+  "shard_count": 500,
+  "total_tokens": 34034,
+  "total_patch_tokens": 33534,
+  "total_caption_tokens_est": 500,
+  "disk_bytes": 987503779,
+  "disk_MB": 987.5,
+  "manifest_path": "manifests/corpus/b-multi-1/raw/manifest.jsonl",
+  "raw_dir": "manifests/corpus/b-multi-1/raw",
+  "encoded_dir": "manifests/corpus/b-multi-1/encoded",
+  "source": "google-research-datasets/conceptual_captions (HF datasets streaming; GCS TSV 403 since 2026)",
+  "patch_px": 48,
+  "in_dim": 6912,
+  "pass": true
+}

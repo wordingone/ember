@@ -1,0 +1,25 @@
+{
+  "ticket": "ENG-107",
+  "ts": "20260611T031146Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "receipts_scanned": 91,
+  "receipts_with_findings": 10,
+  "violation_counts": {
+    "MISSING_REQUIRED": 14,
+    "MISSING_SHA_CONVENTION": 2
+  },
+  "baseline_match": true,
+  "baseline_note": "matches known baseline: MISSING_REQUIRED 14, MISSING_SHA_CONVENTION 2",
+  "findings_per_receipt": {
+    "eng20-license-view-20260611T002458Z.json": ["MISSING_SHA_CONVENTION: sha256_before present but no sha_convention field"],
+    "eng20-license-view-20260611T004457Z.json": ["MISSING_SHA_CONVENTION: sha256_before present but no sha_convention field"],
+    "grpo-attempts-fail-20260610.json": ["MISSING_REQUIRED: ts"],
+    "native-smoke-20260610T230236Z.json": ["MISSING_REQUIRED: ticket", "MISSING_REQUIRED: ts"],
+    "native-smoke-20260610T230645Z.json": ["MISSING_REQUIRED: ticket", "MISSING_REQUIRED: ts"],
+    "probe-meminfo-20260610T043457Z.json": ["MISSING_REQUIRED: ts"],
+    "t4-r1-q15-arc1-seed14-progress.json": ["MISSING_REQUIRED: ticket", "MISSING_REQUIRED: ts"],
+    "t4-r1-q3-arc1-seed14-progress.json": ["MISSING_REQUIRED: ticket", "MISSING_REQUIRED: ts"],
+    "t4-r1-q3-arc1-seed15-progress.json": ["MISSING_REQUIRED: ticket", "MISSING_REQUIRED: ts"],
+    "wsl9p-probe-2026-06-10T225917Z.json": ["MISSING_REQUIRED: ticket", "MISSING_REQUIRED: ts"]
+  }
+}

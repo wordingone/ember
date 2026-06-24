@@ -1,0 +1,60 @@
+{
+  "benchmark_discovery_receipt_path": "<local-path>",
+  "benchmark_discovery_receipt_sha256": "e76158c9ff0a330ad9b77def8d3291d7e029c48863dc7530ad717b5a9f90d25d",
+  "code_vs_docs_metric": {
+    "benchmark_receipt_lines_generated": 179,
+    "classification": "during-project experiment/control receipt, not before-project planning",
+    "technique_receipt_lines_predicted": 60,
+    "this_receipt_generator_code_lines": 365
+  },
+  "compressed_current_blocker_packet": {
+    "current_blocker": "candidate/proposer expressivity on fresh externally heldout rows under the native no-private-leakage contract",
+    "current_executable_command": "python scripts\\ember_d3_native_proposer_loop.py --benchmark-receipt receipts\\ember-post-resident-discovery\\benchmark-discovery-20260622T011400Z.json --technique-receipt receipts\\ember-post-resident-discovery\\past-ember-technique-mining-20260622T011400Z.json --out receipts\\ember-d3-native-loop\\d3-native-loop-20260622T011400Z.json",
+    "kill_ablate_test": "delete or disable native goal organ, learned proposer policy, public-I/O shape miner, and receipt-conditioned update; C must degrade or block versus matched A/B controls",
+    "next_blocker_if_fail": "repair candidate/proposer expressivity using the failed-row receipt as training signal; do not rerun unchanged policy",
+    "next_blocker_if_pass": "admit and run stronger ScienceAgentBench/RE-Bench/PaperBench validation or scale the D3 loop to fuller environments with field-level contribution claim",
+    "required_receipt": "receipts\\ember-d3-native-loop\\d3-native-loop-<timestamp>.json"
+  },
+  "git_head": "59220c52c97e4372af97c9b8a39896604505b27e",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "60c5e6c1ba82c74bd611522fd1b670ee763dd140f28a6ad60069b8fe9eb2de91",
+  "mined_techniques": [
+    {
+      "forbidden_regression": "same-slice family patching or manual row-specific fixes",
+      "id": "receipt_conditioned_repair",
+      "keep": "Failed fresh-transfer receipts must become training signals for the next proposer.",
+      "source": "R12-R14 chronology in GOAL.md"
+    },
+    {
+      "forbidden_regression": "private-label leakage or fixed template victory laps",
+      "id": "public_io_shape_growth",
+      "keep": "Mine public examples into reusable candidate shapes selected by public tests only.",
+      "source": "R15 chronology in GOAL.md"
+    },
+    {
+      "forbidden_regression": "Codex prose selecting the next loop after the fact",
+      "id": "native_goal_organ_selection",
+      "keep": "The native organ must select the next action from receipts; deletion must block or degrade selection.",
+      "source": "R16 chronology in GOAL.md"
+    },
+    {
+      "forbidden_regression": "unchanged prefix-policy reruns after a zero-score transfer",
+      "id": "learned_proposer_policy",
+      "keep": "A learned candidate-space policy must be integrated and deletion-sensitive even when it fails on fresh transfer.",
+      "source": "R17 chronology in GOAL.md"
+    },
+    {
+      "forbidden_regression": "duration growth, readiness, or harness hardening unless the receipt names them as blockers",
+      "id": "failure_as_next_loop",
+      "keep": "A failed fresh row must become the next executable loop input, not a prose postmortem.",
+      "source": "GOAL.md lines around R17 blocker"
+    }
+  ],
+  "missing_required_markers": [],
+  "next_blocker": "first_external_heldout_a_b_c_loop_using_resident_trained_organ",
+  "repo": "<local-path>",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "technique_mining_status": "PASS",
+  "ticket": "EMBER-POST-RESIDENT-PAST-TECHNIQUE-MINING",
+  "ts": "20260622T011400Z"
+}

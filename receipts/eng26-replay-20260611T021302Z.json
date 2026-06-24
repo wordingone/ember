@@ -1,0 +1,57 @@
+{
+  "ticket": "ENG26-REPLAY",
+  "ts": "20260611T021302Z",
+  "leg": "A_regression_replay",
+  "description": "no-cap replay of arc_round build; must reproduce fp-17 counts",
+  "fp17_pin": {
+    "source": "fp17-mixweights-20260611T014512Z.json",
+    "expected_examples": 2321,
+    "expected_exact_unique": 1192,
+    "expected_dup_step_fraction": 0.6545
+  },
+  "reproduced": {
+    "examples": 2321,
+    "exact_unique_completions": 1192,
+    "dup_step_fraction": 0.6545
+  },
+  "pin_match": true,
+  "weight_table_full": {
+    "examples": 2321,
+    "exact_unique_completions": 1192,
+    "steps_on_duplicated_text": 1519,
+    "dup_step_fraction": 0.6545,
+    "exact_group_sizes_top5": [
+      12,
+      8,
+      8,
+      8,
+      8
+    ],
+    "implicit_weight_max": 12,
+    "implicit_weight_median": 1,
+    "near_dup_clusters_cos95": 328,
+    "cluster_example_sizes_top5": [
+      1885,
+      15,
+      8,
+      7,
+      6
+    ],
+    "giant_cluster_step_share": 0.8121,
+    "largest_cluster_chaining_diag": {
+      "sampled_pairs": 1997,
+      "min": 0.6833,
+      "p5": 0.8137,
+      "median": 0.9182,
+      "mean": 0.907,
+      "frac_direct_ge_threshold": 0.1217
+    }
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "sha_before": {
+    "episodes_jsonl": "e2d4e8c7521360043011d7615377814cb3e262846beef8180d840ef2ec438166",
+    "control_pool_jsonl": "4248ce5539f12f4bfa7faf8333d624bb57005835f767e38a21ea6636c62e607c",
+    "dedup_cluster_jsonl": "d88018ec80d97d71bf490e6da6d50d621a2aa896599a100cd35eee693d18c850"
+  },
+  "verdict": "EXACT_MATCH"
+}

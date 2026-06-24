@@ -1,0 +1,95 @@
+{
+  "ticket": "EMBER-RESIDENT-TRAINING-CANDIDATE-RECEIPT",
+  "ts": "20260620T202624Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "manifest_path": "<local-path>",
+  "manifest_sha256": "f3ebb23273f93551da9d8127189aa2c362052e885344041b139fe3128b2c89b7",
+  "policy_update_trace_path": "<local-path>",
+  "policy_update_trace_sha256": "dfe83a15db18264f6b496a02db03785ea5238e9dd0486c3c9892eadfe9ad8b28",
+  "heldout_rows": [
+    {
+      "task_id": "task_5",
+      "source_row_idx": 4,
+      "split": "heldout",
+      "a_score": 0.0,
+      "b_score": 0.5883,
+      "c_score": 1.0,
+      "deleted_score": 0.0,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "required_outputs_count": 10,
+      "required_checks": [
+        "existence",
+        "format_validity",
+        "gold_compare",
+        "non_empty",
+        "numeric_validity",
+        "semantic_consistency"
+      ]
+    },
+    {
+      "task_id": "task_6",
+      "source_row_idx": 5,
+      "split": "heldout",
+      "a_score": 0.0,
+      "b_score": 0.3381,
+      "c_score": 1.0,
+      "deleted_score": 0.0,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "required_outputs_count": 7,
+      "required_checks": [
+        "existence",
+        "numeric_validity",
+        "semantic_consistency"
+      ]
+    },
+    {
+      "task_id": "task_7",
+      "source_row_idx": 6,
+      "split": "heldout",
+      "a_score": 0.0,
+      "b_score": 0.1,
+      "c_score": 1.0,
+      "deleted_score": 0.0,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "required_outputs_count": 4,
+      "required_checks": [
+        "csv_parse",
+        "existence",
+        "format_validity",
+        "gold_compare",
+        "non_empty",
+        "numeric_validity",
+        "semantic_consistency"
+      ]
+    },
+    {
+      "task_id": "task_8",
+      "source_row_idx": 7,
+      "split": "heldout",
+      "a_score": 0.0,
+      "b_score": 0.1083,
+      "c_score": 1.0,
+      "deleted_score": 0.0,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "required_outputs_count": 3,
+      "required_checks": [
+        "csv_parse",
+        "existence",
+        "format_validity",
+        "non_empty",
+        "numeric_validity",
+        "semantic_consistency"
+      ]
+    }
+  ],
+  "status": "PASS",
+  "verdict": "RESIDENT_TRAINING_CANDIDATE_PASS"
+}

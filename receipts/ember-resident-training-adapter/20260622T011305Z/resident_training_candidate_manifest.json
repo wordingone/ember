@@ -1,0 +1,659 @@
+{
+  "action_log_seam_evidence": {
+    "action_log_path": "<local-path>",
+    "action_log_records": 3,
+    "observed_step_primitives": [
+      "commit",
+      "emit-scalar",
+      "emit-token"
+    ],
+    "present_primitives": [
+      "emit-token",
+      "emit-scalar",
+      "emit-pointer",
+      "commit",
+      "stop"
+    ],
+    "required_primitives": [
+      "emit-token",
+      "emit-scalar",
+      "emit-pointer",
+      "commit",
+      "stop"
+    ],
+    "source_path": "scripts/train_multimodal_v0.py"
+  },
+  "arm_contract": {
+    "A": "same task/evaluator envelope with no native goal organ and no resident-training update",
+    "B": "instruction_only fixed policy with no learned RLM/iGRPO update",
+    "C": "train_multimodal-backed resident torch policy updated from verifier-best action targets",
+    "Deleted": "C with resident policy parameters reverted/zeroed to pre-update behavior"
+  },
+  "base_checkpoint_identity": "train_multimodal_v0_tiny_cpu_seed_20260621_with_resident_policy_zero_init",
+  "c_beats_a_and_b": true,
+  "candidate_class": "VERIFIER_CONDITIONED_RESIDENT_PASS",
+  "clean_room_harness_action_channel": true,
+  "deleted_degrades_or_blocks": true,
+  "external_task_source": {
+    "benchmark_id": "D3-Gym",
+    "paper_url": "https://arxiv.org/abs/2604.27977",
+    "source_url": "https://huggingface.co/datasets/osunlp/D3-Gym",
+    "split": {
+      "config": "default",
+      "dataset": "osunlp/D3-Gym",
+      "length": 8,
+      "offset": 0,
+      "split": "train"
+    },
+    "tasks_path": "<local-path>",
+    "tasks_sha256": "77771a0964199d89d3d06b9d6aecf083112317ab071aba43c06e4b28781e1d56"
+  },
+  "floor_contract_manifest": {
+    "floor_contract.BitNet/1.58-bit": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "not satisfied by fp16; promote/skip only by comparison receipt",
+      "launch_vehicle_impact": "low-bit substrate remains immediate post-fp16 comparison",
+      "pilot": "tiny BitNet/1.58 comparison",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "fp16 resident gate pass or CPU-residency/hardware escalation"
+    },
+    "floor_contract.DiffusionGemma": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "promote iff nonzero verify floor and F gain; kill on zero-verify floor",
+      "launch_vehicle_impact": "sampler/teacher-generator throughput bet remains trigger-gated",
+      "pilot": "MBPP floor probe DiffusionGemma vs autoregressive baseline",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "idle GPU window and W-code admission"
+    },
+    "floor_contract.FP8": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "re-enter only on external hardware/library evidence",
+      "launch_vehicle_impact": "consumer FP8 stack evidence remains release-scan item",
+      "pilot": "release-scan receipt",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "consumer-4090 FP8 evidence or torchao sm89 rowwise support"
+    },
+    "floor_contract.MLA/KV": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "promote on verified-episodes/GPU-hour gain; skip only if sampler saturates GPU",
+      "launch_vehicle_impact": "inference memory/compression remains sampling-round lever",
+      "pilot": "MLA retrofit probe",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "first owned-core sampling round or KV pressure"
+    },
+    "floor_contract.MoE": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "re-enter on hardware escalation or local small-MoE win",
+      "launch_vehicle_impact": "sparsity path stays gated by scale/hardware",
+      "pilot": "scale/hardware receipt",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "multi-GPU or >=3B rung/local small-MoE evidence"
+    },
+    "floor_contract.Muon": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "promote on same-scale efficiency; fallback only on receipt-backed null",
+      "launch_vehicle_impact": "hidden-layer Muon floor preserved with AdamW fallback",
+      "pilot": "Muon hidden-layer optimizer run with AdamW fallback receipt",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "owned-core training run using hidden 2D params"
+    },
+    "floor_contract.QAT": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "only user-approved contract change or receipt-proved contradiction may demote",
+      "launch_vehicle_impact": "quantization-native launch floor preserved; tiny resident step does not clear it",
+      "pilot": "QAT tail or governed low-bit pilot",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "launch vehicle QAT/int4 tail or deploy target requiring quantized form"
+    },
+    "floor_contract.QK-norm": {
+      "disposition": "used_now",
+      "evidence_path": "scripts/train_multimodal_v0.py",
+      "kill_promote_condition": "cannot be silently removed; deletion requires receipt-backed degradation/contradiction",
+      "launch_vehicle_impact": "unretrofittable attention normalization remains in launch vehicle",
+      "pilot": "train_multimodal resident adapter",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "model construction and train_multimodal adapter"
+    },
+    "floor_contract.SDEK/GDN": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "kill only on null with named successor such as LoRA-sleep baseline",
+      "launch_vehicle_impact": "sleep consolidation/adaptation-control kernel remains required operating layer",
+      "pilot": "340M GDN-hybrid or successor sleep receipt",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "sleep/consolidation threshold or GDN pilot window"
+    },
+    "floor_contract.governor": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "tighten-only unless user changes residency contract",
+      "launch_vehicle_impact": "residency budget remains binding for non-tiny runs",
+      "pilot": "governed resident loop receipt",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "GPU or long-running resident loop"
+    },
+    "floor_contract.iGRPO/GRPO": {
+      "disposition": "used_now",
+      "evidence_path": "scripts/ember_train_multimodal_resident_adapter.py",
+      "kill_promote_condition": "non-killable for this goal; symbolic proxy is not pass",
+      "launch_vehicle_impact": "verifier-conditioned resident policy update is the active gate",
+      "pilot": "RLM/iGRPO harness-native resident gate",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "resident-training pre-loop gate"
+    },
+    "floor_contract.multimodal_locks": {
+      "disposition": "used_now",
+      "evidence_path": "scripts/train_multimodal_v0.py",
+      "kill_promote_condition": "retrofit can fail, component remains floor until successor receipt",
+      "launch_vehicle_impact": "reserved IDs/soft-token/bidirectional span/2D RoPE remain launch constraints",
+      "pilot": "train_multimodal resident adapter plus multimodal floor probe",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "multimodal adapter and future vision-text floor world"
+    },
+    "floor_contract.trigger-gated_rows": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "docs/ember-floor-contract.md",
+      "kill_promote_condition": "row-specific kill/promote condition must be preserved",
+      "launch_vehicle_impact": "all deferred floor rows remain active obligations, not trashcans",
+      "pilot": "row-specific receipt-producing pilot",
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "trigger": "row-specific revision trigger"
+    },
+    "nc2_component_contract.BitNet/1.58-bit": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "not killable by fp16 success; requires comparison receipt",
+      "launch_vehicle_impact": "from-scratch ternary route remains binding comparison",
+      "pilot": "100-300M or tiny comparison depending gate stage",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "fp16 resident pass then tiny BitNet comparison"
+    },
+    "nc2_component_contract.Chinese-lab_stack": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "mixed per item; no silent stack-level kill",
+      "launch_vehicle_impact": "Muon/FP8/MoE/GRPO stack remains itemized, not collapsed",
+      "pilot": "per-tech pilot/release receipt",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "per-tech release scan or scale entry"
+    },
+    "nc2_component_contract.Gemma_unified_multimodal": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "retrofit may fail; architecture successor must be explicit",
+      "launch_vehicle_impact": "encoder-free multimodal architecture remains owned-core template",
+      "pilot": "soft-token embedder retrofit/floor probe",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "vision-text floor world or multimodal checkpoint eval"
+    },
+    "nc2_component_contract.MTP": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "only negative <=1B evidence with successor",
+      "launch_vehicle_impact": "draft-head/speculation route remains training/sampler component",
+      "pilot": "MTP drafter-head pilot",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "owned-core sampling or NC2 entry"
+    },
+    "nc2_component_contract.QAT": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "fallback only by contract receipt",
+      "launch_vehicle_impact": "quantized form remains owned-core component",
+      "pilot": "QAT/int4 tail",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "NC2 owned-core training/export"
+    },
+    "nc2_component_contract.SDEK": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "cannot be archived without contradiction-level receipt",
+      "launch_vehicle_impact": "adaptation-control kernel remains operating layer",
+      "pilot": "SDEK/GDN consolidation pilot",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "sleep/plasticity threshold or NC2 entry"
+    },
+    "nc2_component_contract.SubQ": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "successor only with quality-cliff receipt",
+      "launch_vehicle_impact": "sparse/linear-hybrid attention remains long-context route",
+      "pilot": "GDN-hybrid sparse/linear pilot",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "long-context world admission or GDN pilot"
+    },
+    "nc2_component_contract.turboquant": {
+      "disposition": "preserved_trigger_gated",
+      "evidence_path": "nc2-own-technique-contract.md",
+      "kill_promote_condition": "only receipt-backed null with successor",
+      "launch_vehicle_impact": "KV/MLA compression family remains first-class",
+      "pilot": "compression/runtime probe",
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "trigger": "sampling or KV pressure"
+    }
+  },
+  "floor_contract_sha256": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+  "generated_by": "scripts/ember_train_multimodal_resident_adapter.py",
+  "hand_authored_patch": false,
+  "harness_interface_path": "<local-path>",
+  "harness_interface_sha256": "91555c30842fc4a5093bfbbc6e975ec09d37bf8b1620a7e230c474cbfb686df1",
+  "launch_vehicle_floor_preservation_map": {
+    "Muon": "preserved_by_floor_contract_not_exercised_in_tiny_cpu_step",
+    "QAT": "preserved_by_floor_contract_not_exercised_in_tiny_cpu_step",
+    "QK-norm": "preserved_and_exercised_by_train_multimodal_model",
+    "governor": "preserved_by_floor_contract_not_exercised_in_tiny_cpu_step",
+    "multimodal_locks": "preserved_and_exercised_by_train_multimodal_batch"
+  },
+  "matched_a_b_c_deleted": true,
+  "model_learned_policy": true,
+  "native_goal_organ_path": "<local-path>",
+  "native_goal_organ_present": true,
+  "native_goal_organ_sha256": "5e4f23384cfa2136dd96fafc9658c03aa45cf98f076f42c591ca52946021caf6",
+  "nc2_component_contract_sha256": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+  "per_task_rows": [
+    {
+      "a_score": 0.0,
+      "b_score": 0.5883,
+      "b_template": "instruction_only",
+      "best_reward_table": [
+        {
+          "checks": [
+            "existence"
+          ],
+          "outputs": [
+            "pred_plbo_bo.pdf",
+            "pred_plbo_bo_pi.pdf",
+            "pred_plbo_bo_pp.pdf",
+            "pred_plbo_bo_si.pdf",
+            "pred_plbo_bop.pdf",
+            "pred_plbo_nn_bo_pi.pdf",
+            "pred_plbo_nn_bo_pp.pdf",
+            "pred_plbo_nn_bo_si.pdf"
+          ],
+          "reward": 0.5883,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only",
+          "template_index": 0
+        },
+        {
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_plbo_bo.pdf",
+            "pred_plbo_bo_pi.pdf",
+            "pred_plbo_bo_pp.pdf",
+            "pred_plbo_bo_si.pdf",
+            "pred_plbo_bop.pdf",
+            "pred_plbo_nn_bo_pi.pdf",
+            "pred_plbo_nn_bo_pp.pdf",
+            "pred_plbo_nn_bo_si.pdf"
+          ],
+          "reward": 0.6467,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview",
+          "template_index": 1
+        },
+        {
+          "checks": [
+            "existence",
+            "format_validity",
+            "gold_compare",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_plbo_bo.pdf",
+            "pred_plbo_bo_pi.pdf",
+            "pred_plbo_bo_pi_CC.pdf",
+            "pred_plbo_bo_pi_CH.pdf",
+            "pred_plbo_bo_pp.pdf",
+            "pred_plbo_bo_si.pdf",
+            "pred_plbo_bop.pdf",
+            "pred_plbo_nn_bo_pi.pdf",
+            "pred_plbo_nn_bo_pp.pdf",
+            "pred_plbo_nn_bo_si.pdf"
+          ],
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive",
+          "template_index": 2
+        }
+      ],
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "deleted_score": 0.5883,
+      "source_row_idx": 4,
+      "split": "heldout",
+      "task_id": "task_5"
+    },
+    {
+      "a_score": 0.0,
+      "b_score": 0.3381,
+      "b_template": "instruction_only",
+      "best_reward_table": [
+        {
+          "checks": [
+            "existence"
+          ],
+          "outputs": [
+            "pred_results/pred_scale_mol.traj",
+            "pred_results/pred_scale_mol_summary.txt"
+          ],
+          "reward": 0.3381,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only",
+          "template_index": 0
+        },
+        {
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_results/pred_scale_mol.traj",
+            "pred_results/pred_scale_mol_summary.txt"
+          ],
+          "reward": 0.4548,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview",
+          "template_index": 1
+        },
+        {
+          "checks": [
+            "existence",
+            "numeric_validity",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_energies.append",
+            "pred_energies.max",
+            "pred_energies.min",
+            "pred_results/pred_scale_mol.traj",
+            "pred_results/pred_scale_mol_summary.txt",
+            "pred_scale_mol.traj",
+            "pred_scale_mol_summary.txt"
+          ],
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive",
+          "template_index": 2
+        }
+      ],
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "deleted_score": 0.3381,
+      "source_row_idx": 5,
+      "split": "heldout",
+      "task_id": "task_6"
+    }
+  ],
+  "persistence_checked": true,
+  "policy_update_trace": "<local-path>",
+  "policy_update_trace_path": "<local-path>",
+  "policy_update_trace_sha256": "defb26be6a7a1556408f56cf9798d9edb84f2bbfe3cf5885d1b1967e636b2beb",
+  "post_neural_parameter_hash": "sha256:c66c19688e92ca4601bd9297bf01dd27961204ae661dde406d70cc55609f8e17",
+  "pre_neural_parameter_hash": "sha256:cb4788bec4d803bec36122d3ac114a6622d3f4ebc7c9141678bb3ada1a4aa941",
+  "prompt_only": false,
+  "prompt_only_routing_only_exclusion_result": {
+    "prompt_only": false,
+    "routing_only": false,
+    "status": "PASS"
+  },
+  "recursive_query_policy_path": "<local-path>",
+  "recursive_query_policy_present": true,
+  "recursive_query_policy_sha256": "51cb83c2fe3adaae7f1bdd9410597e37696b8e9678f8fd9b590ce2ce6cda15c1",
+  "resident_training_receipt_path": "<local-path>",
+  "resident_training_receipt_sha256": "c399e27abf1e245a504fe83838224d310774bf6041df4c39222406f6f838ec7c",
+  "sha_convention": "bytes/tensors as-is; tensor hash includes name, shape, dtype, and CPU contiguous bytes",
+  "symbolic_substitution_check": {
+    "note": "resident action selection comes from torch policy parameters updated from verifier reward targets",
+    "prompt_only": false,
+    "routing_only": false,
+    "status": "NEURAL_UPDATE_PRESENT",
+    "symbolic_template_policy": false
+  },
+  "task_rows_path": "<local-path>",
+  "ticket": "EMBER-TRAIN-MULTIMODAL-RESIDENT-ADAPTER-CANDIDATE",
+  "toy_or_simulated": false,
+  "train_multimodal_adapter_path": "<local-path>",
+  "train_multimodal_integration_decision": {
+    "adapter_path": "<local-path>",
+    "blocked_reason": null,
+    "source_path": "scripts/train_multimodal_v0.py",
+    "source_sha256": "89283f362778c7072bab81f4d5bbbd3d4b6393788c2a504469232d073cf49e90",
+    "status": "ADAPTER_IMPLEMENTED"
+  },
+  "train_task_rows": [
+    {
+      "source_row_idx": 0,
+      "target_template": "eval_script_recursive",
+      "task_id": "task_1"
+    },
+    {
+      "source_row_idx": 1,
+      "target_template": "eval_script_recursive",
+      "task_id": "task_2"
+    },
+    {
+      "source_row_idx": 2,
+      "target_template": "eval_script_recursive",
+      "task_id": "task_3"
+    },
+    {
+      "source_row_idx": 3,
+      "target_template": "eval_script_recursive",
+      "task_id": "task_4"
+    }
+  ],
+  "trainable_neural_model_identity": "train_multimodal_v0_tiny_cpu_model_plus_vision_embedder_plus_resident_policy",
+  "trainable_parameter_count": 244056,
+  "training_signal": "verifier_best_template_reward_table_from_external_D3_Gym_rows",
+  "transfer_rows": [
+    {
+      "a_score": 0.0,
+      "b_score": 0.1,
+      "b_template": "instruction_only",
+      "best_reward_table": [
+        {
+          "checks": [
+            "existence"
+          ],
+          "outputs": [
+            "pred_results/pred_deb_eover.csv",
+            "pred_results/pred_deb_eover.pdf",
+            "pred_results/pred_deb_eover.png"
+          ],
+          "reward": 0.1,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only",
+          "template_index": 0
+        },
+        {
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_results/pred_deb_eover.csv",
+            "pred_results/pred_deb_eover.pdf",
+            "pred_results/pred_deb_eover.png"
+          ],
+          "reward": 0.15,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview",
+          "template_index": 1
+        },
+        {
+          "checks": [
+            "csv_parse",
+            "existence",
+            "format_validity",
+            "gold_compare",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_deb_eover.csv",
+            "pred_deb_eover.pdf",
+            "pred_deb_eover.png",
+            "pred_results/pred_deb_eover.csv",
+            "pred_results/pred_deb_eover.pdf",
+            "pred_results/pred_deb_eover.png",
+            "pred_row.get"
+          ],
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive",
+          "template_index": 2
+        }
+      ],
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "deleted_score": 0.1,
+      "source_row_idx": 6,
+      "split": "transfer",
+      "task_id": "task_7"
+    },
+    {
+      "a_score": 0.0,
+      "b_score": 0.1083,
+      "b_template": "instruction_only",
+      "best_reward_table": [
+        {
+          "checks": [
+            "existence"
+          ],
+          "outputs": [
+            "pred_results/pred_compare_energies.csv",
+            "pred_results/pred_compare_energies.pdf",
+            "pred_results/pred_compare_energies_gulp.csv"
+          ],
+          "reward": 0.1083,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only",
+          "template_index": 0
+        },
+        {
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_results/pred_compare_energies.csv",
+            "pred_results/pred_compare_energies.pdf",
+            "pred_results/pred_compare_energies_gulp.csv"
+          ],
+          "reward": 0.1667,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview",
+          "template_index": 1
+        },
+        {
+          "checks": [
+            "csv_parse",
+            "existence",
+            "format_validity",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency"
+          ],
+          "outputs": [
+            "pred_compare_energies.csv",
+            "pred_compare_energies.pdf",
+            "pred_compare_energies_gulp.csv",
+            "pred_results/pred_compare_energies.csv",
+            "pred_results/pred_compare_energies.pdf",
+            "pred_results/pred_compare_energies_gulp.csv"
+          ],
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive",
+          "template_index": 2
+        }
+      ],
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "deleted_score": 0.1083,
+      "source_row_idx": 7,
+      "split": "transfer",
+      "task_id": "task_8"
+    }
+  ],
+  "ts": "20260622T011310Z",
+  "uses_externally_sourced_task_rows": true,
+  "uses_real_update_step": true,
+  "verifier_conditioned_training_command": "python scripts\\ember_train_multimodal_resident_adapter.py --out-dir <out> # imports scripts/train_multimodal_v0.py, calls run_step, then updates resident torch policy from verifier rewards",
+  "verifier_conditioned_update_present": true
+}

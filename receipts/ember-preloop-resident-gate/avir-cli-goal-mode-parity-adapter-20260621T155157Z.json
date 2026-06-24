@@ -1,0 +1,98 @@
+{
+  "ticket": "EMBER-AVIR-CLI-GOAL-MODE-PARITY-ADAPTER",
+  "ts": "20260621T155157Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "AVIR_CLI_GOAL_MODE_PARITY_ADAPTER_PASS",
+  "gate_allows_next_precondition": true,
+  "out_path": "receipts\\ember-preloop-resident-gate\\avir-cli-goal-mode-parity-adapter-20260621T155157Z.json",
+  "goal_parse": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "660ec660b1b9f025083ca78bb4089e6b49eb83f8d7bfec644687415aba663003",
+    "status": "PASS",
+    "markers": {
+      "has_current_blocker": true,
+      "has_current_executable_command": true,
+      "has_required_receipt": true,
+      "has_kill_ablate_test": true,
+      "has_next_pass": true,
+      "has_next_fail": true
+    },
+    "current_blocker": "the clean-room `avir-cli` inventory has emitted `receipts\\ember-preloop-resident-gate\\avir-cli-cleanroom-inventory-20260621T153049Z.json` with `AVIR_CLI_CLEANROOM_INVENTORY_BLOCKED`. The inventory proves `avir.exe` and 2,956 scanned text/source/provenance files exist, including 13 legal provenance files, but the PowerShell `avir` launch function still points at missing `<local-path>`, no clean-room parity receipt exists, no `/goal`-mode-equivalent resident action channel is implemented, and no deletion/ablation test proves that channel load-bearing. RLM and iGRPO paper preflight remains complete, but their neural-update organs stay blocked until the clean-room resident harness exists.",
+    "current_executable_command": "python scripts\\ember_avir_cli_goal_mode_parity_adapter.py --out receipts\\ember-preloop-resident-gate\\avir-cli-goal-mode-parity-adapter-<timestamp>.json",
+    "required_receipt": "a new `receipts\\ember-preloop-resident-gate\\avir-cli-goal-mode-parity-adapter-<timestamp>.json` with either `AVIR_CLI_GOAL_MODE_PARITY_ADAPTER_PASS` proving the adapter's clean-room source boundary, launch shim, current-blocker parser, receipt reader/writer, bounded action channel, and deletion-sensitive parity test are implemented and reproducible, or `AVIR_CLI_GOAL_MODE_PARITY_ADAPTER_BLOCKED` naming the precise missing file, permission, provenance, or implementation surface and the next executable command. A source inventory, legal inventory, generated docs, or existing CLI feature candidate is not a pass without executable clean-room parity.",
+    "kill_ablate_test": "deleting or disabling the resolved `avir` launch shim, the goal-mode parity adapter, receipt reader/writer, current-blocker parser, or resident action channel must block or degrade the harness receipt. If deletion does not matter, the adapter is not load-bearing and the gate fails.",
+    "next_blocker_if_pass": "continue the next missing non-killable precondition named by the receipt, expected to be adapting `scripts\\train_multimodal_v0.py` into the RLM/iGRPO neural resident-training organ under the fixed before/after A/B/C/deleted transfer contract.",
+    "next_blocker_if_fail": "continue the exact missing clean-room `avir-cli` parity-adapter surface named by the receipt. Do not run additional D3/Kaggle/PaperBench/RE-Bench/ScienceAgentBench loops, readiness checks, duration milestones, documentation passes, or remote GitHub performance work as substitutes."
+  },
+  "receipt_reader": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "7b230131030fb4686f829003509e723d541dddb172dcbc99f1ba1ce0b5508bee",
+    "ticket": "EMBER-AVIR-CLI-CLEANROOM-INVENTORY",
+    "inventory_verdict": "AVIR_CLI_CLEANROOM_INVENTORY_BLOCKED",
+    "next_missing_precondition": "avir_cli_goal_mode_parity_adapter",
+    "next_executable_command": "python scripts\\ember_avir_cli_goal_mode_parity_adapter.py --out receipts\\ember-preloop-resident-gate\\avir-cli-goal-mode-parity-adapter-<timestamp>.json",
+    "blocked_reasons": [
+      "avir_ps1_surface_missing_or_command_points_to_missing_script",
+      "cleanroom_parity_receipt_missing",
+      "delete_ablate_harness_channel_test_missing",
+      "goal_mode_parity_target_missing",
+      "resident_action_channel_not_implemented"
+    ],
+    "legal_provenance_count": 13
+  },
+  "blocker_selection": {
+    "selected_blocker": "avir_cli_goal_mode_parity_adapter",
+    "decision": "PASS_THIS_BOOTSTRAP_THEN_ADVANCE_TO_FULL_AVIR_CLI_PARITY",
+    "selection_basis": [
+      "GOAL.md Current Blocker Packet",
+      "inventory next_missing_precondition",
+      "non-killable clean-room avir-cli precondition"
+    ]
+  },
+  "cleanroom_source_boundary": {
+    "status": "PASS",
+    "adapter_source": {
+      "path": "<local-path>",
+      "exists": true,
+      "sha256": "44d873013d81b5274ffa8b0a02b9a007d654503d8e6dcc231dc1aca9a3b9deaf",
+      "imports_avir_cli_code": false,
+      "boundary": "clean-room Ember-side Python adapter; avir-cli source used only as inspected reference receipts"
+    },
+    "launch_shim": {
+      "path": "<local-path>",
+      "exists": true,
+      "sha256": "564e789e330c1d58787697ed95dc91857866b23c8551e0a013f2d3020cb36956"
+    },
+    "blockers": []
+  },
+  "resident_action_channel": {
+    "status": "PASS",
+    "channel_type": "bounded_command_plan",
+    "compiled_action": {
+      "command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+      "allowed_effect": "write next blocker receipt under receipts/ember-preloop-resident-gate",
+      "requires_human_input": false
+    },
+    "delegation_policy": "adapter emits bounded command; non-Ember executor may run it only as temporary launch surface until native harness is integrated"
+  },
+  "deletion_ablation": {
+    "launch_shim_deleted_blocks": true,
+    "adapter_deleted_blocks": true,
+    "receipt_reader_deleted_blocks": true,
+    "action_channel_deleted_blocks": true,
+    "method": "static deletion probe: each required surface is explicitly consumed by build_receipt; absence is a BLOCKED condition"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "avir_cli_full_parity_harness_gate",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "classification": "clean_room_goal_mode_bootstrap_adapter_not_full_cli_parity",
+  "does_not_satisfy_full_avir_cli_parity": true,
+  "full_avir_cli_parity_requirement": {
+    "target": "near_99_percent_complete_parity_in_function_uiux_backend_and_goal_mode",
+    "forbidden_substitution": "headless_goal_mode_adapter_as_full_harness",
+    "next_gate": "AVIR_CLI_FULL_PARITY_HARNESS_GATE"
+  },
+  "n_rows": 6
+}

@@ -1,0 +1,208 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.0,
+    "Deleted": 0.0
+  },
+  "arm_contract": {
+    "A": "no native generator, no outputs",
+    "B": "instruction-only fixed stub; no eval-script artifact compiler",
+    "C": "shared inferred artifact compiler from fresh task/evaluator requirements",
+    "Deleted": "C with native generator / resident action-selection organ removed"
+  },
+  "arm_solution_paths": {
+    "A": "<local-path>",
+    "B": "<local-path>",
+    "C": "<local-path>",
+    "Deleted": "<local-path>"
+  },
+  "arm_solution_sha256": {
+    "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+    "B": "1e06a4d607182f05268dfaa98ba37751131edcd23b66b5b893ed0590d635834b",
+    "C": "2260f9a4073b559a8adc1471903d470889440b87b039c474c164e7fa17bcf292",
+    "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+  },
+  "code_vs_docs_metric": {
+    "classification": "during-project executable official Docker benchmark receipt",
+    "receipt_lines_predicted": 208,
+    "script_code_lines": 624,
+    "solution_code_lines": 214
+  },
+  "deletion_sensitive": false,
+  "equal_budget": {
+    "entrypoint": "run_and_eval",
+    "official_container_runs_per_arm_per_task": 1,
+    "same_solution_source_per_arm_across_tasks": true,
+    "timeout_seconds_per_arm": 60
+  },
+  "errors": [
+    "multi_task_surface_missing",
+    "c_did_not_pass_multiple_tasks",
+    "positive_delta_missing",
+    "deletion_not_load_bearing"
+  ],
+  "external_task_source": {
+    "dataset": "osunlp/D3-Gym",
+    "length": 12,
+    "offset": 8,
+    "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
+    "split": "train"
+  },
+  "field_level_status": "progress_not_field_breakthrough",
+  "floor_contract_preservation_references": [
+    "docs/ember-floor-contract.md",
+    "nc2-own-technique-contract.md",
+    "scripts/train_multimodal_v0.py \u00a76 action log"
+  ],
+  "fresh_rows_path": "<local-path>",
+  "fresh_rows_sha256": "f552e9eb758c2637b4ee5247ba9740b623266e23bb3663542e87140d9c28494c",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "9b32cba4e6b68f97c3318c38eb07bc38f580eecd4228888f2db3cb623789ef61",
+  "limits": [
+    "This is still within the D3 chemistry/I-ReaxFF family unless broader task IDs are selected.",
+    "Goal completion still requires field-level breakthrough evidence beyond this receipt."
+  ],
+  "manual_solution_exclusion": {
+    "manual_per_task_solution": false,
+    "rationale": "C source is generated once from inferred required artifact families and contains no task_id branches.",
+    "task9_solution_reused": false
+  },
+  "native_goal_organ_load_bearing": false,
+  "next_blocker": "continue exact missing D3 generalization surface named in errors",
+  "per_task_rows": [
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_9",
+      "image_digest": "hananemoussa/d3-gym@sha256:5a18cbec52943e921653c369e7131aed46077c29a66148671bdc286b205ab2fa",
+      "inspect_sha256": "dabb8e610cdc601d94bd935a78586eeaedd0f6d7e71c4bfd6fe431417126f6e3",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_9",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Missing predicted file: pred_zmat_match.txt",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: Missing predicted file: pred_zmat_match.txt\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_9",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Could not parse any matching indices from pred_zmat_match.txt",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: Could not parse any matching indices from pred_zmat_match.txt\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_9",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Could not parse any matching indices from pred_zmat_match.txt",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: Could not parse any matching indices from pred_zmat_match.txt\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_9",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Missing predicted file: pred_zmat_match.txt",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: Missing predicted file: pred_zmat_match.txt\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "mat",
+          "path": "pred_results/POSCAR.mat",
+          "source": "task_instruction"
+        },
+        {
+          "kind": "txt",
+          "path": "pred_results/pred_zmat_match.txt",
+          "source": "task_instruction"
+        },
+        {
+          "kind": "txt",
+          "path": "pred_results/zmat_output.txt",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 8,
+      "task_id": "task_9"
+    }
+  ],
+  "positive_delta": false,
+  "repo": "<local-path>",
+  "reproducibility": {
+    "docker_required": true,
+    "rerun_command": "python scripts\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset8-len12-20260620T230700Z.json --out-dir receipts\\ember-d3-native-loop\\d3-generalized-candidate-20260622T011500Z --timeout-seconds 60 --task-id task_9 --execute",
+    "solution_hashes": {
+      "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+      "B": "1e06a4d607182f05268dfaa98ba37751131edcd23b66b5b893ed0590d635834b",
+      "C": "2260f9a4073b559a8adc1471903d470889440b87b039c474c164e7fa17bcf292",
+      "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+    }
+  },
+  "resident_training_cursor_references": {
+    "bitnet_pr": 485,
+    "discovery_pr": 486,
+    "resident_gate_pr": 484,
+    "task9_pr": 487
+  },
+  "selected_task_ids": [
+    "task_9"
+  ],
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "static_registry_exclusion": {
+    "static_per_task_answer_table": false,
+    "task_id_branches_in_c_source": false
+  },
+  "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC",
+  "ts": "20260622T011835Z",
+  "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"
+}

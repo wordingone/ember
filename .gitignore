@@ -1,0 +1,31 @@
+# Weights stay out of git — every adapter's size+provenance is pinned in the
+# t2 receipt that gated it (receipts/t2-*.json).
+adapters/
+
+# Third-party clones (arc-dsl, re-arc, ARC-AGI-2 — MIT) carry their own .git;
+# provenance = clone URL + SHA recorded in STATE.md / receipts, not vendoring.
+vendor/
+
+__pycache__/
+*.tmp
+
+# Generated at import by unsloth; swept in by accident, kept ignored since.
+scripts/unsloth_compiled_cache/
+*.stackdump
+
+# Runtime/session artifacts — never gate evidence
+state/
+.eng-stop-gate-off
+models/
+
+# Agent harness / orchestration machinery — MUST NOT be published. These carry
+# internal prompts, absolute local paths, and operator identities. Never tracked.
+.claude/
+
+# Scratch / working artifacts — never tracked.
+_scratch_*
+*scratch*/
+_roster_check.py
+
+# repo-guard operator-name denylist is supplied locally, never published.
+tools/.repo-guard-denylist

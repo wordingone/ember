@@ -1,0 +1,42 @@
+{
+  "ticket": "EMBER-MVP-OFFICIAL-ABC-WHEEL-RUNNER",
+  "ts": "20260618T143007Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "fixture_only": false,
+  "source_root": "<local-path>",
+  "data_root": "<local-path>",
+  "submission_root": "<local-path>",
+  "arms": [
+    {
+      "id": "A",
+      "receipt_path": "<local-path>",
+      "verdict": "BLOCKED",
+      "blocked_reason": "official_grading_preflight_failed",
+      "real_mle_tasks_executed": false,
+      "mean_normalized_improvement": null
+    },
+    {
+      "id": "B",
+      "receipt_path": "<local-path>",
+      "verdict": "BLOCKED",
+      "blocked_reason": "official_grading_preflight_failed",
+      "real_mle_tasks_executed": false,
+      "mean_normalized_improvement": null
+    },
+    {
+      "id": "C",
+      "receipt_path": "<local-path>",
+      "verdict": "BLOCKED",
+      "blocked_reason": "official_grading_preflight_failed",
+      "real_mle_tasks_executed": false,
+      "mean_normalized_improvement": null
+    }
+  ],
+  "wheel_receipt_path": "<local-path>",
+  "wheel_verdict": "BLOCKED",
+  "blocked_reason": "benchmark_receipts_not_real",
+  "real_mle_tasks_executed": false,
+  "ordering": "not-C>B>A",
+  "verdict": "BLOCKED"
+}

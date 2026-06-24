@@ -1,0 +1,16 @@
+{
+  "manual_codex_selection": false,
+  "organ_id": "ember_native_goal_organ_min_slice_v1",
+  "parses": [
+    "goal",
+    "receipts",
+    "current blocker"
+  ],
+  "persists": [
+    "<local-path>",
+    "<local-path>",
+    "<local-path>"
+  ],
+  "selects": "next resident action by learned recursive policy weights",
+  "verifies": "scores action drafts with task-row verifier checks"
+}

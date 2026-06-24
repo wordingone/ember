@@ -1,0 +1,16 @@
+{
+  "ticket": "ENG40-T2R2W-VIEWSHA-SELFTEST",
+  "ts": "20260611T051433Z",
+  "issue": "wordingone/ember#150",
+  "checks": {
+    "sha_over_raw_bytes": true,
+    "sha_post_write_positions": true,
+    "receipt_wiring": true,
+    "args_surface_unchanged": true,
+    "fixture_receipt_check_pass": true
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "no_network": true,
+  "no_gpu": true,
+  "note": "append-only: existing certified t2-r2w receipts are untouched; views_written lands on the NEXT run"
+}

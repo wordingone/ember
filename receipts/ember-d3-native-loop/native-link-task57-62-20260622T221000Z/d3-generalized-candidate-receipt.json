@@ -1,0 +1,294 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 1.0,
+    "Deleted": 0.0
+  },
+  "arm_contract": {
+    "A": "no native generator, no outputs",
+    "B": "instruction-only fixed stub; no eval-script artifact compiler",
+    "C": "shared inferred artifact compiler from fresh task/evaluator requirements",
+    "Deleted": "C with native generator / resident action-selection organ removed"
+  },
+  "arm_solution_paths": {
+    "A": "<local-path>",
+    "B": "<local-path>",
+    "C": "<local-path>",
+    "Deleted": "<local-path>"
+  },
+  "arm_solution_sha256": {
+    "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+    "B": "2b3692a5a561628d656ba2aa64e9fdc2ac50587d7b0cd007acf8aecad1fee70d",
+    "C": "a0972566c1c82b1bc8aff7abcf61a2675873575f5bbfa3c50a49ddadbe0584ab",
+    "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+  },
+  "code_vs_docs_metric": {
+    "classification": "during-project executable official Docker benchmark receipt",
+    "receipt_lines_predicted": 294,
+    "script_code_lines": 1319,
+    "solution_code_lines": 851
+  },
+  "deletion_sensitive": true,
+  "equal_budget": {
+    "entrypoint": "run_and_eval",
+    "official_container_runs_per_arm_per_task": 1,
+    "same_solution_source_per_arm_across_tasks": true,
+    "timeout_seconds_per_arm": 180
+  },
+  "errors": [],
+  "external_task_source": {
+    "dataset": "osunlp/D3-Gym",
+    "length": 12,
+    "offset": 54,
+    "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=54&length=12",
+    "split": "train"
+  },
+  "field_level_status": "progress_not_field_breakthrough",
+  "floor_contract_preservation_references": [
+    "docs/ember-floor-contract.md",
+    "nc2-own-technique-contract.md",
+    "scripts/train_multimodal_v0.py \u00a76 action log"
+  ],
+  "fresh_rows_path": "<local-path>",
+  "fresh_rows_sha256": "8fceb429e186fe71ebef6dda41ee1c163625d5c62cf0adb478a95a31dec68e5a",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "7b987a74d82fd4e312b7b2f0249c1c587056dc393ba7f4dd5302c0de2f29bcee",
+  "limits": [
+    "This is still within the D3 chemistry/I-ReaxFF family unless broader task IDs are selected.",
+    "Goal completion still requires field-level breakthrough evidence beyond this receipt."
+  ],
+  "manual_solution_exclusion": {
+    "manual_per_task_solution": false,
+    "rationale": "C source is generated once from inferred required artifact families and contains no task_id branches.",
+    "task9_solution_reused": false
+  },
+  "native_goal_organ_load_bearing": true,
+  "next_blocker": "admit stronger field-level validation target or run a prospective-fresh D3 slice with --require-prospective",
+  "per_task_rows": [
+    {
+      "c_passed": true,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_57",
+      "image_digest": "hananemoussa/d3-gym@sha256:fd98b689dcf2078e2b94f41a75f64210480761329fc948c7a6f6d9a1b881b9e9",
+      "inspect_sha256": "21736c5d66ad3c7da2e4b3e83b8895633b47918af51c85892d77ac3c4b928a56",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_57",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Prediction file not found: pred_results/pred_ParaLearn.txt",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Prediction file not found: pred_results/pred_ParaLearn.txt\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_57",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Could not parse pi or sigma2 from prediction file",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Could not parse pi or sigma2 from prediction file\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_57",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": true,
+          "reason": "Valid GMM parameters: 3 components, pi sums to 1.0000",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: True\nReason: Valid GMM parameters: 3 components, pi sums to 1.0000\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_57",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Prediction file not found: pred_results/pred_ParaLearn.txt",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Prediction file not found: pred_results/pred_ParaLearn.txt\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "txt",
+          "path": "pred_results/pred_ParaLearn.txt",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 56,
+      "task_id": "task_57"
+    },
+    {
+      "c_passed": true,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_62",
+      "image_digest": "hananemoussa/d3-gym@sha256:eaf6d1dc510ef6415661e1e74cb622dce7fe38bbb1a1c5dd29592162f85e6ff0",
+      "inspect_sha256": "3e6d9dad2defedfde99039a5ed45e542bff50038244b0fcf856a40f7af9ae18e",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_62",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted PDF not found at pred_results/pred_Fig13(b)-Performance-of-channel-estimation-SNR.pdf",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted PDF not found at pred_results/pred_Fig13(b)-Performance-of-channel-estimation-SNR.pdf\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_62",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Output file is not a valid PDF",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Output file is not a valid PDF\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_62",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": true,
+          "reason": "PDF exists with correct format, source data has correct sample counts (RF-Diffusion:2300, NeRF2:160, FIRE:101, Codebook:2000)",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: True\nReason: PDF exists with correct format, source data has correct sample counts (RF-Diffusion:2300, NeRF2:160, FIRE:101, Codebook:2000)\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_62",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted PDF not found at pred_results/pred_Fig13(b)-Performance-of-channel-estimation-SNR.pdf",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted PDF not found at pred_results/pred_Fig13(b)-Performance-of-channel-estimation-SNR.pdf\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "pdf",
+          "path": "pred_results/pred_Fig13(b)-Performance-of-channel-estimation-SNR.pdf",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 61,
+      "task_id": "task_62"
+    }
+  ],
+  "positive_delta": true,
+  "prospective_surface": {
+    "fresh_surface_no_prior_failed_receipt_overlap": true,
+    "prior_failed_receipts_scanned": 13,
+    "prior_failed_task_id_overlap": {},
+    "require_prospective": true
+  },
+  "repo": "<local-path>",
+  "reproducibility": {
+    "docker_required": true,
+    "rerun_command": "python scripts\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json --out-dir receipts\\ember-d3-native-loop\\native-link-task57-62-20260622T221000Z --timeout-seconds 180 --task-id task_57 --task-id task_62 --execute",
+    "solution_hashes": {
+      "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+      "B": "2b3692a5a561628d656ba2aa64e9fdc2ac50587d7b0cd007acf8aecad1fee70d",
+      "C": "a0972566c1c82b1bc8aff7abcf61a2675873575f5bbfa3c50a49ddadbe0584ab",
+      "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+    }
+  },
+  "resident_training_cursor_references": {
+    "bitnet_pr": 485,
+    "discovery_pr": 486,
+    "resident_gate_pr": 484,
+    "task9_pr": 487
+  },
+  "selected_task_ids": [
+    "task_57",
+    "task_62"
+  ],
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "static_registry_exclusion": {
+    "static_per_task_answer_table": false,
+    "task_id_branches_in_c_source": false
+  },
+  "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC",
+  "ts": "20260622T214655Z",
+  "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"
+}

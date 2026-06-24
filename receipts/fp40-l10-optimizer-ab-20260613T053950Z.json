@@ -1,0 +1,237 @@
+{
+  "ticket": "FP40-L10-OPTIMIZER-AB",
+  "ts": "20260613T053950Z",
+  "issue": 363,
+  "scope": "L10 optimizer swap A/B \u2014 Muon NS chain off production critical path",
+  "prior_fp39b_tok_s": 19227.8,
+  "prior_fp39b_muon_wall_pct": 36.01,
+  "cells": [
+    {
+      "cell": "muon_split_baseline",
+      "optimizer": "muon_split_baseline",
+      "ns_steps": 5,
+      "fused_side": false,
+      "full_adamw": false,
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": true,
+      "mtp_heads": 2,
+      "mtp_weight": 0.3,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "free_vram_gib_post_warmup": 15.02,
+      "status": "OK",
+      "tok_s_paced": 19223.3,
+      "tok_s_raw": 20421.3,
+      "pacing_tax": 0.0587,
+      "phase_ms_per_step": {
+        "backbone": 99.73,
+        "ce": 34.4,
+        "backward": 372.81,
+        "muon": 285.83,
+        "adamw": 3.69
+      },
+      "phase_pct": {
+        "backbone": 12.52,
+        "ce": 4.32,
+        "backward": 46.81,
+        "muon": 35.89,
+        "adamw": 0.46
+      },
+      "optimizer_wall_pct": 36.35
+    },
+    {
+      "cell": "muon_2d_fused_side",
+      "optimizer": "muon_2d_fused_side",
+      "ns_steps": 5,
+      "fused_side": true,
+      "full_adamw": false,
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": true,
+      "mtp_heads": 2,
+      "mtp_weight": 0.3,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "free_vram_gib_post_warmup": 14.31,
+      "status": "OK",
+      "tok_s_paced": 18854.8,
+      "tok_s_raw": 20005.9,
+      "pacing_tax": 0.0575,
+      "phase_ms_per_step": {
+        "backbone": 100.61,
+        "ce": 34.39,
+        "backward": 374.6,
+        "muon": 287.68,
+        "adamw": 1.45
+      },
+      "phase_pct": {
+        "backbone": 12.6,
+        "ce": 4.31,
+        "backward": 46.9,
+        "muon": 36.02,
+        "adamw": 0.18
+      },
+      "optimizer_wall_pct": 36.2
+    },
+    {
+      "cell": "full_fused_adamw",
+      "optimizer": "full_fused_adamw",
+      "ns_steps": 0,
+      "fused_side": true,
+      "full_adamw": true,
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": true,
+      "mtp_heads": 2,
+      "mtp_weight": 0.3,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "free_vram_gib_post_warmup": 13.57,
+      "status": "OK",
+      "tok_s_paced": 27702.8,
+      "tok_s_raw": 30261.2,
+      "pacing_tax": 0.0845,
+      "phase_ms_per_step": {
+        "backbone": 100.13,
+        "ce": 34.63,
+        "backward": 377.47,
+        "adamw": 16.73
+      },
+      "phase_pct": {
+        "backbone": 18.93,
+        "ce": 6.55,
+        "backward": 71.36,
+        "adamw": 3.16
+      },
+      "optimizer_wall_pct": 3.16
+    },
+    {
+      "cell": "muon_ns3",
+      "optimizer": "muon_ns3",
+      "ns_steps": 3,
+      "fused_side": false,
+      "full_adamw": false,
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": true,
+      "compiled": true,
+      "mtp_heads": 2,
+      "mtp_weight": 0.3,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "free_vram_gib_post_warmup": 13.63,
+      "status": "OK",
+      "tok_s_paced": 21519.0,
+      "tok_s_raw": 23031.5,
+      "pacing_tax": 0.0657,
+      "phase_ms_per_step": {
+        "backbone": 100.36,
+        "ce": 34.76,
+        "backward": 374.5,
+        "muon": 177.69,
+        "adamw": 3.66
+      },
+      "phase_pct": {
+        "backbone": 14.52,
+        "ce": 5.03,
+        "backward": 54.2,
+        "muon": 25.72,
+        "adamw": 0.53
+      },
+      "optimizer_wall_pct": 26.25
+    }
+  ],
+  "equiv_results": {
+    "muon_2d_fused_side": {
+      "cell": "muon_2d_fused_side",
+      "equiv_steps": 100,
+      "equiv_noise_floor_nats": 0.0,
+      "equiv_derived_threshold_nats": 0.1,
+      "status": "OK",
+      "losses_at": {
+        "10": 0.25,
+        "25": 0.0,
+        "50": 0.0,
+        "100": 0.0
+      },
+      "final_delta": 0.0,
+      "trend_diverging": false,
+      "equiv_pass": true
+    },
+    "full_fused_adamw": {
+      "cell": "full_fused_adamw",
+      "equiv_steps": 100,
+      "equiv_noise_floor_nats": 0.0,
+      "equiv_derived_threshold_nats": 0.1,
+      "status": "OK",
+      "losses_at": {
+        "10": 0.25,
+        "25": 0.0,
+        "50": 0.0,
+        "100": 0.0
+      },
+      "final_delta": 0.0,
+      "trend_diverging": false,
+      "equiv_pass": true
+    },
+    "muon_ns3": {
+      "cell": "muon_ns3",
+      "equiv_steps": 100,
+      "equiv_noise_floor_nats": 0.0,
+      "equiv_derived_threshold_nats": 0.1,
+      "status": "OK",
+      "losses_at": {
+        "10": 0.3125,
+        "25": 0.0,
+        "50": 0.0,
+        "100": 0.0
+      },
+      "final_delta": 0.0,
+      "trend_diverging": false,
+      "equiv_pass": true
+    }
+  },
+  "c3_candidates": [
+    {
+      "cell": "full_fused_adamw",
+      "tok_s_paced": 27702.8,
+      "optimizer_wall_pct": 3.16,
+      "equiv_pass": true,
+      "delta_loss_at_100": 0.0
+    }
+  ],
+  "verdict": "C3_CONFIRMED",
+  "equiv_threshold_floor_nats": 0.1,
+  "equiv_noise_floor_nats": 0.0,
+  "equiv_derived_threshold_nats": 0.1,
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.6.0+cu124"
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "production stack: c03 (hidden=1024, layers=20, heads=16, seq=1024)",
+    "B16+ckpt+compile+QAT (variant=qat)",
+    "MTP: 2 heads, weight=0.3",
+    "CE: chunked_cross_entropy (chunk_tokens=1024)",
+    "compile: torch.compile(_backbone_call wrapper, unwrapped forward)",
+    "phase timing: CUDA events per phase",
+    "EQUIV: 100 steps, seeds 42+43 noise-floor, floor=0.1 nats",
+    "EQUIV pass requires |delta@100| <= derived_threshold AND no monotonic increase across [10,25,50,100]",
+    "100-step horizon; full-horizon equivalence unproven",
+    "governor rails HOLD \u2014 never loosened",
+    "proxy cells banned (C-7)"
+  ]
+}

@@ -1,0 +1,335 @@
+{
+  "ticket": "EMBER-TRAIN-MULTIMODAL-RESIDENT-ADAPTER",
+  "ts": "20260622T011310Z",
+  "sha_convention": "bytes/tensors as-is; tensor hash includes name, shape, dtype, and CPU contiguous bytes",
+  "status": "RESIDENT_TRAINING_CANDIDATE_PASS",
+  "verdict": "RESIDENT_TRAINING_CANDIDATE_PASS",
+  "manifest_path": "<local-path>",
+  "manifest_sha256": "297697f024c68d61ab4c0fbbd7f34311f0a3c00a7650896b6a9a51ca9186ac26",
+  "train_multimodal_sha256": "89283f362778c7072bab81f4d5bbbd3d4b6393788c2a504469232d073cf49e90",
+  "adapter_sha256": "64da8ca74ce386d9c27960ab1dda0a5d4bd6f6a828e9384c5cee54ed173109d8",
+  "trainable_parameter_count": 244056,
+  "pre_neural_parameter_hash": "sha256:cb4788bec4d803bec36122d3ac114a6622d3f4ebc7c9141678bb3ada1a4aa941",
+  "post_neural_parameter_hash": "sha256:c66c19688e92ca4601bd9297bf01dd27961204ae661dde406d70cc55609f8e17",
+  "parameter_delta_present": true,
+  "mm_loss": 4.056535243988037,
+  "action_log_path": "<local-path>",
+  "observed_action_log_kinds": [
+    "commit",
+    "emit-scalar",
+    "emit-token"
+  ],
+  "heldout_rows": [
+    {
+      "task_id": "task_5",
+      "source_row_idx": 4,
+      "split": "heldout",
+      "a_score": 0.0,
+      "b_score": 0.5883,
+      "c_score": 1.0,
+      "deleted_score": 0.5883,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "best_reward_table": [
+        {
+          "template_index": 0,
+          "template": "instruction_only",
+          "reward": 0.5883,
+          "snippets": [
+            "task_instruction"
+          ],
+          "outputs": [
+            "pred_plbo_bo.pdf",
+            "pred_plbo_bo_pi.pdf",
+            "pred_plbo_bo_pp.pdf",
+            "pred_plbo_bo_si.pdf",
+            "pred_plbo_bop.pdf",
+            "pred_plbo_nn_bo_pi.pdf",
+            "pred_plbo_nn_bo_pp.pdf",
+            "pred_plbo_nn_bo_si.pdf"
+          ],
+          "checks": [
+            "existence"
+          ]
+        },
+        {
+          "template_index": 1,
+          "template": "dataset_preview",
+          "reward": 0.6467,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "outputs": [
+            "pred_plbo_bo.pdf",
+            "pred_plbo_bo_pi.pdf",
+            "pred_plbo_bo_pp.pdf",
+            "pred_plbo_bo_si.pdf",
+            "pred_plbo_bop.pdf",
+            "pred_plbo_nn_bo_pi.pdf",
+            "pred_plbo_nn_bo_pp.pdf",
+            "pred_plbo_nn_bo_si.pdf"
+          ],
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ]
+        },
+        {
+          "template_index": 2,
+          "template": "eval_script_recursive",
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "outputs": [
+            "pred_plbo_bo.pdf",
+            "pred_plbo_bo_pi.pdf",
+            "pred_plbo_bo_pi_CC.pdf",
+            "pred_plbo_bo_pi_CH.pdf",
+            "pred_plbo_bo_pp.pdf",
+            "pred_plbo_bo_si.pdf",
+            "pred_plbo_bop.pdf",
+            "pred_plbo_nn_bo_pi.pdf",
+            "pred_plbo_nn_bo_pp.pdf",
+            "pred_plbo_nn_bo_si.pdf"
+          ],
+          "checks": [
+            "existence",
+            "format_validity",
+            "gold_compare",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency"
+          ]
+        }
+      ]
+    },
+    {
+      "task_id": "task_6",
+      "source_row_idx": 5,
+      "split": "heldout",
+      "a_score": 0.0,
+      "b_score": 0.3381,
+      "c_score": 1.0,
+      "deleted_score": 0.3381,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "best_reward_table": [
+        {
+          "template_index": 0,
+          "template": "instruction_only",
+          "reward": 0.3381,
+          "snippets": [
+            "task_instruction"
+          ],
+          "outputs": [
+            "pred_results/pred_scale_mol.traj",
+            "pred_results/pred_scale_mol_summary.txt"
+          ],
+          "checks": [
+            "existence"
+          ]
+        },
+        {
+          "template_index": 1,
+          "template": "dataset_preview",
+          "reward": 0.4548,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "outputs": [
+            "pred_results/pred_scale_mol.traj",
+            "pred_results/pred_scale_mol_summary.txt"
+          ],
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ]
+        },
+        {
+          "template_index": 2,
+          "template": "eval_script_recursive",
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "outputs": [
+            "pred_energies.append",
+            "pred_energies.max",
+            "pred_energies.min",
+            "pred_results/pred_scale_mol.traj",
+            "pred_results/pred_scale_mol_summary.txt",
+            "pred_scale_mol.traj",
+            "pred_scale_mol_summary.txt"
+          ],
+          "checks": [
+            "existence",
+            "numeric_validity",
+            "semantic_consistency"
+          ]
+        }
+      ]
+    }
+  ],
+  "transfer_rows": [
+    {
+      "task_id": "task_7",
+      "source_row_idx": 6,
+      "split": "transfer",
+      "a_score": 0.0,
+      "b_score": 0.1,
+      "c_score": 1.0,
+      "deleted_score": 0.1,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "best_reward_table": [
+        {
+          "template_index": 0,
+          "template": "instruction_only",
+          "reward": 0.1,
+          "snippets": [
+            "task_instruction"
+          ],
+          "outputs": [
+            "pred_results/pred_deb_eover.csv",
+            "pred_results/pred_deb_eover.pdf",
+            "pred_results/pred_deb_eover.png"
+          ],
+          "checks": [
+            "existence"
+          ]
+        },
+        {
+          "template_index": 1,
+          "template": "dataset_preview",
+          "reward": 0.15,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "outputs": [
+            "pred_results/pred_deb_eover.csv",
+            "pred_results/pred_deb_eover.pdf",
+            "pred_results/pred_deb_eover.png"
+          ],
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ]
+        },
+        {
+          "template_index": 2,
+          "template": "eval_script_recursive",
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "outputs": [
+            "pred_deb_eover.csv",
+            "pred_deb_eover.pdf",
+            "pred_deb_eover.png",
+            "pred_results/pred_deb_eover.csv",
+            "pred_results/pred_deb_eover.pdf",
+            "pred_results/pred_deb_eover.png",
+            "pred_row.get"
+          ],
+          "checks": [
+            "csv_parse",
+            "existence",
+            "format_validity",
+            "gold_compare",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency"
+          ]
+        }
+      ]
+    },
+    {
+      "task_id": "task_8",
+      "source_row_idx": 7,
+      "split": "transfer",
+      "a_score": 0.0,
+      "b_score": 0.1083,
+      "c_score": 1.0,
+      "deleted_score": 0.1083,
+      "c_selected_template": "eval_script_recursive",
+      "b_template": "instruction_only",
+      "deleted_condition": "resident_policy_parameters_reverted_to_pre_update_zero_policy",
+      "best_reward_table": [
+        {
+          "template_index": 0,
+          "template": "instruction_only",
+          "reward": 0.1083,
+          "snippets": [
+            "task_instruction"
+          ],
+          "outputs": [
+            "pred_results/pred_compare_energies.csv",
+            "pred_results/pred_compare_energies.pdf",
+            "pred_results/pred_compare_energies_gulp.csv"
+          ],
+          "checks": [
+            "existence"
+          ]
+        },
+        {
+          "template_index": 1,
+          "template": "dataset_preview",
+          "reward": 0.1667,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "outputs": [
+            "pred_results/pred_compare_energies.csv",
+            "pred_results/pred_compare_energies.pdf",
+            "pred_results/pred_compare_energies_gulp.csv"
+          ],
+          "checks": [
+            "existence",
+            "semantic_consistency"
+          ]
+        },
+        {
+          "template_index": 2,
+          "template": "eval_script_recursive",
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "outputs": [
+            "pred_compare_energies.csv",
+            "pred_compare_energies.pdf",
+            "pred_compare_energies_gulp.csv",
+            "pred_results/pred_compare_energies.csv",
+            "pred_results/pred_compare_energies.pdf",
+            "pred_results/pred_compare_energies_gulp.csv"
+          ],
+          "checks": [
+            "csv_parse",
+            "existence",
+            "format_validity",
+            "non_empty",
+            "numeric_validity",
+            "semantic_consistency"
+          ]
+        }
+      ]
+    }
+  ],
+  "next_blocker": "resident-training gate"
+}

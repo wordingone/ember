@@ -1,0 +1,43 @@
+{
+  "ticket": "NC0-T5",
+  "round": 1,
+  "ts": "20260610T222615Z",
+  "args_fp": "99eeb5e245abe8bb",
+  "n_problems": 50,
+  "args": {
+    "round": 1,
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "arms": [
+      "core_only",
+      "core_meta"
+    ],
+    "k": 4,
+    "batch_size": 8,
+    "temp": 0.6,
+    "seed": 14,
+    "tag_suffix": "w-q3-mtp"
+  },
+  "arms": {
+    "core_only": {
+      "pass_any_pct": 90.0,
+      "ci95": [
+        82.0,
+        98.0
+      ],
+      "gen_secs": 84.1
+    },
+    "core_meta": {
+      "pass_any_pct": 82.0,
+      "ci95": [
+        70.0,
+        92.0
+      ],
+      "gen_secs": 68.9
+    }
+  },
+  "delta_meta_minus_core_ci95": [
+    -18.0,
+    0.0
+  ],
+  "harm_flag": false
+}

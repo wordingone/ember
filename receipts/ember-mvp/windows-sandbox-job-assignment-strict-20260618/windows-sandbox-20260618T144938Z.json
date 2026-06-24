@@ -1,0 +1,441 @@
+{
+  "ticket": "EMBER-WINDOWS-SANDBOX-SELFTEST",
+  "ts": "20260618T144938Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "windows_native_runner": true,
+  "job_object_limit_requested": true,
+  "summary": {
+    "pass": 10,
+    "total": 10
+  },
+  "rows": [
+    {
+      "probe": "legit-solve",
+      "verdict": "pass",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144934Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "legit-solve",
+        "verdict": "pass",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 61,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {
+          "probe": "legit-solve",
+          "verdict": "pass",
+          "error": null,
+          "memory_result": "not_attempted",
+          "result_json": "5"
+        }
+      }
+    },
+    {
+      "probe": "eq-dispatch",
+      "verdict": "denied",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144934Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "eq-dispatch",
+        "verdict": "denied",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 54,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {
+          "probe": "eq-dispatch",
+          "verdict": "denied",
+          "error": "NameError: __build_class__ not found",
+          "memory_result": "not_attempted",
+          "result_json": null
+        }
+      }
+    },
+    {
+      "probe": "removed-builtin-open",
+      "verdict": "denied",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144934Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "removed-builtin-open",
+        "verdict": "denied",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 59,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {
+          "probe": "removed-builtin-open",
+          "verdict": "denied",
+          "error": "NameError: name 'callable' is not defined",
+          "memory_result": "not_attempted",
+          "result_json": null
+        }
+      }
+    },
+    {
+      "probe": "object-reachability",
+      "verdict": "denied",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144934Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "object-reachability",
+        "verdict": "denied",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 60,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {
+          "probe": "object-reachability",
+          "verdict": "denied",
+          "error": "PermissionError: object reachability token denied",
+          "memory_result": "not_attempted",
+          "result_json": null
+        }
+      }
+    },
+    {
+      "probe": "timeout",
+      "verdict": "killed",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144935Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "timeout",
+        "verdict": "killed",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 509,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "killed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "killed",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {}
+      }
+    },
+    {
+      "probe": "memory-bomb",
+      "verdict": "denied",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144935Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "memory-bomb",
+        "verdict": "denied",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 60,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "denied",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {
+          "probe": "memory-bomb",
+          "verdict": "denied",
+          "error": "MemoryError: memory bomb denied before allocation",
+          "memory_result": "denied",
+          "result_json": null
+        }
+      }
+    },
+    {
+      "probe": "filesystem-escape",
+      "verdict": "denied",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144935Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "filesystem-escape",
+        "verdict": "denied",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 54,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "denied",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {
+          "probe": "filesystem-escape",
+          "verdict": "denied",
+          "error": "NameError: name 'open' is not defined",
+          "memory_result": "not_attempted",
+          "result_json": null
+        }
+      }
+    },
+    {
+      "probe": "subprocess-cleanup",
+      "verdict": "killed",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144938Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "subprocess-cleanup",
+        "verdict": "killed",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 2711,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "killed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "killed",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {}
+      }
+    },
+    {
+      "probe": "network-attempt",
+      "verdict": "denied",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144938Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "network-attempt",
+        "verdict": "denied",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 65,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "denied",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "child": {
+          "probe": "network-attempt",
+          "verdict": "denied",
+          "error": "ImportError: import of 'socket' denied",
+          "memory_result": "not_attempted",
+          "result_json": null
+        }
+      }
+    },
+    {
+      "probe": "deterministic-replay",
+      "verdict": "pass",
+      "ok": true,
+      "receipt": {
+        "ticket": "EMBER-WINDOWS-SANDBOX-PROBE",
+        "ts": "20260618T144938Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "probe": "deterministic-replay",
+        "verdict": "pass",
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "seed": 123456,
+        "cwd": "<local-path>",
+        "cwd_inside_temp_root": true,
+        "duration_ms": 124,
+        "job_object": {
+          "requested": true,
+          "assigned": true,
+          "memory_limit_bytes": 201326592
+        },
+        "timeout_result": "completed",
+        "memory_result": "not_attempted",
+        "filesystem_result": "contained",
+        "network_result": "not_attempted",
+        "process_cleanup_result": "clean",
+        "escape_path_exists": false,
+        "process_tree_marker_exists": false,
+        "replay_result": {
+          "runs": 2,
+          "outputs_match": true,
+          "stdout_sha256": "sha256:6eb42f77a5218ee399ee249e23e10f7f83dec8310e3533ffae443cc0238817c3",
+          "fresh_roots": [
+            "<local-path>",
+            "<local-path>"
+          ]
+        },
+        "runs": [
+          {
+            "index": 1,
+            "command": [
+              "<local-path> Files\\Python310\\python.exe",
+              "<local-path>",
+              "<local-path>"
+            ],
+            "timed_out": false,
+            "cleanup_ok": true,
+            "child": {
+              "probe": "deterministic-replay",
+              "verdict": "pass",
+              "error": null,
+              "memory_result": "not_attempted",
+              "result_json": "{\"seed\":123456,\"values\":[2,3,4,5,6]}"
+            },
+            "result_json": "{\"seed\":123456,\"values\":[2,3,4,5,6]}"
+          },
+          {
+            "index": 2,
+            "command": [
+              "<local-path> Files\\Python310\\python.exe",
+              "<local-path>",
+              "<local-path>"
+            ],
+            "timed_out": false,
+            "cleanup_ok": true,
+            "child": {
+              "probe": "deterministic-replay",
+              "verdict": "pass",
+              "error": null,
+              "memory_result": "not_attempted",
+              "result_json": "{\"seed\":123456,\"values\":[2,3,4,5,6]}"
+            },
+            "result_json": "{\"seed\":123456,\"values\":[2,3,4,5,6]}"
+          }
+        ]
+      }
+    }
+  ]
+}

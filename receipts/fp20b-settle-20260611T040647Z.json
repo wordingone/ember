@@ -1,0 +1,43 @@
+{
+  "ticket": "FP20B-SETTLE",
+  "ts": "20260611T040647Z",
+  "w1_receipt": "w1-floor-g1r2-base-20260611T040544Z.json",
+  "w1_args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "adapter": null,
+    "split": "validation",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 16,
+    "tag": "g1r2-base",
+    "calibrate": false,
+    "focus_from": null,
+    "focus_max_rate": 0.75,
+    "ext_verify": false
+  },
+  "result": {
+    "verdict": "SETTLED",
+    "as_operated": {
+      "pacing_total_s": 36.5,
+      "gen_wall_s": 144.0,
+      "pacing_fraction_of_gen_wall": 0.2535,
+      "compute_only_wall_s": 107.5,
+      "implied_raw_over_paced": 1.34
+    },
+    "components": {
+      "throttle_s": 0.0,
+      "throttle_sleeps": 0,
+      "pacer_s": 36.5,
+      "pacer_sleeps": 73
+    },
+    "sanity_band": {
+      "lo": 0.0,
+      "hi": 0.5,
+      "inside": true
+    },
+    "convention": "fraction = pacing_total_s / gen_secs; meter accumulates only inside the generation phase; verify/ext-verify wall excluded from both sides"
+  }
+}

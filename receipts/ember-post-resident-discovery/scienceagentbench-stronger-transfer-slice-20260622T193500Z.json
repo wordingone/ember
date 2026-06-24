@@ -1,0 +1,96 @@
+{
+  "api_spend_usd": 0,
+  "benchmark": "ScienceAgentBench verified local artifact",
+  "benchmark_root": "<local-path>",
+  "gold_visible_to_candidate_generation": false,
+  "leaderboard_identical": false,
+  "next_executable_command": "Implement and run a zero-cost transfer loop over this frozen slice with matched A/B/C/Deleted arms and candidate/gold separation before any field-level breakthrough claim.",
+  "paid_api_surface_used": false,
+  "rows": [
+    {
+      "dataset": "experimental_band_gap",
+      "dataset_file_sha256": {
+        "matbench_expt_gap_test": "e5473f2ac7a5142d8dffe022c02c5fb3ac1e4270d77231c284ddcdb0077fcafe",
+        "matbench_expt_gap_train": "1f95e898bd072e7c677ebf840a3dd75f296718a0cf186c93c2494eea118c2d80"
+      },
+      "dataset_files": [
+        "matbench_expt_gap_train",
+        "matbench_expt_gap_test"
+      ],
+      "eval_script_name": "eval_experimental_band_gap_prediction.py",
+      "eval_script_sha256": "d3b44aa30389046988a9a463482d1a9665981e1e93a555fdf2777c089f67a9a4",
+      "gold_file": "experimental_band_gap_prediction_gold.csv",
+      "gold_file_sha256": "b08d721b493943732eaaad7ca6f864dae4ab371aa92b14b2e527ba78b894487a",
+      "kind": "deterministic_regression",
+      "output_fname": "pred_results/experimental_band_gap_prediction_pred.csv",
+      "task": "Predict experimental band gap on the held-out matbench_expt_gap_test surface from the SAB verified artifact.",
+      "transfer_instance_id": "SAB-TX-001"
+    },
+    {
+      "dataset": "crystalline_compound",
+      "dataset_file_sha256": {
+        "compound_elastic_properties_test.csv": "e7d49e00341dbc5e0ba85ab63e83390ed44def45d12078156541ffc32583d96e",
+        "compound_elastic_properties_train.csv": "d8c2c76f04407a8603c79c2f735748cb13945407f808256c726f5e6b08c3b14c"
+      },
+      "dataset_files": [
+        "compound_elastic_properties_train.csv",
+        "compound_elastic_properties_test.csv"
+      ],
+      "eval_script_name": "eval_bulk_modulus.py",
+      "eval_script_sha256": "f2cdaa7ae91a7849f11d2ad1f365bf8b29f8d8b3cd8ad787f16c12bfde627ea5",
+      "gold_file": "compound_elastic_properties_gold.csv",
+      "gold_file_sha256": "68fa49678e19e41f6ae83d02040314a2ac7f27e1e02a911ee490b4582688bf37",
+      "kind": "deterministic_regression",
+      "output_fname": "pred_results/compound_bulk_modulus.csv",
+      "task": "Predict crystalline-compound bulk modulus K_VRH on the held-out test surface.",
+      "transfer_instance_id": "SAB-TX-002"
+    },
+    {
+      "dataset": "ref_index",
+      "dataset_file_sha256": {
+        "MP_2018.6": "8fd81f4810f6cc87ff9a3233769075cdb340d29a5c81623ed730b97a27d19792",
+        "md_ref_index_train": "5adb0836b53af78bd30d99fceb61dd4d286bff701f5a9df0285de743f58a0d32"
+      },
+      "dataset_files": [
+        "md_ref_index_train",
+        "MP_2018.6"
+      ],
+      "eval_script_name": "eval_refractive_index_prediction.py",
+      "eval_script_sha256": "43d8c4276c6235a51a57ddacff2dbebb7a67fc47f107835a356a979bcf8a6c8c",
+      "gold_file": "ref_index_predictions_gold.csv",
+      "gold_file_sha256": "3205430c75e948d8e6aba1837776a182514cec1867900b811b8111ad5439f785",
+      "kind": "deterministic_regression",
+      "output_fname": "pred_results/ref_index_predictions_pred.csv",
+      "task": "Predict refractive index on the SAB held-out ref_index surface.",
+      "transfer_instance_id": "SAB-TX-003"
+    },
+    {
+      "dataset": "pucci",
+      "dataset_file_sha256": {
+        "pucci-proteins_dev.csv": "aa76b4b7c38d7af889d734b1881a7b8d0b9f909f55474f78f1d0a207f9aed025",
+        "pucci-proteins_test.csv": "c248990e3df0f0a987a0f64199af7f6cceb4c65c406b0ea509d058e195f22262",
+        "pucci-proteins_train.csv": "35bf635903ea1e3b8dcd07881cb7f22dee721fc17458811da560e5570c52e83c"
+      },
+      "dataset_files": [
+        "pucci-proteins_train.csv",
+        "pucci-proteins_dev.csv",
+        "pucci-proteins_test.csv"
+      ],
+      "eval_script_name": "eval_protein_stability.py",
+      "eval_script_sha256": "015deb5c4af05aa8f33cf2a09911ae14aab7d2f9c3b9c73c91706d9964a797d5",
+      "gold_file": "pucci-proteins_test_gold.csv",
+      "gold_file_sha256": "e842b1c86bc79d0c4167cf91d91f82139ab684edcdee61547c28c7089949ac6f",
+      "kind": "deterministic_regression",
+      "output_fname": "pred_results/pucci-proteins_test_pred.csv",
+      "task": "Predict protein stability deltaTm on the PUCCI held-out test surface.",
+      "transfer_instance_id": "SAB-TX-004"
+    }
+  ],
+  "selection_rule": "disjoint unused deterministic ScienceAgentBench rows, no overlap with frozen six-row SAB slice instance IDs 1,2,4,5,24,25; chosen for cross-domain transfer pressure beyond visualization/fixture polishing",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_receipt": "<local-path>",
+  "source_receipt_sha256": "e152e729f099c0912805a9e607cfb407ace0276006e81e9f172f4199fecb0bc6",
+  "ticket": "EMBER-SAB-STRONGER-TRANSFER-SLICE",
+  "ts": "20260622T193500Z",
+  "verdict": "STRONGER_EXTERNAL_TRANSFER_SLICE_FROZEN"
+}

@@ -1,0 +1,112 @@
+{
+  "ticket": "EMBER-MVP-CYCLE",
+  "ts": "20260617T000000Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "started_at": "2026-06-17T00:00:00Z",
+  "finished_at": "2026-06-17T01:00:00Z",
+  "budget": {
+    "wall_seconds": 3600,
+    "train_seconds": 3600,
+    "eval_seconds": 3600,
+    "gpu_vram_fraction": 0.8,
+    "governor_margin": "recorded"
+  },
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ],
+    "official_leaderboard_comparable": false
+  },
+  "receipts": {
+    "observation": "receipts/observations/obs-20260617T000000Z-0001.json",
+    "sandbox": "receipts/sandbox/cycle-20260617T000000Z-0001.json",
+    "gpu_governor": "receipts/governor/cycle-20260617T000000Z-0001.json",
+    "replay": "state-substrate/receipts/replay/statecommit-20260617T000000Z-0001.json",
+    "rollback": "state-substrate/receipts/rollback/statecommit-20260617T000000Z-0001.json",
+    "benchmark": "receipts/benchmark/cycle-20260617T000000Z-0001.json",
+    "wheel": "receipts/wheel/cycle-20260617T000000Z-0001.json",
+    "wheel_runner": "official-wheel-runner/receipts/wheel-runner/official-abc-wheel-runner-20260618T143007Z.json",
+    "state_substrate": "state-substrate/receipts/commits/statecommit-20260617T000000Z-0001.json"
+  },
+  "hypothesis": {
+    "text": "fixture candidate should improve normalized benchmark delta",
+    "latent_branch_id": "latent-20260617T000000Z-0001"
+  },
+  "evidence": {
+    "sandbox": {
+      "path": "receipts/sandbox/cycle-20260617T000000Z-0001.json",
+      "verdict": "pass",
+      "mode": "windows-native-production-candidate-runner"
+    },
+    "verifier": {
+      "path": "receipts/verifier/cycle-20260617T000000Z-0001.json",
+      "result": "pass"
+    },
+    "governor": {
+      "path": "receipts/governor/cycle-20260617T000000Z-0001.json",
+      "mode": "governed-gpu-train-eval",
+      "checkpoint_hash": "sha256:ebb13cf72836d14ceae8287b68c3a53715853fa984684eb64c8d7da41278a1f5",
+      "artifact_kind": "checkpoint",
+      "gpu_preflight_called": true,
+      "real_gpu_training": true
+    },
+    "benchmark": {
+      "path": "receipts/benchmark/cycle-20260617T000000Z-0001.json",
+      "mode": "official-abc-wheel-runner-arm-c",
+      "fixture_only": false,
+      "real_mle_tasks_executed": false,
+      "verdict": "BLOCKED"
+    },
+    "replay": {
+      "path": "state-substrate/receipts/replay/statecommit-20260617T000000Z-0001.json",
+      "deterministic": true,
+      "commit_id": "statecommit-20260617T000000Z-0001"
+    },
+    "rollback": {
+      "path": "state-substrate/receipts/rollback/statecommit-20260617T000000Z-0001.json",
+      "restored": true,
+      "commit_id": "statecommit-20260617T000000Z-0001"
+    },
+    "wheel": {
+      "path": "receipts/wheel/cycle-20260617T000000Z-0001.json",
+      "fixture_only": false,
+      "real_mle_tasks_executed": false,
+      "equal_budget": true,
+      "ordering": "not-C>B>A",
+      "growth_allowed": false,
+      "blocked_reason": "benchmark_receipts_not_real",
+      "blocked_arms": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "wheel_runner": {
+      "path": "official-wheel-runner/receipts/wheel-runner/official-abc-wheel-runner-20260618T143007Z.json",
+      "verdict": "BLOCKED",
+      "wheel_receipt_path": "official-wheel-runner/wheel/receipts/wheel/wheel-real-20260618T143007Z.json",
+      "real_mle_tasks_executed": false,
+      "blocked_reason": "benchmark_receipts_not_real"
+    },
+    "state_substrate": {
+      "path": "state-substrate/receipts/commits/statecommit-20260617T000000Z-0001.json",
+      "local_inspectable": true,
+      "promotion": "accepted",
+      "gc_eligible": false,
+      "replayable_from_commit": true,
+      "rollback_restored": true
+    }
+  },
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "accepted"
+}

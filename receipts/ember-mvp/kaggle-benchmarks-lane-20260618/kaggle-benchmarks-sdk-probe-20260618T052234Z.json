@@ -1,0 +1,23 @@
+{
+  "ticket": "EMBER-KAGGLE-BENCHMARKS-SDK-PROBE",
+  "ts": "20260618T052234Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "lane": "kaggle_benchmarks",
+  "sdk_root": "<local-path>",
+  "sdk_source_present": true,
+  "requires_python": ">=3.11",
+  "python_version": "3.11.13",
+  "python_runtime_ready": true,
+  "kaggle_benchmarks_importable": true,
+  "docs_claim_task_run_files": true,
+  "docs_claim_dataset_evaluation": true,
+  "task_run_file_execution_ready": true,
+  "blocked_reason": null,
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "READY_TO_RUN_PROBE_TASK"
+}

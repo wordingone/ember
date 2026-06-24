@@ -1,0 +1,50 @@
+{
+  "ticket": "P-GATE",
+  "issue": "#114",
+  "scope": "cross-session-boundary-persistence-pair",
+  "ts": "20260611T081608Z",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "mode": "assemble-verify",
+  "pre_receipt": "receipts\\p-gate-114-pre-assembled-20260611T064723Z.json",
+  "post_receipt": "receipts\\p-gate-114-post-assembled-20260611T064723Z.json",
+  "arm_name": "adapter",
+  "pre_gain": {
+    "gain_value": 0.0523,
+    "exact_ci_lo": 0.0058,
+    "exact_ci_hi": 0.1047
+  },
+  "post_gain": {
+    "gain_value": 0.0523,
+    "exact_ci_lo": 0.0058,
+    "exact_ci_hi": 0.1047
+  },
+  "continuity_stamps": {
+    "pre": {
+      "ledger_sha256": "6328ff74992b839539d50aa773652f7267dba3ac586b07e4d9691603a1cac3fa",
+      "adapter_sha256": "57a2897b50c2a97dae4efb4fb2948cea0d352ea79ab3b87512894d7e659dbd59",
+      "daemon_pid": 11889
+    },
+    "post": {
+      "ledger_sha256": "6328ff74992b839539d50aa773652f7267dba3ac586b07e4d9691603a1cac3fa",
+      "adapter_sha256": "57a2897b50c2a97dae4efb4fb2948cea0d352ea79ab3b87512894d7e659dbd59",
+      "daemon_pid": 20401
+    }
+  },
+  "continuity_checks": {
+    "ledger_sha256_unchanged": true,
+    "adapter_sha256_unchanged": true,
+    "pids_differ": true,
+    "post_gain_in_pre_ci": true
+  },
+  "verdict_components": {
+    "post_gain_value": 0.0523,
+    "pre_gain_ci_lo": 0.0058,
+    "pre_gain_ci_hi": 0.1047,
+    "ledger_unchanged": true,
+    "adapter_unchanged": true,
+    "pids_differ": true
+  },
+  "failure_reasons": [],
+  "verdict": "PASS",
+  "pass": true
+}

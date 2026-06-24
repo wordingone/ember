@@ -1,0 +1,70 @@
+name: freshness-monitor
+
+# The "never stale" ring. Runs daily and FAILS (red run = alarm) when the repo
+# drifts back toward the conditions this consolidation removed: a stale trunk,
+# branch sprawl, or stranded issues/PRs. A failing scheduled run is the signal
+# that an owner must act.
+
+on:
+  schedule:
+    - cron: '17 13 * * *'   # daily, off the :00 mark
+  workflow_dispatch: {}
+
+env:
+  MAX_TRUNK_AGE_DAYS: '4'    # master must move at least this often
+  MAX_BRANCHES: '25'         # steady-state active-branch ceiling
+  MAX_ITEM_AGE_DAYS: '10'    # an open issue/PR older than this with no update is stale
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check freshness
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          FAIL=0
+          now=$(date +%s)
+
+          # 1. trunk freshness
+          last=$(git log -1 --format=%ct origin/master)
+          age=$(( (now - last) / 86400 ))
+          if [ "$age" -gt "${MAX_TRUNK_AGE_DAYS}" ]; then
+            echo "FAIL [trunk] master last moved ${age}d ago (> ${MAX_TRUNK_AGE_DAYS}d) — work is not integrating to the canonical branch"
+            FAIL=1
+          else
+            echo "ok   [trunk] master moved ${age}d ago"
+          fi
+
+          # 2. branch sprawl
+          n=$(git branch -r | grep -vE 'HEAD' | wc -l | tr -d ' ')
+          if [ "$n" -gt "${MAX_BRANCHES}" ]; then
+            echo "FAIL [branches] ${n} remote branches (> ${MAX_BRANCHES}) — prune merged/dead branches"
+            FAIL=1
+          else
+            echo "ok   [branches] ${n} remote branches"
+          fi
+
+          # 3. stale open issues / PRs (no update within the window)
+          cutoff=$(date -u -d "-${MAX_ITEM_AGE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
+          stale_pr=$(gh pr list --state open --json number,updatedAt \
+            --jq "[.[] | select(.updatedAt < \"$cutoff\")] | length")
+          stale_is=$(gh issue list --state open --json number,updatedAt \
+            --jq "[.[] | select(.updatedAt < \"$cutoff\")] | length")
+          if [ "${stale_pr:-0}" -gt 0 ] || [ "${stale_is:-0}" -gt 0 ]; then
+            echo "FAIL [tracker] ${stale_pr} stale PRs + ${stale_is} stale issues (no update in ${MAX_ITEM_AGE_DAYS}d)"
+            gh pr list --state open --json number,title,updatedAt \
+              --jq ".[] | select(.updatedAt < \"$cutoff\") | \"  PR #\(.number) \(.updatedAt[:10]) \(.title)\""
+            gh issue list --state open --json number,title,updatedAt \
+              --jq ".[] | select(.updatedAt < \"$cutoff\") | \"  issue #\(.number) \(.updatedAt[:10]) \(.title)\""
+            FAIL=1
+          else
+            echo "ok   [tracker] no stale open issues/PRs"
+          fi
+
+          echo
+          if [ "$FAIL" -eq 0 ]; then echo "freshness-monitor: PASS"; else echo "freshness-monitor: FAIL"; exit 1; fi

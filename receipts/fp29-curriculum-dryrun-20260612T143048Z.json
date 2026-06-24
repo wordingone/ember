@@ -1,0 +1,16 @@
+{
+  "ticket": "FP29-CURRICULUM-GENERATOR-DRY-RUN",
+  "ts": "20260612T143048Z",
+  "generator_seed": 23,
+  "n_episodes_l1": 72,
+  "n_episodes_l2": 48,
+  "n_episodes_total": 120,
+  "episodes_manifest_sha256": "25a51c14ef6a1a8ff97e4fa428625ccbd0780fb3e921957c563d6b2f21b45bde",
+  "bucket_range_assert": true,
+  "ops_in_grammar_assert": true,
+  "probe_buckets_untouched_assert": true,
+  "window": "DRY-RUN",
+  "note": "conformance dry-run: generator machinery proven shape-conformant before the 2B->4B retry window. The REAL synthesis receipt (ticket CURRICULUM-SYNTHESIS-2B4B, window 2B->4B) is emitted by the continued-pretrain eng harness at run time.",
+  "sha_convention": "episodes_manifest_sha256: sha256 of UTF-8 JSON of the manifest list (sort_keys=True, separators=(',',':')); file shas: sha256 over raw bytes, no normalization",
+  "no_gpu": true
+}

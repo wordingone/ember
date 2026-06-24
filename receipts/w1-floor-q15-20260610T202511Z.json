@@ -1,0 +1,30 @@
+{
+  "ticket": "W1-FLOOR",
+  "ts": "20260610T202511Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "adapter": null,
+    "split": "train",
+    "n_tasks": 0,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 14,
+    "tag": "q15"
+  },
+  "n_tasks": 120,
+  "k": 8,
+  "feed_tasks": 96,
+  "feed_pct": 80.0,
+  "feed_ci95": [
+    72.5,
+    86.67
+  ],
+  "verified_samples": 518,
+  "verified_sample_pct": 53.96,
+  "extraction_fail": 1,
+  "gen_secs": 363.9,
+  "samples_file": "w1-floor-q15-20260610T202511Z-samples.jsonl",
+  "split_discipline": "train=world pool, validation=heldout, test=t5-harm-only"
+}

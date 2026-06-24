@@ -1,0 +1,102 @@
+{
+  "ticket": "NC0-T1",
+  "mode": "selftest",
+  "ts": "20260609T223350Z",
+  "args": {
+    "mode": "selftest",
+    "model": "unsloth/Qwen2.5-Coder-7B-Instruct-bnb-4bit",
+    "n_tasks": 30,
+    "k": 8,
+    "batch_size": 16,
+    "max_new": 768,
+    "temp": 0.8,
+    "seed": 14
+  },
+  "selftest_ok": false,
+  "cases": [
+    {
+      "case": "identity-correct",
+      "ok": true,
+      "got": {
+        "compiled": true,
+        "train_pass": 1,
+        "train_total": 1,
+        "verified": true,
+        "solved": true,
+        "error": null
+      }
+    },
+    {
+      "case": "transpose-correct",
+      "ok": false,
+      "got": {
+        "compiled": false,
+        "train_pass": 0,
+        "train_total": 1,
+        "verified": false,
+        "solved": false,
+        "error": "pool-timeout"
+      }
+    },
+    {
+      "case": "transpose-wrong",
+      "ok": true,
+      "got": {
+        "compiled": true,
+        "train_pass": 0,
+        "train_total": 1,
+        "verified": false,
+        "solved": false,
+        "error": null
+      }
+    },
+    {
+      "case": "infinite-loop",
+      "ok": true,
+      "got": {
+        "compiled": true,
+        "train_pass": 0,
+        "train_total": 1,
+        "verified": false,
+        "solved": false,
+        "error": "timeout"
+      }
+    },
+    {
+      "case": "memory-bomb",
+      "ok": true,
+      "got": {
+        "compiled": true,
+        "train_pass": 0,
+        "train_total": 1,
+        "verified": false,
+        "solved": false,
+        "error": "memory"
+      }
+    },
+    {
+      "case": "malformed",
+      "ok": true,
+      "got": {
+        "compiled": false,
+        "train_pass": 0,
+        "train_total": 1,
+        "verified": false,
+        "solved": false,
+        "error": "SyntaxError: expected ':' (<string>, line 1)"
+      }
+    },
+    {
+      "case": "bad-import",
+      "ok": true,
+      "got": {
+        "compiled": false,
+        "train_pass": 0,
+        "train_total": 1,
+        "verified": false,
+        "solved": false,
+        "error": "ImportError: import of 'socket' not allowed"
+      }
+    }
+  ]
+}

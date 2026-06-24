@@ -1,0 +1,731 @@
+"""v0_pretrain_launch_gate.py — fail-closed dispatch gate for the owned-core
+v0 pretrain (NC2-own, c03 shape: 0.368B QAT, seq 1024, w1-governed 4090).
+
+This shim embeds docs/research/v0-launch-gate.md as named, receipt-checkable
+assertions. The v0 trainer (#167 — scripts/timeshare_pretrain.py extended
+against config/v0-pretrain-config.json) is dispatched THROUGH this gate:
+it loads each named receipt, receipt_checks it, verifies the pins, and
+REFUSES with the failing G-row(s) named. No row is waivable except by the
+user, by name. Same fail-closed grammar as fp25_surfaceb select mode.
+
+Today's live state (recorded in the emitted receipt, not asserted here so
+the selftest stays time-robust): G-prereg is GREEN (eng-48/#181 wired the
+fp26 premise check). The blocking row is now G-shards (eng-49/#183): the
+packed uint16 shards that ARE the live-training input have not been produced
+(production HELD pending the shard-production call), so --live is correctly
+refused. The other six rows are GREEN.
+"""
+import argparse
+import copy
+import datetime
+import glob
+import hashlib
+import json
+import os
+import sys
+
+NC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(NC, "scripts"))
+from receipt_check import validate_receipt          # noqa: E402
+import v0_config_check                              # noqa: E402
+import fp26_prereg                                  # noqa: E402
+import token_shards_v0                              # noqa: E402
+
+# ---- binding pins (changing any of these is a contract change) -----------
+ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
+ASSEMBLY_SHA = ("a29d2e567f1853966cc72a4890eadc963164265e"
+                "4f24a89cadea24d9ff5b80c2")
+TOKENIZER_RECEIPT = "tokenizer-freeze-20260611T154111Z.json"
+CONFIG = f"{NC}/config/v0-pretrain-config.json"
+DEADLINE = datetime.date(2026, 6, 22)
+# fp19-bench receipted-unstacked days-to-compute-optimal for the c03-qat core
+ENVELOPE_DAYS_FLOOR = 4.55
+WORLD_SPECS = ["docs/research/fp22-corpus-world.md", "docs/research/world-choice-r2.md"]
+RESERVED_BAND_N = 8           # NC2 v0 LOCK #1 (ids 0-7)
+HARD_BAR_BYTES = 100 * 10**9  # corpus <100GB hard bar
+FP26_PREREG_GLOB = "receipts/fp26-prereg-*.json"
+TOKEN_SHARDS_GLOB = "receipts/token-shards-v0-*.json"
+SHA_CONVENTION = ("sha256 over the exact on-disk file bytes, no "
+                  "normalization; receipt paths carry the git -text pin")
+
+
+# ---- helpers -------------------------------------------------------------
+def _sha(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def _receipt_clean(name):
+    """(True, dict) if the receipt exists and passes receipt_check;
+    (False, reason) otherwise. Fail-closed on every error path."""
+    p = f"{NC}/receipts/{name}"
+    if not os.path.exists(p):
+        return False, f"{name} not on disk"
+    try:
+        d = json.load(open(p, encoding="utf-8"))
+    except Exception as e:
+        return False, f"{name} unreadable: {e}"
+    findings = validate_receipt(d)
+    if findings:
+        return False, f"{name} receipt_check FAIL: {findings}"
+    return True, d
+
+
+def _receipt_clean_path(path):
+    """(True, dict) for an explicit receipt path that passes receipt_check."""
+    if not path or not os.path.exists(path):
+        return False, f"{path} not on disk"
+    name = os.path.basename(path)
+    try:
+        d = json.load(open(path, encoding="utf-8"))
+    except Exception as e:
+        return False, f"{name} unreadable: {e}"
+    findings = validate_receipt(d)
+    if findings:
+        return False, f"{name} receipt_check FAIL: {findings}"
+    return True, d
+
+
+# ---- G-rows (each returns (status, detail); status in GREEN|BLOCKED) ------
+def g_corpus():
+    ok, d = _receipt_clean(ASSEMBLY_RECEIPT)
+    if not ok:
+        return "BLOCKED", d
+    s = _sha(f"{NC}/receipts/{ASSEMBLY_RECEIPT}")
+    if s != ASSEMBLY_SHA:
+        return "BLOCKED", f"assembly sha {s[:12]} != pin {ASSEMBLY_SHA[:12]}"
+    kept = d.get("totals", {}).get("text_bytes_kept")
+    if kept is None:
+        return "BLOCKED", "totals.text_bytes_kept missing"
+    if kept >= HARD_BAR_BYTES:
+        return "BLOCKED", f"text_bytes_kept {kept} >= 100GB hard bar"
+    return "GREEN", f"sha pin match; {kept / 1e9:.2f} GB < 100 GB"
+
+
+def g_tokenizer():
+    ok, d = _receipt_clean(TOKENIZER_RECEIPT)
+    if not ok:
+        return "BLOCKED", d
+    if d.get("assembly_receipt_sha256") != ASSEMBLY_SHA:
+        return "BLOCKED", "tokenizer receipt does not pin the assembly sha"
+    if d.get("tokens_pending_tokenizer_freeze") is not False:
+        return "BLOCKED", "tokens_pending_tokenizer_freeze != false"
+    tot = (d.get("real_token_counts") or {}).get("total")
+    if not tot:
+        return "BLOCKED", "real_token_counts.total missing/zero"
+    band = d.get("reserved_band") or {}
+    if len(band) != RESERVED_BAND_N:
+        return "BLOCKED", f"reserved band {len(band)} ids != {RESERVED_BAND_N}"
+    if d.get("vocab_size") != 32000:
+        return "BLOCKED", f"vocab_size {d.get('vocab_size')} != 32000"
+    return "GREEN", f"pin match; {tot:,} real tokens; band {RESERVED_BAND_N} ids"
+
+
+def g_shards():
+    # eng-49 (#183): the packed uint16 shards ARE the live-training input. The
+    # gate previously had no row for them, so all-7-green printed "dispatch
+    # permitted" with zero .bin on disk (fail-open w.r.t. the training input,
+    # same class as eng-46/eng-48). A TOKEN-SHARDS-V0 receipt whose declared
+    # shards are present + byte-matched is REQUIRED before --live. No receipt
+    # -> BLOCKED (shards not produced; production is HELD pending the
+    # shard-production call). token_shards_v0.validate_shards_receipt is
+    # fail-closed and re-derives counts from the bytes.
+    cands = sorted(glob.glob(f"{NC}/{TOKEN_SHARDS_GLOB}"))
+    if not cands:
+        return "BLOCKED", ("no token-shards-v0-*.json receipt — packed shards "
+                           "not produced; --live has no training input "
+                           "(production HELD pending the shard-production call)")
+    name = os.path.basename(cands[-1])
+    ok, d = _receipt_clean(name)
+    if not ok:
+        return "BLOCKED", d
+    viol = token_shards_v0.validate_shards_receipt(d, NC)
+    if viol:
+        return "BLOCKED", f"{name} shard contract FAIL: {viol}"
+    return "GREEN", f"{name} shards present + byte-matched; --live input ready"
+
+
+def g_shards_mm(
+    mm_manifest_path=None,
+    mm_tokenizer_path=None,
+    mm_holdout_size=None,
+    mm_holdout_manifest_path=None,
+):
+    """Multimodal-aware replacement for g_shards on the CC3M streaming path.
+
+    G-shards-mm requires ALL 5 (the lead seat, 16709):
+    1. Streaming manifest readable + nonempty
+    2. Exclusion blocklist enforced (n_training>0, holdout_n==requested)
+    3. Held-out manifest frozen: url + sha256 + caption
+    4. Matched-pair binding preserved (ER-2d invariant)
+    5. train-tokenizer == probe-tokenizer == real AND vocab==config(32008)
+    """
+    # Item 1: manifest readable + nonempty
+    if not mm_manifest_path:
+        return "BLOCKED", "G-shards-mm item 1: mm_manifest_path not provided to gate"
+    if not os.path.exists(mm_manifest_path):
+        return "BLOCKED", f"G-shards-mm item 1: manifest not found: {mm_manifest_path}"
+    try:
+        with open(mm_manifest_path, encoding="utf-8") as f:
+            first = next((l for l in f if l.strip()), None)
+        if not first:
+            return "BLOCKED", f"G-shards-mm item 1: manifest empty: {mm_manifest_path}"
+        rec = json.loads(first)
+    except Exception as e:
+        return "BLOCKED", f"G-shards-mm item 1: manifest unreadable: {e}"
+
+    # Item 4: matched-pair binding preserved. Adult CC3M streams use url+caption;
+    # Stage-1 first-words uses local image_path+caption from on-disk B-MULTI-1.
+    if "caption" not in rec or ("url" not in rec and "image_path" not in rec):
+        return "BLOCKED", (
+            "G-shards-mm item 4: manifest record missing caption and "
+            f"(url|image_path): {rec}"
+        )
+
+    # Item 3: held-out manifest frozen; count holdout_n for item 2 tightening
+    if mm_holdout_manifest_path:
+        holdout_cands = [mm_holdout_manifest_path]
+    else:
+        holdout_cands = sorted(glob.glob(f"{NC}/receipts/holdout-manifest*.jsonl"))
+    if not holdout_cands:
+        return "BLOCKED", ("G-shards-mm item 3: no holdout manifest found in receipts/; "
+                           "run with --probe-manifest-out receipts/holdout-manifest.jsonl at launch "
+                           "or pass --mm-holdout-manifest")
+    hm_path = holdout_cands[-1]
+    holdout_n = 0
+    try:
+        with open(hm_path, encoding="utf-8") as hf:
+            first_hrec = None
+            for line in hf:
+                if line.strip():
+                    if first_hrec is None:
+                        first_hrec = json.loads(line)
+                        has_source = ("url" in first_hrec) or ("image_path" in first_hrec)
+                        if not (has_source and all(k in first_hrec for k in ("sha256", "caption"))):
+                            return "BLOCKED", (f"G-shards-mm item 3: holdout manifest missing "
+                                               f"(url|image_path)/sha256/caption: {first_hrec}")
+                    holdout_n += 1
+    except Exception as e:
+        return "BLOCKED", f"G-shards-mm item 3: holdout manifest unreadable: {e}"
+
+    # Item 2 TIGHTENED: directly assert n_training>0 AND holdout_n==requested.
+    # n_training: verify manifest has >1 record (first already validated in item 1).
+    try:
+        n_training_sample = 0
+        with open(mm_manifest_path, encoding="utf-8") as f:
+            for i, line in enumerate(f):
+                if line.strip():
+                    n_training_sample += 1
+                if i >= 9:
+                    break  # sample first 10 lines only — manifest may be large
+        if n_training_sample == 0:
+            return "BLOCKED", "G-shards-mm item 2: n_training=0 (no records in manifest)"
+    except Exception as e:
+        return "BLOCKED", f"G-shards-mm item 2: cannot count training records: {e}"
+    if mm_holdout_size is not None and holdout_n != mm_holdout_size:
+        return "BLOCKED", (f"G-shards-mm item 2: holdout_n={holdout_n} != "
+                           f"requested mm_holdout_size={mm_holdout_size} "
+                           f"(--probe-holdout-size at launch)")
+    elif holdout_n == 0:
+        return "BLOCKED", "G-shards-mm item 2: holdout manifest empty (holdout_n=0)"
+
+    # Item 5 TIGHTENED: train-tok==probe-tok==real AND vocab==config(32008)
+    if not mm_tokenizer_path:
+        return "BLOCKED", ("G-shards-mm item 5: tokenizer_path not set; "
+                           "train-tok and probe-tok both default to ord(c)%vocab — "
+                           "INVALID at checkpoint-1 per prereg §4. Set --probe-tokenizer.")
+    EXPECTED_VOCAB = 32000  # tokenizer vocab_size=32000; boi/eoi at ids 1/2 (inside base vocab, no extension)
+    tok_vocab = None
+    try:
+        try:
+            from tokenizers import Tokenizer as _HFTok
+            _tok = _HFTok.from_file(mm_tokenizer_path)
+            tok_vocab = _tok.get_vocab_size()
+        except ImportError:
+            import sentencepiece as _spm
+            _sp = _spm.SentencePieceProcessor(model_file=mm_tokenizer_path)
+            tok_vocab = _sp.GetPieceSize()
+    except Exception as e:
+        return "BLOCKED", (f"G-shards-mm item 5: tokenizer at {mm_tokenizer_path} "
+                           f"unloadable — cannot verify vocab=={EXPECTED_VOCAB}: {e}")
+    if tok_vocab != EXPECTED_VOCAB:
+        return "BLOCKED", (f"G-shards-mm item 5: tokenizer vocab={tok_vocab} != "
+                           f"config {EXPECTED_VOCAB} (base vocab, boi/eoi inside at ids 1/2)")
+
+    source_kind = "url" if "url" in rec else "image_path"
+    return "GREEN", (f"G-shards-mm: manifest readable ({source_kind}, "
+                     f"n_training_sample={n_training_sample}+); "
+                     f"holdout frozen ({os.path.basename(hm_path)}, n={holdout_n}); "
+                     f"tokenizer vocab={tok_vocab}=={EXPECTED_VOCAB}")
+
+
+def g_config():
+    cfg = json.load(open(CONFIG, encoding="utf-8"))
+    v = v0_config_check.check(cfg, launch=True)
+    if v:
+        return "BLOCKED", f"v0_config_check launch violations: {v}"
+    return "GREEN", "V0_CONFIG_GREEN (launch mode)"
+
+
+def g_governor():
+    # named independently per the gate table even though g_config folds it in
+    cfg = json.load(open(CONFIG, encoding="utf-8"))
+    g = cfg.get("governor", {})
+    f = v0_config_check.GOVERNOR_FLOOR
+    if g.get("vram_fraction", 1.0) > f["vram_fraction"]:
+        return "BLOCKED", "governor.vram_fraction looser than floor 0.80"
+    if g.get("margin_gib_floor", 0) < f["margin_gib_floor"]:
+        return "BLOCKED", "governor.margin_gib_floor below 1.5"
+    if g.get("pace_s_per_step", 0) < f["pace_s_per_step"]:
+        return "BLOCKED", "governor.pace_s_per_step below 0.05"
+    return "GREEN", "floor vram<=0.80 / margin>=1.5GiB / pace>=0.05s (tighten-only)"
+
+
+def g_world():
+    missing = [w for w in WORLD_SPECS if not os.path.exists(f"{NC}/{w}")]
+    if missing:
+        return "BLOCKED", f"world spec missing: {missing}"
+    return "GREEN", f"world specs present ({len(WORLD_SPECS)})"
+
+
+def g_budget(launch_date):
+    days = (DEADLINE - launch_date).days
+    if days < ENVELOPE_DAYS_FLOOR:
+        return "BLOCKED", (f"days-remaining {days} < envelope floor "
+                           f"{ENVELOPE_DAYS_FLOOR} (fp19-bench unstacked)")
+    return "GREEN", (f"{days} d to {DEADLINE.isoformat()} >= "
+                     f"{ENVELOPE_DAYS_FLOOR} d unstacked envelope")
+
+
+def _config_sha256():
+    """Return sha256 of the live v0 pretrain config (sort_keys for stability)."""
+    with open(v0_config_check.CONFIG, encoding="utf-8") as f:
+        cfg = json.load(f)
+    return hashlib.sha256(json.dumps(cfg, sort_keys=True).encode()).hexdigest()
+
+
+def _check_efficiency_receipt(d):
+    """Pure logic: validate a parsed efficiency receipt dict against H1 schema.
+    Returns list of violation strings (empty = clean)."""
+    violations = []
+    if not d.get("licenses_config"):
+        violations.append(
+            "missing 'licenses_config' — receipt must name the arch config it "
+            "enumerates levers FOR (e.g. 'c03-qat-v0'); prevents cross-arch "
+            "stale licensing (#365)")
+    if not d.get("config_sha256"):
+        violations.append(
+            "missing 'config_sha256' — receipt must carry sha256 of the launch "
+            "config it was authored against (#365)")
+    levers = d.get("levers")
+    if not isinstance(levers, dict):
+        violations.append("'levers' field missing or not a dict")
+        return violations
+    missing = EFFICIENCY_LEVERS - levers.keys()
+    if missing:
+        violations.append(f"levers missing: {sorted(missing)}")
+    for key, entry in levers.items():
+        if not isinstance(entry, dict):
+            violations.append(f"lever '{key}': entry must be a dict")
+            continue
+        status = entry.get("status")
+        if status not in EFFICIENCY_STATUSES:
+            violations.append(
+                f"lever '{key}': invalid status {status!r} "
+                f"(must be one of {sorted(EFFICIENCY_STATUSES)})")
+            continue
+        if status in ("receipted-APPLIED", "receipted-KILLED"):
+            if not entry.get("receipt"):
+                violations.append(
+                    f"lever '{key}' status {status}: missing 'receipt' pointer")
+        elif status == "WAIVED":
+            cost = entry.get("wall_days_cost")
+            if cost is None:
+                violations.append(
+                    f"lever '{key}' WAIVED: missing 'wall_days_cost' "
+                    f"(silent waiver is gate FAIL — H1)")
+            elif not isinstance(cost, (int, float)) or cost <= 0:
+                violations.append(
+                    f"lever '{key}' WAIVED: 'wall_days_cost' must be "
+                    f"a positive number, got {cost!r}")
+    return violations
+
+
+def g_efficiency(config_path=None, efficiency_receipt_path=None):
+    # H1 (docs/hardest-problems-register-v1.md): every known throughput lever
+    # must be enumerated before any governed job >12 GPU-h dispatches.
+    # No receipt -> BLOCKED (makes the 12c050e7 silent-skip impossible).
+    # config_path: if provided, bind against this config's SHA instead of the
+    # default text pretrain config (use for multimodal launch path, GAP-3).
+    cands = [] if efficiency_receipt_path else sorted(glob.glob(f"{NC}/{EFFICIENCY_RECEIPT_GLOB}"))
+    if not cands and not efficiency_receipt_path:
+        return "BLOCKED", (
+            "no launch-efficiency-*.json receipt — throughput levers not "
+            "enumerated; any WAIVED lever must carry an explicit wall_days_cost "
+            "(H1: docs/hardest-problems-register-v1.md)")
+    name = os.path.basename(efficiency_receipt_path) if efficiency_receipt_path else os.path.basename(cands[-1])
+    ok, d = _receipt_clean_path(efficiency_receipt_path) if efficiency_receipt_path else _receipt_clean(name)
+    if not ok:
+        return "BLOCKED", d
+    violations = _check_efficiency_receipt(d)
+    if violations:
+        return "BLOCKED", f"{name} efficiency receipt FAIL: {violations}"
+    # Cross-arch binding check: receipt must have been authored for the live config.
+    receipt_sha = d.get("config_sha256", "")
+    if config_path:
+        with open(config_path, encoding="utf-8") as cf:
+            cfg_data = json.load(cf)
+        live_sha = hashlib.sha256(json.dumps(cfg_data, sort_keys=True).encode()).hexdigest()
+    else:
+        live_sha = _config_sha256()
+    if receipt_sha != live_sha:
+        return "BLOCKED", (
+            f"{name} config_sha256 mismatch — receipt licenses '{d.get('licenses_config')}' "
+            f"(sha ...{receipt_sha[-8:]}), live config sha ...{live_sha[-8:]}; "
+            "re-emit efficiency receipt against the current launch config (#365)")
+    levers = d["levers"]
+    applied = [k for k, v in levers.items() if v["status"] == "receipted-APPLIED"]
+    killed = [k for k, v in levers.items() if v["status"] == "receipted-KILLED"]
+    waived = [k for k, v in levers.items() if v["status"] == "WAIVED"]
+    return "GREEN", (f"{name}: applied={applied}, killed={killed}, "
+                     f"waived={[(k, levers[k]['wall_days_cost']) for k in waived]}")
+
+
+def g_prereg():
+    cands = sorted(glob.glob(f"{NC}/{FP26_PREREG_GLOB}"))
+    if not cands:
+        return "BLOCKED", ("no fp26-prereg-*.json receipt — round-3 prereg "
+                           "not frozen (awaits monitor MDE-wording reply, "
+                           "mail 14582 ask #2)")
+    name = os.path.basename(cands[-1])
+    ok, d = _receipt_clean(name)
+    if not ok:
+        return "BLOCKED", d
+    if not d.get("prereg_frozen"):
+        return "BLOCKED", f"{name} lacks prereg_frozen:true"
+    # eng-48 (#181): the frozen receipt existing + prereg_frozen:true is NOT
+    # sufficient — the prereg's PREMISES must still hold (decision-artifact
+    # sha, pinned premise receipts, support receipts). Without this call the
+    # row was fail-OPEN (same class as eng-46): a drifted premise passed
+    # silently. check_premises() is fail-closed; any violation blocks.
+    premise_violations = fp26_prereg.check_premises(NC)
+    if premise_violations:
+        return "BLOCKED", (f"{name} frozen but prereg premises FAIL: "
+                           f"{premise_violations}")
+    return "GREEN", f"{name} frozen; premises hold"
+
+
+EFFICIENCY_RECEIPT_GLOB = "receipts/launch-efficiency-*.json"
+# All levers that must be enumerated before any governed run >12 GPU-h.
+# Each must carry status receipted-APPLIED|receipted-KILLED (with receipt
+# pointer) or WAIVED (with explicit wall_days_cost > 0 — the price must be
+# written down before the run starts). Silent WAIVED = gate FAIL (H1).
+EFFICIENCY_LEVERS: frozenset = frozenset({
+    "batch_size",         # L2: optimal batch from step-econ sweep
+    "checkpointing_off",  # L5: grad-ckpt disabled
+    "fused_muon",         # L3: NS5 chain fused via torch.compile
+    "fp8_matmul",         # L4: fp8 weight-cache linears
+    "torch_compile",      # L6: full-step torch.compile
+    "duty_cycle",         # L7: pacing duty-cycle from live run log
+})
+EFFICIENCY_STATUSES = frozenset({
+    "receipted-APPLIED", "receipted-KILLED", "WAIVED"})
+
+ROWS = ["G-corpus", "G-tokenizer", "G-shards", "G-config", "G-governor",
+        "G-world", "G-budget", "G-prereg", "G-efficiency"]
+
+
+def gate(launch_date, multimodal_config_path=None,
+         mm_manifest_path=None, mm_tokenizer_path=None,
+         mm_holdout_size=None, mm_holdout_manifest_path=None,
+         efficiency_receipt_path=None):
+    """Returns [(row, status, detail), ...] in table order.
+
+    multimodal_config_path: if provided, G-efficiency binds against this config's SHA
+    instead of the default text pretrain config (use for multimodal launch path, GAP-3).
+    mm_manifest_path + mm_tokenizer_path: if provided alongside multimodal_config_path,
+    G-shards is replaced by G-shards-mm (items 1-5 per the lead seat 16709).
+    mm_holdout_size: if provided, item 2 asserts holdout_n==mm_holdout_size (--probe-holdout-size).
+    mm_holdout_manifest_path: if provided, item 3 validates that explicit frozen holdout manifest.
+    efficiency_receipt_path: if provided, G-efficiency validates that explicit receipt.
+    """
+    out = []
+    for name in ROWS:
+        if name == "G-corpus":
+            st, dt = g_corpus()
+        elif name == "G-tokenizer":
+            st, dt = g_tokenizer()
+        elif name == "G-shards":
+            if multimodal_config_path and (mm_manifest_path or mm_tokenizer_path):
+                st, dt = g_shards_mm(
+                    mm_manifest_path,
+                    mm_tokenizer_path,
+                    mm_holdout_size,
+                    mm_holdout_manifest_path,
+                )
+            else:
+                st, dt = g_shards()
+        elif name == "G-config":
+            st, dt = g_config()
+        elif name == "G-governor":
+            st, dt = g_governor()
+        elif name == "G-world":
+            st, dt = g_world()
+        elif name == "G-budget":
+            st, dt = g_budget(launch_date)
+        elif name == "G-prereg":
+            st, dt = g_prereg()
+        elif name == "G-efficiency":
+            st, dt = g_efficiency(
+                config_path=multimodal_config_path,
+                efficiency_receipt_path=efficiency_receipt_path,
+            )
+        out.append((name, st, dt))
+    return out
+
+
+def _utc_ts():
+    return datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y%m%dT%H%M%SZ")
+
+
+def emit(launch_date, rows, output_dir=None):
+    ts = _utc_ts()
+    blocked = [r[0] for r in rows if r[1] != "GREEN"]
+    receipt = {
+        "ticket": "V0-LAUNCH-GATE",
+        "ts": ts,
+        "launch_date": launch_date.isoformat(),
+        "deadline": DEADLINE.isoformat(),
+        "rows": {r[0]: {"status": r[1], "detail": r[2]} for r in rows},
+        "all_green": not blocked,
+        "blocked_rows": blocked,
+        "pins": {
+            "assembly_receipt": ASSEMBLY_RECEIPT,
+            "assembly_sha256": ASSEMBLY_SHA,
+            "tokenizer_receipt": TOKENIZER_RECEIPT,
+            "config": "config/v0-pretrain-config.json",
+            "envelope_days_floor": ENVELOPE_DAYS_FLOOR,
+        },
+        "dispatch_rule": ("v0 pretrain refuses unless all_green; the failing "
+                          "G-row(s) are named in blocked_rows. No row waivable "
+                          "except by the user by name."),
+        "sha_convention": SHA_CONVENTION,
+        "no_gpu": True,
+    }
+    receipt_dir = output_dir or f"{NC}/receipts"
+    os.makedirs(receipt_dir, exist_ok=True)
+    path = os.path.join(receipt_dir, f"v0-launch-gate-{ts}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(receipt, f, indent=2)
+    # checked write — the emitted receipt must itself pass receipt_check
+    reloaded = json.load(open(path, encoding="utf-8"))
+    findings = validate_receipt(reloaded)
+    if findings:
+        raise SystemExit(f"EMITTED RECEIPT FAILS receipt_check: {findings}")
+    return path
+
+
+def _print(rows):
+    for name, st, dt in rows:
+        mark = "OK " if st == "GREEN" else "XX "
+        print(f"  {mark}{name:<12} {st:<8} {dt}")
+
+
+def _selftest():
+    global NC
+    from datetime import date
+    # green-today rows (these are the frozen contract; if one breaks the
+    # contract drifted and the selftest SHOULD fail)
+    assert g_corpus()[0] == "GREEN", g_corpus()
+    assert g_tokenizer()[0] == "GREEN", g_tokenizer()
+    assert g_config()[0] == "GREEN", g_config()
+    assert g_governor()[0] == "GREEN", g_governor()
+    assert g_world()[0] == "GREEN", g_world()
+    # shards: time-robust — BLOCKED iff no token-shards-v0 receipt is on disk
+    # (eng-49 #183). Today none exists, so the row must BLOCK; this is what
+    # keeps the gate from printing "dispatch permitted" with no training input.
+    shard_cands = glob.glob(f"{NC}/{TOKEN_SHARDS_GLOB}")
+    if not shard_cands:
+        st, dt = g_shards()
+        assert st == "BLOCKED" and "not produced" in dt, (st, dt)
+    else:
+        # a receipt present is GREEN only if its declared shards are present +
+        # byte-matched; the validator is exercised in token_shards_v0 selftest.
+        assert g_shards()[0] in ("GREEN", "BLOCKED")
+    # budget: green with margin, blocks past the envelope floor
+    assert g_budget(date(2026, 6, 11))[0] == "GREEN"
+    assert g_budget(date(2026, 6, 20))[0] == "BLOCKED"   # 2 d < 4.55
+    # prereg: blocked iff no frozen receipt (time-robust)
+    cands = glob.glob(f"{NC}/{FP26_PREREG_GLOB}")
+    if not cands:
+        assert g_prereg()[0] == "BLOCKED", g_prereg()
+    else:
+        # eng-48 (#181): a frozen receipt present is GREEN only if the prereg
+        # premises hold. A drifted premise (mutated decision sha) MUST flip
+        # the row to BLOCKED — proves G-prereg is no longer fail-open.
+        assert g_prereg()[0] == "GREEN", g_prereg()
+        _good_dsha = fp26_prereg.DECISION_SHA
+        fp26_prereg.DECISION_SHA = "0" * 64
+        st, dt = g_prereg()
+        assert st == "BLOCKED" and "premises FAIL" in dt, (st, dt)
+        fp26_prereg.DECISION_SHA = _good_dsha
+        assert g_prereg()[0] == "GREEN", g_prereg()
+    # mutation: wrong assembly pin -> G-corpus blocks (fail-closed)
+    global ASSEMBLY_SHA
+    good = ASSEMBLY_SHA
+    ASSEMBLY_SHA = "0" * 64
+    assert g_corpus()[0] == "BLOCKED"
+    ASSEMBLY_SHA = good
+    assert g_corpus()[0] == "GREEN"
+    # mutation: loosened governor floor is caught (launch fail-closed)
+    cfg = json.load(open(CONFIG, encoding="utf-8"))
+    bad = copy.deepcopy(cfg)
+    bad["governor"]["vram_fraction"] = 0.95
+    assert v0_config_check.check(bad) != []
+    # g_efficiency pure-logic tests (H1 — docs/hardest-problems-register-v1.md)
+    _all_levers_applied = {k: {"status": "receipted-APPLIED", "receipt": "x.json"}
+                           for k in EFFICIENCY_LEVERS}
+    _bound = {"licenses_config": "c03-qat-v0", "config_sha256": "a" * 64,
+              "levers": _all_levers_applied}
+    # PASS: all levers applied with config binding
+    assert _check_efficiency_receipt(_bound) == [], _check_efficiency_receipt(_bound)
+    # PASS: waiver with explicit price (the 12c050e7 corrected case)
+    waived_with_price = copy.deepcopy(_all_levers_applied)
+    waived_with_price["batch_size"] = {"status": "WAIVED", "wall_days_cost": 1.157}
+    assert _check_efficiency_receipt({**_bound, "levers": waived_with_price}) == [], \
+        _check_efficiency_receipt({**_bound, "levers": waived_with_price})
+    # FAIL: 12c050e7 negative — WAIVED without wall_days_cost (silent skip)
+    silent_waiver = copy.deepcopy(_all_levers_applied)
+    silent_waiver["batch_size"] = {"status": "WAIVED"}
+    v = _check_efficiency_receipt({**_bound, "levers": silent_waiver})
+    assert any("wall_days_cost" in msg and "H1" in msg for msg in v), v
+    # FAIL: lever absent from enumeration
+    incomplete = {k: val for k, val in _all_levers_applied.items()
+                  if k != "duty_cycle"}
+    v2 = _check_efficiency_receipt({**_bound, "levers": incomplete})
+    assert any("duty_cycle" in msg for msg in v2), v2
+    # FAIL: receipted-APPLIED missing receipt pointer
+    no_ptr = copy.deepcopy(_all_levers_applied)
+    no_ptr["batch_size"] = {"status": "receipted-APPLIED"}
+    v3 = _check_efficiency_receipt({**_bound, "levers": no_ptr})
+    assert any("batch_size" in msg and "receipt" in msg for msg in v3), v3
+    # FAIL: invalid status
+    bad_status = copy.deepcopy(_all_levers_applied)
+    bad_status["batch_size"] = {"status": "IGNORED"}
+    v4 = _check_efficiency_receipt({**_bound, "levers": bad_status})
+    assert any("invalid status" in msg for msg in v4), v4
+    # FAIL: missing licenses_config
+    no_lic = {"levers": _all_levers_applied}
+    v5 = _check_efficiency_receipt(no_lic)
+    assert any("licenses_config" in msg for msg in v5), v5
+    # FAIL: missing config_sha256
+    no_sha = {"licenses_config": "c03-qat-v0", "levers": _all_levers_applied}
+    v6 = _check_efficiency_receipt(no_sha)
+    assert any("config_sha256" in msg for msg in v6), v6
+    # PASS: both fields present (pure schema check — sha value not validated here)
+    both = {"licenses_config": "c03-qat-v0", "config_sha256": "a" * 64,
+            "levers": _all_levers_applied}
+    assert _check_efficiency_receipt(both) == [], _check_efficiency_receipt(both)
+    # g_efficiency() live config-bind: BLOCKED on sha mismatch (today-case fixture)
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        fake_receipts = os.path.join(td, "receipts")
+        os.makedirs(fake_receipts)
+        mismatched = {"ticket": "V0-LAUNCH-EFFICIENCY",
+                      "ts": "20260612T220622Z",
+                      "sha_convention": "bytes on disk as-is",
+                      "licenses_config": "c03-qat-v0",
+                      "config_sha256": "0" * 64,  # wrong sha — today-case
+                      "levers": _all_levers_applied}
+        p = os.path.join(fake_receipts, "launch-efficiency-20260612T220622Z.json")
+        with open(p, "w") as f:
+            json.dump(mismatched, f)
+        # patch NC directly; self-import under __main__ would load a second copy
+        # and patching it would not affect the globals that g_efficiency() reads
+        old_nc = NC
+        NC = td
+        try:
+            st_m, dt_m = g_efficiency()
+            assert st_m == "BLOCKED" and "config_sha256 mismatch" in dt_m, (st_m, dt_m)
+        finally:
+            NC = old_nc
+    # g_efficiency() time-robust: BLOCKED iff no receipt on disk
+    eff_cands = glob.glob(f"{NC}/{EFFICIENCY_RECEIPT_GLOB}")
+    if not eff_cands:
+        st, dt = g_efficiency()
+        assert st == "BLOCKED" and "levers not enumerated" in dt, (st, dt)
+    else:
+        assert g_efficiency()[0] in ("GREEN", "BLOCKED")
+    # gate composition returns all rows (now 9 rows)
+    rows = gate(date(2026, 6, 11))
+    assert [r[0] for r in rows] == ROWS
+    # G-shards-mm accepts local Stage-1 image_path manifests and explicit holdout paths.
+    with tempfile.TemporaryDirectory() as td:
+        train = os.path.join(td, "train.jsonl")
+        holdout = os.path.join(td, "holdout.jsonl")
+        with open(train, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"image_path": os.path.join(td, "car.jpg"), "caption": "car"}) + "\n")
+            f.write(json.dumps({"image_path": os.path.join(td, "dog.jpg"), "caption": "dog"}) + "\n")
+        with open(holdout, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"image_path": os.path.join(td, "tree.jpg"), "sha256": "a" * 64, "caption": "tree"}) + "\n")
+        st_local, dt_local = g_shards_mm(train, None, 1, holdout)
+        assert st_local == "BLOCKED" and "item 5" in dt_local, (st_local, dt_local)
+    print("V0_LAUNCH_GATE_SELFTEST_PASS")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--emit", action="store_true",
+                    help="write the dated launch-gate receipt")
+    ap.add_argument("--emit-dir", default=None,
+                    help="directory for --emit receipt; default = this worktree's receipts/")
+    ap.add_argument("--launch-date", default=None,
+                    help="YYYY-MM-DD; default = today (system date)")
+    ap.add_argument("--multimodal-config", default=None,
+                    help="multimodal config path; enables G-shards-mm when paired with --mm-manifest or --mm-tokenizer")
+    ap.add_argument("--mm-manifest", default=None,
+                    help="matched-pair multimodal training manifest path")
+    ap.add_argument("--mm-tokenizer", default=None,
+                    help="tokenizer used by train and probe")
+    ap.add_argument("--mm-holdout-size", type=int, default=None,
+                    help="expected frozen holdout manifest row count")
+    ap.add_argument("--mm-holdout-manifest", default=None,
+                    help="explicit frozen holdout manifest path")
+    ap.add_argument("--efficiency-receipt", default=None,
+                    help="explicit launch-efficiency receipt path")
+    a = ap.parse_args()
+    if a.selftest:
+        _selftest()
+        return
+    if a.launch_date:
+        ld = datetime.date.fromisoformat(a.launch_date)
+    else:
+        ld = datetime.date.today()
+    rows = gate(
+        ld,
+        multimodal_config_path=a.multimodal_config,
+        mm_manifest_path=a.mm_manifest,
+        mm_tokenizer_path=a.mm_tokenizer,
+        mm_holdout_size=a.mm_holdout_size,
+        mm_holdout_manifest_path=a.mm_holdout_manifest,
+        efficiency_receipt_path=a.efficiency_receipt,
+    )
+    _print(rows)
+    blocked = [r[0] for r in rows if r[1] != "GREEN"]
+    if a.emit:
+        path = emit(ld, rows, output_dir=a.emit_dir)
+        try:
+            rel = os.path.relpath(path, NC)
+        except ValueError:
+            rel = path
+        print(f"receipt: {rel}")
+    if blocked:
+        print(f"LAUNCH REFUSED — blocked rows: {', '.join(blocked)}")
+        raise SystemExit(1)
+    print("V0_LAUNCH_GATE_GREEN — dispatch permitted")
+
+
+if __name__ == "__main__":
+    main()

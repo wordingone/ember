@@ -1,0 +1,38 @@
+{
+  "ticket": "FP7-REVALUE",
+  "ts": "20260610T233935Z",
+  "sampler": "w1-floor-q15-20260610T202511Z-samples.jsonl",
+  "consolidator_posterior": "w1-floor-q3-20260610T203401Z-samples.jsonl",
+  "method": "fp1-stratified-laplace, posterior swapped sampler->consolidator; ext-FPR uncorrected (flagged, same as fp1)",
+  "gen_min_1p5B": 6.06,
+  "analysis": {
+    "tasks_with_small_episodes": 96,
+    "sampler_valued_bits": 244.3,
+    "consolidator_valued_bits": 212.0,
+    "by_small_stratum": {
+      "easy": {
+        "sampler": 53.6,
+        "consolidator": 70.0
+      },
+      "mid": {
+        "sampler": 131.6,
+        "consolidator": 109.3
+      },
+      "frontier": {
+        "sampler": 59.1,
+        "consolidator": 32.7
+      }
+    },
+    "shift_bits": {
+      "upvalued": 60.9,
+      "downvalued": -93.3,
+      "unchanged": 0.0
+    }
+  },
+  "sampler_valued_per_min": 40.3,
+  "consolidator_valued_per_min": 35.0,
+  "self_consistent_3B_per_min": 32.7,
+  "ratio_revalued_over_3B": 1.07,
+  "cheap_sampler_advantage_survives_revaluation": true,
+  "fp1_ratio_sampler_valued": 1.23
+}

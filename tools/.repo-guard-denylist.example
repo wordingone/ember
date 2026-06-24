@@ -1,0 +1,6 @@
+# Template for tools/.repo-guard-denylist (the real file is git-ignored).
+# List one operator/personal name per line; lines are matched case-insensitively
+# with word boundaries against all tracked text. In CI, supply the same list via
+# the REPO_GUARD_NAMES secret (pipe-separated) instead of this file.
+# example-name-1
+# example-name-2

@@ -1,0 +1,189 @@
+{
+  "ticket": "EMBER-TINY-BITNET-COMPARISON",
+  "ts": "20260622T144836Z",
+  "sha_convention": "bytes/tensors as-is; tensor hash includes name, shape, dtype, and CPU contiguous bytes",
+  "verdict": "BITNET_COMPARISON_PASS",
+  "post_resident_gate_required": true,
+  "resident_gate_receipt_status": "PASS",
+  "resident_gate_receipt_path": "receipts\\ember-resident-training-gate\\resident-training-gate-20260622T145000Z-full-parity-reconciled.json",
+  "resident_gate_receipt_sha256": "8d7f19ff486c154734d9592c89a91921417b0e7aea726a2d8f25ee8ced105fae",
+  "task_source": {
+    "benchmark_id": "D3-Gym",
+    "source_url": "https://huggingface.co/datasets/osunlp/D3-Gym",
+    "paper_url": "https://arxiv.org/abs/2604.27977",
+    "split": {
+      "dataset": "osunlp/D3-Gym",
+      "config": "default",
+      "split": "train",
+      "offset": 0,
+      "length": 8
+    },
+    "tasks_path": "<local-path>",
+    "tasks_sha256": "77771a0964199d89d3d06b9d6aecf083112317ab071aba43c06e4b28781e1d56"
+  },
+  "same_resident_harness": "ember_train_multimodal_resident_adapter task features, verifier reward templates, frozen D3-Gym slices",
+  "fp16_baseline_identity": "tiny_fp16_resident_policy_linear_seed_20260621_same_as_post_gate_policy_shape",
+  "bitnet_model_identity": "tiny_ste_ternary_resident_policy_b1_58_seed_20260621",
+  "precision_quantization_scheme": {
+    "fp16": "torch.float16 Linear policy weights and bias",
+    "bitnet": "BitNet-style ternary forward weights {-1,0,+1} with straight-through estimator; fp16 trainable latent weights; bias fp16"
+  },
+  "fp16_trainable_parameter_count": 24,
+  "bitnet_trainable_parameter_count": 24,
+  "fp16_pre_parameter_hash": "sha256:e2f4f179946346cf196e94ee8d809d41ea3e1d871f062ba5772708ba873059cd",
+  "fp16_post_parameter_hash": "sha256:3c0261831cccd652cd76244065d671b7421b636d5d2dfebf66f8afc410f97689",
+  "bitnet_pre_parameter_hash": "sha256:a8cbf7ae85e485551a64aac3aa7c0200a5b8499f0f2be959810361033535cb48",
+  "bitnet_post_parameter_hash": "sha256:e2e5ca2aea95b147a24b92c7dc6e79d6a21c0154e011cab4f7fb66ca255bbd29",
+  "verifier_conditioned_training_command": "python scripts\\ember_tiny_bitnet_comparison.py --out-dir <out>",
+  "matched_budget_envelope": {
+    "same_train_rows": true,
+    "same_heldout_rows": true,
+    "same_transfer_rows": true,
+    "same_epochs": true,
+    "same_lr": true,
+    "same_seed": 20260621,
+    "same_verifier": "ember_resident_training_candidate.score_plan over frozen task rows"
+  },
+  "training": {
+    "fp16": {
+      "epochs": 40,
+      "lr": 0.8,
+      "initial_loss": 1.0986123085021973,
+      "final_loss": 0.004216733854264021,
+      "wall_seconds": 0.037078,
+      "process_cpu_seconds": 0.484375
+    },
+    "bitnet": {
+      "epochs": 40,
+      "lr": 0.8,
+      "initial_loss": 1.0986123085021973,
+      "final_loss": 0.0001534049806650728,
+      "wall_seconds": 0.014578,
+      "process_cpu_seconds": 0.25
+    }
+  },
+  "heldout_rows": [
+    {
+      "task_id": "task_5",
+      "source_row_idx": 4,
+      "split": "heldout",
+      "fp_template": "eval_script_recursive",
+      "score": 1.0,
+      "instruction_only_score": 0.5883,
+      "fp16_score": 1.0,
+      "bitnet_score": 1.0,
+      "bitnet_template": "eval_script_recursive"
+    },
+    {
+      "task_id": "task_6",
+      "source_row_idx": 5,
+      "split": "heldout",
+      "fp_template": "eval_script_recursive",
+      "score": 1.0,
+      "instruction_only_score": 0.3381,
+      "fp16_score": 1.0,
+      "bitnet_score": 1.0,
+      "bitnet_template": "eval_script_recursive"
+    }
+  ],
+  "transfer_rows": [
+    {
+      "task_id": "task_7",
+      "source_row_idx": 6,
+      "split": "transfer",
+      "fp_template": "eval_script_recursive",
+      "score": 1.0,
+      "instruction_only_score": 0.1,
+      "fp16_score": 1.0,
+      "bitnet_score": 1.0,
+      "bitnet_template": "eval_script_recursive"
+    },
+    {
+      "task_id": "task_8",
+      "source_row_idx": 7,
+      "split": "transfer",
+      "fp_template": "eval_script_recursive",
+      "score": 1.0,
+      "instruction_only_score": 0.1083,
+      "fp16_score": 1.0,
+      "bitnet_score": 1.0,
+      "bitnet_template": "eval_script_recursive"
+    }
+  ],
+  "quality_delta": {
+    "fp16_heldout_mean": 1.0,
+    "bitnet_heldout_mean": 1.0,
+    "bitnet_minus_fp16_heldout_mean": 0.0,
+    "fp16_transfer_mean": 1.0,
+    "bitnet_transfer_mean": 1.0,
+    "bitnet_minus_fp16_transfer_mean": 0.0
+  },
+  "footprint": {
+    "fp16_parameter_bytes": 48,
+    "bitnet_effective_parameter_bytes": 10,
+    "bitnet_effective_weight_bits": 1.58,
+    "bias_bits": 16
+  },
+  "throughput_latency": {
+    "fp16": {
+      "repeats": 512,
+      "total_seconds": 0.004753,
+      "mean_ms": 0.009284
+    },
+    "bitnet": {
+      "repeats": 512,
+      "total_seconds": 0.032372,
+      "mean_ms": 0.063227
+    }
+  },
+  "memory_cpu_measurements": {
+    "torch_cuda_available": true,
+    "cuda_max_memory_allocated_bytes": 0,
+    "python_tracemalloc_peak_bytes_during_training": 52501959,
+    "device": "cpu"
+  },
+  "deletion_revert_evidence": [
+    {
+      "task_id": "task_5",
+      "source_row_idx": 4,
+      "split": "heldout_or_transfer",
+      "bitnet_template": "eval_script_recursive",
+      "deleted_template": "instruction_only",
+      "bitnet_score": 1.0,
+      "deleted_score": 0.5883,
+      "deleted_condition": "ternary_policy_parameters_reverted_to_zero_pre_update_state"
+    },
+    {
+      "task_id": "task_6",
+      "source_row_idx": 5,
+      "split": "heldout_or_transfer",
+      "bitnet_template": "eval_script_recursive",
+      "deleted_template": "instruction_only",
+      "bitnet_score": 1.0,
+      "deleted_score": 0.3381,
+      "deleted_condition": "ternary_policy_parameters_reverted_to_zero_pre_update_state"
+    },
+    {
+      "task_id": "task_7",
+      "source_row_idx": 6,
+      "split": "heldout_or_transfer",
+      "bitnet_template": "eval_script_recursive",
+      "deleted_template": "instruction_only",
+      "bitnet_score": 1.0,
+      "deleted_score": 0.1,
+      "deleted_condition": "ternary_policy_parameters_reverted_to_zero_pre_update_state"
+    },
+    {
+      "task_id": "task_8",
+      "source_row_idx": 7,
+      "split": "heldout_or_transfer",
+      "bitnet_template": "eval_script_recursive",
+      "deleted_template": "instruction_only",
+      "bitnet_score": 1.0,
+      "deleted_score": 0.1083,
+      "deleted_condition": "ternary_policy_parameters_reverted_to_zero_pre_update_state"
+    }
+  ],
+  "missing_implementation_surface": null,
+  "next_executable_command": "python scripts\\ember_post_resident_discovery.py --after-bitnet-receipt <receipt>"
+}

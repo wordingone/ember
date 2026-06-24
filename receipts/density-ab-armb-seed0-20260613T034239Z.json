@@ -1,0 +1,55 @@
+{
+  "ticket": "DENSITY-AB-V1",
+  "ts": "20260613T034239Z",
+  "issue": 225,
+  "arm": "b",
+  "arm_label": "curated-code-only",
+  "seed": 0,
+  "code_fraction": 1.0,
+  "tokens": 99999744,
+  "training_steps": 12207,
+  "model": "c01",
+  "model_config": {
+    "hidden": 640,
+    "layers": 12,
+    "heads": 10,
+    "batch": 8
+  },
+  "cell": {
+    "cell": "arm-b-seed0",
+    "arm": "b",
+    "seed": 0,
+    "batch": 8,
+    "seq": 1024,
+    "status": "OK",
+    "tok_s_raw_50pct": 93098.1,
+    "tok_s_raw_100pct": 91908.4,
+    "probes": {
+      "50pct": {
+        "wcode_rate": 0.0,
+        "n_pass": 0,
+        "n_prompts": 400
+      },
+      "100pct": {
+        "wcode_rate": 0.0,
+        "n_pass": 0,
+        "n_prompts": 400
+      }
+    },
+    "slope": "flat",
+    "free_vram_gib_final": 14.03
+  },
+  "caveats": {
+    "code_fraction_is_proxy": "code_fraction is a PROXY for the verified-density axis \u2014 the actual verification status of shards is not re-audited in this bench.",
+    "c01_to_c03_scale_transfer": "c01\u2192c03 scale transfer is an assumption \u2014 density signal at c01 (hidden=640, 79M params) may not hold at c03 (hidden=1024, 284M params); verdict is directional, not a precision estimate at production scale."
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.6.0+cu124"
+  }
+}

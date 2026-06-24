@@ -1,0 +1,130 @@
+{
+  "ticket": "EMBER-MLE-MICRO-OFFICIAL-PREPARE-RUN",
+  "ts": "20260618T140654Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ],
+    "official_leaderboard_comparable": false
+  },
+  "fixture_only": false,
+  "real_mle_tasks_executed": false,
+  "frozen_before_execution": true,
+  "source_root": "<local-path>",
+  "data_root": "<local-path>",
+  "raw_data_ready": false,
+  "raw_audit_receipt_path": "<local-path>",
+  "raw_audit_blocking_bypassed": true,
+  "prepared_data_ready": false,
+  "blocked_reason": "official_prepare_command_failed",
+  "failed_task_id": "detecting-insults-in-social-commentary",
+  "task_results": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "command": [
+        "<local-path>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "detecting-insults-in-social-commentary",
+        "--data-dir",
+        "<local-path>",
+        "--keep-raw"
+      ],
+      "returncode": 1,
+      "output_excerpt": "[2026-06-18 07:07:00,041] [data.py:213] Downloading the dataset for `detecting-insults-in-social-commentary` to `<local-path>`...\n[2026-06-18 07:07:00,496] [utils.py:36] Authentication failed: (401)\nReason: Unauthorized\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json', 'Date': 'Thu, 18 the maintainer 2026 14:07:00 GMT', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Origin': '*', 'Set-Cookie': 'ka_sessionid=979b"
+    }
+  ],
+  "prepare_commands": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "command": [
+        "<local-path>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "detecting-insults-in-social-commentary",
+        "--data-dir",
+        "<local-path>",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path>"
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "command": [
+        "<local-path>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "random-acts-of-pizza",
+        "--data-dir",
+        "<local-path>",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path>"
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "command": [
+        "<local-path>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "spooky-author-identification",
+        "--data-dir",
+        "<local-path>",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path>"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "command": [
+        "<local-path>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "nomad2018-predict-transparent-conductors",
+        "--data-dir",
+        "<local-path>",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path>"
+    },
+    {
+      "task_id": "leaf-classification",
+      "command": [
+        "<local-path>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "leaf-classification",
+        "--data-dir",
+        "<local-path>",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path>"
+    }
+  ],
+  "prepared_preflight_receipt_path": null,
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "BLOCKED"
+}
