@@ -1,0 +1,79 @@
+{
+  "ticket": "FP38-L9-FLASH-AB",
+  "ts": "20260612T223639Z",
+  "lever": "L9",
+  "issue": 225,
+  "verdict": "ALL-SKIPPED:['SKIPPED-OOM', 'SKIPPED-OOM', 'SKIPPED-OOM']",
+  "prior_receipt": "fp32-l6-compile-ab-20260612T215844Z.json",
+  "grid_receipt": "c04-grid-20260612T220829Z.json",
+  "baseline": {
+    "anchor_cell": "b4-ckpt-eager",
+    "anchor_tok_s_paced": 18472.2,
+    "compiled_l6_cell": "b16-ckpt-compile",
+    "compiled_l6_tok_s_paced": 31377.4,
+    "grid_proj_tok_s": 40631,
+    "viable_bar_vs_anchor": 1.02
+  },
+  "cells": [
+    {
+      "batch": 39,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": true,
+      "flash_sdpa": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "cell": "b39-nockpt-flash-compile",
+      "status": "SKIPPED-OOM"
+    },
+    {
+      "batch": 33,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": true,
+      "flash_sdpa": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "cell": "b33-nockpt-flash-compile",
+      "status": "SKIPPED-OOM"
+    },
+    {
+      "batch": 26,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": true,
+      "flash_sdpa": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 8,
+      "cell": "b26-nockpt-flash-compile",
+      "status": "SKIPPED-OOM"
+    }
+  ],
+  "best_cell": null,
+  "multipliers": {
+    "vs_anchor": null,
+    "vs_l6_compiled": null,
+    "vs_grid_proj": null
+  },
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.6.0+cu124"
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "c03 shapes (hidden=1024, layers=20, heads=16, ffn=4096, seq=1024)",
+    "flash/SDPA: torch.nn.attention.sdpa_kernel flash backend",
+    "no gradient checkpointing \u2014 flash provides activation memory saving",
+    "batch ladder: (39, 33, 26) (step-down on OOM, first OK = knee)",
+    "compile: torch.compile(model) default backend (inductor)",
+    "warmup_compile=8 (inductor JIT on first steps)",
+    "governor rails HOLD \u2014 never loosened"
+  ]
+}

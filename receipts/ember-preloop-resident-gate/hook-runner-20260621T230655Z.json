@@ -1,0 +1,118 @@
+{
+  "ticket": "EMBER-AVIR-CLI-HOOK-RUNNER-GATE",
+  "ts": "20260621T230655Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "HOOK_RUNNER_GATE_PASS",
+  "classification": "clean_room_executable_hook_runner_not_static_hook_docs_or_permissive_callbacks",
+  "out_path": "receipts\\ember-preloop-resident-gate\\hook-runner-20260621T230655Z.json",
+  "process_supervision_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "5eaae460ddb5a22c7cf15c95bc6b76d81a6644817ed92d9b76336eb0a9916b40",
+    "ticket": "EMBER-AVIR-CLI-PROCESS-SUPERVISION-GATE",
+    "verdict": "PROCESS_SUPERVISION_GATE_PASS"
+  },
+  "hook_runner": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "4eb5b25d9712cc59d365eac77ad4b292e40bdda4dc0221036df73c4508f71bb8",
+    "copies_avir_code": false,
+    "event_surface": [
+      "pre_tool",
+      "post_tool"
+    ],
+    "policy_surface": [
+      "read_only",
+      "deny_mutation",
+      "forbidden_result_keys",
+      "unknown_event_fail_closed"
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "checks": {
+        "read_only_hook_allowed": true,
+        "mutation_hook_denied": true,
+        "forbidden_result_denied": true,
+        "unknown_event_fail_closed": true,
+        "lifecycle_accounted": true
+      },
+      "pre_tool_results": [
+        {
+          "hook_id": "pre_tool_read_only_audit",
+          "status": "allowed",
+          "result": {
+            "decision": "allow",
+            "observed_event": "pre_tool",
+            "observed_tool": "shell"
+          }
+        },
+        {
+          "hook_id": "pre_tool_mutation_attempt",
+          "status": "denied",
+          "reason": "mutation_denied"
+        }
+      ],
+      "post_tool_results": [
+        {
+          "hook_id": "post_tool_forbidden_result",
+          "status": "denied",
+          "reason": "forbidden_keys",
+          "forbidden_keys": [
+            "spawn_process"
+          ]
+        }
+      ],
+      "lifecycle": [
+        {
+          "event": "pre_tool",
+          "hook_id": "pre_tool_read_only_audit",
+          "status": "allowed",
+          "result": {
+            "decision": "allow",
+            "observed_event": "pre_tool",
+            "observed_tool": "shell"
+          }
+        },
+        {
+          "event": "pre_tool",
+          "hook_id": "pre_tool_mutation_attempt",
+          "status": "denied",
+          "reason": "mutation_denied"
+        },
+        {
+          "event": "post_tool",
+          "hook_id": "post_tool_forbidden_result",
+          "status": "denied",
+          "reason": "forbidden_keys",
+          "forbidden_keys": [
+            "spawn_process"
+          ]
+        },
+        {
+          "event": "pre_network_escape",
+          "status": "denied",
+          "reason": "unknown_event"
+        }
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "hook_runner_deleted_blocks_event_dispatch": true,
+    "policy_engine_deleted_blocks_read_only_enforcement": true,
+    "permission_denial_deleted_blocks_fail_closed_unknown_event": true,
+    "lifecycle_log_deleted_blocks_receipt_accounting": true,
+    "static_hook_list_insufficient": true,
+    "docs_only_policy_insufficient": true,
+    "permissive_callback_runner_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete runner/policy/lifecycle surfaces; event dispatch, read-only denial, fail-closed unknown-event handling, and receipt accounting no longer execute"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_hook_runner_receipt",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-20260621T225437Z.json --hook-runner-receipt receipts\\ember-preloop-resident-gate\\hook-runner-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

@@ -1,0 +1,89 @@
+{
+  "ticket": "FP38C-L9-EAGER",
+  "ts": "20260612T231505Z",
+  "lever": "L9",
+  "issue": 225,
+  "verdict": "L9_REVIVE_B8",
+  "arch_note": "REVIVE at B=8: flash+no-ckpt fits under 0.80 cap. c04 design: hidden/batch tuning within this constraint is viable.",
+  "prior_receipts": {
+    "fp38_l9": "fp38-l9-flash-ab-20260612T223639Z.json",
+    "fp38b_l9_compile_error": "fp38b-l9-completion-20260612T230816Z.json"
+  },
+  "baseline": {
+    "anchor_cell": "b4-ckpt-eager",
+    "anchor_tok_s_paced": 18472.2,
+    "fp38_oom_batches": [
+      39,
+      33,
+      26
+    ]
+  },
+  "cells": [
+    {
+      "cell": "b16-nockpt-flash-eager",
+      "batch": 16,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": false,
+      "flash_sdpa": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 3,
+      "status": "SKIPPED-OOM"
+    },
+    {
+      "cell": "b8-nockpt-flash-eager",
+      "batch": 8,
+      "seq": 1024,
+      "grad_checkpointing": false,
+      "compiled": false,
+      "flash_sdpa": true,
+      "variant": "qat",
+      "timed_steps": 10,
+      "warmup_reps": 3,
+      "free_vram_gib_post_warmup": 6.64,
+      "status": "OK",
+      "tok_s_paced": 27894.6,
+      "tok_s_raw": 33618.3,
+      "pacing_tax": 0.1703
+    }
+  ],
+  "best_cell": {
+    "cell": "b8-nockpt-flash-eager",
+    "batch": 8,
+    "seq": 1024,
+    "grad_checkpointing": false,
+    "compiled": false,
+    "flash_sdpa": true,
+    "variant": "qat",
+    "timed_steps": 10,
+    "warmup_reps": 3,
+    "free_vram_gib_post_warmup": 6.64,
+    "status": "OK",
+    "tok_s_paced": 27894.6,
+    "tok_s_raw": 33618.3,
+    "pacing_tax": 0.1703
+  },
+  "multiplier_vs_anchor": 1.5101,
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.6.0+cu124"
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "c03 shapes (hidden=1024, layers=20, heads=16, ffn=4096, seq=1024)",
+    "flash/SDPA: torch.backends.cuda.enable_flash_sdp(True) global",
+    "no gradient checkpointing",
+    "batch ladder: (16, 8)",
+    "eager (no compile) \u2014 compile blocked by transformers output_capturing NameError at no-ckpt",
+    "warmup_eager=3",
+    "governor rails HOLD \u2014 never loosened",
+    "PROXY CLASS: bench-path only (LlamaForCausalLM, no MTP heads) \u2014 B8 FIT provisional for production (MTP activations add memory pressure)"
+  ],
+  "receipt_class": "BENCH-PATH-PROXY",
+  "rider_required": "b8-nockpt-flash-prod \u2014 verify B8 flash fit on full production stack (LlamaModel+MTP+chunkedCE+Muon)"
+}

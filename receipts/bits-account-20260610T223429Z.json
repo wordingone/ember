@@ -1,0 +1,49 @@
+{
+  "ticket": "BITS-ACCOUNT",
+  "ts": "20260610T223429Z",
+  "ledger_mbpp_records": 956,
+  "flags_wrong_only": 187,
+  "fpr_source": "v-extended-20260610T215421Z.json",
+  "uncovered_tasks": [
+    "mbpp:625",
+    "mbpp:627",
+    "mbpp:738",
+    "mbpp:746",
+    "mbpp:747",
+    "mbpp:756",
+    "mbpp:779",
+    "mbpp:783",
+    "mbpp:802"
+  ],
+  "fpr_ci_by_stratum": {
+    "frontier": [
+      0.1657,
+      0.2708,
+      0.41
+    ],
+    "easy": [
+      0.1976,
+      0.2341,
+      0.2751
+    ],
+    "mid": [
+      0.1583,
+      0.1971,
+      0.2426
+    ]
+  },
+  "fpr_fallback_to_overall": [],
+  "estimators": {
+    "naive_total": 252.2,
+    "ext_clean_total": 209.09,
+    "fpr_corrected": {
+      "lo": 195.9,
+      "point": 196.73,
+      "hi": 197.45,
+      "uncovered_kept": 28,
+      "flagged_kept": 49,
+      "clean_kept": 217
+    }
+  },
+  "reading": "corrected.point is the working B numerator; the [lo,hi] band carries MBPP+ non-coverage uncertainty only (covered episodes are measured, not estimated)"
+}

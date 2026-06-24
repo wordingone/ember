@@ -1,0 +1,142 @@
+{
+  "ticket": "FP16-CENSUS",
+  "ts": "20260611T013228Z",
+  "mapping_source": "fp6_provenance.classify (single source)",
+  "census": {
+    "episodes": {
+      "arc-dsl-mit": {
+        "rows": 1909,
+        "exact_unique": 780,
+        "clusters_cos95": 9,
+        "cluster_sizes_top5": [
+          1884,
+          8,
+          5,
+          4,
+          4
+        ],
+        "rho_mean_pairwise_cos": 0.9076,
+        "ess": 1.1,
+        "largest_cluster_chaining_diag": {
+          "sampled_pairs": 1999,
+          "min": 0.6829,
+          "p5": 0.8112,
+          "median": 0.9212,
+          "mean": 0.9081,
+          "frac_direct_ge_threshold": 0.1406
+        }
+      },
+      "qwen-research": {
+        "rows": 956,
+        "exact_unique": 956,
+        "clusters_cos95": 592,
+        "cluster_sizes_top5": [
+          187,
+          21,
+          17,
+          15,
+          14
+        ],
+        "rho_mean_pairwise_cos": 0.5002,
+        "ess": 2.0,
+        "largest_cluster_chaining_diag": {
+          "sampled_pairs": 1991,
+          "min": 0.7203,
+          "p5": 0.8038,
+          "median": 0.8887,
+          "mean": 0.8858,
+          "frac_direct_ge_threshold": 0.0663
+        }
+      }
+    },
+    "control_pool": {
+      "arc-dsl-mit": {
+        "rows": 1909,
+        "exact_unique": 387,
+        "clusters_cos95": 6,
+        "cluster_sizes_top5": [
+          1884,
+          8,
+          6,
+          6,
+          4
+        ],
+        "rho_mean_pairwise_cos": 0.9121,
+        "ess": 1.1,
+        "largest_cluster_chaining_diag": {
+          "sampled_pairs": 1999,
+          "min": 0.6978,
+          "p5": 0.845,
+          "median": 0.9237,
+          "mean": 0.9152,
+          "frac_direct_ge_threshold": 0.1231
+        }
+      },
+      "qwen-research": {
+        "rows": 1022,
+        "exact_unique": 1022,
+        "clusters_cos95": 697,
+        "cluster_sizes_top5": [
+          151,
+          18,
+          13,
+          11,
+          11
+        ],
+        "rho_mean_pairwise_cos": 0.4916,
+        "ess": 2.0,
+        "largest_cluster_chaining_diag": {
+          "sampled_pairs": 1987,
+          "min": 0.7598,
+          "p5": 0.8172,
+          "median": 0.9095,
+          "mean": 0.9015,
+          "frac_direct_ge_threshold": 0.0755
+        }
+      }
+    }
+  },
+  "standing_claims_delta": {
+    "ledger_total": {
+      "rows": 2865,
+      "exact_unique": 1736,
+      "ess": 3.1
+    },
+    "majority_class_under": {
+      "rows": {
+        "class": "arc-dsl-mit",
+        "share": 0.6663,
+        "by_class": {
+          "arc-dsl-mit": 1909,
+          "qwen-research": 956
+        }
+      },
+      "exact_unique": {
+        "class": "qwen-research",
+        "share": 0.5507,
+        "by_class": {
+          "arc-dsl-mit": 780,
+          "qwen-research": 956
+        }
+      },
+      "ess": {
+        "class": "qwen-research",
+        "share": 0.6452,
+        "by_class": {
+          "arc-dsl-mit": 1.1,
+          "qwen-research": 2.0
+        }
+      }
+    }
+  },
+  "flipped_claims": [
+    "majority class flips under exact_unique: arc-dsl-mit -> qwen-research",
+    "majority class flips under ess: arc-dsl-mit -> qwen-research"
+  ],
+  "binding_rule": "any standing claim that flips sign or majority under dedup accounting switches its canonical quote to the dedup-aware number; corpus quotes carry rows AND effective-N from this receipt on",
+  "eng_slice_candidate": "ingest-side dedup-cluster stamp (sidecar view, files byte-unchanged) \u2014 mint as eng-25 after this receipt is gated",
+  "flags": [
+    "bits totals are NOT affected (seed rows carry zero bits \u2014 fp-13); this census corrects ROW-COUNT claims",
+    "ESS under equicorrelation is a texture-level diversity proxy, not a sample-size for any specific estimator"
+  ]
+}

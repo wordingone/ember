@@ -1,0 +1,7 @@
+{
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "dataset": "<local-path>",
+  "script": "<local-path>",
+  "output_dir": "<local-path>",
+  "hyperparams": {}
+}

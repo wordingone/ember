@@ -1,0 +1,151 @@
+{
+  "ticket": "EMBER-AVIR-CLI-ROLLBACK-REWIND-GATE",
+  "ts": "20260622T002426Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "ROLLBACK_REWIND_GATE_PASS",
+  "classification": "clean_room_rollback_rewind_not_manual_git_reset_or_prompt_only_rewind",
+  "out_path": "receipts\\ember-preloop-resident-gate\\rollback-rewind-20260622T001000Z.json",
+  "receipt_store_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "7119dcaad22fbd8e20c3d50af4594520660b778e2a5790b0715dc58e6346c4b4",
+    "ticket": "EMBER-AVIR-CLI-RECEIPT-STORE-GATE",
+    "verdict": "RECEIPT_STORE_GATE_PASS"
+  },
+  "rollback_rewind": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "30156db59c71bb9b2a38f34f98e6a8ba569ebe5f8eaebcf8ca4ea0ee77c3a71d",
+    "copies_avir_code": false,
+    "rollback_surface": [
+      "checkpoint_store",
+      "diff_engine",
+      "restore_path",
+      "checkpoint_selector",
+      "rollback_event_log"
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "checks": {
+        "checkpoint_discovery": true,
+        "diff_generation": true,
+        "restore_execution": true,
+        "checkpoint_selection": true,
+        "rollback_accounting": true,
+        "receipt_linkage_surface": true
+      },
+      "checkpoints": {
+        "c1": {
+          "checkpoint_id": "c1",
+          "path": "<local-path>",
+          "sha256": "f84aeb6a97b3c0f858061beb0d83e6146404cb9503e130ef4076502767723caf",
+          "message": "stable baseline"
+        },
+        "c2": {
+          "checkpoint_id": "c2",
+          "path": "<local-path>",
+          "sha256": "b327e903146bffcc2521031463322ed57cf8a0eecf173000569ac5c15cfe7619",
+          "message": "risky branch"
+        }
+      },
+      "diff": {
+        "from_checkpoint": "c1",
+        "relative_path": "session.md",
+        "changed": true,
+        "patch": [
+          "--- c1/session.md",
+          "+++ workspace/session.md",
+          "@@ -1,2 +1,2 @@",
+          "-step: observe",
+          "-state: stable",
+          "+step: act",
+          "+state: risky"
+        ]
+      },
+      "restore": {
+        "checkpoint_id": "c1",
+        "relative_path": "session.md",
+        "checkpoint_sha256": "f84aeb6a97b3c0f858061beb0d83e6146404cb9503e130ef4076502767723caf",
+        "restored_sha256": "2e42cf6afc91db7149bec16194ec394aa4c9edf475015275e9614ccebed752f6",
+        "matches_source": true
+      },
+      "events": [
+        {
+          "event": "workspace_write",
+          "payload": {
+            "path": "session.md",
+            "sha256": "2e42cf6afc91db7149bec16194ec394aa4c9edf475015275e9614ccebed752f6"
+          }
+        },
+        {
+          "event": "checkpoint",
+          "payload": {
+            "checkpoint_id": "c1",
+            "sha256": "f84aeb6a97b3c0f858061beb0d83e6146404cb9503e130ef4076502767723caf"
+          }
+        },
+        {
+          "event": "workspace_write",
+          "payload": {
+            "path": "session.md",
+            "sha256": "53a46edb5b3ab1f287d862f926be4dd7b2b06c101c3c1e90f713d99f1ed2507c"
+          }
+        },
+        {
+          "event": "checkpoint",
+          "payload": {
+            "checkpoint_id": "c2",
+            "sha256": "b327e903146bffcc2521031463322ed57cf8a0eecf173000569ac5c15cfe7619"
+          }
+        },
+        {
+          "event": "diff",
+          "payload": {
+            "changed": true,
+            "from_checkpoint": "c1",
+            "relative_path": "session.md"
+          }
+        },
+        {
+          "event": "select_checkpoint",
+          "payload": {
+            "checkpoint_id": "c1",
+            "message": "stable baseline",
+            "path": "<local-path>",
+            "sha256": "f84aeb6a97b3c0f858061beb0d83e6146404cb9503e130ef4076502767723caf"
+          }
+        },
+        {
+          "event": "restore",
+          "payload": {
+            "checkpoint_id": "c1",
+            "checkpoint_sha256": "f84aeb6a97b3c0f858061beb0d83e6146404cb9503e130ef4076502767723caf",
+            "matches_source": true,
+            "relative_path": "session.md",
+            "restored_sha256": "2e42cf6afc91db7149bec16194ec394aa4c9edf475015275e9614ccebed752f6"
+          }
+        }
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "rollback_store_deleted_blocks_checkpoint_discovery": true,
+    "diff_engine_deleted_blocks_diff_generation": true,
+    "restore_path_deleted_blocks_restore_execution": true,
+    "checkpoint_selector_deleted_blocks_selection": true,
+    "rollback_events_deleted_blocks_accounting": true,
+    "manual_git_reset_insufficient": true,
+    "static_docs_insufficient": true,
+    "prompt_only_rewind_claim_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete rollback checkpoint store, diff engine, restore path, checkpoint selector, or event accounting; checkpoint discovery, diff, restore, selection, or receipt-visible rollback rows stop executing"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_rollback_rewind_receipt",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-20260621T225437Z.json --hook-runner-receipt receipts\\ember-preloop-resident-gate\\hook-runner-20260621T230655Z.json --tool-dispatch-permissions-receipt receipts\\ember-preloop-resident-gate\\tool-dispatch-permissions-20260621T231900Z.json --state-persistence-receipt receipts\\ember-preloop-resident-gate\\state-persistence-20260621T232600Z.json --receipt-store-receipt receipts\\ember-preloop-resident-gate\\receipt-store-20260622T000100Z.json --rollback-rewind-receipt receipts\\ember-preloop-resident-gate\\rollback-rewind-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

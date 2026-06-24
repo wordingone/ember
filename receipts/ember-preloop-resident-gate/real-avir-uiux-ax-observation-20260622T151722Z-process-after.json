@@ -1,0 +1,47 @@
+﻿[
+    {
+        "Id":  5772,
+        "ProcessName":  "node",
+        "Path":  "<local-path>"
+    },
+    {
+        "Id":  9408,
+        "ProcessName":  "node",
+        "Path":  "<local-path>"
+    },
+    {
+        "Id":  11916,
+        "ProcessName":  "node",
+        "Path":  "<local-path>"
+    },
+    {
+        "Id":  17436,
+        "ProcessName":  "node",
+        "Path":  "<local-path>"
+    },
+    {
+        "Id":  20100,
+        "ProcessName":  "node",
+        "Path":  "<local-path>"
+    },
+    {
+        "Id":  25048,
+        "ProcessName":  "node",
+        "Path":  "<local-path> Files\\Adobe\\Adobe Creative Cloud Experience\\libs\\node.exe"
+    },
+    {
+        "Id":  31332,
+        "ProcessName":  "node",
+        "Path":  "<local-path>"
+    },
+    {
+        "Id":  26328,
+        "ProcessName":  "node_repl",
+        "Path":  "<local-path>"
+    },
+    {
+        "Id":  23000,
+        "ProcessName":  "python",
+        "Path":  "<local-path> Files\\Python310\\python.exe"
+    }
+]

@@ -1,0 +1,169 @@
+{
+  "api_spend_usd": 0,
+  "audited_evidence": {
+    "connected_cycle_audit": {
+      "aggregate_scores": null,
+      "blocked_reasons": [
+        "field_level_contribution_claim_not_proven"
+      ],
+      "path": "receipts\\ember-post-resident-discovery\\connected-cycle-field-level-audit-20260622T221500Z.json",
+      "sha256": "0e8855cd77417ea62063baa56a85a7fd1fefb73423d7c1fc7b47dd7ab550cad1",
+      "verdict": "CONNECTED_CYCLE_FIELD_LEVEL_AUDIT_BLOCKED"
+    },
+    "d3_native_link_delegate": {
+      "aggregate_scores": {
+        "A": 0.0,
+        "B": 0.0,
+        "C": 1.0,
+        "Deleted": 0.0
+      },
+      "blocked_reasons": null,
+      "path": "receipts\\ember-d3-native-loop\\native-link-task57-62-20260622T221000Z\\d3-generalized-candidate-receipt.json",
+      "sha256": "2536349bcc4b6b02a93e3ed44eb6d676224b2319e2141638fec5e4b111eab5b0",
+      "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"
+    },
+    "native_operator_external_transfer_link": {
+      "aggregate_scores": null,
+      "blocked_reasons": [],
+      "path": "receipts\\ember-post-resident-discovery\\native-operator-external-transfer-link-20260622T221000Z.json",
+      "sha256": "c82f4d8b3d34525bd6a61021b740cb9f716d93582b62f4f7e527fdd1c3ab379a",
+      "verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_PASS"
+    },
+    "pre_native_connected_cycle_audit": {
+      "aggregate_scores": null,
+      "blocked_reasons": [
+        "field_level_contribution_claim_not_proven",
+        "native_operator_to_external_transfer_link_missing"
+      ],
+      "path": "receipts\\ember-post-resident-discovery\\connected-cycle-field-level-audit-20260622T212500Z.json",
+      "sha256": "6f3fb3970b5525556d65ab7ddfbb85e33e381c978abd3a7da2a37617113d8b3c",
+      "verdict": "CONNECTED_CYCLE_FIELD_LEVEL_AUDIT_BLOCKED"
+    },
+    "scienceagentbench_stronger_transfer": {
+      "aggregate_scores": {
+        "A": 0.0,
+        "B": 0.0,
+        "C": 1.0,
+        "Deleted": 0.0
+      },
+      "blocked_reasons": [],
+      "path": "receipts\\ember-post-resident-discovery\\scienceagentbench-stronger-transfer-loop-20260622T204000Z.json",
+      "sha256": "5d214d7220c3a885d7c7dabfb3146f595ae0f94c698215f79e2d0bfb6d112644",
+      "verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS"
+    }
+  },
+  "blocked_reasons": [
+    "field_level_breakthrough_not_proven_over_named_prior"
+  ],
+  "candidate_claim": {
+    "candidate_name": "zero-cost native-operator external-transfer link with connected-cycle audit",
+    "external_disjoint_validation": [
+      "ScienceAgentBench stronger transfer C=1.0 on four disjoint deterministic rows",
+      "D3 native-link task57/task62 C=1.0 with A/B/Deleted=0.0"
+    ],
+    "primary_contribution_class": "agent self-improvement evaluation method",
+    "reusable_artifacts": [
+      "scripts/ember_connected_cycle_audit.py",
+      "scripts/ember_native_operator_external_transfer_link.py",
+      "scripts/ember_field_level_contribution_proof.py",
+      "scripts/ember_d3_generalized_candidate_exec.py"
+    ]
+  },
+  "closest_known_prior_comparison": {
+    "baseline_result": {
+      "d3_controls": {
+        "A": 0.0,
+        "B": 0.0,
+        "C": 1.0,
+        "Deleted": 0.0
+      },
+      "interpretation": "The official D3 controls prove the task-output compiler is load-bearing, but by themselves do not prove a connected native self-improvement method or field-level ML/AI contribution.",
+      "pre_native_audit_blocked_reasons": [
+        "field_level_contribution_claim_not_proven",
+        "native_operator_to_external_transfer_link_missing"
+      ]
+    },
+    "name": "pre-native connected-cycle audit plus D3-Gym equal-budget A/B/Deleted controls",
+    "receipt_paths": [
+      "receipts\\ember-post-resident-discovery\\connected-cycle-field-level-audit-20260622T212500Z.json",
+      "receipts\\ember-d3-native-loop\\native-link-task57-62-20260622T221000Z\\d3-generalized-candidate-receipt.json"
+    ],
+    "why_closest": "It is the immediately preceding Ember evidence surface: same repo, same goal, same D3-Gym official evaluator family, same equal-budget A/B/C/Deleted harness, but without the native operator selecting the blocker and preserving a linked external-transfer receipt."
+  },
+  "contribution_level_deletion_ablation": {
+    "command": [
+      "<local-path> Files\\Python310\\python.exe",
+      "scripts/ember_native_operator_external_transfer_link.py",
+      "--audit",
+      "receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-connected-audit.json",
+      "--native-goal-receipt",
+      "receipts/ember-preloop-resident-gate/native-goal-organ-20260621T195504Z.json",
+      "--resident-gate-receipt",
+      "receipts/ember-resident-training-gate/resident-training-gate-20260622T152500Z-real-avir-observed.json",
+      "--fresh-rows",
+      "receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json",
+      "--out-dir",
+      "receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-native-link",
+      "--timeout-seconds",
+      "180",
+      "--out",
+      "receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-native-link-receipt.json",
+      "--task-id",
+      "task_57",
+      "--task-id",
+      "task_62",
+      "--execute"
+    ],
+    "deleted_audit_path": "receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-connected-audit.json",
+    "deleted_audit_sha256": "3eaa0b501112a4326b000afbb6152cc34fa94a2b5e78406d1186092a9211b5da",
+    "external_delegate_deletion_sensitive": true,
+    "external_delegate_positive_delta": true,
+    "external_delegate_receipt_path": "receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-native-link\\d3-generalized-candidate-receipt.json",
+    "external_delegate_scores": {
+      "A": 0.0,
+      "B": 0.0,
+      "C": 1.0,
+      "Deleted": 0.0
+    },
+    "external_delegate_verdict": "D3_MULTI_TASK_GENERALIZATION_PASS",
+    "native_link_blocked_reasons": [
+      "native_operator_selection_not_load_bearing",
+      "native_or_resident_prerequisite_not_passed"
+    ],
+    "native_link_receipt_path": "receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-native-link-receipt.json",
+    "native_link_receipt_sha256": "868fcdc07981a4bdde0922937fc94bf03b38134fab99f717961856c3426f9c0a",
+    "native_link_verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_BLOCKED",
+    "returncode": 2,
+    "stderr_tail": "",
+    "stdout_tail": "{\n  \"blocked_reasons\": [\n    \"native_operator_selection_not_load_bearing\",\n    \"native_or_resident_prerequisite_not_passed\"\n  ],\n  \"external_transfer\": {\n    \"aggregate_scores\": {\n      \"A\": 0.0,\n      \"B\": 0.0,\n      \"C\": 1.0,\n      \"Deleted\": 0.0\n    },\n    \"deletion_sensitive\": true,\n    \"errors\": [],\n    \"positive_delta\": true,\n    \"selected_task_ids\": [\n      \"task_57\",\n      \"task_62\"\n    ],\n    \"verdict\": \"D3_MULTI_TASK_GENERALIZATION_PASS\"\n  },\n  \"receipt\": \"<local-path>\",\n  \"verdict\": \"NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_BLOCKED\"\n}\n"
+  },
+  "field_level_claim_proven": false,
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "ba9bd284dd68627f893fca11e15e9e3e0c283126c72a88a5d037c136e2bb29fa",
+  "leaderboard_dependency": false,
+  "material_difference_over_prior": {
+    "claim": "A native goal organ reads the current receipt blocker, selects a fresh disjoint external held-out action surface, delegates an equal-budget A/B/C/Deleted run, writes a linked receipt chain, and then refuses field-level overclaim until a contribution-level ablation passes.",
+    "falsifiable_predictions": [
+      "With the native-operator selection trigger present, the native-link proof receipt must pass and point to external D3 rows with C greater than A/B/Deleted.",
+      "With the native-operator selection trigger deleted while task files and runner plumbing remain, the native-link proof must block even if the low-level D3 Docker delegate can still execute.",
+      "If the same result is achievable as an unlinked task candidate or static per-task answer table, the contribution claim fails."
+    ],
+    "ml_ai_contribution_scope": "agent self-improvement evaluation method, not a new model architecture or benchmark SOTA result"
+  },
+  "next_executable_command": "If only field_level_breakthrough_not_proven_over_named_prior remains, run a stricter named-prior superiority protocol on a broader external/disjoint benchmark or produce a new reusable ML/AI method artifact whose deletion degrades that broader benchmark; otherwise fix the exact protocol gap named here and rerun this script with --run-ablation --execute.",
+  "paid_api_surface_used": false,
+  "repo": "<local-path>",
+  "required_goal_fields": {
+    "closest_known_prior_or_baseline_present": true,
+    "contribution_level_deletion_ablation_present": true,
+    "external_disjoint_validation_present": true,
+    "material_difference_defined": true,
+    "primary_contribution_class_present": true,
+    "reusable_artifact_present": true,
+    "zero_cost": true
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-FIELD-LEVEL-CONTRIBUTION-PROOF",
+  "ts": "20260622T221223Z",
+  "verdict": "FIELD_LEVEL_CONTRIBUTION_PROOF_BLOCKED"
+}

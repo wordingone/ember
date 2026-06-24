@@ -1,0 +1,147 @@
+{
+  "receipt_type": "ember_totality_board",
+  "ts": "20260624T142553Z",
+  "rows": [
+    {
+      "condition": "C-EFF",
+      "status": "RED",
+      "reason": "RED C-EFF: RESOLVED receipt ceff-RESOLVED-20260624T020000Z.json fails CHK -> no numeric MFU field present (condition R requires a measured MFU alongside throughput; sustained_tok_s alone does not satisfy R)"
+    },
+    {
+      "condition": "C-BASE",
+      "status": "GREEN",
+      "reason": "GREEN C-BASE: owned from-scratch checkpoint <local-path> exists with hash-verified model.pt (receipt v0-live-20260623T105829Z.json); no borrowed/frozen base; not 12c050e7 lineage (CHK a/c PASS); NC2 manifest: nc2_manifest has 10 entries with non-draft dispositions and bound hashes (CHK b PASS); grow-dryrun receipt cbase-grow-step-dryrun-20260623T220205Z.json: verdict=PASS loss_continuity|delta|=0.000130<0.0500 grown_shape={'heads': 20, 'hidden': 1280, 'intermediate': 5120} replay=True larger_shape=True grown_ckpt_on_disk=True grow_rule='net2net_zero_pad_strict_rmsnorm' (CHK d/forever-horn PASS); no invalid-token present"
+    },
+    {
+      "condition": "C-PORT",
+      "status": "GREEN",
+      "reason": "GREEN C-PORT: device-portability receipt receipts/ember-port-proof-real-20260624T121355Z.json passes CHK: governor + forward pass ran without crash on a non-4090 device (simulated: RTX-3090-24GB-sm86 / T4-16GB-sm75 / RTX-5090-32GB-sm120 / A100-80GB-sm80 / V100-32GB-sm70 / CPU-only-sm0 simulated non-4090 targets: RTX-3090-24GB-sm86 / T4-16GB-sm75 / RTX-5090-32GB-sm120 / A100-80GB-sm80 / V100-32GB-sm70 / CPU-only-sm0), VRAM total runtime-queried, EMBER_VRAM_FRACTION env-sourced (governor selftest re-executed), harness SHA-256 cross-bound, output shapes non-identical across profiles, device-relative throughput basis, fp8/sm>=89/bf16 fallback ladder present; no invalid-token, no 4090-only path, no absolute tok/s gate, no simulated-stub (writes_into_kai_converge confirmed)."
+    },
+    {
+      "condition": "C-FED",
+      "status": "GREEN",
+      "reason": "GREEN C-FED: federation design + egress manifest present in docs/c-fed-federation-design.md (checkpoint-portability/work-sharding/receipt-merge for kaggle/colab/hf; egress manifest named; per-avenue approval or recorded zero-egress); no invalid-token present"
+    },
+    {
+      "condition": "C-GROW",
+      "status": "RED",
+      "reason": "RED C-GROW: invalid-token present -> does-NOT-count outcome: receipts/cport-cbase-landing-20260623.json: invalid_token_present ['invalid_growth_unmeasured'] (does-NOT-count outcome)"
+    },
+    {
+      "condition": "C-ORGANISM",
+      "status": "RED",
+      "reason": "RED C-ORGANISM: cannot read hidden_dim or vocab_size from checkpoint manifest/config at <local-path> -> cannot enforce min-scale gate; treating as unverifiable TOY (FIX-8b: toy-seed rejection requires arch config on disk)"
+    },
+    {
+      "condition": "C(-1)",
+      "status": "RED",
+      "reason": "RED C(-1): receipt receipts/ember-post-resident-discovery/field-level-contribution-proof-20260622T222500Z.json has verdict='FIELD_LEVEL_CONTRIBUTION_PROOF_BLOCKED' which contains a BLOCKED/FAIL/INCOMPLETE/DRAFT marker \u2014 GREEN requires a COMPLETE proof, not a zero-cost blocked receipt (FIX-4)"
+    },
+    {
+      "condition": "C0",
+      "status": "RED",
+      "reason": "RED C0: NO valid C14 RESIDENT_TRAINING_GATE_PASS exists (latest gate verdict=None @ 20260624T012230Z; 2 PASS-label(s) revoked by conflation guard; 3 cited loop receipt(s) earliest=20260624T011547Z). Loops ran WITHOUT a satisfied precondition -> invalid_precondition_bypass. audits=['resident-gate-conflation-audit-20260622T133000Z.json: CONFLATION_GUARD_BLOCKED revokes resident-training-gate-20260622T011305Z.json', 'resident-gate-conflation-audit-20260623T233657Z.json: CONFLATION_GUARD_BLOCKED revokes resident-training-gate-CANDIDATE.json', \"resident-training-gate-20260620T202644Z.json: PASS-labeled but c_base_owned_seed component_status='ABSENT' (FIX-5: C-BASE ownership is a required C14 component; cannot be absent or non-PASS)\"]"
+    },
+    {
+      "condition": "C1",
+      "status": "RED",
+      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK (sources+hashes+rationale+local_run_requirements) cleanly -> [\"benchmark-discovery-20260620T230519Z.json: candidate 'd3-gym' is locally runnable (local_status='FROZEN_EIGHT_ROW_METADATA_SLICE_AVAILABLE') but has no local_run_requirements field (R requires it)\", \"benchmark-discovery-20260621T070500Z.json: candidate 'd3-gym' is locally runnable (local_status='FROZEN_EIGHT_ROW_METADATA_SLICE_AVAILABLE') but has no local_run_requirements field (R requires it)\", \"benchmark-discovery-20260622T011400Z.json: candidate 'd3-gym' is locally runnable (local_status='FROZEN_EIGHT_ROW_METADATA_SLICE_AVAILABLE') but has no local_run_requirements field (R requires it)\"]"
+    },
+    {
+      "condition": "C2",
+      "status": "RED",
+      "reason": "RED C2: D3 native-loop candidate receipt(s) present but none satisfy CHK (external+license+frozen-before+hash-match+url-cross-validate+no-gold-path+recompute-aggregate+deletion-ablation) -> [\"d3-native-loop-20260624T011547Z-post-c14-gate.json: external_task_source.license ABSENT or empty -> FIX-15b-1: license non-empty required (url='https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12' dataset='osunlp/D3-Gym')\", \"d3-native-loop-20260624T012140Z-post-c14-gate.json: external_task_source.license ABSENT or empty -> FIX-15b-1: license non-empty required (url='https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12' dataset='osunlp/D3-Gym')\", \"d3-native-loop-20260620T230519Z.json: external_task_source.license ABSENT or empty -> FIX-15b-1: license non-empty required (url='https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12' dataset='osunlp/D3-Gym')\"]"
+    },
+    {
+      "condition": "C3",
+      "status": "RED",
+      "reason": "RED d3-native-loop-20260624T012140Z-post-c14-gate.json: invalid_retrofitted_ceiling: shared_budget_ceiling_s (1.504e-03) == max arm wall time (1.504e-03); the ceiling was set to the slowest arm's measured value, not pre-declared before the run. Per-arm wall times: {'A': 9.4e-08, 'B': 0.000244732, 'C': 0.001503755, 'Deleted': 1.11e-07}. A genuine pre-declared ceiling must exceed max(arm_times) by at least 5%."
+    },
+    {
+      "condition": "C4",
+      "status": "RED",
+      "reason": "RED resident-training-gate-20260623T232800Z-real-neural-delta-clearance.json: pre_neural_parameter_hash declared in gate receipt (9891099062779049...) does not match the hash recorded in the training artifact (cb4788bec4d803be...) -> neural hash not cross-bound to real training artifact (self-attestation, not execution-bound)"
+    },
+    {
+      "condition": "C5",
+      "status": "RED",
+      "reason": "RED C5: resident-training-gate-20260623T232800Z-real-neural-delta-clearance.json: only 2 per_task_rows (need >= 4) -> min-scale violation; single/small-row receipts are toy artifacts, not genuine per-slice coverage (FIX-7a)"
+    },
+    {
+      "condition": "C6",
+      "status": "RED",
+      "reason": "RED C6: recipe DEFINITION present & reusable in 4 PASS receipt(s) (e.g. receipts/historical-pre-gate-loops/d3-broader-multifamily-loop-20260621T150246Z/d3-generalized-candidate-receipt.json: rerun_command='python scripts\\\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z\\\\d3-broader-multifamily-fresh-rows.json --out-dir receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z --timeout-seconds 180 --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --execute'), but NO independent executed-rerun reproduction receipt found. FIX-7c: need a SEPARATE receipt file with executed_at > recipe ts and captured exit_code or rerun_reproduced=true outside the recipe blob."
+    },
+    {
+      "condition": "C7",
+      "status": "RED",
+      "reason": "RED C7: operator receipt(s) present but none pass ALL execution-binding checks -> self-attestation receipt rejected. First failures: ['c7-selftest-20260623T191939Z.json: operator-source-SHA binding FAILED: receipt missing operator_source_sha binding -> cannot prove receipt was produced by the current regime_operator.py (disk SHA sha256:ea0fc85cd57a5..); this is the self-attestation path \u2014 RED', 'c7-selftest-20260623T190233Z.json: operator-source-SHA binding FAILED: receipt missing operator_source_sha binding -> cannot prove receipt was produced by the current regime_operator.py (disk SHA sha256:ea0fc85cd57a5..); this is the self-attestation path \u2014 RED', 'c7-selftest-20260623T183845Z.json: operator-source-SHA binding FAILED: receipt missing operator_source_sha binding -> cannot prove receipt was produced by the current regime_operator.py (disk SHA sha256:ea0fc85cd57a5..); this is the self-attestation path \u2014 RED']. Note: the hollow c7_selftest receipts lack operator_source_sha, operator_pre/post_regime_hash, and n_tasks fields \u2014 all required by FIX-1 (BUG-1+BUG-2 closed)."
+    },
+    {
+      "condition": "C8",
+      "status": "RED",
+      "reason": "RED C8: field-level-contribution-proof receipt(s) present but NONE prove a falsifiable field-level breakthrough (contribution-level deletion + external-disjoint degradation) -> [\"field-level-contribution-proof-20260622T222500Z.json: CHK unmet ['pass_verdict', 'no_blockers', 'field_level_claim_proven', 'ablation_method_blocked', 'ordinary_runner_intact', 'cites_closest_prior', 'material_difference']; receipt blocker='closest_known_prior_comparison_missing'\", \"field-level-contribution-proof-20260622T223500Z.json: CHK unmet ['pass_verdict', 'no_blockers', 'field_level_claim_proven']; receipt blocker='field_level_breakthrough_not_proven_over_named_prior'\"]"
+    },
+    {
+      "condition": "C9",
+      "status": "RED",
+      "reason": "RED C9: 32 qualifying window(s) lack a 'hardest_blocker' field \u2014 every substrate-growth window must name the hardest active C9 problem at that timestamp; first=code-vs-docs-adaptive-selector-private30-20260620T-now.json"
+    },
+    {
+      "condition": "C10",
+      "status": "RED",
+      "reason": "RED C10: 63 unresolved debt-ledger row(s) remain (ACTIVE=4, ACTIVE-BLOCKER=10, ACTIVE-NEXT=4, OPEN=32, PROGRESS-ONLY=13); banned-phrase-dispositions=1; disposed-without-receipt=0. sample=['DEBT-001:ACTIVE-BLOCKER', 'DEBT-002:ACTIVE-BLOCKER', 'DEBT-003:ACTIVE-BLOCKER', 'DEBT-004:ACTIVE-NEXT', 'DEBT-005:ACTIVE-NEXT'] -> deferred-work escape hatch OPEN (invalid_deferred_remains)"
+    },
+    {
+      "condition": "C11",
+      "status": "RED",
+      "reason": "RED C11: experience-horizon receipts ABSENT ['horizon-short.json', 'horizon-medium.json', 'horizon-long.json', 'deletion.json'] under receipts/ember-mvp/c11-experience-horizon -> the genuine short/medium/long real-learning capability-delta run has not been produced. (Duration-as-CPU-seconds is no longer a pass path: the stopwatch condition was removed; only a real learning capability delta greens C11.)"
+    },
+    {
+      "condition": "C12",
+      "status": "RED",
+      "reason": "RED C12: single-mode receipt \u2014 all 346 mode_events chose mode=['act'] -> selector is a fixed stub, not state-dependent selection; a genuine selector must produce >=2 distinct modes across the logged cycle (e.g. act + sleep_consolidate or idle_think). The current receipt has modes_seen=['act'] with mode_event_count=346, consistent with a fixed-mode clock stub."
+    },
+    {
+      "condition": "C13",
+      "status": "RED",
+      "reason": "RED C13: dissection receipt(s) present but none satisfy the import/reject/make-native + ablation CHK -> [\"codex-goal-mode-dissection-20260619T-now.json: contains placeholder/status token 'blocked'\"]"
+    },
+    {
+      "condition": "C14",
+      "status": "RED",
+      "reason": "RED C14: trainable_parameter_count=244056 < 1000000 (resident-training-gate-20260623T232800Z-real-neural-delta-clearance.json) -> toy/244K model rejected; C-BASE requires a real owned-base scale, not a CPU-tiny smoke model"
+    },
+    {
+      "condition": "C15",
+      "status": "RED",
+      "reason": "RED receipts/ember-tiny-bitnet-comparison/20260622T011334Z-tiny-bitnet-comparison/tiny_bitnet_comparison_receipt.json: PASS receipt fails CHK -> min-scale: C15 fp16 arm has 24 params but C14 has 244,056 params \u2014 ratio 10169.0x exceeds 2.0x same-scale limit; a 24-param toy comparison on a >10K-param C14 gate is not a same-scale BitNet evaluation"
+    },
+    {
+      "condition": "C-OBS",
+      "status": "GREEN",
+      "reason": "GREEN C-OBS: observatory + CLI CERTIFIED by execution: (a) EmberWorldState adapter bound 5 real artifact(s) (sha_bound=sha256:554a4c803...); (b) click-to-evidence in emcli.py cmd_monitor; (c) membrane guard(send_turn) subprocess-verified to raise SilentSteerRefused; (d) emcli.py monitor+understand subprocess-executed with non-empty output; proof-pack receipt under receipts/ only (not tokenizer/ or docs/); no invalid-token in receipts/; no DRAFT/BLOCKED in receipt fields"
+    },
+    {
+      "condition": "C-ANAT",
+      "status": "GREEN",
+      "reason": "GREEN C-ANAT: 16 anatomy docs SHA-bound to receipt receipts/ember-anatomy/c-anat-anatomy-set-completion-20260624.json; each doc has >= 500 bytes real content; each doc has >= 1 named receipt pointer resolving to a real file; H4 addressed (OPEN/UNTOUCHED, not solved); no DRAFT/BLOCKED/FAIL/INCOMPLETE in receipt status fields; docs: 00_INDEX.md, 01_ARCHITECTURE.md, 02_COMPONENTS.md, 03_GOAL_AND_CONSTITUTION.md, 04_EFFICIENCY_PROGRAM.md, 05_TRAINING_LOOP.md, 06_INVARIANTS.md, 07_WORLDS.md, 08_PROMPT_REGISTRY.md, 09_RECEIPTS_SCHEMA.md, 10_ORGANS.md, 11_GOVERNORS.md, 12_FLOOR_CONTRACT.md, 13_RUNBOOK.md, 14_MODEL_CARD.md, 15_TECHNICAL_REPORT.md"
+    },
+    {
+      "condition": "C-MANIFEST",
+      "status": "RED",
+      "reason": "RED invalid_unmanifested_piece: 1/25 \u00a74 planned condition(s) ABSENT from docs/ember-completeness.md (27 rows present, ids C1..); missing=C-SCALE"
+    },
+    {
+      "condition": "C-TALLY",
+      "status": "RED",
+      "reason": "RED invalid-token matched ['pct<100'] in tally-20260613T004807Z.json (pct=23.6)"
+    }
+  ],
+  "summary": {
+    "total": 27,
+    "green": 5,
+    "red": 22,
+    "pct_green": 18.5
+  }
+}

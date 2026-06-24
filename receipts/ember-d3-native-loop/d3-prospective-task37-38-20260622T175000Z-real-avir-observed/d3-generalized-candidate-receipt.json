@@ -1,0 +1,303 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.0,
+    "Deleted": 0.0
+  },
+  "arm_contract": {
+    "A": "no native generator, no outputs",
+    "B": "instruction-only fixed stub; no eval-script artifact compiler",
+    "C": "shared inferred artifact compiler from fresh task/evaluator requirements",
+    "Deleted": "C with native generator / resident action-selection organ removed"
+  },
+  "arm_solution_paths": {
+    "A": "<local-path>",
+    "B": "<local-path>",
+    "C": "<local-path>",
+    "Deleted": "<local-path>"
+  },
+  "arm_solution_sha256": {
+    "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+    "B": "8df9e463491b824e7a0452c237760a18814a7db761bd0f40ed12f8ecbdc95863",
+    "C": "c069055aa4149546287a68b6067cc4be83ae6830e7858e0b279eb46b8de0b2e8",
+    "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+  },
+  "code_vs_docs_metric": {
+    "classification": "during-project executable official Docker benchmark receipt",
+    "receipt_lines_predicted": 303,
+    "script_code_lines": 1115,
+    "solution_code_lines": 648
+  },
+  "deletion_sensitive": false,
+  "equal_budget": {
+    "entrypoint": "run_and_eval",
+    "official_container_runs_per_arm_per_task": 1,
+    "same_solution_source_per_arm_across_tasks": true,
+    "timeout_seconds_per_arm": 120
+  },
+  "errors": [
+    "c_did_not_pass_multiple_tasks",
+    "positive_delta_missing",
+    "deletion_not_load_bearing"
+  ],
+  "external_task_source": {
+    "dataset": "osunlp/D3-Gym",
+    "length": 6,
+    "offset": 36,
+    "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=36&length=6",
+    "split": "train"
+  },
+  "field_level_status": "progress_not_field_breakthrough",
+  "floor_contract_preservation_references": [
+    "docs/ember-floor-contract.md",
+    "nc2-own-technique-contract.md",
+    "scripts/train_multimodal_v0.py \u00a76 action log"
+  ],
+  "fresh_rows_path": "<local-path>",
+  "fresh_rows_sha256": "20b4076e9bd2e883c0ac465523bedeef4ad1f6bb87f3cbeb591b9c6714876323",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "36ab70b9fcafad3bc4130614cf8e6aa61004f110ffcfd0f10fd0aba0b1a26d86",
+  "limits": [
+    "This is still within the D3 chemistry/I-ReaxFF family unless broader task IDs are selected.",
+    "Goal completion still requires field-level breakthrough evidence beyond this receipt."
+  ],
+  "manual_solution_exclusion": {
+    "manual_per_task_solution": false,
+    "rationale": "C source is generated once from inferred required artifact families and contains no task_id branches.",
+    "task9_solution_reused": false
+  },
+  "native_goal_organ_load_bearing": false,
+  "next_blocker": "continue exact missing D3 generalization surface named in errors",
+  "per_task_rows": [
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_37",
+      "image_digest": "hananemoussa/d3-gym@sha256:cc8e0224c477ecfc39f0856eff411e98a0bb412a5080df1e8b39f217d5b3f6f3",
+      "inspect_sha256": "51ef5306df6bbc1863671196a1e459f37b26a36e14e5e4d1d0f3d8557274b744",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_37",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nMessage: Missing file: pred_results/pred_plot_acc.txt\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_37",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nMessage: Predicted plot image is too small (< 1KB), likely invalid\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_37",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": false,
+          "reason": "",
+          "returncode": 1,
+          "skipped": false,
+          "stderr_tail": "  File \"/task/solution.py\", line 421\n    ensure(\"pred_results/pred_plot_every_class.png\").write_bytes(png)\\n        ensure(\"pred_results/pred_plot_confusion_matrix.png\").write_bytes(png)\n                                                                      ^\nSyntaxError: unexpected character after line continuation character\n",
+          "stdout_tail": "=== Running solution ===\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_37",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nMessage: Missing file: pred_results/pred_plot_acc.txt\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "txt",
+          "path": "pred_results/pred_plot_acc.txt",
+          "source": "task_instruction"
+        },
+        {
+          "kind": "png",
+          "path": "pred_results/pred_plot_acc_L100.png",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 36,
+      "task_id": "task_37"
+    },
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_38",
+      "image_digest": "hananemoussa/d3-gym@sha256:b3749681d27e9be4fad076ac6398017f64a6398249304d00b88df268c59e8bce",
+      "inspect_sha256": "c126955613b99c5327a13a3c197c7bd03256785ba8abd2612e5c97bf8cf4fd8b",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_38",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": false,
+          "reason": "",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_38",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": false,
+          "reason": "",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_38",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": false,
+          "reason": "",
+          "returncode": 1,
+          "skipped": false,
+          "stderr_tail": "  File \"/task/solution.py\", line 421\n    ensure(\"pred_results/pred_plot_every_class.png\").write_bytes(png)\\n        ensure(\"pred_results/pred_plot_confusion_matrix.png\").write_bytes(png)\n                                                                      ^\nSyntaxError: unexpected character after line continuation character\n",
+          "stdout_tail": "=== Running solution ===\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_38",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": false,
+          "reason": "",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "png",
+          "path": "pred_results/pred_plot_confusion_matrix.png",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 37,
+      "task_id": "task_38"
+    }
+  ],
+  "positive_delta": false,
+  "prospective_surface": {
+    "fresh_surface_no_prior_failed_receipt_overlap": true,
+    "prior_failed_receipts_scanned": 10,
+    "prior_failed_task_id_overlap": {},
+    "require_prospective": true
+  },
+  "repo": "<local-path>",
+  "reproducibility": {
+    "docker_required": true,
+    "rerun_command": "python scripts\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset36-len6-20260622T174000Z.json --out-dir receipts\\ember-d3-native-loop\\d3-prospective-task37-38-20260622T175000Z-real-avir-observed --timeout-seconds 120 --task-id task_37 --task-id task_38 --execute",
+    "solution_hashes": {
+      "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+      "B": "8df9e463491b824e7a0452c237760a18814a7db761bd0f40ed12f8ecbdc95863",
+      "C": "c069055aa4149546287a68b6067cc4be83ae6830e7858e0b279eb46b8de0b2e8",
+      "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+    }
+  },
+  "resident_training_cursor_references": {
+    "bitnet_pr": 485,
+    "discovery_pr": 486,
+    "resident_gate_pr": 484,
+    "task9_pr": 487
+  },
+  "selected_task_ids": [
+    "task_37",
+    "task_38"
+  ],
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "static_registry_exclusion": {
+    "static_per_task_answer_table": false,
+    "task_id_branches_in_c_source": false
+  },
+  "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC",
+  "ts": "20260622T154938Z",
+  "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"
+}

@@ -1,0 +1,429 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.75,
+    "Deleted": 0.0
+  },
+  "api_spend_usd": 0,
+  "before_aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.5,
+    "Deleted": 0.0
+  },
+  "before_c_score": 0.5,
+  "before_is_transfer_loop": true,
+  "before_receipt": "receipts\\ember-post-resident-discovery\\scienceagentbench-stronger-transfer-loop-20260622T194500Z.json",
+  "before_receipt_sha256": "f5dde1a09ffa81e5a3f98268dd3608630ac7e0b3585edaca536ffea18c86cb47",
+  "benchmark_root": "<local-path>",
+  "blocked_reasons": [],
+  "candidate_safety": {
+    "candidate_workdirs_isolated": true,
+    "gold_programs_read_by_candidate": false,
+    "gold_results_visible_during_candidate_execution": false,
+    "known_unresolved_surface": "ref-index MODNet-backed row remains frozen but not yet solved by the zero-cost runner",
+    "private_labels_read_by_candidate": false,
+    "test_targets_read_by_candidate": false
+  },
+  "deletion_sensitive": true,
+  "equal_budget": {
+    "arms": [
+      "A",
+      "B",
+      "C",
+      "Deleted"
+    ],
+    "attempts_per_arm_per_row": 1,
+    "timeout_seconds": 120
+  },
+  "field_level_evaluation_receipt": "receipts\\ember-post-resident-discovery\\field-level-breakthrough-evaluation-20260622T193500Z.json",
+  "field_level_evaluation_receipt_sha256": "04d365e0735b53d5e93481f0aac7ba85deb8dd73167dff15fd907cc837350ad5",
+  "field_level_status": "transfer_progress_not_field_breakthrough",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "560e3e794cc28da8ed5778c1c732a131c1e512fe278519143d6276537fbf01cd",
+  "improved_over_before": true,
+  "leaderboard_identical": false,
+  "next_executable_command": "Add zero-cost ref-index MODNet support or prove that row invalid and freeze a justified replacement transfer surface, then rerun this frozen transfer slice",
+  "paid_api_surface_used": false,
+  "positive_delta": true,
+  "repo": "<local-path>",
+  "run_root": "<local-path>",
+  "score_rows": [
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "experimental_band_gap",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-001"
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "47da84dd309b6442c6eae5673a3cab51bedd5ad647049346a9638cdbf993eb41",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "experimental_band_gap",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-001"
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "db0d6a2ede8b243338d9b9ba27f7d3d487ec60ab4a1826fbe9cadf13f822c828",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "f9d4bfb505dabcccf3818c1d1a9cca62eeae1c60da393b0284d1ec63e680d5e6",
+        "returncode": 0,
+        "stderr_tail": "<local-path> DeprecationWarning: numpy.core.numeric is deprecated and has been renamed to numpy._core.numeric. The numpy._core namespace contains private NumPy internals and its use is discouraged, as NumPy internals can change without warning in any release. In practice, most real-world usage of numpy.core is to access functionality in the public NumPy API. If that is the case, use the public NumPy API. If not, you are using NumPy internals. If you would still like to access an internal attribute, use numpy._core.numeric._frombuffer.\n  return super().find_class(module, name)\nB:\\M\\avir\\an agent\\state\\ember-mvp\\sab-stronger-transfer\\20260622T202838Z\\SAB-TX-001\\C\\candidate.py:42: DeprecationWarning: numpy.core.numeric is deprecated and has been renamed to numpy._core.numeric. The numpy._core namespace contains private NumPy internals and its use is discouraged, as NumPy internals can change without warning in any release. In practice, most real-world usage of numpy.core is to access functionality in the public NumPy API. If that is the case, use the public NumPy API. If not, you are using NumPy internals. If you would still like to access an internal attribute, use numpy._core.numeric._frombuffer.\n  return super().find_class(module, name)\n",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "experimental_band_gap",
+      "deterministic_eval": {
+        "pass": true,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(1, 'MAE: 0.3612405639913231')\n"
+      },
+      "pass": true,
+      "transfer_instance_id": "SAB-TX-001"
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "experimental_band_gap",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-001"
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "crystalline_compound",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-002"
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "7fc57ed31013bc43abe66a79ccc0a260ab53f01ed32f73c976808efc5bc888d4",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "10e618937e5f391c2a39aab8a65e2b9c6cf9d8de4d46ea7cdb61feea4370b8a8",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "crystalline_compound",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "155.04507157778403\n(0, \"{'data_correctness': True, 'func_correctness': False}\")\n"
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-002"
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "83312f30e098f02b215153fc0f91e6e66be9b4b1cc6c23e37416c3722339771f",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "e24753aef3e287f375522bc60ba8d190d2678987a24f03413c266686499aa271",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "crystalline_compound",
+      "deterministic_eval": {
+        "pass": true,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "6.28462445979336\n(1, \"{'data_correctness': True, 'func_correctness': True}\")\n"
+      },
+      "pass": true,
+      "transfer_instance_id": "SAB-TX-002"
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "crystalline_compound",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-002"
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "ref_index",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-003"
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "3ac81184e598f70f62134ac63a9e141b7b247b9d61973c7113ac92fafb56165d",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "ref_index",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-003"
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "0d50662ecb8be9b4642db253b4c687308021dc20178db4a0ecd2c5929e96a5ac",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "ref_index",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-003"
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "ref_index",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-003"
+    },
+    {
+      "arm": "A",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "pucci",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-004"
+    },
+    {
+      "arm": "B",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "5d3bc66e5ad18519ad495400480a593fd97e35874175e5f309bae5abacefd541",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "0f7791749c19629ecab420cd29ff87d6ab6f9052cfbbc18b0559d7be4c5b2cc3",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "pucci",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(0, 'MAE: 63.95714285714286')\n"
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-004"
+    },
+    {
+      "arm": "C",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "3d98ed4fe015fc0e5ba7cb8db9a00cd3f76b10e4deef45de3473aa5d7c66a13c",
+        "output_exists": true,
+        "output_path": "<local-path>",
+        "output_sha256": "38f07ddcde28236e642fc07045ba92af8388579bb6d4728b5cb9e16003489aec",
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "pucci",
+      "deterministic_eval": {
+        "pass": true,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "(1, 'MAE: 4.284897319403904')\n"
+      },
+      "pass": true,
+      "transfer_instance_id": "SAB-TX-004"
+    },
+    {
+      "arm": "Deleted",
+      "candidate": {
+        "candidate_path": "<local-path>",
+        "candidate_sha256": "d6bff6e67cc1174a9bf1d386433d1ee3bfc9d5794543bd9e527aa391c072b8b7",
+        "output_exists": false,
+        "output_path": "<local-path>",
+        "output_sha256": null,
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "",
+        "timed_out": false
+      },
+      "dataset": "pucci",
+      "deterministic_eval": {
+        "pass": false,
+        "returncode": null,
+        "stderr_tail": "candidate output missing",
+        "stdout_tail": ""
+      },
+      "pass": false,
+      "transfer_instance_id": "SAB-TX-004"
+    }
+  ],
+  "scoring_mode": "zero_cost_deterministic_transfer",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-SCIENCEAGENTBENCH-STRONGER-TRANSFER-LOOP",
+  "transfer_slice_receipt": "receipts\\ember-post-resident-discovery\\scienceagentbench-stronger-transfer-slice-20260622T193500Z.json",
+  "transfer_slice_receipt_sha256": "4f056df2ebeb2857e996a92e85d5688068b94c5c51d716c9c977d7ec79835c5f",
+  "ts": "20260622T202838Z",
+  "verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS"
+}

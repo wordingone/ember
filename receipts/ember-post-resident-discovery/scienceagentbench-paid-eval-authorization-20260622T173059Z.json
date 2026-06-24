@@ -1,0 +1,38 @@
+{
+  "blocked_reasons": [
+    "visual_judge_key_or_azure_config_missing",
+    "paid_visual_judge_not_authorized"
+  ],
+  "first_loop_receipt": "receipts\\ember-post-resident-discovery\\scienceagentbench-first-loop-20260622T172643Z.json",
+  "first_loop_receipt_sha256": "9dd4a419bc901a058af089ec442d4158bd69a6a45a494ca8ccc85be8382b29b5",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "f412d1b76027bee40d9b92675ce0e164a39faa502d56c34a3fc022a63127fa18",
+  "next_executable_command": "Provide visual-judge key/config plus explicit paid-eval authorization and call cap, then rerun this authorization packet.",
+  "paid_visual_judge_authorization": {
+    "authorized": false,
+    "call_cap_sufficient": false,
+    "expected_call_formula": "visual_rows * 4 A/B/C/deleted arms * 3 samples per official score_figure call",
+    "expected_visual_judge_calls": 36,
+    "max_visual_judge_calls": 0,
+    "paid_api_surface": true,
+    "user_budget_note_present": false,
+    "user_budget_note_sha256": null
+  },
+  "repo": "<local-path>",
+  "secret_values_recorded": false,
+  "sha_convention": "bytes on disk/as fetched as-is; text hashes are UTF-8 encoded",
+  "ticket": "EMBER-SCIENCEAGENTBENCH-PAID-EVAL-AUTHORIZATION",
+  "ts": "20260622T173059Z",
+  "verdict": "SCIENCEAGENTBENCH_PAID_EVAL_AUTHORIZATION_BLOCKED",
+  "visual_judge_env_presence": {
+    "azure_config_present": false,
+    "azure_envs_checked": [
+      "AZURE_OPENAI_KEY",
+      "AZURE_OPENAI_API_VERSION",
+      "AZURE_OPENAI_ENDPOINT",
+      "AZURE_OPENAI_DEPLOYMENT_NAME"
+    ],
+    "openai_env_checked": "OPENAI_API_KEY",
+    "openai_key_present": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "blocked_reasons": [
+    "resident_pass_label_adjacent_to_blocked_full_parity_harness",
+    "avir_cli_full_parity_harness_blocked"
+  ],
+  "conflation_guard": {
+    "blocked_full_parity_harness_revokes_gate_clearance_inference": true,
+    "d3_benchmark_or_readiness_work_cannot_use_this_pass_label_as_precondition_clearance": true,
+    "neural_update_claim_is_not_sufficient_without_full_resident_harness_parity": true
+  },
+  "full_parity_blocked": true,
+  "full_parity_blocked_reasons": [
+    "full_cleanroom_parity_not_implemented",
+    "headless_bootstrap_only"
+  ],
+  "full_parity_classification": "FULL_PARITY_GATE_BLOCKED_NOT_HEADLESS_PASS",
+  "full_parity_receipt_path": "<local-path>",
+  "full_parity_receipt_sha256": "5676de0ee35e3e932c2e5020026d58a3f02b9fe6708a61175d5fbbf3de49e4fe",
+  "full_parity_verdict": "AVIR_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "a30b8e8231c7a9a1dee6450b7fac31604af8311684d4c151e848761fa5bf5ce7",
+  "next_executable_command": "Return to the full resident-harness parity gate first: rerun python scripts\\ember_avir_cli_full_parity_harness_gate.py with the latest component receipts, then rerun the resident-training gate only after that receipt is PASS.",
+  "repo": "<local-path>",
+  "resident_candidate_class": "VERIFIER_CONDITIONED_RESIDENT_PASS",
+  "resident_claims_clean_room_action_channel": true,
+  "resident_pass_interpretation": "RUNNER_OR_PARTIAL_NEURAL_PROGRESS_NOT_RESIDENT_ORGAN_CLEARANCE",
+  "resident_training_gate_status": "PASS",
+  "resident_training_receipt_path": "<local-path>",
+  "resident_training_receipt_sha256": "7752a973aa30f24d93e8484062a07a51208cf220fba6cb69c8378d59ed223492",
+  "resident_training_verdict": "RESIDENT_TRAINING_GATE_PASS",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-RESIDENT-GATE-CONFLATION-AUDIT",
+  "ts": "20260622T141354Z",
+  "verdict": "RESIDENT_GATE_CONFLATION_GUARD_BLOCKED"
+}

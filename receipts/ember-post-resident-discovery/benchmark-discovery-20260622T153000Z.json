@@ -1,0 +1,179 @@
+{
+  "benchmark_discovery_status": "PASS",
+  "bitnet_comparison_receipt": {
+    "exists": true,
+    "next_executable_command": "python scripts\\ember_post_resident_discovery.py --after-bitnet-receipt <receipt>",
+    "path": "receipts\\ember-tiny-bitnet-comparison\\20260622T152800Z-real-avir-observed\\tiny_bitnet_comparison_receipt.json",
+    "quality_delta": {
+      "bitnet_heldout_mean": 1.0,
+      "bitnet_minus_fp16_heldout_mean": 0.0,
+      "bitnet_minus_fp16_transfer_mean": 0.0,
+      "bitnet_transfer_mean": 1.0,
+      "fp16_heldout_mean": 1.0,
+      "fp16_transfer_mean": 1.0
+    },
+    "resident_gate_receipt_status": "PASS",
+    "sha256": "23caeef1bafc1d8afbf32b2a7069c1c8ba125d0bb8a92df554b8d53f340e07f6",
+    "status": "PASS",
+    "verdict": "BITNET_COMPARISON_PASS"
+  },
+  "candidates": [
+    {
+      "dataset_or_task_count": "565 tasks from 239 real scientific repositories",
+      "fit_to_goal": [
+        "world is an external scientific data/code environment",
+        "agent must infer task/evaluator constraints from previews and scripts",
+        "candidate can act by emitting code/artifacts",
+        "evaluation script supplies verifier pressure",
+        "training on task trajectories has published transfer signal to ScienceAgentBench"
+      ],
+      "id": "d3-gym",
+      "license_or_access_basis": "Hugging Face dataset card lists MIT for the metadata dataset; underlying repository license distribution includes MIT/GPL/BSD/Apache/CC/custom/no-license rows.",
+      "limits": [
+        "metadata slice is not the full Docker environment",
+        "some underlying repositories lack explicit licenses",
+        "using only the first local rows risks chemistry-domain narrowing"
+      ],
+      "local_status": "FROZEN_EIGHT_ROW_METADATA_SLICE_AVAILABLE",
+      "local_task_rows_path": "<local-path>",
+      "local_task_rows_sha256": "77771a0964199d89d3d06b9d6aecf083112317ab071aba43c06e4b28781e1d56",
+      "name": "D3-Gym",
+      "primary_sources": [
+        "https://arxiv.org/abs/2604.27977",
+        "https://huggingface.co/datasets/osunlp/D3-Gym",
+        "https://github.com/OSU-NLP-Group/D3-Gym"
+      ],
+      "recommended_use": "immediate small post-gate heldout loop while full environments are admitted",
+      "task_evaluator_form": "natural language task, input dataset/artifact previews, reference implementation, executable or synthesized evaluation script, Docker environments for full tasks"
+    },
+    {
+      "dataset_or_task_count": "102 tasks from 44 peer-reviewed publications across four disciplines",
+      "fit_to_goal": [
+        "closest modern external evaluation for data-driven scientific discovery",
+        "requires programmatic work against real publication-derived tasks",
+        "good candidate for field-level validation after small-loop proof"
+      ],
+      "id": "scienceagentbench",
+      "license_or_access_basis": "public paper and code repository; exact task-data licenses must be admitted before local run",
+      "limits": [
+        "heavier setup than current frozen D3-Gym slice",
+        "must verify downloadable task/data availability and license before execution"
+      ],
+      "local_status": "ADMISSION_REQUIRED",
+      "name": "ScienceAgentBench",
+      "primary_sources": [
+        "https://arxiv.org/abs/2410.05080",
+        "https://github.com/OSU-NLP-Group/ScienceAgentBench"
+      ],
+      "recommended_use": "primary stronger post-D3 validation target",
+      "task_evaluator_form": "self-contained Python program output, execution results, cost metrics, contamination mitigations"
+    },
+    {
+      "dataset_or_task_count": "20 ICML 2024 Spotlight/Oral paper replications decomposed into 8316 gradable tasks",
+      "fit_to_goal": [
+        "best match for proof-like replication recipe and reusable research engineering",
+        "directly pressures understanding, implementation, experiment execution, and reporting"
+      ],
+      "id": "paperbench",
+      "license_or_access_basis": "OpenAI frontier-evals repository plus paper; task artifact access must be admitted before local run",
+      "limits": [
+        "long-horizon and expensive; not suitable as first small post-gate loop",
+        "judge/rubric evaluation may be less direct than executable pass/fail rows"
+      ],
+      "local_status": "ADMISSION_REQUIRED",
+      "name": "PaperBench",
+      "primary_sources": [
+        "https://arxiv.org/abs/2504.01848",
+        "https://github.com/openai/frontier-evals/tree/main/project/paperbench"
+      ],
+      "recommended_use": "field-level validation track once Ember has a durable proposer",
+      "task_evaluator_form": "hierarchical rubrics and judge over research replication subtasks"
+    },
+    {
+      "dataset_or_task_count": "7 open-ended AI R&D environments",
+      "fit_to_goal": [
+        "directly targets AI R&D capability and budget-sensitive experimentation",
+        "supports temporal-growth milestones with load-bearing longer attempts"
+      ],
+      "id": "re-bench",
+      "license_or_access_basis": "public METR repository/blog; task assets must be admitted before local run",
+      "limits": [
+        "small number of environments",
+        "some tasks may require larger compute than current safe loop"
+      ],
+      "local_status": "ADMISSION_REQUIRED",
+      "name": "RE-Bench",
+      "primary_sources": [
+        "https://metr.org/blog/2024-11-22-evaluating-r-d-capabilities-of-llms/",
+        "https://github.com/METR/RE-Bench"
+      ],
+      "recommended_use": "duration-growth and AI-R&D breakthrough validation track",
+      "task_evaluator_form": "continuous optimization objectives over runtime, loss, win-rate, and ML/Rust scaffolding tasks under compute budgets"
+    },
+    {
+      "dataset_or_task_count": "13 machine-learning experimentation tasks",
+      "fit_to_goal": [
+        "historically important benchmark for ML experimentation loops",
+        "contains explicit experiment-design/run/analyze/iterate pressure"
+      ],
+      "id": "mlagentbench",
+      "license_or_access_basis": "public paper and GitHub repository; task-specific data licenses must be checked",
+      "limits": [
+        "some tasks are old or saturated",
+        "less direct scientific-world-rule pressure than D3-Gym/ScienceAgentBench"
+      ],
+      "local_status": "ADMISSION_REQUIRED",
+      "name": "MLAgentBench",
+      "primary_sources": [
+        "https://arxiv.org/abs/2310.03302",
+        "https://github.com/snap-stanford/MLAgentBench"
+      ],
+      "recommended_use": "secondary comparison baseline for ML-experiment loop mechanics",
+      "task_evaluator_form": "agent reads/writes files, executes code, inspects outputs, and iterates toward ML metrics"
+    },
+    {
+      "dataset_or_task_count": "270 tasks from 90 papers across computer science, social science, and medicine",
+      "fit_to_goal": [
+        "strong match for reusable/recreatable recipe and proof discipline",
+        "less focused on new self-improvement but strong for verification substrate"
+      ],
+      "id": "core-bench",
+      "license_or_access_basis": "public paper and code repository; paper/data artifact licenses must be admitted before run",
+      "limits": [
+        "reproduction is necessary but not sufficient for self-growth",
+        "may reward environment recovery more than new method formation"
+      ],
+      "local_status": "ADMISSION_REQUIRED",
+      "name": "CORE-Bench",
+      "primary_sources": [
+        "https://arxiv.org/abs/2409.11363",
+        "https://github.com/siegelz/core-bench"
+      ],
+      "recommended_use": "verification/reproducibility transfer check",
+      "task_evaluator_form": "computational reproducibility tasks across difficulty levels, language-only and vision-language variants"
+    }
+  ],
+  "git_head": "00af1ea7a4579b8e164a18cf03dd76dbfb4233e0",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "bf625e69bd5305c85da4e7ab572522ec942028979207ac8f750b81ab60c26707",
+  "historical_kaggle_position": {
+    "downloadable_kaggle_fallback": "allowed only if docs/research/journal admission remains blocked and the loop still proves a reusable field-level technique",
+    "kaggle_cli_public_dataset_access": "works per existing Kaggle CLI decision receipt",
+    "mle_bench_downloads": "blocked by prior 403 receipts; MLE is not the active path"
+  },
+  "next_blocker": "past_ember_technique_mining_receipt",
+  "repo": "<local-path>",
+  "resident_training_gate_required_status": "PASS",
+  "selection": {
+    "immediate_next_loop": "d3-gym",
+    "stronger_validation_after_first_loop": [
+      "scienceagentbench",
+      "re-bench",
+      "paperbench"
+    ],
+    "why": "D3-Gym is already locally frozen with external task rows, evaluator scripts, and a source URL, so it can support the next bounded A/B/C heldout loop without another credential/data blocker. ScienceAgentBench, RE-Bench, and PaperBench are stronger field-level validation tracks but require admission receipts first."
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-POST-RESIDENT-BENCHMARK-DISCOVERY",
+  "ts": "20260622T153000Z"
+}

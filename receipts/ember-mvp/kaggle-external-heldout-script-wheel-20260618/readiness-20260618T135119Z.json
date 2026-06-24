@@ -1,0 +1,89 @@
+{
+  "ticket": "EMBER-MVP-READINESS",
+  "ts": "20260618T135631Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "cycle_receipt_path": "<local-path>",
+  "requirements": [
+    "cycle.accepted",
+    "cycle.observation_and_latent_bound",
+    "cycle.replay_and_rollback_bound",
+    "sandbox.production_runner",
+    "sandbox.required_probes_pass",
+    "governor.real_gpu_training",
+    "governor.hashable_artifact",
+    "assimilation.durable_artifact",
+    "state_substrate.local_commit_replayable",
+    "benchmark.real_mle_tasks_executed",
+    "benchmark.per_task_scores_present",
+    "benchmark.external_delta_positive",
+    "wheel.real_equal_budget_run",
+    "wheel.arm_contracts_valid",
+    "wheel.ordering_c_gt_b_gt_a"
+  ],
+  "failed_requirements": [
+    "benchmark.real_mle_tasks_executed",
+    "benchmark.per_task_scores_present",
+    "wheel.real_equal_budget_run"
+  ],
+  "benchmark_public_test_proxy": {
+    "ready": false
+  },
+  "benchmark_frozen_heldout": {
+    "ready": false
+  },
+  "benchmark_external_heldout": {
+    "ready": true,
+    "dataset_ref": "abdallahwagih/emotion-dataset",
+    "heldout_source": "kaggle-dataset:abdallahwagih/emotion-dataset",
+    "external_source_certified": true,
+    "candidate_prediction_source": "script:<local-path>",
+    "heldout_case_count": 32,
+    "benchmark_delta_claimed": true,
+    "external_benchmark_delta_claimed": true,
+    "score": {
+      "baseline_score": 0.40625,
+      "candidate_score": 0.96875,
+      "mean_normalized_improvement": 0.947368
+    }
+  },
+  "wheel_public_test_proxy": {
+    "ready": false
+  },
+  "wheel_frozen_heldout": {
+    "ready": true,
+    "benchmark_delta_claimed": true,
+    "external_benchmark_delta_claimed": true,
+    "ordering": "C>B>A",
+    "arms": [
+      {
+        "id": "A",
+        "normalized_improvement": 0.052632,
+        "external_benchmark_delta_claimed": true
+      },
+      {
+        "id": "B",
+        "normalized_improvement": 0.736842,
+        "external_benchmark_delta_claimed": true
+      },
+      {
+        "id": "C",
+        "normalized_improvement": 0.947368,
+        "external_benchmark_delta_claimed": true
+      }
+    ]
+  },
+  "verdict": "NOT_READY",
+  "growth_failures": [
+    "growth.repeated_positive_cycles"
+  ],
+  "growth_verdict": "GROWTH_BLOCKED",
+  "linked_receipts": {
+    "sandbox": "<local-path>",
+    "gpu_governor": "<local-path>",
+    "state_substrate": "<local-path>",
+    "observation": "<local-path>",
+    "benchmark": "<local-path>",
+    "wheel": "<local-path>"
+  }
+}

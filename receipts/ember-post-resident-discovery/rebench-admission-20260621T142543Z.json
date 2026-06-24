@@ -1,0 +1,194 @@
+{
+  "benchmark_facts": {
+    "all_machine_learning_or_ai_rd": true,
+    "has_task_standard_manifest": true,
+    "local_materialized": true,
+    "name": "RE-Bench",
+    "task_families": 7,
+    "tasks": 7
+  },
+  "code_vs_docs_metric": {
+    "classification": "during-project benchmark admission receipt",
+    "receipt_lines": 194,
+    "script_code_lines": 258,
+    "task_families_materialized": 7
+  },
+  "deleted_selector_routing": {
+    "admission_state": "ROUTING_BLOCKED_DELETED_SELECTOR",
+    "reason": "Deleting the native benchmark router prevents justified progression from ScienceAgentBench to RE-Bench.",
+    "selected": null
+  },
+  "deletion_sensitive": true,
+  "field_level_pressure": [
+    "AI R&D benchmark, not generic QA",
+    "tasks require experiments, code changes, model training, kernels, or scaling-law inference",
+    "human expert comparison and time-budget pressure are part of benchmark design"
+  ],
+  "frozen_heldout_slice": {
+    "gold_or_solution_contents_excluded": true,
+    "rows": [
+      {
+        "cpus": "20",
+        "gpu_count_range": [],
+        "gpu_model": null,
+        "id": "ai_rd_rust_codecontests_inference",
+        "intermediate_scoring": true,
+        "manifest_sha256": "d6f080c49829c4d86c96de97c0d2cc06574da2ccbc93c863d675a4ba9c320f4e",
+        "manual_scoring": false,
+        "memory_gb": "100",
+        "name": "Build scaffolding for Rust Codecontests",
+        "readme_sha256": "84941bba07396ad6890a1cde254307349d24f15f3d182fcee002bea4a1c306aa",
+        "tasks": [
+          "main"
+        ],
+        "version": "0.2.3",
+        "visible_score_to_agent": true
+      },
+      {
+        "cpus": "13",
+        "gpu_count_range": [
+          [
+            "1",
+            "1"
+          ]
+        ],
+        "gpu_model": "h100",
+        "id": "ai_rd_fix_embedding",
+        "intermediate_scoring": true,
+        "manifest_sha256": "5196490d1ff2659295f3839fe608e6015fc144c709940f1b15279775d0677b47",
+        "manual_scoring": false,
+        "memory_gb": "100",
+        "name": "Fix Embedding",
+        "readme_sha256": "5f23bc050e2885198fc231a77539fb8cb5cd637f448327b9749e916a846bdc4f",
+        "tasks": [
+          "main"
+        ],
+        "version": "0.2.5",
+        "visible_score_to_agent": true
+      },
+      {
+        "cpus": "48",
+        "gpu_count_range": [
+          [
+            "6",
+            "8"
+          ]
+        ],
+        "gpu_model": "h100",
+        "id": "ai_rd_small_scaling_law",
+        "intermediate_scoring": true,
+        "manifest_sha256": "73361ca9d5b6667f3fa5e55cd056fb28ef71192fd05dca76c815b38ee41d33f4",
+        "manual_scoring": false,
+        "memory_gb": "400",
+        "name": "Predict optimal hyperparameters through scaling law",
+        "readme_sha256": "be55b08d4a81b63ae768f9007c040847a145422f9f7858ea3e5243c957457e3e",
+        "tasks": [
+          "main"
+        ],
+        "version": "0.2.3",
+        "visible_score_to_agent": false
+      },
+      {
+        "cpus": "13",
+        "gpu_count_range": [
+          [
+            "1",
+            "1"
+          ]
+        ],
+        "gpu_model": "h100",
+        "id": "ai_rd_triton_cumsum",
+        "intermediate_scoring": true,
+        "manifest_sha256": "cc943a161fef441f13f98c383c9f8a15f86d75bd520a916f3479f5972d51c3e9",
+        "manual_scoring": false,
+        "memory_gb": "100",
+        "name": "Optimize kernel for operation",
+        "readme_sha256": "ff8c12abb582b2d75a7d97569287959fb78a54661b09bf6913eb7b72f0140d6f",
+        "tasks": [
+          "main"
+        ],
+        "version": "0.2.5",
+        "visible_score_to_agent": true
+      }
+    ],
+    "selection_rule": "Prefer low-count visible/evaluable ML repair, scaling-law self-improvement pressure, and kernel optimization pressure; exclude protected solution contents.",
+    "sha256": "f702e4ff2e2dc5a0e54203ab74fb1c0ca73f6beaf4ffe827af16fc1620e664fe"
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "802290a4e0cf9134b6f74f4c762a34ffdc0f68217f63e4562c7d5294b9e00fba",
+  "license_access": {
+    "anti_overfit_request_recorded": "README/LICENSE request avoiding unprotected solution publication, training-data leakage, and overfitting.",
+    "protected_solution_policy": "Do not extract, quote, publish, or train on protected solution contents; use only task/evaluator surfaces for admission.",
+    "repo_license": "MIT License"
+  },
+  "native_operator_routing": {
+    "admission_state": "ADMITTED",
+    "reason": "After ScienceAgentBench artifact access blocked, RE-Bench is the next strongest AI-R&D benchmark with local task-family/evaluator materialization.",
+    "selected": "re-bench"
+  },
+  "next_executable_command": "python scripts\\ember_rebench_first_loop.py --task-family ai_rd_rust_codecontests_inference --frozen-slice receipts\\ember-post-resident-discovery\\rebench-admission-<timestamp>.json --out receipts\\ember-post-resident-discovery\\rebench-first-loop-<timestamp>.json",
+  "protected_solution_handling": {
+    "extracted_protected_solutions": false,
+    "protected_solution_files": 7,
+    "published_unprotected_solutions": false,
+    "zip_names_only_and_hashes_recorded": true
+  },
+  "repo": "<local-path>",
+  "run_constraints": {
+    "h100_resource_requests_present": true,
+    "local_hardware_compatibility_verified": false,
+    "next_preflight_must_check": [
+      "task-standard runtime",
+      "Docker/Vivaria path or local harness adapter",
+      "GPU/H100 feasibility or bounded proxy policy"
+    ],
+    "vivaria_or_task_standard_runtime_required": true
+  },
+  "source_hashes": {
+    "license_sha256": "0651c2b4111fb02dcf9dee40b78f51a44d72f1ed53129d914a18ba6b0fe07312",
+    "readme_sha256": "7f279f6fcbfa8d6e7309764cd7620f682ffbeaedc5f9af09b8746b9c10bbb2dd",
+    "suite_manifest_sha256": "0f6205a46c61a26e7476e498a4199b7d2a3ee4abf53c27dbb7f3640ddcd008ff"
+  },
+  "sources": {
+    "arxiv": "https://arxiv.org/abs/2411.15114",
+    "github": "https://github.com/METR/RE-Bench",
+    "local_git_head": "93b98062e55f6945d4a7e213a3226dd419896170",
+    "local_path": "<local-path>",
+    "paper": "https://metr.org/AI_R_D_Evaluation_Report.pdf"
+  },
+  "task_evaluator_inventory": {
+    "intermediate_scoring_families": [
+      "ai_rd_fix_embedding",
+      "ai_rd_nanogpt_chat_rl",
+      "ai_rd_optimize_llm_foundry",
+      "ai_rd_restricted_mlm",
+      "ai_rd_rust_codecontests_inference",
+      "ai_rd_small_scaling_law",
+      "ai_rd_triton_cumsum"
+    ],
+    "manual_scoring_families": [],
+    "resource_models": [
+      "h100"
+    ],
+    "task_family_ids": [
+      "ai_rd_fix_embedding",
+      "ai_rd_nanogpt_chat_rl",
+      "ai_rd_optimize_llm_foundry",
+      "ai_rd_restricted_mlm",
+      "ai_rd_rust_codecontests_inference",
+      "ai_rd_small_scaling_law",
+      "ai_rd_triton_cumsum"
+    ],
+    "visible_score_families": [
+      "ai_rd_fix_embedding",
+      "ai_rd_nanogpt_chat_rl",
+      "ai_rd_optimize_llm_foundry",
+      "ai_rd_restricted_mlm",
+      "ai_rd_rust_codecontests_inference",
+      "ai_rd_triton_cumsum"
+    ]
+  },
+  "ticket": "EMBER-REBENCH-ADMISSION",
+  "ts": "20260621T142543Z",
+  "verdict": "REBENCH_ADMITTED"
+}

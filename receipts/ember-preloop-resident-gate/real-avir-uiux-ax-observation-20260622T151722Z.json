@@ -1,0 +1,99 @@
+{
+  "classification": "FIRST_HAND_REAL_AVIR_BINARY_TUI_AND_AGENT_LOOP_OBSERVED_WITH_ISOLATED_UNMANAGED_STUB_BACKEND",
+  "commands": {
+    "actual_driver_used": "node <local-path> <local-path>",
+    "cwd": "<local-path>",
+    "driver": "node <local-path> <local-path>",
+    "env_overrides_nonsecret": {
+      "AVIR_API_KEY": "local",
+      "AVIR_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+      "AVIR_MAX_OUTPUT_TOKENS": "512",
+      "AVIR_MODEL_NAME": "codex-observer",
+      "AVIR_MODEL_URL": "http://127.0.0.1:18173",
+      "AVIR_NCTX_PROBE_OVERRIDE": "131072",
+      "HOME": "<local-path>",
+      "NO_COLOR": "1",
+      "USERPROFILE": "<local-path>"
+    },
+    "real_avir_command": "<local-path> --bare --debug-file <local-path> --permission-mode acceptEdits",
+    "repo_preserved_driver": "node scripts\\ember_real_avir_observation_driver.cjs <output-dir>"
+  },
+  "evidence_files": {
+    "adapter_trace": {
+      "bytes": 2754,
+      "path": "receipts/ember-preloop-resident-gate/real-avir-uiux-ax-observation-20260622T151722Z-adapter-trace.log",
+      "sha256": "33c9402ecd4ee247a97173c9935f36366856a224700c92c6ff9ed8bdc6233b1c"
+    },
+    "observation_meta": {
+      "bytes": 1302,
+      "path": "receipts/ember-preloop-resident-gate/real-avir-uiux-ax-observation-20260622T151722Z-meta.json",
+      "sha256": "a3670acfa779945c8b9dc13511cafe0f4bf1618e8ffc0a2a9abf95231e91dfce"
+    },
+    "process_after": {
+      "bytes": 1221,
+      "path": "receipts/ember-preloop-resident-gate/real-avir-uiux-ax-observation-20260622T151722Z-process-after.json",
+      "sha256": "3af9e01737ef84ec77caf2a9fed4f5cf68f0c3763716cd251a8c842ce6071028"
+    },
+    "stub_server_log": {
+      "bytes": 19611,
+      "path": "receipts/ember-preloop-resident-gate/real-avir-uiux-ax-observation-20260622T151722Z-stub-server-log.jsonl",
+      "sha256": "02ac0af45596f5f53a5b03f44f9a605effdd235a6a8388e8d7bd985b5bbf5298"
+    },
+    "terminal_transcript_clean": {
+      "bytes": 4404,
+      "path": "receipts/ember-preloop-resident-gate/real-avir-uiux-ax-observation-20260622T151722Z-terminal-transcript-clean.txt",
+      "sha256": "bcabb719ebd8fd4128e845db63f838f516ed672ccfc533aea8b368ff85d04b2f"
+    }
+  },
+  "first_hand_observations": {
+    "agent_loop": "Stub log shows two POST /v1/chat/completions calls made by Avir after the prompt: one title-generation call and one main agent call carrying the user prompt, tools, current date, cwd, git status, max_tokens=512, stream=true.",
+    "assistant_stream_boundary": "Adapter trace shows streamed OBSERVATION_OK chunks, but Avir classified the stub content as thinking, so the visible transcript did not cleanly render the assistant answer as final text.",
+    "input_rendering": "Transcript shows the typed user prompt submitted through the REPL prompt line.",
+    "tui_boot_banner": "Transcript shows Avir CLI v0.1.0 banner, model line codex-observer Local codex-observer, cwd <local-path>, prompt, accept-edits status, effort/status strip, and Ctrl-C exit affordance.",
+    "uiux_ax_deltas": [
+      "Real TUI uses dense box-drawn banner and status strips that become hard to read in raw PTY captures.",
+      "The prompt/status surface exposes permission mode, effort, model identity, cwd, plugin notice, and Ctrl-C affordance.",
+      "A future clean-room parity UI needs explicit transcript-safe rendering tests and a thinking-vs-final-content check."
+    ]
+  },
+  "limitations": [
+    "The model backend was a local stub, so this receipt proves UI/adapter/agent-loop reachability and resource governance, not model intelligence.",
+    "The visible assistant answer was not cleanly rendered as final text because the stubbed streaming chunks were interpreted as thinking content.",
+    "The run unexpectedly auto-installed the official marketplace into the isolated temp home; this is recorded as an Avir behavior to account for in parity, not hidden as a blocker clearance."
+  ],
+  "marker_checks": {
+    "adapter_has_observation_ok_stream": true,
+    "after_snapshot_has_no_avir_process": true,
+    "after_snapshot_has_no_llama_process": true,
+    "stub_has_main_chat_completion": true,
+    "transcript_has_banner_or_avir": true,
+    "transcript_has_cwd": true,
+    "transcript_has_model_line": true,
+    "transcript_has_user_prompt": true
+  },
+  "negative_control": {
+    "previous_attempt_path": "<local-path>",
+    "previous_attempt_verdict": "UI_BOOT_ONLY_NOT_AGENT_LOOP_PASS",
+    "reason": "The first attempt hit FM_91 before /v1/chat/completions; it is intentionally not counted as observed_agent_loop."
+  },
+  "observed_agent_loop": true,
+  "observed_real_avir_binary": true,
+  "observed_real_tui": true,
+  "observed_uiux_ax": true,
+  "pass_condition": "The full-parity harness may consume this receipt only as real-avir UI/UX/AX observation evidence. It does not satisfy neural resident training, BitNet, external heldout, or goal-clear conditions.",
+  "resource_governance": {
+    "after_snapshot_has_avir_process": false,
+    "after_snapshot_has_llama_process": false,
+    "backend": "isolated local OpenAI-compatible stub",
+    "isolated_home": "<local-path>",
+    "llama_server_spawn_requested": false,
+    "managed_model_spawn_requested": false,
+    "normal_user_home_models_config": "not used",
+    "note": "Avir extracted runtime files into the isolated temp home but used an unmanaged local OpenAI-compatible stub endpoint; no llama-server process remained in the after snapshot."
+  },
+  "resource_governed": true,
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-REAL-AVIR-UIUX-AX-OBSERVATION",
+  "ts": "20260622T151955Z",
+  "verdict": "REAL_AVIR_UIUX_AX_OBSERVATION_PASS"
+}

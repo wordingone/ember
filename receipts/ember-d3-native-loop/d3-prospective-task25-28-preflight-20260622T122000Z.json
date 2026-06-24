@@ -1,0 +1,95 @@
+{
+  "blocked_reasons": [
+    "docker_images_missing_local"
+  ],
+  "docker_image_inspections": [
+    {
+      "available_local": false,
+      "command": [
+        "docker",
+        "image",
+        "inspect",
+        "hananemoussa/d3-gym:task_25",
+        "--format",
+        "{{json .RepoDigests}}"
+      ],
+      "image": "hananemoussa/d3-gym:task_25",
+      "returncode": 1,
+      "stderr": "Error response from daemon: No such image: hananemoussa/d3-gym:task_25",
+      "stdout": ""
+    },
+    {
+      "available_local": false,
+      "command": [
+        "docker",
+        "image",
+        "inspect",
+        "hananemoussa/d3-gym:task_26",
+        "--format",
+        "{{json .RepoDigests}}"
+      ],
+      "image": "hananemoussa/d3-gym:task_26",
+      "returncode": 1,
+      "stderr": "Error response from daemon: No such image: hananemoussa/d3-gym:task_26",
+      "stdout": ""
+    },
+    {
+      "available_local": false,
+      "command": [
+        "docker",
+        "image",
+        "inspect",
+        "hananemoussa/d3-gym:task_27",
+        "--format",
+        "{{json .RepoDigests}}"
+      ],
+      "image": "hananemoussa/d3-gym:task_27",
+      "returncode": 1,
+      "stderr": "Error response from daemon: No such image: hananemoussa/d3-gym:task_27",
+      "stdout": ""
+    },
+    {
+      "available_local": false,
+      "command": [
+        "docker",
+        "image",
+        "inspect",
+        "hananemoussa/d3-gym:task_28",
+        "--format",
+        "{{json .RepoDigests}}"
+      ],
+      "image": "hananemoussa/d3-gym:task_28",
+      "returncode": 1,
+      "stderr": "Error response from daemon: No such image: hananemoussa/d3-gym:task_28",
+      "stdout": ""
+    }
+  ],
+  "dryrun_receipt_path": "<local-path>",
+  "dryrun_receipt_sha256": "98911727e704e74e72d8987907a13aa6dd3f3c268da480afc374d2ed31c7cf21",
+  "execution_policy": {
+    "implicit_pull_allowed": false,
+    "reason": "Prevent surprise disk/network use; missing images must be pulled by an explicit load-bearing command and receipt."
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "a30b8e8231c7a9a1dee6450b7fac31604af8311684d4c151e848761fa5bf5ce7",
+  "materialized_rows_path": "<local-path>",
+  "materialized_rows_sha256": "1a99cff7869bcf210f4b34ed7b8a5f4fb3754ea4aa997802500592716a43707a",
+  "missing_local_images": [
+    "hananemoussa/d3-gym:task_25",
+    "hananemoussa/d3-gym:task_26",
+    "hananemoussa/d3-gym:task_27",
+    "hananemoussa/d3-gym:task_28"
+  ],
+  "next_executable_command": "Explicitly pull or otherwise provision missing D3 Docker images, then run: python scripts\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\ember-d3-native-loop\\d3-hf-materialized-offset24-len8-20260622T121000Z.json --out-dir receipts\\ember-d3-native-loop\\d3-prospective-task25-28-exec-<timestamp> --task-id task_25 --task-id task_26 --task-id task_27 --task-id task_28 --require-prospective --execute",
+  "repo": "<local-path>",
+  "selected_task_ids": [
+    "task_25",
+    "task_26",
+    "task_27",
+    "task_28"
+  ],
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-D3-PROSPECTIVE-EXECUTION-PREFLIGHT",
+  "ts": "20260622T135824Z",
+  "verdict": "D3_PROSPECTIVE_EXECUTION_BLOCKED"
+}

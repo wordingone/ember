@@ -1,0 +1,45 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 1.0,
+    "Deleted": 0.0
+  },
+  "api_spend_usd": 0,
+  "candidate_safety": {
+    "candidate_workdirs_isolated": true,
+    "gold_programs_read_by_candidate": false,
+    "gold_results_visible_during_candidate_execution": false,
+    "known_weak_surface": "clintox verified test csv exposes label columns to candidate; receipt does not treat that row as field-level proof by itself",
+    "private_labels_read_by_candidate": false
+  },
+  "closest_known_prior_or_baseline": "Manual or agent-authored ScienceAgentBench task solution loops with local deterministic/visual regrading; prior D3 multi-task generator receipts in this repo; baseline A/B/Deleted arms in the cited SAB receipt.",
+  "deletion_ablation_evidence": "SAB A/B/Deleted arms remain 0 and C drops if candidate generators/public fixture are removed, but field-level deletion evidence across a stronger transfer benchmark is not yet present.",
+  "deletion_sensitive": true,
+  "evaluated_receipt": "<local-path>",
+  "evaluated_receipt_sha256": "e152e729f099c0912805a9e607cfb407ace0276006e81e9f172f4199fecb0bc6",
+  "field_level_decision": "progress_not_field_breakthrough",
+  "leaderboard_dependency": false,
+  "next_executable_command": "Run the frozen stronger transfer slice with zero-cost matched A/B/C/Deleted arms; do not claim field-level breakthrough until transfer/reuse and ablation evidence passes.",
+  "paid_api_surface_used": false,
+  "positive_delta": true,
+  "primary_contribution_class_considered": "benchmark methodology / agent-learning substrate",
+  "reasons_not_field_level": [
+    "The six-row slice is small and was improved over multiple targeted edits, so it does not prove broad transfer or a new ML/AI method by itself.",
+    "The visual rows use strict local noncanonical regrades rather than an external independent leaderboard result, intentionally zero-cost but not field-level evidence alone.",
+    "The Clintox row remains a known weak surface because its verified test CSV exposes label columns in the local artifact, even though the receipt does not treat it as field-level proof.",
+    "The mat diffusion pass reconstructs public MAST-ML feature output for the benchmark evaluator; useful and reproducible, but not a new learning/self-improvement mechanism.",
+    "The receipt proves candidate-quality progress and deletion sensitivity on this slice, not native self-growing operator autonomy or reusable cross-benchmark breakthrough."
+  ],
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "stronger_external_benchmark_pair": {
+    "benchmark": "ScienceAgentBench verified local artifact",
+    "dataset_pair": "frozen disjoint deterministic transfer slice over experimental_band_gap, crystalline_compound, ref_index, and pucci datasets",
+    "freeze_receipt": "<local-path>",
+    "freeze_receipt_sha256": "4f056df2ebeb2857e996a92e85d5688068b94c5c51d716c9c977d7ec79835c5f"
+  },
+  "ticket": "EMBER-FIELD-LEVEL-BREAKTHROUGH-EVALUATION",
+  "transfer_reuse_evidence": "not_yet_sufficient; stronger transfer slice frozen in companion receipt",
+  "ts": "20260622T193500Z",
+  "verdict": "FIELD_LEVEL_BREAKTHROUGH_NOT_PROVEN_STRONGER_TRANSFER_REQUIRED"
+}

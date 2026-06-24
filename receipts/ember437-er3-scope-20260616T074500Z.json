@@ -1,0 +1,71 @@
+{
+  "ticket": "EMBER-437-ER-3-CORPUS-SCOPE",
+  "ts": "20260616T074500Z",
+  "n_floor_tok_per_gov_day": 745228800,
+  "n_floor_human": "745M tok/gov-day (8627.0 tok_s_paced x 86400s)",
+
+  "pairs_needed": {
+    "1_gov_day_unique": 7280000,
+    "note": "7.28M unique matched pairs for 1 gov-day with no repeat (steps_per_day=181976, pairs_per_step=40 at K=10, batch=4)",
+    "cc3m_total": 3300000,
+    "cc3m_days_unique": 0.45,
+    "chinchilla_ceiling_days": 9.9,
+    "chinchilla_pairs_needed": 72000000,
+    "b_multi_1_current": 500,
+    "b_multi_1_steps_before_cycle": 12
+  },
+
+  "encoded_disk_footprint": {
+    "bytes_per_pair_encoded": 995548,
+    "note": "n_patches=36 x 6912 x float32 + caption = ~1MB/pair",
+    "cc3m_preencoded_gb": 3285,
+    "1day_preencoded_gb": 7246,
+    "chinchilla_preencoded_gb": 71651,
+    "rail_status": "TRIGGERED — pre-encode for any real corpus exceeds 100GB hard rail"
+  },
+
+  "acquisition_source": {
+    "option_a_preencoded": {
+      "name": "pre-encode to disk",
+      "disk_gb": 3285,
+      "verdict": "RAIL — 100GB exceeded, do not proceed"
+    },
+    "option_b_streaming_cc3m": {
+      "name": "CC3M on-the-fly streaming",
+      "metadata_gb": 1,
+      "images_cached_gb": 0,
+      "note": "Download CC3M metadata (~1GB: URLs+captions). Stream JPEG images from URLs at training time. Encode with corpus_patch_encode.encode_patches() (PIL+numpy, no GPU, ~1-3ms/image). Patches computed live, never written to disk.",
+      "cc3m_url_live_fraction": 0.80,
+      "effective_pairs": 2640000,
+      "effective_days": 0.36,
+      "disk_verdict": "PASSES 100GB rail (metadata 1GB)",
+      "acquisition_verdict": "EXTERNAL: CC3M metadata download (~1GB). Needs the maintainer authorization as external acquisition."
+    },
+    "option_c_extend_b_multi_1": {
+      "name": "extend b-multi-1 local corpus",
+      "current_pairs": 500,
+      "max_local_pairs": "limited — requires manual curation",
+      "verdict": "INSUFFICIENT — 500 pairs is 12 steps before cycling; no path to 7.28M"
+    }
+  },
+
+  "on_the_fly_vs_precompute": {
+    "recommendation": "on_the_fly",
+    "rationale": [
+      "Encoder is pure PIL+numpy (no pretrained model, no GPU): patches = resize + crop + reshape, ~1-3ms/image CPU.",
+      "At 40 pairs/step and 380ms step time, encoder budget is ~9.5ms/pair — feasible in background DataLoader thread.",
+      "Pre-encode disk is 3.3TB for CC3M (100GB rail triggered). On-the-fly eliminates this entirely.",
+      "Only disk cost is CC3M metadata: ~1GB (URLs + captions), well under 100GB."
+    ],
+    "open_question": "CC3M URL liveness (~80%): reduces effective pairs from 3.3M to ~2.6M = 0.36 unique days. Cycling 2.6M pairs covers 1-gov-day with ~2.8 repeats per pair. Acceptable for v0 pretrain (early epochs expect repeats)."
+  },
+
+  "rail_summary": {
+    "preencoded_disk": "RAIL TRIGGERED — 3.3TB CC3M >> 100GB",
+    "streaming_disk": "PASSES — 1GB metadata",
+    "external_acquisition": "REQUIRES the maintainer AUTHORIZATION — CC3M metadata is external download not already on-machine",
+    "verdict": "ESCALATE TO the maintainer before proceeding with any acquisition"
+  },
+
+  "er3_scope_pass": true
+}

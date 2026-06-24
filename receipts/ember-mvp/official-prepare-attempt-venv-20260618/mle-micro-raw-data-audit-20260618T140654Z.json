@@ -1,0 +1,227 @@
+{
+  "ticket": "EMBER-MLE-MICRO-RAW-DATA-AUDIT",
+  "ts": "20260618T140654Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ],
+    "official_leaderboard_comparable": false
+  },
+  "fixture_only": false,
+  "real_mle_tasks_executed": false,
+  "frozen_before_execution": true,
+  "data_root": "<local-path>",
+  "raw_data_ready": false,
+  "task_assets": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "raw_root": "<local-path>",
+      "required_raw_assets": [
+        "raw/train.csv",
+        "raw/test_with_solutions.csv"
+      ],
+      "raw_assets": [
+        {
+          "path": "raw/train.csv",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        },
+        {
+          "path": "raw/test_with_solutions.csv",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        }
+      ],
+      "missing_raw_assets": [
+        "raw/train.csv",
+        "raw/test_with_solutions.csv"
+      ]
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "raw_root": "<local-path>",
+      "required_raw_assets": [
+        "raw/train.json",
+        "raw/test.json"
+      ],
+      "raw_assets": [
+        {
+          "path": "raw/train.json",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        },
+        {
+          "path": "raw/test.json",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        }
+      ],
+      "missing_raw_assets": [
+        "raw/train.json",
+        "raw/test.json"
+      ]
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "raw_root": "<local-path>",
+      "required_raw_assets": [
+        "raw/train.zip"
+      ],
+      "raw_assets": [
+        {
+          "path": "raw/train.zip",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        }
+      ],
+      "missing_raw_assets": [
+        "raw/train.zip"
+      ]
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "raw_root": "<local-path>",
+      "required_raw_assets": [
+        "raw/train.zip",
+        "raw/train.csv.zip",
+        "raw/test.zip",
+        "raw/test.csv.zip"
+      ],
+      "raw_assets": [
+        {
+          "path": "raw/train.zip",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        },
+        {
+          "path": "raw/train.csv.zip",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        },
+        {
+          "path": "raw/test.zip",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        },
+        {
+          "path": "raw/test.csv.zip",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        }
+      ],
+      "missing_raw_assets": [
+        "raw/train.zip",
+        "raw/train.csv.zip",
+        "raw/test.zip",
+        "raw/test.csv.zip"
+      ]
+    },
+    {
+      "task_id": "leaf-classification",
+      "raw_root": "<local-path>",
+      "required_raw_assets": [
+        "raw/train.csv.zip",
+        "raw/images.zip"
+      ],
+      "raw_assets": [
+        {
+          "path": "raw/train.csv.zip",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        },
+        {
+          "path": "raw/images.zip",
+          "absolute_path": "<local-path>",
+          "present": false,
+          "sha256": null
+        }
+      ],
+      "missing_raw_assets": [
+        "raw/train.csv.zip",
+        "raw/images.zip"
+      ]
+    }
+  ],
+  "missing_raw_assets": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "path": "raw/train.csv",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "path": "raw/test_with_solutions.csv",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "path": "raw/train.json",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "path": "raw/test.json",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "path": "raw/train.zip",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "path": "raw/train.zip",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "path": "raw/train.csv.zip",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "path": "raw/test.zip",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "path": "raw/test.csv.zip",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "leaf-classification",
+      "path": "raw/train.csv.zip",
+      "expected_path": "<local-path>"
+    },
+    {
+      "task_id": "leaf-classification",
+      "path": "raw/images.zip",
+      "expected_path": "<local-path>"
+    }
+  ],
+  "freeze_manifest_sha256": "sha256:081a83aa5e595b176977781896ead6d0c05dfb57a4f7bec208afdaa2e868005b",
+  "freeze_manifest_path": "<local-path>",
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "BLOCKED"
+}

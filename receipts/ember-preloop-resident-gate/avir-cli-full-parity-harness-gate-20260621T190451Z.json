@@ -1,0 +1,583 @@
+{
+  "ticket": "EMBER-AVIR-CLI-FULL-PARITY-HARNESS-GATE",
+  "ts": "20260621T190452Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "AVIR_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED",
+  "classification": "FULL_PARITY_GATE_BLOCKED_NOT_HEADLESS_PASS",
+  "headless_bootstrap_classification": "HEADLESS_BOOTSTRAP_ONLY",
+  "parity_target": "near_99_percent_complete_parity_in_function_uiux_backend_and_native_goal_mode",
+  "out_path": "receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-20260621T190451Z.json",
+  "goal_parse": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "aee5fcba6147e9afe5466a232ed8dd35f13f34d86fa6f5e8b462a1891e4a7e6f",
+    "status": "PASS",
+    "markers": {
+      "has_current_blocker": true,
+      "has_current_executable_command": true,
+      "has_required_receipt": true,
+      "has_kill_ablate_test": true,
+      "has_next_blocker_if_pass": true,
+      "has_next_blocker_if_fail": true
+    },
+    "current_blocker": "the clean-room goal-mode bootstrap adapter has emitted `receipts\\ember-preloop-resident-gate\\avir-cli-goal-mode-parity-adapter-20260621T155157Z.json` with `AVIR_CLI_GOAL_MODE_PARITY_ADAPTER_PASS`. That receipt proves only a clean-room bootstrap surface: current-blocker parsing, receipt reading/writing, bounded next-action compilation, a launch shim, and deletion-sensitive use of those pieces. It explicitly records `does_not_satisfy_full_avir_cli_parity=true` and routes to `avir_cli_full_parity_harness_gate`. Therefore the clean-room `avir-cli` resident-harness precondition is still open. The next blocker is complete clean-room `avir-cli` parity: near-99% parity in function, UI/UX, backend, launch behavior, process supervision, hooks, tool dispatch, state persistence, receipts, rollback, mailbox/computer-use communicability where applicable, and Codex's exact `/goal`-mode mechanism transplanted as a native resident goal organ. A headless adapter, generated docs, source inventory, wrapper launch, prompt-only router, or goal-mode bootstrap receipt is not full parity.",
+    "current_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+    "required_receipt": "a new `receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json` with either `AVIR_CLI_FULL_PARITY_HARNESS_GATE_PASS` proving near-99% complete clean-room parity across function, UI/UX, backend, and native Codex-goal-mode mechanics, or `AVIR_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED` naming the exact missing parity surface, reference/provenance blocker, permission blocker, or implementation blocker and the next executable command. The receipt must classify any headless-only bridge as `HEADLESS_BOOTSTRAP_ONLY`, not pass.",
+    "kill_ablate_test": "deleting or disabling the visible UI/UX surface, backend command router, process supervisor, hook runner, state/receipt store, rollback path, native goal organ, launch path, or communication bridge must block or measurably degrade the harness receipt. If deletion does not matter, that surface is not load-bearing and the full-parity gate fails.",
+    "next_blocker_if_pass": "continue the next missing non-killable precondition: adapt `scripts\\train_multimodal_v0.py` into the RLM/iGRPO neural resident-training organ under the fixed before/after A/B/C/deleted transfer contract, using the full-parity clean-room harness as the resident body.",
+    "next_blocker_if_fail": "continue the exact missing clean-room `avir-cli` full-parity surface named by the receipt. Do not run additional D3/Kaggle/PaperBench/RE-Bench/ScienceAgentBench loops, readiness checks, duration milestones, documentation passes, or remote GitHub performance work as substitutes."
+  },
+  "inventory_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "7b230131030fb4686f829003509e723d541dddb172dcbc99f1ba1ce0b5508bee",
+    "ticket": "EMBER-AVIR-CLI-CLEANROOM-INVENTORY",
+    "verdict": "AVIR_CLI_CLEANROOM_INVENTORY_BLOCKED"
+  },
+  "bootstrap_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "462d906dd95177a4969fbcc4976ee087a28a3aa5d426b41cddc31e4a636bf312",
+    "ticket": "EMBER-AVIR-CLI-GOAL-MODE-PARITY-ADAPTER",
+    "verdict": "AVIR_CLI_GOAL_MODE_PARITY_ADAPTER_PASS",
+    "does_not_satisfy_full_avir_cli_parity": true
+  },
+  "avir_root": {
+    "path": "<local-path>",
+    "exists": true,
+    "package_json_sha256": "cfa1bc777a599d3633e54a66e6319a80af8e669131cf2130a47d97e3f6b3dc1f"
+  },
+  "cleanroom_legal_boundary": {
+    "inventory_legal_provenance_count": 13,
+    "required_local_legal_files": [
+      {
+        "path": "legal/origin.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "3bb0ef63a7743afe4aaac392ade788ac09a9978b6bb2bb43decc44d3594594c9",
+        "kind": "file"
+      },
+      {
+        "path": "legal/ui-parity-audit.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "d23066436af3949d774ec62889d195852b6f1af0f22309d9eac082bd15e1fac6",
+        "kind": "file"
+      },
+      {
+        "path": "legal/ui-parity-audit-pass2.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57",
+        "kind": "file"
+      },
+      {
+        "path": "legal/ui-parity-audit-pass3.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984",
+        "kind": "file"
+      },
+      {
+        "path": "legal/file-inventory.csv",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb",
+        "kind": "file"
+      },
+      {
+        "path": "legal/product-shape.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "41f203b9300f926d52fef5eef8ac796445b3406d6a1139bf1ae9eab5c49c3d59",
+        "kind": "file"
+      }
+    ],
+    "status": "REFERENCE_AVAILABLE",
+    "copying_policy": "reference/provenance inspection only; no avir-cli source import or inherited implementation copying"
+  },
+  "surface_matrix": [
+    {
+      "surface_id": "function_slash_commands",
+      "name": "Slash command surface",
+      "reference_evidence": [
+        {
+          "path": "legal/ui-parity-audit.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "d23066436af3949d774ec62889d195852b6f1af0f22309d9eac082bd15e1fac6",
+          "kind": "file"
+        },
+        {
+          "path": "src/commands.ts",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "7d3ef624bfd1f8c7845dd597f7659fe129587a98a42a34052abe0888e0f0c68c",
+          "kind": "file"
+        },
+        {
+          "path": "src/commands",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Ember-visible command registry with near-complete avir command behavior and goal-safe replacements for cloud-only/upstream-branded commands.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "uiux_repl_components",
+      "name": "REPL UI and interaction components",
+      "reference_evidence": [
+        {
+          "path": "legal/ui-parity-audit-pass2.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57",
+          "kind": "file"
+        },
+        {
+          "path": "src/screens/REPL.tsx",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "f3dda21b3801042143076a1ee1c1bbfe11653e046a32653caa1e33f67d810667",
+          "kind": "file"
+        },
+        {
+          "path": "src/components",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Native Ember REPL/tool surface with prompt input, message rendering, settings, help, tasks, permissions, model picker, and diagnostics parity.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "backend_coordinator_agents",
+      "name": "Coordinator, agent, and delegation backend",
+      "reference_evidence": [
+        {
+          "path": "legal/ui-parity-audit-pass3.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984",
+          "kind": "file"
+        },
+        {
+          "path": "src/coordinator",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/tools/AgentTool",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/tasks",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Resident local agent orchestration, delegation, task panels, built-in agent definitions, and worker lifecycle without proprietary copy-through.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "launch_packaging",
+      "name": "Launch, packaging, and executable entrypoints",
+      "reference_evidence": [
+        {
+          "path": "package.json",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "cfa1bc777a599d3633e54a66e6319a80af8e669131cf2130a47d97e3f6b3dc1f",
+          "kind": "file"
+        },
+        {
+          "path": "avir.exe",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "8627914d30c8889cfd2387764da48df0ed1ba38a536ce162de771cd816445a48",
+          "kind": "file"
+        },
+        {
+          "path": "src/entrypoints/cli.tsx",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "c58bac7a4d73f5811bcec80d276d537bb6b128cd0f49bf46afc5b8a52dca11c3",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Working avir/ember launch path, package/build contract, and Windows entrypoint that does not point at a missing avir.ps1.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "process_supervision",
+      "name": "Process supervision and cleanup",
+      "reference_evidence": [
+        {
+          "path": "native/windows-job-object",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "windows_job_object.win32-x64-msvc.node",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "b67cdeb082b5b59437fbecdcc4d59a760c83cb49f58987a35d243fc0e446293b",
+          "kind": "file"
+        },
+        {
+          "path": "src",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Windows process-tree cleanup, timeout, background task, and child-process lifecycle controls with deletion-sensitive tests.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "hook_runner",
+      "name": "Hook runner and event policy",
+      "reference_evidence": [
+        {
+          "path": "src/components/hooks",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Hook configuration, event dispatch, read-only policy surfaces, and fail-closed permission handling.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "tool_dispatch_permissions",
+      "name": "Tool dispatch and permission gating",
+      "reference_evidence": [
+        {
+          "path": "src/tools",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/components/permissions",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs/api/generated/src/tools",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Native tool registry, permission prompts, allow/deny rules, and tool-call execution with verifier and rollback hooks.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "state_persistence",
+      "name": "State, sessions, memory, and compaction",
+      "reference_evidence": [
+        {
+          "path": "src",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "state",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": ".avir",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Local session state, durable memory, compaction, resume, settings, and model/account state under Ember-owned storage.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "receipt_store",
+      "name": "Receipts, telemetry, and replayable evidence",
+      "reference_evidence": [
+        {
+          "path": "dogfood-receipts",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs/adr/0004-real-work-replaces-scripted-dogfood.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "714dadb9909240d915167215fe5bf8f968c91625a25eed72578e53f0a30021eb",
+          "kind": "file"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Fail-closed receipt writer/reader, event logs, replay hooks, and evidence rows tied to every gate.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "rollback_rewind",
+      "name": "Rollback, rewind, and branch restoration",
+      "reference_evidence": [
+        {
+          "path": "src/commands/rewind",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/commands/branch",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/commands/diff",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Local branch/session rewind, diff, restore, and delete/ablate-sensitive rollback tests.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "communication_mailbox_computer_use",
+      "name": "Communication and computer-use reachability",
+      "reference_evidence": [
+        {
+          "path": "src/tools/SendMessageTool",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs/avir/en/agent-teams.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "9e3e25dee89a4d88e6187d70219ba1d99d5fa531918dd5139762ab5c46845ffd",
+          "kind": "file"
+        },
+        {
+          "path": "docs/claude-code-upstream/en/sub-agents.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "208f14781c8094b08e5d69bd1880c6a31853f2e826dfb199109fce7b71a3c3fb",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Ember mailbox identity, user-facing communication, founder communication, and computer-use route where applicable.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "native_goal_organ",
+      "name": "Native Codex goal-mode organ",
+      "reference_evidence": [
+        {
+          "path": "GOAL.md",
+          "source_root": "ember_repo",
+          "exists": true,
+          "sha256": "aee5fcba6147e9afe5466a232ed8dd35f13f34d86fa6f5e8b462a1891e4a7e6f",
+          "kind": "file"
+        },
+        {
+          "path": "tools/avir-goal-mode/avir.ps1",
+          "source_root": "ember_repo",
+          "exists": true,
+          "sha256": "5681c2a7b14750da959c4fe25943ee622657ce791807d8194ad2873acff80e45",
+          "kind": "file"
+        },
+        {
+          "path": "scripts/ember_avir_cli_goal_mode_parity_adapter.py",
+          "source_root": "ember_repo",
+          "exists": true,
+          "sha256": "083ed7709805f9e66899d140c43b7936740797e3939d67d51dd8ae15d64e875d",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Resident goal organ that parses goal, reads receipts, selects blocker, compiles action, runs/delegates, verifies, writes receipt, and preserves next blocker without Codex steering.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "cleanroom_legal_boundary",
+      "name": "Clean-room provenance and copyright boundary",
+      "reference_evidence": [
+        {
+          "path": "legal/origin.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "3bb0ef63a7743afe4aaac392ade788ac09a9978b6bb2bb43decc44d3594594c9",
+          "kind": "file"
+        },
+        {
+          "path": "legal/dependencies.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "5a4e609e92cc17084a24580d887dd6f76c6fe469e6d9d05e59ead99b65a4af36",
+          "kind": "file"
+        },
+        {
+          "path": "legal/file-inventory.csv",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb",
+          "kind": "file"
+        },
+        {
+          "path": "legal/product-shape.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "41f203b9300f926d52fef5eef8ac796445b3406d6a1139bf1ae9eab5c49c3d59",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Reference-only evidence boundary, no inherited implementation copying, and per-surface provenance receipt.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    }
+  ],
+  "delete_ablate_required": {
+    "visible_uiux_deleted_blocks": false,
+    "backend_command_router_deleted_blocks": false,
+    "process_supervisor_deleted_blocks": false,
+    "hook_runner_deleted_blocks": false,
+    "state_receipt_store_deleted_blocks": false,
+    "rollback_path_deleted_blocks": false,
+    "native_goal_organ_deleted_blocks": false,
+    "communication_bridge_deleted_blocks": false
+  },
+  "blocked_reasons": [
+    "backend_command_router_deleted_blocks_not_deletion_sensitive",
+    "communication_bridge_deleted_blocks_not_deletion_sensitive",
+    "full_cleanroom_parity_not_implemented",
+    "headless_bootstrap_only",
+    "hook_runner_deleted_blocks_not_deletion_sensitive",
+    "native_goal_organ_deleted_blocks_not_deletion_sensitive",
+    "process_supervisor_deleted_blocks_not_deletion_sensitive",
+    "rollback_path_deleted_blocks_not_deletion_sensitive",
+    "state_receipt_store_deleted_blocks_not_deletion_sensitive",
+    "visible_uiux_deleted_blocks_not_deletion_sensitive"
+  ],
+  "next_missing_precondition": "avir_cli_full_parity_harness_gate",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "next_blocker_if_pass": "rlm_igrpo_train_multimodal_adapter",
+  "n_rows": 13
+}

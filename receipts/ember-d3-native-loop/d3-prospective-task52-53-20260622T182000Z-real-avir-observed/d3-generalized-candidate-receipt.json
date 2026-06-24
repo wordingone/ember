@@ -1,0 +1,301 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.5,
+    "Deleted": 0.0
+  },
+  "arm_contract": {
+    "A": "no native generator, no outputs",
+    "B": "instruction-only fixed stub; no eval-script artifact compiler",
+    "C": "shared inferred artifact compiler from fresh task/evaluator requirements",
+    "Deleted": "C with native generator / resident action-selection organ removed"
+  },
+  "arm_solution_paths": {
+    "A": "<local-path>",
+    "B": "<local-path>",
+    "C": "<local-path>",
+    "Deleted": "<local-path>"
+  },
+  "arm_solution_sha256": {
+    "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+    "B": "6cf385984f0df91e582320b214d8ea6588f274c9cad026742dd810ec5113c8b9",
+    "C": "c443e9dfdd5c0c9c85950a9ff4d4bfc56f6f419fcdd98b65259d89c730f345dc",
+    "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+  },
+  "code_vs_docs_metric": {
+    "classification": "during-project executable official Docker benchmark receipt",
+    "receipt_lines_predicted": 301,
+    "script_code_lines": 1170,
+    "solution_code_lines": 703
+  },
+  "deletion_sensitive": true,
+  "equal_budget": {
+    "entrypoint": "run_and_eval",
+    "official_container_runs_per_arm_per_task": 1,
+    "same_solution_source_per_arm_across_tasks": true,
+    "timeout_seconds_per_arm": 120
+  },
+  "errors": [
+    "c_did_not_pass_multiple_tasks"
+  ],
+  "external_task_source": {
+    "dataset": "osunlp/D3-Gym",
+    "length": 6,
+    "offset": 48,
+    "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=48&length=6",
+    "split": "train"
+  },
+  "field_level_status": "progress_not_field_breakthrough",
+  "floor_contract_preservation_references": [
+    "docs/ember-floor-contract.md",
+    "nc2-own-technique-contract.md",
+    "scripts/train_multimodal_v0.py \u00a76 action log"
+  ],
+  "fresh_rows_path": "<local-path>",
+  "fresh_rows_sha256": "b8424aa4a55b33374447474a071362fa09ec71c7d54e5389d76e4badd5b28568",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "36ab70b9fcafad3bc4130614cf8e6aa61004f110ffcfd0f10fd0aba0b1a26d86",
+  "limits": [
+    "This is still within the D3 chemistry/I-ReaxFF family unless broader task IDs are selected.",
+    "Goal completion still requires field-level breakthrough evidence beyond this receipt."
+  ],
+  "manual_solution_exclusion": {
+    "manual_per_task_solution": false,
+    "rationale": "C source is generated once from inferred required artifact families and contains no task_id branches.",
+    "task9_solution_reused": false
+  },
+  "native_goal_organ_load_bearing": true,
+  "next_blocker": "continue exact missing D3 generalization surface named in errors",
+  "per_task_rows": [
+    {
+      "c_passed": true,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_52",
+      "image_digest": "hananemoussa/d3-gym@sha256:06af52c5e3edc22d128e440ab11188e5f7074d4374ccd16846c148bb3892532a",
+      "inspect_sha256": "e30fc7db91725bea8f29cbd5002714f49b6959026b4308b10e2b67a54e65bc17",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_52",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Missing required output file: pred_dkt_forget_dataloader.json",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Missing required output file: pred_dkt_forget_dataloader.json\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_52",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "pred_dkt_forget_dataloader.json is not valid JSON: Expecting value: line 1 column 1 (char 0)",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: pred_dkt_forget_dataloader.json is not valid JSON: Expecting value: line 1 column 1 (char 0)\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_52",
+            "run_and_eval"
+          ],
+          "failed": false,
+          "passed": true,
+          "reason": "All checks passed: output files exist with valid structure, temporal gap features present, educational sequence data included, statistics are valid, and qtest file is valid.",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: True\nReason: All checks passed: output files exist with valid structure, temporal gap features present, educational sequence data included, statistics are valid, and qtest file is valid.\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_52",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Missing required output file: pred_dkt_forget_dataloader.json",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Missing required output file: pred_dkt_forget_dataloader.json\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "json",
+          "path": "pred_results/pred_dkt_forget_dataloader.json",
+          "source": "task_instruction"
+        },
+        {
+          "kind": "json",
+          "path": "pred_results/pred_dkt_forget_dataloader_qtest.json",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 51,
+      "task_id": "task_52"
+    },
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_53",
+      "image_digest": "hananemoussa/d3-gym@sha256:39b68fcc0b562c173f860f073f481828d379461e0f7791ce43bb09b1dd2d65bf",
+      "inspect_sha256": "ded21f77073c3a7b94ecb65e0d32046695c37f6bfe4ab456c256e7c0fe4bafa5",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_53",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted output file not found: pred_results/pred_que_data_loader_promptkt.json",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted output file not found: pred_results/pred_que_data_loader_promptkt.json\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_53",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Failed to parse predicted JSON: Expecting value: line 1 column 1 (char 0)",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Failed to parse predicted JSON: Expecting value: line 1 column 1 (char 0)\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_53",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "total_samples (5) seems too low compared to dataset size (16)",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: total_samples (5) seems too low compared to dataset size (16)\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_53",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted output file not found: pred_results/pred_que_data_loader_promptkt.json",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted output file not found: pred_results/pred_que_data_loader_promptkt.json\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "json",
+          "path": "pred_results/pred_que_data_loader_promptkt.json",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 52,
+      "task_id": "task_53"
+    }
+  ],
+  "positive_delta": true,
+  "prospective_surface": {
+    "fresh_surface_no_prior_failed_receipt_overlap": true,
+    "prior_failed_receipts_scanned": 11,
+    "prior_failed_task_id_overlap": {},
+    "require_prospective": true
+  },
+  "repo": "<local-path>",
+  "reproducibility": {
+    "docker_required": true,
+    "rerun_command": "python scripts\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset48-len6-20260622T181000Z.json --out-dir receipts\\ember-d3-native-loop\\d3-prospective-task52-53-20260622T182000Z-real-avir-observed --timeout-seconds 120 --task-id task_52 --task-id task_53 --execute",
+    "solution_hashes": {
+      "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+      "B": "6cf385984f0df91e582320b214d8ea6588f274c9cad026742dd810ec5113c8b9",
+      "C": "c443e9dfdd5c0c9c85950a9ff4d4bfc56f6f419fcdd98b65259d89c730f345dc",
+      "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+    }
+  },
+  "resident_training_cursor_references": {
+    "bitnet_pr": 485,
+    "discovery_pr": 486,
+    "resident_gate_pr": 484,
+    "task9_pr": 487
+  },
+  "selected_task_ids": [
+    "task_52",
+    "task_53"
+  ],
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "static_registry_exclusion": {
+    "static_per_task_answer_table": false,
+    "task_id_branches_in_c_source": false
+  },
+  "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC",
+  "ts": "20260622T155346Z",
+  "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"
+}

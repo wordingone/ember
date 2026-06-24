@@ -1,0 +1,103 @@
+{
+  "audited_receipts": {
+    "avir_full_parity": {
+      "exists": true,
+      "expected_verdict": "AVIR_CLI_FULL_PARITY_HARNESS_GATE_PASS",
+      "path": "receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-20260622T152000Z-real-avir-observed.json",
+      "sha256": "330c51d9d32934e7c6216f05540c9dbfbdfa6c7ccd1385c2fe8dd707a42d10ff",
+      "status": "pass",
+      "verdict": "AVIR_CLI_FULL_PARITY_HARNESS_GATE_PASS"
+    },
+    "bitnet_comparison": {
+      "exists": true,
+      "expected_verdict": "BITNET_COMPARISON_PASS",
+      "path": "receipts\\ember-tiny-bitnet-comparison\\20260622T152800Z-real-avir-observed\\tiny_bitnet_comparison_receipt.json",
+      "sha256": "23caeef1bafc1d8afbf32b2a7069c1c8ba125d0bb8a92df554b8d53f340e07f6",
+      "status": "pass",
+      "verdict": "BITNET_COMPARISON_PASS"
+    },
+    "d3_generalization": {
+      "exists": true,
+      "expected_verdict": "D3_MULTI_TASK_GENERALIZATION_PASS",
+      "path": "receipts\\ember-d3-native-loop\\d3-prospective-task65-66-20260622T193000Z-real-avir-observed\\d3-generalized-candidate-receipt.json",
+      "sha256": "a67d21bfddacfdc99a40b06d02ce1add66138779ad0cf55aae037cf6f6c948fe",
+      "status": "pass",
+      "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"
+    },
+    "field_level_evaluation": {
+      "exists": true,
+      "expected_verdict": "FIELD_LEVEL_BREAKTHROUGH_NOT_PROVEN_CONNECTED_CYCLE_AUDIT_REQUIRED",
+      "path": "receipts\\ember-post-resident-discovery\\field-level-breakthrough-evaluation-20260622T211500Z.json",
+      "sha256": "f300cdb87776366309ac940646502a98a84b6cf111571ea0ead6806291a1404b",
+      "status": "pass",
+      "verdict": "FIELD_LEVEL_BREAKTHROUGH_NOT_PROVEN_CONNECTED_CYCLE_AUDIT_REQUIRED"
+    },
+    "native_goal_organ": {
+      "exists": true,
+      "expected_verdict": "NATIVE_GOAL_ORGAN_PASS",
+      "path": "receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json",
+      "sha256": "11ffcd2bf02786d4cdb434fa3b13b8fc6c52fd0eff0be811c9d13b4ca021fdd8",
+      "status": "pass",
+      "verdict": "NATIVE_GOAL_ORGAN_PASS"
+    },
+    "native_operator_external_transfer_link": {
+      "exists": true,
+      "expected_verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_PASS",
+      "path": "receipts\\ember-post-resident-discovery\\native-operator-external-transfer-link-20260622T221000Z.json",
+      "sha256": "c82f4d8b3d34525bd6a61021b740cb9f716d93582b62f4f7e527fdd1c3ab379a",
+      "status": "pass",
+      "verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_PASS"
+    },
+    "resident_training_gate": {
+      "exists": true,
+      "expected_verdict": "RESIDENT_TRAINING_GATE_PASS",
+      "path": "receipts\\ember-resident-training-gate\\resident-training-gate-20260622T152500Z-real-avir-observed.json",
+      "sha256": "f6992b3ae157f0e698eefd4740805cd5815ac4627da6775986c1183eb228c8a2",
+      "status": "pass",
+      "verdict": "RESIDENT_TRAINING_GATE_PASS"
+    },
+    "sab_completion": {
+      "exists": true,
+      "expected_verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS",
+      "path": "receipts\\ember-post-resident-discovery\\scienceagentbench-zero-cost-regrade-loop-20260622T192500Z.json",
+      "sha256": "e152e729f099c0912805a9e607cfb407ace0276006e81e9f172f4199fecb0bc6",
+      "status": "pass",
+      "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS"
+    },
+    "sab_stronger_transfer": {
+      "exists": true,
+      "expected_verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS",
+      "path": "receipts\\ember-post-resident-discovery\\scienceagentbench-stronger-transfer-loop-20260622T204000Z.json",
+      "sha256": "5d214d7220c3a885d7c7dabfb3146f595ae0f94c698215f79e2d0bfb6d112644",
+      "status": "pass",
+      "verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS"
+    }
+  },
+  "blocked_reasons": [
+    "field_level_contribution_claim_not_proven"
+  ],
+  "connected_operator_proof_present": true,
+  "field_level_claim_proven": false,
+  "field_level_decision_seen": "progress_not_field_breakthrough",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "7b987a74d82fd4e312b7b2f0249c1c587056dc393ba7f4dd5302c0de2f29bcee",
+  "next_executable_command": "Produce a falsifiable ML/AI field-level contribution proof package from the connected cycle: name the primary contribution class, closest prior, material difference, reusable artifact, disjoint validation rows, and deletion/ablation evidence that the contribution itself is load-bearing.",
+  "positive_delta_deletion_checks": {
+    "d3_generalization": true,
+    "sab_completion": true,
+    "sab_stronger_transfer": true
+  },
+  "primary_missing_evidence": "native_operator_to_external_transfer_link_missing",
+  "repo": "<local-path>",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-CONNECTED-CYCLE-FIELD-LEVEL-AUDIT",
+  "ts": "20260622T214735Z",
+  "valid_progress_preserved": [
+    "resident gate and avir full-parity preconditions are preserved as gate evidence",
+    "D3 task65/task66 generalization receipt remains positive-delta and deletion-sensitive",
+    "ScienceAgentBench six-row completion and four-row stronger transfer receipts are zero-cost, positive-delta, and deletion-sensitive",
+    "field-level evaluation correctly refuses goal clear on transfer progress alone"
+  ],
+  "verdict": "CONNECTED_CYCLE_FIELD_LEVEL_AUDIT_BLOCKED",
+  "zero_cost_contract_ok": true
+}

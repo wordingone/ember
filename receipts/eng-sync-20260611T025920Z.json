@@ -1,0 +1,3 @@
+{"ticket":"ENG-SYNC","ts":"20260611T025920Z","open":3,"closed":30,
+"closed_without_merged_pr":[],
+"open_issues":[{"number":123,"title":"[eng] eng-33: GPU timeshare checkpoint-resume harness for the v0 pretrain","updatedAt":"2026-06-11T02:51:12Z"},{"number":114,"title":"[eng] eng-32: D-gate + P-gate harness (persistence-gates spec implementation)","updatedAt":"2026-06-11T02:30:56Z"},{"number":107,"title":"[eng] eng-31: receipt_check fail-closed adoption (successor to #103)","updatedAt":"2026-06-11T02:11:35Z"}]}

@@ -1,0 +1,23 @@
+{
+  "ticket": "EMBER-REAL-AVIR-UIUX-AX-OBSERVATION",
+  "started_at": "2026-06-22T15:17:22.398Z",
+  "finished_at": "2026-06-22T15:18:09.486Z",
+  "avir_exe": "<local-path>",
+  "cwd": "<local-path>",
+  "temp_home": "<local-path>",
+  "model_backend": "isolated local OpenAI-compatible stub",
+  "command": "<local-path> --bare --debug-file <local-path> --permission-mode acceptEdits",
+  "process_exit": {},
+  "files": {
+    "terminal_transcript": "<local-path>",
+    "clean_terminal_transcript": "<local-path>",
+    "stub_log": "<local-path>",
+    "adapter_trace": "<local-path>"
+  },
+  "observed_markers": {
+    "transcript_has_avir": true,
+    "transcript_has_user_prompt": true,
+    "transcript_has_observation_ok": true,
+    "stub_saw_chat_completion": true
+  }
+}

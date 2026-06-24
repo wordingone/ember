@@ -1,0 +1,783 @@
+{
+  "ticket": "EMBER-AVIR-CLI-FULL-PARITY-HARNESS-GATE",
+  "ts": "20260622T002441Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "AVIR_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED",
+  "classification": "FULL_PARITY_GATE_BLOCKED_NOT_HEADLESS_PASS",
+  "headless_bootstrap_classification": "HEADLESS_BOOTSTRAP_ONLY",
+  "parity_target": "near_99_percent_complete_parity_in_function_uiux_backend_and_native_goal_mode",
+  "out_path": "receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-20260622T001100Z.json",
+  "goal_parse": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "84f60aa96a344a113ea048c1fc93a54678ff47e470fd88a9d08d270e75a53a91",
+    "status": "PASS",
+    "markers": {
+      "has_current_blocker": true,
+      "has_current_executable_command": true,
+      "has_required_receipt": true,
+      "has_kill_ablate_test": true,
+      "has_next_blocker_if_pass": true,
+      "has_next_blocker_if_fail": true
+    },
+    "current_blocker": "the clean-room receipt-store surface is now receipt-backed by `receipts/ember-preloop-resident-gate/receipt-store-20260622T000100Z.json` with `RECEIPT_STORE_GATE_PASS`: a resident-owned fail-closed receipt writer/reader validated schemas, logged writes/reads/rejections, replayed event rows, performed evidence lookup, and proved loose JSON dumps, docs-only receipt policy, non-validating loggers, prompt-only evidence trails, non-Ember/manual steering, and the headless adapter are insufficient. The full `avir-cli` parity harness gate was then rerun at `receipts/ember-preloop-resident-gate/avir-cli-full-parity-harness-gate-20260622T000300Z.json`. It remains `AVIR_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED`, but `native_goal_organ`, `function_slash_commands`, `uiux_repl_components`, `backend_coordinator_agents`, `launch_packaging`, `process_supervision`, `hook_runner`, `tool_dispatch_permissions`, `state_persistence`, and `receipt_store` rows are `PASS`; the next load-bearing missing surface is `rollback_rewind`. Full `avir-cli` parity is still blocked.",
+    "current_executable_command": "python scripts/ember_avir_cli_rollback_rewind_gate.py --out receipts/ember-preloop-resident-gate/rollback-rewind-<timestamp>.json",
+    "required_receipt": "a new `receipts/ember-preloop-resident-gate/rollback-rewind-<timestamp>.json` with either `ROLLBACK_REWIND_GATE_PASS` proving clean-room local branch/session rewind, diff, restore, checkpoint selection, rollback accounting, and executable deletion/ablation sensitivity, or `ROLLBACK_REWIND_GATE_BLOCKED` naming the exact missing rollback store, diff engine, restore path, checkpoint selector, receipt linkage, implementation surface, or next executable command. Static docs, manual git reset/checkouts, prompt-only rewind claims, non-Ember/manual steering, or a headless-only adapter are not a pass.",
+    "kill_ablate_test": "deleting or disabling the clean-room rollback/rewind surface must block or degrade checkpoint discovery, diff generation, restore execution, branch/session rewind accounting, and receipt-visible rollback rows while leaving launch, process supervision, hook runner, tool dispatch, state persistence, receipt store, command, goal, UIUX, and backend surfaces present. If manual git commands, static docs, prompt-only state narration, non-Ember/manual steering, or the headless adapter can satisfy the same rollback behavior without the rollback/rewind surface, the receipt fails.",
+    "next_blocker_if_pass": "rerun `python scripts/ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt receipts/ember-preloop-resident-gate/native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts/ember-preloop-resident-gate/function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts/ember-preloop-resident-gate/uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts/ember-preloop-resident-gate/backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts/ember-preloop-resident-gate/launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts/ember-preloop-resident-gate/process-supervision-20260621T225437Z.json --hook-runner-receipt receipts/ember-preloop-resident-gate/hook-runner-20260621T230655Z.json --tool-dispatch-permissions-receipt receipts/ember-preloop-resident-gate/tool-dispatch-permissions-20260621T231900Z.json --state-persistence-receipt receipts/ember-preloop-resident-gate/state-persistence-20260621T232600Z.json --receipt-store-receipt receipts/ember-preloop-resident-gate/receipt-store-20260622T000100Z.json --rollback-rewind-receipt receipts/ember-preloop-resident-gate/rollback-rewind-<timestamp>.json --out receipts/ember-preloop-resident-gate/avir-cli-full-parity-harness-gate-<timestamp>.json` and continue the next missing full-parity surface named by that receipt. Only after all required full-parity rows pass may the goal proceed to the RLM/iGRPO neural resident-training organ.",
+    "next_blocker_if_fail": "continue the exact missing rollback/rewind surface named by the receipt. Do not run additional D3/Kaggle/PaperBench/ RE-Bench/ScienceAgentBench loops, readiness checks, duration milestones, documentation passes, or remote GitHub performance work as substitutes."
+  },
+  "inventory_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "7b230131030fb4686f829003509e723d541dddb172dcbc99f1ba1ce0b5508bee",
+    "ticket": "EMBER-AVIR-CLI-CLEANROOM-INVENTORY",
+    "verdict": "AVIR_CLI_CLEANROOM_INVENTORY_BLOCKED"
+  },
+  "bootstrap_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "462d906dd95177a4969fbcc4976ee087a28a3aa5d426b41cddc31e4a636bf312",
+    "ticket": "EMBER-AVIR-CLI-GOAL-MODE-PARITY-ADAPTER",
+    "verdict": "AVIR_CLI_GOAL_MODE_PARITY_ADAPTER_PASS",
+    "does_not_satisfy_full_avir_cli_parity": true
+  },
+  "native_goal_organ_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "11ffcd2bf02786d4cdb434fa3b13b8fc6c52fd0eff0be811c9d13b4ca021fdd8",
+    "ticket": "EMBER-NATIVE-GOAL-ORGAN",
+    "verdict": "NATIVE_GOAL_ORGAN_PASS",
+    "applied": true
+  },
+  "function_slash_commands_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "303749c6dcd3e0e35125a773c6ac1b94781c198135103f25e437f73b9eb851f8",
+    "ticket": "EMBER-AVIR-CLI-FUNCTION-SLASH-COMMANDS-GATE",
+    "verdict": "FUNCTION_SLASH_COMMANDS_GATE_PASS",
+    "applied": true
+  },
+  "uiux_repl_components_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "44c1a554bd6da097c602a6a675b722486dc462ae620894ec043afbd583a223f1",
+    "ticket": "EMBER-AVIR-CLI-UIUX-REPL-COMPONENTS-GATE",
+    "verdict": "UIUX_REPL_COMPONENTS_GATE_PASS",
+    "applied": true
+  },
+  "backend_coordinator_agents_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "3f10d9ed8f144d80cea128bb9d9cf1317a96e957495f1713ab24cfff99b661fd",
+    "ticket": "EMBER-AVIR-CLI-BACKEND-COORDINATOR-AGENTS-GATE",
+    "verdict": "BACKEND_COORDINATOR_AGENTS_GATE_PASS",
+    "applied": true
+  },
+  "launch_packaging_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "000e4e79bc525e246c9224b592b33d3ba64db1a4ba28470e775035304fa108a8",
+    "ticket": "EMBER-AVIR-CLI-LAUNCH-PACKAGING-GATE",
+    "verdict": "LAUNCH_PACKAGING_GATE_PASS",
+    "applied": true
+  },
+  "process_supervision_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "5eaae460ddb5a22c7cf15c95bc6b76d81a6644817ed92d9b76336eb0a9916b40",
+    "ticket": "EMBER-AVIR-CLI-PROCESS-SUPERVISION-GATE",
+    "verdict": "PROCESS_SUPERVISION_GATE_PASS",
+    "applied": true
+  },
+  "hook_runner_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "5ec1c52dd03094ee8c9a5730385bf505947567f588783446ab39b3597f63e5db",
+    "ticket": "EMBER-AVIR-CLI-HOOK-RUNNER-GATE",
+    "verdict": "HOOK_RUNNER_GATE_PASS",
+    "applied": true
+  },
+  "tool_dispatch_permissions_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "6befa3a284e743d908eee167c9636c36437419bdf514945fe3bf74b9d4986b2d",
+    "ticket": "EMBER-AVIR-CLI-TOOL-DISPATCH-PERMISSIONS-GATE",
+    "verdict": "TOOL_DISPATCH_PERMISSIONS_GATE_PASS",
+    "applied": true
+  },
+  "state_persistence_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "1c38a8ddafcd3cdd8fa7119e8c8e38a515e254611214a0d337b426a83f465e24",
+    "ticket": "EMBER-AVIR-CLI-STATE-PERSISTENCE-GATE",
+    "verdict": "STATE_PERSISTENCE_GATE_PASS",
+    "applied": true
+  },
+  "receipt_store_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "7119dcaad22fbd8e20c3d50af4594520660b778e2a5790b0715dc58e6346c4b4",
+    "ticket": "EMBER-AVIR-CLI-RECEIPT-STORE-GATE",
+    "verdict": "RECEIPT_STORE_GATE_PASS",
+    "applied": true
+  },
+  "rollback_rewind_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "ab8349e9ab3e806044023336754d1beffd19e4f0e1380c7284651c4f0e6ace86",
+    "ticket": "EMBER-AVIR-CLI-ROLLBACK-REWIND-GATE",
+    "verdict": "ROLLBACK_REWIND_GATE_PASS",
+    "applied": true
+  },
+  "avir_root": {
+    "path": "<local-path>",
+    "exists": true,
+    "package_json_sha256": "cfa1bc777a599d3633e54a66e6319a80af8e669131cf2130a47d97e3f6b3dc1f"
+  },
+  "cleanroom_legal_boundary": {
+    "inventory_legal_provenance_count": 13,
+    "required_local_legal_files": [
+      {
+        "path": "legal/origin.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "3bb0ef63a7743afe4aaac392ade788ac09a9978b6bb2bb43decc44d3594594c9",
+        "kind": "file"
+      },
+      {
+        "path": "legal/ui-parity-audit.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "d23066436af3949d774ec62889d195852b6f1af0f22309d9eac082bd15e1fac6",
+        "kind": "file"
+      },
+      {
+        "path": "legal/ui-parity-audit-pass2.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57",
+        "kind": "file"
+      },
+      {
+        "path": "legal/ui-parity-audit-pass3.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984",
+        "kind": "file"
+      },
+      {
+        "path": "legal/file-inventory.csv",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb",
+        "kind": "file"
+      },
+      {
+        "path": "legal/product-shape.md",
+        "source_root": "avir_reference_root",
+        "exists": true,
+        "sha256": "41f203b9300f926d52fef5eef8ac796445b3406d6a1139bf1ae9eab5c49c3d59",
+        "kind": "file"
+      }
+    ],
+    "status": "REFERENCE_AVAILABLE",
+    "copying_policy": "reference/provenance inspection only; no avir-cli source import or inherited implementation copying"
+  },
+  "surface_matrix": [
+    {
+      "surface_id": "function_slash_commands",
+      "name": "Slash command surface",
+      "reference_evidence": [
+        {
+          "path": "legal/ui-parity-audit.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "d23066436af3949d774ec62889d195852b6f1af0f22309d9eac082bd15e1fac6",
+          "kind": "file"
+        },
+        {
+          "path": "src/commands.ts",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "7d3ef624bfd1f8c7845dd597f7659fe129587a98a42a34052abe0888e0f0c68c",
+          "kind": "file"
+        },
+        {
+          "path": "src/commands",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Ember-visible command registry with near-complete avir command behavior and goal-safe replacements for cloud-only/upstream-branded commands.",
+      "implemented_cleanroom_surface": "clean-room executable slash-command registry and dispatcher; registered=76 local=54 goal_safe_replacement=21 trigger_gated=1",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "registry_deleted_blocks_resolution": true,
+        "dispatcher_deleted_blocks_action": true,
+        "static_docs_only_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "method": "delete registry index or dispatcher lookup; audited command docs remain but slash-command resolution/action dispatch fails"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "uiux_repl_components",
+      "name": "REPL UI and interaction components",
+      "reference_evidence": [
+        {
+          "path": "legal/ui-parity-audit-pass2.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57",
+          "kind": "file"
+        },
+        {
+          "path": "src/screens/REPL.tsx",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "f3dda21b3801042143076a1ee1c1bbfe11653e046a32653caa1e33f67d810667",
+          "kind": "file"
+        },
+        {
+          "path": "src/components",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Native Ember REPL/tool surface with prompt input, message rendering, settings, help, tasks, permissions, model picker, and diagnostics parity.",
+      "implemented_cleanroom_surface": "clean-room executable REPL/component affordance contract; components=61 local=23 goal_safe_replacement=35 trigger_gated=3",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "component_contract_deleted_blocks_prompt_input": true,
+        "component_contract_deleted_blocks_rendering": true,
+        "component_contract_deleted_blocks_settings_help_tasks_permissions_model_diagnostics": true,
+        "command_registry_alone_insufficient": true,
+        "static_docs_or_screenshot_mock_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "method": "delete REPL/component affordance contract; command registry and docs can remain, but user-facing prompt/render/settings/help/tasks/permissions/model/diagnostics routes fail"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "backend_coordinator_agents",
+      "name": "Coordinator, agent, and delegation backend",
+      "reference_evidence": [
+        {
+          "path": "legal/ui-parity-audit-pass3.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984",
+          "kind": "file"
+        },
+        {
+          "path": "src/coordinator",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/tools/AgentTool",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/tasks",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Resident local agent orchestration, delegation, task panels, built-in agent definitions, and worker lifecycle without proprietary copy-through.",
+      "implemented_cleanroom_surface": "clean-room executable resident coordination backend; components=23 local=6 goal_safe_replacement=16 trigger_gated=1",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "coordinator_backend_deleted_blocks_delegation": true,
+        "agent_registry_deleted_blocks_selection": true,
+        "worker_lifecycle_deleted_blocks_completion": true,
+        "task_panel_without_backend_is_mock_only": true,
+        "command_registry_alone_insufficient": true,
+        "static_docs_or_agent_list_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "delete coordinator backend or agent registry; UI/components/commands can remain, but task assignment, worker lifecycle, panel rows, and result handoff fail"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "launch_packaging",
+      "name": "Launch, packaging, and executable entrypoints",
+      "reference_evidence": [
+        {
+          "path": "package.json",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "cfa1bc777a599d3633e54a66e6319a80af8e669131cf2130a47d97e3f6b3dc1f",
+          "kind": "file"
+        },
+        {
+          "path": "avir.exe",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "8627914d30c8889cfd2387764da48df0ed1ba38a536ce162de771cd816445a48",
+          "kind": "file"
+        },
+        {
+          "path": "src/entrypoints/cli.tsx",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "c58bac7a4d73f5811bcec80d276d537bb6b128cd0f49bf46afc5b8a52dca11c3",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Working avir/ember launch path, package/build contract, and Windows entrypoint that does not point at a missing avir.ps1.",
+      "implemented_cleanroom_surface": "clean-room executable launcher and package entrypoint; bin=avir launcher=<local-path>",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "launcher_deleted_blocks_invocation": true,
+        "entrypoint_deleted_blocks_handoff": true,
+        "package_metadata_alone_insufficient": true,
+        "stale_avir_ps1_pointer_insufficient": true,
+        "reference_avir_exe_not_invoked": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "remove launcher or launch entry; resident command/goal/UI/backend receipts can remain, but user invocation and launch handoff fail"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "process_supervision",
+      "name": "Process supervision and cleanup",
+      "reference_evidence": [
+        {
+          "path": "native/windows-job-object",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "windows_job_object.win32-x64-msvc.node",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "b67cdeb082b5b59437fbecdcc4d59a760c83cb49f58987a35d243fc0e446293b",
+          "kind": "file"
+        },
+        {
+          "path": "src",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Windows process-tree cleanup, timeout, background task, and child-process lifecycle controls with deletion-sensitive tests.",
+      "implemented_cleanroom_surface": "clean-room executable process supervisor; timeout_s=0.25 status=terminated",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "supervisor_deleted_blocks_spawn_and_tracking": true,
+        "timeout_handler_deleted_blocks_termination": true,
+        "survivor_probe_deleted_blocks_cleanup_verification": true,
+        "background_lifecycle_accounting_deleted_blocks_receipt": true,
+        "manual_taskkill_insufficient": true,
+        "launcher_only_behavior_insufficient": true,
+        "static_process_policy_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "delete supervisor/timeout/survivor probe; launcher and resident surfaces remain, but child tracking, timeout kill, cleanup verification, and lifecycle receipt fail"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "hook_runner",
+      "name": "Hook runner and event policy",
+      "reference_evidence": [
+        {
+          "path": "src/components/hooks",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Hook configuration, event dispatch, read-only policy surfaces, and fail-closed permission handling.",
+      "implemented_cleanroom_surface": "clean-room executable hook runner and policy engine; events=pre_tool,post_tool policy=read_only,deny_mutation,forbidden_result_keys,unknown_event_fail_closed",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "hook_runner_deleted_blocks_event_dispatch": true,
+        "policy_engine_deleted_blocks_read_only_enforcement": true,
+        "permission_denial_deleted_blocks_fail_closed_unknown_event": true,
+        "lifecycle_log_deleted_blocks_receipt_accounting": true,
+        "static_hook_list_insufficient": true,
+        "docs_only_policy_insufficient": true,
+        "permissive_callback_runner_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "delete runner/policy/lifecycle surfaces; event dispatch, read-only denial, fail-closed unknown-event handling, and receipt accounting no longer execute"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "tool_dispatch_permissions",
+      "name": "Tool dispatch and permission gating",
+      "reference_evidence": [
+        {
+          "path": "src/tools",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/components/permissions",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs/api/generated/src/tools",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Native tool registry, permission prompts, allow/deny rules, and tool-call execution with verifier and rollback hooks.",
+      "implemented_cleanroom_surface": "clean-room executable tool registry, permission policy, dispatcher, verifier, and rollback handoff; tools=status.read,note.write,repo.delete permissions=read_allow,write_allow_with_rollback,destructive_deny,unknown_tool_fail_closed",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "tool_registry_deleted_blocks_lookup": true,
+        "permission_policy_deleted_blocks_prompt_and_decision": true,
+        "dispatcher_deleted_blocks_execution_handoff": true,
+        "verifier_hook_deleted_blocks_verification_accounting": true,
+        "rollback_hook_deleted_blocks_reversal_accounting": true,
+        "static_tool_list_insufficient": true,
+        "docs_only_permission_policy_insufficient": true,
+        "always_allow_runner_insufficient": true,
+        "prompt_only_route_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "delete registry/policy/dispatcher/verifier/rollback surfaces; lookup, prompts, denial, execution, verification, rollback, and lifecycle rows stop being executable"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "state_persistence",
+      "name": "State, sessions, memory, and compaction",
+      "reference_evidence": [
+        {
+          "path": "src",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "state",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": ".avir",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Local session state, durable memory, compaction, resume, settings, and model/account state under Ember-owned storage.",
+      "implemented_cleanroom_surface": "clean-room file-backed local session state, memory, settings, model/account, compaction, and resume; surfaces=sessions,memory,settings,accounts,compaction,resume",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "state_store_deleted_blocks_write": true,
+        "state_store_deleted_blocks_read": true,
+        "state_store_deleted_blocks_resume": true,
+        "compaction_deleted_blocks_memory_consolidation": true,
+        "settings_store_deleted_blocks_reload": true,
+        "model_account_store_deleted_blocks_reload": true,
+        "lifecycle_log_deleted_blocks_state_accounting": true,
+        "transient_in_memory_dict_insufficient": true,
+        "docs_only_state_policy_insufficient": true,
+        "prompt_only_memory_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "delete file-backed state store/compactor/settings/account loaders; write, read, resume, compaction, reload, and lifecycle evidence stop being executable"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "receipt_store",
+      "name": "Receipts, telemetry, and replayable evidence",
+      "reference_evidence": [
+        {
+          "path": "dogfood-receipts",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs/adr/0004-real-work-replaces-scripted-dogfood.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "714dadb9909240d915167215fe5bf8f968c91625a25eed72578e53f0a30021eb",
+          "kind": "file"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Fail-closed receipt writer/reader, event logs, replay hooks, and evidence rows tied to every gate.",
+      "implemented_cleanroom_surface": "clean-room fail-closed receipt writer/reader, schema validator, event log, replay, and evidence lookup; surfaces=checked_write,checked_read,schema_validation,event_log,replay,evidence_lookup",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "receipt_store_deleted_blocks_fail_closed_write": true,
+        "receipt_store_deleted_blocks_read": true,
+        "schema_validator_deleted_blocks_invalid_receipt_rejection": true,
+        "event_log_deleted_blocks_append_read": true,
+        "replay_hook_deleted_blocks_replay": true,
+        "evidence_lookup_deleted_blocks_ticket_search": true,
+        "loose_json_dump_insufficient": true,
+        "docs_only_receipt_policy_insufficient": true,
+        "non_validating_logger_insufficient": true,
+        "prompt_only_evidence_trail_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "delete receipt store/writer/reader/validator/event-log/replay/evidence lookup; validation, replay, lookup, and lifecycle evidence stop being executable"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "rollback_rewind",
+      "name": "Rollback, rewind, and branch restoration",
+      "reference_evidence": [
+        {
+          "path": "src/commands/rewind",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/commands/branch",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "src/commands/diff",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        }
+      ],
+      "required_cleanroom_surface": "Local branch/session rewind, diff, restore, and delete/ablate-sensitive rollback tests.",
+      "implemented_cleanroom_surface": "clean-room local checkpoint, diff, restore, selector, and rollback event log; surfaces=checkpoint_store,diff_engine,restore_path,checkpoint_selector,rollback_event_log",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "rollback_store_deleted_blocks_checkpoint_discovery": true,
+        "diff_engine_deleted_blocks_diff_generation": true,
+        "restore_path_deleted_blocks_restore_execution": true,
+        "checkpoint_selector_deleted_blocks_selection": true,
+        "rollback_events_deleted_blocks_accounting": true,
+        "manual_git_reset_insufficient": true,
+        "static_docs_insufficient": true,
+        "prompt_only_rewind_claim_insufficient": true,
+        "headless_adapter_alone_insufficient": true,
+        "manual_codex_steering_insufficient": true,
+        "method": "delete rollback checkpoint store, diff engine, restore path, checkpoint selector, or event accounting; checkpoint discovery, diff, restore, selection, or receipt-visible rollback rows stop executing"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "communication_mailbox_computer_use",
+      "name": "Communication and computer-use reachability",
+      "reference_evidence": [
+        {
+          "path": "src/tools/SendMessageTool",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": null,
+          "kind": "directory"
+        },
+        {
+          "path": "docs/avir/en/agent-teams.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "9e3e25dee89a4d88e6187d70219ba1d99d5fa531918dd5139762ab5c46845ffd",
+          "kind": "file"
+        },
+        {
+          "path": "docs/claude-code-upstream/en/sub-agents.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "208f14781c8094b08e5d69bd1880c6a31853f2e826dfb199109fce7b71a3c3fb",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Ember mailbox identity, user-facing communication, founder communication, and computer-use route where applicable.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    },
+    {
+      "surface_id": "native_goal_organ",
+      "name": "Native Codex goal-mode organ",
+      "reference_evidence": [
+        {
+          "path": "GOAL.md",
+          "source_root": "ember_repo",
+          "exists": true,
+          "sha256": "84f60aa96a344a113ea048c1fc93a54678ff47e470fd88a9d08d270e75a53a91",
+          "kind": "file"
+        },
+        {
+          "path": "tools/avir-goal-mode/avir.ps1",
+          "source_root": "ember_repo",
+          "exists": true,
+          "sha256": "5681c2a7b14750da959c4fe25943ee622657ce791807d8194ad2873acff80e45",
+          "kind": "file"
+        },
+        {
+          "path": "scripts/ember_avir_cli_goal_mode_parity_adapter.py",
+          "source_root": "ember_repo",
+          "exists": true,
+          "sha256": "083ed7709805f9e66899d140c43b7936740797e3939d67d51dd8ae15d64e875d",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Resident goal organ that parses goal, reads receipts, selects blocker, compiles action, runs/delegates, verifies, writes receipt, and preserves next blocker without Codex steering.",
+      "implemented_cleanroom_surface": "parse goal, read receipts, select current blocker, compile bounded action, verify, write receipt, preserve next blocker",
+      "cleanroom_implemented": true,
+      "parity_test": "<local-path>",
+      "delete_ablate_test": {
+        "organ_deleted_blocks_selection": true,
+        "receipt_reader_alone_insufficient": true,
+        "static_template_deleted_blocks": true,
+        "manual_codex_goal_mode_ablation_required": true,
+        "method": "delete organ source or replace selection with receipt-only reader; selected blocker/action preservation no longer has an executable owner"
+      },
+      "status": "PASS",
+      "remaining_gap": null
+    },
+    {
+      "surface_id": "cleanroom_legal_boundary",
+      "name": "Clean-room provenance and copyright boundary",
+      "reference_evidence": [
+        {
+          "path": "legal/origin.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "3bb0ef63a7743afe4aaac392ade788ac09a9978b6bb2bb43decc44d3594594c9",
+          "kind": "file"
+        },
+        {
+          "path": "legal/dependencies.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "5a4e609e92cc17084a24580d887dd6f76c6fe469e6d9d05e59ead99b65a4af36",
+          "kind": "file"
+        },
+        {
+          "path": "legal/file-inventory.csv",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb",
+          "kind": "file"
+        },
+        {
+          "path": "legal/product-shape.md",
+          "source_root": "avir_reference_root",
+          "exists": true,
+          "sha256": "41f203b9300f926d52fef5eef8ac796445b3406d6a1139bf1ae9eab5c49c3d59",
+          "kind": "file"
+        }
+      ],
+      "required_cleanroom_surface": "Reference-only evidence boundary, no inherited implementation copying, and per-surface provenance receipt.",
+      "implemented_cleanroom_surface": null,
+      "cleanroom_implemented": false,
+      "parity_test": null,
+      "delete_ablate_test": null,
+      "status": "BLOCKED",
+      "remaining_gap": "clean-room Ember implementation and executable parity/deletion test missing"
+    }
+  ],
+  "delete_ablate_required": {
+    "visible_uiux_deleted_blocks": true,
+    "backend_coordinator_agents_deleted_blocks": true,
+    "launch_packaging_deleted_blocks": true,
+    "backend_command_router_deleted_blocks": true,
+    "process_supervisor_deleted_blocks": true,
+    "hook_runner_deleted_blocks": true,
+    "tool_dispatch_permissions_deleted_blocks": true,
+    "state_persistence_deleted_blocks": true,
+    "receipt_store_deleted_blocks": true,
+    "state_receipt_store_deleted_blocks": true,
+    "rollback_path_deleted_blocks": true,
+    "native_goal_organ_deleted_blocks": true,
+    "communication_bridge_deleted_blocks": false
+  },
+  "blocked_reasons": [
+    "communication_bridge_deleted_blocks_not_deletion_sensitive",
+    "full_cleanroom_parity_not_implemented",
+    "headless_bootstrap_only"
+  ],
+  "next_missing_precondition": "communication_mailbox_computer_use",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt <local-path> --function-slash-commands-receipt <local-path> --uiux-repl-components-receipt <local-path> --backend-coordinator-agents-receipt <local-path> --launch-packaging-receipt <local-path> --process-supervision-receipt <local-path> --hook-runner-receipt <local-path> --tool-dispatch-permissions-receipt <local-path> --state-persistence-receipt <local-path> --receipt-store-receipt <local-path> --rollback-rewind-receipt <local-path> --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "next_blocker_if_pass": "rlm_igrpo_train_multimodal_adapter",
+  "n_rows": 13
+}

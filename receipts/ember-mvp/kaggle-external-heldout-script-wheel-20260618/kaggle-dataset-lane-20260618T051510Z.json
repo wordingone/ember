@@ -1,0 +1,27 @@
+{
+  "ticket": "EMBER-KAGGLE-DATASET-LANE-MATERIALIZATION",
+  "ts": "20260618T051510Z",
+  "dataset_ref": "abdallahwagih/emotion-dataset",
+  "dataset_url": "https://www.kaggle.com/datasets/abdallahwagih/emotion-dataset",
+  "license_name": "Apache 2.0",
+  "source": "kaggle_datasets_api",
+  "purpose": "real_kaggle_dataset_lane_not_mle_bench_competition_lane",
+  "root": "<local-path>",
+  "files": [
+    {
+      "path": "<local-path>",
+      "relative_path": "dataset.zip",
+      "bytes": 218317,
+      "sha256": "sha256:ca8e66c7efab032be2e33d99b04f93d8ee4e3497d7a6ba91615b29fd918e6a62"
+    },
+    {
+      "path": "<local-path>",
+      "relative_path": "raw\\Emotion_classify_Data.csv",
+      "bytes": 614056,
+      "sha256": "sha256:853e11518847531f26f24510f5c454ddf181369968edd191c4ac25ad0c4839db"
+    }
+  ],
+  "file_count": 2,
+  "total_bytes": 832373,
+  "verdict": "MATERIALIZED"
+}

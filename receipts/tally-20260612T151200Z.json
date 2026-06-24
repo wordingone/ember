@@ -1,0 +1,87 @@
+{
+  "ticket": "EMBER-COMPLETENESS-TALLY",
+  "ts": "20260612T151200Z",
+  "issue": 337,
+  "total": 23,
+  "implemented": 0,
+  "part": 11,
+  "gated": 5,
+  "open": 7,
+  "pct_implemented": 0.0,
+  "missing": [
+    {
+      "id": "C6",
+      "reason": "open"
+    },
+    {
+      "id": "C7",
+      "reason": "open"
+    },
+    {
+      "id": "C10",
+      "reason": null
+    },
+    {
+      "id": "C12",
+      "reason": null
+    },
+    {
+      "id": "C13",
+      "reason": null
+    },
+    {
+      "id": "C18",
+      "reason": "governed-launch receipts"
+    },
+    {
+      "id": "C19",
+      "reason": "open"
+    }
+  ],
+  "per_subgoal": {
+    "S1": {
+      "implemented": 0,
+      "part": 2,
+      "gated": 1,
+      "open": 0
+    },
+    "S2": {
+      "implemented": 0,
+      "part": 2,
+      "gated": 0,
+      "open": 3
+    },
+    "S3": {
+      "implemented": 0,
+      "part": 3,
+      "gated": 0,
+      "open": 2
+    },
+    "S4": {
+      "implemented": 0,
+      "part": 0,
+      "gated": 0,
+      "open": 1
+    },
+    "S5": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 2,
+      "open": 0
+    },
+    "S6": {
+      "implemented": 0,
+      "part": 2,
+      "gated": 0,
+      "open": 1
+    },
+    "S7": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 2,
+      "open": 0
+    }
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "no_gpu": true
+}

@@ -1,0 +1,55 @@
+{
+  "ticket": "FP4-CROSS-CORE",
+  "ts": "20260610T231029Z",
+  "small": "w1-floor-q15-20260610T202511Z-samples.jsonl",
+  "big": "w1-floor-q3-20260610T203401Z-samples.jsonl",
+  "pairing": "identical prompts/split/k/seed (train 120 x k=8 seed 14); only the core differs",
+  "analysis": {
+    "n_tasks": 120,
+    "rate_pearson": 0.7667,
+    "rate_pearson_ci95": [
+      0.6803,
+      0.8386
+    ],
+    "rate_rank_r": 0.7657,
+    "stratum_confusion_rows_small_cols_big": {
+      "dead": {
+        "dead": 13,
+        "frontier": 5,
+        "mid": 5,
+        "easy": 1
+      },
+      "frontier": {
+        "dead": 2,
+        "frontier": 5,
+        "mid": 8,
+        "easy": 5
+      },
+      "mid": {
+        "dead": 1,
+        "frontier": 3,
+        "mid": 12,
+        "easy": 21
+      },
+      "easy": {
+        "dead": 0,
+        "frontier": 0,
+        "mid": 5,
+        "easy": 34
+      }
+    },
+    "hot_band": {
+      "small_n": 44,
+      "big_n": 29,
+      "intersection": 25,
+      "jaccard": 0.5208
+    },
+    "verified_program_verbatim_overlap": {
+      "small_pairs": 415,
+      "big_pairs": 523,
+      "shared": 74,
+      "frac_of_small_in_big": 0.1783
+    }
+  },
+  "falsification_arm": "3B-MTP trained on 1.5B-q15 verified episodes (w2-pipeline build, matched to t2-r1w-q3-mtp budget) -> G1 paired vs the receipted MTP-on-own arm; round-3 GPU window"
+}

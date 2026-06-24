@@ -1,0 +1,289 @@
+{
+  "ticket": "EMBER-AVIR-CLI-CLEANROOM-LEGAL-BOUNDARY-GATE",
+  "ts": "20260622T010312Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "CLEANROOM_LEGAL_BOUNDARY_GATE_PASS",
+  "classification": "clean_room_reference_only_boundary_not_copied_avir_cli_or_prompt_only_provenance",
+  "out_path": "receipts\\ember-preloop-resident-gate\\cleanroom-legal-boundary-20260622T003000Z.json",
+  "communication_mailbox_computer_use_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "bfa8c44d9efab3aee03eae53ca17e89c1498a3a9080356f9fa2a5e865fb5f11b",
+    "ticket": "EMBER-AVIR-CLI-COMMUNICATION-MAILBOX-COMPUTER-USE-GATE",
+    "verdict": "COMMUNICATION_MAILBOX_COMPUTER_USE_GATE_PASS"
+  },
+  "cleanroom_legal_boundary": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "05400287a129021dff426fad329f707a6e803651c8e7f42afe3d894e467f4bdf",
+    "copies_avir_code": false,
+    "legal_surface": [
+      "legal_file_discovery",
+      "provenance_hash_checks",
+      "copy_boundary",
+      "surface_linkage",
+      "inventory_accounting",
+      "legal_event_log"
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "checks": {
+        "required_legal_files_available": true,
+        "provenance_hash_checks": true,
+        "file_inventory_accounting": true,
+        "surface_provenance_linkage": true,
+        "copy_boundary_reference_only": true,
+        "receipt_visible_legal_rows": true
+      },
+      "legal_files": [
+        {
+          "path": "legal/origin.md",
+          "exists": true,
+          "sha256": "3bb0ef63a7743afe4aaac392ade788ac09a9978b6bb2bb43decc44d3594594c9",
+          "bytes": 1665
+        },
+        {
+          "path": "legal/dependencies.md",
+          "exists": true,
+          "sha256": "5a4e609e92cc17084a24580d887dd6f76c6fe469e6d9d05e59ead99b65a4af36",
+          "bytes": 8611
+        },
+        {
+          "path": "legal/file-inventory.csv",
+          "exists": true,
+          "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb",
+          "bytes": 152924
+        },
+        {
+          "path": "legal/product-shape.md",
+          "exists": true,
+          "sha256": "41f203b9300f926d52fef5eef8ac796445b3406d6a1139bf1ae9eab5c49c3d59",
+          "bytes": 10390
+        },
+        {
+          "path": "legal/ui-parity-audit.md",
+          "exists": true,
+          "sha256": "d23066436af3949d774ec62889d195852b6f1af0f22309d9eac082bd15e1fac6",
+          "bytes": 15415
+        },
+        {
+          "path": "legal/ui-parity-audit-pass2.md",
+          "exists": true,
+          "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57",
+          "bytes": 17481
+        },
+        {
+          "path": "legal/ui-parity-audit-pass3.md",
+          "exists": true,
+          "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984",
+          "bytes": 13030
+        }
+      ],
+      "provenance_manifest": {
+        "legal/origin.md": {
+          "sha256": "3bb0ef63a7743afe4aaac392ade788ac09a9978b6bb2bb43decc44d3594594c9",
+          "bytes": 1665,
+          "source_root": "avir_reference_root"
+        },
+        "legal/dependencies.md": {
+          "sha256": "5a4e609e92cc17084a24580d887dd6f76c6fe469e6d9d05e59ead99b65a4af36",
+          "bytes": 8611,
+          "source_root": "avir_reference_root"
+        },
+        "legal/file-inventory.csv": {
+          "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb",
+          "bytes": 152924,
+          "source_root": "avir_reference_root"
+        },
+        "legal/product-shape.md": {
+          "sha256": "41f203b9300f926d52fef5eef8ac796445b3406d6a1139bf1ae9eab5c49c3d59",
+          "bytes": 10390,
+          "source_root": "avir_reference_root"
+        },
+        "legal/ui-parity-audit.md": {
+          "sha256": "d23066436af3949d774ec62889d195852b6f1af0f22309d9eac082bd15e1fac6",
+          "bytes": 15415,
+          "source_root": "avir_reference_root"
+        },
+        "legal/ui-parity-audit-pass2.md": {
+          "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57",
+          "bytes": 17481,
+          "source_root": "avir_reference_root"
+        },
+        "legal/ui-parity-audit-pass3.md": {
+          "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984",
+          "bytes": 13030,
+          "source_root": "avir_reference_root"
+        }
+      },
+      "inventory_sample": [
+        {
+          "path": "(1302 files)",
+          "category": "upstream-unchanged",
+          "evidence": "git ls-tree 18021991",
+          "notes": "Content identical to Claude Code v2.1.87 upstream"
+        },
+        {
+          "path": "src/QueryEngine.ts",
+          "category": "upstream-modified",
+          "evidence": "db9519db feat: compile avir.exe from TypeScript source",
+          "notes": "Modified from Claude Code v2.1.87 baseline"
+        },
+        {
+          "path": "src/Tool.ts",
+          "category": "upstream-modified",
+          "evidence": "88aff0f4 avir-cli: turbo4 KV; exact token counting; .claude purge; stub fixes",
+          "notes": "Modified from Claude Code v2.1.87 baseline"
+        },
+        {
+          "path": "src/bootstrap/state.ts",
+          "category": "upstream-modified",
+          "evidence": "88aff0f4 avir-cli: turbo4 KV; exact token counting; .claude purge; stub fixes",
+          "notes": "Modified from Claude Code v2.1.87 baseline"
+        },
+        {
+          "path": "src/bridge/bridgeEnabled.ts",
+          "category": "upstream-modified",
+          "evidence": "db9519db feat: compile avir.exe from TypeScript source",
+          "notes": "Modified from Claude Code v2.1.87 baseline"
+        }
+      ],
+      "inventory_n_rows": 988,
+      "surface_linkage": {
+        "function_slash_commands": [
+          "legal/ui-parity-audit.md",
+          "legal/file-inventory.csv"
+        ],
+        "uiux_repl_components": [
+          "legal/ui-parity-audit-pass2.md",
+          "legal/file-inventory.csv"
+        ],
+        "backend_coordinator_agents": [
+          "legal/ui-parity-audit-pass3.md",
+          "legal/file-inventory.csv"
+        ],
+        "launch_packaging": [
+          "legal/product-shape.md",
+          "legal/file-inventory.csv"
+        ],
+        "process_supervision": [
+          "legal/file-inventory.csv",
+          "legal/dependencies.md"
+        ],
+        "hook_runner": [
+          "legal/file-inventory.csv",
+          "legal/dependencies.md"
+        ],
+        "tool_dispatch_permissions": [
+          "legal/file-inventory.csv",
+          "legal/dependencies.md"
+        ],
+        "state_persistence": [
+          "legal/product-shape.md",
+          "legal/file-inventory.csv"
+        ],
+        "receipt_store": [
+          "legal/product-shape.md",
+          "legal/file-inventory.csv"
+        ],
+        "rollback_rewind": [
+          "legal/product-shape.md",
+          "legal/file-inventory.csv"
+        ],
+        "communication_mailbox_computer_use": [
+          "legal/product-shape.md",
+          "legal/file-inventory.csv"
+        ],
+        "native_goal_organ": [
+          "legal/origin.md",
+          "legal/product-shape.md"
+        ]
+      },
+      "copy_boundary": {
+        "forbidden_roots": [
+          "src",
+          "packages",
+          "native",
+          "docs/api/generated/src"
+        ],
+        "copied_forbidden_roots": [],
+        "reference_only": true
+      },
+      "events": [
+        {
+          "event": "legal_files",
+          "payload": {
+            "n_files": 7,
+            "n_present": 7
+          }
+        },
+        {
+          "event": "legal_files",
+          "payload": {
+            "n_files": 7,
+            "n_present": 7
+          }
+        },
+        {
+          "event": "provenance",
+          "payload": {
+            "n_rows": 7
+          }
+        },
+        {
+          "event": "inventory",
+          "payload": {
+            "columns": [
+              "path",
+              "category",
+              "evidence",
+              "notes"
+            ],
+            "n_rows": 988
+          }
+        },
+        {
+          "event": "surface_linkage",
+          "payload": {
+            "n_surfaces": 12
+          }
+        },
+        {
+          "event": "copy_boundary",
+          "payload": {
+            "copied_forbidden_roots": [],
+            "forbidden_roots": [
+              "src",
+              "packages",
+              "native",
+              "docs/api/generated/src"
+            ],
+            "reference_only": true
+          }
+        }
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "legal_file_discovery_deleted_blocks_legal_files": true,
+    "provenance_deleted_blocks_hash_checks": true,
+    "copy_boundary_deleted_blocks_copy_enforcement": true,
+    "surface_linkage_deleted_blocks_per_surface_provenance": true,
+    "inventory_deleted_blocks_file_inventory_accounting": true,
+    "legal_events_deleted_blocks_receipt_rows": true,
+    "static_policy_text_insufficient": true,
+    "handwaved_cleanroom_claim_insufficient": true,
+    "copied_avir_cli_implementation_insufficient": true,
+    "prompt_only_provenance_narration_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete legal discovery, provenance hashing, copy-boundary enforcement, surface linkage, inventory accounting, or legal events; the clean-room boundary stops being executable and receipt-visible"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_cleanroom_legal_boundary_receipt",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-20260621T225437Z.json --hook-runner-receipt receipts\\ember-preloop-resident-gate\\hook-runner-20260621T230655Z.json --tool-dispatch-permissions-receipt receipts\\ember-preloop-resident-gate\\tool-dispatch-permissions-20260621T231900Z.json --state-persistence-receipt receipts\\ember-preloop-resident-gate\\state-persistence-20260621T232600Z.json --receipt-store-receipt receipts\\ember-preloop-resident-gate\\receipt-store-20260622T000100Z.json --rollback-rewind-receipt receipts\\ember-preloop-resident-gate\\rollback-rewind-20260622T001000Z.json --communication-mailbox-computer-use-receipt receipts\\ember-preloop-resident-gate\\communication-mailbox-computer-use-20260622T002000Z.json --cleanroom-legal-boundary-receipt receipts\\ember-preloop-resident-gate\\cleanroom-legal-boundary-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

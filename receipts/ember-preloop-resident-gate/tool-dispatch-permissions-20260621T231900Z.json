@@ -1,0 +1,227 @@
+{
+  "ticket": "EMBER-AVIR-CLI-TOOL-DISPATCH-PERMISSIONS-GATE",
+  "ts": "20260621T231712Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "TOOL_DISPATCH_PERMISSIONS_GATE_PASS",
+  "classification": "clean_room_executable_tool_dispatch_permissions_not_static_tool_docs_or_always_allow_runner",
+  "out_path": "receipts\\ember-preloop-resident-gate\\tool-dispatch-permissions-20260621T231900Z.json",
+  "hook_runner_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "5ec1c52dd03094ee8c9a5730385bf505947567f588783446ab39b3597f63e5db",
+    "ticket": "EMBER-AVIR-CLI-HOOK-RUNNER-GATE",
+    "verdict": "HOOK_RUNNER_GATE_PASS"
+  },
+  "tool_dispatch_permissions": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "2eccfdbf42e1398af32a67f9450d8268a80f33e1af11ebc72db5cf8a59a78ab3",
+    "copies_avir_code": false,
+    "tool_surface": [
+      "status.read",
+      "note.write",
+      "repo.delete"
+    ],
+    "permission_surface": [
+      "read_allow",
+      "write_allow_with_rollback",
+      "destructive_deny",
+      "unknown_tool_fail_closed"
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "checks": {
+        "registry_lookup_allowed_tool": true,
+        "permission_prompt_recorded": true,
+        "deny_rule_blocks_destructive_tool": true,
+        "unknown_tool_fail_closed": true,
+        "tool_execution_handoff": true,
+        "verifier_handoff_recorded": true,
+        "rollback_handoff_recorded": true,
+        "lifecycle_accounted": true
+      },
+      "results": {
+        "allowed_read": {
+          "tool_id": "status.read",
+          "status": "allowed",
+          "decision": {
+            "tool_id": "status.read",
+            "permission": "read",
+            "allowed": true,
+            "arg_keys": [
+              "target"
+            ]
+          },
+          "output": {
+            "kind": "status",
+            "target": "repo",
+            "ok": true
+          },
+          "verified": true,
+          "rollback_token": null
+        },
+        "allowed_write": {
+          "tool_id": "note.write",
+          "status": "allowed",
+          "decision": {
+            "tool_id": "note.write",
+            "permission": "write",
+            "allowed": true,
+            "arg_keys": [
+              "path",
+              "text"
+            ]
+          },
+          "output": {
+            "kind": "write_note",
+            "path": "state/probe.txt",
+            "bytes": 2
+          },
+          "verified": true,
+          "rollback_token": "rollback:note.write:1"
+        },
+        "denied_delete": {
+          "tool_id": "repo.delete",
+          "status": "denied",
+          "reason": "permission_denied",
+          "decision": {
+            "tool_id": "repo.delete",
+            "permission": "destructive",
+            "allowed": false,
+            "arg_keys": [
+              "path"
+            ]
+          }
+        },
+        "unknown": {
+          "tool_id": "unknown.tool",
+          "status": "denied",
+          "reason": "unknown_tool:unknown.tool"
+        }
+      },
+      "permission_prompts": [
+        {
+          "tool_id": "status.read",
+          "permission": "read",
+          "allowed": true,
+          "arg_keys": [
+            "target"
+          ]
+        },
+        {
+          "tool_id": "note.write",
+          "permission": "write",
+          "allowed": true,
+          "arg_keys": [
+            "path",
+            "text"
+          ]
+        },
+        {
+          "tool_id": "repo.delete",
+          "permission": "destructive",
+          "allowed": false,
+          "arg_keys": [
+            "path"
+          ]
+        }
+      ],
+      "verifier_calls": [
+        {
+          "tool_id": "status.read",
+          "verified": true
+        },
+        {
+          "tool_id": "note.write",
+          "verified": true
+        }
+      ],
+      "rollback_calls": [
+        {
+          "tool_id": "note.write",
+          "rollback_token": "rollback:note.write:1"
+        }
+      ],
+      "lifecycle": [
+        {
+          "tool_id": "status.read",
+          "status": "allowed",
+          "decision": {
+            "tool_id": "status.read",
+            "permission": "read",
+            "allowed": true,
+            "arg_keys": [
+              "target"
+            ]
+          },
+          "output": {
+            "kind": "status",
+            "target": "repo",
+            "ok": true
+          },
+          "verified": true,
+          "rollback_token": null
+        },
+        {
+          "tool_id": "note.write",
+          "status": "allowed",
+          "decision": {
+            "tool_id": "note.write",
+            "permission": "write",
+            "allowed": true,
+            "arg_keys": [
+              "path",
+              "text"
+            ]
+          },
+          "output": {
+            "kind": "write_note",
+            "path": "state/probe.txt",
+            "bytes": 2
+          },
+          "verified": true,
+          "rollback_token": "rollback:note.write:1"
+        },
+        {
+          "tool_id": "repo.delete",
+          "status": "denied",
+          "reason": "permission_denied",
+          "decision": {
+            "tool_id": "repo.delete",
+            "permission": "destructive",
+            "allowed": false,
+            "arg_keys": [
+              "path"
+            ]
+          }
+        },
+        {
+          "tool_id": "unknown.tool",
+          "status": "denied",
+          "reason": "unknown_tool:unknown.tool"
+        }
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "tool_registry_deleted_blocks_lookup": true,
+    "permission_policy_deleted_blocks_prompt_and_decision": true,
+    "dispatcher_deleted_blocks_execution_handoff": true,
+    "verifier_hook_deleted_blocks_verification_accounting": true,
+    "rollback_hook_deleted_blocks_reversal_accounting": true,
+    "static_tool_list_insufficient": true,
+    "docs_only_permission_policy_insufficient": true,
+    "always_allow_runner_insufficient": true,
+    "prompt_only_route_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete registry/policy/dispatcher/verifier/rollback surfaces; lookup, prompts, denial, execution, verification, rollback, and lifecycle rows stop being executable"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_tool_dispatch_permissions_receipt",
+  "next_executable_command": "python scripts\\ember_avir_cli_full_parity_harness_gate.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-20260621T225437Z.json --hook-runner-receipt receipts\\ember-preloop-resident-gate\\hook-runner-20260621T230655Z.json --tool-dispatch-permissions-receipt receipts\\ember-preloop-resident-gate\\tool-dispatch-permissions-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}
