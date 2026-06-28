@@ -1,0 +1,425 @@
+{
+  "ticket": "EMBER-PRELOOP-RESIDENT-GATE",
+  "ts": "20260621T152150Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "PRELOOP_RESIDENT_GATE_BLOCKED",
+  "gate_allows_loops": false,
+  "out_path": "receipts\\ember-preloop-resident-gate\\preloop-resident-gate-20260621T152149Z.json",
+  "goal_authority": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "caa0fc5d9cfd364ec7bdb6825738e8a6db9b24616faceb7b6be0d8a2387b585a",
+    "markers": {
+      "current_blocker_packet": true,
+      "requirement_14": true,
+      "neural_update_floor": true,
+      "invalid_symbolic_substitutions": true,
+      "clean_room_reference_cli": true
+    },
+    "status": "PRESENT"
+  },
+  "paper_sources_read": [
+    {
+      "kind": "RLM",
+      "title": "Recursive Language Models",
+      "arxiv_id": "2512.24601",
+      "index_path": "<local-path>",
+      "index_sha256": "7e626f2530c2a5a9b97715799f914ef237416e500a0d49d20961cd7151fd1bcb",
+      "source_receipt_path": "<local-path>",
+      "source_receipt_sha256": "c4269512252f339d8e2df19b09f64cb3e057e18ee50da3d3c3c11390286b3886",
+      "source_receipt_read": true,
+      "pdf_sha256": "8567362c22768d9b50d4a4a8d63bb28dda2c2b2051be30d67f70f645170429ca",
+      "source_sha256": "9893bffd48ed6e0bf65c40745b54bcc898476af3a3c8f49e384fe9160b30915e",
+      "abs_html_path": "<local-path>",
+      "abs_html_read": true,
+      "abstract_excerpt": "We study allowing large language models (LLMs) to process arbitrarily long prompts through the lens of inference-time scaling. We propose Recursive Language Models (RLMs), a general inference paradigm that treats long prompts as part of an external environment and allows the LLM to programmatically examine, decompose, and recursively call itself over snippets of the prompt. We find that RLMs can successfully process inputs up to two orders of magnitude beyond model context windows and, even for ",
+      "mechanism_primitives": [
+        "bounded recursive inspection of external context/state",
+        "model call over selected subproblem or snippet",
+        "aggregation of recursive sub-results into action or answer",
+        "learned policy for what to inspect, recurse on, and aggregate"
+      ]
+    },
+    {
+      "kind": "iGRPO",
+      "title": "iGRPO: Self-Feedback-Driven LLM Reasoning",
+      "arxiv_id": "2602.09000",
+      "index_path": "<local-path>",
+      "index_sha256": "7e626f2530c2a5a9b97715799f914ef237416e500a0d49d20961cd7151fd1bcb",
+      "source_receipt_path": "<local-path>",
+      "source_receipt_sha256": "14f2b4ac1041db31700af2db2485b60015e24a4537b86a906033fd6efd4a5a25",
+      "source_receipt_read": true,
+      "pdf_sha256": "64816e01828791bf222fbb89bb33f08a92cd6ae84673d1915f24f84d867560b9",
+      "source_sha256": "55bb474224024f7c6e03d0e6ac06349949bf2f55f60d58ed90510239cf21cad6",
+      "abs_html_path": "<local-path>",
+      "abs_html_read": true,
+      "abstract_excerpt": "Large Language Models (LLMs) have shown promise in solving complex mathematical problems, yet they still fall short of producing accurate and consistent solutions. Reinforcement Learning (RL) is a framework for aligning these models with task-specific rewards, improving overall quality and reliability. Group Relative Policy Optimization (GRPO) is an efficient, value-function-free alternative to Proximal Policy Optimization (PPO) that leverages group-relative reward normalization. We introduce It",
+      "mechanism_primitives": [
+        "sample multiple draft attempts under matched budget",
+        "score attempts with verifier/reward",
+        "condition refinement on the best scored draft",
+        "update trainable policy parameters from verifier-conditioned experience",
+        "ablate against plain/fixed GRPO-style baseline"
+      ]
+    }
+  ],
+  "train_multimodal_inventory": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "89283f362778c7072bab81f4d5bbbd3d4b6393788c2a504469232d073cf49e90",
+    "has_adamw": true,
+    "has_state_dict": true,
+    "has_action_log_contract": true,
+    "has_multimodal_locks": true,
+    "action_log_primitives_present": [
+      "emit-token",
+      "emit-scalar",
+      "emit-pointer",
+      "commit",
+      "stop"
+    ],
+    "adapter_decision": "ADAPT_REQUIRED_BEFORE_TINY_FALLBACK",
+    "status": "AVAILABLE_LAUNCH_VEHICLE"
+  },
+  "floor_contract_summary": {
+    "floor_path": "<local-path>",
+    "floor_exists": true,
+    "floor_sha256": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+    "nc2_path": "<local-path>",
+    "nc2_exists": true,
+    "nc2_sha256": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+    "rows": 19,
+    "missing_rows": []
+  },
+  "floor_contract_manifest": {
+    "QAT": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "Muon": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "QK-norm": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "Governor": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "Encoder-free multimodal TRAINING": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "BitNet / 1.58-bit ternary": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "SDEK / GDN-Jet fast-weight sleep consolidation": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "MLA / KV-cache compression": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "GRPO / RL-on-verifier-reward": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "FP8 training": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "MoE": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "DiffusionGemma sampler": {
+      "source_file": "docs/ember-floor-contract.md",
+      "source_hash": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "must be preserved/accounted by resident gate; not silently archived or killed",
+      "trigger": "row-specific trigger or resident-training gate if active",
+      "pilot": "row-specific receipt-producing pilot",
+      "kill_ablate_condition": "only contradiction-level receipt or user-approved contract change can remove",
+      "evidence_path": "<local-path>"
+    },
+    "nc2:QAT": {
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "binding owned-core component contract remains in GOAL authority",
+      "trigger": "resident-training adapter or owned-core scale trigger",
+      "pilot": "component-specific receipt-producing pilot",
+      "kill_ablate_condition": "no archival/killed disposition without physics-level contradiction receipt",
+      "evidence_path": "<local-path>"
+    },
+    "nc2:turboquant": {
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "binding owned-core component contract remains in GOAL authority",
+      "trigger": "resident-training adapter or owned-core scale trigger",
+      "pilot": "component-specific receipt-producing pilot",
+      "kill_ablate_condition": "no archival/killed disposition without physics-level contradiction receipt",
+      "evidence_path": "<local-path>"
+    },
+    "nc2:BitNet/1.58-bit": {
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "binding owned-core component contract remains in GOAL authority",
+      "trigger": "resident-training adapter or owned-core scale trigger",
+      "pilot": "component-specific receipt-producing pilot",
+      "kill_ablate_condition": "no archival/killed disposition without physics-level contradiction receipt",
+      "evidence_path": "<local-path>"
+    },
+    "nc2:SubQ/sparse attention": {
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "binding owned-core component contract remains in GOAL authority",
+      "trigger": "resident-training adapter or owned-core scale trigger",
+      "pilot": "component-specific receipt-producing pilot",
+      "kill_ablate_condition": "no archival/killed disposition without physics-level contradiction receipt",
+      "evidence_path": "<local-path>"
+    },
+    "nc2:MTP": {
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "binding owned-core component contract remains in GOAL authority",
+      "trigger": "resident-training adapter or owned-core scale trigger",
+      "pilot": "component-specific receipt-producing pilot",
+      "kill_ablate_condition": "no archival/killed disposition without physics-level contradiction receipt",
+      "evidence_path": "<local-path>"
+    },
+    "nc2:SDEK": {
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "binding owned-core component contract remains in GOAL authority",
+      "trigger": "resident-training adapter or owned-core scale trigger",
+      "pilot": "component-specific receipt-producing pilot",
+      "kill_ablate_condition": "no archival/killed disposition without physics-level contradiction receipt",
+      "evidence_path": "<local-path>"
+    },
+    "nc2:Gemma-4 unified multimodal architecture": {
+      "source_file": "nc2-own-technique-contract.md",
+      "source_hash": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+      "status": "preserved_trigger_gated",
+      "present": true,
+      "launch_vehicle_impact": "binding owned-core component contract remains in GOAL authority",
+      "trigger": "resident-training adapter or owned-core scale trigger",
+      "pilot": "component-specific receipt-producing pilot",
+      "kill_ablate_condition": "no archival/killed disposition without physics-level contradiction receipt",
+      "evidence_path": "<local-path>"
+    }
+  },
+  "invalid_substitutions_rejected": [
+    "symbolic-template-policy",
+    "prompt-only substitution",
+    "handcrafted routing",
+    "static registry",
+    "scalar dictionary",
+    "rerank-only wrapper",
+    "frozen-model inference",
+    "RLM/iGRPO-style wording without neural parameter updates"
+  ],
+  "preconditions": {
+    "clean_room_reference_cli": {
+      "status": "BLOCKED",
+      "blockers": [
+        "reference_ps1_surface_missing_or_command_points_to_missing_script",
+        "clean_room_reference_cli_parity_receipt_missing"
+      ],
+      "evidence": {
+        "status": "BLOCKED",
+        "reference_root": "<local-path>",
+        "reference_root_exists": true,
+        "reference_exe": {
+          "path": "<local-path>",
+          "exists": true,
+          "bytes": 1646038528,
+          "sha256": null,
+          "sha256_note": "large binary hash deferred; gate requires parity receipt, not binary hash"
+        },
+        "reference_ps1": {
+          "path": "<local-path>",
+          "exists": false
+        },
+        "powershell_reference_command_definition": "$env:reference_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\n    $env:reference_DISABLE_BACKGROUND_TASKS = \"1\"\n    $env:reference_EXPERIMENTAL_AGENT_TEAMS = \"1\"\n    try {\n        & \"<local-path>\" @args\n    } finally {\n        Remove-Item Env:\\reference_DISABLE_NONESSENTIAL_TRAFFIC -ErrorAction SilentlyContinue\n        Remove-Item Env:\\reference_DISABLE_BACKGROUND_TASKS -ErrorAction SilentlyContinue\n        Remove-Item Env:\\reference_EXPERIMENTAL_AGENT_TEAMS -ErrorAction SilentlyContinue\n    }",
+        "candidate_cleanroom_receipts": [],
+        "src_inventory_sample": [
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>",
+          "<local-path>"
+        ],
+        "blockers": [
+          "reference_ps1_surface_missing_or_command_points_to_missing_script",
+          "clean_room_reference_cli_parity_receipt_missing"
+        ],
+        "required_receipt": "clean-room reference-cli resident harness parity receipt with /goal-mode-equivalent action loop, deletion-sensitive harness action channel, and no copyright taint"
+      },
+      "required_next": "implement clean-room reference-cli resident harness inventory/parity receipt",
+      "pass_condition": "actual implementation plus before/after, A/B/C/deleted, transfer, and deletion-sensitive evidence"
+    },
+    "rlm": {
+      "status": "BLOCKED",
+      "blockers": [
+        "rlm_harness_native_recursive_policy_not_implemented",
+        "rlm_neural_parameter_update_not_receipted",
+        "rlm_deletion_sensitive_ablation_missing"
+      ],
+      "evidence": {
+        "paper_source_read": true,
+        "mechanism_primitives": [
+          "bounded recursive inspection of external context/state",
+          "model call over selected subproblem or snippet",
+          "aggregation of recursive sub-results into action or answer",
+          "learned policy for what to inspect, recurse on, and aggregate"
+        ]
+      },
+      "required_next": "adapt train_multimodal_v0.py into a trainable RLM recursive policy with neural state_dict delta",
+      "pass_condition": "actual implementation plus before/after, A/B/C/deleted, transfer, and deletion-sensitive evidence"
+    },
+    "igrpo": {
+      "status": "BLOCKED",
+      "blockers": [
+        "igrpo_verifier_conditioned_training_organ_not_implemented",
+        "igrpo_neural_parameter_update_not_receipted",
+        "igrpo_ab_compare_deleted_transfer_missing"
+      ],
+      "evidence": {
+        "paper_source_read": true,
+        "mechanism_primitives": [
+          "sample multiple draft attempts under matched budget",
+          "score attempts with verifier/reward",
+          "condition refinement on the best scored draft",
+          "update trainable policy parameters from verifier-conditioned experience",
+          "ablate against plain/fixed GRPO-style baseline"
+        ]
+      },
+      "required_next": "adapt train_multimodal_v0.py into a verifier-conditioned iGRPO update organ",
+      "pass_condition": "actual implementation plus before/after, A/B/C/deleted, transfer, and deletion-sensitive evidence"
+    }
+  },
+  "blocked_reasons": [
+    "reference_ps1_surface_missing_or_command_points_to_missing_script",
+    "clean_room_reference_cli_parity_receipt_missing",
+    "igrpo_ab_compare_deleted_transfer_missing",
+    "igrpo_neural_parameter_update_not_receipted",
+    "igrpo_verifier_conditioned_training_organ_not_implemented",
+    "rlm_deletion_sensitive_ablation_missing",
+    "rlm_harness_native_recursive_policy_not_implemented",
+    "rlm_neural_parameter_update_not_receipted"
+  ],
+  "next_missing_precondition": "clean_room_reference_cli_resident_harness",
+  "next_executable_command": "python scripts\\ember_gate_cleanroom_inventory.py --out receipts\\ember-preloop-resident-gate\\reference-cli-cleanroom-inventory-<timestamp>.json",
+  "kill_ablate_test_required": "deleting any of clean-room reference-cli resident harness, RLM organ, or iGRPO organ must block or degrade the gate",
+  "classification": "precondition_inspector_only_not_resident_training_pass",
+  "n_rows": 24
+}

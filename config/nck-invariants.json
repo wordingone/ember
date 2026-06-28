@@ -1,0 +1,36 @@
+{
+  "note": "Protected-invariant manifest for NC-K boot checksum layer. This file and its baseline copy (config/nck-baseline/) must match at boot. Do not edit manually; regenerate via scripts/nck/invariants.py --update-manifest.",
+  "protected_paths": [
+    {
+      "label": "three-test-gain-gate",
+      "path": "docs/formalization-v0.md",
+      "sha256": "b1ae91f916bdec5074f26ffde6e7bdfa2f1b506f8c8eb936927a334cccd66f05"
+    },
+    {
+      "label": "governor-headroom-config",
+      "path": "config/v0-pretrain-config.json",
+      "sha256": "92cf1b21946f9397d6964ca6d21bddae4c21a8cd1f33640d7ef69f669e3c6960"
+    },
+    {
+      "label": "goal-md",
+      "path": "GOAL.md",
+      "sha256": "5671e68c3b91c38737bd46c7c1b61b727af8ab2b4665307664dcc8d19603a4ef"
+    },
+    {
+      "label": "receipts-only-truth-statement",
+      "path": "GOAL.md",
+      "sha256": "5671e68c3b91c38737bd46c7c1b61b727af8ab2b4665307664dcc8d19603a4ef"
+    },
+    {
+      "label": "invariants-py",
+      "path": "scripts/nck/invariants.py",
+      "sha256": "7bbf1ae76dfd6a331ceed1fc67e7fe75a2c567e130e25dc6ee211e80c33d8320"
+    },
+    {
+      "label": "nck-invariants-manifest",
+      "path": "config/nck-invariants.json",
+      "sha256": "SELF"
+    }
+  ],
+  "schema_version": "1"
+}

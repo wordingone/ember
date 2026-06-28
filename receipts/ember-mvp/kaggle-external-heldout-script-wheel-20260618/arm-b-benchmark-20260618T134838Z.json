@@ -1,0 +1,65 @@
+{
+  "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA",
+  "ts": "20260618T134838Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "lane": "kaggle_dataset_external_heldout",
+  "dataset_receipt_path": "<local-path>",
+  "dataset_ref": "abdallahwagih/emotion-dataset",
+  "dataset_url": "https://www.kaggle.com/datasets/abdallahwagih/emotion-dataset",
+  "license_name": "Apache 2.0",
+  "source": "kaggle_datasets_api",
+  "source_file": "<local-path>",
+  "source_file_sha256": "sha256:853e11518847531f26f24510f5c454ddf181369968edd191c4ac25ad0c4839db",
+  "source_file_hash_ok": true,
+  "external_source_certified": true,
+  "wheel_arm": {
+    "id": "B",
+    "name": "dream-loop-only",
+    "uses_dream_loop": true,
+    "uses_latent_branch": false,
+    "uses_state_commit": false,
+    "uses_replay": false
+  },
+  "heldout_source": "kaggle-dataset:abdallahwagih/emotion-dataset",
+  "heldout_case_count": 32,
+  "frozen_heldout_sha256": "sha256:8ac3095b24ec913c849094fd7f5eab1a3846e95ccd9b3ecd3e58f84650638891",
+  "baseline_prediction_source": "majority_label_baseline",
+  "candidate_prediction_source": "script:<local-path>",
+  "candidate_script_path": "<local-path>",
+  "candidate_script_sha256": "sha256:85ac48ddd1406215ffdce9efa8af0185b29cfa074a174cca919e0a274f1b78c3",
+  "candidate_python_executable": "<local-path> Files\\Python310\\python.exe",
+  "candidate_returncode": 0,
+  "candidate_stdout_tail": "",
+  "candidate_stderr_tail": "",
+  "heldout_delta_ready": true,
+  "benchmark_delta_claimed": true,
+  "external_benchmark_delta_claimed": true,
+  "artifact_files": [
+    {
+      "path": "<local-path>",
+      "name": "external_heldout_cases.jsonl",
+      "bytes": 4780,
+      "sha256": "sha256:8ac3095b24ec913c849094fd7f5eab1a3846e95ccd9b3ecd3e58f84650638891"
+    },
+    {
+      "path": "<local-path>",
+      "name": "baseline_predictions.jsonl",
+      "bytes": 1632,
+      "sha256": "sha256:f3a20337362fb71acaa41fdda092692d2041807ed14aba2ee1c7f5eff83fcf58"
+    },
+    {
+      "path": "<local-path>",
+      "name": "candidate_predictions.jsonl",
+      "bytes": 1609,
+      "sha256": "sha256:cdfc1a34c1a7cbaa3cd3a0e33b3b00b8c1b1386212bff5d2eb79ab0c021344b6"
+    }
+  ],
+  "blocked_reason": null,
+  "score": {
+    "baseline_score": 0.40625,
+    "candidate_score": 0.84375,
+    "mean_normalized_improvement": 0.736842
+  },
+  "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"
+}

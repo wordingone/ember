@@ -1,0 +1,14 @@
+{
+  "ticket": "DENSITY-AB-VERDICT",
+  "ts": "20260613T034404Z",
+  "issue": 225,
+  "verdict": "NO_VERDICT",
+  "reason": "seeds disagree on direction at 100pct \u2014 spec rule 4 demands third seed before axis mapping",
+  "seed_agreement": {
+    "seed0_b_wins": false,
+    "seed1_b_wins": true
+  },
+  "delta_pp_100pct": 50.0,
+  "delta_pp_50pct": 0.0,
+  "c04_pick": null
+}

@@ -1,0 +1,13 @@
+{
+  "ticket": "NC0-r1-diag",
+  "cuda_available": true,
+  "idle": {
+    "free_gb": 22.449,
+    "total_gb": 23.988
+  },
+  "after_1gb_alloc": {
+    "free_gb": 21.449,
+    "delta_gb": 1.0
+  },
+  "verdict": "H-B: mem_get_info sane idle -> step-0 transient"
+}

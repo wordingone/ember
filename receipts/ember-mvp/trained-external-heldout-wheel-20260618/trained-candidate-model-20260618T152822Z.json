@@ -1,0 +1,29 @@
+{
+  "ticket": "EMBER-TRAINED-CANDIDATE-MODEL-ARTIFACT",
+  "ts": "20260618T152822Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0003",
+  "source_receipt": "receipts/ember-mvp/trained-external-heldout-wheel-20260618/arm-c-trained-benchmark-20260618T152822Z.json",
+  "candidate_prediction_source": "trained_sklearn_text_classifier",
+  "training_source": "external_rows_after_frozen_heldout",
+  "training_case_count": 5905,
+  "model_metadata": {
+    "classes": [
+      "anger",
+      "fear",
+      "joy"
+    ],
+    "heldout_case_count": 32,
+    "model_family": "sklearn.multinomial_nb",
+    "training_case_count": 5905,
+    "training_label_counts": {
+      "anger": 1987,
+      "fear": 1928,
+      "joy": 1990
+    },
+    "training_source": "external_rows_after_frozen_heldout",
+    "vectorizer": "sklearn.count_vectorizer",
+    "vocabulary_size": 58858
+  },
+  "verdict": "MODEL_METADATA_RECEIPTED"
+}

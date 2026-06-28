@@ -1,0 +1,64 @@
+{
+  "ticket": "FP38D-L9-PROD-FLASH",
+  "ts": "20260612T232449Z",
+  "lever": "L9",
+  "issue": 225,
+  "verdict": "L9_PROD_MARGINAL_B8",
+  "verdict_note": "B8-flash-prod fits under 0.80 cap but below B16-ckpt-compile-prod. Net gain marginal on production stack.",
+  "receipt_class": "PRODUCTION",
+  "prior_receipts": {
+    "fp38c_bench_proxy": "fp38c-l9-eager-20260612T231505Z.json",
+    "fp39b_prod_compile": "fp39b-prod-compile-20260612T230911Z.json"
+  },
+  "baseline": {
+    "bench_b8_flash_tok_s": 27894.6,
+    "prod_b16_ckpt_compile_tok_s": 19227.8,
+    "prod_b16_ckpt_eager_tok_s": 16593.4
+  },
+  "cell": {
+    "cell": "b8-nockpt-flash-eager-prod",
+    "batch": 8,
+    "seq": 1024,
+    "grad_checkpointing": false,
+    "compiled": false,
+    "flash_sdpa": true,
+    "mtp_heads": 2,
+    "mtp_weight": 0.3,
+    "optimizer": "muon_split",
+    "variant": "qat",
+    "timed_steps": 10,
+    "warmup_reps": 5,
+    "receipt_class": "PRODUCTION",
+    "free_vram_gib_post_warmup": 9.3,
+    "status": "OK",
+    "tok_s_paced": 13937.7,
+    "tok_s_raw": 15233.7,
+    "pacing_tax": 0.0851
+  },
+  "wall_days_7b_corpus": 5.791,
+  "multipliers": {
+    "vs_bench_proxy": 0.4997,
+    "vs_prod_b16_ckpt_compile": 0.7249
+  },
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.6.0+cu124"
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "c03 shapes (hidden=1024, layers=20, heads=16, ffn=4096, seq=1024)",
+    "MTP: 2 heads, weight=0.3",
+    "optimizer: Muon (2D hidden params) + AdamW (embed/norm/head)",
+    "CE: chunked_cross_entropy from timeshare_pretrain (chunk_tokens=1024)",
+    "QAT: qat fake-quant via fp19._apply_fake_quant",
+    "flash/SDPA: torch.backends.cuda.enable_flash_sdp(True) global",
+    "no gradient checkpointing",
+    "eager (no compile) \u2014 resolves fp38c BENCH-PATH-PROXY class",
+    "warmup_eager=5",
+    "governor rails HOLD \u2014 never loosened"
+  ]
+}

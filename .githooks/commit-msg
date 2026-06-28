@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# commit-msg ring: a commit message records what a change DOES, not a status
+# board. Enforces a concise subject and rejects status-board / progress-ledger
+# phrasing (that belongs in STATE.md and receipts/, per GOVERNANCE.md).
+msg_file="$1"
+subject="$(sed -n '1p' "$msg_file")"
+fail=0
+
+# allow merge/revert/fixup commits through untouched
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+n=${#subject}
+if [ "$n" -gt 72 ]; then
+  echo "commit-msg: subject is ${n} chars (> 72). Write a concise summary; detail goes in the body."
+  fail=1
+fi
+
+# status-board markers that signal the message is being used as a progress ledger
+if printf '%s' "$subject" | grep -qiE '^(status|state|progress|update|wip|todo|done|eod|daily)\b|\b(DONE|TODO|IN PROGRESS|PASS/FAIL|✅|❌|\[x\]|\[ \])'; then
+  echo "commit-msg: subject reads like a status board. Describe the change itself; track status in STATE.md / receipts/."
+  fail=1
+fi
+
+[ "$fail" -eq 0 ] && exit 0
+echo "  (override with --no-verify only for a genuine exception)"
+exit 1

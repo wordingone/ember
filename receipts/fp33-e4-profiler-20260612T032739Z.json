@@ -1,0 +1,56 @@
+{
+  "ticket": "FP33-E4-PROFILER",
+  "ts": "20260612T032739Z",
+  "method": "cuda.Event per-phase timing (CUPTI-free, WSL2 safe)",
+  "torch_version": "2.6.0+cu124",
+  "config": {
+    "model": "ember-v0 c03-qat",
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "batch": 4,
+    "seq": 1024,
+    "vocab": 32000,
+    "n_params": 368354304,
+    "variant": "qat",
+    "grad_checkpointing": true
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "run": {
+    "warmup_steps": 3,
+    "timed_steps": 15,
+    "free_vram_gib_post_warmup": 17.18
+  },
+  "wall_clock": {
+    "total_s": 6.9311,
+    "governor_sleep_s": 0.75,
+    "governor_wall_pct": 10.8,
+    "tok_s_paced": 8864.4
+  },
+  "phase_avg_ms_per_step": {
+    "qat_fwd": 48.73,
+    "forward": 82.04,
+    "backward": 229.98,
+    "qat_bwd_restore": 0.1,
+    "optimizer": 45.89
+  },
+  "phase_gpu_shares_pct": {
+    "qat_fwd": 12.0,
+    "forward": 20.2,
+    "backward": 56.5,
+    "qat_bwd_restore": 0.0,
+    "optimizer": 11.3
+  },
+  "phase_gpu_total_ms": 6101.24,
+  "flags": [
+    "cuda.Event timing: each phase demarcated by explicit synchronize()",
+    "governor sleep measured from wall time (CPU-side, not CUDA)",
+    "synthetic random batches \u2014 no dataloader (share = 0 by design)",
+    "gradient checkpointing ON \u2014 backward includes activation recompute",
+    "live run 12c050e7 NOT touched"
+  ]
+}

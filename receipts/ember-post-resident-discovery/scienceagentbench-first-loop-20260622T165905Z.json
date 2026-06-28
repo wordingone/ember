@@ -1,0 +1,169 @@
+{
+    "admission_receipt":  "receipts\\ember-post-resident-discovery\\scienceagentbench-admission-20260622T165317Z.json",
+    "admission_receipt_sha256":  "dbaf2f4a697dc178a09f300c597106c4e9776c23068ad59935bf40d0e966762a",
+    "benchmark_root":  "<local-path>",
+    "benchmark_root_exists":  true,
+    "blocked_reasons":  [
+                            "full_frozen_slice_not_locally_runnable_without_visual_judge",
+                            "gpt4_visual_judge_module_missing",
+                            "gpt4_visual_judge_openai_key_missing",
+                            "python_dependency_missing"
+                        ],
+    "candidate_safety":  {
+                             "candidate_generation_faked":  false,
+                             "gold_programs_read_by_candidate":  false,
+                             "gold_results_read_by_candidate":  false,
+                             "private_labels_read_by_candidate":  false
+                         },
+    "code_vs_docs_metric":  {
+                                "classification":  "during-project ScienceAgentBench first-loop preflight receipt",
+                                "receipt_lines":  157,
+                                "script_code_lines":  247
+                            },
+    "deleted_selector_routing":  {
+                                     "admission_state":  "ROUTING_BLOCKED_DELETED_SELECTOR",
+                                     "reason":  "Deleting the native benchmark router prevents preserving ScienceAgentBench as the selected admitted target.",
+                                     "selected":  null
+                                 },
+    "deletion_sensitive":  true,
+    "equal_budget":  {
+                         "arms":  [
+                                      "A_null_or_template_baseline",
+                                      "B_prior_operator",
+                                      "C_resident_operator",
+                                      "Deleted_operator"
+                                  ],
+                         "budget_waived":  false,
+                         "declared_budget_seconds_per_arm_per_row":  120,
+                         "measured_execution":  "not_run_preflight_blocked"
+                     },
+    "frozen_row_count":  6,
+    "frozen_rows_path":  "receipts\\ember-post-resident-discovery\\scienceagentbench-admission-20260622T165317Z.frozen_rows.json",
+    "frozen_rows_sha256":  "af8d0e567b2616918ec336e451b16fd1bc79469ca987420bb32c224f08887fca",
+    "goal_path":  "<local-path>",
+    "goal_source_sha256":  "e9527ab710671d2f71cd306ce1c2a202abd5ce113831d351c597b3ad198bc68e",
+    "missing_dataset_dirs":  [
+
+                             ],
+    "missing_eval_scripts":  [
+
+                             ],
+    "missing_modules":  [
+                            "gpt4_visual_judge"
+                        ],
+    "native_operator_routing":  {
+                                    "admission_state":  "FIRST_LOOP_BLOCKED",
+                                    "reason":  "ScienceAgentBench is admitted; first loop is blocked only by executable evaluator/dependency/candidate-generation requirements.",
+                                    "selected":  "scienceagentbench"
+                                },
+    "next_executable_command":  "Install/provide the missing evaluator dependencies and visual-judge OpenAI key named in blocked_reasons, then rerun this first-loop command.",
+    "positive_delta":  false,
+    "repo":  "<local-path>",
+    "row_checks":  [
+                       {
+                           "dataset_dir":  "<local-path>",
+                           "dataset_dir_exists":  true,
+                           "eval_script_exists":  true,
+                           "eval_script_name":  "clintox_nn_eval.py",
+                           "imports":  [
+                                           "pandas",
+                                           "sklearn"
+                                       ],
+                           "instance_id":  1,
+                           "missing_modules":  [
+
+                                               ],
+                           "output_fname":  "pred_results/clintox_test_pred.csv",
+                           "requires_gpt4_visual_judge":  false
+                       },
+                       {
+                           "dataset_dir":  "<local-path>",
+                           "dataset_dir_exists":  true,
+                           "eval_script_exists":  true,
+                           "eval_script_name":  "eval_elk_analysis.py",
+                           "imports":  [
+                                           "gpt4_visual_judge"
+                                       ],
+                           "instance_id":  4,
+                           "missing_modules":  [
+                                                   "gpt4_visual_judge"
+                                               ],
+                           "output_fname":  "pred_results/Elk_Analysis.png",
+                           "requires_gpt4_visual_judge":  true
+                       },
+                       {
+                           "dataset_dir":  "<local-path>",
+                           "dataset_dir_exists":  true,
+                           "eval_script_exists":  true,
+                           "eval_script_name":  "eval_dkpes_model_development_1.py",
+                           "imports":  [
+                                           "pandas",
+                                           "sklearn"
+                                       ],
+                           "instance_id":  5,
+                           "missing_modules":  [
+
+                                               ],
+                           "output_fname":  "pred_results/dkpes_test_pred.csv",
+                           "requires_gpt4_visual_judge":  false
+                       },
+                       {
+                           "dataset_dir":  "<local-path>",
+                           "dataset_dir_exists":  true,
+                           "eval_script_exists":  true,
+                           "eval_script_name":  "eval_biopsykit_ecg_processing_vis1.py",
+                           "imports":  [
+                                           "gpt4_visual_judge"
+                                       ],
+                           "instance_id":  24,
+                           "missing_modules":  [
+                                                   "gpt4_visual_judge"
+                                               ],
+                           "output_fname":  "pred_results/ecg_processing_vis1_pred_result.png",
+                           "requires_gpt4_visual_judge":  true
+                       },
+                       {
+                           "dataset_dir":  "<local-path>",
+                           "dataset_dir_exists":  true,
+                           "eval_script_exists":  true,
+                           "eval_script_name":  "eval_biopsykit_ecg_processing_vis2.py",
+                           "imports":  [
+                                           "gpt4_visual_judge"
+                                       ],
+                           "instance_id":  25,
+                           "missing_modules":  [
+                                                   "gpt4_visual_judge"
+                                               ],
+                           "output_fname":  "pred_results/ecg_processing_vis2_pred_result.png",
+                           "requires_gpt4_visual_judge":  true
+                       },
+                       {
+                           "dataset_dir":  "<local-path>",
+                           "dataset_dir_exists":  true,
+                           "eval_script_exists":  true,
+                           "eval_script_name":  "eval_mat_feature_select.py",
+                           "imports":  [
+                                           "pandas"
+                                       ],
+                           "instance_id":  2,
+                           "missing_modules":  [
+
+                                               ],
+                           "output_fname":  "pred_results/mat_diffusion_features.csv",
+                           "requires_gpt4_visual_judge":  false
+                       }
+                   ],
+    "score_rows":  [
+
+                   ],
+    "sha_convention":  "bytes on disk/as fetched as-is; text hashes are UTF-8 encoded",
+    "ticket":  "EMBER-SCIENCEAGENTBENCH-FIRST-LOOP",
+    "ts":  "20260622T165905Z",
+    "verdict":  "SCIENCEAGENTBENCH_FIRST_LOOP_BLOCKED",
+    "visual_judge_status":  {
+                                "module_available":  false,
+                                "openai_key_env_checked":  "OPENAI_API_KEY",
+                                "openai_key_present":  false,
+                                "visual_rows":  3
+                            }
+}

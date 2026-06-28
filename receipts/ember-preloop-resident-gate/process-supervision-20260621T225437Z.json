@@ -1,0 +1,64 @@
+{
+  "ticket": "EMBER-reference-CLI-PROCESS-SUPERVISION-GATE",
+  "ts": "20260621T225437Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "PROCESS_SUPERVISION_GATE_PASS",
+  "classification": "clean_room_executable_process_supervisor_not_manual_taskkill_or_static_policy",
+  "out_path": "<local-path>",
+  "launch_packaging_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "000e4e79bc525e246c9224b592b33d3ba64db1a4ba28470e775035304fa108a8",
+    "ticket": "EMBER-reference-CLI-LAUNCH-PACKAGING-GATE",
+    "verdict": "LAUNCH_PACKAGING_GATE_PASS"
+  },
+  "process_supervision": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "9e57f945e97893fdfa1bef7bf308ac57ec4728aabbedd0f355574b8dda2bef28",
+    "copies_reference_code": false,
+    "uses_windows_job_object_reference_binary": false
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "record": {
+        "pid": 47840,
+        "command": [
+          "<local-path> Files\\Python310\\python.exe",
+          "-c",
+          "import time; time.sleep(3)"
+        ],
+        "timeout_s": 0.25,
+        "status": "terminated",
+        "returncode": 1,
+        "duration_s": 0.261074
+      },
+      "alive_after_cleanup": false,
+      "background_lifecycle_accounted": true
+    },
+    "checks": {
+      "child_process_spawned_and_tracked": true,
+      "timeout_terminated_child": true,
+      "survivor_detection_clean": true,
+      "background_lifecycle_accounted": true
+    }
+  },
+  "deletion_ablation": {
+    "supervisor_deleted_blocks_spawn_and_tracking": true,
+    "timeout_handler_deleted_blocks_termination": true,
+    "survivor_probe_deleted_blocks_cleanup_verification": true,
+    "background_lifecycle_accounting_deleted_blocks_receipt": true,
+    "manual_taskkill_insufficient": true,
+    "launcher_only_behavior_insufficient": true,
+    "static_process_policy_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete supervisor/timeout/survivor probe; launcher and resident surfaces remain, but child tracking, timeout kill, cleanup verification, and lifecycle receipt fail"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_process_supervision_receipt",
+  "next_executable_command": "python scripts\\ember_gate_full_parity_harness.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

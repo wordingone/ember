@@ -1,0 +1,49 @@
+{
+  "ticket": "FP6-PROVENANCE",
+  "ts": "20260610T235623Z",
+  "ledger": "episodes.jsonl",
+  "license_texts_read": {
+    "qwen-research": "Qwen RESEARCH LICENSE AGREEMENT 2024-09-19 (huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct/raw/main/LICENSE): non-commercial-only grant; S4.b attribution clause reaches outputs used to train/improve distributed models",
+    "apache-2.0": "Qwen/Qwen2.5-Coder-1.5B-Instruct license tag apache-2.0; no output-use clause exists in Apache-2.0",
+    "arc-dsl-mit": "vendor/arc-dsl (Hodel), MIT per t3_seed.py header; human expert code, not model output"
+  },
+  "episodes_by_license": {
+    "arc-dsl-mit": {
+      "n": 1909,
+      "bits": 0.0,
+      "bits_stamped_n": 0,
+      "bases": {
+        "origin": 1909
+      }
+    },
+    "qwen-research": {
+      "n": 956,
+      "bits": 573.2,
+      "bits_stamped_n": 956,
+      "bases": {
+        "sampler-stamp": 956
+      }
+    }
+  },
+  "control_pool_by_license": {
+    "UNKNOWN": {
+      "n": 1909,
+      "bits": 0.0,
+      "bits_stamped_n": 0,
+      "bases": {
+        "no-provenance(origin=seed-control-wrongtask)": 1909
+      }
+    },
+    "qwen-research": {
+      "n": 1022,
+      "bits": 2906.1,
+      "bits_stamped_n": 1022,
+      "bases": {
+        "sampler-stamp": 1022
+      }
+    }
+  },
+  "unknown_provenance_episodes": 0,
+  "reading": "ledger today = MIT human-expert code (arc-dsl solvers + re-arc verifier variants) + qwen-research-encumbered 3B output; ZERO apache-clean model-output episodes (1.5B q15 verified samples were never ingested)",
+  "bits_note": "bits = sum of per-record ledger stamps (pre-cap); NOT the 252.2 bits-weighted post-cap dataset figure (easy 2/mid 4/frontier 8 caps applied at build)"
+}

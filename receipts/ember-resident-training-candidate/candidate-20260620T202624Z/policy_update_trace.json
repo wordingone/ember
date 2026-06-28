@@ -1,0 +1,219 @@
+{
+  "base_policy": "resident_policy_linear_v1_zero_initialized",
+  "final_weights": {
+    "dataset_preview": -0.33791000000000004,
+    "eval_script_recursive": 4.0,
+    "instruction_only": -0.35459000000000007
+  },
+  "heldout_task_count": 4,
+  "igrpo_mapping": "sample draft policies, score with verifier reward, update toward highest reward draft",
+  "rlm_mapping": "recursive snippet choices over task_instruction, dataset_previews, and eval_script",
+  "selected_template": "eval_script_recursive",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-RESIDENT-TRAINING-CANDIDATE-TRACE",
+  "train_task_count": 4,
+  "ts": "20260620T202624Z",
+  "updates": [
+    {
+      "best_draft": {
+        "reward": 1.0,
+        "snippets": [
+          "task_instruction",
+          "dataset_previews",
+          "eval_script"
+        ],
+        "template": "eval_script_recursive"
+      },
+      "drafts": [
+        {
+          "reward": 0.1,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only"
+        },
+        {
+          "reward": 0.15,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview"
+        },
+        {
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive"
+        }
+      ],
+      "source_row_idx": 0,
+      "task_id": "task_1",
+      "update_rule": "iGRPO-style best-draft reward update over recursive snippet policies",
+      "weights_after": {
+        "dataset_preview": -0.085,
+        "eval_script_recursive": 1.0,
+        "instruction_only": -0.09000000000000001
+      },
+      "weights_before": {
+        "dataset_preview": 0.0,
+        "eval_script_recursive": 0.0,
+        "instruction_only": 0.0
+      }
+    },
+    {
+      "best_draft": {
+        "reward": 1.0,
+        "snippets": [
+          "task_instruction",
+          "dataset_previews",
+          "eval_script"
+        ],
+        "template": "eval_script_recursive"
+      },
+      "drafts": [
+        {
+          "reward": 0.1375,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only"
+        },
+        {
+          "reward": 0.1375,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview"
+        },
+        {
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive"
+        }
+      ],
+      "source_row_idx": 1,
+      "task_id": "task_2",
+      "update_rule": "iGRPO-style best-draft reward update over recursive snippet policies",
+      "weights_after": {
+        "dataset_preview": -0.17125,
+        "eval_script_recursive": 2.0,
+        "instruction_only": -0.17625000000000002
+      },
+      "weights_before": {
+        "dataset_preview": -0.085,
+        "eval_script_recursive": 1.0,
+        "instruction_only": -0.09000000000000001
+      }
+    },
+    {
+      "best_draft": {
+        "reward": 1.0,
+        "snippets": [
+          "task_instruction",
+          "dataset_previews",
+          "eval_script"
+        ],
+        "template": "eval_script_recursive"
+      },
+      "drafts": [
+        {
+          "reward": 0.1083,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only"
+        },
+        {
+          "reward": 0.1667,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview"
+        },
+        {
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive"
+        }
+      ],
+      "source_row_idx": 2,
+      "task_id": "task_3",
+      "update_rule": "iGRPO-style best-draft reward update over recursive snippet policies",
+      "weights_after": {
+        "dataset_preview": -0.25458000000000003,
+        "eval_script_recursive": 3.0,
+        "instruction_only": -0.26542000000000004
+      },
+      "weights_before": {
+        "dataset_preview": -0.17125,
+        "eval_script_recursive": 2.0,
+        "instruction_only": -0.17625000000000002
+      }
+    },
+    {
+      "best_draft": {
+        "reward": 1.0,
+        "snippets": [
+          "task_instruction",
+          "dataset_previews",
+          "eval_script"
+        ],
+        "template": "eval_script_recursive"
+      },
+      "drafts": [
+        {
+          "reward": 0.1083,
+          "snippets": [
+            "task_instruction"
+          ],
+          "template": "instruction_only"
+        },
+        {
+          "reward": 0.1667,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews"
+          ],
+          "template": "dataset_preview"
+        },
+        {
+          "reward": 1.0,
+          "snippets": [
+            "task_instruction",
+            "dataset_previews",
+            "eval_script"
+          ],
+          "template": "eval_script_recursive"
+        }
+      ],
+      "source_row_idx": 3,
+      "task_id": "task_4",
+      "update_rule": "iGRPO-style best-draft reward update over recursive snippet policies",
+      "weights_after": {
+        "dataset_preview": -0.33791000000000004,
+        "eval_script_recursive": 4.0,
+        "instruction_only": -0.35459000000000007
+      },
+      "weights_before": {
+        "dataset_preview": -0.25458000000000003,
+        "eval_script_recursive": 3.0,
+        "instruction_only": -0.26542000000000004
+      }
+    }
+  ],
+  "verdict": "POLICY_UPDATE_TRACE_READY"
+}

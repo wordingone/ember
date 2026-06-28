@@ -1,0 +1,1377 @@
+{
+  "action_log_path": "<local-path>",
+  "mm_grad_norm_l1": 806.5821978889871,
+  "mm_loss": 4.056535243988037,
+  "observed_action_log_kinds": [
+    "commit",
+    "emit-scalar",
+    "emit-token"
+  ],
+  "parameter_delta_present": true,
+  "post_neural_parameter_hash": "sha256:c66c19688e92ca4601bd9297bf01dd27961204ae661dde406d70cc55609f8e17",
+  "pre_neural_parameter_hash": "sha256:cb4788bec4d803bec36122d3ac114a6622d3f4ebc7c9141678bb3ada1a4aa941",
+  "selected_template": "eval_script_recursive",
+  "source": "scripts/train_multimodal_v0.py run_step plus verifier-conditioned resident policy update",
+  "ticket": "EMBER-TRAIN-MULTIMODAL-RESIDENT-ADAPTER-TRACE",
+  "trainable_parameter_count": 244056,
+  "ts": "20260622T011310Z",
+  "updates": [
+    {
+      "epoch": 0,
+      "loss": 1.0986123085021973,
+      "predictions": [
+        "instruction_only",
+        "instruction_only",
+        "instruction_only",
+        "instruction_only"
+      ],
+      "reward_tables": [
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.1,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.15,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_bond_orders.csv",
+              "pred_bonds.items",
+              "pred_bonds_all.items",
+              "pred_info.lower",
+              "pred_info.split",
+              "pred_info.strip",
+              "pred_plotatoms_bondorder.png",
+              "pred_plotatoms_bondorder.svg",
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt",
+              "pred_structure_info.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty"
+            ],
+            "outputs": [
+              "pred_csv_plot.eps",
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_plot_eover.csv",
+              "pred_plot_eover.pdf",
+              "pred_plot_eover.png",
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_reax_debug.log",
+              "pred_reax_debug_bo.txt",
+              "pred_reax_debug_grad.txt",
+              "pred_reax_debug_species.txt",
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ]
+      ],
+      "targets": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "update_rule": "cross_entropy_to_verifier_best_template"
+    },
+    {
+      "epoch": 1,
+      "loss": 0.0408395454287529,
+      "predictions": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "reward_tables": [
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.1,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.15,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_bond_orders.csv",
+              "pred_bonds.items",
+              "pred_bonds_all.items",
+              "pred_info.lower",
+              "pred_info.split",
+              "pred_info.strip",
+              "pred_plotatoms_bondorder.png",
+              "pred_plotatoms_bondorder.svg",
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt",
+              "pred_structure_info.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty"
+            ],
+            "outputs": [
+              "pred_csv_plot.eps",
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_plot_eover.csv",
+              "pred_plot_eover.pdf",
+              "pred_plot_eover.png",
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_reax_debug.log",
+              "pred_reax_debug_bo.txt",
+              "pred_reax_debug_grad.txt",
+              "pred_reax_debug_species.txt",
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ]
+      ],
+      "targets": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "update_rule": "cross_entropy_to_verifier_best_template"
+    },
+    {
+      "epoch": 2,
+      "loss": 0.03282179683446884,
+      "predictions": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "reward_tables": [
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.1,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.15,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_bond_orders.csv",
+              "pred_bonds.items",
+              "pred_bonds_all.items",
+              "pred_info.lower",
+              "pred_info.split",
+              "pred_info.strip",
+              "pred_plotatoms_bondorder.png",
+              "pred_plotatoms_bondorder.svg",
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt",
+              "pred_structure_info.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty"
+            ],
+            "outputs": [
+              "pred_csv_plot.eps",
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_plot_eover.csv",
+              "pred_plot_eover.pdf",
+              "pred_plot_eover.png",
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_reax_debug.log",
+              "pred_reax_debug_bo.txt",
+              "pred_reax_debug_grad.txt",
+              "pred_reax_debug_species.txt",
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ]
+      ],
+      "targets": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "update_rule": "cross_entropy_to_verifier_best_template"
+    },
+    {
+      "epoch": 9,
+      "loss": 0.014139080420136452,
+      "predictions": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "reward_tables": [
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.1,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.15,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_bond_orders.csv",
+              "pred_bonds.items",
+              "pred_bonds_all.items",
+              "pred_info.lower",
+              "pred_info.split",
+              "pred_info.strip",
+              "pred_plotatoms_bondorder.png",
+              "pred_plotatoms_bondorder.svg",
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt",
+              "pred_structure_info.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty"
+            ],
+            "outputs": [
+              "pred_csv_plot.eps",
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_plot_eover.csv",
+              "pred_plot_eover.pdf",
+              "pred_plot_eover.png",
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_reax_debug.log",
+              "pred_reax_debug_bo.txt",
+              "pred_reax_debug_grad.txt",
+              "pred_reax_debug_species.txt",
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ]
+      ],
+      "targets": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "update_rule": "cross_entropy_to_verifier_best_template"
+    },
+    {
+      "epoch": 39,
+      "loss": 0.004216459579765797,
+      "predictions": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "reward_tables": [
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.1,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt"
+            ],
+            "reward": 0.15,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_bond_orders.csv",
+              "pred_bonds.items",
+              "pred_bonds_all.items",
+              "pred_info.lower",
+              "pred_info.split",
+              "pred_info.strip",
+              "pred_plotatoms_bondorder.png",
+              "pred_plotatoms_bondorder.svg",
+              "pred_results/pred_bond_orders.csv",
+              "pred_results/pred_plotatoms_bondorder.png",
+              "pred_results/pred_plotatoms_bondorder.svg",
+              "pred_results/pred_structure_info.txt",
+              "pred_structure_info.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 0.1375,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty"
+            ],
+            "outputs": [
+              "pred_csv_plot.eps",
+              "pred_results/pred_csv_plot.eps"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "csv_parse",
+              "existence",
+              "format_validity",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_plot_eover.csv",
+              "pred_plot_eover.pdf",
+              "pred_plot_eover.png",
+              "pred_results/pred_plot_eover.csv",
+              "pred_results/pred_plot_eover.pdf",
+              "pred_results/pred_plot_eover.png"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ],
+        [
+          {
+            "checks": [
+              "existence"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1083,
+            "snippets": [
+              "task_instruction"
+            ],
+            "template": "instruction_only",
+            "template_index": 0
+          },
+          {
+            "checks": [
+              "existence",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 0.1667,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews"
+            ],
+            "template": "dataset_preview",
+            "template_index": 1
+          },
+          {
+            "checks": [
+              "existence",
+              "format_validity",
+              "gold_compare",
+              "non_empty",
+              "numeric_validity",
+              "semantic_consistency"
+            ],
+            "outputs": [
+              "pred_reax_debug.log",
+              "pred_reax_debug_bo.txt",
+              "pred_reax_debug_grad.txt",
+              "pred_reax_debug_species.txt",
+              "pred_results/pred_reax_debug.log",
+              "pred_results/pred_reax_debug_bo.txt",
+              "pred_results/pred_reax_debug_grad.txt",
+              "pred_results/pred_reax_debug_species.txt"
+            ],
+            "reward": 1.0,
+            "snippets": [
+              "task_instruction",
+              "dataset_previews",
+              "eval_script"
+            ],
+            "template": "eval_script_recursive",
+            "template_index": 2
+          }
+        ]
+      ],
+      "targets": [
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive",
+        "eval_script_recursive"
+      ],
+      "update_rule": "cross_entropy_to_verifier_best_template"
+    }
+  ],
+  "verdict": "POLICY_UPDATE_TRACE_READY",
+  "verifier_feedback_enters": "best template target is computed from per-task verifier reward table"
+}

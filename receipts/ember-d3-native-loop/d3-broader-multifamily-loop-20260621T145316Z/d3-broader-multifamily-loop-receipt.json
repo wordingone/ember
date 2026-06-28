@@ -1,0 +1,490 @@
+{
+  "aggregate_scores": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.0,
+    "Deleted": 0.0
+  },
+  "arm_contract": {
+    "A": "no native generator, no outputs",
+    "B": "instruction-only fixed stub; no eval-script artifact compiler",
+    "C": "shared inferred artifact compiler from fresh task/evaluator requirements",
+    "Deleted": "C with native generator / resident action-selection organ removed"
+  },
+  "arm_solution_paths": {
+    "A": "<local-path>",
+    "B": "<local-path>",
+    "C": "<local-path>",
+    "Deleted": "<local-path>"
+  },
+  "arm_solution_sha256": {
+    "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+    "B": "fcaa3659453927fea96ed1787f83fa03f2ab9371ccaf706fffc8383f9f25b3be",
+    "C": "49ca09dae5a52393736fca77b219c4dc5bc8496237ca797d8d423ae6d46790eb",
+    "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+  },
+  "broader_d3_admission_receipt": "<local-path>",
+  "broader_d3_fresh_rows_path": "<local-path>",
+  "broader_d3_loop_ts": "20260621T145330Z",
+  "code_vs_docs_metric": {
+    "classification": "during-project executable official Docker benchmark receipt",
+    "receipt_lines_predicted": 487,
+    "script_code_lines": 550,
+    "solution_code_lines": 142
+  },
+  "deletion_sensitive": false,
+  "equal_budget": {
+    "entrypoint": "run_and_eval",
+    "official_container_runs_per_arm_per_task": 1,
+    "same_solution_source_per_arm_across_tasks": true,
+    "timeout_seconds_per_arm": 180
+  },
+  "errors": [
+    "c_did_not_pass_multiple_tasks",
+    "positive_delta_missing",
+    "deletion_not_load_bearing"
+  ],
+  "external_task_source": {
+    "dataset": "osunlp/D3-Gym",
+    "length": 4,
+    "offset": 16,
+    "source_url": "https://huggingface.co/datasets/osunlp/D3-Gym",
+    "split": "train"
+  },
+  "field_level_status": "progress_not_field_breakthrough",
+  "floor_contract_preservation_references": [
+    "docs/ember-floor-contract.md",
+    "nc2-own-technique-contract.md",
+    "scripts/train_multimodal_v0.py \u00a76 action log"
+  ],
+  "fresh_rows_path": "<local-path>",
+  "fresh_rows_sha256": "6ad27dcad5c2670bda492ac81f5ef0443bf7f5dcda381909a5fc5d7c3d01ace9",
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "77474f4086d8d283bc937da05aa1836206e96bc50c1662e457374395a602587d",
+  "limits": [
+    "This is still within the D3 chemistry/I-ReaxFF family unless broader task IDs are selected.",
+    "Goal completion still requires field-level breakthrough evidence beyond this receipt."
+  ],
+  "manual_solution_exclusion": {
+    "manual_per_task_solution": false,
+    "rationale": "C source is generated once from inferred required artifact families and contains no task_id branches.",
+    "task9_solution_reused": false
+  },
+  "native_goal_organ_load_bearing": false,
+  "next_blocker": "continue from exact broader-D3 loop errors before any duration/readiness growth",
+  "per_task_rows": [
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_17",
+      "image_digest": "hananemoussa/d3-gym@sha256:00dc94c2740ea423b1f540ab9bebf677fb411b13851afc95f8903dd31533cffa",
+      "inspect_sha256": "7ccf2632a49ff7e67e2179bb564ed9914990f6e596cca470dc6c6ab193a6a912",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_17",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_17",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_17",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_17",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted VASP file not found: pred_results/pred_sort_atoms_mol.vasp\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "txt",
+          "path": "pred_results/pred_sort_atoms_mol.txt",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 16,
+      "task_id": "task_17"
+    },
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_18",
+      "image_digest": "hananemoussa/d3-gym@sha256:87f1b5ccc7cebbea4feaa7c878de63c819d7a6b26a0e1b7a8e55834a5aea228a",
+      "inspect_sha256": "5c42b6649a57eee5d0277c7ad9dbbfde70d7ec2dbb26cd32df7983abf27b0c3f",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_18",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted output file 'pred_results/pred_illuminate.csv' not found.",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: Predicted output file 'pred_results/pred_illuminate.csv' not found.\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_18",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted output file is empty.",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: Predicted output file is empty.\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_18",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "No SMILES column found. Available columns: ['0', '0.00000000', '1.00000000']",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: No SMILES column found. Available columns: ['0', '0.00000000', '1.00000000']\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_18",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted output file 'pred_results/pred_illuminate.csv' not found.",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: FAIL\nReason: Predicted output file 'pred_results/pred_illuminate.csv' not found.\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "csv",
+          "path": "pred_results/pred_illuminate.csv",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 17,
+      "task_id": "task_18"
+    },
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_19",
+      "image_digest": "hananemoussa/d3-gym@sha256:da80a741685c34474cd6a2df32638b0dc4f6b3595f6512d2c81196d8f421d79d",
+      "inspect_sha256": "d88d52590e1879d063e23d1c42d2e8c1c59ae366dc86c0ffae02488668f5bf56",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_19",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Missing main output file: pred_get_reactant_bag_other_reactions.csv",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Missing main output file: pred_get_reactant_bag_other_reactions.csv\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_19",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Main CSV file has no data rows",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Main CSV file has no data rows\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_19",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Main CSV missing expected column: reaction_idx. Found: ['0', '0.00000000', '1.00000000']",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Main CSV missing expected column: reaction_idx. Found: ['0', '0.00000000', '1.00000000']\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_19",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Missing main output file: pred_get_reactant_bag_other_reactions.csv",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Missing main output file: pred_get_reactant_bag_other_reactions.csv\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "csv",
+          "path": "pred_results/pred_get_reactant_bag_other_reactions.csv",
+          "source": "task_instruction"
+        },
+        {
+          "kind": "csv",
+          "path": "pred_results/pred_get_reactant_bag_other_reactions_reaction_idx_{rxn_idx}.csv",
+          "source": "eval_script"
+        }
+      ],
+      "row_idx": 18,
+      "task_id": "task_19"
+    },
+    {
+      "c_passed": false,
+      "controls_passed": {
+        "A": false,
+        "B": false,
+        "Deleted": false
+      },
+      "image": "hananemoussa/d3-gym:task_20",
+      "image_digest": "hananemoussa/d3-gym@sha256:ead29a3647d3c03fb0b541df402db9db57084c1e6dde2ecd49042a8159be6926",
+      "inspect_sha256": "611207ce3fb20ed2eccb0cd5ec3af5eaafd97d8da39279c1fbe43825355983e0",
+      "official_execution": {
+        "A": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_20",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted output file pred_results/pred_demo.json not found",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted output file pred_results/pred_demo.json not found\n"
+        },
+        "B": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_20",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Failed to parse predicted JSON: Expecting value: line 1 column 1 (char 0)",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Failed to parse predicted JSON: Expecting value: line 1 column 1 (char 0)\n"
+        },
+        "C": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_20",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Evaluation failed with 9 error(s) (10% checks passed). Errors: No RMSD matrix data found in output; No clustering data found in output; No reference clusters found in output; No quality statistics found in output; No barrier analysis found in output; No Hessian summary found in output; No generated reactions data found in output; No ground truth comparison found in output; No IRC catalog found in output. Passed: JSON file exists and is valid...",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Evaluation failed with 9 error(s) (10% checks passed). Errors: No RMSD matrix data found in output; No clustering data found in output; No reference clusters found in output; No quality statistics found in output; No barrier analysis found in output; No Hessian summary found in output; No generated reactions data found in output; No ground truth comparison found in output; No IRC catalog found in output. Passed: JSON file exists and is valid...\n"
+        },
+        "Deleted": {
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--mount",
+            "type=bind,src=<local-path>,dst=/task/solution.py,readonly",
+            "hananemoussa/d3-gym:task_20",
+            "run_and_eval"
+          ],
+          "failed": true,
+          "passed": false,
+          "reason": "Predicted output file pred_results/pred_demo.json not found",
+          "returncode": 0,
+          "skipped": false,
+          "stderr_tail": "",
+          "stdout_tail": "=== Running solution ===\n\n=== Running evaluation ===\nResult: False\nReason: Predicted output file pred_results/pred_demo.json not found\n"
+        }
+      },
+      "required_outputs": [
+        {
+          "kind": "json",
+          "path": "pred_results/pred_demo.json",
+          "source": "task_instruction"
+        }
+      ],
+      "row_idx": 19,
+      "task_id": "task_20"
+    }
+  ],
+  "positive_delta": false,
+  "repo": "<local-path>",
+  "reproducibility": {
+    "docker_required": true,
+    "rerun_command": "python scripts\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\ember-d3-native-loop\\d3-broader-multifamily-loop-20260621T145316Z\\d3-broader-multifamily-fresh-rows.json --out-dir receipts\\ember-d3-native-loop\\d3-broader-multifamily-loop-20260621T145316Z --timeout-seconds 180 --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --execute",
+    "solution_hashes": {
+      "A": "7b85b010c93751360a326c0b36087fd005884d75aaf08aafaffb5a10e1a648b8",
+      "B": "fcaa3659453927fea96ed1787f83fa03f2ab9371ccaf706fffc8383f9f25b3be",
+      "C": "49ca09dae5a52393736fca77b219c4dc5bc8496237ca797d8d423ae6d46790eb",
+      "Deleted": "c732465e42eecd204a6e318cb14b63b684119caf2153743703bf2736b8a0eb4c"
+    }
+  },
+  "resident_training_cursor_references": {
+    "bitnet_pr": 485,
+    "discovery_pr": 486,
+    "resident_gate_pr": 484,
+    "task9_pr": 487
+  },
+  "selected_task_ids": [
+    "task_17",
+    "task_18",
+    "task_19",
+    "task_20"
+  ],
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "static_registry_exclusion": {
+    "static_per_task_answer_table": false,
+    "task_id_branches_in_c_source": false
+  },
+  "ticket": "EMBER-D3-BROADER-MULTIFAMILY-LOOP",
+  "ts": "20260621T145330Z",
+  "verdict": "D3_BROADER_MULTIFAMILY_LOOP_BLOCKED"
+}

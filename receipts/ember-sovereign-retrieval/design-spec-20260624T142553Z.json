@@ -1,0 +1,46 @@
+{
+  "ticket": "ember-sovereign-retrieval-probe DESIGN",
+  "ts": "20260624T142553Z",
+  "status": "DESIGN_ONLY",
+  "does_not_count_toward": ["C8", "C-SCALE", "C-TALLY"],
+  "counting_gate": "This is a design verdict from an adversarial Opus debate (workflow wtrl34wzh), NOT an executed run. Docs != progress. C8 credit requires the probe to RUN on the 4090 via the train daemon and emit the measured receipt with all four conditions passing (or an honest NEGATIVE that refutes IVF-PQ-as-replacement and escalates per kill_criterion).",
+  "objective_frame": "TRUE SOVEREIGN COMPUTING: train+quantize+run recursive loops indefinitely on one private RTX 4090; the all-pairs softmax(QK^T/sqrt d)V is O(t)/step -> grows with lifetime -> incompatible with indefinite sovereign recursion on fixed hardware -> must be REPLACED (not bounded) by content-addressable sub-linear retrieval that preserves lossless associative recall. Eval = recursive-loop cost curve (cost vs accumulated history t), NOT a single forward pass.",
+  "verdict": "CONDITIONAL. Replaceable by sub-linear-in-t content retrieval ONLY IF four conditions jointly hold UNDER MEASUREMENT (not assumption): (C1) live per-step cost INCLUDING index insertion fits log-log slope <=0.2 in t AND insert-term slope <1.0; (C2) MASS-recall@k (fraction of top-p softmax mass captured, NOT id-recall) >=0.98 as t->3e5+; (C3) survives EMBEDDING DRIFT (stored keys re-embedded by a later checkpoint, re-queried in the drifted space); (C4) L2/cosine index metric tracks softmax relevance, metric-mismatch gap <2%. Any one fails => retrieval is refuted as recall-lossy (=banned substrate-downgrade) OR O(t)-maintenance (=wall relocated, not broken).",
+  "chosen_mechanism": "Owned IVF-PQ content-addressable KV memory + bounded recent-window cascade (single owned torch/CUDA module; NOT FAISS-as-dependency, NOT HNSW). Recent W=2048 tokens: exact O(1)-in-t windowed dot-product. Older keys: appended to IVF-PQ index (coarse Voronoi quantizer nlist~sqrt(t), 2-level above t=1e5, lazy recluster on geometric t-doubling for O(1)-amortized insert; PQ m=8 subquantizers, LUT scan), query top-k=256, then bounded dot-product attends ONLY over {window + retrieved}. Preserves lossless content-addressable recall within the retrieved set (NOT a lossy fixed-state downgrade).",
+  "design_knob_call": "BOUNDED-WINDOW + SUB-LINEAR RETRIEVAL (reject pure-retrieval). (a) recent tokens carry highest softmax mass and are most volatile/un-indexed -> exact window catches them deterministically; (b) the window is the drift firewall while the encoder trains. Probe includes a pure-retrieval arm (W=0) to MEASURE this dominance, not assume it.",
+  "configs": {
+    "A": "FULL-SDPA over all t keys (FlashAttention kernel; recall+cost oracle/baseline, the BEST honest O(t))",
+    "B": "IVF-PQ retrieval + bounded window W=2048 (the candidate)",
+    "C": "pure-retrieval IVF-PQ, W=0 (design-knob control)",
+    "D": "B with a FROZEN index, no per-step insert (isolates the insertion tax; B-minus-D gap = the tax)"
+  },
+  "metrics": {
+    "primary": "recursive-loop cost curve: median per-step wall-time as t grows over {1e3,4e3,1.6e4,6.4e4,2.56e5,1e6}, 1000 recursive steps each, INCLUDING live insertion; fit log-log slope. PASS if B slope<=0.2 AND insert-term slope<1.0. Report p99 per-step too (recluster spike / tail-latency check).",
+    "secondary": "mass-recall@256 = fraction of top-p(=0.99) softmax mass captured by retrieved set, measured (i) frozen embeddings and (ii) after re-embedding all stored keys with a +5k-step checkpoint and re-querying (drift leg).",
+    "tertiary": "metric-mismatch gap = mass-recall when top-softmax key != top-cosine neighbor.",
+    "recall_tasks": "(1) associative-recall, (2) exact-copy of an early span, (3) needle-in-haystack; measured at EVERY t-checkpoint, never once.",
+    "context": "d=64, fp16, <=0.80 VRAM. NOT single-pass speedup, NOT memory-fit. Log the checkpoint's attention-entropy alongside recall (under-trained-model artifact guard)."
+  },
+  "pass_threshold": "needle_acc and copy_acc >= 0.98 of A ground truth, AND mass-recall@256 >= 0.99 frozen at every t incl 1e6, AND >= 0.95 mass-recall post-drift. eps=0.02 accuracy / 0.01 mass.",
+  "kill_criterion": "KILL IVF-PQ-as-replacement if at t=1e6: mass-recall@256 <0.95 frozen OR <0.90 post-drift OR per-step log-log slope >=0.9 (incl insertion) OR insert-term slope >=1.0 OR no cost crossover with full-SDPA by t=6.4e4 OR metric-mismatch gap >2%. KILL is of the MECHANISM, not the retrieval direction: escalate to 2-level/learned-residual index or softmax-metric-aligned quantizer. NEVER revert to a lossy O(n) state substrate (Mamba) and NEVER conclude 'Ember consolidates to weights so it needs no long history'. Only the user abandons retrieval as the direction.",
+  "negative_signatures": [
+    "B log-log slope >=0.9 OR insert-term slope ~1.0 once insertion in the clock => cost still grows with t (wall relocated to index maintenance).",
+    "mass-recall@256 degrades monotonically with t or collapses <0.95 under drift => recall-LOSSY = banned substrate-downgrade in disguise.",
+    "metric-mismatch gap >2% => index optimizes cosine vs softmax relevance, recall-biased even with perfect ANN."
+  ],
+  "open_risks": [
+    "d=64 bounded-poly crossover cited upstream has NO receipt in this tree (grep empty) -> A re-derives the O(t) baseline from scratch, do not cite the survey prose as evidence.",
+    "INSERTION TAX likeliest silent failure: lazy-recluster amortization bursts on each t-doubling -> report p99 per-step not just median, or amortization hides a halt-on-recluster.",
+    "EMBEDDING DRIFT deepest + least de-riskable in synthetic probe: +5k-step drift leg is a proxy; real co-training drift could be faster/structured.",
+    "METRIC MISMATCH may be the true ceiling: if gap systematically >2%, needs a maxip/softmax-aware quantizer (larger build than this probe scopes).",
+    "Mass concentration (>99% top-k) is empirical for TRAINED attention; Ember is pretraining-stage so early attention is near-uniform -> low recall may be an under-trained-model artifact, hence log attention-entropy."
+  ],
+  "gpu_hours_estimate": "~1.5-2.5 GPU-h on the 4090. Dominated by t=1e6 full-SDPA arm A; cap A at t<=2.56e5 and EXTRAPOLATE its linear slope to 1M if wall-time exceeds budget. Retrieval arms are minutes. Drift re-embed leg ~20 GPU-min. One governed daemon session, <=0.80 VRAM.",
+  "provenance": {
+    "workflow_task_id": "wtrl34wzh",
+    "run_id": "wf (replace-dotproduct-sovereign-retrieval)",
+    "agents": "3x Opus (per-run the maintainer opt-in): designer:sublinear-retrieval, skeptic:retrieval-lossy, synth:cost-curve-probe",
+    "total_tokens": 280541
+  },
+  "next_action": "BUILD the runnable probe (owned IVF-PQ module + 4-config measurement harness + fail-closed assertions) TDD-disciplined, adversarially reviewed; THEN run via train daemon (native-Windows CUDA, <=0.80 VRAM) and bank the MEASURED receipt. Only the measured receipt counts."
+}

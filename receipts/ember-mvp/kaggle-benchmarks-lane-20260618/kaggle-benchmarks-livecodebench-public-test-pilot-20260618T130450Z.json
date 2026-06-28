@@ -1,0 +1,50 @@
+{
+  "ticket": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-PUBLIC-TEST-PILOT",
+  "ts": "20260618T130450Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "lane": "kaggle_benchmarks",
+  "python_executable": "<local-path>",
+  "workdir": "<local-path>",
+  "sdk_root": "<local-path>",
+  "source_example": "<local-path>",
+  "source_example_present": true,
+  "source_example_sha256": "sha256:5cc938fc48f8dc521e9f837f9f76895a96caef0ddd2418896b9bb6191980de14",
+  "benchmark_family": "livecodebench/code_generation_lite",
+  "question_id": "1873_A",
+  "contest_id": "1873",
+  "platform": "codeforces",
+  "returncode": 1,
+  "stdout_tail": "================================================================================\nTASK: LiveCodeBench Demo Public Test: Run #1\n================================================================================\n",
+  "stderr_tail": "reference\\\\an agent\\\\state\\\\ember-mvp\\\\kaggle-benchmarks-livecodebench-public-test-pilot-receipted-20260618T-now\\\\artifacts\\\\tmp\\\\tmpc97bwtm9'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"<local-path>\", line 666, in _exitfunc\n    f()\n  File \"<local-path>\", line 590, in __call__\n    return info.func(*info.args, **(info.kwargs or {}))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<local-path>\", line 933, in _cleanup\n    cls._rmtree(name, ignore_errors=ignore_errors)\n  File \"<local-path>\", line 929, in _rmtree\n    _shutil.rmtree(name, onerror=onerror)\n  File \"<local-path>\", line 787, in rmtree\n    return _rmtree_unsafe(path, onerror)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<local-path>\", line 615, in _rmtree_unsafe\n    onerror(os.scandir, path, sys.exc_info())\n  File \"<local-path>\", line 890, in onerror\n    _resetperms(path)\n  File \"<local-path>\", line 287, in _resetperms\n    _dont_follow_symlinks(_os.chmod, path, 0o700)\n  File \"<local-path>\", line 278, in _dont_follow_symlinks\n    func(path, *args)\nPermissionError: [WinError 5] Access is denied: '<local-path>'\n",
+  "task_file_count": 1,
+  "run_file_count": 1,
+  "summary_path": null,
+  "completed_public_test_run": true,
+  "public_test_passed": true,
+  "sample_count": 1,
+  "pilot_ready": true,
+  "cleanup_error_observed": true,
+  "benchmark_delta_claimed": false,
+  "artifact_files": [
+    {
+      "path": "<local-path>",
+      "name": "LiveCodeBench_Demo_Public_Test.task.json",
+      "bytes": 252,
+      "sha256": "sha256:5fa3fa8d796387f5f4ee9f10b0e39e38b21fc27ff1d184f7716d9a8c5d6162e5"
+    },
+    {
+      "path": "<local-path>",
+      "name": "LiveCodeBench_Demo_Public_Test-run_param_id_1873_A_public.run.json",
+      "bytes": 820,
+      "sha256": "sha256:f310cd2471d03de38296aee2928bc8621e7f90c9830165ab6057a790ba17fe87"
+    }
+  ],
+  "blocked_reason": null,
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "PILOT_PUBLIC_TEST_RECEIPTED"
+}

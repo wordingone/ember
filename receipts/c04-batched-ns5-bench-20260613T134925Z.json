@@ -1,0 +1,62 @@
+{
+  "ticket": "C04-BATCHED-NS5-BENCH",
+  "ts": "20260613T134925Z",
+  "candidate": "c03-h1024-d20",
+  "config": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "batch": 16,
+    "seq": 1024
+  },
+  "bench_reps": 20,
+  "compiled": true,
+  "grad_checkpointing": true,
+  "c1_dtype": "QAT",
+  "harness_sha": "97bcedfc863a2cc6c265e176a38a43a2b4319f05fa475a117ff12fb8e1583322",
+  "status": "OK",
+  "compile_status": "PASS",
+  "compiled_ns5": true,
+  "measure": false,
+  "n_muon_params": 142,
+  "tok_s_paced": 19707.1,
+  "tok_s_raw": 20968.1,
+  "mean_step_ms": 781.17,
+  "optimizer_wall_share": 0.354,
+  "mean_opt_wall_ms": 276.53,
+  "mean_muon_wall_ms": 270.74,
+  "mean_adamw_wall_ms": 5.79,
+  "free_vram_gib_post_warmup": 19.23,
+  "ns5_equiv": {
+    "per_shape": {
+      "(64, 128)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(1024, 1024)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(4096, 1024)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      },
+      "(32000, 1024)": {
+        "max_abs_delta": 0.0,
+        "pass": true
+      }
+    },
+    "max_abs_delta": 0.0,
+    "gate_pass": true,
+    "gate_tol": 2e-07
+  },
+  "gate": {
+    "tok_s_paced": 19707.1,
+    "tok_s_threshold": 25463.0,
+    "tok_s_pass": false,
+    "ns5_max_delta": 0.0,
+    "ns5_threshold": 2e-07,
+    "ns5_pass": true,
+    "gate_pass": false
+  }
+}

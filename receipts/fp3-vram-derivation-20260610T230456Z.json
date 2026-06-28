@@ -1,0 +1,132 @@
+{
+  "ticket": "FP3-VRAM-DERIVATION",
+  "ts": "20260610T230456Z",
+  "kind": "derivation (executed arithmetic from stated assumptions) \u2014 NOT a VRAM measurement; the 1.5B full-FT smoke receipt supersedes",
+  "governor_source": "t2-r1w-q3-grpo-20260610T223426Z.json",
+  "governor": {
+    "vram_fraction": 0.85,
+    "free_gb": 24.1,
+    "total_gb": 25.76,
+    "margin_gb": 4.0
+  },
+  "cap_gb": 21.9,
+  "activation_band_gb": [
+    1.0,
+    3.0
+  ],
+  "ladder": [
+    {
+      "core": "qwen2.5-0.5b",
+      "params_b": 0.494,
+      "regime": "adamw_fp32_moments",
+      "bytes_per_param": 12,
+      "states_gb": 5.52,
+      "est_total_gb": [
+        6.52,
+        8.52
+      ],
+      "verdict_at_cap": "FITS"
+    },
+    {
+      "core": "qwen2.5-0.5b",
+      "params_b": 0.494,
+      "regime": "adamw_fp32_moments_master",
+      "bytes_per_param": 16,
+      "states_gb": 7.36,
+      "est_total_gb": [
+        8.36,
+        10.36
+      ],
+      "verdict_at_cap": "FITS"
+    },
+    {
+      "core": "qwen2.5-0.5b",
+      "params_b": 0.494,
+      "regime": "adamw_8bit",
+      "bytes_per_param": 6,
+      "states_gb": 2.76,
+      "est_total_gb": [
+        3.76,
+        5.76
+      ],
+      "verdict_at_cap": "FITS"
+    },
+    {
+      "core": "qwen2.5-1.5b",
+      "params_b": 1.544,
+      "regime": "adamw_fp32_moments",
+      "bytes_per_param": 12,
+      "states_gb": 17.26,
+      "est_total_gb": [
+        18.26,
+        20.26
+      ],
+      "verdict_at_cap": "FITS"
+    },
+    {
+      "core": "qwen2.5-1.5b",
+      "params_b": 1.544,
+      "regime": "adamw_fp32_moments_master",
+      "bytes_per_param": 16,
+      "states_gb": 23.01,
+      "est_total_gb": [
+        24.01,
+        26.01
+      ],
+      "verdict_at_cap": "NO"
+    },
+    {
+      "core": "qwen2.5-1.5b",
+      "params_b": 1.544,
+      "regime": "adamw_8bit",
+      "bytes_per_param": 6,
+      "states_gb": 8.63,
+      "est_total_gb": [
+        9.63,
+        11.63
+      ],
+      "verdict_at_cap": "FITS"
+    },
+    {
+      "core": "qwen2.5-3b",
+      "params_b": 3.086,
+      "regime": "adamw_fp32_moments",
+      "bytes_per_param": 12,
+      "states_gb": 34.49,
+      "est_total_gb": [
+        35.49,
+        37.49
+      ],
+      "verdict_at_cap": "NO"
+    },
+    {
+      "core": "qwen2.5-3b",
+      "params_b": 3.086,
+      "regime": "adamw_fp32_moments_master",
+      "bytes_per_param": 16,
+      "states_gb": 45.98,
+      "est_total_gb": [
+        46.98,
+        48.98
+      ],
+      "verdict_at_cap": "NO"
+    },
+    {
+      "core": "qwen2.5-3b",
+      "params_b": 3.086,
+      "regime": "adamw_8bit",
+      "bytes_per_param": 6,
+      "states_gb": 17.24,
+      "est_total_gb": [
+        18.24,
+        20.24
+      ],
+      "verdict_at_cap": "FITS"
+    }
+  ],
+  "receipted_lora_anchors": {
+    "qlora_3b_train": "t2-r1w-q3-*: 57 steps 281-285s, adapter 239,536,272 B (r=32)",
+    "qlora_7b_train_peak": "ember-r1: 16.4/24.5 GB held",
+    "eval_3b_merged_peak": "t4 s14 health: 8,278/24,564 MiB"
+  }
+}

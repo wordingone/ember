@@ -1,0 +1,17 @@
+{
+  "ticket": "ENG36-ACQUIRE-SELFTEST",
+  "ts": "20260611T044312Z",
+  "issue": "wordingone/ember#130",
+  "checks": {
+    "registry": true,
+    "ingest_core": true,
+    "license_failclosed": true,
+    "shard_writer_roundtrip": true,
+    "file_sha256": true,
+    "source_wiring": true
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "substitution_note": "code_github_clean is a source substitution vs the issue text (the-stack-v2 references-only; march sample lacks per-file license metadata) \u2014 runner refuses it without --ack-code-source until the gate-holder acks",
+  "no_network": true,
+  "no_gpu": true
+}

@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""CLI contract selftest for ember_train_multimodal_resident_adapter."""
+from __future__ import annotations
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def main() -> int:
+    repo = Path(__file__).resolve().parent.parent
+    with tempfile.TemporaryDirectory(prefix="ember-train-adapter-cli-") as td:
+        out_dir = Path(td) / "adapter-out"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(repo / "scripts" / "ember_train_multimodal_resident_adapter.py"),
+                "--train-script",
+                "scripts\\train_multimodal_v0.py",
+                "--out-dir",
+                str(out_dir),
+            ],
+            cwd=str(repo),
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+        assert proc.returncode == 0, proc.stderr + proc.stdout
+        assert (out_dir / "resident_training_candidate_manifest.json").exists()
+        assert (out_dir / "train_multimodal_resident_adapter_receipt.json").exists()
+    print("EMBER_TRAIN_MULTIMODAL_RESIDENT_ADAPTER_CLI_SELFTEST_PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

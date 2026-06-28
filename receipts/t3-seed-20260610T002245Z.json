@@ -1,0 +1,95 @@
+{
+  "ticket": "NC0-T3-SEED",
+  "ts": "20260610T002245Z",
+  "seed": 14,
+  "config": {
+    "n_variants": 4,
+    "diffs": [
+      0.3,
+      0.5,
+      0.7,
+      1.0
+    ],
+    "pairs_per_variant": 4,
+    "max_prompt_chars": 10000
+  },
+  "phase_a": {
+    "solvers_parsed": 400
+  },
+  "phase_b": {
+    "verified_orig": 399,
+    "failed_orig": [
+      {
+        "task": "e40b9e2f",
+        "error": null,
+        "train_pass": 0
+      }
+    ]
+  },
+  "phase_c": {
+    "variant_jobs": 1403,
+    "aug_verified": 368,
+    "gen_fail": [
+      "00d62c1b#a0",
+      "00d62c1b#a1",
+      "00d62c1b#a2",
+      "00d62c1b#a3",
+      "045e512c#a0",
+      "045e512c#a1",
+      "045e512c#a2",
+      "045e512c#a3",
+      "11852cab#a0",
+      "11852cab#a1",
+      "11852cab#a2",
+      "11852cab#a3",
+      "1e0a9b12#a0",
+      "1e0a9b12#a1",
+      "1e0a9b12#a2",
+      "1e0a9b12#a3",
+      "2204b7a8#a0",
+      "2204b7a8#a1",
+      "2204b7a8#a2",
+      "2204b7a8#a3",
+      "239be575#a0",
+      "239be575#a1",
+      "239be575#a2",
+      "239be575#a3",
+      "272f95fa#a0",
+      "272f95fa#a1",
+      "272f95fa#a2",
+      "272f95fa#a3",
+      "3aa6fb7a#a0",
+      "3aa6fb7a#a1",
+      "3aa6fb7a#a2",
+      "3aa6fb7a#a3",
+      "3e980e27#a0",
+      "3eda0437#a0",
+      "3eda0437#a1",
+      "3eda0437#a2",
+      "3eda0437#a3",
+      "42a50994#a0",
+      "42a50994#a1",
+      "42a50994#a2",
+      "42a50994#a3",
+      "444801d8#a1",
+      "444801d8#a2",
+      "444801d8#a3",
+      "5168d44c#a0",
+      "5168d44c#a1",
+      "5168d44c#a2",
+      "5168d44c#a3",
+      "5614dbcf#a0",
+      "5614dbcf#a1"
+    ],
+    "gen_fail_count": 168,
+    "prompt_skips": 25,
+    "no_generator": []
+  },
+  "phase_d": {
+    "controls_written": 766,
+    "accidental_pass_dropped": 1
+  },
+  "episodes_total": 767,
+  "episodes_written_new": 767,
+  "secs": 10.4
+}

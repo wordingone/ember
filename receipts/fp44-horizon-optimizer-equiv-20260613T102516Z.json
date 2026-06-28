@@ -1,0 +1,140 @@
+{
+  "ticket": "FP44-HORIZON-OPTIMIZER-EQUIV",
+  "ts": "20260613T102516Z",
+  "issue": "#376",
+  "decision_rule": "Pre-registered: |delta_adamw_minus_muon@2000| <= derived_threshold AND adamw not diverging -> EQUIV_PASS -> commit AdamW -> gate-9 -> pretrain. muon val lower @2000 -> TRADEOFF -> user decision.",
+  "config": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "seq": 1024,
+    "batch": 16,
+    "grad_checkpointing": true,
+    "variant": "qat",
+    "mtp_n_heads": 2,
+    "mtp_weight": 0.3,
+    "lr_muon": 0.02,
+    "lr_adamw": 0.0003,
+    "weight_decay": 0.1,
+    "train_steps": 2000,
+    "val_checkpoints": [
+      250,
+      500,
+      1000,
+      1500,
+      2000
+    ],
+    "val_batch": 8,
+    "val_steps": 16,
+    "warmup_steps": 8,
+    "noise_seeds": [
+      42,
+      43
+    ],
+    "bench_seed": 16,
+    "compile": "DEFERRED (eager) \u2014 C-4 env wall #373",
+    "train_shard": "v0-00000.bin",
+    "val_shard": "v0-00001.bin"
+  },
+  "noise_floor_run": {
+    "seed_results": {
+      "42": {
+        "val_losses": {
+          "250": 9.828125,
+          "500": 7.679688,
+          "1000": 6.324219,
+          "1500": 6.896484,
+          "2000": 6.134766
+        },
+        "total_time_s": 1974.5
+      },
+      "43": {
+        "val_losses": {
+          "250": 10.246094,
+          "500": 7.992188,
+          "1000": 6.589844,
+          "1500": 7.326172,
+          "2000": 6.740234
+        },
+        "total_time_s": 1971.9
+      }
+    },
+    "noise_floor": 0.605468,
+    "derived_threshold": 0.605468,
+    "threshold_floor": 0.05
+  },
+  "muon_result": {
+    "arm": "muon_split_baseline",
+    "seed": 16,
+    "train_steps": 2000,
+    "val_checkpoints": [
+      250,
+      500,
+      1000,
+      1500,
+      2000
+    ],
+    "free_vram_gib_post_warmup": 16.0,
+    "status": "OK",
+    "val_losses": {
+      "250": 8.855469,
+      "500": 7.740234,
+      "1000": 6.384766,
+      "1500": 7.078125,
+      "2000": 6.230469
+    },
+    "total_time_s": 1973.3
+  },
+  "adamw_result": {
+    "arm": "full_fused_adamw",
+    "seed": 16,
+    "train_steps": 2000,
+    "val_checkpoints": [
+      250,
+      500,
+      1000,
+      1500,
+      2000
+    ],
+    "free_vram_gib_post_warmup": 15.37,
+    "status": "OK",
+    "val_losses": {
+      "250": 9.394531,
+      "500": 8.984375,
+      "1000": 7.324219,
+      "1500": 7.386719,
+      "2000": 6.976562
+    },
+    "total_time_s": 1419.6
+  },
+  "decision": {
+    "verdict": "TRADEOFF",
+    "delta_adamw_minus_muon": 0.746093,
+    "muon_val_2000": 6.230469,
+    "adamw_val_2000": 6.976562,
+    "derived_threshold": 0.605468,
+    "adamw_diverging": false,
+    "consequence": "Muon val lower by 0.7461 nats at step 2000 (above threshold=0.6055). User decision: Muon=19223 tok/s = 1.32 governed days (over \u22641-day bar). Do NOT pick AdamW to dodge it."
+  },
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "torch": "2.6.0+cu124"
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  },
+  "flags": [
+    "c03 frozen config (h=1024 d=20 heads=16)",
+    "B=16, ckpt=True, QAT, MTP 2h w=0.3",
+    "compile: DEFERRED (eager) \u2014 C-4 env wall #373 unresolved",
+    "noise-floor: same post-warmup snapshot for seeds 42+43",
+    "A/B bench: seed 16, 2000 steps each arm",
+    "val loss measured at {250,500,1000,1500,2000} steps",
+    "threshold = max(0.05, noise_floor@2000)",
+    "governor rails HOLD \u2014 never loosened",
+    "prior fp40: full_fused_adamw 27703 tok/s / 3.16% opt wall (EQUIV at 100 steps)",
+    "fp40 100-step horizon insufficient (synthetic data, loss floors to 0) -> fp-44"
+  ]
+}

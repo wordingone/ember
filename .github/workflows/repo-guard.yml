@@ -1,0 +1,32 @@
+name: repo-guard
+
+# Unbypassable server-side ring. Runs the same kernel as the local hook on every
+# push and PR. Make this a REQUIRED status check in branch protection so a change
+# that violates a structural invariant cannot merge — agents cannot --no-verify
+# their way past it.
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # need full history for the --base range check
+      - name: Run repo-guard
+        env:
+          # Operator-name denylist injected from a repo secret so the names are
+          # never committed. If unset, the kernel skips the name check and still
+          # enforces every structural invariant.
+          REPO_GUARD_NAMES: ${{ secrets.REPO_GUARD_NAMES }}
+        run: |
+          chmod +x tools/repo-guard.sh
+          if git rev-parse --verify -q origin/master >/dev/null; then
+            bash tools/repo-guard.sh --base origin/master
+          else
+            bash tools/repo-guard.sh
+          fi

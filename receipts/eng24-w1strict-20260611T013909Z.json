@@ -1,0 +1,17 @@
+{
+  "ticket": "ENG24-W1STRICT",
+  "ts": "20260611T013909Z",
+  "surface": "w1_humaneval",
+  "description": "zero-new-flips leg: strict comparator on w1_humaneval (v_compare single source, eng-24)",
+  "n_rows_rerun": 0,
+  "n_skipped_no_problem": 543,
+  "n_reverified": 0,
+  "n_flipped": 0,
+  "flips": [],
+  "guard_flips": 0,
+  "flipped_task_ids": [],
+  "samples_file_sha256_before": "aa8f80888ab35dc968dfa75b931e975efeda625dca25624272a1efd053ff5dc9",
+  "samples_file_sha256_after": "aa8f80888ab35dc968dfa75b931e975efeda625dca25624272a1efd053ff5dc9",
+  "sha_convention": "sha256 over file bytes as on disk (LF, no CRLF present)",
+  "ledger_and_source_sample_files": "opened read-only; byte-unchanged (sha_before == sha_after)"
+}

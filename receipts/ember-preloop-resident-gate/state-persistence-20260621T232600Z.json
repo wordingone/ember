@@ -1,0 +1,176 @@
+{
+  "ticket": "EMBER-reference-CLI-STATE-PERSISTENCE-GATE",
+  "ts": "20260621T232426Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "STATE_PERSISTENCE_GATE_PASS",
+  "classification": "clean_room_file_backed_state_persistence_not_transient_memory_or_prompt_only_state",
+  "out_path": "receipts\\ember-preloop-resident-gate\\state-persistence-20260621T232600Z.json",
+  "tool_dispatch_permissions_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "6befa3a284e743d908eee167c9636c36437419bdf514945fe3bf74b9d4986b2d",
+    "ticket": "EMBER-reference-CLI-TOOL-DISPATCH-PERMISSIONS-GATE",
+    "verdict": "TOOL_DISPATCH_PERMISSIONS_GATE_PASS"
+  },
+  "state_persistence": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "900362cf15de9fd3b9d40912d64e3f5037b09ab061ae6720d3870176ee4594a8",
+    "copies_reference_code": false,
+    "state_surface": [
+      "sessions",
+      "memory",
+      "settings",
+      "accounts",
+      "compaction",
+      "resume"
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "checks": {
+        "session_write_read_resume": true,
+        "durable_memory_write_read": true,
+        "compaction_persists": true,
+        "settings_reload": true,
+        "model_account_reload": true,
+        "lifecycle_accounted": true,
+        "file_backed_not_memory_only": true
+      },
+      "records": {
+        "session": {
+          "kind": "sessions",
+          "key": "s1",
+          "path": "<local-path>",
+          "sha256": "5cb4f574162e224b30a3cea35eb71f6c12e8a71f125366a02619a424b0c89e60"
+        },
+        "memory_initial": {
+          "kind": "memory",
+          "key": "m1",
+          "path": "<local-path>",
+          "sha256": "d83e15ccc3c7b19f02e1aea41c9143158ae5f2e73d6561af921446a6bad0a0b7"
+        },
+        "settings": {
+          "kind": "settings",
+          "key": "default",
+          "path": "<local-path>",
+          "sha256": "a480584f1b98c93133361db6b87d5ac31dd34ddb20885fc203847f547a9b311c"
+        },
+        "account": {
+          "kind": "accounts",
+          "key": "local",
+          "path": "<local-path>",
+          "sha256": "980d4152279e73e89dbc92d995512430bbfa8e1f91dadef6c9f52b470ab505aa"
+        },
+        "memory_compacted": {
+          "kind": "memory",
+          "key": "m1",
+          "path": "<local-path>",
+          "sha256": "d8729d7b374bf85641009d4764ba57030efd404e482226b062ebd207e3174170"
+        }
+      },
+      "resume": {
+        "session_id": "s1",
+        "step": "state_persistence",
+        "memory_items": 4
+      },
+      "settings": {
+        "theme": "plain",
+        "approval_mode": "fail_closed"
+      },
+      "account": {
+        "model": "ember-local",
+        "provider": "local"
+      },
+      "lifecycle": [
+        {
+          "op": "write",
+          "kind": "sessions",
+          "key": "s1",
+          "sha256": "5cb4f574162e224b30a3cea35eb71f6c12e8a71f125366a02619a424b0c89e60"
+        },
+        {
+          "op": "write",
+          "kind": "memory",
+          "key": "m1",
+          "sha256": "d83e15ccc3c7b19f02e1aea41c9143158ae5f2e73d6561af921446a6bad0a0b7"
+        },
+        {
+          "op": "write",
+          "kind": "settings",
+          "key": "default",
+          "sha256": "a480584f1b98c93133361db6b87d5ac31dd34ddb20885fc203847f547a9b311c"
+        },
+        {
+          "op": "write",
+          "kind": "accounts",
+          "key": "local",
+          "sha256": "980d4152279e73e89dbc92d995512430bbfa8e1f91dadef6c9f52b470ab505aa"
+        },
+        {
+          "op": "read",
+          "kind": "sessions",
+          "key": "s1",
+          "sha256": "5cb4f574162e224b30a3cea35eb71f6c12e8a71f125366a02619a424b0c89e60"
+        },
+        {
+          "op": "read",
+          "kind": "memory",
+          "key": "m1",
+          "sha256": "d83e15ccc3c7b19f02e1aea41c9143158ae5f2e73d6561af921446a6bad0a0b7"
+        },
+        {
+          "op": "read",
+          "kind": "memory",
+          "key": "m1",
+          "sha256": "d83e15ccc3c7b19f02e1aea41c9143158ae5f2e73d6561af921446a6bad0a0b7"
+        },
+        {
+          "op": "write",
+          "kind": "memory",
+          "key": "m1",
+          "sha256": "d8729d7b374bf85641009d4764ba57030efd404e482226b062ebd207e3174170"
+        },
+        {
+          "op": "read",
+          "kind": "settings",
+          "key": "default",
+          "sha256": "a480584f1b98c93133361db6b87d5ac31dd34ddb20885fc203847f547a9b311c"
+        },
+        {
+          "op": "read",
+          "kind": "accounts",
+          "key": "local",
+          "sha256": "980d4152279e73e89dbc92d995512430bbfa8e1f91dadef6c9f52b470ab505aa"
+        },
+        {
+          "op": "read",
+          "kind": "memory",
+          "key": "m1",
+          "sha256": "d8729d7b374bf85641009d4764ba57030efd404e482226b062ebd207e3174170"
+        }
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "state_store_deleted_blocks_write": true,
+    "state_store_deleted_blocks_read": true,
+    "state_store_deleted_blocks_resume": true,
+    "compaction_deleted_blocks_memory_consolidation": true,
+    "settings_store_deleted_blocks_reload": true,
+    "model_account_store_deleted_blocks_reload": true,
+    "lifecycle_log_deleted_blocks_state_accounting": true,
+    "transient_in_memory_dict_insufficient": true,
+    "docs_only_state_policy_insufficient": true,
+    "prompt_only_memory_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete file-backed state store/compactor/settings/account loaders; write, read, resume, compaction, reload, and lifecycle evidence stop being executable"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_state_persistence_receipt",
+  "next_executable_command": "python scripts\\ember_gate_full_parity_harness.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-20260621T225437Z.json --hook-runner-receipt receipts\\ember-preloop-resident-gate\\hook-runner-20260621T230655Z.json --tool-dispatch-permissions-receipt receipts\\ember-preloop-resident-gate\\tool-dispatch-permissions-20260621T231900Z.json --state-persistence-receipt receipts\\ember-preloop-resident-gate\\state-persistence-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

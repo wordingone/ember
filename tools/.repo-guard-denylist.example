@@ -1,0 +1,8 @@
+# Operator-name denylist example — copy to .repo-guard-denylist and fill in.
+# One entry per line; blank lines and # comments are ignored.
+# This file IS committed; .repo-guard-denylist is git-ignored.
+#
+# Add the operator/vendor names that must never appear in tracked files:
+VENDOR_NAME_1
+VENDOR_NAME_2
+# You may also add product names, model names, URLs, etc.

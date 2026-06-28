@@ -1,0 +1,12 @@
+{
+  "action_space": [
+    "instruction_only",
+    "dataset_preview",
+    "eval_script_recursive"
+  ],
+  "deletion_test": "zero/reverted policy selects instruction_only and degrades below C",
+  "policy_id": "train_multimodal_verifier_conditioned_policy_v1",
+  "selection_rule": "resident torch policy argmax over task features after verifier-conditioned update",
+  "status": "VERIFIER_CONDITIONED_RESIDENT_POLICY_READY",
+  "uses_train_multimodal_v0": true
+}
