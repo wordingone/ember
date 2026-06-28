@@ -1,0 +1,82 @@
+{
+  "benchmark_facts": {
+    "name": "PaperBench",
+    "paper_claim": "20 ICML 2024 Spotlight/Oral paper replications and 8316 gradable tasks per paper/README sources",
+    "paperbench_readme_present": true,
+    "requires_api_keys": true,
+    "requires_docker": true,
+    "requires_gpu_for_full_run": true,
+    "requires_uv": true,
+    "stages": [
+      "agent rollout",
+      "reproduction",
+      "grading"
+    ]
+  },
+  "blocked_reasons": [
+    "paperbench_project_incomplete",
+    "paperbench_data_lfs_not_hydrated"
+  ],
+  "code_vs_docs_metric": {
+    "classification": "during-project PaperBench admission receipt",
+    "receipt_lines": 82,
+    "script_code_lines": 185
+  },
+  "deleted_selector_routing": {
+    "admission_state": "ROUTING_BLOCKED_DELETED_SELECTOR",
+    "reason": "Deleting the native benchmark router prevents justified transition from RE-Bench block to PaperBench.",
+    "selected": null
+  },
+  "deletion_sensitive": true,
+  "frozen_heldout_slice": {
+    "gold_or_rubric_private_contents_excluded": true,
+    "status": "not_frozen_materialization_blocked"
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "9b32cba4e6b68f97c3318c38eb07bc38f580eecd4228888f2db3cb623789ef61",
+  "license_access": {
+    "data_hydration_policy": "README requires manual Git-LFS hydration for project/paperbench/data and separately notes JudgeEval tarballs that cannot be redistributed automatically.",
+    "frontier_evals_license": "MIT license per local LICENSE.md"
+  },
+  "local_materialization": {
+    "frontier_root_exists": true,
+    "paperbench_data_dir": true,
+    "paperbench_package_dir": false,
+    "paperbench_pyproject": false,
+    "paperbench_readme": true,
+    "paperbench_uv_lock": false,
+    "root_license": true,
+    "root_readme": true
+  },
+  "native_operator_routing": {
+    "admission_state": "BLOCKED_LOCAL_MATERIALIZATION",
+    "reason": "PaperBench is the next field-level benchmark after ScienceAgentBench artifact access and RE-Bench first-loop preflight both blocked by receipt.",
+    "selected": "paperbench"
+  },
+  "next_benchmark_if_blocked": {
+    "next_executable_command": "python scripts\\ember_d3_broader_multifamily_admission.py --out receipts\\ember-post-resident-discovery\\d3-broader-multifamily-admission-<timestamp>.json",
+    "selected": "broader-d3-multifamily"
+  },
+  "next_executable_command": "Hydrate PaperBench Git-LFS data and missing project files, then rerun admission.",
+  "protected_data_boundaries": {
+    "data_lfs_hydrated": false,
+    "judge_eval_tarballs_redistributed": false,
+    "private_or_large_data_not_embedded_in_receipt": true
+  },
+  "repo": "<local-path>",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_hashes": {
+    "paperbench_readme_sha256": "97764f5f9ebee1642a8772630d3e5d3a1b1d2573865e5513c722d8a65057f8c1",
+    "root_license_sha256": "f369f1c768d4c0d6756077f1fc034cf2768ab77df244c240260822acd99451cc",
+    "root_readme_sha256": "ad0b85a495f0dc42c6f0af90f8acad5c59363355179cc78ff77a4343f6e22342"
+  },
+  "sources": {
+    "arxiv": "https://arxiv.org/abs/2504.01848",
+    "github": "https://github.com/openai/frontier-evals/tree/main/project/paperbench",
+    "local_frontier_root": "<local-path>",
+    "local_git_head": "51052cede8cc608f95bb00346635e03759013e5a"
+  },
+  "ticket": "EMBER-PAPERBENCH-ADMISSION",
+  "ts": "20260622T012545Z",
+  "verdict": "PAPERBENCH_BLOCKED"
+}

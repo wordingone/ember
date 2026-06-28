@@ -1,0 +1,83 @@
+{
+  "ticket": "EMBER-COMPLETENESS-TALLY",
+  "ts": "20260612T174305Z",
+  "issue": 337,
+  "total": 55,
+  "implemented": 10,
+  "part": 17,
+  "gated": 22,
+  "open": 6,
+  "pct_implemented": 18.2,
+  "missing": [
+    {
+      "id": "C12",
+      "reason": null
+    },
+    {
+      "id": "C13",
+      "reason": null
+    },
+    {
+      "id": "C48",
+      "reason": null
+    },
+    {
+      "id": "C50",
+      "reason": null
+    },
+    {
+      "id": "C53",
+      "reason": "open"
+    },
+    {
+      "id": "C55",
+      "reason": null
+    }
+  ],
+  "per_subgoal": {
+    "S1": {
+      "implemented": 2,
+      "part": 5,
+      "gated": 4,
+      "open": 2
+    },
+    "S2": {
+      "implemented": 4,
+      "part": 4,
+      "gated": 8,
+      "open": 1
+    },
+    "S3": {
+      "implemented": 2,
+      "part": 2,
+      "gated": 2,
+      "open": 1
+    },
+    "S4": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 0,
+      "open": 1
+    },
+    "S5": {
+      "implemented": 0,
+      "part": 2,
+      "gated": 3,
+      "open": 1
+    },
+    "S6": {
+      "implemented": 2,
+      "part": 2,
+      "gated": 3,
+      "open": 0
+    },
+    "S7": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 2,
+      "open": 0
+    }
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "no_gpu": true
+}

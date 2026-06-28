@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Local pre-push ring: run the full kernel including range checks against the
+# upstream so goal+evidence co-commits are caught before they leave the machine.
+ROOT="$(git rev-parse --show-toplevel)"
+if git rev-parse --verify -q origin/master >/dev/null; then
+  exec bash "$ROOT/tools/repo-guard.sh" --base origin/master
+else
+  exec bash "$ROOT/tools/repo-guard.sh"
+fi

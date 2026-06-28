@@ -1,0 +1,98 @@
+{
+  "ticket": "EMBER-MVP-CYCLE",
+  "ts": "20260617T000000Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "started_at": "2026-06-17T00:00:00Z",
+  "finished_at": "2026-06-17T01:00:00Z",
+  "budget": {
+    "wall_seconds": 3600,
+    "train_seconds": 3600,
+    "eval_seconds": 3600,
+    "gpu_vram_fraction": 0.8,
+    "governor_margin": "recorded"
+  },
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ],
+    "official_leaderboard_comparable": false
+  },
+  "receipts": {
+    "observation": "receipts/observations/obs-20260617T000000Z-0001.json",
+    "sandbox": "receipts/sandbox/cycle-20260617T000000Z-0001.json",
+    "gpu_governor": "receipts/governor/cycle-20260617T000000Z-0001.json",
+    "replay": "state-substrate/receipts/replay/statecommit-20260617T000000Z-0001.json",
+    "rollback": "state-substrate/receipts/rollback/statecommit-20260617T000000Z-0001.json",
+    "benchmark": "receipts/benchmark/cycle-20260617T000000Z-0001.json",
+    "wheel": "receipts/wheel/cycle-20260617T000000Z-0001.json",
+    "state_substrate": "state-substrate/receipts/commits/statecommit-20260617T000000Z-0001.json"
+  },
+  "hypothesis": {
+    "text": "fixture candidate should improve normalized benchmark delta",
+    "latent_branch_id": "latent-20260617T000000Z-0001"
+  },
+  "evidence": {
+    "sandbox": {
+      "path": "receipts/sandbox/cycle-20260617T000000Z-0001.json",
+      "verdict": "pass",
+      "mode": "windows-native-production-candidate-runner"
+    },
+    "verifier": {
+      "path": "receipts/verifier/cycle-20260617T000000Z-0001.json",
+      "result": "pass"
+    },
+    "governor": {
+      "path": "receipts/governor/cycle-20260617T000000Z-0001.json",
+      "mode": "governed-gpu-train-eval",
+      "checkpoint_hash": "sha256:ebb13cf72836d14ceae8287b68c3a53715853fa984684eb64c8d7da41278a1f5",
+      "artifact_kind": "checkpoint",
+      "gpu_preflight_called": true,
+      "real_gpu_training": true
+    },
+    "benchmark": {
+      "path": "receipts/benchmark/cycle-20260617T000000Z-0001.json",
+      "mode": "external-bound-receipt",
+      "fixture_only": false,
+      "real_mle_tasks_executed": false,
+      "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"
+    },
+    "replay": {
+      "path": "state-substrate/receipts/replay/statecommit-20260617T000000Z-0001.json",
+      "deterministic": true,
+      "commit_id": "statecommit-20260617T000000Z-0001"
+    },
+    "rollback": {
+      "path": "state-substrate/receipts/rollback/statecommit-20260617T000000Z-0001.json",
+      "restored": true,
+      "commit_id": "statecommit-20260617T000000Z-0001"
+    },
+    "wheel": {
+      "path": "receipts/wheel/cycle-20260617T000000Z-0001.json",
+      "fixture_only": false,
+      "real_mle_tasks_executed": false,
+      "equal_budget": true,
+      "ordering": "C>B>A",
+      "growth_allowed": false
+    },
+    "state_substrate": {
+      "path": "state-substrate/receipts/commits/statecommit-20260617T000000Z-0001.json",
+      "local_inspectable": true,
+      "promotion": "accepted",
+      "gc_enggible": false,
+      "replayable_from_commit": true,
+      "rollback_restored": true
+    }
+  },
+  "score": {
+    "baseline_score": 0.40625,
+    "candidate_score": 0.96875,
+    "mean_normalized_improvement": 0.947368
+  },
+  "verdict": "accepted"
+}

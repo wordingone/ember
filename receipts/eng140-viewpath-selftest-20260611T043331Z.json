@@ -1,0 +1,18 @@
+{
+  "ticket": "ENG140-VIEWPATH-SELFTEST",
+  "ts": "20260611T043331Z",
+  "issue": "wordingone/ember#140",
+  "checks": {
+    "load_view_records": true,
+    "file_sha256": true,
+    "t2_mtp_branch_guard": true,
+    "t2_mtp_viewpath_arm_readonly_identity": true,
+    "t2_mtp_legacy_arm_unchanged": true,
+    "t2_mtp_receipt_identity": true,
+    "wrapper_wiring": true
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) \u2014 the convention file_sha256 is pinned against",
+  "gate_rework": "PR #143 changes-requested (option b): wrapper consumes the sft arm's exact view sha-pinned; t2_mtp read-only consume + build-time pin assert + certified-sft-receipt cross-check (rows, n_examples) -> identity claim TRUE in both receipts, by construction",
+  "default_path_unchanged": "no --view-path = legacy round-1 behavior (regenerate wcode-r1.jsonl from ledger, arm-A-identical build)",
+  "quarantine_note": "adapter r2-q3-mtp stays PRE-GATE/QUARANTINED until rerun on the sft-identical view \u2014 dispatch is the gate-holder's call"
+}

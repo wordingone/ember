@@ -1,0 +1,104 @@
+{
+  "api_spend_usd": 0,
+  "audit_receipt": "<local-path>",
+  "audit_receipt_sha256": "3eaa0b501112a4326b000afbb6152cc34fa94a2b5e78406d1186092a9211b5da",
+  "blocked_reasons": [
+    "native_operator_selection_not_load_bearing",
+    "native_or_resident_prerequisite_not_passed"
+  ],
+  "bounded_action": {
+    "execute_official_docker": true,
+    "fresh_rows": "receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json",
+    "selected_task_ids": [
+      "task_57",
+      "task_62"
+    ],
+    "type": "delegate_existing_official_d3_a_b_c_deleted_runner"
+  },
+  "candidate_safety": {
+    "fresh_rows_disjoint_from_task65_66": true,
+    "gold_results_visible_during_candidate_execution": false,
+    "manual_codex_selection_for_c_arm": false
+  },
+  "delegate_result": {
+    "command": [
+      "<local-path> Files\\Python310\\python.exe",
+      "scripts/ember_d3_generalized_candidate_exec.py",
+      "--fresh-rows",
+      "receipts\\ember-d3-native-loop\\d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json",
+      "--out-dir",
+      "receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-native-link",
+      "--timeout-seconds",
+      "180",
+      "--require-prospective",
+      "--task-id",
+      "task_57",
+      "--task-id",
+      "task_62",
+      "--execute"
+    ],
+    "receipt_path": "<local-path>",
+    "receipt_sha256": "dc2564235a7265755a0a7aba161d2a8a8e0876cbe0acf0dc66dda09d264e170e",
+    "returncode": 0,
+    "stderr_tail": "",
+    "stdout_tail": "{\n  \"aggregate_scores\": {\n    \"A\": 0.0,\n    \"B\": 0.0,\n    \"C\": 1.0,\n    \"Deleted\": 0.0\n  },\n  \"deletion_sensitive\": true,\n  \"errors\": [],\n  \"positive_delta\": true,\n  \"receipt\": \"<local-path>\",\n  \"selected_task_ids\": [\n    \"task_57\",\n    \"task_62\"\n  ],\n  \"verdict\": \"D3_MULTI_TASK_GENERALIZATION_PASS\"\n}\n"
+  },
+  "deletion_sensitive": true,
+  "external_transfer_receipt_summary": {
+    "aggregate_scores": {
+      "A": 0.0,
+      "B": 0.0,
+      "C": 1.0,
+      "Deleted": 0.0
+    },
+    "deletion_sensitive": true,
+    "errors": [],
+    "positive_delta": true,
+    "selected_task_ids": [
+      "task_57",
+      "task_62"
+    ],
+    "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "ba9bd284dd68627f893fca11e15e9e3e0c283126c72a88a5d037c136e2bb29fa",
+  "leaderboard_dependency": false,
+  "native_goal_receipt": "<local-path>",
+  "native_goal_receipt_sha256": "11ffcd2bf02786d4cdb434fa3b13b8fc6c52fd0eff0be811c9d13b4ca021fdd8",
+  "native_operator_deleted_blocks_selection": false,
+  "next_executable_command": "Fix the exact native-link delegate or selection gap named in blocked_reasons, then rerun this script on a fresh disjoint external row.",
+  "operator_selection": {
+    "blocked_reasons": [
+      "native_or_resident_prerequisite_not_passed"
+    ],
+    "fresh_rows_path": "<local-path>",
+    "native_goal_organ_verdict": "NATIVE_GOAL_ORGAN_PASS",
+    "resident_component_status_subset": {
+      "deletion_sensitive_improvement": "PASS",
+      "native_goal_organ": "PASS",
+      "neural_parameter_update": "PASS",
+      "verifier_conditioned_update": "PASS"
+    },
+    "resident_gate_verdict": "RESIDENT_TRAINING_GATE_PASS",
+    "selected_blocker": "blocked_unknown",
+    "selected_task_ids": [
+      "task_57",
+      "task_62"
+    ],
+    "selection_basis": [
+      "connected-cycle audit blocked_reasons contains native_operator_to_external_transfer_link_missing",
+      "native goal organ receipt verdict is NATIVE_GOAL_ORGAN_PASS",
+      "resident gate component_status native_goal_organ/verifier_conditioned_update/neural_parameter_update are PASS",
+      "fresh row receipt offset54 task55/task56 is disjoint from solved task65/task66 path"
+    ]
+  },
+  "paid_api_surface_used": false,
+  "positive_delta": true,
+  "repo": "<local-path>",
+  "resident_gate_receipt": "<local-path>",
+  "resident_gate_receipt_sha256": "f6992b3ae157f0e698eefd4740805cd5815ac4627da6775986c1183eb228c8a2",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-NATIVE-OPERATOR-EXTERNAL-TRANSFER-LINK",
+  "ts": "20260622T221223Z",
+  "verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_BLOCKED"
+}

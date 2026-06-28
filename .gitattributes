@@ -1,0 +1,24 @@
+# sha-bearing artifacts: bytes are load-bearing (manifest_sha256 in receipts,
+# shard sha256 chains). git must NEVER rewrite line endings at checkout.
+corpus-manifests/** -text
+receipts/** -text
+tokenizer/** -text
+# research/ holds raw-byte-pinned premises (fp26_prereg pins the decision
+# artifact's sha256 over exact on-disk bytes); CRLF normalization on Windows
+# checkouts drifts those bytes and fails the prereg premise. Pin -text (eng-47).
+research/** -text
+# ledger views + probe sets are sha-bound by audit receipts (sp-3/fp-28 bind
+# byte-true sha256); CRLF conversion on fresh checkouts drifts the bytes vs
+# the recorded sha. Pin -text (same class as the eng-47 research/** pin).
+receipts/ledger/** -text
+probes/** -text
+# nck-protected paths: sha256 hashes in nck-invariants.json are load-bearing;
+# git must not rewrite line endings at checkout (same class as eng-47 research/**).
+GOAL.md -text
+docs/formalization-v0.md -text
+config/v0-pretrain-config.json -text
+config/nck-invariants.json -text
+config/nck-baseline/** -text
+# scripts and hooks: enforce LF (prevents CRLF creep on Windows checkouts)
+*.sh text eol=lf
+*.py text eol=lf

@@ -1,0 +1,71 @@
+{
+  "ticket": "FP13-CONCENTRATION",
+  "ts": "20260611T012048Z",
+  "prereg": "issue #85 (frozen): CONCENTRATED iff effective-unique < 30% of corpus OR arc dispersion < 0.5 x qwen dispersion",
+  "corpus": {
+    "arc_dsl": 1909,
+    "originals": 399,
+    "variants": 1510,
+    "realized_expansion_factor": 4.78,
+    "qwen_mbpp": 956,
+    "human_mbpp": 109
+  },
+  "effective_n": {
+    "exact_unique_srcs": 780,
+    "near_dup_clusters_cos95": 9,
+    "effective_unique_fraction": 0.0047,
+    "method": "union-find over 3-gram-bag cosine >= 0.95",
+    "cluster_sizes_desc": [
+      1884,
+      8,
+      5,
+      4,
+      4,
+      1,
+      1,
+      1,
+      1
+    ],
+    "largest_cluster_chaining_diag": {
+      "sampled_pairs": 1999,
+      "min": 0.6829,
+      "p5": 0.8112,
+      "median": 0.9212,
+      "mean": 0.9081,
+      "frac_direct_ge_threshold": 0.1406
+    },
+    "chaining_note": "union-find merges transitively; the cluster count is a LOWER bound on distinct neighborhoods \u2014 the diagnostic shows whether the giant component is genuinely near-dup (high direct median) or a chain artifact",
+    "design_effect_ess": 1.1,
+    "design_effect_rho": 0.9076,
+    "ess_note": "chaining-FREE complement: ESS = n/(1+(n-1)*rho) under equicorrelation, rho = mean pairwise 3-gram cosine"
+  },
+  "dispersion_pooled_zspace": {
+    "arc_dsl": {
+      "mean_pairwise_euclid": 11.6153,
+      "n": 1909,
+      "n_pairs": 1821186
+    },
+    "qwen_mbpp": {
+      "mean_pairwise_euclid": 32.1979,
+      "n": 956,
+      "n_pairs": 456490
+    },
+    "human_mbpp": {
+      "mean_pairwise_euclid": 34.0459,
+      "n": 109,
+      "n_pairs": 5886
+    }
+  },
+  "dispersion_ratio_arc_over_qwen": 0.3607,
+  "mean_pairwise_trigram_cosine": {
+    "arc_dsl": 0.9076,
+    "qwen_mbpp": 0.5002,
+    "human_mbpp": 0.4013
+  },
+  "verdict": "CONCENTRATED",
+  "consequence_if_concentrated": "every '1,909' quote carries effective-N; \u00a78.15d dilution preferences re-rank (majority class = the diluted, not diluter)",
+  "flags": [
+    "cross-class dispersion LEVELS are domain-confounded (DSL vs general Python); the bar uses the qwen class only as a same-space calibration point, per the issue design note",
+    "near-dup threshold 0.95 on hashed bags is a proxy for text near-duplication (hash collisions can merge, never split)"
+  ]
+}

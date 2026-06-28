@@ -1,0 +1,149 @@
+{
+  "benchmark_facts": {
+    "candidate_count": 24,
+    "domain_diversity": {
+      "discipline_count": 1,
+      "disciplines": [
+        "Chemistry"
+      ],
+      "honest_limitation": "single_discipline_chemistry"
+    },
+    "family_diversity": {
+      "original_repo_count": 4,
+      "original_repos": [
+        "Jonas-Verhellen/Bayesian-Illumination",
+        "TheJacksonLab/OpenMacromolecularGenome",
+        "chenruduan/OAReactDiff",
+        "fenggo/I-ReaxFF"
+      ],
+      "qualifies_as_multifamily": true
+    },
+    "fresh_relative_to_solved_d3_task9_12": true,
+    "name": "D3-Gym",
+    "selected_task_count": 4,
+    "solved_task_ids_excluded": [
+      "task_10",
+      "task_11",
+      "task_12",
+      "task_9"
+    ]
+  },
+  "blocked_reasons": [],
+  "code_vs_docs_metric": {
+    "classification": "during-project broader-D3 admission receipt",
+    "receipt_lines": 149,
+    "script_code_lines": 288
+  },
+  "deleted_selector_routing": {
+    "admission_state": "ROUTING_BLOCKED_DELETED_SELECTOR",
+    "reason": "Deleting the native selector leaves source inspection intact but removes the justified family-diverse task route; no static priority fallback is allowed.",
+    "selected": null
+  },
+  "deletion_sensitive": true,
+  "frozen_heldout_slice": {
+    "gold_or_solution_contents_excluded": true,
+    "rows": [
+      {
+        "discipline": "Chemistry",
+        "docker_image": "hananemoussa/d3-gym:task_17",
+        "evaluator_kind": "docker_run_and_eval",
+        "original_repo": "fenggo/I-ReaxFF",
+        "row_sha256": "cdc4bbdc607d97b83763616e4b7186d9af418623fe711ba069a06b98990c8185",
+        "source_path": "<local-path>",
+        "source_row_idx": 16,
+        "task_id": "task_17"
+      },
+      {
+        "discipline": "Chemistry",
+        "docker_image": "hananemoussa/d3-gym:task_18",
+        "evaluator_kind": "docker_run_and_eval",
+        "original_repo": "Jonas-Verhellen/Bayesian-Illumination",
+        "row_sha256": "e33d14221abeeadac97042f3c4acd31b59a94e9aec84c86fbcb524bd356e05d2",
+        "source_path": "<local-path>",
+        "source_row_idx": 17,
+        "task_id": "task_18"
+      },
+      {
+        "discipline": "Chemistry",
+        "docker_image": "hananemoussa/d3-gym:task_19",
+        "evaluator_kind": "docker_run_and_eval",
+        "original_repo": "TheJacksonLab/OpenMacromolecularGenome",
+        "row_sha256": "535b061b65249a6be1e6d943597eac016822614193735607560ed1850117b584",
+        "source_path": "<local-path>",
+        "source_row_idx": 18,
+        "task_id": "task_19"
+      },
+      {
+        "discipline": "Chemistry",
+        "docker_image": "hananemoussa/d3-gym:task_20",
+        "evaluator_kind": "docker_run_and_eval",
+        "original_repo": "chenruduan/OAReactDiff",
+        "row_sha256": "1dd989c1d0cb8d6cb167e044f8f090f782df9ce9c9b63570fd8f8a4cd5cfadab",
+        "source_path": "<local-path>",
+        "source_row_idx": 19,
+        "task_id": "task_20"
+      }
+    ],
+    "selection_rule": "Native selector chooses fresh unsolved D3 rows, one per source repo first, to maximize family diversity before adding same-family rows.",
+    "sha256": "e9411d89358bbe9bf56c9c417982bcd6e2965af0acdcca996064d6262f645e18"
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "9b32cba4e6b68f97c3318c38eb07bc38f580eecd4228888f2db3cb623789ef61",
+  "license_access": {
+    "basis": "public D3-Gym dataset rows already materialized locally plus local admission receipt license/access basis",
+    "no_private_gold_or_solution_contents_embedded": true,
+    "task_rows_refrozen_from_public_materialization": true
+  },
+  "native_operator_routing": {
+    "admission_state": "ADMITTED",
+    "reason": "ScienceAgentBench artifact access, RE-Bench first-loop feasibility, and PaperBench materialization are receipt-blocked; this D3 slice is the next local external heldout route only if it is fresh and multi-family.",
+    "selected": "d3-broader-multifamily"
+  },
+  "next_benchmark_if_blocked": {
+    "next_executable_command": "python scripts\\ember_external_benchmark_discovery.py --exclude scienceagentbench,re-bench,paperbench,d3-gym --out receipts\\ember-post-resident-discovery\\external-benchmark-discovery-<timestamp>.json",
+    "selected": "external-benchmark-discovery"
+  },
+  "next_executable_command": "python scripts\\ember_d3_broader_multifamily_loop.py --admission receipts\\ember-post-resident-discovery\\d3-broader-multifamily-admission-<timestamp>.json --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --timeout-seconds 180 --execute",
+  "repo": "<local-path>",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_hashes": {
+    "local_admission_receipts": {
+      "<local-path>": "8aaf35d4a59472b09310315ba53a9920ed542149cab618d28ce55df87b6d4335",
+      "<local-path>": "18b18de2899bc596d9c8085fdc4a2fb0da4e9e1514666cc41ea76aadf8094050",
+      "<local-path>": "d9b6c2e9b222cd3328c373428042bc097484038f6e149cee24f7877b62f08ad5",
+      "<local-path>": "d996d88bff981b067d809a26a96c812e2776c9b23b25c4136b3e9fcd529ab34e",
+      "<local-path>": "ab6cd118330cd33314e1ec508c7f735a17b1ea5e929b675b3bce154c8ef2429a"
+    },
+    "selected_frozen_row_files": {
+      "<local-path>": "b6ea59828565f9969fc3aa022b352f445fc4620ddeec13d16e923d4f0322708c"
+    }
+  },
+  "sources": {
+    "admission_receipts": [
+      "<local-path>",
+      "<local-path>",
+      "<local-path>",
+      "<local-path>",
+      "<local-path>"
+    ],
+    "arxiv": "https://arxiv.org/abs/2506.04592",
+    "github": "https://github.com/osunlp/D3-Gym",
+    "hf_dataset": "https://huggingface.co/datasets/osunlp/D3-Gym",
+    "local_state_root": "<local-path>"
+  },
+  "task_evaluator_inventory": {
+    "docker_images": [
+      "hananemoussa/d3-gym:task_17",
+      "hananemoussa/d3-gym:task_18",
+      "hananemoussa/d3-gym:task_19",
+      "hananemoussa/d3-gym:task_20"
+    ],
+    "evaluator_kinds": [
+      "docker_run_and_eval"
+    ],
+    "requires_docker": true
+  },
+  "ticket": "EMBER-D3-BROADER-MULTIFAMILY-ADMISSION",
+  "ts": "20260622T012614Z",
+  "verdict": "D3_BROADER_MULTIFAMILY_ADMITTED"
+}

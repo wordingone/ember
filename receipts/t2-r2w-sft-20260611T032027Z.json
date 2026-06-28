@@ -1,0 +1,29 @@
+{
+  "ticket": "NC0-T2-R2W",
+  "arm": "sft",
+  "tag": "r2-q3-sft",
+  "ts": "20260611T032027Z",
+  "round": 2,
+  "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+  "gate_token_present": true,
+  "deviation": "prereg-\u00a71.2 data-path correction: #112 t2_r2_sft delegated to full-ledger flat-cap build; this runner trains the registered W-code theta-filtered set",
+  "frontier_filter": {
+    "theta": 0.5,
+    "view_rows_wcode": 1047,
+    "view_rows_after_theta": 205,
+    "tasks_wcode": 110,
+    "tasks_after_theta": 28,
+    "dataset_examples": 98,
+    "dataset_tasks": 28,
+    "rates_source": "r2_arms.solve_rates_from_ledger(ledger+control_pool)"
+  },
+  "dry_run": true,
+  "pacing": {
+    "throttle_s": 0.0,
+    "throttle_sleeps": 0,
+    "pacer_s": 0.0,
+    "pacer_sleeps": 0,
+    "pacing_total_s": 0.0,
+    "convention": "governed wall-clock = compute + this pacing; subtract pacing_total_s for compute-only views"
+  }
+}

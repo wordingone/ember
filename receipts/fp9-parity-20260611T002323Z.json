@@ -1,0 +1,29 @@
+{
+  "ticket": "FP9-PARITY",
+  "ts": "20260611T002323Z",
+  "tasks_joint": 120,
+  "method": "task-level bootstrap (seed 16, 10k) on the fp-7 re-valued ratio; ext-FPR correction discounts success counts per-stratum AND re-derives the valuing posterior",
+  "flags": [
+    "ext fail-rates measured at 3B, modeled at 1.5B",
+    "gen minutes are governed wall-clock (fp-11 pending)"
+  ],
+  "uncorrected": {
+    "point": 1.07,
+    "ci95": [
+      0.834,
+      1.367
+    ],
+    "n_draws": 10000,
+    "verdict": "cost-parity"
+  },
+  "ext_corrected": {
+    "point": 1.02,
+    "ci95": [
+      0.867,
+      1.203
+    ],
+    "n_draws": 10000,
+    "verdict": "cost-parity"
+  },
+  "prereg_verdict_rule": "corrected CI excludes 1.0 -> edge real; includes 1.0 -> cost parity, upvalued-band filter is the surviving rationale"
+}

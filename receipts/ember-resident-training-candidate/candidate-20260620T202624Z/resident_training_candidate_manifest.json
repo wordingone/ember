@@ -1,0 +1,155 @@
+{
+  "arm_contract": {
+    "A": "same task/evaluator envelope with no native goal organ and no update",
+    "B": "fixed instruction-only policy with no learned RLM/iGRPO update",
+    "C": "learned recursive eval-script policy after verifier-conditioned update",
+    "Deleted": "C with native organ/recursive policy/action channel removed"
+  },
+  "base_checkpoint_identity": "resident_policy_linear_v1_zero_initialized",
+  "c_beats_a_and_b": true,
+  "clean_room_harness_action_channel": true,
+  "deleted_degrades_or_blocks": true,
+  "external_task_source": {
+    "benchmark_id": "D3-Gym",
+    "paper_url": "https://arxiv.org/abs/2604.27977",
+    "source_url": "https://huggingface.co/datasets/osunlp/D3-Gym",
+    "split": {
+      "config": "default",
+      "dataset": "osunlp/D3-Gym",
+      "length": 8,
+      "offset": 0,
+      "split": "train"
+    },
+    "tasks_path": "<local-path>",
+    "tasks_sha256": "77771a0964199d89d3d06b9d6aecf083112317ab071aba43c06e4b28781e1d56"
+  },
+  "generated_by": "scripts/ember_resident_training_candidate.py",
+  "hand_authored_patch": false,
+  "harness_interface_path": "<local-path>",
+  "harness_interface_sha256": "785090e0f66e7eb79256d46d4c378440b1d3f9f35d753cd7a07f110ea5de81a2",
+  "matched_a_b_c_deleted": true,
+  "model_learned_policy": true,
+  "native_goal_organ_path": "<local-path>",
+  "native_goal_organ_present": true,
+  "native_goal_organ_sha256": "8c1760fa05f418717deee3a62e6a438e88f39e11cf073eecddf851df9f9cfd25",
+  "per_task_rows": [
+    {
+      "a_score": 0.0,
+      "b_score": 0.5883,
+      "b_template": "instruction_only",
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "deleted_score": 0.0,
+      "required_checks": [
+        "existence",
+        "format_validity",
+        "gold_compare",
+        "non_empty",
+        "numeric_validity",
+        "semantic_consistency"
+      ],
+      "required_outputs_count": 10,
+      "source_row_idx": 4,
+      "split": "heldout",
+      "task_id": "task_5"
+    },
+    {
+      "a_score": 0.0,
+      "b_score": 0.3381,
+      "b_template": "instruction_only",
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "deleted_score": 0.0,
+      "required_checks": [
+        "existence",
+        "numeric_validity",
+        "semantic_consistency"
+      ],
+      "required_outputs_count": 7,
+      "source_row_idx": 5,
+      "split": "heldout",
+      "task_id": "task_6"
+    },
+    {
+      "a_score": 0.0,
+      "b_score": 0.1,
+      "b_template": "instruction_only",
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "deleted_score": 0.0,
+      "required_checks": [
+        "csv_parse",
+        "existence",
+        "format_validity",
+        "gold_compare",
+        "non_empty",
+        "numeric_validity",
+        "semantic_consistency"
+      ],
+      "required_outputs_count": 4,
+      "source_row_idx": 6,
+      "split": "heldout",
+      "task_id": "task_7"
+    },
+    {
+      "a_score": 0.0,
+      "b_score": 0.1083,
+      "b_template": "instruction_only",
+      "c_score": 1.0,
+      "c_selected_template": "eval_script_recursive",
+      "deleted_condition": "native_goal_organ_removed_and_recursive_policy_removed",
+      "deleted_score": 0.0,
+      "required_checks": [
+        "csv_parse",
+        "existence",
+        "format_validity",
+        "non_empty",
+        "numeric_validity",
+        "semantic_consistency"
+      ],
+      "required_outputs_count": 3,
+      "source_row_idx": 7,
+      "split": "heldout",
+      "task_id": "task_8"
+    }
+  ],
+  "persistence_checked": true,
+  "policy_update_trace": "<local-path>",
+  "policy_update_trace_path": "<local-path>",
+  "policy_update_trace_sha256": "dfe83a15db18264f6b496a02db03785ea5238e9dd0486c3c9892eadfe9ad8b28",
+  "prompt_only": false,
+  "recursive_query_policy_path": "<local-path>",
+  "recursive_query_policy_present": true,
+  "recursive_query_policy_sha256": "dd181723145c657df5a047d30f2436bd31f47184e5f09f7a7fbae8aa87351d61",
+  "resident_training_receipt_path": "<local-path>",
+  "resident_training_receipt_sha256": "0600c614fbd43d8b7206d99fe9c6295566f41093c9b7d50ddde09cfcd351d1bc",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "task_rows_path": "<local-path>",
+  "ticket": "EMBER-RESIDENT-TRAINING-CANDIDATE",
+  "toy_or_simulated": false,
+  "train_task_rows": [
+    {
+      "source_row_idx": 0,
+      "task_id": "task_1"
+    },
+    {
+      "source_row_idx": 1,
+      "task_id": "task_2"
+    },
+    {
+      "source_row_idx": 2,
+      "task_id": "task_3"
+    },
+    {
+      "source_row_idx": 3,
+      "task_id": "task_4"
+    }
+  ],
+  "ts": "20260620T202624Z",
+  "uses_externally_sourced_task_rows": true,
+  "uses_real_update_step": true,
+  "verifier_conditioned_update_present": true
+}

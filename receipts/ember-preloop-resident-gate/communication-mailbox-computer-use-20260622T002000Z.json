@@ -1,0 +1,182 @@
+{
+  "ticket": "EMBER-reference-CLI-COMMUNICATION-MAILBOX-COMPUTER-USE-GATE",
+  "ts": "20260622T005359Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "COMMUNICATION_MAILBOX_COMPUTER_USE_GATE_PASS",
+  "classification": "clean_room_resident_communication_not_live_codex_mailbox_polling_or_mock_chat",
+  "out_path": "receipts\\ember-preloop-resident-gate\\communication-mailbox-computer-use-20260622T002000Z.json",
+  "rollback_rewind_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "ab8349e9ab3e806044023336754d1beffd19e4f0e1380c7284651c4f0e6ace86",
+    "ticket": "EMBER-reference-CLI-ROLLBACK-REWIND-GATE",
+    "verdict": "ROLLBACK_REWIND_GATE_PASS"
+  },
+  "communication_mailbox_computer_use": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "7ca5e95f2813b12587e0d3f7dc464c4497226856df733ecffc27375220ec8663",
+    "copies_reference_code": false,
+    "communication_surface": [
+      "mailbox_identity",
+      "user_facing",
+      "founder_mailbox",
+      "inbound",
+      "reachability_status",
+      "computer_use_route",
+      "event_log"
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "checks": {
+        "mailbox_identity": true,
+        "user_facing_communication": true,
+        "founder_communication": true,
+        "inbound_message_route": true,
+        "fail_closed_unknown_recipient": true,
+        "reachability_status_accounting": true,
+        "computer_use_route": true,
+        "receipt_visible_accounting": true
+      },
+      "identity": {
+        "agent_id": "ember",
+        "mailbox_id": "ember",
+        "allowed_founders": [
+          "an agent",
+          "the engineer",
+          "an agent",
+          "the lead"
+        ]
+      },
+      "messages": {
+        "founder": {
+          "message_id": "m-founder",
+          "sender": "ember",
+          "recipient": "the lead",
+          "channel": "founder_mailbox",
+          "body_sha256": "42c730b0df85812ad0a5404581a65c7ad5251e1798cd7029c808e2a707106484",
+          "status": "queued"
+        },
+        "user": {
+          "message_id": "m-user",
+          "sender": "ember",
+          "recipient": "user",
+          "channel": "user_facing",
+          "body_sha256": "42e4e4d08e2fb06f4c89ab8d6b249b75f78a461f4449a17c58d4e715856c591d",
+          "status": "queued"
+        },
+        "inbound": {
+          "message_id": "m-inbound",
+          "sender": "the engineer",
+          "recipient": "ember",
+          "channel": "inbound",
+          "body_sha256": "2e19701d1fca28832ebd966432e8973cb8859985ec0b3f8c34cdc4f901fa8ce0",
+          "status": "received"
+        },
+        "computer_use": {
+          "message_id": "m-computer",
+          "sender": "ember",
+          "recipient": "computer-use",
+          "channel": "computer_use",
+          "body_sha256": "c52b23b0fa38cf427bca0e4d388ccbebae951587c559d15332d9fed79f466577",
+          "status": "queued"
+        }
+      },
+      "status_rows": [
+        {
+          "message_id": "m-founder",
+          "status": "delivered",
+          "path": "<local-path>",
+          "sha256": "c07ff29f29c9b71ff10ccd5bb5586fb0472eaac90039f250468ff2919d2433e6"
+        },
+        {
+          "message_id": "m-computer",
+          "status": "blocked",
+          "path": "<local-path>",
+          "sha256": "1fab6503ebfd6a2047dd89fe5b3bf2183c19d5149b943cf816803339e47c4984"
+        }
+      ],
+      "events": [
+        {
+          "event": "message_constructed",
+          "payload": {
+            "body_sha256": "42c730b0df85812ad0a5404581a65c7ad5251e1798cd7029c808e2a707106484",
+            "channel": "founder_mailbox",
+            "message_id": "m-founder",
+            "recipient": "the lead",
+            "sender": "ember",
+            "status": "queued"
+          }
+        },
+        {
+          "event": "message_constructed",
+          "payload": {
+            "body_sha256": "42e4e4d08e2fb06f4c89ab8d6b249b75f78a461f4449a17c58d4e715856c591d",
+            "channel": "user_facing",
+            "message_id": "m-user",
+            "recipient": "user",
+            "sender": "ember",
+            "status": "queued"
+          }
+        },
+        {
+          "event": "message_received",
+          "payload": {
+            "body_sha256": "2e19701d1fca28832ebd966432e8973cb8859985ec0b3f8c34cdc4f901fa8ce0",
+            "channel": "inbound",
+            "message_id": "m-inbound",
+            "recipient": "ember",
+            "sender": "the engineer",
+            "status": "received"
+          }
+        },
+        {
+          "event": "message_constructed",
+          "payload": {
+            "body_sha256": "c52b23b0fa38cf427bca0e4d388ccbebae951587c559d15332d9fed79f466577",
+            "channel": "computer_use",
+            "message_id": "m-computer",
+            "recipient": "computer-use",
+            "sender": "ember",
+            "status": "queued"
+          }
+        },
+        {
+          "event": "status",
+          "payload": {
+            "message_id": "m-founder",
+            "status": "delivered"
+          }
+        },
+        {
+          "event": "status",
+          "payload": {
+            "message_id": "m-computer",
+            "status": "blocked"
+          }
+        }
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "identity_deleted_blocks_message_construction": true,
+    "founder_addressing_deleted_blocks_route_selection": true,
+    "reachability_deleted_blocks_status_accounting": true,
+    "computer_use_route_deleted_blocks_computer_use": true,
+    "communication_events_deleted_blocks_receipt_rows": true,
+    "static_docs_insufficient": true,
+    "mock_only_chat_text_insufficient": true,
+    "live_codex_mailbox_polling_insufficient": true,
+    "prompt_only_coordination_claim_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete identity, addressing, reachability/status, computer-use route, or event accounting; message construction, validation, routing, status, or receipt-visible communication rows stop executing"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_communication_mailbox_computer_use_receipt",
+  "next_executable_command": "python scripts\\ember_gate_full_parity_harness.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-20260621T225437Z.json --hook-runner-receipt receipts\\ember-preloop-resident-gate\\hook-runner-20260621T230655Z.json --tool-dispatch-permissions-receipt receipts\\ember-preloop-resident-gate\\tool-dispatch-permissions-20260621T231900Z.json --state-persistence-receipt receipts\\ember-preloop-resident-gate\\state-persistence-20260621T232600Z.json --receipt-store-receipt receipts\\ember-preloop-resident-gate\\receipt-store-20260622T000100Z.json --rollback-rewind-receipt receipts\\ember-preloop-resident-gate\\rollback-rewind-20260622T001000Z.json --communication-mailbox-computer-use-receipt receipts\\ember-preloop-resident-gate\\communication-mailbox-computer-use-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

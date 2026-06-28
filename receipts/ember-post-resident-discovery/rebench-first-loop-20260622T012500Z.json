@@ -1,0 +1,85 @@
+{
+  "abc_deleted_status": "not_run_preflight_blocked",
+  "blocked_reasons": [
+    "task_standard_runtime_missing",
+    "task_openai_key_missing",
+    "resource_envelope_insufficient"
+  ],
+  "code_vs_docs_metric": {
+    "classification": "during-project RE-Bench first-loop preflight receipt",
+    "receipt_lines": 85,
+    "script_code_lines": 236
+  },
+  "deleted_selector_routing": {
+    "admission_state": "ROUTING_BLOCKED_DELETED_SELECTOR",
+    "reason": "Deleting the native loop selector prevents choosing the CPU-only RE-Bench task family.",
+    "selected": null
+  },
+  "deletion_sensitive": true,
+  "equal_budget_status": "not_run_preflight_blocked",
+  "frozen_public_inputs": {
+    "build_steps_sha256": "1469a35735c8ddc54b88db84b99d3a373ecab27c25558648f8bd769e1a20fd91",
+    "heldout_test_file_not_read": true,
+    "protected_solution_contents_excluded": true,
+    "readme_sha256": "84941bba07396ad6890a1cde254307349d24f15f3d182fcee002bea4a1c306aa",
+    "task_family": "ai_rd_rust_codecontests_inference"
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "9b32cba4e6b68f97c3318c38eb07bc38f580eecd4228888f2db3cb623789ef61",
+  "native_operator_routing": {
+    "admission_state": "BLOCKED_RUNTIME_PREFLIGHT",
+    "reason": "CPU-only RE-Bench family is the first executable field-level target after ScienceAgentBench artifact access blocked.",
+    "selected": "ai_rd_rust_codecontests_inference"
+  },
+  "next_benchmark_if_unfixable": {
+    "next_executable_command": "python scripts\\ember_paperbench_admission.py --out receipts\\ember-post-resident-discovery\\paperbench-admission-<timestamp>.json",
+    "selected": "paperbench"
+  },
+  "next_executable_command": "Install/enable the missing RE-Bench runtime pieces named in blocked_reasons, then rerun this command.",
+  "preflight": {
+    "available": {
+      "logical_cpus": 32,
+      "memory_gb": 63.6,
+      "task_openai_key_present": false,
+      "task_standard_runtime": false,
+      "tools": {
+        "cargo": "<local-path>",
+        "docker": "<local-path> Files\\Docker\\Docker\\resources\\bin\\docker.EXE",
+        "git": "<local-path> Files\\Git\\cmd\\git.EXE",
+        "rustc": "<local-path>"
+      }
+    },
+    "blocked_reasons": [
+      "task_standard_runtime_missing",
+      "task_openai_key_missing",
+      "resource_envelope_insufficient"
+    ],
+    "requirements": {
+      "manifest_sha256": "d6f080c49829c4d86c96de97c0d2cc06574da2ccbc93c863d675a4ba9c320f4e",
+      "required_cpus": 20,
+      "required_memory_gb": 100,
+      "score_on_usage_limits": true,
+      "visible_score_to_agent": true
+    }
+  },
+  "protected_solution_handling": {
+    "extracted_protected_solutions": false,
+    "protected_solution_files": 1,
+    "protected_solution_zip_names": [
+      "official_solution.zip"
+    ],
+    "quoted_or_published_solution_contents": false
+  },
+  "repo": "<local-path>",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_hashes": {
+    "build_steps_sha256": "1469a35735c8ddc54b88db84b99d3a373ecab27c25558648f8bd769e1a20fd91",
+    "manifest_sha256": "d6f080c49829c4d86c96de97c0d2cc06574da2ccbc93c863d675a4ba9c320f4e",
+    "readme_sha256": "84941bba07396ad6890a1cde254307349d24f15f3d182fcee002bea4a1c306aa"
+  },
+  "task_dir": "<local-path>",
+  "task_family": "ai_rd_rust_codecontests_inference",
+  "ticket": "EMBER-REBENCH-FIRST-LOOP",
+  "ts": "20260622T012500Z",
+  "verdict": "REBENCH_FIRST_LOOP_BLOCKED"
+}

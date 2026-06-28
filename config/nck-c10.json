@@ -1,0 +1,4 @@
+{
+  "mail_signal_path": "<local-path>",
+  "mail_db_path": "<local-path>"
+}

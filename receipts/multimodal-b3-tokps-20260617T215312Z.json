@@ -1,0 +1,13 @@
+{
+  "ticket": "B3-MULTIMODAL-SELFTEST",
+  "ts": "20260617T215312Z",
+  "config_base": "config/v0-pretrain-config.json",
+  "config_mm_ext": "config/v0-multimodal-config.json",
+  "lock2_splice_pass": true,
+  "lock3_span_mask_pass": true,
+  "lock4_rope_2d_exclusive_pass": true,
+  "rope_2d_exclusive_pass": true,
+  "tokens_per_second": 22180.33,
+  "tokps_basis": "cpu-tiny-selftest: hidden=32 heads=2 seq=8 batch=1; production GPU tok/s from fp-44 remeasure on #414",
+  "pass": true
+}

@@ -1,0 +1,33 @@
+[adapter-boot] pid=62944 reference_ADAPTER_TRACE=1 ts=1782141442876
+[adapter-boot] pid=19400 reference_ADAPTER_TRACE=1 ts=1782141444701
+[adapter-boot] pid=61708 reference_ADAPTER_TRACE=1 ts=1782141444743
+[adapter-boot] pid=48636 reference_ADAPTER_TRACE=1 ts=1782141444857
+[adapter-boot] pid=63320 reference_ADAPTER_TRACE=1 ts=1782141444894
+[adapter-boot] pid=62716 reference_ADAPTER_TRACE=1 ts=1782141444935
+[adapter-boot] pid=60804 reference_ADAPTER_TRACE=1 ts=1782141444974
+[adapter-boot] pid=59152 reference_ADAPTER_TRACE=1 ts=1782141445082
+[adapter-boot] pid=52184 reference_ADAPTER_TRACE=1 ts=1782141445169
+[adapter-boot] pid=56224 reference_ADAPTER_TRACE=1 ts=1782141445271
+[adapter-boot] pid=35156 reference_ADAPTER_TRACE=1 ts=1782141445304
+[adapter-boot] pid=56784 reference_ADAPTER_TRACE=1 ts=1782141445344
+[adapter-boot] pid=35888 reference_ADAPTER_TRACE=1 ts=1782141445393
+[adapter-boot] pid=10060 reference_ADAPTER_TRACE=1 ts=1782141445429
+[adapter-boot] pid=60156 reference_ADAPTER_TRACE=1 ts=1782141445495
+[adapter-boot] pid=55268 reference_ADAPTER_TRACE=1 ts=1782141445515
+[adapter-boot] pid=3956 reference_ADAPTER_TRACE=1 ts=1782141445550
+[adapter-boot] pid=49352 reference_ADAPTER_TRACE=1 ts=1782141445606
+[adapter-boot] pid=57276 reference_ADAPTER_TRACE=1 ts=1782141445651
+[adapter-boot] pid=56088 reference_ADAPTER_TRACE=1 ts=1782141445674
+[adapter-boot] pid=52908 reference_ADAPTER_TRACE=1 ts=1782141445731
+[adapter-trace] state=thinking data={"id":"chatcmpl-020cd891","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data={"id":"chatcmpl-020cd891","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] chunk="OBSERVATION_OK real-reference-uiux-ax loop reached via compiled  state:thinking->thinking think="OBSERVATION_OK real-reference-uiux-ax loop r text=""
+[adapter-trace] state=thinking data={"id":"chatcmpl-020cd891","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data=[DONE]
+[adapter-trace] DONE: reader exhausted
+[adapter-trace] state=thinking data={"id":"chatcmpl-7c40e233","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data={"id":"chatcmpl-7c40e233","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] chunk="OBSERVATION_OK real-reference-uiux-ax loop reached via compiled  state:thinking->thinking think="OBSERVATION_OK real-reference-uiux-ax loop r text=""
+[adapter-trace] state=thinking data={"id":"chatcmpl-7c40e233","object":"chat.completion.chunk","created":1782141450,"model":"codex-observer","choices":[{"in
+[adapter-trace] state=thinking data=[DONE]
+[adapter-trace] DONE: reader exhausted

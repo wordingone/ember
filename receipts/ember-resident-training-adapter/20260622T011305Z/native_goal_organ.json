@@ -1,0 +1,12 @@
+{
+  "manual_codex_selection": false,
+  "organ_id": "verifier_conditioned_resident_goal_organ_min_slice_v1",
+  "parses": [
+    "task row",
+    "eval script",
+    "dataset preview"
+  ],
+  "selects": "next resident action template through trained neural policy",
+  "status": "READY",
+  "verifies": "scores actions with verifier-derived reward table"
+}

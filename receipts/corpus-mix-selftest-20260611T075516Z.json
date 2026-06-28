@@ -1,0 +1,17 @@
+{
+  "ticket": "CORPUS-MIX-SELFTEST",
+  "ts": "20260611T075516Z",
+  "issue": "wordingone/ember#168",
+  "checks": {
+    "length_stats_exact": true,
+    "packing_waste_math": true,
+    "band_regex_detects_all": true,
+    "scan_source_clean": true,
+    "scan_source_planted_detected": true,
+    "fail_closed_wiring": true
+  },
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "note": "fixture-level harness pins; the PRODUCTION mix run (--mix-stats) runs over the merged v0 corpus against the frozen tokenizer",
+  "no_network": true,
+  "no_gpu": true
+}

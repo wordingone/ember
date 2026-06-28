@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Local pre-commit ring: refuse a commit that violates the structural invariants.
+# Install once per clone:  git config core.hooksPath .githooks   (or run tools/install-hooks.sh)
+# This is the fast, local ring. It is bypassable (--no-verify); the unbypassable
+# ring is the GitHub Actions required check. Both run the same kernel.
+exec bash "$(git rev-parse --show-toplevel)/tools/repo-guard.sh"

@@ -1,0 +1,33 @@
+{
+  "ticket": "DENSITY-AB-V1",
+  "arm": "b",
+  "arm_label": "curated-code-only",
+  "design": "code_only",
+  "code_fraction": 1.0,
+  "shard": {
+    "path": "density-ab-shards/density-ab-arm-b-100M.bin",
+    "sha256": "557365f5210568743ba1d789a14dcda3d9ccbde3a31dc1b5ac423169e2ad31be",
+    "tokens": 100000000,
+    "bytes": 200000000,
+    "dtype": "<u2"
+  },
+  "sources": {
+    "code_github_clean": {
+      "files": [
+        {
+          "path": "corpus-v0/code_github_clean/code_github_clean-00000.jsonl.zst",
+          "sha256": "71ec4259d4c2b4656a9b84b228ff0ebdc36e84112e5ac7c21742a04e96fe58ae"
+        }
+      ]
+    },
+    "ledger_mit": {
+      "files": []
+    }
+  },
+  "note": "Arm B = code_github_clean only; 100M token budget exhausted before ledger_mit needed (code shard-00000 alone contains >100M tokens).",
+  "prep_script": "scripts/density_ab_prep.py",
+  "prep_script_commit": "cdb9627edaa4eff99256551029326d150956c1db",
+  "frozen_by": "density_ab_prep.py main()",
+  "separator_id": 0,
+  "reserved_ids": [1, 2, 3, 4, 5, 6, 7]
+}
