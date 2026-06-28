@@ -1,0 +1,13 @@
+{
+  "action_channel": "run_step + action_log.jsonl + resident action template selection",
+  "adapter_path": "scripts/ember_train_multimodal_resident_adapter.py",
+  "bounded_actions": [
+    "build tiny multimodal model",
+    "run forward/backward",
+    "optimizer.step",
+    "train resident policy from verifier reward",
+    "select action"
+  ],
+  "harness_id": "train_multimodal_v0_resident_adapter_v2",
+  "source_path": "scripts/train_multimodal_v0.py"
+}

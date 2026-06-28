@@ -1,0 +1,325 @@
+{
+  "benchmark_facts": {
+    "domains": 4,
+    "full_artifact_local_path": "<local-path>",
+    "has_docker_eval": true,
+    "has_full_artifact_access": true,
+    "hf_valid": true,
+    "verified_rows": 102
+  },
+  "benchmark_fit_to_goal": [
+    "external scientific data/code environments from peer-reviewed publications",
+    "agent must generate executable code/artifacts under evaluator pressure",
+    "stronger field-level validation than D3 small-loop proof",
+    "requires admission before equal-budget A/B/C/deleted loop can run"
+  ],
+  "blocked_reasons": [],
+  "code_vs_docs_metric": {
+    "classification": "during-project benchmark admission receipt",
+    "frozen_rows": 6,
+    "receipt_lines": 325,
+    "script_code_lines": 347
+  },
+  "deleted_selector_routing": {
+    "admission_state": "ROUTING_BLOCKED_DELETED_SELECTOR",
+    "reason": "native admission selector deleted; static benchmark preference is forbidden",
+    "selected": null
+  },
+  "deletion_sensitive": true,
+  "fallback_order_if_blocked_after_artifact_attempt": [
+    "re-bench",
+    "paperbench",
+    "broader-d3-multifamily"
+  ],
+  "frozen_heldout_slice": {
+    "gold_programs_excluded": true,
+    "labels_or_gold_outputs_excluded": true,
+    "path": "<local-path>",
+    "rows": [
+      {
+        "dataset_folder_tree": "|-- clintox/\n|---- clintox_test.csv\n|---- clintox_train.csv",
+        "dataset_preview_sha256": "c17e4848e9fb5feedb188e574124cf4874aa55d11207554314fdc88c2a5943e5",
+        "domain": "Computational Chemistry",
+        "eval_script_name": "clintox_nn_eval.py",
+        "github_name": "deepchem/deepchem",
+        "instance_id": 1,
+        "output_fname": "pred_results/clintox_test_pred.csv",
+        "src_file_or_path": "examples/clintox",
+        "subtask_categories": "Feature Engineering, Deep Learning",
+        "task_inst": "Train a multitask model on the Clintox dataset to predict a drug's toxicity and FDA approval status. Save the test set predictions, including the SMILES representation of drugs and the probability of positive labels, to \"pred_results/clintox_test_pred.csv\"."
+      },
+      {
+        "dataset_folder_tree": "|-- ElkMovement/\n|---- Elk_in_Southwestern_Alberta_2009.geojson",
+        "dataset_preview_sha256": "71c9a187f7f8237cef53c88f29bf938b8beb610b69476f383fe07200475598aa",
+        "domain": "Geographical Information Science",
+        "eval_script_name": "eval_elk_analysis.py",
+        "github_name": "geopandas/geopandas",
+        "instance_id": 4,
+        "output_fname": "pred_results/Elk_Analysis.png",
+        "src_file_or_path": null,
+        "subtask_categories": "Statistical Analysis, Data Visualization",
+        "task_inst": "Analyze and visualize Elk movements in the given dataset. Estimate home ranges and assess habitat preferences using spatial analysis techniques. Identify the spatial clusters of Elk movements. Document the findings with maps and visualizations. Save the figure as \"pred_results/Elk_Analysis.png\"."
+      },
+      {
+        "dataset_folder_tree": "|-- dkpes/\n|---- dkpes_test.csv\n|---- dkpes_train.csv",
+        "dataset_preview_sha256": "5e35acdde7a2ad6e9d7c94723cb33047d1582cfd29188536257ad881a4efc87c",
+        "domain": "Bioinformatics",
+        "eval_script_name": "eval_dkpes_model_development_1.py",
+        "github_name": "psa-lab/predicting-activity-by-machine-learning",
+        "instance_id": 5,
+        "output_fname": "pred_results/dkpes_test_pred.csv",
+        "src_file_or_path": "code/dkpes_fgroup_analysis.ipynb",
+        "subtask_categories": "Data Visualization",
+        "task_inst": "Use the DKPES dataset to develop a Random Forest classifier predicting signal inhibition of chemicals while choosing appropriate threshold to assign binary labels based on signal inhibition values. Save the test set predictions, including the index and predicted signal inhibition, in \"pred_results/dkpes_test_pred.csv\"."
+      },
+      {
+        "dataset_folder_tree": "|-- ecg_processing_data/\n|---- ecg_data.pkl\n|---- sampling_rate.txt",
+        "dataset_preview_sha256": "59eddacf3de4cf1a968be76096c45dc433eb17820f35654340b9e1fd47baa96b",
+        "domain": "Psychology and Cognitive science",
+        "eval_script_name": "eval_biopsykit_ecg_processing_vis1.py",
+        "github_name": "mad-lab-fau/BioPsyKit",
+        "instance_id": 24,
+        "output_fname": "pred_results/ecg_processing_vis1_pred_result.png",
+        "src_file_or_path": "examples/ECG_Processing_Example.ipynb",
+        "subtask_categories": "Computational Analysis, Data Visualization",
+        "task_inst": "Process and visualize the given ECG data by perform R peak detection and outlier correction. Plot an overview of the data and save the final figure as \"pred_results/ecg_processing_vis1_pred_result.png\"."
+      },
+      {
+        "dataset_folder_tree": "|-- ecg_processing_data/\n|---- ecg_data.pkl\n|---- sampling_rate.txt",
+        "dataset_preview_sha256": "59eddacf3de4cf1a968be76096c45dc433eb17820f35654340b9e1fd47baa96b",
+        "domain": "Psychology and Cognitive science",
+        "eval_script_name": "eval_biopsykit_ecg_processing_vis2.py",
+        "github_name": "mad-lab-fau/BioPsyKit",
+        "instance_id": 25,
+        "output_fname": "pred_results/ecg_processing_vis2_pred_result.png",
+        "src_file_or_path": "examples/ECG_Processing_Example.ipynb",
+        "subtask_categories": "Computational Analysis, Data Visualization",
+        "task_inst": "Process the given ECG data and show heart rate variability (HRV) plot. After loading the ECG data, perform R peak detection and outlier correction. Then, you need to divide the data into two phases: the first phase is from 12:32 to 12:35, the second phase is from 12:35 to 12:38. Create a HRV plot for the second phase and save the final figure as \"pred_results/ecg_processing_vis2_pred_result.png\"."
+      },
+      {
+        "dataset_folder_tree": "|-- mat_diffusion/\n|---- diffusion_data_nofeatures_new.xlsx",
+        "dataset_preview_sha256": "f9ff7564adcc1186f16086ac2b791e0e94aa2eebffc92e6ac22ec5058a12a223",
+        "domain": "Computational Chemistry",
+        "eval_script_name": "eval_mat_feature_select.py",
+        "github_name": "uw-cmg/MAST-ML",
+        "instance_id": 2,
+        "output_fname": "pred_results/mat_diffusion_features.csv",
+        "src_file_or_path": "examples/MASTML_Tutorial_3_FeatureEngineering.ipynb",
+        "subtask_categories": "Feature Selection, Machine Learning",
+        "task_inst": "Generate features for the given diffusion data based on material composition and use the SHAP feature selection approach to select 20 features. Save the selected features as a CSV file \"mat_diffusion_features.csv\" to the folder \"pred_results/\". "
+      }
+    ],
+    "sha256": "af8d0e567b2616918ec336e451b16fd1bc79469ca987420bb32c224f08887fca"
+  },
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "99a4c211842bec36493f0f6ba4865f48a404f25634099b6339bdc8882a4402c0",
+  "license_access": {
+    "github_code_license": "MIT per LICENSE",
+    "hf_dataset_card_license": "cc-by-4.0 per Hugging Face dataset page checked 2026-06-21",
+    "readme_license_summary": "Most tasks CC-BY-4.0; rasterio instances 32/46/53/54/84 and matminer instance 3 retain original licenses; unzipped data must not be redistributed."
+  },
+  "local_materialization": {
+    "full_artifact_exists": true,
+    "full_artifact_expected": "benchmark_verified.zip",
+    "full_artifact_local_path": "<local-path>",
+    "full_artifact_sha256": "46e715d3b2196d459d2dff52aa487f506a95ec44b44262e82208d086ea879610",
+    "hf_metadata_materialized": true
+  },
+  "native_operator_routing": {
+    "admission_state": "ADMITTED",
+    "reason": "ScienceAgentBench has metadata plus local full artifacts for executable admission.",
+    "score": 8,
+    "score_parts": {
+      "docker_or_programmatic_eval": 2,
+      "full_artifacts_local": 3,
+      "hf_verified_split": 2,
+      "scientific_domain_breadth": 1
+    },
+    "selected": "scienceagentbench"
+  },
+  "next_executable_command": "Run first ScienceAgentBench A/B/C/deleted heldout loop against frozen rows in <local-path>",
+  "repo": "<local-path>",
+  "run_requirements": {
+    "docker_recommended": true,
+    "primary_eval": "Dockerized evaluation via python -m evaluation.harness.run_evaluation --benchmark_path benchmark --pred_program_path pred_programs --log_fname <log> --run_id <id>",
+    "requires_openai_key_for_direct_eval": true,
+    "threads_claim": "README states 102 SAB instances can run within 30 minutes using 8 threads as of 2025-01-10 update."
+  },
+  "sha_convention": "bytes on disk/as fetched as-is; text hashes are UTF-8 encoded",
+  "source_hashes": {
+    "github_license": "93b43d692b033b76129504448695bfe76ef22d18b11e51352bfab4b5622e5aaa",
+    "github_main_commit": "6b6ce18f460063925cc6f6ffa60e2a99910391fa2b067f8b672ddae8ef9f039b",
+    "github_readme": "022534fda30c4755976c568fdbb582563a166c7b0ca5c81c725e142b2833768c",
+    "hf_rows": "f4c01009d3174902bf70f70b9c33d5108bffde73197368bdd0ba5923a27d716a",
+    "hf_size": "ef9d21eebc4799bb8308eaa4561c12de03bd9c4eb3be427af152b9ea616b4c1d",
+    "hf_splits": "1412eb13407b7c5e5754b915b0bc8b872d1d02950cc661edbdbbdee60842df6e"
+  },
+  "sources": {
+    "github_api_main_url": "https://api.github.com/repos/OSU-NLP-Group/ScienceAgentBench/commits/main",
+    "github_license_url": "https://raw.githubusercontent.com/OSU-NLP-Group/ScienceAgentBench/main/LICENSE",
+    "github_readme_url": "https://raw.githubusercontent.com/OSU-NLP-Group/ScienceAgentBench/main/README.md",
+    "hf_rows_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FScienceAgentBench&config=default&split=verified&offset=0&length=25",
+    "hf_size_url": "https://datasets-server.huggingface.co/size?dataset=osunlp%2FScienceAgentBench",
+    "hf_splits_url": "https://datasets-server.huggingface.co/splits?dataset=osunlp%2FScienceAgentBench",
+    "response_headers": {
+      "github_license": {
+        "accept-ranges": "bytes",
+        "access-control-allow-origin": "*",
+        "cache-control": "max-age=300",
+        "connection": "close",
+        "content-length": "1088",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "cross-origin-resource-policy": "cross-origin",
+        "date": "Mon, 22 the maintainer 2026 16:53:18 GMT",
+        "etag": "\"06c90fbfa43247cbe19f973eae05809190ccd271a52e03656c0d41bcc81ecb3b\"",
+        "expires": "Mon, 22 the maintainer 2026 16:58:18 GMT",
+        "source-age": "0",
+        "strict-transport-security": "max-age=31536000",
+        "vary": "Authorization,Accept-Encoding",
+        "via": "1.1 varnish",
+        "x-cache": "HIT",
+        "x-cache-hits": "0",
+        "x-content-type-options": "nosniff",
+        "x-fastly-request-id": "d13594c9bd644e1299a5c1aa0f4f53ca26d1c685",
+        "x-frame-options": "deny",
+        "x-github-request-id": "37FE:2A1C10:4F35:8628:6A395D27",
+        "x-served-by": "cache-hhr-khhr2060051-HHR",
+        "x-timer": "S1782147198.283301,VS0,VE236",
+        "x-xss-protection": "1; mode=block"
+      },
+      "github_main_commit": {
+        "accept-ranges": "bytes",
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+        "cache-control": "public, max-age=60, s-maxage=60",
+        "connection": "close",
+        "content-length": "7347",
+        "content-security-policy": "default-src 'none'",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Mon, 22 the maintainer 2026 16:53:19 GMT",
+        "etag": "W/\"1c0f8ff530e00d3cdbc6c09a9f16167533edc38c24ee8e0c722866fdc963c82b\"",
+        "last-modified": "Wed, 29 Apr 2026 23:45:00 GMT",
+        "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+        "server": "github.com",
+        "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+        "vary": "Accept,Accept-Encoding, Accept, X-Requested-With",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-github-api-version-selected": "2022-11-28",
+        "x-github-media-type": "github.v3; format=json",
+        "x-github-request-id": "E17C:27915B:55A985:56870D:6A39687F",
+        "x-ratelimit-limit": "60",
+        "x-ratelimit-remaining": "58",
+        "x-ratelimit-reset": "1782147897",
+        "x-ratelimit-resource": "core",
+        "x-ratelimit-used": "2",
+        "x-xss-protection": "0"
+      },
+      "github_readme": {
+        "accept-ranges": "bytes",
+        "access-control-allow-origin": "*",
+        "cache-control": "max-age=300",
+        "connection": "close",
+        "content-length": "12063",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "cross-origin-resource-policy": "cross-origin",
+        "date": "Mon, 22 the maintainer 2026 16:53:18 GMT",
+        "etag": "\"88d2d510901768079acffc1aacf9fd7ee90c9eef593c60f36516548fbcc89f98\"",
+        "expires": "Mon, 22 the maintainer 2026 16:58:18 GMT",
+        "source-age": "0",
+        "strict-transport-security": "max-age=31536000",
+        "vary": "Authorization,Accept-Encoding",
+        "via": "1.1 varnish",
+        "x-cache": "HIT",
+        "x-cache-hits": "0",
+        "x-content-type-options": "nosniff",
+        "x-fastly-request-id": "0c70f5937ad2502be377ec76870d0f887908d08a",
+        "x-frame-options": "deny",
+        "x-github-request-id": "4E7A:36EE25:E383:11D4F:6A395D27",
+        "x-served-by": "cache-bur-kbur8200172-BUR",
+        "x-timer": "S1782147198.113774,VS0,VE108",
+        "x-xss-protection": "1; mode=block"
+      },
+      "hf_rows": {
+        "cache-control": "max-age=120",
+        "connection": "close",
+        "content-length": "81202",
+        "content-type": "application/json",
+        "date": "Mon, 22 the maintainer 2026 16:53:19 GMT",
+        "server": "uvicorn",
+        "vary": "Accept-Encoding",
+        "via": "1.1 2a03d2711471724998d148d52c90bedc.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "bw5uZTN5-KUUeSTNvHWvkxPuMc1g1hL3TPd1fauacCka4-T6YOrm9g==",
+        "x-amz-cf-pop": "LAX53-P5",
+        "x-cache": "Miss from cloudfront",
+        "x-revision": "9c6e96c9e74572e979b0930ee735041cef528cb7"
+      },
+      "hf_size": {
+        "cache-control": "max-age=120",
+        "connection": "close",
+        "content-length": "754",
+        "content-type": "application/json",
+        "date": "Mon, 22 the maintainer 2026 16:53:19 GMT",
+        "server": "uvicorn",
+        "vary": "Accept-Encoding",
+        "via": "1.1 650ddcac4370b35e9c5f62ea4ced2a74.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "2s6HgG-QrEHG6WXnEsqaaex_PXUsoKer_wbPyoBgljnodlWrxsSxoQ==",
+        "x-amz-cf-pop": "LAX53-P5",
+        "x-cache": "Miss from cloudfront",
+        "x-revision": "9c6e96c9e74572e979b0930ee735041cef528cb7"
+      },
+      "hf_splits": {
+        "cache-control": "max-age=120",
+        "connection": "close",
+        "content-length": "2378",
+        "content-type": "application/json",
+        "date": "Mon, 22 the maintainer 2026 16:53:19 GMT",
+        "server": "uvicorn",
+        "vary": "Accept-Encoding",
+        "via": "1.1 9a84b519213ca56a345386ec1f102396.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "M6v1TwDo1BC2Q9V1CrMP7d-6geJJA6LEd7ceTERSJ7LO_2qv2tqnFA==",
+        "x-amz-cf-pop": "LAX53-P5",
+        "x-cache": "Miss from cloudfront",
+        "x-revision": "9c6e96c9e74572e979b0930ee735041cef528cb7"
+      }
+    },
+    "sharepoint_artifact_url": "https://buckeyemailosu-my.sharepoint.com/:<local-path>",
+    "sharepoint_head_status": {
+      "error": "HTTP Error 401: Unauthorized",
+      "error_type": "HTTPError",
+      "ok": false
+    }
+  },
+  "task_evaluator_inventory": {
+    "domains_in_frozen_rows": [
+      "Bioinformatics",
+      "Computational Chemistry",
+      "Geographical Information Science",
+      "Psychology and Cognitive science"
+    ],
+    "eval_script_names": [
+      "clintox_nn_eval.py",
+      "eval_elk_analysis.py",
+      "eval_dkpes_model_development_1.py",
+      "eval_biopsykit_ecg_processing_vis1.py",
+      "eval_biopsykit_ecg_processing_vis2.py",
+      "eval_mat_feature_select.py"
+    ],
+    "frozen_rows": 6,
+    "output_fnames": [
+      "pred_results/clintox_test_pred.csv",
+      "pred_results/Elk_Analysis.png",
+      "pred_results/dkpes_test_pred.csv",
+      "pred_results/ecg_processing_vis1_pred_result.png",
+      "pred_results/ecg_processing_vis2_pred_result.png",
+      "pred_results/mat_diffusion_features.csv"
+    ],
+    "target_output_form": "self-contained Python program producing task-specific pred_results artifacts",
+    "verified_rows": 102
+  },
+  "ticket": "EMBER-SCIENCEAGENTBENCH-ADMISSION",
+  "ts": "20260622T165321Z",
+  "verdict": "SCIENCEAGENTBENCH_ADMITTED"
+}

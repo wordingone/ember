@@ -1,0 +1,43 @@
+{
+  "ticket": "FP18-PROMPTDIV",
+  "ts": "20260611T021320Z",
+  "build": "arc_round replay \u2014 t2_round.build_dataset(LEDGER), default caps (same shape as fp-17 build A)",
+  "examples": 2321,
+  "exact_unique_completions": 1192,
+  "prompt_stats": {
+    "n_multi_groups": 390,
+    "n_multi_examples": 1519,
+    "within": {
+      "n_pairs": 2306,
+      "median": 0.4555,
+      "p5": 0.0923,
+      "p95": 0.9003,
+      "near_dup_frac": 0.0234
+    },
+    "between_sampled": {
+      "n_pairs": 5000,
+      "median": 0.396,
+      "p5": 0.1029,
+      "p95": 0.7781,
+      "near_dup_frac": 0.001
+    }
+  },
+  "prereg": {
+    "rule": "false-accept iff P1 (within-group prompt near-dup pair fraction >= 0.5 at cos >= 0.95) AND P2 (within >= 2.0x between-group sampled baseline); frozen in-script before the measuring run",
+    "consequence_if_false_accept": "fp-17 round-3 prereg amended on this receipt (dedup-collapse re-enters as the simpler lever); amendment recorded as a deviation",
+    "consequence_otherwise": "fp-17 rationale STANDS; cluster-cap remains the round-3 choice"
+  },
+  "verdict": {
+    "p1_within_near_dup_frac": 0.0234,
+    "p1_bar": 0.5,
+    "p1_trips": false,
+    "p2_within_over_between_ratio": 23.4,
+    "p2_bar": 2.0,
+    "p2_trips": true,
+    "false_accept": false
+  },
+  "flags": [
+    "prompt texture via 3-gram bags \u2014 format-level similarity is anchored out by the between-group baseline (P2), not ignored",
+    "between-group baseline is a seeded sample (n<=5000, seed 18), not exhaustive"
+  ]
+}

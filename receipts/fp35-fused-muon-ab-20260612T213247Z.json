@@ -1,0 +1,31 @@
+{
+  "ticket": "fp35-fused-muon-ab",
+  "ts": "20260612T213247Z",
+  "lever": "L3",
+  "verdict": "MUON_FUSED_COMPILE_KILL_TRITON_CC",
+  "tag": "ENG",
+  "finding": "torch.compile/Triton JIT fails on native Windows Python: Triton attempts to build cuda_utils.cp310-win_amd64.pyd via MinGW gcc; MinGW cannot link against CUDA MSVC .lib files (libcuda, libpython310 in CUDA v12.8/x64). FileNotFoundError [WinError 2]. Same failure in WSL2 daemon env (prior receipt). CC=gcc attempted and confirmed insufficient.",
+  "unblock": "MSVC Build Tools (cl.exe) install \u2014 Triton on Windows requires MSVC ABI; MinGW cannot link against CUDA Toolkit .lib files.",
+  "related_lever": "L6",
+  "selftest": "MUON_FUSED_AB_SELFTEST_PASS",
+  "seeds": [
+    16,
+    17,
+    18
+  ],
+  "shapes": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "ffn": 4096,
+    "vocab": 32000,
+    "seq": 1024
+  },
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib": 1.5,
+    "pace_s": 0.05
+  },
+  "pass": false,
+  "blocked_by": "torch.compile/Triton MSVC requirement unmet"
+}

@@ -1,0 +1,33 @@
+{
+  "ts": "2026-06-14T16:59:26Z",
+  "type": "density_probe_prereg",
+  "status": "PRE_REGISTERED",
+  "note": "B-MULTI-1 image data not yet built; probe run deferred until data is available.",
+  "spec": {
+    "probe_version": "1.0",
+    "metric": "val_loss_delta (CE bits-per-token; arm_b - arm_a at final checkpoint)",
+    "aggregation": "seed-direction agreement (>=2/3 seeds same direction \u2192 CONFIRMED)",
+    "arms": {
+      "arm_a": "text=0.7,image=0.3",
+      "arm_b": "text=0.5,image=0.5"
+    },
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "steps": 2000,
+    "val_checkpoints": [
+      250,
+      500,
+      1000,
+      1500,
+      2000
+    ],
+    "epsilon_bpbt": 0.0001,
+    "min_seed_agreement": 2,
+    "killed_metric": "wcode_100pct (floor-degenerate; all-zero outside seed1; +33pp was mean artifact)",
+    "reference": "ember #415, #225 (rejected)"
+  },
+  "DENSITY_PROBE_PREREG_PASS": true
+}

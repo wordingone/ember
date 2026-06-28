@@ -1,0 +1,43 @@
+{
+  "ticket": "EMBER-KAGGLE-BENCHMARKS-TASK-FILE-PROBE",
+  "ts": "20260618T125207Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "lane": "kaggle_benchmarks",
+  "python_executable": "<local-path>",
+  "workdir": "<local-path>",
+  "returncode": 1,
+  "stdout_tail": "================================================================================\nTASK: Ember Probe No LLM: Run #1\n================================================================================\n",
+  "stderr_tail": "or 5] Access is denied: '<local-path>'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"<local-path>\", line 666, in _exitfunc\n    f()\n  File \"<local-path>\", line 590, in __call__\n    return info.func(*info.args, **(info.kwargs or {}))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<local-path>\", line 933, in _cleanup\n    cls._rmtree(name, ignore_errors=ignore_errors)\n  File \"<local-path>\", line 929, in _rmtree\n    _shutil.rmtree(name, onerror=onerror)\n  File \"<local-path>\", line 787, in rmtree\n    return _rmtree_unsafe(path, onerror)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<local-path>\", line 615, in _rmtree_unsafe\n    onerror(os.scandir, path, sys.exc_info())\n  File \"<local-path>\", line 890, in onerror\n    _resetperms(path)\n  File \"<local-path>\", line 287, in _resetperms\n    _dont_follow_symlinks(_os.chmod, path, 0o700)\n  File \"<local-path>\", line 278, in _dont_follow_symlinks\n    func(path, *args)\nPermissionError: [WinError 5] Access is denied: '<local-path>'\n",
+  "task_file_count": 1,
+  "run_file_count": 1,
+  "completed_run_files": [
+    "<local-path>"
+  ],
+  "passed_assertion_files": [
+    "<local-path>"
+  ],
+  "cleanup_error_observed": true,
+  "task_run_files_materialized": true,
+  "artifact_files": [
+    {
+      "path": "<local-path>",
+      "name": "Ember_Probe_No_LLM.task.json",
+      "bytes": 214,
+      "sha256": "sha256:d42a18082f025691742236bd5db914a3fdd14ee458cbd32b3a59df3cf56b2b11"
+    },
+    {
+      "path": "<local-path>",
+      "name": "Ember_Probe_No_LLM-run_id_Run_1.run.json",
+      "bytes": 1122,
+      "sha256": "sha256:90a296d09863aaa4b2cea0b926776881c54ee200df17f633749ea64e27f37da4"
+    }
+  ],
+  "blocked_reason": null,
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "TASK_RUN_FILES_MATERIALIZED"
+}

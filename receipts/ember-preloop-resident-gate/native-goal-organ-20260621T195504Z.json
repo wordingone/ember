@@ -1,0 +1,85 @@
+{
+  "ticket": "EMBER-NATIVE-GOAL-ORGAN",
+  "ts": "20260621T195504Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "NATIVE_GOAL_ORGAN_PASS",
+  "out_path": "receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json",
+  "goal_parse": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "43aee10571849a9731286e1cdd7275f63996de6b84b16779a5733474ff26f7f0",
+    "status": "PASS",
+    "markers": {
+      "has_current_blocker": true,
+      "has_current_executable_command": true,
+      "has_required_receipt": true,
+      "has_kill_ablate_test": true,
+      "has_next_blocker_if_pass": true,
+      "has_next_blocker_if_fail": true
+    },
+    "current_blocker": "the full `reference-cli` parity harness gate has emitted `receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-20260621T190451Z.json` with `reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED`. The receipt consumes the inventory and bootstrap receipts, reads the legal/reference boundary, and records a 13-row surface matrix for function, UI/UX, backend/coordinator, launch, process supervision, hooks, tool dispatch/permissions, state, receipts, rollback, communication, native goal mode, and clean-room legal boundary. It classifies the previous adapter as `HEADLESS_BOOTSTRAP_ONLY`, records `full_cleanroom_parity_not_implemented`, and proves no full-parity surface is deletion-sensitive yet. The first load-bearing missing surface to implement is `native_goal_organ`, because Codex-style goal mode must become a resident Ember mechanism before any RLM/iGRPO training can learn to operate the harness.",
+    "current_executable_command": "python scripts\\ember_native_goal_organ.py --out receipts\\ember-preloop-resident-gate\\native-goal-organ-<timestamp>.json",
+    "required_receipt": "a new `receipts\\ember-preloop-resident-gate\\native-goal-organ-<timestamp>.json` with either `NATIVE_GOAL_ORGAN_PASS` proving a clean-room resident goal organ implements parse/read/select/compile/act-or-delegate/verify/write/preserve and deletion of that organ blocks or degrades the cycle, or `NATIVE_GOAL_ORGAN_BLOCKED` naming the exact missing mechanism, permission, reference, or implementation surface and the next executable command. A prompt-only plan, static routing table, Codex manual steering trace, or headless adapter is not a pass.",
+    "kill_ablate_test": "deleting or disabling the native goal organ must block current-blocker selection and next-action preservation while leaving receipt parsing alone insufficient. If a static template, Codex goal mode, or manual steering can continue the cycle without the organ, the receipt fails.",
+    "next_blocker_if_pass": "rerun `python scripts\\ember_gate_full_parity_harness.py --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json` and continue the next missing full-parity surface named by that receipt. Only after all required full-parity rows pass may the goal proceed to the RLM/iGRPO neural resident-training organ.",
+    "next_blocker_if_fail": "continue the exact missing native-goal-organ surface named by the receipt. Do not run additional D3/Kaggle/PaperBench/RE-Bench/ ScienceAgentBench loops, readiness checks, duration milestones, documentation passes, or remote GitHub performance work as substitutes."
+  },
+  "receipt_reader": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "9cacaa0b2d373deb523bf0926bbf605deb166029bcaab6d8964cbd803c069579",
+    "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE",
+    "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED",
+    "selected_surface_id": "native_goal_organ",
+    "selected_surface_status": "BLOCKED",
+    "selected_surface_cleanroom_implemented": false,
+    "next_missing_precondition": "reference_cli_full_parity_harness_gate"
+  },
+  "blocker_selection": {
+    "selected_blocker": "native_goal_organ",
+    "selection_basis": [
+      "GOAL.md Current Blocker Packet",
+      "full parity surface_matrix.native_goal_organ",
+      "non-Ember executor ablation requirement"
+    ],
+    "blocked_reasons": []
+  },
+  "native_goal_organ": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "e79c00cd971a539c1f718d83d87c8f5e82b1cd28a2bd9b2c76145fad42b77266",
+    "codex_ablation_required": true,
+    "implemented_surface": "parse goal, read receipts, select current blocker, compile bounded action, verify, write receipt, preserve next blocker"
+  },
+  "bounded_action": {
+    "status": "PASS",
+    "channel_type": "bounded_command_delegation",
+    "compiled_action": {
+      "command": "python scripts\\ember_gate_full_parity_harness.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json",
+      "allowed_effect": "rerun full parity gate with native goal organ evidence",
+      "requires_human_input": false
+    },
+    "delegation_policy": "native organ emits the exact bounded local command; caller may execute it, but next action selection is preserved in the receipt"
+  },
+  "verification": {
+    "status": "PASS",
+    "checks": {
+      "goal_parse_pass": true,
+      "receipt_read_pass": true,
+      "selects_native_goal_organ": true,
+      "action_compiled": true,
+      "preserves_next_blocker": true
+    }
+  },
+  "deletion_ablation": {
+    "organ_deleted_blocks_selection": true,
+    "receipt_reader_alone_insufficient": true,
+    "static_template_deleted_blocks": true,
+    "manual_codex_goal_mode_ablation_required": true,
+    "method": "delete organ source or replace selection with receipt-only reader; selected blocker/action preservation no longer has an executable owner"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_native_goal_organ_receipt",
+  "next_executable_command": "python scripts\\ember_gate_full_parity_harness.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 7
+}

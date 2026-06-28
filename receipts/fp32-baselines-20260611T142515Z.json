@@ -1,0 +1,116 @@
+{
+  "ticket": "FP32-BASELINES",
+  "ts": "20260611T142515Z",
+  "issue": 225,
+  "rows": {
+    "gen": {
+      "status": "OK",
+      "source": "w1-humaneval-q3-20260610T234716Z.json",
+      "fields": [
+        "gen_secs",
+        "n_tasks",
+        "k",
+        "verified_samples"
+      ],
+      "gen_secs": 836.9,
+      "n_samples": 792,
+      "secs_per_sample": 1.057,
+      "verified_samples": 543,
+      "verified_per_gen_min": 38.9
+    },
+    "pace": {
+      "status": "OK",
+      "source": "fp20b-settle-20260611T040647Z.json",
+      "fields": [
+        "result.as_operated"
+      ],
+      "pacing_fraction_of_gen_wall": 0.2535,
+      "implied_raw_over_paced": 1.34
+    },
+    "bits": {
+      "status": "OK",
+      "source": "fp11-denominator-20260611T010052Z.json",
+      "fields": [
+        "accountings.A1.bits_per_min_sampler_valued"
+      ],
+      "bits_per_gen_min_A1": {
+        "q15": 40.3,
+        "q3": 32.7
+      }
+    },
+    "train": {
+      "status": "OK",
+      "source": "t2-r2-q3-mtp-20260611T044201Z.json",
+      "fields": [
+        "train_secs",
+        "dataset.n_examples"
+      ],
+      "train_secs": 85.6,
+      "n_examples": 98,
+      "secs_per_example": 0.873,
+      "gen_to_train_wall_ratio": 9.78
+    },
+    "step": {
+      "status": "OK",
+      "source": "fp19-bench-20260611T024648Z.json",
+      "fields": [
+        "results.c03-qat.tok_s_paced",
+        ".tok_s_raw",
+        ".batch"
+      ],
+      "batch": 4,
+      "tok_s_paced": 18737.7,
+      "tok_s_raw": 24294.7,
+      "pacing_tax": 0.2287,
+      "free_vram_gib_post_warmup": 17.19,
+      "live_freeze_receipt": "tokenizer-freeze-20260611T060423Z.json",
+      "real_token_total": 6973632296,
+      "v0_wall_days_paced": 4.308
+    },
+    "power": {
+      "status": "OK",
+      "roundgate_n_frozen": 100,
+      "mde_at_roundgate_n": [
+        {
+          "discordance": 0.1,
+          "ci95_half_width_pp": 6.2,
+          "mde80_one_sided_pp": 7.9
+        },
+        {
+          "discordance": 0.2,
+          "ci95_half_width_pp": 8.8,
+          "mde80_one_sided_pp": 11.1
+        },
+        {
+          "discordance": 0.3,
+          "ci95_half_width_pp": 10.7,
+          "mde80_one_sided_pp": 13.6
+        },
+        {
+          "discordance": 0.5,
+          "ci95_half_width_pp": 13.9,
+          "mde80_one_sided_pp": 17.6
+        }
+      ],
+      "source": "w4-eval-r2w-q3-20260611T044559Z.json",
+      "fields": [
+        "deltas",
+        "n_tasks"
+      ],
+      "eval_n_tasks": 43,
+      "measured_ci95_widths_pp": {
+        "sft_minus_base_ci95": 20.93,
+        "mtp_minus_base_ci95": 16.28,
+        "grpo_minus_base_ci95": 16.28,
+        "control_minus_base_ci95": 6.98
+      }
+    }
+  },
+  "result": {
+    "rows_ok": 6,
+    "rows_missing": []
+  },
+  "provenance_rule": "every numeric field re-derived from the named source receipt's named fields by this script's arithmetic \u2014 no free-typed numbers",
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}

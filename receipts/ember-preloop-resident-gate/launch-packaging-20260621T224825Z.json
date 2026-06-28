@@ -1,0 +1,127 @@
+{
+  "ticket": "EMBER-reference-CLI-LAUNCH-PACKAGING-GATE",
+  "ts": "20260621T224826Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "LAUNCH_PACKAGING_GATE_PASS",
+  "classification": "clean_room_executable_launch_path_not_metadata_or_stale_binary",
+  "out_path": "<local-path>",
+  "reference_launch_shape": {
+    "package_json": {
+      "path": "<local-path>",
+      "exists": true,
+      "sha256": "cfa1bc777a599d3633e54a66e6319a80af8e669131cf2130a47d97e3f6b3dc1f",
+      "name": "reference-cli",
+      "bin": {
+        "reference": "src/entrypoints/cli.tsx"
+      },
+      "scripts": {
+        "start": "bun run generate-build-info && bun --preload src/shims/macros.ts run src/entrypoints/cli.tsx",
+        "build": "bun run build:native && bun run generate-build-info && bun build --compile src/entrypoints/cli.tsx --outfile reference.exe --external playwright --external playwright-core && cp reference.exe reference_test.exe",
+        "build:native": "cargo build --release --manifest-path native/windows-job-object/Cargo.toml && cp native/windows-job-object/target/release/windows_job_object.dll windows_job_object.win32-x64-msvc.node"
+      }
+    },
+    "reference_exe": {
+      "path": "<local-path>",
+      "exists": true,
+      "sha256": "8627914d30c8889cfd2387764da48df0ed1ba38a536ce162de771cd816445a48",
+      "bytes": 1646038528,
+      "used_by_ember_launch": false
+    },
+    "copying_policy": "reference/provenance inspection only; clean-room launcher does not invoke or copy reference-cli binaries or TypeScript entrypoint"
+  },
+  "backend_coordinator_agents_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "3f10d9ed8f144d80cea128bb9d9cf1317a96e957495f1713ab24cfff99b661fd",
+    "ticket": "EMBER-reference-CLI-BACKEND-COORDINATOR-AGENTS-GATE",
+    "verdict": "BACKEND_COORDINATOR_AGENTS_GATE_PASS"
+  },
+  "launch_packaging": {
+    "implemented": true,
+    "launcher_path": "<local-path>",
+    "launcher_sha256": "95b2c5c2886f871fbe53f3aad480b9e7aaa5f7629f83d6c9aecf32df7601ddf9",
+    "entrypoint_path": "<local-path>",
+    "entrypoint_sha256": "aac75e17a2ec76171dc3b85f312434a55dbe8abaffbf3af591dfba5bdc08d2f7",
+    "bin_name": "reference",
+    "copies_reference_code": false,
+    "uses_reference_exe": false
+  },
+  "verification": {
+    "status": "PASS",
+    "launcher_invocation": {
+      "status": "PASS",
+      "command": [
+        "<local-path>",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "<local-path>",
+        "--handshake"
+      ],
+      "returncode": 0,
+      "stdout_json": {
+        "launcher": "ember_reference_cleanroom_launch_entry",
+        "repo": "<local-path>",
+        "argv": [],
+        "bin_name": "reference",
+        "entrypoint": "<local-path>",
+        "resident_handoff": {
+          "native_goal_organ": true,
+          "slash_commands": true,
+          "uiux_repl": true,
+          "backend_coordinator_agents": true
+        },
+        "surfaces": {
+          "native_goal_organ": {
+            "path": "<local-path>",
+            "exists": true,
+            "verdict": "NATIVE_GOAL_ORGAN_PASS",
+            "status": "PASS"
+          },
+          "function_slash_commands": {
+            "path": "<local-path>",
+            "exists": true,
+            "verdict": "FUNCTION_SLASH_COMMANDS_GATE_PASS",
+            "status": "PASS"
+          },
+          "uiux_repl_components": {
+            "path": "<local-path>",
+            "exists": true,
+            "verdict": "UIUX_REPL_COMPONENTS_GATE_PASS",
+            "status": "PASS"
+          },
+          "backend_coordinator_agents": {
+            "path": "<local-path>",
+            "exists": true,
+            "verdict": "BACKEND_COORDINATOR_AGENTS_GATE_PASS",
+            "status": "PASS"
+          }
+        },
+        "status": "PASS"
+      },
+      "stderr": ""
+    },
+    "checks": {
+      "launcher_exists": true,
+      "launcher_executes": true,
+      "handoff_reaches_all_resident_surfaces": true,
+      "reference_exe_not_used": true,
+      "package_metadata_not_sole_evidence": true
+    }
+  },
+  "deletion_ablation": {
+    "launcher_deleted_blocks_invocation": true,
+    "entrypoint_deleted_blocks_handoff": true,
+    "package_metadata_alone_insufficient": true,
+    "stale_reference_ps1_pointer_insufficient": true,
+    "reference_exe_not_invoked": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "remove launcher or launch entry; resident command/goal/UI/backend receipts can remain, but user invocation and launch handoff fail"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_launch_packaging_receipt",
+  "next_executable_command": "python scripts\\ember_gate_full_parity_harness.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

@@ -1,0 +1,151 @@
+{
+ "ticket": "FP-38",
+ "ts": "20260612T232016Z",
+ "issue": 355,
+ "constants": {
+  "grid_receipt": "receipts/c04-grid-20260612T220829Z.json",
+  "owned_stream_tokens": 6977868758,
+  "governed_day_s": 86400,
+  "mde_pp": {
+   "100": 0.101634,
+   "400": 0.03846
+  },
+  "chinchilla_tok_per_param": 20.0,
+  "max_fresh_epochs": 4.0
+ },
+ "f_sustained_used": 42500000000000.0,
+ "f_scale": 0.6129287823691398,
+ "table": [
+  {
+   "h": 1024,
+   "d": 20,
+   "params_m": 284.4,
+   "B_knee": 39,
+   "proj_tok_s": 24904,
+   "afford_1day_b": 2.152,
+   "tok_per_param_1day": 7.6,
+   "chinchilla_b": 5.69,
+   "density_mult_required": 2.64,
+   "days_at_chinchilla": 2.64,
+   "epochs_of_owned_at_1day": 0.308
+  },
+  {
+   "h": 2048,
+   "d": 12,
+   "params_m": 669.5,
+   "B_knee": 26,
+   "proj_tok_s": 10580,
+   "afford_1day_b": 0.914,
+   "tok_per_param_1day": 1.4,
+   "chinchilla_b": 13.39,
+   "density_mult_required": 14.65,
+   "days_at_chinchilla": 14.65,
+   "epochs_of_owned_at_1day": 0.131
+  },
+  {
+   "h": 2048,
+   "d": 14,
+   "params_m": 770.2,
+   "B_knee": 21,
+   "proj_tok_s": 9197,
+   "afford_1day_b": 0.795,
+   "tok_per_param_1day": 1.0,
+   "chinchilla_b": 15.4,
+   "density_mult_required": 19.39,
+   "days_at_chinchilla": 19.39,
+   "epochs_of_owned_at_1day": 0.114
+  },
+  {
+   "h": 2048,
+   "d": 16,
+   "params_m": 870.8,
+   "B_knee": 17,
+   "proj_tok_s": 8134,
+   "afford_1day_b": 0.703,
+   "tok_per_param_1day": 0.8,
+   "chinchilla_b": 17.42,
+   "density_mult_required": 24.78,
+   "days_at_chinchilla": 24.78,
+   "epochs_of_owned_at_1day": 0.101
+  },
+  {
+   "h": 2304,
+   "d": 12,
+   "params_m": 838.1,
+   "B_knee": 21,
+   "proj_tok_s": 8451,
+   "afford_1day_b": 0.73,
+   "tok_per_param_1day": 0.9,
+   "chinchilla_b": 16.76,
+   "density_mult_required": 22.96,
+   "days_at_chinchilla": 22.96,
+   "epochs_of_owned_at_1day": 0.105
+  },
+  {
+   "h": 2304,
+   "d": 14,
+   "params_m": 965.5,
+   "B_knee": 16,
+   "proj_tok_s": 7336,
+   "afford_1day_b": 0.634,
+   "tok_per_param_1day": 0.7,
+   "chinchilla_b": 19.31,
+   "density_mult_required": 30.46,
+   "days_at_chinchilla": 30.46,
+   "epochs_of_owned_at_1day": 0.091
+  },
+  {
+   "h": 2304,
+   "d": 16,
+   "params_m": 1092.9,
+   "B_knee": 13,
+   "proj_tok_s": 6481,
+   "afford_1day_b": 0.56,
+   "tok_per_param_1day": 0.5,
+   "chinchilla_b": 21.86,
+   "density_mult_required": 39.03,
+   "days_at_chinchilla": 39.03,
+   "epochs_of_owned_at_1day": 0.08
+  },
+  {
+   "h": 2560,
+   "d": 12,
+   "params_m": 1025.6,
+   "B_knee": 16,
+   "proj_tok_s": 6906,
+   "afford_1day_b": 0.597,
+   "tok_per_param_1day": 0.6,
+   "chinchilla_b": 20.51,
+   "density_mult_required": 34.37,
+   "days_at_chinchilla": 34.37,
+   "epochs_of_owned_at_1day": 0.086
+  },
+  {
+   "h": 2560,
+   "d": 14,
+   "params_m": 1182.9,
+   "B_knee": 12,
+   "proj_tok_s": 5988,
+   "afford_1day_b": 0.517,
+   "tok_per_param_1day": 0.4,
+   "chinchilla_b": 23.66,
+   "density_mult_required": 45.73,
+   "days_at_chinchilla": 45.73,
+   "epochs_of_owned_at_1day": 0.074
+  },
+  {
+   "h": 2560,
+   "d": 16,
+   "params_m": 1340.2,
+   "B_knee": 9,
+   "proj_tok_s": 5285,
+   "afford_1day_b": 0.457,
+   "tok_per_param_1day": 0.3,
+   "chinchilla_b": 26.8,
+   "density_mult_required": 58.7,
+   "days_at_chinchilla": 58.7,
+   "epochs_of_owned_at_1day": 0.065
+  }
+ ],
+ "reading": "density_mult_required = Chinchilla-default tokens / 1-day affordable tokens. The empirical anchor (3B bulk tokens -> floor-marginal) means the multiplier is an OBLIGATION on curriculum density, receipt-checkable only by a density A/B (curated vs bulk at matched FLOPs)"
+}

@@ -1,0 +1,38 @@
+{
+  "ticket": "ENG114-SELFTEST",
+  "receipt_id": "eng114-selftest-20260611T025444Z",
+  "issue": "#114",
+  "scope": "d_gate + p_gate selftest summary",
+  "ts": "20260611T025444Z",
+  "sha_convention": "sha256 over raw file bytes in 65536-byte read chunks; hex-encoded lowercase; no header, no encoding, no metadata",
+  "d_gate": {
+    "script": "scripts/d_gate.py",
+    "script_sha256": "c50cf6b1b75bab7b1206cea3624486c07ca4038df60b16723f7123fa1401f02f",
+    "marker": "D_GATE_SELFTEST_PASS",
+    "pass": true,
+    "verdict_branches_covered": [
+      "PASS (gain collapses on quarantine, reproduces on restore)",
+      "FAIL (false-accept: gain survives quarantine)"
+    ],
+    "quarantine_roundtrip": "byte-identical",
+    "ci_pins_tested": [
+      "newcombe_paired_ci(0,10,20): both bounds negative",
+      "newcombe_paired_ci(8,0,20): lo > 0.10",
+      "wilson_ci(0,20): hi < 0.20"
+    ]
+  },
+  "p_gate": {
+    "script": "scripts/p_gate.py",
+    "script_sha256": "42307d225179cd26893d1ce3d18c9e928da5c4bf0eb60d4988a8d5dc34817e94",
+    "marker": "P_GATE_SELFTEST_PASS",
+    "pass": true,
+    "verdict_branches_covered": [
+      "PASS (post gain in pre CI, shas unchanged, PIDs differ)",
+      "FAIL_BY_CI (post gain outside pre CI)",
+      "FAIL_BY_SHA_DRIFT_LEDGER (ledger sha drifted)",
+      "FAIL_BY_SAME_PID (session boundary not real)"
+    ]
+  },
+  "overall_pass": true,
+  "verdict": "PASS"
+}

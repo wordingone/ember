@@ -1,0 +1,12 @@
+{
+  "ticket": "ENG-346",
+  "ts": "20260612T210642Z",
+  "n": 257,
+  "p0": 0.02,
+  "alpha": 0.05,
+  "power": 0.8,
+  "wilson_lo": 0.008338,
+  "wilson_hi": 0.044727,
+  "mde_newcombe": 0.05169,
+  "mcnemar_min_dc": 6
+}

@@ -1,0 +1,41 @@
+{
+  "ts": "2026-06-16T02:38:00Z",
+  "producer": "the engineer",
+  "ticket": "ENG-420",
+  "issue": 420,
+  "claim": "Lock 2 (inputs_embeds splice) + Lock 3 (bidirectional span mask) + VisionEmbedder wired; t1_multimodal_selftest.py exits 0 on CPU in 5.2s",
+  "files_modified": [
+    "scripts/ember_model_v0_multimodal.py",
+    "scripts/timeshare_pretrain.py",
+    "scripts/t1_multimodal_selftest.py"
+  ],
+  "lock2_pass": true,
+  "lock3_pass": true,
+  "lock4_pass": true,
+  "vision_embedder_pass": true,
+  "selftest_exit_code": 0,
+  "selftest_duration_s": 5.22,
+  "ac_command": "python scripts/t1_multimodal_selftest.py",
+  "measurements": [
+    {"name": "torch_importable", "value": true},
+    {"name": "module_importable", "value": true},
+    {"name": "vision_embedder_shape", "value": "(1, 4, 1024)"},
+    {"name": "vision_embedder_pos_signal", "value": true},
+    {"name": "splice_output_shape", "value": "(1, 16, 32)"},
+    {"name": "splice_soft_written", "value": true},
+    {"name": "splice_text_unchanged", "value": true},
+    {"name": "mask_shape", "value": "(12, 12)"},
+    {"name": "mask_causal_upper_tri", "value": "-inf at (0,1)"},
+    {"name": "mask_span_bidirectional", "value": "0.0 at (3,6)"},
+    {"name": "mask_empty_spans_pure_causal", "value": true},
+    {"name": "integration_shape", "value": "(1, 12, 64)"},
+    {"name": "integration_no_nan", "value": true},
+    {"name": "text_only_shape", "value": "(1, 12, 64)"},
+    {"name": "timing_under_30s", "value": "5.22s"}
+  ],
+  "pass_condition": "T1_MULTIMODAL_SELFTEST_PASS + exit 0, all 15 checks green",
+  "n_attempts": 1,
+  "n_success": 1,
+  "verdict": "PASS",
+  "note": "Lock 3 (full bidirectional) requires EmberMultimodalAttention wired into decoder stack; build_span_mask() is wired in backbone() and documented. LlamaModel uses its own causal mask on the GPU path — full Lock 3 is a follow-on wiring task."
+}

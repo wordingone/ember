@@ -1,0 +1,64 @@
+{
+  "api_spend_usd": 0,
+  "audited_evidence": {
+    "connected_cycle_audit": {
+      "path": "receipts\\ember-post-resident-discovery\\connected-cycle-field-level-audit-20260622T221500Z.json",
+      "sha256": "0e8855cd77417ea62063baa56a85a7fd1fefb73423d7c1fc7b47dd7ab550cad1",
+      "verdict": "CONNECTED_CYCLE_FIELD_LEVEL_AUDIT_BLOCKED"
+    },
+    "d3_native_link_delegate": {
+      "path": "receipts\\ember-d3-native-loop\\native-link-task57-62-20260622T221000Z\\d3-generalized-candidate-receipt.json",
+      "sha256": "2536349bcc4b6b02a93e3ed44eb6d676224b2319e2141638fec5e4b111eab5b0",
+      "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"
+    },
+    "native_operator_external_transfer_link": {
+      "path": "receipts\\ember-post-resident-discovery\\native-operator-external-transfer-link-20260622T221000Z.json",
+      "sha256": "c82f4d8b3d34525bd6a61021b740cb9f716d93582b62f4f7e527fdd1c3ab379a",
+      "verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_PASS"
+    },
+    "scienceagentbench_stronger_transfer": {
+      "path": "receipts\\ember-post-resident-discovery\\scienceagentbench-stronger-transfer-loop-20260622T204000Z.json",
+      "sha256": "5d214d7220c3a885d7c7dabfb3146f595ae0f94c698215f79e2d0bfb6d112644",
+      "verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS"
+    }
+  },
+  "blocked_reasons": [
+    "closest_known_prior_comparison_missing",
+    "contribution_level_deletion_ablation_missing",
+    "material_difference_over_prior_not_formalized"
+  ],
+  "candidate_claim": {
+    "candidate_name": "zero-cost native-operator external-transfer link with connected-cycle audit",
+    "external_disjoint_validation": [
+      "ScienceAgentBench stronger transfer C=1.0 on four disjoint deterministic rows",
+      "D3 native-link task57/task62 C=1.0 with A/B/Deleted=0.0"
+    ],
+    "primary_contribution_class": "agent-learning substrate / benchmark methodology",
+    "reusable_artifacts": [
+      "scripts/ember_connected_cycle_audit.py",
+      "scripts/ember_native_operator_external_transfer_link.py",
+      "scripts/ember_scienceagentbench_stronger_transfer_loop.py",
+      "scripts/ember_d3_generalized_candidate_exec.py"
+    ]
+  },
+  "field_level_claim_proven": false,
+  "goal_path": "<local-path>",
+  "goal_source_sha256": "a9a6c2d3f844bae18fdec06d9b2861faf6f5f459d18c489fdd305eb8f2e0c979",
+  "leaderboard_dependency": false,
+  "next_executable_command": "Write and run the closest-prior/material-difference/contribution-ablation protocol for the native-operator external-transfer method; the proof must compare against a named prior baseline and delete/revert the claimed method, not merely delete task candidate files.",
+  "paid_api_surface_used": false,
+  "repo": "<local-path>",
+  "required_goal_fields": {
+    "closest_known_prior_or_baseline_present": false,
+    "contribution_level_deletion_ablation_present": false,
+    "external_disjoint_validation_present": true,
+    "material_difference_defined": false,
+    "primary_contribution_class_present": true,
+    "reusable_artifact_present": true,
+    "zero_cost": true
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-FIELD-LEVEL-CONTRIBUTION-PROOF",
+  "ts": "20260622T215728Z",
+  "verdict": "FIELD_LEVEL_CONTRIBUTION_PROOF_BLOCKED"
+}

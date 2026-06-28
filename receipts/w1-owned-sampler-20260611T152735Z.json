@@ -1,0 +1,94 @@
+{
+  "ticket": "ENG-57-R6",
+  "ts": "20260611T152735Z",
+  "issue": 230,
+  "refs": [
+    225,
+    205
+  ],
+  "mode": "model-free-projection",
+  "no_gpu": true,
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "script_sha256": "63b17205d4ec69b673d4362a823203571b2423d3d46529b058a6ec22efe9ecd7",
+  "fp27_pins_cited": {
+    "seed": 31,
+    "k": 8,
+    "n_tasks_l1": 200,
+    "n_tasks_l2": 56,
+    "temperature": 0.8,
+    "top_p": 0.95,
+    "max_new_tokens": 512,
+    "source": "scripts/fp27_round1_prereg.py::SAMPLING",
+    "mutated_by_this_module": false
+  },
+  "governor": {
+    "reused_unchanged": true,
+    "decode_pace_source": "t1_probe.decode_pacer (PACE_S / PACE_EVERY)",
+    "inter_wave_throttle": "t1_probe.THROTTLE_S (env EMBER_THROTTLE_S, default 0.6)",
+    "vram": "EMBER_VRAM_FRACTION / EMBER_VRAM_MARGIN_GB (daemon env, governor.py)",
+    "model_free_core_touches_gpu": false
+  },
+  "distribution": {
+    "calibrated_to": "receipts/fp32-baselines-20260611T142515Z.json::rows.gen",
+    "n_streams": 256,
+    "n_slots": 8,
+    "mean_short_tok": 80.0,
+    "cap_tok": 512,
+    "straggler_frac": 0.12,
+    "seed_synth": 31,
+    "observed_mean_len": 141.1,
+    "observed_max_len": 510
+  },
+  "naive_whole_batch": {
+    "wall_steps": 13348,
+    "slot_steps": 106784,
+    "useful_token_steps": 36121,
+    "slot_waste": 0.661738,
+    "slot_waste_per_batch_mean": 0.655601,
+    "n_batches": 32
+  },
+  "owned_continuous_fifo": {
+    "wall_steps": 4772,
+    "slot_steps_available": 38176,
+    "useful_token_steps": 36121,
+    "slot_waste": 0.05383,
+    "mean_occupancy": 7.5694,
+    "min_occupancy": 1,
+    "max_occupancy": 8,
+    "admission": "fifo"
+  },
+  "owned_continuous_oracle_upper_bound": {
+    "wall_steps": 4516,
+    "slot_steps_available": 36128,
+    "useful_token_steps": 36121,
+    "slot_waste": 0.000194,
+    "mean_occupancy": 7.9984,
+    "min_occupancy": 3,
+    "max_occupancy": 8,
+    "admission": "oracle"
+  },
+  "projection": {
+    "wall_speedup_fifo": 2.7972,
+    "wall_speedup_oracle_upper_bound": 2.9557,
+    "decode_dominated_assumption": "constant per-token tok/s (baselines: 18.7k paced); gen-wall dominates 9.78:1 over train (baselines rows.train)",
+    "baseline_verified_per_gen_min": 38.9,
+    "projected_verified_per_gen_min_fifo": 108.81,
+    "threshold": 2.0,
+    "meets_2x_projected": true,
+    "verdict": "PROJECTED-PASS",
+    "note": "model-free PROJECTION; the live >=2x-or-kill smoke fires at round-1 (live_decode_contract)."
+  },
+  "live_seam": {
+    "scheduler": "continuous_batch_decode (this module)",
+    "per_stream_rng": "torch.Generator(seed=(FP27_PINS.seed, stream_id))",
+    "governor": {
+      "reused_unchanged": true,
+      "decode_pace_source": "t1_probe.decode_pacer (PACE_S / PACE_EVERY)",
+      "inter_wave_throttle": "t1_probe.THROTTLE_S (env EMBER_THROTTLE_S, default 0.6)",
+      "vram": "EMBER_VRAM_FRACTION / EMBER_VRAM_MARGIN_GB (daemon env, governor.py)",
+      "model_free_core_touches_gpu": false
+    },
+    "fires_at": "round-1 (off the #195 critical path; gated)",
+    "smoke": "verified-episodes/gen-min >=2x vs whole-batch OR negative receipt"
+  }
+}

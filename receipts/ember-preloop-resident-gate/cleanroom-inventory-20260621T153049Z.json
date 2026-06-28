@@ -1,0 +1,1217 @@
+{
+  "ticket": "EMBER-reference-CLI-CLEANROOM-INVENTORY",
+  "ts": "20260621T153056Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "reference_CLI_CLEANROOM_INVENTORY_BLOCKED",
+  "cleanroom_pass_allowed": false,
+  "out_path": "receipts\\ember-preloop-resident-gate\\reference-cli-cleanroom-inventory-20260621T153049Z.json",
+  "preloop_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "0bd5a49c76532f5675c564d3b8921f70f43489ad2c0a45fae98883529d03a613",
+    "ticket": "EMBER-PRELOOP-RESIDENT-GATE",
+    "verdict": "PRELOOP_RESIDENT_GATE_BLOCKED",
+    "next_missing_precondition": "clean_room_reference_cli_resident_harness"
+  },
+  "launch_surface": {
+    "reference_root": "<local-path>",
+    "reference_root_exists": true,
+    "reference_exe": {
+      "path": "<local-path>",
+      "exists": true,
+      "bytes": 1646038528,
+      "sha256": null,
+      "sha256_note": "large binary hash deferred; clean-room inventory depends on source/provenance receipts"
+    },
+    "reference_ps1": {
+      "path": "<local-path>",
+      "exists": false,
+      "sha256": null
+    },
+    "powershell_reference_command_definition": "$env:reference_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\n    $env:reference_DISABLE_BACKGROUND_TASKS = \"1\"\n    $env:reference_EXPERIMENTAL_AGENT_TEAMS = \"1\"\n    try {\n        & \"<local-path>\" @args\n    } finally {\n        Remove-Item Env:\\reference_DISABLE_NONESSENTIAL_TRAFFIC -ErrorAction SilentlyContinue\n        Remove-Item Env:\\reference_DISABLE_BACKGROUND_TASKS -ErrorAction SilentlyContinue\n        Remove-Item Env:\\reference_EXPERIMENTAL_AGENT_TEAMS -ErrorAction SilentlyContinue\n    }",
+    "launch_mismatch": true
+  },
+  "source_inventory": {
+    "package_json": {
+      "path": "<local-path>",
+      "exists": true,
+      "sha256": "cfa1bc777a599d3633e54a66e6319a80af8e669131cf2130a47d97e3f6b3dc1f",
+      "name": "reference-cli",
+      "version": "0.1.0",
+      "bin": {
+        "reference": "src/entrypoints/cli.tsx"
+      },
+      "scripts": {
+        "typecheck": "bun tsc --noEmit",
+        "verify:imports": "bun run scripts/verify-dynamic-imports.ts",
+        "generate-build-info": "bun run scripts/generate-build-info.ts",
+        "build-models-json": "bun run scripts/build-models-json.ts",
+        "postinstall": "bun run scripts/build-models-json.ts",
+        "start": "bun run generate-build-info && bun --preload src/shims/macros.ts run src/entrypoints/cli.tsx",
+        "build:native": "cargo build --release --manifest-path native/windows-job-object/Cargo.toml && cp native/windows-job-object/target/release/windows_job_object.dll windows_job_object.win32-x64-msvc.node",
+        "build": "bun run build:native && bun run generate-build-info && bun build --compile src/entrypoints/cli.tsx --outfile reference.exe --external playwright --external playwright-core && cp reference.exe reference_test.exe",
+        "test": "bun test",
+        "test:unit": "bun test src/**/__tests__/ tests/bypass/",
+        "test:regression": "bun test tests/regression/",
+        "test:integration": "bun test tests/integration/",
+        "test:e2e": "bun test tests/e2e/",
+        "test:gpu": "bun run tests/gpu/runner.ts",
+        "test:schemas": "bun run scripts/validate-schemas.ts",
+        "docs:api": "typedoc",
+        "test:all": "bun test",
+        "prepare": "husky"
+      }
+    },
+    "text_file_count_scanned": 2956,
+    "top_level_text_counts": {
+      ".commitlintrc.json": 1,
+      ".github": 36,
+      ".mcp.json": 1,
+      ".release-please-manifest.json": 1,
+      ".vscode": 1,
+      "BUILD.md": 1,
+      "CHANGELOG.md": 1,
+      "CONTRIBUTING.md": 1,
+      "README.md": 1,
+      "SECURITY.md": 1,
+      "artifact.md": 1,
+      "bunfig.toml": 1,
+      "config": 2,
+      "docs": 296,
+      "dogfood-receipts": 1,
+      "legal": 13,
+      "package.json": 1,
+      "packages": 5,
+      "pr-body-937.md": 1,
+      "release-please-config.json": 1,
+      "scripts": 55,
+      "src": 2177,
+      "state": 7,
+      "stubs": 20,
+      "tests": 328,
+      "tsconfig.json": 1,
+      "typedoc.json": 1
+    },
+    "sample_files": [
+      ".commitlintrc.json",
+      ".github/CONTRIBUTING-workflows.md",
+      ".github/dependabot.yml",
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/config.yml",
+      ".github/ISSUE_TEMPLATE/documentation.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.yml",
+      ".github/ISSUE_TEMPLATE/model_behavior.yml",
+      ".github/labels.yml",
+      ".github/pull_request_template.md",
+      ".github/SECURITY.md",
+      ".github/workflows/_template.env-safe.yml",
+      ".github/workflows/admission-gate.yml",
+      ".github/workflows/bypass-detection.yml",
+      ".github/workflows/chat-template-drift-guard.yml",
+      ".github/workflows/check-workflows.yml",
+      ".github/workflows/ci-pr.yml",
+      ".github/workflows/ci-push-production.yml",
+      ".github/workflows/closure-audit.yml",
+      ".github/workflows/commitlint.yml",
+      ".github/workflows/continuous-validation-drift-guard.yml",
+      ".github/workflows/dogfood-artifact-gate.yml",
+      ".github/workflows/drift-report.yml",
+      ".github/workflows/evidence-row-check.yml",
+      ".github/workflows/forge-stability-gate.yml",
+      ".github/workflows/issue-sweep.yml",
+      ".github/workflows/label-sync.yml",
+      ".github/workflows/lock-closed-issues.yml",
+      ".github/workflows/perf-regression-gate.yml",
+      ".github/workflows/README.md",
+      ".github/workflows/registry-drift-guard.yml",
+      ".github/workflows/registry-schema-validate.yml",
+      ".github/workflows/release-please.yml",
+      ".github/workflows/release.yml",
+      ".github/workflows/remove-autoclose-label.yml",
+      ".github/workflows/TEMPLATE.yml",
+      ".github/workflows/turboquant-coverage-gate.yml",
+      ".mcp.json",
+      ".release-please-manifest.json",
+      ".vscode/extensions.json",
+      "artifact.md",
+      "BUILD.md",
+      "bunfig.toml",
+      "CHANGELOG.md",
+      "config/models.example.json",
+      "config/roster.example.json",
+      "CONTRIBUTING.md",
+      "docs/adr/0000-template.md",
+      "docs/adr/0001-local-ci-cutover.md",
+      "docs/adr/0002-registry-as-source-of-truth.md",
+      "docs/adr/0003-turboquant-default.md",
+      "docs/adr/0004-real-work-replaces-scripted-dogfood.md",
+      "docs/adr/0005-the lead-merge-gate-discipline.md",
+      "docs/adr/0006-three-fail-escalation.md",
+      "docs/adr/0007-no-defer-to-the maintainer-absolute.md",
+      "docs/adr/0008-model-ingestion-contract.md",
+      "docs/adr/0009-production-as-default-merge-target.md",
+      "docs/adr/README.md",
+      "docs/api/generated/README.md",
+      "docs/api/generated/scripts/dogfood/types/functions/eventLogDir.md",
+      "docs/api/generated/scripts/dogfood/types/functions/eventLogPath.md",
+      "docs/api/generated/scripts/dogfood/types/functions/latestLogSymlinkPath.md",
+      "docs/api/generated/scripts/dogfood/types/README.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/CapabilityClass.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/ErrorBranch.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/Event.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/EventKind.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/GateCriterion.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/GateResult.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/Receipt.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/ScriptMeta.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/ScriptsFile.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/ScriptVariant.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/SessionEndStatus.md",
+      "docs/api/generated/scripts/dogfood/types/type-aliases/Turn.md",
+      "docs/api/generated/scripts/dogfood/types/variables/CapabilityClass.md",
+      "docs/api/generated/scripts/dogfood/types/variables/ErrorBranch.md",
+      "docs/api/generated/scripts/dogfood/types/variables/Event.md",
+      "docs/api/generated/scripts/dogfood/types/variables/EVENT_KINDS.md",
+      "docs/api/generated/scripts/dogfood/types/variables/EventKind.md"
+    ]
+  },
+  "parity_surface_map": {
+    "goal_parse": {
+      "status": "CANDIDATE_SURFACES_FOUND",
+      "candidate_files": [
+        {
+          "path": ".github/CONTRIBUTING-workflows.md",
+          "matched": [
+            "plan"
+          ],
+          "sha256": "4c0823ac88078b0ce2c88800b2b83712fc9e09deffc5fa0b7d527a8e69d07fe0"
+        },
+        {
+          "path": ".github/labels.yml",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "7179cd302988eef19f873ba60893260b9a0c235b96b1dc1ff790390f4cfe6f26"
+        },
+        {
+          "path": ".github/pull_request_template.md",
+          "matched": [
+            "agent",
+            "plan"
+          ],
+          "sha256": "291f15cab727905a4c72e026bea49894010e90a1ff8d6e610976fc2d8b4dc318"
+        },
+        {
+          "path": ".github/workflows/README.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "b9d74214936d7e49d840095424e13e8dc054e04f18b2df6c4ccacef820d56432"
+        },
+        {
+          "path": ".github/workflows/TEMPLATE.yml",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "a8d7146535ed864a20126237521e0cbdd1a5ca9c556b79113a4e45902856fb66"
+        },
+        {
+          "path": "BUILD.md",
+          "matched": [
+            "task"
+          ],
+          "sha256": "04eb896090275f0b074ed35b373cb5111ce495f64d7ac230a9c7a967d0d39517"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "matched": [
+            "agent",
+            "plan"
+          ],
+          "sha256": "7249e60d1a149140d6c69fe53f4992534f39bb68070e51dad9e83eb3c4e7ef9a"
+        },
+        {
+          "path": "config/roster.example.json",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "c89bc825e3585ba587922246dabd9721162b7258fe9448785a440e01473a00cf"
+        },
+        {
+          "path": "CONTRIBUTING.md",
+          "matched": [
+            "plan"
+          ],
+          "sha256": "e8e061256da1490a62a11437fba44aededb325c4e781b1e0599757c06810f3fc"
+        },
+        {
+          "path": "docs/adr/0001-local-ci-cutover.md",
+          "matched": [
+            "plan"
+          ],
+          "sha256": "8f691ba04d54052741186f3281022a00b88fc68c3e1169f8ae919576ff22bf42"
+        },
+        {
+          "path": "docs/adr/0005-the lead-merge-gate-discipline.md",
+          "matched": [
+            "plan"
+          ],
+          "sha256": "b902649ddf143ed6ca3050a1bfee44683737614f335612ba2e05ba17ec05cfb0"
+        },
+        {
+          "path": "docs/adr/0007-no-defer-to-the maintainer-absolute.md",
+          "matched": [
+            "plan"
+          ],
+          "sha256": "8cc54ee3f501c778df05ea564350165dbe63ba9aebc42200ece45de924010e5f"
+        },
+        {
+          "path": "docs/adr/0009-production-as-default-merge-target.md",
+          "matched": [
+            "plan",
+            "task"
+          ],
+          "sha256": "b41b2ed508a237bf41255917cd9a3cc07fa2aa186ff821b735f78582e18529d7"
+        },
+        {
+          "path": "docs/adr/README.md",
+          "matched": [
+            "plan"
+          ],
+          "sha256": "9a5fa432fe9aebb6629b7bbcaff1d041c73bb965d2799eed6d155f17f30442c2"
+        },
+        {
+          "path": "docs/api/generated/src/services/telemetry/lifecycle/interfaces/LifecycleEvent.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "a61d1e56305752578aee5ba1637bdf57662bee7c4cf7f56e12201e86da2586b3"
+        },
+        {
+          "path": "docs/api/generated/src/tools/functions/assembleToolPool.md",
+          "matched": [
+            "agent",
+            "plan"
+          ],
+          "sha256": "d8d5f123a1a3f8670c0c7c0e8767cfd0b693084abab7e629aa60e9949c179e9b"
+        },
+        {
+          "path": "docs/api/generated/src/tools/functions/filterToolsByDenyRules.md",
+          "matched": [
+            "agent",
+            "plan"
+          ],
+          "sha256": "2de058047cc291e33fb71d42eb48e679e2eceb731cf4e56f74c4e65a13905c3f"
+        },
+        {
+          "path": "docs/api/generated/src/tools/functions/getMergedTools.md",
+          "matched": [
+            "agent",
+            "plan"
+          ],
+          "sha256": "a0df257a259b415984ee255cd6c42356482e5c3f6f6f4bd39f15b66801374439"
+        },
+        {
+          "path": "docs/api/generated/src/tools/functions/getTools.md",
+          "matched": [
+            "agent",
+            "plan"
+          ],
+          "sha256": "d0484cd54310792c6e3f2f33af355b6bec874c6d2896b32a8ea15711d0dcd629"
+        },
+        {
+          "path": "docs/api/generated/src/tools/README.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "8e62266a8678da8cec03f96600268d97bcbac4c3d46393c2352a1d46cc5a9737"
+        },
+        {
+          "path": "docs/api/generated/src/tools/variables/ALL_AGENT_DISALLOWED_TOOLS.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "7408e13f563b4d5a8876d13b1716d0cadb4503947a366c774629ac17da1dbfa8"
+        },
+        {
+          "path": "docs/api/generated/src/tools/variables/ASYNC_AGENT_ALLOWED_TOOLS.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "93a677b17813c84676a924f315bb3005b798c31c104e01027a5380c10227d68a"
+        },
+        {
+          "path": "docs/api/generated/src/tools/variables/COORDINATOR_MODE_ALLOWED_TOOLS.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "ae7b86c66dbbdbfe1e58829eca3ee0fdc96aaefd4ff6f3fd0f239eed76f09cca"
+        },
+        {
+          "path": "docs/api/generated/src/tools/variables/CUSTOM_AGENT_DISALLOWED_TOOLS.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "baf171516c6751d0e9f78e48fe0dc7bee858e42b912bf2aaa94a8b16a73e34a9"
+        },
+        {
+          "path": "docs/api/README.md",
+          "matched": [
+            "agent"
+          ],
+          "sha256": "edaa36979b7883f8d25eacac472aabb0aecf19a527081a7275180c77eaafa70b"
+        }
+      ],
+      "cleanroom_parity_proven": false,
+      "resident_action_channel_proven": false
+    },
+    "act_or_delegate": {
+      "status": "CANDIDATE_SURFACES_FOUND",
+      "candidate_files": [
+        {
+          "path": "docs/api/generated/src/tools/functions/assembleToolPool.md",
+          "matched": [
+            "runagent",
+            "worker"
+          ],
+          "sha256": "d8d5f123a1a3f8670c0c7c0e8767cfd0b693084abab7e629aa60e9949c179e9b"
+        },
+        {
+          "path": "docs/api/generated/src/tools/functions/filterToolsByDenyRules.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "2de058047cc291e33fb71d42eb48e679e2eceb731cf4e56f74c4e65a13905c3f"
+        },
+        {
+          "path": "docs/api/generated/src/tools/functions/getMergedTools.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "a0df257a259b415984ee255cd6c42356482e5c3f6f6f4bd39f15b66801374439"
+        },
+        {
+          "path": "docs/api/generated/src/tools/functions/getTools.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "d0484cd54310792c6e3f2f33af355b6bec874c6d2896b32a8ea15711d0dcd629"
+        },
+        {
+          "path": "docs/audits/wave7-stubs-2026-04-17.md",
+          "matched": [
+            "agenttool"
+          ],
+          "sha256": "c3a845167090fd26fd652ff1931f6c74ba19f86e52cb8b0ee5706d4db9a9a4b2"
+        },
+        {
+          "path": "docs/reference/en/agent-teams.md",
+          "matched": [
+            "sendmessage",
+            "worker"
+          ],
+          "sha256": "9e3e25dee89a4d88e6187d70219ba1d99d5fa531918dd5139762ab5c46845ffd"
+        },
+        {
+          "path": "docs/reference/en/features-overview.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "caa06207fc93fc14053f41cdcb1985d1eb7c480b3f5682ba659e8edb50330600"
+        },
+        {
+          "path": "docs/reference/en/tools-reference.md",
+          "matched": [
+            "sendmessage",
+            "taskstop"
+          ],
+          "sha256": "9522288d77cce7646d6a8505e0b00be15c9e0e29d975f10d0a1d1500ac0ac213"
+        },
+        {
+          "path": "docs/upstream-docs/en/agent-teams.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "b664ab08bb996c9a10bcb75c2529c07728afdbff107a6801a860b81722bab90d"
+        },
+        {
+          "path": "docs/upstream-docs/en/changelog.md",
+          "matched": [
+            "sendmessage",
+            "taskstop"
+          ],
+          "sha256": "03580dc60185b29ef966dd196e31ceabee9eb62184eb539170b60a121316baac"
+        },
+        {
+          "path": "docs/upstream-docs/en/chrome.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "5a8a5a0e7c6acae276d5aafad89c5b1cbbc2b6f3494b575094ae0edb5493056a"
+        },
+        {
+          "path": "docs/upstream-docs/en/features-overview.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "4847b8964a512350544b3dbe3cf8c13c6af742ee2dd55221b1c06a029ff1fbdd"
+        },
+        {
+          "path": "docs/upstream-docs/en/sub-agents.md",
+          "matched": [
+            "sendmessage",
+            "worker"
+          ],
+          "sha256": "208f14781c8094b08e5d69bd1880c6a31853f2e826dfb199109fce7b71a3c3fb"
+        },
+        {
+          "path": "docs/upstream-docs/en/tools-reference.md",
+          "matched": [
+            "sendmessage",
+            "taskstop"
+          ],
+          "sha256": "1e96adbdc2a34c135356fd77e89f8d53a5fdbb57a01edf29ead3a6c6730d8a58"
+        },
+        {
+          "path": "docs/dev/cicd-recommendations-for-reference.md",
+          "matched": [
+            "agenttool",
+            "worker"
+          ],
+          "sha256": "f3dee34252c935472b478969c05b56103adc524725040480b1b416c36015a934"
+        },
+        {
+          "path": "docs/internal/forge-queue.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "cd0ec4c51a284c7675afb00074700bfc984bc00f777e56065290add86f8c49a0"
+        },
+        {
+          "path": "docs/internal/phase9-findings.md",
+          "matched": [
+            "sendmessage"
+          ],
+          "sha256": "9774ef84e1b917f1cc9a444223ff3974903e87283cf4cff4be83404787311e9f"
+        },
+        {
+          "path": "docs/internal/realwork-runbook.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "873d552b0bfdce8f4d2da932629350a9ba26a36b287ec44a1b5dd25f9ad85b93"
+        },
+        {
+          "path": "docs/ONBOARDING.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "5cddf7ac3276a49619469265b44b60b154e43eba84c4f4703ea11ea63be38b16"
+        },
+        {
+          "path": "docs/plans/metanoia.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "fde6d1602417b93e72608a934a2fbeba3447946974f8d39309466baddea3b8c0"
+        },
+        {
+          "path": "docs/runbooks/realwork-runbook-engineer-extract.md",
+          "matched": [
+            "worker"
+          ],
+          "sha256": "2264a99be522301cee1f46cceada299064ab959f9ee3ff878a002d84bbfdc736"
+        },
+        {
+          "path": "legal/branding-exposure.md",
+          "matched": [
+            "agenttool",
+            "sendmessage",
+            "worker"
+          ],
+          "sha256": "501172a27ba516da7a1163dfa58209d6a729dbd848385c85c6414f0d5fbce7da"
+        },
+        {
+          "path": "legal/file-categorization.csv",
+          "matched": [
+            "agenttool",
+            "runagent",
+            "sendmessage",
+            "worker"
+          ],
+          "sha256": "a784e8fc6758034280d6f7d6c6c57fedeaf09718dcc9a5cb72b28d0d142f6621"
+        },
+        {
+          "path": "legal/file-inventory.csv",
+          "matched": [
+            "agenttool",
+            "runagent",
+            "sendmessage",
+            "worker"
+          ],
+          "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb"
+        },
+        {
+          "path": "legal/ownership-roadmap.md",
+          "matched": [
+            "agenttool"
+          ],
+          "sha256": "eddb660ac0481ac2a26deb4ea8f7e81da1b95ca6ae1b7aa2b88f11f0f6b6ea7f"
+        }
+      ],
+      "cleanroom_parity_proven": false,
+      "resident_action_channel_proven": false
+    },
+    "verify_result": {
+      "status": "CANDIDATE_SURFACES_FOUND",
+      "candidate_files": [
+        {
+          "path": ".commitlintrc.json",
+          "matched": [
+            "test"
+          ],
+          "sha256": "c2bb8a6ca72eef51a85ef791e69a9e0fb793e6a5f591cab8e24f20324c23efa4"
+        },
+        {
+          "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "f34413d7f87d0fcc0e618a6cc71b16b92ec990276dd70154bcd83c98bf6f5f88"
+        },
+        {
+          "path": ".github/ISSUE_TEMPLATE/documentation.yml",
+          "matched": [
+            "test"
+          ],
+          "sha256": "4941771cd2b157a883d5c8ce0f489a224266120332afc0b7ce606673cdbc7ce2"
+        },
+        {
+          "path": ".github/ISSUE_TEMPLATE/model_behavior.yml",
+          "matched": [
+            "test"
+          ],
+          "sha256": "3b7848992d6cc8bb6b268300867b8a520b9d3edbfaafeaddc5ce7e2e38fc4367"
+        },
+        {
+          "path": ".github/labels.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "7179cd302988eef19f873ba60893260b9a0c235b96b1dc1ff790390f4cfe6f26"
+        },
+        {
+          "path": ".github/pull_request_template.md",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "291f15cab727905a4c72e026bea49894010e90a1ff8d6e610976fc2d8b4dc318"
+        },
+        {
+          "path": ".github/workflows/_template.env-safe.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "718b74aaf4820a22a6156654870cae4b4caf861fb5594edf1551b4dc85c37526"
+        },
+        {
+          "path": ".github/workflows/admission-gate.yml",
+          "matched": [
+            "test"
+          ],
+          "sha256": "513b757a7b528b121419f81e777489e0cde0f4cc42c227de8637d4079341ff34"
+        },
+        {
+          "path": ".github/workflows/bypass-detection.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "3d9ccbffe7d8402eacb10f5f1eaa2ae5ea283543f99709b6004ad7a548c1bb33"
+        },
+        {
+          "path": ".github/workflows/chat-template-drift-guard.yml",
+          "matched": [
+            "permission",
+            "test",
+            "verify"
+          ],
+          "sha256": "5aab1cb67e0d988f74b57f0cce041965afb1cc21809fe0a242a00eb33b293c79"
+        },
+        {
+          "path": ".github/workflows/check-workflows.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "dda65f2226acaf19fea8bbf9318bbad49c782766ad76fff77ecb921fa8ca9a49"
+        },
+        {
+          "path": ".github/workflows/ci-pr.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "163944df661c320a52163d7ba320f3ae0c056d3ed011fbb574f2298f5f8c19bc"
+        },
+        {
+          "path": ".github/workflows/ci-push-production.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "730b931496eae27e8b86cd214645f507f2bfe71a4e7e379f611df9aedd7e7270"
+        },
+        {
+          "path": ".github/workflows/closure-audit.yml",
+          "matched": [
+            "permission",
+            "test",
+            "verify"
+          ],
+          "sha256": "4f70d773dd76f8e586fbe081bbe9739cd49922811853a2f79019671adc26b705"
+        },
+        {
+          "path": ".github/workflows/commitlint.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "bbc779f7f9e1159a7cbe20b89af1de1008fecf7961f15450a290c36e58479d9a"
+        },
+        {
+          "path": ".github/workflows/continuous-validation-drift-guard.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "650158db46aed1b5c06f87436fbb4df798979b2813c8c96e885a38edd6aed7db"
+        },
+        {
+          "path": ".github/workflows/dogfood-artifact-gate.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "641aff96fc42d34a94e981e7f57d6b533be6948f9abdf5827ffd78e6ee51a6ec"
+        },
+        {
+          "path": ".github/workflows/drift-report.yml",
+          "matched": [
+            "test"
+          ],
+          "sha256": "db194e4636ed7d704ad09af2604ab414217e15d84f377895f75de53b1706626b"
+        },
+        {
+          "path": ".github/workflows/evidence-row-check.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "d2a3ef7d8b1f0c1a98f4ef0da4c3f6a13d1816131c29e123d5797fba70353875"
+        },
+        {
+          "path": ".github/workflows/forge-stability-gate.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "85d7f3cb9c1f689f77204f56892dda27d526b79b8dcc18b48eaf6cbf3b8bf2d5"
+        },
+        {
+          "path": ".github/workflows/issue-sweep.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "5761801d6eb84277d9dfa02f9e56f5f243b5c4c051260daa7f810532f7aae232"
+        },
+        {
+          "path": ".github/workflows/label-sync.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "c6af15e8c97d197c1e4f051367763998f298fa041e9745387590a8f4dd6a3aab"
+        },
+        {
+          "path": ".github/workflows/lock-closed-issues.yml",
+          "matched": [
+            "permission",
+            "test"
+          ],
+          "sha256": "f960586cd6cddc1dffa8907e400d784917e38cc24c25f4910f5024ad7607c37a"
+        },
+        {
+          "path": ".github/workflows/perf-regression-gate.yml",
+          "matched": [
+            "test"
+          ],
+          "sha256": "ca7db6ff5f3eb2b058de2e324fe2a70262f61ee35643a5147e1e04950348be58"
+        },
+        {
+          "path": ".github/workflows/README.md",
+          "matched": [
+            "permission",
+            "verify"
+          ],
+          "sha256": "b9d74214936d7e49d840095424e13e8dc054e04f18b2df6c4ccacef820d56432"
+        }
+      ],
+      "cleanroom_parity_proven": false,
+      "resident_action_channel_proven": false
+    },
+    "receipt_write": {
+      "status": "CANDIDATE_SURFACES_FOUND",
+      "candidate_files": [
+        {
+          "path": "CHANGELOG.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "7249e60d1a149140d6c69fe53f4992534f39bb68070e51dad9e83eb3c4e7ef9a"
+        },
+        {
+          "path": "CONTRIBUTING.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "e8e061256da1490a62a11437fba44aededb325c4e781b1e0599757c06810f3fc"
+        },
+        {
+          "path": "docs/adr/0004-real-work-replaces-scripted-dogfood.md",
+          "matched": [
+            "jsonl",
+            "receipt"
+          ],
+          "sha256": "714dadb9909240d915167215fe5bf8f968c91625a25eed72578e53f0a30021eb"
+        },
+        {
+          "path": "docs/adr/0005-the lead-merge-gate-discipline.md",
+          "matched": [
+            "jsonl",
+            "receipt"
+          ],
+          "sha256": "b902649ddf143ed6ca3050a1bfee44683737614f335612ba2e05ba17ec05cfb0"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/functions/eventLogPath.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "9be3785c183ce5e038e80071c1682f1f34a5a979907db53dd45e13f6f1b8c505"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/functions/latestLogSymlinkPath.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "3b85f52df5d25c853a3aac84645cbf878d41c19fc769ae2d2f988ca5378ac9a6"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/README.md",
+          "matched": [
+            "receipt"
+          ],
+          "sha256": "743a30859d06654365bc84994ee88d446e007d02131cf4b5bfb8e67761873af7"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/type-aliases/Receipt.md",
+          "matched": [
+            "receipt"
+          ],
+          "sha256": "7f0c2c033c43255a5473bc2b827bdcc168d571aff0ba42341d59d2fea7bd12b8"
+        },
+        {
+          "path": "docs/api/generated/src/services/telemetry/harnessBridge/functions/emitHarnessBridge.md",
+          "matched": [
+            "harness-events",
+            "jsonl"
+          ],
+          "sha256": "c6d0a460dfc5558dcf83d51d1083a81e5fd42d33b53c6692cb2cd7ac9230f9b0"
+        },
+        {
+          "path": "docs/api/generated/src/services/telemetry/lifecycle/functions/emitLifecycleEvent.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "e00ba05733d1ed6b0a277b49c21983ae574a32aee5899a8d1a8ad4b075cb3ae7"
+        },
+        {
+          "path": "docs/api/generated/src/services/telemetry/lifecycle/functions/readLifecycleEvents.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "89b94b8fa152911c56bcc3fbbaf2c31ef0a13ab7db8832e2ea19fa26b8110a59"
+        },
+        {
+          "path": "docs/api/README.md",
+          "matched": [
+            "harness-events",
+            "jsonl"
+          ],
+          "sha256": "edaa36979b7883f8d25eacac472aabb0aecf19a527081a7275180c77eaafa70b"
+        },
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "matched": [
+            "jsonl",
+            "receipt"
+          ],
+          "sha256": "257279686dfa60b339aebb2609c7c4c58a1c6e05823d3a3fd2f6b841be3a15b6"
+        },
+        {
+          "path": "docs/archive/ARCHITECTURE-2026-04-27.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "490333c45084e1a77f26698932a40e940808f08934e676c938a36bfa93943feb"
+        },
+        {
+          "path": "docs/archive/AUDIT-2026-04-16.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "b612d68233c358d99f837ae2f7a6037ec51bb7ea1bd79c06576d4f67cf58c8f7"
+        },
+        {
+          "path": "docs/archive/reference-triage-2026-04-08.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "e226a404b8a3a2f0cba0c16f4a90cf27c1f8bbee389729fdd97773f9b810eff3"
+        },
+        {
+          "path": "docs/archive/dogfood/prompt-script-schema.md",
+          "matched": [
+            "receipt"
+          ],
+          "sha256": "402dd05a6356ccbf16b80894bd6276a7c792f5ad9694bea67f1ab6c40bc22a81"
+        },
+        {
+          "path": "docs/archive/dogfood/README.md",
+          "matched": [
+            "jsonl",
+            "receipt"
+          ],
+          "sha256": "318aba102406b07f309c399a050b58e63e4847f3f20696620610f3452b09c3ef"
+        },
+        {
+          "path": "docs/archive/dogfood/receipt-template.md",
+          "matched": [
+            "jsonl",
+            "receipt"
+          ],
+          "sha256": "574a3a4b9c0ca55974671b4948927c109073869c5612c327b2ec60d7ee51c096"
+        },
+        {
+          "path": "docs/archive/dogfood-validation-log.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "dc48efbc1c9f22e062e308bb4afb6bea5b91507239f7fe4ffa19f24f74478498"
+        },
+        {
+          "path": "docs/archive/dogfood.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "0d9094740863b679bcab5f7d9230f494bcb92faf3d7802feaf1beeb36d4a0e2d"
+        },
+        {
+          "path": "docs/archive/REGRESSION-TRACE-2026-04-16.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "056f1299cd50a24d93d6e35f2add1f388ec07669afc688a16adb3e0cbcd290ea"
+        },
+        {
+          "path": "docs/archive/TESTING_LOG.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "39896181a679d0cacb61e451d203615ba60f4929c8c502cac34ace712ea6d9e7"
+        },
+        {
+          "path": "docs/audits/wave7-media-jsonl-2026-04-17.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "25413a4ebb39d6ee76b4d1ea5a0f130bc846485088d1694daed0c18fe68d9767"
+        },
+        {
+          "path": "docs/reference/en/commands.md",
+          "matched": [
+            "jsonl"
+          ],
+          "sha256": "216db1aef13f9dd7c4342ba0ef7731ad58131805d572f655e9a19fbd7f888ae1"
+        }
+      ],
+      "cleanroom_parity_proven": false,
+      "resident_action_channel_proven": false
+    },
+    "state_persistence": {
+      "status": "CANDIDATE_SURFACES_FOUND",
+      "candidate_files": [
+        {
+          "path": ".github/workflows/drift-report.yml",
+          "matched": [
+            "session"
+          ],
+          "sha256": "db194e4636ed7d704ad09af2604ab414217e15d84f377895f75de53b1706626b"
+        },
+        {
+          "path": ".github/workflows/forge-stability-gate.yml",
+          "matched": [
+            "session"
+          ],
+          "sha256": "85d7f3cb9c1f689f77204f56892dda27d526b79b8dcc18b48eaf6cbf3b8bf2d5"
+        },
+        {
+          "path": ".github/workflows/perf-regression-gate.yml",
+          "matched": [
+            "session"
+          ],
+          "sha256": "ca7db6ff5f3eb2b058de2e324fe2a70262f61ee35643a5147e1e04950348be58"
+        },
+        {
+          "path": "BUILD.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "04eb896090275f0b074ed35b373cb5111ce495f64d7ac230a9c7a967d0d39517"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "matched": [
+            "compact"
+          ],
+          "sha256": "7249e60d1a149140d6c69fe53f4992534f39bb68070e51dad9e83eb3c4e7ef9a"
+        },
+        {
+          "path": "CONTRIBUTING.md",
+          "matched": [
+            "compact",
+            "session"
+          ],
+          "sha256": "e8e061256da1490a62a11437fba44aededb325c4e781b1e0599757c06810f3fc"
+        },
+        {
+          "path": "docs/adr/0001-local-ci-cutover.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "8f691ba04d54052741186f3281022a00b88fc68c3e1169f8ae919576ff22bf42"
+        },
+        {
+          "path": "docs/adr/0002-registry-as-source-of-truth.md",
+          "matched": [
+            "compact"
+          ],
+          "sha256": "ceb390c64f866fa0fb0ca475fc9a731ffa26d2cdcdc244947e3a5353be6f051d"
+        },
+        {
+          "path": "docs/adr/0004-real-work-replaces-scripted-dogfood.md",
+          "matched": [
+            "compact",
+            "session"
+          ],
+          "sha256": "714dadb9909240d915167215fe5bf8f968c91625a25eed72578e53f0a30021eb"
+        },
+        {
+          "path": "docs/adr/0005-the lead-merge-gate-discipline.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "b902649ddf143ed6ca3050a1bfee44683737614f335612ba2e05ba17ec05cfb0"
+        },
+        {
+          "path": "docs/adr/0006-three-fail-escalation.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "8672dfb452b2ea071892fbf3e17bf6e10f6cb5dc013726846a3c29684eefa669"
+        },
+        {
+          "path": "docs/adr/0007-no-defer-to-the maintainer-absolute.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "8cc54ee3f501c778df05ea564350165dbe63ba9aebc42200ece45de924010e5f"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/functions/eventLogPath.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "9be3785c183ce5e038e80071c1682f1f34a5a979907db53dd45e13f6f1b8c505"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/functions/latestLogSymlinkPath.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "3b85f52df5d25c853a3aac84645cbf878d41c19fc769ae2d2f988ca5378ac9a6"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/README.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "743a30859d06654365bc84994ee88d446e007d02131cf4b5bfb8e67761873af7"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/type-aliases/SessionEndStatus.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "99fa5b6c315e479bb7702b876352e991ce458d6bf2b4585bfc21134fdc850309"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/CapabilityClass.md",
+          "matched": [
+            "compact"
+          ],
+          "sha256": "610b9b65c4d023c5b9b54899b490940d0c5fc875332f08d79b33f0cdc955d8aa"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/Event.md",
+          "matched": [
+            "compact",
+            "session"
+          ],
+          "sha256": "39c59433be64c99ef62f1bcde79cd99a52762dccf4052bca95414554257f4523"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/EVENT_KINDS.md",
+          "matched": [
+            "compact",
+            "session"
+          ],
+          "sha256": "92e269c3fea01bb425c8887fe5e1f5c38dad92d3320469eb202c3aac2b0138ad"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/EventKind.md",
+          "matched": [
+            "compact",
+            "session"
+          ],
+          "sha256": "afacbbad9f80ad0151cc6c601d8e727e5520f4eeb3c2fcd554eece9ab6888af5"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/GateResult.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "30a070c5e501c34abe92be7e0f79d27a2c438ccb435c63c3303ca53e8e148061"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/ScriptMeta.md",
+          "matched": [
+            "compact"
+          ],
+          "sha256": "b09e2bd4f9a3c97eb313b5b6a63bb92c223ee06e973c1969eeed3fe8836b19a6"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/ScriptsFile.md",
+          "matched": [
+            "compact"
+          ],
+          "sha256": "c7d322599702b7d39ad15e2eadad0c059cf88257e707d34d6e8e1754df3e211f"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/ScriptVariant.md",
+          "matched": [
+            "compact"
+          ],
+          "sha256": "6cc2b62e119911be7ba0ad58349418d2f91698a2e599e5d2b2361c79da67e693"
+        },
+        {
+          "path": "docs/api/generated/scripts/dogfood/types/variables/SESSION_END_STATUSES.md",
+          "matched": [
+            "session"
+          ],
+          "sha256": "f66e520bc883df20173e7e738ac9d95150245b2ab1262b5d5e4ba4bbf9941066"
+        }
+      ],
+      "cleanroom_parity_proven": false,
+      "resident_action_channel_proven": false
+    }
+  },
+  "copyright_cleanroom_boundary": {
+    "status": "BLOCKED",
+    "legal_provenance_files": [
+      {
+        "path": "legal/branding-exposure.md",
+        "sha256": "501172a27ba516da7a1163dfa58209d6a729dbd848385c85c6414f0d5fbce7da"
+      },
+      {
+        "path": "legal/dep-categorization.csv",
+        "sha256": "43323ee5fa359713d6261a98dfad39c44c4dc2d2a680c8c15d33de5006f19799"
+      },
+      {
+        "path": "legal/dependencies.md",
+        "sha256": "5a4e609e92cc17084a24580d887dd6f76c6fe469e6d9d05e59ead99b65a4af36"
+      },
+      {
+        "path": "legal/deps-raw.csv",
+        "sha256": "025578defe956c3e71548f1a07de23edd6b31507b57d0a3ecf06384e71e57146"
+      },
+      {
+        "path": "legal/file-categorization.csv",
+        "sha256": "a784e8fc6758034280d6f7d6c6c57fedeaf09718dcc9a5cb72b28d0d142f6621"
+      },
+      {
+        "path": "legal/file-inventory.csv",
+        "sha256": "c05cb36397e6446675ced886344371ed375ee9bb8c0e8f53ed88634824b15cdb"
+      },
+      {
+        "path": "legal/origin.md",
+        "sha256": "3bb0ef63a7743afe4aaac392ade788ac09a9978b6bb2bb43decc44d3594594c9"
+      },
+      {
+        "path": "legal/ownership-roadmap.md",
+        "sha256": "eddb660ac0481ac2a26deb4ea8f7e81da1b95ca6ae1b7aa2b88f11f0f6b6ea7f"
+      },
+      {
+        "path": "legal/phase3-methodology.md",
+        "sha256": "8163c5c91e3cf868ef5e644fa79803b1848213bbf9ffbf8b60db822dd5ff0326"
+      },
+      {
+        "path": "legal/product-shape.md",
+        "sha256": "41f203b9300f926d52fef5eef8ac796445b3406d6a1139bf1ae9eab5c49c3d59"
+      },
+      {
+        "path": "legal/ui-parity-audit-pass2.md",
+        "sha256": "37ab920836d1a467de74f219f06c6d62bd8575dfbcce8759f946ac3429708f57"
+      },
+      {
+        "path": "legal/ui-parity-audit-pass3.md",
+        "sha256": "ec0d19f271c3e501c7c940e72be33210ca76a84b9730e7ba28c79c5de21e3984"
+      },
+      {
+        "path": "legal/ui-parity-audit.md",
+        "sha256": "d23066436af3949d774ec62889d195852b6f1af0f22309d9eac082bd15e1fac6"
+      }
+    ],
+    "cleanroom_receipts": [],
+    "blockers": [
+      "cleanroom_parity_receipt_missing"
+    ]
+  },
+  "blocked_reasons": [
+    "reference_ps1_surface_missing_or_command_points_to_missing_script",
+    "cleanroom_parity_receipt_missing",
+    "delete_ablate_harness_channel_test_missing",
+    "goal_mode_parity_target_missing",
+    "resident_action_channel_not_implemented"
+  ],
+  "next_missing_precondition": "reference_cli_goal_mode_parity_adapter",
+  "next_executable_command": "python scripts\\ember_gate_goal_mode_parity_adapter.py --out receipts\\ember-preloop-resident-gate\\reference-cli-goal-mode-parity-adapter-<timestamp>.json",
+  "kill_ablate_test_required": "deleting the resolved reference launch shim or resident action-channel adapter must block the clean-room harness receipt",
+  "n_rows": 98
+}

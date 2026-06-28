@@ -1,0 +1,225 @@
+{
+  "ticket": "EMBER-MLE-MICRO-SAMPLE-SUBMISSION-BOOTSTRAP",
+  "ts": "20260618T011558Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ],
+    "official_leaderboard_comparable": false
+  },
+  "fixture_only": false,
+  "prepared_data_ready": false,
+  "candidate_submissions_ready": true,
+  "real_mle_tasks_executed": false,
+  "frozen_before_execution": true,
+  "source_root": "<local-path>",
+  "data_root": "<local-path>",
+  "submission_root": "<local-path>",
+  "required_prepared_data_keys": [
+    "answers",
+    "sample_submission"
+  ],
+  "optional_prepared_data_keys": [
+    "gold_submission"
+  ],
+  "task_assets": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "config_path": "<local-path>",
+      "dataset_paths": {
+        "answers": "detecting-insults-in-social-commentary/prepared/private/test.csv",
+        "gold_submission": "detecting-insults-in-social-commentary/prepared/private/gold_submission.csv",
+        "sample_submission": "detecting-insults-in-social-commentary/prepared/public/sample_submission_null.csv"
+      },
+      "prepared_assets": {
+        "answers": false,
+        "gold_submission": false,
+        "sample_submission": true
+      },
+      "sample_submission_ready": true,
+      "submission_path": "<local-path>",
+      "submission_ready": true
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "config_path": "<local-path>",
+      "dataset_paths": {
+        "answers": "random-acts-of-pizza/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "random-acts-of-pizza/prepared/public/sampleSubmission.csv"
+      },
+      "prepared_assets": {
+        "answers": false,
+        "gold_submission": null,
+        "sample_submission": true
+      },
+      "sample_submission_ready": true,
+      "submission_path": "<local-path>",
+      "submission_ready": true
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "config_path": "<local-path>",
+      "dataset_paths": {
+        "answers": "spooky-author-identification/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "spooky-author-identification/prepared/public/sample_submission.csv"
+      },
+      "prepared_assets": {
+        "answers": false,
+        "gold_submission": null,
+        "sample_submission": true
+      },
+      "sample_submission_ready": true,
+      "submission_path": "<local-path>",
+      "submission_ready": true
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "config_path": "<local-path>",
+      "dataset_paths": {
+        "answers": "nomad2018-predict-transparent-conductors/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "nomad2018-predict-transparent-conductors/prepared/public/sample_submission.csv"
+      },
+      "prepared_assets": {
+        "answers": false,
+        "gold_submission": null,
+        "sample_submission": true
+      },
+      "sample_submission_ready": true,
+      "submission_path": "<local-path>",
+      "submission_ready": true
+    },
+    {
+      "task_id": "leaf-classification",
+      "config_path": "<local-path>",
+      "dataset_paths": {
+        "answers": "leaf-classification/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "leaf-classification/prepared/public/sample_submission.csv"
+      },
+      "prepared_assets": {
+        "answers": false,
+        "gold_submission": null,
+        "sample_submission": true
+      },
+      "sample_submission_ready": true,
+      "submission_path": "<local-path>",
+      "submission_ready": true
+    }
+  ],
+  "copied_count": 5,
+  "copied_submissions": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "source_sample_submission": "<local-path>",
+      "submission_path": "<local-path>",
+      "sha256": "sha256:fc96c3ced2e96c42e8818af763b83a3bb4c07906fbc07f988619f227f7e56d6f"
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "source_sample_submission": "<local-path>",
+      "submission_path": "<local-path>",
+      "sha256": "sha256:1cab8fe30ca68061bb5a2c68e5edca8ad5b4503596e42f848d564ae101d8c4e1"
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "source_sample_submission": "<local-path>",
+      "submission_path": "<local-path>",
+      "sha256": "sha256:502fe99eeacd86507d2ebf29554e2206d51ff5a0346d0ef11e9402f963338c7f"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "source_sample_submission": "<local-path>",
+      "submission_path": "<local-path>",
+      "sha256": "sha256:f7b0ff2ac33aa7978951a4f040fb0b16cfbddc1d383488fc9d4f276ccc975366"
+    },
+    {
+      "task_id": "leaf-classification",
+      "source_sample_submission": "<local-path>",
+      "submission_path": "<local-path>",
+      "sha256": "sha256:1befba66dcaa303468520f0b6195818adc9a4d2e4a6caa2c0d786e4159e3e833"
+    }
+  ],
+  "missing_prepared_assets": [
+    {
+      "task_id": "detecting-insults-in-social-commentary",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [
+        "gold_submission"
+      ],
+      "dataset_paths": {
+        "answers": "detecting-insults-in-social-commentary/prepared/private/test.csv",
+        "gold_submission": "detecting-insults-in-social-commentary/prepared/private/gold_submission.csv",
+        "sample_submission": "detecting-insults-in-social-commentary/prepared/public/sample_submission_null.csv"
+      }
+    },
+    {
+      "task_id": "random-acts-of-pizza",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "random-acts-of-pizza/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "random-acts-of-pizza/prepared/public/sampleSubmission.csv"
+      }
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "spooky-author-identification/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "spooky-author-identification/prepared/public/sample_submission.csv"
+      }
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "nomad2018-predict-transparent-conductors/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "nomad2018-predict-transparent-conductors/prepared/public/sample_submission.csv"
+      }
+    },
+    {
+      "task_id": "leaf-classification",
+      "missing": [
+        "answers"
+      ],
+      "optional_missing": [],
+      "dataset_paths": {
+        "answers": "leaf-classification/prepared/private/test.csv",
+        "gold_submission": "",
+        "sample_submission": "leaf-classification/prepared/public/sample_submission.csv"
+      }
+    }
+  ],
+  "missing_sample_submissions": [],
+  "freeze_manifest_sha256": "sha256:081a83aa5e595b176977781896ead6d0c05dfb57a4f7bec208afdaa2e868005b",
+  "freeze_manifest_path": "<local-path>",
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "verdict": "BLOCKED"
+}

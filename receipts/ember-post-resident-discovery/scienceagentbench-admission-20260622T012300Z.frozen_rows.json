@@ -1,0 +1,78 @@
+{
+  "dataset": "osunlp/ScienceAgentBench",
+  "rows": [
+    {
+      "dataset_folder_tree": "|-- clintox/\n|---- clintox_test.csv\n|---- clintox_train.csv",
+      "dataset_preview_sha256": "c17e4848e9fb5feedb188e574124cf4874aa55d11207554314fdc88c2a5943e5",
+      "domain": "Computational Chemistry",
+      "eval_script_name": "clintox_nn_eval.py",
+      "github_name": "deepchem/deepchem",
+      "instance_id": 1,
+      "output_fname": "pred_results/clintox_test_pred.csv",
+      "src_file_or_path": "examples/clintox",
+      "subtask_categories": "Feature Engineering, Deep Learning",
+      "task_inst": "Train a multitask model on the Clintox dataset to predict a drug's toxicity and FDA approval status. Save the test set predictions, including the SMILES representation of drugs and the probability of positive labels, to \"pred_results/clintox_test_pred.csv\"."
+    },
+    {
+      "dataset_folder_tree": "|-- ElkMovement/\n|---- Elk_in_Southwestern_Alberta_2009.geojson",
+      "dataset_preview_sha256": "71c9a187f7f8237cef53c88f29bf938b8beb610b69476f383fe07200475598aa",
+      "domain": "Geographical Information Science",
+      "eval_script_name": "eval_elk_analysis.py",
+      "github_name": "geopandas/geopandas",
+      "instance_id": 4,
+      "output_fname": "pred_results/Elk_Analysis.png",
+      "src_file_or_path": null,
+      "subtask_categories": "Statistical Analysis, Data Visualization",
+      "task_inst": "Analyze and visualize Elk movements in the given dataset. Estimate home ranges and assess habitat preferences using spatial analysis techniques. Identify the spatial clusters of Elk movements. Document the findings with maps and visualizations. Save the figure as \"pred_results/Elk_Analysis.png\"."
+    },
+    {
+      "dataset_folder_tree": "|-- dkpes/\n|---- dkpes_test.csv\n|---- dkpes_train.csv",
+      "dataset_preview_sha256": "5e35acdde7a2ad6e9d7c94723cb33047d1582cfd29188536257ad881a4efc87c",
+      "domain": "Bioinformatics",
+      "eval_script_name": "eval_dkpes_model_development_1.py",
+      "github_name": "psa-lab/predicting-activity-by-machine-learning",
+      "instance_id": 5,
+      "output_fname": "pred_results/dkpes_test_pred.csv",
+      "src_file_or_path": "code/dkpes_fgroup_analysis.ipynb",
+      "subtask_categories": "Data Visualization",
+      "task_inst": "Use the DKPES dataset to develop a Random Forest classifier predicting signal inhibition of chemicals while choosing appropriate threshold to assign binary labels based on signal inhibition values. Save the test set predictions, including the index and predicted signal inhibition, in \"pred_results/dkpes_test_pred.csv\"."
+    },
+    {
+      "dataset_folder_tree": "|-- ecg_processing_data/\n|---- ecg_data.pkl\n|---- sampling_rate.txt",
+      "dataset_preview_sha256": "59eddacf3de4cf1a968be76096c45dc433eb17820f35654340b9e1fd47baa96b",
+      "domain": "Psychology and Cognitive science",
+      "eval_script_name": "eval_biopsykit_ecg_processing_vis1.py",
+      "github_name": "mad-lab-fau/BioPsyKit",
+      "instance_id": 24,
+      "output_fname": "pred_results/ecg_processing_vis1_pred_result.png",
+      "src_file_or_path": "examples/ECG_Processing_Example.ipynb",
+      "subtask_categories": "Computational Analysis, Data Visualization",
+      "task_inst": "Process and visualize the given ECG data by perform R peak detection and outlier correction. Plot an overview of the data and save the final figure as \"pred_results/ecg_processing_vis1_pred_result.png\"."
+    },
+    {
+      "dataset_folder_tree": "|-- ecg_processing_data/\n|---- ecg_data.pkl\n|---- sampling_rate.txt",
+      "dataset_preview_sha256": "59eddacf3de4cf1a968be76096c45dc433eb17820f35654340b9e1fd47baa96b",
+      "domain": "Psychology and Cognitive science",
+      "eval_script_name": "eval_biopsykit_ecg_processing_vis2.py",
+      "github_name": "mad-lab-fau/BioPsyKit",
+      "instance_id": 25,
+      "output_fname": "pred_results/ecg_processing_vis2_pred_result.png",
+      "src_file_or_path": "examples/ECG_Processing_Example.ipynb",
+      "subtask_categories": "Computational Analysis, Data Visualization",
+      "task_inst": "Process the given ECG data and show heart rate variability (HRV) plot. After loading the ECG data, perform R peak detection and outlier correction. Then, you need to divide the data into two phases: the first phase is from 12:32 to 12:35, the second phase is from 12:35 to 12:38. Create a HRV plot for the second phase and save the final figure as \"pred_results/ecg_processing_vis2_pred_result.png\"."
+    },
+    {
+      "dataset_folder_tree": "|-- mat_diffusion/\n|---- diffusion_data_nofeatures_new.xlsx",
+      "dataset_preview_sha256": "f9ff7564adcc1186f16086ac2b791e0e94aa2eebffc92e6ac22ec5058a12a223",
+      "domain": "Computational Chemistry",
+      "eval_script_name": "eval_mat_feature_select.py",
+      "github_name": "uw-cmg/MAST-ML",
+      "instance_id": 2,
+      "output_fname": "pred_results/mat_diffusion_features.csv",
+      "src_file_or_path": "examples/MASTML_Tutorial_3_FeatureEngineering.ipynb",
+      "subtask_categories": "Feature Selection, Machine Learning",
+      "task_inst": "Generate features for the given diffusion data based on material composition and use the SHAP feature selection approach to select 20 features. Save the selected features as a CSV file \"mat_diffusion_features.csv\" to the folder \"pred_results/\". "
+    }
+  ],
+  "split": "verified"
+}

@@ -1,0 +1,11 @@
+{
+  "aggregation": "required_outputs + verifier_checks -> bounded action plan",
+  "forbidden_equivalence": "plain file reading without learned snippet selection is not this policy",
+  "policy_id": "d3_gym_recursive_eval_policy_v1",
+  "recursive_snippet_order": [
+    "task_instruction",
+    "dataset_previews",
+    "eval_script"
+  ],
+  "selected_template": "eval_script_recursive"
+}

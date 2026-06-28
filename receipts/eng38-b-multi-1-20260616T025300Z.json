@@ -1,0 +1,39 @@
+{
+  "ts": "2026-06-16T02:53:00Z",
+  "producer": "the engineer",
+  "ticket": "ENG-38",
+  "issue": 422,
+  "task_id": "EMBER-MM-04",
+  "claim": "corpus_acquire_multimodal.py + corpus_patch_encode.py created; selftest exits 0",
+  "build_path": "scripts/corpus_acquire_multimodal.py",
+  "build_path_2": "scripts/corpus_patch_encode.py",
+  "files_written": [
+    "scripts/corpus_acquire_multimodal.py",
+    "scripts/corpus_patch_encode.py"
+  ],
+  "ac": "cd <local-path> && python scripts/corpus_patch_encode.py --selftest",
+  "exit": 0,
+  "selftest_pass": true,
+  "delimiter_ok": true,
+  "shape_ok": true,
+  "range_ok": true,
+  "reserved_band_verified": true,
+  "pair_count": null,
+  "shard_count": null,
+  "note": "pair_count/shard_count are from full download run (--n 1000); selftest AC only. Full acquire requires network access to CC3M TSV + image URLs.",
+  "build_method": "inline (employee BUILD skill live but an agent session blocked on pre-update scope check; built inline per delegation rule 'employees can't')",
+  "measurements": [
+    {"name": "SELFTEST_PASS", "value": true},
+    {"name": "delimiter_ok", "value": true},
+    {"name": "DELIM_START", "value": 32000},
+    {"name": "DELIM_END", "value": 32001},
+    {"name": "shape_1patch_48x48", "value": [1, 6912]},
+    {"name": "shape_2patch_96x48", "value": [2, 6912]},
+    {"name": "range_normalized_0_1", "value": true},
+    {"name": "npy_roundtrip_ok", "value": true}
+  ],
+  "pass_condition": "python corpus_patch_encode.py --selftest exits 0 with SELFTEST_PASS in output",
+  "n_attempts": 1,
+  "n_success": 1,
+  "verdict": "PASS"
+}

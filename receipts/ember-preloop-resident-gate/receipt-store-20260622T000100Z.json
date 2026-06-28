@@ -1,0 +1,131 @@
+{
+  "ticket": "EMBER-reference-CLI-RECEIPT-STORE-GATE",
+  "ts": "20260621T233501Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "verdict": "RECEIPT_STORE_GATE_PASS",
+  "classification": "clean_room_fail_closed_receipt_store_not_loose_json_or_nonvalidating_logger",
+  "out_path": "receipts\\ember-preloop-resident-gate\\receipt-store-20260622T000100Z.json",
+  "state_persistence_receipt": {
+    "path": "<local-path>",
+    "exists": true,
+    "sha256": "1c38a8ddafcd3cdd8fa7119e8c8e38a515e254611214a0d337b426a83f465e24",
+    "ticket": "EMBER-reference-CLI-STATE-PERSISTENCE-GATE",
+    "verdict": "STATE_PERSISTENCE_GATE_PASS"
+  },
+  "receipt_store": {
+    "implemented": true,
+    "source_path": "<local-path>",
+    "source_sha256": "6bab2cd69ce9cc0ce2f449e6e2a3f3f85ffbf9418f8926dbf10c67b4f3adca33",
+    "copies_reference_code": false,
+    "receipt_surface": [
+      "checked_write",
+      "checked_read",
+      "schema_validation",
+      "event_log",
+      "replay",
+      "evidence_lookup"
+    ]
+  },
+  "verification": {
+    "status": "PASS",
+    "probe": {
+      "status": "PASS",
+      "checks": {
+        "fail_closed_write_validates_schema": true,
+        "malformed_receipt_rejected_and_removed": true,
+        "read_validates_schema": true,
+        "event_log_append_read": true,
+        "replay_hook_executes": true,
+        "evidence_lookup_finds_ticket": true,
+        "receipt_visible_accounting": true
+      },
+      "written": {
+        "key": "probe",
+        "path": "<local-path>",
+        "sha256": "348b0aeb081bf879d64bbd9ff5b726d9167737c06779023017eb712daf5209e9"
+      },
+      "read_back": {
+        "ticket": "EMBER-RECEIPT-STORE-PROBE",
+        "ts": "20260621T000000Z",
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "verdict": "PROBE_PASS",
+        "n_rows": 1
+      },
+      "events": [
+        {
+          "event": "receipt_write",
+          "payload": {
+            "key": "probe",
+            "sha256": "348b0aeb081bf879d64bbd9ff5b726d9167737c06779023017eb712daf5209e9"
+          }
+        },
+        {
+          "event": "receipt_read",
+          "payload": {
+            "key": "probe",
+            "sha256": "348b0aeb081bf879d64bbd9ff5b726d9167737c06779023017eb712daf5209e9"
+          }
+        },
+        {
+          "event": "receipt_reject",
+          "payload": {
+            "key": "invalid",
+            "reason": "ValueError"
+          }
+        },
+        {
+          "event": "evidence_lookup",
+          "payload": {
+            "n_rows": 1,
+            "ticket": "EMBER-RECEIPT-STORE-PROBE"
+          }
+        }
+      ],
+      "replay": [
+        {
+          "seen": "receipt_write",
+          "has_payload": true
+        },
+        {
+          "seen": "receipt_read",
+          "has_payload": true
+        },
+        {
+          "seen": "receipt_reject",
+          "has_payload": true
+        },
+        {
+          "seen": "evidence_lookup",
+          "has_payload": true
+        }
+      ],
+      "evidence_lookup": [
+        {
+          "path": "<local-path>",
+          "ticket": "EMBER-RECEIPT-STORE-PROBE",
+          "verdict": "PROBE_PASS",
+          "sha256": "348b0aeb081bf879d64bbd9ff5b726d9167737c06779023017eb712daf5209e9"
+        }
+      ]
+    }
+  },
+  "deletion_ablation": {
+    "receipt_store_deleted_blocks_fail_closed_write": true,
+    "receipt_store_deleted_blocks_read": true,
+    "schema_validator_deleted_blocks_invalid_receipt_rejection": true,
+    "event_log_deleted_blocks_append_read": true,
+    "replay_hook_deleted_blocks_replay": true,
+    "evidence_lookup_deleted_blocks_ticket_search": true,
+    "loose_json_dump_insufficient": true,
+    "docs_only_receipt_policy_insufficient": true,
+    "non_validating_logger_insufficient": true,
+    "prompt_only_evidence_trail_insufficient": true,
+    "headless_adapter_alone_insufficient": true,
+    "manual_codex_steering_insufficient": true,
+    "method": "delete receipt store/writer/reader/validator/event-log/replay/evidence lookup; validation, replay, lookup, and lifecycle evidence stop being executable"
+  },
+  "blocked_reasons": [],
+  "next_missing_precondition": "rerun_full_parity_gate_with_receipt_store_receipt",
+  "next_executable_command": "python scripts\\ember_gate_full_parity_harness.py --native-goal-organ-receipt receipts\\ember-preloop-resident-gate\\native-goal-organ-20260621T195504Z.json --function-slash-commands-receipt receipts\\ember-preloop-resident-gate\\function-slash-commands-20260621T221454Z.json --uiux-repl-components-receipt receipts\\ember-preloop-resident-gate\\uiux-repl-components-20260621T222342Z.json --backend-coordinator-agents-receipt receipts\\ember-preloop-resident-gate\\backend-coordinator-agents-20260621T224002Z.json --launch-packaging-receipt receipts\\ember-preloop-resident-gate\\launch-packaging-20260621T224825Z.json --process-supervision-receipt receipts\\ember-preloop-resident-gate\\process-supervision-20260621T225437Z.json --hook-runner-receipt receipts\\ember-preloop-resident-gate\\hook-runner-20260621T230655Z.json --tool-dispatch-permissions-receipt receipts\\ember-preloop-resident-gate\\tool-dispatch-permissions-20260621T231900Z.json --state-persistence-receipt receipts\\ember-preloop-resident-gate\\state-persistence-20260621T232600Z.json --receipt-store-receipt receipts\\ember-preloop-resident-gate\\receipt-store-<timestamp>.json --out receipts\\ember-preloop-resident-gate\\reference-cli-full-parity-harness-gate-<timestamp>.json",
+  "n_rows": 1
+}

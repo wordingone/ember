@@ -1,0 +1,48 @@
+{
+  "ticket": "DT1-DELTA-RULE-DIAGNOSTIC",
+  "ts": "20260616T165810Z",
+  "prereg": "docs/delta-rule-diagnostic-prereg.md",
+  "model_size": "15M",
+  "wall_clock_s": 120,
+  "seeds": 2,
+  "seq_len": 512,
+  "batch_size": 4,
+  "lr": 0.001,
+  "per_seed": [
+    {
+      "seed": 0,
+      "bp_steps": 4408,
+      "bp_final_nll": 10.37363052368164,
+      "cold_steps": 6552,
+      "cold_final_nll": 10.373738288879395,
+      "warm_steps": 6301,
+      "warm_final_nll": 10.3750581741333,
+      "cold_rel_to_bp": 1.0388378254642134e-05,
+      "warm_rel_to_bp": 0.00013762302873627678,
+      "cold_verdict": "PASS",
+      "warm_verdict": "PASS"
+    },
+    {
+      "seed": 1,
+      "bp_steps": 4481,
+      "bp_final_nll": 10.373794555664062,
+      "cold_steps": 6574,
+      "cold_final_nll": 10.373738288879395,
+      "warm_steps": 6228,
+      "warm_final_nll": 10.373597145080566,
+      "cold_rel_to_bp": -5.423934739217218e-06,
+      "warm_rel_to_bp": -1.9029737135897695e-05,
+      "cold_verdict": "PASS",
+      "warm_verdict": "PASS"
+    }
+  ],
+  "warm_pass_any": true,
+  "cold_pass_any": true,
+  "overall": "PASS",
+  "verdict_map": {
+    "PASS": "owned-update path PROCEEDS; autograd confirmed as substrate boundary",
+    "WARM_PASS_COLD_FAIL": "owned path proceeds WITH warm-init required (kills-guard confirmed)",
+    "FAIL": "owned-update SHELVED for round-1; round-1 bootstraps borrowed",
+    "INCONCLUSIVE": "within noise; increase seeds or wall-clock"
+  }
+}

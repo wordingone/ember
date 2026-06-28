@@ -1,0 +1,29 @@
+{
+  "ticket": "FP44-MULTIMODAL-TOKPS",
+  "ts": "20260616T044922Z",
+  "device": "NVIDIA GeForce RTX 4090",
+  "config": {
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "vocab": 32000,
+    "seq": 1024,
+    "batch": 4,
+    "dtype": "bfloat16",
+    "grad_ckpt": true,
+    "optimizer": "AdamW"
+  },
+  "params": 368354304,
+  "warmup_steps": 3,
+  "timed_steps": 200,
+  "tokens_per_second_paced": 19935.6,
+  "tokens_per_second_raw": 26347.3,
+  "tokens_per_second": 19935.6,
+  "free_vram_gib_post_warmup": 17.19,
+  "tokps_basis": "realized-v0-multimodal-config: hidden=1024 layers=20 heads=16 vocab=32000 seq=1024 batch=4 bfloat16 gradient-ckpt AdamW NVIDIA GeForce RTX 4090",
+  "governor": {
+    "vram_fraction": 0.8,
+    "margin_gib_floor": 1.5,
+    "pace_s_per_step": 0.05
+  }
+}

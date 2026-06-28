@@ -1,0 +1,15 @@
+{
+  "ticket": "FP30D-SHARD-GATE",
+  "ts": "20260611T231847Z",
+  "issue": 247,
+  "verdict": "GREEN",
+  "violations": [],
+  "shards_receipt": "token-shards-v0-20260611T170047Z.json",
+  "shards_receipt_sha256": "3adffdda07bf6de31c5f9a9b82aaa08134aac567898c27c5fb0eae90d8ee409d",
+  "shards_receipt_tracked_clean": true,
+  "live_freeze": "tokenizer-freeze-20260611T154111Z.json",
+  "live_freeze_total": 6973632300,
+  "binding_basis": "shard receipt gated against the LIVE fp30-resolved freeze, not the premise it names \u2014 stale self-consistent emissions cannot certify G-shards",
+  "sha_convention": "file shas = sha256 over the exact on-disk raw bytes, no normalization",
+  "no_gpu": true
+}

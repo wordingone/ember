@@ -1,0 +1,41 @@
+[reference] Extracting inference runtime vdev to <local-path>
+
+[reference] Runtime ready (vdev)
+
+╭───ReferenceCLIv0.1.0────────────────────────────────────────────────────────────────────────────────────────────╮
+
+││Tipsforgettingstarted│
+
+│Welcomeback!│Run/inittocreateanREFERENCE.mdfilewithinstructionsforthe assistant model│
+
+││────────────────────────────────────────────────────────────────│
+
+│▐▛███▜▌│Recentactivity│
+
+│▝▜█████▛▘│Norecentactivity│
+
+│▘▘▝▝││
+
+│││
+
+│codex-observer·Local·codex-observer││
+
+│<local-path>
+
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯↑ Opusnowdefaultsto1Mcontext·5xmoreroom,samepricingDebugmodeenabledLoggingto:<local-path>
+
+>  
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────⏵⏵accepteditson (shift+tabtocycle)●high·/effort↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑✓ The model vendor marketplace installed · /plugin to see available plugins> Reply with exactly OBSERVATION_OK and one sentence naming the current executable path.                                   
+
+✽ Baking…                                                                                                               
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+>  
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────⏵⏵accepteditson (shift+tabtocycle)·esctoint…✓the model vendormarketplaceinstalled·/plugintoseeavailable…────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────>    ⏵⏵ accept edits on (shift+tab to cycle)✓ The model vendor marketplace installed · /plugin to see available plugins
+
+                                                                                                                                                                                                                                                
+
+● high · /effortPress Ctrl-C againto exit⏵⏵ accept edits on(shift+tab to cycle)

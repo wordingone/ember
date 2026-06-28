@@ -1,0 +1,46 @@
+{
+  "ticket": "W1-HUMANEVAL-ADMISSION",
+  "ts": "20260610T234716Z",
+  "args": {
+    "model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "adapter": null,
+    "k": 8,
+    "batch_size": 8,
+    "max_new": 512,
+    "temp": 0.8,
+    "seed": 14,
+    "tag": "q3"
+  },
+  "world": "humanevalplus",
+  "n_tasks": 99,
+  "k": 8,
+  "split": {
+    "rule": "id%5==3 heldout, id%5==4 harm-reserve, else train",
+    "total": 164,
+    "train": 99,
+    "heldout": 33,
+    "harm": 32
+  },
+  "feed_tasks": 83,
+  "feed_pct": 83.84,
+  "feed_wilson95_lower_pct": 75.35,
+  "verified_samples": 543,
+  "verified_sample_pct": 68.56,
+  "verified_wilson95_lower_pct": 65.24,
+  "extraction_fail": 5,
+  "sample_strata": {
+    "easy": 464,
+    "mid": 128,
+    "dead": 128,
+    "frontier": 72
+  },
+  "admission": {
+    "criterion": "floor > 0 and Wilson 95% lower bound excludes 0 (train pool, any-of-k)",
+    "floor_positive": true,
+    "wilson_excludes_zero": true,
+    "admitted": true
+  },
+  "gen_secs": 836.9,
+  "samples_file": "w1-humaneval-q3-20260610T234716Z-samples.jsonl",
+  "split_discipline": "train=probe pool, heldout=round evals, harm-reserve=t5-class only"
+}
