@@ -1,0 +1,41 @@
+{
+    "accessed":  "2026-06-29",
+    "command":  "tools/github/git-safe.ps1 ls-remote \u003crepo\u003e HEAD",
+    "pins":  [
+                 {
+                     "id":  "modded-nanogpt",
+                     "url":  "https://github.com/KellerJordan/modded-nanogpt.git",
+                     "head":  "54c192a77bd0e3d2572a891e0a8a1b0ceeb957d7"
+                 },
+                 {
+                     "id":  "algoperf",
+                     "url":  "https://github.com/mlcommons/algorithmic-efficiency.git",
+                     "head":  "58491177c1a0cfcf75f6b2331c512a7d6facd842"
+                 },
+                 {
+                     "id":  "babylm-site",
+                     "url":  "https://github.com/babylm/babylm.github.io.git",
+                     "head":  "2142c4c2b222b392cdc5c576d7ceede987453725"
+                 },
+                 {
+                     "id":  "babylm-eval",
+                     "url":  "https://github.com/babylm-org/babylm-eval.git",
+                     "head":  "02b56cbc8185de1462da195b54877b4be153fbfe"
+                 },
+                 {
+                     "id":  "mle-bench",
+                     "url":  "https://github.com/openai/mle-bench.git",
+                     "head":  "507f92e1138bb6e40dac5c6ee7a6758e6424bf97"
+                 },
+                 {
+                     "id":  "mlagentbench",
+                     "url":  "https://github.com/snap-stanford/MLAgentBench.git",
+                     "head":  "5d71205cc20a8e95d43aa7cb7120e89ca3323e31"
+                 },
+                 {
+                     "id":  "ai-scientist",
+                     "url":  "https://github.com/SakanaAI/AI-Scientist.git",
+                     "head":  "1de1dbc1f4ee2c5f61e9c94348d55eb51d7fa2eb"
+                 }
+             ]
+}

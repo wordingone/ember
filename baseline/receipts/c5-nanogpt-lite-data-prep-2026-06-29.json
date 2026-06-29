@@ -1,0 +1,33 @@
+{
+  "files": [
+    {
+      "exists": true,
+      "path": "C:\\tmp\\ember-baseline-ai-scientist\\data\\shakespeare_char\\input.txt",
+      "sha256": "a29d649defa42cc30feade39d794c74a4f54c23e7dac87b44ed9b9e3f20da95b",
+      "size_bytes": 1155394
+    },
+    {
+      "exists": true,
+      "path": "C:\\tmp\\ember-baseline-ai-scientist\\data\\shakespeare_char\\train.bin",
+      "sha256": "6ec305602a99ac2802745a134e1f5e33e2231b4855525b00b9aebb730ac2626f",
+      "size_bytes": 2007708
+    },
+    {
+      "exists": true,
+      "path": "C:\\tmp\\ember-baseline-ai-scientist\\data\\shakespeare_char\\val.bin",
+      "sha256": "d37d30cc0c8327c270d493299c3dca54135f6d5f1c9ef60cda78076e311204b1",
+      "size_bytes": 223080
+    },
+    {
+      "exists": true,
+      "path": "C:\\tmp\\ember-baseline-ai-scientist\\data\\shakespeare_char\\meta.pkl",
+      "sha256": "6ee5a37533af83b67fcbe6b93705fde9e15e78bafe895f54b2cb2cb32534526c",
+      "size_bytes": 703
+    }
+  ],
+  "job": "data/shakespeare_char/prepare.py",
+  "task_id": "C5-0B-AI-Scientist-nanoGPT-lite",
+  "train_tokens": 1003854,
+  "val_tokens": 111540,
+  "verdict": "PASS"
+}

@@ -1,0 +1,231 @@
+{
+    "access_date":  "2026-06-29",
+    "repo":  "B:\\M\\ember-public",
+    "baseline_path":  "B:\\M\\ember-public\\baseline",
+    "verdict":  "PASS",
+    "line_endings":  {
+                         "files":  [
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "4090-ceiling-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "agent-loop-baselines-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "anchors.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "claim-map-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "cli-goal-mode-baseline-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "compute-governance-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "contracts\\B0-modded-nanogpt-training-efficiency.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "contracts\\C1-4090-1B-feasibility.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "contracts\\C5-self-improvement-loop.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "contracts\\C6-C7-cli-goal-mode.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "contracts\\C8-agent-loop-baselines.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "fragments\\external-reference-ocean-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "fragments\\external-refs-public-summary-v0.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "fragments\\external-refs-public-v0.jsonl"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "fragments\\inventory-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "line-endings\\README.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "promotion-plan-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "protocols\\c5-zero-spend-subset-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "protocols\\compute-spend-c5-baseline-readiness-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "protocols\\data-efficiency-frontier-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "protocols\\inference-to-training-transfer-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "protocols\\protocol-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "README.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\c5-baseline-readiness-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\c5-nanogpt-lite-data-prep-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\c5-nanogpt-lite-smoke-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\c5-subset-static-check-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\deepseek-dspark-resolution-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\fragment-inventory-v0.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\promotion-readiness-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\sample-invalid-run.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\sample-verdict-validation-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\sapient-hrm-data-efficiency-frontier-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\self-improvement-subset-inspection-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\source-ledger-validation-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\source-metadata-draft.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "receipts\\source-pins-2026-06-29.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "reports\\public-private-parity-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "reports\\report-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "schemas\\verdict-schema.json"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\check_c5_baseline_readiness.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\check_c5_subset_static.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\check_line_endings.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\check_promotion_readiness.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\emit_verdict.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\extract_external_refs.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\make_manifest.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\run_c5_nanogpt_smoke.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "scripts\\validate_sources.py"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "self-improvement-baseline-v0.md"
+                                       },
+                                       {
+                                           "line_ending":  "LF",
+                                           "path":  "sources.jsonl"
+                                       }
+                                   ],
+                         "root":  "B:\\M\\ember-public\\baseline"
+                     },
+    "source_validation":  {
+                              "duplicate_ids":  [
+
+                                                ],
+                              "malformed":  [
+
+                                            ],
+                              "missing_required_ids":  [
+
+                                                       ],
+                              "source_count":  16,
+                              "verdict":  "PASS"
+                          },
+    "manifest_tree_hash":  "20bee912eb7e132c866e4b2b2800f1d8029f840b87e4d2f53d5d91295135152a",
+    "manifest_file_count":  51,
+    "note":  "Manifest hash was computed before writing this repo-verification receipt; rerun make_manifest.py for an exact full-tree hash including this receipt."
+}
