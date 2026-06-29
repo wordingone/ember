@@ -1,0 +1,48 @@
+{
+  "access_date": "2026-06-29",
+  "claim_family": "architecture_kernels_inference_to_training_transfer",
+  "verdict": "RESOLVED_SOURCE_IDENTITY_SCOPE_LIMITED",
+  "source": {
+    "id": "deepseek-deepspec-dspark",
+    "repo_url": "https://github.com/deepseek-ai/DeepSpec",
+    "repo_commit": "6443750b5cc6317b9dfd6e971b272577281c8d1c",
+    "repo_commit_date": "2026-06-29T07:55:49Z",
+    "paper_path": "DSpark_paper.pdf",
+    "config_example": "config/dspark/dspark_qwen3_4b.py"
+  },
+  "verified_facts": [
+    "DeepSpec is a full-stack codebase for training and evaluating draft models for speculative decoding.",
+    "The workflow is data preparation, training, and evaluation of speculative-decoding acceptance on benchmark tasks.",
+    "Default configs and scripts assume a single node with 8 GPUs; fewer GPUs require reducing CUDA_VISIBLE_DEVICES.",
+    "Default Qwen/Qwen3-4B data preparation warns target cache storage can be roughly 38 TB.",
+    "Released DSpark checkpoints are listed for Qwen3-4B, Qwen3-8B, Qwen3-14B, and google/gemma-4-12B-it targets.",
+    "Supported DeepSpec draft algorithms currently include DSpark, DFlash, and Eagle3."
+  ],
+  "released_dspark_checkpoints": [
+    "https://huggingface.co/deepseek-ai/dspark_qwen3_4b_block7",
+    "https://huggingface.co/deepseek-ai/dspark_qwen3_8b_block7",
+    "https://huggingface.co/deepseek-ai/dspark_qwen3_14b_block7",
+    "https://huggingface.co/deepseek-ai/dspark_gemma4_12b_block7"
+  ],
+  "commands": [
+    {
+      "command": "& .\\tools\\github\\gh-safe.ps1 api orgs/deepseek-ai/repos --paginate --jq '.[] | {name, html_url, description, updated_at}'",
+      "cwd": "C:\\Users\\Admin\\.codex\\worktrees\\9232\\avir\\kai",
+      "result": "PASS",
+      "note": "DeepSpec repository observed in DeepSeek org listing; initial standalone-DSpark search was insufficient."
+    },
+    {
+      "command": "& .\\tools\\github\\gh-safe.ps1 api repos/deepseek-ai/DeepSpec/commits/main --jq '{sha: .sha, date: .commit.committer.date, message: .commit.message}'",
+      "result": "PASS"
+    },
+    {
+      "command": "& .\\tools\\github\\gh-safe.ps1 api repos/deepseek-ai/DeepSpec/readme --header 'Accept: application/vnd.github.raw'",
+      "result": "PASS"
+    }
+  ],
+  "baseline_scope": {
+    "allowed": "Use DSpark/DeepSpec as an external speculative-decoding and draft-model training/evaluation baseline for inference throughput, acceptance, and agent-loop sampling cost.",
+    "disallowed": "Do not use DSpark as direct proof that Ember can train a >=1B foundation model on one RTX 4090 in days. That transfer requires same-axis RTX 4090 training receipts."
+  },
+  "correction": "The first DSpark lookup was stale/shallow because it searched for a standalone DSpark source and missed DSpark inside DeepSeek DeepSpec. The baseline packet now records this as a coverage failure mode and pins the resolved source."
+}

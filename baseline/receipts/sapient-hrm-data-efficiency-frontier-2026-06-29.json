@@ -1,0 +1,40 @@
+{
+  "access_date": "2026-06-29",
+  "claim_family": "sample_efficiency_architecture_data_efficiency",
+  "verdict": "SOURCE_PINNED_SCOPE_LIMITED_NEEDS_RECORD_ADJUDICATION",
+  "sources": [
+    {
+      "id": "sapient-hrm-arxiv",
+      "url": "https://arxiv.org/abs/2506.21734",
+      "title": "Hierarchical Reasoning Model",
+      "date": "2025-06-26",
+      "pinned_claims": ["27 million parameters", "1000 training samples", "no pre-training or chain-of-thought data", "strong reported performance on Sudoku, maze path finding, and ARC-style reasoning tasks"]
+    },
+    {
+      "id": "hrm-mechanistic-analysis",
+      "url": "https://arxiv.org/abs/2601.10679",
+      "title": "Are Your Reasoning Models Reasoning or Guessing? A Mechanistic Analysis of Hierarchical Reasoning Models",
+      "date": "2026-01-15",
+      "pinned_claims": ["reports HRM failure modes and argues some behavior may be closer to guessing/fixed-point dynamics than reasoning", "provides a critical guardrail against treating HRM headline results as settled foundation-model proof"]
+    },
+    {
+      "id": "cmm-hrm-frontier",
+      "url": "https://arxiv.org/abs/2603.22871",
+      "title": "Dynamical Systems Theory Behind a Hierarchical Reasoning Model",
+      "date": "2026-03-24",
+      "pinned_claims": ["reports compact dynamical-systems alternatives outperforming HRM on Sudoku/Maze-style tasks", "establishes that HRM is part of an active extreme-parameter-efficiency reasoning frontier, not a final endpoint"]
+    },
+    {
+      "id": "modded-nanotabpfn",
+      "url": "https://arxiv.org/abs/2606.03681",
+      "title": "Speedrunning Tabular Foundation Model Pretraining",
+      "date": "2026-06-02",
+      "pinned_claims": ["nanoTabPFN community speedrun on one NVIDIA L40S GPU", "current best record 0.92 minutes to fixed downstream ROC AUC target", "81x speedup over 74.32 minute baseline", "22x fewer synthetic datasets"]
+    }
+  ],
+  "baseline_scope": {
+    "allowed": "Use Sapient HRM as a data-efficiency and compact-reasoning architecture anchor; use modded-nanoTabPFN as a tabular foundation-model pretraining speed/data-efficiency anchor.",
+    "disallowed": "Do not use HRM as proof of broad >=1B language foundation-model pretraining on one RTX 4090, and do not use tabular foundation pretraining as a substitute for language-model or Ember self-improvement claims."
+  },
+  "correction": "The prior baseline over-weighted raw LM speedrun and general sample-efficiency anchors while under-weighting extreme data-efficiency records. Sapient HRM and modded-nanoTabPFN must be represented as separate frontier anchors with explicit transfer limits."
+}

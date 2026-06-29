@@ -26,3 +26,10 @@ config/nck-baseline/** -text
 # scripts and hooks: enforce LF (prevents CRLF creep on Windows checkouts)
 *.sh text eol=lf
 *.py text eol=lf
+# Baseline packet: force reproducible LF across Windows/Unix checkouts.
+baseline/** text eol=lf
+baseline/**/*.py text eol=lf
+baseline/**/*.sh text eol=lf
+baseline/**/*.md text eol=lf
+baseline/**/*.json text eol=lf
+baseline/**/*.jsonl text eol=lf
