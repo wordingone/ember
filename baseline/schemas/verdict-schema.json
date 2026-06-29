@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ember Baseline Verdict",
+  "type": "object",
+  "required": [
+    "claim_id",
+    "verdict",
+    "contract",
+    "metric",
+    "threshold",
+    "evidence",
+    "generated_at"
+  ],
+  "properties": {
+    "claim_id": { "type": "string", "minLength": 1 },
+    "verdict": { "type": "string", "enum": ["PASS", "FAIL", "INVALID-RUN"] },
+    "contract": { "type": "string", "minLength": 1 },
+    "metric": { "type": "object" },
+    "threshold": { "type": "object" },
+    "evidence": { "type": "object" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

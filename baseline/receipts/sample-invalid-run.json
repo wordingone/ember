@@ -1,0 +1,16 @@
+{
+  "claim_id": "B0-MODNANO-TRAINING-EFFICIENCY-RULER",
+  "verdict": "INVALID-RUN",
+  "contract": "contracts/B0-modded-nanogpt-training-efficiency.md",
+  "metric": {
+    "name": "validation_loss_time_to_target",
+    "status": "not_locked"
+  },
+  "threshold": {
+    "status": "not_locked"
+  },
+  "evidence": {
+    "reason": "Exact external comparator commit, metric row, and threshold are not locked."
+  },
+  "generated_at": "2026-06-29T00:00:00Z"
+}

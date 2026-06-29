@@ -1,0 +1,125 @@
+{
+  "command": [
+    "C:\\Program Files\\Python310\\python.exe",
+    "experiment.py",
+    "--out_dir",
+    "run_0"
+  ],
+  "cwd": "C:\\tmp\\ember-baseline-smoke\\nanoGPT_lite_smoke",
+  "elapsed_seconds": 3.4665656089782715,
+  "job": "smoke_reduced_run_0",
+  "outputs": {
+    "final_info_json": "C:\\tmp\\ember-baseline-smoke\\nanoGPT_lite_smoke\\run_0\\final_info.json",
+    "final_info_json_exists": true,
+    "per_seed_json": "C:\\tmp\\ember-baseline-smoke\\nanoGPT_lite_smoke\\run_0\\final_info_shakespeare_char_0.json",
+    "per_seed_json_exists": true
+  },
+  "parsed_final_info": {
+    "shakespeare_char": {
+      "final_info_dict": {
+        "avg_inference_tokens_per_second": [
+          139.95562887251538
+        ],
+        "best_val_loss": [
+          3.8001708984375
+        ],
+        "final_train_loss": [
+          3.7662353515625
+        ],
+        "total_train_time": [
+          0.24570250511169434
+        ]
+      },
+      "means": {
+        "avg_inference_tokens_per_second_mean": 139.95562887251538,
+        "best_val_loss_mean": 3.8001708984375,
+        "final_train_loss_mean": 3.7662353515625,
+        "total_train_time_mean": 0.24570250511169434
+      },
+      "stderrs": {
+        "avg_inference_tokens_per_second_stderr": 0.0,
+        "best_val_loss_stderr": 0.0,
+        "final_train_loss_stderr": 0.0,
+        "total_train_time_stderr": 0.0
+      }
+    }
+  },
+  "patches": [
+    {
+      "new": "batch_size = 4 if dataset == \"shakespeare_char\" else 4",
+      "old": "batch_size = 64 if dataset == \"shakespeare_char\" else 32",
+      "status": "applied"
+    },
+    {
+      "new": "block_size = 64  # smoke-reduced context",
+      "old": "block_size = 256  # context of up to 256 previous characters",
+      "status": "applied"
+    },
+    {
+      "new": "eval_interval = 1 if dataset == \"shakespeare_char\" else 1",
+      "old": "eval_interval = 250 if dataset == \"shakespeare_char\" else 1000",
+      "status": "applied"
+    },
+    {
+      "new": "log_interval = 1 if dataset == \"shakespeare_char\" else 1",
+      "old": "log_interval = 10 if dataset == \"shakespeare_char\" else 100",
+      "status": "applied"
+    },
+    {
+      "new": "eval_iters = 2",
+      "old": "eval_iters = 200",
+      "status": "applied"
+    },
+    {
+      "new": "n_layer = 2  # smoke-reduced model",
+      "old": "n_layer = 6  # baby GPT model :)",
+      "status": "applied"
+    },
+    {
+      "new": "n_head = 2",
+      "old": "n_head = 6",
+      "status": "applied"
+    },
+    {
+      "new": "n_embd = 128",
+      "old": "n_embd = 384",
+      "status": "applied"
+    },
+    {
+      "new": "max_iters = 3 if dataset == \"shakespeare_char\" else 3",
+      "old": "max_iters = 5000 if dataset == \"shakespeare_char\" else 100000",
+      "status": "applied"
+    },
+    {
+      "new": "warmup_iters = 1 if dataset == \"shakespeare_char\" else 1",
+      "old": "warmup_iters = 100 if dataset == \"shakespeare_char\" else 200",
+      "status": "applied"
+    },
+    {
+      "new": "compile = False  # smoke disables compile overhead",
+      "old": "compile = True  # do not torch compile the model on macbooks",
+      "status": "applied"
+    },
+    {
+      "new": "num_samples = 1  # smoke sample count",
+      "old": "num_samples = 10  # number of samples to draw",
+      "status": "applied"
+    },
+    {
+      "new": "max_new_tokens = 16  # smoke generation budget",
+      "old": "max_new_tokens = 500  # number of tokens generated in each sample",
+      "status": "applied"
+    },
+    {
+      "new": "\"shakespeare_char\": 1,",
+      "old": "\"shakespeare_char\": 2,",
+      "status": "applied"
+    }
+  ],
+  "returncode": 0,
+  "stderr_tail": "C:\\tmp\\ember-baseline-smoke\\nanoGPT_lite_smoke\\experiment.py:463: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.\n  scaler = torch.cuda.amp.GradScaler(enabled=(dtype == \"float16\"))\n",
+  "stdout_tail": "tokens per iteration will be: 256\nfound vocab_size = 65 (inside ../../data\\shakespeare_char\\meta.pkl)\nInitializing a new model from scratch\nnumber of parameters: 0.40M\nnum decayed parameter tensors: 10, with 409,728 parameters\nnum non-decayed parameter tensors: 5, with 640 parameters\nusing fused AdamW: True\nstep 0: train loss 4.2349, val loss 4.2174\niter 0: loss 4.2065, time 222.49ms\nstep 1: train loss 4.2211, val loss 4.2162\niter 1: loss 4.2263, time 10.46ms\nstep 2: train loss 3.8683, val loss 3.8919\niter 2: loss 3.9185, time 12.75ms\nstep 3: train loss 3.7752, val loss 3.8002\niter 3: loss 3.7662, time 0.00ms\ntraining done\nBest validation loss: 3.8001708984375\nTotal train time: 0.00 mins\nLoading meta from ../../data\\shakespeare_char\\meta.pkl...\nSample 1:\n h,KRh3edoy'NS'Sh\nInference time: 0.11 seconds\nTokens per second: 139.96\n---------------\nAverage tokens per second: 139.96\n",
+  "task_id": "C5-0B-AI-Scientist-nanoGPT-lite",
+  "timeout_seconds": 240,
+  "verdict": "PASS"
+}
