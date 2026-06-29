@@ -1,0 +1,24 @@
+{
+    "babylm_2026":  {
+                        "strict_small_words":  10000000,
+                        "strict_words":  100000000,
+                        "site_commit":  "2142c4c2b222b392cdc5c576d7ceede987453725",
+                        "evaluator_url":  "https://github.com/babylm-org/babylm-eval",
+                        "leaderboard_url":  "https://huggingface.co/spaces/BabyLM-community/BabyLM-Leaderboard-2026",
+                        "epoch_limit":  10
+                    },
+    "receipt_type":  "fragment_inventory_receipt",
+    "completion_claim":  false,
+    "modded_nanogpt":  {
+                           "commit":  "54c192a77bd0e3d2572a891e0a8a1b0ceeb957d7",
+                           "record_time_ms_from_log":  83855,
+                           "hardware":  "8x NVIDIA H100",
+                           "final_val_loss":  3.2802,
+                           "record_time_minutes":  1.32,
+                           "record_id":  84
+                       },
+    "generated_at":  "2026-06-29T00:00:00Z",
+    "reason":  "Fragment inventory created and two external anchors tightened, but final dual-repo /baseline promotion and governed Ember trial remain incomplete.",
+    "verdict":  "INVALID-RUN",
+    "inventory":  "fragments/inventory-v0.md"
+}

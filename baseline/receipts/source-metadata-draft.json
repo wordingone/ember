@@ -1,0 +1,8 @@
+{
+  "receipt_type": "source_metadata_draft",
+  "generated_at": "2026-06-29T00:00:00Z",
+  "verdict": "INVALID-RUN",
+  "reason": "Source URLs and access dates are listed, but final commit/version/leaderboard pins are not complete.",
+  "sources_file": "sources.jsonl",
+  "completion_claim": false
+}

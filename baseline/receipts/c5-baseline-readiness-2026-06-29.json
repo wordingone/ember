@@ -1,0 +1,51 @@
+{
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+  "tasks": {
+    "C5-0A-MLAgentBench-CLRS": {
+      "baseline_readiness": "INVALID-RUN",
+      "modules": {
+        "absl": true,
+        "attrs": true,
+        "chex": false,
+        "clrs": false,
+        "haiku": false,
+        "jax": true,
+        "jaxlib": true,
+        "numpy": true,
+        "optax": false,
+        "tensorflow": true
+      },
+      "next_repair": "Create isolated environment with MLAgentBench CLRS requirements including dm-clrs/clrs before running baseline.",
+      "required_files_present": {
+        "eval.py": true,
+        "train.py": true
+      }
+    },
+    "C5-0B-AI-Scientist-nanoGPT-lite": {
+      "baseline_readiness": "PASS",
+      "modules": {
+        "datasets": true,
+        "numpy": true,
+        "tiktoken": true,
+        "torch": true,
+        "tqdm": true,
+        "transformers": true
+      },
+      "next_repair": null,
+      "required_files_present": {
+        "data/shakespeare_char/prepare.py": true,
+        "experiment.py": true
+      },
+      "torch": {
+        "bf16_supported": true,
+        "cuda_available": true,
+        "cuda_device_0": "NVIDIA GeForce RTX 4090",
+        "cuda_device_count": 1,
+        "installed": true,
+        "version": "2.10.0+cu126"
+      }
+    }
+  },
+  "verdict": "INVALID-RUN"
+}
