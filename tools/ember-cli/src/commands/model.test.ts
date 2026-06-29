@@ -1,0 +1,385 @@
+// commands/model.test.ts — unit tests for the /model command.
+
+import { describe, it, expect, beforeEach } from "bun:test";
+import { createModelCommand, _makeKillReceiptWriter } from "./model.ts";
+import {
+  resetModelLifecycleForTests,
+  registerManagedModel,
+  unloadModel,
+  type ModelLifecycleDeps,
+} from "../services/model-lifecycle.ts";
+import type { CommandContext } from "../types/command-types.ts";
+
+describe("model command", () => {
+  const mockCtx: CommandContext = {
+    sessionId: "test-session",
+    mode: "test",
+    cwd: "/test",
+  };
+
+  // =========================================================================
+  // AC8: registered in registry as "model", no alias collision
+  // =========================================================================
+  describe("AC8: command registration", () => {
+    it("has name 'model' and is enabled", () => {
+      const cmd = createModelCommand();
+      expect(cmd.name).toBe("model");
+      expect(cmd.isEnabled()).toBe(true);
+      expect(cmd.description).toContain("model");
+    });
+  });
+
+  // =========================================================================
+  // AC9: /model status returns current state + pid
+  // =========================================================================
+  describe("AC9: /model status", () => {
+    it("returns the current model state", async () => {
+      const mockState = "loaded";
+
+      const cmd = createModelCommand({
+        getModelState: () => mockState,
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("model:");
+      expect(result?.message).toContain(mockState);
+    });
+
+    it("handles unloaded state", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "unloaded",
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("unloaded");
+    });
+
+    it("handles external state", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "external",
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("external");
+    });
+
+    it("treats empty args as status", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "loaded",
+      });
+
+      const result = await cmd.execute("", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("model:");
+    });
+  });
+
+  // =========================================================================
+  // AC10: /model unload calls unloadModel, /model load calls loadModel
+  // =========================================================================
+  describe("AC10: /model unload", () => {
+    it("calls unloadModel and returns its status", async () => {
+      const unloadCalls: string[] = [];
+
+      const cmd = createModelCommand({
+        unloadModel: async () => {
+          unloadCalls.push("called");
+          return "model unloaded (pid 1234 freed)";
+        },
+      });
+
+      const result = await cmd.execute("unload", mockCtx);
+
+      expect(unloadCalls.length).toBe(1);
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("unloaded");
+    });
+
+    it("handles errors from unloadModel", async () => {
+      const cmd = createModelCommand({
+        unloadModel: async () => {
+          throw new Error("kill failed");
+        },
+      });
+
+      const result = await cmd.execute("unload", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("error");
+      expect(result?.message).toContain("kill failed");
+    });
+  });
+
+  describe("AC10: /model load", () => {
+    it("calls loadModel and returns its status", async () => {
+      const loadCalls: string[] = [];
+
+      const cmd = createModelCommand({
+        loadModel: async () => {
+          loadCalls.push("called");
+          return "model loaded (pid 5678)";
+        },
+      });
+
+      const result = await cmd.execute("load", mockCtx);
+
+      expect(loadCalls.length).toBe(1);
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("loaded");
+    });
+
+    it("handles errors from loadModel", async () => {
+      const cmd = createModelCommand({
+        loadModel: async () => {
+          throw new Error("spawn failed");
+        },
+      });
+
+      const result = await cmd.execute("load", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("error");
+      expect(result?.message).toContain("spawn failed");
+    });
+  });
+
+  // =========================================================================
+  // AC10: unknown subcommand → usage line
+  // =========================================================================
+  describe("AC10: unknown subcommand", () => {
+    it("returns usage line for unknown subcommand", async () => {
+      const cmd = createModelCommand();
+
+      const result = await cmd.execute("invalid", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("usage:");
+      expect(result?.message).toContain("status");
+      expect(result?.message).toContain("load");
+      expect(result?.message).toContain("unload");
+    });
+
+    it("never crashes on any input", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "unloaded",
+        loadModel: async () => "model loaded (pid 1234)",
+        unloadModel: async () => "model unloaded (pid 1234 freed)",
+      });
+
+      const tests = ["", " ", "foobar", "load extra args", "unload 123"];
+
+      for (const test of tests) {
+        const result = await cmd.execute(test, mockCtx);
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe("message");
+      }
+    });
+  });
+
+  // =========================================================================
+  // realWriteKillReceipt: AC wiring test — writeKillReceipt flows through deps
+  // =========================================================================
+  describe("AC wiring: writeKillReceipt injected into ModelLifecycleDeps for unload", () => {
+    it("passes the injected writeKillReceipt into the lifecycle deps object", async () => {
+      const capturedDeps: ModelLifecycleDeps[] = [];
+      const mockReceipt = (_rec: { pid: number; match_rule: string }) => {};
+
+      const cmd = createModelCommand({
+        unloadModel: async (deps) => {
+          capturedDeps.push(deps);
+          return "model unloaded (pid 9999 freed)";
+        },
+        writeKillReceipt: mockReceipt,
+      });
+
+      await cmd.execute("unload", mockCtx);
+
+      expect(capturedDeps.length).toBe(1);
+      // The exact same function reference must be wired in
+      expect(capturedDeps[0]!.writeKillReceipt).toBe(mockReceipt);
+    });
+  });
+});
+
+// =============================================================================
+// _makeKillReceiptWriter — unit tests for JSONL format (no live FS)
+// =============================================================================
+
+describe("_makeKillReceiptWriter — JSONL format via injected appendFileFn", () => {
+  it("appends a well-formed JSONL entry with all required fields", async () => {
+    const captured: Array<{ path: string; data: string }> = [];
+
+    const writer = _makeKillReceiptWriter({
+      ledgerPath: "/fake/kill-receipts.jsonl",
+      appendFileFn: async (path, data) => {
+        captured.push({ path, data });
+      },
+    });
+
+    writer({ pid: 4321, match_rule: "model child spawned this session" });
+
+    // flush microtask queue so the fire-and-forget promise resolves
+    await new Promise<void>((r) => setTimeout(r, 0));
+
+    expect(captured.length).toBe(1);
+    const raw = captured[0]!.data.trim();
+    // Must be valid JSON
+    let entry: Record<string, unknown>;
+    expect(() => {
+      entry = JSON.parse(raw);
+    }).not.toThrow();
+    entry = JSON.parse(raw);
+
+    // ts: ISO8601Z timestamp
+    expect(typeof entry["ts"]).toBe("string");
+    expect(entry["ts"] as string).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+
+    // script: must reference "ember" or "model"
+    expect(typeof entry["script"]).toBe("string");
+    expect(entry["script"] as string).toMatch(/ember|model/i);
+
+    // pids: array containing the given pid
+    expect(Array.isArray(entry["pids"])).toBe(true);
+    expect(entry["pids"]).toEqual([4321]);
+
+    // match_rule: matches the input
+    expect(entry["match_rule"]).toBe("model child spawned this session");
+
+    // survivors_expected: "none" or a numeric string
+    const se = entry["survivors_expected"] as string;
+    expect(se === "none" || /^\d+$/.test(se)).toBe(true);
+  });
+
+  it("writes to the exact ledger path provided", async () => {
+    const capturedPaths: string[] = [];
+
+    const writer = _makeKillReceiptWriter({
+      ledgerPath: "/custom/vigil/receipts.jsonl",
+      appendFileFn: async (path, _data) => {
+        capturedPaths.push(path);
+      },
+    });
+
+    writer({ pid: 111, match_rule: "test-rule" });
+    await new Promise<void>((r) => setTimeout(r, 0));
+
+    expect(capturedPaths.length).toBe(1);
+    expect(capturedPaths[0]).toBe("/custom/vigil/receipts.jsonl");
+  });
+
+  it("swallows I/O errors gracefully — does not throw, does not propagate", async () => {
+    const writer = _makeKillReceiptWriter({
+      ledgerPath: "/fake/path.jsonl",
+      appendFileFn: async () => {
+        throw new Error("ENOSPC: disk full");
+      },
+    });
+
+    // synchronous call must not throw
+    expect(() => writer({ pid: 999, match_rule: "test" })).not.toThrow();
+    // let the promise reject and be caught internally
+    await new Promise<void>((r) => setTimeout(r, 0));
+    // if we reach here the error was swallowed — test passes
+  });
+
+  it("appends a newline after the JSON so the file is valid JSONL", async () => {
+    const captured: string[] = [];
+
+    const writer = _makeKillReceiptWriter({
+      ledgerPath: "/fake/ledger.jsonl",
+      appendFileFn: async (_path, data) => {
+        captured.push(data);
+      },
+    });
+
+    writer({ pid: 777, match_rule: "line-end-check" });
+    await new Promise<void>((r) => setTimeout(r, 0));
+
+    expect(captured.length).toBe(1);
+    expect(captured[0]!.endsWith("\n")).toBe(true);
+  });
+});
+
+// =============================================================================
+// writeKillReceipt call order — receipt-before-kill invariant via unloadModel seam
+// =============================================================================
+
+describe("writeKillReceipt call-order invariant — via model-lifecycle seam", () => {
+  beforeEach(() => {
+    resetModelLifecycleForTests();
+  });
+
+  it("receipt is written exactly once and strictly before killPid", async () => {
+    const callOrder: string[] = [];
+
+    registerManagedModel({ pid: 5001 });
+
+    const deps: ModelLifecycleDeps = {
+      spawnModel: () => ({ pid: 0 }),
+      killPid: (pid) => {
+        callOrder.push(`kill(${pid})`);
+      },
+      waitReady: async () => {},
+      writeKillReceipt: (rec) => {
+        callOrder.push(`receipt(${rec.pid})`);
+      },
+      isExternal: () => false,
+      now: () => new Date().toISOString(),
+    };
+
+    await unloadModel(deps);
+
+    expect(callOrder).toEqual(["receipt(5001)", "kill(5001)"]);
+  });
+
+  it("writeKillReceipt is called only once on double unload (idempotency)", async () => {
+    const receiptPids: number[] = [];
+
+    registerManagedModel({ pid: 5002 });
+
+    const deps: ModelLifecycleDeps = {
+      spawnModel: () => ({ pid: 0 }),
+      killPid: () => {},
+      waitReady: async () => {},
+      writeKillReceipt: (rec) => {
+        receiptPids.push(rec.pid);
+      },
+      isExternal: () => false,
+      now: () => new Date().toISOString(),
+    };
+
+    // first unload: kills and writes receipt
+    await unloadModel(deps);
+    // second unload: already unloaded, must be a no-op
+    await unloadModel(deps);
+
+    expect(receiptPids.length).toBe(1);
+    expect(receiptPids[0]).toBe(5002);
+  });
+
+  it("writeKillReceipt is never called in external mode (isExternal=true)", async () => {
+    const receiptCalls: number[] = [];
+
+    const deps: ModelLifecycleDeps = {
+      spawnModel: () => ({ pid: 0 }),
+      killPid: () => {},
+      waitReady: async () => {},
+      writeKillReceipt: (rec) => {
+        receiptCalls.push(rec.pid);
+      },
+      isExternal: () => true, // external mode: no managed process
+      now: () => new Date().toISOString(),
+    };
+
+    await unloadModel(deps);
+
+    expect(receiptCalls.length).toBe(0);
+  });
+});
