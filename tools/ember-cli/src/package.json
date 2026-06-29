@@ -1,0 +1,30 @@
+{
+  "name": "ember-cli",
+  "version": "0.0.0",
+  "description": "Agentic CLI for local AI models.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "ember": "./entrypoints/main.ts"
+  },
+  "scripts": {
+    "dev": "bun run ./entrypoints/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build ./entrypoints/main.ts --compile --outfile ember.exe"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-reconciler": "^0.33.0",
+    "ajv": "^8.20.0",
+    "fuse.js": "^7.4.2",
+    "highlight.js": "^11.11.1",
+    "react": "^19.2.7",
+    "react-reconciler": "^0.33.0",
+    "zod": "^4.4.3"
+  }
+}

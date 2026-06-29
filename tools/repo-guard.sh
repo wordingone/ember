@@ -39,6 +39,13 @@ else
   ok ".agent" "not tracked"
 fi
 
+# ---- 1b. tracked text files must be LF-only ------------------------------
+if python tools/check_line_endings.py; then
+  :
+else
+  FAIL=1
+fi
+
 # ---- 2. no absolute local filesystem paths in tracked text ---------------
 # Matches B:/M, B:\M, C:/Users, C:\Users, <local> /mnt/c/ and similar.
 PATHPAT='([A-Za-z]:[/\\](Users|M|Downloads))|(/mnt/[a-z]/)'
