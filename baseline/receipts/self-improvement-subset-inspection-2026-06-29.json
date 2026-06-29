@@ -1,0 +1,24 @@
+{
+    "accessed":  "2026-06-29",
+    "verdict":  "SUBSET_SELECTED_NOT_RUN",
+    "repos":  [
+                  {
+                      "id":  "mle-bench",
+                      "path":  "C:\\tmp\\ember-baseline-mle-bench",
+                      "commit":  "507f92e1138bb6e40dac5c6ee7a6758e6424bf97",
+                      "finding":  "Lite split exists but still depends on Kaggle competitions, credentials/consent, and large data; defer from first zero-spend subset."
+                  },
+                  {
+                      "id":  "mlagentbench",
+                      "path":  "C:\\tmp\\ember-baseline-mlagentbench",
+                      "commit":  "5d71205cc20a8e95d43aa7cb7120e89ca3323e31",
+                      "finding":  "CLRS task exposes local algorithmic eval and is selected as primary C5-0 task."
+                  },
+                  {
+                      "id":  "ai-scientist",
+                      "path":  "C:\\tmp\\ember-baseline-ai-scientist",
+                      "commit":  "1de1dbc1f4ee2c5f61e9c94348d55eb51d7fa2eb",
+                      "finding":  "nanoGPT_lite/shakespeare_char template exposes local baseline experiment; selected as secondary C5-0 task."
+                  }
+              ]
+}

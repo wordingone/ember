@@ -1,0 +1,1221 @@
+{
+  "max_bytes": 1048576,
+  "root": "B:\\M\\ember-public",
+  "row_count": 12877,
+  "skip_parts": [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "checkpoints",
+    "models",
+    "node_modules",
+    "receipts",
+    "results",
+    "scratchpad",
+    "venv"
+  ],
+  "top_paths": [
+    {
+      "count": 1774,
+      "path": "manifests/corpus/b-multi-1/raw/manifest.jsonl"
+    },
+    {
+      "count": 627,
+      "path": "docs/research/gpu-math-multiplier-table-v2-2026-06-11.json"
+    },
+    {
+      "count": 555,
+      "path": "docs/research/nc2-technique-survey-2026-06.md"
+    },
+    {
+      "count": 554,
+      "path": "docs/goal-archive.md"
+    },
+    {
+      "count": 324,
+      "path": "docs/research/gemma4-unified-architecture.md"
+    },
+    {
+      "count": 262,
+      "path": "GOAL.md"
+    },
+    {
+      "count": 243,
+      "path": "docs/research/external-stack/ai2-eurohpc.md"
+    },
+    {
+      "count": 210,
+      "path": "docs/research/drafts/nc2-recipe-stack-draft.md"
+    },
+    {
+      "count": 197,
+      "path": "scripts/ember_resident_training_gate.py"
+    },
+    {
+      "count": 188,
+      "path": "docs/research/external-stack/unsloth-inference.md"
+    },
+    {
+      "count": 187,
+      "path": "docs/research/first-principles-audit-2026-06-10.md"
+    },
+    {
+      "count": 161,
+      "path": "docs/ember-mvp-cycle-spine-status.md"
+    },
+    {
+      "count": 156,
+      "path": "docs/research/triton-windows-research-2026-06-10.md"
+    },
+    {
+      "count": 153,
+      "path": "docs/research/arc-llm-program-synthesis-sota.md"
+    },
+    {
+      "count": 149,
+      "path": "scripts/ember_d3_generalized_candidate_exec.py"
+    },
+    {
+      "count": 128,
+      "path": "docs/research/gpu-math-multiplier-table-2026-06-11.json"
+    },
+    {
+      "count": 126,
+      "path": "docs/nc2-own-technique-contract.md"
+    },
+    {
+      "count": 98,
+      "path": "docs/research/nc2-recipe-stack-2026-06-10.md"
+    },
+    {
+      "count": 96,
+      "path": "docs/research/external-stack/nous-cogcomp.md"
+    },
+    {
+      "count": 91,
+      "path": "scripts/ember_post_resident_discovery.py"
+    },
+    {
+      "count": 88,
+      "path": "scripts/timeshare_pretrain.py"
+    },
+    {
+      "count": 84,
+      "path": "docs/work-ahead-ledger.md"
+    },
+    {
+      "count": 77,
+      "path": "docs/ember-completeness.md"
+    },
+    {
+      "count": 76,
+      "path": "docs/ember-debt-ledger.md"
+    },
+    {
+      "count": 76,
+      "path": "docs/research/drafts/fp2-v-ceiling-draft.md"
+    },
+    {
+      "count": 72,
+      "path": "scripts/fp25_indist_prereg.py"
+    },
+    {
+      "count": 72,
+      "path": "scripts/sp3_terminal_audit.py"
+    },
+    {
+      "count": 65,
+      "path": "docs/compute-ceiling-program-v1.md"
+    },
+    {
+      "count": 65,
+      "path": "scripts/ember_mle_micro_harness.py"
+    },
+    {
+      "count": 64,
+      "path": "docs/research/drafts/world-choice-r2-draft.md"
+    },
+    {
+      "count": 63,
+      "path": "scripts/ember_gate_full_parity_harness.py"
+    },
+    {
+      "count": 62,
+      "path": "scripts/train_multimodal_v0.py"
+    },
+    {
+      "count": 61,
+      "path": "docs/research/subq-term-resolution.md"
+    },
+    {
+      "count": 60,
+      "path": "docs/research/novelty-verdicts-2026-06-10.md"
+    },
+    {
+      "count": 58,
+      "path": "docs/technique-registry.jsonl"
+    },
+    {
+      "count": 56,
+      "path": "scripts/fp33_surpass_verdict.py"
+    },
+    {
+      "count": 55,
+      "path": "docs/pretrain-launch-authorization-brief-multimodal.md"
+    },
+    {
+      "count": 53,
+      "path": "docs/research/fp32-bottleneck-ledger.json"
+    },
+    {
+      "count": 51,
+      "path": "docs/sp6-duty-battery-encodings.jsonl"
+    },
+    {
+      "count": 48,
+      "path": "scripts/ember_gate_backend_coordinator_agents.py"
+    },
+    {
+      "count": 48,
+      "path": "scripts/fp25_surfaceb.py"
+    },
+    {
+      "count": 47,
+      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260624T142553Z.json"
+    },
+    {
+      "count": 47,
+      "path": "scripts/fp6_provenance.py"
+    },
+    {
+      "count": 47,
+      "path": "scripts/t2_r2_mtp.py"
+    },
+    {
+      "count": 47,
+      "path": "scripts/token_shards_v0.py"
+    },
+    {
+      "count": 46,
+      "path": "docs/fp33-e2b-surpass-envelope.md"
+    },
+    {
+      "count": 44,
+      "path": "scripts/fp33_fp8_linear_ab.py"
+    },
+    {
+      "count": 43,
+      "path": "docs/world-model-compiler-decision.md"
+    },
+    {
+      "count": 43,
+      "path": "scripts/ember_gate_backend_coordinator_agents_selftest.py"
+    },
+    {
+      "count": 43,
+      "path": "scripts/ember_preloop_resident_gate.py"
+    }
+  ],
+  "top_refs": [
+    {
+      "count": 398,
+      "kind": "known_term",
+      "value": "Muon"
+    },
+    {
+      "count": 263,
+      "kind": "known_term",
+      "value": "FP8"
+    },
+    {
+      "count": 263,
+      "kind": "known_term",
+      "value": "MTP"
+    },
+    {
+      "count": 246,
+      "kind": "github_like",
+      "value": "tok/s"
+    },
+    {
+      "count": 231,
+      "kind": "known_term",
+      "value": "SFT"
+    },
+    {
+      "count": 223,
+      "kind": "github_like",
+      "value": "A/B"
+    },
+    {
+      "count": 221,
+      "kind": "known_term",
+      "value": "QAT"
+    },
+    {
+      "count": 173,
+      "kind": "known_term",
+      "value": "GRPO"
+    },
+    {
+      "count": 153,
+      "kind": "known_term",
+      "value": "Kaggle"
+    },
+    {
+      "count": 135,
+      "kind": "github_like",
+      "value": "usr/bin"
+    },
+    {
+      "count": 129,
+      "kind": "known_term",
+      "value": "Qwen"
+    },
+    {
+      "count": 128,
+      "kind": "known_term",
+      "value": "BitNet"
+    },
+    {
+      "count": 116,
+      "kind": "known_term",
+      "value": "E2B"
+    },
+    {
+      "count": 116,
+      "kind": "github_like",
+      "value": "l7.alamy.com/zooms"
+    },
+    {
+      "count": 90,
+      "kind": "github_like",
+      "value": "receipts/ledger"
+    },
+    {
+      "count": 87,
+      "kind": "known_term",
+      "value": "LoRA"
+    },
+    {
+      "count": 84,
+      "kind": "github_like",
+      "value": "docs/research"
+    },
+    {
+      "count": 81,
+      "kind": "known_term",
+      "value": "D3-Gym"
+    },
+    {
+      "count": 80,
+      "kind": "github_like",
+      "value": "arxiv.org/abs"
+    },
+    {
+      "count": 77,
+      "kind": "known_term",
+      "value": "ScienceAgentBench"
+    },
+    {
+      "count": 76,
+      "kind": "known_term",
+      "value": "Gemma"
+    },
+    {
+      "count": 66,
+      "kind": "github_like",
+      "value": "Qwen/Qwen2.5-Coder-3B-Instruct"
+    },
+    {
+      "count": 66,
+      "kind": "github_like",
+      "value": "i.pinimg.com/736x"
+    },
+    {
+      "count": 63,
+      "kind": "known_term",
+      "value": "iGRPO"
+    },
+    {
+      "count": 62,
+      "kind": "known_term",
+      "value": "torchao"
+    },
+    {
+      "count": 62,
+      "kind": "known_term",
+      "value": "RLM"
+    },
+    {
+      "count": 51,
+      "kind": "github_like",
+      "value": "thumb/1.jpg"
+    },
+    {
+      "count": 50,
+      "kind": "known_term",
+      "value": "MLE-bench"
+    },
+    {
+      "count": 37,
+      "kind": "known_term",
+      "value": "1.58-bit"
+    },
+    {
+      "count": 36,
+      "kind": "github_like",
+      "value": "scripts/nck"
+    },
+    {
+      "count": 36,
+      "kind": "github_like",
+      "value": "receipts/ember-post-resident-discovery"
+    },
+    {
+      "count": 35,
+      "kind": "github_like",
+      "value": "I/O"
+    },
+    {
+      "count": 34,
+      "kind": "known_term",
+      "value": "Codex"
+    },
+    {
+      "count": 33,
+      "kind": "known_term",
+      "value": "Triton"
+    },
+    {
+      "count": 33,
+      "kind": "github_like",
+      "value": "scripts/train_multimodal_v0.py"
+    },
+    {
+      "count": 33,
+      "kind": "github_like",
+      "value": "github.com/allenai"
+    },
+    {
+      "count": 31,
+      "kind": "github_like",
+      "value": "C/deleted"
+    },
+    {
+      "count": 31,
+      "kind": "github_like",
+      "value": "ML/AI"
+    },
+    {
+      "count": 30,
+      "kind": "known_term",
+      "value": "Llama"
+    },
+    {
+      "count": 29,
+      "kind": "github_like",
+      "value": "0/1"
+    },
+    {
+      "count": 28,
+      "kind": "github_like",
+      "value": "RLM/iGRPO"
+    },
+    {
+      "count": 28,
+      "kind": "github_like",
+      "value": "livecodebench/code_generation_lite"
+    },
+    {
+      "count": 27,
+      "kind": "github_like",
+      "value": "before/after"
+    },
+    {
+      "count": 27,
+      "kind": "github_like",
+      "value": "arxiv.org/html"
+    },
+    {
+      "count": 27,
+      "kind": "github_like",
+      "value": "mnt/b"
+    },
+    {
+      "count": 26,
+      "kind": "github_like",
+      "value": "config/v0-pretrain-config.json"
+    },
+    {
+      "count": 26,
+      "kind": "github_like",
+      "value": "abdallahwagih/emotion-dataset"
+    },
+    {
+      "count": 25,
+      "kind": "github_like",
+      "value": "wordingone/ember"
+    },
+    {
+      "count": 25,
+      "kind": "github_like",
+      "value": "arxiv.org/pdf"
+    },
+    {
+      "count": 22,
+      "kind": "github_like",
+      "value": "0/12"
+    },
+    {
+      "count": 22,
+      "kind": "github_like",
+      "value": "thumb7.shutterstock.com/display_pic_with_logo"
+    },
+    {
+      "count": 20,
+      "kind": "github_like",
+      "value": "huggingface.co/docs"
+    },
+    {
+      "count": 20,
+      "kind": "github_like",
+      "value": "i.dailymail.co.uk/i"
+    },
+    {
+      "count": 18,
+      "kind": "github_like",
+      "value": "pass/fail"
+    },
+    {
+      "count": 18,
+      "kind": "github_like",
+      "value": "manifests/corpus"
+    },
+    {
+      "count": 18,
+      "kind": "github_like",
+      "value": "AgentTool/built-in"
+    },
+    {
+      "count": 16,
+      "kind": "github_like",
+      "value": "x/y"
+    },
+    {
+      "count": 16,
+      "kind": "github_like",
+      "value": "3/3"
+    },
+    {
+      "count": 16,
+      "kind": "github_like",
+      "value": "docs/ember-floor-contract.md"
+    },
+    {
+      "count": 16,
+      "kind": "known_term",
+      "value": "FlashAttention"
+    },
+    {
+      "count": 16,
+      "kind": "github_like",
+      "value": "osunlp/D3-Gym"
+    },
+    {
+      "count": 16,
+      "kind": "known_term",
+      "value": "modded-nanogpt"
+    },
+    {
+      "count": 16,
+      "kind": "github_like",
+      "value": "benchmark/datasets"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "dev/null"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "PASS/FAIL"
+    },
+    {
+      "count": 15,
+      "kind": "known_term",
+      "value": "OpenAI"
+    },
+    {
+      "count": 15,
+      "kind": "known_term",
+      "value": "dgm"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "0/3"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "0/20"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "huggingface.co/datasets"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "thumb1.shutterstock.com/display_pic_with_logo"
+    },
+    {
+      "count": 15,
+      "kind": "github_like",
+      "value": "c8.alamy.com/comp"
+    },
+    {
+      "count": 14,
+      "kind": "github_like",
+      "value": "n/a"
+    },
+    {
+      "count": 14,
+      "kind": "github_like",
+      "value": "github.com/microsoft"
+    },
+    {
+      "count": 14,
+      "kind": "url",
+      "value": "https://huggingface.co/docs/transformers/model_doc/gemma4"
+    },
+    {
+      "count": 14,
+      "kind": "github_like",
+      "value": "transformers/model_doc"
+    },
+    {
+      "count": 14,
+      "kind": "github_like",
+      "value": "legal/file-inventory.csv"
+    },
+    {
+      "count": 13,
+      "kind": "github_like",
+      "value": "tok/step"
+    },
+    {
+      "count": 13,
+      "kind": "github_like",
+      "value": "bits/GPU-min"
+    },
+    {
+      "count": 13,
+      "kind": "github_like",
+      "value": "tokenizer/tokenizer.json"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "flash/SDPA"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "pre/post"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "4/5"
+    },
+    {
+      "count": 12,
+      "kind": "known_term",
+      "value": "nanogpt"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "embed/head"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "Pass/fail"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "github.com/unslothai"
+    },
+    {
+      "count": 12,
+      "kind": "known_term",
+      "value": "FineWeb-Edu"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "download.pytorch.org/whl"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "config/replay-policy.json"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "receipts/ember-preloop-resident-gate"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "us.123rf.com/450wm"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "skills/bundled"
+    },
+    {
+      "count": 12,
+      "kind": "github_like",
+      "value": "scripts/w1_mbpp.py"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "tools/repo-guard.sh"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "config/nck-baseline"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "docs/formalization-v0.md"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "BitNet/1.58-bit"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "1/3"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "bits/min"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "github.com/pytorch"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "github.com/KellerJordan"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "pypi.org/project"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "N/A"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "github.com/OpenEuroLLM"
+    },
+    {
+      "count": 11,
+      "kind": "url",
+      "value": "https://lilting.ch/en/articles/gemma-4-12b-unified-encoder-free"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "lilting.ch/en"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "articles/gemma-4-12b-unified-encoder-free"
+    },
+    {
+      "count": 11,
+      "kind": "arxiv",
+      "value": "2412.19437"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "hananemoussa/d3-gym"
+    },
+    {
+      "count": 11,
+      "kind": "github_like",
+      "value": "ticket/ts"
+    },
+    {
+      "count": 10,
+      "kind": "github_like",
+      "value": "1B/2B"
+    },
+    {
+      "count": 10,
+      "kind": "github_like",
+      "value": "docs/ember-completeness.md"
+    },
+    {
+      "count": 10,
+      "kind": "github_like",
+      "value": "ai.google.dev/gemma"
+    },
+    {
+      "count": 10,
+      "kind": "github_like",
+      "value": "google/gemma-4-E2B-it"
+    },
+    {
+      "count": 10,
+      "kind": "github_like",
+      "value": "shards/v0-00000.bin"
+    },
+    {
+      "count": 10,
+      "kind": "github_like",
+      "value": "unsloth/Qwen2.5-Coder-7B-Instruct"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "tok/s_paced"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "tok/param"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "public-I/O"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "scripts/receipt_check.py"
+    },
+    {
+      "count": 9,
+      "kind": "arxiv",
+      "value": "2605.26099"
+    },
+    {
+      "count": 9,
+      "kind": "url",
+      "value": "https://github.com/microsoft/BitNet"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "huggingface.co/google"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "github.com/mlfoundations"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "github.com/NousResearch"
+    },
+    {
+      "count": 9,
+      "kind": "known_term",
+      "value": "Hermes"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "github.com/ggml-org"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "mtp/grpo"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "MB/s"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "disc/N"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "pix/2017"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "image.shutterstock.com/z"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "s-media-cache-ak0.pinimg.com/originals"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "ak0.picdn.net/shutterstock"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "receipts/ember-d3-native-loop"
+    },
+    {
+      "count": 9,
+      "kind": "github_like",
+      "value": "legal/product-shape.md"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "checkpoint/resume"
+    },
+    {
+      "count": 8,
+      "kind": "known_term",
+      "value": "Chinchilla"
+    },
+    {
+      "count": 8,
+      "kind": "known_term",
+      "value": "ARC-AGI"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "5/5"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "Kill/ablate"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "D3/Kaggle"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "tokens/s"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "null/negative"
+    },
+    {
+      "count": 8,
+      "kind": "known_term",
+      "value": "Fuyu"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "1h/1h"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "replay/rollback"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "0/10"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "path/to"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "s/step"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "docs/core"
+    },
+    {
+      "count": 8,
+      "kind": "arxiv",
+      "value": "2502.16982"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "task/evaluator"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "ak4.picdn.net/shutterstock"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "ak6.picdn.net/shutterstock"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "ak1.picdn.net/shutterstock"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "thumb9.shutterstock.com/display_pic_with_logo"
+    },
+    {
+      "count": 8,
+      "kind": "github_like",
+      "value": "tools/AgentTool"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "scripts/timeshare_pretrain.py"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "B/unit"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "tokens/day"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "QAT/ternary"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "340M/1.8B"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "docs/ember-mvp-v0.md"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "dF/dround"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "A1/A2"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "docs/ember-debt-ledger.md"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "scripts/v0_pretrain_launch_gate.py"
+    },
+    {
+      "count": 7,
+      "kind": "url",
+      "value": "https://github.com/KellerJordan/Muon"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "key/value"
+    },
+    {
+      "count": 7,
+      "kind": "known_term",
+      "value": "DPO"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "unsloth.ai/docs"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "blog.google/innovation-and-ai"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "receipts/fp32-step-econ-20260611T142831Z.json"
+    },
+    {
+      "count": 7,
+      "kind": "url",
+      "value": "https://ai.google.dev/gemma/docs/core/model_card_4"
+    },
+    {
+      "count": 7,
+      "kind": "arxiv",
+      "value": "2509.24406"
+    },
+    {
+      "count": 7,
+      "kind": "arxiv",
+      "value": "2404.19737"
+    },
+    {
+      "count": 7,
+      "kind": "arxiv",
+      "value": "2504.12285"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "bytes/param"
+    },
+    {
+      "count": 7,
+      "kind": "known_term",
+      "value": "DeltaNet"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "adapters/r2-q3-sft"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "sft/mtp"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "2/3"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "thumb10.shutterstock.com/display_pic_with_logo"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "bytes/4"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "b-multi-1/raw"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "I-ReaxFF/test"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "datasets-server.huggingface.co/rows"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "tools/.repo-guard-denylist"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "legal/origin.md"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "www.kaggle.com/datasets"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "google-research-datasets/mbpp"
+    },
+    {
+      "count": 7,
+      "kind": "github_like",
+      "value": "views/wcode-r2-sft.jsonl"
+    },
+    {
+      "count": 6,
+      "kind": "github_like",
+      "value": "config/nck-invariants.json"
+    },
+    {
+      "count": 6,
+      "kind": "github_like",
+      "value": "ENG/ARCH"
+    },
+    {
+      "count": 6,
+      "kind": "github_like",
+      "value": "docs/citation-policy-search-to-ember.md"
+    },
+    {
+      "count": 6,
+      "kind": "github_like",
+      "value": "receipts/tally"
+    },
+    {
+      "count": 6,
+      "kind": "github_like",
+      "value": "delimiter/placeholder"
+    }
+  ]
+}

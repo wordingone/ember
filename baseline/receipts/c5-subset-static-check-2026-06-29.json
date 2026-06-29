@@ -1,0 +1,86 @@
+{
+  "issues": [],
+  "tasks": [
+    {
+      "checks": {
+        "eval_has_get_score": true,
+        "mentions_floyd_warshall": true,
+        "processors_has_triplet_hook": true,
+        "requires_baseline_model_loadable": true,
+        "train_saves_best_checkpoint": true
+      },
+      "files": {
+        "baseline_model_description": {
+          "path": "C:\\tmp\\ember-baseline-mlagentbench\\MLAgentBench\\benchmarks\\CLRS\\env\\baseline_model_description.txt",
+          "sha256": "165d13712f8b6dd2e1fbc3b4509e15b921fd3dd9135656bb778d6d69ffed23e1"
+        },
+        "data_description": {
+          "path": "C:\\tmp\\ember-baseline-mlagentbench\\MLAgentBench\\benchmarks\\CLRS\\env\\data_description.txt",
+          "sha256": "7613581eb1ba3d64000c4e4bce9f0b8502065c65307d57e71a73e73fca3d69df"
+        },
+        "eval": {
+          "path": "C:\\tmp\\ember-baseline-mlagentbench\\MLAgentBench\\benchmarks\\CLRS\\scripts\\eval.py",
+          "sha256": "195f6c4dd74d834d66db780613fa158ec823f778ccf86cc8f932ef3d9bd34723"
+        },
+        "processors": {
+          "path": "C:\\tmp\\ember-baseline-mlagentbench\\MLAgentBench\\benchmarks\\CLRS\\env\\processors.py",
+          "sha256": "2882bcd8192c72457463e22fbadfc5a2b2246e4e5df77ec0ca2748c049ff0ba1"
+        },
+        "research_problem": {
+          "path": "C:\\tmp\\ember-baseline-mlagentbench\\MLAgentBench\\benchmarks\\CLRS\\scripts\\research_problem.txt",
+          "sha256": "27afe96e2c849516e9cf6ae3489770b7c56d1cd2e17cc8ab3687ff9982868f30"
+        },
+        "train": {
+          "path": "C:\\tmp\\ember-baseline-mlagentbench\\MLAgentBench\\benchmarks\\CLRS\\env\\train.py",
+          "sha256": "ff3ca249cb9cfb9654087049027b80d1db4b7fc482f249dd602c51f41a8affb2"
+        }
+      },
+      "root": "C:\\tmp\\ember-baseline-mlagentbench\\MLAgentBench\\benchmarks\\CLRS",
+      "static_ok": true,
+      "task_id": "C5-0A-MLAgentBench-CLRS"
+    },
+    {
+      "checks": {
+        "experiment_has_run0": true,
+        "experiment_has_train": true,
+        "experiment_uses_shakespeare": true,
+        "experiment_writes_json": true,
+        "prepare_fetches_tiny_shakespeare": true
+      },
+      "files": {
+        "experiment": {
+          "path": "C:\\tmp\\ember-baseline-ai-scientist\\templates\\nanoGPT_lite\\experiment.py",
+          "sha256": "43675303bea38f2c712488ab1891a895afb85a9fd8acef1a85c3b01ccf0372a5"
+        },
+        "ideas": {
+          "path": "C:\\tmp\\ember-baseline-ai-scientist\\templates\\nanoGPT_lite\\ideas.json",
+          "sha256": "3f42e7f2d2e9da83d1ed64f1ac44c13e99663735509e12b908a45dba12c6c758"
+        },
+        "plot": {
+          "path": "C:\\tmp\\ember-baseline-ai-scientist\\templates\\nanoGPT_lite\\plot.py",
+          "sha256": "d339e567ffa0e9ba939b3224cdbc52523f9e7804663504a089e474fc1116c45d"
+        },
+        "prepare_shakespeare": {
+          "path": "C:\\tmp\\ember-baseline-ai-scientist\\data\\shakespeare_char\\prepare.py",
+          "sha256": "d5fbea0686d146748cf36017d6c34136a2fe9c41f065f1429529ad55a992c692"
+        },
+        "prompt": {
+          "path": "C:\\tmp\\ember-baseline-ai-scientist\\templates\\nanoGPT_lite\\prompt.json",
+          "sha256": "337dccfa6ef36ffca7818199881adac40ab5a2cce855ddeea7973b1e3a791032"
+        },
+        "seed_ideas": {
+          "path": "C:\\tmp\\ember-baseline-ai-scientist\\templates\\nanoGPT_lite\\seed_ideas.json",
+          "sha256": "cfe5f93f8a36efe47e2577d87dcd662b489cf3653e45cbfbb97852656fbafd92"
+        },
+        "writeup": {
+          "path": "C:\\tmp\\ember-baseline-ai-scientist\\templates\\nanoGPT_lite\\WRITEUP.md",
+          "sha256": "a284a16de1c5d265daffae3110a7617c682921157eaab92c5bae2351373e5fdb"
+        }
+      },
+      "root": "C:\\tmp\\ember-baseline-ai-scientist\\templates\\nanoGPT_lite",
+      "static_ok": true,
+      "task_id": "C5-0B-AI-Scientist-nanoGPT-lite"
+    }
+  ],
+  "verdict": "PASS"
+}
