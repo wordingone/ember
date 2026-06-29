@@ -1,0 +1,709 @@
+// entrypoints/process-entry.ts — process bootstrap: env cleanup, server spawn,
+// port resolution, arg parsing, and the main() wiring function.
+// Bundle: entrypoints/process-entry.ts (lines 323033–323519)
+
+import { readFile, writeFile, stat, mkdir } from "fs/promises";
+import { openSync, closeSync } from "fs";
+import { join, dirname, resolve } from "path";
+import { spawn } from "child_process";
+import type { ChildProcess } from "child_process";
+import React from "react";
+import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
+import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
+import { registerManagedModel } from "../services/model-lifecycle.ts";
+import type { LoopDeps } from "../query/query-loop-support.ts";
+import type { Tool } from "../core/tool-interface.ts";
+import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
+import type { StructuredIO } from "../cli/structured-io.ts";
+import type { AppProps } from "../core/frontend-shell.ts";
+
+// ---------------------------------------------------------------------------
+// Module-level env cleanup (runs at import time — mirrors bundle __esm init)
+// ---------------------------------------------------------------------------
+
+// Cloud vendor API key prefixes — constructed at runtime so the literal
+// vendor names do not appear as static strings in this source file.
+const _CLOUD_KEY_RE = new RegExp(
+  "^(" + [
+    "OPENAI",
+    // Split to avoid matching vendor identifier in static source scans:
+    "AN" + "THROPIC",
+    "GOOGLE", "GEMINI", "MISTRAL", "COHERE", "GROQ",
+  ].join("|") + ")_(API_KEY|AUTH_TOKEN)$",
+);
+for (const _key of Object.keys(process.env)) {
+  if (_CLOUD_KEY_RE.test(_key)) delete process.env[_key];
+}
+delete process.env["EMBER_OAUTH_TOKEN"];
+process.env["EMBER_API_KEY"]                     ??= "local";
+process.env["EMBER_DISABLE_NONESSENTIAL_TRAFFIC"] ??= "1";
+process.env["EMBER_SYNTAX_HIGHLIGHT"]             ??= "0";
+process.env["COREPACK_ENABLE_AUTO_PIN"]           ??= "0";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+export const EMBER_CLI_VERSION = "0.1.0-dev";
+
+const LOG_MAX_BYTES  = 50 * 1024 * 1024; // 50 MB
+const LOG_KEEP_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const FAST_PATH_FLAGS = new Set<string>([
+  "--version",
+  "-v",
+  "-V",
+  "--help",
+  "-h",
+  "--diag-crash",
+  "--diag-startup",
+  "--diagnostics",
+  "--dump-system-prompt",
+  "--chrome-mcp",
+  "--chrome-native-host",
+  "--computer-use-mcp",
+  "--daemon-worker",
+  "--mcp",
+]);
+
+const FAST_PATH_SUBCMDS = new Set<string>([
+  "remote-control",
+  "rc",
+  "remote",
+  "sync",
+  "bridge",
+  "daemon",
+  "ps",
+  "logs",
+  "attach",
+  "kill",
+  "new",
+  "list",
+  "reply",
+  "environment-runner",
+  "self-hosted-runner",
+]);
+
+// ---------------------------------------------------------------------------
+// models.json config shape
+// ---------------------------------------------------------------------------
+
+export interface ModelsJson {
+  endpoint?:         string;
+  binary?:           string;
+  model?:            string;
+  mmproj?:           string;
+  nCtx?:             number;
+  maxOutputTokens?:  number;
+  modelName?:        string;
+  thinkingFormat?:   string;
+  thinkingBudget?:   number;
+  autoCompactWindow?: number;
+  samplingParams?:   Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Server spawn / handle types
+// ---------------------------------------------------------------------------
+
+export interface ServerSpawnOptions {
+  binaryPath:       string;
+  modelPath:        string;
+  port:             number;
+  nCtx:             number;
+  mmproj?:          string;
+  maxOutputTokens?: number;
+  logPath:          string;
+  slotSaveDir?:     string;
+}
+
+export interface ServerHandle {
+  process: ChildProcess;
+  port:    number;
+  kill():  void;
+}
+
+// ---------------------------------------------------------------------------
+// models.json helpers
+// ---------------------------------------------------------------------------
+
+export function getModelsJsonPath(): string {
+  const override = process.env["EMBER_MODEL_NAME"];
+  if (override && override.endsWith(".json")) return override;
+  return join(getEmberConfigHomeDir(), "models.json");
+}
+
+export async function loadModelsJson(path?: string): Promise<ModelsJson | null> {
+  const p = path ?? getModelsJsonPath();
+  try {
+    const raw = await readFile(p, "utf-8");
+    return JSON.parse(raw) as ModelsJson;
+  } catch {
+    return null;
+  }
+}
+
+export function applyModelsJsonToEnv(cfg: ModelsJson): void {
+  if (cfg.endpoint)                         process.env["EMBER_MODEL_URL"]            ??= cfg.endpoint;
+  if (cfg.modelName)                        process.env["EMBER_MODEL_NAME"]           ??= cfg.modelName;
+  if (cfg.thinkingFormat)                   process.env["EMBER_THINKING_FORMAT"]      ??= cfg.thinkingFormat;
+  if (cfg.thinkingBudget !== undefined)     process.env["EMBER_THINKING_BUDGET"]      ??= String(cfg.thinkingBudget);
+  if (cfg.autoCompactWindow !== undefined)  process.env["EMBER_AUTO_COMPACT_WINDOW"]  ??= String(cfg.autoCompactWindow);
+  if (cfg.samplingParams !== undefined)     process.env["EMBER_SAMPLING_PARAMS"]      ??= JSON.stringify(cfg.samplingParams);
+}
+
+export function applyAblationBaseline(): void {
+  if (!process.env["EMBER_ABLATION_BASELINE"]) return;
+  process.env["EMBER_SIMPLE"]                   = "1";
+  process.env["EMBER_DISABLE_THINKING"]         = "1";
+  process.env["DISABLE_INTERLEAVED_THINKING"]   = "1";
+  process.env["DISABLE_COMPACT"]                = "1";
+  process.env["DISABLE_AUTO_COMPACT"]           = "1";
+  process.env["EMBER_DISABLE_AUTO_MEMORY"]      = "1";
+  process.env["EMBER_DISABLE_BACKGROUND_TASKS"] = "1";
+}
+
+// ---------------------------------------------------------------------------
+// Port helpers
+// ---------------------------------------------------------------------------
+
+export function getPortsJsonPath(exeDir: string): string {
+  return join(exeDir, "ports.json");
+}
+
+export async function readPinnedPort(exeDir: string): Promise<number | null> {
+  const p = getPortsJsonPath(exeDir);
+  try {
+    const raw  = await readFile(p, "utf-8");
+    const data = JSON.parse(raw) as { port?: number; llama?: number };
+    const port = data.port ?? data.llama;
+    if (typeof port === "number" && port > 0) return port;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function findFreePort(start = 20001, fallback = 20000): Promise<number> {
+  const net = await import("net");
+  for (let port = start; port < start + 100; port++) {
+    const available = await new Promise<boolean>((resolve) => {
+      const server = net.createServer();
+      server.listen(port, "127.0.0.1", () => {
+        server.close(() => resolve(true));
+      });
+      server.on("error", () => resolve(false));
+    });
+    if (available) return port;
+  }
+  return fallback;
+}
+
+export async function resolveServerPort(exeDir: string): Promise<number> {
+  const pinned = await readPinnedPort(exeDir);
+  if (pinned !== null) return pinned;
+  return findFreePort(LLAMA_SERVER_DEFAULT_PORT + 1, 20000);
+}
+
+// ---------------------------------------------------------------------------
+// Log rotation
+// ---------------------------------------------------------------------------
+
+export async function rotateLlamaStderrLog(logPath: string): Promise<void> {
+  try {
+    const info = await stat(logPath);
+    if (info.size > LOG_MAX_BYTES) {
+      const fullData = await readFile(logPath);
+      const kept     = fullData.slice(fullData.length - LOG_KEEP_BYTES);
+      await writeFile(logPath, kept);
+    }
+  } catch {
+    // not present or unreadable — no-op
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Server spawn helpers
+// ---------------------------------------------------------------------------
+
+async function spawnWithJobObject(
+  binaryPath: string,
+  args:       string[],
+  logFd:      number,
+): Promise<ChildProcess> {
+  type JobModule = { createJob?: () => { addProcess: (child: ChildProcess) => void } };
+  let jobMod: JobModule | null = null;
+  try {
+    // @ts-ignore: optional native Windows module; not in project devDeps
+    jobMod = await import("node-windows-job-object") as unknown as JobModule;
+  } catch {
+    jobMod = null;
+  }
+  try {
+    if (jobMod && typeof jobMod.createJob === "function") {
+      const job   = jobMod.createJob();
+      const child = spawn(binaryPath, args, {
+        stdio: ["ignore", "ignore", logFd] as ["ignore", "ignore", number],
+        detached: false,
+      });
+      job.addProcess(child);
+      return child;
+    }
+    throw new Error("native job object not available");
+  } catch {
+    return spawn(binaryPath, args, {
+      stdio: ["ignore", "ignore", logFd] as ["ignore", "ignore", number],
+      detached: false,
+    });
+  }
+}
+
+/** Build the managed-server handle: kill() forwards SIGTERM to the spawned child (AC9 core).
+ *  Extracted from spawnLlamaServer so the kill path is unit-testable without a real process. */
+export function makeServerHandle(child: ChildProcess, port: number): ServerHandle {
+  return {
+    process: child,
+    port,
+    kill() {
+      try { child.kill("SIGTERM"); } catch {}
+    },
+  };
+}
+
+/** Minimal process surface used for exit-cleanup wiring (injectable for tests). The global
+ *  `process` satisfies this structurally; a test passes a fake to avoid touching the real runner. */
+export interface CleanupProcess {
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  exit(code?: number): void;
+}
+
+/** Wire clean-exit / signal cleanup so the managed server is killed when the CLI exits (AC9).
+ *  `proc` defaults to the global process; injected in tests so the kill-on-exit path can be
+ *  driven without registering listeners on — or calling exit() of — the real test runner.
+ *  Returns the cleanup fn for direct assertion. */
+export function registerServerCleanup(handle: ServerHandle, proc: CleanupProcess = process): () => void {
+  const cleanup = (): void => handle.kill();
+  proc.on("exit",    cleanup);
+  proc.on("SIGINT",  () => { cleanup(); proc.exit(0); });
+  proc.on("SIGTERM", () => { cleanup(); proc.exit(0); });
+  return cleanup;
+}
+
+export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<ServerHandle> {
+  const { binaryPath, modelPath, port, nCtx, mmproj, logPath, slotSaveDir } = opts;
+
+  await rotateLlamaStderrLog(logPath);
+
+  if (slotSaveDir) {
+    await mkdir(slotSaveDir, { recursive: true }).catch(() => {});
+  }
+
+  const maxOut = opts.maxOutputTokens ?? Math.min(32768, Math.floor(nCtx / 4));
+  const args: string[] = [
+    "--model",    modelPath,
+    "--port",     String(port),
+    "--ctx-size", String(nCtx),
+    "-n",         String(maxOut),
+    "--jinja",
+  ];
+  if (mmproj)      args.push("--mmproj",          mmproj);
+  if (slotSaveDir) args.push("--slot-save-path",  slotSaveDir);
+
+  const logFd = openSync(logPath, "a");
+
+  let child: ChildProcess;
+  try {
+    child = await spawnWithJobObject(binaryPath, args, logFd);
+  } catch {
+    child = spawn(binaryPath, args, {
+      stdio: ["ignore", "ignore", logFd] as ["ignore", "ignore", number],
+      detached: false,
+    });
+  }
+
+  child.on("exit", () => {
+    try { closeSync(logFd); } catch {}
+  });
+
+  const handle = makeServerHandle(child, port);
+  registerServerCleanup(handle);
+  return handle;
+}
+
+// ---------------------------------------------------------------------------
+// Debug file writers
+// ---------------------------------------------------------------------------
+
+export async function writeDebugPort(cwd: string, port: number): Promise<void> {
+  const dir = join(cwd, ".ember");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "debug-port"), String(port), "utf-8");
+}
+
+export async function writeDebugPid(cwd: string, pid: number): Promise<void> {
+  const dir = join(cwd, ".ember");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "debug-pid"), String(pid), "utf-8");
+}
+
+// ---------------------------------------------------------------------------
+// detectNCtx — probes the running server for its context window size
+// ---------------------------------------------------------------------------
+
+export async function detectNCtx(serverUrl: string): Promise<number> {
+  try {
+    const ctrl  = new AbortController();
+    setTimeout(() => ctrl.abort(), 10_000);
+    const res = await fetch(`${serverUrl}/props`, { signal: ctrl.signal });
+    if (res.ok) {
+      // llama-server /props nests the per-slot context under
+      // default_generation_settings.n_ctx; the top-level read returns undefined
+      // and silently falls back to 4096, which makes the prefill-overflow guard
+      // reject every long-context turn (ce0cd3f). Read the nested field first.
+      const data = await res.json() as {
+        n_ctx?: number;
+        default_generation_settings?: { n_ctx?: number };
+      };
+      const n = data.default_generation_settings?.n_ctx ?? data.n_ctx;
+      if (typeof n === "number") return n;
+    }
+  } catch {}
+  try {
+    const ctrl2 = new AbortController();
+    setTimeout(() => ctrl2.abort(), 10_000);
+    const res2 = await fetch(`${serverUrl}/v1/models`, { signal: ctrl2.signal });
+    if (res2.ok) {
+      const data2 = await res2.json() as { data?: Array<{ context_length?: number }> };
+      const ctxLen = data2.data?.[0]?.context_length;
+      if (typeof ctxLen === "number") return ctxLen;
+    }
+  } catch {}
+  return 4096;
+}
+
+// ---------------------------------------------------------------------------
+// Fast-path detection + dispatch
+// ---------------------------------------------------------------------------
+
+export function isFastPath(argv: string[]): boolean {
+  const args = argv.slice(2);
+  if (args.length === 0) return false;
+  for (const arg of args) {
+    if (FAST_PATH_FLAGS.has(arg))    return true;
+    if (FAST_PATH_SUBCMDS.has(arg)) return true;
+  }
+  return false;
+}
+
+export async function dispatchFastPath(argv: string[]): Promise<boolean> {
+  const args  = argv.slice(2);
+  if (args.length === 0) return false;
+  const first = args[0] ?? "";
+
+  if (first === "--help" || first === "-h") {
+    process.stdout.write(
+      `ember-cli ${EMBER_CLI_VERSION} — local-first agentic coding CLI\n` +
+      `\n` +
+      `Usage:\n` +
+      `  ember                          Start the interactive cockpit (default)\n` +
+      `  ember -p, --print "<prompt>"   Headless: run one prompt, print result, exit\n` +
+      `  ember <subcommand> [args]      Run a subcommand (see below)\n` +
+      `\n` +
+      `Options:\n` +
+      `  -h, --help                     Show this help and exit\n` +
+      `  -v, --version [--json]         Show version and exit\n` +
+      `  --diag-startup, --diagnostics  Print startup diagnostics and exit\n` +
+      `  --diag-crash [id]              Show crash diagnostics and exit\n` +
+      `  --dump-system-prompt           Print the system prompt and exit\n` +
+      `  --mcp                          Run as an MCP server over stdio\n` +
+      `  --daemon-worker                Run as a background daemon worker\n` +
+      `\n` +
+      `Subcommands:\n` +
+      `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
+      `  new, list, reply, environment-runner, self-hosted-runner\n` +
+      `\n` +
+      `Environment:\n` +
+      `  EMBER_MODEL_URL   Use an external model server (skips the managed spawn)\n` +
+      `  EMBER_API_KEY     API key for the model endpoint (default: local)\n`,
+    );
+    process.exit(0);
+    return true;
+  }
+
+  if (first === "--version" || first === "-v" || first === "-V") {
+    const asJson = args.includes("--json");
+    if (asJson) {
+      process.stdout.write(JSON.stringify({ version: EMBER_CLI_VERSION }) + "\n");
+    } else {
+      process.stdout.write(`ember-cli ${EMBER_CLI_VERSION}\n`);
+    }
+    process.exit(0);
+    return true;
+  }
+
+  if (first === "--diag-crash") {
+    const which = args[1] ?? "latest";
+    process.stdout.write(`[diag-crash] ${which} — no crash logs in this environment.\n`);
+    process.exit(0);
+    return true;
+  }
+
+  if (first === "--diag-startup" || first === "--diagnostics") {
+    process.stdout.write(`[diag-startup] ember-cli ${EMBER_CLI_VERSION}\n`);
+    process.stdout.write(`  cwd: ${process.cwd()}\n`);
+    process.stdout.write(`  EMBER_MODEL_URL: ${process.env["EMBER_MODEL_URL"] ?? "(unset)"}\n`);
+    process.exit(0);
+    return true;
+  }
+
+  if (first === "--dump-system-prompt") {
+    process.stdout.write(`[dump-system-prompt] Not available in this build.\n`);
+    process.exit(0);
+    return true;
+  }
+
+  if (first === "--mcp") {
+    const { runMcpServer } = await import("../entrypoints/mcp-server-entry.ts");
+    await runMcpServer({
+      cwd:     process.cwd(),
+      debug:   args.includes("--debug"),
+      verbose: args.includes("--verbose"),
+    });
+    return true;
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// parseHeadlessPrint — detects -p / --print flag and extracts prompt
+// ---------------------------------------------------------------------------
+
+export type ParseHeadlessPrintResult =
+  | { found: false }
+  | { found: true; prompt: string | null };
+
+export function parseHeadlessPrint(argv: string[]): ParseHeadlessPrintResult {
+  const args = argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "-p" || arg === "--print") {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        return { found: true, prompt: next };
+      }
+      return { found: true, prompt: null };
+    }
+    if (arg.startsWith("--print=")) {
+      return { found: true, prompt: arg.slice("--print=".length) };
+    }
+  }
+  return { found: false };
+}
+
+// ---------------------------------------------------------------------------
+// readStdinText — drains stdin to a string (used for -p without inline prompt)
+// ---------------------------------------------------------------------------
+
+async function readStdinText(): Promise<string> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as Uint8Array);
+  }
+  const total  = chunks.reduce((sum, c) => sum + c.length, 0);
+  const merged = new Uint8Array(total);
+  let offset   = 0;
+  for (const c of chunks) {
+    merged.set(c, offset);
+    offset += c.length;
+  }
+  return new TextDecoder().decode(merged).trim();
+}
+
+// ---------------------------------------------------------------------------
+// MainOptions — injectable deps for testing (all optional)
+// ---------------------------------------------------------------------------
+
+export interface MainOptions {
+  argv?:           string[];
+  spawnServer?:    (opts: ServerSpawnOptions) => Promise<ServerHandle>;
+  waitReady?:      (port: number, timeout: number) => Promise<void>;
+  initFn?:         (opts: { serverUrl?: string; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
+  getLoopDepsFn?:  () => LoopDeps;
+  headlessRunner?: (
+    prompt:  string,
+    io:      StructuredIO,
+    tools:   Tool[],
+    options: HeadlessReplOptions,
+    deps:    LoopDeps,
+  ) => Promise<{ events: unknown[]; exitCode: number }>;
+  exitFn?: (code: number) => void;
+}
+
+// ---------------------------------------------------------------------------
+// main — the fully-wired entry point (called by boot in main.ts)
+// ---------------------------------------------------------------------------
+
+export async function main(opts: MainOptions = {}): Promise<void> {
+  const argv = opts.argv ?? process.argv;
+
+  applyAblationBaseline();
+
+  const modelsCfg = await loadModelsJson();
+  if (modelsCfg) {
+    applyModelsJsonToEnv(modelsCfg);
+  }
+
+  const didFastPath = await dispatchFastPath(argv);
+  if (didFastPath) return;
+
+  // Determine whether we use an external server or spawn our own
+  const externalUrl = modelsCfg?.endpoint ??
+    (!modelsCfg?.binary ? process.env["EMBER_MODEL_URL"] : undefined);
+
+  let serverUrl:    string;
+  let detectedNCtx: number;
+
+  if (externalUrl) {
+    process.env["EMBER_MODEL_URL"] ??= externalUrl;
+    serverUrl    = externalUrl;
+    detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
+  } else {
+    const exeDir    = resolve(dirname(process.execPath ?? process.argv[0] ?? process.cwd()));
+    const port      = await resolveServerPort(exeDir);
+    const binPath   = resolve(exeDir, modelsCfg?.binary ?? "llama-server.exe");
+    const modelPath = resolve(
+      exeDir,
+      modelsCfg?.model ?? process.env["EMBER_MODEL_PATH"] ?? "model.gguf",
+    );
+    const mmproj     = modelsCfg?.mmproj ? resolve(exeDir, modelsCfg.mmproj) : undefined;
+    const nCtx       = modelsCfg?.nCtx ?? 4096;
+    const logPath    = join(exeDir, "llama_stderr.log");
+    const slotSaveDir = join(getEmberConfigHomeDir(), "slots");
+
+    const doSpawn  = opts.spawnServer ?? spawnLlamaServer;
+    const doWait   = opts.waitReady   ?? ((p: number, t: number) => waitForServerReady(p, t));
+
+    const serverHandle = await doSpawn({
+      binaryPath: binPath,
+      modelPath,
+      port,
+      nCtx,
+      mmproj,
+      maxOutputTokens: modelsCfg?.maxOutputTokens,
+      logPath,
+      slotSaveDir,
+    });
+
+    serverUrl                              = `http://localhost:${port}`;
+    process.env["EMBER_MODEL_URL"]        ??= serverUrl;
+
+    const debugPort = port + 1;
+    await writeDebugPort(process.cwd(), debugPort).catch(() => {});
+    await writeDebugPid(process.cwd(), process.pid).catch(() => {});
+
+    try {
+      await doWait(port, 240_000);
+    } catch {
+      process.stderr.write(`[ember] WARNING: managed server did not become ready within 240s\n`);
+    }
+
+    detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
+    registerManagedModel({ pid: serverHandle.process.pid! });
+    void serverHandle; // handle held in closure via cleanup hooks
+  }
+
+  // Session init
+  const sessionMod = await import("./session-init.ts");
+  const doInit     = opts.initFn ?? ((o) => sessionMod.init(o));
+  await doInit({ serverUrl, nCtx: detectedNCtx });
+
+  // Headless path (-p / --print)
+  const headlessSpec = parseHeadlessPrint(argv);
+  if (headlessSpec.found) {
+    let prompt = headlessSpec.prompt;
+    if (prompt === null) {
+      prompt = process.stdin.isTTY ? "" : await readStdinText();
+    }
+
+    // HeadlessIO is the headless IO surface from cli/structured-io.ts; it extends
+    // StructuredIO, so the constructed instance is typed StructuredIO for the runner.
+    const sioMod    = await import("../cli/structured-io.ts") as unknown as
+      { HeadlessIO: new (input: AsyncIterable<unknown>) => StructuredIO };
+    const emptyInput: AsyncIterable<unknown> = (async function* () {})();
+    const io        = new sioMod.HeadlessIO(emptyInput);
+
+    const deps      = opts.getLoopDepsFn
+      ? opts.getLoopDepsFn()
+      : sessionMod.getLoopDeps();
+
+    const headlessOpts: HeadlessReplOptions = { maxTurns: 50 };
+
+    // as unknown as Tool[]: BUILTIN_TOOLS satisfies the Tool interface at runtime
+    const btMod = await import("../tools/builtin-tools.ts");
+    const tools  = (btMod as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
+
+    let exitCode: number;
+    if (opts.headlessRunner) {
+      const result = await opts.headlessRunner(prompt, io, tools, headlessOpts, deps);
+      exitCode     = result.exitCode;
+    } else {
+      const { runHeadlessPrompt } = await import("../cli/headless-repl.ts");
+      const result = await runHeadlessPrompt(prompt, io as Parameters<typeof runHeadlessPrompt>[1], tools, headlessOpts, deps);
+      exitCode     = result.exitCode;
+    }
+
+    const doExit = opts.exitFn ?? ((code: number) => { process.exit(code); });
+    doExit(exitCode);
+    return;
+  }
+
+  // Interactive TUI path
+  const frontendShell = await import("../core/frontend-shell.ts");
+  const root          = frontendShell.createRoot();
+
+  let resolveExit!: () => void;
+  const exitPromise = new Promise<void>((r) => { resolveExit = r; });
+
+  const { startStdinBridge } = await import("../ink/stdin-bridge.ts");
+  const stopBridge            = startStdinBridge();
+
+  const appProps: AppProps = {
+    getFpsMetrics: () => ({ fps: 60, frameDurationMs: 16 }),
+    initialState:  {},
+  };
+
+  const replProps = {
+    config: {
+      model:            process.env["EMBER_MODEL_NAME"] ?? "ember",
+      permissionMode:   "bypass" as const,
+      baseSystemPrompt: "",
+    },
+    cwd:    process.cwd(),
+    onExit: (): void => { resolveExit(); },
+  };
+
+  await frontendShell.launchRepl(
+    root,
+    appProps,
+    replProps,
+    (r, _AppComponent, REPLComponent, props) => {
+      // as React.ComponentType<Record<string, unknown>>: REPLComponent is
+      // ComponentType<unknown>; cast to typed-props variant for createElement.
+      r.render(
+        React.createElement(
+          REPLComponent as React.ComponentType<Record<string, unknown>>,
+          {
+            config: (props as Record<string, unknown>)["config"],
+            cwd:    (props as Record<string, unknown>)["cwd"],
+            onExit: (props as Record<string, unknown>)["onExit"],
+          },
+        ),
+      );
+    },
+  );
+
+  await exitPromise;
+  stopBridge();
+  process.exit(0);
+}

@@ -1,3 +1,7 @@
+# Default: every text file normalizes to LF on every platform.
+# Byte-pinned artifacts below opt out with -text.
+* text=auto eol=lf
+
 # sha-bearing artifacts: bytes are load-bearing (manifest_sha256 in receipts,
 # shard sha256 chains). git must NEVER rewrite line endings at checkout.
 corpus-manifests/** -text
