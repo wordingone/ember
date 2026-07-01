@@ -3,6 +3,6 @@
   "not_ready_sources": [],
   "ready_for_promotion": false,
   "report_declares_incomplete": true,
-  "root": "C:\\Users\\Admin\\.codex\\worktrees\\9232\\avir\\kai\\state\\ember-baseline",
+  "root": "<codex-worktree>\\state\\ember-baseline",
   "verdict": "INVALID-RUN"
 }

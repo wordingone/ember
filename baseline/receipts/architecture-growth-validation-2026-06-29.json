@@ -1,0 +1,23 @@
+{
+  "completion_limit": "This validates only the architecture_growth_keystone_sota family. It does not complete the overall baseline.",
+  "contract_path": "B:\\M\\ember\\baseline\\contracts\\architecture-growth-keystone-sota.md",
+  "created_at_utc": "2026-06-30T09:21:37Z",
+  "failure_count": 0,
+  "failures": [],
+  "growth_refutation_import_receipt": "receipts/growth-refutation-import-2026-06-30.json",
+  "growth_refutation_summary": {
+    "claim_status": "UNSATISFIED until matched v4 controls and enough seeds support the growth claim",
+    "v3_arm_counts": {
+      "B0": 8,
+      "F": 8,
+      "G": 8,
+      "R": 8,
+      "baseline": 1,
+      "verdict": 1
+    },
+    "v4_growth_event_count": 4,
+    "v4_latest_verdict_result": "INCONCLUSIVE:insufficient_seeds(need>=3,got=1)"
+  },
+  "protocol_path": "B:\\M\\ember\\baseline\\protocols\\inference-to-training-transfer-v0.md",
+  "verdict": "ARCHITECTURE_GROWTH_BASELINE_COMPLETE"
+}

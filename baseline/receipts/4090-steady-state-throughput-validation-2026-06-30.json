@@ -1,0 +1,12 @@
+{
+  "completion_limit": "This validates bounded same-window steady-state throughput telemetry only. It is not a varied-data long-run, data-loader, evaluation, checkpoint cadence, or overall baseline completion receipt.",
+  "created_at_utc": "2026-06-30T14:41:27Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_steady_state_throughput_probe_validation",
+  "measured_tflops_lower_bound": 61.4014102630069,
+  "receipt_path": "receipts/4090-real-data-steady-state-throughput-probe-pretraining-equivalent.json",
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 16,
+  "verdict": "C1_STEADY_STATE_THROUGHPUT_PROBE_VALIDATED"
+}

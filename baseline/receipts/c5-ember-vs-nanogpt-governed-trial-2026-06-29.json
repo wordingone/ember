@@ -1,0 +1,33 @@
+{
+  "claim_id": "C5-0B-AI-Scientist-nanoGPT-lite",
+  "comparator": "AI Scientist nanoGPT_lite governed bounded baseline-control",
+  "contract": "Run current Ember against the AI Scientist nanoGPT_lite C5-0B external baseline under a governed non-smoke receipt contract.",
+  "elapsed_seconds": 0.0,
+  "ember_commit": "5c139dc1aa3959e7d96890cfb0a3bd8d86b22901",
+  "ember_repo": "B:\\M\\ember",
+  "evidence": {
+    "ember_candidate_receipt": null,
+    "ember_candidate_receipt_sha256": null,
+    "errors": [
+      "ember_candidate_receipt_missing"
+    ],
+    "external_baseline_receipt": "B:\\M\\ember\\baseline\\receipts\\c5-nanogpt-governed-baseline-control-2026-06-29.json",
+    "external_baseline_receipt_sha256": "0a87303b3835b29fb9f3abd4898083aea1f273ccde35df3908beba055de0d821",
+    "failure_interpretation": "Current Ember did not supply a governed non-smoke candidate receipt for this locked comparison."
+  },
+  "generated_at": "2026-06-29T21:33:45Z",
+  "metric": {
+    "dataset": "shakespeare_char",
+    "ember_candidate_best_val_loss_mean": null,
+    "external_baseline_best_val_loss_mean": 2.9307998418807983,
+    "improvement_pct": null,
+    "name": "best_val_loss_mean_improvement_pct"
+  },
+  "protocol": "protocols/c5-zero-spend-subset-v0.md",
+  "threshold": {
+    "direction": "PASS requires Ember candidate validation loss to improve over external baseline by the threshold.",
+    "min_improvement_pct": 1.0
+  },
+  "trial_type": "ember_vs_external_baseline",
+  "verdict": "FAIL"
+}

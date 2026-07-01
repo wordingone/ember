@@ -5,13 +5,13 @@ Status: NOT EXECUTED.
 ## Local Repo Mapping Observed 2026-06-29
 
 - `B:\M\ember`
-  - `origin`: `https://github.com/wordingone/ember-backup.git`
-  - `public`: `https://github.com/wordingone/ember.git`
+  - `origin`: `https://github.com/private remote.git`
+  - `public`: `https://github.com/public remote.git`
   - branch/status observed: `ember-cli-src-recovery-20260627`, dirty with many modified/untracked receipts and work surfaces.
 
 - `B:\M\ember-public`
-  - `origin`: `https://github.com/wordingone/ember-backup.git`
-  - `public`: `https://github.com/wordingone/ember.git`
+  - `origin`: `https://github.com/private remote.git`
+  - `public`: `https://github.com/public remote.git`
   - branch/status observed: `public-clean-root-20260628`, untracked `reconstruct-after-delete.sh`.
 
 No `baseline/` directory was observed in either checkout.

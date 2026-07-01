@@ -1,0 +1,116 @@
+{
+  "budget": {
+    "batch_size_preserved": true,
+    "block_size_preserved": true,
+    "eval_iters": 10,
+    "max_iters": 20,
+    "model_shape_preserved": true,
+    "num_seeds_shakespeare_char": 2,
+    "profile": "bounded_non_smoke"
+  },
+  "candidate_kind": "external_baseline_control",
+  "command": [
+    "C:\\Program Files\\Python310\\python.exe",
+    "experiment.py",
+    "--out_dir",
+    "run_0"
+  ],
+  "cwd": "C:\\tmp\\ember-baseline-governed\\nanoGPT_lite_baseline_control",
+  "elapsed_seconds": 5.3913116455078125,
+  "governed_run": true,
+  "job": "governed_bounded_baseline_control",
+  "outputs": {
+    "final_info_json": "C:\\tmp\\ember-baseline-governed\\nanoGPT_lite_baseline_control\\run_0\\final_info.json",
+    "final_info_json_exists": true,
+    "per_seed_json": [
+      "C:\\tmp\\ember-baseline-governed\\nanoGPT_lite_baseline_control\\run_0\\final_info_shakespeare_char_0.json",
+      "C:\\tmp\\ember-baseline-governed\\nanoGPT_lite_baseline_control\\run_0\\final_info_shakespeare_char_1.json"
+    ],
+    "per_seed_json_exists": [
+      true,
+      true
+    ]
+  },
+  "parsed_final_info": {
+    "shakespeare_char": {
+      "final_info_dict": {
+        "avg_inference_tokens_per_second": [
+          323.7499662668643,
+          394.9887477499502
+        ],
+        "best_val_loss": [
+          2.8787951469421387,
+          2.982804536819458
+        ],
+        "final_train_loss": [
+          2.857544422149658,
+          3.0012149810791016
+        ],
+        "total_train_time": [
+          0.960040807723999,
+          0.7261841297149658
+        ]
+      },
+      "means": {
+        "avg_inference_tokens_per_second_mean": 359.3693570084073,
+        "best_val_loss_mean": 2.9307998418807983,
+        "final_train_loss_mean": 2.92937970161438,
+        "total_train_time_mean": 0.8431124687194824
+      },
+      "stderrs": {
+        "avg_inference_tokens_per_second_stderr": 17.80969537077148,
+        "best_val_loss_stderr": 0.026002347469329834,
+        "final_train_loss_stderr": 0.03591763973236084,
+        "total_train_time_stderr": 0.0584641695022583
+      }
+    }
+  },
+  "patches": [
+    {
+      "new": "eval_interval = 10 if dataset == \"shakespeare_char\" else 10",
+      "old": "eval_interval = 250 if dataset == \"shakespeare_char\" else 1000",
+      "status": "applied"
+    },
+    {
+      "new": "log_interval = 5 if dataset == \"shakespeare_char\" else 5",
+      "old": "log_interval = 10 if dataset == \"shakespeare_char\" else 100",
+      "status": "applied"
+    },
+    {
+      "new": "eval_iters = 10",
+      "old": "eval_iters = 200",
+      "status": "applied"
+    },
+    {
+      "new": "max_iters = 20 if dataset == \"shakespeare_char\" else 20",
+      "old": "max_iters = 5000 if dataset == \"shakespeare_char\" else 100000",
+      "status": "applied"
+    },
+    {
+      "new": "warmup_iters = 5 if dataset == \"shakespeare_char\" else 5",
+      "old": "warmup_iters = 100 if dataset == \"shakespeare_char\" else 200",
+      "status": "applied"
+    },
+    {
+      "new": "compile = False  # governed bounded run disables compile overhead",
+      "old": "compile = True  # do not torch compile the model on macbooks",
+      "status": "applied"
+    },
+    {
+      "new": "num_samples = 2  # governed bounded inference samples",
+      "old": "num_samples = 10  # number of samples to draw",
+      "status": "applied"
+    },
+    {
+      "new": "max_new_tokens = 64  # governed bounded generation budget",
+      "old": "max_new_tokens = 500  # number of tokens generated in each sample",
+      "status": "applied"
+    }
+  ],
+  "returncode": 0,
+  "stderr_tail": "C:\\tmp\\ember-baseline-governed\\nanoGPT_lite_baseline_control\\experiment.py:463: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.\n  scaler = torch.cuda.amp.GradScaler(enabled=(dtype == \"float16\"))\nC:\\tmp\\ember-baseline-governed\\nanoGPT_lite_baseline_control\\experiment.py:463: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.\n  scaler = torch.cuda.amp.GradScaler(enabled=(dtype == \"float16\"))\n",
+  "stdout_tail": "tokens per iteration will be: 16,384\nfound vocab_size = 65 (inside ../../data\\shakespeare_char\\meta.pkl)\nInitializing a new model from scratch\nnumber of parameters: 10.65M\nnum decayed parameter tensors: 26, with 10,740,096 parameters\nnum non-decayed parameter tensors: 13, with 4,992 parameters\nusing fused AdamW: True\nstep 0: train loss 4.2873, val loss 4.2810\niter 0: loss 4.2694, time 372.29ms\niter 5: loss 3.3925, time 9.00ms\nstep 10: train loss 3.2642, val loss 3.3116\niter 10: loss 3.2792, time 162.74ms\niter 15: loss 3.0463, time 13.63ms\nstep 20: train loss 2.8559, val loss 2.8788\niter 20: loss 2.8575, time 162.19ms\ntraining done\nBest validation loss: 2.8787951469421387\nTotal train time: 0.02 mins\nLoading meta from ../../data\\shakespeare_char\\meta.pkl...\nSample 1:\n oMe tWG s wannlee se w:\n\nMend mithe k,\n\nWollitoud fan anAf thee \nInference time: 0.26 seconds\nTokens per second: 243.08\n---------------\nSample 2:\n  hwNoun th onnn f sanreTorand cRous than us ad the thed fawiwhTa\nInference time: 0.16 seconds\nTokens per second: 404.42\n---------------\nAverage tokens per second: 323.75\ntokens per iteration will be: 16,384\nfound vocab_size = 65 (inside ../../data\\shakespeare_char\\meta.pkl)\nInitializing a new model from scratch\nnumber of parameters: 10.65M\nnum decayed parameter tensors: 26, with 10,740,096 parameters\nnum non-decayed parameter tensors: 13, with 4,992 parameters\nusing fused AdamW: True\nstep 0: train loss 4.2392, val loss 4.2279\niter 0: loss 4.2361, time 129.44ms\niter 5: loss 3.3556, time 10.49ms\nstep 10: train loss 3.3142, val loss 3.3684\niter 10: loss 3.3324, time 170.74ms\niter 15: loss 3.1134, time 12.09ms\nstep 20: train loss 2.9469, val loss 2.9828\niter 20: loss 3.0012, time 172.12ms\ntraining done\nBest validation loss: 2.982804536819458\nTotal train time: 0.01 mins\nLoading meta from ../../data\\shakespeare_char\\meta.pkl...\nSample 1:\n  id teed\n !roninn whanelerr anve int min\n\n\n\n\nW dtanp nd.eeeigd h\nInference time: 0.17 seconds\nTokens per second: 381.34\n---------------\nSample 2:\n aInlI  sP,dC w c aneou;th th,Sd h neee he themeM d r nmore he,er\nInference time: 0.16 seconds\nTokens per second: 408.64\n---------------\nAverage tokens per second: 394.99\n",
+  "task_id": "C5-0B-AI-Scientist-nanoGPT-lite",
+  "timeout_seconds": 600,
+  "verdict": "PASS"
+}

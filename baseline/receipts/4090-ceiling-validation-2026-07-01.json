@@ -1,0 +1,9 @@
+{
+  "completion_limit": "This validates only the single_4090_ge_1b_foundation_ceiling baseline family. It is not an Ember win and not overall baseline completion.",
+  "contract_path": "contracts/C1-4090-1B-feasibility.md",
+  "created_at_utc": "2026-07-01T12:18:18Z",
+  "failure_count": 0,
+  "failures": [],
+  "report_path": "4090-ceiling-v0.md",
+  "verdict": "SINGLE_4090_ENGINEERING_BASELINE_SURFACE_READY"
+}

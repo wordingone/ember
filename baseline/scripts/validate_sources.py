@@ -19,6 +19,19 @@ REQUIRED_IDS = {
     "agent-openai-codex",
     "agent-anthropic-claude-code",
     "agent-nvidia-nemo-agent-toolkit",
+    "deepseek-deepspec-dspark",
+    "deepseek-open-infra-index",
+    "sapient-hrm",
+    "modded-nanotabpfn",
+    "ai-scientist-v2",
+    "bitnet",
+    "kosmos-ai-scientist",
+    "hrm-critical-frontier",
+    "bitsandbytes-8bit-optimizers",
+    "pytorch-activation-checkpointing",
+    "pytorch-sdpa-flashattention",
+    "nvidia-cutlass",
+    "triton-language",
 }
 
 

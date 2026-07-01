@@ -1,0 +1,140 @@
+{
+  "completion_limits": [
+    "This is deterministic math, not a representative local throughput benchmark.",
+    "Completion still requires an exact model/config, measured sustained throughput, memory receipt, capability target, comparator table, and dual-repo verifier PASS."
+  ],
+  "created_at_utc": "2026-06-29T22:15:42Z",
+  "flop_formula": "training_flops = 6 * active_parameters * trained_tokens",
+  "local_hardware_probe": {
+    "available": true,
+    "gpus": [
+      {
+        "memory_total_mib": "24564",
+        "name": "NVIDIA GeForce RTX 4090",
+        "power_limit_w": "450.00"
+      }
+    ]
+  },
+  "memory_profiles": [
+    {
+      "fit_on_24gb_before_activations": true,
+      "gradients_gb": 2.0,
+      "notes": "Mathematically fits before activations for 1B, but leaves too little practical headroom for useful sequence/batch without checkpointing or state reduction.",
+      "optimizer_master_gb": 12.0,
+      "profile": "bf16_weights_bf16_grads_fp32_adamw_fp32_master",
+      "subtotal_before_activations_gb": 16.0,
+      "weights_gb": 2.0
+    },
+    {
+      "fit_on_24gb_before_activations": true,
+      "gradients_gb": 2.0,
+      "notes": "Plausible with activation checkpointing, small microbatching, fused kernels, and measured stability/throughput.",
+      "optimizer_master_gb_estimate": 5.5,
+      "profile": "bf16_weights_bf16_grads_8bit_optimizer_fp32_master_estimate",
+      "subtotal_before_activations_gb": 9.5,
+      "weights_gb": 2.0
+    },
+    {
+      "fit_on_24gb_before_activations": "conditional",
+      "gradients_gb": 2.0,
+      "notes": "Only valid if offload bandwidth, recompute, and quality cost are included in wall-clock receipts.",
+      "optimizer_master_gb_estimate": "variable",
+      "profile": "compressed_or_offloaded_optimizer_state",
+      "subtotal_before_activations_gb": "4GB + offload/compression state",
+      "weights_gb": 2.0
+    }
+  ],
+  "params_b": 1.0,
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.10.11",
+    "release": "10",
+    "system": "Windows"
+  },
+  "required_sustained_tflops": [
+    {
+      "required_sustained_tflops_for_target_days": 24.8015873015873,
+      "token_budget_b": 5
+    },
+    {
+      "required_sustained_tflops_for_target_days": 49.6031746031746,
+      "token_budget_b": 10
+    },
+    {
+      "required_sustained_tflops_for_target_days": 99.2063492063492,
+      "token_budget_b": 20
+    },
+    {
+      "required_sustained_tflops_for_target_days": 148.80952380952382,
+      "token_budget_b": 30
+    },
+    {
+      "required_sustained_tflops_for_target_days": 248.01587301587304,
+      "token_budget_b": 50
+    }
+  ],
+  "target_days": 14.0,
+  "token_budget_days_table": [
+    {
+      "days_by_sustained_tflops": {
+        "100": 3.4722222222222223,
+        "150": 2.314814814814815,
+        "200": 1.7361111111111112,
+        "250": 1.3888888888888888,
+        "50": 6.944444444444445,
+        "75": 4.62962962962963
+      },
+      "token_budget_b": 5,
+      "training_flops": 3e+19
+    },
+    {
+      "days_by_sustained_tflops": {
+        "100": 6.944444444444445,
+        "150": 4.62962962962963,
+        "200": 3.4722222222222223,
+        "250": 2.7777777777777777,
+        "50": 13.88888888888889,
+        "75": 9.25925925925926
+      },
+      "token_budget_b": 10,
+      "training_flops": 6e+19
+    },
+    {
+      "days_by_sustained_tflops": {
+        "100": 13.88888888888889,
+        "150": 9.25925925925926,
+        "200": 6.944444444444445,
+        "250": 5.555555555555555,
+        "50": 27.77777777777778,
+        "75": 18.51851851851852
+      },
+      "token_budget_b": 20,
+      "training_flops": 1.2e+20
+    },
+    {
+      "days_by_sustained_tflops": {
+        "100": 20.833333333333332,
+        "150": 13.88888888888889,
+        "200": 10.416666666666666,
+        "250": 8.333333333333334,
+        "50": 41.666666666666664,
+        "75": 27.77777777777778
+      },
+      "token_budget_b": 30,
+      "training_flops": 1.8e+20
+    },
+    {
+      "days_by_sustained_tflops": {
+        "100": 34.72222222222222,
+        "150": 23.14814814814815,
+        "200": 17.36111111111111,
+        "250": 13.88888888888889,
+        "50": 69.44444444444444,
+        "75": 46.2962962962963
+      },
+      "token_budget_b": 50,
+      "training_flops": 3e+20
+    }
+  ],
+  "verdict": "CALCULATION_RECEIPT_NOT_COMPLETION"
+}

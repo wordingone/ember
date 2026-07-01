@@ -1,0 +1,56 @@
+{
+  "active_trainable_parameters": 1027764224,
+  "capability_target": "c1_probe_shape_telemetry_not_completion",
+  "completion_limit": "Bounded probe telemetry is non-dry-run GPU evidence, but not representative full 1B long-run throughput and not family completion by itself.",
+  "config_id": "from_scratch_1b_4090_v0",
+  "config_path": "baseline\\engineering\\4090-1b\\configs\\from_scratch_1b_4090.json",
+  "created_at_utc": "2026-06-30T02:19:37Z",
+  "cuda_available": true,
+  "cuda_version": "12.6",
+  "device_name": "NVIDIA GeForce RTX 4090",
+  "device_total_memory_bytes": 25756696576,
+  "dtype": "bfloat16",
+  "elapsed_s": 0.19773469999199733,
+  "estimated_probe_training_tflops": 0.4893636076415329,
+  "full_config_parameter_count": {
+    "active_trainable_parameters": 1027764224,
+    "attention": 318767104,
+    "lm_head": 0,
+    "mlp": 637534208,
+    "norms": 159744,
+    "position_embedding": 4194304,
+    "token_embedding": 67108864
+  },
+  "full_config_required_sustained_tflops": 50.98036825396826,
+  "kind": "single_4090_governed_probe",
+  "lane": "from_scratch",
+  "loss_first": 9.209059715270996,
+  "loss_last": 8.555414199829102,
+  "peak_memory_bytes": 239880704,
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.10.11",
+    "release": "10",
+    "system": "Windows"
+  },
+  "probe_shape": {
+    "batch_size": 1,
+    "heads": 8,
+    "hidden": 512,
+    "layers": 4,
+    "parameters": 20999168,
+    "seq_len": 256,
+    "vocab_size": 8192
+  },
+  "steps_completed": 3,
+  "steps_requested": 3,
+  "stop_rule": {
+    "max_seconds": 120.0,
+    "no_completion_claim": true,
+    "steps": 3
+  },
+  "token_budget": 10000000000,
+  "tokens_per_second": 3883.992035950606,
+  "torch_version": "2.10.0+cu126",
+  "verdict": "GOVERNED_PROBE_NOT_COMPLETION"
+}

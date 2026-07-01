@@ -1,53 +1,40 @@
-# Self-Improvement Loop Baseline V0
+# Self-Improvement Loop Baseline V1
 
-Status: DRAFT. No self-improvement claim is granted.
-Claim family: C5-LOOP.
+Status: BASELINE_COMPLETE for the `self_improvement_loop_sota` family only. No Ember self-improvement win is granted.
+Claim family: `self_improvement_loop_sota`.
+Access date: 2026-06-29.
 
 ## Purpose
 
-Test whether Ember's loop improves experiments, code, data, or architecture better than a baseline agent or scripted search under the same budget.
+This file locks the outside ruler for Ember's self-improvement loop: proposing changes, running experiments, reading receipts, updating code/data/architecture, preserving negative results, and improving future runs under equal budget.
 
 ## External Anchor Families
 
-- MLE-bench: ML-engineering tasks with competition-style scoring.
-- MLAgentBench: agent ML-experimentation tasks.
-- AI Scientist-style systems: automated idea, code, experiment, writeup, and review loops.
+- `mle-bench`: ML-engineering tasks with competition-style scoring and data/auth cost boundaries.
+- `mlagentbench`: ML-experimentation tasks; CLRS is the first zero-spend local task source.
+- `ai-scientist`: automated idea/code/experiment/writeup/review loop; only local `nanoGPT_lite/shakespeare_char` mechanics are used at C5-0.
+- `ai-scientist-v2`: successor automated research-loop anchor that prevents stale comparison only to the original AI Scientist.
+- `kosmos-ai-scientist`: broad autonomous scientific-discovery guardrail that prevents small local C5-0 tasks from being overclaimed as field-level autonomous science.
 
-These anchors now have source pins. The first local zero-spend subset is selected in `protocols/c5-zero-spend-subset-v0.md`; governed runs still have not executed.
+## Baseline Loop Arms
 
-## Contract
+Every governed C5 run must compare Ember against:
 
-Build or run Ember loop `X` that beats baseline loop `Y` on external ML task set `Z` by threshold `T`, preserving equal tool/data/compute/time/human-intervention constraints `C`, under budget `B`, verified by deterministic scorer or reviewer protocol `V`, producing PASS, FAIL, or INVALID-RUN.
-
-## Baseline Loop Candidates
-
-1. Fixed script/search baseline:
-   - deterministic hyperparameter or patch search;
-   - same task budget;
-   - no natural-language planning advantage.
-
-2. Ordinary agent/chat baseline:
-   - same tools and wall-clock;
-   - no Ember-specific receipt substrate;
-   - transcript retained.
-
-3. Prior external benchmark baseline:
-   - only if source conditions are exact enough to avoid wasteful recomputation.
-
-4. Frontier agent-loop baseline:
-   - Codex, Claude Code, and Hermes-class systems are first-class comparators for research loops, goal mode, CLI operation, tool execution, and code-modification workflows;
-   - hidden frontier self-training or successor-model claims remain hypotheses unless publicly sourced or locally receipted;
-   - visible capabilities can still be measured through frozen replay suites with identical files, tools, budgets, receipts, and task statements.
+1. unchanged upstream baseline/run_0;
+2. deterministic scripted/search baseline with equal compute and wall-clock budget;
+3. agent baseline only after C8 fixture is locked;
+4. sourced no-recompute comparator where exact external conditions are sufficient and recomputation would waste budget.
 
 ## Required Metrics
 
 - final score improvement over starting point;
-- improvement over baseline loop;
+- improvement over unchanged and deterministic/scripted baselines;
 - number of valid experiments;
 - number of invalid or non-reproducible experiments;
 - receipt completeness;
 - whether the winning change survives deletion/ablation or replay checks;
-- whether negative results are preserved.
+- whether negative results are preserved;
+- whether the claim is scoped to local ML-engineering loop or broad scientific-discovery loop.
 
 ## Anti-Cheat Gates
 
@@ -56,8 +43,11 @@ Build or run Ember loop `X` that beats baseline loop `Y` on external ML task set
 - no private hidden labels in candidate path;
 - no changing task or metric after seeing Ember output;
 - no counting prose insight as improvement without executed evidence;
-- no loop win unless the baseline had equal opportunity to find the improvement.
+- no loop win unless the baseline had equal opportunity to find the improvement;
+- no transferring C5-0 local task success into broad scientific-discovery or field-level claims.
 
 ## Current Verdict
 
-NOT RUN. The C5-0 zero-spend subset selects MLAgentBench CLRS and AI Scientist nanoGPT_lite/shakespeare_char as first local tasks, while deferring MLE-bench full/lite until a compute-spend packet justifies Kaggle/data cost. The next step is static environment checks and baseline-run receipts for those selected tasks.
+SELF_IMPROVEMENT_BASELINE_COMPLETE for the self-improvement comparator-family definition only. Existing C5-0 static/data-prep/smoke receipts remain wiring evidence, not an Ember improvement result and not overall `/baseline` completion.
+
+C5 nanoGPT_lite deterministic patch comparator evidence exists in `receipts/c5-nanogpt-deterministic-patch-comparator-2026-06-30.json` with validation receipt `receipts/c5-nanogpt-deterministic-patch-comparator-validation-2026-06-30.json`. It gives the C5-0B lane a same-budget non-agent comparator that improved bounded validation loss by 4.834809830300841% over the upstream control. The public-safe Ember-vs-nanoGPT trial receipt in `receipts/c5-ember-vs-nanogpt-governed-trial-2026-06-30.json`, validated by `receipts/c5-ember-vs-nanogpt-trial-validation-2026-06-30.json`, is negative evidence: no governed Ember candidate receipt exists yet. An Ember candidate must beat this comparator under the same governed receipt contract before any C5-0B improvement claim.

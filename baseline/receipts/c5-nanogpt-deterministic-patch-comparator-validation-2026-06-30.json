@@ -1,0 +1,12 @@
+{
+  "baseline_best_val_loss_mean": 2.9307998418807983,
+  "baseline_receipt_path": "receipts/c5-nanogpt-governed-baseline-control-2026-06-29.json",
+  "comparator_best_val_loss_mean": 2.789101243019104,
+  "completion_limit": "This validates a deterministic same-budget nanoGPT comparator only. It is not an Ember improvement, not a full C5 governed trial, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T10:51:51Z",
+  "delta_vs_upstream_pct": 4.834809830300841,
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/c5-nanogpt-deterministic-patch-comparator-2026-06-30.json",
+  "verdict": "C5_NANOGPT_DETERMINISTIC_PATCH_COMPARATOR_VALIDATED"
+}

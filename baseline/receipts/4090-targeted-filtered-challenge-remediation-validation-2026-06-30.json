@@ -1,0 +1,15 @@
+{
+  "completion_limit": "This validates deterministic challenge-sample remediation only. It is not full-corpus near-duplicate remediation, not a C1 hygiene pass, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T20:08:53Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-targeted-filtered-challenge-remediation-2026-06-30.json",
+  "summary": {
+    "challenge_exclusion_document_count": 25,
+    "challenge_exclusion_token_floor": 38244,
+    "cluster_count": 14,
+    "existing_targeted_manifest_overlap_count": 0,
+    "input_crossing_pair_count": 25
+  },
+  "verdict": "C1_TARGETED_FILTERED_CHALLENGE_REMEDIATION_VALIDATED"
+}

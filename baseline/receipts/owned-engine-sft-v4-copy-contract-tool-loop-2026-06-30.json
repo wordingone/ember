@@ -1,0 +1,133 @@
+{
+  "checkpoint": {
+    "label": "<trained-owned-engine-checkpoint-v4-copy-contract>",
+    "sha256": "dbf338fc10c30091d80c8e9bc0f6b59c6ea6fe88792f1f34f032e6787826f5df",
+    "size_bytes": 1604552023,
+    "stored_outside_baseline": true
+  },
+  "completion_limit": "This is a bounded owned-engine copy-contract SFT and normalized heldout tool-loop probe. It is not a SOTA baseline win, not a governed external benchmark win, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T09:56:08Z",
+  "probe": {
+    "elapsed_seconds": 4.099,
+    "expected_output": "470",
+    "observed_output": "14",
+    "output_file_exists": true,
+    "runtime_policy": "Normalize byte-level decode markers and truncate model output to one executable tool call per turn.",
+    "task_passed": false,
+    "turns": [
+      {
+        "normalized_tool": "COUNT B:/M/delta/scripts  sh\n",
+        "observation": "0",
+        "raw": "COUNT \u0120B :/ M / delta / scripts \u0120sh \u010a OB SER \u0120sh \u010a OB SER \u0120sh \u010a Tool \u0120call \u010a WRITE \u0120demo - out . txt \u010a 92 \u010a 14 \u010a 14 \u010a 27 \u010a \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a END WRITE \u010a 27 \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out .",
+        "turn": 1,
+        "verb": "COUNT"
+      },
+      {
+        "normalized_tool": "WRITE  demo-out.txt \n 14 \n ENDWRITE\n",
+        "observation": "wrote 6 bytes to demo-out.txt",
+        "raw": "WRITE \u0120demo - out . txt \u010a 14 \u010a END WRITE \u010a 27 \u010a 27 73 \u010a 27 \u010a WRITE \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a 27 \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a 27 \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a READ \u0120demo",
+        "turn": 2,
+        "verb": "WRITE"
+      },
+      {
+        "normalized_tool": "READ demo-out.txt\n",
+        "observation": " 14 \n ",
+        "raw": "READ \u0120demo - out . txt \u010a 14 / delta / \u010a READ \u0120demo - out . txt \u010a D ONE \u010a D ONE \u010a D ONE \u010a 27 \u010a 27 \u010a 27 \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a WRITE \u0120demo - out . txt \u010a 14 / delta / \u010a READ \u010a READ \u010a READ \u010a READ \u010a",
+        "turn": 3,
+        "verb": "READ"
+      },
+      {
+        "normalized_tool": "DONE 14/delta/scripts  sh\n",
+        "observation": "",
+        "raw": "D ONE \u010a 14 / delta / scripts \u0120sh \u010a 27 \u010a 4 \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a WRITE \u0120demo - out . txt \u010a 27 \u010a END WRITE \u010a READ 73 \u010a 27 \u010a READ \u010a :/ M \u010a READ \u010a READ \u010a Tool \u0120call els \u010a READ \u010a READ \u010a END WRITE \u010a 14 / delta",
+        "turn": 4,
+        "verb": "DONE"
+      }
+    ],
+    "valid_tool_observation_count": 4
+  },
+  "root_cause_tested": "Whether the owned checkpoint can learn first-action goal path copying and later live-observation copying under a one-tool-per-turn normalized runtime.",
+  "schema": "owned_engine.sft_copy_contract_tool_loop_probe.v1",
+  "training_run": {
+    "batch_size": 4,
+    "device": "cuda",
+    "elapsed_seconds": 120.43,
+    "heldout_policy": "target directory string and target count 470 are excluded from generated copy-contract traces",
+    "init_checkpoint_label": "<trained-owned-engine-checkpoint-v1>",
+    "learning_rate": 6e-05,
+    "loss_samples": [
+      {
+        "elapsed_seconds": 0.4,
+        "loss": 7.8159918785095215,
+        "step": 1
+      },
+      {
+        "elapsed_seconds": 10.3,
+        "loss": 0.9375334978103638,
+        "step": 100
+      },
+      {
+        "elapsed_seconds": 20.2,
+        "loss": 0.5350476503372192,
+        "step": 200
+      },
+      {
+        "elapsed_seconds": 30.1,
+        "loss": 0.49135810136795044,
+        "step": 300
+      },
+      {
+        "elapsed_seconds": 40.0,
+        "loss": 0.536834180355072,
+        "step": 400
+      },
+      {
+        "elapsed_seconds": 50.0,
+        "loss": 0.7214881777763367,
+        "step": 500
+      },
+      {
+        "elapsed_seconds": 59.9,
+        "loss": 0.6391871571540833,
+        "step": 600
+      },
+      {
+        "elapsed_seconds": 69.8,
+        "loss": 0.3479437828063965,
+        "step": 700
+      },
+      {
+        "elapsed_seconds": 79.7,
+        "loss": 0.813218891620636,
+        "step": 800
+      },
+      {
+        "elapsed_seconds": 89.7,
+        "loss": 0.13133510947227478,
+        "step": 900
+      },
+      {
+        "elapsed_seconds": 99.6,
+        "loss": 0.45638447999954224,
+        "step": 1000
+      },
+      {
+        "elapsed_seconds": 109.5,
+        "loss": 2.7020562356483424e-06,
+        "step": 1100
+      },
+      {
+        "elapsed_seconds": 119.4,
+        "loss": 0.20705223083496094,
+        "step": 1200
+      }
+    ],
+    "output_checkpoint_label": "<trained-owned-engine-checkpoint-v4-copy-contract>",
+    "seqcap": 512,
+    "source_episode_count": 3200,
+    "steps": 1200,
+    "supervision_policy": "Only action tokens are trained; first action must copy the path and extension from the goal, later actions copy live observations.",
+    "turnwise_example_count": 12800
+  },
+  "verdict": "FAIL"
+}

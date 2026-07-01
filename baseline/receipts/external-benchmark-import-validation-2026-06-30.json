@@ -1,0 +1,15 @@
+{
+  "completion_limit": "This validates imported executed benchmark receipts only. Blocked/access-gap receipts are preserved in the separate gap ledger and are not completed-family evidence.",
+  "created_at_utc": "2026-06-30T13:05:56Z",
+  "executed_receipt_count": 3,
+  "executed_receipt_ids": [
+    "kaggle_external_heldout_wheel",
+    "livecodebench_frozen_heldout_delta",
+    "livecodebench_public_candidate_vs_baseline"
+  ],
+  "failure_count": 0,
+  "failures": [],
+  "gap_ledger_path": "receipts/external-benchmark-gap-ledger-validation-2026-06-30.json",
+  "index_path": "receipts/external-benchmark-receipt-index-2026-06-30.json",
+  "verdict": "EXTERNAL_BENCHMARK_EXECUTED_IMPORTS_READY"
+}

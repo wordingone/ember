@@ -1,0 +1,31 @@
+{
+  "created_at_utc": "2026-06-29T00:00:00Z",
+  "verdict": "SOURCE_REFRESH_PARTIAL_PASS_COMPLETION_STILL_INCOMPLETE",
+  "access_date": "2026-06-29",
+  "source_count_after_refresh": 18,
+  "git_head_pins": {
+    "modded-nanogpt": "54c192a77bd0e3d2572a891e0a8a1b0ceeb957d7",
+    "deepseek-deepspec-dspark": "6443750b5cc6317b9dfd6e971b272577281c8d1c",
+    "deepseek-open-infra-index": "56d86855fcf6e08fdfd45ce6280bd24322c93351",
+    "mlcommons-algoperf": "58491177c1a0cfcf75f6b2331c512a7d6facd842",
+    "mle-bench": "507f92e1138bb6e40dac5c6ee7a6758e6424bf97",
+    "mlagentbench": "5d71205cc20a8e95d43aa7cb7120e89ca3323e31",
+    "ai-scientist": "1de1dbc1f4ee2c5f61e9c94348d55eb51d7fa2eb",
+    "ai-scientist-v2": "96bd51617cfdbb494a9fc283af00fe090edfae48",
+    "bitnet": "01eb415772c342d9f20dc42772f1583ae1e5b102",
+    "modded-nanotabpfn": "687cfd9b5777bd6b1139fb7a3448417de4021497",
+    "nanotabpfn-upstream": "07a5fb75a9894f4ac2818315b0ca1b60a97e7cb5"
+  },
+  "validation_commands": [
+    "python state\\ember-baseline\\scripts\\validate_sources.py --sources state\\ember-baseline\\sources.jsonl --pretty",
+    "python B:\\M\\ember\\baseline\\scripts\\validate_sources.py --sources B:\\M\\ember\\baseline\\sources.jsonl --pretty"
+  ],
+  "validation_result": "PASS in both trees for required source ids, duplicates, malformed rows, and access-date presence",
+  "remaining_completion_limits": [
+    "source validation is structural and pin-level, not proof of benchmark dominance",
+    "single-4090 >=1B ceiling still lacks representative local throughput receipt",
+    "mandatory claim-family verifier receipts are absent",
+    "operator acceptance is absent",
+    "remote dual-repo completion proof is absent"
+  ]
+}

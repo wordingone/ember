@@ -1,0 +1,107 @@
+{
+  "active_trainable_parameters": 1027764224,
+  "benchmark_limits": {
+    "kernel_family": "bf16 GEMM only",
+    "not_measured": [
+      "attention backward",
+      "optimizer fusion",
+      "loss fusion",
+      "full CUDA C++ extension path",
+      "long-run thermal/power stability"
+    ]
+  },
+  "benchmarks": [
+    {
+      "dtype": "bfloat16_inputs_float32_accum",
+      "flops_per_matmul": 51539607552.0,
+      "k": 2048,
+      "m": 2048,
+      "max_abs_error": 0.4999847412109375,
+      "max_reference_abs": 251.0,
+      "max_relative_error": 0.0019919710805216635,
+      "n": 6144,
+      "name": "qkv_like",
+      "torch_seconds": 0.00037297999951988456,
+      "torch_tflops": 138.18330103046796,
+      "triton_seconds": 0.0011418499983847142,
+      "triton_tflops": 45.136933594525594,
+      "triton_vs_torch_speed_ratio": 0.3266453562617771
+    },
+    {
+      "dtype": "bfloat16_inputs_float32_accum",
+      "flops_per_matmul": 17179869184.0,
+      "k": 2048,
+      "m": 2048,
+      "max_abs_error": 0.499969482421875,
+      "max_reference_abs": 227.0,
+      "max_relative_error": 0.0022025087331360134,
+      "n": 2048,
+      "name": "proj_like",
+      "torch_seconds": 0.00011307999957352877,
+      "torch_tflops": 151.92668242653306,
+      "triton_seconds": 0.00037742999847978354,
+      "triton_tflops": 45.51802785469427,
+      "triton_vs_torch_speed_ratio": 0.2996052248867169
+    },
+    {
+      "dtype": "bfloat16_inputs_float32_accum",
+      "flops_per_matmul": 68719476736.0,
+      "k": 2048,
+      "m": 2048,
+      "max_abs_error": 0.50042724609375,
+      "max_reference_abs": 237.0,
+      "max_relative_error": 0.002111507367484177,
+      "n": 8192,
+      "name": "mlp_up_like",
+      "torch_seconds": 0.00044374000281095506,
+      "torch_tflops": 154.86428156281485,
+      "triton_seconds": 0.0015014500007964672,
+      "triton_tflops": 45.7687413497264,
+      "triton_vs_torch_speed_ratio": 0.295540978770899
+    },
+    {
+      "dtype": "bfloat16_inputs_float32_accum",
+      "flops_per_matmul": 68719476736.0,
+      "k": 8192,
+      "m": 2048,
+      "max_abs_error": 2.34661865234375,
+      "max_reference_abs": 470.0,
+      "max_relative_error": 0.004992805643284574,
+      "n": 2048,
+      "name": "mlp_down_like",
+      "torch_seconds": 0.00048658999730832875,
+      "torch_tflops": 141.22665306754294,
+      "triton_seconds": 0.0013928000000305474,
+      "triton_tflops": 49.33908438720047,
+      "triton_vs_torch_speed_ratio": 0.34936099748539395
+    }
+  ],
+  "capability_target": "c1_native_kernel_probe",
+  "completion_limit": "Native kernel probe measures bounded Triton GEMM shapes and records CUDA C++ toolchain availability. It is not family completion, not full forward/backward/optimizer training throughput, and not proof that native optimization is exhausted.",
+  "config_id": "from_scratch_1b_4090_v0",
+  "config_path": "baseline\\engineering\\4090-1b\\configs\\from_scratch_1b_4090.json",
+  "created_at_utc": "2026-06-30T03:24:39Z",
+  "cuda_available": true,
+  "cuda_version": "12.6",
+  "device_name": "NVIDIA GeForce RTX 4090",
+  "device_total_memory_bytes": 25756696576,
+  "kind": "single_4090_native_kernel_probe",
+  "lane": "from_scratch",
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.10.11",
+    "release": "10",
+    "system": "Windows"
+  },
+  "toolchain": {
+    "cl_available": false,
+    "cl_path": null,
+    "cmake_path": "C:\\Program Files\\CMake\\bin\\cmake.EXE",
+    "nvcc_available": true,
+    "nvcc_path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.6\\bin\\nvcc.EXE",
+    "triton_available": true,
+    "triton_version": "3.5.0"
+  },
+  "torch_version": "2.10.0+cu126",
+  "verdict": "NATIVE_KERNEL_PROBE_NOT_COMPLETION"
+}

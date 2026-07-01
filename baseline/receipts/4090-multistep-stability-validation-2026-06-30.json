@@ -1,0 +1,12 @@
+{
+  "completion_limit": "This validates bounded same-window real-token multi-step stability telemetry only. It is not a full-data epoch, long-run throughput, checkpoint cadence, convergence, or overall baseline completion.",
+  "created_at_utc": "2026-06-30T14:34:05Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_multistep_stability_probe_validation",
+  "loss_first": 1458.7789306640625,
+  "loss_last": 112.35446166992188,
+  "receipt_path": "receipts/4090-real-data-multistep-stability-probe-pretraining-equivalent.json",
+  "steps_completed": 4,
+  "verdict": "C1_MULTISTEP_STABILITY_PROBE_VALIDATED"
+}

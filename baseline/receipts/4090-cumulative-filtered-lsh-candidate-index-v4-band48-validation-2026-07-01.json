@@ -1,0 +1,18 @@
+{
+  "completion_limit": "This validates LSH candidate-index materialization only. It is not exact near-duplicate adjudication, not a C1 hygiene pass, and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T02:14:18Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-cumulative-filtered-lsh-candidate-index-v4-band48-2026-07-01.json",
+  "summary": {
+    "band_starts_materialized": [
+      48
+    ],
+    "candidate_pair_upper_bound_before_deduplication": 20991666,
+    "collision_bucket_count": 28289,
+    "collision_document_memberships": 113574,
+    "index_path": "fragments/c1-cumulative-filtered-lsh-candidate-index-v4-band48-2026-07-01.jsonl",
+    "max_bucket_size": 5741
+  },
+  "verdict": "C1_CUMULATIVE_FILTERED_LSH_CANDIDATE_INDEX_V4_VALIDATED"
+}

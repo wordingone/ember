@@ -1,0 +1,36 @@
+{
+  "claim_id": "C5-owned-engine-tool-loop-candidate-negative-evidence",
+  "command_redacted": [
+    "python",
+    "<owned-engine-runner>",
+    "--device",
+    "cuda",
+    "--max-turns",
+    "3",
+    "--max-new-tokens",
+    "96",
+    "--workdir",
+    "<RUN_WORKDIR>"
+  ],
+  "date": "2026-06-30",
+  "elapsed_seconds": 27.22223925590515,
+  "engine": {
+    "absolute_paths_omitted": true,
+    "default_checkpoint_label": "models/cbase-smoke-run/checkpoints/step-00000610/model.pt",
+    "kind": "owned_checkpoint_runner",
+    "script": "<owned-engine-runner>"
+  },
+  "governance": {
+    "bounded_short_job": true,
+    "interpretation": "Real Ember engine candidate run only; a FAIL is negative evidence, not a blocker and not a completed baseline.",
+    "max_new_tokens": 96,
+    "max_turns": 3,
+    "no_claim_of_sota_or_baseline_completion": true,
+    "timeout_seconds": 600
+  },
+  "returncode": 2,
+  "schema": "owned_engine.tool_loop_candidate.v1",
+  "stderr_redacted": "W0630 02:10:48.646000 25120 torch\\distributed\\elastic\\multiprocessing\\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.\n[transformers] use_kernel_func_from_hub is not available in the installed kernels version. Please upgrade kernels to use this feature.\n",
+  "stdout_redacted": "========================================================================\n<OWNED_ENGINE_RUNNER> \u00e2\u20ac\u201d REAL owned engine engine driving an <OWNED_ENGINE_AGENT>-cli goal loop.\nengine: <EMBER_REPO>\\models\\cbase-smoke-run\\checkpoints\\step-00000610\\model.pt\n        (step-610 cbase smoke checkpoint, last_loss ~7.25 \u00e2\u20ac\u201d near-untrained)\ngoal:   Count how many .py files are under <EMBER_REPO>/scripts, write that number into demo-out.txt, then read it back and report the number.\ntarget: <EMBER_REPO>\\scripts  -> correct demo-out.txt content == '470'\nworkdir:<RUN_WORKDIR>\n========================================================================\n[load] tensors mapped=183 missing(non-rope)=0 unexpected=0\n[ready] real owned engine loaded in 20.7s on cuda\n\n----- turn 1 -----\n[ember raw output] (1.9s)\n'\u00c4\u00a0 \u00c4\u00a0</ a > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ div > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span > \u00c4\u0160 \u00c4\u00a0 \u00c4\u00a0</ span >< span ><'\n\n[tool] verb=None obs='NO_VALID_TOOL_CALL'\n\n----- turn 2 -----\n[ember raw output] (1.6s)\n'\u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160'\n\n[tool] verb=None obs='NO_VALID_TOOL_CALL'\n\n----- turn 3 -----\n[ember raw output] (2.1s)\n'\u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0 \u00c4\u0160 \u00c4\u00a0'\n\n[tool] verb=None obs='NO_VALID_TOOL_CALL'\n\n========================================================================\ndemo-out.txt exists: False  content_correct('470'): False\nMILESTONE-1 STATUS: NOT DONE \u00e2\u20ac\u201d owned engine did not complete the task\nThe above is the true current capability of the owned engine engine \u00e2\u20ac\u201d shown, not asserted.\n========================================================================\n",
+  "verdict": "FAIL"
+}

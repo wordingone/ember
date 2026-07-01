@@ -1,0 +1,130 @@
+{
+  "benchmark_subset": {
+    "id": "mle-low-micro-v0",
+    "official_leaderboard_comparable": false,
+    "task_ids": [
+      "detecting-insults-in-social-commentary",
+      "random-acts-of-pizza",
+      "spooky-author-identification",
+      "nomad2018-predict-transparent-conductors",
+      "leaf-classification"
+    ]
+  },
+  "blocked_reason": "official_prepare_command_failed",
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "data_root": "B:\\M\\ember\\mle-bench-data",
+  "failed_task_id": "detecting-insults-in-social-commentary",
+  "fixture_only": false,
+  "frozen_before_execution": true,
+  "prepare_commands": [
+    {
+      "command": [
+        "<local-path-redacted>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "detecting-insults-in-social-commentary",
+        "--data-dir",
+        "B:\\M\\ember\\mle-bench-data",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path-redacted>",
+      "task_id": "detecting-insults-in-social-commentary"
+    },
+    {
+      "command": [
+        "<local-path-redacted>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "random-acts-of-pizza",
+        "--data-dir",
+        "B:\\M\\ember\\mle-bench-data",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path-redacted>",
+      "task_id": "random-acts-of-pizza"
+    },
+    {
+      "command": [
+        "<local-path-redacted>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "spooky-author-identification",
+        "--data-dir",
+        "B:\\M\\ember\\mle-bench-data",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path-redacted>",
+      "task_id": "spooky-author-identification"
+    },
+    {
+      "command": [
+        "<local-path-redacted>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "nomad2018-predict-transparent-conductors",
+        "--data-dir",
+        "B:\\M\\ember\\mle-bench-data",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path-redacted>",
+      "task_id": "nomad2018-predict-transparent-conductors"
+    },
+    {
+      "command": [
+        "<local-path-redacted>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "leaf-classification",
+        "--data-dir",
+        "B:\\M\\ember\\mle-bench-data",
+        "--keep-raw"
+      ],
+      "cwd": "<local-path-redacted>",
+      "task_id": "leaf-classification"
+    }
+  ],
+  "prepared_data_ready": false,
+  "prepared_preflight_receipt_path": null,
+  "raw_audit_blocking_bypassed": true,
+  "raw_audit_receipt_path": "<local-path-redacted>",
+  "raw_data_ready": false,
+  "real_mle_tasks_executed": false,
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_root": "<local-path-redacted>",
+  "task_results": [
+    {
+      "command": [
+        "<local-path-redacted>",
+        "-m",
+        "mlebench.cli",
+        "prepare",
+        "-c",
+        "detecting-insults-in-social-commentary",
+        "--data-dir",
+        "B:\\M\\ember\\mle-bench-data",
+        "--keep-raw"
+      ],
+      "output_excerpt": "[2026-06-18 07:07:00,041] [data.py:213] Downloading the dataset for `detecting-insults-in-social-commentary` to `B:\\M\\ember\\mle-bench-data\\detecting-insults-in-social-commentary`...\n[2026-06-18 07:07:00,496] [utils.py:36] Authentication failed: (401)\nReason: Unauthorized\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json', 'Date': 'Thu, 18 Jun 2026 14:07:00 GMT', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Origin': '*', 'Set-Cookie': 'ka_sessionid=979b",
+      "returncode": 1,
+      "task_id": "detecting-insults-in-social-commentary"
+    }
+  ],
+  "ticket": "EMBER-MLE-MICRO-OFFICIAL-PREPARE-RUN",
+  "ts": "20260618T140654Z",
+  "verdict": "BLOCKED"
+}

@@ -1,0 +1,59 @@
+{
+  "active_trainable_parameters": 1027764224,
+  "capability_target": "c1_full_shape_block_throughput_not_completion",
+  "completion_limit": "Full-shape block probe measures one representative block at locked 1B shape. It is not full 19-layer 1B long-run throughput and not family completion by itself.",
+  "config_id": "pretraining_equivalent_1b_4090_v0",
+  "config_path": "baseline\\engineering\\4090-1b\\configs\\pretraining_equivalent_1b_4090.json",
+  "created_at_utc": "2026-06-30T02:42:23Z",
+  "cuda_available": true,
+  "cuda_version": "12.6",
+  "device_name": "NVIDIA GeForce RTX 4090",
+  "device_total_memory_bytes": 25756696576,
+  "dtype": "bfloat16",
+  "elapsed_s": 0.16004950000206009,
+  "estimated_block_training_tflops_lower_bound": 7.729808014545974,
+  "full_config_required_sustained_tflops": 50.98036825396826,
+  "kind": "single_4090_full_shape_block_probe",
+  "lane": "pretraining_equivalent",
+  "loss_first": 2.0399169921875,
+  "loss_last": 2.0112180709838867,
+  "parameter_count": {
+    "active_trainable_parameters": 1027764224,
+    "attention": 318767104,
+    "lm_head": 0,
+    "mlp": 637534208,
+    "norms": 159744,
+    "position_embedding": 4194304,
+    "token_embedding": 67108864
+  },
+  "peak_memory_bytes": 554124288,
+  "peak_reserved_bytes": 668991488,
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.10.11",
+    "release": "10",
+    "system": "Windows"
+  },
+  "probe_shape": {
+    "batch_size": 1,
+    "block_parameters": 50339840,
+    "full_model_active_trainable_parameters": 1027764224,
+    "head_dim": 128,
+    "heads": 16,
+    "hidden": 2048,
+    "mlp_hidden": 8192,
+    "model_layers": 19,
+    "seq_len": 2048
+  },
+  "steps_completed": 2,
+  "steps_requested": 2,
+  "stop_rule": {
+    "max_seconds": 240.0,
+    "no_completion_claim": true,
+    "steps": 2
+  },
+  "tokens_per_second": 25592.08244916278,
+  "torch_version": "2.10.0+cu126",
+  "uses_scaled_dot_product_attention": true,
+  "verdict": "FULL_SHAPE_BLOCK_PROBE_NOT_COMPLETION"
+}

@@ -1,0 +1,19 @@
+{
+  "checked_paths": {
+    "contract_path": "contracts/C6-C7-cli-goal-mode.md",
+    "protocol_path": "protocols/protocol-v0.md",
+    "report_path": "cli-goal-mode-baseline-v0.md"
+  },
+  "completion_limit": "This receipt checks family contract surface readiness only. The family remains incomplete until its baseline module, locked thresholds, governed receipts, and final verifier PASS exist.",
+  "created_at_utc": "2026-06-29T22:22:03Z",
+  "failures": [],
+  "family": "ember_goal_mode_control",
+  "field_relevance_present": true,
+  "overall_goal_status": "INCOMPLETE",
+  "source_rows": [
+    "agent-openai-codex",
+    "agent-anthropic-claude-code"
+  ],
+  "status_in_lock": "INCOMPLETE",
+  "verdict": "CONTRACT_AUDIT_PASS_NOT_BASELINE_COMPLETE"
+}

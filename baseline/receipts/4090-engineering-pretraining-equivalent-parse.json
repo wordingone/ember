@@ -1,0 +1,7 @@
+{
+  "completion_limit": "Parser PASS only validates the engineered 4090 baseline surface/receipt shape. It is not overall baseline completion.",
+  "failure_count": 0,
+  "failures": [],
+  "input_receipt": "baseline\\receipts\\4090-engineering-pretraining-equivalent-dry-run.json",
+  "verdict": "ENGINEERING_DRY_RUN_PASS"
+}

@@ -1,0 +1,481 @@
+{
+  "band_starts_adjudicated": [
+    48
+  ],
+  "bucket_summaries_sample": [
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "010058dfc4fc434f6cfbb89786074455906c01482939d88e8134b577a9a42d28",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.797549,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00c33dba3120b2ab68fdc4d26a1bd65341ca76188e5c1a9c3624681d851a7c6c",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.77094,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00e4138e947f44c3bc36df0a9b07644093207b69d486bd4e39c0624619de3cb9",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.755128,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00fc8a9f49f145b37fdf2c9c6107ba3eafe2c54c7c33f3833719237c3edfe2e6",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.754513,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00d9cba6249ddfa8722e9636a3913c1d2f5db027987ca63efcfc659c2e81b8e0",
+      "bucket_size": 5,
+      "candidate_pair_count": 10,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 10,
+      "max_exact_jaccard": 0.752274,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00c9f121256c156f4bca5c9d7d475ab4997838f37123451cc846667b78f99dd1",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.75,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00ddc5db89099f9da2baa9648dc0b0e0f30f9f5cf12f12b1a61058189b1bcf42",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.75,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00c90350305e41e8b93e5e870a42c6ed71ecb5b8ff2f493ba3f0f17a17e052df",
+      "bucket_size": 11,
+      "candidate_pair_count": 55,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 55,
+      "max_exact_jaccard": 0.742896,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00fba6dc1cf155d071d9ab97eaf6ce5879c3c0346695f50791a586c16f716b2a",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.733226,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00e1ddb2d644c87955b3e121b94e4b358dc9b120b2b01748c738c15ff910756a",
+      "bucket_size": 8,
+      "candidate_pair_count": 28,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 28,
+      "max_exact_jaccard": 0.716341,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "010b6391241f5a24eeffa1479bd75ca05754ff6dfc62a852f58e5e4e2e93d28d",
+      "bucket_size": 3,
+      "candidate_pair_count": 3,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 3,
+      "max_exact_jaccard": 0.715655,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00c82e35b1ee39e767c6546ebba095aeea542d1d5a191f24fed9a5945373390f",
+      "bucket_size": 6,
+      "candidate_pair_count": 15,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 10,
+      "max_exact_jaccard": 0.662116,
+      "size_pruned_pair_count": 5
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00f11d97b026aac533a9ea92405b242c7cf9ebe4ec6759a82c9a28198e8383ca",
+      "bucket_size": 3,
+      "candidate_pair_count": 3,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.639649,
+      "size_pruned_pair_count": 2
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00f5651f788f029975542c511f3616e0f8b76e37dfa5c538791697a6c81a9a06",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.636967,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "010440a32d89b9cf3bb6bc0ba2e0aa0b3fc0cd97eee1d04ff07e8a8a3e2c8d37",
+      "bucket_size": 3,
+      "candidate_pair_count": 3,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 3,
+      "max_exact_jaccard": 0.541387,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "01092b33d1e93c87afa33302d2eb54f884c8dff8ae28eb8cbd67cbdc8c56c611",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.530612,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00f1bf5510b40670d11e2c7c0648ee286947425a1db3daeb419a389f13dd70ab",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.453416,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00fc287d63fa4b61b62adb18d5fcd36898902444b02de3883d70c87fd6c7a107",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.444089,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00e2868b32138b2c325ece4523edb796ec3317155717b6832f677538ffa4ba29",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.440487,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00c53071af826f2053569b87f23ae4ac464b470ef0a224464208197432458f5d",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.402985,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00bdbffebfb62cd87d3ddd0d0ee1c7fc2a461a92cb72b62515f7df23993091cc",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.379562,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00d589e232f2b4501164568eb104c847e0e4b8575095b3795b87fbec81eccba4",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 1,
+      "max_exact_jaccard": 0.334086,
+      "size_pruned_pair_count": 0
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "00c4ef1f5e3e4ce9298d0b429a304e70c791c32d332362d48f220b9fa4eb24e4",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 0,
+      "max_exact_jaccard": 0.0,
+      "size_pruned_pair_count": 1
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "0104477dde0947b499adaa9f6368bb5858a6d3e3550d5e730740af58be83df06",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 0,
+      "max_exact_jaccard": 0.0,
+      "size_pruned_pair_count": 1
+    },
+    {
+      "band_start": 48,
+      "bucket_hash_sha256": "010975a33a7fc3f6b2611f5c1adb882b9d6b8c1be9554100ab30e39e68d1ce55",
+      "bucket_size": 2,
+      "candidate_pair_count": 1,
+      "crossing_pair_count": 0,
+      "exact_jaccard_pair_count": 0,
+      "max_exact_jaccard": 0.0,
+      "size_pruned_pair_count": 1
+    }
+  ],
+  "bucket_summary_digest_sha256": "1968142459173b358eb5f74ccf44538b4ed7556e55651ea752c60bb40160184b",
+  "candidate_documents_loaded": 75,
+  "candidate_documents_required": 75,
+  "candidate_index_path": "fragments/c1-cumulative-filtered-lsh-candidate-index-v14-band48-2026-07-01.jsonl",
+  "candidate_index_receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v14-band48-2026-07-01.json",
+  "candidate_index_sha256": "d0f00eb75075195130616e2947f40665a70cd29a734521395f83c6a950e4ff4c",
+  "candidate_pair_count": 135,
+  "completion_limit": "This exact-adjudication receipt is not C1 completion. Full required candidate coverage, remediation if crossings are found, replacement C1 near-duplicate PASS receipts, full eval-contamination receipts, and overall baseline verifier PASS remain required.",
+  "created_at_utc": "2026-07-01T11:57:16Z",
+  "crossing_pair_count": 0,
+  "crossing_samples": [],
+  "documents_seen": 4236458,
+  "elapsed_seconds": 23.977,
+  "exact_jaccard_pair_count": 125,
+  "excluded_document_count": 1952,
+  "excluded_documents_seen": 1952,
+  "exclusion_manifest_row_digest_sha256": "c9ac7c02e18e43b01488ab99a5987f751ca9b4bdbdf023c940d7bcb7e44fea59",
+  "failure_count": 0,
+  "failures": [],
+  "index_row_end_exclusive": 75,
+  "index_row_start_offset": 50,
+  "index_rows_adjudicated": 25,
+  "index_rows_available": 28172,
+  "index_rows_skipped": 50,
+  "kind": "single_4090_c1_cumulative_filtered_lsh_candidate_index_V14_exact_adjudication",
+  "max_exact_jaccard_observed": 0.797549,
+  "method": "exact 13-token-shingle Jaccard adjudication over materialized LSH collision buckets; size-ratio upper-bound pruning is allowed only when it proves Jaccard cannot reach threshold",
+  "partial_index_adjudication": true,
+  "policy_receipt": "baseline/receipts/4090-data-hygiene-policy-thresholds-2026-06-30.json",
+  "remaining_content_token_floor": 6974539594,
+  "remaining_document_count": 4234506,
+  "scope_limit": "Exact adjudication for the named candidate-index rows only. It is not full 16-band adjudication, not eval-contamination evidence, not a replacement C1 near-duplicate PASS by itself, and not overall baseline completion.",
+  "shards": [
+    {
+      "candidate_documents_loaded": 5,
+      "documents_seen": 125093,
+      "excluded_documents": 110,
+      "name": "v0-00000.bin",
+      "sha256": "2ada751e4f1a9612b57cf21d95deec09d8230690f52a9892a69b9c665b231ca5"
+    },
+    {
+      "candidate_documents_loaded": 3,
+      "documents_seen": 125358,
+      "excluded_documents": 114,
+      "name": "v0-00001.bin",
+      "sha256": "0a529f8425e268dfbf61870f121381f2eae1c5e5ebc298804013d54324c36e81"
+    },
+    {
+      "candidate_documents_loaded": 4,
+      "documents_seen": 121034,
+      "excluded_documents": 121,
+      "name": "v0-00002.bin",
+      "sha256": "4efeb973ee7667d4ce9356d0bd9c478f9a33252733c2d01361e5f7a8b472d89f"
+    },
+    {
+      "candidate_documents_loaded": 9,
+      "documents_seen": 124341,
+      "excluded_documents": 111,
+      "name": "v0-00003.bin",
+      "sha256": "c9dc5cafa7a806384a200c26a51a7e11a3483019e9bb177dc4afed11eba18d0c"
+    },
+    {
+      "candidate_documents_loaded": 4,
+      "documents_seen": 124561,
+      "excluded_documents": 125,
+      "name": "v0-00004.bin",
+      "sha256": "6f87138445b43b9669869deaca8ab07702b8dd0ebebd54d186cf3c3bf18134fb"
+    },
+    {
+      "candidate_documents_loaded": 5,
+      "documents_seen": 122926,
+      "excluded_documents": 130,
+      "name": "v0-00005.bin",
+      "sha256": "990aa39342ddde2d5f839f9c766fa09f0924a66cb460629e6273425a7525d603"
+    },
+    {
+      "candidate_documents_loaded": 6,
+      "documents_seen": 123885,
+      "excluded_documents": 125,
+      "name": "v0-00006.bin",
+      "sha256": "8da2dab4c68907f4643c6fba8d0b82ab0611584247c3e95e58109f34dfed10b7"
+    },
+    {
+      "candidate_documents_loaded": 6,
+      "documents_seen": 125714,
+      "excluded_documents": 112,
+      "name": "v0-00007.bin",
+      "sha256": "d2456d659bbcd46a9becf08512660008f4742cf853e5ac0aaed90edc66ecbccd"
+    },
+    {
+      "candidate_documents_loaded": 2,
+      "documents_seen": 125198,
+      "excluded_documents": 114,
+      "name": "v0-00008.bin",
+      "sha256": "a0851ffadf70046e9d74fcce1aefdbeb68c826a3dce5e7100de68c66104d93e4"
+    },
+    {
+      "candidate_documents_loaded": 4,
+      "documents_seen": 123154,
+      "excluded_documents": 144,
+      "name": "v0-00009.bin",
+      "sha256": "73ba58e42bd827ae4d111ffb7c54b67fbb0b2300b0d3eb243d65302ff4f2407d"
+    },
+    {
+      "candidate_documents_loaded": 3,
+      "documents_seen": 121279,
+      "excluded_documents": 150,
+      "name": "v0-00010.bin",
+      "sha256": "ceb2fcfa59e505ae8496eb55d71e89abf24577013ea50439f6eeef562533cd99"
+    },
+    {
+      "candidate_documents_loaded": 3,
+      "documents_seen": 122877,
+      "excluded_documents": 131,
+      "name": "v0-00011.bin",
+      "sha256": "f15ec3e7951ec0e6b32daa38968fadb5a5890bf69e55236667056336161b798b"
+    },
+    {
+      "candidate_documents_loaded": 3,
+      "documents_seen": 121472,
+      "excluded_documents": 141,
+      "name": "v0-00012.bin",
+      "sha256": "55556e9bf1fe4f4653417dd48fa048d824b45aba21be565699b947edb269badf"
+    },
+    {
+      "candidate_documents_loaded": 9,
+      "documents_seen": 125443,
+      "excluded_documents": 140,
+      "name": "v0-00013.bin",
+      "sha256": "90977814b3f5b35decfa1d37262c818b92069971a2c24d04db1a8944873f5e0d"
+    },
+    {
+      "candidate_documents_loaded": 3,
+      "documents_seen": 122327,
+      "excluded_documents": 145,
+      "name": "v0-00014.bin",
+      "sha256": "28a53ddf00bbf8940b92662c1982b1259a1cc102e2b20fa1a8f3bac47652d90c"
+    },
+    {
+      "candidate_documents_loaded": 1,
+      "documents_seen": 236094,
+      "excluded_documents": 12,
+      "name": "v0-00015.bin",
+      "sha256": "204f935c7b827634cfbf51ad00ad2be1161f123a87b93c79ed6ecd40b008b5ad"
+    },
+    {
+      "candidate_documents_loaded": 1,
+      "documents_seen": 248084,
+      "excluded_documents": 0,
+      "name": "v0-00016.bin",
+      "sha256": "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed"
+    },
+    {
+      "candidate_documents_loaded": 0,
+      "documents_seen": 248841,
+      "excluded_documents": 3,
+      "name": "v0-00017.bin",
+      "sha256": "39618f4adfcca860c1faab43bb86660dbfb621c0635794565371826e59719a69"
+    },
+    {
+      "candidate_documents_loaded": 1,
+      "documents_seen": 251766,
+      "excluded_documents": 3,
+      "name": "v0-00018.bin",
+      "sha256": "3bb6dbbabc4e6eec2d62a6798956d74175f2af3d1b848d2b59eeccd043976553"
+    },
+    {
+      "candidate_documents_loaded": 0,
+      "documents_seen": 249731,
+      "excluded_documents": 3,
+      "name": "v0-00019.bin",
+      "sha256": "207b2b81c83bed4978b9877f33acf27b3e497338c9b3bbf6fd0b847360866a72"
+    },
+    {
+      "candidate_documents_loaded": 2,
+      "documents_seen": 248355,
+      "excluded_documents": 9,
+      "name": "v0-00020.bin",
+      "sha256": "6683296395568e6b40b03ad8320ded457f3278bf1124c4831311e10c5de1bbb4"
+    },
+    {
+      "candidate_documents_loaded": 1,
+      "documents_seen": 245457,
+      "excluded_documents": 5,
+      "name": "v0-00021.bin",
+      "sha256": "6b9f3d68714a54d48e9916b7de68b1f38afb53a6046189e2a0cce7d7a23189c5"
+    },
+    {
+      "candidate_documents_loaded": 0,
+      "documents_seen": 296937,
+      "excluded_documents": 3,
+      "name": "v0-00022.bin",
+      "sha256": "f5f7da6149461604db34ba5b567b94e9955d97d27845b58df5e76d76077b23b1"
+    },
+    {
+      "candidate_documents_loaded": 0,
+      "documents_seen": 314835,
+      "excluded_documents": 1,
+      "name": "v0-00023.bin",
+      "sha256": "cd58fa76d65350622739e5c788e8bd82c7d3eccd302837afcc7d812472cba7c1"
+    },
+    {
+      "candidate_documents_loaded": 0,
+      "documents_seen": 38529,
+      "excluded_documents": 0,
+      "name": "v0-00024.bin",
+      "sha256": "028e718b21054ee4dd62af20c6e07db07f9e8186367530f8dc85be8162c8e085"
+    },
+    {
+      "candidate_documents_loaded": 0,
+      "documents_seen": 3167,
+      "excluded_documents": 0,
+      "name": "v0-00025.bin",
+      "sha256": "d2bc5c37a48a33ec40bc3358a9a84f11dda0c19ab82d37e09606c2d202ed106f"
+    }
+  ],
+  "shingle_size_tokens": 13,
+  "size_pruned_pair_count": 10,
+  "source_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v14-2026-07-01.jsonl",
+  "source_exclusion_manifest_sha256": "59e21b4c6ff8a43d95b6f94e429ffb8dafa05c170ba867d65153b2e5911d2a8e",
+  "source_filtered_view_receipt": "receipts/4090-cumulative-filtered-corpus-view-v14-2026-07-01.json",
+  "source_receipt": "receipts/token-shards-v0-20260611T170047Z.json",
+  "threshold": 0.8,
+  "verdict": "C1_CUMULATIVE_FILTERED_LSH_CANDIDATE_INDEX_V14_EXACT_ADJUDICATION_NO_CROSSINGS_NOT_COMPLETION"
+}

@@ -1,0 +1,38 @@
+{
+  "best_measured_lane": "pretraining_equivalent",
+  "best_measured_tflops_lower_bound": 29.674024222362227,
+  "best_measured_to_required_ratio": 0.5820676711187239,
+  "c1_completion_gate": "Current measured full-stack LM-loss throughput is below the locked <=14-day requirement. C1 cannot complete until a replacement measured full-stack long-run receipt meets or exceeds the requirement, or a stronger native/lower-level ceiling receipt supersedes this gap without weakening data, memory, evaluation, and replay constraints.",
+  "completion_limit": "This is a measured throughput-gap validation, not a completion receipt and not an Ember win.",
+  "created_at_utc": "2026-06-30T14:07:35Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_training_throughput_gap",
+  "lane_summaries": [
+    {
+      "active_trainable_parameters": 1027764224,
+      "lane": "from_scratch",
+      "measured_tflops_lower_bound": 29.607511156018123,
+      "measured_to_required_ratio": 0.5807629911287175,
+      "path": "receipts/4090-full-stack-lm-loss-probe-from-scratch.json",
+      "required_sustained_tflops": 50.98036825396826,
+      "shortfall_tflops": 21.372857097950135,
+      "steps_completed": 1,
+      "tokens_per_second": 4801.281342003287
+    },
+    {
+      "active_trainable_parameters": 1027764224,
+      "lane": "pretraining_equivalent",
+      "measured_tflops_lower_bound": 29.674024222362227,
+      "measured_to_required_ratio": 0.5820676711187239,
+      "path": "receipts/4090-full-stack-lm-loss-probe-pretraining-equivalent.json",
+      "required_sustained_tflops": 50.98036825396826,
+      "shortfall_tflops": 21.30634403160603,
+      "steps_completed": 1,
+      "tokens_per_second": 4812.067386894212
+    }
+  ],
+  "minimum_multiplier_needed_to_reach_requirement": 1.7180132991719286,
+  "required_sustained_tflops": 50.98036825396826,
+  "verdict": "C1_TRAINING_THROUGHPUT_GAP_VALIDATED"
+}

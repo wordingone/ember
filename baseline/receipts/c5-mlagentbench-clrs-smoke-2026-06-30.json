@@ -1,0 +1,142 @@
+{
+  "checkpoint_files": [
+    {
+      "name": "best.pkl",
+      "sha256": "4ffb155050ded646ddb43acf4b14731e6326bd175a57c4cb76baf69c0d5319dd",
+      "size_bytes": 155334
+    },
+    {
+      "name": "model_params.pkl",
+      "sha256": "9b4bfb135298d6526405d8aa684df399cf4ef6ca33e66f013ade9847f9ad3424",
+      "size_bytes": 414
+    },
+    {
+      "name": "spec_list.pkl",
+      "sha256": "6c7fa97ca51288c1f12846ff9f70fad5d52a7ff307ac2d880009dbde8841416f",
+      "size_bytes": 182
+    }
+  ],
+  "compatibility_patch": [
+    {
+      "file": "train.py",
+      "new_sha256": "0e5c71bf95af57198df1a76300af9b0b976a6ce9f20a5f7bb14774b1ea8efa58",
+      "old_sha256": "ff3ca249cb9cfb9654087049027b80d1db4b7fc482f249dd602c51f41a8affb2",
+      "patch_scope": "Windows/NumPy PRNG upper-bound compatibility only; no model, data, score, or optimizer logic changed.",
+      "replacement_count": 3
+    },
+    {
+      "file": "eval.py",
+      "new_sha256": "0db2edf8a596bec6efdd72f5e1487179c8e7e3e98a32a0fda911dc71ecb6ffcd",
+      "old_sha256": "195f6c4dd74d834d66db780613fa158ec823f778ccf86cc8f932ef3d9bd34723",
+      "patch_scope": "Windows/NumPy PRNG upper-bound compatibility only; no model, data, score, or optimizer logic changed.",
+      "replacement_count": 3
+    }
+  ],
+  "completion_limit": "This proves the selected MLAgentBench CLRS upstream baseline can execute a tiny scored smoke after a declared compatibility patch. It is not an Ember improvement, not a three-seed governed C5 trial, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T08:37:35Z",
+  "duration_seconds": 29.283,
+  "environment": {
+    "module_versions": {
+      "absl": {
+        "present": true,
+        "version": "2.3.1"
+      },
+      "attrs": {
+        "present": true,
+        "version": "25.3.0"
+      },
+      "chex": {
+        "present": true,
+        "version": "0.1.90"
+      },
+      "clrs": {
+        "present": true,
+        "version": "2.0.3"
+      },
+      "haiku": {
+        "present": true,
+        "version": "0.0.16"
+      },
+      "jax": {
+        "present": true,
+        "version": "0.6.2"
+      },
+      "jaxlib": {
+        "present": true,
+        "version": "0.6.2"
+      },
+      "numpy": {
+        "present": true,
+        "version": "1.26.4"
+      },
+      "optax": {
+        "present": true,
+        "version": "0.2.8"
+      },
+      "tensorflow": {
+        "present": true,
+        "version": "2.20.0"
+      }
+    },
+    "python_version": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+    "runner_python_label": "isolated CLRS venv supplied by --python; local absolute path intentionally omitted"
+  },
+  "failure_count": 0,
+  "local_path_policy": "Receipt omits absolute local paths. Reproduce by cloning MLAgentBench at the pinned commit, creating the isolated CLRS env, and running this script with local --mlagentbench/--python/--scratch paths.",
+  "parsed_log": {
+    "checkpoint_seen": true,
+    "done_seen": true,
+    "loss_events": [
+      {
+        "algorithm": "floyd_warshall",
+        "current_train_items": 2,
+        "loss": 5.18932,
+        "step": 0
+      }
+    ],
+    "restore_seen": true,
+    "test_events": [
+      {
+        "algorithm": "floyd_warshall",
+        "score": 0.0114593505859375
+      }
+    ],
+    "val_events": [
+      {
+        "algorithm": "floyd_warshall",
+        "score": 0.232421875,
+        "step": 0
+      }
+    ]
+  },
+  "pass_conditions": {
+    "checkpoint_seen": true,
+    "done_seen": true,
+    "has_checkpoint_files": true,
+    "has_test_score": true,
+    "restore_seen": true,
+    "returncode_zero": true
+  },
+  "run_config": {
+    "algorithm": "floyd_warshall",
+    "batch_size": 2,
+    "eval_every": 1,
+    "hidden_size": 16,
+    "nb_msg_passing_steps": 1,
+    "test_every": 1,
+    "train_lengths": [
+      4
+    ],
+    "train_steps": 1
+  },
+  "source": {
+    "expected_commit": "5d71205cc20a8e95d43aa7cb7120e89ca3323e31",
+    "id": "mlagentbench",
+    "selected_task": "CLRS/floyd_warshall",
+    "source_commit": "5d71205cc20a8e95d43aa7cb7120e89ca3323e31",
+    "upstream_eval_sha256": "195f6c4dd74d834d66db780613fa158ec823f778ccf86cc8f932ef3d9bd34723",
+    "upstream_train_sha256": "ff3ca249cb9cfb9654087049027b80d1db4b7fc482f249dd602c51f41a8affb2"
+  },
+  "stdout_stderr_tail": "I0630 01:37:25.860443 18184 train.py:495] Algo floyd_warshall step 0 current loss 5.189320, current_train_items 2.\nI0630 01:37:26.102356 18184 train.py:515] (val) algo floyd_warshall step 0: {'Pi': 0.232421875, 'score': 0.232421875, 'examples_seen': 2, 'step': 0, 'algorithm': 'floyd_warshall'}\nI0630 01:37:26.102356 18184 train.py:531] Checkpointing best model, best avg val score was -1.000, current avg val score is 0.232, val scores are: floyd_warshall: 0.232\nI0630 01:37:26.107866 18184 train.py:539] Restoring best model from checkpoint...\nI0630 01:37:34.570454 18184 train.py:554] (test) algo floyd_warshall : {'Pi': 0.0114593505859375, 'score': 0.0114593505859375, 'examples_seen': 2, 'step': 1, 'algorithm': 'floyd_warshall'}\nI0630 01:37:34.570454 18184 train.py:556] Done!\n",
+  "verdict": "C5_MLAGENTBENCH_CLRS_SMOKE_PASS"
+}

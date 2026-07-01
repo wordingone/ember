@@ -1,0 +1,358 @@
+{
+  "aggregate": {
+    "max_test_score": 0.01898956298828125,
+    "mean_test_score": 0.01531982421875,
+    "min_test_score": 0.01050567626953125,
+    "scores": [
+      0.01050567626953125,
+      0.01898956298828125,
+      0.0164642333984375
+    ],
+    "seed_count": 3,
+    "stdev_test_score": 0.004356183850810297,
+    "valid_score_count": 3
+  },
+  "compatibility_patch": [
+    {
+      "file": "train.py",
+      "new_sha256": "0e5c71bf95af57198df1a76300af9b0b976a6ce9f20a5f7bb14774b1ea8efa58",
+      "old_sha256": "ff3ca249cb9cfb9654087049027b80d1db4b7fc482f249dd602c51f41a8affb2",
+      "patch_scope": "Windows/NumPy PRNG upper-bound compatibility only; no model, data, score, or optimizer logic changed.",
+      "replacement_count": 3
+    },
+    {
+      "file": "eval.py",
+      "new_sha256": "0db2edf8a596bec6efdd72f5e1487179c8e7e3e98a32a0fda911dc71ecb6ffcd",
+      "old_sha256": "195f6c4dd74d834d66db780613fa158ec823f778ccf86cc8f932ef3d9bd34723",
+      "patch_scope": "Windows/NumPy PRNG upper-bound compatibility only; no model, data, score, or optimizer logic changed.",
+      "replacement_count": 3
+    }
+  ],
+  "completion_limit": "This is a governed three-seed upstream-baseline comparator receipt for C5-0A. It is not an Ember loop result, not an equal-budget deterministic patch comparator, not a C5 improvement claim, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T08:51:34Z",
+  "duration_seconds": 89.82,
+  "environment": {
+    "module_versions": {
+      "absl": {
+        "present": true,
+        "version": "2.3.1"
+      },
+      "attrs": {
+        "present": true,
+        "version": "25.3.0"
+      },
+      "chex": {
+        "present": true,
+        "version": "0.1.90"
+      },
+      "clrs": {
+        "present": true,
+        "version": "2.0.3"
+      },
+      "haiku": {
+        "present": true,
+        "version": "0.0.16"
+      },
+      "jax": {
+        "present": true,
+        "version": "0.6.2"
+      },
+      "jaxlib": {
+        "present": true,
+        "version": "0.6.2"
+      },
+      "numpy": {
+        "present": true,
+        "version": "1.26.4"
+      },
+      "optax": {
+        "present": true,
+        "version": "0.2.8"
+      },
+      "tensorflow": {
+        "present": true,
+        "version": "2.20.0"
+      }
+    },
+    "runner_python_label": "isolated CLRS venv supplied by --python; local absolute path intentionally omitted"
+  },
+  "failure_count": 0,
+  "local_path_policy": "Receipt omits absolute local paths. Reproduce by cloning MLAgentBench at the pinned commit, creating the isolated CLRS env, and running this script with local --mlagentbench/--python/--scratch paths.",
+  "pass_conditions": {
+    "all_seed_runs_passed": true,
+    "all_seed_scores_numeric": true,
+    "source_commit_pinned": true,
+    "three_or_more_seeds": true
+  },
+  "run_config": {
+    "algorithm": "floyd_warshall",
+    "batch_size": 2,
+    "comparator": "unchanged upstream MLAgentBench CLRS baseline with declared Windows/NumPy compatibility patch",
+    "eval_every": 1,
+    "hidden_size": 16,
+    "nb_msg_passing_steps": 1,
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "train_lengths": [
+      4
+    ],
+    "train_steps": 3
+  },
+  "seed_runs": [
+    {
+      "best_val_score_observed": 0.2421875,
+      "checkpoint_files": [
+        {
+          "name": "best.pkl",
+          "sha256": "4d23c10a248201bc8264898f93e951ddc854e3acc53baac2fe1f8efbba383db1",
+          "size_bytes": 155334
+        },
+        {
+          "name": "model_params.pkl",
+          "sha256": "d28907cae1677245f8a4c6b0ed03a7a0e1d3899dae4e7267b3698e87f0bb6ab4",
+          "size_bytes": 421
+        },
+        {
+          "name": "spec_list.pkl",
+          "sha256": "6c7fa97ca51288c1f12846ff9f70fad5d52a7ff307ac2d880009dbde8841416f",
+          "size_bytes": 182
+        }
+      ],
+      "duration_seconds": 30.059,
+      "parsed_log": {
+        "checkpoint_seen": true,
+        "done_seen": true,
+        "loss_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 2,
+            "loss": 5.18932,
+            "step": 0
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 4,
+            "loss": 5.651585,
+            "step": 1
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 6,
+            "loss": 5.386072,
+            "step": 2
+          }
+        ],
+        "restore_seen": true,
+        "test_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.01050567626953125
+          }
+        ],
+        "val_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.232421875,
+            "step": 0
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.2421875,
+            "step": 1
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.2412109375,
+            "step": 2
+          }
+        ]
+      },
+      "pass_conditions": {
+        "checkpoint_seen": true,
+        "done_seen": true,
+        "has_checkpoint_files": true,
+        "has_test_score": true,
+        "restore_seen": true,
+        "returncode_zero": true
+      },
+      "passed": true,
+      "seed": 42,
+      "stdout_stderr_tail": "I0630 01:50:24.342477 49852 train.py:495] Algo floyd_warshall step 0 current loss 5.189320, current_train_items 2.\nI0630 01:50:24.602500 49852 train.py:515] (val) algo floyd_warshall step 0: {'Pi': 0.232421875, 'score': 0.232421875, 'examples_seen': 2, 'step': 0, 'algorithm': 'floyd_warshall'}\nI0630 01:50:24.602500 49852 train.py:531] Checkpointing best model, best avg val score was -1.000, current avg val score is 0.232, val scores are: floyd_warshall: 0.232\nI0630 01:50:24.602500 49852 train.py:495] Algo floyd_warshall step 1 current loss 5.651585, current_train_items 4.\nI0630 01:50:24.602500 49852 train.py:515] (val) algo floyd_warshall step 1: {'Pi': 0.2421875, 'score': 0.2421875, 'examples_seen': 4, 'step': 1, 'algorithm': 'floyd_warshall'}\nI0630 01:50:24.602500 49852 train.py:531] Checkpointing best model, best avg val score was 0.232, current avg val score is 0.242, val scores are: floyd_warshall: 0.242\nI0630 01:50:24.622459 49852 train.py:495] Algo floyd_warshall step 2 current loss 5.386072, current_train_items 6.\nI0630 01:50:24.622459 49852 train.py:515] (val) algo floyd_warshall step 2: {'Pi': 0.2412109375, 'score': 0.2412109375, 'examples_seen': 6, 'step': 2, 'algorithm': 'floyd_warshall'}\nI0630 01:50:24.622459 49852 train.py:534] Not saving new best model, best avg val score was 0.242, current avg val score is 0.241, val scores are: floyd_warshall: 0.241\nI0630 01:50:24.622459 49852 train.py:539] Restoring best model from checkpoint...\nI0630 01:50:33.138678 49852 train.py:554] (test) algo floyd_warshall : {'Pi': 0.01050567626953125, 'score': 0.01050567626953125, 'examples_seen': 6, 'step': 3, 'algorithm': 'floyd_warshall'}\nI0630 01:50:33.138678 49852 train.py:556] Done!\n",
+      "test_score": 0.01050567626953125
+    },
+    {
+      "best_val_score_observed": 0.296875,
+      "checkpoint_files": [
+        {
+          "name": "best.pkl",
+          "sha256": "dd25fd63c82bc36bf6fbdbac547010768e3563bf0dc07a2fe31881e3b6845586",
+          "size_bytes": 155334
+        },
+        {
+          "name": "model_params.pkl",
+          "sha256": "89d568d981ce418614ab0560fcc508e56aadca279c7ef79055ed53321280c39e",
+          "size_bytes": 421
+        },
+        {
+          "name": "spec_list.pkl",
+          "sha256": "6c7fa97ca51288c1f12846ff9f70fad5d52a7ff307ac2d880009dbde8841416f",
+          "size_bytes": 182
+        }
+      ],
+      "duration_seconds": 29.826,
+      "parsed_log": {
+        "checkpoint_seen": true,
+        "done_seen": true,
+        "loss_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 2,
+            "loss": 5.183346,
+            "step": 0
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 4,
+            "loss": 5.217947,
+            "step": 1
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 6,
+            "loss": 5.036817,
+            "step": 2
+          }
+        ],
+        "restore_seen": true,
+        "test_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.01898956298828125
+          }
+        ],
+        "val_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.294921875,
+            "step": 0
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.2763671875,
+            "step": 1
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.296875,
+            "step": 2
+          }
+        ]
+      },
+      "pass_conditions": {
+        "checkpoint_seen": true,
+        "done_seen": true,
+        "has_checkpoint_files": true,
+        "has_test_score": true,
+        "restore_seen": true,
+        "returncode_zero": true
+      },
+      "passed": true,
+      "seed": 43,
+      "stdout_stderr_tail": "I0630 01:50:54.266206 49192 train.py:495] Algo floyd_warshall step 0 current loss 5.183346, current_train_items 2.\nI0630 01:50:54.517057 49192 train.py:515] (val) algo floyd_warshall step 0: {'Pi': 0.294921875, 'score': 0.294921875, 'examples_seen': 2, 'step': 0, 'algorithm': 'floyd_warshall'}\nI0630 01:50:54.517057 49192 train.py:531] Checkpointing best model, best avg val score was -1.000, current avg val score is 0.295, val scores are: floyd_warshall: 0.295\nI0630 01:50:54.528550 49192 train.py:495] Algo floyd_warshall step 1 current loss 5.217947, current_train_items 4.\nI0630 01:50:54.528550 49192 train.py:515] (val) algo floyd_warshall step 1: {'Pi': 0.2763671875, 'score': 0.2763671875, 'examples_seen': 4, 'step': 1, 'algorithm': 'floyd_warshall'}\nI0630 01:50:54.528550 49192 train.py:534] Not saving new best model, best avg val score was 0.295, current avg val score is 0.276, val scores are: floyd_warshall: 0.276\nI0630 01:50:54.538904 49192 train.py:495] Algo floyd_warshall step 2 current loss 5.036817, current_train_items 6.\nI0630 01:50:54.544401 49192 train.py:515] (val) algo floyd_warshall step 2: {'Pi': 0.296875, 'score': 0.296875, 'examples_seen': 6, 'step': 2, 'algorithm': 'floyd_warshall'}\nI0630 01:50:54.544401 49192 train.py:531] Checkpointing best model, best avg val score was 0.295, current avg val score is 0.297, val scores are: floyd_warshall: 0.297\nI0630 01:50:54.548410 49192 train.py:539] Restoring best model from checkpoint...\nI0630 01:51:03.142561 49192 train.py:554] (test) algo floyd_warshall : {'Pi': 0.01898956298828125, 'score': 0.01898956298828125, 'examples_seen': 6, 'step': 3, 'algorithm': 'floyd_warshall'}\nI0630 01:51:03.142561 49192 train.py:556] Done!\n",
+      "test_score": 0.01898956298828125
+    },
+    {
+      "best_val_score_observed": 0.31640625,
+      "checkpoint_files": [
+        {
+          "name": "best.pkl",
+          "sha256": "a106703ddf802f3bbdfb511ea107b573d06a7071e2d0604e6c15f650d77deb14",
+          "size_bytes": 155334
+        },
+        {
+          "name": "model_params.pkl",
+          "sha256": "3cdc07750ac240a76ad5501547beb374dac72da63344376526c2fd1bccc6f93b",
+          "size_bytes": 421
+        },
+        {
+          "name": "spec_list.pkl",
+          "sha256": "6c7fa97ca51288c1f12846ff9f70fad5d52a7ff307ac2d880009dbde8841416f",
+          "size_bytes": 182
+        }
+      ],
+      "duration_seconds": 29.883,
+      "parsed_log": {
+        "checkpoint_seen": true,
+        "done_seen": true,
+        "loss_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 2,
+            "loss": 5.113055,
+            "step": 0
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 4,
+            "loss": 5.256776,
+            "step": 1
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "current_train_items": 6,
+            "loss": 5.144967,
+            "step": 2
+          }
+        ],
+        "restore_seen": true,
+        "test_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.0164642333984375
+          }
+        ],
+        "val_events": [
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.28125,
+            "step": 0
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.296875,
+            "step": 1
+          },
+          {
+            "algorithm": "floyd_warshall",
+            "score": 0.31640625,
+            "step": 2
+          }
+        ]
+      },
+      "pass_conditions": {
+        "checkpoint_seen": true,
+        "done_seen": true,
+        "has_checkpoint_files": true,
+        "has_test_score": true,
+        "restore_seen": true,
+        "returncode_zero": true
+      },
+      "passed": true,
+      "seed": 44,
+      "stdout_stderr_tail": "I0630 01:51:24.233185 53216 train.py:495] Algo floyd_warshall step 0 current loss 5.113055, current_train_items 2.\nI0630 01:51:24.478354 53216 train.py:515] (val) algo floyd_warshall step 0: {'Pi': 0.28125, 'score': 0.28125, 'examples_seen': 2, 'step': 0, 'algorithm': 'floyd_warshall'}\nI0630 01:51:24.478354 53216 train.py:531] Checkpointing best model, best avg val score was -1.000, current avg val score is 0.281, val scores are: floyd_warshall: 0.281\nI0630 01:51:24.492617 53216 train.py:495] Algo floyd_warshall step 1 current loss 5.256776, current_train_items 4.\nI0630 01:51:24.492617 53216 train.py:515] (val) algo floyd_warshall step 1: {'Pi': 0.296875, 'score': 0.296875, 'examples_seen': 4, 'step': 1, 'algorithm': 'floyd_warshall'}\nI0630 01:51:24.492617 53216 train.py:531] Checkpointing best model, best avg val score was 0.281, current avg val score is 0.297, val scores are: floyd_warshall: 0.297\nI0630 01:51:24.492617 53216 train.py:495] Algo floyd_warshall step 2 current loss 5.144967, current_train_items 6.\nI0630 01:51:24.508680 53216 train.py:515] (val) algo floyd_warshall step 2: {'Pi': 0.31640625, 'score': 0.31640625, 'examples_seen': 6, 'step': 2, 'algorithm': 'floyd_warshall'}\nI0630 01:51:24.508680 53216 train.py:531] Checkpointing best model, best avg val score was 0.297, current avg val score is 0.316, val scores are: floyd_warshall: 0.316\nI0630 01:51:24.508680 53216 train.py:539] Restoring best model from checkpoint...\nI0630 01:51:33.039320 53216 train.py:554] (test) algo floyd_warshall : {'Pi': 0.0164642333984375, 'score': 0.0164642333984375, 'examples_seen': 6, 'step': 3, 'algorithm': 'floyd_warshall'}\nI0630 01:51:33.040824 53216 train.py:556] Done!\n",
+      "test_score": 0.0164642333984375
+    }
+  ],
+  "source": {
+    "expected_commit": "5d71205cc20a8e95d43aa7cb7120e89ca3323e31",
+    "id": "mlagentbench",
+    "selected_task": "CLRS/floyd_warshall",
+    "source_commit": "5d71205cc20a8e95d43aa7cb7120e89ca3323e31",
+    "upstream_eval_sha256": "195f6c4dd74d834d66db780613fa158ec823f778ccf86cc8f932ef3d9bd34723",
+    "upstream_train_sha256": "ff3ca249cb9cfb9654087049027b80d1db4b7fc482f249dd602c51f41a8affb2"
+  },
+  "verdict": "C5_MLAGENTBENCH_CLRS_GOVERNED_BASELINE_PASS"
+}

@@ -1,0 +1,17 @@
+{
+  "completion_limit": "This validates a targeted-filtered near-duplicate challenge sample only. It is not an all-pairs near-duplicate PASS, not eval-contamination evidence, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T19:55:59Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-targeted-filtered-near-duplicate-sample-2026-06-30.json",
+  "summary": {
+    "candidate_pair_count": 10335,
+    "crossing_pair_count": 25,
+    "excluded_document_count": 1668,
+    "max_exact_jaccard_observed": 0.955778,
+    "remaining_document_count": 4234790,
+    "sampled_documents": 50000,
+    "verdict": "C1_TARGETED_FILTERED_NEAR_DUPLICATE_SAMPLE_CANDIDATES_FOUND"
+  },
+  "verdict": "C1_TARGETED_FILTERED_NEAR_DUPLICATE_SAMPLE_VALIDATED"
+}

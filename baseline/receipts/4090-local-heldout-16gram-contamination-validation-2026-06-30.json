@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates local heldout exact 16-token overlap only. It is not external eval-suite or normalized-span contamination completion and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T13:56:33Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-local-heldout-16gram-contamination-scan-2026-06-30.json",
+  "verdict": "C1_LOCAL_HELDOUT_16GRAM_CONTAMINATION_VALIDATED"
+}

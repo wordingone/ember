@@ -1,0 +1,144 @@
+{
+  "budget": {
+    "batch_size_preserved": true,
+    "block_size_preserved": true,
+    "eval_iters": 10,
+    "max_iters": 20,
+    "model_shape_preserved": true,
+    "num_seeds_shakespeare_char": 2,
+    "profile": "bounded_non_smoke_equal_budget"
+  },
+  "candidate_kind": "deterministic_patch_comparator",
+  "command": [
+    "python",
+    "experiment.py",
+    "--out_dir",
+    "run_0"
+  ],
+  "completion_limit": "This is a deterministic same-budget comparator run only. It is not an Ember improvement and not overall baseline completion.",
+  "cwd": "<WORKDIR>",
+  "deterministic_patch": {
+    "dropout": "0.2 -> 0.1",
+    "learning_rate_shakespeare_char": "1e-3 -> 8e-4",
+    "rationale": "Simple non-agent deterministic hyperparameter comparator under identical bounded budget."
+  },
+  "elapsed_seconds": 5.457825,
+  "governed_run": true,
+  "job": "governed_bounded_deterministic_patch_comparator",
+  "local_path_policy": "Checked-in receipt redacts machine-local paths; work-template and source repo are inputs only.",
+  "outputs": {
+    "final_info_json": "<WORKDIR>/run_0/final_info.json",
+    "final_info_json_exists": true,
+    "final_info_json_sha256": "93ad19331ce7a69c79e838159e20ea3c0d0103b474767b61468c86cee01e2ccc",
+    "per_seed_json": [
+      "<WORKDIR>/run_0/final_info_shakespeare_char_0.json",
+      "<WORKDIR>/run_0/final_info_shakespeare_char_1.json"
+    ],
+    "per_seed_json_exists": [
+      true,
+      true
+    ]
+  },
+  "parsed_final_info": {
+    "shakespeare_char": {
+      "final_info_dict": {
+        "avg_inference_tokens_per_second": [
+          284.983315981119,
+          394.59560309861354
+        ],
+        "best_val_loss": [
+          2.797684907913208,
+          2.780517578125
+        ],
+        "final_train_loss": [
+          2.7747108936309814,
+          2.80825138092041
+        ],
+        "total_train_time": [
+          1.0329580307006836,
+          0.7386703491210938
+        ]
+      },
+      "means": {
+        "avg_inference_tokens_per_second_mean": 339.78945953986624,
+        "best_val_loss_mean": 2.789101243019104,
+        "final_train_loss_mean": 2.791481137275696,
+        "total_train_time_mean": 0.8858141899108887
+      },
+      "stderrs": {
+        "avg_inference_tokens_per_second_stderr": 27.403071779373633,
+        "best_val_loss_stderr": 0.004291832447052002,
+        "final_train_loss_stderr": 0.008385121822357178,
+        "total_train_time_stderr": 0.07357192039489746
+      }
+    }
+  },
+  "patches": [
+    {
+      "group": "budget",
+      "new": "eval_interval = 10 if dataset == \"shakespeare_char\" else 10",
+      "old": "eval_interval = 250 if dataset == \"shakespeare_char\" else 1000",
+      "status": "applied"
+    },
+    {
+      "group": "budget",
+      "new": "log_interval = 5 if dataset == \"shakespeare_char\" else 5",
+      "old": "log_interval = 10 if dataset == \"shakespeare_char\" else 100",
+      "status": "applied"
+    },
+    {
+      "group": "budget",
+      "new": "eval_iters = 10",
+      "old": "eval_iters = 200",
+      "status": "applied"
+    },
+    {
+      "group": "budget",
+      "new": "max_iters = 20 if dataset == \"shakespeare_char\" else 20",
+      "old": "max_iters = 5000 if dataset == \"shakespeare_char\" else 100000",
+      "status": "applied"
+    },
+    {
+      "group": "budget",
+      "new": "warmup_iters = 5 if dataset == \"shakespeare_char\" else 5",
+      "old": "warmup_iters = 100 if dataset == \"shakespeare_char\" else 200",
+      "status": "applied"
+    },
+    {
+      "group": "budget",
+      "new": "compile = False  # governed bounded run disables compile overhead",
+      "old": "compile = True  # do not torch compile the model on macbooks",
+      "status": "applied"
+    },
+    {
+      "group": "budget",
+      "new": "num_samples = 2  # governed bounded inference samples",
+      "old": "num_samples = 10  # number of samples to draw",
+      "status": "applied"
+    },
+    {
+      "group": "budget",
+      "new": "max_new_tokens = 64  # governed bounded generation budget",
+      "old": "max_new_tokens = 500  # number of tokens generated in each sample",
+      "status": "applied"
+    },
+    {
+      "group": "deterministic_comparator",
+      "new": "learning_rate = 8e-4 if dataset == \"shakespeare_char\" else 5e-4",
+      "old": "learning_rate = 1e-3 if dataset == \"shakespeare_char\" else 5e-4",
+      "status": "applied"
+    },
+    {
+      "group": "deterministic_comparator",
+      "new": "dropout = 0.1  # deterministic comparator patch: lower dropout under same budget",
+      "old": "dropout = 0.2  # for pretraining 0 is good, for finetuning try 0.1+",
+      "status": "applied"
+    }
+  ],
+  "returncode": 0,
+  "stderr_tail": "<LOCAL_PATH>/ember-baseline-governed/nanoGPT_lite_deterministic_patch_comparator/experiment.py:463: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.\n  scaler = torch.cuda.amp.GradScaler(enabled=(dtype == \"float16\"))\n<LOCAL_PATH>/ember-baseline-governed/nanoGPT_lite_deterministic_patch_comparator/experiment.py:463: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.\n  scaler = torch.cuda.amp.GradScaler(enabled=(dtype == \"float16\"))\n",
+  "stdout_tail": "tokens per iteration will be: 16,384\nfound vocab_size = 65 (inside ../../data/shakespeare_char/meta.pkl)\nInitializing a new model from scratch\nnumber of parameters: 10.65M\nnum decayed parameter tensors: 26, with 10,740,096 parameters\nnum non-decayed parameter tensors: 13, with 4,992 parameters\nusing fused AdamW: True\nstep 0: train loss 4.2873, val loss 4.2810\niter 0: loss 4.2763, time 442.41ms\niter 5: loss 3.4700, time 3.17ms\nstep 10: train loss 3.1931, val loss 3.2414\niter 10: loss 3.2121, time 157.61ms\niter 15: loss 2.9338, time 15.79ms\nstep 20: train loss 2.7793, val loss 2.7977\niter 20: loss 2.7747, time 149.75ms\ntraining done\nBest validation loss: 2.797684907913208\nTotal train time: 0.02 mins\nLoading meta from ../../data/shakespeare_char/meta.pkl...\nSample 1:\n ofe tWG ond onlee se w:\n\nMetore y thathe,\n\nTheOThesand BAf thee \nInference time: 0.33 seconds\nTokens per second: 193.79\n---------------\nSample 2:\n wowe in to ond h h andeTorand cR\n\nShe t sus ad the ched fawiwhea\nInference time: 0.17 seconds\nTokens per second: 376.17\n---------------\nAverage tokens per second: 284.98\ntokens per iteration will be: 16,384\nfound vocab_size = 65 (inside ../../data/shakespeare_char/meta.pkl)\nInitializing a new model from scratch\nnumber of parameters: 10.65M\nnum decayed parameter tensors: 26, with 10,740,096 parameters\nnum non-decayed parameter tensors: 13, with 4,992 parameters\nusing fused AdamW: True\nstep 0: train loss 4.2392, val loss 4.2279\niter 0: loss 4.2352, time 142.67ms\niter 5: loss 3.3642, time 5.53ms\nstep 10: train loss 3.1503, val loss 3.2020\niter 10: loss 3.1841, time 168.16ms\niter 15: loss 2.8761, time 5.56ms\nstep 20: train loss 2.7637, val loss 2.7805\niter 20: loss 2.8083, time 157.94ms\ntraining done\nBest validation loss: 2.780517578125\nTotal train time: 0.01 mins\nLoading meta from ../../data/shakespeare_char/meta.pkl...\nSample 1:\n ped te d. !rengen whandlerr anve int mie sshet dtan fed.\n\nMigd h\nInference time: 0.15 seconds\nTokens per second: 424.17\n---------------\nSample 2:\n menly heP! h a chane chtheth, d hensee he t mmes d Rd moe t tSec\nInference time: 0.18 seconds\nTokens per second: 365.02\n---------------\nAverage tokens per second: 394.60\n",
+  "task_id": "C5-0B-AI-Scientist-nanoGPT-lite",
+  "timeout_seconds": 600,
+  "verdict": "PASS"
+}

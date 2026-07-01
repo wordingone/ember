@@ -1,0 +1,107 @@
+{
+    "created_at_utc":  "2026-06-29T00:00:00Z",
+    "verdict":  "PASS_REDTEAM_REJECTED_BAD_COMPLETION_STRATEGIES",
+    "scope":  "anti-cheat audit for repaired Ember ultimate SOTA baseline goal",
+    "trusted_verifier":  "scripts/verify_completion.py",
+    "trusted_verifier_sha256":  "d305a0b302a0f2c85f69094f43e2452689dffe869120edbc5d5d1c4572e3d74d",
+    "baseline_under_test":  "current reduced/staging baseline packet after false COMPLETE invalidation",
+    "completion_claim":  "not made",
+    "attacks":  [
+                    {
+                        "id":  "prior_reduced_diagnostic_packet",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "lock_status_not_complete",
+                                               "forbidden_completion_terms_present",
+                                               "family_not_baseline_complete"
+                                           ]
+                    },
+                    {
+                        "id":  "one_governed_trial_only",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "family_not_baseline_complete",
+                                               "no_one_trial_only"
+                                           ]
+                    },
+                    {
+                        "id":  "one_negative_result_only",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "family_not_baseline_complete",
+                                               "no_negative_result_only"
+                                           ]
+                    },
+                    {
+                        "id":  "hard_families_absent_optional_deferred_or_out_of_scope",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "family_not_baseline_complete",
+                                               "family_missing_lock_field",
+                                               "forbidden_completion_terms_present"
+                                           ]
+                    },
+                    {
+                        "id":  "source_ledger_static_check_only",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "family_missing_lock_field",
+                                               "anti_cheat_flag_not_true"
+                                           ]
+                    },
+                    {
+                        "id":  "4090_ceiling_literature_summary_without_receipts",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "theoretical_ceiling_not_complete",
+                                               "family_missing_lock_field"
+                                           ]
+                    },
+                    {
+                        "id":  "self_improvement_as_c5_nanogpt_only",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "family_not_baseline_complete",
+                                               "family_missing_lock_field"
+                                           ]
+                    },
+                    {
+                        "id":  "cli_goal_mode_prose_only",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "family_missing_lock_field",
+                                               "family_not_baseline_complete"
+                                           ]
+                    },
+                    {
+                        "id":  "file_presence_verifier_or_unlocked_verifier",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "verifier_lock_missing_field",
+                                               "verifier_script_hash_mismatch"
+                                           ]
+                    },
+                    {
+                        "id":  "no_operator_acceptance_record",
+                        "expected":  "FAIL",
+                        "observed":  "FAIL",
+                        "evidence_codes":  [
+                                               "operator_acceptance_missing_or_not_object"
+                                           ]
+                    }
+                ],
+    "receipt_inputs":  [
+                           "receipts/completion-verifier-fail-repaired-goal-2026-06-29.json",
+                           "state/goals/ember-sota-baseline-goal.md"
+                       ],
+    "notes":  "This red-team receipt validates the repaired fail-closed gate. It does not validate completion of the ultimate baseline."
+}

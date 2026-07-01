@@ -1,0 +1,114 @@
+{
+  "completion_limit": "This imports and summarizes existing growth-law receipts only. It is negative/partial evidence, not an architecture-growth win and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T09:20:38Z",
+  "evidence_interpretation": {
+    "claim_status": "UNSATISFIED: the growth-law or keystone claim still needs matched v4 controls and enough seeds before any field-level architecture-growth claim.",
+    "v3_controls": "The v3 receipt contains matched G/F/B0/R control arms for eight rounds, but it used the earlier jam calibration and is not a v4 replacement.",
+    "v4_growth_arm": "The v4 growth arm executed 12 rounds and recorded real growth events, then ended with an insufficient-seed verdict rather than a win."
+  },
+  "failure_count": 0,
+  "failures": [],
+  "inputs": [
+    {
+      "arm_counts": {
+        "G": 13,
+        "baseline": 1,
+        "verdict": 1
+      },
+      "growth_event_count": 4,
+      "label": "v4_growth_run",
+      "latest_by_arm": {
+        "G": {
+          "frontier_pass_at_1": 0.0,
+          "growth_event": false,
+          "n_growth_events": 4,
+          "round": 12,
+          "round_wall_seconds": 59,
+          "verified_fraction": 0.0,
+          "vram_fraction": 0.4052
+        },
+        "baseline": {
+          "frontier_pass_at_1": null,
+          "growth_event": null,
+          "n_growth_events": null,
+          "round": 0,
+          "round_wall_seconds": 1717,
+          "verified_fraction": null,
+          "vram_fraction": 0.0405
+        }
+      },
+      "latest_verdict_result": "INCONCLUSIVE:insufficient_seeds(need>=3,got=1)",
+      "latest_verdict_round": 12,
+      "max_reported_vram_fraction": 0.5964,
+      "row_count": 15,
+      "sha256": "c00c017cf2308fa89e39f88025fd780bc72d1456e2d7a3ec738becdc64d31e2e"
+    },
+    {
+      "arm_counts": {
+        "B0": 8,
+        "F": 8,
+        "G": 8,
+        "R": 8,
+        "baseline": 1,
+        "verdict": 1
+      },
+      "growth_event_count": 1,
+      "label": "v3_matched_controls",
+      "latest_by_arm": {
+        "B0": {
+          "frontier_pass_at_1": 0.0,
+          "growth_event": false,
+          "n_growth_events": 0,
+          "round": 8,
+          "round_wall_seconds": 194,
+          "verified_fraction": 0.0,
+          "vram_fraction": 0.1782
+        },
+        "F": {
+          "frontier_pass_at_1": 0.133333,
+          "growth_event": false,
+          "n_growth_events": 0,
+          "round": 8,
+          "round_wall_seconds": 776,
+          "verified_fraction": 0.16,
+          "vram_fraction": 0.0944
+        },
+        "G": {
+          "frontier_pass_at_1": 0.166667,
+          "growth_event": false,
+          "n_growth_events": 0,
+          "round": 8,
+          "round_wall_seconds": 845,
+          "verified_fraction": 0.26,
+          "vram_fraction": 0.0869
+        },
+        "R": {
+          "frontier_pass_at_1": 0.0,
+          "growth_event": false,
+          "n_growth_events": 1,
+          "round": 8,
+          "round_wall_seconds": 1696,
+          "verified_fraction": 0.0,
+          "vram_fraction": 0.1104
+        },
+        "baseline": {
+          "frontier_pass_at_1": null,
+          "growth_event": null,
+          "n_growth_events": null,
+          "round": 0,
+          "round_wall_seconds": 1294,
+          "verified_fraction": null,
+          "vram_fraction": 0.0405
+        }
+      },
+      "latest_verdict_result": "INCONCLUSIVE:insufficient_seeds(need>=3,got=1)",
+      "latest_verdict_round": 8,
+      "max_reported_vram_fraction": 0.1782,
+      "row_count": 34,
+      "sha256": "fb8fe46da9c4727055dcf13a2b3e49773e468734bdc706147ae09cf745e488d0"
+    }
+  ],
+  "next_repair": "Run matched v4 control arms or a complete multi-seed growth-law packet under the predeclared compute budget; do not recompute completed v3/v4 rows unless the parser identifies a concrete invalid row.",
+  "schema": "baseline.growth_refutation_import.v1",
+  "verdict": "GROWTH_REFUTATION_RECEIPTS_IMPORTED"
+}

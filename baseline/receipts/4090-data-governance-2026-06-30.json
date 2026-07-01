@@ -1,0 +1,407 @@
+{
+  "completion_limit": "This receipt proves public-safe C1 data provenance/token-floor evidence, seeded real-token full-stack LM-loss probe evidence, bounded same-window multi-step stability, bounded same-window steady-state throughput above the locked TFLOP/s threshold, bounded varied-window real-token throughput above the locked TFLOP/s threshold, bounded streamed-window throughput with per-step loader timing above the locked TFLOP/s threshold, bounded 128-window streamed real-token throughput above the locked TFLOP/s threshold, bounded nvidia-smi power/energy sampling for that 128-window probe, bounded checkpoint/resume mechanics, bounded repeated checkpoint-cadence mechanics with explicit overhead, bounded eval-accounting mechanics, bounded recovery-accounting mechanics, bounded integrated train/checkpoint/eval/recovery policy mechanics, bounded 256-window policy-amortized train/checkpoint/eval/recovery/power evidence measured below the locked throughput requirement, and explicit remaining gaps only. It is not a full-shard dataloader long-run training receipt, not full-run energy accounting, not a long-run checkpoint/recovery policy receipt, not a full external evaluation suite, not a full dedupe/contamination pass, and not overall baseline completion.",
+  "corpus": {
+    "content_total_tokens": 6973632300,
+    "per_source": {
+      "code_github_clean": {
+        "content_tokens": 4053253615,
+        "separator_tokens": 1867710,
+        "stream_tokens": 4055121325
+      },
+      "fineweb_edu": {
+        "content_tokens": 1666837789,
+        "separator_tokens": 1549860,
+        "stream_tokens": 1668387649
+      },
+      "gutenberg_en": {
+        "content_tokens": 506114061,
+        "separator_tokens": 4510,
+        "stream_tokens": 506118571
+      },
+      "ledger_mit": {
+        "content_tokens": 232578,
+        "separator_tokens": 780,
+        "stream_tokens": 233358
+      },
+      "wikipedia_en": {
+        "content_tokens": 747194257,
+        "separator_tokens": 813598,
+        "stream_tokens": 748007855
+      }
+    },
+    "separator_tokens": 4236458,
+    "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; shard + receipt paths carry the git -text pin",
+    "shard_count": 26,
+    "shard_hashes": [
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00000.bin",
+        "sha256": "2ada751e4f1a9612b57cf21d95deec09d8230690f52a9892a69b9c665b231ca5"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00001.bin",
+        "sha256": "0a529f8425e268dfbf61870f121381f2eae1c5e5ebc298804013d54324c36e81"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00002.bin",
+        "sha256": "4efeb973ee7667d4ce9356d0bd9c478f9a33252733c2d01361e5f7a8b472d89f"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00003.bin",
+        "sha256": "c9dc5cafa7a806384a200c26a51a7e11a3483019e9bb177dc4afed11eba18d0c"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00004.bin",
+        "sha256": "6f87138445b43b9669869deaca8ab07702b8dd0ebebd54d186cf3c3bf18134fb"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00005.bin",
+        "sha256": "990aa39342ddde2d5f839f9c766fa09f0924a66cb460629e6273425a7525d603"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00006.bin",
+        "sha256": "8da2dab4c68907f4643c6fba8d0b82ab0611584247c3e95e58109f34dfed10b7"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00007.bin",
+        "sha256": "d2456d659bbcd46a9becf08512660008f4742cf853e5ac0aaed90edc66ecbccd"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00008.bin",
+        "sha256": "a0851ffadf70046e9d74fcce1aefdbeb68c826a3dce5e7100de68c66104d93e4"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00009.bin",
+        "sha256": "73ba58e42bd827ae4d111ffb7c54b67fbb0b2300b0d3eb243d65302ff4f2407d"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00010.bin",
+        "sha256": "ceb2fcfa59e505ae8496eb55d71e89abf24577013ea50439f6eeef562533cd99"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00011.bin",
+        "sha256": "f15ec3e7951ec0e6b32daa38968fadb5a5890bf69e55236667056336161b798b"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00012.bin",
+        "sha256": "55556e9bf1fe4f4653417dd48fa048d824b45aba21be565699b947edb269badf"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00013.bin",
+        "sha256": "90977814b3f5b35decfa1d37262c818b92069971a2c24d04db1a8944873f5e0d"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00014.bin",
+        "sha256": "28a53ddf00bbf8940b92662c1982b1259a1cc102e2b20fa1a8f3bac47652d90c"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00015.bin",
+        "sha256": "204f935c7b827634cfbf51ad00ad2be1161f123a87b93c79ed6ecd40b008b5ad"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00016.bin",
+        "sha256": "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00017.bin",
+        "sha256": "39618f4adfcca860c1faab43bb86660dbfb621c0635794565371826e59719a69"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00018.bin",
+        "sha256": "3bb6dbbabc4e6eec2d62a6798956d74175f2af3d1b848d2b59eeccd043976553"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00019.bin",
+        "sha256": "207b2b81c83bed4978b9877f33acf27b3e497338c9b3bbf6fd0b847360866a72"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00020.bin",
+        "sha256": "6683296395568e6b40b03ad8320ded457f3278bf1124c4831311e10c5de1bbb4"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00021.bin",
+        "sha256": "6b9f3d68714a54d48e9916b7de68b1f38afb53a6046189e2a0cce7d7a23189c5"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00022.bin",
+        "sha256": "f5f7da6149461604db34ba5b567b94e9955d97d27845b58df5e76d76077b23b1"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00023.bin",
+        "sha256": "cd58fa76d65350622739e5c788e8bd82c7d3eccd302837afcc7d812472cba7c1"
+      },
+      {
+        "n_tokens": 268435456,
+        "name": "v0-00024.bin",
+        "sha256": "028e718b21054ee4dd62af20c6e07db07f9e8186367530f8dc85be8162c8e085"
+      },
+      {
+        "n_tokens": 266982358,
+        "name": "v0-00025.bin",
+        "sha256": "d2bc5c37a48a33ec40bc3358a9a84f11dda0c19ab82d37e09606c2d202ed106f"
+      }
+    ],
+    "stream_total_tokens": 6977868758
+  },
+  "created_at_utc": "2026-06-30T03:51:34Z",
+  "governance_gaps": {
+    "checkpoint_cadence_probe": "BOUNDED_STREAMED_CHECKPOINT_CADENCE_READY_LONG_RUN_POLICY_STILL_REQUIRED",
+    "contamination_receipt_for_c1": "NOT_IMPORTED_INTO_BASELINE_YET",
+    "dedupe_receipt_for_c1": "NOT_IMPORTED_INTO_BASELINE_YET",
+    "eval_accounting_probe": "BOUNDED_STREAMED_EVAL_ACCOUNTING_READY_FULL_EXTERNAL_EVAL_STILL_REQUIRED",
+    "integrated_policy_probe": "BOUNDED_STREAMED_TRAIN_CHECKPOINT_EVAL_RECOVERY_READY_LONG_RUN_STILL_REQUIRED",
+    "long_run_checkpoint_resume": "BOUNDED_REAL_TOKEN_CHECKPOINT_RESUME_PROBE_READY_LONG_RUN_CADENCE_STILL_REQUIRED",
+    "multistep_stability_probe": "BOUNDED_SAME_WINDOW_REAL_TOKEN_MULTISTEP_STABILITY_READY_LONG_RUN_STILL_REQUIRED",
+    "policy_amortized_256_window_probe": "BOUNDED_POLICY_AMORTIZED_256_WINDOW_MEASURED_BELOW_REQUIRED_LONG_RUN_STILL_REQUIRED",
+    "power_sampled_128_window_probe": "BOUNDED_POWER_SAMPLED_128_WINDOW_READY_FULL_RUN_ENERGY_STILL_REQUIRED",
+    "real_data_lm_loss_probe": "BOUNDED_REAL_TOKEN_FULL_STACK_LM_LOSS_PROBE_READY_LONG_RUN_STILL_REQUIRED",
+    "recovery_accounting_probe": "BOUNDED_STREAMED_RECOVERY_ACCOUNTING_READY_LONG_RUN_POLICY_STILL_REQUIRED",
+    "steady_state_throughput_probe": "BOUNDED_SAME_WINDOW_STEADY_STATE_THROUGHPUT_CLEARS_TFLOPS_LONG_RUN_STILL_REQUIRED",
+    "streamed_window_throughput_probe": "BOUNDED_STREAMED_128_WINDOW_THROUGHPUT_CLEARS_TFLOPS_FULL_SHARD_LONG_RUN_STILL_REQUIRED",
+    "varied_window_throughput_probe": "BOUNDED_VARIED_WINDOW_REAL_TOKEN_THROUGHPUT_CLEARS_TFLOPS_DATALOADER_LONG_RUN_STILL_REQUIRED"
+  },
+  "kind": "single_4090_c1_data_governance",
+  "lane_readiness": {
+    "from_scratch": {
+      "available_content_tokens": 6973632300,
+      "c1_config": "engineering/4090-1b/configs/from_scratch_1b_4090.json",
+      "coverage_ratio": 0.69736323,
+      "missing_tokens": 3026367700,
+      "status": "TOKEN_SHORTFALL_FOR_LOCKED_10B_FROM_SCRATCH_LANE",
+      "token_budget": 10000000000
+    },
+    "pretraining_equivalent": {
+      "available_content_tokens": 6973632300,
+      "c1_config": "engineering/4090-1b/configs/pretraining_equivalent_1b_4090.json",
+      "coverage_ratio": 1.39472646,
+      "excess_tokens": 1973632300,
+      "status": "TOKEN_FLOOR_READY_FOR_LOCKED_5B_PRETRAINING_EQUIVALENT_LANE",
+      "token_budget": 5000000000
+    }
+  },
+  "source_evidence": {
+    "checkpoint_cadence_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-checkpoint-cadence-probe-pretraining-equivalent.json",
+      "sha256": "7fc39e8c6dddfcc5c3945bd4d6a083adc628d8486a83623b1c8989546a9ae756",
+      "validation_receipt": "receipts/4090-checkpoint-cadence-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "checkpoint_cadence_validation": {
+      "repo_path": "receipts/4090-checkpoint-cadence-validation-2026-06-30.json",
+      "sha256": "224865bf804125a820573c796b8d4b1a6efe0ac2e42d6ed45f4a8c22c41512fd",
+      "verdict": "C1_CHECKPOINT_CADENCE_PROBE_VALIDATED"
+    },
+    "checkpoint_resume_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-checkpoint-resume-probe-pretraining-equivalent.json",
+      "sha256": "c0038ae54b57af24374dafd73481253e516b58bbfacec3d8fcb588626912ce31",
+      "validation_receipt": "receipts/4090-checkpoint-resume-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "checkpoint_resume_validation": {
+      "repo_path": "receipts/4090-checkpoint-resume-validation-2026-06-30.json",
+      "sha256": "05a496e9018ce20ccba0d8adcb24fb165d220041957580853e44ffdb44cb2ab4",
+      "verdict": "C1_CHECKPOINT_RESUME_PROBE_VALIDATED"
+    },
+    "eval_accounting_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-eval-accounting-probe-pretraining-equivalent.json",
+      "sha256": "9a2919009a5160ed728c9b322fa937d1d42111a140e66fea7026834c6772af28",
+      "validation_receipt": "receipts/4090-eval-accounting-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "eval_accounting_validation": {
+      "repo_path": "receipts/4090-eval-accounting-validation-2026-06-30.json",
+      "sha256": "508c4b2545bb017ef8469489186f28efa042d59931f1c674fef75cebe85696bb",
+      "verdict": "C1_EVAL_ACCOUNTING_PROBE_VALIDATED"
+    },
+    "integrated_policy_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-integrated-policy-probe-pretraining-equivalent.json",
+      "sha256": "62f8c8f244a66ae4de0dae2027871ac4020b8b136537483e1142ab6e78e24a64",
+      "validation_receipt": "receipts/4090-integrated-policy-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "integrated_policy_validation": {
+      "repo_path": "receipts/4090-integrated-policy-validation-2026-06-30.json",
+      "sha256": "b63ad94e007650f570147e445edb976477becc181a49ac2d5f4ed00b1d96d354",
+      "verdict": "C1_INTEGRATED_POLICY_PROBE_VALIDATED"
+    },
+    "multistep_stability_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-multistep-stability-probe-pretraining-equivalent.json",
+      "sha256": "153729869ffb895ec35b8770f3648424db962f3c82e65b88f2634118c102e706",
+      "validation_receipt": "receipts/4090-multistep-stability-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "multistep_stability_validation": {
+      "repo_path": "receipts/4090-multistep-stability-validation-2026-06-30.json",
+      "sha256": "e2ae2b3b508b74543f02f830cbc8b0aa4448eec38520a055ac5321c509a6d2fb",
+      "verdict": "C1_MULTISTEP_STABILITY_PROBE_VALIDATED"
+    },
+    "policy_amortized_256_window_power": {
+      "repo_path": "receipts/4090-policy-amortized-256-window-power-2026-06-30.json",
+      "sha256": "6d99ecc1a857ae806321f587ffd10543fed37031a4a0288d37c8cf5aaae5089b",
+      "validation_receipt": "receipts/4090-policy-amortized-256-window-validation-2026-06-30.json",
+      "verdict": "C1_POLICY_AMORTIZED_256_WINDOW_READY_NOT_COMPLETION"
+    },
+    "policy_amortized_256_window_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-policy-amortized-256-window-probe-pretraining-equivalent.json",
+      "sha256": "15770057e7cdfa1d124e002c608db91d9b2f13da40d91256304d6983082e2d14",
+      "validation_receipt": "receipts/4090-policy-amortized-256-window-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "policy_amortized_256_window_validation": {
+      "repo_path": "receipts/4090-policy-amortized-256-window-validation-2026-06-30.json",
+      "sha256": "9c596f77032d5ec739bd3c493da3bf14ca95771267ce750226e588a5a802fab7",
+      "verdict": "C1_POLICY_AMORTIZED_256_WINDOW_VALIDATED"
+    },
+    "power_sampled_128_window_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-streamed-128-window-power-sampled-probe-pretraining-equivalent.json",
+      "sha256": "8b3be2255cd18e4e03589d718f566da74afcefa87f465a921f2fd678ac9a82c4",
+      "validation_receipt": "receipts/4090-power-sampled-128-window-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "power_sampled_128_window_receipt": {
+      "repo_path": "receipts/4090-power-sampled-128-window-throughput-2026-06-30.json",
+      "sha256": "d5a9ef98c500c35b29b3248ab15496164b2876dda262408458868fe037220bd2",
+      "validation_receipt": "receipts/4090-power-sampled-128-window-validation-2026-06-30.json",
+      "verdict": "C1_POWER_SAMPLED_128_WINDOW_THROUGHPUT_READY_NOT_COMPLETION"
+    },
+    "power_sampled_128_window_validation": {
+      "repo_path": "receipts/4090-power-sampled-128-window-validation-2026-06-30.json",
+      "sha256": "734d514a994a125f5d2d927255966aee0896f7f17b2cae4dbc9f6a60f26fbba7",
+      "verdict": "C1_POWER_SAMPLED_128_WINDOW_THROUGHPUT_VALIDATED"
+    },
+    "real_data_lm_loss_probe_from_scratch": {
+      "repo_path": "receipts/4090-real-data-lm-loss-probe-from-scratch.json",
+      "sha256": "179ecb28c8b5718ade5241daafd4ab48269228c549578a1be270db7192f4830a",
+      "validation_receipt": "receipts/4090-real-data-lm-loss-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "real_data_lm_loss_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-lm-loss-probe-pretraining-equivalent.json",
+      "sha256": "a0a74885195784ab191318a89010092bbc79291c7874496506187375b232883a",
+      "validation_receipt": "receipts/4090-real-data-lm-loss-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "real_data_lm_loss_validation": {
+      "repo_path": "receipts/4090-real-data-lm-loss-validation-2026-06-30.json",
+      "sha256": "9b2a6ad037b23861e97f4723d75211b904a4a38ce9e192363bf28f5b39f5ee4d",
+      "verdict": "C1_REAL_DATA_LM_LOSS_PROBE_VALIDATED"
+    },
+    "recovery_accounting_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-recovery-accounting-probe-pretraining-equivalent.json",
+      "sha256": "a375300f203c619c9a8a071b08a569344db706ebb7d8485ae434e85d5a6c147c",
+      "validation_receipt": "receipts/4090-recovery-accounting-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "recovery_accounting_validation": {
+      "repo_path": "receipts/4090-recovery-accounting-validation-2026-06-30.json",
+      "sha256": "1cc7a60255bbdeec609a85e7bca418c4a490f7ebd6835c4ea9e7f84d4ef02d57",
+      "verdict": "C1_RECOVERY_ACCOUNTING_PROBE_VALIDATED"
+    },
+    "steady_state_throughput_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-steady-state-throughput-probe-pretraining-equivalent.json",
+      "sha256": "2cc6ae4c03bdbb11b13c9e7471ce5c42bce159e38fc9fe082e9d1701d48fc286",
+      "validation_receipt": "receipts/4090-steady-state-throughput-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "steady_state_throughput_validation": {
+      "repo_path": "receipts/4090-steady-state-throughput-validation-2026-06-30.json",
+      "sha256": "6975911f914757503d0e3af543c01793cc560274669c729cd5de87e92a4b4309",
+      "verdict": "C1_STEADY_STATE_THROUGHPUT_PROBE_VALIDATED"
+    },
+    "streamed_128_window_throughput_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-streamed-128-window-throughput-probe-pretraining-equivalent.json",
+      "sha256": "ea355ac3082454211510510654cdb58949bf368d8b360f67699a0efa7bbce8f2",
+      "validation_receipt": "receipts/4090-streamed-128-window-throughput-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "streamed_128_window_throughput_validation": {
+      "repo_path": "receipts/4090-streamed-128-window-throughput-validation-2026-06-30.json",
+      "sha256": "98d1e7612abbc61d4d7be56268588563ce6723e45a982d9c4756f4481123c4bf",
+      "verdict": "C1_STREAMED_128_WINDOW_THROUGHPUT_VALIDATED"
+    },
+    "streamed_window_throughput_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-streamed-window-throughput-probe-pretraining-equivalent.json",
+      "sha256": "912655af48947de1a4ccf7fc5e8aff02bf29eef20dc338c9c1ce2fb49df8d3ed",
+      "validation_receipt": "receipts/4090-streamed-window-throughput-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "streamed_window_throughput_validation": {
+      "repo_path": "receipts/4090-streamed-window-throughput-validation-2026-06-30.json",
+      "sha256": "31a44eb28acf5efb7492d5eed7dcb0e97a37f586b0516a0286e92af6657b2823",
+      "verdict": "C1_STREAMED_WINDOW_THROUGHPUT_PROBE_VALIDATED"
+    },
+    "token_shards_receipt": {
+      "repo_path": "receipts/token-shards-v0-20260611T170047Z.json",
+      "sha256": "3adffdda07bf6de31c5f9a9b82aaa08134aac567898c27c5fb0eae90d8ee409d",
+      "ticket": "TOKEN-SHARDS-V0",
+      "ts": "20260611T170047Z"
+    },
+    "tokenizer_freeze_receipt": {
+      "repo_path": "receipts/tokenizer-freeze-20260611T154111Z.json",
+      "sha256": "1e2da479d09f896d1ef15cece19255347aff2bc78a450b4160905579910e56ee",
+      "ticket": "TOKENIZER-FREEZE-V0",
+      "ts": "20260611T154111Z"
+    },
+    "v0_pretrain_config": {
+      "frozen": "2026-06-11T07:20Z",
+      "params_estimate": 368354304,
+      "repo_path": "configs/v0-pretrain-config.json",
+      "sha256": "5d6ea0737f8d75828d0f53de2878f08d1bb31764c0bbcb07e9c0140f2de86684"
+    },
+    "varied_window_throughput_probe_pretraining_equivalent": {
+      "repo_path": "receipts/4090-real-data-varied-window-throughput-probe-pretraining-equivalent.json",
+      "sha256": "c0fb63b6e389c494dcedae7c6ddcbb12eb837b1e071ba6e90805f956bca2db6d",
+      "validation_receipt": "receipts/4090-varied-window-throughput-validation-2026-06-30.json",
+      "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+    },
+    "varied_window_throughput_validation": {
+      "repo_path": "receipts/4090-varied-window-throughput-validation-2026-06-30.json",
+      "sha256": "5361eb378ab64b850889417b4474ae15ddf0eb813b9eb2214e304388900462fb",
+      "verdict": "C1_VARIED_WINDOW_THROUGHPUT_PROBE_VALIDATED"
+    }
+  },
+  "tokenizer": {
+    "c1_vocab_compatibility": "PASS_TOKEN_IDS_FIT_C1_VOCAB",
+    "c1_vocab_size": 32768,
+    "frozen_pre_step0": true,
+    "max_token_id_lt": 32000,
+    "reserved_band_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "reserved_band_observed_in_stream": 0,
+    "tokenizer_json_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "tokens_pending_tokenizer_freeze": false,
+    "vocab_size": 32000
+  },
+  "verdict": "C1_DATA_GOVERNANCE_EVIDENCE_READY_WITH_EXPLICIT_GAPS"
+}

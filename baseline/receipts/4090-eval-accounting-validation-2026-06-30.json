@@ -1,0 +1,16 @@
+{
+  "completion_limit": "This validates bounded no-grad LM-head eval accounting on streamed real-token windows only. It is not a full external evaluation suite, recovery accounting, data-hygiene PASS, throughput completion, or overall baseline completion receipt.",
+  "created_at_utc": "2026-06-30T15:22:27Z",
+  "eval_elapsed_fraction": 0.05830205455995249,
+  "eval_elapsed_s": 0.06643420003820211,
+  "eval_loss_mean": 101.9405288696289,
+  "eval_steps": 2,
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_eval_accounting_probe_validation",
+  "measured_tflops_lower_bound": 44.33297130056238,
+  "receipt_path": "receipts/4090-real-data-eval-accounting-probe-pretraining-equivalent.json",
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 4,
+  "verdict": "C1_EVAL_ACCOUNTING_PROBE_VALIDATED"
+}

@@ -1,0 +1,14 @@
+{
+  "bounded_surfaces": [
+    "adamw_optimizer_step",
+    "cross_entropy_forward_backward",
+    "sdpa_attention_forward_backward"
+  ],
+  "completion_limit": "This validates bounded native/fused training-stack telemetry only. It is not a full native transformer implementation, not a long-run 1B training receipt, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T15:55:00Z",
+  "failure_count": 0,
+  "failures": [],
+  "open_native_surface_count": 5,
+  "receipt_path": "receipts/4090-native-training-stack-probe-pretraining-equivalent.json",
+  "verdict": "C1_NATIVE_TRAINING_STACK_PROBE_VALIDATED"
+}

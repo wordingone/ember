@@ -1,0 +1,356 @@
+{
+  "cluster_count": 4,
+  "clusters": [
+    {
+      "keep": {
+        "doc_index": 8785,
+        "doc_sha256": "35d9ce2dbcf601a84135a0fd6f4c9f31b9929a5194ac08ec96e2da6ecd6e4b2f",
+        "shard": "v0-00000.bin",
+        "token_len": 3004
+      },
+      "member_count": 13,
+      "remove": [
+        {
+          "doc_index": 36556,
+          "doc_sha256": "f150b43e5a04124a5c7eab61a8d433b02ae63cac60ebf8df765b641b9477ddbc",
+          "shard": "v0-00000.bin",
+          "token_len": 2492
+        },
+        {
+          "doc_index": 112586,
+          "doc_sha256": "5493bdadb3812416f3c3237ab9b12a1285c5eaeeca0a1afcd7a6932a86bf3bfb",
+          "shard": "v0-00000.bin",
+          "token_len": 3008
+        },
+        {
+          "doc_index": 246766,
+          "doc_sha256": "e5bcb57f4affe1d8c63448fae46f1f63440864440c5d77b301ba73bb43c56e5c",
+          "shard": "v0-00001.bin",
+          "token_len": 3002
+        },
+        {
+          "doc_index": 411174,
+          "doc_sha256": "ec4855c01659f6db7f79ec353b5fb8d17cee518d1257c5ca53aad5179820520d",
+          "shard": "v0-00003.bin",
+          "token_len": 3007
+        },
+        {
+          "doc_index": 485716,
+          "doc_sha256": "c7c9ea267b04be4d77c5e450acb54b55078f68f95dea0a261c5e257b3acc6e0e",
+          "shard": "v0-00003.bin",
+          "token_len": 3005
+        },
+        {
+          "doc_index": 990615,
+          "doc_sha256": "4f139eecb375f5f45a0f06cdb9b2eedc2c89230fbb9ec814ed5abf2b71a7fa61",
+          "shard": "v0-00007.bin",
+          "token_len": 3002
+        },
+        {
+          "doc_index": 1034234,
+          "doc_sha256": "c51b011735c601a2a6121e0a04eab26f2159f353903205e24bd18036924b85c4",
+          "shard": "v0-00008.bin",
+          "token_len": 2487
+        },
+        {
+          "doc_index": 1140451,
+          "doc_sha256": "214d9bc65579757c4588e517c9e0d52b3471c1fe85bf5590b87b6a9d8be31b68",
+          "shard": "v0-00009.bin",
+          "token_len": 3010
+        },
+        {
+          "doc_index": 1497016,
+          "doc_sha256": "6d840ad6b463f6b5217b1884400a0f6625e1b1ad42b83f9b4fe6429a616e96d8",
+          "shard": "v0-00012.bin",
+          "token_len": 3008
+        },
+        {
+          "doc_index": 1511384,
+          "doc_sha256": "02edd729cbb1abf323a92fc1567e13f5bc4dc62605bf206ca1da0311bc20c872",
+          "shard": "v0-00012.bin",
+          "token_len": 3001
+        },
+        {
+          "doc_index": 1512367,
+          "doc_sha256": "7002930a36002b57a55c1cda26850deccd7e64d8222526ec5b81f1cb148c8533",
+          "shard": "v0-00012.bin",
+          "token_len": 3004
+        },
+        {
+          "doc_index": 1807212,
+          "doc_sha256": "2cba75c29ab365b36e216c7708306fde5ba1e00ded92961ef6ef6a7136c0b96f",
+          "shard": "v0-00014.bin",
+          "token_len": 3002
+        }
+      ],
+      "remove_count": 12
+    },
+    {
+      "keep": {
+        "doc_index": 12104,
+        "doc_sha256": "6203489b961db6731ff0d259ce99a444f9a89e3c9559cc5d6c6b8c4afc7f9251",
+        "shard": "v0-00000.bin",
+        "token_len": 133
+      },
+      "member_count": 3,
+      "remove": [
+        {
+          "doc_index": 860195,
+          "doc_sha256": "9f8256389de991a9990b4e53a0eb0df011f7325888ca58cb7bc7cccf0a405210",
+          "shard": "v0-00006.bin",
+          "token_len": 133
+        },
+        {
+          "doc_index": 1620243,
+          "doc_sha256": "23552eb514cb4a221da7a9167994ef1bef4d36312f72738f868ef84a9520631b",
+          "shard": "v0-00013.bin",
+          "token_len": 140
+        }
+      ],
+      "remove_count": 2
+    },
+    {
+      "keep": {
+        "doc_index": 21425,
+        "doc_sha256": "c97af86ff7ad6b9605be4bab05ba1335795e85863d750e707e1585af4423166c",
+        "shard": "v0-00000.bin",
+        "token_len": 1300
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "doc_index": 424615,
+          "doc_sha256": "cc0b54f3a76572e7fade44f7ec5901e039be747f083e6cd7dd2b5bc5ca8eb088",
+          "shard": "v0-00003.bin",
+          "token_len": 1300
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "keep": {
+        "doc_index": 32612,
+        "doc_sha256": "784f9571954dfa37282eb39442e2869cce7571dfcd6fdccebe12130e6d71b5ee",
+        "shard": "v0-00000.bin",
+        "token_len": 242
+      },
+      "member_count": 10,
+      "remove": [
+        {
+          "doc_index": 249112,
+          "doc_sha256": "129a1f159aeb2b5527dfcc45d18db73e96f34d4b14fa477fd7bf57ec58ebd4fd",
+          "shard": "v0-00001.bin",
+          "token_len": 240
+        },
+        {
+          "doc_index": 300293,
+          "doc_sha256": "0192a199bcc635962438139d6192106540303533ff7bb56e1c777357847b071f",
+          "shard": "v0-00002.bin",
+          "token_len": 236
+        },
+        {
+          "doc_index": 725481,
+          "doc_sha256": "e7e45ba9e2ee584ae8daa67a54751df7000d11619c7200a223b74b6bb540ad5e",
+          "shard": "v0-00005.bin",
+          "token_len": 251
+        },
+        {
+          "doc_index": 925187,
+          "doc_sha256": "bf06d46369729cff65dcf3c0fa9ba4ce283a79f3eadce6c1e7582b2bb9a2fe5f",
+          "shard": "v0-00007.bin",
+          "token_len": 237
+        },
+        {
+          "doc_index": 1133987,
+          "doc_sha256": "f6bab3077920bb5b1336cf23896aaf889fc0258adb6ed902ba78595e28415d53",
+          "shard": "v0-00009.bin",
+          "token_len": 239
+        },
+        {
+          "doc_index": 1267687,
+          "doc_sha256": "8a5fe8a397ca6eb4fdff486e2bd7ddb21dde57bfcc74019f80e1be4d36595682",
+          "shard": "v0-00010.bin",
+          "token_len": 242
+        },
+        {
+          "doc_index": 1461223,
+          "doc_sha256": "1a265c102def00cfc45e7eca09cb2f3d15a7db1eb0a9baf086f59d5006cf938b",
+          "shard": "v0-00011.bin",
+          "token_len": 251
+        },
+        {
+          "doc_index": 1745488,
+          "doc_sha256": "ce9f5a7860f1072324a1a8eef43fdd415a50e674ff32f9fa06ae8de2fd9608c5",
+          "shard": "v0-00014.bin",
+          "token_len": 238
+        },
+        {
+          "doc_index": 1829211,
+          "doc_sha256": "90d0e536832ef9051e227ba4fae6ac253c6f72bb14147c2be5e4c01adace6bc4",
+          "shard": "v0-00014.bin",
+          "token_len": 237
+        }
+      ],
+      "remove_count": 9
+    }
+  ],
+  "completion_limit": "This is a deterministic sample remediation packet only. Full-corpus MinHash scan, full-corpus exclusion materialization, and post-remediation PASS validation remain required.",
+  "created_at_utc": "2026-06-30T10:25:34Z",
+  "exclusions": [
+    {
+      "doc_index": 36556,
+      "doc_sha256": "f150b43e5a04124a5c7eab61a8d433b02ae63cac60ebf8df765b641b9477ddbc",
+      "shard": "v0-00000.bin",
+      "token_len": 2492
+    },
+    {
+      "doc_index": 112586,
+      "doc_sha256": "5493bdadb3812416f3c3237ab9b12a1285c5eaeeca0a1afcd7a6932a86bf3bfb",
+      "shard": "v0-00000.bin",
+      "token_len": 3008
+    },
+    {
+      "doc_index": 246766,
+      "doc_sha256": "e5bcb57f4affe1d8c63448fae46f1f63440864440c5d77b301ba73bb43c56e5c",
+      "shard": "v0-00001.bin",
+      "token_len": 3002
+    },
+    {
+      "doc_index": 249112,
+      "doc_sha256": "129a1f159aeb2b5527dfcc45d18db73e96f34d4b14fa477fd7bf57ec58ebd4fd",
+      "shard": "v0-00001.bin",
+      "token_len": 240
+    },
+    {
+      "doc_index": 300293,
+      "doc_sha256": "0192a199bcc635962438139d6192106540303533ff7bb56e1c777357847b071f",
+      "shard": "v0-00002.bin",
+      "token_len": 236
+    },
+    {
+      "doc_index": 411174,
+      "doc_sha256": "ec4855c01659f6db7f79ec353b5fb8d17cee518d1257c5ca53aad5179820520d",
+      "shard": "v0-00003.bin",
+      "token_len": 3007
+    },
+    {
+      "doc_index": 424615,
+      "doc_sha256": "cc0b54f3a76572e7fade44f7ec5901e039be747f083e6cd7dd2b5bc5ca8eb088",
+      "shard": "v0-00003.bin",
+      "token_len": 1300
+    },
+    {
+      "doc_index": 485716,
+      "doc_sha256": "c7c9ea267b04be4d77c5e450acb54b55078f68f95dea0a261c5e257b3acc6e0e",
+      "shard": "v0-00003.bin",
+      "token_len": 3005
+    },
+    {
+      "doc_index": 725481,
+      "doc_sha256": "e7e45ba9e2ee584ae8daa67a54751df7000d11619c7200a223b74b6bb540ad5e",
+      "shard": "v0-00005.bin",
+      "token_len": 251
+    },
+    {
+      "doc_index": 860195,
+      "doc_sha256": "9f8256389de991a9990b4e53a0eb0df011f7325888ca58cb7bc7cccf0a405210",
+      "shard": "v0-00006.bin",
+      "token_len": 133
+    },
+    {
+      "doc_index": 925187,
+      "doc_sha256": "bf06d46369729cff65dcf3c0fa9ba4ce283a79f3eadce6c1e7582b2bb9a2fe5f",
+      "shard": "v0-00007.bin",
+      "token_len": 237
+    },
+    {
+      "doc_index": 990615,
+      "doc_sha256": "4f139eecb375f5f45a0f06cdb9b2eedc2c89230fbb9ec814ed5abf2b71a7fa61",
+      "shard": "v0-00007.bin",
+      "token_len": 3002
+    },
+    {
+      "doc_index": 1034234,
+      "doc_sha256": "c51b011735c601a2a6121e0a04eab26f2159f353903205e24bd18036924b85c4",
+      "shard": "v0-00008.bin",
+      "token_len": 2487
+    },
+    {
+      "doc_index": 1133987,
+      "doc_sha256": "f6bab3077920bb5b1336cf23896aaf889fc0258adb6ed902ba78595e28415d53",
+      "shard": "v0-00009.bin",
+      "token_len": 239
+    },
+    {
+      "doc_index": 1140451,
+      "doc_sha256": "214d9bc65579757c4588e517c9e0d52b3471c1fe85bf5590b87b6a9d8be31b68",
+      "shard": "v0-00009.bin",
+      "token_len": 3010
+    },
+    {
+      "doc_index": 1267687,
+      "doc_sha256": "8a5fe8a397ca6eb4fdff486e2bd7ddb21dde57bfcc74019f80e1be4d36595682",
+      "shard": "v0-00010.bin",
+      "token_len": 242
+    },
+    {
+      "doc_index": 1461223,
+      "doc_sha256": "1a265c102def00cfc45e7eca09cb2f3d15a7db1eb0a9baf086f59d5006cf938b",
+      "shard": "v0-00011.bin",
+      "token_len": 251
+    },
+    {
+      "doc_index": 1497016,
+      "doc_sha256": "6d840ad6b463f6b5217b1884400a0f6625e1b1ad42b83f9b4fe6429a616e96d8",
+      "shard": "v0-00012.bin",
+      "token_len": 3008
+    },
+    {
+      "doc_index": 1511384,
+      "doc_sha256": "02edd729cbb1abf323a92fc1567e13f5bc4dc62605bf206ca1da0311bc20c872",
+      "shard": "v0-00012.bin",
+      "token_len": 3001
+    },
+    {
+      "doc_index": 1512367,
+      "doc_sha256": "7002930a36002b57a55c1cda26850deccd7e64d8222526ec5b81f1cb148c8533",
+      "shard": "v0-00012.bin",
+      "token_len": 3004
+    },
+    {
+      "doc_index": 1620243,
+      "doc_sha256": "23552eb514cb4a221da7a9167994ef1bef4d36312f72738f868ef84a9520631b",
+      "shard": "v0-00013.bin",
+      "token_len": 140
+    },
+    {
+      "doc_index": 1745488,
+      "doc_sha256": "ce9f5a7860f1072324a1a8eef43fdd415a50e674ff32f9fa06ae8de2fd9608c5",
+      "shard": "v0-00014.bin",
+      "token_len": 238
+    },
+    {
+      "doc_index": 1807212,
+      "doc_sha256": "2cba75c29ab365b36e216c7708306fde5ba1e00ded92961ef6ef6a7136c0b96f",
+      "shard": "v0-00014.bin",
+      "token_len": 3002
+    },
+    {
+      "doc_index": 1829211,
+      "doc_sha256": "90d0e536832ef9051e227ba4fae6ac253c6f72bb14147c2be5e4c01adace6bc4",
+      "shard": "v0-00014.bin",
+      "token_len": 237
+    }
+  ],
+  "input_crossing_pair_count": 25,
+  "input_max_exact_jaccard_observed": 0.914169,
+  "kind": "single_4090_c1_near_duplicate_sample_remediation",
+  "rule": "Within each connected component of above-threshold sample pairs, keep the lowest doc_index/doc_sha256 document and exclude the remaining documents before any C1 pass attempt.",
+  "sample_exclusion_document_count": 24,
+  "sample_exclusion_token_floor": 38772,
+  "scope_limit": "This remediates only the checked-in bounded sample crossing pairs. It is not a full-corpus near-duplicate remediation list and cannot complete C1 data hygiene by itself.",
+  "source_receipt": "receipts/4090-near-duplicate-minhash-sample-2026-06-30.json",
+  "threshold": 0.8,
+  "unique_crossing_documents": 28,
+  "verdict": "C1_NEAR_DUPLICATE_SAMPLE_REMEDIATION_PACKET_READY"
+}

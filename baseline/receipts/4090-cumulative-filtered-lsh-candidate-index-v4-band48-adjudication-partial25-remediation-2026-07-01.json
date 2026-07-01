@@ -1,0 +1,456 @@
+{
+  "cluster_count": 12,
+  "clusters": [
+    {
+      "component_id": 0,
+      "keep": {
+        "component_id": 0,
+        "doc_index": 238078,
+        "doc_sha256": "b99fe5b63e221af96de845046a83c80ca3dd01a3b4ba5cce96b4d5921275ec71",
+        "kept": true,
+        "shard": "v0-00001.bin",
+        "token_len": 321
+      },
+      "member_count": 4,
+      "remove": [
+        {
+          "component_id": 0,
+          "doc_index": 1033536,
+          "doc_sha256": "c38612c16f9e8ca0f439acb1ebbe7ef1a72378df048a610f6eee8359b28972e5",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00008.bin",
+          "token_len": 321
+        },
+        {
+          "component_id": 0,
+          "doc_index": 1740963,
+          "doc_sha256": "3fee1300ba972f7191b8043c20303aac4294d5f7fc57e60a3a3c81cbf1b5b759",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 321
+        },
+        {
+          "component_id": 0,
+          "doc_index": 1767606,
+          "doc_sha256": "f6bb1ed7d7c17d0ed10aea829f12c9e54140e334477935945eb12cc168a53454",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 321
+        }
+      ],
+      "remove_count": 3
+    },
+    {
+      "component_id": 1,
+      "keep": {
+        "component_id": 1,
+        "doc_index": 252301,
+        "doc_sha256": "805aea09af63454a96c8b3837723a2ebb0aabb57c82adbba8146017154cfb1b7",
+        "kept": true,
+        "shard": "v0-00002.bin",
+        "token_len": 706
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 1,
+          "doc_index": 1566872,
+          "doc_sha256": "cb32f8390fb4b6890a39733373a20a5500e48b59e6bd0b4d3072e2d2bafd9c2c",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00012.bin",
+          "token_len": 756
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 2,
+      "keep": {
+        "component_id": 2,
+        "doc_index": 335480,
+        "doc_sha256": "f3b2f65bd10b2c9c34f1492730ec334305f19e0bcb0f2e18a265c1799e62533f",
+        "kept": true,
+        "shard": "v0-00002.bin",
+        "token_len": 69
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 2,
+          "doc_index": 1288749,
+          "doc_sha256": "6969bfae07308d3d011f391f8ccff70d770f9ecb181f7a22eea2dccb5f395308",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 69
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 3,
+      "keep": {
+        "component_id": 3,
+        "doc_index": 513407,
+        "doc_sha256": "ac56b88214d10d5d0a0fb320866cd62af1476ce7e47846aca8861b576a120119",
+        "kept": true,
+        "shard": "v0-00004.bin",
+        "token_len": 634
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 3,
+          "doc_index": 1273070,
+          "doc_sha256": "bec98d7eaba4b869f36291cbf5410c4d947031958ee157a56836b945e3dbfbbe",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 636
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 4,
+      "keep": {
+        "component_id": 4,
+        "doc_index": 761917,
+        "doc_sha256": "798b4bdadfcb8ac2948e80d026ffa5568013a4b5b5051b55a0ff0c76e736ede7",
+        "kept": true,
+        "shard": "v0-00006.bin",
+        "token_len": 3241
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 4,
+          "doc_index": 1254638,
+          "doc_sha256": "767fe8e50bf55775b9d5e880c3c8e39a3a0af419041df0a29c23127b6de8bb1c",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 3069
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 5,
+      "keep": {
+        "component_id": 5,
+        "doc_index": 816686,
+        "doc_sha256": "d1c0cdfdbd07f0bbc1099eee36c2d46e42df6439507d154ad01791f11d2884b6",
+        "kept": true,
+        "shard": "v0-00006.bin",
+        "token_len": 1519
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 5,
+          "doc_index": 1308262,
+          "doc_sha256": "55a5884da769e91efcef84b70acd7a801951bcaa34d0570d62ab217cd784ee6a",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 1472
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 6,
+      "keep": {
+        "component_id": 6,
+        "doc_index": 1204457,
+        "doc_sha256": "3d41bc913dbc1fd8927cbb5e77c9785726c21b6c43620d423c67ae3a6caff4d8",
+        "kept": true,
+        "shard": "v0-00009.bin",
+        "token_len": 2271
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 6,
+          "doc_index": 1334308,
+          "doc_sha256": "4b33813f23238ecf42dec54eda7ef3ec7f68eb074c3931e2fdab2643184e9c56",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 2270
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 7,
+      "keep": {
+        "component_id": 7,
+        "doc_index": 1223517,
+        "doc_sha256": "fe603ed6819820fba63e59f4e5590735b7c0bdfb8a79af2d3386a40f0c9eeab0",
+        "kept": true,
+        "shard": "v0-00009.bin",
+        "token_len": 1088
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 7,
+          "doc_index": 1354071,
+          "doc_sha256": "9ea4e3a60443f1af1f14b31619bf8a81298ce3cee964e22fe67770951b36c08e",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 1084
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 8,
+      "keep": {
+        "component_id": 8,
+        "doc_index": 1322069,
+        "doc_sha256": "74228c1a2c6ad7012104a1a0a3e277ac632151717166228fc9b111b3bd14e000",
+        "kept": true,
+        "shard": "v0-00010.bin",
+        "token_len": 1392
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 8,
+          "doc_index": 1411155,
+          "doc_sha256": "e59102d9fbeb26a1297b649fbcd001663a27b81905600fc031c6effcfd8014c6",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00011.bin",
+          "token_len": 1506
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 9,
+      "keep": {
+        "component_id": 9,
+        "doc_index": 1361448,
+        "doc_sha256": "40136f7b311aefe2a5e378da56eef0670fd7bf7ebdbc477548a0fe6b5d2ba341",
+        "kept": true,
+        "shard": "v0-00010.bin",
+        "token_len": 569
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 9,
+          "doc_index": 1527245,
+          "doc_sha256": "f80235aafdbf131b1f2851321bcaf6a3b0da9b916a5a5f65a5ae048375f6f7da",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00012.bin",
+          "token_len": 569
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 10,
+      "keep": {
+        "component_id": 10,
+        "doc_index": 1367919,
+        "doc_sha256": "65c1a5b4e37faa7e0274bae5ffd27a6c66b73ff8d0fcfc9be54ffa64f4860b11",
+        "kept": true,
+        "shard": "v0-00011.bin",
+        "token_len": 278
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 10,
+          "doc_index": 1799001,
+          "doc_sha256": "8c5acceea7c309d846e45fae36be3b7da98f50d8ddc87a77fc68211174e43a5c",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 275
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 11,
+      "keep": {
+        "component_id": 11,
+        "doc_index": 3986647,
+        "doc_sha256": "03644c764d3a1a0ef6cd769891ad829b9d25a7e944d507ac6a9110bc94117963",
+        "kept": true,
+        "shard": "v0-00023.bin",
+        "token_len": 521
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 11,
+          "doc_index": 3986658,
+          "doc_sha256": "cf1cfaa7ecb35d284b2ee16d56b7220a44210de8ae7f1a4cba44a267db26be2e",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00023.bin",
+          "token_len": 521
+        }
+      ],
+      "remove_count": 1
+    }
+  ],
+  "completion_limit": "This packet is actionable remediation evidence only. Materializing a follow-up cumulative exclusion manifest, rerunning candidate indexing/adjudication, full eval-contamination receipts, and overall verifier PASS remain required.",
+  "created_at_utc": "2026-07-01T02:26:26Z",
+  "exclusions": [
+    {
+      "component_id": 0,
+      "doc_index": 1033536,
+      "doc_sha256": "c38612c16f9e8ca0f439acb1ebbe7ef1a72378df048a610f6eee8359b28972e5",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00008.bin",
+      "token_len": 321
+    },
+    {
+      "component_id": 4,
+      "doc_index": 1254638,
+      "doc_sha256": "767fe8e50bf55775b9d5e880c3c8e39a3a0af419041df0a29c23127b6de8bb1c",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 3069
+    },
+    {
+      "component_id": 3,
+      "doc_index": 1273070,
+      "doc_sha256": "bec98d7eaba4b869f36291cbf5410c4d947031958ee157a56836b945e3dbfbbe",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 636
+    },
+    {
+      "component_id": 2,
+      "doc_index": 1288749,
+      "doc_sha256": "6969bfae07308d3d011f391f8ccff70d770f9ecb181f7a22eea2dccb5f395308",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 69
+    },
+    {
+      "component_id": 5,
+      "doc_index": 1308262,
+      "doc_sha256": "55a5884da769e91efcef84b70acd7a801951bcaa34d0570d62ab217cd784ee6a",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 1472
+    },
+    {
+      "component_id": 6,
+      "doc_index": 1334308,
+      "doc_sha256": "4b33813f23238ecf42dec54eda7ef3ec7f68eb074c3931e2fdab2643184e9c56",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 2270
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1354071,
+      "doc_sha256": "9ea4e3a60443f1af1f14b31619bf8a81298ce3cee964e22fe67770951b36c08e",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 1084
+    },
+    {
+      "component_id": 8,
+      "doc_index": 1411155,
+      "doc_sha256": "e59102d9fbeb26a1297b649fbcd001663a27b81905600fc031c6effcfd8014c6",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00011.bin",
+      "token_len": 1506
+    },
+    {
+      "component_id": 9,
+      "doc_index": 1527245,
+      "doc_sha256": "f80235aafdbf131b1f2851321bcaf6a3b0da9b916a5a5f65a5ae048375f6f7da",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00012.bin",
+      "token_len": 569
+    },
+    {
+      "component_id": 1,
+      "doc_index": 1566872,
+      "doc_sha256": "cb32f8390fb4b6890a39733373a20a5500e48b59e6bd0b4d3072e2d2bafd9c2c",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00012.bin",
+      "token_len": 756
+    },
+    {
+      "component_id": 0,
+      "doc_index": 1740963,
+      "doc_sha256": "3fee1300ba972f7191b8043c20303aac4294d5f7fc57e60a3a3c81cbf1b5b759",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 321
+    },
+    {
+      "component_id": 0,
+      "doc_index": 1767606,
+      "doc_sha256": "f6bb1ed7d7c17d0ed10aea829f12c9e54140e334477935945eb12cc168a53454",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 321
+    },
+    {
+      "component_id": 10,
+      "doc_index": 1799001,
+      "doc_sha256": "8c5acceea7c309d846e45fae36be3b7da98f50d8ddc87a77fc68211174e43a5c",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 275
+    },
+    {
+      "component_id": 11,
+      "doc_index": 3986658,
+      "doc_sha256": "cf1cfaa7ecb35d284b2ee16d56b7220a44210de8ae7f1a4cba44a267db26be2e",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00023.bin",
+      "token_len": 521
+    }
+  ],
+  "existing_cumulative_manifest_overlap_count": 0,
+  "index_rows_adjudicated": 25,
+  "input_crossing_pair_count": 17,
+  "input_max_exact_jaccard_observed": 0.970803,
+  "kind": "single_4090_c1_lsh_candidate_adjudication_remediation_v4",
+  "partial_index_adjudication": true,
+  "remediation_exclusion_document_count": 14,
+  "remediation_exclusion_token_floor": 13190,
+  "rule": "Within each connected component of above-threshold v4 band-48 partial candidate-index adjudication pairs, keep the lowest doc_index/doc_sha256 document and exclude the remaining documents before any follow-up C1 pass attempt.",
+  "scope_limit": "This remediation packet covers only crossing pairs found in the named partial candidate-index adjudication receipt. It is not a full band-48 remediation, not a full 16-band remediation, not a C1 near-duplicate PASS, and not overall baseline completion.",
+  "source_adjudication_receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v4-band48-adjudication-partial25-2026-07-01.json",
+  "source_cumulative_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v4-2026-06-30.jsonl",
+  "threshold": 0.8,
+  "unique_crossing_documents": 26,
+  "verdict": "C1_LSH_CANDIDATE_ADJUDICATION_V4_REMEDIATION_PACKET_READY_NOT_COMPLETION"
+}

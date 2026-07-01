@@ -1,0 +1,177 @@
+{
+  "blocked_or_access_gap_count": 3,
+  "completion_limit": "This index proves prior external benchmark/access receipts have been imported and classified. It is not an Ember-vs-baseline win and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T03:25:00Z",
+  "executed_receipt_count": 3,
+  "imports": [
+    {
+      "blocked_reason": null,
+      "classification": "executed_public_test_delta",
+      "id": "livecodebench_public_candidate_vs_baseline",
+      "import_path": "receipts/external-benchmark-imports/2026-06-30/livecodebench_public_candidate_vs_baseline.json",
+      "real_mle_tasks_executed": null,
+      "scope": "Kaggle benchmark lane public-test delta receipt; public-test only, not frozen private leaderboard.",
+      "score": {
+        "baseline_score": null,
+        "candidate_score": null,
+        "mean_normalized_improvement": null
+      },
+      "sha256": "47f92c35351ed288360f8ca6cac54b41807375ddf67471bee62400d30ecf793f",
+      "source_branch": "codex/ember-real-benchmark-next",
+      "source_commit": "c539ed809dd7d107eadbbc5c1713b834bd8c552c",
+      "source_path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-livecodebench-candidate-vs-baseline-20260618T131138Z.json",
+      "verdict": "PUBLIC_TEST_DELTA_RECEIPTED"
+    },
+    {
+      "blocked_reason": null,
+      "classification": "executed_frozen_heldout_delta",
+      "id": "livecodebench_frozen_heldout_delta",
+      "import_path": "receipts/external-benchmark-imports/2026-06-30/livecodebench_frozen_heldout_delta.json",
+      "real_mle_tasks_executed": null,
+      "scope": "Frozen heldout delta receipt with candidate_score=1.0, baseline_score=0.0 on the recorded narrow task; not field-level by itself.",
+      "score": {
+        "baseline_score": 0.0,
+        "candidate_score": 1.0,
+        "mean_normalized_improvement": 1.0
+      },
+      "sha256": "5274ca73f0f4dce2e7462928b985933253c386c36a5dcee3f380da4ffa47b539",
+      "source_branch": "codex/ember-real-benchmark-next",
+      "source_commit": "c539ed809dd7d107eadbbc5c1713b834bd8c552c",
+      "source_path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-livecodebench-frozen-heldout-delta-20260618T132254Z.json",
+      "verdict": "HELDOUT_DELTA_RECEIPTED"
+    },
+    {
+      "arms": [
+        {
+          "blocked_reason": null,
+          "external_benchmark_delta_claimed": true,
+          "external_source_certified": true,
+          "heldout_delta_ready": true,
+          "id": "A",
+          "name": "direct-benchmark-iteration",
+          "normalized_improvement": 0.052632,
+          "real_mle_tasks_executed": null,
+          "verdict": null
+        },
+        {
+          "blocked_reason": null,
+          "external_benchmark_delta_claimed": true,
+          "external_source_certified": true,
+          "heldout_delta_ready": true,
+          "id": "B",
+          "name": "dream-loop-only",
+          "normalized_improvement": 0.736842,
+          "real_mle_tasks_executed": null,
+          "verdict": null
+        },
+        {
+          "blocked_reason": null,
+          "external_benchmark_delta_claimed": true,
+          "external_source_certified": true,
+          "heldout_delta_ready": true,
+          "id": "C",
+          "name": "full-mvp-loop",
+          "normalized_improvement": 0.947368,
+          "real_mle_tasks_executed": null,
+          "verdict": null
+        }
+      ],
+      "blocked_reason": null,
+      "classification": "executed_external_heldout_wheel",
+      "id": "kaggle_external_heldout_wheel",
+      "import_path": "receipts/external-benchmark-imports/2026-06-30/kaggle_external_heldout_wheel.json",
+      "real_mle_tasks_executed": false,
+      "scope": "Three-arm heldout wheel over kaggle-dataset:abdallahwagih/emotion-dataset; shows prior external benchmark execution, not field-level by itself and not baseline completion.",
+      "score": null,
+      "sha256": "de8211e2f196dbda606e8e7e19f9e41c2de56e5e9bdcea94e7b5b3f11e59d946",
+      "source_branch": "codex/ember-real-benchmark-next",
+      "source_commit": "c539ed809dd7d107eadbbc5c1713b834bd8c552c",
+      "source_path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/wheel-heldout-20260618T135020Z.json",
+      "verdict": "HELDOUT_WHEEL_RECEIPTED"
+    },
+    {
+      "arms": [
+        {
+          "blocked_reason": "official_grading_preflight_failed",
+          "external_benchmark_delta_claimed": null,
+          "external_source_certified": null,
+          "heldout_delta_ready": null,
+          "id": "A",
+          "name": null,
+          "normalized_improvement": null,
+          "real_mle_tasks_executed": false,
+          "verdict": "BLOCKED"
+        },
+        {
+          "blocked_reason": "official_grading_preflight_failed",
+          "external_benchmark_delta_claimed": null,
+          "external_source_certified": null,
+          "heldout_delta_ready": null,
+          "id": "B",
+          "name": null,
+          "normalized_improvement": null,
+          "real_mle_tasks_executed": false,
+          "verdict": "BLOCKED"
+        },
+        {
+          "blocked_reason": "official_grading_preflight_failed",
+          "external_benchmark_delta_claimed": null,
+          "external_source_certified": null,
+          "heldout_delta_ready": null,
+          "id": "C",
+          "name": null,
+          "normalized_improvement": null,
+          "real_mle_tasks_executed": false,
+          "verdict": "BLOCKED"
+        }
+      ],
+      "blocked_reason": "benchmark_receipts_not_real",
+      "classification": "blocked_official_mle_runner",
+      "id": "official_abc_wheel_runner_blocked",
+      "import_path": "receipts/external-benchmark-imports/2026-06-30/official_abc_wheel_runner_blocked.json",
+      "real_mle_tasks_executed": false,
+      "scope": "Official ABC wheel runner receipt; blocked by official grading preflight; imported to preserve known gap.",
+      "score": null,
+      "sha256": "cba4e0103aa0a9dd4e804c5e4e47e2863f64159cd3464c99a514590eb917627b",
+      "source_branch": "codex/ember-real-benchmark-next",
+      "source_commit": "c539ed809dd7d107eadbbc5c1713b834bd8c552c",
+      "source_path": "receipts/ember-mvp/official-abc-wheel-runner-20260618/official-abc-wheel-runner-20260618T142652Z.json",
+      "verdict": "BLOCKED"
+    },
+    {
+      "blocked_reason": "official_prepare_command_failed",
+      "classification": "blocked_official_mle_prepare",
+      "id": "official_mle_prepare_blocked",
+      "import_path": "receipts/external-benchmark-imports/2026-06-30/official_mle_prepare_blocked.json",
+      "real_mle_tasks_executed": false,
+      "scope": "Official prepare attempt receipt; raw/data/auth governance gap preserved.",
+      "score": {
+        "baseline_score": null,
+        "candidate_score": null,
+        "mean_normalized_improvement": null
+      },
+      "sha256": "1f81ab96273837f00df82f0b899d65c80eae61935d1e5184db28528a33021a65",
+      "source_branch": "codex/ember-real-benchmark-next",
+      "source_commit": "c539ed809dd7d107eadbbc5c1713b834bd8c552c",
+      "source_path": "receipts/ember-mvp/official-prepare-attempt-venv-20260618/mle-micro-official-prepare-run-20260618T140654Z.json",
+      "verdict": "BLOCKED"
+    },
+    {
+      "blocked_reason": "kaggle_auth_unauthorized",
+      "classification": "blocked_kaggle_auth_preflight",
+      "id": "kaggle_auth_preflight_blocked",
+      "import_path": "receipts/external-benchmark-imports/2026-06-30/kaggle_auth_preflight_blocked.json",
+      "real_mle_tasks_executed": null,
+      "scope": "Kaggle auth surface receipt; credential/token shape detected but live auth blocked, no secret values imported.",
+      "score": null,
+      "sha256": "73ab179e4bd691a63f9b1d006010ee413a2d03378d30e2f2215052dd3204fc81",
+      "source_branch": "codex/ember-real-benchmark-next",
+      "source_commit": "c539ed809dd7d107eadbbc5c1713b834bd8c552c",
+      "source_path": "receipts/ember-mvp/kaggle-auth-surface-probe-20260618/kaggle-auth-preflight-20260618T141735Z.json",
+      "verdict": "BLOCKED"
+    }
+  ],
+  "kind": "external_benchmark_receipt_import_index",
+  "source_branch": "codex/ember-real-benchmark-next",
+  "source_commit": "c539ed809dd7d107eadbbc5c1713b834bd8c552c"
+}

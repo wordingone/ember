@@ -1,0 +1,21 @@
+{
+  "completion_limit": "This validates exact adjudication evidence only. It is not full C1 hygiene completion and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T07:02:18Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-cumulative-filtered-lsh-candidate-index-v12-band48-adjudication-partial25-skip25-2026-07-01.json",
+  "summary": {
+    "candidate_pair_count": 106,
+    "crossing_pair_count": 0,
+    "exact_jaccard_pair_count": 94,
+    "index_row_end_exclusive": 50,
+    "index_row_start_offset": 25,
+    "index_rows_adjudicated": 25,
+    "index_rows_skipped": 25,
+    "max_exact_jaccard_observed": 0.795349,
+    "partial_index_adjudication": true,
+    "size_pruned_pair_count": 12,
+    "verdict": "C1_CUMULATIVE_FILTERED_LSH_CANDIDATE_INDEX_V12_EXACT_ADJUDICATION_NO_CROSSINGS_NOT_COMPLETION"
+  },
+  "verdict": "C1_CUMULATIVE_FILTERED_LSH_CANDIDATE_INDEX_V12_EXACT_ADJUDICATION_VALIDATED"
+}

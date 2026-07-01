@@ -1,0 +1,75 @@
+{
+  "cluster_count": 1,
+  "clusters": [
+    {
+      "component_id": 0,
+      "keep": {
+        "component_id": 0,
+        "doc_index": 571523,
+        "doc_sha256": "59805009a6058de13399f9d99aae0cb3f8262d4921bdc88c12b8cd99bfd03a36",
+        "kept": true,
+        "shard": "v0-00004.bin",
+        "token_len": 1638
+      },
+      "member_count": 3,
+      "remove": [
+        {
+          "component_id": 0,
+          "doc_index": 1722647,
+          "doc_sha256": "d2e8eb79e780f6af7f83a488d2aba0b9b57b506ede2ee87327f11ea0b14f9e20",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_v7_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00013.bin",
+          "token_len": 1638
+        },
+        {
+          "component_id": 0,
+          "doc_index": 1766737,
+          "doc_sha256": "f91ea8fc0622dbe59cda8366275037714e4e848a6a0c0d314952ecd86f25ac9c",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_v7_partial25_adjudication_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 1638
+        }
+      ],
+      "remove_count": 2
+    }
+  ],
+  "completion_limit": "This packet is actionable remediation evidence only. Materializing a follow-up cumulative exclusion manifest, rerunning candidate indexing/adjudication, full eval-contamination receipts, and overall verifier PASS remain required.",
+  "created_at_utc": "2026-07-01T04:51:55Z",
+  "exclusions": [
+    {
+      "component_id": 0,
+      "doc_index": 1722647,
+      "doc_sha256": "d2e8eb79e780f6af7f83a488d2aba0b9b57b506ede2ee87327f11ea0b14f9e20",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_v7_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00013.bin",
+      "token_len": 1638
+    },
+    {
+      "component_id": 0,
+      "doc_index": 1766737,
+      "doc_sha256": "f91ea8fc0622dbe59cda8366275037714e4e848a6a0c0d314952ecd86f25ac9c",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_v7_partial25_adjudication_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 1638
+    }
+  ],
+  "existing_cumulative_v7_manifest_overlap_count": 0,
+  "index_rows_adjudicated": 25,
+  "input_crossing_pair_count": 3,
+  "input_max_exact_jaccard_observed": 0.952118,
+  "kind": "single_4090_c1_lsh_candidate_adjudication_remediation_v7",
+  "partial_index_adjudication": true,
+  "remediation_exclusion_document_count": 2,
+  "remediation_exclusion_token_floor": 3276,
+  "rule": "Within each connected component of above-threshold v7 band-48 partial candidate-index adjudication pairs, keep the lowest doc_index/doc_sha256 document and exclude the remaining documents before any follow-up C1 pass attempt.",
+  "scope_limit": "This remediation packet covers only crossing pairs found in the named v7 partial candidate-index adjudication receipt. It is not a full band-48 remediation, not a full 16-band remediation, not a C1 near-duplicate PASS, and not overall baseline completion.",
+  "source_adjudication_receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v7-band48-adjudication-partial25-2026-07-01.json",
+  "source_cumulative_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v7-2026-07-01.jsonl",
+  "threshold": 0.8,
+  "unique_crossing_documents": 3,
+  "verdict": "C1_LSH_CANDIDATE_ADJUDICATION_V7_REMEDIATION_PACKET_READY_NOT_COMPLETION"
+}

@@ -1,0 +1,64 @@
+{
+  "artifact_files": [
+    {
+      "bytes": 377,
+      "name": "LiveCodeBench_Public_Test_Candidate_Vs_Baseline.task.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:94f615fb6c36e8a1c89e0efaf608a35b93e3a6d6003c7114d6a38d783879edbe"
+    },
+    {
+      "bytes": 980,
+      "name": "LiveCodeBench_Public_Test_Candidate_Vs_Baseline-run_param_id_baseline.run.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:d6c9cafbbe5a7da9a888415b2438bd287928246c91c7d61646bcf815b38153c9"
+    },
+    {
+      "bytes": 979,
+      "name": "LiveCodeBench_Public_Test_Candidate_Vs_Baseline-run_param_id_candidate.run.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:5e49534d92340af0f0af11c593b32b792fcc72ace02cbc11c22aa3b5737d5920"
+    },
+    {
+      "bytes": 239,
+      "name": "livecodebench_candidate_vs_baseline_summary.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:d4182c7292f677efb8032dbdf9a1c34ceaab351ba39aad68b0b1abef5fb07fd7"
+    }
+  ],
+  "baseline_public_pass": false,
+  "benchmark_delta_claimed": false,
+  "benchmark_family": "livecodebench/code_generation_lite",
+  "blocked_reason": null,
+  "candidate_public_pass": true,
+  "candidate_vs_baseline_ready": true,
+  "cleanup_error_observed": true,
+  "contest_id": "1873",
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "frozen_public_test_sha256": "sha256:c15678ef5e91815dab8c7335105f8ada322022cd2536b48cb194088ff7b5ff61",
+  "lane": "kaggle_benchmarks",
+  "platform": "codeforces",
+  "public_test_delta": 1.0,
+  "python_executable": "C:\\tmp\\ember-kaggle-benchmarks-venv\\Scripts\\python.exe",
+  "question_id": "1873_A",
+  "returncode": 1,
+  "run_file_count": 2,
+  "sample_count": 1,
+  "score": {
+    "baseline_score": null,
+    "candidate_score": null,
+    "mean_normalized_improvement": null
+  },
+  "sdk_root": "C:\\tmp\\kaggle-benchmarks",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_example": "C:\\tmp\\kaggle-benchmarks\\documentation\\examples\\code_generation.py",
+  "source_example_present": true,
+  "source_example_sha256": "sha256:5cc938fc48f8dc521e9f837f9f76895a96caef0ddd2418896b9bb6191980de14",
+  "stderr_tail": "<local-path-redacted>",
+  "stdout_tail": "================================================================================\nTASK: LiveCodeBench Public Test Candidate Vs Baseline: Run #1\n================================================================================\n================================================================================\nTASK: LiveCodeBench Public Test Candidate Vs Baseline: Run #1\n================================================================================\n",
+  "summary_path": "<local-path-redacted>",
+  "task_file_count": 1,
+  "ticket": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-CANDIDATE-VS-BASELINE",
+  "ts": "20260618T131138Z",
+  "verdict": "PUBLIC_TEST_DELTA_RECEIPTED",
+  "workdir": "<local-path-redacted>"
+}

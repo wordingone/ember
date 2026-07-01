@@ -1,0 +1,113 @@
+{
+  "active_trainable_parameters": 1027764224,
+  "allocation_plan": [
+    {
+      "bytes": 2055528448,
+      "name": "bf16_weights",
+      "reason": "2 bytes per active trainable parameter"
+    },
+    {
+      "bytes": 2055528448,
+      "name": "bf16_gradients",
+      "reason": "2 bytes per active trainable parameter"
+    },
+    {
+      "bytes": 5652703232,
+      "name": "optimizer_state_8bit_estimate",
+      "reason": "8-bit optimizer plus master/state estimate used by C1 memory plan"
+    },
+    {
+      "bytes": 637534208,
+      "name": "activation_checkpoint_estimate",
+      "reason": "checkpointed activation estimate from C1 plan"
+    },
+    {
+      "bytes": 2147483648,
+      "name": "temporary_fragmentation_margin",
+      "reason": "temporary buffers and fragmentation margin"
+    }
+  ],
+  "allocations": [
+    {
+      "allocated_bytes_after_segment": 2055528448,
+      "chunk_count": 1961,
+      "name": "bf16_weights",
+      "planned_bytes": 2055528448,
+      "reason": "2 bytes per active trainable parameter",
+      "reserved_bytes_after_segment": 2057306112
+    },
+    {
+      "allocated_bytes_after_segment": 4111056896,
+      "chunk_count": 1961,
+      "name": "bf16_gradients",
+      "planned_bytes": 2055528448,
+      "reason": "2 bytes per active trainable parameter",
+      "reserved_bytes_after_segment": 4112515072
+    },
+    {
+      "allocated_bytes_after_segment": 9763760128,
+      "chunk_count": 5391,
+      "name": "optimizer_state_8bit_estimate",
+      "planned_bytes": 5652703232,
+      "reason": "8-bit optimizer plus master/state estimate used by C1 memory plan",
+      "reserved_bytes_after_segment": 9764339712
+    },
+    {
+      "allocated_bytes_after_segment": 10401294336,
+      "chunk_count": 608,
+      "name": "activation_checkpoint_estimate",
+      "planned_bytes": 637534208,
+      "reason": "checkpointed activation estimate from C1 plan",
+      "reserved_bytes_after_segment": 10401873920
+    },
+    {
+      "allocated_bytes_after_segment": 12548777984,
+      "chunk_count": 2048,
+      "name": "temporary_fragmentation_margin",
+      "planned_bytes": 2147483648,
+      "reason": "temporary buffers and fragmentation margin",
+      "reserved_bytes_after_segment": 12549357568
+    }
+  ],
+  "capability_target": "c1_full_config_memory_feasibility_not_completion",
+  "completion_limit": "Full-config allocation probe measures C1 memory-plan feasibility only. It is not full 1B forward/backward throughput and not family completion by itself.",
+  "config_id": "from_scratch_1b_4090_v0",
+  "config_path": "baseline\\engineering\\4090-1b\\configs\\from_scratch_1b_4090.json",
+  "created_at_utc": "2026-06-30T02:34:56Z",
+  "cuda_available": true,
+  "cuda_version": "12.6",
+  "device_name": "NVIDIA GeForce RTX 4090",
+  "device_total_memory_bytes": 25756696576,
+  "device_total_memory_gb": 23.98779296875,
+  "failure": null,
+  "fits_memory_probe": true,
+  "kind": "single_4090_full_config_memory_probe",
+  "lane": "from_scratch",
+  "parameter_count": {
+    "active_trainable_parameters": 1027764224,
+    "attention": 318767104,
+    "lm_head": 0,
+    "mlp": 637534208,
+    "norms": 159744,
+    "position_embedding": 4194304,
+    "token_embedding": 67108864
+  },
+  "peak_allocated_bytes": 12548777984,
+  "peak_reserved_bytes": 12549357568,
+  "peak_reserved_gb": 11.6875,
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.10.11",
+    "release": "10",
+    "system": "Windows"
+  },
+  "torch_version": "2.10.0+cu126",
+  "verdict": "FULL_CONFIG_MEMORY_PROBE_NOT_COMPLETION",
+  "warnings": [
+    {
+      "message": "Invalid device argument ",
+      "stage": "reset_peak_memory_stats",
+      "type": "RuntimeError"
+    }
+  ]
+}

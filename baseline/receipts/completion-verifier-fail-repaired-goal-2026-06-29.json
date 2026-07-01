@@ -1,0 +1,22 @@
+{
+  "checked_at_local_date": "2026-06-30",
+  "failure_count": 3,
+  "failures": [
+    {
+      "actual": "INCOMPLETE",
+      "code": "lock_status_not_complete"
+    },
+    {
+      "actual": "ENGINEERING_BASELINE_SURFACE_READY",
+      "code": "family_not_baseline_complete",
+      "family": "single_4090_ge_1b_foundation_ceiling"
+    },
+    {
+      "code": "operator_acceptance_missing_or_not_object"
+    }
+  ],
+  "goal": "ultimate_sota_theoretical_ceiling_baseline",
+  "root": "B:\\M\\ember\\baseline",
+  "verdict": "FAIL",
+  "verifier_sha256": "f7bbb9089e8d3eb5b339d501ac86cfa48973ff5ba03f23a77d175978ad0536c2"
+}

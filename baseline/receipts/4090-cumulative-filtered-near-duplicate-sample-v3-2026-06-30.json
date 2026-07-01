@@ -1,0 +1,374 @@
+{
+  "band_size": 4,
+  "binary_shards_rewritten": false,
+  "candidate_pair_count": 10148,
+  "completion_limit": "This records cumulative-filtered v3 near-duplicate sample evidence only. It is not eval contamination evidence, not an all-pairs near-duplicate/MinHash PASS, not a long-run training receipt, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T23:35:14Z",
+  "crossing_pair_count": 10,
+  "crossing_samples": [
+    {
+      "exact_jaccard": 0.823077,
+      "left": {
+        "doc_index": 712924,
+        "doc_sha256": "4252c0f950453cbebc27c1a08660f28f9d6d276c65325eda88983a8dd2253aa7",
+        "shard": "v0-00005.bin",
+        "token_len": 381
+      },
+      "right": {
+        "doc_index": 1754784,
+        "doc_sha256": "4d14fffe512b5d64bc58952a313c72e126847e2e3de7c96486722240fe0c7e42",
+        "shard": "v0-00014.bin",
+        "token_len": 384
+      }
+    },
+    {
+      "exact_jaccard": 0.820257,
+      "left": {
+        "doc_index": 723093,
+        "doc_sha256": "4e77f0c3fc3ad1fbe1ab224d89f7215250f3e46adbeb06163cd8339629253604",
+        "shard": "v0-00005.bin",
+        "token_len": 2110
+      },
+      "right": {
+        "doc_index": 1332734,
+        "doc_sha256": "2cc72a09171a6bcd4fef8886da8bb58bba1c19dd7648596f22217b291222b874",
+        "shard": "v0-00010.bin",
+        "token_len": 2100
+      }
+    },
+    {
+      "exact_jaccard": 0.8375,
+      "left": {
+        "doc_index": 800525,
+        "doc_sha256": "36ed6a6f13937ddf1657bde95027bf15fc920d76056b300507784242ca971fb7",
+        "shard": "v0-00006.bin",
+        "token_len": 1077
+      },
+      "right": {
+        "doc_index": 1590252,
+        "doc_sha256": "9b34d1e3d9bfd78337955529bd9650446b8f94cc171a96fca168173bf48bbe1a",
+        "shard": "v0-00012.bin",
+        "token_len": 878
+      }
+    },
+    {
+      "exact_jaccard": 0.854115,
+      "left": {
+        "doc_index": 861060,
+        "doc_sha256": "adaf0df4174463d7e808a403560e7e12cdd674cdfeed7e15620c61cb3a8d19a9",
+        "shard": "v0-00006.bin",
+        "token_len": 1912
+      },
+      "right": {
+        "doc_index": 1131079,
+        "doc_sha256": "33429c57b184262872a7fbe846729b058b420b4dfd0acfc1a1f82193e62704f6",
+        "shard": "v0-00009.bin",
+        "token_len": 1930
+      }
+    },
+    {
+      "exact_jaccard": 0.912172,
+      "left": {
+        "doc_index": 883029,
+        "doc_sha256": "7a1f744fe3b019282471e5e91848743fe63f0bf4f59f2ea9167c8119b34be707",
+        "shard": "v0-00007.bin",
+        "token_len": 2299
+      },
+      "right": {
+        "doc_index": 1567706,
+        "doc_sha256": "4f03d01d44b63ea6ba85dd21d680d1ce923b8e20526fd58be3473c4f48183850",
+        "shard": "v0-00012.bin",
+        "token_len": 2301
+      }
+    },
+    {
+      "exact_jaccard": 0.872596,
+      "left": {
+        "doc_index": 895905,
+        "doc_sha256": "3fbb584e2c219b6c53b21864035723a4b9864a5a0fe3a84c07b1ca183088bde4",
+        "shard": "v0-00007.bin",
+        "token_len": 797
+      },
+      "right": {
+        "doc_index": 1778315,
+        "doc_sha256": "7f97510d10edbb2bec6fd146182ab826064a481fa8de7377845fc9b66ae4edf6",
+        "shard": "v0-00014.bin",
+        "token_len": 789
+      }
+    },
+    {
+      "exact_jaccard": 0.810256,
+      "left": {
+        "doc_index": 1019567,
+        "doc_sha256": "36adb11f8b575054e16fa2e8c003be84dbedc3864c9b7c9596a4d4be5ce28493",
+        "shard": "v0-00008.bin",
+        "token_len": 365
+      },
+      "right": {
+        "doc_index": 1087719,
+        "doc_sha256": "2d0272425947ddca71137390ee48fc7201dbf497571e46bfa793a17b49ea3e8e",
+        "shard": "v0-00008.bin",
+        "token_len": 365
+      }
+    },
+    {
+      "exact_jaccard": 0.842932,
+      "left": {
+        "doc_index": 1083258,
+        "doc_sha256": "5ee8c0bb0c2e0b5f35fae31562ae9780b8b54d21da90e499b415efbf82ee1c75",
+        "shard": "v0-00008.bin",
+        "token_len": 823
+      },
+      "right": {
+        "doc_index": 1122207,
+        "doc_sha256": "8de7e81cac7f0bb98215959916927f89210a3912c2442c130598581f97abc0e2",
+        "shard": "v0-00009.bin",
+        "token_len": 865
+      }
+    },
+    {
+      "exact_jaccard": 0.849619,
+      "left": {
+        "doc_index": 1210114,
+        "doc_sha256": "6d52cfcc02b3c495909718ab6b23b6cf4451751ffc5e8b2ce28ac81d1a1d5ec3",
+        "shard": "v0-00009.bin",
+        "token_len": 3160
+      },
+      "right": {
+        "doc_index": 1596024,
+        "doc_sha256": "27df94326ce317c72e118b5c9ccc0e3d1761bc0572468ce138393e9e827aeb43",
+        "shard": "v0-00012.bin",
+        "token_len": 3158
+      }
+    },
+    {
+      "exact_jaccard": 0.867718,
+      "left": {
+        "doc_index": 1221297,
+        "doc_sha256": "51eea21f57abb72a3c13d344b0b0cdce89cabf96e9e95ba621107415710d7d29",
+        "shard": "v0-00009.bin",
+        "token_len": 1409
+      },
+      "right": {
+        "doc_index": 1758583,
+        "doc_sha256": "66501e70bc27e736be023f13f217584456b34189589e5863087df2b86d417238",
+        "shard": "v0-00014.bin",
+        "token_len": 1396
+      }
+    }
+  ],
+  "documents_seen": 4236458,
+  "elapsed_seconds": 62.858,
+  "eligible_documents_after_filter": 3806894,
+  "excluded_document_count": 1709,
+  "excluded_documents_seen": 1709,
+  "exclusion_manifest_row_digest_sha256": "4feecee77239b48a5db2d786422a47190649a30d47ccf046c7ec21f7e7d1356c",
+  "failure_count": 0,
+  "failures": [],
+  "filtered_view_materialized": true,
+  "kind": "single_4090_c1_cumulative_filtered_near_duplicate_sample_v3",
+  "max_exact_jaccard_observed": 0.912172,
+  "method": "deterministic lowest-score sample after applying targeted near-duplicate exclusions to separator-delimited C1 document stream; 13-token shingle MinHash signatures; LSH candidate generation; exact Jaccard audit for candidate pairs",
+  "policy_receipt": "baseline/receipts/4090-data-hygiene-policy-thresholds-2026-06-30.json",
+  "remaining_content_token_floor": 6974856721,
+  "remaining_document_count": 4234749,
+  "sample_limit": 50000,
+  "sample_policy": "Select documents by stable blake2b document score after cumulative v3 exclusions and eligibility filtering.",
+  "sampled_documents": 50000,
+  "sampled_excluded_document_count": 0,
+  "scope_limit": "Cumulative-filtered v3 deterministic challenge sample only. It is not an all-pairs near-duplicate PASS, not full-corpus MinHash proof, and cannot complete C1 data hygiene by itself.",
+  "shards": [
+    {
+      "documents_seen": 125093,
+      "eligible_documents_after_filter": 103230,
+      "excluded_documents": 110,
+      "name": "v0-00000.bin",
+      "sha256": "2ada751e4f1a9612b57cf21d95deec09d8230690f52a9892a69b9c665b231ca5"
+    },
+    {
+      "documents_seen": 125358,
+      "eligible_documents_after_filter": 103394,
+      "excluded_documents": 113,
+      "name": "v0-00001.bin",
+      "sha256": "0a529f8425e268dfbf61870f121381f2eae1c5e5ebc298804013d54324c36e81"
+    },
+    {
+      "documents_seen": 121034,
+      "eligible_documents_after_filter": 99715,
+      "excluded_documents": 112,
+      "name": "v0-00002.bin",
+      "sha256": "4efeb973ee7667d4ce9356d0bd9c478f9a33252733c2d01361e5f7a8b472d89f"
+    },
+    {
+      "documents_seen": 124341,
+      "eligible_documents_after_filter": 102762,
+      "excluded_documents": 106,
+      "name": "v0-00003.bin",
+      "sha256": "c9dc5cafa7a806384a200c26a51a7e11a3483019e9bb177dc4afed11eba18d0c"
+    },
+    {
+      "documents_seen": 124561,
+      "eligible_documents_after_filter": 102668,
+      "excluded_documents": 119,
+      "name": "v0-00004.bin",
+      "sha256": "6f87138445b43b9669869deaca8ab07702b8dd0ebebd54d186cf3c3bf18134fb"
+    },
+    {
+      "documents_seen": 122926,
+      "eligible_documents_after_filter": 101528,
+      "excluded_documents": 114,
+      "name": "v0-00005.bin",
+      "sha256": "990aa39342ddde2d5f839f9c766fa09f0924a66cb460629e6273425a7525d603"
+    },
+    {
+      "documents_seen": 123885,
+      "eligible_documents_after_filter": 102350,
+      "excluded_documents": 118,
+      "name": "v0-00006.bin",
+      "sha256": "8da2dab4c68907f4643c6fba8d0b82ab0611584247c3e95e58109f34dfed10b7"
+    },
+    {
+      "documents_seen": 125714,
+      "eligible_documents_after_filter": 103989,
+      "excluded_documents": 100,
+      "name": "v0-00007.bin",
+      "sha256": "d2456d659bbcd46a9becf08512660008f4742cf853e5ac0aaed90edc66ecbccd"
+    },
+    {
+      "documents_seen": 125198,
+      "eligible_documents_after_filter": 103449,
+      "excluded_documents": 98,
+      "name": "v0-00008.bin",
+      "sha256": "a0851ffadf70046e9d74fcce1aefdbeb68c826a3dce5e7100de68c66104d93e4"
+    },
+    {
+      "documents_seen": 123154,
+      "eligible_documents_after_filter": 101741,
+      "excluded_documents": 120,
+      "name": "v0-00009.bin",
+      "sha256": "73ba58e42bd827ae4d111ffb7c54b67fbb0b2300b0d3eb243d65302ff4f2407d"
+    },
+    {
+      "documents_seen": 121279,
+      "eligible_documents_after_filter": 100020,
+      "excluded_documents": 121,
+      "name": "v0-00010.bin",
+      "sha256": "ceb2fcfa59e505ae8496eb55d71e89abf24577013ea50439f6eeef562533cd99"
+    },
+    {
+      "documents_seen": 122877,
+      "eligible_documents_after_filter": 101541,
+      "excluded_documents": 112,
+      "name": "v0-00011.bin",
+      "sha256": "f15ec3e7951ec0e6b32daa38968fadb5a5890bf69e55236667056336161b798b"
+    },
+    {
+      "documents_seen": 121472,
+      "eligible_documents_after_filter": 100047,
+      "excluded_documents": 113,
+      "name": "v0-00012.bin",
+      "sha256": "55556e9bf1fe4f4653417dd48fa048d824b45aba21be565699b947edb269badf"
+    },
+    {
+      "documents_seen": 125443,
+      "eligible_documents_after_filter": 103708,
+      "excluded_documents": 123,
+      "name": "v0-00013.bin",
+      "sha256": "90977814b3f5b35decfa1d37262c818b92069971a2c24d04db1a8944873f5e0d"
+    },
+    {
+      "documents_seen": 122327,
+      "eligible_documents_after_filter": 100553,
+      "excluded_documents": 122,
+      "name": "v0-00014.bin",
+      "sha256": "28a53ddf00bbf8940b92662c1982b1259a1cc102e2b20fa1a8f3bac47652d90c"
+    },
+    {
+      "documents_seen": 236094,
+      "eligible_documents_after_filter": 226782,
+      "excluded_documents": 8,
+      "name": "v0-00015.bin",
+      "sha256": "204f935c7b827634cfbf51ad00ad2be1161f123a87b93c79ed6ecd40b008b5ad"
+    },
+    {
+      "documents_seen": 248084,
+      "eligible_documents_after_filter": 240117,
+      "excluded_documents": 0,
+      "name": "v0-00016.bin",
+      "sha256": "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed"
+    },
+    {
+      "documents_seen": 248841,
+      "eligible_documents_after_filter": 240774,
+      "excluded_documents": 0,
+      "name": "v0-00017.bin",
+      "sha256": "39618f4adfcca860c1faab43bb86660dbfb621c0635794565371826e59719a69"
+    },
+    {
+      "documents_seen": 251766,
+      "eligible_documents_after_filter": 244089,
+      "excluded_documents": 0,
+      "name": "v0-00018.bin",
+      "sha256": "3bb6dbbabc4e6eec2d62a6798956d74175f2af3d1b848d2b59eeccd043976553"
+    },
+    {
+      "documents_seen": 249731,
+      "eligible_documents_after_filter": 242058,
+      "excluded_documents": 0,
+      "name": "v0-00019.bin",
+      "sha256": "207b2b81c83bed4978b9877f33acf27b3e497338c9b3bbf6fd0b847360866a72"
+    },
+    {
+      "documents_seen": 248355,
+      "eligible_documents_after_filter": 240524,
+      "excluded_documents": 0,
+      "name": "v0-00020.bin",
+      "sha256": "6683296395568e6b40b03ad8320ded457f3278bf1124c4831311e10c5de1bbb4"
+    },
+    {
+      "documents_seen": 245457,
+      "eligible_documents_after_filter": 232089,
+      "excluded_documents": 0,
+      "name": "v0-00021.bin",
+      "sha256": "6b9f3d68714a54d48e9916b7de68b1f38afb53a6046189e2a0cce7d7a23189c5"
+    },
+    {
+      "documents_seen": 296937,
+      "eligible_documents_after_filter": 280305,
+      "excluded_documents": 0,
+      "name": "v0-00022.bin",
+      "sha256": "f5f7da6149461604db34ba5b567b94e9955d97d27845b58df5e76d76077b23b1"
+    },
+    {
+      "documents_seen": 314835,
+      "eligible_documents_after_filter": 294870,
+      "excluded_documents": 0,
+      "name": "v0-00023.bin",
+      "sha256": "cd58fa76d65350622739e5c788e8bd82c7d3eccd302837afcc7d812472cba7c1"
+    },
+    {
+      "documents_seen": 38529,
+      "eligible_documents_after_filter": 33811,
+      "excluded_documents": 0,
+      "name": "v0-00024.bin",
+      "sha256": "028e718b21054ee4dd62af20c6e07db07f9e8186367530f8dc85be8162c8e085"
+    },
+    {
+      "documents_seen": 3167,
+      "eligible_documents_after_filter": 780,
+      "excluded_documents": 0,
+      "name": "v0-00025.bin",
+      "sha256": "d2bc5c37a48a33ec40bc3358a9a84f11dda0c19ab82d37e09606c2d202ed106f"
+    }
+  ],
+  "shingle_size_tokens": 13,
+  "signature_size": 64,
+  "skipped_long_documents_after_filter": 261474,
+  "skipped_short_documents_after_filter": 166381,
+  "source_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v3-2026-06-30.jsonl",
+  "source_exclusion_manifest_sha256": "c6401417a88141b3c4a519906d63faca9d31eed200549ccdd9d1b20f8933b00e",
+  "source_filtered_view_receipt": "receipts/4090-cumulative-filtered-corpus-view-v3-2026-06-30.json",
+  "source_receipt": "receipts/token-shards-v0-20260611T170047Z.json",
+  "threshold": 0.8,
+  "verdict": "C1_CUMULATIVE_FILTERED_NEAR_DUPLICATE_SAMPLE_V3_CANDIDATES_FOUND"
+}

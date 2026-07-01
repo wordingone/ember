@@ -1,0 +1,10 @@
+{
+  "baseline_receipt_path": "receipts/c5-nanogpt-governed-baseline-control-2026-06-29.json",
+  "comparator_validation_receipt_path": "receipts/c5-nanogpt-deterministic-patch-comparator-validation-2026-06-30.json",
+  "completion_limit": "This validates a public-safe negative Ember-vs-nanoGPT trial surface. It is not an Ember win and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T11:01:22Z",
+  "failure_count": 0,
+  "failures": [],
+  "trial_receipt_path": "receipts/c5-ember-vs-nanogpt-governed-trial-2026-06-30.json",
+  "verdict": "C5_EMBER_VS_NANOGPT_TRIAL_NEGATIVE_EVIDENCE_VALIDATED"
+}

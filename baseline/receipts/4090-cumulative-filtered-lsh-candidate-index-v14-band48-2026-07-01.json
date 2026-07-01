@@ -1,0 +1,280 @@
+{
+  "band_count_materialized": 1,
+  "band_size": 4,
+  "band_starts_materialized": [
+    48
+  ],
+  "candidate_pair_upper_bound_before_deduplication": 20960456,
+  "collision_bucket_count": 28172,
+  "collision_document_memberships": 113224,
+  "completion_limit": "This materializes LSH collision candidates only. Exact candidate-pair Jaccard adjudication, remediation as needed, and a replacement C1 near-duplicate PASS receipt remain required before C1 or overall baseline completion.",
+  "created_at_utc": "2026-07-01T11:54:12Z",
+  "documents_censused": 3806651,
+  "documents_seen": 4236458,
+  "elapsed_seconds": 547.323,
+  "eligible_documents_after_filter_seen": 3806651,
+  "excluded_document_count": 1952,
+  "excluded_documents_seen": 1952,
+  "exclusion_manifest_row_digest_sha256": "c9ac7c02e18e43b01488ab99a5987f751ca9b4bdbdf023c940d7bcb7e44fea59",
+  "failure_count": 0,
+  "failures": [],
+  "full_band_coverage": false,
+  "full_document_coverage": true,
+  "index_path": "fragments/c1-cumulative-filtered-lsh-candidate-index-v14-band48-2026-07-01.jsonl",
+  "index_row_count": 28172,
+  "index_row_digest_sha256": "71f321c9c4c3d9bf4b2c7f218f62d2d20b43205797b761de95a57bf637d3dba2",
+  "index_sha256": "d0f00eb75075195130616e2947f40665a70cd29a734521395f83c6a950e4ff4c",
+  "kind": "single_4090_c1_cumulative_filtered_lsh_candidate_index_V14",
+  "max_bucket_size": 5741,
+  "method": "two-pass v14-filtered LSH candidate-index materialization; first pass counts selected-band buckets, second pass writes only collision bucket members for exact Jaccard adjudication",
+  "policy_receipt": "baseline/receipts/4090-data-hygiene-policy-thresholds-2026-06-30.json",
+  "remaining_content_token_floor": 6974539594,
+  "remaining_document_count": 4234506,
+  "scope_limit": "Candidate-index materialization only. It is not exact Jaccard adjudication, not an all-pairs near-duplicate PASS, not eval-contamination evidence, and not overall baseline completion.",
+  "shards": [
+    {
+      "documents_seen": 125093,
+      "eligible_documents_after_filter": 103230,
+      "excluded_documents": 110,
+      "name": "v0-00000.bin",
+      "sha256": "2ada751e4f1a9612b57cf21d95deec09d8230690f52a9892a69b9c665b231ca5",
+      "skipped_long_documents_after_filter": 12289,
+      "skipped_short_documents_after_filter": 9464
+    },
+    {
+      "documents_seen": 125358,
+      "eligible_documents_after_filter": 103393,
+      "excluded_documents": 114,
+      "name": "v0-00001.bin",
+      "sha256": "0a529f8425e268dfbf61870f121381f2eae1c5e5ebc298804013d54324c36e81",
+      "skipped_long_documents_after_filter": 12489,
+      "skipped_short_documents_after_filter": 9362
+    },
+    {
+      "documents_seen": 121034,
+      "eligible_documents_after_filter": 99706,
+      "excluded_documents": 121,
+      "name": "v0-00002.bin",
+      "sha256": "4efeb973ee7667d4ce9356d0bd9c478f9a33252733c2d01361e5f7a8b472d89f",
+      "skipped_long_documents_after_filter": 12166,
+      "skipped_short_documents_after_filter": 9041
+    },
+    {
+      "documents_seen": 124341,
+      "eligible_documents_after_filter": 102757,
+      "excluded_documents": 111,
+      "name": "v0-00003.bin",
+      "sha256": "c9dc5cafa7a806384a200c26a51a7e11a3483019e9bb177dc4afed11eba18d0c",
+      "skipped_long_documents_after_filter": 12346,
+      "skipped_short_documents_after_filter": 9127
+    },
+    {
+      "documents_seen": 124561,
+      "eligible_documents_after_filter": 102662,
+      "excluded_documents": 125,
+      "name": "v0-00004.bin",
+      "sha256": "6f87138445b43b9669869deaca8ab07702b8dd0ebebd54d186cf3c3bf18134fb",
+      "skipped_long_documents_after_filter": 12317,
+      "skipped_short_documents_after_filter": 9457
+    },
+    {
+      "documents_seen": 122926,
+      "eligible_documents_after_filter": 101512,
+      "excluded_documents": 130,
+      "name": "v0-00005.bin",
+      "sha256": "990aa39342ddde2d5f839f9c766fa09f0924a66cb460629e6273425a7525d603",
+      "skipped_long_documents_after_filter": 12347,
+      "skipped_short_documents_after_filter": 8937
+    },
+    {
+      "documents_seen": 123885,
+      "eligible_documents_after_filter": 102343,
+      "excluded_documents": 125,
+      "name": "v0-00006.bin",
+      "sha256": "8da2dab4c68907f4643c6fba8d0b82ab0611584247c3e95e58109f34dfed10b7",
+      "skipped_long_documents_after_filter": 12230,
+      "skipped_short_documents_after_filter": 9187
+    },
+    {
+      "documents_seen": 125714,
+      "eligible_documents_after_filter": 103977,
+      "excluded_documents": 112,
+      "name": "v0-00007.bin",
+      "sha256": "d2456d659bbcd46a9becf08512660008f4742cf853e5ac0aaed90edc66ecbccd",
+      "skipped_long_documents_after_filter": 12426,
+      "skipped_short_documents_after_filter": 9199
+    },
+    {
+      "documents_seen": 125198,
+      "eligible_documents_after_filter": 103433,
+      "excluded_documents": 114,
+      "name": "v0-00008.bin",
+      "sha256": "a0851ffadf70046e9d74fcce1aefdbeb68c826a3dce5e7100de68c66104d93e4",
+      "skipped_long_documents_after_filter": 12496,
+      "skipped_short_documents_after_filter": 9155
+    },
+    {
+      "documents_seen": 123154,
+      "eligible_documents_after_filter": 101717,
+      "excluded_documents": 144,
+      "name": "v0-00009.bin",
+      "sha256": "73ba58e42bd827ae4d111ffb7c54b67fbb0b2300b0d3eb243d65302ff4f2407d",
+      "skipped_long_documents_after_filter": 12240,
+      "skipped_short_documents_after_filter": 9053
+    },
+    {
+      "documents_seen": 121279,
+      "eligible_documents_after_filter": 99991,
+      "excluded_documents": 150,
+      "name": "v0-00010.bin",
+      "sha256": "ceb2fcfa59e505ae8496eb55d71e89abf24577013ea50439f6eeef562533cd99",
+      "skipped_long_documents_after_filter": 12122,
+      "skipped_short_documents_after_filter": 9016
+    },
+    {
+      "documents_seen": 122877,
+      "eligible_documents_after_filter": 101522,
+      "excluded_documents": 131,
+      "name": "v0-00011.bin",
+      "sha256": "f15ec3e7951ec0e6b32daa38968fadb5a5890bf69e55236667056336161b798b",
+      "skipped_long_documents_after_filter": 12226,
+      "skipped_short_documents_after_filter": 8998
+    },
+    {
+      "documents_seen": 121472,
+      "eligible_documents_after_filter": 100019,
+      "excluded_documents": 141,
+      "name": "v0-00012.bin",
+      "sha256": "55556e9bf1fe4f4653417dd48fa048d824b45aba21be565699b947edb269badf",
+      "skipped_long_documents_after_filter": 12316,
+      "skipped_short_documents_after_filter": 8996
+    },
+    {
+      "documents_seen": 125443,
+      "eligible_documents_after_filter": 103691,
+      "excluded_documents": 140,
+      "name": "v0-00013.bin",
+      "sha256": "90977814b3f5b35decfa1d37262c818b92069971a2c24d04db1a8944873f5e0d",
+      "skipped_long_documents_after_filter": 12276,
+      "skipped_short_documents_after_filter": 9336
+    },
+    {
+      "documents_seen": 122327,
+      "eligible_documents_after_filter": 100530,
+      "excluded_documents": 145,
+      "name": "v0-00014.bin",
+      "sha256": "28a53ddf00bbf8940b92662c1982b1259a1cc102e2b20fa1a8f3bac47652d90c",
+      "skipped_long_documents_after_filter": 12338,
+      "skipped_short_documents_after_filter": 9314
+    },
+    {
+      "documents_seen": 236094,
+      "eligible_documents_after_filter": 226778,
+      "excluded_documents": 12,
+      "name": "v0-00015.bin",
+      "sha256": "204f935c7b827634cfbf51ad00ad2be1161f123a87b93c79ed6ecd40b008b5ad",
+      "skipped_long_documents_after_filter": 8391,
+      "skipped_short_documents_after_filter": 913
+    },
+    {
+      "documents_seen": 248084,
+      "eligible_documents_after_filter": 240117,
+      "excluded_documents": 0,
+      "name": "v0-00016.bin",
+      "sha256": "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed",
+      "skipped_long_documents_after_filter": 7938,
+      "skipped_short_documents_after_filter": 29
+    },
+    {
+      "documents_seen": 248841,
+      "eligible_documents_after_filter": 240771,
+      "excluded_documents": 3,
+      "name": "v0-00017.bin",
+      "sha256": "39618f4adfcca860c1faab43bb86660dbfb621c0635794565371826e59719a69",
+      "skipped_long_documents_after_filter": 8044,
+      "skipped_short_documents_after_filter": 23
+    },
+    {
+      "documents_seen": 251766,
+      "eligible_documents_after_filter": 244086,
+      "excluded_documents": 3,
+      "name": "v0-00018.bin",
+      "sha256": "3bb6dbbabc4e6eec2d62a6798956d74175f2af3d1b848d2b59eeccd043976553",
+      "skipped_long_documents_after_filter": 7652,
+      "skipped_short_documents_after_filter": 25
+    },
+    {
+      "documents_seen": 249731,
+      "eligible_documents_after_filter": 242055,
+      "excluded_documents": 3,
+      "name": "v0-00019.bin",
+      "sha256": "207b2b81c83bed4978b9877f33acf27b3e497338c9b3bbf6fd0b847360866a72",
+      "skipped_long_documents_after_filter": 7639,
+      "skipped_short_documents_after_filter": 34
+    },
+    {
+      "documents_seen": 248355,
+      "eligible_documents_after_filter": 240515,
+      "excluded_documents": 9,
+      "name": "v0-00020.bin",
+      "sha256": "6683296395568e6b40b03ad8320ded457f3278bf1124c4831311e10c5de1bbb4",
+      "skipped_long_documents_after_filter": 7806,
+      "skipped_short_documents_after_filter": 25
+    },
+    {
+      "documents_seen": 245457,
+      "eligible_documents_after_filter": 232084,
+      "excluded_documents": 5,
+      "name": "v0-00021.bin",
+      "sha256": "6b9f3d68714a54d48e9916b7de68b1f38afb53a6046189e2a0cce7d7a23189c5",
+      "skipped_long_documents_after_filter": 9058,
+      "skipped_short_documents_after_filter": 4310
+    },
+    {
+      "documents_seen": 296937,
+      "eligible_documents_after_filter": 280302,
+      "excluded_documents": 3,
+      "name": "v0-00022.bin",
+      "sha256": "f5f7da6149461604db34ba5b567b94e9955d97d27845b58df5e76d76077b23b1",
+      "skipped_long_documents_after_filter": 7455,
+      "skipped_short_documents_after_filter": 9177
+    },
+    {
+      "documents_seen": 314835,
+      "eligible_documents_after_filter": 294869,
+      "excluded_documents": 1,
+      "name": "v0-00023.bin",
+      "sha256": "cd58fa76d65350622739e5c788e8bd82c7d3eccd302837afcc7d812472cba7c1",
+      "skipped_long_documents_after_filter": 7528,
+      "skipped_short_documents_after_filter": 12437
+    },
+    {
+      "documents_seen": 38529,
+      "eligible_documents_after_filter": 33811,
+      "excluded_documents": 0,
+      "name": "v0-00024.bin",
+      "sha256": "028e718b21054ee4dd62af20c6e07db07f9e8186367530f8dc85be8162c8e085",
+      "skipped_long_documents_after_filter": 2952,
+      "skipped_short_documents_after_filter": 1766
+    },
+    {
+      "documents_seen": 3167,
+      "eligible_documents_after_filter": 780,
+      "excluded_documents": 0,
+      "name": "v0-00025.bin",
+      "sha256": "d2bc5c37a48a33ec40bc3358a9a84f11dda0c19ab82d37e09606c2d202ed106f",
+      "skipped_long_documents_after_filter": 2387,
+      "skipped_short_documents_after_filter": 0
+    }
+  ],
+  "shingle_size_tokens": 13,
+  "signature_size": 64,
+  "skipped_long_documents_after_filter": 261474,
+  "skipped_short_documents_after_filter": 166381,
+  "source_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v14-2026-07-01.jsonl",
+  "source_exclusion_manifest_sha256": "59e21b4c6ff8a43d95b6f94e429ffb8dafa05c170ba867d65153b2e5911d2a8e",
+  "source_filtered_view_receipt": "receipts/4090-cumulative-filtered-corpus-view-v14-2026-07-01.json",
+  "source_receipt": "receipts/token-shards-v0-20260611T170047Z.json",
+  "threshold": 0.8,
+  "verdict": "C1_CUMULATIVE_FILTERED_LSH_CANDIDATE_INDEX_V14_MATERIALIZED_NOT_COMPLETION"
+}

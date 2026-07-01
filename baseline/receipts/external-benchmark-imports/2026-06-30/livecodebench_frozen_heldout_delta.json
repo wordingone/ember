@@ -1,0 +1,67 @@
+{
+  "artifact_files": [
+    {
+      "bytes": 127,
+      "name": "frozen_heldout_cases.jsonl",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:a291286871db834b1e770bfc02ec4a312f577ed18d9120b0d2161b2382ce2d91"
+    },
+    {
+      "bytes": 64,
+      "name": "LiveCodeBench_Frozen_Heldout_Candidate_Vs_Baseline.task.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:22010ea135852ab43e14de51e5d137e76bc6fcf11ef9948c294f2c31144305d0"
+    },
+    {
+      "bytes": 78,
+      "name": "LiveCodeBench_Frozen_Heldout_Candidate_Vs_Baseline-run_param_id_baseline.run.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:6900fd7bf3c9582116ce755d3ec49dd3f824f0bf33467f1cd47bef4630b98f7e"
+    },
+    {
+      "bytes": 78,
+      "name": "LiveCodeBench_Frozen_Heldout_Candidate_Vs_Baseline-run_param_id_candidate.run.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:68b8e91e7f9e2bed4ab2f986821dfb911a88f6881de0449518b39f03cb77dcee"
+    },
+    {
+      "bytes": 271,
+      "name": "livecodebench_frozen_heldout_summary.json",
+      "path": "<local-path-redacted>",
+      "sha256": "sha256:ed9bf5595cb36633fbb9aa4f4c435d86d74ad18d9fe8ebc19bf98f7e2141e48d"
+    }
+  ],
+  "benchmark_delta_claimed": true,
+  "benchmark_family": "livecodebench/code_generation_lite",
+  "blocked_reason": null,
+  "cycle_id": "cycle-20260617T000000Z-0001",
+  "external_benchmark_delta_claimed": false,
+  "external_source_certified": false,
+  "frozen_heldout_sha256": "sha256:a291286871db834b1e770bfc02ec4a312f577ed18d9120b0d2161b2382ce2d91",
+  "heldout_case_count": 2,
+  "heldout_delta_ready": true,
+  "heldout_source": "local-frozen-fixture",
+  "lane": "kaggle_benchmarks",
+  "python_executable": "C:\\Program Files\\Python310\\python.exe",
+  "question_id": "1873_A",
+  "returncode": 0,
+  "run_file_count": 2,
+  "score": {
+    "baseline_score": 0.0,
+    "candidate_score": 1.0,
+    "mean_normalized_improvement": 1.0
+  },
+  "sdk_root": "C:\\tmp\\kaggle-benchmarks",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_example": "C:\\tmp\\kaggle-benchmarks\\documentation\\examples\\code_generation.py",
+  "source_example_present": true,
+  "source_example_sha256": "sha256:5cc938fc48f8dc521e9f837f9f76895a96caef0ddd2418896b9bb6191980de14",
+  "stderr_tail": "",
+  "stdout_tail": "EMBER_KAGGLE_BENCHMARKS_FROZEN_HELDOUT_DELTA_PASS\n",
+  "summary_path": "<local-path-redacted>",
+  "task_file_count": 1,
+  "ticket": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-FROZEN-HELDOUT-DELTA",
+  "ts": "20260618T132254Z",
+  "verdict": "HELDOUT_DELTA_RECEIPTED",
+  "workdir": "<local-path-redacted>"
+}

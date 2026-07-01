@@ -1,0 +1,51 @@
+{
+  "completion_limit": "This locks C1 data-hygiene policy thresholds. It is not a near-duplicate scan, not an eval-contamination scan, not a long-run training receipt, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T04:14:18Z",
+  "document_unit": {
+    "definition": "separator-token-delimited document spans in pinned uint16 token shards, separator token id 0",
+    "document_count": 4236458,
+    "stream_tokens": 6977868758
+  },
+  "kind": "single_4090_c1_data_hygiene_policy_thresholds",
+  "no_recompute_strategy": "Reuse exact-dedupe scan receipt for exact duplicate threshold; run near-duplicate and eval-contamination scans only once their inputs and thresholds are locked by this receipt.",
+  "scope": "single_4090_ge_1b_foundation_ceiling data hygiene controls for the pinned Ember v0 token substrate",
+  "source_receipts": {
+    "data_governance": {
+      "repo_path": "baseline/receipts/4090-data-governance-2026-06-30.json",
+      "sha256": "acac33de98e965cb46360d8cd6d429164e3693433deb4cfbd3c7ccd293bf5773"
+    },
+    "exact_dedupe_scan": {
+      "repo_path": "baseline/receipts/4090-exact-dedupe-scan-2026-06-30.json",
+      "sha256": "c135f212246d81ed2d544f3be3d9b50b4b4903a94061358bc6e2599cda3c9338"
+    },
+    "token_shards": {
+      "repo_path": "receipts/token-shards-v0-20260611T170047Z.json",
+      "sha256": "3adffdda07bf6de31c5f9a9b82aaa08134aac567898c27c5fb0eae90d8ee409d"
+    }
+  },
+  "thresholds": {
+    "eval_contamination": {
+      "allowed_exception_rule": "public benchmark boilerplate or citation text may be allowed only if the receipt records item id, matched span hash, source, and reason; task answer/solution leakage is never allowed",
+      "method_family": "exact and normalized n-gram overlap scan from frozen eval prompts/answers/solutions against training corpus documents",
+      "min_exact_ngram_tokens": 32,
+      "min_normalized_char_span": 200,
+      "pass_rule": "zero unapproved eval items with exact >=32-token overlap or normalized >=200-character solution/prompt span overlap in the training corpus after public-source attribution review",
+      "status": "LOCKED_NOT_YET_SCANNED"
+    },
+    "exact_duplicate": {
+      "current_receipt": "receipts/4090-exact-dedupe-scan-2026-06-30.json",
+      "metric": "exact sha256 over separator-delimited token-byte document span with document length included",
+      "pass_rule": "duplicate_documents == 0 and duplicate_document_tokens == 0"
+    },
+    "near_duplicate_minhash": {
+      "high_confidence_jaccard_threshold": 0.9,
+      "method_family": "MinHash or equivalent token-shingle LSH over separator-delimited documents",
+      "pass_rule": "no near-duplicate pair with estimated or exact token-shingle Jaccard >= 0.80 outside an allowed citation/license/source-family exception list checked into the receipt",
+      "primary_jaccard_threshold": 0.8,
+      "sample_audit_rule": "any LSH candidate that crosses the primary threshold must include deterministic pair ids, source shard names, token lengths, estimated similarity, and exact similarity when feasible",
+      "shingle_size_tokens": 13,
+      "status": "LOCKED_NOT_YET_SCANNED"
+    }
+  },
+  "verdict": "C1_DATA_HYGIENE_POLICY_THRESHOLDS_LOCKED"
+}

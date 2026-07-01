@@ -1,0 +1,16 @@
+{
+  "checkpoint_event_count": 2,
+  "completion_limit": "This validates a bounded 256-window streamed train/checkpoint/eval/recovery/power policy probe only. It is not days-scale long-run training, not full-run energy accounting, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T19:15:54Z",
+  "energy_joules_trapezoid": 21311.84581055625,
+  "eval_window_count": 4,
+  "failure_count": 0,
+  "failures": [],
+  "measured_tflops_lower_bound": 36.083710011868725,
+  "power_receipt_path": "receipts/4090-policy-amortized-256-window-power-2026-06-30.json",
+  "probe_receipt_path": "receipts/4090-policy-amortized-256-window-probe-pretraining-equivalent.json",
+  "recovery_window_base": 260,
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 256,
+  "verdict": "C1_POLICY_AMORTIZED_256_WINDOW_VALIDATED"
+}

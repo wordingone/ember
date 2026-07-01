@@ -1,0 +1,162 @@
+{
+  "checkpoint": {
+    "label": "<trained-owned-engine-checkpoint-v6-observation-copy>",
+    "sha256": "9a65c17cc470a6c4838203fc38f03cef15766bd6132a01c905468f89d2f48184",
+    "size_bytes": 1604552023,
+    "stored_outside_baseline": true
+  },
+  "completion_limit": "This is a bounded owned-engine observation-copy SFT and normalized heldout tool-loop probe. It is not a SOTA baseline win, not a governed external benchmark win, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T10:03:06Z",
+  "probe": {
+    "elapsed_seconds": 8.117,
+    "expected_output": "470",
+    "observed_output": "DONE \n WRITE 2",
+    "output_file_exists": true,
+    "runtime_policy": "Normalize byte-level decode markers and truncate model output to one executable tool call per turn.",
+    "task_passed": false,
+    "turns": [
+      {
+        "normalized_tool": "COUNT <REPO_ROOT>/scripts  py\n",
+        "observation": "470",
+        "raw": "COUNT \u0120B :/ M / owned engine / scripts \u0120py \u010a OB SER \u0120py \u010a WRITE \u0120demo - out . txt \u010a WRITE \u0120demo - out . txt \u010a 43 \u010a END WRITE \u010a 5 \u010a 7 \u010a END WRITE \u010a WRITE \u010a END aml \u010a READ \u0120demo - out . txt \u010a READ \u010a READ \u010a READ \u010a READ \u0120demo - out . txt",
+        "turn": 1,
+        "verb": "COUNT"
+      },
+      {
+        "normalized_tool": "WRITE  demo-out.txt \n 49 3 \n ENDWRITE\n",
+        "observation": "wrote 8 bytes to demo-out.txt",
+        "raw": "WRITE \u0120demo - out . txt \u010a 49 3 \u010a END WRITE \u010a 9 44 9 \u010a WRITE \u010a WRITE 9 44 9 \u010a WRITE \u010a END WRITE \u010a WRITE \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a OB SER \u0120cfg \u010a 7 \u010a 7 80 7 \u010a READ \u0120demo - out . txt \u010a READ \u0120demo",
+        "turn": 2,
+        "verb": "WRITE"
+      },
+      {
+        "normalized_tool": "READ demo-out.txt\n",
+        "observation": " 49 3 \n ",
+        "raw": "READ \u0120demo - out . txt \u010a WRITE \u010a WRITE \u010a READ \u0120demo - out . txt \u010a WRITE \u010a D ONE \u010a D ONE \u010a WRITE \u010a WRITE \u010a 48 6 \u010a END WRITE \u010a WRITE \u010a READ \u0120demo - out . txt \u010a WRITE \u010a END \u010a 71 \u010a \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a END 62",
+        "turn": 3,
+        "verb": "READ"
+      },
+      {
+        "normalized_tool": "WRITE \n 400 \n DONE \n 400 \n ENDWRITE\n",
+        "observation": "wrote 14 bytes to demo-out.txt",
+        "raw": "WRITE \u010a 400 \u010a D ONE \u010a 400 \u010a END WRITE \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a WRITE 68 srv \u010a 25 \u010a 48 6 \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a END 19 \u010a WRITE \u010a D ONE \u010a 406 \u010a 88 \u010a WRITE \u010a D ONE \u010a 88 \u010a 400 \u010a READ \u0120demo",
+        "turn": 4,
+        "verb": "WRITE"
+      },
+      {
+        "normalized_tool": "READ demo-out.txt\n",
+        "observation": " DONE \n 400 \n ",
+        "raw": "READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a D ONE \u010a D ONE \u010a READ \u0120demo - out . txt \u010a 400 \u010a \u010a D ONE \u010a READ \u0120demo - out . txt \u010a D ONE \u010a D ONE \u010a WRITE \u010a WRITE \u010a D ONE \u010a \u010a \u010a END \u010a END \u010a END \u010a READ \u0120demo -",
+        "turn": 5,
+        "verb": "READ"
+      },
+      {
+        "normalized_tool": "WRITE \n 406 \n 400 \n 406 \n READ  demo-out.txt \n DONE \n DONE \n WRITE \n WRITE \n WRITE \n 88 \n WRITE \n ENDWRITE\n",
+        "observation": "wrote 85 bytes to demo-out.txt",
+        "raw": "WRITE \u010a 406 \u010a 400 \u010a 406 \u010a READ \u0120demo - out . txt \u010a D ONE \u010a D ONE \u010a WRITE \u010a WRITE \u010a WRITE \u010a 88 \u010a WRITE \u010a END WRITE \u010a END \u010a END 19 \u010a READ \u0120demo - out . txt \u010a WRITE \u010a \u010a WRITE \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt",
+        "turn": 6,
+        "verb": "WRITE"
+      },
+      {
+        "normalized_tool": "READ demo-out.txt\n",
+        "observation": " 400 \n 406 \n READ  demo-out.txt \n DONE \n DONE \n WRITE \n WRITE \n WRITE \n 88 \n WRITE \n ",
+        "raw": "READ \u0120demo - out . txt \u010a 406 \u010a END \u010a WRITE \u010a D ONE \u010a D ONE \u010a D ONE \u010a 400 \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a D ONE \u010a WRITE \u010a D ONE \u010a WRITE \u010a 400 \u010a WRITE \u010a WRITE \u010a READ \u0120demo - out . txt \u010a D ONE \u010a",
+        "turn": 7,
+        "verb": "READ"
+      },
+      {
+        "normalized_tool": "WRITE 19 22 19 \n DONE \n WRITE 2 \n ENDWRITE\n",
+        "observation": "wrote 18 bytes to demo-out.txt",
+        "raw": "WRITE 19 22 19 \u010a D ONE \u010a WRITE 2 \u010a END WRITE \u010a D ONE \u010a WRITE \u010a WRITE \u010a WRITE \u010a WRITE \u010a WRITE \u010a WRITE \u010a WRITE \u010a END \u010a END 2 \u010a END \u010a END \u010a 406 \u010a WRITE \u010a WRITE \u010a D ONE \u010a D ONE \u010a WRITE \u010a END \u010a 406 \u010a 406 \u010a 2 \u010a END \u010a",
+        "turn": 8,
+        "verb": "WRITE"
+      }
+    ],
+    "valid_tool_observation_count": 8
+  },
+  "root_cause_tested": "Whether continuation from the v5 path-copy checkpoint can copy the live COUNT observation into WRITE while exact target count 470 remains held out.",
+  "schema": "owned_engine.sft_observation_copy_tool_loop_probe.v1",
+  "training_run": {
+    "batch_size": 4,
+    "curriculum": "Continuation from v5 with WRITE turns oversampled three-to-one so the model must copy live observations into demo-out.txt.",
+    "device": "cuda",
+    "elapsed_seconds": 120.253,
+    "heldout_policy": "Exact target count 470 is excluded; nearby 400-499 counts except 470 are oversampled for observation-copy training.",
+    "init_checkpoint_label": "<trained-owned-engine-checkpoint-v1>",
+    "learning_rate": 6e-05,
+    "loss_samples": [
+      {
+        "elapsed_seconds": 0.5,
+        "loss": 2.1840485715074465e-05,
+        "step": 1
+      },
+      {
+        "elapsed_seconds": 10.3,
+        "loss": 0.40219101309776306,
+        "step": 100
+      },
+      {
+        "elapsed_seconds": 20.2,
+        "loss": 1.3581260418504826e-06,
+        "step": 200
+      },
+      {
+        "elapsed_seconds": 30.1,
+        "loss": 0.33236163854599,
+        "step": 300
+      },
+      {
+        "elapsed_seconds": 40.0,
+        "loss": 0.44801244139671326,
+        "step": 400
+      },
+      {
+        "elapsed_seconds": 49.9,
+        "loss": 0.4678414762020111,
+        "step": 500
+      },
+      {
+        "elapsed_seconds": 59.8,
+        "loss": 0.38563698530197144,
+        "step": 600
+      },
+      {
+        "elapsed_seconds": 69.7,
+        "loss": 0.17540693283081055,
+        "step": 700
+      },
+      {
+        "elapsed_seconds": 79.6,
+        "loss": 0.1947195678949356,
+        "step": 800
+      },
+      {
+        "elapsed_seconds": 89.5,
+        "loss": 0.12776269018650055,
+        "step": 900
+      },
+      {
+        "elapsed_seconds": 99.5,
+        "loss": 2.968738044728525e-05,
+        "step": 1000
+      },
+      {
+        "elapsed_seconds": 109.4,
+        "loss": 0.1900830864906311,
+        "step": 1100
+      },
+      {
+        "elapsed_seconds": 119.3,
+        "loss": 0.45783454179763794,
+        "step": 1200
+      }
+    ],
+    "output_checkpoint_label": "<trained-owned-engine-checkpoint-v6-observation-copy>",
+    "seqcap": 512,
+    "source_episode_count": 3200,
+    "steps": 1200,
+    "supervision_policy": "Only action tokens are trained; first action must copy the path and extension from the goal, later actions copy live observations.",
+    "turnwise_example_count": 19200
+  },
+  "verdict": "FAIL"
+}

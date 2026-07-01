@@ -1,0 +1,18 @@
+{
+  "completion_limit": "This validates LSH bucket-census evidence only. It is not exact all-pairs near-duplicate adjudication, not a C1 hygiene pass, and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T00:55:42Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-cumulative-filtered-lsh-bucket-census-v4-band24-2026-06-30.json",
+  "summary": {
+    "band_count_scanned": 1,
+    "bucket_count": 3728419,
+    "collision_bucket_count": 28292,
+    "documents_censused": 3806884,
+    "full_band_coverage": false,
+    "full_document_coverage": true,
+    "max_bucket_size": 1761,
+    "verdict": "C1_CUMULATIVE_FILTERED_LSH_BUCKET_CENSUS_V4_PARTIAL_NOT_COMPLETION"
+  },
+  "verdict": "C1_CUMULATIVE_FILTERED_LSH_BUCKET_CENSUS_V4_VALIDATED"
+}

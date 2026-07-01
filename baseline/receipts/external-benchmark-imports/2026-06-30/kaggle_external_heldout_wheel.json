@@ -1,0 +1,98 @@
+{
+  "arms": [
+    {
+      "arm_contract": {
+        "id": "A",
+        "name": "direct-benchmark-iteration",
+        "uses_dream_loop": false,
+        "uses_latent_branch": false,
+        "uses_replay": false,
+        "uses_state_commit": false
+      },
+      "arm_contract_errors": [],
+      "arm_contract_ok": true,
+      "benchmark_receipt": "<local-path-redacted>",
+      "budget_seconds": 3600,
+      "external_benchmark_delta_claimed": true,
+      "external_source_certified": true,
+      "heldout_delta_ready": true,
+      "heldout_source": "kaggle-dataset:abdallahwagih/emotion-dataset",
+      "id": "A",
+      "name": "direct-benchmark-iteration",
+      "normalized_improvement": 0.052632
+    },
+    {
+      "arm_contract": {
+        "id": "B",
+        "name": "dream-loop-only",
+        "uses_dream_loop": true,
+        "uses_latent_branch": false,
+        "uses_replay": false,
+        "uses_state_commit": false
+      },
+      "arm_contract_errors": [],
+      "arm_contract_ok": true,
+      "benchmark_receipt": "<local-path-redacted>",
+      "budget_seconds": 3600,
+      "external_benchmark_delta_claimed": true,
+      "external_source_certified": true,
+      "heldout_delta_ready": true,
+      "heldout_source": "kaggle-dataset:abdallahwagih/emotion-dataset",
+      "id": "B",
+      "name": "dream-loop-only",
+      "normalized_improvement": 0.736842
+    },
+    {
+      "arm_contract": {
+        "id": "C",
+        "name": "full-mvp-loop",
+        "uses_dream_loop": true,
+        "uses_latent_branch": true,
+        "uses_replay": true,
+        "uses_state_commit": true
+      },
+      "arm_contract_errors": [],
+      "arm_contract_ok": true,
+      "benchmark_receipt": "<local-path-redacted>",
+      "budget_seconds": 3600,
+      "external_benchmark_delta_claimed": true,
+      "external_source_certified": true,
+      "heldout_delta_ready": true,
+      "heldout_source": "kaggle-dataset:abdallahwagih/emotion-dataset",
+      "id": "C",
+      "name": "full-mvp-loop",
+      "normalized_improvement": 0.947368
+    }
+  ],
+  "benchmark_delta_claimed": true,
+  "benchmark_subset": {
+    "id": "kaggle-benchmarks-livecodebench-frozen-heldout-v0",
+    "official_leaderboard_comparable": false,
+    "task_ids": [
+      null
+    ]
+  },
+  "blocked_arms": [],
+  "blocked_reason": null,
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "equal_budget": true,
+  "external_benchmark_delta_claimed": true,
+  "fixture_only": false,
+  "growth_gate": {
+    "blocked_until_repeated_positive_cycles": 3,
+    "growth_allowed": false,
+    "next_cycle_ceiling_hours": 24,
+    "reason": "heldout wheel is not growth-ready without repeated external-certified cycles"
+  },
+  "heldout_delta_ready": true,
+  "ordering": "C>B>A",
+  "real_mle_tasks_executed": false,
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-WHEEL-HELDOUT-RUN",
+  "ts": "20260618T135020Z",
+  "verdict": "HELDOUT_WHEEL_RECEIPTED",
+  "wheel": {
+    "description": "A/B/C equal-budget wheel over frozen heldout Kaggle Benchmarks-style receipts",
+    "id": "abc-heldout-equal-budget-v0"
+  }
+}

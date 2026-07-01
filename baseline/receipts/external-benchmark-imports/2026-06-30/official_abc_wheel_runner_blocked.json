@@ -1,0 +1,42 @@
+{
+  "arms": [
+    {
+      "blocked_reason": "official_grading_preflight_failed",
+      "id": "A",
+      "mean_normalized_improvement": null,
+      "real_mle_tasks_executed": false,
+      "receipt_path": "<local-path-redacted>",
+      "verdict": "BLOCKED"
+    },
+    {
+      "blocked_reason": "official_grading_preflight_failed",
+      "id": "B",
+      "mean_normalized_improvement": null,
+      "real_mle_tasks_executed": false,
+      "receipt_path": "<local-path-redacted>",
+      "verdict": "BLOCKED"
+    },
+    {
+      "blocked_reason": "official_grading_preflight_failed",
+      "id": "C",
+      "mean_normalized_improvement": null,
+      "real_mle_tasks_executed": false,
+      "receipt_path": "<local-path-redacted>",
+      "verdict": "BLOCKED"
+    }
+  ],
+  "blocked_reason": "benchmark_receipts_not_real",
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "data_root": "B:\\M\\ember\\mle-bench-data",
+  "fixture_only": false,
+  "ordering": "not-C>B>A",
+  "real_mle_tasks_executed": false,
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "source_root": "<local-path-redacted>",
+  "submission_root": "B:\\M\\ember\\mle-bench-submissions",
+  "ticket": "EMBER-MVP-OFFICIAL-ABC-WHEEL-RUNNER",
+  "ts": "20260618T142652Z",
+  "verdict": "BLOCKED",
+  "wheel_receipt_path": "<local-path-redacted>",
+  "wheel_verdict": "BLOCKED"
+}

@@ -1,0 +1,353 @@
+{
+  "challenge_exclusion_document_count": 10,
+  "challenge_exclusion_token_floor": 14166,
+  "cluster_count": 10,
+  "clusters": [
+    {
+      "component_id": 0,
+      "keep": {
+        "component_id": 0,
+        "doc_index": 712924,
+        "doc_sha256": "4252c0f950453cbebc27c1a08660f28f9d6d276c65325eda88983a8dd2253aa7",
+        "kept": true,
+        "shard": "v0-00005.bin",
+        "token_len": 381
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 0,
+          "doc_index": 1754784,
+          "doc_sha256": "4d14fffe512b5d64bc58952a313c72e126847e2e3de7c96486722240fe0c7e42",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 384
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 1,
+      "keep": {
+        "component_id": 1,
+        "doc_index": 723093,
+        "doc_sha256": "4e77f0c3fc3ad1fbe1ab224d89f7215250f3e46adbeb06163cd8339629253604",
+        "kept": true,
+        "shard": "v0-00005.bin",
+        "token_len": 2110
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 1,
+          "doc_index": 1332734,
+          "doc_sha256": "2cc72a09171a6bcd4fef8886da8bb58bba1c19dd7648596f22217b291222b874",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 2100
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 2,
+      "keep": {
+        "component_id": 2,
+        "doc_index": 800525,
+        "doc_sha256": "36ed6a6f13937ddf1657bde95027bf15fc920d76056b300507784242ca971fb7",
+        "kept": true,
+        "shard": "v0-00006.bin",
+        "token_len": 1077
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 2,
+          "doc_index": 1590252,
+          "doc_sha256": "9b34d1e3d9bfd78337955529bd9650446b8f94cc171a96fca168173bf48bbe1a",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00012.bin",
+          "token_len": 878
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 3,
+      "keep": {
+        "component_id": 3,
+        "doc_index": 861060,
+        "doc_sha256": "adaf0df4174463d7e808a403560e7e12cdd674cdfeed7e15620c61cb3a8d19a9",
+        "kept": true,
+        "shard": "v0-00006.bin",
+        "token_len": 1912
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 3,
+          "doc_index": 1131079,
+          "doc_sha256": "33429c57b184262872a7fbe846729b058b420b4dfd0acfc1a1f82193e62704f6",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00009.bin",
+          "token_len": 1930
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 4,
+      "keep": {
+        "component_id": 4,
+        "doc_index": 883029,
+        "doc_sha256": "7a1f744fe3b019282471e5e91848743fe63f0bf4f59f2ea9167c8119b34be707",
+        "kept": true,
+        "shard": "v0-00007.bin",
+        "token_len": 2299
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 4,
+          "doc_index": 1567706,
+          "doc_sha256": "4f03d01d44b63ea6ba85dd21d680d1ce923b8e20526fd58be3473c4f48183850",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00012.bin",
+          "token_len": 2301
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 5,
+      "keep": {
+        "component_id": 5,
+        "doc_index": 895905,
+        "doc_sha256": "3fbb584e2c219b6c53b21864035723a4b9864a5a0fe3a84c07b1ca183088bde4",
+        "kept": true,
+        "shard": "v0-00007.bin",
+        "token_len": 797
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 5,
+          "doc_index": 1778315,
+          "doc_sha256": "7f97510d10edbb2bec6fd146182ab826064a481fa8de7377845fc9b66ae4edf6",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 789
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 6,
+      "keep": {
+        "component_id": 6,
+        "doc_index": 1019567,
+        "doc_sha256": "36adb11f8b575054e16fa2e8c003be84dbedc3864c9b7c9596a4d4be5ce28493",
+        "kept": true,
+        "shard": "v0-00008.bin",
+        "token_len": 365
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 6,
+          "doc_index": 1087719,
+          "doc_sha256": "2d0272425947ddca71137390ee48fc7201dbf497571e46bfa793a17b49ea3e8e",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00008.bin",
+          "token_len": 365
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 7,
+      "keep": {
+        "component_id": 7,
+        "doc_index": 1083258,
+        "doc_sha256": "5ee8c0bb0c2e0b5f35fae31562ae9780b8b54d21da90e499b415efbf82ee1c75",
+        "kept": true,
+        "shard": "v0-00008.bin",
+        "token_len": 823
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 7,
+          "doc_index": 1122207,
+          "doc_sha256": "8de7e81cac7f0bb98215959916927f89210a3912c2442c130598581f97abc0e2",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00009.bin",
+          "token_len": 865
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 8,
+      "keep": {
+        "component_id": 8,
+        "doc_index": 1210114,
+        "doc_sha256": "6d52cfcc02b3c495909718ab6b23b6cf4451751ffc5e8b2ce28ac81d1a1d5ec3",
+        "kept": true,
+        "shard": "v0-00009.bin",
+        "token_len": 3160
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 8,
+          "doc_index": 1596024,
+          "doc_sha256": "27df94326ce317c72e118b5c9ccc0e3d1761bc0572468ce138393e9e827aeb43",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00012.bin",
+          "token_len": 3158
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 9,
+      "keep": {
+        "component_id": 9,
+        "doc_index": 1221297,
+        "doc_sha256": "51eea21f57abb72a3c13d344b0b0cdce89cabf96e9e95ba621107415710d7d29",
+        "kept": true,
+        "shard": "v0-00009.bin",
+        "token_len": 1409
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 9,
+          "doc_index": 1758583,
+          "doc_sha256": "66501e70bc27e736be023f13f217584456b34189589e5863087df2b86d417238",
+          "kept": false,
+          "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 1396
+        }
+      ],
+      "remove_count": 1
+    }
+  ],
+  "completion_limit": "This is deterministic v4 remediation generated from cumulative-filtered v3 challenge-sample crossings only; all-pairs/full-corpus PASS remains required before C1 data hygiene or the overall baseline can complete.",
+  "created_at_utc": "2026-06-30T23:46:26Z",
+  "exclusions": [
+    {
+      "component_id": 6,
+      "doc_index": 1087719,
+      "doc_sha256": "2d0272425947ddca71137390ee48fc7201dbf497571e46bfa793a17b49ea3e8e",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00008.bin",
+      "token_len": 365
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1122207,
+      "doc_sha256": "8de7e81cac7f0bb98215959916927f89210a3912c2442c130598581f97abc0e2",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00009.bin",
+      "token_len": 865
+    },
+    {
+      "component_id": 3,
+      "doc_index": 1131079,
+      "doc_sha256": "33429c57b184262872a7fbe846729b058b420b4dfd0acfc1a1f82193e62704f6",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00009.bin",
+      "token_len": 1930
+    },
+    {
+      "component_id": 1,
+      "doc_index": 1332734,
+      "doc_sha256": "2cc72a09171a6bcd4fef8886da8bb58bba1c19dd7648596f22217b291222b874",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 2100
+    },
+    {
+      "component_id": 4,
+      "doc_index": 1567706,
+      "doc_sha256": "4f03d01d44b63ea6ba85dd21d680d1ce923b8e20526fd58be3473c4f48183850",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00012.bin",
+      "token_len": 2301
+    },
+    {
+      "component_id": 2,
+      "doc_index": 1590252,
+      "doc_sha256": "9b34d1e3d9bfd78337955529bd9650446b8f94cc171a96fca168173bf48bbe1a",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00012.bin",
+      "token_len": 878
+    },
+    {
+      "component_id": 8,
+      "doc_index": 1596024,
+      "doc_sha256": "27df94326ce317c72e118b5c9ccc0e3d1761bc0572468ce138393e9e827aeb43",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00012.bin",
+      "token_len": 3158
+    },
+    {
+      "component_id": 0,
+      "doc_index": 1754784,
+      "doc_sha256": "4d14fffe512b5d64bc58952a313c72e126847e2e3de7c96486722240fe0c7e42",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 384
+    },
+    {
+      "component_id": 9,
+      "doc_index": 1758583,
+      "doc_sha256": "66501e70bc27e736be023f13f217584456b34189589e5863087df2b86d417238",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 1396
+    },
+    {
+      "component_id": 5,
+      "doc_index": 1778315,
+      "doc_sha256": "7f97510d10edbb2bec6fd146182ab826064a481fa8de7377845fc9b66ae4edf6",
+      "kept": false,
+      "reason": "cumulative_filtered_v3_challenge_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 789
+    }
+  ],
+  "existing_targeted_manifest_overlap_count": 0,
+  "input_crossing_pair_count": 10,
+  "input_max_exact_jaccard_observed": 0.912172,
+  "kind": "single_4090_c1_cumulative_filtered_challenge_remediation_v4",
+  "rule": "Within each connected component of above-threshold cumulative-filtered v3 challenge pairs, keep the lowest doc_index/doc_sha256 document and exclude the remaining documents before any C1 pass attempt.",
+  "sampled_excluded_document_count": 0,
+  "scope_limit": "This is a v4 remediation packet generated from cumulative-filtered v3 challenge-sample crossings only. It does not rewrite token shards and does not claim corpus-wide hygiene.",
+  "source_receipt": "receipts/4090-cumulative-filtered-near-duplicate-sample-v3-2026-06-30.json",
+  "targeted_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v3-2026-06-30.jsonl",
+  "threshold": 0.8,
+  "unique_crossing_documents": 20,
+  "verdict": "C1_CUMULATIVE_FILTERED_CHALLENGE_REMEDIATION_V4_PACKET_READY"
+}

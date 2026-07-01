@@ -1,0 +1,9 @@
+{
+  "completion_limit": "This validates only the reproducibility_publication_surface family. It does not create operator acceptance or complete the overall baseline.",
+  "contract_path": "contracts/reproducibility-publication-surface.md",
+  "created_at_utc": "2026-07-01T11:42:56Z",
+  "failure_count": 0,
+  "failures": [],
+  "report_path": "reports/public-private-parity-v0.md",
+  "verdict": "PUBLICATION_SURFACE_BASELINE_COMPLETE"
+}

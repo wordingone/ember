@@ -1,0 +1,10 @@
+{
+  "completion_limit": "This validates only the self_improvement_loop_sota family. It does not complete the overall baseline.",
+  "contract_path": "B:\\M\\ember\\baseline\\contracts\\C5-self-improvement-loop.md",
+  "created_at_utc": "2026-06-30T10:52:28Z",
+  "failure_count": 0,
+  "failures": [],
+  "protocol_path": "B:\\M\\ember\\baseline\\protocols\\c5-zero-spend-subset-v0.md",
+  "report_path": "B:\\M\\ember\\baseline\\self-improvement-baseline-v0.md",
+  "verdict": "SELF_IMPROVEMENT_BASELINE_COMPLETE"
+}

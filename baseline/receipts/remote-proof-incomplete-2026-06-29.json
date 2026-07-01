@@ -1,0 +1,20 @@
+{
+  "created_at_utc": "2026-06-29T00:00:00Z",
+  "verdict": "REMOTE_BASELINE_VISIBLE_NOT_COMPLETE",
+  "branch": "codex/ember-baseline-repaired-goal-20260629",
+  "commit_sha": "5377123c7fbe69d08ea18827e9185c6de943ca2d",
+  "baseline_tree_git_object": "cbf29ac3af395ff5eae3fe54ebc15ed3c035e6cf",
+  "public_remote": {
+    "repo": "wordingone/ember",
+    "ref": "refs/heads/codex/ember-baseline-repaired-goal-20260629",
+    "ls_remote": "5377123c7fbe69d08ea18827e9185c6de943ca2d",
+    "baseline_listing_verified": true
+  },
+  "private_remote": {
+    "repo": "wordingone/ember-backup",
+    "ref": "refs/heads/codex/ember-baseline-repaired-goal-20260629",
+    "ls_remote": "5377123c7fbe69d08ea18827e9185c6de943ca2d",
+    "baseline_listing_verified": true
+  },
+  "completion_limit": "This proves a fail-closed INCOMPLETE baseline branch is visible on both remotes. It does not prove ultimate baseline completion, family completion, operator acceptance, or final completion-lock status."
+}

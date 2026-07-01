@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates an explicit C1 data-hygiene gap audit only. It is not a full near-duplicate/contamination PASS and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T07:14:52Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-data-hygiene-audit-2026-06-30.json",
+  "verdict": "C1_DATA_HYGIENE_AUDIT_VALIDATED"
+}

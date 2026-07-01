@@ -1,0 +1,20 @@
+{
+  "checked_paths": {
+    "contract_path": "contracts/C5-self-improvement-loop.md",
+    "protocol_path": "protocols/c5-zero-spend-subset-v0.md",
+    "report_path": "self-improvement-baseline-v0.md"
+  },
+  "completion_limit": "This receipt checks family contract surface readiness only. The family remains incomplete until its baseline module, locked thresholds, governed receipts, and final verifier PASS exist.",
+  "created_at_utc": "2026-06-29T22:22:03Z",
+  "failures": [],
+  "family": "self_improvement_loop_sota",
+  "field_relevance_present": true,
+  "overall_goal_status": "INCOMPLETE",
+  "source_rows": [
+    "mle-bench",
+    "mlagentbench",
+    "ai-scientist"
+  ],
+  "status_in_lock": "INCOMPLETE",
+  "verdict": "CONTRACT_AUDIT_PASS_NOT_BASELINE_COMPLETE"
+}

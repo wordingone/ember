@@ -1,0 +1,7 @@
+{
+  "completion_limit": "Full-stack parser PASS validates bounded all-layer stack telemetry only. It is not a long-run 1B language-model training receipt and not overall baseline completion.",
+  "failure_count": 0,
+  "failures": [],
+  "input_receipt": "baseline\\receipts\\4090-full-stack-step-probe-from-scratch.json",
+  "verdict": "FULL_STACK_STEP_PROBE_PARSE_PASS"
+}

@@ -1,0 +1,858 @@
+{
+  "cluster_count": 17,
+  "clusters": [
+    {
+      "component_id": 0,
+      "keep": {
+        "component_id": 0,
+        "doc_index": 8783,
+        "doc_sha256": "521d886a2e8c1d094a2334641cb7f523bfddf1c22c23e0af8e22dda4e0e8ec9d",
+        "kept": true,
+        "shard": "v0-00000.bin",
+        "token_len": 302
+      },
+      "member_count": 4,
+      "remove": [
+        {
+          "component_id": 0,
+          "doc_index": 277058,
+          "doc_sha256": "60fcf74429e2dbe57a3837c653527f1d625a0a0e069b4aab9374591bc20c9e22",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00002.bin",
+          "token_len": 303
+        },
+        {
+          "component_id": 0,
+          "doc_index": 706115,
+          "doc_sha256": "f58545df7bf073d0aad5e40bfae116a70dc92c0e23412bafc79fba6c7030e199",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00005.bin",
+          "token_len": 278
+        },
+        {
+          "component_id": 0,
+          "doc_index": 706969,
+          "doc_sha256": "685334de01b6ce90e85dc521fa4d905d59097b650c4df61dbb4d7915b7b6a834",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00005.bin",
+          "token_len": 305
+        }
+      ],
+      "remove_count": 3
+    },
+    {
+      "component_id": 1,
+      "keep": {
+        "component_id": 1,
+        "doc_index": 193197,
+        "doc_sha256": "e9b356b791d81cedc4d9006222f526bd8bff6e2bd8da6efe4487dffa8b6100f3",
+        "kept": true,
+        "shard": "v0-00001.bin",
+        "token_len": 270
+      },
+      "member_count": 3,
+      "remove": [
+        {
+          "component_id": 1,
+          "doc_index": 193346,
+          "doc_sha256": "3b4f92dadc3449dc1c342b032d8c9a82f1a6eee7b0f24aed3d9091f3cb21d435",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00001.bin",
+          "token_len": 269
+        },
+        {
+          "component_id": 1,
+          "doc_index": 1458806,
+          "doc_sha256": "90b993c26612b5f70d81ca1f83a9665560faf5d090b1d4e1b57796cb20201cce",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00011.bin",
+          "token_len": 269
+        }
+      ],
+      "remove_count": 2
+    },
+    {
+      "component_id": 2,
+      "keep": {
+        "component_id": 2,
+        "doc_index": 207606,
+        "doc_sha256": "ed3c47af54e730aefef0775fa779df5e70bd880bec0fc29158504b72c70188fc",
+        "kept": true,
+        "shard": "v0-00001.bin",
+        "token_len": 996
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 2,
+          "doc_index": 1500978,
+          "doc_sha256": "a937282d998d3102fba1654e0cb177351f1aadd8bc0611b082a54ad29257056d",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00012.bin",
+          "token_len": 998
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 3,
+      "keep": {
+        "component_id": 3,
+        "doc_index": 510976,
+        "doc_sha256": "b6e50145ee4866880743cba2a48841fcd814e456c273e196002e0c87e5ae6d8a",
+        "kept": true,
+        "shard": "v0-00004.bin",
+        "token_len": 950
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 3,
+          "doc_index": 1806137,
+          "doc_sha256": "6368b5cb89d7111bdb2a2ca4ea4059232e54e7f703f730f3701713dbf2fc35a7",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 945
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 4,
+      "keep": {
+        "component_id": 4,
+        "doc_index": 674486,
+        "doc_sha256": "15765b37522da07ad68de9627d6ad7b7e5f467ab71a5f1ebdd6cfaf9cd6ec344",
+        "kept": true,
+        "shard": "v0-00005.bin",
+        "token_len": 380
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 4,
+          "doc_index": 1137569,
+          "doc_sha256": "5c83c6e2b5918a7d83d7a9da94efe8feba8d515e0dcc57068010244d9d19331f",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00009.bin",
+          "token_len": 383
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 5,
+      "keep": {
+        "component_id": 5,
+        "doc_index": 699160,
+        "doc_sha256": "c88ba56463700378d59dfbecd0e574f02929d59f9be43ad7ecd4558a5c074421",
+        "kept": true,
+        "shard": "v0-00005.bin",
+        "token_len": 716
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 5,
+          "doc_index": 1334655,
+          "doc_sha256": "4d771d2fe56ea16fa6bbb8c7efaf73b4ca899bf57585aab597323a8499a9682d",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 703
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 6,
+      "keep": {
+        "component_id": 6,
+        "doc_index": 703283,
+        "doc_sha256": "d73dace9b3545d63cb9ce21f7d12e900687c713a16cb59c09582d681fa6114c1",
+        "kept": true,
+        "shard": "v0-00005.bin",
+        "token_len": 2465
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 6,
+          "doc_index": 1325872,
+          "doc_sha256": "b1fd9650abdb2892cf74e4d93cb38d126bbcc8eb4556f493279c0d2d0c170774",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 2598
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 7,
+      "keep": {
+        "component_id": 7,
+        "doc_index": 777914,
+        "doc_sha256": "648796390ae36af81d8b6048db5c9a30507260caf2420afbfbf23bc3b5c4a644",
+        "kept": true,
+        "shard": "v0-00006.bin",
+        "token_len": 2219
+      },
+      "member_count": 8,
+      "remove": [
+        {
+          "component_id": 7,
+          "doc_index": 1013999,
+          "doc_sha256": "093f2435af2452eb46e4c55de775d83867942895abd189c467ef43e8714a8389",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00008.bin",
+          "token_len": 2131
+        },
+        {
+          "component_id": 7,
+          "doc_index": 1165572,
+          "doc_sha256": "0e0d2b0cefede53106ddb9dd550ca8d9e5175ce9413194b2b2e412cbfd119b6f",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00009.bin",
+          "token_len": 2127
+        },
+        {
+          "component_id": 7,
+          "doc_index": 1179996,
+          "doc_sha256": "d2ad6d9e585d2f648b58ff0c59e1c66aa0c607e05361dbdf03fcd70d71c34b3f",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00009.bin",
+          "token_len": 2129
+        },
+        {
+          "component_id": 7,
+          "doc_index": 1299906,
+          "doc_sha256": "9e5fb4afda54cf0069e46897184826349d2da6bcfebeb67c27edda237a3c99f8",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 2125
+        },
+        {
+          "component_id": 7,
+          "doc_index": 1463528,
+          "doc_sha256": "a0379d9d5b2b60ec48c96558a375a60bc58a037364f581c44981e874cbef4de9",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00011.bin",
+          "token_len": 2126
+        },
+        {
+          "component_id": 7,
+          "doc_index": 1578301,
+          "doc_sha256": "e2f5c076793ef3851fea9d4c28827b671f7cda8717fbf48ec5de6d9b5707b506",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00012.bin",
+          "token_len": 2280
+        },
+        {
+          "component_id": 7,
+          "doc_index": 1864715,
+          "doc_sha256": "3483050776df1e2fbb1e63edf3682804c0f1999b92155837743b48573b3676e1",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00015.bin",
+          "token_len": 2323
+        }
+      ],
+      "remove_count": 7
+    },
+    {
+      "component_id": 8,
+      "keep": {
+        "component_id": 8,
+        "doc_index": 895791,
+        "doc_sha256": "4709d2c3f620f84c59ce6ed7f4ff7783e607f7e3b18254ee99008f9ea7f68e0f",
+        "kept": true,
+        "shard": "v0-00007.bin",
+        "token_len": 1810
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 8,
+          "doc_index": 1380369,
+          "doc_sha256": "e0fca144ba0d7f040ebe44e3c7a7d49867ba575af792bfde4bd1f0813dce84c2",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00011.bin",
+          "token_len": 1721
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 9,
+      "keep": {
+        "component_id": 9,
+        "doc_index": 980729,
+        "doc_sha256": "eafefda4937afa5892e90668f0c6c99c6c7df3455e55572f827ebf0ac9c9f278",
+        "kept": true,
+        "shard": "v0-00007.bin",
+        "token_len": 1809
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 9,
+          "doc_index": 1036208,
+          "doc_sha256": "77ae52b88257f10130976c1d2ae1c72d1515a8ad6fe1d273737a8f67d6b9eb62",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00008.bin",
+          "token_len": 1806
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 10,
+      "keep": {
+        "component_id": 10,
+        "doc_index": 996380,
+        "doc_sha256": "407f3658b0c1cc96ba993c34a2b04b10fc4fd8712a923eb5fd327d8121c917cd",
+        "kept": true,
+        "shard": "v0-00008.bin",
+        "token_len": 567
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 10,
+          "doc_index": 1205764,
+          "doc_sha256": "f220cf4845badba51ea855188e80239af029a1356d43c25c3a0a76dc451be469",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00009.bin",
+          "token_len": 643
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 11,
+      "keep": {
+        "component_id": 11,
+        "doc_index": 1201245,
+        "doc_sha256": "8dc2129a7ea85877169633d1204e19cb25a15399d9607401b0d0f051f948f4a3",
+        "kept": true,
+        "shard": "v0-00009.bin",
+        "token_len": 1177
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 11,
+          "doc_index": 1354600,
+          "doc_sha256": "b0f8bf5c78721f116820658a22a5988578d218d7105d7a77236d1e4dd11a74ab",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00010.bin",
+          "token_len": 1186
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 12,
+      "keep": {
+        "component_id": 12,
+        "doc_index": 1516954,
+        "doc_sha256": "168b934468c9b7a7ffcba05dbda0f7752b93bb13ccbc72bc87f8877fc99e82af",
+        "kept": true,
+        "shard": "v0-00012.bin",
+        "token_len": 1087
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 12,
+          "doc_index": 1829866,
+          "doc_sha256": "e21deb84d92155fd9d31c9db9af7265a51aabf5e61682a30bd172e885d80dfa0",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 1087
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 13,
+      "keep": {
+        "component_id": 13,
+        "doc_index": 1631018,
+        "doc_sha256": "66fc00203c99d0b22384e0c6ed4f7e87ca68c597f5192f56bf020aa8e7e7bc47",
+        "kept": true,
+        "shard": "v0-00013.bin",
+        "token_len": 1691
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 13,
+          "doc_index": 1838427,
+          "doc_sha256": "bf6d282fe3098356c0c4c9d7798b3741caa74c19b1d066d95b6e3fe1080b6b34",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00014.bin",
+          "token_len": 1624
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 14,
+      "keep": {
+        "component_id": 14,
+        "doc_index": 2297418,
+        "doc_sha256": "18b3019e28c6f827cdfd95c42eda1648dcb8b72965ff5e0569d0b90700f050b8",
+        "kept": true,
+        "shard": "v0-00016.bin",
+        "token_len": 1163
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 14,
+          "doc_index": 2838188,
+          "doc_sha256": "349fe9fb9ce69229560ef197f3a2aad7ca6d780cc705b6777d45ffb707ce9f98",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00018.bin",
+          "token_len": 1165
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 15,
+      "keep": {
+        "component_id": 15,
+        "doc_index": 2679057,
+        "doc_sha256": "39033890ec09bf234cc8d53b6e5b574e91fea59aaab5d155d316927b8cd861a1",
+        "kept": true,
+        "shard": "v0-00018.bin",
+        "token_len": 1420
+      },
+      "member_count": 2,
+      "remove": [
+        {
+          "component_id": 15,
+          "doc_index": 3282496,
+          "doc_sha256": "856b842c4011d40f0aead20ec48d6ba489bc5f842de83284ccbfce504ef5e8e7",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00020.bin",
+          "token_len": 1394
+        }
+      ],
+      "remove_count": 1
+    },
+    {
+      "component_id": 16,
+      "keep": {
+        "component_id": 16,
+        "doc_index": 3702607,
+        "doc_sha256": "a75efe56f1578f864c215f2d150b57313de21b3e66d937995589971db8884779",
+        "kept": true,
+        "shard": "v0-00022.bin",
+        "token_len": 99
+      },
+      "member_count": 4,
+      "remove": [
+        {
+          "component_id": 16,
+          "doc_index": 3702629,
+          "doc_sha256": "726e4171758655c222638d6854923c76aeb4555a23a596644d97ec6a89911723",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00022.bin",
+          "token_len": 110
+        },
+        {
+          "component_id": 16,
+          "doc_index": 3702638,
+          "doc_sha256": "e1c57ffd6184fc64383a41962971bb8cbe929b994efe35e6bd8d49a4e7e5cbf3",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00022.bin",
+          "token_len": 102
+        },
+        {
+          "component_id": 16,
+          "doc_index": 3702644,
+          "doc_sha256": "b6e2ae6566cbd79ac18f5383fe1c5de95cdfc4960ea07b0cd549c67ec8d95689",
+          "kept": false,
+          "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+          "shard": "v0-00022.bin",
+          "token_len": 99
+        }
+      ],
+      "remove_count": 3
+    }
+  ],
+  "completion_limit": "This packet is actionable remediation evidence only. Materializing a follow-up cumulative exclusion manifest, rerunning candidate indexing/adjudication, full eval-contamination receipts, and overall verifier PASS remain required.",
+  "created_at_utc": "2026-07-01T07:36:35Z",
+  "exclusions": [
+    {
+      "component_id": 1,
+      "doc_index": 193346,
+      "doc_sha256": "3b4f92dadc3449dc1c342b032d8c9a82f1a6eee7b0f24aed3d9091f3cb21d435",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00001.bin",
+      "token_len": 269
+    },
+    {
+      "component_id": 0,
+      "doc_index": 277058,
+      "doc_sha256": "60fcf74429e2dbe57a3837c653527f1d625a0a0e069b4aab9374591bc20c9e22",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00002.bin",
+      "token_len": 303
+    },
+    {
+      "component_id": 0,
+      "doc_index": 706115,
+      "doc_sha256": "f58545df7bf073d0aad5e40bfae116a70dc92c0e23412bafc79fba6c7030e199",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00005.bin",
+      "token_len": 278
+    },
+    {
+      "component_id": 0,
+      "doc_index": 706969,
+      "doc_sha256": "685334de01b6ce90e85dc521fa4d905d59097b650c4df61dbb4d7915b7b6a834",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00005.bin",
+      "token_len": 305
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1013999,
+      "doc_sha256": "093f2435af2452eb46e4c55de775d83867942895abd189c467ef43e8714a8389",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00008.bin",
+      "token_len": 2131
+    },
+    {
+      "component_id": 9,
+      "doc_index": 1036208,
+      "doc_sha256": "77ae52b88257f10130976c1d2ae1c72d1515a8ad6fe1d273737a8f67d6b9eb62",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00008.bin",
+      "token_len": 1806
+    },
+    {
+      "component_id": 4,
+      "doc_index": 1137569,
+      "doc_sha256": "5c83c6e2b5918a7d83d7a9da94efe8feba8d515e0dcc57068010244d9d19331f",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00009.bin",
+      "token_len": 383
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1165572,
+      "doc_sha256": "0e0d2b0cefede53106ddb9dd550ca8d9e5175ce9413194b2b2e412cbfd119b6f",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00009.bin",
+      "token_len": 2127
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1179996,
+      "doc_sha256": "d2ad6d9e585d2f648b58ff0c59e1c66aa0c607e05361dbdf03fcd70d71c34b3f",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00009.bin",
+      "token_len": 2129
+    },
+    {
+      "component_id": 10,
+      "doc_index": 1205764,
+      "doc_sha256": "f220cf4845badba51ea855188e80239af029a1356d43c25c3a0a76dc451be469",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00009.bin",
+      "token_len": 643
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1299906,
+      "doc_sha256": "9e5fb4afda54cf0069e46897184826349d2da6bcfebeb67c27edda237a3c99f8",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 2125
+    },
+    {
+      "component_id": 6,
+      "doc_index": 1325872,
+      "doc_sha256": "b1fd9650abdb2892cf74e4d93cb38d126bbcc8eb4556f493279c0d2d0c170774",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 2598
+    },
+    {
+      "component_id": 5,
+      "doc_index": 1334655,
+      "doc_sha256": "4d771d2fe56ea16fa6bbb8c7efaf73b4ca899bf57585aab597323a8499a9682d",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 703
+    },
+    {
+      "component_id": 11,
+      "doc_index": 1354600,
+      "doc_sha256": "b0f8bf5c78721f116820658a22a5988578d218d7105d7a77236d1e4dd11a74ab",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00010.bin",
+      "token_len": 1186
+    },
+    {
+      "component_id": 8,
+      "doc_index": 1380369,
+      "doc_sha256": "e0fca144ba0d7f040ebe44e3c7a7d49867ba575af792bfde4bd1f0813dce84c2",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00011.bin",
+      "token_len": 1721
+    },
+    {
+      "component_id": 1,
+      "doc_index": 1458806,
+      "doc_sha256": "90b993c26612b5f70d81ca1f83a9665560faf5d090b1d4e1b57796cb20201cce",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00011.bin",
+      "token_len": 269
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1463528,
+      "doc_sha256": "a0379d9d5b2b60ec48c96558a375a60bc58a037364f581c44981e874cbef4de9",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00011.bin",
+      "token_len": 2126
+    },
+    {
+      "component_id": 2,
+      "doc_index": 1500978,
+      "doc_sha256": "a937282d998d3102fba1654e0cb177351f1aadd8bc0611b082a54ad29257056d",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00012.bin",
+      "token_len": 998
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1578301,
+      "doc_sha256": "e2f5c076793ef3851fea9d4c28827b671f7cda8717fbf48ec5de6d9b5707b506",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00012.bin",
+      "token_len": 2280
+    },
+    {
+      "component_id": 3,
+      "doc_index": 1806137,
+      "doc_sha256": "6368b5cb89d7111bdb2a2ca4ea4059232e54e7f703f730f3701713dbf2fc35a7",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 945
+    },
+    {
+      "component_id": 12,
+      "doc_index": 1829866,
+      "doc_sha256": "e21deb84d92155fd9d31c9db9af7265a51aabf5e61682a30bd172e885d80dfa0",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 1087
+    },
+    {
+      "component_id": 13,
+      "doc_index": 1838427,
+      "doc_sha256": "bf6d282fe3098356c0c4c9d7798b3741caa74c19b1d066d95b6e3fe1080b6b34",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00014.bin",
+      "token_len": 1624
+    },
+    {
+      "component_id": 7,
+      "doc_index": 1864715,
+      "doc_sha256": "3483050776df1e2fbb1e63edf3682804c0f1999b92155837743b48573b3676e1",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00015.bin",
+      "token_len": 2323
+    },
+    {
+      "component_id": 14,
+      "doc_index": 2838188,
+      "doc_sha256": "349fe9fb9ce69229560ef197f3a2aad7ca6d780cc705b6777d45ffb707ce9f98",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00018.bin",
+      "token_len": 1165
+    },
+    {
+      "component_id": 15,
+      "doc_index": 3282496,
+      "doc_sha256": "856b842c4011d40f0aead20ec48d6ba489bc5f842de83284ccbfce504ef5e8e7",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00020.bin",
+      "token_len": 1394
+    },
+    {
+      "component_id": 16,
+      "doc_index": 3702629,
+      "doc_sha256": "726e4171758655c222638d6854923c76aeb4555a23a596644d97ec6a89911723",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00022.bin",
+      "token_len": 110
+    },
+    {
+      "component_id": 16,
+      "doc_index": 3702638,
+      "doc_sha256": "e1c57ffd6184fc64383a41962971bb8cbe929b994efe35e6bd8d49a4e7e5cbf3",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00022.bin",
+      "token_len": 102
+    },
+    {
+      "component_id": 16,
+      "doc_index": 3702644,
+      "doc_sha256": "b6e2ae6566cbd79ac18f5383fe1c5de95cdfc4960ea07b0cd549c67ec8d95689",
+      "kept": false,
+      "reason": "cumulative_filtered_lsh_band48_V13_windowed_adjudication_near_duplicate_component",
+      "shard": "v0-00022.bin",
+      "token_len": 99
+    }
+  ],
+  "existing_cumulative_v13_manifest_overlap_count": 0,
+  "index_row_windows": [
+    {
+      "crossing_pair_count": 0,
+      "end_exclusive": 25,
+      "max_exact_jaccard_observed": 0.799622,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip0-2026-07-01.json",
+      "rows": 25,
+      "start": 0
+    },
+    {
+      "crossing_pair_count": 0,
+      "end_exclusive": 50,
+      "max_exact_jaccard_observed": 0.795349,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip25-2026-07-01.json",
+      "rows": 25,
+      "start": 25
+    },
+    {
+      "crossing_pair_count": 0,
+      "end_exclusive": 75,
+      "max_exact_jaccard_observed": 0.797549,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip50-2026-07-01.json",
+      "rows": 25,
+      "start": 50
+    },
+    {
+      "crossing_pair_count": 0,
+      "end_exclusive": 100,
+      "max_exact_jaccard_observed": 0.789764,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip75-2026-07-01.json",
+      "rows": 25,
+      "start": 75
+    },
+    {
+      "crossing_pair_count": 0,
+      "end_exclusive": 125,
+      "max_exact_jaccard_observed": 0.799472,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip100-2026-07-01.json",
+      "rows": 25,
+      "start": 100
+    },
+    {
+      "crossing_pair_count": 0,
+      "end_exclusive": 150,
+      "max_exact_jaccard_observed": 0.796676,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip125-2026-07-01.json",
+      "rows": 25,
+      "start": 125
+    },
+    {
+      "crossing_pair_count": 17,
+      "end_exclusive": 175,
+      "max_exact_jaccard_observed": 0.972644,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip150-2026-07-01.json",
+      "rows": 25,
+      "start": 150
+    },
+    {
+      "crossing_pair_count": 44,
+      "end_exclusive": 200,
+      "max_exact_jaccard_observed": 0.976217,
+      "receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip175-2026-07-01.json",
+      "rows": 25,
+      "start": 175
+    }
+  ],
+  "index_rows_adjudicated": 200,
+  "input_crossing_pair_count": 61,
+  "input_max_exact_jaccard_observed": 0.976217,
+  "kind": "single_4090_c1_lsh_candidate_adjudication_remediation_V13",
+  "partial_index_adjudication": true,
+  "remediation_exclusion_document_count": 28,
+  "remediation_exclusion_token_floor": 33229,
+  "rule": "Within each connected component of above-threshold v13 band-48 partial candidate-index adjudication pairs, keep the lowest doc_index/doc_sha256 document and exclude the remaining documents before any follow-up C1 pass attempt.",
+  "scope_limit": "This remediation packet covers only crossing pairs found in the named v13 partial candidate-index adjudication receipts. It is not a full band-48 remediation, not a full 16-band remediation, not a C1 near-duplicate PASS, and not overall baseline completion.",
+  "source_adjudication_receipts": [
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip0-2026-07-01.json",
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip25-2026-07-01.json",
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip50-2026-07-01.json",
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip75-2026-07-01.json",
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip100-2026-07-01.json",
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip125-2026-07-01.json",
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip150-2026-07-01.json",
+    "receipts/4090-cumulative-filtered-lsh-candidate-index-v13-band48-adjudication-partial25-skip175-2026-07-01.json"
+  ],
+  "source_cumulative_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v13-2026-07-01.jsonl",
+  "threshold": 0.8,
+  "unique_crossing_documents": 45,
+  "verdict": "C1_LSH_CANDIDATE_ADJUDICATION_V13_REMEDIATION_PACKET_READY_NOT_COMPLETION"
+}

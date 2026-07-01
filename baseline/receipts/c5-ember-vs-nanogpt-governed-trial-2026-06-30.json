@@ -1,0 +1,37 @@
+{
+  "claim_id": "C5-0B-AI-Scientist-nanoGPT-lite",
+  "comparator": "AI Scientist nanoGPT_lite governed bounded baseline-control plus same-budget deterministic patch comparator",
+  "completion_limit": "This is a governed C5 nanoGPT trial receipt only. PASS would require a real Ember candidate receipt; deterministic patch gains are an external comparator, not an Ember result and not overall baseline completion.",
+  "contract": "Run current Ember against the AI Scientist nanoGPT_lite C5-0B external baseline under a governed non-smoke receipt contract.",
+  "elapsed_seconds": 0.0,
+  "ember_repo_commit": "34b875265d09fba5cd43229eb11e69933d9ecfd1",
+  "evidence": {
+    "deterministic_comparator_validation_receipt": "receipts/c5-nanogpt-deterministic-patch-comparator-validation-2026-06-30.json",
+    "deterministic_comparator_validation_receipt_sha256": "e54a908cffebcb32d11b187cf66e7363bbd888299e0fa0b22275edaed8ae3d83",
+    "ember_candidate_receipt": null,
+    "ember_candidate_receipt_sha256": null,
+    "errors": [
+      "ember_candidate_receipt_missing"
+    ],
+    "external_baseline_receipt": "receipts/c5-nanogpt-governed-baseline-control-2026-06-29.json",
+    "external_baseline_receipt_sha256": "0a87303b3835b29fb9f3abd4898083aea1f273ccde35df3908beba055de0d821",
+    "failure_interpretation": "Current Ember did not supply a governed non-smoke candidate receipt for this locked comparison."
+  },
+  "generated_at": "2026-06-30T10:59:30Z",
+  "metric": {
+    "dataset": "shakespeare_char",
+    "deterministic_patch_delta_vs_upstream_pct": 4.834809830300841,
+    "ember_candidate_best_val_loss_mean": null,
+    "ember_improvement_vs_external_pct": null,
+    "external_baseline_best_val_loss_mean": 2.9307998418807983,
+    "name": "best_val_loss_mean_improvement_pct"
+  },
+  "protocol": "protocols/c5-zero-spend-subset-v0.md",
+  "schema": "c5.nanogpt.ember_vs_external_trial.v1",
+  "threshold": {
+    "direction": "PASS requires Ember candidate validation loss to improve over external baseline by the threshold under a governed non-smoke receipt.",
+    "min_improvement_pct": 1.0
+  },
+  "trial_type": "ember_vs_external_baseline",
+  "verdict": "FAIL"
+}

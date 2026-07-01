@@ -1,0 +1,97 @@
+{
+  "child_command_recorded": false,
+  "child_returncode": 0,
+  "child_stderr_bytes": 0,
+  "child_stdout_bytes": 109934,
+  "completion_limit": "This is bounded nvidia-smi power sampling around a 128-window streamed real-token full-stack C1 probe only: not days-scale long-run training, not full-run energy accounting for data prep/eval/recovery/packaging, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T18:55:41Z",
+  "kind": "single_4090_c1_power_sampled_streamed_throughput_probe",
+  "local_input_paths_recorded": false,
+  "power_sampling": {
+    "avg_gpu_utilization_percent": 73.35106382978724,
+    "avg_power_w": 305.8564893617022,
+    "child_elapsed_s": 31.92734409996774,
+    "energy_joules_trapezoid": 9898.821555133089,
+    "energy_wh": 2.7496726542036356,
+    "first_sample_timestamp": "2026/06/30 11:55:41.140",
+    "includes_child_wall_clock": true,
+    "joules_per_step": 77.33454339947725,
+    "joules_per_training_token": 0.037761007519276,
+    "last_sample_timestamp": "2026/06/30 11:56:12.963",
+    "max_gpu_utilization_percent": 100.0,
+    "max_memory_used_mib": 12201.0,
+    "max_power_w": 406.86,
+    "max_temperature_c": 72.0,
+    "min_power_w": 12.74,
+    "raw_sample_count_recorded": 94,
+    "sample_count": 94,
+    "sample_interval_s_requested": 0.25,
+    "sample_span_s": 31.96610290009994,
+    "sampling_method": "nvidia-smi query-gpu timestamp,power.draw,temperature.gpu,utilization.gpu,memory.used,memory.total sampled around child wall clock",
+    "steps_accounted": 128,
+    "tokens_accounted": 262144
+  },
+  "probe_receipt": {
+    "active_trainable_parameters": 1027764224,
+    "exists": true,
+    "includes_dataloader_timing": true,
+    "measured_tflops_lower_bound": 64.55069146955562,
+    "real_data_window_count": 128,
+    "repo_path": "receipts/4090-real-data-streamed-128-window-power-sampled-probe-pretraining-equivalent.json",
+    "required_sustained_tflops": 50.98036825396826,
+    "steps_completed": 128,
+    "unique_input_window_count": 128,
+    "verdict": "FULL_STACK_LM_LOSS_PROBE_NOT_COMPLETION"
+  },
+  "sample_preview": [
+    {
+      "memory_total_mib": 24564.0,
+      "memory_used_mib": 1357.0,
+      "power_draw_w": 13.03,
+      "temperature_c": 39.0,
+      "timestamp": "2026/06/30 11:55:41.140",
+      "utilization_gpu_percent": 0.0
+    },
+    {
+      "memory_total_mib": 24564.0,
+      "memory_used_mib": 1357.0,
+      "power_draw_w": 12.94,
+      "temperature_c": 39.0,
+      "timestamp": "2026/06/30 11:55:41.441",
+      "utilization_gpu_percent": 0.0
+    },
+    {
+      "memory_total_mib": 24564.0,
+      "memory_used_mib": 1357.0,
+      "power_draw_w": 13.03,
+      "temperature_c": 39.0,
+      "timestamp": "2026/06/30 11:55:41.729",
+      "utilization_gpu_percent": 0.0
+    },
+    {
+      "memory_total_mib": 24564.0,
+      "memory_used_mib": 12197.0,
+      "power_draw_w": 381.03,
+      "temperature_c": 65.0,
+      "timestamp": "2026/06/30 11:56:12.451",
+      "utilization_gpu_percent": 100.0
+    },
+    {
+      "memory_total_mib": 24564.0,
+      "memory_used_mib": 12197.0,
+      "power_draw_w": 243.45,
+      "temperature_c": 53.0,
+      "timestamp": "2026/06/30 11:56:12.747",
+      "utilization_gpu_percent": 1.0
+    },
+    {
+      "memory_total_mib": 24564.0,
+      "memory_used_mib": 1357.0,
+      "power_draw_w": 243.45,
+      "temperature_c": 53.0,
+      "timestamp": "2026/06/30 11:56:12.963",
+      "utilization_gpu_percent": 1.0
+    }
+  ],
+  "verdict": "C1_POWER_SAMPLED_128_WINDOW_THROUGHPUT_READY_NOT_COMPLETION"
+}

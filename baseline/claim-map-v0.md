@@ -49,3 +49,8 @@ The DSpark miss is itself recorded as a baseline coverage failure mode: the firs
 Sapient HRM and modded-nanoTabPFN are now explicit data-efficiency frontier anchors. They correct a stale/shallow baseline shape that over-emphasized raw LM speedrun and general sample-efficiency anchors while under-representing least-compute capability claims.
 
 They do not collapse into one generic foundation-model record. HRM is a compact recurrent reasoning/data-efficiency anchor; modded-nanoTabPFN is a tabular foundation-model pretraining speedrun anchor. Ember must beat them only on matching task axes, or name a pre-registered Pareto tradeoff that preserves task, data, hardware, and capability constraints.
+Benchmark/data readiness is mechanically checked by `scripts/validate_benchmark_data_readiness.py` with receipt `receipts/benchmark-data-readiness-2026-06-30.json`: it verifies pinned benchmark/data substrate, records the MLAgentBench CLRS executable smoke plus upstream and deterministic patch comparators, and preserves remaining MLE-bench/auth and Ember governed-trial gaps without treating readiness as an Ember win.
+
+## Prior External Benchmark Receipt Boundary
+
+Prior Ember benchmark receipts are imported under `receipts/external-benchmark-imports/2026-06-30/` and validated by `scripts/validate_external_benchmark_receipts.py`. Executed imports prove that external/public/heldout benchmark plumbing ran before this baseline pass; blocked imports preserve Kaggle/auth/MLE prepare gaps. None of these imports transfers automatically to a field-level Ember win without a family-specific frozen comparator, metric, budget, and threshold.

@@ -1,0 +1,17 @@
+{
+  "completion_limit": "This validates a cumulative-filtered v3 near-duplicate challenge sample only. It is not an all-pairs near-duplicate PASS, not eval-contamination evidence, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T23:37:34Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-cumulative-filtered-near-duplicate-sample-v3-2026-06-30.json",
+  "summary": {
+    "candidate_pair_count": 10148,
+    "crossing_pair_count": 10,
+    "excluded_document_count": 1709,
+    "max_exact_jaccard_observed": 0.912172,
+    "remaining_document_count": 4234749,
+    "sampled_documents": 50000,
+    "verdict": "C1_CUMULATIVE_FILTERED_NEAR_DUPLICATE_SAMPLE_V3_CANDIDATES_FOUND"
+  },
+  "verdict": "C1_CUMULATIVE_FILTERED_NEAR_DUPLICATE_SAMPLE_V3_VALIDATED"
+}

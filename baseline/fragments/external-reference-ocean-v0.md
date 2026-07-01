@@ -31,11 +31,11 @@ Each external reference promoted into `/baseline` must be classified as one of:
 
 The first broad scan of `B:\M\ember` timed out before producing output because private dirty receipts and checkpoints are much larger. That has been converted into a solved scan-shape problem: the narrowed private scan produced `fragments/external-refs-private-v0.jsonl` and `fragments/external-refs-private-summary-v0.json` with 35,356 rows after skipping receipts/checkpoints and files over 1 MiB.
 
-Private narrowed agent-loop counts include Anthropic 266, Codex 81, OpenAI 79, Claude Code 73, ClaudeCode 15, and Hermes 13 known-term hits. This confirms the private repo carries more dense agent/CLI baseline material and must not be treated as interchangeable with the public clean repo.
+Private narrowed agent-loop counts include external vendor B 266, Codex 81, OpenAI 79, external coding agent B 73, external coding agent B 15, and Hermes 13 known-term hits. This confirms the private repo carries more dense agent/CLI baseline material and must not be treated as interchangeable with the public clean repo.
 
 ## Agent-Loop Addition
 
-Codex, Claude Code, and Hermes-class systems are now explicit first-class baseline candidates. They belong to the self-improvement, goal-mode, ember-cli, and research-operator claim families. Any Ember claim in those families must either compare against them, cite why a same-budget comparison is impossible/unnecessary, or mark the claim incomplete.
+Codex, external coding agent B, and Hermes-class systems are now explicit first-class baseline candidates. They belong to the self-improvement, goal-mode, ember-cli, and research-operator claim families. Any Ember claim in those families must either compare against them, cite why a same-budget comparison is impossible/unnecessary, or mark the claim incomplete.
 
 ## Current Verdict
 

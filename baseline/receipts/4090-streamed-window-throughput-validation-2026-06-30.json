@@ -1,0 +1,16 @@
+{
+  "completion_limit": "This validates bounded streamed real-token throughput telemetry with per-step loader timing only. It is not full-shard dataloader coverage, checkpoint cadence, evaluation, recovery, data-hygiene PASS, or overall baseline completion.",
+  "created_at_utc": "2026-06-30T15:05:12Z",
+  "dataloader_elapsed_fraction": 0.00626602122423926,
+  "dataloader_elapsed_s": 0.021226400043815374,
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_streamed_window_throughput_probe_validation",
+  "measured_tflops_lower_bound": 59.649965667554056,
+  "real_data_window_count": 16,
+  "receipt_path": "receipts/4090-real-data-streamed-window-throughput-probe-pretraining-equivalent.json",
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 16,
+  "unique_real_data_window_count": 16,
+  "verdict": "C1_STREAMED_WINDOW_THROUGHPUT_PROBE_VALIDATED"
+}

@@ -1,0 +1,15 @@
+{
+  "completion_limit": "This validates deterministic v3 remediation generated from cumulative-filtered v2 challenge-sample crossings only. It is not full-corpus near-duplicate remediation, not a C1 hygiene pass, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T23:37:33Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-cumulative-filtered-challenge-remediation-v3-2026-06-30.json",
+  "summary": {
+    "challenge_exclusion_document_count": 16,
+    "challenge_exclusion_token_floor": 23813,
+    "cluster_count": 6,
+    "existing_targeted_manifest_overlap_count": 0,
+    "input_crossing_pair_count": 25
+  },
+  "verdict": "C1_CUMULATIVE_FILTERED_CHALLENGE_REMEDIATION_V3_VALIDATED"
+}

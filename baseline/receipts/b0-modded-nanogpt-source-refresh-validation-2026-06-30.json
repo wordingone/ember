@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates only current-source freshness for the B0 comparator. It is not an Ember run and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T13:01:11Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/b0-modded-nanogpt-source-refresh-2026-06-30.json",
+  "verdict": "B0_SOURCE_REFRESH_VALIDATED"
+}

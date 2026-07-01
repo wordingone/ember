@@ -1,0 +1,49 @@
+{
+  "completion_limit": "This validates bounded negative repair-attempt evidence only. It is not an external benchmark win and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T10:06:12Z",
+  "failure_count": 0,
+  "failures": [],
+  "summaries": {
+    "receipts/owned-engine-sft-v2-tool-loop-2026-06-30.json": {
+      "checkpoint_size_bytes": 1604552023,
+      "observed_output": "",
+      "root_test": "large-count generalization",
+      "task_passed": false,
+      "training_steps": 900,
+      "valid_tool_observation_count": 8
+    },
+    "receipts/owned-engine-sft-v3-turnwise-tool-loop-2026-06-30.json": {
+      "checkpoint_size_bytes": 1604552023,
+      "observed_output": "",
+      "root_test": "turnwise next-action supervision",
+      "task_passed": false,
+      "training_steps": 900,
+      "valid_tool_observation_count": 8
+    },
+    "receipts/owned-engine-sft-v4-copy-contract-tool-loop-2026-06-30.json": {
+      "checkpoint_size_bytes": 1604552023,
+      "observed_output": "14",
+      "root_test": "normalized copy-contract runtime",
+      "task_passed": false,
+      "training_steps": 1200,
+      "valid_tool_observation_count": 4
+    },
+    "receipts/owned-engine-sft-v5-compositional-copy-tool-loop-2026-06-30.json": {
+      "checkpoint_size_bytes": 1604552023,
+      "observed_output": "2 123",
+      "root_test": "compositional target-path copying",
+      "task_passed": false,
+      "training_steps": 1200,
+      "valid_tool_observation_count": 4
+    },
+    "receipts/owned-engine-sft-v6-observation-copy-tool-loop-2026-06-30.json": {
+      "checkpoint_size_bytes": 1604552023,
+      "observed_output": "DONE \n WRITE 2",
+      "root_test": "live-observation to write-body copying",
+      "task_passed": false,
+      "training_steps": 1200,
+      "valid_tool_observation_count": 8
+    }
+  },
+  "verdict": "OWNED_ENGINE_SFT_REPAIR_ATTEMPTS_NEGATIVE_EVIDENCE_VALIDATED"
+}

@@ -1,0 +1,72 @@
+{
+  "active_trainable_parameters": 1027764224,
+  "capability_target": {
+    "frozen_before_run": true,
+    "minimum": "externally meaningful loss/capability target must be specified in the run manifest before non-dry-run execution",
+    "parser_requires_target": true
+  },
+  "completion_limit": "This receipt proves the engineered baseline surface is runnable/configured; it is not a completed training run and not an Ember win.",
+  "config_id": "from_scratch_1b_4090_v0",
+  "config_path": "baseline\\engineering\\4090-1b\\configs\\from_scratch_1b_4090.json",
+  "created_at_utc": "2026-06-30T02:12:20Z",
+  "dry_run": true,
+  "lane": "from_scratch",
+  "memory_plan": {
+    "activation_checkpointed_estimate_gb": 0.59375,
+    "adamw_8bit_master_estimate_gb": 5.264490127563477,
+    "adamw_fp32_master_gb": 11.486160278320312,
+    "estimated_8bit_optimizer_total_gb": 11.686960220336914,
+    "fits_24gb_estimate": true,
+    "gradients_bf16_gb": 1.9143600463867188,
+    "required_controls": [
+      "activation_checkpointing",
+      "micro_batch_size=1 until measured otherwise",
+      "8-bit optimizer or equivalently measured state compression/offload",
+      "bf16/fp16 weights and gradients",
+      "representative long-run memory receipt before PASS"
+    ],
+    "temporary_and_fragmentation_margin_gb": 2.0,
+    "weights_bf16_gb": 1.9143600463867188
+  },
+  "parameter_count": {
+    "active_trainable_parameters": 1027764224,
+    "attention": 318767104,
+    "lm_head": 0,
+    "mlp": 637534208,
+    "norms": 159744,
+    "position_embedding": 4194304,
+    "token_embedding": 67108864
+  },
+  "parameter_floor": 1000000000,
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.10.11",
+    "release": "10",
+    "system": "Windows"
+  },
+  "precondition_failures": [],
+  "stop_rule": {
+    "abort_if_no_receipt_update_minutes": 60,
+    "abort_if_peak_memory_margin_gb_below": 1.0,
+    "abort_if_projected_days_exceeds": 14,
+    "checkpoint_interval_minutes": 30,
+    "max_wall_clock_days": 14
+  },
+  "throughput": {
+    "days_threshold": 14.0,
+    "formula": "training_flops = 6 * active_trainable_parameters * trained_tokens",
+    "required_sustained_tflops": 50.98036825396826,
+    "token_budget": 10000000000,
+    "training_flops": 6.166585344e+19
+  },
+  "token_budget": 10000000000,
+  "torch_probe": {
+    "cuda_available": true,
+    "cuda_version": "12.6",
+    "device_name": "NVIDIA GeForce RTX 4090",
+    "device_total_memory_bytes": 25756696576,
+    "torch_available": true,
+    "torch_version": "2.10.0+cu126"
+  },
+  "verdict": "DRY_RUN_ENGINEERING_BASELINE_READY"
+}

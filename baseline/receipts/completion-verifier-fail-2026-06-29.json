@@ -1,0 +1,70 @@
+{
+    "generated_at_utc":  "2026-06-29T21:35:37Z",
+    "command":  "python B:\\M\\ember\\baseline\\scripts\\verify_completion.py --root B:\\M\\ember\\baseline --pretty",
+    "expected_exit_code":  1,
+    "actual_exit_code":  1,
+    "expected_verdict":  "FAIL",
+    "purpose":  "Completion verifier after adding the first governed Ember-vs-external-baseline FAIL trial.",
+    "verifier_output":  {
+                            "baseline_tree_sha256":  "81f428d3d4e22c7e81e64c9bc4c5a79577bd0d200153dd814e7b18ec8bad1380",
+                            "commit":  "5c139dc1aa3959e7d96890cfb0a3bd8d86b22901",
+                            "errors":  [
+                                           {
+                                               "code":  "completion_contradicted_by_required_docs",
+                                               "hits":  [
+                                                            {
+                                                                "path":  "README.md",
+                                                                "pattern":  "STAGING\\s+ONLY"
+                                                            },
+                                                            {
+                                                                "path":  "README.md",
+                                                                "pattern":  "NOT\\s+COMPLETE"
+                                                            },
+                                                            {
+                                                                "path":  "README.md",
+                                                                "pattern":  "\\bmissing\\b"
+                                                            },
+                                                            {
+                                                                "path":  "README.md",
+                                                                "pattern":  "\\bdraft\\b"
+                                                            },
+                                                            {
+                                                                "path":  "reports/report-v0.md",
+                                                                "pattern":  "NOT\\s+COMPLETE"
+                                                            },
+                                                            {
+                                                                "path":  "reports/report-v0.md",
+                                                                "pattern":  "\\bmissing\\b"
+                                                            },
+                                                            {
+                                                                "path":  "reports/report-v0.md",
+                                                                "pattern":  "\\bplaceholder\\b"
+                                                            },
+                                                            {
+                                                                "path":  "reports/report-v0.md",
+                                                                "pattern":  "\\bdraft\\b"
+                                                            }
+                                                        ]
+                                           },
+                                           {
+                                               "code":  "completion_lock_status_not_complete",
+                                               "status":  "NOT_COMPLETE"
+                                           },
+                                           {
+                                               "code":  "anti_cheat_flags_not_true",
+                                               "flags":  [
+                                                             "not_staging_only",
+                                                             "human_and_machine_status_match"
+                                                         ]
+                                           }
+                                       ],
+                            "repo_root":  "B:/M/ember",
+                            "root":  "B:\\M\\ember\\baseline",
+                            "source_count":  16,
+                            "verdict":  "FAIL",
+                            "warnings":  [
+
+                                         ]
+                        },
+    "raw_output":  null
+}

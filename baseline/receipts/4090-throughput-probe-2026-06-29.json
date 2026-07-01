@@ -1,0 +1,68 @@
+{
+  "completion_limits": [
+    "This is a short local probe, not a governed >=1B training run.",
+    "The result cannot satisfy the single_4090_ge_1b_foundation_ceiling family without exact 1B config, memory fit, sustained long-run throughput, capability target, and comparator receipts."
+  ],
+  "created_at_utc": "2026-06-29T22:19:02Z",
+  "device": {
+    "capability": [
+      8,
+      9
+    ],
+    "name": "NVIDIA GeForce RTX 4090",
+    "total_memory_bytes": 25756696576
+  },
+  "matmul": {
+    "dtype": "float16",
+    "elapsed_s": 0.017763400042895228,
+    "iters": 20,
+    "kind": "square_matmul",
+    "memory_allocated_bytes": 142737408,
+    "size": 4096,
+    "tflops": 154.743971469551,
+    "warmup": 5
+  },
+  "nvidia_smi": {
+    "available": true,
+    "gpus": [
+      {
+        "driver_version": "591.86",
+        "memory_total_mib": 24564.0,
+        "name": "NVIDIA GeForce RTX 4090",
+        "power_limit_w": 450.0
+      }
+    ]
+  },
+  "platform": {
+    "machine": "AMD64",
+    "release": "10",
+    "system": "Windows"
+  },
+  "torch": {
+    "cuda_available": true,
+    "cuda_version": "12.6",
+    "version": "2.10.0+cu126"
+  },
+  "transformer_step": {
+    "batch_size": 2,
+    "dtype": "bfloat16",
+    "elapsed_s": 0.03881249995902181,
+    "estimated_training_tflops": 9.972474460152116,
+    "heads": 8,
+    "hidden": 512,
+    "iters": 6,
+    "kind": "tiny_transformer_forward_backward_step",
+    "layers": 4,
+    "limit": "Tiny model throughput does not transfer directly to 1B training; it is a local CUDA sanity/projection input only.",
+    "loss_first": 8.689830780029297,
+    "loss_last": 7.5535078048706055,
+    "parameter_count": 20999168,
+    "peak_memory_bytes": 246168576,
+    "seq_len": 256,
+    "tokens_per_iter": 512,
+    "tokens_per_second": 79149.7585376725,
+    "vocab_size": 8192,
+    "warmup": 2
+  },
+  "verdict": "THROUGHPUT_PROBE_NOT_COMPLETION"
+}

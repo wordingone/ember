@@ -1,0 +1,14 @@
+{
+  "completion_limit": "This validates targeted expansion for discovered near-duplicate clusters only. It is not an all-pairs near-duplicate pass, not C1 completion, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T10:45:27Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-near-duplicate-targeted-expansion-2026-06-30.json",
+  "summary": {
+    "eligible_documents": 3808603,
+    "expanded_exclusion_document_count": 1668,
+    "expanded_exclusion_token_floor": 2949980,
+    "target_count": 4
+  },
+  "verdict": "C1_NEAR_DUPLICATE_TARGETED_EXPANSION_VALIDATED"
+}

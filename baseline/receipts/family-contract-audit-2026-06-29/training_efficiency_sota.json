@@ -1,0 +1,19 @@
+{
+  "checked_paths": {
+    "contract_path": "contracts/B0-modded-nanogpt-training-efficiency.md",
+    "protocol_path": "protocols/protocol-v0.md",
+    "report_path": "reports/report-v0.md"
+  },
+  "completion_limit": "This receipt checks family contract surface readiness only. The family remains incomplete until its baseline module, locked thresholds, governed receipts, and final verifier PASS exist.",
+  "created_at_utc": "2026-06-29T22:22:03Z",
+  "failures": [],
+  "family": "training_efficiency_sota",
+  "field_relevance_present": true,
+  "overall_goal_status": "INCOMPLETE",
+  "source_rows": [
+    "modded-nanogpt",
+    "mlcommons-algoperf"
+  ],
+  "status_in_lock": "INCOMPLETE",
+  "verdict": "CONTRACT_AUDIT_PASS_NOT_BASELINE_COMPLETE"
+}

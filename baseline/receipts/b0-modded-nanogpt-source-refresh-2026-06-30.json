@@ -1,0 +1,23 @@
+{
+  "benchmark": "NanoGPT speedrun track_1_short",
+  "checked_at_utc": "2026-06-30T12:00:00Z",
+  "completion_limit": "This is a source-refresh receipt for the external B0 comparator only. It is not an Ember run, not a training result, and not overall baseline completion.",
+  "contract_commit": "54c192a77bd0e3d2572a891e0a8a1b0ceeb957d7",
+  "current_record_date": "2026-05-21",
+  "current_record_id": "84",
+  "current_record_log_path": "records/track_1_short/2026-05-19_FP8MLPUpProj/this_record/008bb79d-d5bc-4205-bd4e-5e4ae82e658c.txt",
+  "current_record_time_minutes": 1.32,
+  "evidence": {
+    "access_date": "2026-06-30",
+    "readme_record_quote": "84 | 1.320 minutes | FP8 on MLP up-projection forward pass | 05/21/26",
+    "readme_run_rule_summary": "Current record can be replayed from the public repository; official records are timed on 8 NVIDIA H100 GPUs.",
+    "readme_target_quote": "Train a neural network to <=3.28 validation loss on FineWeb using 8x NVIDIA H100s.",
+    "readme_url": "https://raw.githubusercontent.com/KellerJordan/modded-nanogpt/master/README.md"
+  },
+  "hardware": "8x NVIDIA H100",
+  "interpretation": "The previously locked B0 comparator remains current against the public README refresh: no newer track_1_short record superseded record 84 at inspection time.",
+  "schema": "b0.modded_nanogpt.source_refresh.v1",
+  "source_id": "modded-nanogpt",
+  "target_val_loss": 3.28,
+  "verdict": "B0_SOURCE_REFRESH_CURRENT_MATCHES_LOCKED_COMPARATOR"
+}

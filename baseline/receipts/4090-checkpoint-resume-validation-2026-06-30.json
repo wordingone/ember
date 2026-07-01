@@ -1,0 +1,9 @@
+{
+  "completion_limit": "This validates bounded real-token checkpoint/resume mechanics only. It is not a long-run checkpoint cadence receipt, not a throughput completion receipt, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T14:26:49Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_checkpoint_resume_probe_validation",
+  "receipt_path": "receipts/4090-real-data-checkpoint-resume-probe-pretraining-equivalent.json",
+  "verdict": "C1_CHECKPOINT_RESUME_PROBE_VALIDATED"
+}

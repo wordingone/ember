@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates only the three-seed upstream CLRS baseline comparator receipt. It is not an Ember improvement claim and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T08:53:39Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt": "receipts/c5-mlagentbench-clrs-governed-baseline-2026-06-30.json",
+  "verdict": "C5_MLAGENTBENCH_CLRS_GOVERNED_BASELINE_VALIDATED"
+}

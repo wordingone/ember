@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates C1 data-governance evidence only. It is not a long-run training receipt and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T19:16:44Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-data-governance-2026-06-30.json",
+  "verdict": "C1_DATA_GOVERNANCE_VALIDATED"
+}

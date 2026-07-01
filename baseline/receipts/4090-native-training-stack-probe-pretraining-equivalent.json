@@ -1,0 +1,73 @@
+{
+  "active_trainable_parameters": 1027764224,
+  "capability_target": "c1_native_training_stack_probe",
+  "completion_limit": "Native training-stack probe bounds selected PyTorch/CUDA fused surfaces only: SDPA attention forward/backward, CUDA cross-entropy, and fused AdamW API behavior. It is not a full native transformer implementation, not a full 1B long-run training receipt, not proof that native optimization is exhausted, and not family completion.",
+  "config_id": "pretraining_equivalent_1b_4090_v0",
+  "config_repo_path": "engineering/4090-1b/configs/pretraining_equivalent_1b_4090.json",
+  "created_at_utc": "2026-06-30T15:54:24Z",
+  "cuda_available": true,
+  "cuda_version": "12.6",
+  "device_name": "NVIDIA GeForce RTX 4090",
+  "device_total_memory_bytes": 25756696576,
+  "kind": "single_4090_native_training_stack_probe",
+  "lane": "pretraining_equivalent",
+  "native_training_surfaces": {
+    "adamw_optimizer_step": {
+      "bounded": true,
+      "fallback_if_any": null,
+      "fused_adamw_requested": true,
+      "fused_adamw_supported": true,
+      "mean_step_seconds": 0.00030824001878499986,
+      "optimizer_elements": 8388608,
+      "parameter_dtype": "bfloat16"
+    },
+    "cross_entropy_forward_backward": {
+      "bounded": true,
+      "mean_forward_backward_seconds": 0.0014310600003227592,
+      "shape": {
+        "logit_dtype": "bfloat16",
+        "loss_dtype": "float32",
+        "tokens": 1024,
+        "vocab_size": 32768
+      },
+      "uses_torch_cuda_cross_entropy_path": true
+    },
+    "sdpa_attention_forward_backward": {
+      "bounded": true,
+      "flash_sdp_enabled": true,
+      "lower_bound_attention_tflops": 22.48409119689459,
+      "math_sdp_enabled": true,
+      "mean_forward_backward_seconds": 0.0015281799947842955,
+      "mem_efficient_sdp_enabled": true,
+      "shape": {
+        "batch": 1,
+        "dtype": "bfloat16",
+        "head_dim": 128,
+        "heads": 16,
+        "seq_len": 2048
+      },
+      "uses_torch_scaled_dot_product_attention": true
+    }
+  },
+  "open_native_surfaces": [
+    "full CUDA C++ transformer block forward/backward implementation",
+    "Triton fused attention backward replacement at full C1 stack",
+    "fused bias/dropout/residual/layernorm training kernel stack",
+    "full 19-layer native forward/backward/optimizer long-run receipt",
+    "thermal/power stability over long-run native training"
+  ],
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.10.11",
+    "release": "10",
+    "system": "Windows"
+  },
+  "toolchain": {
+    "cmake_available": true,
+    "nvcc_available": true,
+    "nvcc_path_recorded": true,
+    "triton_available": false
+  },
+  "torch_version": "2.10.0+cu126",
+  "verdict": "NATIVE_TRAINING_STACK_PROBE_NOT_COMPLETION"
+}

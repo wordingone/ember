@@ -1,0 +1,33 @@
+{
+    "generated_at_utc":  "2026-06-29T21:30:20Z",
+    "command":  "python B:\\M\\ember\\baseline\\scripts\\parse_c5_nanogpt_verdict.py --baseline-receipt B:\\M\\ember\\baseline\\receipts\\c5-nanogpt-governed-baseline-control-2026-06-29.json --candidate-receipt B:\\M\\ember\\baseline\\receipts\\c5-nanogpt-governed-baseline-control-2026-06-29.json --min-improvement-pct 1.0 --pretty",
+    "expected_exit_code":  0,
+    "actual_exit_code":  0,
+    "expected_verdict":  "FAIL",
+    "completion_gate_role":  "supporting_control_only_not_ember_vs_external_baseline",
+    "parser_output":  {
+                          "claim_id":  "C5-0B-AI-Scientist-nanoGPT-lite",
+                          "contract":  "C5-0B nanoGPT_lite governed local research-loop comparison",
+                          "evidence":  {
+                                           "baseline_receipt":  "B:\\M\\ember\\baseline\\receipts\\c5-nanogpt-governed-baseline-control-2026-06-29.json",
+                                           "candidate_receipt":  "B:\\M\\ember\\baseline\\receipts\\c5-nanogpt-governed-baseline-control-2026-06-29.json",
+                                           "errors":  [
+
+                                                      ],
+                                           "rejects_smoke_receipts":  true
+                                       },
+                          "generated_at":  "2026-06-29T00:00:00Z",
+                          "metric":  {
+                                         "baseline_best_val_loss_mean":  2.9307998418807983,
+                                         "candidate_best_val_loss_mean":  2.9307998418807983,
+                                         "dataset":  "shakespeare_char",
+                                         "improvement_pct":  0.0,
+                                         "name":  "best_val_loss_mean_improvement_pct"
+                                     },
+                          "threshold":  {
+                                            "direction":  "higher improvement is better; validation loss lower is better",
+                                            "min_improvement_pct":  1.0
+                                        },
+                          "verdict":  "FAIL"
+                      }
+}

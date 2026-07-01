@@ -1,0 +1,53 @@
+{
+  "config_id": "pretraining_equivalent_1b_4090_v0",
+  "lane": "pretraining_equivalent",
+  "purpose": "Runnable engineering translation of the single-RTX-4090 >=1B theoretical ceiling for continued-pretraining, distillation, or adapter-to-full-model equivalence claims.",
+  "model": {
+    "family": "decoder_only_gpt_or_compatible_external_1b_plus",
+    "parameterization": "active_trainable_or_equivalence_justified",
+    "vocab_size": 32768,
+    "sequence_length": 2048,
+    "n_layers": 19,
+    "n_embd": 2048,
+    "n_heads": 16,
+    "mlp_ratio": 4,
+    "tie_embeddings": true,
+    "dropout": 0.0,
+    "bias": false,
+    "expected_active_trainable_parameters_min": 1000000000
+  },
+  "training": {
+    "token_budget": 5000000000,
+    "days_scale_threshold": 7,
+    "micro_batch_size": 1,
+    "gradient_accumulation_steps": 64,
+    "optimizer": "adamw_8bit_preferred_adamw_torch_fallback",
+    "learning_rate": 0.0001,
+    "weight_decay": 0.1,
+    "precision": "bf16_preferred_fp16_fallback",
+    "activation_checkpointing": true,
+    "sequence_packing": true,
+    "compile": "optional_after_dry_run",
+    "flash_attention": "torch_sdpa_when_available"
+  },
+  "data": {
+    "mode": "curated_continued_pretraining_tokens_or_distillation_tokens",
+    "token_dtype": "uint16_or_int32",
+    "dedupe_required": true,
+    "contamination_policy_required": true,
+    "teacher_or_source_model_receipt_required": true,
+    "synthetic_data_allowed_for_dry_run_only": true
+  },
+  "capability_target": {
+    "frozen_before_run": true,
+    "minimum": "pretraining-equivalent target must be distinct from from-scratch target and locked before execution",
+    "parser_requires_target": true
+  },
+  "stop_rule": {
+    "max_wall_clock_days": 7,
+    "checkpoint_interval_minutes": 30,
+    "abort_if_projected_days_exceeds": 7,
+    "abort_if_peak_memory_margin_gb_below": 1.0,
+    "abort_if_no_receipt_update_minutes": 60
+  }
+}

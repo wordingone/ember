@@ -1,0 +1,16 @@
+{
+  "completion_limit": "This validates a bounded SFT/probe negative-evidence receipt only. It is not a governed external benchmark win and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T09:32:05Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt": "receipts/owned-engine-sft-tool-loop-2026-06-30.json",
+  "summary": {
+    "checkpoint_size_bytes": 1604552023,
+    "probe_expected_output": "470",
+    "probe_observed_output": "",
+    "task_passed": false,
+    "training_steps": 700,
+    "valid_tool_observation_count": 6
+  },
+  "verdict": "OWNED_ENGINE_SFT_TOOL_LOOP_NEGATIVE_EVIDENCE_VALIDATED"
+}

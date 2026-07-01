@@ -1,0 +1,271 @@
+{
+  "completion_limit": "This materializes a cumulative v15 filtered-corpus view for cumulative discovered near-duplicate clusters only. It is not an all-pairs near-duplicate PASS, not binary shard rewrite, not a full-corpus MinHash PASS, not eval-contamination evidence, and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T12:07:07Z",
+  "cumulative_filtered_view": {
+    "binary_shards_rewritten": false,
+    "excluded_document_count": 1978,
+    "excluded_document_fraction": 0.00046689947120920355,
+    "excluded_token_floor": 3364087,
+    "excluded_token_floor_fraction_of_stream": 0.0004821080929822785,
+    "exclusion_application": "exclude listed document indices from the C1 document stream before sampling/training",
+    "exclusion_key_digest_sha256": "3672ae5dce9d6b3c26919943a71cfaddb57b4bd69eb2675a12c700896907bf66",
+    "remaining_content_token_floor": 6974504671,
+    "remaining_document_count": 4234480,
+    "view_materialized": true
+  },
+  "excluded_doc_index_summary": {
+    "max_doc_index": 3986658,
+    "min_doc_index": 1299,
+    "unique_doc_index_count": 1978
+  },
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_cumulative_filtered_corpus_view_V15",
+  "per_shard_application": [
+    {
+      "excluded_document_count": 110,
+      "excluded_token_floor": 189647,
+      "remaining_documents": 124983,
+      "shard": "v0-00000.bin",
+      "source_documents_closed": 125093,
+      "source_sha256": "2ada751e4f1a9612b57cf21d95deec09d8230690f52a9892a69b9c665b231ca5",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 114,
+      "excluded_token_floor": 207540,
+      "remaining_documents": 125244,
+      "shard": "v0-00001.bin",
+      "source_documents_closed": 125358,
+      "source_sha256": "0a529f8425e268dfbf61870f121381f2eae1c5e5ebc298804013d54324c36e81",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 123,
+      "excluded_token_floor": 208495,
+      "remaining_documents": 120911,
+      "shard": "v0-00002.bin",
+      "source_documents_closed": 121034,
+      "source_sha256": "4efeb973ee7667d4ce9356d0bd9c478f9a33252733c2d01361e5f7a8b472d89f",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 111,
+      "excluded_token_floor": 192395,
+      "remaining_documents": 124230,
+      "shard": "v0-00003.bin",
+      "source_documents_closed": 124341,
+      "source_sha256": "c9dc5cafa7a806384a200c26a51a7e11a3483019e9bb177dc4afed11eba18d0c",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 127,
+      "excluded_token_floor": 231005,
+      "remaining_documents": 124434,
+      "shard": "v0-00004.bin",
+      "source_documents_closed": 124561,
+      "source_sha256": "6f87138445b43b9669869deaca8ab07702b8dd0ebebd54d186cf3c3bf18134fb",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 131,
+      "excluded_token_floor": 227899,
+      "remaining_documents": 122795,
+      "shard": "v0-00005.bin",
+      "source_documents_closed": 122926,
+      "source_sha256": "990aa39342ddde2d5f839f9c766fa09f0924a66cb460629e6273425a7525d603",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 126,
+      "excluded_token_floor": 190263,
+      "remaining_documents": 123759,
+      "shard": "v0-00006.bin",
+      "source_documents_closed": 123885,
+      "source_sha256": "8da2dab4c68907f4643c6fba8d0b82ab0611584247c3e95e58109f34dfed10b7",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 113,
+      "excluded_token_floor": 218018,
+      "remaining_documents": 125601,
+      "shard": "v0-00007.bin",
+      "source_documents_closed": 125714,
+      "source_sha256": "d2456d659bbcd46a9becf08512660008f4742cf853e5ac0aaed90edc66ecbccd",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 115,
+      "excluded_token_floor": 190259,
+      "remaining_documents": 125083,
+      "shard": "v0-00008.bin",
+      "source_documents_closed": 125198,
+      "source_sha256": "a0851ffadf70046e9d74fcce1aefdbeb68c826a3dce5e7100de68c66104d93e4",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 146,
+      "excluded_token_floor": 247803,
+      "remaining_documents": 123008,
+      "shard": "v0-00009.bin",
+      "source_documents_closed": 123154,
+      "source_sha256": "73ba58e42bd827ae4d111ffb7c54b67fbb0b2300b0d3eb243d65302ff4f2407d",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 152,
+      "excluded_token_floor": 263408,
+      "remaining_documents": 121127,
+      "shard": "v0-00010.bin",
+      "source_documents_closed": 121279,
+      "source_sha256": "ceb2fcfa59e505ae8496eb55d71e89abf24577013ea50439f6eeef562533cd99",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 132,
+      "excluded_token_floor": 231462,
+      "remaining_documents": 122745,
+      "shard": "v0-00011.bin",
+      "source_documents_closed": 122877,
+      "source_sha256": "f15ec3e7951ec0e6b32daa38968fadb5a5890bf69e55236667056336161b798b",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 146,
+      "excluded_token_floor": 248199,
+      "remaining_documents": 121326,
+      "shard": "v0-00012.bin",
+      "source_documents_closed": 121472,
+      "source_sha256": "55556e9bf1fe4f4653417dd48fa048d824b45aba21be565699b947edb269badf",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 142,
+      "excluded_token_floor": 227458,
+      "remaining_documents": 125301,
+      "shard": "v0-00013.bin",
+      "source_documents_closed": 125443,
+      "source_sha256": "90977814b3f5b35decfa1d37262c818b92069971a2c24d04db1a8944873f5e0d",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 148,
+      "excluded_token_floor": 248221,
+      "remaining_documents": 122179,
+      "shard": "v0-00014.bin",
+      "source_documents_closed": 122327,
+      "source_sha256": "28a53ddf00bbf8940b92662c1982b1259a1cc102e2b20fa1a8f3bac47652d90c",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 12,
+      "excluded_token_floor": 9977,
+      "remaining_documents": 236082,
+      "shard": "v0-00015.bin",
+      "source_documents_closed": 236094,
+      "source_sha256": "204f935c7b827634cfbf51ad00ad2be1161f123a87b93c79ed6ecd40b008b5ad",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 0,
+      "excluded_token_floor": 0,
+      "remaining_documents": 248084,
+      "shard": "v0-00016.bin",
+      "source_documents_closed": 248084,
+      "source_sha256": "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 3,
+      "excluded_token_floor": 2434,
+      "remaining_documents": 248838,
+      "shard": "v0-00017.bin",
+      "source_documents_closed": 248841,
+      "source_sha256": "39618f4adfcca860c1faab43bb86660dbfb621c0635794565371826e59719a69",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 4,
+      "excluded_token_floor": 4175,
+      "remaining_documents": 251762,
+      "shard": "v0-00018.bin",
+      "source_documents_closed": 251766,
+      "source_sha256": "3bb6dbbabc4e6eec2d62a6798956d74175f2af3d1b848d2b59eeccd043976553",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 5,
+      "excluded_token_floor": 3687,
+      "remaining_documents": 249726,
+      "shard": "v0-00019.bin",
+      "source_documents_closed": 249731,
+      "source_sha256": "207b2b81c83bed4978b9877f33acf27b3e497338c9b3bbf6fd0b847360866a72",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 9,
+      "excluded_token_floor": 15038,
+      "remaining_documents": 248346,
+      "shard": "v0-00020.bin",
+      "source_documents_closed": 248355,
+      "source_sha256": "6683296395568e6b40b03ad8320ded457f3278bf1124c4831311e10c5de1bbb4",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 5,
+      "excluded_token_floor": 5872,
+      "remaining_documents": 245452,
+      "shard": "v0-00021.bin",
+      "source_documents_closed": 245457,
+      "source_sha256": "6b9f3d68714a54d48e9916b7de68b1f38afb53a6046189e2a0cce7d7a23189c5",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 3,
+      "excluded_token_floor": 311,
+      "remaining_documents": 296934,
+      "shard": "v0-00022.bin",
+      "source_documents_closed": 296937,
+      "source_sha256": "f5f7da6149461604db34ba5b567b94e9955d97d27845b58df5e76d76077b23b1",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 1,
+      "excluded_token_floor": 521,
+      "remaining_documents": 314834,
+      "shard": "v0-00023.bin",
+      "source_documents_closed": 314835,
+      "source_sha256": "cd58fa76d65350622739e5c788e8bd82c7d3eccd302837afcc7d812472cba7c1",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 0,
+      "excluded_token_floor": 0,
+      "remaining_documents": 38529,
+      "shard": "v0-00024.bin",
+      "source_documents_closed": 38529,
+      "source_sha256": "028e718b21054ee4dd62af20c6e07db07f9e8186367530f8dc85be8162c8e085",
+      "source_stream_tokens": 268435456
+    },
+    {
+      "excluded_document_count": 0,
+      "excluded_token_floor": 0,
+      "remaining_documents": 3167,
+      "shard": "v0-00025.bin",
+      "source_documents_closed": 3167,
+      "source_sha256": "d2bc5c37a48a33ec40bc3358a9a84f11dda0c19ab82d37e09606c2d202ed106f",
+      "source_stream_tokens": 266982358
+    }
+  ],
+  "source_corpus": {
+    "documents_seen": 4236458,
+    "separator_token_id": 0,
+    "shard_count": 26,
+    "stream_tokens": 6977868758
+  },
+  "source_exact_dedupe_receipt": "receipts/4090-exact-dedupe-scan-2026-06-30.json",
+  "source_exclusion_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v15-2026-07-01.jsonl",
+  "source_exclusion_manifest_sha256": "5ebb68dadf195c826063e6d19d67b87664645c248f4f57be838a613d5acd6773",
+  "source_exclusion_receipt": "receipts/4090-near-duplicate-cumulative-exclusion-manifest-v15-2026-07-01.json",
+  "verdict": "C1_CUMULATIVE_FILTERED_CORPUS_VIEW_V15_READY_NOT_COMPLETION"
+}

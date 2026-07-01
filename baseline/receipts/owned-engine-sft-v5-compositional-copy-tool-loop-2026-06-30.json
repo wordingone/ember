@@ -1,0 +1,134 @@
+{
+  "checkpoint": {
+    "label": "<trained-owned-engine-checkpoint-v5-compositional-copy>",
+    "sha256": "9e182e3d17146a9a63593987817ea78d9db7495f1af5c45f2aa797929524ce03",
+    "size_bytes": 1604552023,
+    "stored_outside_baseline": true
+  },
+  "completion_limit": "This is a bounded owned-engine compositional-copy SFT and normalized heldout tool-loop probe. It is not a SOTA baseline win, not a governed external benchmark win, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T09:59:40Z",
+  "probe": {
+    "elapsed_seconds": 4.043,
+    "expected_output": "470",
+    "observed_output": "2 123",
+    "output_file_exists": true,
+    "runtime_policy": "Normalize byte-level decode markers and truncate model output to one executable tool call per turn.",
+    "task_passed": false,
+    "turns": [
+      {
+        "normalized_tool": "COUNT <REPO_ROOT>/scripts  py\n",
+        "observation": "470",
+        "raw": "COUNT \u0120B :/ M / owned engine / scripts \u0120py \u010a OB SER \u0120py \u010a WRITE \u0120demo - out . txt \u010a WRITE \u0120demo - out . txt \u010a 98 \u010a END WRITE \u010a \u010a 2 \u010a 14 \u010a \u010a WRITE \u010a WRITE \u010a 2 123 \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a 96 \u010a END WRITE",
+        "turn": 1,
+        "verb": "COUNT"
+      },
+      {
+        "normalized_tool": "WRITE  demo-out.txt \n 2 123 \n ENDWRITE\n",
+        "observation": "wrote 9 bytes to demo-out.txt",
+        "raw": "WRITE \u0120demo - out . txt \u010a 2 123 \u010a END WRITE \u010a 2 123 \u010a WRITE \u010a WRITE \u010a END WRITE 4 44 \u010a WRITE \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a 14 93 \u010a \u010a \u010a D ONE \u010a 14 96 \u010a 96 \u010a",
+        "turn": 2,
+        "verb": "WRITE"
+      },
+      {
+        "normalized_tool": "READ demo-out.txt\n",
+        "observation": " 2 123 \n ",
+        "raw": "READ \u0120demo - out . txt \u010a 14 96 \u010a \u010a \u010a READ \u0120demo - out . txt \u010a D ONE \u010a D ONE \u010a D ONE \u010a 98 \u010a 98 \u010a 6 \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a WRITE \u010a WRITE \u010a 98 \u010a 2 123 \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a END",
+        "turn": 3,
+        "verb": "READ"
+      },
+      {
+        "normalized_tool": "DONE DONE\n",
+        "observation": "",
+        "raw": "D ONE \u010a D ONE \u010a 19 \u010a 19 \u010a 2 123 \u010a \u010a \u010a \u010a WRITE 44 \u010a WRITE \u010a WRITE \u0120js \u010a WRITE 46 \u010a WRITE \u010a WRITE \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a END WRITE \u010a WRITE \u010a WRITE \u010a WRITE \u010a 19 \u010a WRITE \u010a WRITE \u010a WRITE \u010a COUNT \u010a 2 123 \u010a READ",
+        "turn": 4,
+        "verb": "DONE"
+      }
+    ],
+    "valid_tool_observation_count": 4
+  },
+  "root_cause_tested": "Whether component-level exposure to the heldout path parts without the exact target path lets the owned checkpoint copy B:/M/ember/scripts py from the goal.",
+  "schema": "owned_engine.sft_compositional_copy_tool_loop_probe.v1",
+  "training_run": {
+    "batch_size": 4,
+    "curriculum": "Continuation from v4 with biased examples containing the target path components separately and frequent py extension examples.",
+    "device": "cuda",
+    "elapsed_seconds": 121.351,
+    "heldout_policy": "Exact target path B:/M/ember/scripts and target count 470 are excluded; component paths such as B:/M/ember/tools and B:/M/alpha/scripts are included.",
+    "init_checkpoint_label": "<trained-owned-engine-checkpoint-v1>",
+    "learning_rate": 6e-05,
+    "loss_samples": [
+      {
+        "elapsed_seconds": 0.5,
+        "loss": 0.445200651884079,
+        "step": 1
+      },
+      {
+        "elapsed_seconds": 10.4,
+        "loss": 0.4054776430130005,
+        "step": 100
+      },
+      {
+        "elapsed_seconds": 20.4,
+        "loss": 0.35116133093833923,
+        "step": 200
+      },
+      {
+        "elapsed_seconds": 30.4,
+        "loss": 0.15567098557949066,
+        "step": 300
+      },
+      {
+        "elapsed_seconds": 40.4,
+        "loss": 0.1770799458026886,
+        "step": 400
+      },
+      {
+        "elapsed_seconds": 50.4,
+        "loss": 0.8081207275390625,
+        "step": 500
+      },
+      {
+        "elapsed_seconds": 60.4,
+        "loss": 0.36168786883354187,
+        "step": 600
+      },
+      {
+        "elapsed_seconds": 70.4,
+        "loss": 0.3324580192565918,
+        "step": 700
+      },
+      {
+        "elapsed_seconds": 80.4,
+        "loss": 0.25690409541130066,
+        "step": 800
+      },
+      {
+        "elapsed_seconds": 90.4,
+        "loss": 0.18995708227157593,
+        "step": 900
+      },
+      {
+        "elapsed_seconds": 100.4,
+        "loss": 9.238704592462454e-07,
+        "step": 1000
+      },
+      {
+        "elapsed_seconds": 110.4,
+        "loss": 1.4483856602964806e-06,
+        "step": 1100
+      },
+      {
+        "elapsed_seconds": 120.4,
+        "loss": 0.018925141543149948,
+        "step": 1200
+      }
+    ],
+    "output_checkpoint_label": "<trained-owned-engine-checkpoint-v5-compositional-copy>",
+    "seqcap": 512,
+    "source_episode_count": 3200,
+    "steps": 1200,
+    "supervision_policy": "Only action tokens are trained; first action must copy the path and extension from the goal, later actions copy live observations.",
+    "turnwise_example_count": 12800
+  },
+  "verdict": "FAIL"
+}

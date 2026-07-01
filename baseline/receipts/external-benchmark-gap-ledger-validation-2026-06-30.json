@@ -1,0 +1,12 @@
+{
+  "completion_limit": "This validates blocked/access-gap receipt preservation only. It is not used as completed-family evidence and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T13:05:56Z",
+  "gap_receipt_count": 3,
+  "gap_receipt_ids": [
+    "kaggle_auth_preflight_blocked",
+    "official_abc_wheel_runner_blocked",
+    "official_mle_prepare_blocked"
+  ],
+  "index_path": "receipts/external-benchmark-receipt-index-2026-06-30.json",
+  "verdict": "EXTERNAL_BENCHMARK_GAP_LEDGER_VALIDATED"
+}

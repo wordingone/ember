@@ -1,0 +1,36 @@
+{
+  "completion_limit": "This validates bounded real-token full-stack LM-loss telemetry only. It is not a multi-step stability receipt, checkpoint/resume receipt, long-run training receipt, or overall baseline completion.",
+  "created_at_utc": "2026-06-30T14:18:28Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_real_data_lm_loss_probe_validation",
+  "lane_summaries": [
+    {
+      "input_tokens_sha256": "3233b2ae5dda077bf18ea97deef633e57f29ace79d007bd275c750158777f4eb",
+      "lane": "from_scratch",
+      "loss_first": 1458.7789306640625,
+      "loss_last": 1458.7789306640625,
+      "measured_tflops_lower_bound": 29.3257030024326,
+      "path": "receipts/4090-real-data-lm-loss-probe-from-scratch.json",
+      "required_sustained_tflops": 50.98036825396826,
+      "shard_name": "v0-00000.bin",
+      "stream_token_start": 1048576,
+      "target_tokens_sha256": "3f4c623392aa50fd56f04615d765637013e9b22dda380b21b41dc54d79be84fd",
+      "tokens_per_second": 4755.582119846293
+    },
+    {
+      "input_tokens_sha256": "3233b2ae5dda077bf18ea97deef633e57f29ace79d007bd275c750158777f4eb",
+      "lane": "pretraining_equivalent",
+      "loss_first": 1458.7789306640625,
+      "loss_last": 1458.7789306640625,
+      "measured_tflops_lower_bound": 29.32593453272375,
+      "path": "receipts/4090-real-data-lm-loss-probe-pretraining-equivalent.json",
+      "required_sustained_tflops": 50.98036825396826,
+      "shard_name": "v0-00000.bin",
+      "stream_token_start": 1048576,
+      "target_tokens_sha256": "3f4c623392aa50fd56f04615d765637013e9b22dda380b21b41dc54d79be84fd",
+      "tokens_per_second": 4755.619665794047
+    }
+  ],
+  "verdict": "C1_REAL_DATA_LM_LOSS_PROBE_VALIDATED"
+}

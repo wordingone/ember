@@ -1,0 +1,16 @@
+{
+  "completion_limit": "This validates bounded near-duplicate sample evidence only. It is not a full near-duplicate pass, not eval-contamination evidence, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T10:18:14Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-near-duplicate-minhash-sample-2026-06-30.json",
+  "summary": {
+    "candidate_pair_count": 10534,
+    "crossing_pair_count": 25,
+    "eligible_documents": 3808603,
+    "max_exact_jaccard_observed": 0.914169,
+    "sampled_documents": 50000,
+    "verdict": "C1_NEAR_DUPLICATE_SAMPLE_CANDIDATES_FOUND"
+  },
+  "verdict": "C1_NEAR_DUPLICATE_SAMPLE_VALIDATED"
+}

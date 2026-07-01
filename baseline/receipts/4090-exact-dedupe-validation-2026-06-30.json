@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates exact token-document dedupe only. It is not near-duplicate, eval-contamination, long-run training, or overall baseline completion.",
+  "created_at_utc": "2026-06-30T04:23:05Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-exact-dedupe-scan-2026-06-30.json",
+  "verdict": "C1_EXACT_DEDUPE_VALIDATED"
+}

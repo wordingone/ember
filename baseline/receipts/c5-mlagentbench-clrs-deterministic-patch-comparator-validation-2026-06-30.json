@@ -1,0 +1,11 @@
+{
+  "completion_limit": "This validates only the equal-budget deterministic CLRS patch comparator. It is not an Ember improvement claim and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T09:03:11Z",
+  "delta_vs_upstream_mean": 0.0026092529296875,
+  "deterministic_patch_mean_test_score": 0.0179290771484375,
+  "failure_count": 0,
+  "failures": [],
+  "receipt": "receipts/c5-mlagentbench-clrs-deterministic-patch-comparator-2026-06-30.json",
+  "upstream_baseline_mean_test_score": 0.01531982421875,
+  "verdict": "C5_MLAGENTBENCH_CLRS_DETERMINISTIC_PATCH_COMPARATOR_VALIDATED"
+}

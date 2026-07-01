@@ -1,9 +1,9 @@
-# Inference-To-Training Transfer Protocol V0
+# Inference-To-Training Transfer Protocol V1
 
-Status: DRAFT FILTER, not a pass.
+Status: BASELINE_COMPLETE for the `architecture_growth_keystone_sota` family only.
 Created: 2026-06-29.
 
-This protocol exists because Ember has many DeepSeek, MTP, MLA, speculative decoding, and kernel references whose published wins often live on inference, draft-model, or distributed-serving axes. The baseline must not turn an inference-speed result into a training-efficiency, sample-efficiency, or one-4090 feasibility claim unless the transfer path is measured.
+This protocol exists because Ember has many DeepSeek, MTP, MLA, speculative decoding, precision, kernel, and infrastructure references whose published wins often live on inference, draft-model, forward-only, distributed-serving, or data-pipeline axes. The baseline must not turn those results into training-efficiency, sample-efficiency, single-4090 feasibility, or keystone-growth claims unless the transfer path is measured on the same axis.
 
 ## Source Thread
 
@@ -13,6 +13,13 @@ Local Ember files already contain the relevant research thread:
 - `B:\M\ember\research\gpu-math-multiplier-table-v2-2026-06-11.json` includes rows that translate or reject inference multipliers for training and small-scale use.
 - `B:\M\ember\nc2-own-technique-contract.md` lists DeepSeek-style MTP, MLA, FP8, sparse attention, MoE, and GRPO as candidate components with staging decisions.
 - `B:\M\ember\receipts\ns-chain-roofline-4090-adjudication-20260623T171500Z.json` warns that training tall-skinny GEMM bottlenecks and small inference matmuls must not be conflated without direct measurement.
+
+## Pinned External Architecture Anchors
+
+| Lane | Source rows | What it controls | Scope limit |
+|---|---|---|---|
+| AG-DEEPSEEK-INFERENCE-TRANSFER | `deepseek-deepspec-dspark`, `deepseek-open-infra-index` | DSpark/DeepSpec speculative decoding, draft-model training/evaluation, DeepSeek open infrastructure candidates including DeepGEMM, DeepEP, FlashMLA, DualPipe, 3FS, and TileKernels. | Same published axis only unless a same-axis training receipt exists. |
+| AG-LOWBIT-KERNEL-TRAINING | `bitnet` | Low-bit/1.58-bit architecture and quantized-training candidate. | Requires preserved-quality full training-step or pretraining-equivalent evidence; inference/model-format-only evidence is not enough. |
 
 ## DSpark Correction
 
@@ -26,7 +33,7 @@ Pinned source:
 - config example: `config/dspark/dspark_qwen3_4b.py`
 - released checkpoint rows: `deepseek-ai/dspark_qwen3_4b_block7`, `deepseek-ai/dspark_qwen3_8b_block7`, `deepseek-ai/dspark_qwen3_14b_block7`, `deepseek-ai/dspark_gemma4_12b_block7`
 
-DeepSpec describes itself as a full-stack codebase for training and evaluating draft models for speculative decoding. Its README says the default configs/scripts assume one node with 8 GPUs, and the default `Qwen/Qwen3-4B` target-cache path can require roughly 38 TB of storage. Therefore DSpark is an external frontier baseline for speculative decoding and draft-model training/evaluation, not direct evidence for Ember's single-4090 foundation-model pretraining claim.
+DeepSpec is an external frontier baseline for speculative decoding and draft-model training/evaluation, not direct evidence for Ember's single-4090 foundation-model pretraining claim.
 
 Receipt: `receipts/deepseek-dspark-resolution-2026-06-29.json`.
 
@@ -34,12 +41,12 @@ Receipt: `receipts/deepseek-dspark-resolution-2026-06-29.json`.
 
 | Optimization class | Typical published axis | Allowed Ember baseline use | Rejection rule |
 |---|---|---|---|
-| Speculative decoding, EAGLE, DeepSeek DSpark, DFlash, DeepSpec | Inference tokens/s, acceptance, completions/task, draft-model training | May baseline sampler throughput, draft-model quality, or CLI/agent-loop sampling cost. May not prove foundation-model pretraining speed, training energy, or sample efficiency. | Reject transfer unless the receipt measures the same model class, same GPU class, same task, and inference-only accounting is explicitly separated from training. |
+| Speculative decoding, EAGLE, DeepSeek DSpark, DFlash, DeepSpec | Inference tokens/s, acceptance, completions/task, draft-model training | May baseline sampler throughput, draft-model quality, or CLI/agent-loop sampling cost. | Reject transfer unless the receipt measures the same model class, same GPU class, same task, and inference-only accounting is explicitly separated from training. |
 | DeepSeek-style MTP drafter | Inference speed or auxiliary/draft objective | May be tested as a component ablation. Existing local survey treats small-scale MTP-as-pretraining-quality as negative or unproven. | Reject any automatic multiplier at <=1B unless matched ablation improves locked validation/capability at equal tokens, wall-clock, VRAM, and energy. |
 | MLA / KV compression / FlashMLA | Inference memory, long-context serving, attention kernels | May be an attention/kernel candidate. Does not count as a one-4090 training bottleneck fix by default. | Reject unless forward+backward memory and throughput improve the actual training step on RTX 4090 under the selected context length. |
-| DeepGEMM / fused kernels / TileKernels | Kernel throughput, often forward or microbenchmark | May enter C3 only as a kernel candidate. | Reject if the measured path is forward-only while the claim concerns forward+backward+optimizer training. |
+| DeepGEMM / fused kernels / TileKernels | Kernel throughput, often forward or microbenchmark | May enter architecture/kernel lane only as a kernel candidate. | Reject if the measured path is forward-only while the claim concerns forward+backward+optimizer training. |
 | DeepEP, EPLB, DualPipe, 3FS, smallpond | Distributed MoE communication, load balancing, pipeline overlap, storage/data infra | May inform future multi-GPU or data-pipeline baselines. | Reject for the default single-4090 dense baseline unless it removes a measured local bottleneck without adding hidden distributed hardware. |
-| FP8 DeepSeek-V3-style recipe | Training precision and throughput on datacenter paths | May become a training candidate only after Ada/RTX 4090 support, numerics, and quality are locally verified. | Reject if the path depends on H100/MI300-only kernels, unavailable libraries, or unmeasured loss/quality drift. |
+| FP8, BitNet, 1.58-bit, QAT, optimizer/state compression | Low-bit training, inference, model-format, or optimizer memory | May become a training candidate only after numerics, quality, and train-step path are verified. | Reject if the path lacks preserved quality, backward pass, optimizer state, or selected-hardware support. |
 
 ## Required Receipt Fields
 
@@ -54,4 +61,4 @@ Any transfer claim must state:
 
 ## Current Verdict
 
-This protocol rejects free transfer. DSpark/DeepSpec is now pinned, but it is scoped to speculative decoding until a same-axis training receipt proves a wider claim.
+ARCHITECTURE_GROWTH_BASELINE_COMPLETE for the architecture/growth comparator-family definition only. It rejects free transfer. DSpark/DeepSpec and DeepSeek open-infra anchors are pinned, and BitNet/low-bit training candidates are scoped to same-axis training evidence only. This is not an Ember architecture win and not overall `/baseline` completion.

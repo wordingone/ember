@@ -1,0 +1,16 @@
+{
+  "completion_limit": "This validates cumulative discovered-cluster exclusions v3 only. It is not all-pairs/full-corpus near-duplicate PASS evidence and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T23:37:33Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-near-duplicate-cumulative-exclusion-manifest-v3-2026-06-30.json",
+  "summary": {
+    "exclusion_document_count": 1709,
+    "exclusion_token_floor": 3012037,
+    "source_counts": {
+      "cumulative_filtered_v2_challenge_remediation": 16,
+      "cumulative_v2": 1693
+    }
+  },
+  "verdict": "C1_NEAR_DUPLICATE_CUMULATIVE_EXCLUSION_MANIFEST_V3_VALIDATED"
+}

@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates only the CLRS executable smoke receipt. It is not a C5 governed improvement trial and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T08:43:56Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt": "receipts/c5-mlagentbench-clrs-smoke-2026-06-30.json",
+  "verdict": "C5_MLAGENTBENCH_CLRS_SMOKE_VALIDATED"
+}

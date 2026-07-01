@@ -1,0 +1,26 @@
+{
+  "completion_limit": "This materializes cumulative discovered-cluster exclusions v3 only. It is not an all-pairs near-duplicate PASS, not a full-corpus MinHash proof, not eval-contamination evidence, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T23:34:11Z",
+  "exclusion_document_count": 1709,
+  "exclusion_token_floor": 3012037,
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_near_duplicate_cumulative_exclusion_manifest_v3",
+  "manifest": {
+    "line_count": 1709,
+    "repo_path": "fragments/c1-near-duplicate-cumulative-exclusions-v3-2026-06-30.jsonl",
+    "row_digest_sha256": "4feecee77239b48a5db2d786422a47190649a30d47ccf046c7ec21f7e7d1356c",
+    "sha256": "c6401417a88141b3c4a519906d63faca9d31eed200549ccdd9d1b20f8933b00e"
+  },
+  "source_challenge_remediation_receipt": "receipts/4090-cumulative-filtered-challenge-remediation-v3-2026-06-30.json",
+  "source_challenge_validation_receipt": "receipts/4090-cumulative-filtered-challenge-remediation-v3-validation-2026-06-30.json",
+  "source_counts": {
+    "cumulative_filtered_v2_challenge_remediation": 16,
+    "cumulative_v2": 1693
+  },
+  "source_overlap_count": 0,
+  "source_targeted_exclusion_receipt": "receipts/4090-near-duplicate-cumulative-exclusion-manifest-v2-2026-06-30.json",
+  "source_targeted_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v2-2026-06-30.jsonl",
+  "source_targeted_manifest_sha256": "e372616941b14d5d4d61ba3350d34e7b520b9c8abb6380134f69c36eb06c3610",
+  "verdict": "C1_NEAR_DUPLICATE_CUMULATIVE_EXCLUSION_MANIFEST_V3_READY"
+}

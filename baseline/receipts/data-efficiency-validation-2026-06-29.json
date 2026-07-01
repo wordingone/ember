@@ -1,0 +1,9 @@
+{
+  "completion_limit": "This validates only the data_efficiency_sota family. It does not complete the overall baseline.",
+  "contract_path": "B:\\M\\ember\\baseline\\contracts\\data-efficiency-frontier-v0.md",
+  "created_at_utc": "2026-06-29T22:54:04Z",
+  "failure_count": 0,
+  "failures": [],
+  "protocol_path": "B:\\M\\ember\\baseline\\protocols\\data-efficiency-frontier-v0.md",
+  "verdict": "DATA_EFFICIENCY_BASELINE_COMPLETE"
+}

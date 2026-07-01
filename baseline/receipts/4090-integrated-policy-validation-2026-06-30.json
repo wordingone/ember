@@ -1,0 +1,14 @@
+{
+  "checkpoint_event_count": 2,
+  "completion_limit": "This validates one bounded integrated streamed train/checkpoint/eval/recovery policy probe only. It is not long-run throughput, not external evaluation, not convergence, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T18:09:50Z",
+  "eval_window_count": 2,
+  "failure_count": 0,
+  "failures": [],
+  "measured_tflops_lower_bound": 2.273041158845439,
+  "receipt_path": "receipts/4090-integrated-policy-probe-pretraining-equivalent.json",
+  "recovery_window_base": 10,
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 8,
+  "verdict": "C1_INTEGRATED_POLICY_PROBE_VALIDATED"
+}

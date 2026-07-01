@@ -1,0 +1,10 @@
+{
+  "completion_limit": "This validates only the training_efficiency_sota family. It does not complete the overall baseline.",
+  "contract_path": "B:\\M\\ember\\baseline\\contracts\\B0-modded-nanogpt-training-efficiency.md",
+  "created_at_utc": "2026-06-30T13:01:11Z",
+  "failure_count": 0,
+  "failures": [],
+  "source_refresh_receipt": "receipts/b0-modded-nanogpt-source-refresh-2026-06-30.json",
+  "source_refresh_validation": "receipts/b0-modded-nanogpt-source-refresh-validation-2026-06-30.json",
+  "verdict": "TRAINING_EFFICIENCY_BASELINE_COMPLETE"
+}

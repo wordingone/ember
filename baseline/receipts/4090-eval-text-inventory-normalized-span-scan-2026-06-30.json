@@ -1,0 +1,242 @@
+{
+  "blocking_gap": "Full external eval-suite contamination PASS still requires raw/frozen external eval prompts/cases and a token-shard or full-corpus normalized-span scan. Imported receipts here are metadata/hash receipts, not raw eval text.",
+  "blocks_full_eval_suite_pass": true,
+  "checked_in_training_text_surfaces_scanned": [
+    {
+      "exact_normalized_span_hits": 0,
+      "hit_span_hashes_sha256": null,
+      "normalized_chars": 18629,
+      "repo_path": "data/ember_avir_tasks/train.jsonl",
+      "sha256": "3267ee4176a0acfc63690e16442728d1cb61564743b62a3440a3f8ea9b6eb9f2"
+    }
+  ],
+  "completion_limit": "This inventories available local/imported eval text and scans normalized 200-character spans against checked-in local training JSONL only. It is not a full external eval-suite contamination PASS, not a token-shard or full-corpus normalized-span PASS, not a near-duplicate PASS, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T18:20:30Z",
+  "eval_text_inventory": {
+    "external_benchmark_import_receipts": {
+      "metadata_only_receipt_count": 6,
+      "raw_eval_text_available_count": 0,
+      "receipt_count": 6,
+      "receipts": [
+        {
+          "classification": null,
+          "id": "EMBER-MLE-KAGGLE-AUTH-PREFLIGHT",
+          "metadata_only": true,
+          "raw_eval_text_available": false,
+          "raw_eval_text_gap": "imported receipt carries artifact hashes/metadata but not raw benchmark prompts, cases, or private evaluator text",
+          "repo_path": "baseline/receipts/external-benchmark-imports/2026-06-30/kaggle_auth_preflight_blocked.json",
+          "sha256": "73ab179e4bd691a63f9b1d006010ee413a2d03378d30e2f2215052dd3204fc81",
+          "verdict": "BLOCKED"
+        },
+        {
+          "classification": null,
+          "id": "EMBER-WHEEL-HELDOUT-RUN",
+          "metadata_only": true,
+          "raw_eval_text_available": false,
+          "raw_eval_text_gap": "imported receipt carries artifact hashes/metadata but not raw benchmark prompts, cases, or private evaluator text",
+          "repo_path": "baseline/receipts/external-benchmark-imports/2026-06-30/kaggle_external_heldout_wheel.json",
+          "sha256": "de8211e2f196dbda606e8e7e19f9e41c2de56e5e9bdcea94e7b5b3f11e59d946",
+          "verdict": "HELDOUT_WHEEL_RECEIPTED"
+        },
+        {
+          "classification": null,
+          "id": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-FROZEN-HELDOUT-DELTA",
+          "metadata_only": true,
+          "raw_eval_text_available": false,
+          "raw_eval_text_gap": "imported receipt carries artifact hashes/metadata but not raw benchmark prompts, cases, or private evaluator text",
+          "repo_path": "baseline/receipts/external-benchmark-imports/2026-06-30/livecodebench_frozen_heldout_delta.json",
+          "sha256": "5274ca73f0f4dce2e7462928b985933253c386c36a5dcee3f380da4ffa47b539",
+          "verdict": "HELDOUT_DELTA_RECEIPTED"
+        },
+        {
+          "classification": null,
+          "id": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-CANDIDATE-VS-BASELINE",
+          "metadata_only": true,
+          "raw_eval_text_available": false,
+          "raw_eval_text_gap": "imported receipt carries artifact hashes/metadata but not raw benchmark prompts, cases, or private evaluator text",
+          "repo_path": "baseline/receipts/external-benchmark-imports/2026-06-30/livecodebench_public_candidate_vs_baseline.json",
+          "sha256": "47f92c35351ed288360f8ca6cac54b41807375ddf67471bee62400d30ecf793f",
+          "verdict": "PUBLIC_TEST_DELTA_RECEIPTED"
+        },
+        {
+          "classification": null,
+          "id": "EMBER-MVP-OFFICIAL-ABC-WHEEL-RUNNER",
+          "metadata_only": true,
+          "raw_eval_text_available": false,
+          "raw_eval_text_gap": "imported receipt carries artifact hashes/metadata but not raw benchmark prompts, cases, or private evaluator text",
+          "repo_path": "baseline/receipts/external-benchmark-imports/2026-06-30/official_abc_wheel_runner_blocked.json",
+          "sha256": "cba4e0103aa0a9dd4e804c5e4e47e2863f64159cd3464c99a514590eb917627b",
+          "verdict": "BLOCKED"
+        },
+        {
+          "classification": null,
+          "id": "EMBER-MLE-MICRO-OFFICIAL-PREPARE-RUN",
+          "metadata_only": true,
+          "raw_eval_text_available": false,
+          "raw_eval_text_gap": "imported receipt carries artifact hashes/metadata but not raw benchmark prompts, cases, or private evaluator text",
+          "repo_path": "baseline/receipts/external-benchmark-imports/2026-06-30/official_mle_prepare_blocked.json",
+          "sha256": "1f81ab96273837f00df82f0b899d65c80eae61935d1e5184db28528a33021a65",
+          "verdict": "BLOCKED"
+        }
+      ]
+    },
+    "local_ember_heldout": {
+      "item_count": 20,
+      "items": [
+        {
+          "id": "h001",
+          "line": 1,
+          "normalized_chars": 1084,
+          "normalized_doc_sha256": "e6f87cc4baaebb8a28a2b0a49bffe95c4f2c4d2db833c4e440bf99948172e3fc",
+          "span_count": 885
+        },
+        {
+          "id": "h002",
+          "line": 2,
+          "normalized_chars": 901,
+          "normalized_doc_sha256": "1a764e900a922d8d31c28a5e4540a3b9eaa95d82028116f8b02e2890de13f761",
+          "span_count": 702
+        },
+        {
+          "id": "h003",
+          "line": 3,
+          "normalized_chars": 928,
+          "normalized_doc_sha256": "aaefbfb8d388ee1be1276bd0390fbdbb1a046531fadffae2fc0af63a18eb84bf",
+          "span_count": 729
+        },
+        {
+          "id": "h004",
+          "line": 4,
+          "normalized_chars": 1018,
+          "normalized_doc_sha256": "03a928609bf5b6708365d4f1eb84fef89dc98ad583ae2435cc96def63e7fa2a1",
+          "span_count": 819
+        },
+        {
+          "id": "h005",
+          "line": 5,
+          "normalized_chars": 951,
+          "normalized_doc_sha256": "c3efa2e4035b95ed0b7ec5ddb35f85f93b94e048554bb779377cb0cbf6508f98",
+          "span_count": 752
+        },
+        {
+          "id": "h006",
+          "line": 6,
+          "normalized_chars": 1057,
+          "normalized_doc_sha256": "88bc23035c7b6eaa6a9ff23ea5d4c7259c25f8d63646f92a5d23c45dc41da31d",
+          "span_count": 858
+        },
+        {
+          "id": "h007",
+          "line": 7,
+          "normalized_chars": 1036,
+          "normalized_doc_sha256": "3b5595f8782099c8f5a9da02264ce64430bd2f6d3af7fb4b5f23fb90868ffe7b",
+          "span_count": 837
+        },
+        {
+          "id": "h008",
+          "line": 8,
+          "normalized_chars": 938,
+          "normalized_doc_sha256": "b06b686a39a6e4e6d610e468823bfea38ba817be38136915e5ca6b301df63162",
+          "span_count": 739
+        },
+        {
+          "id": "h009",
+          "line": 9,
+          "normalized_chars": 1105,
+          "normalized_doc_sha256": "c8f50406805a661931051c0de9b73e16c4079e05ba07848543feb0f22af83ba6",
+          "span_count": 906
+        },
+        {
+          "id": "h010",
+          "line": 10,
+          "normalized_chars": 1053,
+          "normalized_doc_sha256": "79ce78a621945f18008b7085983203179aa0bd144d00b027ef32a6c4e95356f2",
+          "span_count": 854
+        },
+        {
+          "id": "h011",
+          "line": 11,
+          "normalized_chars": 1126,
+          "normalized_doc_sha256": "6fac2df45a96be8916112725f6304991142ab238a5ec0d87125adf5b4ac43c48",
+          "span_count": 927
+        },
+        {
+          "id": "h012",
+          "line": 12,
+          "normalized_chars": 1109,
+          "normalized_doc_sha256": "e904cb1dcfa5515354d900ebd32999227eda8f81ca7d63bc13ebc26b013036e7",
+          "span_count": 910
+        },
+        {
+          "id": "h013",
+          "line": 13,
+          "normalized_chars": 1609,
+          "normalized_doc_sha256": "232d67680f81290bc5f2fa523a4eb5f6dd0cd765bcc15e8a7d9d2844f4120693",
+          "span_count": 1410
+        },
+        {
+          "id": "h014",
+          "line": 14,
+          "normalized_chars": 1137,
+          "normalized_doc_sha256": "9da4bc2fd02119e1865731d332772edfc4fcec296e6325641f135f45349e847b",
+          "span_count": 938
+        },
+        {
+          "id": "h015",
+          "line": 15,
+          "normalized_chars": 1156,
+          "normalized_doc_sha256": "dd94c2a7b7b144f9cc0ebc30af45ee558ba603aded065fb72faf70b15253f009",
+          "span_count": 957
+        },
+        {
+          "id": "h016",
+          "line": 16,
+          "normalized_chars": 981,
+          "normalized_doc_sha256": "ccd0c638dd165166477de28a6cda0e73e9dc43236267c6cae915450c4edea2c3",
+          "span_count": 782
+        },
+        {
+          "id": "h017",
+          "line": 17,
+          "normalized_chars": 899,
+          "normalized_doc_sha256": "330f4ed39d8bf2f7868db57999543887f55ae41c3293050a95273b609735c91d",
+          "span_count": 700
+        },
+        {
+          "id": "h018",
+          "line": 18,
+          "normalized_chars": 1185,
+          "normalized_doc_sha256": "ad42757d9eb2e96083a3c6d7da6fa27fe9f6226e17cfb14e8cd33aa153d6edee",
+          "span_count": 986
+        },
+        {
+          "id": "h019",
+          "line": 19,
+          "normalized_chars": 1050,
+          "normalized_doc_sha256": "199aa97f7d20319330bb96efa1dcad4aaac70f272371d90d76601d6577493109",
+          "span_count": 851
+        },
+        {
+          "id": "h020",
+          "line": 20,
+          "normalized_chars": 1569,
+          "normalized_doc_sha256": "fcc77b8d210c811acff5f1014e9031fc2ee44d3959873f3ec65a714ff23da10b",
+          "span_count": 1370
+        }
+      ],
+      "normalized_doc_count": 20,
+      "repo_path": "data/ember_avir_tasks/heldout.jsonl",
+      "sha256": "7903049ca5b5d343a7c3096a0733e8053b3395b86e736108d53587b63f5b5221",
+      "span_count": 17912,
+      "span_hashes_sha256": "359f576f500be5c293625a4c40d162b237ef3697810cbf2ccb6828be76234fa5"
+    }
+  },
+  "exact_normalized_span_hits": 0,
+  "failure_count": 0,
+  "failures": [],
+  "hit_samples": [],
+  "kind": "single_4090_c1_available_eval_text_inventory_normalized_span_scan",
+  "normalization": "NFKC, lowercase, collapse whitespace, strip boundaries; exact contiguous normalized character windows",
+  "normalized_span_min_chars": 200,
+  "verdict": "C1_AVAILABLE_EVAL_TEXT_NORMALIZED_SPAN_LOCAL_SURFACE_SCAN_PASS_WITH_BLOCKING_FULL_SUITE_GAP"
+}

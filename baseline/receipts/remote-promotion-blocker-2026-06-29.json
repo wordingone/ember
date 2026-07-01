@@ -1,0 +1,14 @@
+{
+  "created_at_utc": "2026-06-29T00:00:00Z",
+  "verdict": "REMOTE_PROMOTION_BLOCKED_BY_PUBLIC_LEAK_GATE",
+  "scope": "baseline remote proof progress, not completion",
+  "attempted_action": "baseline-only commit on branch codex/ember-baseline-repaired-goal-20260629 for later public/private remote visibility",
+  "result": "pre-commit rejected staged added lines before commit was created",
+  "blocked_classes": [
+    "exact public/private repository owner labels in baseline prose or lock",
+    "exact external coding-agent vendor-B labels and official URL in source rows"
+  ],
+  "safety_decision": "No broad source-citation scrub was applied. The exact-source evidence was preserved locally instead of weakening citations to pass the public gate.",
+  "index_recovery": "baseline changes were unstaged after the failed commit attempt; worktree files remain available for further repair.",
+  "completion_limit": "This receipt explains why remote refs remain absent. It does not satisfy public/private remote proof, operator acceptance, or any mandatory family completion."
+}

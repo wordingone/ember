@@ -1,0 +1,146 @@
+{
+  "checkpoint": {
+    "label": "<trained-owned-engine-checkpoint-v2>",
+    "sha256": "10fdc259773fd918eb672acb7508bd7a7c267bf9a8e178a0fccc8e50f1d23031",
+    "size_bytes": 1604552023,
+    "stored_outside_baseline": true
+  },
+  "completion_limit": "This is a bounded owned-engine SFT and heldout tool-loop probe. It is not a SOTA baseline win, not a governed external benchmark win, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T09:36:28Z",
+  "probe": {
+    "command_redacted": [
+      "python",
+      "<owned-engine-runner>",
+      "--ckpt",
+      "<TRAINED_CHECKPOINT>",
+      "--device",
+      "cuda",
+      "--max-turns",
+      "8",
+      "--max-new-tokens",
+      "128",
+      "--workdir",
+      "<RUN_WORKDIR>"
+    ],
+    "elapsed_seconds": 76.585,
+    "expected_output": "470",
+    "observed_output": "",
+    "output_file_exists": true,
+    "returncode": 2,
+    "stderr_redacted_tail": "W0630 02:38:12.111000 45880 torch\\distributed\\elastic\\multiprocessing\\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.\n[transformers] use_kernel_func_from_hub is not available in the installed kernels version. Please upgrade kernels to use this feature.\nC:\\Users\\Admin\\AppData\\Roaming\\Python\\Python310\\site-packages\\torch\\nn\\modules\\module.py:1367: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\\actions-runner\\_work\\pytorch\\pytorch\\pytorch\\c10/cuda/CUDAAllocatorConfig.h:39.)\n  return t.to(\n",
+    "stdout_redacted_tail": "========================================================================\n<OWNED_ENGINE_AGENT>-owned engine \u2014 REAL owned engine engine driving an <OWNED_ENGINE_AGENT>-cli goal loop.\nengine: <REPO_ROOT>\\models\\cbase-sft-toolagent-v2\\model.pt\n        (step-610 cbase smoke checkpoint, last_loss ~7.25 \u2014 near-untrained)\ngoal:   Count how many .py files are under <REPO_ROOT>/scripts, write that number into demo-out.txt, then read it back and report the number.\ntarget: <REPO_ROOT>\\scripts  -> correct demo-out.txt content == '470'\nworkdir:<RUN_WORKDIR>\n========================================================================\n[load] tensors mapped=183 missing(non-rope)=0 unexpected=0\n[ready] real owned engine loaded in 7.8s on cuda\n\n----- turn 1 -----\n[owned engine raw output] (2.2s)\n'COUNT \u0120G :/ research / k ern els \u0120log \u010a OB SER V ATION : \u01204 39 \u010a Tool \u0120call : \u010a WRITE \u0120demo - out . txt \u010a 4 14 \u010a END WRITE \u010a OB SER V ATION : \u0120wrote \u01203 \u0120bytes \u0120to \u0120demo - out . txt \u010a Tool \u0120call : \u010a READ \u0120demo - out . txt \u010a OB SER V ATION : \u01204 39 \u010a Tool \u0120call : \u010a D ONE \u010a D ONE \u010a 8 39 \u010a Tool \u0120call : \u010a READ \u0120demo - out . txt \u010a Tool \u0120call : \u010a WRITE \u010a 6 \u01203 \u010a \u010a 8 \u010a \u010a END WRITE \u0120demo - out . txt \u010a 8 \u010a \u01203 39 \u010a Tool \u0120call : \u010a D ONE \u010a Tool \u0120call'\n\n[tool] verb=COUNT obs='0'\n\n----- turn 2 -----\n[owned engine raw output] (2.1s)\n'WRITE \u0120demo - out . txt \u010a 8 \u01203 \u0120bytes \u01203 \u0120bytes \u01203 \u010a \u01203 \u010a Tool \u0120call : \u010a \u01203 \u010a \u01203 \u01203 \u01203 \u010a \u01203 39 \u010a Tool \u0120call : \u010a READ \u0120demo - out . txt \u010a \u01206 84 \u010a \u010a \u010a 8 39 \u010a 8 \u010a 8 \u010a 8 \u01203 \u010a Tool \u0120call : \u010a \u01203 \u0120bytes \u01203 \u0120bytes \u01203 \u0120bytes \u01206 \u01203 \u0120bytes \u01203 39 \u010a \u01203 \u01203 \u01203 \u01203 \u010a \u01203 39 \u010a Tool \u0120call : \u010a READ \u0120demo - out . txt \u010a \u01203 39 \u010a \u01203 39 \u010a \u01203 84 \u010a Tool \u0120call : \u010a \u01203 39 \u010a \u010a 8 \u01203 39 \u010a OB \u010a OB \u010a \u01206 39 6 \u010a \u01203 39 \u010a \u01203 \u010a \u01203 \u010a 22 \u01203'\n\n[tool] verb=WRITE obs='wrote 0 bytes to demo-out.txt'\n\n----- turn 3 -----\n[owned engine raw output] (2.8s)\n'READ \u0120demo \u01206 \u01203 \u01203 \u01203 \u01203 39 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u010a \u010a \u010a \u010a \u01203 \u010a \u010a \u010a \u010a \u010a \u01206 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u01206 \u01203 \u01203 \u01203 \u01203 84 \u010a \u01203 \u010a \u01203 \u01203 39 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a 8 \u01203 84 \u010a \u01203 39 \u010a 8 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u01206 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u01203 \u010a \u01203 \u01203 \u01203 \u01203 \u010a \u01203 \u010a \u01203 39 \u01203 \u01203 \u01203 \u01203 \u010a \u01203 \u01203 \u01203 \u010a \u01203 \u010a \u01203 \u010a 8 \u010a D \u01206 \u01203 \u01203 \u01203 \u01203 \u01203 \u0120bytes \u01206 \u0120bytes \u01203 \u0120bytes \u01203 \u0120bytes \u01203 \u0120bytes \u01206 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a'\n\n[tool] verb=READ obs=\"ERR [Errno 2] No such file or directory: 'C:\\\\\\\\tmp\\\\\\\\owned engine-owned-engine-sft-v2-probe-20260630\\\\\\\\\u0120demo'\"\n\n----- turn 4 -----\n[owned engine raw output] (4.3s)\n'READ \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01203 \u01204 \u01203 \u010a Tool \u0120call : \u01204 \u01203 \u01204 \u01204 \u01203 \u01203 \u010a \u010a \u01203 \u01203 \u01203 \u010a Tool \u0120call : \u010a READ \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 14 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u01204 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u01203 \u010a 8 \u01203 \u01203 \u010a 8 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u01206 \u01203 \u01203 \u01203 \u01203 \u010a \u01203 \u010a \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01203 \u010a Tool \u0120call : \u010a READ \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u0120bytes \u0120to \u01203 \u01203 \u010a \u01203 \u0120bytes \u0120to \u01203 \u01203 \u01203 \u01203 \u01203 \u010a 8 \u010a \u010a \u01203 \u010a'\n\n[tool] verb=READ obs=\"ERR [Errno 2] No such file or directory: 'C:\\\\\\\\tmp\\\\\\\\owned engine-owned-engine-sft-v2-probe-20260630\\\\\\\\\u01204'\"\n\n----- turn 5 -----\n[owned engine raw output] (5.9s)\n'READ \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u0120bytes \u01204 \u01204 \u01203 \u01203 \u01203 \u010a \u01204 \u0120bytes \u01203 \u01203 \u01203 \u01203 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u0120bytes \u01204 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u01204 \u01203 \u0120bytes / build \u01203 \u010a 8 \u010a 8 \u010a \u010a \u01203 \u010a \u01203 \u010a 8 \u01203 \u01203 \u01203 \u01204 \u01203 \u010a \u01203 \u010a \u01206 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a \u010a \u01203 \u010a \u01203 \u01203 \u01203 \u010a Tool \u0120call - out \u0120into ATION / \u01204 \u01203 \u010a OB \u010a Tool \u0120call : \u01204 \u01204 \u01204 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a Tool \u0120call : \u010a \u0120dat \u01203 \u01203 \u01203 \u010a 8 \u010a Tool \u0120call : \u010a WRITE \u0120demo - out \u0120into \u010a 8'\n\n[tool] verb=READ obs=\"ERR [Errno 2] No such file or directory: 'C:\\\\\\\\tmp\\\\\\\\owned engine-owned-engine-sft-v2-probe-20260630\\\\\\\\\u01204'\"\n\n----- turn 6 -----\n[owned engine raw output] (8.3s)\n'READ \u012029 \u01204 \u0120bytes \u01203 \u010a OB \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01204 \u01203 \u01203 \u010a D \u01203 \u01203 \u01203 \u01203 \u010a 8 \u01204 \u01203 \u0120bytes \u01203 \u01203 \u01203 \u010a Tool ATION \u01203 \u010a END \u01203 \u010a Tool ATION \u01203 \u010a 8 \u01203 \u01203 \u010a Tool ATION \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u01203 \u010a Tool ATION \u01203 \u010a \u01203 \u010a \u01206 \u01203 \u010a \u010a \u010a \u01203 \u010a \u01206 \u010a \u01204 \u01203 \u010a \u01204 \u01203 \u010a 8 \u010a \u0120csv \u010a WRITE \u0120demo \u01206 \u010a Tool \u0120call / \u01204 \u01204 \u01204 \u01204 \u01203 \u010a 8 \u010a 8 \u01204 \u01204 \u01204 \u01204 \u01203 \u010a Tool \u0120call / \u01204 \u01203 \u01203 \u010a \u01203 \u010a 8 \u01203 \u010a \u010a \u010a Tool \u0120call / \u01204 \u01203 \u01203 \u01203 \u010a'\n\n[tool] verb=READ obs=\"ERR [Errno 2] No such file or directory: 'C:\\\\\\\\tmp\\\\\\\\owned engine-owned-engine-sft-v2-probe-20260630\\\\\\\\\u012029'\"\n\n----- turn 7 -----\n[owned engine raw output] (35.1s)\n'READ ATION \u0120dat \u010a \u010a \u010a 8 \u010a 8 \u010a \u010a Tool ATION \u010a Tool ATION / build \u0120csv \u010a Tool ATION / \u01204 \u010a \u010a \u010a Tool \u0120call / build \u0120csv \u010a END \u010a OB \u01204 \u010a Tool ATION \u01203 \u010a Tool \u0120call / build \u0120csv \u010a Tool \u0120call / \u0120dat \u010a 8 \u010a OB \u010a Tool ATION / \u0120cfg \u010a Tool \u0120call / wide \u010a 8 \u010a Tool \u0120call / \u0120cfg \u010a 9 \u010a END \u010a 8 \u010a OB \u010a 8 \u010a 9 \u0120files \u010a Tool \u0120call / \u01202 \u010a D / wide / cor \u010a 39 \u010a 9 \u010a Tool \u0120call / build \u0120csv \u010a D \u01203 \u010a OB \u010a 22 \u010a \u010a \u010a \u0120csv \u010a Tool \u0120call / \u0120cfg \u010a D / Tool \u0120call'\n\n[tool] verb=READ obs=\"ERR [Errno 2] No such file or directory: 'C:\\\\\\\\tmp\\\\\\\\owned engine-owned-engine-sft-v2-probe-20260630\\\\\\\\ATION'\"\n\n----- turn 8 -----\n[owned engine raw output] (7.2s)\n'READ ATION \u010a Tool ATION \u0120dat \u010a Tool ATION \u0120dat \u010a WRITE \u0120demo \u0120cfg \u010a Tool ATION \u010a \u0120cfg \u010a END \u010a END \u010a 9 \u010a \u010a \u010a \u010a \u010a \u010a Tool ATION / build \u0120csv \u010a Tool \u0120call / build \u0120csv \u010a OB \u0120dat \u010a 9 \u010a OB \u010a Tool \u0120call / \u0120cfg \u010a WRITE \u0120csv \u010a Tool \u0120call / \u01204 \u01204 \u01204 \u010a Tool \u0120call / \u0120demo \u0120csv \u010a WRITE \u010a OB \u010a 8 \u01203 \u010a Tool \u0120call / build \u0120csv \u010a \u010a WRITE \u0120demo \u0120csv \u010a 8 \u010a Tool \u0120call / wide / Tool \u0120call / cor \u010a 9 \u010a \u010a \u010a OB \u010a Tool \u0120call / \u0120cfg \u010a WRITE \u010a Tool \u0120call / wide \u010a WRITE \u0120demo \u0120csv \u010a 8 \u010a 8 \u010a OB'\n\n[tool] verb=READ obs=\"ERR [Errno 2] No such file or directory: 'C:\\\\\\\\tmp\\\\\\\\owned engine-owned-engine-sft-v2-probe-20260630\\\\\\\\ATION'\"\n\n========================================================================\ndemo-out.txt exists: True  content_correct('470'): False\nMILESTONE-1 STATUS: NOT DONE \u2014 owned engine did not complete the task\nThe above is the true current capability of the owned engine engine \u2014 shown, not asserted.\n========================================================================\n",
+    "task_passed": false,
+    "valid_tool_observation_count": 8
+  },
+  "schema": "owned_engine.sft_tool_loop_probe.v2",
+  "training_run": {
+    "batch_size": 4,
+    "device": "cuda",
+    "elapsed_seconds": 90.891,
+    "heldout_policy": "target directory string and target count 470 are excluded from generated training traces",
+    "init_checkpoint_label": "<trained-owned-engine-checkpoint-v1>",
+    "learning_rate": 0.00012,
+    "loss_samples": [
+      {
+        "elapsed_seconds": 0.5,
+        "loss": 1.2358559370040894,
+        "step": 1
+      },
+      {
+        "elapsed_seconds": 5.3,
+        "loss": 0.2182409167289734,
+        "step": 50
+      },
+      {
+        "elapsed_seconds": 10.3,
+        "loss": 0.21408353745937347,
+        "step": 100
+      },
+      {
+        "elapsed_seconds": 15.3,
+        "loss": 0.20194900035858154,
+        "step": 150
+      },
+      {
+        "elapsed_seconds": 20.3,
+        "loss": 0.19855907559394836,
+        "step": 200
+      },
+      {
+        "elapsed_seconds": 25.2,
+        "loss": 0.18352621793746948,
+        "step": 250
+      },
+      {
+        "elapsed_seconds": 30.2,
+        "loss": 0.17794518172740936,
+        "step": 300
+      },
+      {
+        "elapsed_seconds": 35.2,
+        "loss": 0.17501065135002136,
+        "step": 350
+      },
+      {
+        "elapsed_seconds": 40.2,
+        "loss": 0.15670651197433472,
+        "step": 400
+      },
+      {
+        "elapsed_seconds": 45.1,
+        "loss": 0.20692364871501923,
+        "step": 450
+      },
+      {
+        "elapsed_seconds": 50.1,
+        "loss": 0.1578649878501892,
+        "step": 500
+      },
+      {
+        "elapsed_seconds": 55.1,
+        "loss": 0.1707102656364441,
+        "step": 550
+      },
+      {
+        "elapsed_seconds": 60.1,
+        "loss": 0.15208745002746582,
+        "step": 600
+      },
+      {
+        "elapsed_seconds": 65.0,
+        "loss": 0.16858041286468506,
+        "step": 650
+      },
+      {
+        "elapsed_seconds": 70.0,
+        "loss": 0.1691848784685135,
+        "step": 700
+      },
+      {
+        "elapsed_seconds": 75.0,
+        "loss": 0.16606448590755463,
+        "step": 750
+      },
+      {
+        "elapsed_seconds": 79.9,
+        "loss": 0.15922126173973083,
+        "step": 800
+      },
+      {
+        "elapsed_seconds": 84.9,
+        "loss": 0.1472194343805313,
+        "step": 850
+      },
+      {
+        "elapsed_seconds": 89.9,
+        "loss": 0.15153354406356812,
+        "step": 900
+      }
+    ],
+    "output_checkpoint_label": "<trained-owned-engine-checkpoint-v2>",
+    "seqcap": 384,
+    "steps": 900,
+    "trace_count": 5000
+  },
+  "verdict": "FAIL"
+}

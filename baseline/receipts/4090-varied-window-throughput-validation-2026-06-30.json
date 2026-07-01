@@ -1,0 +1,14 @@
+{
+  "completion_limit": "This validates bounded varied-window real-token throughput telemetry only. It is not a dataloader-inclusive long-run, checkpoint cadence, evaluation, recovery, data-hygiene PASS, or overall baseline completion receipt.",
+  "created_at_utc": "2026-06-30T14:54:23Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_varied_window_throughput_probe_validation",
+  "measured_tflops_lower_bound": 60.162723557980016,
+  "real_data_window_count": 16,
+  "receipt_path": "receipts/4090-real-data-varied-window-throughput-probe-pretraining-equivalent.json",
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 16,
+  "unique_real_data_window_count": 16,
+  "verdict": "C1_VARIED_WINDOW_THROUGHPUT_PROBE_VALIDATED"
+}

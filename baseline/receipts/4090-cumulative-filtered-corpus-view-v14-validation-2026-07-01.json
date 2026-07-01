@@ -1,0 +1,12 @@
+{
+  "completion_limit": "This validates a cumulative v14 filtered-corpus view only. It is not an all-pairs near-duplicate PASS, not binary shard rewrite, and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T07:38:46Z",
+  "excluded_document_count": 1952,
+  "excluded_token_floor": 3329164,
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-cumulative-filtered-corpus-view-v14-2026-07-01.json",
+  "remaining_content_token_floor": 6974539594,
+  "remaining_document_count": 4234506,
+  "verdict": "C1_CUMULATIVE_FILTERED_CORPUS_VIEW_V14_VALIDATED"
+}

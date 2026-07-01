@@ -1,0 +1,149 @@
+{
+  "checkpoint": {
+    "label": "<trained-owned-engine-checkpoint-v3-turnwise>",
+    "sha256": "cd9e0b0c1e9582b6c3c2e9aafe51435eb25abf019e62e07ef8734cf0780de05d",
+    "size_bytes": 1604552023,
+    "stored_outside_baseline": true
+  },
+  "completion_limit": "This is a bounded owned-engine turnwise SFT and heldout tool-loop probe. It is not a SOTA baseline win, not a governed external benchmark win, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T09:41:19Z",
+  "probe": {
+    "command_redacted": [
+      "python",
+      "<owned-engine-runner>",
+      "--ckpt",
+      "<TRAINED_CHECKPOINT>",
+      "--device",
+      "cuda",
+      "--max-turns",
+      "8",
+      "--max-new-tokens",
+      "64",
+      "--workdir",
+      "<RUN_WORKDIR>"
+    ],
+    "elapsed_seconds": 19.826,
+    "expected_output": "470",
+    "observed_output": "",
+    "output_file_exists": true,
+    "returncode": 2,
+    "stderr_redacted_tail": "W0630 02:43:04.330000 7540 torch\\distributed\\elastic\\multiprocessing\\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.\n[transformers] use_kernel_func_from_hub is not available in the installed kernels version. Please upgrade kernels to use this feature.\n<USER_SITE_PATH>\\AppData\\Roaming\\Python\\Python310\\site-packages\\torch\\nn\\modules\\module.py:1367: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\\actions-runner\\_work\\pytorch\\pytorch\\pytorch\\c10/cuda/CUDAAllocatorConfig.h:39.)\n  return t.to(\n",
+    "stdout_redacted_tail": "========================================================================\n<OWNED_ENGINE_AGENT>-owned engine \u2014 REAL owned engine engine driving an <OWNED_ENGINE_AGENT>-cli goal loop.\nengine: <REPO_ROOT>\\models\\cbase-sft-toolagent-v3-turnwise\\model.pt\n        (step-610 cbase smoke checkpoint, last_loss ~7.25 \u2014 near-untrained)\ngoal:   Count how many .py files are under <REPO_ROOT>/scripts, write that number into demo-out.txt, then read it back and report the number.\ntarget: <REPO_ROOT>\\scripts  -> correct demo-out.txt content == '470'\nworkdir:<RUN_WORKDIR>\n========================================================================\n[load] tensors mapped=183 missing(non-rope)=0 unexpected=0\n[ready] real owned engine loaded in 7.7s on cuda\n\n----- turn 1 -----\n[owned engine raw output] (1.1s)\n'COUNT \u0120G :/ research / k ern els \u0120xml \u010a OB txt \u010a OB txt \u010a Tool \u0120call : \u012045 \u010a WRITE \u0120demo - out . txt \u010a 9 \u010a 9 \u010a 9 12 12 \u010a \u010a \u010a \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out . txt \u010a \u010a \u010a \u010a \u010a'\n\n[tool] verb=COUNT obs='0'\n\n----- turn 2 -----\n[owned engine raw output] (1.0s)\n'COUNT 84 \u010a Tool \u0120call : \u010a 9 10 \u010a END WRITE \u0120demo - out . txt \u010a \u010a END WRITE \u010a END WRITE \u010a D ONE \u010a END WRITE \u0120demo - out . txt \u010a \u010a READ \u0120demo - out . txt \u010a OB txt \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a OB txt \u010a 9 \u010a 9'\n\n[tool] verb=COUNT obs='0'\n\n----- turn 3 -----\n[owned engine raw output] (1.0s)\n'COUNT \u0120demo - out . txt \u010a 9 10 \u010a Tool \u0120call \u010a COUNT \u0120G \u010a COUNT \u0120G \u010a \u010a READ \u0120demo - out . txt \u010a big / large - out . txt \u010a \u010a \u010a \u010a \u010a \u010a 84 \u010a END \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a \u010a Tool \u0120call \u010a COUNT \u010a COUNT \u0120E \u010a READ \u0120demo'\n\n[tool] verb=COUNT obs='0'\n\n----- turn 4 -----\n[owned engine raw output] (1.2s)\n'WRITE \u0120demo - out . txt \u010a 9 \u010a END WRITE \u010a READ \u0120demo \u010a READ \u0120demo \u010a 9 \u010a END \u010a READ \u0120demo \u010a COUNT \u0120F \u010a Tool \u0120call \u010a READ \u0120demo \u010a READ \u0120demo \u010a OB \u010a 9 10 \u010a READ \u0120demo \u010a READ \u0120demo \u010a OB \u010a OB \u010a 12 \u010a READ \u0120demo \u010a V 87 \u010a READ \u0120demo \u010a 9'\n\n[tool] verb=WRITE obs='wrote 0 bytes to demo-out.txt'\n\n----- turn 5 -----\n[owned engine raw output] (1.3s)\n'READ \u0120demo \u010a WRITE \u0120demo \u010a COUNT \u0120G \u010a 9 \u010a D ONE \u010a END \u010a OB \u010a OB \u010a Tool \u0120call \u010a D ONE \u010a COUNT \u010a D ONE \u010a 9 \u010a 9 \u010a READ \u0120demo \u010a \u010a \u010a \u010a \u010a OB \u010a READ \u0120demo \u010a \u010a END \u010a \u010a READ \u0120demo \u010a \u010a \u010a \u010a V \u010a 12 \u010a \u010a \u010a END'\n\n[tool] verb=READ obs=\"ERR [Errno 2] No such file or directory: 'C:\\\\\\\\tmp\\\\\\\\owned engine-owned-engine-sft-v3-probe-20260630\\\\\\\\\u0120demo'\"\n\n----- turn 6 -----\n[owned engine raw output] (1.7s)\n'COUNT \u010a WRITE \u0120demo \u010a D \u010a COUNT \u010a \u010a END WRITE \u010a \u010a 9 \u010a Tool \u010a COUNT \u0120F \u010a END WRITE \u0120demo \u010a READ \u0120demo \u010a \u010a OB \u010a END \u010a END \u010a READ \u0120demo \u010a READ \u0120demo \u010a \u010a READ \u0120demo \u010a 9 \u010a 9 \u010a 9 \u010a \u010a \u010a OB \u010a \u010a \u010a \u010a \u010a END \u010a \u010a Tool \u010a'\n\n[tool] verb=COUNT obs='0'\n\n----- turn 7 -----\n[owned engine raw output] (1.8s)\n'WRITE \u0120demo \u010a Tool \u010a 9 \u010a 9 \u010a END WRITE \u0120demo \u010a READ \u010a \u010a \u010a END WRITE \u0120demo \u010a \u010a Tool \u0120call \u010a D \u010a END WRITE \u0120demo \u010a READ \u0120demo \u010a \u010a END WRITE \u010a END \u010a READ \u0120demo \u010a READ \u0120demo \u010a END WRITE \u0120demo \u010a READ \u0120demo \u010a END WRITE \u0120demo \u010a END \u010a READ \u0120demo \u010a READ \u0120demo'\n\n[tool] verb=WRITE obs='wrote 0 bytes to demo-out.txt'\n\n----- turn 8 -----\n[owned engine raw output] (2.2s)\n'D \u010a Tool \u010a COUNT \u0120F \u010a 9 \u010a D \u010a D \u010a READ \u0120demo \u010a D \u010a D \u010a END WRITE \u0120demo \u010a D \u010a Tool \u010a txt \u010a END WRITE \u0120demo \u010a READ \u010a 12 12 \u010a \u010a END WRITE \u010a READ \u010a READ \u010a \u010a \u010a END \u010a END \u010a OB \u010a READ \u0120demo \u010a txt \u010a \u010a READ 84 \u010a'\n\n[tool] verb=COUNT obs='0'\n\n========================================================================\ndemo-out.txt exists: True  content_correct('470'): False\nMILESTONE-1 STATUS: NOT DONE \u2014 owned engine did not complete the task\nThe above is the true current capability of the owned engine engine \u2014 shown, not asserted.\n========================================================================\n",
+    "task_passed": false,
+    "valid_tool_observation_count": 8
+  },
+  "root_cause_tested": "Prior SFT trained full imagined tool episodes; this run trains only the next tool action after the current live transcript.",
+  "schema": "owned_engine.sft_turnwise_tool_loop_probe.v1",
+  "training_run": {
+    "batch_size": 4,
+    "device": "cuda",
+    "elapsed_seconds": 91.039,
+    "heldout_policy": "target directory string and target count 470 are excluded from generated turnwise traces",
+    "init_checkpoint_label": "<trained-owned-engine-checkpoint-v1>",
+    "learning_rate": 8e-05,
+    "loss_samples": [
+      {
+        "elapsed_seconds": 0.5,
+        "loss": 0.9910743236541748,
+        "step": 1
+      },
+      {
+        "elapsed_seconds": 5.4,
+        "loss": 0.1773596853017807,
+        "step": 50
+      },
+      {
+        "elapsed_seconds": 10.4,
+        "loss": 0.23502491414546967,
+        "step": 100
+      },
+      {
+        "elapsed_seconds": 15.4,
+        "loss": 0.5556662678718567,
+        "step": 150
+      },
+      {
+        "elapsed_seconds": 20.3,
+        "loss": 0.00012173605500720441,
+        "step": 200
+      },
+      {
+        "elapsed_seconds": 25.3,
+        "loss": 0.638366162776947,
+        "step": 250
+      },
+      {
+        "elapsed_seconds": 30.3,
+        "loss": 0.5982626676559448,
+        "step": 300
+      },
+      {
+        "elapsed_seconds": 35.3,
+        "loss": 0.3888686001300812,
+        "step": 350
+      },
+      {
+        "elapsed_seconds": 40.2,
+        "loss": 0.4572485685348511,
+        "step": 400
+      },
+      {
+        "elapsed_seconds": 45.2,
+        "loss": 0.4240449070930481,
+        "step": 450
+      },
+      {
+        "elapsed_seconds": 50.2,
+        "loss": 0.19872985780239105,
+        "step": 500
+      },
+      {
+        "elapsed_seconds": 55.2,
+        "loss": 0.2857334613800049,
+        "step": 550
+      },
+      {
+        "elapsed_seconds": 60.2,
+        "loss": 0.4671194851398468,
+        "step": 600
+      },
+      {
+        "elapsed_seconds": 65.1,
+        "loss": 0.7695325016975403,
+        "step": 650
+      },
+      {
+        "elapsed_seconds": 70.1,
+        "loss": 0.2914552390575409,
+        "step": 700
+      },
+      {
+        "elapsed_seconds": 75.1,
+        "loss": 0.423134982585907,
+        "step": 750
+      },
+      {
+        "elapsed_seconds": 80.1,
+        "loss": 0.5784794688224792,
+        "step": 800
+      },
+      {
+        "elapsed_seconds": 85.1,
+        "loss": 0.1675349324941635,
+        "step": 850
+      },
+      {
+        "elapsed_seconds": 90.0,
+        "loss": 0.5909780263900757,
+        "step": 900
+      }
+    ],
+    "output_checkpoint_label": "<trained-owned-engine-checkpoint-v3-turnwise>",
+    "seqcap": 512,
+    "source_episode_count": 2200,
+    "steps": 900,
+    "supervision_policy": "Only tokens after the final Tool call marker are trained, so each sample teaches the next live tool action rather than a full imagined episode.",
+    "turnwise_example_count": 8800
+  },
+  "verdict": "FAIL"
+}

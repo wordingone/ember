@@ -1,0 +1,23 @@
+{
+    "generated_at_utc":  "2026-06-29T21:40:10Z",
+    "command":  "python B:\\M\\ember\\baseline\\scripts\\verify_completion.py --root B:\\M\\ember\\baseline --pretty",
+    "expected_exit_code":  0,
+    "actual_exit_code":  0,
+    "expected_verdict":  "PASS",
+    "purpose":  "Completion verifier for baseline release v0 negative-result artifact.",
+    "verifier_output":  {
+                            "baseline_tree_sha256":  "856f767b0376046a6d15896623b2685fa777843109016510fbe57e8bc14b45e6",
+                            "commit":  "8affeca16fae63f03ef412d17a39ba713a9420ad",
+                            "errors":  [
+
+                                       ],
+                            "repo_root":  "B:/M/ember",
+                            "root":  "B:\\M\\ember\\baseline",
+                            "source_count":  16,
+                            "verdict":  "PASS",
+                            "warnings":  [
+
+                                         ]
+                        },
+    "raw_output":  null
+}

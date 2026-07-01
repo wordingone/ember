@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates only the field_level_contribution_threshold family. It does not complete the overall baseline.",
+  "created_at_utc": "2026-06-29T22:39:57Z",
+  "failure_count": 0,
+  "failures": [],
+  "threshold_path": "B:\\M\\ember\\baseline\\field-level-threshold-v0.md",
+  "verdict": "FIELD_THRESHOLD_BASELINE_COMPLETE"
+}

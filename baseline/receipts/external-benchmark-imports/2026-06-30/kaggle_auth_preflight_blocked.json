@@ -1,0 +1,29 @@
+{
+  "access_token_file_present": true,
+  "access_token_path": "<local-path-redacted>",
+  "access_token_sha256": "sha256:e90febb3b0297842c4f55acd698496d2f9185d017ead0454afca28c796719026",
+  "access_token_shape": "KGAT",
+  "blocked_reason": "kaggle_auth_unauthorized",
+  "credential_file_present": true,
+  "credential_json_parseable": true,
+  "credential_path": "<local-path-redacted>",
+  "cycle_id": "cycle-20260617T000000Z-0002",
+  "key_present": true,
+  "key_sha256": "sha256:18129265d4d771ba5abd05555f7dc7442984e3e6ce9085ac440f8bcd8b149311",
+  "legacy_kaggle_client_accepts_access_token": false,
+  "legacy_kaggle_client_required_credentials": [
+    "username",
+    "key"
+  ],
+  "live_auth_checked": true,
+  "live_auth_command_exe": "kaggle",
+  "live_auth_command_provided": false,
+  "live_auth_error": "Kaggle authentication failed: 401, Unauthorized",
+  "live_auth_status": "AUTH_FAILED",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-MLE-KAGGLE-AUTH-PREFLIGHT",
+  "ts": "20260618T141735Z",
+  "username_present": true,
+  "username_sha256": "sha256:94f1d882f96d0714e1da520da3d22f0c8a9c08a0b6d543f744b6520f1e8c2ea4",
+  "verdict": "BLOCKED"
+}

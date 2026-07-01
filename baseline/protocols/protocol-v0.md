@@ -1,6 +1,6 @@
 # Ember Baseline Protocol V0
 
-Status: LOCKING DRAFT. Not yet a runnable final protocol.
+Status: B0 COMPARATOR LOCKED; EMBER TRIAL NOT EXECUTED.
 
 ## First Active Baseline Task
 
@@ -60,7 +60,7 @@ INVALID-RUN:
 
 ## Stage Order
 
-1. Finalize external source pins.
+1. Finalize external source pins. COMPLETE for B0 comparator lock via `receipts/b0-modded-nanogpt-source-refresh-validation-2026-06-30.json`.
 2. Validate schemas and parser.
 3. Validate line endings.
 4. Run CPU/static checks.
@@ -73,4 +73,4 @@ INVALID-RUN:
 
 ## Current Verdict
 
-NOT RUN. This protocol cannot be used for a PASS claim until source pins and contract thresholds are locked.
+B0 COMPARATOR LOCKED, EMBER TRIAL NOT EXECUTED. The external Modded-NanoGPT ruler is pinned and source-refreshed, with contract thresholds locked. This protocol cannot be used for an Ember PASS claim until the governed Ember trial is executed and parsed.

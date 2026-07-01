@@ -1,0 +1,7 @@
+{
+  "completion_limit": "Native kernel parser PASS validates bounded Triton/CUDA toolchain telemetry only. It is not full 1B training throughput and not overall baseline completion.",
+  "failure_count": 0,
+  "failures": [],
+  "input_receipt": "baseline\\receipts\\4090-native-kernel-probe-from-scratch.json",
+  "verdict": "NATIVE_KERNEL_PROBE_PARSE_PASS"
+}

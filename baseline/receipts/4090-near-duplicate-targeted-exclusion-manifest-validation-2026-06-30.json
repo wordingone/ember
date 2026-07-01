@@ -1,0 +1,11 @@
+{
+  "completion_limit": "This validates materialization of targeted discovered-cluster exclusions only. It is not an all-pairs near-duplicate PASS, not a rebuilt filtered corpus, not eval-contamination evidence, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T15:44:17Z",
+  "exclusion_document_count": 1668,
+  "exclusion_token_floor": 2949980,
+  "failure_count": 0,
+  "failures": [],
+  "manifest_path": "fragments/c1-near-duplicate-targeted-exclusions-2026-06-30.jsonl",
+  "receipt_path": "receipts/4090-near-duplicate-targeted-exclusion-manifest-2026-06-30.json",
+  "verdict": "C1_NEAR_DUPLICATE_TARGETED_EXCLUSION_MANIFEST_VALIDATED"
+}

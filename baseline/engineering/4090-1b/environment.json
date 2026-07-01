@@ -1,0 +1,37 @@
+{
+  "artifact_id": "ember-4090-1b-engineering-baseline-environment-v0",
+  "created_for": "single_4090_ge_1b_foundation_ceiling",
+  "hardware": {
+    "gpu_class": "RTX 4090-class",
+    "required_vram_gb": 24,
+    "single_gpu_only": true,
+    "distributed_training_allowed": false
+  },
+  "software": {
+    "python": ">=3.10",
+    "required": [
+      "torch>=2.3",
+      "numpy"
+    ],
+    "optional": [
+      "bitsandbytes for 8-bit AdamW optimizer",
+      "triton/torch.compile when stable on local stack"
+    ]
+  },
+  "line_endings": "LF",
+  "receipt_contract": {
+    "train_script": "engineering/4090-1b/train_1b_4090.py",
+    "parser": "engineering/4090-1b/parse_receipts.py",
+    "required_receipt_fields": [
+      "verdict",
+      "config_id",
+      "parameter_count",
+      "active_trainable_parameters",
+      "token_budget",
+      "capability_target",
+      "memory_plan",
+      "throughput",
+      "stop_rule"
+    ]
+  }
+}

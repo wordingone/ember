@@ -1,0 +1,14 @@
+{
+  "completion_limit": "This validates bounded nvidia-smi power sampling around a 128-window streamed real-token full-stack C1 probe only. It is not days-scale long-run training, not full-run energy accounting, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T19:00:29Z",
+  "energy_joules_trapezoid": 9898.821555133089,
+  "failure_count": 0,
+  "failures": [],
+  "measured_tflops_lower_bound": 64.55069146955562,
+  "probe_receipt_path": "receipts/4090-real-data-streamed-128-window-power-sampled-probe-pretraining-equivalent.json",
+  "receipt_path": "receipts/4090-power-sampled-128-window-throughput-2026-06-30.json",
+  "required_sustained_tflops": 50.98036825396826,
+  "sample_count": 94,
+  "steps_completed": 128,
+  "verdict": "C1_POWER_SAMPLED_128_WINDOW_THROUGHPUT_VALIDATED"
+}

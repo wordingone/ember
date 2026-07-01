@@ -1,0 +1,157 @@
+{
+  "checked_at_local_date": "2026-06-30",
+  "failure_count": 20,
+  "failures": [
+    {
+      "actual": "INCOMPLETE",
+      "code": "lock_status_not_complete"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "training_efficiency_sota",
+      "markers": [
+        "not run"
+      ],
+      "path": "protocols/protocol-v0.md"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "data_efficiency_sota",
+      "markers": [
+        "SOURCE_PINNED_AUTH_AND_DATA_COST_DEFERRED",
+        "blocked_or_access_gap_count",
+        "known_execution_gaps",
+        "not a full governed"
+      ],
+      "path": "receipts/benchmark-data-readiness-2026-06-30.json"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "data_efficiency_sota",
+      "markers": [
+        "blocked_or_access_gap_count"
+      ],
+      "path": "receipts/external-benchmark-import-validation-2026-06-30.json"
+    },
+    {
+      "actual": "ENGINEERING_BASELINE_SURFACE_READY",
+      "code": "family_not_baseline_complete",
+      "family": "single_4090_ge_1b_foundation_ceiling"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "self_improvement_loop_sota",
+      "markers": [
+        "blocked_or_access_gap_count"
+      ],
+      "path": "receipts/external-benchmark-import-validation-2026-06-30.json"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "local_agentic_research_sota",
+      "markers": [
+        "SOURCE_PINNED_AUTH_AND_DATA_COST_DEFERRED",
+        "blocked_or_access_gap_count",
+        "known_execution_gaps",
+        "not a full governed"
+      ],
+      "path": "receipts/benchmark-data-readiness-2026-06-30.json"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "local_agentic_research_sota",
+      "markers": [
+        "blocked_or_access_gap_count"
+      ],
+      "path": "receipts/external-benchmark-import-validation-2026-06-30.json"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "ember_cli_runtime_reproducibility",
+      "markers": [
+        "not run"
+      ],
+      "path": "protocols/protocol-v0.md"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "ember_goal_mode_control",
+      "markers": [
+        "not run"
+      ],
+      "path": "protocols/protocol-v0.md"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "reproducibility_publication_surface",
+      "markers": [
+        "not run"
+      ],
+      "path": "protocols/protocol-v0.md"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "reproducibility_publication_surface",
+      "markers": [
+        "SOURCE_PINNED_AUTH_AND_DATA_COST_DEFERRED",
+        "blocked_or_access_gap_count",
+        "known_execution_gaps",
+        "not a full governed"
+      ],
+      "path": "receipts/benchmark-data-readiness-2026-06-30.json"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "reproducibility_publication_surface",
+      "markers": [
+        "blocked_or_access_gap_count"
+      ],
+      "path": "receipts/external-benchmark-import-validation-2026-06-30.json"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "field_level_contribution_threshold",
+      "markers": [
+        "not run"
+      ],
+      "path": "protocols/protocol-v0.md"
+    },
+    {
+      "code": "family_complete_contains_incomplete_deliverable_marker",
+      "family": "field_level_contribution_threshold",
+      "markers": [
+        "blocked_or_access_gap_count"
+      ],
+      "path": "receipts/external-benchmark-import-validation-2026-06-30.json"
+    },
+    {
+      "code": "operator_acceptance_missing_or_not_object"
+    },
+    {
+      "actual": "eeb9809259b68679817a50586ded1bf8d04194935779a0032d633db28182d045",
+      "code": "publication_manifest_hash_mismatch",
+      "expected": "597a366634de73010d80dbff07dcc1a917b819458fd439d6ff49f4876edfb005"
+    },
+    {
+      "actual": "publication-manifest-sha256:eeb9809259b68679817a50586ded1bf8d04194935779a0032d633db28182d045",
+      "code": "promotion_manifest_hash_mismatch",
+      "expected": "publication-manifest-sha256:597a366634de73010d80dbff07dcc1a917b819458fd439d6ff49f4876edfb005"
+    },
+    {
+      "actual": "eeb9809259b68679817a50586ded1bf8d04194935779a0032d633db28182d045",
+      "code": "repo_baseline_manifest_hash_mismatch",
+      "expected": "597a366634de73010d80dbff07dcc1a917b819458fd439d6ff49f4876edfb005",
+      "repo": "public_repo"
+    },
+    {
+      "actual": "eeb9809259b68679817a50586ded1bf8d04194935779a0032d633db28182d045",
+      "code": "repo_baseline_manifest_hash_mismatch",
+      "expected": "597a366634de73010d80dbff07dcc1a917b819458fd439d6ff49f4876edfb005",
+      "repo": "private_repo"
+    }
+  ],
+  "goal": "ultimate_sota_theoretical_ceiling_baseline",
+  "root": "B:\\M\\ember\\baseline",
+  "verdict": "FAIL",
+  "verifier_sha256": "f7bbb9089e8d3eb5b339d501ac86cfa48973ff5ba03f23a77d175978ad0536c2"
+}

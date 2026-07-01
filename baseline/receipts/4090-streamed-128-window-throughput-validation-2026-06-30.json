@@ -1,0 +1,12 @@
+{
+  "completion_limit": "This validates 128 streamed real-token full-stack windows only. It is not days-scale long-run training, not full-data coverage, not convergence, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T18:44:57Z",
+  "failure_count": 0,
+  "failures": [],
+  "measured_tflops_lower_bound": 64.63770807884087,
+  "receipt_path": "receipts/4090-real-data-streamed-128-window-throughput-probe-pretraining-equivalent.json",
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 128,
+  "unique_window_count": 128,
+  "verdict": "C1_STREAMED_128_WINDOW_THROUGHPUT_VALIDATED"
+}

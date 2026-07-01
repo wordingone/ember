@@ -1,0 +1,15 @@
+{
+  "checkpoint_elapsed_fraction": 0.9569057707589077,
+  "checkpoint_elapsed_s": 25.89978459989652,
+  "checkpoint_event_count": 2,
+  "completion_limit": "This validates bounded repeated checkpoint save/hash/reload/delete mechanics with streamed real-token steps only. It is not a long-run checkpoint policy, recovery, evaluation, throughput-completion, data-hygiene PASS, or overall baseline completion receipt.",
+  "created_at_utc": "2026-06-30T15:14:54Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_checkpoint_cadence_probe_validation",
+  "measured_tflops_lower_bound": 1.8664128312518145,
+  "receipt_path": "receipts/4090-real-data-checkpoint-cadence-probe-pretraining-equivalent.json",
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 4,
+  "verdict": "C1_CHECKPOINT_CADENCE_PROBE_VALIDATED"
+}

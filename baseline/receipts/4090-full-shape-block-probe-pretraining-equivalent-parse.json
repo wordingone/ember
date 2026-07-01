@@ -1,0 +1,7 @@
+{
+  "completion_limit": "Full-shape block parser PASS validates representative block telemetry only. It is not full 19-layer 1B long-run throughput and not overall baseline completion.",
+  "failure_count": 0,
+  "failures": [],
+  "input_receipt": "baseline\\receipts\\4090-full-shape-block-probe-pretraining-equivalent.json",
+  "verdict": "FULL_SHAPE_BLOCK_PROBE_PARSE_PASS"
+}

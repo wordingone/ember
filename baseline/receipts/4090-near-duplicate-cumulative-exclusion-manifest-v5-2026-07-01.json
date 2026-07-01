@@ -1,0 +1,25 @@
+{
+  "completion_limit": "This materializes cumulative discovered-cluster exclusions v5 from partial band-48 LSH adjudication remediation only. It is not a full band-48 remediation, not an all-pairs near-duplicate PASS, not eval-contamination evidence, and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T02:35:26Z",
+  "exclusion_document_count": 1733,
+  "exclusion_token_floor": 3039393,
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_near_duplicate_cumulative_exclusion_manifest_v5",
+  "manifest": {
+    "line_count": 1733,
+    "repo_path": "fragments/c1-near-duplicate-cumulative-exclusions-v5-2026-07-01.jsonl",
+    "row_digest_sha256": "b42831b5923bb9aa3a1bcaa16a1ea3baf2da58ff9c48a4546d220b17cd40d1cc",
+    "sha256": "984c8f92917ab5053ef6e621ca2cff3a59519b93495455987e935eb5eae050d3"
+  },
+  "source_base_exclusion_receipt": "receipts/4090-near-duplicate-cumulative-exclusion-manifest-v4-2026-06-30.json",
+  "source_base_manifest": "fragments/c1-near-duplicate-cumulative-exclusions-v4-2026-06-30.jsonl",
+  "source_base_manifest_sha256": "882660047cf80b2b90faba8e6e5575f5ff47102b452eec44b79cb6a5ffc5e0db",
+  "source_counts": {
+    "cumulative_v4": 1719,
+    "lsh_band48_partial25_adjudication_remediation": 14
+  },
+  "source_lsh_adjudication_remediation_receipt": "receipts/4090-cumulative-filtered-lsh-candidate-index-v4-band48-adjudication-partial25-remediation-2026-07-01.json",
+  "source_overlap_count": 0,
+  "verdict": "C1_NEAR_DUPLICATE_CUMULATIVE_EXCLUSION_MANIFEST_V5_READY_NOT_COMPLETION"
+}

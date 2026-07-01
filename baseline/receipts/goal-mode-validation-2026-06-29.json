@@ -1,0 +1,9 @@
+{
+  "completion_limit": "This validates only the ember_goal_mode_control family. It does not complete the overall baseline or write operator acceptance.",
+  "contract_path": "B:\\M\\ember\\baseline\\contracts\\C6-C7-cli-goal-mode.md",
+  "created_at_utc": "2026-06-29T23:32:58Z",
+  "failure_count": 0,
+  "failures": [],
+  "report_path": "B:\\M\\ember\\baseline\\cli-goal-mode-baseline-v0.md",
+  "verdict": "GOAL_MODE_BASELINE_COMPLETE"
+}

@@ -1,0 +1,8 @@
+{
+  "completion_limit": "This validates threshold policy only. It is not a near-duplicate scan, not an eval-contamination scan, and not overall baseline completion.",
+  "created_at_utc": "2026-06-30T04:22:47Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-data-hygiene-policy-thresholds-2026-06-30.json",
+  "verdict": "C1_DATA_HYGIENE_POLICY_THRESHOLDS_VALIDATED"
+}

@@ -1,0 +1,16 @@
+{
+  "completion_limit": "This validates bounded checkpoint recovery plus post-recovery train/eval accounting only. It is not a long-run recovery policy, full external evaluation suite, data-hygiene PASS, throughput completion, or overall baseline completion receipt.",
+  "created_at_utc": "2026-06-30T15:33:13Z",
+  "failure_count": 0,
+  "failures": [],
+  "kind": "single_4090_c1_recovery_accounting_probe_validation",
+  "measured_tflops_lower_bound": 1.7782560324040653,
+  "post_recovery_eval_loss": 110.46126556396484,
+  "post_recovery_train_loss": 137.4329833984375,
+  "receipt_path": "receipts/4090-real-data-recovery-accounting-probe-pretraining-equivalent.json",
+  "recovery_elapsed_fraction": 0.9544038237473619,
+  "recovery_elapsed_s": 13.55634380003903,
+  "required_sustained_tflops": 50.98036825396826,
+  "steps_completed": 2,
+  "verdict": "C1_RECOVERY_ACCOUNTING_PROBE_VALIDATED"
+}

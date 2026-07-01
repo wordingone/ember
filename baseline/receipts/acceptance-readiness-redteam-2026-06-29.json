@@ -1,0 +1,28 @@
+{
+  "created_at_utc": "2026-06-30T00:10:00Z",
+  "verdict": "PASS",
+  "acceptance_requested": false,
+  "purpose": "Pre-acceptance red-team receipt. This does not create operator acceptance and does not complete the overall baseline; it proves acceptance cannot be used as an exit ramp for weak artifact proof.",
+  "attacks": {
+    "operator_acceptance_used_as_exit_ramp": {
+      "verifier_must_reject": true,
+      "verifier_rejects": true,
+      "evidence": "verify_completion.py requires artifact identity, manifest proof, family receipts, and acceptance-readiness before operator acceptance can be decisive."
+    },
+    "stale_local_commit_ref_tree_verifier_or_remote_proof": {
+      "verifier_must_reject": true,
+      "verifier_rejects": true,
+      "evidence": "verify_completion.py checks verifier script hash and non-self-referential publication manifest fields rather than trusting stale checked-in tree hashes."
+    },
+    "self_referential_completion_lock_tree_hash": {
+      "verifier_must_reject": true,
+      "verifier_rejects": true,
+      "evidence": "completion-lock.json tree-hash-only proof is insufficient; publication manifest excludes self-referential lock/proof receipts."
+    },
+    "acceptance_requested_before_acceptance_readiness_audit": {
+      "verifier_must_reject": true,
+      "verifier_rejects": true,
+      "evidence": "This checked-in receipt is required before any acceptance request and records acceptance_requested=false."
+    }
+  }
+}

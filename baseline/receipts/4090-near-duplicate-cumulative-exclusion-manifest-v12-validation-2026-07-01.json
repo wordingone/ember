@@ -1,0 +1,16 @@
+{
+  "completion_limit": "This validates cumulative discovered-cluster exclusions v12 only. It is not full band-48/full-corpus/all-pairs near-duplicate PASS evidence and not overall baseline completion.",
+  "created_at_utc": "2026-07-01T06:40:27Z",
+  "failure_count": 0,
+  "failures": [],
+  "receipt_path": "receipts/4090-near-duplicate-cumulative-exclusion-manifest-v12-2026-07-01.json",
+  "summary": {
+    "exclusion_document_count": 1892,
+    "exclusion_token_floor": 3250574,
+    "source_counts": {
+      "cumulative_v11": 1854,
+      "lsh_band48_v11_window150_adjudication_remediation": 38
+    }
+  },
+  "verdict": "C1_NEAR_DUPLICATE_CUMULATIVE_EXCLUSION_MANIFEST_V12_VALIDATED"
+}
