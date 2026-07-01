@@ -16,7 +16,7 @@
     "task_passed": false,
     "turns": [
       {
-        "normalized_tool": "COUNT B:/M/delta/scripts  sh\n",
+        "normalized_tool": "COUNT <local-workspace-root>/delta/scripts  sh\n",
         "observation": "0",
         "raw": "COUNT \u0120B :/ M / delta / scripts \u0120sh \u010a OB SER \u0120sh \u010a OB SER \u0120sh \u010a Tool \u0120call \u010a WRITE \u0120demo - out . txt \u010a 92 \u010a 14 \u010a 14 \u010a 27 \u010a \u010a END WRITE \u010a READ \u0120demo - out . txt \u010a END WRITE \u010a 27 \u010a READ \u0120demo - out . txt \u010a READ \u0120demo - out .",
         "turn": 1,

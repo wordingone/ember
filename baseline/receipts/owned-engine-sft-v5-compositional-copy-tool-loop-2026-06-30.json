@@ -46,14 +46,14 @@
     ],
     "valid_tool_observation_count": 4
   },
-  "root_cause_tested": "Whether component-level exposure to the heldout path parts without the exact target path lets the owned checkpoint copy B:/M/ember/scripts py from the goal.",
+  "root_cause_tested": "Whether component-level exposure to the heldout path parts without the exact target path lets the owned checkpoint copy <private-ember-local-checkout>/scripts py from the goal.",
   "schema": "owned_engine.sft_compositional_copy_tool_loop_probe.v1",
   "training_run": {
     "batch_size": 4,
     "curriculum": "Continuation from v4 with biased examples containing the target path components separately and frequent py extension examples.",
     "device": "cuda",
     "elapsed_seconds": 121.351,
-    "heldout_policy": "Exact target path B:/M/ember/scripts and target count 470 are excluded; component paths such as B:/M/ember/tools and B:/M/alpha/scripts are included.",
+    "heldout_policy": "Exact target path <private-ember-local-checkout>/scripts and target count 470 are excluded; component paths such as <private-ember-local-checkout>/tools and <local-workspace-root>/alpha/scripts are included.",
     "init_checkpoint_label": "<trained-owned-engine-checkpoint-v1>",
     "learning_rate": 6e-05,
     "loss_samples": [

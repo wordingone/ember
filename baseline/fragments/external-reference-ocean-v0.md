@@ -8,7 +8,7 @@ Ember already contains a large scattered ocean of external projects, papers, sys
 
 ## Current Public Scan
 
-A narrowed machine scan of `B:\M\ember-public` produced `fragments/external-refs-public-v0.jsonl` and `fragments/external-refs-public-summary-v0.json` with 12,877 rows after skipping receipts/checkpoints and files over 1 MiB.
+A narrowed machine scan of `<public-ember-local-mirror>` produced `fragments/external-refs-public-v0.jsonl` and `fragments/external-refs-public-summary-v0.json` with 12,877 rows after skipping receipts/checkpoints and files over 1 MiB.
 
 High-volume or high-signal references include Qwen, MTP, GRPO, SFT, D3-Gym, Muon, FP8, QAT, ScienceAgentBench, BitNet, iGRPO, Kaggle, RLM, LoRA, Gemma, torchao, MLE-bench, Triton, Hugging Face, FineWeb, Codex, OpenAI, Hermes, and many GitHub-like project references. Public narrowed agent-loop counts include Codex 34, OpenAI 15, and Hermes 9 known-term hits.
 
@@ -29,7 +29,7 @@ Each external reference promoted into `/baseline` must be classified as one of:
 
 ## Current Private Scan
 
-The first broad scan of `B:\M\ember` timed out before producing output because private dirty receipts and checkpoints are much larger. That has been converted into a solved scan-shape problem: the narrowed private scan produced `fragments/external-refs-private-v0.jsonl` and `fragments/external-refs-private-summary-v0.json` with 35,356 rows after skipping receipts/checkpoints and files over 1 MiB.
+The first broad scan of `<private-ember-local-checkout>` timed out before producing output because private dirty receipts and checkpoints are much larger. That has been converted into a solved scan-shape problem: the narrowed private scan produced `fragments/external-refs-private-v0.jsonl` and `fragments/external-refs-private-summary-v0.json` with 35,356 rows after skipping receipts/checkpoints and files over 1 MiB.
 
 Private narrowed agent-loop counts include external vendor B 266, Codex 81, OpenAI 79, external coding agent B 73, external coding agent B 15, and Hermes 13 known-term hits. This confirms the private repo carries more dense agent/CLI baseline material and must not be treated as interchangeable with the public clean repo.
 

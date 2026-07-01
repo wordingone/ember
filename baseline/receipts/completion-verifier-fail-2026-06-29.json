@@ -58,7 +58,7 @@
                                                          ]
                                            }
                                        ],
-                            "repo_root":  "B:/M/ember",
+                            "repo_root":  "<private-ember-local-checkout>",
                             "root":  "B:\\M\\ember\\baseline",
                             "source_count":  16,
                             "verdict":  "FAIL",
