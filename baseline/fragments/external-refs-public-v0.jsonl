@@ -8238,7 +8238,7 @@
 {"context": "and `tools/repo-guard.sh` enforce structure going forward. If you cloned or", "kind": "github_like", "line": 148, "path": "README.md", "value": "tools/repo-guard.sh"}
 {"context": "#!/usr/bin/env bash", "kind": "github_like", "line": 1, "path": "reconstruct-after-delete.sh", "value": "usr/bin"}
 {"context": "# Turnkey reconstruction of PUBLIC wordingone/ember AFTER the web-UI deletion.", "kind": "github_like", "line": 2, "path": "reconstruct-after-delete.sh", "value": "wordingone/ember"}
-{"context": "# Run from B:/M/ember-public (where the clean orphan root cd5e361 lives).", "kind": "github_like", "line": 4, "path": "reconstruct-after-delete.sh", "value": "M/ember-public"}
+{"context": "# Run from <public-ember-local-mirror> (where the clean orphan root cd5e361 lives).", "kind": "github_like", "line": 4, "path": "reconstruct-after-delete.sh", "value": "local-ember-public-mirror"}
 {"context": "REPO=wordingone/ember", "kind": "github_like", "line": 10, "path": "reconstruct-after-delete.sh", "value": "wordingone/ember"}
 {"context": "echo \"[1/6] guard: repo MUST be deleted first (this script is the post-delete half)\"", "kind": "github_like", "line": 14, "path": "reconstruct-after-delete.sh", "value": "1/6"}
 {"context": "if gh repo view \"$REPO\" >/dev/null 2>&1; then", "kind": "github_like", "line": 15, "path": "reconstruct-after-delete.sh", "value": "dev/null"}
@@ -12853,7 +12853,7 @@
 {"context": "#   tools/repo-guard.sh --range A..B    # also check commits in range A..B", "kind": "github_like", "line": 18, "path": "tools/repo-guard.sh", "value": "tools/repo-guard.sh"}
 {"context": "#   tools/repo-guard.sh --base master   # range = merge-base(master,HEAD)..HEAD", "kind": "github_like", "line": 19, "path": "tools/repo-guard.sh", "value": "tools/repo-guard.sh"}
 {"context": "if [ -n \"$(git ls-files .agent 2>/dev/null | head -1)\" ]; then", "kind": "github_like", "line": 35, "path": "tools/repo-guard.sh", "value": "dev/null"}
-{"context": "# Matches B:/M, B:\\M, C:/Users, C:\\Users, <local> /mnt/c/ and similar.", "kind": "github_like", "line": 43, "path": "tools/repo-guard.sh", "value": "mnt/c"}
+{"context": "# Matches <local-workspace-root>, B:\\M, <local-user-home>, C:\\Users, <local> <local-mount>/ and similar.", "kind": "github_like", "line": 43, "path": "tools/repo-guard.sh", "value": "local-mount"}
 {"context": "if git grep -nIE \"$PATHPAT\" -- . ':(exclude)tools/repo-guard.sh' >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then", "kind": "github_like", "line": 45, "path": "tools/repo-guard.sh", "value": "tools/repo-guard.sh"}
 {"context": "if git grep -nIE \"$PATHPAT\" -- . ':(exclude)tools/repo-guard.sh' >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then", "kind": "github_like", "line": 45, "path": "tools/repo-guard.sh", "value": "tmp/rg_paths"}
 {"context": "if git grep -nIE \"$PATHPAT\" -- . ':(exclude)tools/repo-guard.sh' >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then", "kind": "github_like", "line": 45, "path": "tools/repo-guard.sh", "value": "dev/null"}
