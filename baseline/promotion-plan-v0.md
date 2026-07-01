@@ -4,12 +4,12 @@ Status: NOT EXECUTED.
 
 ## Local Repo Mapping Observed 2026-06-29
 
-- `<private-ember-local-checkout>`
+- `B:\M\ember`
   - `origin`: `https://github.com/wordingone/ember-backup.git`
   - `public`: `https://github.com/wordingone/ember.git`
   - branch/status observed: `ember-cli-src-recovery-20260627`, dirty with many modified/untracked receipts and work surfaces.
 
-- `<public-ember-local-mirror>`
+- `B:\M\ember-public`
   - `origin`: `https://github.com/wordingone/ember-backup.git`
   - `public`: `https://github.com/wordingone/ember.git`
   - branch/status observed: `public-clean-root-20260628`, untracked `reconstruct-after-delete.sh`.
