@@ -4,8 +4,6 @@ Status: STAGING ONLY. This directory does not complete the goal.
 Created: 2026-06-29.
 Target promotion path: top-level `baseline/` in both `wordingone/ember` and `wordingone/ember-backup`.
 
-2026-07-01 default-branch governance update: `master` is allowed to carry this staging packet only while it remains explicitly NOT COMPLETE. A completed baseline requires the shipping discipline contract, strict verifier, publication-surface verifier, line-ending verifier, remote proof receipts, and operator acceptance to agree. An unmerged PR or staging branch is not delivery.
-
 ## Purpose
 
 This packet builds the outside ruler Ember must face before any field-level claim is allowed. The final achievement is not this staging directory. The final achievement is a cited, data-backed, recreatable `/baseline` directory committed or PR-visible in both Ember repos.
@@ -20,7 +18,6 @@ Reasons:
 - no remote refs or PR URLs have been recorded;
 - no governed Ember-vs-baseline trial has run under the locked protocol;
 - exact source pins now exist for the first external anchors, and a first self-improvement zero-spend subset has a static PASS receipt, but baseline receipts, locked thresholds, governed trials, and dual-repo promotion are still missing.
-- the active shipping discipline contract forbids treating this staging packet or any unmerged PR as final baseline delivery.
 
 ## Layout
 
