@@ -19,21 +19,47 @@ artifacts under `receipts/` — never by prose.
 
 ## Current status
 
+<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T161600Z | counts: 28-GREEN / 3-AUDIT-OK / 3-RED -->
+
 Position ledger: `STATE.md`. Standing goal: `GOAL.md`.
 
-**Current blocker (as of last `STATE.md` update):**
-`FIELD_LEVEL_CONTRIBUTION_PROOF_BLOCKED` — the field-level ML/AI breakthrough
-superiority proof over the named prior is not yet receipted. The required
-receipt must run a stricter named-prior superiority protocol on a broader
-external/disjoint benchmark (or produce a new reusable ML/AI method artifact
-whose deletion degrades that benchmark), with zero-cost verification
-(`api_spend_usd=0`, `paid_api_surface_used=false`).
+**State as of 2026-07-04.** The program is now governed by a receipt-gated
+**totality board**: a registry of 34 conditions (32 primary + 2 roll-ups)
+covering base capability, resident training, growth, efficiency, observability,
+independence, process integrity, and enforcement. Every row's verdict traces to
+executed-job receipts; an adversarial board-integrity audit (issue #89)
+re-attacks the GREEN rows on a cadence. Current board: **28 of 31 state
+conditions GREEN, 3 of 3 process-invariant audits OK**. The three REDs are the
+honest frontier:
 
-Prior gate receipts on file (not sufficient for goal-clear): live-surface
-observation, full-parity harness, resident-training neural update,
-D3 multi-task generalization, and ScienceAgentBench admission. See
-`GOAL.md §Current Blocker Packet` for the authoritative receipt cursor,
-exact status codes, and why each prior receipt does not clear the goal.
+- **C-SCALE** — foundation-model-scale training on the one-GPU budget is not
+  yet receipted. This week's named finding (issue #82): the pre-registered W1
+  token-collapse control landed **L3** — a width-matched from-scratch control
+  matched the grown model's capability point with **≤13% of the grow path's
+  tokens**, refuting the growth ladder's token-economics at rung-1 scale and
+  redirecting the scale program to from-scratch-at-width.
+- **C-E2B** — the paired measured-distance protocol against the frozen
+  reference model (issues #23/#48): GATE-1 passed; the GATE-0 paired run is
+  re-firing with the storage-sharing cure at this writing.
+- **C-TALLY** — the roll-up; RED by construction until the two above clear.
+
+The field-level contribution proof (`GOAL.md`) therefore remains **not
+cleared** — C-SCALE and C-E2B are its preconditions, and no receipt on file
+constitutes a field-level claim.
+
+Beyond the board, the standing program surfaces are public as issues on this
+repository: the succession/self-hosting codex (#90), the
+autonomy-relinquishment ladder — the invariant-gated transfer of the
+maintainer's levers to ember itself, currently at rung NONE with rung R0 in
+build (#92), enforcement-layer execution integrity (#38), and the export/CI
+hygiene chain that is bringing the full contract tree, board machinery, and
+receipts into this public repo via PRs (#33, #91).
+
+**Freshness contract:** this section carries a machine-readable
+`state-as-of` marker (above). A stale README is a defect of the same class as
+a stale `STATE.md` (`GOVERNANCE.md`), and the publication-visibility clause
+(issue #42) makes public-surface currency a board-gated property, not a
+courtesy.
 
 ## How to reproduce the public checks
 
