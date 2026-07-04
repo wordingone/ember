@@ -48,7 +48,7 @@
     "mode_reduce_overhead_result": "OOM at batch=8 (CUDA graph recording overhead exhausts VRAM)",
     "implication": "compile lever contributes ~2%, not the 1.5x assumed in fp-42 two-lever plan; §3 gate plan needs revision"
   },
-  "eli_integration_notes": "Apply both patch functions before torch.compile. Compile fwd_fn (forward-only, no backward in compiled region). In _bench_cell: extract fwd portion into separate closure, compile that, call loss.backward() + opts.step() outside the compiled region. The bench loop timing is unaffected (t_opt measured outside as before).",
+  "engineer_integration_notes": "Apply both patch functions before torch.compile. Compile fwd_fn (forward-only, no backward in compiled region). In _bench_cell: extract fwd portion into separate closure, compile that, call loss.backward() + opts.step() outside the compiled region. The bench loop timing is unaffected (t_opt measured outside as before).",
   "probes": [
     "c04_compile_probe6.py (job d680a26f): blocker identification",
     "c04_compile_probe7.py (job 29254bd8): patch verification",

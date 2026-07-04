@@ -73,14 +73,14 @@ def _require_gate_token():
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("--the lead-gate-token", default="")
     args, _ = ap.parse_known_args()
-    if not args.leo_gate_token.strip():
+    if not args.maintainer_gate_token.strip():
         print(
             "ERROR: t2_r2w.py requires --the lead-gate-token=<non-empty> "
             "(round-2 launch interlock). Exiting without any work.",
             flush=True,
         )
         sys.exit(1)
-    return args.leo_gate_token
+    return args.maintainer_gate_token
 
 
 _gate_token = _require_gate_token()

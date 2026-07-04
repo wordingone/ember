@@ -342,7 +342,7 @@ def selftest():
     # fp44-horizon-optimizer-equiv-20260613T102516Z): NO `arms` block — per-arm
     # {muon,adamw}_result with val_losses (plural); noise floor nested under
     # noise_floor_run.derived_threshold. Locks the loader against regression.
-    r_eli = {"ticket": "FP44-HORIZON-OPTIMIZER-EQUIV",
+    r_eng = {"ticket": "FP44-HORIZON-OPTIMIZER-EQUIV",
              "noise_floor_run": {"derived_threshold": 0.605468, "noise_floor": 0.605468},
              "muon_result": {"arm": "muon_split_baseline",
                              "val_losses": {"250": 8.86, "500": 7.74, "1000": 6.38,
@@ -350,14 +350,14 @@ def selftest():
              "adamw_result": {"arm": "full_fused_adamw",
                               "val_losses": {"250": 9.39, "500": 8.98, "1000": 7.32,
                                              "1500": 7.39, "2000": 6.9766}}}
-    s_eli = score_receipt(r_eli)
-    c_eli = (s_eli.get("status") == "SCORED"
-             and s_eli.get("verdict") == "ESCALATE_USER_TRADEOFF"
-             and s_eli.get("noise_floor_source") == "derived"
-             and abs(s_eli.get("noise_floor", 0) - 0.605468) < 1e-6)
-    print(f"  [{'PASS' if c_eli else 'FAIL'}] the engineer real schema (muon_result/adamw_result/"
-          f"noise_floor_run) -> {s_eli.get('verdict')} src={s_eli.get('noise_floor_source')}")
-    ok = ok and c_eli
+    s_eng = score_receipt(r_eng)
+    c_eng = (s_eng.get("status") == "SCORED"
+             and s_eng.get("verdict") == "ESCALATE_USER_TRADEOFF"
+             and s_eng.get("noise_floor_source") == "derived"
+             and abs(s_eng.get("noise_floor", 0) - 0.605468) < 1e-6)
+    print(f"  [{'PASS' if c_eng else 'FAIL'}] the engineer real schema (muon_result/adamw_result/"
+          f"noise_floor_run) -> {s_eng.get('verdict')} src={s_eng.get('noise_floor_source')}")
+    ok = ok and c_eng
 
     # schema-mismatch path
     sm = score_receipt({"arms": {"sgd": {"val_loss": {"2000": 1.0}}}})

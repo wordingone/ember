@@ -8244,9 +8244,9 @@
 {"context": "if gh repo view \"$REPO\" >/dev/null 2>&1; then", "kind": "github_like", "line": 15, "path": "reconstruct-after-delete.sh", "value": "dev/null"}
 {"context": "echo \"[2/6] gate: $CLEAN must be leak-clean (0/0) before it becomes the public root\"", "kind": "github_like", "line": 19, "path": "reconstruct-after-delete.sh", "value": "2/6"}
 {"context": "echo \"[2/6] gate: $CLEAN must be leak-clean (0/0) before it becomes the public root\"", "kind": "github_like", "line": 19, "path": "reconstruct-after-delete.sh", "value": "0/0"}
-{"context": "HITS=$(git grep -iE 'anthropic|\\bavir\\b|avir-cli|\\bclaude\\b|\\.claude|\\b(leo|eli|archie|jude|mira|kai)\\b' \"$CLEAN\" 2>/dev/null | grep -ivE 'avirus|coronavirus' | wc -l)", "kind": "github_like", "line": 20, "path": "reconstruct-after-delete.sh", "value": "dev/null"}
-{"context": "HITS=$(git grep -iE 'anthropic|\\bavir\\b|avir-cli|\\bclaude\\b|\\.claude|\\b(leo|eli|archie|jude|mira|kai)\\b' \"$CLEAN\" 2>/dev/null | grep -ivE 'avirus|coronavirus' | wc -l)", "kind": "known_term", "line": 20, "path": "reconstruct-after-delete.sh", "value": "Anthropic"}
-{"context": "FN=$(git ls-tree -r --name-only \"$CLEAN\" | grep -iE 'avir|claude|anthropic|\\b(leo|eli|archie|jude|mira|kai)\\b' | wc -l)", "kind": "known_term", "line": 21, "path": "reconstruct-after-delete.sh", "value": "Anthropic"}
+{"context": "HITS=$(git grep -iE 'anthropic|\\bavir\\b|avir-cli|\\bclaude\\b|\\.claude|\\b(internal-handles-redacted)\\b' \"$CLEAN\" 2>/dev/null | grep -ivE 'avirus|coronavirus' | wc -l)", "kind": "github_like", "line": 20, "path": "reconstruct-after-delete.sh", "value": "dev/null"}
+{"context": "HITS=$(git grep -iE 'anthropic|\\bavir\\b|avir-cli|\\bclaude\\b|\\.claude|\\b(internal-handles-redacted)\\b' \"$CLEAN\" 2>/dev/null | grep -ivE 'avirus|coronavirus' | wc -l)", "kind": "known_term", "line": 20, "path": "reconstruct-after-delete.sh", "value": "Anthropic"}
+{"context": "FN=$(git ls-tree -r --name-only \"$CLEAN\" | grep -iE 'avir|claude|anthropic|\\b(internal-handles-redacted)\\b' | wc -l)", "kind": "known_term", "line": 21, "path": "reconstruct-after-delete.sh", "value": "Anthropic"}
 {"context": "echo \"[3/6] create fresh public repo\"", "kind": "github_like", "line": 24, "path": "reconstruct-after-delete.sh", "value": "3/6"}
 {"context": "echo \"[4/6] push $CLEAN as the single root (master) + default-branch + tag v0\"", "kind": "github_like", "line": 27, "path": "reconstruct-after-delete.sh", "value": "4/6"}
 {"context": "git push \"https://github.com/$REPO\" \"$CLEAN:refs/heads/master\"", "kind": "url", "line": 28, "path": "reconstruct-after-delete.sh", "value": "https://github.com/$REPO"}
@@ -11337,7 +11337,7 @@
 {"context": "\"arms\": {\"muon\": {\"val_loss\": {\"2000\": 1.0}},", "kind": "known_term", "line": 334, "path": "scripts/fp44_horizon_equiv_gate.py", "value": "Muon"}
 {"context": "# the engineer's eng/329c REAL schema (the exact shape of the landed receipt", "kind": "github_like", "line": 341, "path": "scripts/fp44_horizon_equiv_gate.py", "value": "eng/329c"}
 {"context": "# {muon,adamw}_result with val_losses (plural); noise floor nested under", "kind": "known_term", "line": 343, "path": "scripts/fp44_horizon_equiv_gate.py", "value": "Muon"}
-{"context": "print(f\"  [{'PASS' if c_eli else 'FAIL'}] the engineer real schema (muon_result/adamw_result/\"", "kind": "github_like", "line": 358, "path": "scripts/fp44_horizon_equiv_gate.py", "value": "muon_result/adamw_result"}
+{"context": "print(f\"  [{'PASS' if c_eng else 'FAIL'}] the engineer real schema (muon_result/adamw_result/\"", "kind": "github_like", "line": 358, "path": "scripts/fp44_horizon_equiv_gate.py", "value": "muon_result/adamw_result"}
 {"context": "print(f\"  [{'PASS' if c_src else 'FAIL'}] discovery picks SOURCE, excludes gate-output (-GATE suffix; FLAG-A/B)\")", "kind": "github_like", "line": 379, "path": "scripts/fp44_horizon_equiv_gate.py", "value": "FLAG-A/B"}
 {"context": "muon_split_baseline  \u2014 Muon(2D excl embed, lr=0.02, ns5) + AdamW(rest, lr=3e-4)", "kind": "known_term", "line": 6, "path": "scripts/fp44_horizon_optimizer_equiv.py", "value": "Muon"}
 {"context": "ckpt=True, QAT fake_quant (variant=qat), MTP 2 heads weight=0.3", "kind": "known_term", "line": 11, "path": "scripts/fp44_horizon_optimizer_equiv.py", "value": "QAT"}
