@@ -30,4 +30,8 @@ _roster_check.py
 # repo-guard operator-name denylist is supplied locally, never published.
 tools/.repo-guard-denylist
 
+# baseline scan artifacts: frozen machine-scan outputs, retained privately only —
+# never edited, never re-tracked (see baseline/fragments/external-reference-ocean-v0.md).
+baseline/fragments/external-refs-*.jsonl
+
 .remediation/

@@ -1,0 +1,15 @@
+# repo-guard names-scan exclusion list.
+#
+# One path-prefix per line (relative to repo root). Any tracked file under a
+# listed prefix is skipped by the operator-names check ONLY — plaintext mode
+# (tools/repo-guard.sh) and hashed mode (tools/check_names_hashed.py) both
+# read this same file, so the exemption is identical in both modes. This does
+# NOT exempt the path there from the paths check, the line-endings check, or
+# any other repo-guard invariant — only from the names scan.
+#
+# Rule: only machine-generated vocabulary/data artifacts belong here (BPE
+# tokenizer vocabularies, generated ID tables, and similar corpora where a
+# name-shaped substring is an incidental token/id, not written prose). Never
+# add a prose/docs directory here to silence a real hit — a match in prose
+# means the prose needs rewording, not an exemption.
+tokenizer/
