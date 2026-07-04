@@ -19,7 +19,7 @@ artifacts under `receipts/` — never by prose.
 
 ## Current status
 
-<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T172207Z | counts: 27-GREEN / 3-AUDIT-OK / 7-RED -->
+<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T175932Z | counts: 28-GREEN / 3-AUDIT-OK / 6-RED -->
 
 Position ledger: `STATE.md`. Standing goal: `GOAL.md`.
 
@@ -53,10 +53,6 @@ previously accepted on weaker evidence are now honestly open. The RED set:
   Honest re-measurement queued.
 - **C-SURFACE2** — re-opened BY the hardening: replay-of-completed-run
   provenance no longer counts as a live surface; needs a genuinely live run.
-- **C-LADM** — new condition (issue #95), first fire honestly RED: 418
-  admitted episodes across 48 tasks have no matched-control comparator in the
-  pool, so the anti-Goodhart matched-control gain is vacuous for those tasks.
-  Backfill is queued as its own cure lane.
 - **C-TALLY** — the roll-up; RED by construction until the above clear.
 The field-level contribution proof (`GOAL.md`) therefore remains **not
 cleared** — C-SCALE and C-E2B are its preconditions, and no receipt on file
