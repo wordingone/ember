@@ -19,18 +19,19 @@ artifacts under `receipts/` — never by prose.
 
 ## Current status
 
-<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T161600Z | counts: 28-GREEN / 3-AUDIT-OK / 3-RED -->
+<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T174000Z | counts: 27-GREEN / 3-AUDIT-OK / 5-RED -->
 
 Position ledger: `STATE.md`. Standing goal: `GOAL.md`.
 
-**State as of 2026-07-04.** The program is now governed by a receipt-gated
-**totality board**: a registry of 34 conditions (32 primary + 2 roll-ups)
+**State as of 2026-07-04 (evening).** The program is now governed by a receipt-gated
+**totality board**: a registry of 35 conditions (33 primary + 2 roll-ups)
 covering base capability, resident training, growth, efficiency, observability,
 independence, process integrity, and enforcement. Every row's verdict traces to
 executed-job receipts; an adversarial board-integrity audit (issue #89)
-re-attacks the GREEN rows on a cadence. Current board: **28 of 31 state
-conditions GREEN, 3 of 3 process-invariant audits OK**. The three REDs are the
-honest frontier:
+re-attacks the GREEN rows on a cadence — its first fire produced 7 findings, of
+which maintainer spot-verification confirmed 5 (probe hardening in flight,
+issue #97). Current board: **27 of 32 state conditions GREEN, 3 of 3
+process-invariant audits OK**. The REDs are the honest frontier:
 
 - **C-SCALE** — foundation-model-scale training on the one-GPU budget is not
   yet receipted. This week's named finding (issue #82): the pre-registered W1
@@ -41,7 +42,10 @@ honest frontier:
 - **C-E2B** — the paired measured-distance protocol against the frozen
   reference model (issues #23/#48): GATE-1 passed; the GATE-0 paired run is
   re-firing with the storage-sharing cure at this writing.
-- **C-TALLY** — the roll-up; RED by construction until the two above clear.
+- **C-PORT / C-FED** — transient false-positive REDs: the #89 audit receipt
+  QUOTES violation tokens in its finding text and two probes parse quoting as
+  committing; the exclusion cure is dispatched (issue #97, cure 7).
+- **C-TALLY** — the roll-up; RED by construction until the above clear.
 
 The field-level contribution proof (`GOAL.md`) therefore remains **not
 cleared** — C-SCALE and C-E2B are its preconditions, and no receipt on file
