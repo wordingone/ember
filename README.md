@@ -19,7 +19,7 @@ artifacts under `receipts/` — never by prose.
 
 ## Current status
 
-<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T175932Z | counts: 28-GREEN / 3-AUDIT-OK / 6-RED -->
+<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T203132Z | counts: 29-GREEN / 3-AUDIT-OK / 6-RED -->
 
 Position ledger: `STATE.md`. Standing goal: `GOAL.md`.
 
@@ -31,7 +31,9 @@ admission. Every row's verdict traces to executed-job receipts; an adversarial
 board-integrity audit (issue #89) re-attacks the GREEN rows on a cadence — its
 first fire produced 7 findings, maintainer spot-verification confirmed 5, and
 all 7 probe-hardening cures have now LANDED (issue #97). Current board:
-**27 of 34 state conditions GREEN, 3 of 3 process-invariant audits OK**. Two of
+**29 of 35 state conditions GREEN, 3 of 3 process-invariant audits OK** (the 35th
+state condition, C-AUTO, entered the registry today: autonomy-ladder claim
+faithfulness, GREEN-honest at zero claims — issue #104). Two of
 today's REDs are the hardened probes doing their job — verdicts that were
 previously accepted on weaker evidence are now honestly open. The RED set:
 
