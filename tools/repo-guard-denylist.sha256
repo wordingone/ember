@@ -1,0 +1,12 @@
+# repo-guard hashed name denylist — GENERATED, committed, contains NO names.
+# One sha256(lowercase-name) per line. Regenerate with:
+#   python tools/check_names_hashed.py --generate --denylist-plain <local-plaintext-file> --out tools/repo-guard-denylist.sha256
+0f066c9b74c216ddd215acefdc27957bfebfe665448b1be8fa82270b091cbf8d
+27037fccea3062ee8ebaea07a9e2bf8dcb6511fd860ae993442aee0c512b8bbf
+3c38aafb0579dafe18bb584dce2786ccaab6835245f2979af4bb7dd2b6b90775
+5792492f01a08c7b70f70541e3af23636dd83a959d3a19aee1776e98550b2038
+8535e86c8118bbbb0a18ac72d15d3a2b37b18d1bce1611fc60165f322cf57386
+a5cd1d7cbdd49c27aacc041890a06f107dc63b582e5fff92a45edb1c1f6106f2
+c10688a28512e1550645c69fdf13e7ab6b74ed87094bbe01f28e886490b70239
+eb687afb0f4823e8eb80b3c1c1fa6519cdc916cd8e31c63106d039ac5b0fa907
+f844ad6231ada5aa202a39fe48b28f113d32dfb0ab109e3d75110335b462e1a0

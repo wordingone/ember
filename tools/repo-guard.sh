@@ -7,11 +7,17 @@
 # here. If this exits non-zero, the offending change does not land.
 #
 # This file is PUBLIC. It must contain no operator names and no absolute local
-# paths. The operator-name denylist is supplied at runtime, never committed:
-#   - env var  REPO_GUARD_NAMES   = pipe-separated names (CI injects from a secret), or
-#   - local file tools/.repo-guard-denylist (one name per line; git-ignored).
-# If neither is present, the name check is SKIPPED with a notice; all other
-# (structural) checks still run.
+# paths. The operator-name denylist is supplied at runtime, never committed as
+# plaintext; three modes, checked in this priority order:
+#   1. env var  REPO_GUARD_NAMES        = pipe-separated names (CI injects from a secret), or
+#   2. local file tools/.repo-guard-denylist (one name per line; git-ignored), or
+#   3. committed tools/repo-guard-denylist.sha256 (one sha256-per-lowercase-name;
+#      contains no reversible names, safe to commit) via tools/check_names_hashed.py.
+# Modes 1/2 take precedence when present (exact string match on the real names).
+# Mode 3 lets CI enforce the same invariant with no secret at all. If none of the
+# three is usable, the name check is SKIPPED with a notice; all other (structural)
+# checks still run — except in a CI context, where an unusable name check is a
+# hard failure (see step 3 below).
 #
 # Usage:
 #   tools/repo-guard.sh                 # check the tracked tree (default)
@@ -57,25 +63,58 @@ else
 fi
 
 # ---- 3. no operator names in tracked text (denylist supplied at runtime) --
+# Priority: REPO_GUARD_NAMES env > local plaintext tools/.repo-guard-denylist >
+# committed hashed tools/repo-guard-denylist.sha256 (via check_names_hashed.py) >
+# unusable (CI fail-closed / local skip).
+#
+# tools/repo-guard-names-exclude.txt lists path-prefixes (one per line) that
+# the names scan skips entirely — machine-generated vocab/data artifacts only
+# (e.g. tokenizer/), never prose. Both plaintext and hashed modes read it.
+NAMES_EXCLUDE_ARGS=()
+if [ -f tools/repo-guard-names-exclude.txt ]; then
+  while IFS= read -r prefix; do
+    prefix="$(printf '%s' "$prefix" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [ -z "$prefix" ] && continue
+    case "$prefix" in \#*) continue ;; esac
+    NAMES_EXCLUDE_ARGS+=(":(exclude)${prefix}")
+  done < tools/repo-guard-names-exclude.txt
+fi
 NAMES=""
 if [ -n "${REPO_GUARD_NAMES:-}" ]; then
   NAMES="$REPO_GUARD_NAMES"
 elif [ -f tools/.repo-guard-denylist ]; then
   NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
 fi
-if [ -z "$NAMES" ]; then
-  if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-    printf 'FAIL [names] denylist required in protected context (set REPO_GUARD_NAMES secret or tools/.repo-guard-denylist); aborting\n'
-    exit 2
-  else
-    printf 'skip [names] no denylist (local run) — structural checks still enforced\n'
-  fi
-else
-  if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
+if [ -n "$NAMES" ]; then
+  if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
     fail "names" "operator names in tracked files"
     sed 's/^/      /' /tmp/rg_names | head -20
   else
     ok "names" "none found"
+  fi
+elif [ -f tools/repo-guard-denylist.sha256 ]; then
+  HASHED_OUT="$(python tools/check_names_hashed.py 2>&1)"
+  HASHED_RC=$?
+  case "$HASHED_RC" in
+    0) ok "names" "none found (hashed denylist)" ;;
+    1) fail "names" "operator names in tracked files (hashed denylist match)"
+       printf '%s\n' "$HASHED_OUT" | sed 's/^/      /' ;;
+    *) # denylist file present but unusable (empty after comment-stripping) — same
+       # unusable-denylist branch as if no file existed at all.
+       if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+         printf 'FAIL [names] hashed denylist present but unusable (tools/repo-guard-denylist.sha256); aborting\n'
+         exit 2
+       else
+         printf 'skip [names] hashed denylist unusable (local run) — structural checks still enforced\n'
+       fi
+       ;;
+  esac
+else
+  if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+    printf 'FAIL [names] denylist required in protected context (set REPO_GUARD_NAMES secret, tools/.repo-guard-denylist, or commit tools/repo-guard-denylist.sha256); aborting\n'
+    exit 2
+  else
+    printf 'skip [names] no denylist (local run) — structural checks still enforced\n'
   fi
 fi
 
