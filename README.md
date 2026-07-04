@@ -19,34 +19,45 @@ artifacts under `receipts/` — never by prose.
 
 ## Current status
 
-<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T174000Z | counts: 27-GREEN / 3-AUDIT-OK / 5-RED -->
+<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T172207Z | counts: 27-GREEN / 3-AUDIT-OK / 7-RED -->
 
 Position ledger: `STATE.md`. Standing goal: `GOAL.md`.
 
 **State as of 2026-07-04 (evening).** The program is now governed by a receipt-gated
-**totality board**: a registry of 35 conditions (33 primary + 2 roll-ups)
+**totality board**: a registry of 37 conditions (35 primary + 2 roll-ups)
 covering base capability, resident training, growth, efficiency, observability,
-independence, process integrity, and enforcement. Every row's verdict traces to
-executed-job receipts; an adversarial board-integrity audit (issue #89)
-re-attacks the GREEN rows on a cadence — its first fire produced 7 findings, of
-which maintainer spot-verification confirmed 5 (probe hardening in flight,
-issue #97). Current board: **27 of 32 state conditions GREEN, 3 of 3
-process-invariant audits OK**. The REDs are the honest frontier:
+independence, process integrity, enforcement, disconfirmation, and ledger
+admission. Every row's verdict traces to executed-job receipts; an adversarial
+board-integrity audit (issue #89) re-attacks the GREEN rows on a cadence — its
+first fire produced 7 findings, maintainer spot-verification confirmed 5, and
+all 7 probe-hardening cures have now LANDED (issue #97). Current board:
+**27 of 34 state conditions GREEN, 3 of 3 process-invariant audits OK**. Two of
+today's REDs are the hardened probes doing their job — verdicts that were
+previously accepted on weaker evidence are now honestly open. The RED set:
 
 - **C-SCALE** — foundation-model-scale training on the one-GPU budget is not
   yet receipted. This week's named finding (issue #82): the pre-registered W1
   token-collapse control landed **L3** — a width-matched from-scratch control
   matched the grown model's capability point with **≤13% of the grow path's
   tokens**, refuting the growth ladder's token-economics at rung-1 scale and
-  redirecting the scale program to from-scratch-at-width.
+  redirecting the scale program to from-scratch-at-width (W2 pre-registration
+  frozen, issue #29).
 - **C-E2B** — the paired measured-distance protocol against the frozen
   reference model (issues #23/#48): GATE-1 passed; the GATE-0 paired run is
-  re-firing with the storage-sharing cure at this writing.
-- **C-PORT / C-FED** — transient false-positive REDs: the #89 audit receipt
-  QUOTES violation tokens in its finding text and two probes parse quoting as
-  committing; the exclusion cure is dispatched (issue #97, cure 7).
+  live at this writing (instrumented re-fire after two silent launch failures).
+- **C11** — re-opened BY the hardening: the probe now demands execution-bound
+  active-time tiers, and two banked tiers inherited a counter instead of
+  earning it (re-earn protocol: issue #98). The 24h tier's spend was genuine.
+- **C3** — re-opened BY the hardening: the probe now reads the receipt's own
+  `equal_within_tolerance` measurement, which contradicts the banked reason.
+  Honest re-measurement queued.
+- **C-SURFACE2** — re-opened BY the hardening: replay-of-completed-run
+  provenance no longer counts as a live surface; needs a genuinely live run.
+- **C-LADM** — new condition (issue #95), first fire honestly RED: 418
+  admitted episodes across 48 tasks have no matched-control comparator in the
+  pool, so the anti-Goodhart matched-control gain is vacuous for those tasks.
+  Backfill is queued as its own cure lane.
 - **C-TALLY** — the roll-up; RED by construction until the above clear.
-
 The field-level contribution proof (`GOAL.md`) therefore remains **not
 cleared** — C-SCALE and C-E2B are its preconditions, and no receipt on file
 constitutes a field-level claim.
