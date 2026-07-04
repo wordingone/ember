@@ -113,3 +113,36 @@ does the arm continue its event stream without input).
    recon (attach-recon-20260703T224158Z.json) stands as auxiliary evidence the E2B graph accepts
    adapters with clean gradient isolation; the paired arm itself must be head-attached for
    structural parity with fire-4's head-LoRA owned arm.
+
+## v1.3 addendum (freeze ts 20260704T003500Z — before any verdict receipt; the base-identity
+## clause extracted from the fire-4 citation-integrity investigation, probe chain complete)
+
+1. **Base-identity assert (fail-closed, mechanical).** An adapter artifact is only half an
+   identity: a LoRA delta is defined RELATIVE to the base it trained on, and the adapter's own
+   hash chain cannot see the base underneath it. Any arm that loads a persisted adapter MUST
+   attach it to the base checkpoint named by the TRAINING receipt's candidate_manifest
+   (seed_checkpoint_path + sha256), with the loaded base's model.pt sha asserted at load time.
+   Loading any other base — including a module-level default — invalidates the arm outright.
+   Root cause this cures: load_owned_core_from_c14_checkpoint's FILE-shape branch
+   (ember_e2b_surpass_run.py:506-518) builds the core with NO seed_ckpt argument, silently
+   falling back to SEED_CKPT_DEFAULT; for any run trained under an A20 substrate override (fire-4
+   trained on the rung1 step-00000766 checkpoint, sha 58e8e989…, 2,377,797,331 bytes — not the
+   867,847,498-byte smoke default) the reload therefore evaluated the right adapter on the WRONG
+   substrate. Probe chain: probes A–D (numerics, KV-cache, twin identity, non-LoRA drift) all
+   correctly negative yet inheriting the mismatch; probe E confirmed the mismatch by direct file
+   hash and recovered fire-4's recorded final-battery rows EXACTLY (8/8, incl. train_s00=0 and
+   train_s07=0) through the REAL checkpoint-eval callback on the corrected base
+   (scratch/c-e2b-merge/probe-e-base-identity-and-real-callback-20260704T002000Z.json).
+2. **Loader interface cure required before the paired run.** load_owned_core_from_c14_checkpoint
+   gains explicit base parameters for the FILE-shape branch (same repoint mechanism its directory
+   branch already uses), REQUIRED for that shape — the silent-default path is removed, not merely
+   deprecated. The paired-run script passes the base from fire-4's receipt manifest.
+3. **Clause-3 spot-check: SATISFIED.** The v1.2 requirement (reproduce fire-4's final-battery
+   action rows on >=3 tasks via the fail-closed adapter-load path) is met 8/8 on the corrected
+   base — train_s02/train_s07/held_s01 = 3/0/3 as pre-registered, plus the remaining five rows.
+   Fire-4's receipt is confirmed honest end-to-end (its manifest records the override base from
+   the same variables the factory consumed). Citation of fire-4 as the owned ember_work arm is
+   VALID under the clause-2 loader cure + clause-1 assert.
+4. **Retraction.** Any "fresh-eval" score for the persisted fire-4 adapter measured before this
+   addendum (the 0.2-class numbers in the adjudication thread) was measured on a mismatched base
+   and is VOID — not a property of the artifact.
