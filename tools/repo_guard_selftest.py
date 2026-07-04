@@ -107,8 +107,12 @@ def test_red_absolute_path():
     tmp = make_fixture("fix/selftest-red-path")
     try:
         (tmp / "docs").mkdir()
+        # Path literal assembled at runtime so the guard's own paths scan
+        # never matches this tracked selftest source (self-referential-gate
+        # dodge, same pattern as the leak-gate's own term list).
+        bad_path = "C" + ":" + chr(92) + chr(92).join(["Users", "someone", "notes.txt"])
         (tmp / "docs" / "note.md").write_text(
-            r"See C:\Users\someone\notes.txt for the local copy." + "\n",
+            "See " + bad_path + " for the local copy.\n",
             encoding="utf-8", newline="\n",
         )
         commit_fixture(tmp)
