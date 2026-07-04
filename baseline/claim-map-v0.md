@@ -9,10 +9,10 @@ This file maps current Ember surfaces to external baseline claims. It exists to 
 
 Evidence inspected:
 
-- `B:\M\ember\README.md`: Ember is a local training/improvement substrate; every claimed gain must survive held-out eval, beat matched control, disappear under deletion, persist across process boundaries, and be proven by receipts.
-- `B:\M\ember\GOAL.md`: current integrated goal spans cockpit, visible/steerable training, M10 CLI margin, research harness, repo legibility, signature surfaces, and hard-problem tracking. Completion requires fresh receipts, 100% tally, C8 field-level receipt, and C-SCALE receipt.
-- `B:\M\ember\configs\v0-pretrain-config.json`: `ember-v0` c03 config, 368,354,304 estimated parameters, seq 1024, hidden 1024, 20 layers, 16 heads, bf16 base, QAT enabled, Muon/AdamW split, WSD schedule, MTP aux heads, 6.973B real tokens, 7.367B compute-optimal token target, 4090-governed VRAM fraction 0.80.
-- `B:\M\ember\configs\v0-multimodal-config.json`: multimodal extension with reserved ids 0-7, image soft-token path, 2D RoPE, qk_norm, vision embedder, and missing/build notes for `inputs_embeds` and bidirectional spans.
+- `<exec-tree>\README.md`: Ember is a local training/improvement substrate; every claimed gain must survive held-out eval, beat matched control, disappear under deletion, persist across process boundaries, and be proven by receipts.
+- `<exec-tree>\GOAL.md`: current integrated goal spans cockpit, visible/steerable training, M10 CLI margin, research harness, repo legibility, signature surfaces, and hard-problem tracking. Completion requires fresh receipts, 100% tally, C8 field-level receipt, and C-SCALE receipt.
+- `<exec-tree>\configs\v0-pretrain-config.json`: `ember-v0` c03 config, 368,354,304 estimated parameters, seq 1024, hidden 1024, 20 layers, 16 heads, bf16 base, QAT enabled, Muon/AdamW split, WSD schedule, MTP aux heads, 6.973B real tokens, 7.367B compute-optimal token target, 4090-governed VRAM fraction 0.80.
+- `<exec-tree>\configs\v0-multimodal-config.json`: multimodal extension with reserved ids 0-7, image soft-token path, 2D RoPE, qk_norm, vision embedder, and missing/build notes for `inputs_embeds` and bidirectional spans.
 
 ## Claim Families
 

@@ -9,10 +9,10 @@ This protocol exists because Ember has many DeepSeek, MTP, MLA, speculative deco
 
 Local Ember files already contain the relevant research thread:
 
-- `B:\M\ember\research\nc2-technique-survey-2026-06.md` separates MTP, MLA/KV compression, and FP8 from the one-4090 training claim.
-- `B:\M\ember\research\gpu-math-multiplier-table-v2-2026-06-11.json` includes rows that translate or reject inference multipliers for training and small-scale use.
-- `B:\M\ember\nc2-own-technique-contract.md` lists DeepSeek-style MTP, MLA, FP8, sparse attention, MoE, and GRPO as candidate components with staging decisions.
-- `B:\M\ember\receipts\ns-chain-roofline-4090-adjudication-20260623T171500Z.json` warns that training tall-skinny GEMM bottlenecks and small inference matmuls must not be conflated without direct measurement.
+- `<exec-tree>\research\nc2-technique-survey-2026-06.md` separates MTP, MLA/KV compression, and FP8 from the one-4090 training claim.
+- `<exec-tree>\research\gpu-math-multiplier-table-v2-2026-06-11.json` includes rows that translate or reject inference multipliers for training and small-scale use.
+- `<exec-tree>\nc2-own-technique-contract.md` lists DeepSeek-style MTP, MLA, FP8, sparse attention, MoE, and GRPO as candidate components with staging decisions.
+- `<exec-tree>\receipts\ns-chain-roofline-4090-adjudication-20260623T171500Z.json` warns that training tall-skinny GEMM bottlenecks and small inference matmuls must not be conflated without direct measurement.
 
 ## DSpark Correction
 
