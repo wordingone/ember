@@ -1,11 +1,19 @@
 {
   "ticket": "OWNED-CORE-WIDEN-PREP",
   "description": "CPU-preparable config for function-preserving LoRA rank expansion (244K → ≥1.1e6 params)",
+  "deviation_from_issue_125": {
+    "reason": "Issue #125 premise was incorrect (spec author dated correction 2026-07-05 in #132 comment): 244K is NOT the full core size (1e8), but the TRAINABLE SURFACE (LoRA rank-8 on head layer). D7 guard binds trainable_param_count; the cure is trainable-surface expansion (LoRA rank 8→34), not core FF-widening.",
+    "mechanism_change": "Spec said 'FF-widening'; ground truth requires 'LoRA rank expansion' (function-preserving via zero-init on new B rows)",
+    "everything_else_stands": "D7 dual-layer acceptance, preservation receipt, smoke episode, CPU-prep-then-GPU sequencing unchanged",
+    "reference_comment": "https://github.com/wordingone/ember/issues/125#issuecomment-*"
+  },
   "version": "1.0",
   "date_created": "2026-07-05",
+  "config_updated": "2026-07-05 (fixed path, added deviation disclosure)",
   "source_owned_core": {
-    "checkpoint": "B:\\M\\ember\\models\\cbase-smoke-run\\checkpoints\\step-00000610",
+    "checkpoint_ref": "models/cbase-smoke-run/checkpoints/step-00000610",
     "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+    "checkpoint_note": "repo-relative path; sha256 is the identity binding",
     "arch": {
       "hidden": 1024,
       "layers": 20,
@@ -65,10 +73,14 @@
     "cpu_harness_test": "Cheap CPU test on tiny synthetic core (same code path, passes fp tolerance)"
   },
   "deliverables": {
-    "config_file": "configs/owned-core-widen-config.json (this file)",
-    "widen_operator_code": "scripts/owned_core_widen_operator.py (TDD-test-driven implementation)",
-    "tests_file": "tests/test_owned_core_widen.py (param-count, D7 guards, config-loads, fp-harness)",
-    "selftest_receipt": "receipts/owned-core-widen-selftest-YYYYMMDDTHHMMSSZ.json (api_spend_usd: 0.0)",
-    "pr_branch": "feat/owned-core-widen-prep (off fresh public/master)"
+    "cpu_stage": {
+      "config_file": "config/owned-core-widen-config.json (spec: rank 8→34, param-count, preservation strategy)",
+      "tests_file": "tests/test_owned_core_widen.py (param-count arithmetic, D7 guards, config-loads, cpu function-preservation harness)",
+      "selftest_receipt": "receipts/owned-core-widen-selftest-*.json (api_spend_usd: 0.0, all tests pass)"
+    },
+    "gpu_stage": {
+      "widen_operator_code": "scripts/owned_core_widen_operator.py (TDD-test-driven impl: rank-expansion with zero-init-B preservation, param-count assert, lineage fields) — to be built in GPU stage dispatch",
+      "note": "Operator is GPU-stage work (loads checkpoint, applies rank expansion, verifies preservation, tracks lineage shas)"
+    }
   }
 }
