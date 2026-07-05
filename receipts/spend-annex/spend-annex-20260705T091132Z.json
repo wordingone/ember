@@ -1,0 +1,27 @@
+{
+  "receipt_type": "spend_annex",
+  "ticket": "SPEND-ANNEX",
+  "ts": "20260705T091132Z",
+  "sha_convention": "bytes on disk as-is",
+  "rows": [
+    {
+      "path": "receipts/ember-d3-native-loop/d3-native-loop-20260704T161315Z-c3-wall-time-rerun.json",
+      "evidence_class": "script_scanned_clean",
+      "sha256": "3d7f48ba910d9cfcfff4c2a428f7050f00da8f4065a2fc13c736ad99e5052258",
+      "notes": "CPU-local deterministic parser run; no API surface dependency"
+    },
+    {
+      "path": "receipts/ember-d3-native-loop/d3-native-loop-20260704T235144Z-c3-wall-time-rerun.json",
+      "evidence_class": "script_scanned_clean",
+      "sha256": "4f86f7fc51235957ea8c976c103f452ef8d934ba3279a33320f0abeb12c7eddc",
+      "notes": "CPU-local deterministic parser run; no API surface dependency"
+    },
+    {
+      "path": "receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T.json",
+      "evidence_class": "script_scanned_clean",
+      "sha256": "e0ba13083600aee0ceaa10d8b2202f6a1c67260ca9e9ec01b3c48391bf712d01",
+      "notes": "CPU-local deterministic parser run; no API surface dependency"
+    }
+  ],
+  "summary": "Spend-annex coverage for 3 CPU-local deterministic runs (d3-native-loop tests)"
+}

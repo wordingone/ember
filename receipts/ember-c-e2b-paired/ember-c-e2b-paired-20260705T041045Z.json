@@ -1,0 +1,307 @@
+{
+  "ticket": "C-E2B-PAIRED-RUN",
+  "ts": "2026-07-05T04:10:45Z",
+  "mode": "live",
+  "script": "scripts/ember_c_e2b_paired_run.py",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "legs": {
+    "ember_work": {
+      "battery": "c14-increment-mod-8-executing-verifier (corpus-v2, k=3 exemplars, 5+3 split)",
+      "corpus_meta": {
+        "seed": 20260702,
+        "split_rule": "increment-modulo-8 executing-verifier family (ember_resident_igrpo.executing_verifier semantics: correct=(state_val+1)%8, executed not looked-up); state_val domain {0..7} shuffled by random.Random(seed=20260702) then partitioned into disjoint SETS — heldout_state_vals=[1, 3, 4] (3 values), train_state_vals=[0, 2, 5, 6, 7] (5 values); zero state_val overlap between splits (a genuinely held-out family-parameter range, not merely held-out task IDs over a value range shared with train).",
+        "n_train": 5,
+        "n_heldout": 3,
+        "train_state_vals": [
+          0,
+          2,
+          5,
+          6,
+          7
+        ],
+        "heldout_state_vals": [
+          1,
+          3,
+          4
+        ],
+        "corpus_version": "v2",
+        "k_exemplars": 3,
+        "exemplar_assignment": {
+          "train_s00": [
+            2,
+            5,
+            6
+          ],
+          "train_s02": [
+            0,
+            6,
+            7
+          ],
+          "train_s05": [
+            0,
+            2,
+            7
+          ],
+          "train_s06": [
+            0,
+            2,
+            7
+          ],
+          "train_s07": [
+            2,
+            5,
+            6
+          ],
+          "held_s01": [
+            5,
+            6,
+            7
+          ],
+          "held_s03": [
+            0,
+            5,
+            7
+          ],
+          "held_s04": [
+            0,
+            2,
+            5
+          ]
+        }
+      },
+      "score_formula": "final_heldout_pass_count + 0.2 * max_train_pass_count",
+      "owned": {
+        "cited_from": "receipts/ember-c14-owned-run/live-20260703T215130Z.json",
+        "cited_adapter_path": "receipts/ember-c14-owned-run/resident-adapter-20260703T215130Z.pt",
+        "cited_adapter_sha256": "401939b2429912a911bcc1f7d38e871c53554aa3bcdfda96fd3f674527b05f4e",
+        "n_checkpoint_evals_cited": 16,
+        "final_step": 1024,
+        "final_heldout_pass_count": 0,
+        "max_train_pass_count": 2,
+        "score_formula": "final_heldout_pass_count + 0.2 * max_train_pass_count",
+        "owned_core_score": 0.4
+      },
+      "owned_core_score": 0.4,
+      "e2b": {
+        "n_train_steps": 1024,
+        "checkpoint_interval": 64,
+        "action_token_ids": [
+          236771,
+          236770,
+          236778,
+          236800,
+          236812,
+          236810,
+          236825,
+          236832,
+          236828,
+          236819
+        ],
+        "n_checkpoint_evals": 16,
+        "final_heldout_pass_count": 0,
+        "max_train_pass_count": 1,
+        "final_eval": {
+          "step": 1024,
+          "train_pass_count": 1,
+          "train_total": 5,
+          "heldout_pass_count": 0,
+          "heldout_total": 3,
+          "train_rows": [
+            {
+              "id": "train_s00",
+              "state_val": 0,
+              "action": 7,
+              "reward": 0.0
+            },
+            {
+              "id": "train_s02",
+              "state_val": 2,
+              "action": 7,
+              "reward": 0.0
+            },
+            {
+              "id": "train_s05",
+              "state_val": 5,
+              "action": 5,
+              "reward": 0.0
+            },
+            {
+              "id": "train_s06",
+              "state_val": 6,
+              "action": 7,
+              "reward": 1.0
+            },
+            {
+              "id": "train_s07",
+              "state_val": 7,
+              "action": 7,
+              "reward": 0.0
+            }
+          ],
+          "heldout_rows": [
+            {
+              "id": "held_s01",
+              "state_val": 1,
+              "action": 7,
+              "reward": 0.0
+            },
+            {
+              "id": "held_s03",
+              "state_val": 3,
+              "action": 7,
+              "reward": 0.0
+            },
+            {
+              "id": "held_s04",
+              "state_val": 4,
+              "action": 4,
+              "reward": 0.0
+            }
+          ]
+        },
+        "base_dtype": "torch.bfloat16",
+        "lora_compute_dtype": "torch.float32",
+        "policy_snapshot_mode": "frozen-base-shared",
+        "n_shared_tensors": 1972,
+        "n_copied_tensors": 2
+      },
+      "e2b_score": 0.2
+    },
+    "founder_likeness": {
+      "battery": "founder-likeness-v1-3-part-scripted-session",
+      "scorer_module": "ember_c_e2b_founder_likeness.score_founder_likeness_v1_leg",
+      "window_s": 300.0,
+      "owned_core_score": 1,
+      "e2b_score": 1,
+      "owned_elements": {
+        "probe": false,
+        "work_item": false,
+        "continuation": true
+      },
+      "e2b_elements": {
+        "probe": false,
+        "work_item": false,
+        "continuation": true
+      },
+      "owned_artifacts": {
+        "probe": {
+          "prompt": "What is the id and type of the newest event in your current harness log? Answer with exactly: <id> <type>",
+          "answer": "čĊ Ġinteger Ġper Ġline . txt \": Ġ\" ass istant \", Ġ\" message \": Ġ{\" role",
+          "current_tail_event": {
+            "id": "evt-0",
+            "type": "session_start"
+          }
+        },
+        "work_item": {
+          "prompt": "Emit a JSON object with exactly these fields and nothing else: {\"task\": \"founder_likeness_work_item\", \"status\": \"done\"}",
+          "answer": "\": Ġ\" icket icket icket icket icket icket icket icket icket icket icket icket icket icket",
+          "receipt_written": null
+        },
+        "continuation": {
+          "window_s": 300.0,
+          "before_count": 2,
+          "after_count": 3,
+          "new_entries": [
+            {
+              "id": "evt-2",
+              "type": "autonomous_tick"
+            }
+          ]
+        }
+      },
+      "e2b_artifacts": {
+        "probe": {
+          "prompt": "What is the id and type of the newest event in your current harness log? Answer with exactly: <id> <type>",
+          "answer": "I do not have access to a \"harness log.\" Please provide the log",
+          "current_tail_event": {
+            "id": "evt-3",
+            "type": "autonomous_tick"
+          }
+        },
+        "work_item": {
+          "prompt": "Emit a JSON object with exactly these fields and nothing else: {\"task\": \"founder_likeness_work_item\", \"status\": \"done\"}",
+          "answer": "```json\n{\n  \"task\": \"founder_likeness_work",
+          "receipt_written": null
+        },
+        "continuation": {
+          "window_s": 300.0,
+          "before_count": 5,
+          "after_count": 6,
+          "new_entries": [
+            {
+              "id": "evt-5",
+              "type": "autonomous_tick"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "matched_budget": {
+    "owned_arm": 12768.6,
+    "e2b_arm": 12768.6,
+    "unit": "wall_clock_cap_s (identical budget both arms; see the *_wall_clock_cap_s / *_train_steps breakdown below for the full matched-budget detail)",
+    "owned_arm_wall_clock_cap_s": 12768.6,
+    "e2b_arm_wall_clock_cap_s": 12768.6,
+    "owned_arm_train_steps": 1024,
+    "e2b_arm_train_steps": 1024,
+    "eval_task_ids": [
+      "train_s00",
+      "train_s02",
+      "train_s05",
+      "train_s06",
+      "train_s07",
+      "held_s01",
+      "held_s03",
+      "held_s04"
+    ],
+    "founder_likeness_continuation_window_s": 300
+  },
+  "owned_core_identity": {
+    "id": "cbase-v0:58e8e98916823941",
+    "checkpoint": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766 [path redacted for public-repo leak-gate: absolute local paths are never published; identity is proven by the adjacent sha256, not the path]",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "no_borrowed_weights": true,
+    "quantized": false,
+    "base_checkpoint_path": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766 [path redacted for public-repo leak-gate: absolute local paths are never published; identity is proven by the adjacent sha256, not the path]",
+    "base_model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
+  },
+  "e2b_reference": {
+    "model_id": "google/gemma-4-E2B-it",
+    "local_path": "models/gemma-4-E2B-it [path redacted for public-repo leak-gate: absolute local paths are never published; identity is proven by the adjacent sha256, not the path]",
+    "format": "safetensors (bf16 on disk)",
+    "size_bytes": 10246621918,
+    "provenance": "cached local copy on this machine (sibling repo the-search/models/gemma-4-E2B-it); the prior HF-hub cache copy (models--google--gemma-4-E2B-it) that the 2026-06-12 sp6c-e2b-shakedown receipts used has since been evicted from ~/.cache/huggingface/hub -- this is the same public checkpoint, no re-download, no network call in this script",
+    "weights_sha256": "2db5482b20d746879bb3ef79b5203e9075a2e2b98f54ec7c2f281c1477ddc550"
+  },
+  "protocol_frozen_ref": "docs/c-e2b-paired-protocol-freeze-20260703T072431Z.md",
+  "verdict": "measured_distance",
+  "remaining_gap": "ember_work: owned 0.400 > e2b 0.200 (surpassed); founder_likeness: owned 1.000 <= e2b 1.000 (gap 0.000)",
+  "receipt_type": "e2b_measured_distance",
+  "g_budget": {
+    "status": "GREEN",
+    "detail": "requested_run[ember-c-e2b-paired-run--live]: total_steps=1056, cost=2.39e+15 FLOPs (6*params*tokens estimate) vs micro-fit ceiling 2.431e+16 FLOPs (0.5% of the certified full-ladder FLOPs budget) -> FIT"
+  },
+  "requested_run": {
+    "source": "ember-c-e2b-paired-run--live",
+    "total_steps": 1056,
+    "params": 368354304,
+    "batch": 1,
+    "seq": 1024
+  },
+  "_derived_citation": {
+    "derived_ticket": "C-E2B-PAIRED-RUN-DERIVED",
+    "derived_ts": "2026-07-05T10:10:00Z",
+    "original_source_repo": "private engineering tree (internal, not published) -- distinct from this public ember-goalforge repo",
+    "original_source_relpath": "receipts/ember-c-e2b-paired-20260705T041045Z.json",
+    "original_source_sha256": "42879b94c6f7e06760b535cc74755a7d1f303db4045f72612dd3975bf48c75ae",
+    "reason": "GATE-0 terminal receipt was generated in the private engineering repository but the C-E2B board checker (test_c_e2b.py) only scans receipts/**/*e2b*.json under THIS repo root. This derived file reproduces the original receipt content VERBATIM at top level (byte-for-byte field values, none edited except the two absolute local filesystem paths noted below, redacted per this public repo's leak-gate structural invariant -- identity for both is still proven by the adjacent sha256 fields, unedited) plus this _derived_citation provenance block. The historical original at the source path above is never modified.",
+    "fields_redacted_for_leak_gate": [
+      "owned_core_identity.checkpoint",
+      "owned_core_identity.base_checkpoint_path",
+      "e2b_reference.local_path"
+    ]
+  }
+}

@@ -1,0 +1,328 @@
+{
+  "ticket": "PUBLICATION-GATE-CHECK",
+  "ts": "20260705T071930Z",
+  "kind": "gate",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "verdict": "FAIL",
+  "verdict_detail": "2/5 GREEN \u2014 gate CLOSED (publication-v1.md sec3)",
+  "chk_name": "check_publication_gate",
+  "spec_ref": "docs/spec/publication-v1.md sec3 (premature-publication gate); paper/claims-evidence-map.md rows 18/19/21; GOAL.md sec1b (research-focus test)",
+  "generator": {
+    "path": "scripts/check_publication_gate.py",
+    "sha256": "8442fc7e2bd0c0adc1f59758a318f741d61b3b352a8e37f542f5017a70e492e7"
+  },
+  "execution": {
+    "pid": 19636,
+    "host": "DESKTOPHH",
+    "start_ts": "2026-07-05T07:19:28Z",
+    "total_secs": 2.0051591000010376,
+    "model_load_secs": null,
+    "overhead_secs": null,
+    "overhead_pct": null
+  },
+  "inputs_sha": {
+    "args_fingerprint": "08fc7cd32729a972"
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "result": {
+    "conjuncts": {
+      "kernel_fired": {
+        "verdict": "RED",
+        "map_row": 21,
+        "reason": "no receipt found demonstrating the math-core sec9 flywheel-turn condition (dB/dround > 0 and G1_delta > 0) under a frozen kernel",
+        "evidence": {
+          "manifest_hits": [
+            "kernel-v1.0.manifest"
+          ],
+          "flywheel_turn_receipts": [],
+          "receipt_parse_errors": 1
+        }
+      },
+      "bootstrap_pass_real_world": {
+        "verdict": "RED",
+        "map_row": 18,
+        "reason": "2 BOOTSTRAP_PASS-shaped receipt(s) found, none qualify: receipts/bootstrap-falsifier-20260702T064130Z.json (synthetic markers ['ember_bootstrap_package', 'does_not_prove']); receipts/proof-threshold-sweep-20260702T065226Z.json (synthetic markers ['ember_impl', 'ember_engineering_contract', 'vendored_package'])",
+        "evidence": {
+          "bootstrap_pass_shaped_candidates": [
+            {
+              "path": "receipts/bootstrap-falsifier-20260702T064130Z.json",
+              "bootstrap_pass_fields": [
+                "positive_outer.outer_pass"
+              ],
+              "synthetic_markers_found": [
+                "ember_bootstrap_package",
+                "does_not_prove"
+              ],
+              "real_world_markers_found": [],
+              "max_param_count_found": null,
+              "qualifies_as_real_world_ge_1e6": false
+            },
+            {
+              "path": "receipts/proof-threshold-sweep-20260702T065226Z.json",
+              "bootstrap_pass_fields": [
+                "package_default_reconstruction_check.BOOTSTRAP_PASS_from_raw_cache",
+                "package_default_reconstruction_check.BOOTSTRAP_PASS_from_vendored_package_direct",
+                "honest_default_outer_metrics.BOOTSTRAP_PASS"
+              ],
+              "synthetic_markers_found": [
+                "ember_impl",
+                "ember_engineering_contract",
+                "vendored_package"
+              ],
+              "real_world_markers_found": [],
+              "max_param_count_found": null,
+              "qualifies_as_real_world_ge_1e6": false
+            }
+          ],
+          "qualifying_real_world_hits": [],
+          "receipt_parse_errors": 1,
+          "min_real_core_params": 1000000
+        }
+      },
+      "earned_growth_rung": {
+        "verdict": "RED",
+        "map_row": 19,
+        "reason": "no receipt with a growth-EARNED shape (kind:growth or an 'earned' block) found under receipts/",
+        "evidence": {
+          "growth_shaped_candidates": [],
+          "positive_earned_hits": [],
+          "receipt_parse_errors": 1
+        }
+      },
+      "claims_map_complete": {
+        "verdict": "GREEN",
+        "reason": "all rows compliant",
+        "evidence": {
+          "rows_checked": 26,
+          "per_row": [
+            {
+              "row": 1,
+              "strength": "PROVEN (synthetic)",
+              "status": "compliant",
+              "refs": {
+                "receipts/bootstrap-falsifier-*.json": true,
+                "paper/bootstrap/falsify_bootstrap_package_v1.py": true
+              }
+            },
+            {
+              "row": 2,
+              "strength": "PROVEN (synthetic)",
+              "status": "compliant",
+              "refs": {
+                "receipts/proof-threshold-sweep-20260702T065226Z.json": true
+              }
+            },
+            {
+              "row": 3,
+              "strength": "GROUNDED (lit-sweep)",
+              "status": "compliant",
+              "refs": {
+                "docs/grounding/self-improvement-2026.md": true
+              }
+            },
+            {
+              "row": 4,
+              "strength": "GROUNDED",
+              "status": "compliant_literature_only"
+            },
+            {
+              "row": 5,
+              "strength": "GROUNDED",
+              "status": "compliant_literature_only"
+            },
+            {
+              "row": 6,
+              "strength": "GROUNDED",
+              "status": "compliant",
+              "refs": {
+                "scripts/vbits.py": true
+              }
+            },
+            {
+              "row": 7,
+              "strength": "GROUNDED (open axis)",
+              "status": "compliant",
+              "refs": {
+                "__barefile__local-fm-2026.md": true
+              }
+            },
+            {
+              "row": 8,
+              "strength": "PROVEN (toy, in-repo) + receipted at real width",
+              "status": "compliant",
+              "refs": {
+                "scripts/proofs/growth_identity_check.py": true,
+                "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json": true,
+                "receipts/cgrow-run-20260628T062609Z/": true
+              }
+            },
+            {
+              "row": 9,
+              "strength": "LITERATURE ONLY",
+              "status": "compliant_literature_only"
+            },
+            {
+              "row": 10,
+              "strength": "DERIVED (receipt-anchored arithmetic)",
+              "status": "compliant",
+              "refs": {
+                "scripts/proofs/feasibility_bill.py": true
+              }
+            },
+            {
+              "row": 11,
+              "strength": "DERIVED + LITERATURE",
+              "status": "compliant_literature_only"
+            },
+            {
+              "row": 12,
+              "strength": "PROVEN (in-repo)",
+              "status": "compliant",
+              "refs": {
+                "receipts/ceff-composition-ab-20260703T111351Z.json": false,
+                "receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json": true,
+                "receipts/ceff-shatter-REPUDIATED-20260623T170000Z.json": true
+              }
+            },
+            {
+              "row": 13,
+              "strength": "PROVEN",
+              "status": "compliant",
+              "refs": {
+                "receipts/w1-floor-g1-base-20260610T215814Z.json": true
+              }
+            },
+            {
+              "row": 14,
+              "strength": "PROVEN",
+              "status": "compliant",
+              "refs": {
+                "__bare__t4-r1-q15-arc1-seed14-20260610T150153Z": true
+              }
+            },
+            {
+              "row": 15,
+              "strength": "PROVEN",
+              "status": "compliant",
+              "refs": {
+                "docs/spec/verifier-v1.md": true,
+                "receipts/v-extended-20260610T215421Z.json": true
+              }
+            },
+            {
+              "row": 16,
+              "strength": "LITERATURE (motivating)",
+              "status": "compliant_literature_only"
+            },
+            {
+              "row": 17,
+              "strength": "LITERATURE",
+              "status": "compliant_literature_only"
+            },
+            {
+              "row": 18,
+              "strength": "**ABSENT**",
+              "status": "exempt_absent"
+            },
+            {
+              "row": 19,
+              "strength": "**ABSENT**",
+              "status": "exempt_absent"
+            },
+            {
+              "row": 20,
+              "strength": "**ABSENT**",
+              "status": "exempt_absent"
+            },
+            {
+              "row": 21,
+              "strength": "**ABSENT** (spec complete)",
+              "status": "exempt_absent"
+            },
+            {
+              "row": 22,
+              "strength": "PROVEN",
+              "status": "compliant",
+              "refs": {
+                "receipts/proof-threshold-sweep-20260702T065226Z.json": true
+              }
+            },
+            {
+              "row": 23,
+              "strength": "PROVEN",
+              "status": "compliant",
+              "refs": {
+                "receipts/ember-c8-execution-binding/field-level-contribution-proof-20260703T081125Z.json": true
+              }
+            },
+            {
+              "row": 24,
+              "strength": "PROVEN",
+              "status": "compliant",
+              "refs": {
+                "receipts/cbase-grow-dryrun-20260702T190532Z.json": false,
+                "receipts/v0-live-import-edition-20260702T190633Z.json": true
+              }
+            },
+            {
+              "row": 25,
+              "strength": "PROVEN (as negatives)",
+              "status": "compliant",
+              "refs": {
+                "receipts/ember-c14-owned-run/live-20260703T141139Z-import-edition.json": true,
+                "paper/draft-v1/E-negative-results-appendix.md": true
+              }
+            },
+            {
+              "row": 26,
+              "strength": "PROVEN (dated)",
+              "status": "compliant",
+              "refs": {
+                "scripts/ember_totality/receipts-totality/ember-totality-20260703T124716Z.json": true
+              }
+            }
+          ],
+          "noncompliant": []
+        }
+      },
+      "research_focus_test": {
+        "verdict": "GREEN",
+        "reason": "all rows law-graded and primary claim class is law-grade",
+        "evidence": {
+          "rows_checked": 26,
+          "offending_law_grade": [],
+          "primary_class": {
+            "outline_k_labels": [
+              "K2",
+              "K4"
+            ],
+            "primary_rows": {
+              "K2": 4,
+              "K4": 5
+            },
+            "not_law_grade": [],
+            "instrument_accepted": [
+              {
+                "k_label": "K2",
+                "row": 4
+              },
+              {
+                "k_label": "K4",
+                "row": 5
+              }
+            ]
+          },
+          "frame_revision": {
+            "rows_checked": [],
+            "invalid": [],
+            "formal_object_names": [],
+            "law_grade_core_present": true
+          }
+        }
+      }
+    },
+    "overall_verdict": "RED",
+    "gate_state": "CLOSED 2/5"
+  }
+}
