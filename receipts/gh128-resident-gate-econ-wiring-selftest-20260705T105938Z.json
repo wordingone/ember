@@ -1,0 +1,40 @@
+{
+  "ticket": "GH-128-RESIDENT-GATE-ECON-WIRING-SELFTEST",
+  "ts": "20260705T105938Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "issue": 128,
+  "files_changed": [
+    "scripts/ember_resident_training_gate.py",
+    "scripts/test_ember_resident_training_gate_econ.py"
+  ],
+  "wiring_summary": "check_econ_gate (scripts/loop_econ_gate.py) is now unconditionally invoked inside build_gate_receipt as a PASS conjunct -- never gated behind an if status==\"PASS\" branch -- so a PASS with the econ leg unevaluated is impossible by construction. DT-6 fields (signal_per_gpu_hour, equal_wallclock_band, exceeds_band) are extracted from the resident-training receipt under evaluation (_extract_dt6_fields); missing fields resolve to an empty dict which check_econ_gate itself rejects by name (AC1). component_status[\"loop_econ_gate\"], invalid_codes, and a full loop_economics_gate_verdict are new receipt fields.",
+  "pytest_suite": "scripts/test_ember_resident_training_gate_econ.py",
+  "pytest_result_raw": "9 passed in 1.06s",
+  "pytest_test_names": [
+    "test_complete_dt6_fields_and_passing_econ_yields_pass",
+    "test_missing_dt6_field_blocks_and_names_it",
+    "test_missing_all_dt6_fields_blocks_and_names_all_three",
+    "test_failing_econ_values_blocks_as_within_floor",
+    "test_exceeds_band_false_blocks_even_with_signal_above_band",
+    "test_import_smoke_resolves_at_head",
+    "test_check_econ_gate_is_actually_invoked_on_a_pass",
+    "test_check_econ_gate_is_invoked_even_when_no_candidate_manifest",
+    "test_econ_gate_call_receives_the_extracted_fields"
+  ],
+  "internal_module_selftest": "python scripts/ember_resident_training_gate.py --selftest -> EMBER_RESIDENT_TRAINING_GATE_SELFTEST_PASS (refactored fixture builders build_fixture_repo/build_symbolic_candidate_base/build_valid_candidate_manifest extracted and reused by the pytest suite)",
+  "theater_regression_proof": "Same 9 tests copied into an isolated scratch dir alongside the PRE-FIX (git show HEAD, i.e. the version before this PR) ember_resident_training_gate.py: 8 of 9 FAILED (AttributeError: module has no attribute build_fixture_repo / check_econ_gate never invoked), 1 passed (import smoke, trivially true pre-fix too). Confirms these tests are load-bearing against the exact 067ac17-era theater class (check_econ_gate imported but never called) this issue closes.",
+  "newest_resident_training_gate_receipt_on_disk": {
+    "path": "receipts/ember-resident-training-gate/resident-training-gate-20260622T155000Z-blocked.json",
+    "ts": "20260622T150327Z",
+    "resident_training_gate_status": "BLOCKED",
+    "invalid_codes": [
+      "invalid_clean_room_harness_incomplete",
+      "real_reference_uiux_ax_observation_missing"
+    ],
+    "predates_econ_wiring": true,
+    "note": "No loop_econ_gate component_status key or loop_economics_gate_verdict key present in this receipt -- confirms the theater gap this PR closes (the econ leg did not exist in gate output at all before this wiring)."
+  },
+  "live_rerun_note": "PAPER_INDEX_DEFAULT is redacted to a placeholder path in this public workbench checkout and no real candidate manifest with genuine DT-6 fields is checked into this branch, so a live --out re-run against production defaults cannot be executed honestly from this environment. Per the issue: the gate must go honestly BLOCKED on real receipts lacking DT-6 fields rather than backfilling fields to force PASS -- that behavior is what the hermetic selftest + pytest suite above exercises and prove.",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}
