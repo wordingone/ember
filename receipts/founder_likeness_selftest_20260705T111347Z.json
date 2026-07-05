@@ -1,0 +1,24 @@
+{
+  "ticket": "FOUNDER_LIKENESS_SELFTEST",
+  "ts": "20260705T111347Z",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "test_results": {
+    "turn1_perfect": "PASS",
+    "turn1_wrong": "PASS",
+    "turn2_perfect": "PASS",
+    "turn2_wrong": "PASS",
+    "turn3_no_events": "PASS",
+    "full_integration": "PASS"
+  },
+  "arm_blindness_check": {
+    "grep_pattern": "(e2b|owned)",
+    "case_insensitive": false,
+    "matches_found": 0,
+    "status": "PASS"
+  },
+  "module": "scripts/ember_c_e2b_founder_likeness.py",
+  "interface_frozen": true,
+  "receipt_format": "per-arm score fields defined by paired-protocol specification",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
+}
