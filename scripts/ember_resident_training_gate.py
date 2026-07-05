@@ -415,6 +415,204 @@ ALLOWED_FLOOR_DISPOSITIONS = {"used_now", "preserved_trigger_gated", "blocked_wi
 FORBIDDEN_FLOOR_DISPOSITION_WORDS = {"archival", "archived", "killed", "irrelevant", "later", "covered by fp16", "covered_by_fp16"}
 
 
+def parse_floor_contract_manifest(
+    floor_path: Path,
+) -> tuple[dict[str, dict[str, str | None]] | None, list[str]]:
+    """Parse floor-contract.md and build manifest from actual rows.
+
+    Returns (manifest_dict, errors) where manifest_dict is keyed by row component name
+    and contains {source_file, source_hash, disposition, launch_vehicle_impact, trigger,
+    pilot, kill_promote_condition, evidence_path}. Missing fields get UNDECLARED-IN-DOC.
+
+    FAIL-CLOSED: returns (None, errors) if doc missing/unparseable/zero rows.
+    """
+    errors: list[str] = []
+
+    if not floor_path.exists():
+        errors.append("floor_contract.missing")
+        return None, errors
+
+    try:
+        content = floor_path.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        errors.append(f"floor_contract.read_error: {str(e)}")
+        return None, errors
+
+    if not content.strip():
+        errors.append("floor_contract.empty")
+        return None, errors
+
+    # Parse markdown tables: split by |, strip whitespace
+    def parse_md_table(text: str) -> list[list[str]] | None:
+        """Parse a markdown table and return rows (list of cell lists)."""
+        lines = [line.strip() for line in text.split("\n") if line.strip().startswith("|")]
+        if len(lines) < 3:  # need at least header, separator, one data row
+            return None
+
+        rows = []
+        for line in lines:
+            cells = [cell.strip() for cell in line.split("|")]
+            cells = [c for c in cells if c]  # remove empty cells from | at start/end
+            if cells:
+                rows.append(cells)
+        return rows if len(rows) >= 3 else None  # header, separator, data
+
+    # Find "What v0 already carries" section and extract its table
+    invehicle_match = re.search(
+        r"## What v0 already carries.*?\n(.*?)(?=\n##|\Z)",
+        content,
+        re.DOTALL | re.IGNORECASE,
+    )
+
+    # Find "Deferral rows" section and extract its table
+    deferral_match = re.search(
+        r"## Deferral rows.*?\n(.*?)(?=\n##|\Z)",
+        content,
+        re.DOTALL | re.IGNORECASE,
+    )
+
+    manifest: dict[str, dict[str, str | None]] = {}
+
+    # Parse in-vehicle components (floor components IN the launch vehicle)
+    if invehicle_match:
+        invehicle_section = invehicle_match.group(1)
+        invehicle_rows = parse_md_table(invehicle_section)
+
+        if invehicle_rows and len(invehicle_rows) >= 3:
+            header = invehicle_rows[0]
+
+            def find_col_idx(header: list[str], names: list[str]) -> int | None:
+                for i, cell in enumerate(header):
+                    if any(name.lower() in cell.lower() for name in names):
+                        return i
+                return None
+
+            comp_idx = find_col_idx(header, ["Component"])
+            surface_idx = find_col_idx(header, ["v0 surface", "surface"])
+            evidence_idx = find_col_idx(header, ["Evidence"])
+
+            data_rows = invehicle_rows[2:]
+            for row in data_rows:
+                if not row or all(not cell.strip() for cell in row):
+                    continue
+
+                component = row[comp_idx].strip() if comp_idx is not None and comp_idx < len(row) else None
+                if not component:
+                    continue
+
+                surface = row[surface_idx].strip() if surface_idx is not None and surface_idx < len(row) else "UNDECLARED-IN-DOC"
+                evidence = row[evidence_idx].strip() if evidence_idx is not None and evidence_idx < len(row) else "UNDECLARED-IN-DOC"
+
+                manifest[component] = {
+                    "source_file": "docs/ember-floor-contract.md",
+                    "source_hash": _sha256(floor_path),
+                    "disposition": "used_now",  # IN-vehicle components are currently used
+                    "launch_vehicle_impact": surface,
+                    "trigger": "model construction and launch",
+                    "pilot": evidence,
+                    "kill_promote_condition": "cannot be silently removed",
+                    "evidence_path": "docs/ember-floor-contract.md",
+                }
+
+    # Parse deferral rows
+    if not deferral_match:
+        errors.append("floor_contract.deferral_section_missing")
+        return None, errors if not manifest else (manifest, errors)
+
+    deferral_section = deferral_match.group(1)
+    deferral_rows = parse_md_table(deferral_section)
+
+    if not deferral_rows or len(deferral_rows) < 3:
+        errors.append("floor_contract.deferral_rows_unparseable_or_empty")
+        return (manifest, errors) if manifest else (None, errors)
+
+    # Header row (first row)
+    header = deferral_rows[0]
+
+    # Expected columns: Component, Why deferred, Receipt-producing pilot, Revision trigger, Owner, Status, Kill/promote
+    # Find column indices (case-insensitive)
+    def find_col_idx(header: list[str], names: list[str]) -> int | None:
+        for i, cell in enumerate(header):
+            if any(name.lower() in cell.lower() for name in names):
+                return i
+        return None
+
+    comp_idx = find_col_idx(header, ["Component"])
+    why_idx = find_col_idx(header, ["Why deferred"])
+    pilot_idx = find_col_idx(header, ["Receipt-producing pilot", "pilot"])
+    trigger_idx = find_col_idx(header, ["Revision trigger", "trigger"])
+    owner_idx = find_col_idx(header, ["Owner"])
+    status_idx = find_col_idx(header, ["Status"])
+    kill_idx = find_col_idx(header, ["Kill", "promote"])
+
+    # Data rows (skip header and separator)
+    data_rows = deferral_rows[2:]
+
+    if not data_rows and not manifest:
+        errors.append("floor_contract.deferral_rows_empty")
+        return None, errors
+
+    for row_idx, row in enumerate(data_rows):
+        if not row or all(not cell.strip() for cell in row):
+            continue  # skip empty rows
+
+        component = row[comp_idx].strip() if comp_idx is not None and comp_idx < len(row) else None
+        if not component:
+            continue
+
+        # Map table columns to manifest fields
+        why_deferred = (
+            row[why_idx].strip() if why_idx is not None and why_idx < len(row) else "UNDECLARED-IN-DOC"
+        )
+        pilot = row[pilot_idx].strip() if pilot_idx is not None and pilot_idx < len(row) else "UNDECLARED-IN-DOC"
+        trigger = (
+            row[trigger_idx].strip() if trigger_idx is not None and trigger_idx < len(row) else "UNDECLARED-IN-DOC"
+        )
+        status = row[status_idx].strip() if status_idx is not None and status_idx < len(row) else "UNDECLARED-IN-DOC"
+        kill_promote = (
+            row[kill_idx].strip() if kill_idx is not None and kill_idx < len(row) else "UNDECLARED-IN-DOC"
+        )
+
+        # Map status to disposition
+        disposition = _map_status_to_disposition(status)
+
+        manifest[component] = {
+            "source_file": "docs/ember-floor-contract.md",
+            "source_hash": _sha256(floor_path),
+            "disposition": disposition,
+            "launch_vehicle_impact": why_deferred,
+            "trigger": trigger,
+            "pilot": pilot,
+            "kill_promote_condition": kill_promote,
+            "evidence_path": "docs/ember-floor-contract.md",
+        }
+
+    if not manifest:
+        errors.append("floor_contract.deferral_rows_no_valid_rows")
+        return None, errors
+
+    return manifest, errors
+
+
+def _map_status_to_disposition(status: str) -> str:
+    """Map floor contract status to manifest disposition."""
+    status_lower = status.lower()
+
+    # RE-STAGED, ADOPT -> preserved_trigger_gated (has a trigger/pilot, will be executed)
+    if any(x in status_lower for x in ["re-staged", "adopt", "pilot"]):
+        return "preserved_trigger_gated"
+
+    # SKIP-with-receipt, WATCHING -> preserved_trigger_gated (gated by condition)
+    if any(x in status_lower for x in ["skip", "watching"]):
+        return "preserved_trigger_gated"
+
+    # Default for undeclared
+    if status == "UNDECLARED-IN-DOC":
+        return "UNDECLARED-IN-DOC"
+
+    return "preserved_trigger_gated"
+
+
 def build_floor_contract_manifest(floor_sha: str | None, nc2_sha: str | None) -> dict[str, dict[str, str | None]]:
     def row(
         *,
@@ -494,6 +692,11 @@ def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
     nc2_text = read_required(nc2_path, "nc2_component_contract")
     train_text = read_required(train_path, "train_multimodal")
 
+    # Parse floor contract manifest from actual doc (FAIL-CLOSED)
+    parsed_manifest, parse_errors = parse_floor_contract_manifest(floor_path)
+    errors.extend(parse_errors)
+    nc2_present = nc2_path.exists()
+
     floor_rows = _marker_status(
         floor_text,
         {
@@ -569,6 +772,9 @@ def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
             for key in ("BitNet/1.58-bit", "SDEK/GDN", "MLA/KV", "iGRPO/GRPO", "FP8", "MoE", "DiffusionGemma")
             if key in floor_rows
         },
+        "parsed_floor_contract_manifest": parsed_manifest,
+        "nc2_component_contract_present": nc2_present,
+        "floor_contract_manifest_parse_status": "PASS" if parsed_manifest and not parse_errors else "BLOCKED",
         "required_floor_contract_manifest": build_floor_contract_manifest(
             _sha256(floor_path) if floor_path.exists() else None,
             _sha256(nc2_path) if nc2_path.exists() else None,
