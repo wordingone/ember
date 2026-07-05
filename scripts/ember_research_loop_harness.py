@@ -271,6 +271,7 @@ def write_research_loop_receipt(
 
 def main() -> int:
     import argparse
+    from datetime import datetime, timezone
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--selftest", action="store_true")
@@ -288,6 +289,15 @@ def main() -> int:
         import ember_research_loop_harness_selftest
 
         return ember_research_loop_harness_selftest.main()
+
+    # Guard: check C14 RESIDENT_TRAINING_GATE_PASS precondition before launch
+    try:
+        import loop_launch_guard
+        repo = Path.cwd().resolve()
+        loop_launch_guard.guard_loop_launch(repo, datetime.now(timezone.utc))
+    except RuntimeError as e:
+        print(f"Loop launch blocked by precondition guard: {e}", file=__import__("sys").stderr)
+        return 2
 
     required = [args.admission_receipt, args.arm_a_solution, args.arm_b_solution, args.arm_c_solution, args.out]
     if not all(required):
