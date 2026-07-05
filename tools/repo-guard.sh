@@ -56,8 +56,25 @@ if [ -n "${REPO_GUARD_NAMES:-}" ]; then
 elif [ -f tools/.repo-guard-denylist ]; then
   NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
 fi
-if [ -z "$NAMES" ]; then
-  printf 'skip [names] no denylist (set REPO_GUARD_NAMES or tools/.repo-guard-denylist) — structural checks still enforced\n'
+if [ -z "$NAMES" ] && [ ! -f tools/.repo-guard-denylist.sha256 ]; then
+  printf 'skip [names] no denylist (set REPO_GUARD_NAMES, tools/.repo-guard-denylist, or tools/.repo-guard-denylist.sha256) — structural checks still enforced\n'
+elif [ -f tools/.repo-guard-denylist.sha256 ] && [ -z "$NAMES" ]; then
+  # Hashed denylist mode: extract names from comments in the denylist, then check for them
+  # Format: <hash>  <name-comment> — extract the names from the comment field for efficient checking
+  # Only extract from lines that have a 64-character hash followed by whitespace and a name
+  NAMES="$(grep -E '^[a-f0-9]{64}[[:space:]]+[a-z]' tools/.repo-guard-denylist.sha256 2>/dev/null | awk '{print $NF}' | paste -sd '|' -)"
+
+  if [ -z "$NAMES" ]; then
+    printf 'skip [names] hashed denylist is empty — structural checks still enforced\n'
+  else
+    # Check tracked files for these names (case-insensitive)
+    if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist.sha256' >/tmp/rg_names_hashed 2>/dev/null && [ -s /tmp/rg_names_hashed ]; then
+      fail "names" "operator names (hashed denylist) in tracked files"
+      sed 's/^/      /' /tmp/rg_names_hashed | head -20
+    else
+      ok "names" "none found (hashed denylist)"
+    fi
+  fi
 else
   if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
     fail "names" "operator names in tracked files"
