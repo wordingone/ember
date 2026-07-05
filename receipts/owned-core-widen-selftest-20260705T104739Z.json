@@ -1,0 +1,36 @@
+{
+  "ticket": "OWNED-CORE-WIDEN-SELFTEST",
+  "ts": "2026-07-05T10:47:39.546790+00:00Z",
+  "scope": "TDD tests for CPU-preparable owned-core LoRA rank expansion (issue #125)",
+  "test_suite": "tests/test_owned_core_widen.py",
+  "tests_passed": [
+    "test_config_loads: config parses as valid JSON, specifies correct architecture",
+    "test_param_count_arithmetic: target rank=34 produces trainable_params=1,122,816 >= 1.1e6",
+    "test_d7_guard_spec: D7 dual-layer guards (run-start assert, receipt semantic check) properly specified",
+    "test_function_preservation_cpu_harness: CPU synthetic core expansion preserves logits (fp_diff=0.0 <= 1e-4)"
+  ],
+  "test_results": {
+    "param_count": 1122816,
+    "target_rank": 34,
+    "source_rank": 8,
+    "growth_factor": 4.25,
+    "function_preservation_max_abs_diff": 0.0,
+    "function_preservation_tolerance": 0.0001,
+    "all_tests_passed": true
+  },
+  "deliverables": {
+    "config_file": "configs/owned-core-widen-config.json",
+    "widen_operator_code": "scripts/owned_core_widen_operator.py (implementation follows TDD tests)",
+    "tests_file": "tests/test_owned_core_widen.py",
+    "pr_branch": "feat/owned-core-widen-prep"
+  },
+  "guards_verified": {
+    "D7_layer1_run_start_assert": "trainable_param_count >= 1000000 -- PASS (1122816 >= 1000000)",
+    "D7_layer2_receipt_semantic_check": "accept if >= 1000000, reject if < 1000000 -- PASS"
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "device": "cpu",
+  "computation": "Pure Python math + torch CPU ops (no GPU, no network, no paid APIs)",
+  "verdict": "OWNED_CORE_WIDEN_SELFTEST_PASS"
+}

@@ -1,0 +1,86 @@
+{
+  "ticket": "OWNED-CORE-WIDEN-PREP",
+  "description": "CPU-preparable config for function-preserving LoRA rank expansion (244K → ≥1.1e6 params)",
+  "deviation_from_issue_125": {
+    "reason": "Issue #125 premise was incorrect (spec author dated correction 2026-07-05 in #132 comment): 244K is NOT the full core size (1e8), but the TRAINABLE SURFACE (LoRA rank-8 on head layer). D7 guard binds trainable_param_count; the cure is trainable-surface expansion (LoRA rank 8→34), not core FF-widening.",
+    "mechanism_change": "Spec said 'FF-widening'; ground truth requires 'LoRA rank expansion' (function-preserving via zero-init on new B rows)",
+    "everything_else_stands": "D7 dual-layer acceptance, preservation receipt, smoke episode, CPU-prep-then-GPU sequencing unchanged",
+    "reference_comment": "https://github.com/wordingone/ember/issues/125#issuecomment-*"
+  },
+  "version": "1.0",
+  "date_created": "2026-07-05",
+  "config_updated": "2026-07-05 (fixed path, added deviation disclosure)",
+  "source_owned_core": {
+    "checkpoint_ref": "models/cbase-smoke-run/checkpoints/step-00000610",
+    "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+    "checkpoint_note": "repo-relative path; sha256 is the identity binding",
+    "arch": {
+      "hidden": 1024,
+      "layers": 20,
+      "heads": 16,
+      "vocab": 32000,
+      "seq": 1024,
+      "intermediate": 4096,
+      "n_mtp_heads": 2
+    },
+    "trainable_params_current": 264192,
+    "trainable_mechanism": "LoRA on head layer",
+    "lora_config_current": {
+      "target_layer": "head",
+      "rank": 8,
+      "n_trainable_params": 264192
+    }
+  },
+  "widen_operator": {
+    "mechanism": "LoRA rank expansion (function-preserving initialization)",
+    "target_rank": 34,
+    "target_trainable_params": 1122816,
+    "param_calculation": "rank * (hidden_dim + vocab_size) = 34 * (1024 + 32000) = 34 * 33024 = 1,122,816",
+    "margin_over_floor": "1.122816e6 / 1.0e6 = 1.1228 (12.28% above 1.0e6 floor, 2.28% above 1.1e6 gate)",
+    "initialization_strategy": {
+      "description": "Function-preserving LoRA expansion via structured re-initialization",
+      "lora_A_init": "Xavier uniform (matches standard LoRA init)",
+      "lora_B_init": "zeros (so expanded part has zero contribution at start, matching parent behavior)",
+      "preservation_proof": "Parent LoRA has low-rank structure; expanding with zero-init on new entries preserves forward pass exactly at step 0, allowing stabilization to find safe growth path"
+    }
+  },
+  "function_preservation_spec": {
+    "method": "CPU float32 test on pinned owned-corpus batch",
+    "tolerance_logit_max_abs_diff": 1e-4,
+    "test_batch_size": 1,
+    "test_seq_length": 32,
+    "note": "Identical to rung-1 precedent (receipts/cbase-grow-live/ smoke tests)"
+  },
+  "stabilization_recipe": {
+    "source_precedent": "rung-1 stabilization from receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json",
+    "steps": "To be computed at dispatch (fixed-FLOPs budget from rung-1 precedent)",
+    "batch_size": 16,
+    "seq_length": 1024,
+    "optimizer": "SGD (matching owned-core smoke baseline)",
+    "learning_rate": 0.01,
+    "margin_assert": "VRAM free-margin check (owned-core CPU-only, no GPU constraint at widen stage)"
+  },
+  "guards": {
+    "D7_layer1_run_start_assert": "trainable_param_count >= 1000000",
+    "D7_layer2_receipt_semantic_check": "accept if trainable_param_count >= 1000000; reject if < 1000000",
+    "function_preservation_check": "logit max-abs-diff <= 1e-4 on fixed batch before stabilization",
+    "lineage_preservation": "parent core sha -> widened core sha (net2net-style tracking, no borrowed weights)"
+  },
+  "acceptance_criteria": {
+    "param_count": "trainable_param_count >= 1,000,000 (D7 binding)",
+    "function_preservation": "logit max-abs-diff <= 1e-4 on pinned batch (rung-1 standard)",
+    "config_loads": "Config parses, specifies valid architecture, no contradictions",
+    "cpu_harness_test": "Cheap CPU test on tiny synthetic core (same code path, passes fp tolerance)"
+  },
+  "deliverables": {
+    "cpu_stage": {
+      "config_file": "config/owned-core-widen-config.json (spec: rank 8→34, param-count, preservation strategy)",
+      "tests_file": "tests/test_owned_core_widen.py (param-count arithmetic, D7 guards, config-loads, cpu function-preservation harness)",
+      "selftest_receipt": "receipts/owned-core-widen-selftest-*.json (api_spend_usd: 0.0, all tests pass)"
+    },
+    "gpu_stage": {
+      "widen_operator_code": "scripts/owned_core_widen_operator.py (TDD-test-driven impl: rank-expansion with zero-init-B preservation, param-count assert, lineage fields) — to be built in GPU stage dispatch",
+      "note": "Operator is GPU-stage work (loads checkpoint, applies rank expansion, verifies preservation, tracks lineage shas)"
+    }
+  }
+}
