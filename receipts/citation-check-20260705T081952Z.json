@@ -1,0 +1,567 @@
+{
+  "tool": "check_goal_citations",
+  "version": 4,
+  "timestamp": "20260705T081952Z",
+  "repo_root": "ember-goalforge (this repo root)",
+  "cross_tree_root": null,
+  "sources_scanned": [
+    "GOAL.md",
+    "docs/PROBLEMS.md",
+    "docs/spec/anti-gaming-contract-v1.md",
+    "docs/spec/architecture-organism-v1.md",
+    "docs/spec/autonomy-relinquishment-ladder-v1.md",
+    "docs/spec/bootstrap-v1.md",
+    "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+    "docs/spec/c-scale-s2-token-bill-protocol.md",
+    "docs/spec/c-scale-s3-compute-protocol-v1.md",
+    "docs/spec/c0-incident-cure-contract.md",
+    "docs/spec/c10-disposition-execution-map.md",
+    "docs/spec/c14-b1-closure-plan-v1.md",
+    "docs/spec/c14-owned-core-resident-run-v1.md",
+    "docs/spec/c8-claim-ladder.md",
+    "docs/spec/c8-preregistration-v1.md",
+    "docs/spec/ceff-lever-ladder.md",
+    "docs/spec/conditions-v1.md",
+    "docs/spec/curriculum-dataset-v1.md",
+    "docs/spec/data-engineering-v1.md",
+    "docs/spec/deployment-release-v1.md",
+    "docs/spec/e2b-paired-protocol-v1.md",
+    "docs/spec/energy-law-theory-v1.md",
+    "docs/spec/energy-law-v1.md",
+    "docs/spec/engineering-contracts-v1.md",
+    "docs/spec/error-assimilation-v1.md",
+    "docs/spec/evaluation-v1.md",
+    "docs/spec/execution-workflow-v1.md",
+    "docs/spec/experimentation-v1.md",
+    "docs/spec/feasibility-envelope-v1.md",
+    "docs/spec/growth-v1.md",
+    "docs/spec/h0-residual-lever-prereg-v1.md",
+    "docs/spec/inference-serving-v1.md",
+    "docs/spec/judge-admission-v1.md",
+    "docs/spec/learner-resident-v1.md",
+    "docs/spec/math-core-v1.md",
+    "docs/spec/milestones-v1.md",
+    "docs/spec/ocal-calibration-validity-v1.md",
+    "docs/spec/oid-b1-design-v1.md",
+    "docs/spec/operator-acceptance-v1.md",
+    "docs/spec/operator-independence-v1.md",
+    "docs/spec/optimizer-v1.md",
+    "docs/spec/publication-v1.md",
+    "docs/spec/publishability-adjudication-v1.md",
+    "docs/spec/receipts-v1.md",
+    "docs/spec/reproducibility-v1.md",
+    "docs/spec/rung2-grow-spec-v1.md",
+    "docs/spec/training-v1.md",
+    "docs/spec/verifier-v1.md",
+    "docs/spec/w1-token-collapse-control-v1.md",
+    "docs/spec/w2-scale-preregistration-v1.md",
+    "docs/spec/w2-transition-receipt-v1.md",
+    "docs/spec/world-environment-v1.md"
+  ],
+  "checked": 756,
+  "missing": [],
+  "documented_absent": [
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "receipts/ceff-RESOLVED-20260628T051500Z.json",
+      "marker": "verified absent",
+      "line": 98
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "docs/ember-anatomy/",
+      "marker": "absent as of\n2026-07-01**",
+      "line": 136
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "receipts/ember-anatomy/",
+      "marker": "absent as of\n2026-07-01**",
+      "line": 137
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260624.json",
+      "marker": "absent as of 2026-07-01",
+      "line": 132
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/ceff-composition-ab-20260703T111351Z.json",
+      "marker": "absent as of 2026-07-03",
+      "line": 264
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "scripts/cbase_grow_dryrun.py",
+      "marker": "absent as of 2026-07-03",
+      "line": 87
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "scripts/cbase_grow_live.py",
+      "marker": "absent as of 2026-07-03",
+      "line": 164
+    },
+    {
+      "doc": "docs/spec/c-scale-s2-token-bill-protocol.md",
+      "ref": "docs/spec/c-scale-s2-token-bill-protocol-v1.md",
+      "marker": "absent as of\n2026-07-03;",
+      "line": 9
+    },
+    {
+      "doc": "docs/spec/c-scale-s2-token-bill-protocol.md",
+      "ref": "scripts/cbase_grow_dryrun.py",
+      "marker": "absent as of 2026-07-03",
+      "line": 160
+    },
+    {
+      "doc": "docs/spec/c-scale-s2-token-bill-protocol.md",
+      "ref": "scripts/cbase_grow_live.py",
+      "marker": "absent as of 2026-07-03",
+      "line": 160
+    },
+    {
+      "doc": "docs/spec/conditions-v1.md",
+      "ref": "docs/ENTRY-MAP.md",
+      "marker": "not yet built",
+      "line": 304
+    },
+    {
+      "doc": "docs/spec/deployment-release-v1.md",
+      "ref": "scripts/validate_operator_acceptance.py",
+      "marker": "TO\nBUILD",
+      "line": 116
+    },
+    {
+      "doc": "docs/spec/engineering-contracts-v1.md",
+      "ref": "receipts/ember-cockpit-live-surface1/2026-06-28T03-00-39Z/",
+      "marker": "verified absent",
+      "line": 217
+    },
+    {
+      "doc": "docs/spec/engineering-contracts-v1.md",
+      "ref": "scripts/proofs/engineering_contracts_check.py",
+      "marker": "absent as of 2026-07-01",
+      "line": 339
+    },
+    {
+      "doc": "docs/spec/error-assimilation-v1.md",
+      "ref": "receipts/ember-mvp/c11-exp/",
+      "marker": "build target",
+      "line": 187
+    },
+    {
+      "doc": "docs/spec/evaluation-v1.md",
+      "ref": "docs/spec/evaluation-suite-manifest-v1.json",
+      "marker": "TO BUILD",
+      "line": 101
+    },
+    {
+      "doc": "docs/spec/inference-serving-v1.md",
+      "ref": "receipts/ember-cockpit-live-surface1/2026-06-28T03-00-39Z/",
+      "marker": "verified absent",
+      "line": 156
+    },
+    {
+      "doc": "docs/spec/publication-v1.md",
+      "ref": "paper/submission/",
+      "marker": "verified absent",
+      "line": 254
+    },
+    {
+      "doc": "docs/spec/receipts-v1.md",
+      "ref": "receipts/ceff-RESOLVED-20260628T051500Z.json",
+      "marker": "verified absent",
+      "line": 168
+    },
+    {
+      "doc": "docs/spec/world-environment-v1.md",
+      "ref": "scripts/swe_sandbox.py",
+      "marker": "not yet built",
+      "line": 91
+    },
+    {
+      "doc": "docs/spec/world-environment-v1.md",
+      "ref": "scripts/w1_swe.py",
+      "marker": "not yet built",
+      "line": 88
+    }
+  ],
+  "stale_absent_marker": [
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "paper/bootstrap/",
+      "marker": "absent as of",
+      "line": 277
+    },
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "scripts/ember_totality/",
+      "marker": "absent as of",
+      "line": 277
+    },
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "scripts/proofs/",
+      "marker": "absent as of",
+      "line": 277
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "docs/spec/milestones-v1.md",
+      "marker": "absent as of",
+      "line": 10
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "receipts/proof-feasibility-20260702T064430Z.json",
+      "marker": "TO BUILD",
+      "line": 243
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "receipts/proof-frontier-protocol-20260702T065351Z.json",
+      "marker": "TO BUILD",
+      "line": 242
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "receipts/proof-threshold-sweep-20260702T065226Z.json",
+      "marker": "TO BUILD",
+      "line": 243
+    },
+    {
+      "doc": "docs/spec/architecture-organism-v1.md",
+      "ref": "scripts/ember_tally_checks.py",
+      "marker": "absent as of",
+      "line": 139
+    },
+    {
+      "doc": "docs/spec/bootstrap-v1.md",
+      "ref": "receipts/bootstrap-falsifier-20260702T064130Z.json",
+      "marker": "build target",
+      "line": 28
+    },
+    {
+      "doc": "docs/spec/c-scale-s2-token-bill-protocol.md",
+      "ref": "docs/spec/conditions-v1.md",
+      "marker": "build target",
+      "line": 8
+    },
+    {
+      "doc": "docs/spec/c-scale-s2-token-bill-protocol.md",
+      "ref": "scripts/check_goal_citations.py",
+      "marker": "build target",
+      "line": 8
+    },
+    {
+      "doc": "docs/spec/c-scale-s3-compute-protocol-v1.md",
+      "ref": "scripts/ember_c_scale_s3_producer.py",
+      "marker": "build target",
+      "line": 100
+    },
+    {
+      "doc": "docs/spec/c0-incident-cure-contract.md",
+      "ref": "receipts/ember-process-incident-dispositions/",
+      "marker": "not yet built",
+      "line": 220
+    },
+    {
+      "doc": "docs/spec/curriculum-dataset-v1.md",
+      "ref": "baseline/scripts/check_near_dup_stopping_rule.py",
+      "marker": "TO BUILD",
+      "line": 286
+    },
+    {
+      "doc": "docs/spec/data-engineering-v1.md",
+      "ref": "receipts/assembly-sha-as-manifest-adjudication-20260702T162500Z.json",
+      "marker": "TO BUILD",
+      "line": 111
+    },
+    {
+      "doc": "docs/spec/data-engineering-v1.md",
+      "ref": "scripts/check_goal_citations.py",
+      "marker": "TO BUILD",
+      "line": 9
+    },
+    {
+      "doc": "docs/spec/deployment-release-v1.md",
+      "ref": "scripts/manifest_sha.py",
+      "marker": "TO BUILD",
+      "line": 140
+    },
+    {
+      "doc": "docs/spec/energy-law-theory-v1.md",
+      "ref": "scripts/check_energy_law_theory.py",
+      "marker": "TO BUILD",
+      "line": 10
+    },
+    {
+      "doc": "docs/spec/energy-law-theory-v1.md",
+      "ref": "scripts/check_goal_citations.py",
+      "marker": "TO BUILD",
+      "line": 9
+    },
+    {
+      "doc": "docs/spec/energy-law-v1.md",
+      "ref": "scripts/econ_pass.py",
+      "marker": "TO BUILD",
+      "line": 275
+    },
+    {
+      "doc": "docs/spec/energy-law-v1.md",
+      "ref": "scripts/joules.py",
+      "marker": "TO BUILD",
+      "line": 232
+    },
+    {
+      "doc": "docs/spec/energy-law-v1.md",
+      "ref": "scripts/vbits.py",
+      "marker": "TO BUILD",
+      "line": 231
+    },
+    {
+      "doc": "docs/spec/engineering-contracts-v1.md",
+      "ref": "scripts/joules.py",
+      "marker": "absent as of",
+      "line": 122
+    },
+    {
+      "doc": "docs/spec/error-assimilation-v1.md",
+      "ref": "docs/spec/curriculum-dataset-v1.md",
+      "marker": "TO BUILD",
+      "line": 210
+    },
+    {
+      "doc": "docs/spec/error-assimilation-v1.md",
+      "ref": "scripts/proofs/error_assimilation_pipeline_test.py",
+      "marker": "TO BUILD",
+      "line": 9
+    },
+    {
+      "doc": "docs/spec/evaluation-v1.md",
+      "ref": "scripts/check_goal_citations.py",
+      "marker": "TO BUILD",
+      "line": 133
+    },
+    {
+      "doc": "docs/spec/evaluation-v1.md",
+      "ref": "scripts/proofs/contamination_verbatim_check.py",
+      "marker": "TO BUILD",
+      "line": 133
+    },
+    {
+      "doc": "docs/spec/evaluation-v1.md",
+      "ref": "scripts/proofs/split_construction_check.py",
+      "marker": "TO BUILD",
+      "line": 133
+    },
+    {
+      "doc": "docs/spec/evaluation-v1.md",
+      "ref": "scripts/receipt_semantic_check.py",
+      "marker": "build target",
+      "line": 111
+    },
+    {
+      "doc": "docs/spec/experimentation-v1.md",
+      "ref": "scripts/proofs/adversarial_cadence_check.py",
+      "marker": "TO BUILD",
+      "line": 172
+    },
+    {
+      "doc": "docs/spec/inference-serving-v1.md",
+      "ref": "docs/goal-archive/GOAL-20260630-pre-goalforge.md",
+      "marker": "verified absent",
+      "line": 155
+    },
+    {
+      "doc": "docs/spec/math-core-v1.md",
+      "ref": "receipts/proof-threshold-sweep-20260702T065226Z.json",
+      "marker": "build target",
+      "line": 367
+    },
+    {
+      "doc": "docs/spec/ocal-calibration-validity-v1.md",
+      "ref": "receipts/proof-ocal-sweep-20260702T094209Z.json",
+      "marker": "TO BUILD",
+      "line": 120
+    },
+    {
+      "doc": "docs/spec/ocal-calibration-validity-v1.md",
+      "ref": "scripts/proofs/ocal_calibration_sweep.py",
+      "marker": "TO BUILD",
+      "line": 119
+    },
+    {
+      "doc": "docs/spec/operator-acceptance-v1.md",
+      "ref": "scripts/receipt_check.py",
+      "marker": "build target",
+      "line": 75
+    },
+    {
+      "doc": "docs/spec/operator-acceptance-v1.md",
+      "ref": "scripts/receipt_semantic_check.py",
+      "marker": "build target",
+      "line": 75
+    },
+    {
+      "doc": "docs/spec/operator-independence-v1.md",
+      "ref": "scripts/check_goal_citations.py",
+      "marker": "TO BUILD",
+      "line": 12
+    },
+    {
+      "doc": "docs/spec/optimizer-v1.md",
+      "ref": "docs/fp44-multimodal-optimizer-decision.md",
+      "marker": "absent as of",
+      "line": 108
+    },
+    {
+      "doc": "docs/spec/optimizer-v1.md",
+      "ref": "scripts/c04_optimizer_pick.py",
+      "marker": "Not yet built",
+      "line": 247
+    },
+    {
+      "doc": "docs/spec/publication-v1.md",
+      "ref": "paper/bootstrap/falsify_bootstrap_package_v1.py",
+      "marker": "TO BUILD",
+      "line": 159
+    },
+    {
+      "doc": "docs/spec/publication-v1.md",
+      "ref": "scripts/check_publication_gate.py",
+      "marker": "verified absent",
+      "line": 251
+    },
+    {
+      "doc": "docs/spec/reproducibility-v1.md",
+      "ref": "scripts/proofs/",
+      "marker": "TO BUILD",
+      "line": 253
+    },
+    {
+      "doc": "docs/spec/reproducibility-v1.md",
+      "ref": "scripts/proofs/placement_9p_bleed_probe.py",
+      "marker": "TO BUILD",
+      "line": 254
+    },
+    {
+      "doc": "docs/spec/training-v1.md",
+      "ref": "docs/spec/growth-v1.md",
+      "marker": "TO BUILD",
+      "line": 156
+    },
+    {
+      "doc": "docs/spec/training-v1.md",
+      "ref": "scripts/proofs/feasibility_bill.py",
+      "marker": "TO BUILD",
+      "line": 249
+    },
+    {
+      "doc": "docs/spec/verifier-v1.md",
+      "ref": "scripts/proofs/verifier_surface_coverage.py",
+      "marker": "TO BUILD",
+      "line": 254
+    },
+    {
+      "doc": "docs/spec/w2-transition-receipt-v1.md",
+      "ref": "scripts/w2_transition_probe.py",
+      "marker": "build target",
+      "line": 124
+    },
+    {
+      "doc": "docs/spec/world-environment-v1.md",
+      "ref": "receipts/t4-r1-q15-arc1-seed14-20260610T150153Z.json",
+      "marker": "absent as of",
+      "line": 45
+    }
+  ],
+  "cross_tree": [],
+  "wrap_joined": [
+    {
+      "doc": "GOAL.md",
+      "ref": "docs/spec/curriculum-",
+      "joined": "docs/spec/curriculum-dataset-v1.md",
+      "line": 230
+    },
+    {
+      "doc": "GOAL.md",
+      "ref": "docs/spec/learner-",
+      "joined": "docs/spec/learner-resident-v1.md",
+      "line": 236
+    },
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "baseline/cli-goal-",
+      "joined": "baseline/cli-goal-mode-baseline-v0.md",
+      "line": 4
+    },
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "docs/c11-experience-",
+      "joined": "docs/c11-experience-horizon-spec.md",
+      "line": 109
+    },
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "receipts/gate-stats-346-",
+      "joined": "receipts/gate-stats-346-20260612T202900Z.json",
+      "line": 158
+    },
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "scripts/ember_resident_gate_",
+      "joined": "scripts/ember_resident_gate_conflation_audit.py",
+      "line": 101
+    },
+    {
+      "doc": "docs/spec/anti-gaming-contract-v1.md",
+      "ref": "scripts/receipt_",
+      "joined": "scripts/receipt_semantic_check.py",
+      "line": 301
+    },
+    {
+      "doc": "docs/spec/energy-law-v1.md",
+      "ref": "receipts/ceff-closure-gate9-shatter-",
+      "joined": "receipts/ceff-closure-gate9-shatter-bf16ns5-20260623T132000Z.json",
+      "line": 81
+    },
+    {
+      "doc": "docs/spec/energy-law-v1.md",
+      "ref": "receipts/ceff-shatter-REPUDIATED-",
+      "joined": "receipts/ceff-shatter-REPUDIATED-20260623T170000Z.json",
+      "line": 80
+    },
+    {
+      "doc": "docs/spec/energy-law-v1.md",
+      "ref": "receipts/fp39-",
+      "joined": "receipts/fp39-density-power-audit-20260613T051216Z.json",
+      "line": 264
+    },
+    {
+      "doc": "docs/spec/engineering-contracts-v1.md",
+      "ref": "docs/ledger-schema-",
+      "joined": "docs/ledger-schema-v3.md",
+      "line": 150
+    },
+    {
+      "doc": "docs/spec/verifier-v1.md",
+      "ref": "docs/hardest-problems-",
+      "joined": "docs/hardest-problems-register-v1.md",
+      "line": 207
+    }
+  ],
+  "allowlisted": 0,
+  "templated_skipped": 66,
+  "allowlist_malformed_lines": 0,
+  "anchor_checked": 49,
+  "anchor_missing": [],
+  "anchor_suppressed": 0,
+  "row_id_checked": 28,
+  "row_id_missing": [],
+  "row_id_map_rows_found": 26,
+  "row_id_map_error": null,
+  "pass": true
+}

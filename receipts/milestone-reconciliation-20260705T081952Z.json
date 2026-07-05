@@ -1,0 +1,16 @@
+{
+  "ticket": "milestone-reconciliation",
+  "ts": "20260705T081952Z",
+  "mapped": 55,
+  "unmapped": [],
+  "lattice_diff": [],
+  "floor_contract_gaps": [],
+  "inputs": {
+    "docs/ember-completeness.md": "goalforge",
+    "docs/PROBLEMS.md": "goalforge",
+    "docs/problems-meta.yaml": "goalforge",
+    "docs/spec/milestones-v1.md": "goalforge",
+    "docs/ember-floor-contract.md": "goalforge"
+  },
+  "exit": "PASS"
+}
