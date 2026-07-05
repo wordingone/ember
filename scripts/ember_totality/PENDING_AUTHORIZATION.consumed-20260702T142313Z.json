@@ -1,0 +1,18 @@
+{
+ "authorizing_reference": "docs/goalforge-debate-ledger.md R11 row (2026-07-02, commit a3b11c2): salvage-verified lane-14 repair pass built by chk-repair-2 before the host crash; R11 salvage leg verdict: 18/18 controls pass (14 existing intact + 4 new), both probes RED live, diff matches the ordered spec incl. the traced-necessary _goal_files_for(nc_root) fixture-isolation change; NEG-fixture false-GREEN claims hand-trace-confirmed against pre-repair logic.",
+ "changes": [
+  {
+   "file": "test_c_obs.py",
+   "reason": "repair 1 -- evidence-surface scoping: positive-evidence scan for conjuncts (a)-(d) restricted to receipts/, ledger/, baseline/ subtrees and non-.py files, so requirement DESCRIPTIONS in docs/spec can no longer satisfy evidence checks; INVALID_TOKENS negative scan stays tree-wide; RED live (invalid_observatory_not_user_runnable + synthetic_only)."
+  },
+  {
+   "file": "test_c_manifest.py",
+   "reason": "repair 2 -- tolerant sec-4 condition-id separators (--, em/en-dash, colon, bold-close) + tolerant headings + fail-closed floor: parsed denominator <20 prints RED denominator-implausibly-small instead of proceeding (kills the fail-open denominator shrink); goal-file candidates resolved via _goal_files_for(nc_root) so fixture controls actually isolate; RED live (12/27 unmanifested, denominator 27)."
+  },
+  {
+   "file": "chk_controls/run_controls.py",
+   "reason": "+4 fixture controls (pos/neg per repair; NEG fixtures demonstrate the pre-repair code would false-GREEN); 18/18 total."
+  }
+ ],
+ "baseline_ref": "a3b11c2247a9240f079439eb59c0b49ea8ce33e1"
+}

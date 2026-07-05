@@ -1,0 +1,366 @@
+{
+ "authorizing_reference": "docs/goalforge-debate-ledger.md rows: OPERATOR-INDEPENDENCE DIRECTIVE ABSORBED AS C-IND + R13 + C-IND BOARD WIRING LANDED (2026-07-02, commits 382b48c/a241072/eb17dac/8994a00); operator directive 2026-07-02 (proof surface / standalone operability)",
+ "baseline_ref": "83ac6bf",
+ "changes": [
+  {
+   "file": "GOAL.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "baseline/scripts/check_near_dup_stopping_rule.py",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/ember-completeness.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/goalforge-debate-ledger.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/goalforge-operator-brief.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/goalforge-validation-report.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/operator/README.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/spec/anti-gaming-contract-v1.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/spec/conditions-v1.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/spec/engineering-contracts-v1.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/spec/math-core-v1.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/spec/operator-acceptance-v1.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "docs/spec/operator-independence-v1.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/adversarial-cadence-check-20260702T153418Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T153138Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T153150Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T153200Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T153225Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T153754Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T154007Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T154509Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T154519Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T154544Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T154706Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T155139Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/near-dup-stopping-rule-check-20260702T153121Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "receipts/split-construction-check-20260702T153740Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/README.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/baseline.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/cockpit.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/customize.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/error-assimilation.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/experiment-reproduction.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/federation.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/growth.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/harness.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/interact.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/ledger.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/operate-launch.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/operate-resume.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/operate-teardown.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/publication.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/resident-learner.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/docs/operator/worlds-and-verifiers.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/click-to-evidence-note.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind1-interact-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind3-launch-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind3-resume-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind3-teardown-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind4-customize-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind4-experiment-reproduction-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind5-a-attested-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/ember-operator-independence/ind5-s-checkable-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/membrane-note.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/proofpack-note.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_neg/receipts/worldstate-binding-note.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/README.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/baseline.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/cockpit.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/customize.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/error-assimilation.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/experiment-reproduction.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/federation.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/growth.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/harness.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/interact.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/ledger.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/operate-launch.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/operate-resume.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/operate-teardown.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/publication.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/resident-learner.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/docs/operator/worlds-and-verifiers.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/click-to-evidence-note.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind1-interact-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind3-launch-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind3-resume-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind3-teardown-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind4-customize-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind4-experiment-reproduction-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind5-a-attested-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/ember-operator-independence/ind5-s-checkable-20990101T000000Z.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/membrane-note.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/proofpack-note.json",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/fixtures/c_ind_pos/receipts/worldstate-binding-note.md",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/run_controls.py",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/ember_totality_spec.py",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/ember_totality/test_c_ind.py",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/proofs/adversarial_cadence_check.py",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  },
+  {
+   "file": "scripts/proofs/split_construction_check.py",
+   "reason": "C-IND absorption + R13 v1.1 hardening + board wiring + round-5 build-queue landing (see authorizing ledger rows)"
+  }
+ ]
+}

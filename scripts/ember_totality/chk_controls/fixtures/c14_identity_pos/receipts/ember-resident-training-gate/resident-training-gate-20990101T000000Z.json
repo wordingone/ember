@@ -1,0 +1,16 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "ts": "20990101T000000Z",
+  "verdict": "RESIDENT_TRAINING_GATE_PASS",
+  "resident_training_gate_status": "PASS",
+  "invalid_codes": [],
+  "errors": [],
+  "clean_room_harness_identity": {
+    "full_avir_cli_parity_receipt": {
+      "real_avir_uiux_ax_observation_receipt": {
+        "sha256": "60ced0a081857524adf428be5ca121c2f9e2d5e3dc5ad5a525bf76241e3294d9"
+      }
+    }
+  }
+}

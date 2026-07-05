@@ -1,0 +1,147 @@
+{
+  "receipt_type": "ember_totality_board",
+  "ts": "20260702T091332Z",
+  "rows": [
+    {
+      "condition": "C-EFF",
+      "status": "RED",
+      "reason": "RED C-EFF: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C-BASE",
+      "status": "RED",
+      "reason": "RED C-BASE: receipts dir absent at B:\\M\\ember-goalforge\\kai-converge\\receipts (nothing to satisfy the CHK)"
+    },
+    {
+      "condition": "C-PORT",
+      "status": "RED",
+      "reason": "RED C-PORT: kai-converge root not found under any known WSL mount (tried ['B:\\\\M\\\\ember-goalforge\\\\kai-converge'])"
+    },
+    {
+      "condition": "C-FED",
+      "status": "RED",
+      "reason": "RED C-FED: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C-GROW",
+      "status": "RED",
+      "reason": "RED C-GROW: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C-ORGANISM",
+      "status": "RED",
+      "reason": "RED C-ORGANISM: receipts dir absent at B:\\M\\ember-goalforge\\kai-converge\\receipts (nothing to satisfy the CHK)"
+    },
+    {
+      "condition": "C(-1)",
+      "status": "RED",
+      "reason": "RED C(-1): kai-converge root not found under any known WSL mount (['B:\\\\M\\\\ember-goalforge\\\\kai-converge']) -> cannot inspect state"
+    },
+    {
+      "condition": "C0",
+      "status": "RED",
+      "reason": "RED C0: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C1",
+      "status": "RED",
+      "reason": "RED C1: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C2",
+      "status": "RED",
+      "reason": "RED C2: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C3",
+      "status": "RED",
+      "reason": "RED no d3-native-loop receipt dir at B:\\M\\ember-goalforge\\kai-converge\\receipts\\ember-d3-native-loop (C3 budget artifact absent)"
+    },
+    {
+      "condition": "C4",
+      "status": "RED",
+      "reason": "RED no resident-training receipts found under B:\\M\\ember-goalforge\\kai-converge\\receipts\\ember-resident-training-gate (C4 before/after artifact absent)"
+    },
+    {
+      "condition": "C5",
+      "status": "RED",
+      "reason": "RED no resident-training-gate receipt dir at B:\\M\\ember-goalforge\\kai-converge\\receipts\\ember-resident-training-gate"
+    },
+    {
+      "condition": "C6",
+      "status": "RED",
+      "reason": "RED no receipts dir at B:\\M\\ember-goalforge\\kai-converge\\receipts"
+    },
+    {
+      "condition": "C7",
+      "status": "RED",
+      "reason": "RED C7: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C8",
+      "status": "RED",
+      "reason": "RED C8: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C9",
+      "status": "RED",
+      "reason": "RED kai-converge root not found at any known path (tried ['B:\\\\M\\\\ember-goalforge\\\\kai-converge'])"
+    },
+    {
+      "condition": "C10",
+      "status": "RED",
+      "reason": "RED C10: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C11",
+      "status": "RED",
+      "reason": "RED C11: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C12",
+      "status": "RED",
+      "reason": "RED C12: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C13",
+      "status": "RED",
+      "reason": "RED C13: kai-converge root not found under any known WSL mount"
+    },
+    {
+      "condition": "C14",
+      "status": "RED",
+      "reason": "RED C14: kai-converge root not found under any known WSL mount (['B:\\\\M\\\\ember-goalforge\\\\kai-converge']) -> cannot inspect state"
+    },
+    {
+      "condition": "C15",
+      "status": "RED",
+      "reason": "RED kai-converge checkout not found under any of ['B:\\\\M\\\\ember-goalforge\\\\kai-converge']; cannot inspect any C15 receipt"
+    },
+    {
+      "condition": "C-OBS",
+      "status": "RED",
+      "reason": "RED kai-converge state root not found on any of /mnt/b, /b, B: \u2014 cannot inspect real receipts"
+    },
+    {
+      "condition": "C-ANAT",
+      "status": "RED",
+      "reason": "RED C-ANAT: repo root absent at B:\\M\\ember-goalforge\\kai-converge (nothing to satisfy the CHK)"
+    },
+    {
+      "condition": "C-MANIFEST",
+      "status": "RED",
+      "reason": "RED kai-converge root not found at any known path (tried ['B:\\\\M\\\\ember-goalforge\\\\kai-converge'])"
+    },
+    {
+      "condition": "C-TALLY",
+      "status": "RED",
+      "reason": "RED no tally-*.json receipt exists under B:\\M\\ember-goalforge\\kai-converge\\receipts"
+    }
+  ],
+  "summary": {
+    "total": 27,
+    "green": 0,
+    "red": 27,
+    "pct_green": 0.0
+  }
+}

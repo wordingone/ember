@@ -1,0 +1,20 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "receipt_class": "IND-5",
+  "leg": "s_checkable",
+  "organism_component_docs": {
+    "worlds_and_verifiers": "docs/operator/worlds-and-verifiers.md",
+    "ledger": "docs/operator/ledger.md",
+    "resident_learner": "docs/operator/resident-learner.md",
+    "growth_operator": "docs/operator/growth.md",
+    "harness_self_edits": "docs/operator/harness.md",
+    "observatory_cockpit": "docs/operator/cockpit.md",
+    "error_assimilation": "docs/operator/error-assimilation.md",
+    "federation": "docs/operator/federation.md",
+    "baseline_packet": "docs/operator/baseline.md",
+    "publication": "docs/operator/publication.md"
+  },
+  "single_entry_path": "docs/operator/README.md",
+  "no_dead_links": true
+}

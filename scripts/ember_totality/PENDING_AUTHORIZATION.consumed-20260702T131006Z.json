@@ -1,0 +1,18 @@
+{
+  "authorizing_reference": "docs/goalforge-debate-ledger.md lane-14 hardening pass rows (R9 defect-3 fix, consume-on-use + git cross-check composition ordered by lead)",
+  "baseline_ref": "231943b",
+  "changes": [
+    {
+      "file": "scripts/ember_totality/ember_totality_spec.py",
+      "reason": "NOT a hardening target: protocol completion - consume-on-use (builder) + git cross-check graft (lead); self-enumerated so the protocol edit doesn't ride its own authorization"
+    },
+    {
+      "file": "scripts/ember_totality/receipts-totality/**",
+      "reason": "NOT a hardening target: append-only board receipts"
+    },
+    {
+      "file": "scripts/ember_totality/PENDING_AUTHORIZATION.consumed-**",
+      "reason": "NOT a hardening target: consumed-authorization artifacts (protocol output)"
+    }
+  ]
+}

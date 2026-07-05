@@ -1,0 +1,11 @@
+{
+  "kind": "device_portability_probe",
+  "device": "NVIDIA RTX 4090",
+  "forward_pass": {
+    "no_crash": true
+  },
+  "governor": {
+    "total_gib": 24.0,
+    "ember_vram_fraction": 0.9
+  }
+}

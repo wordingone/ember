@@ -1,0 +1,10 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "receipt_class": "IND-3",
+  "leg": "launch",
+  "doc_pointer": "docs/operator/operate-launch.md",
+  "documented_command": "ember-cli --start (fixture)",
+  "governed_vram_fraction_respected": true,
+  "generator": "fixture-harness"
+}

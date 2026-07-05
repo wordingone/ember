@@ -1,0 +1,13 @@
+{
+  "device": "simulated 3090-class (Ampere, sm_86, non-4090 profile)",
+  "forward_pass": {
+    "no_crash": true
+  },
+  "governor": {
+    "total_gib": 24.0,
+    "ember_vram_fraction": 0.9
+  },
+  "throughput_basis": "device-relative roofline-derived threshold",
+  "fp8_note": "fp8 path gated on sm>=89; bf16 fallback used for sm<89",
+  "note": "governor change is tighten only, never loosen the 4090 floor"
+}

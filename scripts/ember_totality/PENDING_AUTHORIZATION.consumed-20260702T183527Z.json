@@ -1,0 +1,17 @@
+{
+  "authorizing_reference": "docs/spec/engineering-contracts-v1.md sec 9 repair contract + docs/spec/milestones-v1.md sec C + GOAL.md sec 4.1 ('the CHK registry must cover ALL sec-4 conditions ... closing that gap is milestone work') -- repair toward already-accepted spec text as of the clear anchor defcc562 (GOAL.md sec 12 clear-to-fire window). The board itself carried the debt marker: 'no probe script implements C-SCALE/C-E2B ... closing this gap is tracked separately, milestones sec C'.",
+  "changes": [
+    {
+      "file": "scripts/ember_totality/test_c_scale.py",
+      "reason": "NEW probe closing the C-SCALE gap: enforces the registry CHK verbatim (operating point >3e9, W1/W2 compute-collapse blocks with RE-DERIVED ratios, C8 deletion linkage, working-set-within-floor); renders honest RED apex-absent on the live tree; UNEVALUABLE reserved for env-failure only."
+    },
+    {
+      "file": "scripts/ember_totality/test_c_e2b.py",
+      "reason": "NEW probe closing the C-E2B gap: paired-both-legs numeric surpass at matched budget, unborrowed+unquantized identity, protocol frozen-before-verdict (in-tree ref, ts-ordered); measured-distance receipts render RED-with-gap (condition is SURPASS, not report); renders honest RED on the live tree (3 old shakedown receipts correctly rejected)."
+    },
+    {
+      "file": "scripts/ember_totality/chk_controls/run_controls.py",
+      "reason": "lane-14 pos/neg controls for both new probes (separate builder per the CHK-adequacy authorship-separation contract): 24/24 controls PASS including all 20 pre-existing; NEG fixtures isolate the ratio-re-derivation tooth (C-SCALE) and single-leg-surpass rejection (C-E2B)."
+    }
+  ]
+}

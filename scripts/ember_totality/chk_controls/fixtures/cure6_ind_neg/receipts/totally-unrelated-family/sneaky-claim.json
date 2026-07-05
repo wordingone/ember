@@ -1,0 +1,12 @@
+{
+  "receipt_class": "IND-1",
+  "documented_boot_command": "ember-cli --interactive (decoy)",
+  "doc_pointer": "docs/operator/interact.md",
+  "rendered_frame_evidence": {
+    "screen_capture_path": "decoy-frame.png",
+    "prompt_turn_rendered": true
+  },
+  "clean_exit": true,
+  "matrix_complete": true,
+  "matrix_missing": []
+}

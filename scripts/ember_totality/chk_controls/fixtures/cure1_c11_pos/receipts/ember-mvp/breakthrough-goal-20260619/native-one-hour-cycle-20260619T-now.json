@@ -1,0 +1,27 @@
+{
+  "ticket": "EMBER-C11-NATIVE-DURATION-CYCLE",
+  "ts": "20990101T000000Z",
+  "milestone": "1-hour",
+  "target_seconds": 3600.0,
+  "active_work": {
+    "active_seconds": 3700.0,
+    "inherited_active_seconds": 0.0,
+    "this_run_active_seconds": 3700.0,
+    "wall_seconds": 3705.0
+  },
+  "sleep_padding_seconds": 0,
+  "why_not_artificial_delay": "fixture: no time.sleep call, every second is real measured work",
+  "load_bearing_duration_growth": {
+    "deeper_experiment_horizon": true,
+    "larger_heldout_surface": true,
+    "stronger_consolidation": true,
+    "broader_transfer_reuse_checks": true,
+    "active_capacity_growth": true
+  },
+  "deletion_ablation": {
+    "degrades_decision": true,
+    "deleted_selected_next_action": {
+      "disallowed": true
+    }
+  }
+}

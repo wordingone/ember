@@ -1,0 +1,33 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "verdict": "SYNTHETIC_RESIDENT_TRAINING_GATE_PASS",
+  "resident_training_gate_status": "PASS",
+  "resident_training_candidate": {
+    "per_task_rows": [
+      {
+        "task_id": "synthetic_task_1",
+        "a_score": 0.0,
+        "b_score": 0.3,
+        "b_template": "instruction_only",
+        "c_score": 1.0,
+        "c_selected_template": "eval_script_recursive",
+        "best_reward_table": [
+          {
+            "template": "instruction_only",
+            "reward": 0.3
+          },
+          {
+            "template": "eval_script_recursive",
+            "reward": 1.0
+          }
+        ]
+      }
+    ],
+    "pre_neural_parameter_hash": "sha256:d45b8ddbd7dab6b88bf6e43a28b4fd22d78f7c8b1d0686e04bb7cb84f37d50d5",
+    "post_neural_parameter_hash": "sha256:41abfa43dec757bb1f107d2db76d1f14978c2614b984f84c358cbe2ff80a835e",
+    "policy_update_trace_path": "B:\\M\\ember-goalforge\\scripts\\ember_totality\\chk_controls\\fixtures\\_off_tree_resident_c4c5_neg\\synthetic_policy_update_trace.json",
+    "policy_update_trace_sha256": "73c4f4a3d5e6dc6b85ca65ab7c6a478af826315f25125518689488ebfa1e2401",
+    "scoring_command": "python synthetic_score.py"
+  }
+}

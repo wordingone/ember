@@ -1,0 +1,16 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "verdict": "PASS",
+  "operator_constants_hash": "cd32c6bcd96cbc2ffd71db331a56056b2a3892033882017fc92ac8b29e91055f",
+  "held_out_slices": [
+    1,
+    2
+  ],
+  "degenerate_slice": [
+    0
+  ],
+  "proves_load_bearing": true,
+  "real_trained_pass_rate": 0.85,
+  "real_deleted_pass_rate": 0.1
+}

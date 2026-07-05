@@ -1,0 +1,5 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "finding": "spot-verify: probe scan detected the literal string 'invalid_unapproved_egress' quoted inside a receipt's text; this audit report quotes the token as a finding description, it does not commit the violation"
+}

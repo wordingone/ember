@@ -1,0 +1,30 @@
+{
+ "authorizing_reference": "docs/goalforge-debate-ledger.md row: C-MANIFEST CURED GREEN (2026-07-02, commit b4ad346) - 12 pre-existing absences manifested + U+2212 row-id parser repair (LANE-14 REPAIR 2b)",
+ "baseline_ref": "903269c",
+ "changes": [
+  {
+   "file": "docs/ember-completeness.md",
+   "reason": "C-MANIFEST cure: honest manifest rows + symmetric parser repair (ledger row b4ad346)"
+  },
+  {
+   "file": "docs/goalforge-debate-ledger.md",
+   "reason": "C-MANIFEST cure: honest manifest rows + symmetric parser repair (ledger row b4ad346)"
+  },
+  {
+   "file": "docs/spec/conditions-v1.md",
+   "reason": "C-MANIFEST cure: honest manifest rows + symmetric parser repair (ledger row b4ad346)"
+  },
+  {
+   "file": "docs/spec/milestones-v1.md",
+   "reason": "C-MANIFEST cure: honest manifest rows + symmetric parser repair (ledger row b4ad346)"
+  },
+  {
+   "file": "receipts/citation-check-20260702T155952Z.json",
+   "reason": "C-MANIFEST cure: honest manifest rows + symmetric parser repair (ledger row b4ad346)"
+  },
+  {
+   "file": "scripts/ember_totality/test_c_manifest.py",
+   "reason": "C-MANIFEST cure: honest manifest rows + symmetric parser repair (ledger row b4ad346)"
+  }
+ ]
+}

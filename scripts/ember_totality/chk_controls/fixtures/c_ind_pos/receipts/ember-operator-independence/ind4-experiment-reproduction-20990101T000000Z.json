@@ -1,0 +1,10 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "receipt_class": "IND-4",
+  "leg": "experiment_reproduction",
+  "doc_pointer": "docs/operator/experiment-reproduction.md",
+  "banked_receipt_ref": "receipts/fixture-banked-20990101T000000Z.json",
+  "fresh_receipt_ref": "receipts/fixture-fresh-20990101T000200Z.json",
+  "within_tolerance": true
+}

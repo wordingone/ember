@@ -1,0 +1,25 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "ts": "20990101T010000Z",
+  "external_task_source": {
+    "source_url": "https://huggingface.co/datasets/osunlp/D3-Gym",
+    "dataset": "osunlp/D3-Gym"
+  },
+  "fresh_rows_sha256": "b2cdd404b2992ecfec962d1183e5a4bb34d34d4d06091c595f8c598d94a47ae0",
+  "fresh_rows_path": "C:\\tmp\\synthetic\\frozen-rows.json",
+  "per_task_rows": [
+    {
+      "task_id": "synthetic_task_1",
+      "split": "heldout",
+      "arm_predictions": {
+        "C": {
+          "policy": "resident_eval_script_recursive",
+          "artifacts": [
+            "SECRET_GOLD_VALUE_42 leaked verbatim in output"
+          ]
+        }
+      }
+    }
+  ]
+}
