@@ -4,7 +4,7 @@
 // bundle=Y
 
 import { stat, readFile, readdir } from "fs/promises";
-import { join, dirname, basename } from "path";
+import { join, dirname, basename, isAbsolute } from "path";
 import { z } from "zod";
 import { buildTool, type ToolUseContext } from "../core/tool-interface.ts";
 
@@ -37,7 +37,7 @@ function isUncPath(p: string): boolean {
   return p.startsWith("\\\\") || p.startsWith("//");
 }
 
-function resolveFilePath(p: string): string {
+function resolveFilePath(p: string, cwd: string): string {
   if (p === "~" || p.startsWith("~/") || p.startsWith("~\\")) {
     const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "";
     p = home + p.slice(1);
@@ -45,6 +45,14 @@ function resolveFilePath(p: string): string {
   p = p.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, braced: string, bare: string) => {
     return process.env[braced ?? bare] ?? "";
   });
+  // issue #182: the Read tool's contract says "always use absolute paths", but
+  // a relative path here previously fell through to Node's implicit
+  // resolution against the real process.cwd() (the launch cwd) instead of
+  // the agent's resolved repo root — join it against the resolved cwd
+  // defensively rather than trusting every caller to comply.
+  if (!isAbsolute(p)) {
+    p = join(cwd, p);
+  }
   return p;
 }
 
@@ -192,7 +200,7 @@ async function readFile_(
   input: { file_path: string; limit?: number; offset?: number; pages?: string },
   ctx: ToolUseContext,
 ): Promise<ReadOutput> {
-  const resolvedPath = resolveFilePath(input.file_path);
+  const resolvedPath = resolveFilePath(input.file_path, ctx.cwd ?? process.cwd());
 
   if (isUncPath(resolvedPath)) {
     return {

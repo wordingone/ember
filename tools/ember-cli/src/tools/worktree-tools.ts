@@ -265,7 +265,7 @@ export const EnterWorktreeTool = buildTool<EnterWorktreeInput, unknown>({
     }
 
     const state = context.getAppState() as Record<string, unknown>;
-    const originalCwd = (state["cwd"] as string | undefined) ?? process.cwd();
+    const originalCwd = context.cwd ?? (state["cwd"] as string | undefined) ?? process.cwd();
 
     // --- Enter existing worktree by path ---
     if (args.path) {

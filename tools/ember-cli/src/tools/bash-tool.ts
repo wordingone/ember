@@ -121,6 +121,7 @@ async function executeCommand(
   command: string,
   timeout: number,
   abortSignal: AbortSignal,
+  cwd: string,
 ): Promise<ExecResult> {
   return new Promise((resolve) => {
     const stdoutChunks: Buffer[] = [];
@@ -129,7 +130,7 @@ async function executeCommand(
 
     const proc = spawn("cmd.exe", ["/c", command], {
       env: process.env,
-      cwd: process.cwd(),
+      cwd,
       shell: false,
     });
 
@@ -223,7 +224,7 @@ async function runBash(
   if (!disableBackground) {
     let bgTaskId: string | undefined;
     const startTime = Date.now();
-    const result = await executeCommand(command, timeout, ctx.abortController.signal);
+    const result = await executeCommand(command, timeout, ctx.abortController.signal, ctx.cwd ?? process.cwd());
     const elapsed = Date.now() - startTime;
     const stdoutBuf = result.stdout;
     const isImage = detectImageOutput(stdoutBuf);
@@ -248,7 +249,7 @@ async function runBash(
       ...(isImage ? { isImage: true } : {}),
     };
   } else {
-    const result = await executeCommand(command, timeout, ctx.abortController.signal);
+    const result = await executeCommand(command, timeout, ctx.abortController.signal, ctx.cwd ?? process.cwd());
     const stdoutBuf = result.stdout;
     const isImage = detectImageOutput(stdoutBuf);
     let stdout = isImage ? "[binary image output]" : stdoutBuf.toString("utf-8");

@@ -652,6 +652,7 @@ export class QueryEngine {
         maxBudgetUsd: this.config.maxBudgetUsd,
       },
       abortController,
+      cwd: this.config.cwd ?? process.cwd(),
       getAppState: this.config.getAppState,
       setAppState: this.config.setAppState,
       setAppStateForTasks: (updater) => {
