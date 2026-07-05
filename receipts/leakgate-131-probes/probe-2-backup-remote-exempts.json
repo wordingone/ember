@@ -1,0 +1,17 @@
+{
+  "ts": "2026-07-05T14:01:37Z",
+  "probe": "probe-2-backup-remote-exempts",
+  "description": "Push to backup remote with forbidden term should PASS with NAME scan SKIPPED",
+  "remote": "backup",
+  "push_url": "file:////tmp/fake-backup",
+  "canonical_backup_url": "file:////tmp/fake-backup",
+  "urls_match": true,
+  "gate_verdict": "ok [backup-exemption] + ok [names] SKIPPED",
+  "names_check_executed": false,
+  "names_check_skipped": true,
+  "exemption_applied": true,
+  "exemption_log": "2026-07-05T14:01:37Z backup-remote exemption applied",
+  "mechanism": "hardcoded CANONICAL_BACKUP_URL constant, exact-match check passes, NAME scan skipped",
+  "proof": "same FORBIDDEN_TERM_FOR_TESTING in test.md; public and unknown remotes fail on names check; backup remote skips it",
+  "passed": true
+}
