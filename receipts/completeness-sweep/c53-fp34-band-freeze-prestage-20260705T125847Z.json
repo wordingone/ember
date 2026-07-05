@@ -1,0 +1,42 @@
+{
+  "ticket": "C53",
+  "ts": "20260705T125847Z",
+  "description": "fp-34 owned-band chain pre-stage: band-freeze + selftest ready",
+  "status": "PARTIAL_PRESTAGE",
+  "band_specification": {
+    "protocol": "fp-34 band-owned (frozen 2026-06-12)",
+    "predicate": "band_owned(t) := s_r1(t) > 0 AND laplace_phat(s_r1(t), n_r1(t)) <= 0.5",
+    "bars": {
+      "ratio": 1.5,
+      "permutation_p": 0.05,
+      "shuffles": 10000,
+      "seed": 19
+    },
+    "lineage": "fp-21b prong-A DORMANT, fp-34 re-instantiated",
+    "freeze_rule": "computed ONCE from round-1 receipts via fp34_band_owned.py freeze"
+  },
+  "executable_path": "scripts/fp34_band_owned.py",
+  "executable_commands": [
+    "freeze",
+    "verdict",
+    "--selftest"
+  ],
+  "output_receipt_paths": [
+    "receipts/fp34-band-manifest-<ts>.json",
+    "receipts/fp34-bandtransfer-<ts>.json"
+  ],
+  "selftest_status": "READY_TO_EXECUTE",
+  "selftest_coverage": [
+    "predicate boundary cases",
+    "seed-19 determinism",
+    "shared-machinery import (fp15_bandtransfer)"
+  ],
+  "depends_on": {
+    "round1_sampling_receipt": "REQUIRED for band freeze (not yet available — current job 12c050e7 mid-pretrain)"
+  },
+  "successor": {
+    "fp35": "prediction -> policy (fires on prong-A PREDICTIVE)"
+  },
+  "deployment_note": "Band-freeze is pre-stageable (all inputs available or derivable); selftest can run standalone to verify logic; full freeze awaits round-1 receipt.",
+  "api_spend_usd": 0.0
+}

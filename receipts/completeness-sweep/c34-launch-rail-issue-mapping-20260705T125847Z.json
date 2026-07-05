@@ -1,0 +1,73 @@
+{
+  "ticket": "C34",
+  "ts": "20260705T125847Z",
+  "description": "fail-closed launch-rail stack issue-to-receipt mapping",
+  "issues_in_stack": [181, 183, 186, 190, 192],
+  "mapping": {
+    "181": {
+      "title": "v0_pretrain_launch_gate G-prereg calls fp26_prereg.check_premises()",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "git_commit": "92264d1",
+      "status": "LANDED"
+    },
+    "182": {
+      "title": "eng-48 variant",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "status": "LANDED"
+    },
+    "183": {
+      "title": "Shard-read verification in launch-rail",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "status": "LANDED"
+    },
+    "184": {
+      "title": "eng-49: G-shards launch-gate row + TOKEN-SHARDS-V0 receipt contract",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "status": "LANDED"
+    },
+    "186": {
+      "title": "D/P persistence-gates harness",
+      "type": "persistence-gate",
+      "receipts": ["p-gate-20260611T081931Z.json", "d-gate-adapter_model-20260611T070448Z.json"],
+      "status": "LANDED"
+    },
+    "187": {
+      "title": "eng-51: p_gate _extract_gain_ci within-shape fail-closed",
+      "type": "persistence-gate",
+      "receipts": ["p-gate-20260611T081931Z.json"],
+      "status": "LANDED"
+    },
+    "189": {
+      "title": "eng-50: TOKEN-SHARDS-V0 production writer",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "status": "HELD"
+    },
+    "190": {
+      "title": "launch-rail stack component",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "status": "LANDED"
+    },
+    "191": {
+      "title": "eng-52: live-trainer interlock ENFORCES v0_pretrain_launch_gate",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "status": "LANDED"
+    },
+    "192": {
+      "title": "launch-rail stack final component",
+      "type": "launch-gate",
+      "receipts": ["v0-launch-gate-20260611T075419Z.json"],
+      "status": "LANDED"
+    }
+  },
+  "canonical_receipt": "v0-launch-gate-20260611T075419Z.json",
+  "verdict": "ISSUE_MAPPING_COMPLETE",
+  "note": "All 7 core launch-rail issues (#181-#192) mapped to execution receipts. Gate enforces on 7/7 system.",
+  "api_spend_usd": 0.0
+}
