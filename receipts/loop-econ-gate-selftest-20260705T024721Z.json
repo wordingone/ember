@@ -1,0 +1,19 @@
+{
+  "ticket": "DT6-LOOP-ECON-GATE-SELFTEST",
+  "ts": "20260705T024721Z",
+  "cases_checked": 3,
+  "ac1": {
+    "verdict": "REJECT",
+    "ac": "AC1"
+  },
+  "ac2": {
+    "verdict": "ACCEPT",
+    "ac": "AC2"
+  },
+  "ac3": {
+    "verdict": "REJECT",
+    "ac": "AC3"
+  },
+  "failures": [],
+  "pass": true
+}
