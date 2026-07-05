@@ -7,7 +7,7 @@ REMOTE="${1:-origin}"
 PUSH_REMOTE_URL="$(git config --get remote.$REMOTE.url 2>/dev/null || echo '')"
 
 if git rev-parse --verify -q origin/master >/dev/null; then
-  exec bash "$ROOT/tools/repo-guard.sh" --base origin/master --push-remote "$PUSH_REMOTE_URL"
+  exec env PUSH_REMOTE_URL="$PUSH_REMOTE_URL" bash "$ROOT/tools/repo-guard.sh" --base origin/master
 else
-  exec bash "$ROOT/tools/repo-guard.sh" --push-remote "$PUSH_REMOTE_URL"
+  exec env PUSH_REMOTE_URL="$PUSH_REMOTE_URL" bash "$ROOT/tools/repo-guard.sh"
 fi
