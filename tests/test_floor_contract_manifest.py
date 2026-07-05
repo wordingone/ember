@@ -114,5 +114,40 @@ def test_map_status_to_disposition_unknown_status():
     assert found_unmapped, "Should have found at least one UNMAPPED-STATUS entry"
 
 
+def test_parse_floor_contract_manifest_unparseable_binary_doc():
+    """Test unparseable binary doc returns None + error (fail-closed)."""
+    fixture_path = Path(__file__).parent / "fixtures/floor_manifest/floor-contract-unparseable-binary.md"
+    from ember_resident_training_gate import parse_floor_contract_manifest
+
+    manifest, errors = parse_floor_contract_manifest(fixture_path)
+
+    # Unparseable doc should return None (fail-closed)
+    assert manifest is None, "Unparseable doc should return None"
+    # Should have at least one error
+    assert len(errors) > 0, "Unparseable doc should produce errors"
+
+
+def test_parse_failure_blocks_gate_verdict():
+    """Test verdict-coupling: parse failure blocks gate verdict (not just a field)."""
+    from ember_resident_training_gate import inspect_floor_contracts
+
+    # Use a repo with no floor contract
+    test_repo = Path(__file__).parent / "fixtures/floor_manifest/no-floor-contract-repo"
+    test_repo.mkdir(parents=True, exist_ok=True)
+
+    result, errors = inspect_floor_contracts(test_repo)
+
+    # Gate verdict should be BLOCKED when floor contract is missing
+    assert result["status"] == "BLOCKED", \
+        f"Gate verdict should be BLOCKED when floor contract missing, got {result['status']}"
+
+    # Verify floor_contract_manifest_parse_status field also shows BLOCKED
+    assert result["floor_contract_manifest_parse_status"] == "BLOCKED", \
+        f"floor_contract_manifest_parse_status should be BLOCKED, got {result['floor_contract_manifest_parse_status']}"
+
+    # Should have errors accumulated
+    assert len(errors) > 0, "Should have errors when floor contract missing"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
