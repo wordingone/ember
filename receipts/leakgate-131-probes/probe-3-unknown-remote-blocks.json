@@ -1,0 +1,14 @@
+{
+  "ts": "2026-07-05T14:01:45Z",
+  "probe": "probe-3-unknown-remote-blocks",
+  "description": "Push to unknown remote with forbidden term should block on NAME scan",
+  "remote": "unknown",
+  "push_url": "file:////tmp/fake-unknown",
+  "canonical_backup_url": "file:////tmp/fake-backup",
+  "urls_match": false,
+  "gate_verdict": "FAIL [names]",
+  "names_check_executed": true,
+  "exemption_applied": false,
+  "mechanism": "hardcoded CANONICAL_BACKUP_URL constant, exact-match only, fail-closed for non-matching URLs",
+  "passed": true
+}

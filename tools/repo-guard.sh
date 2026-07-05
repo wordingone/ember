@@ -36,6 +36,21 @@ ok()   { printf 'ok   [%s] %s\n' "$1" "$2"; }
 
 MAX_STATE_LINES="${MAX_STATE_LINES:-150}"
 MAX_BRANCHES="${MAX_BRANCHES:-25}"
+PUSH_REMOTE_URL="${PUSH_REMOTE_URL:-}"
+GATE_LOG="${GATE_LOG:-tools/.leak-gate.log}"
+
+# Canonical backup URL — exact-match allowlist (tracked, reviewed via PR only)
+CANONICAL_BACKUP_URL="https://github.com/wordingone/ember-backup.git"
+
+# Check if this push is to the backup remote (exact match only, no patterns, fail-closed)
+BACKUP_EXEMPTION_APPLIED=0
+if [ -n "$PUSH_REMOTE_URL" ] && [ "$PUSH_REMOTE_URL" = "$CANONICAL_BACKUP_URL" ]; then
+  BACKUP_EXEMPTION_APPLIED=1
+  # Log the exemption
+  mkdir -p "$(dirname "$GATE_LOG")"
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) backup-remote exemption applied" >> "$GATE_LOG" 2>/dev/null || true
+  ok "backup-exemption" "NAME/leak scans SKIPPED for backup remote"
+fi
 
 # ---- 1. agent-harness machinery must never be tracked --------------------
 if [ -n "$(git ls-files .agent 2>/dev/null | head -1)" ]; then
@@ -70,52 +85,57 @@ fi
 # tools/repo-guard-names-exclude.txt lists path-prefixes (one per line) that
 # the names scan skips entirely — machine-generated vocab/data artifacts only
 # (e.g. tokenizer/), never prose. Both plaintext and hashed modes read it.
-NAMES_EXCLUDE_ARGS=()
-if [ -f tools/repo-guard-names-exclude.txt ]; then
-  while IFS= read -r prefix; do
-    prefix="$(printf '%s' "$prefix" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    [ -z "$prefix" ] && continue
-    case "$prefix" in \#*) continue ;; esac
-    NAMES_EXCLUDE_ARGS+=(":(exclude)${prefix}")
-  done < tools/repo-guard-names-exclude.txt
-fi
-NAMES=""
-if [ -n "${REPO_GUARD_NAMES:-}" ]; then
-  NAMES="$REPO_GUARD_NAMES"
-elif [ -f tools/.repo-guard-denylist ]; then
-  NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
-fi
-if [ -n "$NAMES" ]; then
-  if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
-    fail "names" "operator names in tracked files"
-    sed 's/^/      /' /tmp/rg_names | head -20
-  else
-    ok "names" "none found"
+# SKIP all NAME checks if backup exemption is applied (exact-match private mirror only)
+if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
+  NAMES_EXCLUDE_ARGS=()
+  if [ -f tools/repo-guard-names-exclude.txt ]; then
+    while IFS= read -r prefix; do
+      prefix="$(printf '%s' "$prefix" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      [ -z "$prefix" ] && continue
+      case "$prefix" in \#*) continue ;; esac
+      NAMES_EXCLUDE_ARGS+=(":(exclude)${prefix}")
+    done < tools/repo-guard-names-exclude.txt
   fi
-elif [ -f tools/repo-guard-denylist.sha256 ]; then
-  HASHED_OUT="$(python tools/check_names_hashed.py 2>&1)"
-  HASHED_RC=$?
-  case "$HASHED_RC" in
-    0) ok "names" "none found (hashed denylist)" ;;
-    1) fail "names" "operator names in tracked files (hashed denylist match)"
-       printf '%s\n' "$HASHED_OUT" | sed 's/^/      /' ;;
-    *) # denylist file present but unusable (empty after comment-stripping) — same
-       # unusable-denylist branch as if no file existed at all.
-       if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-         printf 'FAIL [names] hashed denylist present but unusable (tools/repo-guard-denylist.sha256); aborting\n'
-         exit 2
-       else
-         printf 'skip [names] hashed denylist unusable (local run) — structural checks still enforced\n'
-       fi
-       ;;
-  esac
+  NAMES=""
+  if [ -n "${REPO_GUARD_NAMES:-}" ]; then
+    NAMES="$REPO_GUARD_NAMES"
+  elif [ -f tools/.repo-guard-denylist ]; then
+    NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
+  fi
+  if [ -n "$NAMES" ]; then
+    if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
+      fail "names" "operator names in tracked files"
+      sed 's/^/      /' /tmp/rg_names | head -20
+    else
+      ok "names" "none found"
+    fi
+  elif [ -f tools/repo-guard-denylist.sha256 ]; then
+    HASHED_OUT="$(python tools/check_names_hashed.py 2>&1)"
+    HASHED_RC=$?
+    case "$HASHED_RC" in
+      0) ok "names" "none found (hashed denylist)" ;;
+      1) fail "names" "operator names in tracked files (hashed denylist match)"
+         printf '%s\n' "$HASHED_OUT" | sed 's/^/      /' ;;
+      *) # denylist file present but unusable (empty after comment-stripping) — same
+         # unusable-denylist branch as if no file existed at all.
+         if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+           printf 'FAIL [names] hashed denylist present but unusable (tools/repo-guard-denylist.sha256); aborting\n'
+           exit 2
+         else
+           printf 'skip [names] hashed denylist unusable (local run) — structural checks still enforced\n'
+         fi
+         ;;
+    esac
+  else
+    if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+      printf 'FAIL [names] denylist required in protected context (set REPO_GUARD_NAMES secret, tools/.repo-guard-denylist, or commit tools/repo-guard-denylist.sha256); aborting\n'
+      exit 2
+    else
+      printf 'skip [names] no denylist (local run) — structural checks still enforced\n'
+    fi
+  fi
 else
-  if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-    printf 'FAIL [names] denylist required in protected context (set REPO_GUARD_NAMES secret, tools/.repo-guard-denylist, or commit tools/repo-guard-denylist.sha256); aborting\n'
-    exit 2
-  else
-    printf 'skip [names] no denylist (local run) — structural checks still enforced\n'
-  fi
+  ok "names" "SKIPPED (backup-remote exemption)"
 fi
 
 # ---- 4. exactly one root goal document -----------------------------------
