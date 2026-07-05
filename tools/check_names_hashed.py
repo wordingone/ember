@@ -39,12 +39,14 @@ TOKEN_RE = re.compile(r"[A-Za-z]{3,}")
 # itself may carry example tokens in its own docstring/tests.
 SELF_EXCLUDE = {
     "tools/repo-guard.sh",
-    "tools/repo-guard-denylist.sha256",
     "tools/check_names_hashed.py",
     "tools/.repo-guard-denylist",
     "tools/.repo-guard-denylist.example",
     "tools/repo-guard-names-exclude.txt",
 }
+# Note: tools/repo-guard-denylist.sha256 is NOT excluded — its comments must be
+# scanned to prevent raw names from appearing as metadata. Hash lines themselves
+# are safe (hex tokens don't match founder names).
 
 DEFAULT_NAMES_EXCLUDE = Path("tools/repo-guard-names-exclude.txt")
 
