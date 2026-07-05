@@ -320,8 +320,48 @@ print("RED C-AUTO: test fixture validation failed")
     return test_passed, receipt_path
 
 
+def test_probe_absent(sandbox: str) -> tuple[bool, str]:
+    """Test 5: Probe-absent scenario - executor refuses (fail-CLOSED)."""
+    print("\n=== TEST 5: Probe-absent -> executor refuses (fail-CLOSED) ===")
+
+    # Create 5 real PASS windows
+    window_refs = []
+    for i in range(1, 6):
+        ref = write_window_receipt(sandbox, i, "PASS")
+        window_refs.append(ref)
+    print(f"  Created 5 PASS windows")
+
+    # Remove the probe (simulate probe not available at runtime)
+    probe_dir = os.path.join(sandbox, "scripts", "ember_totality")
+    probe_script = os.path.join(probe_dir, "test_c_auto.py")
+    if os.path.isfile(probe_script):
+        os.remove(probe_script)
+    print(f"  Removed probe: test_c_auto.py")
+
+    # Try to execute claim without probe
+    from r0_claim_executor import execute_claim
+
+    success, result = execute_claim(sandbox, window_refs)
+
+    # Claim should fail because probe is unavailable (fail-CLOSED)
+    test_passed = not success and "probe not found" in result.get("probe_output", "").lower()
+
+    details = {
+        "windows": window_refs,
+        "probe_available": False,
+        "claim_attempt_succeeded": success,
+        "probe_output": result.get("probe_output"),
+        "expected": "claim should fail (refuse) because probe unavailable"
+    }
+
+    receipt_path = write_selftest_receipt(sandbox, "probe_absent", test_passed, details)
+    print(f"  Result: {'PASS (executor refused without probe)' if test_passed else 'FAIL'}")
+
+    return test_passed, receipt_path
+
+
 def run_all_tests() -> tuple[bool, list[str]]:
-    """Run all 4 selftests."""
+    """Run all 5 selftests."""
     print("=" * 70)
     print("R0 CLAIM MACHINERY SELFTESTS v2")
     print("=" * 70)
@@ -339,6 +379,7 @@ def run_all_tests() -> tuple[bool, list[str]]:
         ("Test 2: 4 PASS + 1 FAIL", lambda: test_4pass_1fail(sandbox)),
         ("Test 3: Fabricated window ref", lambda: test_fabricated_window_ref(sandbox)),
         ("Test 4: Rollback on RED probe", lambda: test_rollback_on_probe_red(sandbox)),
+        ("Test 5: Probe-absent (fail-CLOSED)", lambda: test_probe_absent(sandbox)),
     ]
 
     all_passed = True
@@ -353,7 +394,7 @@ def run_all_tests() -> tuple[bool, list[str]]:
             all_passed = False
 
     print("\n" + "=" * 70)
-    print("TEST SUMMARY:")
+    print("TEST SUMMARY (5 tests):")
     for result in results:
         print(f"  {result}")
     print("=" * 70)

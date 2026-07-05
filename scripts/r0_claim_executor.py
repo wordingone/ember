@@ -127,18 +127,26 @@ def update_state(repo_root: str, window_refs: list[str], claim_ts: str) -> bool:
         return False
 
 
-def run_c_auto_probe(repo_root: str) -> tuple[bool, str]:
+def run_c_auto_probe(repo_root: str, probe_path: str | None = None) -> tuple[bool, str]:
     """
     Run the test_c_auto probe to verify the claim.
+
+    Fail-CLOSED: if the probe cannot be found or run, returns (False, error_msg).
+    The claim executor REFUSES to finalize when the probe is unavailable.
+
+    Args:
+        repo_root: Path to repo root
+        probe_path: Optional custom path to test_c_auto.py. If None, uses default location.
 
     Returns:
         (passed: bool, output: str)
     """
-    probe_script = os.path.join(repo_root, "scripts", "ember_totality", "test_c_auto.py")
+    if probe_path is None:
+        probe_path = os.path.join(repo_root, "scripts", "ember_totality", "test_c_auto.py")
 
-    if not os.path.isfile(probe_script):
-        # Fallback: try to run from chore/board-suite-port branch
-        return False, "test_c_auto.py not found"
+    if not os.path.isfile(probe_path):
+        # Fail-CLOSED: probe unavailable means claim cannot be verified
+        return False, f"C-AUTO probe not found at {probe_path} (required for self-gating claim verification)"
 
     try:
         # Set EMBER_TOTALITY_ROOT for the probe
@@ -146,7 +154,7 @@ def run_c_auto_probe(repo_root: str) -> tuple[bool, str]:
         env["EMBER_TOTALITY_ROOT"] = repo_root
 
         result = subprocess.run(
-            [sys.executable, probe_script],
+            [sys.executable, probe_path],
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -165,13 +173,18 @@ def run_c_auto_probe(repo_root: str) -> tuple[bool, str]:
         return False, f"Probe execution failed: {str(e)}"
 
 
-def execute_claim(repo_root: str, window_refs: list[str]) -> tuple[bool, dict[str, Any]]:
+def execute_claim(repo_root: str, window_refs: list[str], probe_path: str | None = None) -> tuple[bool, dict[str, Any]]:
     """
     Execute the R0 claim with self-gating.
+
+    Fail-CLOSED self-gating: state edit + probe run + rollback-on-non-GREEN.
+    If the probe cannot be run, the claim is REFUSED (rolled back).
 
     Args:
         repo_root: Path to repo root
         window_refs: List of window receipt filenames (e.g., ["R0-window-1-...", ...])
+        probe_path: Optional custom path to test_c_auto.py. If None, uses default location.
+                   If the probe is unavailable at runtime, claim is refused.
 
     Returns:
         (success: bool, result: dict)
@@ -203,7 +216,7 @@ def execute_claim(repo_root: str, window_refs: list[str]) -> tuple[bool, dict[st
         return False, {"error": "Failed to update autonomy-ladder-state.json", "claim_ts": claim_ts}
 
     # Step 4: Run test_c_auto probe
-    probe_passed, probe_output = run_c_auto_probe(repo_root)
+    probe_passed, probe_output = run_c_auto_probe(repo_root, probe_path)
 
     # Step 5: Rollback if probe failed
     if not probe_passed:
