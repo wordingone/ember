@@ -1,0 +1,15 @@
+{
+  "ts": "2026-07-05T13:53:40Z",
+  "probe_name": "probe-1-public-remote-blocks",
+  "description": "Push to public remote with forbidden term should block on NAME scan",
+  "remote": "public",
+  "remote_url": "file:////tmp/fake-public",
+  "backup_url": "file:////tmp/fake-backup",
+  "expected_result": "FAIL on names check",
+  "command": "bash tools/repo-guard-with-exemption.sh --base origin/master",
+  "exit_code": 1,
+  "gate_verdict": "FAIL",
+  "key_output_line": "FAIL [names] operator names in tracked files",
+  "names_check_status": "EXECUTED (not exempted)",
+  "passed": true
+}

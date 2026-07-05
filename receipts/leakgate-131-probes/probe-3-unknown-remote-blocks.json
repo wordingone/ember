@@ -1,0 +1,15 @@
+{
+  "ts": "2026-07-05T13:54:10Z",
+  "probe_name": "probe-3-unknown-remote-blocks",
+  "description": "Push to unknown remote with forbidden term should block on NAME scan",
+  "remote": "unknown",
+  "remote_url": "file:////tmp/fake-unknown",
+  "backup_url": "file:////tmp/fake-backup",
+  "expected_result": "FAIL on names check",
+  "command": "bash tools/repo-guard-with-exemption.sh --base origin/master",
+  "exit_code": 1,
+  "gate_verdict": "FAIL",
+  "key_output_line": "FAIL [names] operator names in tracked files",
+  "names_check_status": "EXECUTED (not exempted)",
+  "passed": true
+}

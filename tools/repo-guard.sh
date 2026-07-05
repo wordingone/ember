@@ -30,6 +30,19 @@ ok()   { printf 'ok   [%s] %s\n' "$1" "$2"; }
 
 MAX_STATE_LINES="${MAX_STATE_LINES:-150}"
 MAX_BRANCHES="${MAX_BRANCHES:-25}"
+PUSH_REMOTE_URL="${PUSH_REMOTE_URL:-}"
+BACKUP_URL="${BACKUP_URL:-}"
+GATE_LOG="${GATE_LOG:-tools/.leak-gate.log}"
+
+# Check if this push is to the backup remote (exact match only)
+BACKUP_EXEMPTION_APPLIED=0
+if [ -n "$PUSH_REMOTE_URL" ] && [ -n "$BACKUP_URL" ] && [ "$PUSH_REMOTE_URL" = "$BACKUP_URL" ]; then
+  BACKUP_EXEMPTION_APPLIED=1
+  # Log the exemption
+  mkdir -p "$(dirname "$GATE_LOG")"
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) backup-remote exemption applied" >> "$GATE_LOG" 2>/dev/null || true
+  ok "backup-exemption" "NAME/leak scans SKIPPED for backup remote"
+fi
 
 # ---- 1. agent-harness machinery must never be tracked --------------------
 if [ -n "$(git ls-files .claude 2>/dev/null | head -1)" ]; then
@@ -50,21 +63,26 @@ else
 fi
 
 # ---- 3. no operator names in tracked text (denylist supplied at runtime) --
-NAMES=""
-if [ -n "${REPO_GUARD_NAMES:-}" ]; then
-  NAMES="$REPO_GUARD_NAMES"
-elif [ -f tools/.repo-guard-denylist ]; then
-  NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
-fi
-if [ -z "$NAMES" ]; then
-  printf 'skip [names] no denylist (set REPO_GUARD_NAMES or tools/.repo-guard-denylist) — structural checks still enforced\n'
-else
-  if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
-    fail "names" "operator names in tracked files"
-    sed 's/^/      /' /tmp/rg_names | head -20
-  else
-    ok "names" "none found"
+# SKIP if backup exemption is applied (exact-match private mirror only)
+if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
+  NAMES=""
+  if [ -n "${REPO_GUARD_NAMES:-}" ]; then
+    NAMES="$REPO_GUARD_NAMES"
+  elif [ -f tools/.repo-guard-denylist ]; then
+    NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
   fi
+  if [ -z "$NAMES" ]; then
+    printf 'skip [names] no denylist (set REPO_GUARD_NAMES or tools/.repo-guard-denylist) — structural checks still enforced\n'
+  else
+    if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
+      fail "names" "operator names in tracked files"
+      sed 's/^/      /' /tmp/rg_names | head -20
+    else
+      ok "names" "none found"
+    fi
+  fi
+else
+  ok "names" "SKIPPED (backup-remote exemption)"
 fi
 
 # ---- 4. exactly one root goal document -----------------------------------
