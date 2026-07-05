@@ -59,7 +59,7 @@ This is not yet a complete proof sweep. It is the first absorption inventory.
 
 Primary source inspected:
 
-- clone: `C:\tmp\modded-nanogpt-baseline-source`
+- clone: `<exec-root>/tmp/modded-nanogpt-baseline-source`
 - repository: `https://github.com/KellerJordan/modded-nanogpt`
 - commit: `54c192a77bd0e3d2572a891e0a8a1b0ceeb957d7`
 
