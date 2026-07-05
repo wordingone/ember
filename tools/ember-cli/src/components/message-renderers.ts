@@ -328,11 +328,15 @@ export interface UserTextMessageProps {
   text:       string;
   timestamp?: string;
   brief?:     boolean;
+  /** ember #165: prompts injected via the operator named-pipe channel carry
+   *  this so the transcript visibly distinguishes them from keyboard input. */
+  origin?:    "keyboard" | "operator";
 }
 
-export function UserTextMessage({ text, timestamp, brief = false }: UserTextMessageProps): React.ReactElement {
+export function UserTextMessage({ text, timestamp, brief = false, origin }: UserTextMessageProps): React.ReactElement {
   const header = React.createElement(Box, { flexDirection: "row" },
     React.createElement(Text, { bold: true }, "You"),
+    origin === "operator" ? React.createElement(Text, { color: "cyan" }, " [operator]") : null,
     timestamp ? React.createElement(Text, { dimColor: true }, ` ${timestamp}`) : null,
   );
 
