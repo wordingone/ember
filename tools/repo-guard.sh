@@ -77,6 +77,16 @@ else
   ok "paths" "no absolute local paths"
 fi
 
+# ---- 2b. no local path fragments in tracked text (avir/, /mnt refs) -------
+# Detect patterns like /mnt/..../M/avir/ or /M/avir that carry developer-local context.
+PATHFRAG='(/mnt/[^/]*/M/avir/)|(/M/avir)'
+if git grep -nIE "$PATHFRAG" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/check_names_hashed.py' ':(exclude)tools/repo-guard-denylist.sha256' >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
+  fail "path-frags" "local WSL/mount path fragments in tracked files"
+  sed 's/^/      /' /tmp/rg_pathfrags | head -20
+else
+  ok "path-frags" "no local path fragments"
+fi
+
 # ---- 3. no operator names in tracked text (denylist supplied at runtime) --
 # Priority: REPO_GUARD_NAMES env > local plaintext tools/.repo-guard-denylist >
 # committed hashed tools/repo-guard-denylist.sha256 (via check_names_hashed.py) >
