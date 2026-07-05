@@ -73,6 +73,56 @@ function isMcpElicitationError(err: unknown): err is McpElicitationError {
 }
 
 // ---------------------------------------------------------------------------
+// Final message synthesis
+// ---------------------------------------------------------------------------
+
+/**
+ * Synthesizes a final assistant message when the loop terminates without one.
+ * Used when max_turns is reached, on error, or on abort — ensures the user
+ * always receives some closing text rather than silence.
+ */
+function synthesizeFinalMessage(
+  reason: "max_turns" | "error" | "abort",
+  lastToolResults?: ToolResultBlock[],
+): ModelResponse {
+  let text = "";
+
+  switch (reason) {
+    case "max_turns":
+      text = "I reached the maximum number of turns for this conversation. ";
+      if (lastToolResults && lastToolResults.length > 0) {
+        const failedTools = lastToolResults.filter((r) => r.is_error);
+        if (failedTools.length > 0) {
+          text += `Unable to complete your request due to ${failedTools.length} tool failure${failedTools.length > 1 ? "s" : ""}.`;
+        } else {
+          text += "Please review the tool results above.";
+        }
+      }
+      break;
+
+    case "error":
+      text =
+        "An error occurred while processing your request. Unable to complete the operation.";
+      break;
+
+    case "abort":
+      text = "The conversation was interrupted. Please try again.";
+      break;
+  }
+
+  // Ensure non-empty
+  if (!text.trim()) {
+    text = "Operation terminated. Unable to produce a result.";
+  }
+
+  return {
+    role: "assistant",
+    content: [{ type: "text", text }],
+    stop_reason: "end_turn" as const,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Tool schema conversion
 // ---------------------------------------------------------------------------
 
@@ -124,6 +174,8 @@ export interface ResultEventError {
   type: "result";
   subtype: "error";
   durationMs: number;
+  finalMessage?: ModelResponse;
+  errorMessage?: string;
 }
 
 export interface ResultEventErrorMaxTokens {
@@ -137,12 +189,14 @@ export interface ResultEventAbort {
   type: "result";
   subtype: "abort";
   durationMs: number;
+  finalMessage?: ModelResponse;
 }
 
 export interface ResultEventMaxTurns {
   type: "result";
   subtype: "max_turns";
   durationMs: number;
+  finalMessage?: ModelResponse;
 }
 
 export type ResultEvent =
@@ -225,12 +279,21 @@ export async function* query(
         abortSignal: params.toolUseContext.abortController.signal,
         jsonSchema: _config?.jsonSchema,
       });
-    } catch {
+    } catch (err) {
       if (params.toolUseContext.abortController.signal.aborted) {
-        yield { type: "result", subtype: "abort", durationMs: Date.now() - startTime };
+        const abortMsg = synthesizeFinalMessage("abort");
+        yield { type: "result", subtype: "abort", durationMs: Date.now() - startTime, finalMessage: abortMsg };
         return;
       }
-      yield { type: "result", subtype: "error", durationMs: Date.now() - startTime };
+      const errorMsg = synthesizeFinalMessage("error");
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      yield {
+        type: "result",
+        subtype: "error",
+        durationMs: Date.now() - startTime,
+        finalMessage: errorMsg,
+        errorMessage,
+      };
       return;
     }
 
@@ -368,8 +431,22 @@ export async function* query(
     return;
   }
 
-  // Exceeded max turns
-  yield { type: "result", subtype: "max_turns", durationMs: Date.now() - startTime };
+  // Exceeded max turns: synthesize a final message from tool results if available
+  let lastToolResults: ToolResultBlock[] | undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i] as EngineMessage;
+    if (msg.role === "user" && msg.toolUseResult) {
+      lastToolResults = msg.toolUseResult;
+      break;
+    }
+  }
+  const maxTurnsMsg = synthesizeFinalMessage("max_turns", lastToolResults);
+  yield {
+    type: "result",
+    subtype: "max_turns",
+    durationMs: Date.now() - startTime,
+    finalMessage: maxTurnsMsg,
+  };
 }
 
 // ---------------------------------------------------------------------------
