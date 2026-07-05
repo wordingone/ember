@@ -421,7 +421,7 @@ def parse_floor_contract_manifest(
     """Parse floor-contract.md and build manifest from actual rows.
 
     Returns (manifest_dict, errors) where manifest_dict is keyed by row component name
-    and contains {source_file, source_hash, disposition, launch_vehicle_impact, trigger,
+    and contains {source_file, source_sha256, disposition, launch_vehicle_impact, trigger,
     pilot, kill_promote_condition, evidence_path}. Missing fields get UNDECLARED-IN-DOC.
 
     FAIL-CLOSED: returns (None, errors) if doc missing/unparseable/zero rows.
@@ -505,7 +505,7 @@ def parse_floor_contract_manifest(
 
                 manifest[component] = {
                     "source_file": "docs/ember-floor-contract.md",
-                    "source_hash": _sha256(floor_path),
+                    "source_sha256": _sha256(floor_path),
                     "disposition": "used_now",  # IN-vehicle components are currently used
                     "launch_vehicle_impact": surface,
                     "trigger": "model construction and launch",
@@ -580,7 +580,7 @@ def parse_floor_contract_manifest(
 
         manifest[component] = {
             "source_file": "docs/ember-floor-contract.md",
-            "source_hash": _sha256(floor_path),
+            "source_sha256": _sha256(floor_path),
             "disposition": disposition,
             "launch_vehicle_impact": why_deferred,
             "trigger": trigger,

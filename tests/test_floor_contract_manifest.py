@@ -34,7 +34,7 @@ def test_parse_floor_contract_manifest_valid():
     assert bitnet_row["trigger"] == "hardware escalation"
     assert bitnet_row["pilot"] == "ternary pilot"
     assert bitnet_row["kill_promote_condition"] == "promote on >=3B"
-    assert "source_hash" in bitnet_row
+    assert "source_sha256" in bitnet_row
 
 
 def test_parse_floor_contract_manifest_missing_doc():
@@ -57,7 +57,7 @@ def test_floor_contract_manifest_required_fields():
 
     required_fields = [
         "source_file",
-        "source_hash",
+        "source_sha256",
         "disposition",
         "launch_vehicle_impact",
         "trigger",

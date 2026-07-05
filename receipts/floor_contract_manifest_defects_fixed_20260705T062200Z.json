@@ -1,0 +1,65 @@
+{
+  "ts": "2026-07-05T06:22:00Z",
+  "test_suite": "floor_contract_manifest_defect_fixes",
+  "verdict": "FLOOR_CONTRACT_MANIFEST_DEFECTS_FIXED_TESTS_PASS",
+  "tdd_tests_pass": 5,
+  "theater_regression_tests_pass": 3,
+  "total_tests": 8,
+  "defects_fixed": {
+    "defect_1_precedence_bug": {
+      "issue": "return None, errors if not manifest else (manifest, errors) parses as (None, (errors if not manifest else (manifest, errors)))",
+      "fix": "Explicit if-else: if manifest: return manifest, errors / return None, errors",
+      "test_added": "test_parse_floor_contract_manifest_invehicle_only_no_deferral",
+      "test_fixture": "floor-contract-invehicle-only.md"
+    },
+    "defect_2_unknown_status_mapping": {
+      "issue": "_map_status_to_disposition returns 'preserved_trigger_gated' for unknown statuses (false positive disposition)",
+      "fix": "Changed default return to f'UNMAPPED-STATUS:{status}' to mark unmapped values explicitly",
+      "test_added": "test_map_status_to_disposition_unknown_status",
+      "test_fixture": "floor-contract-unknown-status.md"
+    },
+    "defect_3_verdict_coupling": {
+      "issue": "Verify that parse failure blocks the gate verdict (not just a field)",
+      "status": "VERIFIED - inspect_floor_contracts() adds parse_errors to main errors list at line 697, which blocks gate verdict at line 754"
+    }
+  },
+  "tdd_tests": {
+    "test_parse_floor_contract_manifest_valid": "PASSED",
+    "test_parse_floor_contract_manifest_missing_doc": "PASSED",
+    "test_floor_contract_manifest_required_fields": "PASSED",
+    "test_parse_floor_contract_manifest_invehicle_only_no_deferral": "PASSED (NEW)",
+    "test_map_status_to_disposition_unknown_status": "PASSED (NEW)",
+    "summary": "5 passed in 0.03s"
+  },
+  "theater_regression_tests": {
+    "test_parse_floor_contract_manifest_not_in_prechange": "PASSED",
+    "test_map_status_to_disposition_not_in_prechange": "PASSED",
+    "test_parse_manifest_call_in_inspect_current": "PASSED",
+    "summary": "All 3/3 theater-regression tests passed"
+  },
+  "implementation_details": {
+    "files_modified": [
+      "scripts/ember_resident_training_gate.py (lines 517-521, 597-613)"
+    ],
+    "files_added": [
+      "tests/fixtures/floor_manifest/floor-contract-invehicle-only.md",
+      "tests/fixtures/floor_manifest/floor-contract-unknown-status.md",
+      "tests/test_floor_contract_manifest.py (new test methods)"
+    ],
+    "verdict_coupling_evidence": {
+      "file": "scripts/ember_resident_training_gate.py",
+      "lines": "696-697, 754",
+      "mechanism": "parse_errors extended to main errors list; gate status=BLOCKED if errors not empty"
+    }
+  },
+  "branch_state": {
+    "current_commit": "2fef6e9",
+    "message": "Fix three defects: precedence bug in return statement, unknown status mapping, add edge case tests for both",
+    "branch": "fix/floor-contract-manifest",
+    "remote": "public",
+    "pushed": true
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "notes": "All three defects identified by team lead are now fixed and tested. Precedence bug fixed with explicit if-else. Unknown status mapping now returns UNMAPPED-STATUS:<verbatim>. Verdict coupling verified: parse failures add errors to main errors list, blocking the gate verdict. Two new test fixtures created to cover edge cases. All 5 TDD tests pass; all 3 theater-regression tests pass. Ready for merge."
+}
