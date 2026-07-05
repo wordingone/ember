@@ -73,5 +73,46 @@ def test_floor_contract_manifest_required_fields():
             assert row_data[field] is not None, f"Row {row_name} field {field} is None"
 
 
+def test_parse_floor_contract_manifest_invehicle_only_no_deferral():
+    """Test precedence bug fix: in-vehicle rows without deferral section returns partial manifest with errors."""
+    fixture_path = Path(__file__).parent / "fixtures/floor_manifest/floor-contract-invehicle-only.md"
+    from ember_resident_training_gate import parse_floor_contract_manifest
+
+    manifest, errors = parse_floor_contract_manifest(fixture_path)
+
+    # Should have in-vehicle rows parsed (manifest not None)
+    assert manifest is not None, "Manifest should not be None even without deferral section"
+    assert len(manifest) > 0, "Manifest should have in-vehicle entries"
+
+    # Should have error for missing deferral section
+    assert any("deferral_section_missing" in err for err in errors), \
+        f"Expected deferral_section_missing error, got: {errors}"
+
+    # In-vehicle components should have disposition="used_now"
+    for component, fields in manifest.items():
+        assert fields["disposition"] == "used_now", \
+            f"In-vehicle component {component} should have disposition=used_now"
+
+
+def test_map_status_to_disposition_unknown_status():
+    """Test unknown status mapping: returns UNMAPPED-STATUS:<verbatim>."""
+    fixture_path = Path(__file__).parent / "fixtures/floor_manifest/floor-contract-unknown-status.md"
+    from ember_resident_training_gate import parse_floor_contract_manifest
+
+    manifest, errors = parse_floor_contract_manifest(fixture_path)
+
+    assert manifest is not None, "Manifest should not be None"
+
+    # Find the component with unknown status
+    found_unmapped = False
+    for component, fields in manifest.items():
+        if "UNMAPPED-STATUS" in fields["disposition"]:
+            found_unmapped = True
+            assert "FUTURE_UNKNOWN_STATUS" in fields["disposition"], \
+                f"Unknown status should be preserved: {fields['disposition']}"
+
+    assert found_unmapped, "Should have found at least one UNMAPPED-STATUS entry"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

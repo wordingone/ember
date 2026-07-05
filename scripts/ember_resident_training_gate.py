@@ -517,7 +517,9 @@ def parse_floor_contract_manifest(
     # Parse deferral rows
     if not deferral_match:
         errors.append("floor_contract.deferral_section_missing")
-        return None, errors if not manifest else (manifest, errors)
+        if manifest:
+            return manifest, errors
+        return None, errors
 
     deferral_section = deferral_match.group(1)
     deferral_rows = parse_md_table(deferral_section)
@@ -610,7 +612,8 @@ def _map_status_to_disposition(status: str) -> str:
     if status == "UNDECLARED-IN-DOC":
         return "UNDECLARED-IN-DOC"
 
-    return "preserved_trigger_gated"
+    # Unknown status: return unmapped marker with verbatim value
+    return f"UNMAPPED-STATUS:{status}"
 
 
 def build_floor_contract_manifest(floor_sha: str | None, nc2_sha: str | None) -> dict[str, dict[str, str | None]]:
