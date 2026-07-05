@@ -300,6 +300,16 @@ def main() -> int:
     ap.add_argument("--task-limit", type=int, default=None)
     args = ap.parse_args()
 
+    # Guard: check C14 RESIDENT_TRAINING_GATE_PASS precondition before launch
+    try:
+        import loop_launch_guard
+        from datetime import datetime, timezone
+        repo = Path.cwd().resolve()
+        loop_launch_guard.guard_loop_launch(repo, datetime.now(timezone.utc))
+    except RuntimeError as e:
+        print(f"Loop launch blocked by precondition guard: {e}", file=__import__("sys").stderr)
+        return 2
+
     repo = Path.cwd().resolve()
     out_path = (repo / args.out).resolve()
     receipt = build_receipt(
