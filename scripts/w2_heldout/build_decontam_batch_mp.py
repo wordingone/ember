@@ -1035,11 +1035,27 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
 
     pool_size = batch_size * pool_oversample
     pool_start, disjoint_check = reserve_pool(n_windows, pool_size, ceiling_steps, train_batch)
+    # First index training can NEVER reach (assert_disjoint_from_training's own
+    # boundary: max_training_window_index = ceiling_steps*train_batch - 1, so
+    # this is max_training_window_index + 1). Replacement draws must never go
+    # at or below max_training_window_index -- i.e. never below this value.
+    disjoint_lower_bound = ceiling_steps * train_batch
 
     selected_rows: list[list[int]] = []
     selected_indices: list[int] = []
     rounds: list[dict] = []
-    next_pool_start = pool_start
+    # Issue #115 fix: rounds march DOWNWARD from the tail toward
+    # disjoint_lower_bound, never upward off the corpus end. pool_floor is the
+    # exclusive upper edge available to the NEXT round (round 1 uses the tail
+    # pool established by reserve_pool; each subsequent round takes the
+    # contiguous, non-overlapping slice immediately below the previous one).
+    # POOL_EXHAUSTED can now only fire once the full disjoint range
+    # [disjoint_lower_bound, n_windows) has actually been consumed, instead of
+    # firing on round 2 every time round 1's tail pool is fully contaminated
+    # (the old next_pool_start = pool_indices[-1] + 1 logic marched UPWARD off
+    # the end of the corpus, so ~6.79M disjoint mid-corpus windows were never
+    # tried at all).
+    pool_floor = pool_start
     replacements_made = 0
     total_candidates_checked = 0
 
@@ -1048,12 +1064,23 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
         if need <= 0:
             break
         this_pool_size = max(need * pool_oversample, need)
-        pool_indices = list(range(next_pool_start, min(next_pool_start + this_pool_size, n_windows)))
+
+        if round_no == 1:
+            this_pool_start, this_pool_end = pool_start, n_windows
+        else:
+            this_pool_end = pool_floor
+            this_pool_start = max(disjoint_lower_bound, this_pool_end - this_pool_size)
+
+        pool_indices = list(range(this_pool_start, this_pool_end))
         if not pool_indices:
             raise SystemExit(
                 "W2_DECONTAM_POOL_EXHAUSTED: ran out of training-disjoint window "
                 f"indices before assembling {batch_size} clean windows "
                 f"(selected {len(selected_rows)}).")
+
+        # Fail-closed disjointness proof for the FULL range actually drawn
+        # this round (not just the initial reserve_pool call).
+        round_disjoint_check = assert_disjoint_from_training(this_pool_start, ceiling_steps, train_batch)
 
         candidate_rows = [read_window_tokens(shard_dir, files, cum, seq, block_len, i)
                            for i in pool_indices]
@@ -1073,7 +1100,8 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
 
         rounds.append({
             "round": round_no,
-            "pool_start": next_pool_start,
+            "pool_start": this_pool_start,
+            "pool_end": this_pool_end,
             "pool_size": len(pool_indices),
             "wall_s": result["wall_s"],
             "n_contamination_recheck_calls": result["n_calls"],
@@ -1081,9 +1109,10 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
             "clean_found": len(result["clean_idx"]),
             "contaminated_found": len(result["contaminated_idx"]),
             "self_matches_excluded": result["self_matches_excluded"],
+            "disjoint_check": round_disjoint_check,
         })
 
-        next_pool_start = pool_indices[-1] + 1
+        pool_floor = this_pool_start
 
     if len(selected_rows) < batch_size:
         raise SystemExit(
