@@ -5,6 +5,7 @@
 import type { Style, ColorValue } from "./termio.ts";
 import { cursorPosition, applyAnsiCodes } from "./termio.ts";
 import type { LayoutNode } from "./layout-engine.ts";
+import { resolveBorderGlyphs, type BorderStyleName } from "./border-glyphs.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -305,6 +306,12 @@ export interface RenderNode {
   style?: Style;
   /** Raw ANSI string for raw-ansi nodes. */
   rawAnsi?: string;
+  /** For box nodes: perimeter style name (undefined = no border painted). */
+  borderStyle?: BorderStyleName;
+  /** For box nodes: border glyph color (chalk-style name or #rrggbb hex). */
+  borderColor?: string;
+  /** For box nodes: text embedded in the top border edge (D4 titled-panel composition). */
+  borderTitle?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +339,95 @@ function charWidth(ch: string): number {
       (cp >= 0x1f300 && cp <= 0x1f9ff))
     return 2;
   return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Border painting — box borderStyle/borderColor/borderTitle rendered as a real
+// perimeter (B2 increment). Lives here, not components.ts, because painting is
+// a rendering-pipeline concern; components.ts only ever drops the declarative
+// intent into data-attrs (mirrors how text/raw-ansi nodes are painted here too).
+// ---------------------------------------------------------------------------
+
+const BORDER_NAMED_FG: Record<string, number> = {
+  black: 0, red: 1, green: 2, yellow: 3, blue: 4, magenta: 5, cyan: 6, white: 7,
+  gray: 8, grey: 8,
+};
+
+/** Resolves a chalk-style color name or #rrggbb hex into a border Style. Border
+ * colors are always foreground-only (glyphs, never a filled background). */
+function resolveBorderColorStyle(colorName: string | undefined): Style {
+  if (!colorName) return {};
+  if (colorName.startsWith("#")) {
+    const hex = colorName.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16) || 0;
+    const g = parseInt(hex.slice(2, 4), 16) || 0;
+    const b = parseInt(hex.slice(4, 6), 16) || 0;
+    return { fg: { type: "rgb", r, g, b } };
+  }
+  const idx = BORDER_NAMED_FG[colorName.toLowerCase()];
+  return idx !== undefined ? { fg: { type: "named", index: idx } } : {};
+}
+
+/** Paints a box's perimeter (all 4 edges) at its own layout rect, clipped to
+ * clipRect exactly like text painting. Embeds borderTitle in the top edge when
+ * given (falls back to a truncated title, never throwing, when it overflows the
+ * available inner width). No-ops when the box is too small to hold a border. */
+function paintBorder(
+  node: RenderNode,
+  output: Output,
+  lx: number, ly: number, lw: number, lh: number,
+  clipRect: ClipRect,
+): void {
+  if (!node.borderStyle || lw < 2 || lh < 2) return;
+  const glyphs = resolveBorderGlyphs(node.borderStyle);
+  const style  = resolveBorderColorStyle(node.borderColor);
+  const inner  = Math.max(0, lw - 2);
+
+  const writeAt = (row: number, col: number, ch: string): void => {
+    if (col < clipRect.x || col >= clipRect.x + clipRect.width) return;
+    if (row < clipRect.y || row >= clipRect.y + clipRect.height) return;
+    output.write(cursorPosition(row + 1, col + 1));
+    output.writeSGR(style, {});
+    output.write(ch);
+  };
+
+  // Top edge — plain horizontal run, or with the title embedded just after the
+  // corner glyph (a much-too-long title truncates to `inner` rather than throwing
+  // or being silently dropped).
+  let topMid: string;
+  if (node.borderTitle && node.borderTitle.length > 0) {
+    const padded = ` ${node.borderTitle} `;
+    if (padded.length <= inner) {
+      const leftFill  = 1;
+      const rightFill = Math.max(0, inner - leftFill - padded.length);
+      topMid = glyphs.horizontal.repeat(leftFill) + padded + glyphs.horizontal.repeat(rightFill);
+    } else {
+      const truncated = node.borderTitle.slice(0, inner);
+      topMid = truncated + glyphs.horizontal.repeat(Math.max(0, inner - truncated.length));
+    }
+  } else {
+    topMid = glyphs.horizontal.repeat(inner);
+  }
+  const topRow = glyphs.topLeft + topMid + glyphs.topRight;
+  for (let i = 0; i < topRow.length && i < lw; i++) writeAt(ly, lx + i, topRow[i]!);
+
+  // Side edges — vertical glyph at the leftmost/rightmost column of every row
+  // strictly between the top and bottom edges.
+  for (let r = 1; r < lh - 1; r++) {
+    writeAt(ly + r, lx, glyphs.vertical);
+    writeAt(ly + r, lx + lw - 1, glyphs.vertical);
+  }
+
+  // Bottom edge — plain horizontal run, no title.
+  const bottomRow = glyphs.bottomLeft + glyphs.horizontal.repeat(inner) + glyphs.bottomRight;
+  for (let i = 0; i < bottomRow.length && i < lw; i++) writeAt(ly + lh - 1, lx + i, bottomRow[i]!);
+
+  // Self-terminating (style-bleed.test.ts): every glyph write above assumes the SAME
+  // always-empty previous style text painting does, so a colored border leaves the real
+  // terminal state non-default with nothing downstream aware it must reset. Explicitly
+  // closing out the color here, once, keeps the border's own paint self-contained instead
+  // of leaking into whatever renders immediately after it.
+  if (style.fg || style.bg) output.write("\x1b[m");
 }
 
 // ---------------------------------------------------------------------------
@@ -381,6 +477,8 @@ export function renderNodeToOutput(
   } else if (node.kind === "raw-ansi" && node.rawAnsi !== undefined) {
     output.write(cursorPosition(ly + 1, lx + 1));
     output.write(node.rawAnsi);
+  } else if (node.kind === "box" && node.borderStyle) {
+    paintBorder(node, output, lx, ly, lw, lh, clipRect);
   }
 
   // Recurse into children

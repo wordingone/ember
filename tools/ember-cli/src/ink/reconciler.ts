@@ -13,6 +13,7 @@ import {
 } from "./rendering-pipeline.ts";
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
+import type { BorderStyleName } from "./border-glyphs.ts";
 
 // ---------------------------------------------------------------------------
 // Internal node — extends RenderNode with reconciler bookkeeping
@@ -161,6 +162,24 @@ function extractInitialText(props: Props): string | undefined {
     return "\n".repeat(count);
   }
   return undefined;
+}
+
+/** Extracts border intent from a Box's data-attrs onto the render node, and
+ * reserves 1 layout cell per side when a borderStyle is present so children are
+ * inset instead of painted under the border glyphs (B2 increment). */
+function applyBorderProps(node: InternalNode, props: Props): void {
+  const bs = props["data-border-style"];
+  if (typeof bs === "string" && bs.length > 0) {
+    node.borderStyle  = bs as BorderStyleName;
+    node.layout.border = 1;
+  } else {
+    node.borderStyle   = undefined;
+    node.layout.border = 0;
+  }
+  const bc = props["data-border-color"];
+  node.borderColor = typeof bc === "string" ? bc : undefined;
+  const bt = props["data-border-title"];
+  node.borderTitle = typeof bt === "string" ? bt : undefined;
 }
 
 function makeNode(
@@ -317,6 +336,7 @@ const hostConfig: any = {
     const node  = makeNode(kind, { style, text });
     const s = props["style"];
     if (s && typeof s === "object") applyBoxStyle(node.layout, s as Record<string, unknown>);
+    if (kind === "box") applyBorderProps(node, props);
     return node;
   },
 
@@ -386,6 +406,7 @@ const hostConfig: any = {
     }
     const s = nextProps["style"];
     if (s && typeof s === "object") applyBoxStyle(instance.layout, s as Record<string, unknown>);
+    if (instance.kind === "box") applyBorderProps(instance, nextProps);
   },
 
   commitTextUpdate(
