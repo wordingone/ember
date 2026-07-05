@@ -3,7 +3,8 @@
 # Simple proof: (1) guard detects operator names with hashed denylist,
 # (2) guard still works with plaintext denylist, (3) no denylist skips check
 
-GUARD_REPO="B:/M/ember-goalforge"
+# Get the repo root by finding .git directory
+GUARD_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 TESTS_PASS=0
 TESTS_FAIL=0
 
