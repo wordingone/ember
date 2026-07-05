@@ -29,7 +29,7 @@ import torch.nn as nn
 
 def test_config_loads():
     """Config parses as valid JSON and specifies correct architecture."""
-    config_path = REPO / "configs" / "owned-core-widen-config.json"
+    config_path = REPO / "config" / "owned-core-widen-config.json"
     assert config_path.exists(), f"Config not found at {config_path}"
 
     with open(config_path, "r") as f:
