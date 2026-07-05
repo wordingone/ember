@@ -228,6 +228,21 @@ class FlexNode implements LayoutNode {
   ): void {
     const availW = width  ?? 0;
     const availH = height ?? 0;
+    // Root-freeze fix (#114): mountInk seeds this.width/this.height once, at mount, from
+    // whatever the terminal size was at that instant (a plain number, never "auto"). Every
+    // later call here passes the LIVE terminal size as width/height -- but _layout()'s own
+    // self-size resolution is `this.width === "auto" ? availW : resolveSize(this.width, rootW)`,
+    // so once this.width is a definite (non-"auto") number it wins over the live argument
+    // FOREVER, and that frozen number is also `rootW` for the whole descendant tree (any
+    // percentage-width node resolves against it). The renderer's own live-getter stdout and
+    // the resize-driven paint/clear logic (rendering-pipeline.ts) were both already correct;
+    // only the actual computed geometry stayed pinned at boot size. calculateLayout's width/
+    // height parameters are the authoritative live size for a top-level call (this is the only
+    // place a tree gets laid out from the real root), so they must always overwrite the root's
+    // stored style, exactly like Yoga's YGNodeCalculateLayout(root, width, height, dir) treats
+    // its arguments as authoritative regardless of the root node's own style.
+    this.width  = availW;
+    this.height = availH;
     // Capture root's prev BEFORE layout so _markNewLayout sees the right baseline.
     const prev = { w: this.computedWidth, h: this.computedHeight,
                    l: this.computedLeft, t: this.computedTop };
@@ -311,6 +326,75 @@ class FlexNode implements LayoutNode {
       }
     }
 
+    // Shrink: when children overflow a DEFINITE main size, clamp using each child's OWN
+    // flexShrink weight (real CSS flex-shrink semantics: cut_i ∝ flexShrink_i * base_i).
+    // B6 W4' fix: previously this cut EVERY child proportionally to its base size alone,
+    // ignoring flexShrink entirely — a child explicitly marked flexShrink:0 (e.g. a status bar
+    // or prompt row that must never be crushed) was shrunk right alongside its flex-grow
+    // siblings whenever total content exceeded the viewport. flexShrink:0 children are now
+    // excluded from the deficit pool outright; the deficit lands only on flexShrink>0 children,
+    // weighted by (flexShrink * base). Every existing child defaults to flexShrink:1 (unchanged
+    // field default), so for any tree where nothing opts into flexShrink:0 this reduces to
+    // exactly the old plain-proportional-to-base formula — fully backward compatible.
+    // Auto-sized parents are excluded — their overflow feeds content resolution.
+    const mainIsDefinite = isRow ? this.width !== "auto" : this.height !== "auto";
+    if (freeSpace < 0 && mainIsDefinite && totalBase > 0) {
+      const deficit = -freeSpace;
+      const weightedBase = visibleChildren.reduce((s, c) => {
+        const base = isRow ? c.computedWidth : c.computedHeight;
+        return s + (c.flexShrink > 0 ? c.flexShrink * base : 0);
+      }, 0);
+      if (weightedBase > 0) {
+        // Running-cumulative rounding (bucket/largest-remainder style): each child's cut is the
+        // DELTA between successive rounded cumulative shares, not an independently-rounded share.
+        // Independent per-child rounding (the naive `Math.ceil` version this replaced) can round
+        // UP on every child and overshoot the true integer deficit by several rows, leaving a
+        // gap nothing occupies — exactly the "status bar lands one row short of the true last
+        // row" defect this was built to catch.
+        let idealCumulative = 0;
+        let appliedSoFar    = 0;
+        for (const child of visibleChildren) {
+          if (child.flexShrink <= 0) continue;
+          const base       = isRow ? child.computedWidth : child.computedHeight;
+          const weight     = child.flexShrink * base;
+          idealCumulative += deficit * weight / weightedBase;
+          const target     = Math.round(idealCumulative);
+          const cut        = Math.min(base, Math.max(0, target - appliedSoFar));
+          appliedSoFar    += cut;
+          if (isRow) child.computedWidth  = base - cut;
+          else       child.computedHeight = base - cut;
+        }
+      }
+    }
+
+    // Re-layout pass for children whose main-axis size CHANGED via grow/shrink above.
+    //
+    // Bug (B7 item 2 re-verification, operator regrade 2026-07-03): the "first pass" loop above
+    // calls child._layout(innerW, innerH, ...) using THIS node's own pre-distribution inner size
+    // for EVERY child, so an "auto"-height/width child (selfH/selfW = availH/availW when
+    // this.height/width === "auto", see the top of this method) measures itself against the FULL
+    // undistributed space, not its true post-grow/shrink share. That child's OWN internal
+    // positioning -- justify-content offset (mainSize-driven), cross-align stretch, and its own
+    // "auto" self-size resolution -- was computed during that SAME single _layout() call, using
+    // the stale (pre-distribution) mainSize. A flexGrow:1, auto-height, justifyContent:"flex-end"
+    // container (exactly repl.ts's transcript Box, alongside flexShrink:0 siblings like the
+    // prompt/status bar) anchored its child using the WRONG offset -- e.g. 39 instead of the
+    // correct 35 in a 46-row transcript, a discrepancy exactly equal to the reserved sibling
+    // rows the first pass didn't yet know to exclude (see bottom-anchor.test.ts's flexGrow/shrink
+    // regression test). Re-invoking _layout with the child's now-FINAL main-axis size fixes its
+    // internal positioning; the size restore immediately after guards against that child's own
+    // "auto self-size" resolution (line ~415 below) overwriting the flex-distributed size with a
+    // content-sum instead (transcript itself is "auto"-height, sized by flexGrow, not content).
+    visibleChildren.forEach((child, i) => {
+      const finalMain = isRow ? child.computedWidth : child.computedHeight;
+      if (finalMain === baseSizes[i]) return; // untouched by grow/shrink -- first pass already correct
+      const relayoutInnerW = isRow ? finalMain : innerW;
+      const relayoutInnerH = isRow ? innerH : finalMain;
+      child._layout(relayoutInnerW, relayoutInnerH, rootW, rootH);
+      if (isRow) child.computedWidth  = finalMain;
+      else       child.computedHeight = finalMain;
+    });
+
     // Position children along main axis
     let cursor = isRow ? pl + bl : pt + bt;
     const relChildren  = visibleChildren.filter(c => c.positionType === "relative");
@@ -338,12 +422,20 @@ class FlexNode implements LayoutNode {
     }
     cursor += startOffset;
 
+    // Cross space used by stretch/align in a ROW: an auto-height row resolves its
+    // cross size from CONTENT (max natural child height), never from the
+    // provisional avail-based innerH — otherwise stretch blows auto-height
+    // children to full screen height before the row's own auto resolution runs.
+    const rowCross = (isRow && this.height === "auto")
+      ? relChildren.reduce((m, c) => Math.max(m, c.computedHeight), 0)
+      : innerH;
+
     for (let ci = 0; ci < relChildren.length; ci++) {
       const child = relChildren[ci]!;
       if (isRow) {
         child.computedLeft = cursor;
         // align items cross-axis (may modify child.computedHeight via stretch)
-        child.computedTop  = this._crossAlign(child, innerH, pt + bt);
+        child.computedTop  = this._crossAlign(child, rowCross, pt + bt);
       } else {
         child.computedTop  = cursor;
         // align items cross-axis (may modify child.computedWidth via stretch)
