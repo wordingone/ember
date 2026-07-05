@@ -38,7 +38,7 @@ from receipt_write import checked_write
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 
 _TABLE_ROW_RE = re.compile(
-    r"^\|\s*(C\d+)\s*\|"      # id
+    r"^\|\s*([CM]\d+)\s*\|"   # id (M-prefix for manifest, C for backward-compat board refs)
     r"\s*([^|]*?)\s*\|"       # subgoal
     r"\s*([^|]*?)\s*\|"       # piece
     r"\s*([^|]*?)\s*\|"       # AC/test
@@ -207,11 +207,11 @@ _SYNTHETIC_MANIFEST = """\
 
 | id | subgoal | piece | AC | receipt | status |
 |----|---------|-------|----|---------|--------|
-| C1 | S1 | done piece | receipt validates | REPLACE_DONE_RECEIPT | DONE |
-| C2 | S2 | part piece | partial | some-reference | PART |
-| C3 | S3 | open piece | nothing | — | OPEN |
-| C4 | S4 | gated piece | needs C1 | — | GATED:C1 |
-| C5 | S5 | done missing | no file | nonexistent-file-xyz | DONE |
+| M1 | S1 | done piece | receipt validates | REPLACE_DONE_RECEIPT | DONE |
+| M2 | S2 | part piece | partial | some-reference | PART |
+| M3 | S3 | open piece | nothing | — | OPEN |
+| M4 | S4 | gated piece | needs M1 | — | GATED:M1 |
+| M5 | S5 | done missing | no file | nonexistent-file-xyz | DONE |
 """
 
 _MALFORMED_MANIFEST = """\
@@ -264,14 +264,14 @@ def _selftest():
         failures.append(f"Case 2: open should be 2 (OPEN + DONE-missing), got {result['open']}")
 
     # Case 3: DONE with missing receipt downgrades to 'open'
-    c5 = next(r for r in result["classified_rows"] if r["id"] == "C5")
-    if c5["classification"] != "open":
-        failures.append(f"Case 3: C5 (DONE with missing receipt) should be open, got {c5['classification']}")
+    m5 = next(r for r in result["classified_rows"] if r["id"] == "M5")
+    if m5["classification"] != "open":
+        failures.append(f"Case 3: M5 (DONE with missing receipt) should be open, got {m5['classification']}")
 
     # Case 4: GATED row is gated
-    c4 = next(r for r in result["classified_rows"] if r["id"] == "C4")
-    if c4["classification"] != "gated":
-        failures.append(f"Case 4: C4 should be gated, got {c4['classification']}")
+    m4 = next(r for r in result["classified_rows"] if r["id"] == "M4")
+    if m4["classification"] != "gated":
+        failures.append(f"Case 4: M4 should be gated, got {m4['classification']}")
 
     # Case 5: parse-drift detection (malformed manifest -> 0 rows -> SystemExit)
     import tempfile as _tf
