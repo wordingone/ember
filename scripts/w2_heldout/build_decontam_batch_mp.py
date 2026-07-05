@@ -431,10 +431,15 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
         result["n_workers"] = 1
         return result
 
-    shards_per_worker = max(1, len(shard_paths) // n_workers)
-    worker_shards = []
-    for i in range(0, len(shard_paths), shards_per_worker):
-        worker_shards.append(shard_paths[i:i + shards_per_worker])
+    # Distribute shards into EXACTLY min(n_workers, len(shard_paths)) balanced groups.
+    # Fold remainder shards into existing groups to avoid silent extra workers.
+    n_groups = min(n_workers, len(shard_paths))
+    worker_shards = [[] for _ in range(n_groups)]
+    for shard_idx, shard_name in enumerate(shard_paths):
+        group_idx = shard_idx % n_groups
+        worker_shards[group_idx].append(shard_name)
+    # Filter out empty groups (shouldn't happen, but safe)
+    worker_shards = [g for g in worker_shards if g]
 
     # Dispatch workers
     worker_args = []
