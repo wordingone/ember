@@ -8,7 +8,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 
 export type OperatorReceiptEvent = "pipe_connected" | "prompt_injected" | "response_rendered";
 
@@ -25,14 +25,15 @@ export function compactUtcStamp(now: Date = new Date()): string {
   return now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
-/** Repo root, resolved relative to this module's own file location
- *  (services/ -> src/ -> ember-cli/ -> tools/ -> repo root), never via
- *  process.cwd() — ember-cli's cwd is not reliably the repo root (see the
- *  2026-07-05 operator-session receipt where GOAL.md lookups failed for
- *  exactly this reason). */
+/** Repo root, resolved via the shared repo-root anchor (utils/repo-root.ts) — never via
+ *  import.meta.url, which resolves to a virtual bunfs path under `bun build --compile`
+ *  and walks to the drive root instead of the repo (issue #172: this is exactly how the
+ *  2026-07-05 operator-session receipt landed at B:/receipts instead of the real repo,
+ *  and GOAL.md lookups failed for the same reason). Fails OPEN here (never throws) per
+ *  this module's own contract below — resolution failure degrades to process.cwd() with
+ *  a loud warning, it never crashes the CLI and never silently returns a wrong root. */
 export function defaultRepoRoot(): string {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(here, "../../../../");
+  return resolveEmberRepoRootOrCwd({}, "[operator-receipts]");
 }
 
 export interface OperatorReceiptWriter {
