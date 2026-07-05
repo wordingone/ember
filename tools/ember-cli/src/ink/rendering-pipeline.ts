@@ -40,8 +40,20 @@ export class StylePool {
   private _styles: Style[] = [{}];
   private _keys:   string[] = [this._key({})];
 
+  /** Order-independent key covering the FULL style, nested color values included.
+   * B2 fix: the prior `JSON.stringify(s, Object.keys(s).sort())` passed the sorted
+   * key list as JSON.stringify's ARRAY REPLACER, which filters to that allow-list
+   * at every nesting level -- not just the top. That silently stripped every key
+   * inside a ColorValue (type/r/g/b or type/index), collapsing e.g. an orange RGB
+   * fg and an unrelated teal RGB fg to the identical key `{"fg":{}}`. Two visually
+   * distinct colors then interned to the SAME pool slot, and whichever was
+   * written first "won" every later lookup of that slot -- exactly the bleed
+   * pattern that made the reconstructed Homescreen's border/fireball colors read
+   * wrong (#168 pixel-gate bounce). Serializing each key's value independently
+   * (no replacer) keeps nested contents intact while staying order-independent. */
   private _key(s: Style): string {
-    return JSON.stringify(s, Object.keys(s).sort());
+    const keys = (Object.keys(s) as (keyof Style)[]).sort();
+    return keys.map(k => `${k}:${JSON.stringify(s[k])}`).join(",");
   }
 
   intern(style: Style): StyleRef {
