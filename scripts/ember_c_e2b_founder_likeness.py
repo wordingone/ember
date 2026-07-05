@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""C-E2B leg 2: founder_likeness v1 scorer.
+"""Founder likeness v1 scorer — leg 2 of the paired-protocol evaluation.
 
-Implements the frozen interface per docs/spec/e2b-paired-protocol-v1.md:
+Implements the frozen interface per the paired-protocol specification:
   score_founder_likeness_v1_leg(generate_fn, harness_log_reader, receipt_dir, window_s=300)
     -> {score: int 0..3, elements: {...}, artifacts: {...}}
 
@@ -13,10 +13,10 @@ The 3-part scripted session:
   3. Unprompted continuation: fixed 300s silent window (harness event-stream timestamps).
      Point iff autonomous entries appear in the window.
 
-No arm-specific branches (arm-blind): identifiable by grep for 'e2b' or 'owned'.
+No seat-specific branches: identical logic for both evaluation arms.
 
-Receipt format: JSON with legs.founder_likeness containing owned_core_score, e2b_score,
-and elements array detailing each turn's artifact grounding.
+Receipt format: JSON with per-arm score fields and elements array detailing
+each turn's artifact grounding.
 """
 from __future__ import annotations
 
