@@ -1,0 +1,1993 @@
+"""w1_collapse_control_run.py -- W1 token-collapse control-run producer (#71).
+
+Builds the width-matched from-scratch baseline runner specified by the FROZEN
+spec `docs/spec/w1-token-collapse-control-v1.md` and pinned by the pricing
+receipt `scratch/w1-control/w1-pricing-20260704T063236Z.json`. Two phases:
+
+  Phase 1 (capability-point leg): evaluate the grow arm's terminal checkpoint
+    on a FIXED held-out batch (sha-pinned token ids, the function_preservation
+    _check idiom) to get the pre-registered target_eval_loss. No training on
+    the real path.
+  Phase 2 (control leg): identical architecture, RANDOM init, standard
+    from-scratch cosine+warmup LR schedule (never the grow-path's continuation
+    schedule -- spec section 2 anti-poison clause), eval on the SAME
+    sha-pinned batch every K steps via the SAME code path as phase 1,
+    early-stop when eval_loss <= target, hard ceiling, resumable
+    checkpointing, governor 0.8 one-job.
+
+THIS invocation is CPU --dry-run ONLY. A tiny toy architecture stands in for
+the real rung-1 config; phase 1's "checkpoint" is a tiny model trained a few
+steps inside this harness (no real lineage exists at CPU-dry-run scale), so
+every dry-run receipt field is honestly labeled dry_run=true,
+is_real_lineage=false. The real GPU run (real rung-1 checkpoint, real
+tokenizer/shards, 1533-step ceiling, K=100) is maintainer-window-scheduled
+(issue #53) and is never fired by this builder -- --device cuda requires
+--live AND EMBER_GATE_AUTHORIZED=1, and even then refuses to fabricate
+synthetic shards (mirrors the eng-54 #194 guard already in
+timeshare_pretrain.run_v0_segment).
+
+Citations (read-only; never edited by this script):
+  spec              docs/spec/w1-token-collapse-control-v1.md
+  issue             #71 (pins the two-phase structure; #62 opened the wall)
+  pricing receipt   scratch/w1-control/w1-pricing-20260704T063236Z.json
+  grow-arm terminal receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json
+  v0/c03 config doc fp19-envelope.md, quoted verbatim in
+                    scripts/timeshare_pretrain.py's module docstring
+                    ("c03 shape -- 0.37B decoder, hidden 1024, 20 layers,
+                    16 heads, vocab 32k, seq 1024, tied embeddings")
+
+Usage (dry run, the only supported mode from this workstation):
+  python scripts/w1_collapse_control_run.py --dry-run
+  python scripts/w1_collapse_control_run.py --dry-run --out-dir scratch/w1-control/dry-run/custom
+
+Real run (maintainer-window only, never executed here):
+  EMBER_GATE_AUTHORIZED=1 python scripts/w1_collapse_control_run.py \
+      --live --device cuda --shard-dir <real shard dir>
+
+Receipt: receipts/ember-c-scale/w1-collapse-control-<ts>.json, schema
+w1-collapse-control/v1 per spec section 7.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import re
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+
+import numpy as np
+import torch
+
+from timeshare_pretrain import (  # reused, not edited (hard rail: new files only)
+    save_checkpoint,
+    load_checkpoint,
+    capture_rng,
+    restore_rng,
+    pacing_snapshot,
+    _pace_reset,
+    _pace_record,
+    check_resume_integrity,
+    FP19_PACE_S,
+    CONTRACT_PATH as PRETRAIN_CONTRACT_PATH,
+    build_split_optimizer,
+    save_optimizers_state,
+    load_optimizers_state,
+    resolve_ce_impl,
+    mtp_total_loss,
+)
+from receipt_write import checked_write
+
+# ---------------------------------------------------------------------------
+# Citations (paths + the exact figures pinned by the pricing/rung receipts).
+# Read at runtime for the "real_lineage_reference" block; never used to drive
+# dry-run arithmetic (dry-run computes everything from its own toy execution).
+# ---------------------------------------------------------------------------
+
+SPEC_REF = "docs/spec/w1-token-collapse-control-v1.md"
+ISSUE_REF = "#71"
+DEFAULT_PRICING_RECEIPT = os.path.join(
+    REPO, "scratch", "w1-control", "w1-pricing-20260704T063236Z.json")
+# Cross-tree source (per spec section 2 / the pricing receipt's own note):
+# the grow-arm lineage receipts live in the ember work tree, not this
+# goalforge tree. Read-only citation; never written to.
+DEFAULT_RUNG_RECEIPT = os.path.normpath(os.path.join(
+    REPO, "..", "ember", "receipts", "cbase-grow-rung",
+    "cbase-grow-rung1-live-20260703T155711Z.json"))
+
+REAL_EVAL_CADENCE_K = 100          # pinned by the pricing receipt
+# Issue #71's body states "hard ceiling 1533 steps (25,100,288 tokens)".
+# The exact arithmetic (see real_hard_ceiling_derivation) gives 1532: 16384 *
+# 1532 = 25,100,288 EXACTLY (no remainder), so ceil(25,100,288 / 16384) =
+# 1532, not 1533. This is a genuine one-step discrepancy between the issue
+# text and the exact math -- flagged rather than silently propagated (same
+# convention as the rung receipt's own params_dedup ambiguity note). Both
+# figures are carried in the receipt; ISSUE_STATED is what a maintainer
+# invocation should pass as --ceiling-steps unless they resolve the
+# discrepancy first.
+REAL_HARD_CEILING_STEPS_ISSUE_STATED = 1533
+REAL_HARD_CEILING_STEPS = REAL_HARD_CEILING_STEPS_ISSUE_STATED
+
+# ---------------------------------------------------------------------------
+# REAL LIVE PATH constants (issue #82).
+#
+# Corpus citation (read-only; the combined sha is ASSERTED at launch, never
+# trusted from a receipt's self-report): receipts/corpus-verification-
+# 20260704T095213Z.json -- 26/26 shards sha-verified twice independently
+# (coreutils + manifest_sha), n_files=26, total_tokens=6,977,868,758.
+# ---------------------------------------------------------------------------
+
+CORPUS_VERIFICATION_RECEIPT = os.path.join(
+    REPO, "receipts", "corpus-verification-20260704T095213Z.json")
+CORPUS_MANIFEST_COMBINED_SHA256_EXPECTED = (
+    "aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a")
+
+# Issue #82 reopened defect: RealW1Model omitted the MTP auxiliary heads that
+# every real checkpoint carries (production ALWAYS constructs mtp_heads in
+# _V0Real.__init__, timeshare_pretrain.py, regardless of whether the MTP loss
+# term is enabled for training -- see run_v0_segment's mtp_enabled branch,
+# which only gates whether mtp_heads receive a loss term, never whether they
+# exist in the state_dict). PRETRAIN_CONTRACT_PATH (imported above as
+# timeshare_pretrain.CONTRACT_PATH) is the SAME config file production reads
+# its mtp_aux_heads.n_heads from -- read fresh at derive time, never
+# hardcoded, so a config change is never silently stale.
+
+# Second, INDEPENDENT launch interlock (verification leg (c), issue #82).
+# refuse_unless_dry_run_safe's existing EMBER_GATE_AUTHORIZED gate is a
+# general-purpose flag reused elsewhere in the repo (e.g. timeshare_pretrain.
+# _check_launch_interlock) -- a builder/test session can end up with it set
+# for unrelated reasons. On this machine torch.cuda.is_available() is True
+# even from a builder session (the GPU exists; it is merely window-occupied
+# by the maintainer's own concurrent job) -- so neither hardware presence nor
+# the general authorization flag is a sufficient safety signal on its own.
+# This SEPARATE env var is the deterministic second key: set ONLY by the
+# maintainer's actual GPU-launch runbook, NEVER by this builder, NEVER in a
+# test. Do NOT weaken EMBER_GATE_AUTHORIZED's existing check to compensate --
+# both gates are required, independently, every time.
+MAINTAINER_WINDOW_ENV = "EMBER_W1_MAINTAINER_WINDOW_CONFIRMED"
+
+# Same convention as scratch/corpus-wire/contamination_check.py.
+CONTAMINATION_WINDOW_TOKENS = 13
+CONTAMINATION_ROLL_BASE = 1000000007
+
+
+def real_hard_ceiling_derivation(ceiling_tokens: int, batch: int, seq: int) -> int:
+    """ceil(ceiling_tokens / (batch*seq)) -- the real-run step ceiling,
+    derived fresh from the pricing receipt's own ceiling_tokens figure (never
+    hardcoded)."""
+    return -(-ceiling_tokens // (batch * seq))  # ceil via negated floor division
+
+
+def load_json(path: str) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def sha256_tokens(token_ids: "torch.Tensor") -> str:
+    """sha256 over the raw int64 bytes of a token-id tensor -- same convention
+    as the function_preservation_check idiom (rung receipt: batch/seqlen/
+    token_ids_sha256/generator_seed)."""
+    arr = token_ids.detach().to("cpu").contiguous().to(torch.int64).numpy()
+    return sha256_hex(arr.tobytes())
+
+
+# ---------------------------------------------------------------------------
+# Real-architecture derivation (citation-only; never drives dry-run numbers).
+#
+# The rung-1 terminal receipt does not carry vocab/hidden as named fields.
+# Every figure below is either read directly or derived with its arithmetic
+# shown -- no silent guess:
+#   vocab   = 32000                          (pricing receipt control_arm.
+#                                              target_architecture string)
+#   seq     = 1024, batch = 16               (pricing receipt +
+#                                              rung receipt g_budget_preflight.
+#                                              requested_run)
+#   hidden  = 1024                           (DERIVED: rung receipt
+#                                              params_dedup.measured_duplicate
+#                                              _numel = 32,768,000 = vocab *
+#                                              hidden tied-embedding count;
+#                                              32,768,000 / 32000 = 1024)
+#   ff_grown = 16384                         (rung receipt, the grow TARGET --
+#                                              this IS the rung-1 terminal FF
+#                                              width)
+#   params_unique_after = 1,188,865,024      (rung receipt, D4-authoritative)
+#   params_state_dict_sum_after = 1,221,633,024 (rung receipt, carried
+#                                              alongside per D4 ruling)
+#   layers = 20, heads = 16                  (NOT independently re-derivable
+#                                              from the grow-rung receipt
+#                                              chain -- carried from the v0/
+#                                              c03 config precedent quoted in
+#                                              scripts/timeshare_pretrain.py's
+#                                              module docstring, fp19-envelope
+#                                              .md. Flagged, not silently
+#                                              assumed.)
+# ---------------------------------------------------------------------------
+
+def derive_real_arch_config(pricing_receipt: dict, rung_receipt: dict) -> dict:
+    target_arch_str = pricing_receipt["control_arm"]["target_architecture"]
+    vocab_match = re.search(r"vocab=(\d+)", target_arch_str)
+    seq_match = re.search(r"seq=(\d+)", target_arch_str)
+    params_match = re.search(r"(\d+)\s*params", target_arch_str)
+    if not (vocab_match and seq_match and params_match):
+        raise ValueError(
+            "W1_ARCH_DERIVE_FAIL: could not parse vocab/seq/params from "
+            f"pricing receipt control_arm.target_architecture={target_arch_str!r}")
+    vocab = int(vocab_match.group(1))
+    seq = int(seq_match.group(1))
+    batch = pricing_receipt["control_arm"]["batch"]
+
+    dedup_numel = rung_receipt["params_dedup"]["measured_duplicate_numel"]
+    if dedup_numel % vocab != 0:
+        raise ValueError(
+            "W1_ARCH_DERIVE_FAIL: measured_duplicate_numel "
+            f"{dedup_numel} not divisible by vocab {vocab}")
+    hidden = dedup_numel // vocab
+
+    # n_mtp (issue #82 reopened defect): read from the SAME contract file
+    # production's _V0Real reads (timeshare_pretrain.py: n_mtp =
+    # cfg["objective"]["mtp_aux_heads"]["n_heads"]) -- production constructs
+    # mtp_heads unconditionally at that count regardless of whether the MTP
+    # loss term is enabled for a given segment, so the checkpoint's state_dict
+    # always carries mtp_heads.<k>.weight for k in range(n_mtp). Never
+    # hardcoded; read fresh so a contract change can't go silently stale.
+    pretrain_contract = load_json(PRETRAIN_CONTRACT_PATH)
+    n_mtp = pretrain_contract["objective"]["mtp_aux_heads"]["n_heads"]
+
+    return {
+        "vocab": vocab,
+        "seq": seq,
+        "batch": batch,
+        "hidden": hidden,
+        "n_mtp": n_mtp,
+        "n_mtp_source": (
+            f"{PRETRAIN_CONTRACT_PATH} objective.mtp_aux_heads.n_heads="
+            f"{n_mtp} -- the SAME contract path production's _V0Real reads "
+            "(timeshare_pretrain.CONTRACT_PATH), read fresh, never hardcoded"),
+        "hidden_derivation": (
+            f"params_dedup.measured_duplicate_numel={dedup_numel} / vocab={vocab} "
+            f"= {hidden} (tied embed/head dedup count = vocab*hidden)"),
+        "ff_grown": rung_receipt["ff_grown"],
+        "params_unique_after": rung_receipt["params_unique_after"],
+        "params_state_dict_sum_after": rung_receipt["params_state_dict_sum_after"],
+        "layers_heads_source": (
+            "layers=20, heads=16 carried from the v0/c03 config precedent "
+            "(fp19-envelope.md, quoted in scripts/timeshare_pretrain.py's "
+            "module docstring) -- NOT independently present in the grow-rung "
+            "receipt chain; flagged, not silently assumed"),
+        "layers_assumed": 20,
+        "heads_assumed": 16,
+        "terminal_checkpoint_ref": rung_receipt["stabilization_segment"]["checkpoint"],
+        "terminal_checkpoint_receipt": DEFAULT_RUNG_RECEIPT,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Shared model -- SAME class for phase 1 and phase 2 (identical architecture,
+# spec section 2's control-arm requirement, mechanically enforced via a
+# config_sha equality assertion in main()).
+#
+# Naming mirrors the repo's established _tiny_v0_model idiom
+# (embed/blocks/norm/head) so this stand-in reads like the rest of the
+# codebase's dry-run models. head carries a bias -- a deliberate dry-run-only
+# simplification (see synthetic_corpus() docstring for why) that does NOT
+# carry to the real rung-1 architecture, which is tied/no-bias per the
+# net2net convention.
+# ---------------------------------------------------------------------------
+
+class TinyW1Model(torch.nn.Module):
+    def __init__(self, vocab: int, hidden: int, depth: int):
+        super().__init__()
+        self.embed = torch.nn.Embedding(vocab, hidden)
+        self.blocks = torch.nn.ModuleList(
+            [torch.nn.Linear(hidden, hidden, bias=False) for _ in range(depth)])
+        self.norm = torch.nn.LayerNorm(hidden)
+        self.head = torch.nn.Linear(hidden, vocab, bias=True)
+
+    def backbone(self, ids: "torch.Tensor") -> "torch.Tensor":
+        h = self.embed(ids)
+        for blk in self.blocks:
+            h = torch.relu(blk(h))
+        return self.norm(h)
+
+    def forward(self, ids: "torch.Tensor") -> "torch.Tensor":
+        return self.head(self.backbone(ids))
+
+
+def arch_config_dict(vocab: int, hidden: int, depth: int, seq: int, batch: int) -> dict:
+    return {"vocab": vocab, "hidden": hidden, "depth": depth, "seq": seq,
+            "batch": batch, "tied_embeddings": False, "head_bias": True}
+
+
+def config_sha(cfg: dict) -> str:
+    return sha256_hex(json.dumps(cfg, sort_keys=True).encode("utf-8"))
+
+
+def build_model(cfg: dict, seed: int, device: str) -> "torch.nn.Module":
+    torch.manual_seed(seed)
+    model = TinyW1Model(cfg["vocab"], cfg["hidden"], cfg["depth"])
+    return model.to(device)
+
+
+# ---------------------------------------------------------------------------
+# Standard from-scratch cosine-with-linear-warmup LR schedule.
+#
+# Deliberately NOT timeshare_pretrain.apply_wsd (the warmup-stable-decay
+# schedule used for the grow-path's CONTINUATION training) -- spec section 2:
+# "an intentionally-hobbled control inflates the ratio and poisons the
+# result." Source: standard SGDR-style cosine decay envelope with linear
+# warmup (Loshchilov & Hutter 2016), documented here rather than imported so
+# the control arm's schedule is visibly independent of the grow-path module.
+# ---------------------------------------------------------------------------
+
+def cosine_warmup_lr(step: int, total_steps: int, *, base_lr: float,
+                      warmup_frac: float = 0.1, min_lr_frac: float = 0.1) -> float:
+    warmup_steps = max(1, int(total_steps * warmup_frac))
+    if step < warmup_steps:
+        return base_lr * (step + 1) / warmup_steps
+    progress = min(1.0, (step - warmup_steps) / max(1, total_steps - warmup_steps))
+    cos = 0.5 * (1.0 + math.cos(math.pi * progress))
+    return base_lr * (min_lr_frac + (1.0 - min_lr_frac) * cos)
+
+
+LR_SCHEDULE_SOURCE = (
+    "standard from-scratch cosine-with-linear-warmup (SGDR-style decay "
+    "envelope, Loshchilov & Hutter 2016), self-contained in this script -- "
+    "distinct from timeshare_pretrain.apply_wsd's warmup-stable-decay "
+    "schedule used for the grow-path's continuation training (spec section 2 "
+    "anti-poison clause forbids reusing the continuation schedule here)")
+
+
+def cosine_warmup_frac(step: int, total_steps: int, *,
+                        warmup_frac: float = 0.1,
+                        min_lr_frac: float = 0.1) -> float:
+    """Pure lr-multiplier form of cosine_warmup_lr (base_lr factored out) --
+    SAME mechanical contract shape as timeshare_pretrain.wsd_lr_frac, so it
+    slots into a split-optimizer apply function the same way apply_wsd does.
+    Formula is UNCHANGED from cosine_warmup_lr (issue #82 live-fire finding
+    2's matched-recipe control still uses the spec sec.2 anti-poison
+    cosine+warmup schedule, only now applied across muon+adamw base_lrs
+    instead of one AdamW lr -- cosine_warmup_lr itself is left untouched,
+    still used verbatim by the dry-run leg)."""
+    warmup_steps = max(1, int(total_steps * warmup_frac))
+    if step < warmup_steps:
+        return (step + 1) / warmup_steps
+    progress = min(1.0, (step - warmup_steps) / max(1, total_steps - warmup_steps))
+    cos = 0.5 * (1.0 + math.cos(math.pi * progress))
+    return min_lr_frac + (1.0 - min_lr_frac) * cos
+
+
+def apply_cosine_warmup(optimizers: dict, base_lrs: dict, step: int,
+                         total_steps: int, *, warmup_frac: float = 0.1,
+                         min_lr_frac: float = 0.1) -> float:
+    """Set every split-optimizer group's lr = base_lr * cosine_warmup_frac
+    (step) -- SAME mechanical application shape as timeshare_pretrain.
+    apply_wsd (never edited; this is the anti-poison schedule swap-in for
+    the matched-recipe control, issue #82 live-fire finding 2). Returns the
+    multiplier so the receipt can quote the realized schedule."""
+    mult = cosine_warmup_frac(step, total_steps, warmup_frac=warmup_frac,
+                              min_lr_frac=min_lr_frac)
+    for key, opt in optimizers.items():
+        for g in opt.param_groups:
+            g["lr"] = base_lrs[key] * mult
+    return mult
+
+
+MATCHED_RECIPE_SCHEDULE_SOURCE = (
+    "cosine_warmup_frac/apply_cosine_warmup -- the SAME formula as "
+    "cosine_warmup_lr (spec sec.2 anti-poison clause: an intentionally-"
+    "hobbled control inflates the ratio and poisons the result, so the "
+    "control arm never reuses timeshare_pretrain.apply_wsd, which is tuned "
+    "for the grow-path's CONTINUATION training), restructured as a pure "
+    "multiplier + apply pair (mirroring apply_wsd's own mechanical shape) "
+    "so it can drive the muon+adamw split optimizer's two base_lrs the way "
+    "apply_wsd drives production's. This is the ONE deliberate delta from "
+    "an otherwise full matched-recipe reuse (issue #82 live-fire finding 2: "
+    "production optimizer mix + production MTP aux objective, since the "
+    "production optimizer mix demonstrably fits the governed card while "
+    "plain AdamW-everything at this shape does not).")
+
+
+# ---------------------------------------------------------------------------
+# Synthetic corpus (dry-run fixture ONLY -- never used on the --live path,
+# which requires a real --shard-dir, mirroring the eng-54 #194 guard already
+# in timeshare_pretrain.run_v0_segment).
+#
+# Tokens are i.i.d. draws from a fixed Zipf-like marginal pmf. Next-token
+# prediction under i.i.d. tokens has one learnable quantity: the marginal
+# distribution itself: cross-entropy is minimized when the model's output
+# equals the pmf, converging toward the pmf's true entropy H(pmf) < log
+# (vocab) as training proceeds. This is a genuinely learnable AND genuinely
+# transferable-to-a-disjoint-held-out-batch quantity (real language modeling
+# gets its easiest wins from the same unigram-frequency signal) -- unlike raw
+# sequence memorization, which would not generalize to a fresh eval batch at
+# all. The head's bias term (see TinyW1Model) is what lets a 2-block linear
+# stand-in fit this within tens of CPU steps.
+# ---------------------------------------------------------------------------
+
+CORPUS_SEED_PHASE1 = 7
+CORPUS_SEED_PHASE2 = 8
+EVAL_GENERATOR_SEED = 42  # matches the function_preservation_check precedent
+
+
+def zipf_pmf(vocab: int) -> "np.ndarray":
+    ranks = np.arange(1, vocab + 1, dtype=np.float64)
+    weights = 1.0 / ranks
+    return weights / weights.sum()
+
+
+def synthetic_corpus(vocab: int, seq: int, n_windows: int, seed: int) -> "np.ndarray":
+    """n_windows windows of (seq+1) i.i.d. tokens each, drawn from the fixed
+    Zipf pmf. Returns shape [n_windows, seq+1]."""
+    rng = np.random.default_rng(seed)
+    pmf = zipf_pmf(vocab)
+    flat = rng.choice(vocab, size=n_windows * (seq + 1), p=pmf)
+    return flat.reshape(n_windows, seq + 1)
+
+
+def batch_from_corpus(corpus: "np.ndarray", step: int, batch_size: int,
+                       device: str) -> tuple["torch.Tensor", "torch.Tensor"]:
+    n_windows = corpus.shape[0]
+    idxs = [(step * batch_size + b) % n_windows for b in range(batch_size)]
+    windows = corpus[idxs]  # [batch, seq+1]
+    x = torch.as_tensor(windows[:, :-1], dtype=torch.long, device=device)
+    y = torch.as_tensor(windows[:, 1:], dtype=torch.long, device=device)
+    return x, y
+
+
+def eval_loss_fn(model: "torch.nn.Module", x: "torch.Tensor",
+                  y: "torch.Tensor") -> float:
+    """The ONE code path both phases use to compute eval loss (spec section 3:
+    'evaluated ... in both arms with the same code path')."""
+    model.eval()
+    with torch.no_grad():
+        logits = model(x)
+        loss = torch.nn.functional.cross_entropy(
+            logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
+    model.train()
+    return float(loss.item())
+
+
+def train_step(model: "torch.nn.Module", optimizer: "torch.optim.Optimizer",
+                x: "torch.Tensor", y: "torch.Tensor") -> float:
+    optimizer.zero_grad(set_to_none=True)
+    logits = model(x)
+    loss = torch.nn.functional.cross_entropy(
+        logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
+    loss.backward()
+    optimizer.step()
+    return float(loss.item())
+
+
+def train_step_matched_recipe(model: "torch.nn.Module", optimizers: dict,
+                               ce_fn, *, x: "torch.Tensor", y0: "torch.Tensor",
+                               y_mtp: list, mtp_enabled: bool,
+                               mtp_weight: float,
+                               ce_chunk_tokens: int = 256) -> float:
+    """Matched-recipe training step (issue #82 live-fire finding 2) --
+    per-step mechanics mirror run_v0_segment's own composition EXACTLY:
+    backbone -> primary CE via ce_fn against model.head.weight -> MTP CEs via
+    ce_fn against each model.mtp_heads[k].weight -> mtp_total_loss composition
+    -> single backward() over the composite -> step() EACH split optimizer ->
+    zero_grad EACH. This is a NEW, separate function from the shared
+    train_step() above (untouched, still used verbatim by the dry-run leg) --
+    train_step assumes one optimizer and a primary-CE-only objective, neither
+    of which holds for the matched-recipe control arm."""
+    for opt in optimizers.values():
+        opt.zero_grad(set_to_none=True)
+    hidden_out = model.backbone(x)
+    h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
+    primary_ce, _n_primary = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
+                                    chunk_tokens=ce_chunk_tokens)
+    mtp_ces = []
+    if mtp_enabled:
+        for k, head in enumerate(model.mtp_heads):
+            ce_k, _n_k = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
+                               chunk_tokens=ce_chunk_tokens)
+            mtp_ces.append(ce_k)
+    loss = mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
+    loss.backward()
+    for opt in optimizers.values():
+        opt.step()
+    return float(loss.detach())
+
+
+def make_eval_batch(vocab: int, batch: int, seq: int, device: str
+                     ) -> tuple["torch.Tensor", "torch.Tensor", str]:
+    """FIXED held-out batch, disjoint from both training corpora (own
+    generator seed), the function_preservation_check idiom applied to eval
+    rather than function-preservation: batch+seqlen+token_ids_sha256+
+    generator_seed all recorded."""
+    corpus = synthetic_corpus(vocab, seq, n_windows=batch, seed=EVAL_GENERATOR_SEED)
+    x = torch.as_tensor(corpus[:, :-1], dtype=torch.long, device=device)
+    y = torch.as_tensor(corpus[:, 1:], dtype=torch.long, device=device)
+    combined_sha = sha256_tokens(torch.cat([x, y], dim=1))
+    return x, y, combined_sha
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 -- capability-point leg.
+# ---------------------------------------------------------------------------
+
+def run_phase1_dryrun(cfg: dict, *, train_steps: int, seed: int, device: str,
+                       out_dir: str, eval_x, eval_y) -> dict:
+    """Dry-run stand-in for 'load the existing rung-1 terminal checkpoint':
+    since no real lineage exists at CPU-dry-run scale, this trains a tiny
+    model here inside the harness so a real (if toy) capability point exists
+    -- labeled dry_run=true, is_real_lineage=false throughout."""
+    model = build_model(cfg, seed, device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.05)
+    # n_windows must exceed the total draws for this phase (train_steps *
+    # batch) with margin -- too few unique windows lets the model MEMORIZE
+    # specific (position, token) pairs instead of learning the pmf's
+    # marginal, which measurably HURTS held-out eval loss (verified: an
+    # 8-window pool drove eval loss above the log(vocab) random baseline).
+    # Enough unique windows forces the only transferable regularity --
+    # per-position output near the true pmf -- which IS what a disjoint
+    # held-out batch rewards.
+    corpus = synthetic_corpus(cfg["vocab"], cfg["seq"],
+                              n_windows=max(train_steps * cfg["batch"] * 3, 64),
+                              seed=CORPUS_SEED_PHASE1)
+
+    losses = []
+    t0 = time.perf_counter()
+    for step in range(train_steps):
+        x, y = batch_from_corpus(corpus, step, cfg["batch"], device)
+        losses.append(train_step(model, optimizer, x, y))
+    wall_s = time.perf_counter() - t0
+
+    target_eval_loss = eval_loss_fn(model, eval_x, eval_y)
+
+    ckpt_dir = save_checkpoint(
+        out_dir, train_steps, model.state_dict(), optimizer.state_dict(),
+        capture_rng(),
+        extra={"segment_id": "w1-phase1-dryrun-harness", "dry_run": True,
+               "is_real_lineage": False, "last_train_loss": losses[-1],
+               "target_eval_loss": target_eval_loss})
+
+    tokens_total = train_steps * cfg["batch"] * cfg["seq"]
+    return {
+        "dry_run": True,
+        "is_real_lineage": False,
+        "terminal_checkpoint_ref": ckpt_dir,
+        "init_seed": seed,
+        "train_steps": train_steps,
+        "tokens_total": tokens_total,
+        "loss_first": round(losses[0], 6),
+        "loss_last": round(losses[-1], 6),
+        "wall_s": round(wall_s, 3),
+        "target_eval_loss": target_eval_loss,
+        "note": ("toy model trained inside this harness stands in for the "
+                 "real rung-1 terminal checkpoint; proves the capability-"
+                 "point leg's mechanics, carries no physical meaning"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 -- control leg (random init, from-scratch schedule, early-stop /
+# ceiling, one deliberate checkpoint+resume cycle to prove resumability).
+# ---------------------------------------------------------------------------
+
+def run_phase2_dryrun(cfg: dict, *, ceiling_steps: int, eval_every: int,
+                       checkpoint_every: int, target_eval_loss: float,
+                       seed: int, device: str, out_dir: str,
+                       eval_x, eval_y) -> dict:
+    model = build_model(cfg, seed, device)
+    base_lr = 0.05
+    optimizer = torch.optim.AdamW(model.parameters(), lr=base_lr)
+    # same diversity rationale as phase 1 (see its comment) -- ceiling_steps
+    # is the worst case (a run that never early-stops).
+    corpus = synthetic_corpus(cfg["vocab"], cfg["seq"],
+                              n_windows=max(ceiling_steps * cfg["batch"] * 3, 64),
+                              seed=CORPUS_SEED_PHASE2)
+
+    _pace_reset()
+    eval_trace: list[dict] = []
+    lr_trace: list[float] = []
+    resume_proof: dict | None = None
+    matched = False
+    tokens_to_match: int | None = None
+    stop_step: int | None = None
+
+    def do_eval(step_idx: int, tokens_so_far: int) -> float:
+        el = eval_loss_fn(model, eval_x, eval_y)
+        eval_trace.append({"step": step_idx, "tokens_so_far": tokens_so_far,
+                            "eval_loss": el})
+        return el
+
+    resume_at_step = checkpoint_every  # deliberate mid-run kill+resume point
+    resumed_once = False
+    t0 = time.perf_counter()
+
+    step = 0
+    el0 = do_eval(0, 0)
+    if el0 <= target_eval_loss:
+        matched, tokens_to_match, stop_step = True, 0, 0
+
+    while step < ceiling_steps and not matched:
+        x, y = batch_from_corpus(corpus, step, cfg["batch"], device)
+        lr = cosine_warmup_lr(step, ceiling_steps, base_lr=base_lr)
+        for g in optimizer.param_groups:
+            g["lr"] = lr
+        lr_trace.append(round(lr, 8))
+        train_step(model, optimizer, x, y)
+        step += 1
+        tokens_so_far = step * cfg["batch"] * cfg["seq"]
+        _pace_record("pace", 0.0)
+
+        if step == resume_at_step and not resumed_once:
+            # --- deliberate checkpoint + kill + resume cycle -----------------
+            pre_ckpt_eval = eval_loss_fn(model, eval_x, eval_y)
+            rng_snap = capture_rng()
+            ckpt_dir = save_checkpoint(
+                out_dir, step, model.state_dict(), optimizer.state_dict(),
+                rng_snap, extra={"segment_id": "w1-phase2-dryrun-control",
+                                  "dry_run": True, "step": step})
+            # simulate a genuine process restart: drop the live objects,
+            # rebuild fresh ones, load state back in.
+            del model, optimizer
+            model = build_model(cfg, seed, device)  # architecture only; state overwritten below
+            optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+            m_state, o_state, r_state, manifest = load_checkpoint(ckpt_dir)
+            model.load_state_dict(m_state)
+            optimizer.load_state_dict(o_state)
+            restore_rng(r_state)
+            post_resume_eval = eval_loss_fn(model, eval_x, eval_y)
+            resume_proof = {
+                "checkpoint_dir": ckpt_dir,
+                "resume_step": manifest["step"],
+                "eval_loss_pre_checkpoint": pre_ckpt_eval,
+                "eval_loss_immediately_post_resume": post_resume_eval,
+                "bit_exact": pre_ckpt_eval == post_resume_eval,
+                "loss_continuity": check_resume_integrity(
+                    [pre_ckpt_eval], [post_resume_eval], rtol=1e-6),
+                "verdict": ("RESUME_BIT_EXACT" if pre_ckpt_eval == post_resume_eval
+                            else "RESUME_STATE_MISMATCH"),
+            }
+            resumed_once = True
+
+        if step % eval_every == 0 or step == ceiling_steps:
+            el = do_eval(step, tokens_so_far)
+            if el <= target_eval_loss:
+                matched = True
+                tokens_to_match = tokens_so_far
+                stop_step = step
+
+    wall_s = time.perf_counter() - t0
+    tokens_at_ceiling = ceiling_steps * cfg["batch"] * cfg["seq"]
+
+    return {
+        "config_sha": config_sha(cfg),
+        "init_seed": seed,
+        "lr_schedule": {"source": LR_SCHEDULE_SOURCE, "base_lr": base_lr,
+                        "warmup_frac": 0.1, "min_lr_frac": 0.1,
+                        "total_steps_for_schedule": ceiling_steps,
+                        "lr_trace_first": lr_trace[0] if lr_trace else None,
+                        "lr_trace_last": lr_trace[-1] if lr_trace else None},
+        "eval_cadence_K": eval_every,
+        "ceiling_steps": ceiling_steps,
+        "steps_run": step,
+        "matched": matched,
+        "tokens_to_match": tokens_to_match,
+        "tokens_at_ceiling": None if matched else tokens_at_ceiling,
+        "stop_step": stop_step,
+        "eval_trace": eval_trace,
+        "resume_proof": resume_proof,
+        "wall_s": round(wall_s, 3),
+        "pacing": pacing_snapshot(),
+        "governor": {
+            "mode": "cpu_dryrun",
+            "note": "governor.preflight() not called on the CPU dry-run path "
+                    "(no GPU); the real --live/--device cuda path calls it "
+                    "before any load and asserts the 0.80 fraction floor",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# REAL LIVE PATH (issue #82) -- phase 1 loads the real rung-1 terminal
+# checkpoint and evaluates it on a real sha-pinned held-out batch drawn from
+# the verified 26-shard corpus; phase 2 trains a width-matched from-scratch
+# control on real shard tokens. Reachable ONLY through refuse_unless_dry_
+# run_safe's two independent interlocks -- never fired by this builder.
+# ---------------------------------------------------------------------------
+
+def verify_real_checkpoint(ckpt_dir: str, rung_receipt: dict) -> dict:
+    """Fail-closed real-checkpoint verification (issue #82 point 3, first
+    real-input assertion). Two checks, both must hold:
+
+      1. chain of custody -- ckpt_dir must be EXACTLY the terminal checkpoint
+         path the rung-1 receipt itself names (stabilization_segment.
+         checkpoint); a substituted path is refused, not silently accepted.
+      2. integrity -- every file the checkpoint's OWN manifest.json lists is
+         re-hashed from on-disk bytes (streaming sha256; no torch.load, no
+         tensor materialization -- CPU/disk-only, safe with no CUDA budget)
+         and must match exactly.
+
+    Raises SystemExit on any mismatch (fail-closed, never a warning).
+    """
+    expected_ckpt = rung_receipt["stabilization_segment"]["checkpoint"]
+    if os.path.normpath(ckpt_dir) != os.path.normpath(expected_ckpt):
+        raise SystemExit(
+            "W1_LIVE_CHECKPOINT_PATH_MISMATCH: ckpt_dir "
+            f"{ckpt_dir!r} is not the rung-1 receipt's own terminal "
+            f"checkpoint {expected_ckpt!r} -- refusing a substituted path.")
+    manifest_path = os.path.join(ckpt_dir, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        raise SystemExit(
+            f"W1_LIVE_CHECKPOINT_MANIFEST_MISSING: {manifest_path!r} not found")
+    manifest = load_json(manifest_path)
+    verified_files: dict[str, str] = {}
+    for fname, expected_sha in manifest.get("files", {}).items():
+        fpath = os.path.join(ckpt_dir, fname)
+        if not os.path.isfile(fpath):
+            raise SystemExit(f"W1_LIVE_CHECKPOINT_FILE_MISSING: {fpath!r}")
+        actual_sha = sha256_file(fpath)
+        if actual_sha != expected_sha:
+            raise SystemExit(
+                f"W1_LIVE_CHECKPOINT_SHA_MISMATCH: {fname} "
+                f"expected={expected_sha} actual={actual_sha}")
+        verified_files[fname] = actual_sha
+    if not verified_files:
+        raise SystemExit(
+            f"W1_LIVE_CHECKPOINT_MANIFEST_EMPTY: {manifest_path!r} lists no files")
+    return {
+        "checkpoint_dir": ckpt_dir,
+        "rung_receipt_terminal_checkpoint": expected_ckpt,
+        "path_identity_verified": True,
+        "files_sha256_verified": verified_files,
+        "method": "streaming re-hash of on-disk bytes against the checkpoint's "
+                  "own manifest.json (no tensor load; CPU/disk-only)",
+    }
+
+
+def verify_shard_corpus(shard_dir: str,
+                         expected_combined_sha256: str | None = None) -> dict:
+    """Fail-closed shard-corpus verification (issue #82 point 3, second
+    real-input assertion), reusing manifest_sha.compute_manifest -- never
+    reimplemented. Raises SystemExit if shard_dir has zero shards, or if
+    expected_combined_sha256 is given and the freshly-computed digest
+    disagrees (a swapped, stale, or corrupted corpus directory)."""
+    import manifest_sha
+    if not os.path.isdir(shard_dir):
+        raise SystemExit(f"W1_LIVE_SHARD_DIR_MISSING: {shard_dir!r} is not a directory")
+    try:
+        manifest = manifest_sha.compute_manifest(shard_dir)
+    except FileNotFoundError as e:
+        raise SystemExit(f"W1_LIVE_SHARD_MANIFEST_EMPTY: {e}")
+    if expected_combined_sha256 and manifest["combined_sha256"] != expected_combined_sha256:
+        raise SystemExit(
+            "W1_LIVE_SHARD_MANIFEST_MISMATCH: computed combined_sha256="
+            f"{manifest['combined_sha256']} != expected={expected_combined_sha256} "
+            f"-- shard_dir {shard_dir!r} is not the verified corpus.")
+    return manifest
+
+
+def compute_n_windows_from_manifest(manifest: dict, seq: int, n_mtp: int = 0) -> int:
+    """Re-derive PackedShardLoader's n_windows from manifest byte SIZES alone
+    -- no token data is loaded (matches receipts/corpus-verification-
+    20260704T095213Z.json's 'windowing_rederivation' methodology exactly:
+    total_tokens = total_size_bytes // 2, n_windows = (total_tokens -
+    block_len)//seq + 1). This lets the held-out window range be chosen
+    before PackedShardLoader's RAM-heavy (~14-27GB) full-corpus concatenation
+    ever runs."""
+    total_tokens = manifest["total_size_bytes"] // 2   # dtype <u2, 2 bytes/token
+    block_len = seq + 1 + n_mtp
+    if total_tokens < block_len:
+        raise SystemExit(
+            f"W1_LIVE_CORPUS_TOO_SMALL: total_tokens={total_tokens} < "
+            f"block_len={block_len}")
+    return (total_tokens - block_len) // seq + 1
+
+
+def held_out_window_start(n_windows: int, eval_batch_size: int) -> int:
+    """Reserve the LAST eval_batch_size windows of the packed stream as the
+    held-out capability-point batch. Deterministic, no RNG."""
+    start = n_windows - eval_batch_size
+    if start <= 0:
+        raise SystemExit(
+            f"W1_LIVE_HELDOUT_RANGE_EMPTY: n_windows={n_windows} <= "
+            f"eval_batch_size={eval_batch_size}")
+    return start
+
+
+def assert_disjoint_from_training(held_out_start: int, ceiling_steps: int,
+                                   train_batch: int) -> dict:
+    """Fail-closed proof that the held-out window range can never be touched
+    by phase-2 from-scratch training. PackedShardLoader.batch(step, B) reads
+    window indices [step*B, step*B+B) for step in [0, ceiling_steps);
+    training always starts at step=0 (spec sec.2: random initialization, a
+    fresh from-scratch run), so the highest window index training can EVER
+    reach is ceiling_steps*train_batch - 1. held_out_start must exceed that."""
+    max_training_window_index = ceiling_steps * train_batch - 1
+    disjoint = held_out_start > max_training_window_index
+    result = {
+        "held_out_window_start": held_out_start,
+        "max_training_window_index_at_ceiling": max_training_window_index,
+        "arithmetic": (f"{held_out_start} > {ceiling_steps}*{train_batch}-1"
+                       f"={max_training_window_index}"),
+        "disjoint": disjoint,
+    }
+    if not disjoint:
+        raise SystemExit(
+            "W1_LIVE_HELDOUT_NOT_DISJOINT: held-out window range overlaps "
+            f"training's reachable window range -- {result}")
+    return result
+
+
+def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
+                           window: int = CONTAMINATION_WINDOW_TOKENS,
+                           roll_base: int = CONTAMINATION_ROLL_BASE) -> dict:
+    """Exhaustive exact-match contamination check of the REAL eval batch
+    against the shard corpus -- the 'contamination re-check hook' issue #82
+    point 1 requires, per receipts/corpus-verification-20260704T095213Z.json's
+    own OPEN ITEM ('re-run this script once issue #53 lands a real
+    capability_point receipt'). Same method as scratch/corpus-wire/
+    contamination_check.py (13-token polynomial rolling hash, uint64 mod
+    2**64, hash hits re-verified by exact elementwise comparison,
+    shard-to-shard boundary windows checked too) -- reimplemented here as a
+    reusable function (that script is a scratch one-off hardcoded to the
+    dry-run batch) rather than imported. CPU-only, one shard resident in RAM
+    at a time -- eval_rows is small (batch rows of length seq+1), never the
+    corpus itself."""
+    import numpy as np
+
+    mod = 1 << 64
+
+    def _needle_hash(ids) -> int:
+        h = 0
+        b = 1
+        for v in ids:
+            h = (h + int(v) * b) % mod
+            b = (b * roll_base) % mod
+        return h
+
+    def _sliding_windows(ids, w):
+        n = len(ids)
+        return [tuple(int(x) for x in ids[i:i + w]) for i in range(n - w + 1)] if n >= w else []
+
+    needle_windows = []
+    for row in eval_rows:
+        needle_windows.extend(_sliding_windows(list(row), window))
+    needle_hash_to_windows: dict[int, list[tuple]] = {}
+    for w in needle_windows:
+        needle_hash_to_windows.setdefault(_needle_hash(w), []).append(w)
+    needle_hash_set = set(needle_hash_to_windows.keys())
+
+    shard_paths = sorted(p for p in os.listdir(shard_dir) if p.endswith(".bin"))
+    if not shard_paths:
+        raise SystemExit(f"W1_LIVE_CONTAMINATION_NO_SHARDS: {shard_dir!r}")
+
+    def _rolling_hashes(arr_u16):
+        n = arr_u16.shape[0]
+        if n < window:
+            return np.array([], dtype=np.uint64), 0
+        arr64 = arr_u16.astype(np.uint64)
+        n_out = n - window + 1
+        h = np.zeros(n_out, dtype=np.uint64)
+        power = np.uint64(1)
+        rb = np.uint64(roll_base)
+        # uint64 wraparound IS the mod-2**64 reduction (same convention as
+        # scratch/corpus-wire/contamination_check.py) -- expected, not an error.
+        with np.errstate(over="ignore"):
+            for k in range(window):
+                h += arr64[k:k + n_out] * power
+                power = power * rb
+        return h, n_out
+
+    confirmed_matches: list[dict] = []
+    candidate_collisions = 0
+    total_windows_hashed = 0
+    prev_tail = None
+    prev_name = None
+    needle_arr = (np.fromiter(needle_hash_set, dtype=np.uint64, count=len(needle_hash_set))
+                  if needle_hash_set else np.array([], dtype=np.uint64))
+
+    for name in shard_paths:
+        arr = np.fromfile(os.path.join(shard_dir, name), dtype="<u2")
+        n = arr.shape[0]
+
+        hashes, n_out = _rolling_hashes(arr)
+        total_windows_hashed += n_out
+        if n_out and needle_hash_set:
+            hit_idx = np.where(np.isin(hashes, needle_arr))[0]
+            for i in hit_idx:
+                i = int(i)
+                candidate = tuple(int(x) for x in arr[i:i + window])
+                hh = _needle_hash(candidate)
+                if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
+                    confirmed_matches.append({"shard": name, "offset": i,
+                                               "window": list(candidate)})
+                else:
+                    candidate_collisions += 1
+
+        if prev_tail is not None and n >= (window - 1) and needle_hash_set:
+            join = np.concatenate([prev_tail, arr[:window - 1]])
+            join_hashes, join_n = _rolling_hashes(join)
+            total_windows_hashed += join_n
+            if join_n:
+                jhit = np.where(np.isin(join_hashes, needle_arr))[0]
+                for i in jhit:
+                    i = int(i)
+                    candidate = tuple(int(x) for x in join[i:i + window])
+                    hh = _needle_hash(candidate)
+                    if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
+                        confirmed_matches.append({
+                            "boundary": f"{prev_name}|{name}",
+                            "offset_in_join": i, "window": list(candidate)})
+
+        prev_tail = arr[-(window - 1):].copy() if n >= (window - 1) else prev_tail
+        prev_name = name
+
+    return {
+        "method": "13-token polynomial rolling hash (uint64 mod 2**64), hash "
+                  "hits re-verified by exact elementwise comparison, "
+                  "shard-to-shard boundary windows checked -- same convention "
+                  "as scratch/corpus-wire/contamination_check.py",
+        "corpus_verification_open_item_ref": CORPUS_VERIFICATION_RECEIPT,
+        "shards_scanned": len(shard_paths),
+        "windows_hashed": total_windows_hashed,
+        "confirmed_matches": confirmed_matches,
+        "hash_collisions_ruled_out": candidate_collisions,
+        "verdict": "CLEAN" if not confirmed_matches else "CONTAMINATED",
+    }
+
+
+class RealW1Model(torch.nn.Module):
+    """Real rung-1-shaped model for the W1 live path. Mirrors timeshare_
+    pretrain._V0Real's key naming (backbone_model / head / mtp_heads, tied
+    embeddings) EXACTLY so load_state_dict(strict=True) matches the real
+    rung-1 checkpoint byte-for-byte. NOT imported from timeshare_pretrain
+    because _V0Real is a closure-local class inside build_v0_model with
+    intermediate_size HARDCODED to 4096 (the un-grown seed FF width) --
+    this checkpoint is rung-1 TERMINAL (post-grow, ff=16384), which
+    build_v0_model has no parameter for. Same transformers.LlamaModel
+    backbone class/convention as build_v0_model's live path -- new only in
+    the FF-width parameter build_v0_model lacks.
+
+    mtp_heads (issue #82 reopened defect, cure): _V0Real.__init__
+    (timeshare_pretrain.py) constructs mtp_heads UNCONDITIONALLY at
+    cfg["objective"]["mtp_aux_heads"]["n_heads"] count -- run_v0_segment's
+    mtp_enabled flag only gates whether they receive a loss term during
+    training, never whether they exist in the model / state_dict. The rung-1
+    terminal checkpoint therefore always carries mtp_heads.<k>.weight keys,
+    and load_state_dict(strict=True) rejects a class that omits them (the
+    live-fire failure this class previously caused). Cured by constructing
+    the identical ModuleList (same per-head shape: Linear(hidden, vocab,
+    bias=False), same count, sourced from the same contract file production
+    reads -- see derive_real_arch_config's n_mtp/n_mtp_source).
+
+    forward()/eval loss deliberately does NOT route through mtp_heads --
+    verified by reading run_v0_segment's training loop (timeshare_pretrain.py
+    ~L1316-1326), not guessed: mtp_heads consume the SAME shared backbone
+    hidden_out as a separate, parallel prediction target (further-future
+    tokens, y_mtp[k]) via their OWN independent CE term
+    (mtp_total_loss(primary_ce, mtp_ces, mtp_weight)); they do not feed into
+    or affect model.head's own computation, which depends only on
+    backbone(ids) and its own weight. This is the standard multi-token-
+    prediction architecture (an auxiliary training-time densifying signal,
+    dropped at inference) -- so the W1 capability metric (primary next-token
+    eval loss, spec sec.3) is architecturally unaffected by whether mtp_heads
+    are invoked in forward(), and matches the pre-existing, already-approved
+    TinyW1Model dry-run convention (primary CE only, spec sec.3 never
+    mentions MTP). mtp_heads exist here ONLY so the checkpoint loads; they
+    are present in model.parameters() (so an optimizer built over this class
+    would list them) but receive no gradient because forward() never calls
+    them -- the same structural shape as a legitimate CE-only fallback
+    segment (RECEIPTED elsewhere in the repo as a real production mode), not
+    a new deviation this class introduces."""
+
+    def __init__(self, real_arch: dict):
+        super().__init__()
+        from transformers import LlamaConfig, LlamaModel
+        conf = LlamaConfig(
+            vocab_size=real_arch["vocab"], hidden_size=real_arch["hidden"],
+            intermediate_size=real_arch["ff_grown"],
+            num_hidden_layers=real_arch["layers_assumed"],
+            num_attention_heads=real_arch["heads_assumed"],
+            num_key_value_heads=real_arch["heads_assumed"],
+            max_position_embeddings=real_arch["seq"],
+            tie_word_embeddings=False)
+        self.backbone_model = LlamaModel(conf)
+        self.head = torch.nn.Linear(real_arch["hidden"], real_arch["vocab"], bias=False)
+        self.head.weight = self.backbone_model.embed_tokens.weight  # tied, per rung receipt's tied_pairs_detected
+        self.mtp_heads = torch.nn.ModuleList(
+            [torch.nn.Linear(real_arch["hidden"], real_arch["vocab"], bias=False)
+             for _ in range(real_arch["n_mtp"])])
+
+    def backbone(self, ids: "torch.Tensor") -> "torch.Tensor":
+        return self.backbone_model(input_ids=ids).last_hidden_state
+
+    def forward(self, ids: "torch.Tensor") -> "torch.Tensor":
+        return self.head(self.backbone(ids))
+
+
+def real_config_dict(real_arch: dict) -> dict:
+    return {"vocab": real_arch["vocab"], "hidden": real_arch["hidden"],
+            "layers": real_arch["layers_assumed"], "heads": real_arch["heads_assumed"],
+            "ff": real_arch["ff_grown"], "seq": real_arch["seq"],
+            "batch": real_arch["batch"], "tied_embeddings": True, "head_bias": False,
+            "n_mtp": real_arch["n_mtp"]}
+
+
+def build_real_model(real_arch: dict, device: str, seed: int | None = None):
+    """Builds RealW1Model and casts it EXACTLY the way every real-
+    architecture model construction path in timeshare_pretrain.py (both
+    trees -- build_v0_model's live branch, ember's extended `.to(device).
+    to(torch.bfloat16)` CPU-smoke variant, and the older inline run_segment
+    live branch, all checked directly) unconditionally does:
+    `.to(device).to(torch.bfloat16)` then `.gradient_checkpointing_enable()`
+    -- regardless of device, matching that this codebase applies both
+    UNCONDITIONALLY, never gated on device=="cuda" (verified: ember's
+    build_v0_model calls this same pair with device="cpu" for its own
+    real-architecture CPU smoke-test path).
+
+    Root cause (issue #82 live-fire finding 2 -- confirmed by reading, not
+    guessed): the prior RealW1Model built plain fp32 with no checkpointing,
+    while the checkpoint this class loads (model.pt, checked directly) is
+    ENTIRELY torch.bfloat16 and was produced by a run that (per the SAME
+    unconditional convention above) also ran under gradient checkpointing --
+    this is the confirmed, non-guessed pair of discrepancies behind the
+    CUDA OOM at run_phase2_live's first forward pass (17.32GiB allocated vs
+    19.19GiB allowed -- see run_phase2_live's docstring for the full
+    arithmetic). Applying both here, on every device, restores byte-for-
+    byte dtype parity with the checkpoint (no more implicit bf16->fp32
+    upcast on load_state_dict) and is directly verified working on CPU
+    (forward/backward/optimizer.step all run cleanly in bf16 with
+    gradient_checkpointing_enable() active -- checked, not assumed)."""
+    if seed is not None:
+        torch.manual_seed(seed)
+    model = RealW1Model(real_arch)
+    model = model.to(device).to(torch.bfloat16)
+    model.backbone_model.gradient_checkpointing_enable()
+    return model
+
+
+def assess_real_lineage(*, checkpoint_verified: bool, shard_verified: bool,
+                         eval_batch_pinned: bool) -> tuple[bool, list[str]]:
+    """issue #82 point 3: is_real_lineage=True ONLY when every real-input
+    assertion holds; fail-closed otherwise, with the failing assertions
+    NAMED -- never a silent/blanket True (the manufactured-GREEN trap
+    issue #82 caught: the prior code stamped 'is_real_lineage: False if
+    dry_run else True' unconditionally)."""
+    reasons = []
+    if not checkpoint_verified:
+        reasons.append("checkpoint_sha_did_not_match_rung_receipt")
+    if not shard_verified:
+        reasons.append("shard_dir_did_not_sha_verify_against_corpus_manifest")
+    if not eval_batch_pinned:
+        reasons.append("eval_batch_sha256_not_pinned")
+    return (len(reasons) == 0, reasons)
+
+
+def verify_checkpoint_key_shape_parity(model_state: dict,
+                                        model: "torch.nn.Module") -> dict:
+    """Issue #82 reopened-defect cure, point 2: a CPU-only, seconds-cheap
+    key-set + shape parity diff between an already-loaded checkpoint
+    state_dict and a model instance's own state_dict() -- catches exactly
+    the class of defect that killed the live run (RealW1Model omitted
+    mtp_heads, so model.load_state_dict(m_state, strict=True) rejected the
+    real checkpoint's mtp_heads.0.weight / mtp_heads.1.weight keys) for free,
+    WITHOUT needing a --live --device cuda invocation to find out. This is
+    the exact check the issue names: torch.load(model.pt, map_location=
+    'cpu').keys() vs RealW1Model().state_dict().keys() -- generalized to any
+    already-loaded state_dict/model pair so it is reusable standalone (a
+    selftest fixture) or wired into run_phase1_live ahead of the real strict
+    load (below), which stays in place, unweakened, as defense-in-depth.
+
+    model_state: a state_dict from load_checkpoint()/torch.load(model.pt) --
+    the caller decides how/when the checkpoint touches disk; never re-loaded
+    here.
+    model: an already-constructed model instance whose .state_dict() is
+    compared against model_state."""
+    own_state = model.state_dict()
+    ckpt_keys = set(model_state.keys())
+    own_keys = set(own_state.keys())
+    missing_in_model = sorted(ckpt_keys - own_keys)
+    unexpected_in_model = sorted(own_keys - ckpt_keys)
+    shape_mismatches = {
+        k: {"checkpoint": list(model_state[k].shape), "model": list(own_state[k].shape)}
+        for k in sorted(ckpt_keys & own_keys)
+        if tuple(model_state[k].shape) != tuple(own_state[k].shape)
+    }
+    if missing_in_model or unexpected_in_model or shape_mismatches:
+        raise SystemExit(
+            "W1_LIVE_CHECKPOINT_KEY_SHAPE_MISMATCH: the model's state_dict "
+            "does not match the checkpoint's -- "
+            f"missing_in_model(checkpoint has, model construction lacks)="
+            f"{missing_in_model} "
+            f"unexpected_in_model(model has, checkpoint lacks)="
+            f"{unexpected_in_model} "
+            f"shape_mismatches={shape_mismatches}. This is exactly the class "
+            "of defect that killed the 2026-07-04 live run at strict=True "
+            "load (issue #82 reopened) -- fix the model class's "
+            "construction, never the checkpoint.")
+    return {"n_keys_checked": len(ckpt_keys), "keys_match": True, "shapes_match": True}
+
+
+def optimizer_state_shape_parity(resumed_bundle: dict, original_bundle: dict) -> dict:
+    """Explicit, named optimizer-state shape-parity check (issue #82
+    live-fire finding 2, requirement 6) -- verifies a resumed split-optimizer
+    bundle's tensor shapes match the originally-saved bundle key-for-key,
+    LAYERED ON TOP of load_optimizers_state's own implicit validation
+    (PyTorch's optimizer.load_state_dict already raises internally on a
+    structural mismatch -- this makes the check explicit, named, and
+    receipted rather than relying solely on that implicit exception path,
+    the same defense-in-depth relationship verify_checkpoint_key_shape_
+    parity has with the model's own strict=True load)."""
+    mismatches: list[str] = []
+    for opt_key in original_bundle:
+        if opt_key not in resumed_bundle:
+            mismatches.append(f"missing optimizer key {opt_key!r} after resume")
+            continue
+        orig_state = original_bundle[opt_key].get("state", {})
+        new_state = resumed_bundle[opt_key].get("state", {})
+        if set(orig_state.keys()) != set(new_state.keys()):
+            mismatches.append(
+                f"{opt_key}: param-index key sets differ "
+                f"(original={sorted(orig_state.keys())} "
+                f"resumed={sorted(new_state.keys())})")
+            continue
+        for pidx, orig_pstate in orig_state.items():
+            new_pstate = new_state.get(pidx, {})
+            for buf_name, orig_t in orig_pstate.items():
+                if not isinstance(orig_t, torch.Tensor):
+                    continue
+                new_t = new_pstate.get(buf_name)
+                if new_t is None or tuple(new_t.shape) != tuple(orig_t.shape):
+                    mismatches.append(
+                        f"{opt_key}[{pidx}].{buf_name}: shape "
+                        f"{None if new_t is None else tuple(new_t.shape)} != "
+                        f"{tuple(orig_t.shape)}")
+    return {"n_optimizer_keys_checked": len(original_bundle),
+            "mismatches": mismatches, "shapes_match": len(mismatches) == 0}
+
+
+def hard_free_and_assert_phase_boundary(
+        device: str, *, threshold_bytes: int = 512 * 1024 * 1024) -> dict:
+    """Phase-boundary hygiene (issue #82 live-fire finding 2, requirement 2):
+    hard-free phase-1's resident and ASSERT allocated CUDA memory is below a
+    named threshold before phase-2 builds its own model + optimizers.
+
+    Root-cause note on whether phase-1 leaked into phase-2 (from reading,
+    not guessed): run_phase1_live's `model` is a function-local that goes
+    out of scope on return; main_live only ever keeps the RETURNED DICT
+    (strings/floats/lists, no tensor or model reference) -- so CPython's
+    deterministic refcounting should already free phase-1's model with no
+    reference cycle involved (none was found reading run_phase1_live/
+    main_live). The observed 17.32GiB allocated at the phase-2 crash is
+    fully and independently explained by phase-2's OWN single-model
+    forward-pass activation accumulation without gradient checkpointing
+    (see run_phase2_live's docstring for the arithmetic) -- so this is NOT
+    confirmed to be a phase-1 leak. This assert is kept as a permanent,
+    cheap hygiene boundary regardless: it converts "probably fine" into a
+    receipted, fail-closed guarantee, and would catch a REAL leak
+    introduced by some future change immediately rather than at the next
+    OOM."""
+    import gc
+    gc.collect()
+    if device != "cuda":
+        return {"mode": "cpu_no_op",
+                "note": "device != 'cuda' -- nothing to free/assert "
+                        "(tiny-fixture selftest path; production live path "
+                        "always passes device='cuda')"}
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    allocated = torch.cuda.memory_allocated()
+    reserved = torch.cuda.memory_reserved()
+    result = {
+        "mode": "cuda",
+        "allocated_bytes": allocated,
+        "allocated_gib": round(allocated / (1024 ** 3), 3),
+        "reserved_bytes": reserved,
+        "reserved_gib": round(reserved / (1024 ** 3), 3),
+        "threshold_bytes": threshold_bytes,
+        "threshold_gib": round(threshold_bytes / (1024 ** 3), 3),
+        "below_threshold": allocated < threshold_bytes,
+    }
+    if not result["below_threshold"]:
+        raise SystemExit(
+            "W1_LIVE_PHASE_BOUNDARY_RESIDUE: "
+            f"{result['allocated_gib']}GiB still allocated after the "
+            f"phase-1->phase-2 hard-free (gc.collect + empty_cache + "
+            f"synchronize), above the {result['threshold_gib']}GiB "
+            "threshold -- a real residue, not the expected near-zero "
+            "baseline. Refusing to start phase-2 on top of it rather than "
+            f"risk compounding toward another OOM. {json.dumps(result)}")
+    return result
+
+
+def derive_wall_hours_from_rung(rung_receipt: dict, ceiling_tokens: int) -> dict:
+    """Wall/throughput re-estimate (issue #82 live-fire finding 2,
+    requirement 4) -- derived FRESH from the rung receipt's own measured
+    rate, never the prior w1-pricing receipt's pass-through figure. This is
+    now a MORE faithful estimate than before: phase-2 adopts the SAME
+    matched recipe (muon-split optimizer + MTP aux objective + bf16 +
+    gradient checkpointing) the rung's own stabilization segment used when
+    it measured this throughput, at the same architecture/batch/seq/
+    governor pacing convention -- unlike the prior plain-AdamW design, which
+    this throughput figure never actually characterized."""
+    tok_s = rung_receipt["stabilization_segment"]["tok_s_paced"]
+    wall_s = ceiling_tokens / tok_s if tok_s else None
+    return {
+        "throughput_tok_s_paced": tok_s,
+        "throughput_source": (
+            "rung_receipt.stabilization_segment.tok_s_paced -- measured "
+            "during the live run that used the SAME matched recipe (muon "
+            "split optimizer + MTP aux objective, at the same governor "
+            "pacing) phase-2 now also uses, not the prior plain-AdamW-"
+            "agnostic pricing-receipt pass-through"),
+        "ceiling_tokens": ceiling_tokens,
+        "wall_hours": None if wall_s is None else round(wall_s / 3600.0, 4),
+    }
+
+
+def run_phase1_live(real_arch: dict, rung_receipt: dict, *, device: str,
+                     eval_x, eval_y) -> dict:
+    """Real capability-point leg (issue #82 point 1): load the rung-1
+    terminal checkpoint (sha-verified against the rung receipt), evaluate on
+    the real held-out batch via the SAME eval_loss_fn dry-run phase 1 uses --
+    NO retraining (spec sec.3: 'computed once from the existing checkpoint,
+    CPU/GPU-cheap')."""
+    checkpoint_verify = verify_real_checkpoint(
+        real_arch["terminal_checkpoint_ref"], rung_receipt)
+    model = build_real_model(real_arch, device)
+    m_state, _, _, _ = load_checkpoint(real_arch["terminal_checkpoint_ref"])
+    # Cheap, named parity check BEFORE the strict load (issue #82 reopened
+    # cure) -- strict=True below still stays, unweakened, as the final
+    # defense-in-depth assertion.
+    key_shape_parity = verify_checkpoint_key_shape_parity(m_state, model)
+    model.load_state_dict(m_state, strict=True)
+    target_eval_loss = eval_loss_fn(model, eval_x, eval_y)
+    return {
+        "dry_run": False,
+        "checkpoint_verify": checkpoint_verify,
+        "key_shape_parity": key_shape_parity,
+        "terminal_checkpoint_ref": real_arch["terminal_checkpoint_ref"],
+        "target_eval_loss": target_eval_loss,
+        "note": ("real rung-1 terminal checkpoint loaded and sha-verified "
+                 "(path identity + per-file re-hash + key/shape parity + "
+                 "strict state_dict match); no training in this leg -- the "
+                 "capability point is computed once from the existing "
+                 "checkpoint, per spec section 3."),
+    }
+
+
+def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
+                     eval_every: int, checkpoint_every: int,
+                     target_eval_loss: float, seed: int, device: str,
+                     out_dir: str, shard_dir: str, eval_x, eval_y,
+                     loader=None, rung_receipt: dict | None = None) -> dict:
+    """Real control leg, REWORKED to the full matched-recipe control (issue
+    #82 live-fire finding 2, 2026-07-04): the prior plain-AdamW single-
+    optimizer design OOM'd at 17.32GiB allocated + 1.61GiB fragmentation-
+    reserved vs the 19.19GiB governed allowance, on its VERY FIRST forward
+    pass (scratch/w1-control/live/w1-live-20260704c.log traceback: crashed
+    inside backbone_model's MLP down_proj, "Tried to allocate 1024.00 MiB"
+    == exactly batch*seq*ff_grown*4bytes, one MLP intermediate activation
+    tensor in fp32; no backward()/optimizer.step() had run yet for this
+    step, so NO optimizer state existed at the crash point -- this rules out
+    "2 AdamW moment buffers" as the proximate trigger, though the design
+    asymmetry was real and is now resolved anyway).
+
+    Root-caused by READING the ACTUAL code that produced the proven-fit
+    existence-proof run (rung-1 stabilization: cbase_grow_rung.py ->
+    timeshare_pretrain.run_v0_segment -> build_v0_model's live branch, both
+    trees checked, functions confirmed byte-identical across the contract/
+    execution split) -- two confirmed discrepancies, never guessed:
+      1. build_v0_model casts `.to(device).to(torch.bfloat16)`
+         UNCONDITIONALLY (even on its own CPU smoke-test path). The real
+         checkpoint's model.pt is confirmed ENTIRELY torch.bfloat16 (checked
+         directly against the file). The prior RealW1Model built fp32
+         (default), silently doubling every param/activation/gradient
+         tensor's memory AND silently upcasting the checkpoint's bf16
+         weights to fp32 on load_state_dict.
+      2. build_v0_model calls `.gradient_checkpointing_enable()`
+         UNCONDITIONALLY (same, even on CPU) -- this executes regardless of
+         v0-pretrain-config.json's model.grad_checkpointing:false field
+         (confirmed identical in both the v3-licensed execution-tree config
+         and the v4 contract-tree config; the code does not read this flag
+         at all). Without it, retained MLP activations across all 20 layers
+         (ff_grown=16384 -> ~2.1GB/layer fp32) accumulate simultaneously
+         during forward for backward -- 17.32GiB / ~2.1GB ~= 8 layers,
+         closely matching the crash point.
+    Also confirmed directly: the real checkpoint's optimizer.pt has
+    top-level keys ['muon', 'adamw'] (proof the rung segment used
+    build_split_optimizer's muon_split routing, never the AdamW-everything
+    fallback), with a MIX of bfloat16 (Muon's momentum buffer, matching its
+    bf16 param/grad) and float32 (AdamW's exp_avg/exp_avg_sq) tensor dtypes
+    -- exactly what naturally falls out of casting the model to bf16 and
+    building the SAME optimizers over it via build_split_optimizer, not a
+    separately-chosen policy this rework has to reproduce by hand.
+
+    Cure: reuses (never reimplements) build_split_optimizer, resolve_ce_impl,
+    mtp_total_loss, save_optimizers_state/load_optimizers_state from
+    timeshare_pretrain -- the SAME building blocks run_v0_segment itself
+    composes (run_v0_segment cannot be called directly: its model comes from
+    build_v0_model, whose intermediate_size is hardcoded to 4096, not this
+    checkpoint's grown 16384 -- the same FF-width constraint that required
+    RealW1Model to exist in the first place). ONLY the LR schedule is
+    deliberately swapped for cosine+warmup (see cosine_warmup_frac/
+    apply_cosine_warmup, MATCHED_RECIPE_SCHEDULE_SOURCE -- spec sec.2
+    anti-poison clause: WSD is tuned for the grow-path's continuation, not
+    a from-scratch control). The capability metric (target_eval_loss,
+    eval_loss_fn) is UNCHANGED -- primary-CE-only, per the pre-existing spec
+    sec.3 convention; only the TRAINING objective now includes the real MTP
+    composite, matching production.
+
+    loader: an already-built PackedShardLoader over shard_dir with
+    n_mtp=real_arch["n_mtp"] (main_live now builds it at this count, not 0,
+    since training needs real MTP targets too -- window x/primary-y for a
+    given index are unaffected by n_mtp, verified by reading window_np's
+    slicing directly, so this is also the correct loader for the held-out
+    eval batch). Reused here for training to avoid a second ~14-27GB corpus
+    load; builds its own (also at real_arch["n_mtp"]) only if none given
+    (tiny-fixture selftest calling this function standalone).
+
+    rung_receipt: if given, the wall/throughput estimate (requirement 4) is
+    derived fresh from its own stabilization_segment.tok_s_paced field (see
+    derive_wall_hours_from_rung) instead of the prior pricing-receipt
+    pass-through."""
+    if device == "cuda":
+        from timeshare_pretrain import _apply_governor
+        gov_receipt = _apply_governor()
+    else:
+        # governor.preflight() asserts a VRAM budget -- meaningless without an
+        # actual GPU device. Production always calls this with device="cuda"
+        # (main_live hardcodes device="cuda"); this branch exists so the
+        # mechanics are exercisable end-to-end on a tiny CPU fixture without
+        # ever touching CUDA (issue #82 verification leg: CPU-only, no CUDA
+        # allocation from the builder session).
+        gov_receipt = {
+            "mode": "cpu_live_test",
+            "note": "governor.preflight() not called -- device != 'cuda' "
+                    "(tiny-fixture selftest path; production live path always "
+                    "passes device='cuda')",
+        }
+
+    pretrain_contract = load_json(PRETRAIN_CONTRACT_PATH)
+    mtp_cfg = pretrain_contract["objective"]["mtp_aux_heads"]
+    mtp_enabled = bool(mtp_cfg["enabled"])
+    mtp_weight = mtp_cfg["weight"]
+
+    deviation_dir = os.path.join(out_dir, "deviations")
+
+    def _build_model_and_optimizers():
+        m = build_real_model(real_arch, device, seed=seed)
+        opts, blrs, routing_ = build_split_optimizer(
+            m, pretrain_contract, force_fallback=False,
+            deviation_dir=deviation_dir)
+        return m, opts, blrs, routing_
+
+    model, optimizers, base_lrs, routing = _build_model_and_optimizers()
+    ce_impl, ce_fn = resolve_ce_impl(prefer_liger=(device == "cuda"))
+
+    if loader is None:
+        from timeshare_pretrain import PackedShardLoader
+        loader = PackedShardLoader(shard_dir, real_arch["seq"],
+                                   n_mtp=real_arch["n_mtp"])
+
+    _pace_reset()
+    eval_trace: list[dict] = []
+    lr_trace: list[float] = []
+    resume_proof: dict | None = None
+    matched = False
+    tokens_to_match: int | None = None
+    stop_step: int | None = None
+
+    def do_eval(step_idx: int, tokens_so_far: int) -> float:
+        el = eval_loss_fn(model, eval_x, eval_y)
+        eval_trace.append({"step": step_idx, "tokens_so_far": tokens_so_far,
+                            "eval_loss": el})
+        return el
+
+    resume_at_step = checkpoint_every
+    resumed_once = False
+    t0 = time.perf_counter()
+
+    step = 0
+    el0 = do_eval(0, 0)
+    if el0 <= target_eval_loss:
+        matched, tokens_to_match, stop_step = True, 0, 0
+
+    while step < ceiling_steps and not matched:
+        x, y0, y_mtp = loader.batch(step, real_arch["batch"])
+        x = x.to(device)
+        y0 = y0.to(device)
+        y_mtp = [t.to(device) for t in y_mtp]
+        mult = apply_cosine_warmup(optimizers, base_lrs, step, ceiling_steps)
+        lr_trace.append(round(mult, 8))
+        train_step_matched_recipe(
+            model, optimizers, ce_fn, x=x, y0=y0, y_mtp=y_mtp,
+            mtp_enabled=mtp_enabled, mtp_weight=mtp_weight)
+        step += 1
+        tokens_so_far = step * real_arch["batch"] * real_arch["seq"]
+        _pace_record("pace", 0.0)
+
+        if step == resume_at_step and not resumed_once:
+            pre_ckpt_eval = eval_loss_fn(model, eval_x, eval_y)
+            rng_snap = capture_rng()
+            saved_o_state = save_optimizers_state(optimizers)
+            ckpt_dir = save_checkpoint(
+                out_dir, step, model.state_dict(), saved_o_state,
+                rng_snap, extra={"segment_id": "w1-phase2-live-control",
+                                  "dry_run": False, "step": step,
+                                  "optimizer_mode": routing["mode"]})
+            del model, optimizers
+            model, optimizers, base_lrs, routing = _build_model_and_optimizers()
+            m_state, o_state, r_state, manifest = load_checkpoint(ckpt_dir)
+            model.load_state_dict(m_state, strict=True)
+            load_optimizers_state(optimizers, o_state)
+            restore_rng(r_state)
+            post_resume_eval = eval_loss_fn(model, eval_x, eval_y)
+            resume_proof = {
+                "checkpoint_dir": ckpt_dir,
+                "resume_step": manifest["step"],
+                "eval_loss_pre_checkpoint": pre_ckpt_eval,
+                "eval_loss_immediately_post_resume": post_resume_eval,
+                "bit_exact": pre_ckpt_eval == post_resume_eval,
+                "loss_continuity": check_resume_integrity(
+                    [pre_ckpt_eval], [post_resume_eval], rtol=1e-6),
+                "verdict": ("RESUME_BIT_EXACT" if pre_ckpt_eval == post_resume_eval
+                            else "RESUME_STATE_MISMATCH"),
+                "optimizer_state_shape_check": optimizer_state_shape_parity(
+                    save_optimizers_state(optimizers), saved_o_state),
+            }
+            resumed_once = True
+
+        if step % eval_every == 0 or step == ceiling_steps:
+            el = do_eval(step, tokens_so_far)
+            if el <= target_eval_loss:
+                matched = True
+                tokens_to_match = tokens_so_far
+                stop_step = step
+
+    wall_s = time.perf_counter() - t0
+    tokens_at_ceiling = ceiling_steps * real_arch["batch"] * real_arch["seq"]
+
+    wall_hours_estimate = (derive_wall_hours_from_rung(rung_receipt, tokens_at_ceiling)
+                          if rung_receipt is not None else None)
+
+    return {
+        "config_sha": config_sha(cfg_real),
+        "init_seed": seed,
+        "lr_schedule": {"source": MATCHED_RECIPE_SCHEDULE_SOURCE,
+                        "base_lrs": base_lrs, "warmup_frac": 0.1,
+                        "min_lr_frac": 0.1,
+                        "total_steps_for_schedule": ceiling_steps,
+                        "lr_mult_trace_first": lr_trace[0] if lr_trace else None,
+                        "lr_mult_trace_last": lr_trace[-1] if lr_trace else None},
+        "optimizer": {"mode": routing["mode"], "n_muon": routing.get("n_muon"),
+                      "n_adamw": routing.get("n_adamw"), "ce_impl": ce_impl,
+                      "mtp_enabled": mtp_enabled, "mtp_weight": mtp_weight,
+                      "n_mtp_heads": real_arch["n_mtp"]},
+        "eval_cadence_K": eval_every,
+        "ceiling_steps": ceiling_steps,
+        "steps_run": step,
+        "matched": matched,
+        "tokens_to_match": tokens_to_match,
+        "tokens_at_ceiling": None if matched else tokens_at_ceiling,
+        "stop_step": stop_step,
+        "eval_trace": eval_trace,
+        "resume_proof": resume_proof,
+        "wall_s": round(wall_s, 3),
+        "wall_hours_estimate": wall_hours_estimate,
+        "pacing": pacing_snapshot(),
+        "governor": gov_receipt,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Outcome classification (spec section 4 -- all three land as truth).
+# ---------------------------------------------------------------------------
+
+def classify_outcome(tokens_growpath: int, phase2: dict) -> dict:
+    if phase2["matched"]:
+        tokens_fromscratch = phase2["tokens_to_match"]
+        ratio = (tokens_fromscratch / tokens_growpath) if tokens_growpath > 0 else None
+        if ratio is None:
+            outcome = "L2"
+            lower_bound = True
+            ratio_repr = None
+        elif ratio > 1:
+            outcome = "L1"
+            lower_bound = False
+            ratio_repr = ratio
+        else:
+            outcome = "L3"
+            lower_bound = False
+            ratio_repr = ratio
+        return {"outcome": outcome, "ratio": ratio_repr, "lower_bound": lower_bound,
+                "tokens_fromscratch": tokens_fromscratch}
+    else:
+        tokens_ceiling = phase2["tokens_at_ceiling"]
+        ratio_lower = (tokens_ceiling / tokens_growpath) if tokens_growpath > 0 else None
+        return {"outcome": "L2", "ratio": f"> {ratio_lower}" if ratio_lower else None,
+                "lower_bound": True, "tokens_fromscratch": tokens_ceiling}
+
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--live", action="store_true",
+                    help="real-run path; refuses unless EMBER_GATE_AUTHORIZED=1 "
+                         "AND --device cuda AND --shard-dir given. Never fired "
+                         "by this builder.")
+    ap.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
+    ap.add_argument("--shard-dir", default=None,
+                    help="real packed-token shards; required on --live, refused "
+                         "to fabricate (eng-54 #194 guard)")
+    ap.add_argument("--out-dir", default=os.path.join(
+        REPO, "scratch", "w1-control", "dry-run"))
+    ap.add_argument("--pricing-receipt", default=DEFAULT_PRICING_RECEIPT)
+    ap.add_argument("--rung-receipt", default=DEFAULT_RUNG_RECEIPT)
+    # tiny dry-run architecture (task-specified defaults)
+    ap.add_argument("--vocab", type=int, default=512)
+    ap.add_argument("--hidden", type=int, default=32)
+    ap.add_argument("--depth", type=int, default=2)
+    ap.add_argument("--seq", type=int, default=64)
+    ap.add_argument("--batch", type=int, default=2)
+    ap.add_argument("--ceiling-steps", type=int, default=40)
+    ap.add_argument("--eval-every", type=int, default=5)
+    ap.add_argument("--checkpoint-every", type=int, default=10)
+    ap.add_argument("--phase1-train-steps", type=int, default=20)
+    ap.add_argument("--phase1-seed", type=int, default=1001)
+    ap.add_argument("--phase2-seed", type=int, default=2002)
+    # Live-path-only options (issue #82). Kept SEPARATE from the dry-run
+    # tunables above (--ceiling-steps/--eval-every/--checkpoint-every) so the
+    # dry-run branch's defaults/behavior are untouched by this change.
+    ap.add_argument("--corpus-manifest-sha256",
+                    default=CORPUS_MANIFEST_COMBINED_SHA256_EXPECTED,
+                    help="expected combined_sha256 of --shard-dir's manifest "
+                         "(sha-verified fail-closed on live launch, cited from "
+                         "receipts/corpus-verification-20260704T095213Z.json); "
+                         "pass '' to skip the check (NOT recommended -- only "
+                         "for a deliberate, disclosed corpus refresh).")
+    ap.add_argument("--live-ceiling-steps", type=int, default=None,
+                    help="live control-arm hard ceiling steps; default "
+                         f"REAL_HARD_CEILING_STEPS ({REAL_HARD_CEILING_STEPS}, "
+                         "issue-stated) unless given.")
+    ap.add_argument("--live-eval-every", type=int, default=None,
+                    help="live eval cadence K; default "
+                         f"REAL_EVAL_CADENCE_K ({REAL_EVAL_CADENCE_K}) unless given.")
+    ap.add_argument("--live-checkpoint-every", type=int, default=None,
+                    help="live checkpoint cadence; defaults to --live-eval-every "
+                         "unless given (spec sec.6: 'checkpoint + eval every K steps').")
+    return ap
+
+
+def refuse_unless_dry_run_safe(args: argparse.Namespace) -> None:
+    """Default-closed guard (mirrors timeshare_pretrain._check_launch_interlock):
+    refuses the GPU/real-run path unless explicitly authorized, and refuses to
+    fabricate synthetic shards on that path even when authorized."""
+    if not args.live and args.device == "cpu":
+        return
+    authorized = os.environ.get("EMBER_GATE_AUTHORIZED", "") == "1"
+    if not (authorized and args.live and args.device == "cuda"):
+        msg = ("W1_CONTROL_LAUNCH_INTERLOCK_REFUSED: real/GPU path blocked. "
+               "Requires EMBER_GATE_AUTHORIZED=1 (env) AND --live AND "
+               "--device cuda. The real run is maintainer-window-scheduled "
+               f"(issue #53); never fired by this builder. "
+               f"[authorized={authorized}, live={args.live}, device={args.device}]")
+        print(msg)
+        raise SystemExit(msg)
+    if not args.shard_dir:
+        raise SystemExit(
+            "W1_CONTROL_LIVE_NO_SHARDS: live control-arm training requires a "
+            "real --shard-dir of packed token shards; refusing to fabricate "
+            "synthetic tokens on the live/GPU path (mirrors eng-54 #194).")
+    maintainer_confirmed = os.environ.get(MAINTAINER_WINDOW_ENV, "") == "1"
+    if not maintainer_confirmed:
+        raise SystemExit(
+            "W1_CONTROL_LIVE_SECOND_INTERLOCK_REFUSED: real/GPU launch "
+            f"additionally requires {MAINTAINER_WINDOW_ENV}=1, INDEPENDENT of "
+            "EMBER_GATE_AUTHORIZED=1 -- a second, W1-specific key so a "
+            "builder/test session that happens to carry EMBER_GATE_AUTHORIZED=1 "
+            "for unrelated reasons (or a machine where torch.cuda.is_available() "
+            "is True because the GPU merely happens to be window-occupied, not "
+            "absent) can never reach the real training path. Set only by the "
+            "maintainer's actual GPU-launch runbook.")
+
+
+def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
+              rung_receipt: dict, real_arch: dict) -> int:
+    """REAL live pipeline (issue #82). Reachable ONLY after both
+    refuse_unless_dry_run_safe interlocks passed (EMBER_GATE_AUTHORIZED=1 AND
+    EMBER_W1_MAINTAINER_WINDOW_CONFIRMED=1 AND --live AND --device cuda AND
+    --shard-dir). Never invoked by this builder outside a fixture-mocked
+    selftest that stops short of this function (the selftest exercises the
+    constituent assertion functions directly, on tiny fixtures, never this
+    entrypoint end-to-end against real CUDA)."""
+    import numpy as np
+
+    # Fragmentation mitigation (issue #82 live-fire finding 2, requirement 3)
+    # -- MUST be set before the process's first CUDA context init (before any
+    # .cuda()/.to("cuda") call anywhere below), or it has no effect. The env
+    # var name is copied EXACTLY from the actual OOM error message ("If
+    # reserved but unallocated memory is large try setting
+    # PYTORCH_ALLOC_CONF=expandable_segments:True"), not assumed/renamed.
+    pytorch_alloc_conf_already_set = "PYTORCH_ALLOC_CONF" in os.environ
+    os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
+    pytorch_alloc_conf_receipt = {
+        "env_var": "PYTORCH_ALLOC_CONF",
+        "value": os.environ["PYTORCH_ALLOC_CONF"],
+        "already_set_by_caller": pytorch_alloc_conf_already_set,
+        "adopted_by_this_run": not pytorch_alloc_conf_already_set,
+    }
+
+    from timeshare_pretrain import PackedShardLoader
+
+    device = "cuda"
+    out_dir = args.out_dir
+    os.makedirs(out_dir, exist_ok=True)
+
+    expected_corpus_sha = args.corpus_manifest_sha256 or None
+    shard_manifest = verify_shard_corpus(
+        args.shard_dir, expected_combined_sha256=expected_corpus_sha)
+    shard_verified_ok = (expected_corpus_sha is None or
+                         shard_manifest["combined_sha256"] == expected_corpus_sha)
+
+    # n_mtp threaded through (issue #82 live-fire finding 2): the matched-
+    # recipe training loop needs real MTP targets, so the ONE loader built
+    # below is now sized at real_arch["n_mtp"] (was 0) and reused for BOTH
+    # the held-out eval batch AND phase-2 training -- window_np's x/primary-y
+    # slicing for a given window index is unaffected by n_mtp (verified by
+    # reading PackedShardLoader.window_np directly: x = w[:seq] always
+    # starts at i*seq regardless of block_len), only n_windows itself shrinks
+    # slightly as n_mtp grows, so n_windows must be re-derived at the SAME
+    # n_mtp the loader actually uses for held-out-start/disjointness to stay
+    # exactly correct (not "coincidentally correct at this corpus scale").
+    n_windows = compute_n_windows_from_manifest(
+        shard_manifest, real_arch["seq"], n_mtp=real_arch["n_mtp"])
+    ceiling_steps = args.live_ceiling_steps or REAL_HARD_CEILING_STEPS
+    eval_every = args.live_eval_every or REAL_EVAL_CADENCE_K
+    checkpoint_every = args.live_checkpoint_every or eval_every
+    held_out_start = held_out_window_start(n_windows, real_arch["batch"])
+    disjoint_check = assert_disjoint_from_training(
+        held_out_start, ceiling_steps, real_arch["batch"])
+
+    eval_loader = PackedShardLoader(args.shard_dir, real_arch["seq"],
+                                    n_mtp=real_arch["n_mtp"])
+    xs, ys = [], []
+    for j in range(real_arch["batch"]):
+        x_np, y_np, _y_mtp = eval_loader.window_np(held_out_start + j)
+        xs.append(x_np)
+        ys.append(y_np)
+    eval_x = torch.as_tensor(np.stack(xs), dtype=torch.long, device=device)
+    eval_y = torch.as_tensor(np.stack(ys), dtype=torch.long, device=device)
+    eval_sha = sha256_tokens(torch.cat([eval_x, eval_y], dim=1))
+    eval_batch_pinned_ok = bool(eval_sha)
+
+    # Contamination re-check hook (corpus-verification receipt's open item):
+    # reconstruct the full seq+1 window per held-out row (x_np is w[0:seq],
+    # y_np is w[1:seq+1], so w = x_np + [y_np[-1]]) before scanning.
+    eval_rows = [list(x_np) + [int(y_np[-1])] for x_np, y_np in zip(xs, ys)]
+    contamination = contamination_recheck(eval_rows, args.shard_dir)
+
+    phase1 = run_phase1_live(real_arch, rung_receipt, device=device,
+                              eval_x=eval_x, eval_y=eval_y)
+
+    # Phase-boundary hygiene (issue #82 live-fire finding 2, requirement 2):
+    # hard-free phase-1's resident + ASSERT allocated is below threshold
+    # BEFORE phase-2 builds its own model + optimizers.
+    phase_boundary_hygiene = hard_free_and_assert_phase_boundary(device)
+
+    cfg_real = real_config_dict(real_arch)
+    phase2 = run_phase2_live(
+        cfg_real, real_arch, ceiling_steps=ceiling_steps, eval_every=eval_every,
+        checkpoint_every=checkpoint_every, target_eval_loss=phase1["target_eval_loss"],
+        seed=args.phase2_seed, device=device,
+        out_dir=os.path.join(out_dir, "phase2-live"), shard_dir=args.shard_dir,
+        eval_x=eval_x, eval_y=eval_y,
+        loader=eval_loader,  # reuse -- avoid a second ~14-27GB corpus load
+        rung_receipt=rung_receipt)
+
+    is_real_lineage, lineage_reasons = assess_real_lineage(
+        checkpoint_verified=True,   # run_phase1_live raises before returning if not
+        shard_verified=shard_verified_ok,
+        eval_batch_pinned=eval_batch_pinned_ok)
+
+    outcome = classify_outcome(pricing_receipt["grow_arm"]["tokens_total"], phase2)
+
+    eval_trace_path = os.path.join(out_dir, f"w1-eval-trace-live-{ts}.json")
+    with open(eval_trace_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(phase2["eval_trace"], f, indent=2)
+    eval_trace_sha = sha256_file(eval_trace_path)
+
+    receipt = {
+        "ticket": "W1-COLLAPSE-CONTROL",
+        "ts": ts,
+        "issue": ISSUE_REF,
+        "schema": "w1-collapse-control/v1",
+        "spec_ref": f"{SPEC_REF} section 7",
+        "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+        "dry_run": False,
+        "is_real_lineage": is_real_lineage,
+        "is_real_lineage_reasons": lineage_reasons,
+        "mode": "live",
+        "device": device,
+        "real_lineage_reference": {
+            "pricing_receipt_path": args.pricing_receipt,
+            "pricing_receipt_sha256": sha256_file(args.pricing_receipt),
+            "rung_receipt_path": args.rung_receipt,
+            "rung_receipt_sha256": sha256_file(args.rung_receipt),
+            "corpus_verification_receipt": CORPUS_VERIFICATION_RECEIPT,
+            "derived_target_architecture": real_arch,
+        },
+        "checkpoint_verification": phase1["checkpoint_verify"],
+        "shard_corpus_verification": {
+            "shard_dir": args.shard_dir,
+            "n_files": shard_manifest["n_files"],
+            "total_tokens": shard_manifest["total_tokens"],
+            "combined_sha256": shard_manifest["combined_sha256"],
+            "expected_combined_sha256": expected_corpus_sha,
+            "verified": shard_verified_ok,
+        },
+        "held_out_batch": {
+            "window_start": held_out_start,
+            "n_windows_total": n_windows,
+            "disjointness_check": disjoint_check,
+        },
+        "contamination_recheck": contamination,
+        "grow_arm": {
+            "terminal_checkpoint_ref": phase1["terminal_checkpoint_ref"],
+            "tokens_total": pricing_receipt["grow_arm"]["tokens_total"],
+            "bill_aggregation_rows": pricing_receipt["grow_arm"]["bill_aggregation_rows"],
+            "dry_run": False,
+            "is_real_lineage": is_real_lineage,
+        },
+        "control_arm": {
+            "config_sha": phase2["config_sha"],
+            "init_seed": phase2["init_seed"],
+            "lr_schedule": phase2["lr_schedule"],
+            "optimizer": phase2["optimizer"],
+            "tokens_to_match": phase2["tokens_to_match"],
+            "tokens_at_ceiling": phase2["tokens_at_ceiling"],
+            "eval_trace_ref": eval_trace_path,
+            "eval_trace_sha256": eval_trace_sha,
+            "eval_cadence_K": phase2["eval_cadence_K"],
+            "ceiling_steps": phase2["ceiling_steps"],
+            "ceiling_steps_issue_stated": REAL_HARD_CEILING_STEPS_ISSUE_STATED,
+            "steps_run": phase2["steps_run"],
+            "resume_proof": phase2["resume_proof"],
+            "governor": phase2["governor"],
+            "pacing": phase2["pacing"],
+            "wall_s": phase2["wall_s"],
+            "wall_hours_estimate": phase2["wall_hours_estimate"],
+        },
+        "phase_boundary_hygiene": phase_boundary_hygiene,
+        "pytorch_alloc_conf": pytorch_alloc_conf_receipt,
+        "capability_point": {
+            "eval_batch_sha256": eval_sha,
+            "eval_batch_shape": {"batch": real_arch["batch"], "seqlen": real_arch["seq"]},
+            "target_eval_loss": phase1["target_eval_loss"],
+            "dry_run_capability_point": False,
+        },
+        "ratio": outcome["ratio"],
+        "outcome": outcome["outcome"],
+        "lower_bound": outcome["lower_bound"],
+        "seeds": 1,
+        "seed_sensitivity_unmeasured": True,
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": False,
+        "pass": is_real_lineage,
+        "verdict": ("W1_CONTROL_LIVE_COMPLETE" if is_real_lineage
+                    else "W1_CONTROL_LIVE_LINEAGE_UNVERIFIED"),
+        "note": ("" if is_real_lineage else
+                 f"is_real_lineage=False -- failing assertions: {lineage_reasons}. "
+                 "Fail-closed per issue #82 point 3: never a silent/blanket True."),
+    }
+
+    receipts_dir = os.path.join(REPO, "receipts", "ember-c-scale")
+    os.makedirs(receipts_dir, exist_ok=True)
+    out_path = os.path.join(receipts_dir, f"w1-collapse-control-{ts}.json")
+    checked_write(out_path, receipt)
+
+    with open(out_path, "rb") as f:
+        raw = f.read()
+    assert not raw.startswith(b"\xef\xbb\xbf"), "W1_RECEIPT_HAS_BOM"
+    with open(out_path, "r", encoding="utf-8") as f:
+        json.load(f)
+
+    print(f"[w1-control-live] receipt written: {out_path}")
+    print(f"[w1-control-live] outcome={receipt['outcome']} "
+          f"is_real_lineage={is_real_lineage} lineage_reasons={lineage_reasons}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    refuse_unless_dry_run_safe(args)
+
+    dry_run = not (args.live and args.device == "cuda")
+    device = args.device if not dry_run else "cpu"
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    pricing_receipt = load_json(args.pricing_receipt)
+    rung_receipt = load_json(args.rung_receipt)
+    real_arch = derive_real_arch_config(pricing_receipt, rung_receipt)
+
+    if not dry_run:
+        # REAL LIVE PATH (issue #82) -- only reachable once refuse_unless_
+        # dry_run_safe's two independent interlocks both passed. Everything
+        # below this point (the ORIGINAL dry-run pipeline) is untouched.
+        return main_live(args, ts, pricing_receipt, rung_receipt, real_arch)
+
+    cfg = arch_config_dict(args.vocab, args.hidden, args.depth, args.seq, args.batch)
+    cfg_sha = config_sha(cfg)
+
+    eval_x, eval_y, eval_sha = make_eval_batch(args.vocab, args.batch, args.seq, device)
+
+    phase1 = run_phase1_dryrun(
+        cfg, train_steps=args.phase1_train_steps, seed=args.phase1_seed,
+        device=device, out_dir=os.path.join(args.out_dir, "phase1"),
+        eval_x=eval_x, eval_y=eval_y)
+
+    phase2 = run_phase2_dryrun(
+        cfg, ceiling_steps=args.ceiling_steps, eval_every=args.eval_every,
+        checkpoint_every=args.checkpoint_every,
+        target_eval_loss=phase1["target_eval_loss"], seed=args.phase2_seed,
+        device=device, out_dir=os.path.join(args.out_dir, "phase2"),
+        eval_x=eval_x, eval_y=eval_y)
+
+    assert phase2["config_sha"] == cfg_sha, (
+        "W1_ARCH_MISMATCH: control-arm config_sha diverged from the shared "
+        "architecture dict -- spec section 2's identical-architecture "
+        "requirement violated")
+
+    outcome = classify_outcome(phase1["tokens_total"], phase2)
+
+    eval_trace_path = os.path.join(args.out_dir, f"w1-eval-trace-{ts}.json")
+    with open(eval_trace_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(phase2["eval_trace"], f, indent=2)
+    eval_trace_sha = sha256_file(eval_trace_path)
+
+    receipt = {
+        "ticket": "W1-COLLAPSE-CONTROL",
+        "ts": ts,
+        "issue": ISSUE_REF,
+        "schema": "w1-collapse-control/v1",
+        "spec_ref": f"{SPEC_REF} section 7",
+        "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+        "dry_run": dry_run,
+        "is_real_lineage": False if dry_run else True,
+        "mode": "cpu_dryrun" if dry_run else "live",
+        "device": device,
+        "real_lineage_reference": {
+            "note": ("informational citation ONLY -- NOT used to compute this "
+                     "receipt's ratio/outcome. Real grow-arm token bill and "
+                     "bill_aggregation_rows imported verbatim from the pricing "
+                     "receipt, with citation, per issue #71's instruction."),
+            "pricing_receipt_path": args.pricing_receipt,
+            "pricing_receipt_sha256": sha256_file(args.pricing_receipt),
+            "rung_receipt_path": args.rung_receipt,
+            "rung_receipt_sha256": sha256_file(args.rung_receipt),
+            "grow_arm_terminal_checkpoint_ref": pricing_receipt["grow_arm"]["terminal_checkpoint_ref"],
+            "grow_arm_tokens_total": pricing_receipt["grow_arm"]["tokens_total"],
+            "grow_arm_bill_aggregation_rows": pricing_receipt["grow_arm"]["bill_aggregation_rows"],
+            # NOTE: control_arm.tokens_ceiling in the pricing receipt is a
+            # human-readable "2.0 * grow_arm = N" string; the integer lives in
+            # wall_hours_pricing.control_arm_ceiling_tokens.
+            "control_arm_ceiling_tokens_real": pricing_receipt["wall_hours_pricing"]["control_arm_ceiling_tokens"],
+            "control_arm_eval_cadence_K_real": pricing_receipt["control_arm"]["eval_cadence_K"],
+            "derived_target_architecture": real_arch,
+            "real_hard_ceiling_steps_issue_stated": REAL_HARD_CEILING_STEPS_ISSUE_STATED,
+            "real_hard_ceiling_steps_exact_derivation": (
+                real_hard_ceiling_derivation(
+                    pricing_receipt["wall_hours_pricing"]["control_arm_ceiling_tokens"],
+                    real_arch["batch"], real_arch["seq"])),
+            "real_hard_ceiling_steps_discrepancy_note": (
+                f"issue #71 states 1533; exact arithmetic ceil("
+                f"{pricing_receipt['wall_hours_pricing']['control_arm_ceiling_tokens']} / "
+                f"({real_arch['batch']}*{real_arch['seq']})) = "
+                f"{real_hard_ceiling_derivation(pricing_receipt['wall_hours_pricing']['control_arm_ceiling_tokens'], real_arch['batch'], real_arch['seq'])} "
+                "-- 16384*1532 = 25,100,288 exactly, no remainder. One-step "
+                "discrepancy flagged, not silently resolved either way; the "
+                "maintainer should pick which figure the real run uses."),
+        },
+        "grow_arm": {
+            "terminal_checkpoint_ref": phase1["terminal_checkpoint_ref"],
+            "tokens_total": phase1["tokens_total"],
+            "bill_aggregation_rows": [{
+                "segment": "w1-phase1-dryrun-harness",
+                "tokens_computed": f"{phase1['train_steps']} * {args.batch} * {args.seq} = {phase1['tokens_total']}",
+                "steps": phase1["train_steps"], "batch": args.batch, "seq": args.seq,
+                "tokens_value": phase1["tokens_total"],
+                "note": "DRY-RUN toy harness training, not real lineage",
+            }],
+            "dry_run": True,
+            "is_real_lineage": False,
+            "init_seed": phase1["init_seed"],
+            "loss_first": phase1["loss_first"],
+            "loss_last": phase1["loss_last"],
+            "wall_s": phase1["wall_s"],
+        },
+        "control_arm": {
+            "config_sha": phase2["config_sha"],
+            "init_seed": phase2["init_seed"],
+            "lr_schedule": phase2["lr_schedule"],
+            "tokens_to_match": phase2["tokens_to_match"],
+            "tokens_at_ceiling": phase2["tokens_at_ceiling"],
+            "eval_trace_ref": eval_trace_path,
+            "eval_trace_sha256": eval_trace_sha,
+            "eval_cadence_K": phase2["eval_cadence_K"],
+            "ceiling_steps": phase2["ceiling_steps"],
+            "steps_run": phase2["steps_run"],
+            "resume_proof": phase2["resume_proof"],
+            "governor": phase2["governor"],
+            "pacing": phase2["pacing"],
+            "wall_s": phase2["wall_s"],
+        },
+        "capability_point": {
+            "eval_batch_sha256": eval_sha,
+            "eval_batch_shape": {"batch": args.batch, "seqlen": args.seq},
+            "generator_seed": EVAL_GENERATOR_SEED,
+            "target_eval_loss": phase1["target_eval_loss"],
+            "dry_run_capability_point": True,
+        },
+        "ratio": outcome["ratio"],
+        "outcome": outcome["outcome"],
+        "lower_bound": outcome["lower_bound"],
+        "seeds": 1,
+        "seed_sensitivity_unmeasured": True,
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": False,
+        "pass": True,
+        "verdict": (
+            "W1_CONTROL_DRYRUN_PIPELINE_PROVEN" if dry_run
+            else "W1_CONTROL_LIVE_COMPLETE"),
+        "note": (
+            "CPU dry-run: proves the two-phase pipeline (capability-point "
+            "leg, control leg with early-stop/ceiling/resume, outcome "
+            "classification) end-to-end on a toy architecture. Carries NO "
+            "physical claim about the real W1 collapse ratio -- that is the "
+            "real GPU run's job (maintainer-window-scheduled, issue #53)."
+            if dry_run else ""),
+    }
+
+    receipts_dir = os.path.join(REPO, "receipts", "ember-c-scale")
+    os.makedirs(receipts_dir, exist_ok=True)
+    out_path = os.path.join(receipts_dir, f"w1-collapse-control-{ts}.json")
+    checked_write(out_path, receipt)
+
+    # BOM-free plain-utf8 round-trip verification (hard requirement).
+    with open(out_path, "rb") as f:
+        raw = f.read()
+    assert not raw.startswith(b"\xef\xbb\xbf"), "W1_RECEIPT_HAS_BOM"
+    with open(out_path, "r", encoding="utf-8") as f:
+        json.load(f)  # raises if not plain-utf8-parseable
+
+    print(f"[w1-control] receipt written: {out_path}")
+    print(f"[w1-control] outcome={receipt['outcome']} ratio={receipt['ratio']} "
+          f"lower_bound={receipt['lower_bound']} dry_run={dry_run}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
