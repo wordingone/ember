@@ -81,7 +81,7 @@ DEFAULT_N_MTP = 2
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_CEILING_STEPS = 1533
 DEFAULT_TRAIN_BATCH = 16
-DEFAULT_SHARD_DIR = "B:/M/shards-v0"
+DEFAULT_SHARD_DIR = os.environ.get("EMBER_SHARD_DIR", "")
 DEFAULT_POOL_OVERSAMPLE = 2   # candidates drawn per round = batch_size * this;
                               # kept modest because contamination_recheck's
                               # own np.isin call grows memory-expensive with
@@ -571,6 +571,9 @@ def main():
         REPO_ROOT, "receipts", "ember-c-scale", "w2-heldout-batch.npy"))
     ap.add_argument("--receipt-dir", default=RECEIPT_DIR)
     args = ap.parse_args()
+
+    if not args.shard_dir:
+        raise SystemExit("W2_DECONTAM_SHARD_DIR_REQUIRED: shard directory must be specified via --shard-dir argument or EMBER_SHARD_DIR environment variable")
 
     result = build_batch(shard_dir=args.shard_dir, seq=args.seq, n_mtp=args.n_mtp,
                           batch_size=args.batch_size, ceiling_steps=args.ceiling_steps,

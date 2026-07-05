@@ -1,7 +1,7 @@
 """test_build_decontam_batch.py -- hermetic fixture tests for
 scripts/w2_heldout/build_decontam_batch.py's window I/O and self-match-aware
 classification logic. Real code, synthetic-only corpus (two tiny .bin shard
-files under tempfile.TemporaryDirectory()) -- the real B:/M/shards-v0 corpus
+files under tempfile.TemporaryDirectory()) -- the real shards corpus
 is never touched by this suite. This is the RED/GREEN coverage of the novel
 piece of this dispatch (self-match exclusion, including the cross-shard-
 boundary case that a naive (shard, offset) comparison would misclassify).
