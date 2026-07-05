@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from receipt_write import checked_write
+from loop_econ_gate import REQUIRED_FIELDS as DT6_REQUIRED_FIELDS, check_econ_gate
 
 TICKET = "EMBER-RESIDENT-TRAINING-GATE"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
@@ -584,6 +585,28 @@ def _candidate_ref(manifest_path: Path, value: Any) -> Path | None:
     return p
 
 
+def _extract_dt6_fields(manifest_path: Path | None, candidate: dict[str, Any] | None) -> dict[str, Any]:
+    """Extracts the DT-6 loop-economics fields (docs/dt6-loop-economics-gate-
+    amendment.md) from the resident-training receipt under evaluation -- the
+    file at candidate['resident_training_receipt_path'], resolved relative to
+    the candidate manifest. Returns only the fields actually present; a
+    missing field is simply absent so check_econ_gate's own AC1 (missing-
+    field) check fires naturally on the caller's {"verdict": "PASS", **fields}
+    construction, rather than being re-implemented here."""
+    if candidate is None or manifest_path is None:
+        return {}
+    receipt_ref = _candidate_ref(manifest_path, candidate.get("resident_training_receipt_path"))
+    if receipt_ref is None or not receipt_ref.exists():
+        return {}
+    try:
+        receipt = _load_json(receipt_ref)
+    except Exception:
+        return {}
+    if not isinstance(receipt, dict):
+        return {}
+    return {field: receipt[field] for field in DT6_REQUIRED_FIELDS if field in receipt}
+
+
 def _validate_candidate_manifest(path: Path | None, floor_contracts: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, list[str]]:
     if path is None:
         return None, ["candidate_manifest.missing"]
@@ -811,6 +834,20 @@ def build_gate_receipt(
     candidate, candidate_errors = _validate_candidate_manifest(candidate_manifest, floor_contracts)
     errors.extend(candidate_errors)
 
+    # DT-6 loop-economics conjunct (docs/dt6-loop-economics-gate-amendment.md,
+    # gh #128): check_econ_gate is invoked unconditionally here -- never only
+    # inside an `if status == "PASS"` branch -- so a PASS with the econ leg
+    # unevaluated is impossible by construction. A missing candidate or
+    # missing DT-6 fields both resolve to an empty dt6_fields dict, which
+    # check_econ_gate itself rejects by name (AC1); nothing here forces a
+    # pending-pass.
+    dt6_fields = _extract_dt6_fields(candidate_manifest, candidate)
+    econ_gate_verdict = check_econ_gate({"verdict": "PASS", **dt6_fields})
+    if econ_gate_verdict["decision"] != "ACCEPT":
+        errors.append(
+            f"loop_econ_gate.{econ_gate_verdict.get('ac') or 'NONE'}: {econ_gate_verdict['reason']}"
+        )
+
     source_truth = {
         "repo": str(repo),
         "git_head": _git_head(repo),
@@ -836,6 +873,7 @@ def build_gate_receipt(
         "floor_contract_accounting": "PASS" if candidate and not any(e.startswith("candidate.floor_contract") or e.startswith("candidate.nc2_component_contract") or e.startswith("candidate.action_log") or e.startswith("candidate.launch_vehicle_floor") for e in candidate_errors) else "BLOCKED",
         "a_b_c_deleted_evaluator": "PASS" if candidate and candidate.get("matched_a_b_c_deleted") is True else "BLOCKED",
         "deletion_sensitive_improvement": "PASS" if candidate and candidate.get("deleted_degrades_or_blocks") is True else "BLOCKED",
+        "loop_econ_gate": "PASS" if econ_gate_verdict["decision"] == "ACCEPT" else "BLOCKED",
     }
     status = "PASS" if not errors and all(v == "PASS" for v in component_status.values()) else "BLOCKED"
     invalid_codes = []
@@ -859,6 +897,8 @@ def build_gate_receipt(
             invalid_codes.append("symbolic_proxy_substitution")
         if any(e.startswith("candidate.train_multimodal_adapter") or e.startswith("candidate.floor_contract") or e.startswith("candidate.nc2_component_contract") or e.startswith("candidate.action_log") or e.startswith("candidate.launch_vehicle_floor") for e in candidate_errors):
             invalid_codes.append("invalid_floor_contract_bypass")
+    if econ_gate_verdict["decision"] != "ACCEPT":
+        invalid_codes.append("loop_econ_gate_not_accept")
 
     next_blocker = "resident_training_gate_passed" if status == "PASS" else _next_blocker(errors)
     receipt = {
@@ -875,6 +915,7 @@ def build_gate_receipt(
         "train_multimodal_floor_contract": floor_contracts,
         "resident_training_candidate_manifest_path": str(candidate_manifest) if candidate_manifest else None,
         "resident_training_candidate": candidate,
+        "loop_economics_gate_verdict": econ_gate_verdict,
         "a_b_c_deleted_contract": {
             "A": "same task/evaluator/harness envelope with no native goal organ and no resident-training update",
             "B": "clean-room harness plus fixed hand-authored or prompt/rule policy, but no learned RLM/iGRPO update",
@@ -897,6 +938,7 @@ def build_gate_receipt(
 def _next_blocker(errors: list[str]) -> str:
     priority = [
         ("paper", "paper mechanism extraction or source integrity"),
+        ("loop_econ_gate", "loop-economics gate (DT-6 fields / check_econ_gate)"),
         ("floor_contract", "floor-contract ledger and launch-vehicle preservation evidence"),
         ("nc2_component_contract", "NC2 component-contract evidence"),
         ("train_multimodal", "train_multimodal_v0.py adapter/infrastructure evidence"),
@@ -945,134 +987,239 @@ def write_gate_receipt(out_path: Path, receipt: dict[str, Any]) -> None:
     checked_write(str(out_path), receipt)
 
 
+def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
+    """Builds the hermetic fixture repo (GOAL.md, floor contracts, clean-room
+    harness files, papers index, full-parity receipt) under root. Shared by
+    selftest() and test_ember_resident_training_gate_econ.py so both exercise
+    the real build_gate_receipt() codepath against one fixture definition
+    instead of two. Returns (repo, papers_index_path, full_parity_receipt_path)."""
+    repo = root / "repo"
+    repo.mkdir()
+    (repo / "docs").mkdir()
+    (repo / "scripts" / "nck").mkdir(parents=True)
+    (repo / "receipts").mkdir()
+    for rel, content in {
+        "GOAL.md": (
+            "Authority And Precedence\nCurrent Blocker Packet\nresident_training_gate_status\n"
+            "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
+            "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
+        ),
+        "docs/ember-debt-ledger.md": "ledger\n",
+        "docs/ember-floor-contract.md": (
+            "Reserved multimodal vocab band\nQAT\nMuon optimizer\nQK-norm\nGovernor\n"
+            "BitNet / 1.58-bit\nSDEK / GDN-Jet\nMLA / KV-cache compression\n"
+            "GRPO / RL-on-verifier-reward\nFP8 training\nMoE\nDiffusionGemma\ntrigger-gated\n"
+        ),
+        "docs/ember-mvp-v0.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
+        "docs/nck-event-loop-v0.md": "event loop\n",
+        "docs/nck-invariants-v0.md": "invariants\n",
+        "nc2-own-technique-contract.md": (
+            "QAT\nturboquant\n1.58-bit\nBitNet\nSubQ\nMTP\nSDEK\n"
+            "MLA\nFP8\nMuon\nMoE\nGRPO\nGemma 4 12B unified architecture\n"
+        ),
+        "scripts/train_multimodal_v0.py": (
+            "section 6 primitive-typed action-log contract\n"
+            "action_log.jsonl\nemit-token\nemit-scalar\nemit-pointer\ncommit\nstop\n"
+            "AdamW optimizer\nselftest\nsmoke/live training paths\ncheckpoint/state_dict\n"
+            "QK-norm\n2D RoPE\nreserved vocab\nsoft-token\nbidirectional span\n"
+        ),
+        "scripts/nck/event_loop.py": "# event\n",
+        "scripts/nck/invariants.py": "# inv\n",
+        "scripts/nck/nck_e2e_proof.py": "# proof\n",
+    }.items():
+        path = repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    (repo / "receipts/nck-e2e-proof-20260612T142318Z.json").write_text(
+        json.dumps({"ticket": "NCK-E2E-PROOF", "all_stages_pass": True, "chain": ["boot_checksum"], "identity": "ember"}),
+        encoding="utf-8",
+    )
+    papers = root / "papers"
+    (papers / "rlm").mkdir(parents=True)
+    (papers / "igrpo").mkdir()
+    paper_entries = []
+    for kind, slug, abstract in [
+        ("RLM", "rlm", "Recursive Language Models inspect decompose recursively call itself over snippets."),
+        ("iGRPO", "igrpo", "iGRPO samples drafts selects highest reward and applies GRPO-style update on refinements."),
+    ]:
+        d = papers / slug
+        pdf = d / f"{slug}.pdf"
+        src = d / f"{slug}.tar"
+        abs_html = d / f"{slug}.html"
+        pdf.write_text("pdf", encoding="utf-8")
+        src.write_text("src", encoding="utf-8")
+        abs_html.write_text(f'<meta name="citation_abstract" content="{abstract}" />', encoding="utf-8")
+        receipt = {
+            "kind": kind,
+            "title": kind,
+            "arxiv_id": "fixture",
+            "files": {
+                "pdf": {"path": str(pdf), "sha256": _sha256(pdf), "bytes": pdf.stat().st_size},
+                "source": {"path": str(src), "sha256": _sha256(src), "bytes": src.stat().st_size},
+                "abs_html": {"path": str(abs_html), "sha256": _sha256(abs_html), "bytes": abs_html.stat().st_size},
+            },
+        }
+        receipt_path = d / "source-receipt.json"
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        paper_entries.append({"kind": kind, "title": kind, "arxiv_id": "fixture", "receipt": str(receipt_path), "pdf_sha256": _sha256(pdf), "source_sha256": _sha256(src)})
+    index = papers / "INDEX.json"
+    index.write_text(json.dumps({"papers": paper_entries}), encoding="utf-8-sig")
+
+    full_parity_surface_ids = [
+        "function_slash_commands",
+        "uiux_repl_components",
+        "backend_coordinator_agents",
+        "launch_packaging",
+        "process_supervision",
+        "hook_runner",
+        "tool_dispatch_permissions",
+        "state_persistence",
+        "receipt_store",
+        "rollback_rewind",
+        "communication_mailbox_computer_use",
+        "native_goal_organ",
+        "cleanroom_legal_boundary",
+    ]
+    full_parity_path = root / "full-parity.json"
+    full_parity_path.write_text(
+        json.dumps(
+            {
+                "ticket": "EMBER-GATE-FULL-PARITY-HARNESS",
+                "ts": "20260621T000000Z",
+                "sha_convention": SHA_CONVENTION,
+                "verdict": "THE_PREDECESSOR_CLI_FULL_PARITY_HARNESS_GATE_PASS",
+                "classification": "FULL_PARITY_GATE_PASS",
+                "headless_bootstrap_classification": "SUPERSEDED_BY_FULL_CLEANROOM_PARITY_RECEIPTS",
+                "blocked_reasons": [],
+                "n_rows": len(full_parity_surface_ids),
+                "surface_matrix": [{"surface_id": sid, "status": "PASS"} for sid in full_parity_surface_ids],
+                "delete_ablate_required": {"native_goal_organ_deleted_blocks": True, "receipt_store_deleted_blocks": True},
+                "real_reference_uiux_ax_observation_receipt": {
+                    "ticket": "EMBER-REAL-PREDECESSOR-CLI-UIUX-AX-OBSERVATION",
+                    "verdict": "REAL_PREDECESSOR_CLI_UIUX_AX_OBSERVATION_PASS",
+                    "observed_real_reference_binary": True,
+                    "observed_real_tui": True,
+                    "observed_agent_loop": True,
+                    "observed_uiux_ax": True,
+                    "resource_governed": True,
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return repo, index, full_parity_path
+
+
+def build_symbolic_candidate_base(root: Path) -> dict[str, Any]:
+    """The pre-neural-update candidate shape: passes A/B/C/deleted and all the
+    process-evidence checks but carries no real trainable-parameter delta yet.
+    Used both as the symbolic_proxy_substitution BLOCKED fixture and as the
+    base that build_valid_candidate_manifest extends into a real candidate."""
+    return {
+        "uses_real_update_step": True,
+        "uses_externally_sourced_task_rows": True,
+        "matched_a_b_c_deleted": True,
+        "c_beats_a_and_b": True,
+        "deleted_degrades_or_blocks": True,
+        "model_learned_policy": True,
+        "clean_room_harness_action_channel": True,
+        "native_goal_organ_present": True,
+        "recursive_query_policy_present": True,
+        "verifier_conditioned_update_present": True,
+        "persistence_checked": True,
+        "external_task_source": {"source_url": "https://example.invalid/fixture"},
+        "policy_update_trace": str(root / "trace.json"),
+        "policy_update_trace_path": str(root / "trace.json"),
+        "recursive_query_policy_path": "policy.py",
+        "native_goal_organ_path": "goal.py",
+        "harness_interface_path": "harness.py",
+        "resident_training_receipt_path": str(root / "receipt.json"),
+        "task_rows_path": str(root / "tasks.json"),
+        "per_task_rows": [{"task_id": "t1", "source_row_idx": 0, "split": "heldout", "a_score": 0, "b_score": 0, "c_score": 1, "deleted_score": 0}],
+    }
+
+
+def build_valid_candidate_manifest(root: Path, repo: Path, dt6_fields: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Writes the fixture artifacts (trace/policy/goal/harness/receipt/tasks/
+    adapter) under root and returns the fully-valid candidate dict that clears
+    every component_status check except, optionally, the loop-economics gate.
+    `dt6_fields` (signal_per_gpu_hour / equal_wallclock_band / exceeds_band),
+    if given, is merged onto receipt.json -- the resident-training receipt
+    _extract_dt6_fields reads from -- so callers can build complete/missing/
+    failing DT-6 fixtures without re-deriving the rest of this fixture. Does
+    not write the manifest itself; callers json.dumps() it wherever they
+    choose."""
+    receipt_payload: dict[str, Any] = {"verdict": "RESIDENT_TRAINING_CANDIDATE_PASS"}
+    if dt6_fields:
+        receipt_payload.update(dt6_fields)
+    for artifact_name in ["trace.json", "policy.py", "goal.py", "harness.py", "receipt.json", "tasks.json", "adapter.py"]:
+        (root / artifact_name).write_text(
+            json.dumps({"verdict": "POLICY_UPDATE_TRACE_READY", "updates": [1], "selected_template": "eval_script_recursive"})
+            if artifact_name == "trace.json"
+            else json.dumps(receipt_payload)
+            if artifact_name == "receipt.json"
+            else "fixture",
+            encoding="utf-8",
+        )
+    real_candidate = build_symbolic_candidate_base(root)
+    real_candidate.update(
+        {
+            "trainable_neural_model_identity": "fixture_fp16_resident_policy",
+            "trainable_parameter_count": 128,
+            "pre_neural_parameter_hash": "sha256:" + ("0" * 64),
+            "post_neural_parameter_hash": "sha256:" + ("1" * 64),
+            "verifier_conditioned_training_command": "python scripts/train_multimodal_v0.py --selftest --resident-adapter-fixture",
+            "transfer_rows": [{"task_id": "transfer_1", "split": "transfer", "c_score": 1.0, "b_score": 0.5, "deleted_score": 0.0}],
+            "symbolic_substitution_check": {"status": "NEURAL_UPDATE_PRESENT", "symbolic_template_policy": False, "prompt_only": False, "routing_only": False},
+            "prompt_only_routing_only_exclusion_result": {"status": "PASS", "prompt_only": False, "routing_only": False},
+            "train_multimodal_integration_decision": {
+                "status": "ADAPTER_IMPLEMENTED",
+                "source_path": "scripts/train_multimodal_v0.py",
+                "adapter_path": str(root / "adapter.py"),
+                "source_sha256": _sha256(repo / "scripts/train_multimodal_v0.py"),
+            },
+            "train_multimodal_adapter_path": str(root / "adapter.py"),
+            "floor_contract_sha256": _sha256(repo / "docs/ember-floor-contract.md"),
+            "nc2_component_contract_sha256": _sha256(repo / "nc2-own-technique-contract.md"),
+            "action_log_seam_evidence": {
+                "source_path": "scripts/train_multimodal_v0.py",
+                "required_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
+                "present_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
+            },
+            "launch_vehicle_floor_preservation_map": {
+                "QAT": "preserved",
+                "Muon": "preserved",
+                "QK-norm": "preserved",
+                "governor": "preserved",
+                "multimodal_locks": "preserved",
+            },
+            "floor_contract_manifest": build_floor_contract_manifest(
+                _sha256(repo / "docs/ember-floor-contract.md"),
+                _sha256(repo / "nc2-own-technique-contract.md"),
+            ),
+        }
+    )
+    return real_candidate
+
+
 def selftest() -> int:
     import tempfile
 
     with tempfile.TemporaryDirectory(prefix="ember-resident-gate-") as td:
         root = Path(td)
-        repo = root / "repo"
-        repo.mkdir()
-        (repo / "docs").mkdir()
-        (repo / "scripts" / "nck").mkdir(parents=True)
-        (repo / "receipts").mkdir()
-        for rel, content in {
-            "GOAL.md": (
-                "Authority And Precedence\nCurrent Blocker Packet\nresident_training_gate_status\n"
-                "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
-                "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
-            ),
-            "docs/ember-debt-ledger.md": "ledger\n",
-            "docs/ember-floor-contract.md": (
-                "Reserved multimodal vocab band\nQAT\nMuon optimizer\nQK-norm\nGovernor\n"
-                "BitNet / 1.58-bit\nSDEK / GDN-Jet\nMLA / KV-cache compression\n"
-                "GRPO / RL-on-verifier-reward\nFP8 training\nMoE\nDiffusionGemma\ntrigger-gated\n"
-            ),
-            "docs/ember-mvp-v0.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
-            "docs/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
-            "docs/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
-            "docs/nck-event-loop-v0.md": "event loop\n",
-            "docs/nck-invariants-v0.md": "invariants\n",
-            "nc2-own-technique-contract.md": (
-                "QAT\nturboquant\n1.58-bit\nBitNet\nSubQ\nMTP\nSDEK\n"
-                "MLA\nFP8\nMuon\nMoE\nGRPO\nGemma 4 12B unified architecture\n"
-            ),
-            "scripts/train_multimodal_v0.py": (
-                "section 6 primitive-typed action-log contract\n"
-                "action_log.jsonl\nemit-token\nemit-scalar\nemit-pointer\ncommit\nstop\n"
-                "AdamW optimizer\nselftest\nsmoke/live training paths\ncheckpoint/state_dict\n"
-                "QK-norm\n2D RoPE\nreserved vocab\nsoft-token\nbidirectional span\n"
-            ),
-            "scripts/nck/event_loop.py": "# event\n",
-            "scripts/nck/invariants.py": "# inv\n",
-            "scripts/nck/nck_e2e_proof.py": "# proof\n",
-        }.items():
-            path = repo / rel
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
-        (repo / "receipts/nck-e2e-proof-20260612T142318Z.json").write_text(
-            json.dumps({"ticket": "NCK-E2E-PROOF", "all_stages_pass": True, "chain": ["boot_checksum"], "identity": "ember"}),
-            encoding="utf-8",
-        )
-        papers = root / "papers"
-        (papers / "rlm").mkdir(parents=True)
-        (papers / "igrpo").mkdir()
-        paper_entries = []
-        for kind, slug, abstract in [
-            ("RLM", "rlm", "Recursive Language Models inspect decompose recursively call itself over snippets."),
-            ("iGRPO", "igrpo", "iGRPO samples drafts selects highest reward and applies GRPO-style update on refinements."),
-        ]:
-            d = papers / slug
-            pdf = d / f"{slug}.pdf"
-            src = d / f"{slug}.tar"
-            abs_html = d / f"{slug}.html"
-            pdf.write_text("pdf", encoding="utf-8")
-            src.write_text("src", encoding="utf-8")
-            abs_html.write_text(f'<meta name="citation_abstract" content="{abstract}" />', encoding="utf-8")
-            receipt = {
-                "kind": kind,
-                "title": kind,
-                "arxiv_id": "fixture",
-                "files": {
-                    "pdf": {"path": str(pdf), "sha256": _sha256(pdf), "bytes": pdf.stat().st_size},
-                    "source": {"path": str(src), "sha256": _sha256(src), "bytes": src.stat().st_size},
-                    "abs_html": {"path": str(abs_html), "sha256": _sha256(abs_html), "bytes": abs_html.stat().st_size},
-                },
-            }
-            receipt_path = d / "source-receipt.json"
-            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
-            paper_entries.append({"kind": kind, "title": kind, "arxiv_id": "fixture", "receipt": str(receipt_path), "pdf_sha256": _sha256(pdf), "source_sha256": _sha256(src)})
-        index = papers / "INDEX.json"
-        index.write_text(json.dumps({"papers": paper_entries}), encoding="utf-8-sig")
-
-        full_parity_surface_ids = [
-            "function_slash_commands",
-            "uiux_repl_components",
-            "backend_coordinator_agents",
-            "launch_packaging",
-            "process_supervision",
-            "hook_runner",
-            "tool_dispatch_permissions",
-            "state_persistence",
-            "receipt_store",
-            "rollback_rewind",
-            "communication_mailbox_computer_use",
-            "native_goal_organ",
-            "cleanroom_legal_boundary",
-        ]
-        full_parity_path = root / "full-parity.json"
-        full_parity_path.write_text(
-            json.dumps(
-                {
-                    "ticket": "EMBER-GATE-FULL-PARITY-HARNESS",
-                    "ts": "20260621T000000Z",
-                    "sha_convention": SHA_CONVENTION,
-                    "verdict": "THE_PREDECESSOR_CLI_FULL_PARITY_HARNESS_GATE_PASS",
-                    "classification": "FULL_PARITY_GATE_PASS",
-                    "headless_bootstrap_classification": "SUPERSEDED_BY_FULL_CLEANROOM_PARITY_RECEIPTS",
-                    "blocked_reasons": [],
-                    "n_rows": len(full_parity_surface_ids),
-                    "surface_matrix": [{"surface_id": sid, "status": "PASS"} for sid in full_parity_surface_ids],
-                    "delete_ablate_required": {"native_goal_organ_deleted_blocks": True, "receipt_store_deleted_blocks": True},
-                    "real_reference_uiux_ax_observation_receipt": {
-                        "ticket": "EMBER-REAL-PREDECESSOR-CLI-UIUX-AX-OBSERVATION",
-                        "verdict": "REAL_PREDECESSOR_CLI_UIUX_AX_OBSERVATION_PASS",
-                        "observed_real_reference_binary": True,
-                        "observed_real_tui": True,
-                        "observed_agent_loop": True,
-                        "observed_uiux_ax": True,
-                        "resource_governed": True,
-                    },
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        repo, index, full_parity_path = build_fixture_repo(root)
 
         blocked = build_gate_receipt(repo, index, None, None, [Path("scripts/ember_resident_training_gate.py")], full_parity_path)
         assert blocked["resident_training_gate_status"] == "BLOCKED"
         assert "resident_training_candidate_missing" in blocked["invalid_codes"]
         assert blocked["component_status"]["paper_source_preflight"] == "PASS"
         assert blocked["component_status"]["clean_room_harness_interface"] == "PASS"
+        # gh #128: check_econ_gate must be invoked even with no candidate at all
+        assert blocked["component_status"]["loop_econ_gate"] == "BLOCKED"
+        assert blocked["loop_economics_gate_verdict"]["decision"] != "PENDING"
 
         toy_path = root / "toy.json"
         toy_path.write_text(json.dumps({"toy_or_simulated": True, "prompt_only": True}), encoding="utf-8")
@@ -1081,77 +1228,31 @@ def selftest() -> int:
         assert "precondition_scaffold_only" in toy["invalid_codes"]
 
         symbolic_path = root / "symbolic.json"
-        for artifact_name in ["trace.json", "policy.py", "goal.py", "harness.py", "receipt.json", "tasks.json", "adapter.py"]:
-            (root / artifact_name).write_text(json.dumps({"verdict": "POLICY_UPDATE_TRACE_READY", "updates": [1], "selected_template": "eval_script_recursive"}) if artifact_name == "trace.json" else json.dumps({"verdict": "RESIDENT_TRAINING_CANDIDATE_PASS"}) if artifact_name == "receipt.json" else "fixture", encoding="utf-8")
-        symbolic_base = {
-            "uses_real_update_step": True,
-            "uses_externally_sourced_task_rows": True,
-            "matched_a_b_c_deleted": True,
-            "c_beats_a_and_b": True,
-            "deleted_degrades_or_blocks": True,
-            "model_learned_policy": True,
-            "clean_room_harness_action_channel": True,
-            "native_goal_organ_present": True,
-            "recursive_query_policy_present": True,
-            "verifier_conditioned_update_present": True,
-            "persistence_checked": True,
-            "external_task_source": {"source_url": "https://example.invalid/fixture"},
-            "policy_update_trace": str(root / "trace.json"),
-            "policy_update_trace_path": str(root / "trace.json"),
-            "recursive_query_policy_path": "policy.py",
-            "native_goal_organ_path": "goal.py",
-            "harness_interface_path": "harness.py",
-            "resident_training_receipt_path": str(root / "receipt.json"),
-            "task_rows_path": str(root / "tasks.json"),
-            "per_task_rows": [{"task_id": "t1", "source_row_idx": 0, "split": "heldout", "a_score": 0, "b_score": 0, "c_score": 1, "deleted_score": 0}],
-        }
+        (root / "trace.json").write_text(
+            json.dumps({"verdict": "POLICY_UPDATE_TRACE_READY", "updates": [1], "selected_template": "eval_script_recursive"}),
+            encoding="utf-8",
+        )
+        (root / "receipt.json").write_text(json.dumps({"verdict": "RESIDENT_TRAINING_CANDIDATE_PASS"}), encoding="utf-8")
+        for artifact_name in ["policy.py", "goal.py", "harness.py", "tasks.json", "adapter.py"]:
+            (root / artifact_name).write_text("fixture", encoding="utf-8")
+        symbolic_base = build_symbolic_candidate_base(root)
         symbolic_path.write_text(json.dumps(symbolic_base), encoding="utf-8")
         symbolic = build_gate_receipt(repo, index, None, symbolic_path, [], full_parity_path)
         assert symbolic["resident_training_gate_status"] == "BLOCKED"
         assert "symbolic_proxy_substitution" in symbolic["invalid_codes"]
 
         candidate_path = root / "candidate.json"
-        real_candidate = dict(symbolic_base)
-        real_candidate.update(
-            {
-                "trainable_neural_model_identity": "fixture_fp16_resident_policy",
-                "trainable_parameter_count": 128,
-                "pre_neural_parameter_hash": "sha256:" + ("0" * 64),
-                "post_neural_parameter_hash": "sha256:" + ("1" * 64),
-                "verifier_conditioned_training_command": "python scripts/train_multimodal_v0.py --selftest --resident-adapter-fixture",
-                "transfer_rows": [{"task_id": "transfer_1", "split": "transfer", "c_score": 1.0, "b_score": 0.5, "deleted_score": 0.0}],
-                "symbolic_substitution_check": {"status": "NEURAL_UPDATE_PRESENT", "symbolic_template_policy": False, "prompt_only": False, "routing_only": False},
-                "prompt_only_routing_only_exclusion_result": {"status": "PASS", "prompt_only": False, "routing_only": False},
-                "train_multimodal_integration_decision": {
-                    "status": "ADAPTER_IMPLEMENTED",
-                    "source_path": "scripts/train_multimodal_v0.py",
-                    "adapter_path": str(root / "adapter.py"),
-                    "source_sha256": _sha256(repo / "scripts/train_multimodal_v0.py"),
-                },
-                "train_multimodal_adapter_path": str(root / "adapter.py"),
-                "floor_contract_sha256": _sha256(repo / "docs/ember-floor-contract.md"),
-                "nc2_component_contract_sha256": _sha256(repo / "nc2-own-technique-contract.md"),
-                "action_log_seam_evidence": {
-                    "source_path": "scripts/train_multimodal_v0.py",
-                    "required_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
-                    "present_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
-                },
-                "launch_vehicle_floor_preservation_map": {
-                    "QAT": "preserved",
-                    "Muon": "preserved",
-                    "QK-norm": "preserved",
-                    "governor": "preserved",
-                    "multimodal_locks": "preserved",
-                },
-                "floor_contract_manifest": build_floor_contract_manifest(
-                    _sha256(repo / "docs/ember-floor-contract.md"),
-                    _sha256(repo / "nc2-own-technique-contract.md"),
-                ),
-            }
+        real_candidate = build_valid_candidate_manifest(
+            root, repo,
+            dt6_fields={"signal_per_gpu_hour": 1.2, "equal_wallclock_band": 0.5, "exceeds_band": True},
         )
         candidate_path.write_text(json.dumps(real_candidate), encoding="utf-8")
         passed = build_gate_receipt(repo, index, None, candidate_path, [], full_parity_path)
         assert passed["resident_training_gate_status"] == "PASS"
+        # gh #128: PASS must carry a genuinely-evaluated (not placeholder) econ leg
+        assert passed["component_status"]["loop_econ_gate"] == "PASS"
+        assert passed["loop_economics_gate_verdict"]["decision"] == "ACCEPT"
+        assert passed["loop_economics_gate_verdict"]["ac"] == "AC2"
     print("EMBER_RESIDENT_TRAINING_GATE_SELFTEST_PASS")
     return 0
 
