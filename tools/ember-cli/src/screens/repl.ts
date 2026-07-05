@@ -63,6 +63,12 @@ import type { AppState } from "../state/app-state.ts";
 import type { CallModelParams, ModelResponse } from "../query/query-loop-support.ts";
 import { tryDispatchSlashCommand, parseSlashInput } from "../services/slash-dispatch.ts";
 import { consumePostCompaction } from "../session-state.ts";
+import { OperatorInjector } from "../services/operator-input.ts";
+import { startOperatorPipe } from "../services/operator-pipe.ts";
+import {
+  createOperatorReceiptWriter,
+  type OperatorReceiptWriter,
+} from "../services/operator-receipts.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -278,8 +284,9 @@ export function renderMsgDispatch(
 
     case "user":
       return React.createElement(UserTextMessage, {
-        key:  msg.id,
-        text: String(msg["content"] ?? ""),
+        key:    msg.id,
+        text:   String(msg["content"] ?? ""),
+        origin: msg["origin"] === "operator" ? "operator" : undefined,
       });
 
     case "assistant":
@@ -382,6 +389,19 @@ export function ReplScreen({
   const messagesRef  = useRef<SessionMessage[]>([]);
   // Stable per-session id for the slash-command CommandContext.
   const sessionIdRef = useRef<string>(crypto.randomUUID());
+
+  // Operator input channel (ember #165 / #154) — a local named pipe the operator
+  // writes prompts to alongside the keyboard. submitPromptRef always holds the
+  // latest submitPrompt closure so the injector (constructed once, below, after
+  // usePromptInput) never calls a stale one. One receipt-writer/JSONL file per
+  // mounted session.
+  const submitPromptRef = useRef<(text: string, origin?: "keyboard" | "operator") => Promise<void>>(
+    async () => {},
+  );
+  const operatorReceiptsRef = useRef<OperatorReceiptWriter | null>(null);
+  if (!operatorReceiptsRef.current) {
+    operatorReceiptsRef.current = createOperatorReceiptWriter();
+  }
 
   const [busy,           setBusy]           = useState(false);
   const busyRef                             = useRef(false);
@@ -524,6 +544,236 @@ export function ReplScreen({
   // Prompt input hook
   const [inputState, inputActions] = usePromptInput();
 
+  // Latest input-buffer snapshot, readable from the injector's closures below
+  // without re-constructing them on every keystroke.
+  const inputStateRef = useRef(inputState);
+  inputStateRef.current = inputState;
+
+  // Constructed once (usePromptInput's setText is referentially stable across
+  // renders): the queue/inject semantics that give the keyboard priority over
+  // operator-pipe lines. See services/operator-input.ts.
+  const operatorInjectorRef = useRef<OperatorInjector | null>(null);
+  if (!operatorInjectorRef.current) {
+    operatorInjectorRef.current = new OperatorInjector({
+      canInjectNow: () => inputStateRef.current.text.length === 0 && !busyRef.current,
+      setText:      (t) => inputActions.setText(t),
+      submit:       (text, origin) => {
+        operatorReceiptsRef.current?.append("prompt_injected", text);
+        inputActions.setText("");
+        void submitPromptRef.current(text, origin);
+      },
+    });
+  }
+
+  // Re-attempt draining the operator queue whenever the gate might have opened
+  // (buffer emptied by submit or by backspacing to nothing; a busy turn ended).
+  useEffect(() => {
+    operatorInjectorRef.current?.flush();
+  }, [inputState.text, busy]);
+
+  // Named-pipe transport lifecycle — starts once at mount, torn down at unmount.
+  // Fails open: a pipe error/warning is surfaced as a single transcript row and
+  // never crashes or delays the CLI (ember #165 acceptance).
+  useEffect(() => {
+    const handle = startOperatorPipe(
+      (line) => { operatorInjectorRef.current?.handleLine(line); },
+      {
+        onEvent: (event) => {
+          if (event.kind === "pipe_connected") {
+            operatorReceiptsRef.current?.append("pipe_connected");
+          }
+        },
+        onWarning: (message) => {
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), type: "error", content: `[operator-pipe] ${message}` },
+          ]);
+        },
+      },
+    );
+    return () => handle.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Submits `text` exactly as Enter would — shared by the keyboard Enter-key
+  // handler below and the operator-pipe injector (ember #165). `origin` tags
+  // the echoed transcript row so a human watching the window can tell who
+  // typed it; keyboard is the default and carries no tag.
+  const submitPrompt = async (
+    text:   string,
+    origin: "keyboard" | "operator" = "keyboard",
+  ): Promise<void> => {
+    busyRef.current         = true;
+    setBusy(true);
+    spinnerStartRef.current = Date.now();
+    setSpinnerElapsed(0);
+
+    // Echo slash commands distinctly (UserCommandMessage), ordinary input as
+    // a chat message (UserTextMessage). parseSlashInput mirrors the dispatch's
+    // own slash detection so the echo and the dispatch always agree.
+    const slashParsed = parseSlashInput(text);
+    if (slashParsed !== null) {
+      const commandText = slashParsed.args
+        ? `${slashParsed.name} ${slashParsed.args}`
+        : slashParsed.name;
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), type: "command", content: commandText },
+      ]);
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(), type: "user", content: text,
+          ...(origin === "operator" ? { origin } : {}),
+        },
+      ]);
+    }
+
+    // Slash-command dispatch — execute a registered command instead of a model
+    // turn. Returns null for ordinary input, which falls through to the engine.
+    const slashResult = await tryDispatchSlashCommand(text, {
+      sessionId: sessionIdRef.current,
+      mode:      String(permMode),
+      cwd,
+    });
+    if (slashResult !== null) {
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), type: "assistant", content: slashResult.message },
+      ]);
+      busyRef.current = false;
+      setBusy(false);
+      return;
+    }
+
+    // Lazy-init the QueryEngine on first submission
+    if (!engineRef.current) {
+      try {
+        const [siMod, btMod] = await Promise.all([
+          import("../entrypoints/session-init.ts"),
+          import("../tools/builtin-tools.ts"),
+        ]);
+
+        const deps      = siMod.getLoopDeps();
+        callModelRef.current = deps.callModel;
+        const engineCfg = {
+          cwd,
+          tools:              btMod.BUILTIN_TOOLS as unknown as Tool[],
+          commands:           [] as unknown[],
+          mcpClients:         {} as Record<string, unknown>,
+          agents:             {} as Record<string, unknown>,
+          canUseTool:         async () => true,
+          getAppState:        () => ({} as Record<string, unknown>),
+          setAppState:        async () => {},
+          readFileCache:      new Map<string, unknown>(),
+          customSystemPrompt: systemPromptRef.current,
+          userSpecifiedModel: config.model,
+        };
+        engineRef.current = new QueryEngine(engineCfg, deps);
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id:      crypto.randomUUID(),
+            type:    "error",
+            content: `Engine init failed: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ]);
+        busyRef.current = false;
+        setBusy(false);
+        return;
+      }
+    }
+
+    const abortCtrl  = new AbortController();
+    abortRef.current = abortCtrl;
+
+    const assistantId = crypto.randomUUID();
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, type: "assistant", content: "" },
+    ]);
+
+    try {
+      for await (const ev of (engineRef.current as QueryEngine).submitMessage(text)) {
+        if (abortCtrl.signal.aborted) break;
+
+        const event = ev as QueryEvent;
+
+        if (event.type === "assistant") {
+          const raw = event.message.content;
+          const content = Array.isArray(raw)
+            ? (raw as Array<{ type?: string; text?: string }>)
+                .filter((b) => b.type === "text")
+                .map((b) => b.text ?? "")
+                .join("")
+            : String(raw ?? "");
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content } : m)),
+          );
+        } else if (event.type === "user") {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id:      crypto.randomUUID(),
+              type:    "tool_result",
+              content: JSON.stringify(event.message.content ?? ""),
+            },
+          ]);
+        } else if (event.type === "result") {
+          break;
+        }
+      }
+
+      // Operator-session receipt (ember #165 acceptance): the response for an
+      // operator-injected prompt has finished rendering into the transcript.
+      if (origin === "operator" && !abortCtrl.signal.aborted) {
+        operatorReceiptsRef.current?.append("response_rendered", assistantId);
+      }
+
+      // Surface compaction feedback: the engine sets a one-shot post-
+      // compaction flag (markPostCompaction) when autocompact ran during
+      // this turn. Consume it and render the completion indicator so the
+      // user sees the conversation was compacted — closes the dead-feature
+      // gap where the flag was set but never read and the progress
+      // component was never mounted.
+      const compactedElapsed = consumePostCompaction();
+      if (compactedElapsed !== null) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            type: "compaction",
+            isComplete: true,
+            elapsedSecs: compactedElapsed,
+          },
+        ]);
+      }
+
+      // Fire prompt-suggestion generation after each completed turn.
+      if (!abortCtrl.signal.aborted && callModelRef.current) {
+        void executePromptSuggestion({
+          messages:   messagesRef.current as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          getAppState: () => ({} as AppState),
+          setAppState: (updater) => {
+            const next = updater({} as AppState);
+            // executePromptSuggestion casts the state to `any` when writing
+            // currentSuggestion; extract it safely via unknown.
+            const sugg = (next as unknown as Record<string, unknown>)["currentSuggestion"];
+            if (typeof sugg === "string") setCurrentSuggestion(sugg);
+            else if (sugg === null)        setCurrentSuggestion(null);
+          },
+          forkedAgentExecutor: makeSuggestionExecutor(callModelRef.current),
+        });
+      }
+    } finally {
+      abortRef.current = null;
+      busyRef.current  = false;
+      setBusy(false);
+    }
+  };
+  submitPromptRef.current = submitPrompt;
+
   // Main keyboard handler
   useInput((input, key) => {
     // Submit on Enter
@@ -542,169 +792,7 @@ export function ReplScreen({
       inputActions.setText("");
       // Clear any pending suggestion when the user submits.
       setCurrentSuggestion(null);
-
-      (async () => {
-        busyRef.current         = true;
-        setBusy(true);
-        spinnerStartRef.current = Date.now();
-        setSpinnerElapsed(0);
-
-        // Echo slash commands distinctly (UserCommandMessage), ordinary input as
-        // a chat message (UserTextMessage). parseSlashInput mirrors the dispatch's
-        // own slash detection so the echo and the dispatch always agree.
-        const slashParsed = parseSlashInput(text);
-        if (slashParsed !== null) {
-          const commandText = slashParsed.args
-            ? `${slashParsed.name} ${slashParsed.args}`
-            : slashParsed.name;
-          setMessages((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), type: "command", content: commandText },
-          ]);
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), type: "user", content: text },
-          ]);
-        }
-
-        // Slash-command dispatch — execute a registered command instead of a model
-        // turn. Returns null for ordinary input, which falls through to the engine.
-        const slashResult = await tryDispatchSlashCommand(text, {
-          sessionId: sessionIdRef.current,
-          mode:      String(permMode),
-          cwd,
-        });
-        if (slashResult !== null) {
-          setMessages((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), type: "assistant", content: slashResult.message },
-          ]);
-          busyRef.current = false;
-          setBusy(false);
-          return;
-        }
-
-        // Lazy-init the QueryEngine on first submission
-        if (!engineRef.current) {
-          try {
-            const [siMod, btMod] = await Promise.all([
-              import("../entrypoints/session-init.ts"),
-              import("../tools/builtin-tools.ts"),
-            ]);
-
-            const deps      = siMod.getLoopDeps();
-            callModelRef.current = deps.callModel;
-            const engineCfg = {
-              cwd,
-              tools:              btMod.BUILTIN_TOOLS as unknown as Tool[],
-              commands:           [] as unknown[],
-              mcpClients:         {} as Record<string, unknown>,
-              agents:             {} as Record<string, unknown>,
-              canUseTool:         async () => true,
-              getAppState:        () => ({} as Record<string, unknown>),
-              setAppState:        async () => {},
-              readFileCache:      new Map<string, unknown>(),
-              customSystemPrompt: systemPromptRef.current,
-              userSpecifiedModel: config.model,
-            };
-            engineRef.current = new QueryEngine(engineCfg, deps);
-          } catch (err) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id:      crypto.randomUUID(),
-                type:    "error",
-                content: `Engine init failed: ${err instanceof Error ? err.message : String(err)}`,
-              },
-            ]);
-            busyRef.current = false;
-            setBusy(false);
-            return;
-          }
-        }
-
-        const abortCtrl  = new AbortController();
-        abortRef.current = abortCtrl;
-
-        const assistantId = crypto.randomUUID();
-        setMessages((prev) => [
-          ...prev,
-          { id: assistantId, type: "assistant", content: "" },
-        ]);
-
-        try {
-          for await (const ev of (engineRef.current as QueryEngine).submitMessage(text)) {
-            if (abortCtrl.signal.aborted) break;
-
-            const event = ev as QueryEvent;
-
-            if (event.type === "assistant") {
-              const raw = event.message.content;
-              const content = Array.isArray(raw)
-                ? (raw as Array<{ type?: string; text?: string }>)
-                    .filter((b) => b.type === "text")
-                    .map((b) => b.text ?? "")
-                    .join("")
-                : String(raw ?? "");
-              setMessages((prev) =>
-                prev.map((m) => (m.id === assistantId ? { ...m, content } : m)),
-              );
-            } else if (event.type === "user") {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id:      crypto.randomUUID(),
-                  type:    "tool_result",
-                  content: JSON.stringify(event.message.content ?? ""),
-                },
-              ]);
-            } else if (event.type === "result") {
-              break;
-            }
-          }
-
-          // Surface compaction feedback: the engine sets a one-shot post-
-          // compaction flag (markPostCompaction) when autocompact ran during
-          // this turn. Consume it and render the completion indicator so the
-          // user sees the conversation was compacted — closes the dead-feature
-          // gap where the flag was set but never read and the progress
-          // component was never mounted.
-          const compactedElapsed = consumePostCompaction();
-          if (compactedElapsed !== null) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                type: "compaction",
-                isComplete: true,
-                elapsedSecs: compactedElapsed,
-              },
-            ]);
-          }
-
-          // Fire prompt-suggestion generation after each completed turn.
-          if (!abortCtrl.signal.aborted && callModelRef.current) {
-            void executePromptSuggestion({
-              messages:   messagesRef.current as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-              getAppState: () => ({} as AppState),
-              setAppState: (updater) => {
-                const next = updater({} as AppState);
-                // executePromptSuggestion casts the state to `any` when writing
-                // currentSuggestion; extract it safely via unknown.
-                const sugg = (next as unknown as Record<string, unknown>)["currentSuggestion"];
-                if (typeof sugg === "string") setCurrentSuggestion(sugg);
-                else if (sugg === null)        setCurrentSuggestion(null);
-              },
-              forkedAgentExecutor: makeSuggestionExecutor(callModelRef.current),
-            });
-          }
-        } finally {
-          abortRef.current = null;
-          busyRef.current  = false;
-          setBusy(false);
-        }
-      })();
+      void submitPrompt(text, "keyboard");
       return;
     }
 
