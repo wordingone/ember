@@ -1,0 +1,66 @@
+{
+  "ts": "2026-07-05T13:27:13Z",
+  "test_suite": "floor_contract_manifest_final_complete",
+  "verdict": "FLOOR_CONTRACT_MANIFEST_FINAL_ALL_TESTS_PASS",
+  "tdd_tests": 7,
+  "behavioral_tests_current": 6,
+  "behavioral_tests_prechange_failures": 5,
+  "total_test_runs": 18,
+  "defects_status": {
+    "defect_1_precedence_bug": "FIXED - explicit if-else return",
+    "defect_2_unknown_status_mapping": "FIXED - UNMAPPED-STATUS:<verbatim>",
+    "defect_3_verdict_coupling": "VERIFIED - parse_errors extend main errors, gate blocks on errors"
+  },
+  "evidence_summary": {
+    "behavioral_prechange_failures": {
+      "type": "ImportError: cannot import name 'parse_floor_contract_manifest'",
+      "count": "5 tests all fail with this error",
+      "interpretation": "Pre-change module lacks parse_floor_contract_manifest function - proves NEW capability"
+    },
+    "behavioral_current_passes": {
+      "type": "All behavioral tests pass on current module",
+      "count": 6,
+      "tests": [
+        "test_parse_floor_contract_manifest_returns_dict_keyed_by_component",
+        "test_missing_floor_contract_doc_returns_blocked",
+        "test_unparseable_doc_returns_blocked",
+        "test_parse_failure_blocks_gate_verdict",
+        "test_disposition_mapping_correct",
+        "test_missing_fields_get_undeclared_in_doc"
+      ]
+    },
+    "tdd_tests_passing": {
+      "count": 7,
+      "tests": [
+        "test_parse_floor_contract_manifest_valid",
+        "test_parse_floor_contract_manifest_missing_doc",
+        "test_floor_contract_manifest_required_fields",
+        "test_parse_floor_contract_manifest_invehicle_only_no_deferral",
+        "test_map_status_to_disposition_unknown_status",
+        "test_parse_floor_contract_manifest_unparseable_binary_doc",
+        "test_parse_failure_blocks_gate_verdict"
+      ]
+    }
+  },
+  "test_fixtures": {
+    "floor-contract-valid.md": "Complete fixture with in-vehicle and deferral sections",
+    "floor-contract-invehicle-only.md": "In-vehicle present, deferral section missing (tests precedence fix)",
+    "floor-contract-unknown-status.md": "Deferral with unknown status (tests unknown status mapping fix)",
+    "floor-contract-sparse.md": "Sparse columns (tests UNDECLARED-IN-DOC mapping)",
+    "floor-contract-unparseable.md": "No valid markdown tables (tests unparseable doc handling)",
+    "floor-contract-unparseable-binary.md": "Binary garbage bytes (tests binary doc handling → None + error)"
+  },
+  "implementation": {
+    "parse_floor_contract_manifest": "Complete - returns (manifest_dict, errors) or (None, errors) fail-closed",
+    "_map_status_to_disposition": "Complete - maps unknown statuses to UNMAPPED-STATUS:<verbatim>",
+    "inspect_floor_contracts_integration": "Complete - parse_errors added to main errors list, gate blocks when errors not empty"
+  },
+  "branch": {
+    "commit": "b309646",
+    "remote": "public/fix/floor-contract-manifest",
+    "pushed": true
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "notes": "FINAL: All evidence collected. (A) Code defects 1-3 fixed with tests. (B) Behavioral theater-regression shows 5 test failures on pre-change module (ImportError: function doesn't exist), 6 tests pass on current module - proves NEW capability. (C) Test gaps filled: unparseable binary doc test + verdict-coupling test added. (D) Receipt timestamp corrected to real UTC 2026-07-05T13:27:13Z. Ready for merge."
+}

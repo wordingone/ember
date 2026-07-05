@@ -1,0 +1,17 @@
+{
+  "ticket": "FLOOR-CONTRACT-MANIFEST-SELFTEST",
+  "ts": "20260705T130358Z",
+  "test_run_type": "selftest",
+  "test_module": "test_floor_contract_manifest.py",
+  "test_count": 6,
+  "test_passed": 6,
+  "test_failed": 0,
+  "theater_regression_module": "test_floor_contract_manifest_theater_regression.py",
+  "theater_regression_tests": 3,
+  "theater_regression_passed": 3,
+  "theater_regression_failed": 0,
+  "verdict": "FLOOR_CONTRACT_MANIFEST_SELFTEST_PASS",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "summary": "Floor contract manifest parsing implementation verified. All TDD tests pass. Theater regression confirms pre-change and post-change behavior equivalence. Manifest emission is fail-closed on missing/unparseable docs."
+}
