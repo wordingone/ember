@@ -18,7 +18,7 @@ export const LARGE_FILE_BYTES = 1 * 1024 * 1024;
 export type ThemeMode     = "dark" | "light" | "auto";
 export type ResolvedTheme = "dark" | "light";
 export type ColorRole     = "fg" | "bg";
-export type ColorKey      = "error" | "success" | "warning" | "info" | "pending" | "loading" | "primary" | "muted";
+export type ColorKey      = "error" | "success" | "warning" | "info" | "pending" | "loading" | "primary" | "muted" | "identity";
 
 export interface ThemeEntry {
   fg: string;
@@ -64,6 +64,9 @@ export const THEME_PALETTE: Record<ColorKey, Record<ResolvedTheme, ThemeEntry>> 
   loading: { dark: { fg: "gray",   bg: "#1a1a1a" }, light: { fg: "gray",   bg: "#f0f0f0" } },
   primary: { dark: { fg: "cyan",   bg: "#002a2a" }, light: { fg: "cyan",   bg: "#e0ffff" } },
   muted:   { dark: { fg: "gray",   bg: "#111111" }, light: { fg: "gray",   bg: "#f8f8f8" } },
+  // ember's brand/identity accent -- the wordmark + panel border color (D4). Reuses fireball.ts's
+  // established "O" rank orange for dark theme; light theme deepens it for contrast on a pale bg.
+  identity: { dark: { fg: "#ef7d1a", bg: "#2a1200" }, light: { fg: "#c9530a", bg: "#fff3e0" } },
 };
 
 export const COLOR_FALLBACK: ThemeEntry = { fg: "white", bg: "#000000" };

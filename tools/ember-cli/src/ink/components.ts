@@ -185,6 +185,8 @@ export interface BoxProps {
   borderRightColor?: string;
   borderBottomColor?: string;
   borderLeftColor?: string;
+  /** Text embedded in the top border edge (requires borderStyle). See ink/border-title.test.ts. */
+  borderTitle?: string;
   backgroundColor?: string;
 
   // Events
@@ -252,6 +254,7 @@ export const Box = React.forwardRef<HTMLDivElement, BoxProps>(function Box(
     "data-box": true,
     "data-border-style": props.borderStyle,
     "data-border-color": props.borderColor,
+    "data-border-title": props.borderTitle,
     "data-background-color": props.backgroundColor,
     onClick: props.onClick as React.MouseEventHandler | undefined,
     onFocus: props.onFocus as React.FocusEventHandler | undefined,
