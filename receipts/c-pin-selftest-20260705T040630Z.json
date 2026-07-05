@@ -1,0 +1,27 @@
+{
+  "ticket": "C-PIN-SELFTEST",
+  "ts": "20260705T040630Z",
+  "probe_name": "test_c_pin.py",
+  "issue": 96,
+  "test_cases_run": 4,
+  "test_cases_passed": 4,
+  "test_cases_failed": 0,
+  "verdicts": [
+    "stale_pin_red",
+    "matched_pin_green",
+    "malformed_authority_red",
+    "missing_authority_red"
+  ],
+  "receipt_fields_verified": [
+    "pinned_sha",
+    "actual_sha",
+    "exec_goal_path",
+    "verdict",
+    "error"
+  ],
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "probe_shape": "new_test_c_pin.py",
+  "probe_justification": "Smallest-surface honest new probe. No dependency on C-ENF, isolated TDD RED/GREEN fixtures, path-parameterized for two-tree layout. Extension leg would couple board infrastructure; standalone probe bounds risk and is immediately testable.",
+  "pass": true
+}
