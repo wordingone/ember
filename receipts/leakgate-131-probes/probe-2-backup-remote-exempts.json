@@ -1,0 +1,16 @@
+{
+  "ts": "2026-07-05T13:53:55Z",
+  "probe_name": "probe-2-backup-remote-exempts",
+  "description": "Push to backup remote with forbidden term should PASS with NAME scan SKIPPED and exemption logged",
+  "remote": "backup",
+  "remote_url": "file:////tmp/fake-backup",
+  "backup_url": "file:////tmp/fake-backup",
+  "expected_result": "NAME scan skipped, exemption logged",
+  "command": "bash tools/repo-guard-with-exemption.sh --base origin/master",
+  "exit_code_for_names": 0,
+  "gate_verdict": "names check SKIPPED",
+  "key_output_line": "ok   [names] SKIPPED (backup-remote exemption)",
+  "backup_exemption_applied": true,
+  "exemption_log_entry": "2026-07-05T13:53:55Z backup-remote exemption applied",
+  "passed": true
+}

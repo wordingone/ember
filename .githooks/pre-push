@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Local pre-push ring: run the full kernel including range checks against the
 # upstream so goal+evidence co-commits are caught before they leave the machine.
+# Supports backup-remote exemption for private mirror (exact-match URL only).
 ROOT="$(git rev-parse --show-toplevel)"
+REMOTE="${1:-origin}"
+PUSH_REMOTE_URL="$(git config --get remote.$REMOTE.url 2>/dev/null || echo '')"
+BACKUP_URL="$(git config --get remote.backup.url 2>/dev/null || echo '')"
+
 if git rev-parse --verify -q origin/master >/dev/null; then
-  exec bash "$ROOT/tools/repo-guard.sh" --base origin/master
+  exec bash "$ROOT/tools/repo-guard.sh" --base origin/master --push-remote "$PUSH_REMOTE_URL" --backup-url "$BACKUP_URL"
 else
-  exec bash "$ROOT/tools/repo-guard.sh"
+  exec bash "$ROOT/tools/repo-guard.sh" --push-remote "$PUSH_REMOTE_URL" --backup-url "$BACKUP_URL"
 fi
