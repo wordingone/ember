@@ -19,7 +19,7 @@ artifacts under `receipts/` — never by prose.
 
 ## Current status
 
-<!-- state-as-of: 2026-07-04 | board-receipt: ember-totality-20260704T203132Z | counts: 29-GREEN / 3-AUDIT-OK / 6-RED -->
+<!-- state-as-of: 2026-07-05 | board-receipt: ember-totality-20260705T081932Z | counts: 29-GREEN / 2-AUDIT-OK / 1-AUDIT-INCIDENT / 6-RED -->
 
 Position ledger: `STATE.md`. Standing goal: `GOAL.md`.
 
