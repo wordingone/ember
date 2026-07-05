@@ -1,6 +1,6 @@
 {
   "max_bytes": 1048576,
-  "root": "B:\\M\\ember-public",
+  "root": "<public-tree>",
   "row_count": 12877,
   "skip_parts": [
     ".git",
