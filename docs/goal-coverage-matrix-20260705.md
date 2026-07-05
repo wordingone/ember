@@ -29,7 +29,7 @@ caveats in §Caveats.
 ## Standing actions that are NOT specs (riding the loop)
 
 - Board re-run post-annex → confirms C(-1) flip + regenerates C-TALLY (next REVIEW tick).
-- Shared-checkout branch hygiene: B:/M/ember-goalforge sits on a stale lane branch; return to
+- Shared-checkout branch hygiene: the local goalforge working tree sits on a stale lane branch; return to
   master at next landing.
 - This matrix lands via PR (docs/, per the evidence-artifact location convention).
 
