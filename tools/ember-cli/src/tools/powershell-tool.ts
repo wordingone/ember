@@ -314,6 +314,7 @@ async function executePs(
   timeout: number,
   abortSignal: AbortSignal,
   psExe: string,
+  cwd: string,
 ): Promise<PsExecResult> {
   return new Promise((resolve) => {
     const stdoutChunks: Buffer[] = [];
@@ -322,7 +323,7 @@ async function executePs(
 
     const proc = spawn(psExe, ["-NoProfile", "-NonInteractive", "-Command", command], {
       env: process.env,
-      cwd: process.cwd(),
+      cwd,
       shell: false,
     });
 
@@ -412,7 +413,7 @@ async function runPowerShell(
   const { command } = input;
   const timeout = input.timeout ?? BASH_TIMEOUT_MS;
   const psExe = await getPsExecutable();
-  const result = await executePs(command, timeout, ctx.abortController.signal, psExe);
+  const result = await executePs(command, timeout, ctx.abortController.signal, psExe, ctx.cwd ?? process.cwd());
 
   const stdoutBuf = result.stdout;
   const isImage = detectImageOutput(stdoutBuf);

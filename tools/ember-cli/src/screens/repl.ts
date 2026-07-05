@@ -663,7 +663,10 @@ export function ReplScreen({
           mcpClients:         {} as Record<string, unknown>,
           agents:             {} as Record<string, unknown>,
           canUseTool:         async () => true,
-          getAppState:        () => ({} as Record<string, unknown>),
+          // #182: ExitPlanMode/EnterWorktree/ExitWorktree read state["cwd"] as
+          // a fallback path to the resolved root; keep it consistent with the
+          // same `cwd` this config already threads via ToolUseContext.cwd.
+          getAppState:        () => ({ cwd } as Record<string, unknown>),
           setAppState:        async () => {},
           readFileCache:      new Map<string, unknown>(),
           customSystemPrompt: systemPromptRef.current,
