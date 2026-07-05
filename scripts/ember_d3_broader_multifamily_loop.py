@@ -142,6 +142,16 @@ def main() -> int:
         import ember_d3_broader_multifamily_loop_selftest
 
         return ember_d3_broader_multifamily_loop_selftest.main()
+
+    # Guard: check C14 RESIDENT_TRAINING_GATE_PASS precondition before launch
+    try:
+        import loop_launch_guard
+        repo = Path.cwd().resolve()
+        loop_launch_guard.guard_loop_launch(repo, datetime.now(timezone.utc))
+    except RuntimeError as e:
+        print(f"Loop launch blocked by precondition guard: {e}", file=__import__("sys").stderr)
+        return 2
+
     repo = Path.cwd().resolve()
     admission = Path(args.admission) if args.admission else latest_admission(repo)
     if not admission.is_absolute():
