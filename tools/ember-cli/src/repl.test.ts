@@ -34,9 +34,11 @@ import {
   Homescreen,
   WelcomeV2,
   LogoV2,
+  IDENTITY_TAGLINE,
 } from "../components/logo-homescreen.ts";
 import { Markdown, renderInline } from "../components/markdown-and-code.ts";
 import type { SessionMessage } from "../components/app-shell.ts";
+import { color } from "./components/design-system.ts";
 
 // Empty lookups for tests that don't exercise tool-use state
 const emptyLookups: MessageLookups = buildMessageLookups([]);
@@ -68,14 +70,15 @@ describe("AC1: welcome → Homescreen (not bare Text)", () => {
     expect(s).not.toContain(`"${welcomeContent}"`);
   });
 
-  it("Homescreen produces WelcomeV2 with distinctive greeting token", () => {
-    // Call Homescreen as a function (like React would render it) to get the child tree
+  // AC1 assertions superseded by the D4 homescreen battery landed in 5f1b7e5 (#160);
+  // updated to the D4 contract. Homescreen no longer nests WelcomeV2 (the D4 outer
+  // titled panel replaced it — see logo-homescreen.ts's module docstring for why),
+  // so the old "props include viewportWidth" evidence of nesting no longer applies;
+  // the tagline is D4's own distinctive identity token instead.
+  it("Homescreen produces the distinctive identity tagline inline", () => {
     const homescreenEl = Homescreen({ state: {}, viewportWidth: 80 });
     const s = ser(homescreenEl);
-    // Homescreen produces a Box containing WelcomeV2; its props include viewportWidth
-    // WelcomeV2 has default greeting "Welcome back!" — check child element references it
-    // (WelcomeV2 is a React element reference in the tree; props.viewportWidth tells us it's there)
-    expect(s).toContain("viewportWidth");
+    expect(s).toContain(IDENTITY_TAGLINE);
   });
 
   it("WelcomeV2 output contains greeting token 'Welcome back!'", () => {
@@ -85,11 +88,11 @@ describe("AC1: welcome → Homescreen (not bare Text)", () => {
     expect(s).toContain("Welcome back!");
   });
 
-  it("LogoV2 output contains 'ember' with cyan color (distinctive logo token)", () => {
+  it("LogoV2 output contains 'ember' with the identity color token (distinctive logo token)", () => {
     const logo = LogoV2({ viewportWidth: 80, state: {} });
     const s = ser(logo);
     expect(s).toContain('"ember"');
-    expect(s).toContain('"cyan"');
+    expect(s).toContain(color("identity", "fg", "dark"));
   });
 });
 
