@@ -1,0 +1,23 @@
+{
+  "ts": "20990102T000000Z",
+  "legs": {
+    "ember_work": {
+      "owned_core_score": 0.82,
+      "e2b_score": 0.55
+    },
+    "founder_likeness": {
+      "owned_core_score": 0.91,
+      "e2b_score": 0.6
+    }
+  },
+  "matched_budget": {
+    "owned_arm": 100,
+    "e2b_arm": 100
+  },
+  "owned_core_identity": {
+    "id": "ember-owned-core-fixture-v1",
+    "no_borrowed_weights": true,
+    "quantized": false
+  },
+  "protocol_frozen_ref": "receipts/ember-e2b-fixture/e2b-protocol-frozen-20990101T000000Z.json"
+}

@@ -1,0 +1,200 @@
+{
+  "receipt_type": "ember_totality_board",
+  "ticket": "EMBER-TOTALITY-BOARD",
+  "ts": "20260702T104235Z_roottest2",
+  "root": "C:\\WINDOWS\\Temp\\claude-totality-roottest-empty",
+  "registry_spec": "docs\\spec\\conditions-v1.md",
+  "registry_sync": {
+    "runner_ids": 29,
+    "registry_ids": 29,
+    "matched": true
+  },
+  "rows": [
+    {
+      "condition": "C-EFF",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-EFF: receipts dir absent at C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts"
+    },
+    {
+      "condition": "C-BASE",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-BASE: receipts dir absent at C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts (nothing to satisfy the CHK)"
+    },
+    {
+      "condition": "C-PORT",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-PORT: receipts dir absent at C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts"
+    },
+    {
+      "condition": "C-FED",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-FED: no federation-design / egress-manifest artifact found under docs/ or receipts/ (word-boundary egress|federation absent; 'regression' substring excluded) -> satisfying artifact ABSENT"
+    },
+    {
+      "condition": "C-GROW",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-GROW: no growth-signature receipt found under receipts/ (no net2net/stacking/expert-add/warm-start measured receipt) -> satisfying artifact ABSENT"
+    },
+    {
+      "condition": "C-ORGANISM",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-ORGANISM: receipts dir absent at C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts (nothing to satisfy the CHK)"
+    },
+    {
+      "condition": "C(-1)",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C(-1): no JSON receipts found under receipts/ -> clear-packet artifact ABSENT"
+    },
+    {
+      "condition": "C0",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C0: no ember-resident-training-gate receipt dir -> C14 precondition ABSENT, loops cannot be authorized"
+    },
+    {
+      "condition": "C1",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C1: no benchmark/dataset discovery receipt found (receipts/*discovery* absent) -> satisfying artifact ABSENT"
+    },
+    {
+      "condition": "C2",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C2: no D3 native-loop candidate receipt found (receipts/ember-d3-native-loop/*native-loop* absent) -> satisfying artifact ABSENT"
+    },
+    {
+      "condition": "C3",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED no d3-native-loop receipt dir at C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts\\ember-d3-native-loop (C3 budget artifact absent)"
+    },
+    {
+      "condition": "C4",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED no resident-training receipts found under C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts\\ember-resident-training-gate (C4 before/after artifact absent)"
+    },
+    {
+      "condition": "C5",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED no resident-training-gate receipt dir at C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts\\ember-resident-training-gate"
+    },
+    {
+      "condition": "C6",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED no receipts dir at C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts"
+    },
+    {
+      "condition": "C7",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C7: no c7-selftest / operator-ablation receipt found (receipts/c7-selftest-* absent) -> satisfying artifact ABSENT"
+    },
+    {
+      "condition": "C8",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C8: no field-level-contribution-proof-*.json receipt found (other field-level receipts present: 0) -> satisfying artifact ABSENT"
+    },
+    {
+      "condition": "C9",
+      "status": "UNEVALUABLE",
+      "outcome": "UNEVALUABLE",
+      "reason": "UNEVALUABLE no code_vs_docs_metric receipt found under C:\\WINDOWS\\Temp\\claude-totality-roottest-empty/receipts (0 json files scanned, 0 parse errors)"
+    },
+    {
+      "condition": "C10",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C10: debt ledger ABSENT at docs\\ember-debt-ledger.md -> no receipt proving zero open/active/deferred rows"
+    },
+    {
+      "condition": "C11",
+      "status": "UNEVALUABLE",
+      "outcome": "UNEVALUABLE",
+      "reason": "UNEVALUABLE C11: receipt dir ABSENT at receipts\\ember-mvp\\breakthrough-goal-20260619 -> no native developmental-duration milestones exist"
+    },
+    {
+      "condition": "C12",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C12: no receipt files found under receipts/ -> no deleted-mode-selector degradation receipt exists"
+    },
+    {
+      "condition": "C13",
+      "status": "UNEVALUABLE",
+      "outcome": "UNEVALUABLE",
+      "reason": "UNEVALUABLE C13: no native-goal-organ-probe receipt found (native-goal-organ-probe-* absent) -> internalized goal-mode organ artifact ABSENT"
+    },
+    {
+      "condition": "C14",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C14: no resident-training-gate receipt found (receipts/ember-resident-training-gate/ empty) -> satisfying artifact ABSENT"
+    },
+    {
+      "condition": "C15",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED no tiny_bitnet_comparison_receipt.json under C:\\WINDOWS\\Temp\\claude-totality-roottest-empty/receipts/ember-tiny-bitnet-comparison/ \u2014 C15 artifact absent"
+    },
+    {
+      "condition": "C-OBS",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-OBS satisfying artifact ABSENT under kai-converge: missing real GOAL/ledger/receipts->EmberWorldState adapter binding; click-to-evidence surface; confirm-only encounter membrane (no silent-steer); user-runnable observatory proof-pack (MONITOR/UNDERSTAND/INTERACT)"
+    },
+    {
+      "condition": "C-ANAT",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under C:\\WINDOWS\\Temp\\claude-totality-roottest-empty; CHK 'all 16 present and consistent with receipts' unmet"
+    },
+    {
+      "condition": "C-SCALE",
+      "status": "UNEVALUABLE",
+      "outcome": "UNEVALUABLE",
+      "reason": "no probe script implements C-SCALE under B:\\M\\ember-goalforge\\scripts\\ember_totality (expected test file absent) -- closing this gap is tracked separately, docs/spec/milestones-v1.md \u00a7C"
+    },
+    {
+      "condition": "C-E2B",
+      "status": "UNEVALUABLE",
+      "outcome": "UNEVALUABLE",
+      "reason": "no probe script implements C-E2B under B:\\M\\ember-goalforge\\scripts\\ember_totality (expected test file absent) -- closing this gap is tracked separately, docs/spec/milestones-v1.md \u00a7C"
+    },
+    {
+      "condition": "C-MANIFEST",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED docs/ember-completeness.md ABSENT under C:\\WINDOWS\\Temp\\claude-totality-roottest-empty -- the completeness manifest (the C-MANIFEST artifact) does not exist"
+    },
+    {
+      "condition": "C-TALLY",
+      "status": "RED",
+      "outcome": "RED",
+      "reason": "RED no tally-*.json receipt exists under C:\\WINDOWS\\Temp\\claude-totality-roottest-empty\\receipts"
+    }
+  ],
+  "summary": {
+    "total": 29,
+    "green": 0,
+    "red": 24,
+    "unevaluable": 5,
+    "pct_green": 0.0,
+    "completion_math": {
+      "red_plus_unevaluable": 29,
+      "pct_complete": 0.0,
+      "note": "UNEVALUABLE counts as RED for completion math (GOAL.md \u00a74.1 amendment 2026-07-02); it is never reported as an evaluated failure above."
+    }
+  }
+}

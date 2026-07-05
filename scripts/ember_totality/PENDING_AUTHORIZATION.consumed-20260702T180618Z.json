@@ -1,0 +1,9 @@
+{
+  "authorizing_reference": "receipts/governor-repair-080-20260702T180248Z.json (clear-to-fire window repair per GOAL.md sec 12, toward GOAL.md sec 5 item 3 pinned spec text 'VRAM fraction <=0.80 canonical, repair ordered'; clear object receipts/acceptance/goalforge-clear-2026-07-02.json, git_anchor defcc562)",
+  "changes": [
+    {
+      "file": "scripts/governor.py",
+      "reason": "EMBER_VRAM_FRACTION default repaired 0.85 -> 0.80 (repair-to-pinned-spec, no new behavior; env override path unchanged; selftest re-run GOVERNOR_SELFTEST_PASS in both trees). Twin copy at B:/M/ember/scripts/governor.py repaired identically, same receipt."
+    }
+  ]
+}

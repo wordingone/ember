@@ -1,0 +1,22 @@
+{
+ "authorizing_reference": "docs/goalforge-debate-ledger.md R11 row (2026-07-02, commit a3b11c2): salvage-verified lane-14 repair pass built by chk-repair-2 before the host crash; R11 salvage leg verdict: 18/18 controls pass (14 existing intact + 4 new), both probes RED live, diff matches the ordered spec incl. the traced-necessary _goal_files_for(nc_root) fixture-isolation change. RE-ISSUE of the 142313Z decl whose bare-filename changes[] entries failed repo-relative pairing (UNPAIRED_FILES_DETECTED incident retained in that receipt, append-only -- a genuine live NEG exercise of the pairing gate).",
+ "changes": [
+  {
+   "file": "scripts/ember_totality/test_c_obs.py",
+   "reason": "repair 1 -- evidence-surface scoping: positive-evidence scan for conjuncts (a)-(d) restricted to receipts/, ledger/, baseline/ subtrees and non-.py files; INVALID_TOKENS negative scan stays tree-wide; RED live."
+  },
+  {
+   "file": "scripts/ember_totality/test_c_manifest.py",
+   "reason": "repair 2 -- tolerant sec-4 separators/headings + fail-closed <20 denominator floor + _goal_files_for(nc_root) fixture isolation; RED live (12/27, denominator 27)."
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/run_controls.py",
+   "reason": "+4 fixture controls (pos/neg per repair; NEG fixtures demonstrate pre-repair false-GREEN); 18/18 total."
+  },
+  {
+   "file": "scripts/ember_totality/chk_controls/**",
+   "reason": "new fixture trees for the 4 controls (untracked until this commit)."
+  }
+ ],
+ "baseline_ref": "a3b11c2247a9240f079439eb59c0b49ea8ce33e1"
+}

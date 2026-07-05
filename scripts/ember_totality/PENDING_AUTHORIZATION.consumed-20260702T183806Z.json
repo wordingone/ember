@@ -1,0 +1,13 @@
+{
+  "authorizing_reference": "Repo leak-gate remediation (standing 'nothing leaks into the remote or its history' direction, 2026-06-27) -- pre-commit gate blocked the two new probe files on a legacy secondary-root name; scrub-not-carve chosen for NEW files. Repair-class edit under GOAL.md sec 12 (no semantic change: the dropped candidate root does not exist under this repo root, so root resolution is byte-different, behavior-identical; probes re-verified RED-honest and controls 24/24 after the scrub).",
+  "changes": [
+    {
+      "file": "scripts/ember_totality/test_c_scale.py",
+      "reason": "Dropped the dead legacy secondary root candidate from CANDIDATE_ROOTS (leak-gate scrub; resolution behavior identical under this repo root)."
+    },
+    {
+      "file": "scripts/ember_totality/test_c_e2b.py",
+      "reason": "Same scrub as test_c_scale.py."
+    }
+  ]
+}

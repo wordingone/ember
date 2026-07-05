@@ -1,0 +1,19 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "candidates": [
+    {
+      "primary_sources": [
+        "http://example.com/dataset"
+      ],
+      "license_or_access_basis": "CC-BY-4.0 (synthetic)",
+      "task_evaluator_form": "exact_match (synthetic)",
+      "fit_to_goal": "best self-improvement-by-action proxy (synthetic)",
+      "frozen_rows_sha256": "a4f690012db702f5fd2330722f8e7c4cb9d031cd2cc52af8260eee3cfb9e1e8d",
+      "local_task_rows_path": "B:\\M\\ember-goalforge\\scripts\\ember_totality\\chk_controls\\fixtures\\c1_pos\\receipts\\ember-post-resident-discovery\\synthetic-frozen-rows.json"
+    }
+  ],
+  "selection": {
+    "why": "synthetic selection rationale"
+  }
+}

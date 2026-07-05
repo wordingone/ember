@@ -1,0 +1,13 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "receipt_class": "IND-5",
+  "leg": "a_attested",
+  "schema": "acceptance/v1",
+  "scope": "c-ind-comprehension-fixture",
+  "accepted_by": "assistant",
+  "generated_by": "automated_transcription_script",
+  "channel": "chat",
+  "verbatim": "Auto-generated comprehension summary produced without operator review.",
+  "ts": "20990101T000000Z"
+}

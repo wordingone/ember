@@ -1,0 +1,37 @@
+{
+ "authorizing_reference": "GitHub issue #38 (public tracker), Deliverable 3 (maintainer-owned board wiring), parent #35 Class 2 -- 'an enforcement leg inside the totality run that subprocess-executes both checkers and goes RED on regression'; builder Deliverables 1-2 (enforcement_leg.py + fixture suite + integration receipt) landed and accepted 2026-07-03.",
+ "kind": "probe_amendment_pending_review",
+ "actor": "maintainer (review-gate session), issue #38 Deliverable 3",
+ "files": [
+  "scripts/ember_totality/test_c_enf.py",
+  "scripts/ember_totality/ember_totality_spec.py",
+  "docs/spec/conditions-v1.md"
+ ],
+ "changes": [
+  {
+   "file": "scripts/ember_totality/test_c_enf.py",
+   "reason": "NEW status probe for condition C-ENF: calls enforcement_leg.run_enforcement_leg(ROOT); GREEN iff every registered checker executed with a coherent dual-source verdict (PASS or FAIL) AND the energy-law selftest is PASS. DISAGREEMENT/UNRESOLVABLE/missing-checker/unimportable-leg = RED invalid_enforcement_regression (fail-closed). Deliberately does NOT import the publication gate's open/closed direction -- that is the endgame bar judged by publication-v1.md sec3; honest CLOSED pre-publication is GREEN-compatible here."
+  },
+  {
+   "file": "scripts/ember_totality/ember_totality_spec.py",
+   "reason": "Wire C-ENF into FILENAME_ID (test_c_enf.py -> C-ENF) and ORDER (after C-SURFACE2, before the roll-ups). No other runner logic touched."
+  },
+  {
+   "file": "docs/spec/conditions-v1.md",
+   "reason": "Add the C-ENF registry row (sec4.2, after C-LEGIB) and re-rule sec4.3 numeric closure: 32 primary + 2 roll-ups = 34 entries (re-ruled 2026-07-04 on C-ENF's addition, gh issue #38). Bar EXPANDS -- never-reduce-scope safe direction; precedent C-LEGIB (issue #13) / C-SURFACE2 (issue #11)."
+  }
+ ],
+ "diff_ref": "git diff on the three files, this commit",
+ "sandbox_verification": {
+  "sandbox_path": "scratchpad cenf-sandbox (red-a/red-b/red-c throwaway roots via EMBER_TOTALITY_ROOT; GREEN leg against the live tree is read+scratch-receipt only, same class as a board run); proof persisted at scratch/cenf-sandbox-proof-20260704.md",
+  "runs_executed": 4,
+  "run_1_green_live": "GREEN -- check_energy_law_theory=PASS (exit 0), check_publication_gate=FAIL (exit 1, honest CLOSED 0/5) -> coherent, GREEN-compatible",
+  "run_2_red_checkers_absent": "RED -- both checkers 'never executed (checker script not found)' [invalid_enforcement_regression]",
+  "run_3_red_selftest_coherent_fail": "RED -- energy selftest verdict FAIL ('selftest: 3 FAILED', exit 1) + publication checker UNRESOLVABLE (no OVERALL line) [invalid_enforcement_regression]",
+  "run_4_red_leg_module_gone": "RED -- enforcement_leg unimportable (ModuleNotFoundError) [invalid_enforcement_regression]"
+ },
+ "expected_board_effect": "STATE conditions 30 -> 31 (34 entries - 3 process invariants); C-ENF expected GREEN on the live tree; GREEN count expected +1.",
+ "ts": "2026-07-04T03:40:00Z",
+ "landed_by": "maintainer review gate, flip-pair protocol",
+ "landed_utc": ""
+}

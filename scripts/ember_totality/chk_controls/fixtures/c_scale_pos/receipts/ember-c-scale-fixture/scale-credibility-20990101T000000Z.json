@@ -1,0 +1,22 @@
+{
+  "operating_capability_point": 4200000000.0,
+  "W1": {
+    "measured_tokens_to_base": 84000000000.0,
+    "projected_dense_tokens_to_base": 168000000000.0,
+    "token_bill_collapse_ratio": 2.0,
+    "growth_lineage_from_cbase_seed": "grown-from-cbase-seed-fixture-v1",
+    "no_borrowed_weights_load_bearing": true
+  },
+  "W2": {
+    "native_finetune_mechanism_id": "native-inloop-adapter-fixture-v1",
+    "per_update_cost_at_scale": 0.42,
+    "free_cognitive_mode_transition_receipt": "receipts/ember-c-scale-fixture/mode-transition-note.json",
+    "no_borrowed_base": true
+  },
+  "measured_flops_to_capability": 5e+21,
+  "projected_dense_flops_to_capability": 1.1e+22,
+  "capability_per_compute_ratio": 2.2,
+  "contribution_deletion_collapses_excess": true,
+  "active_working_set_bytes": 20000000000.0,
+  "device_working_set_floor_bytes": 24000000000.0
+}

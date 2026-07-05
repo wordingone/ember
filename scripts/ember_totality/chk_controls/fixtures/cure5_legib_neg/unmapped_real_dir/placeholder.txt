@@ -1,0 +1,1 @@
+fixture: a genuine working dir with no entry-map row

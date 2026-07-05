@@ -1,0 +1,10 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "ts": "20990101T000000Z",
+  "verdict": "REAL_AVIR_UIUX_AX_OBSERVATION_PASS",
+  "observed_real_avir_binary": true,
+  "observed_real_tui": true,
+  "observed_agent_loop": true,
+  "observed_uiux_ax": true
+}

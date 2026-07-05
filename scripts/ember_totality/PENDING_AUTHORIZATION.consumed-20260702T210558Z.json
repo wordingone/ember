@@ -1,0 +1,10 @@
+{
+ "authorizing_reference": "GOAL.md sec 13 item 6 + operator message 2026-07-02 ('youre confident that I wont have to handhold you...') - closing the named PR-latency hole the same turn it was named.",
+ "changes": [
+  {
+   "path": "scripts/ember_totality/test_c_proc.py",
+   "why": "CHK clause (d): open_prs enumeration required; verdict-pending >48h = RED"
+  }
+ ],
+ "ts": "2026-07-02T21:05:45Z"
+}

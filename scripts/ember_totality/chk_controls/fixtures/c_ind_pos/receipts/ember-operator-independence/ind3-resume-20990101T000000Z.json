@@ -1,0 +1,10 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "receipt_class": "IND-3",
+  "leg": "interrupted_resume",
+  "doc_pointer": "docs/operator/operate-resume.md",
+  "resumable_state": true,
+  "corrupt": false,
+  "generator": "fixture-harness"
+}

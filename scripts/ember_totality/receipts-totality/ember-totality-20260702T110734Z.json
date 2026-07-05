@@ -1,0 +1,299 @@
+{
+  "receipt_type": "ember_totality_board",
+  "ticket": "EMBER-TOTALITY-BOARD",
+  "ts": "20260702T110734Z",
+  "sha_convention": "bytes on disk as-is",
+  "root": "B:\\M\\ember-goalforge",
+  "registry_spec": "docs\\spec\\conditions-v1.md",
+  "registry_sync": {
+    "runner_ids": 29,
+    "registry_ids": 29,
+    "matched": true
+  },
+  "rows": [
+    {
+      "condition": "C-EFF",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-EFF: no receipts/ceff-RESOLVED-*.json closure receipt -> satisfying artifact ABSENT. Prior gate9-shatter verdict is REPUDIATED (repudiation receipt present (ceff-shatter-REPUDIATED-20260623T170000Z.json)); measured 1.18x lever / 1.85x c03 stack = 56% of the >=3.3x shatter criterion. Valid closure: SHATTER (>=3.3x compound AND base in <=1 governed day) OR PRICED_SCALEOUT_RESIDUAL."
+    },
+    {
+      "condition": "C-BASE",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-BASE: no owned from-scratch checkpoint receipt under B:\\M\\ember-goalforge\\receipts names a checkpoint whose on-disk model.pt bytes hash-match its manifest weight-hash claim (2 owned-pretrain candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause (a)/(c) unmet)"
+    },
+    {
+      "condition": "C-PORT",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-PORT: NO device-portability receipt under receipts/ proving governor + a forward pass on a non-4090 (simulated/real) device without crash -> satisfying artifact genuinely ABSENT. governor.py portability gaps: ['no sm>=89 fp8 gate', 'no bf16 fallback ladder', 'no device-relative throughput threshold']. The newest device receipt (ns-chain-roofline-4090-*.json) is explicitly RTX-4090-only (a 4090-only path does NOT count)."
+    },
+    {
+      "condition": "C-FED",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-FED: invalid-token present in docs\\c-fed-federation-design.md ['invalid_unapproved_egress'] (does-NOT-count outcome) -> condition NOT met"
+    },
+    {
+      "condition": "C-GROW",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-GROW: growth-related receipts exist but NONE satisfies CHK (needs net2net/stacking/expert-add warm-start receipt with before/after param counts + loss-continuity across grow step + FLOP-saving vs from-scratch, measured on train daemon) -> [\"receipts\\\\citation-check-20260702T082958Z.json: CHK missing ['param_counts_before_and_after', 'loss_continuity_across_grow_step', 'flop_saving_vs_fromscratch']\", \"receipts\\\\citation-check-20260702T083116Z.json: CHK missing ['param_counts_before_and_after', 'loss_continuity_across_grow_step', 'flop_saving_vs_fromscratch']\", \"receipts\\\\citation-check-20260702T083319Z.json: CHK missing ['param_counts_before_and_after', 'loss_continuity_across_grow_step', 'flop_saving_vs_fromscratch']\", \"receipts\\\\proof-growth-identity-20260702T064211Z.json: CHK missing ['grow_method(net2net/stacking/expert-add/warm-start)', 'param_counts_before_and_after', 'loss_continuity_across_grow_step', 'flop_saving_vs_fromscratch']\"]"
+    },
+    {
+      "condition": "C-ORGANISM",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under B:\\M\\ember-goalforge\\receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 746 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT)"
+    },
+    {
+      "condition": "C(-1)",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C(-1): clear packet present in receipts\\ember-post-resident-discovery\\field-level-contribution-proof-20260622T222500Z.json (api_spend_usd=0, paid_api_surface_used=false, required_goal_fields.zero_cost=True, leaderboard_dependency=False); zero paid-surface dependency, no invalid-token matched (13 negative assertions checked)"
+    },
+    {
+      "condition": "C0",
+      "status": "AUDIT-PENDING-EPOCH",
+      "is_process_invariant": true,
+      "reason": "AUDIT-PENDING-EPOCH C0: no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1) -> this STANDING PROCESS-INVARIANT has no epoch to cadence-audit from; pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9) -- neither AUDIT-OK nor AUDIT-INCIDENT, never RED"
+    },
+    {
+      "condition": "C1",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C1: source-backed discovery receipt receipts\\ember-post-resident-discovery\\benchmark-discovery-20260620T230519Z.json enumerates 6 benchmarks with URLs+licenses+evaluator-forms+hashes+selection.why; no invalid-token present; no reachable artifact to re-hash"
+    },
+    {
+      "condition": "C2",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C2: candidate receipts\\ember-d3-native-loop\\d3-native-loop-20260620T230519Z.json ran on EXTERNAL held-out osunlp/D3-Gym (12 rows); frozen-rows sha256 f552e9eb758c VERIFIED on disk and frozen at 2026-06-20T23:07:00Z BEFORE candidate run 2026-06-20T23:44:35Z; arm-C policy extracts evaluator requirements (no label/gold/sample-answer read); no invalid_heldout_leak token present"
+    },
+    {
+      "condition": "C3",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED d3-native-loop-20260622T153500Z-real-avir-observed.json: equal_budget block is missing required dimension(s) ['wall_time'] -> per-arm budget rows incomplete (not all six C3 budget dimensions declared+measured). arms=['A', 'B', 'C', 'Deleted'] budget_fields=['attempts_per_arm_per_task', 'cpu_gpu', 'data_access', 'verifier'] seeds=present dims_present=['gpu_cpu', 'data_access', 'attempt_budget', 'seed_policy', 'verifier_path'] dims_missing=['wall_time']"
+    },
+    {
+      "condition": "C4",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C4 satisfied by resident-training-gate-20260622T152500Z-real-avir-observed.json [PASS gate receipt with per-task rows AND pre/post neural hashes]: matched before(A) baseline + after(C) candidate present per slice on the same frozen task, one identical scoring command across arms, pre!=post neural parameter hashes (real assimilation before/after), no invalid_missing_before. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o'"
+    },
+    {
+      "condition": "C5",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C5 satisfied by resident-training-gate-20260622T152500Z-real-avir-observed.json [PASS-verdict receipt with rows]: positive aggregate delta, C beats before-baseline(A) AND control(B), per-slice rows present, no invalid_no_rows. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2"
+    },
+    {
+      "condition": "C6",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED recipe DEFINITION present & reusable in 10 PASS receipt(s) (e.g. receipts\\ember-post-resident-discovery\\field-level-contribution-protocol-20260622T223500Z\\deleted-method-native-link\\d3-generalized-candidate-receipt.json: reproducibility keys=['docker_required', 'rerun_command', 'solution_hashes']), but NO executed-rerun reproduction record (none of ['rerun_verified', 'rerun_reproduced', 'reproduced_score', 'reproduction_verdict', 'rerun_reproduction', 'rerun_match']) -> C6 CHK 'rerun command reproduces the score or names a deterministic mismatch' UNPROVEN"
+    },
+    {
+      "condition": "C7",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C7: load-bearing self-growth operator proven by receipts\\c7-selftest-20260623T155403Z.json (verdict=PASS, proves_load_bearing=true, held_out_slices=[1, 2] out-of-closure vs deleted-arm slice [0]); operator_constants_hash bound to LIVE operator (cd32c6bcd96c..); operator PROSPECTIVE (declares prospective+fires-before-cycle); no invalid-token present"
+    },
+    {
+      "condition": "C8",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C8: field-level-contribution-proof receipt(s) present but NONE prove a falsifiable field-level breakthrough (contribution-level deletion + external-disjoint degradation) -> [\"field-level-contribution-proof-20260622T222500Z.json: CHK unmet ['pass_verdict', 'no_blockers', 'field_level_claim_proven', 'ablation_method_blocked', 'ordinary_runner_intact', 'cites_closest_prior', 'material_difference']; receipt blocker='closest_known_prior_comparison_missing'\", \"field-level-contribution-proof-20260622T223500Z.json: CHK unmet ['pass_verdict', 'no_blockers', 'field_level_claim_proven']; receipt blocker='field_level_breakthrough_not_proven_over_named_prior'\"]"
+    },
+    {
+      "condition": "C9",
+      "status": "AUDIT-PENDING-EPOCH",
+      "is_process_invariant": true,
+      "reason": "AUDIT-PENDING-EPOCH C9: no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1) -> this STANDING PROCESS-INVARIANT has no epoch to cadence-audit from; pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9) -- neither AUDIT-OK nor AUDIT-INCIDENT, never RED"
+    },
+    {
+      "condition": "C10",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C10: 16 unresolved debt-ledger row(s) remain (ACTIVE-BLOCKER=5, ACTIVE-NEXT=4, TRIGGER-GATED (TRIGGERLESS)=7); banned-phrase-dispositions=0; disposed-without-receipt=0. sample=['DEBT-001:ACTIVE-BLOCKER', 'DEBT-002:ACTIVE-BLOCKER', 'DEBT-003:ACTIVE-BLOCKER', 'DEBT-004:ACTIVE-NEXT', 'DEBT-005:ACTIVE-NEXT'] -> deferred-work escape hatch OPEN (invalid_deferred_remains)"
+    },
+    {
+      "condition": "C11",
+      "status": "UNEVALUABLE",
+      "is_process_invariant": false,
+      "reason": "UNEVALUABLE C11: receipt dir ABSENT at receipts\\ember-mvp\\breakthrough-goal-20260619 -> no native developmental-duration milestones exist"
+    },
+    {
+      "condition": "C12",
+      "status": "UNEVALUABLE",
+      "is_process_invariant": false,
+      "reason": "UNEVALUABLE C12: no receipt carries a deleted-mode-selector / fixed-timer ablation block proving removal degrades the cycle -> CHK unmet (deleted-mode-selector receipt absent)"
+    },
+    {
+      "condition": "C13",
+      "status": "UNEVALUABLE",
+      "is_process_invariant": false,
+      "reason": "UNEVALUABLE C13: no native-goal-organ-probe receipt found (native-goal-organ-probe-* absent) -> internalized goal-mode organ artifact ABSENT"
+    },
+    {
+      "condition": "C14",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C14: invalid-token(s) present in authoritative receipts ['RUNNER_OR_PARTIAL_NEURAL_PROGRESS_NOT_RESIDENT_ORGAN_CLEARANCE'] -> a does-NOT-count outcome (resident=resident-training-gate-20260622T152500Z-real-avir-observed.json, conflation=resident-gate-conflation-audit-20260622T133000Z.json)"
+    },
+    {
+      "condition": "C15",
+      "status": "AUDIT-PENDING-EPOCH",
+      "is_process_invariant": true,
+      "reason": "AUDIT-PENDING-EPOCH no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1) -> this STANDING PROCESS-INVARIANT has no epoch to cadence-audit from; pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9) -- neither AUDIT-OK nor AUDIT-INCIDENT, never RED"
+    },
+    {
+      "condition": "C-OBS",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED does-NOT-count invalid-token matched: invalid_observatory_not_user_runnable@docs\\goal-archive\\GOAL-20260630-pre-goalforge.md, invalid_observatory_not_user_runnable@docs\\spec\\conditions-v1.md, invalid_observatory_not_user_runnable@docs\\spec\\inference-serving-v1.md, invalid_observatory_not_user_runnable@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T103808Z.json, invalid_observatory_not_user_runnable@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T103938Z.json, invalid_observatory_not_user_runnable@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T104123Z_roottest.json, invalid_observatory_not_user_runnable@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T104425Z.json, invalid_observatory_not_user_runnable@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T110541Z.json, invalid_observatory_not_user_runnable@scripts\\ember_totality\\test_c_obs.py, invalid_observatory_synthetic_only@docs\\goal-archive\\GOAL-20260630-pre-goalforge.md, invalid_observatory_synthetic_only@docs\\spec\\conditions-v1.md, invalid_observatory_synthetic_only@docs\\spec\\inference-serving-v1.md, invalid_observatory_synthetic_only@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T103808Z.json, invalid_observatory_synthetic_only@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T103938Z.json, invalid_observatory_synthetic_only@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T104123Z_roottest.json, invalid_observatory_synthetic_only@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T104425Z.json, invalid_observatory_synthetic_only@scripts\\ember_totality\\receipts-totality\\ember-totality-20260702T110541Z.json, invalid_observatory_synthetic_only@scripts\\ember_totality\\test_c_obs.py"
+    },
+    {
+      "condition": "C-ANAT",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 5/16 anatomy docs present, missing prefixes=['05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under B:\\M\\ember-goalforge; CHK 'all 16 present and consistent with receipts' unmet"
+    },
+    {
+      "condition": "C-SCALE",
+      "status": "UNEVALUABLE",
+      "is_process_invariant": false,
+      "reason": "no probe script implements C-SCALE under B:\\M\\ember-goalforge\\scripts\\ember_totality (expected test file absent) -- closing this gap is tracked separately, docs/spec/milestones-v1.md \u00a7C"
+    },
+    {
+      "condition": "C-E2B",
+      "status": "UNEVALUABLE",
+      "is_process_invariant": false,
+      "reason": "no probe script implements C-E2B under B:\\M\\ember-goalforge\\scripts\\ember_totality (expected test file absent) -- closing this gap is tracked separately, docs/spec/milestones-v1.md \u00a7C"
+    },
+    {
+      "condition": "C-MANIFEST",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED invalid_unmanifested_piece: 11/26 \u00a74 planned condition(s) ABSENT from docs/ember-completeness.md (55 rows present, ids C1..); missing=C-EFF,C-BASE,C0,C-PORT,C-FED,C-GROW,C-ORGANISM,C-OBS,C-ANAT,C-SCALE,C-E2B"
+    },
+    {
+      "condition": "C-TALLY",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED invalid-token matched ['pct<100'] in tally-20260613T004807Z.json (pct=23.6)"
+    }
+  ],
+  "summary": {
+    "total": 29,
+    "state_condition_total": 26,
+    "process_invariant_total": 3,
+    "green": 6,
+    "red": 15,
+    "unevaluable": 5,
+    "audit_ok": 0,
+    "audit_incident": 0,
+    "audit_pending_epoch": 3,
+    "pct_green": 23.1,
+    "completion_math": {
+      "state_conditions_green": false,
+      "unresolved_post_epoch_incidents": 0,
+      "complete": false,
+      "red_plus_unevaluable": 20,
+      "pct_complete": 23.1,
+      "note": "Completion is computed over the 26 STATE-conditions ONLY (GOAL.md \u00a74.0(9) / conditions-v1.md \u00a74.4): complete iff every STATE-condition is GREEN AND zero unresolved post-epoch AUDIT-INCIDENT rows exist. UNEVALUABLE counts as RED for STATE-condition completion math (GOAL.md \u00a74.1 amendment 2026-07-02) but is never reported as an evaluated failure. The 3 STANDING PROCESS-INVARIANT rows (['C0', 'C15', 'C9']) are cadence-audit results (AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH), never completion conjuncts and never a GREEN."
+    }
+  },
+  "invariant_checksum": {
+    "mapping_source": "GOAL.md \u00a75 item 9 (six I-members) mapped to concrete canonical files by this runner -- no pinned manifest exists yet, see per-member comments in ember_totality_spec.py:I_MEMBERS",
+    "members": [
+      {
+        "member": "enforcement_layer",
+        "files": [
+          {
+            "path": "docs/spec/anti-gaming-contract-v1.md",
+            "sha256": "4b6e83098c68f6d160af8a0802b6346636048b72437efd164d4932c2ea25b210",
+            "present": true
+          },
+          {
+            "path": "docs/spec/engineering-contracts-v1.md",
+            "sha256": "2d79ed3195d51791505acf1f1d34338986399fd0f3bc45332ba09f6763d42f10",
+            "present": true
+          }
+        ],
+        "member_sha256": "20c19ca62165076bf0b7e8becbc95394c195f9c2ef18f34966e551c27e26733b"
+      },
+      {
+        "member": "evaluation_suite_m",
+        "files": [
+          {
+            "path": "docs/spec/evaluation-v1.md",
+            "sha256": "00625e00cc71d66fec49cf8e74eaaedec0054a17b6bb8cbaecc0dbe594b7f350",
+            "present": true
+          }
+        ],
+        "member_sha256": "f74219cebd6430e3276fbf4d735d558d5b7448be2baedf3755cf913c452fa9c6"
+      },
+      {
+        "member": "gate_semantics",
+        "files": [
+          {
+            "path": "docs/spec/math-core-v1.md",
+            "sha256": "5740f41d30a58b5af4fe3ce3c6199c0107f943e83d9b71ac7fa5ad1f4f7868ba",
+            "present": true
+          }
+        ],
+        "member_sha256": "76c5d3f1d95133239467ef58ada3afc1fc41cdd066806d984d119508b6d35138"
+      },
+      {
+        "member": "goal_md",
+        "files": [
+          {
+            "path": "GOAL.md",
+            "sha256": "f635ec06679a99dd0fecefd4fb103a7a9484cbb45c400e325ba57f6eac042406",
+            "present": true
+          }
+        ],
+        "member_sha256": "b337ee1a6e8b2a4c73ff51419c3b7ba5ddf1a5e80ccd719e06261e6fa413c717"
+      },
+      {
+        "member": "governor",
+        "files": [
+          {
+            "path": "scripts/governor.py",
+            "sha256": "9348311c7cae6db5eea632c05ce4a7db825f3f7faeac248d8ad032c78ece0076",
+            "present": true
+          }
+        ],
+        "member_sha256": "1e748bd3e2c7cf14d83565c9b84f19ceed18a02026aa5408299601739c9514cd"
+      },
+      {
+        "member": "receipts_discipline",
+        "files": [
+          {
+            "path": "docs/spec/receipts-v1.md",
+            "sha256": "bb1631836eb77ed90380b66aee576d08468482da6b485a8ea024d98a7128fe69",
+            "present": true
+          },
+          {
+            "path": "scripts/receipt_check.py",
+            "sha256": "c98b112afc070b901742e800695354836f046ddb2cbaa271c1cb4006098bc15e",
+            "present": true
+          },
+          {
+            "path": "scripts/receipt_write.py",
+            "sha256": "3c101e1c3f96a9b9dc6ef68c41584e31276047752d2ca5c0d3784bceca928453",
+            "present": true
+          }
+        ],
+        "member_sha256": "a12ea1bfcb84fd45a4545eb783f8fabf1bb13543a6f0f3e982b062f10ef7035f"
+      }
+    ],
+    "combined_sha256": "cce7892f38b2beb630e2974dde84b70c53edf648930fb9b1edfc103aec4f8307",
+    "pinned": null,
+    "status": "pre-freeze-baseline",
+    "note": "No pinned invariant manifest exists yet (kernel unfired, freeze-onset per GOAL.md \u00a712) -- this run's hashes BECOME the baseline record; they are not compared against a prior pin. Post freeze-onset, any I-member edit must flag a manifest change on the very next run (GOAL.md \u00a712)."
+  }
+}

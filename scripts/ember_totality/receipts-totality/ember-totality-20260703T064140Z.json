@@ -1,0 +1,635 @@
+{
+  "receipt_type": "ember_totality_board",
+  "ticket": "EMBER-TOTALITY-BOARD",
+  "ts": "20260703T064140Z",
+  "sha_convention": "bytes on disk as-is",
+  "root": "B:\\M\\ember-goalforge",
+  "registry_spec": "docs\\spec\\conditions-v1.md",
+  "registry_sync": {
+    "runner_ids": 33,
+    "registry_ids": 33,
+    "matched": true
+  },
+  "rows": [
+    {
+      "condition": "C-EFF",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-EFF: no receipts/ceff-RESOLVED-*.json closure receipt -> satisfying artifact ABSENT. Prior gate9-shatter verdict is REPUDIATED (repudiation receipt present (ceff-shatter-REPUDIATED-20260623T170000Z.json)); measured 1.18x lever / 1.85x c03 stack = 56% of the >=3.3x shatter criterion. Valid closure: SHATTER (>=3.3x compound AND base in <=1 governed day) OR PRICED_SCALEOUT_RESIDUAL."
+    },
+    {
+      "condition": "C-BASE",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-BASE: owned from-scratch checkpoint B:\\M\\ember\\models\\cbase-smoke-run\\checkpoints\\step-00000610 exists with hash-verified weights (receipt v0-live-import-edition-20260702T190633Z.json), no borrowed/frozen base and not the 12c050e7 lineage, and grow-operator dry-run receipt cbase-grow-dryrun-20260702T190532Z.json produces a valid larger-shape checkpoint that replays; no invalid-token present (CHK all four clauses pass)"
+    },
+    {
+      "condition": "C-PORT",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-PORT: device-portability receipt receipts\\c-port-device-portability-20260703T020837Z-import-edition.json passes CHK: governor + forward pass ran without crash on a non-4090 device (physical=NVIDIA GeForce RTX 4090 (sm_89, real); primary pass capability SIMULATED to 3090-class (Ampere, sm_86, non-4090 profile) via governor.device_capability(capability_override); contrast pass uses the real capability for tighten-only comparison non-4090 simulated capability profile: 3090-class (Ampere, sm_86, non-4090 profile) NVIDIA GeForce RTX 4090 sm_86 (simulated, primary pass) / sm_89 (real, contrast pass)), VRAM total runtime-queried, EMBER_VRAM_FRACTION env-sourced, device-relative throughput basis, fp8/sm>=89/bf16 fallback ladder present; no invalid-token, no 4090-only path, no absolute tok/s gate."
+    },
+    {
+      "condition": "C-FED",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-FED: federation design + egress manifest present in docs\\c-fed-federation-design.md (checkpoint-portability/work-sharding/receipt-merge for kaggle/colab/hf; egress manifest named; per-avenue approval or recorded zero-egress); no invalid-token present"
+    },
+    {
+      "condition": "C-GROW",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-GROW: measured function-preserving growth receipt present in receipts\\cbase-grow-live-live-20260703T053225Z-import-edition.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured); no invalid-token present"
+    },
+    {
+      "condition": "C-ORGANISM",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-ORGANISM: seed-graph inspection receipt seed-graph-inspection-20260703T055203Z.json proves ingestion+growth+portability all callable on the pre-pretrain seed, each deletion-sensitive, with no invalid-token present"
+    },
+    {
+      "condition": "C(-1)",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C(-1): PASS-class clear packet receipts\\ember-post-resident-discovery\\scienceagentbench-zero-cost-visual-judgments-20260622T191500Z.json (verdict='SCIENCEAGENTBENCH_ZERO_COST_VISUAL_JUDGMENTS_PASS') declares api_spend_usd=0, paid_api_surface_used=false, no invalid-token; ALL 338 decisive-claim (verdict-bearing) receipts under receipts/ declare zero paid-surface dependency (none undeclared-and-uncovered, none violating); 312 additional receipt(s) covered via sha-pinned spend-annex receipts\\spend-annex\\spend-annex-20260703T062816Z.json"
+    },
+    {
+      "condition": "C0",
+      "status": "AUDIT-OK",
+      "is_process_invariant": true,
+      "reason": "AUDIT-OK C0: valid C14 PASS resident-training-gate-20260703T020755Z-import-edition.json @ 20260703T020755Z predates earliest cited loop @ 20260703T034009Z (4 loops, window >= 20260702T174352Z) -> precondition satisfied before any loop"
+    },
+    {
+      "condition": "C1",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C1: source-backed discovery receipt receipts\\ember-post-resident-discovery\\benchmark-discovery-20260702T182431Z.json enumerates 6 benchmarks with URLs+licenses+evaluator-forms+hashes+selection.why; no invalid-token present; on-disk hash VERIFIED against an in-tree artifact (mandatory, lane-14 hardening)"
+    },
+    {
+      "condition": "C2",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C2: candidate receipts\\ember-d3-native-loop\\d3-native-loop-20260620T230519Z.json ran on EXTERNAL held-out osunlp/D3-Gym (12 rows); frozen-rows sha256 f552e9eb758c VERIFIED on disk and frozen at 2026-06-20T23:07:00Z BEFORE candidate run 2026-06-20T23:44:35Z; arm-C policy extracts evaluator requirements (no label/gold/sample-answer read); no invalid_heldout_leak token present; git-anchor: frozen-rows last-commit 2026-06-20T23:44:55Z POST-DATES candidate ts 2026-06-20T23:44:35Z (disclosure only, non-blocking -- this repo's receipt history was reconstructed via batched imports, so commit time reflects when a file was checked into THIS tree, not the original cadence; the load-bearing freeze-before-candidate check is the internal fr_ts<cand_ts comparison above); non-self-labeled leak check: NOTE -- no gold/reference-answer field (('gold_answer', 'gold', 'reference_answer', 'expected_answer', 'answer', 'ground_truth', 'label')) present in this benchmark's frozen rows; nothing to content-match (not RED)"
+    },
+    {
+      "condition": "C3",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C3 satisfied by d3-native-loop-20260703T034643Z-c3-wall-time-rerun.json: A/B/C arm contract present and the equal_budget block declares one SHARED (equal) path across all six required dimensions (wall time, GPU/CPU, data access, attempt budget, seed policy, verifier path); no zero-attempt arm, no waived governor, no unequal resource path, no active invalid_unequal_budget. arms=['A', 'B', 'C', 'Deleted'] budget_fields=['attempts_per_arm_per_task', 'cpu_gpu', 'data_access', 'verifier', 'wall_time'] seeds=present dims_present=['wall_time', 'gpu_cpu', 'data_access', 'attempt_budget', 'seed_policy', 'verifier_path'] dims_missing=[]"
+    },
+    {
+      "condition": "C4",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C4 satisfied by resident-training-gate-20260703T020755Z-import-edition.json [PASS gate receipt with per-task rows AND pre/post neural hashes]: matched before(A) baseline + after(C) candidate present per slice on the same frozen task, one identical scoring command across arms, pre!=post neural parameter hashes (real assimilation before/after), no invalid_missing_before; ARTIFACT REACHABILITY verified (5 <field>_path/<field>_sha256 pair(s) verified in-tree); sample-recompute PASSED (row[0] task_id='task_5': b_score=0.5883 recomputed-match (template='instruction_only'); c_score=1.0 recomputed-match (template='eval_script_recursive')). rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o'"
+    },
+    {
+      "condition": "C5",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C5 satisfied by resident-training-gate-20260703T020755Z-import-edition.json [PASS-verdict receipt with rows]: positive aggregate delta, C beats before-baseline(A) AND control(B), per-slice rows present, no invalid_no_rows; ARTIFACT REACHABILITY verified (5 <field>_path/<field>_sha256 pair(s) verified in-tree); sample-recompute PASSED (row[0] task_id='task_5': b_score=0.5883 recomputed-match (template='instruction_only'); c_score=1.0 recomputed-match (template='eval_script_recursive')). rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2"
+    },
+    {
+      "condition": "C6",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C6 satisfied by receipts\\ember-d3-native-loop\\c6-rerun-20260703T034009Z\\d3-generalized-candidate-receipt.json: complete reusable recipe (commands/hashes/env/seeds/paths/rerun_command present, no invalid_not_reusable flag) AND rerun reproduction verified (reproducibility.rerun_verified={'match': True, 'method': \"executed the original receipt's own reproducibility.rerun_command verbatim (fresh-rows, task-ids, timeout-seconds, --execute all unchanged), redirected only --out-dir to this fresh directory so the original receipt file was never opened for write\", 'environment': 'native Windows system python, Docker Desktop engine 29.1.3 (desktop-linux context), images resolved from local cache only (hananemoussa/d3-gym:task_57, hananemoussa/d3-gym:task_62 -- zero docker pull events, verified present in `docker images` before run)', 'compared_against': 'receipts/ember-post-resident-discovery/field-level-contribution-protocol-20260622T223500Z/deleted-method-native-link/d3-generalized-candidate-receipt.json', 'fields_compared': {'verdict': 'D3_MULTI_TASK_GENERALIZATION_PASS == D3_MULTI_TASK_GENERALIZATION_PASS', 'aggregate_scores': '{A:0.0,B:0.0,C:1.0,Deleted:0.0} == {A:0.0,B:0.0,C:1.0,Deleted:0.0}', 'positive_delta': 'true == true', 'deletion_sensitive': 'true == true', 'errors': '[] == []', 'arm_solution_sha256': 'A/B/C/Deleted all byte-identical (same generator, same fresh-rows source)', 'per_task_rows[task_57].image_digest': 'sha256:fd98b689dcf2078e2b94f41a75f64210480761329fc948c7a6f6d9a1b881b9e9 == sha256:fd98b689dcf2078e2b94f41a75f64210480761329fc948c7a6f6d9a1b881b9e9', 'per_task_rows[task_57].inspect_sha256': '21736c5d66ad3c7da2e4b3e83b8895633b47918af51c85892d77ac3c4b928a56 == 21736c5d66ad3c7da2e4b3e83b8895633b47918af51c85892d77ac3c4b928a56', 'per_task_rows[task_57].official_execution.C.reason': \"'Valid GMM parameters: 3 components, pi sums to 1.0000' == same\", 'per_task_rows[task_62].image_digest': 'sha256:eaf6d1dc510ef6415661e1e74cb622dce7fe38bbb1a1c5dd29592162f85e6ff0 == sha256:eaf6d1dc510ef6415661e1e74cb622dce7fe38bbb1a1c5dd29592162f85e6ff0', 'per_task_rows[task_62].inspect_sha256': '3e6d9dad2defedfde99039a5ed45e542bff50038244b0fcf856a40f7af9ae18e == 3e6d9dad2defedfde99039a5ed45e542bff50038244b0fcf856a40f7af9ae18e', 'per_task_rows[task_62].official_execution.C.reason': \"'PDF exists with correct format, source data has correct sample counts (RF-Diffusion:2300, NeRF2:160, FIRE:101, Codebook:2000)' == same\"}, 'verdict_note': 'exact reproduction, no deterministic mismatch encountered; a second confirmatory rerun was not needed because every compared field (scores, hashes, image digests, container output reasons) matched exactly on the first rerun'}); rerun_command='python scripts\\\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\\\ember-d3-native-loop\\\\d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json --out-dir receipts\\\\ember-d3-native-loop\\\\c6-rerun-20260703T034009Z --timeout-seconds 180 --task-id task_57 --task-id task_62 --execute'"
+    },
+    {
+      "condition": "C7",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C7: load-bearing self-growth operator proven by receipts\\c7-selftest-20260703T025608Z.json (verdict=PASS, proves_load_bearing=true, held_out_slices=[1, 2] out-of-closure vs deleted-arm slice [0]); operator_constants_hash bound to LIVE operator (cd32c6bcd96c..); operator PROSPECTIVE (declares prospective+fires-before-cycle); EVIDENCE-IN-RECEIPT: real_trained_pass_rate=0.5000 real_deleted_pass_rate=0.0000 recomputed degradation=+0.5000 > 0; no invalid-token present"
+    },
+    {
+      "condition": "C8",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C8: field-level-contribution-proof receipt(s) present but NONE prove a falsifiable field-level breakthrough (contribution-level deletion + external-disjoint degradation) -> [\"field-level-contribution-proof-20260622T222500Z.json: CHK unmet ['pass_verdict', 'no_blockers', 'field_level_claim_proven', 'ablation_method_blocked', 'ordinary_runner_intact', 'cites_closest_prior', 'material_difference']; receipt blocker='closest_known_prior_comparison_missing'\", \"field-level-contribution-proof-20260622T223500Z.json: CHK unmet ['pass_verdict', 'no_blockers', 'field_level_claim_proven']; receipt blocker='field_level_breakthrough_not_proven_over_named_prior'\"]"
+    },
+    {
+      "condition": "C9",
+      "status": "AUDIT-OK",
+      "is_process_invariant": true,
+      "reason": "AUDIT-OK C9 CHK satisfied in window >= 20260702T174352Z: 1/1 code_vs_docs_metric window(s) show substrate growth (0 docs-only excluded, no invalid_scaffold_before_core marker); witness receipts\\c9-cadence\\code-vs-docs-20260702T180521Z.json verdict=mixed_code_and_docs code=264 docs=584 docs_split(before/during/after)=0/572/12 code_fraction=0.3113"
+    },
+    {
+      "condition": "C10",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C10: 8 unresolved debt-ledger row(s) remain (ACTIVE-BLOCKER=5, ACTIVE-NEXT=3); banned-phrase-dispositions=0; disposed-without-receipt=0. sample=['DEBT-001:ACTIVE-BLOCKER', 'DEBT-002:ACTIVE-BLOCKER', 'DEBT-003:ACTIVE-BLOCKER', 'DEBT-005:ACTIVE-NEXT', 'DEBT-006:ACTIVE-NEXT'] -> deferred-work escape hatch OPEN (invalid_deferred_remains)"
+    },
+    {
+      "condition": "C11",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C11: developmental-duration progression INCOMPLETE -> earned+load-bearing+deletion-sensitive milestones [none] present & CHK-passing, but milestone(s) [1-hour, 3-hour, 24-hour] genuinely ABSENT (no receipt). The full 1h/3h/24h progression is not yet proven; no unearned_duration / sleep-padding / add-params present."
+    },
+    {
+      "condition": "C12",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C12: deleted-mode-selector receipt c12-cognitive-mode-ablation-20260703T042314Z.json carries fixed_timer_ablation for the state-dependent cognitive mode selector (degrades_cycle_next_action_recipe=True); selector source scripts\\ember_cognitive_mode_policy.py present; wires_selector=True state_driven_decisions=True; no invalid_timer_artifact_modes / equal-duration substitute -> modes are state-selected and deletion-sensitive"
+    },
+    {
+      "condition": "C13",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C13: native goal-mode organ internalized + ablated. probe=receipts\\ember-native-goal-organ-probe\\native-goal-organ-probe-20260703T040704Z.json (controller=ember_native_goal_organ_probe, codex_controller_required=false, 8-step loop covered, deletion degrades cycle); dissection=receipts\\ember-codex-goal-mode-dissection\\codex-goal-mode-dissection-20260703T041002Z.json (13 mechanisms, import/reject/make-native + ablation, all_required_mechanisms_covered=true); deleted-arm native-goal-organ-probe-20260703T040704Z-deleted.json blocks cycle (controller=deleted_native_goal_organ, codex_controller_required=true); no invalid-token in positive receipt"
+    },
+    {
+      "condition": "C14",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C14: invalid-token(s) present in authoritative receipts ['RUNNER_OR_PARTIAL_NEURAL_PROGRESS_NOT_RESIDENT_ORGAN_CLEARANCE'] -> a does-NOT-count outcome (resident=resident-training-gate-20260703T020755Z-import-edition.json, conflation=resident-gate-conflation-audit-20260622T133000Z.json)"
+    },
+    {
+      "condition": "C15",
+      "status": "AUDIT-OK",
+      "is_process_invariant": true,
+      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under B:\\M\\ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window"
+    },
+    {
+      "condition": "C-OBS",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-OBS satisfying artifact ABSENT under the state root: missing real GOAL/ledger/receipts->EmberWorldState adapter binding; click-to-evidence surface; confirm-only encounter membrane (no silent-steer)"
+    },
+    {
+      "condition": "C-ANAT",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-ANAT: all 16 anatomy docs present and receipt canonical-anatomy-attestation-20260703T032407Z.json attests the set complete + consistent with receipts + H4 addressed, with no invalid-token present"
+    },
+    {
+      "condition": "C-SCALE",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-SCALE: no scale-credibility receipt under receipts/ (patterns *scale-credibility*/*c-scale*/*cscale*) -> the apex artifact is genuinely ABSENT. Honest boot state: W1 (owned >3e9 base affordable) and W2 (native in-loop adaptation at scale) both unbroken; keystone C-BASE unmet upstream. A memory-fit probe would not change this (invalid_memory_fit_as_scale_affordability)."
+    },
+    {
+      "condition": "C-E2B",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-E2B: 3 candidate receipt(s) present but none is a valid paired surpass or measured-distance record -> ['fp33-e3-gemma-e2b-smoke-20260612T042902Z.json: legs block absent', 'sp6c-e2b-shakedown-20260612T080215Z.json: legs block absent', 'sp6c-e2b-shakedown-20260612T085839Z.json: legs block absent']"
+    },
+    {
+      "condition": "C-IND",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED 4/5 IND classes unsatisfied: IND-1 INTERACT (IND-1 receipt(s) present but incomplete shape); IND-2 OBSERVE (C-OBS not GREEN (RED C-OBS satisfying artifact ABSENT under the state root: missing real GOAL/ledger/receipts->EmberWorldState adapter binding; click-to-evidence surface; confirm-only encounter membrane (no silent-steer))); IND-3 OPERATE (IND-3 missing leg(s): launch, teardown, interrupted_resume); IND-5 COMPREHEND (IND-5 [S] satisfied but [A] operator-attestation object absent)"
+    },
+    {
+      "condition": "C-PROC",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-PROC CHK satisfied by process-visibility-20260703T063211Z.json: 11 public issue URL(s) cited, no open PRs, covered commits verified in 2 tree(s), work-vs-coverage lag 0.1h <= 48h grace (GOAL.md sec 13: the board, not the operator, detects process drift)"
+    },
+    {
+      "condition": "C-LEGIB",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-LEGIB CHK satisfied: entry map covers every top-level directory with a one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and scripts/check_goal_citations.py exits 0 (GOAL.md: the repo is legible to a fresh reader with no prior session context)"
+    },
+    {
+      "condition": "C-SURFACE2",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED C-SURFACE2: newest receipt receipts/ember-surface2-telemetry/2026-06-28T05-30-45-Z/render-test-receipt.json carries a synthetic_event field -- 'Synthetic marker event appended as test artifact; does NOT represent real training data.' (invalid_surface2_synthetic_receipt)"
+    },
+    {
+      "condition": "C-MANIFEST",
+      "status": "GREEN",
+      "is_process_invariant": false,
+      "reason": "GREEN C-MANIFEST CHK satisfied: docs/ember-completeness.md enumerates all 71 rows with complete fields (id+subgoal[S1-S7]+AC+receipt+status), every \u00a74 planned condition (31) is manifested, and no invalid_unmanifested_piece marker present"
+    },
+    {
+      "condition": "C-TALLY",
+      "status": "RED",
+      "is_process_invariant": false,
+      "reason": "RED invalid-token pct<100 matched (recomputed from ember-totality-20260703T064004Z.json: green=18/30=60.0%, not-green=['C-EFF', 'C(-1)', 'C8', 'C10', 'C11', 'C14', 'C-OBS', 'C-SCALE'], audit_incident=[]); tally: tally-20260613T004807Z.json ts=2026-06-13T00:48:07Z < board ts -> STALE, IGNORED"
+    }
+  ],
+  "invariant_rows": [
+    {
+      "condition": "C0",
+      "status": "AUDIT-OK",
+      "reason": "AUDIT-OK C0: valid C14 PASS resident-training-gate-20260703T020755Z-import-edition.json @ 20260703T020755Z predates earliest cited loop @ 20260703T034009Z (4 loops, window >= 20260702T174352Z) -> precondition satisfied before any loop"
+    },
+    {
+      "condition": "C9",
+      "status": "AUDIT-OK",
+      "reason": "AUDIT-OK C9 CHK satisfied in window >= 20260702T174352Z: 1/1 code_vs_docs_metric window(s) show substrate growth (0 docs-only excluded, no invalid_scaffold_before_core marker); witness receipts\\c9-cadence\\code-vs-docs-20260702T180521Z.json verdict=mixed_code_and_docs code=264 docs=584 docs_split(before/during/after)=0/572/12 code_fraction=0.3113"
+    },
+    {
+      "condition": "C15",
+      "status": "AUDIT-OK",
+      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under B:\\M\\ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window"
+    }
+  ],
+  "summary": {
+    "total": 33,
+    "state_condition_total": 30,
+    "process_invariant_total": 3,
+    "green": 19,
+    "red": 11,
+    "unevaluable": 0,
+    "audit_ok": 3,
+    "audit_incident": 0,
+    "audit_pending_epoch": 0,
+    "pct_green": 63.3,
+    "completion_math": {
+      "state_conditions_green": false,
+      "unresolved_post_epoch_incidents": 0,
+      "complete": false,
+      "red_plus_unevaluable": 11,
+      "pct_complete": 63.3,
+      "note": "Completion is computed over the 30 STATE-conditions ONLY (GOAL.md \u00a74.0(9) / conditions-v1.md \u00a74.4): complete iff every STATE-condition is GREEN AND zero unresolved post-epoch AUDIT-INCIDENT rows exist. UNEVALUABLE counts as RED for STATE-condition completion math (GOAL.md \u00a74.1 amendment 2026-07-02) but is never reported as an evaluated failure. The 3 STANDING PROCESS-INVARIANT rows (['C0', 'C15', 'C9']) are cadence-audit results (AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH), never completion conjuncts and never a GREEN."
+    }
+  },
+  "invariant_checksum": {
+    "mapping_source": "GOAL.md \u00a75 item 9's PINNED I-manifest (pinned 2026-07-02, commit 509b426, docs/goalforge-debate-ledger.md row R8b) -- this is the authority; I_MEMBERS in ember_totality_spec.py is the hand-synced machine copy, verified against the live GOAL.md text every run (see manifest_sync below).",
+    "manifest_sync": {
+      "matched": true,
+      "parsed_ok": true,
+      "incident": null,
+      "diff": {}
+    },
+    "members": [
+      {
+        "member": "enforcement_layer",
+        "pinned_files": [
+          "docs/spec/anti-gaming-contract-v1.md",
+          "docs/spec/engineering-contracts-v1.md",
+          "scripts/check_goal_citations.py",
+          "scripts/check_publication_gate.py",
+          "scripts/ember_tally.py",
+          "scripts/ember_tally_checks.py",
+          "scripts/ember_totality/*.py (sorted, recursive, receipts-totality/ excluded)"
+        ],
+        "files": [
+          {
+            "path": "docs/spec/anti-gaming-contract-v1.md",
+            "sha256": "14b48a7a600faf4182673a595481f3be068267dd3ce79c1513c9fd5f219aa229",
+            "present": true
+          },
+          {
+            "path": "docs/spec/engineering-contracts-v1.md",
+            "sha256": "96a33ebc214d95ec6eb79b7dfc841b92a9897404b3f494dc8d6e05a8fdfd97c4",
+            "present": true
+          },
+          {
+            "path": "scripts/check_goal_citations.py",
+            "sha256": "464051808190f2a543bf48112d14f76e3515cd7d33e886b2f6194198208270db",
+            "present": true
+          },
+          {
+            "path": "scripts/check_publication_gate.py",
+            "sha256": "2fcc5e6152d435ab49346dc6108b33ce2244c2dfcff7625f59dcdc5aa7dac3e6",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_tally.py",
+            "sha256": "a8da616a5c48eab2352abacc58f1122a1500bc5152096527a6e57bfb96b9c4ec",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_tally_checks.py",
+            "sha256": "a5427f17297722d4d1020e0d060553a1a470474fe8d7cfaa934f4529f36a725c",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/_lane14_common.py",
+            "sha256": "89a202bb0f1e5bc2610fbfa077293e447e3101ad35497a1494977eba294f9e0e",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/c7_selftest.py",
+            "sha256": "ba3320bd8ebb7eaab45a41bf87a5bf41bdb599f45d3ae4b61b97ab49a01513dd",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/regime_operator.py",
+            "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/c7_selftest.py",
+            "sha256": "ba3320bd8ebb7eaab45a41bf87a5bf41bdb599f45d3ae4b61b97ab49a01513dd",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/regime_operator.py",
+            "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/chk_controls/run_controls.py",
+            "sha256": "da5e9c576706d9958accb2b49f82f680837a06ad0314dde39964a7189a91566d",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/ember_totality_spec.py",
+            "sha256": "8edfea49d1af1ee484f2c51bac89ba84d392bbe0bb9eb692779a8a6985413fd8",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/spend_annex_scan.py",
+            "sha256": "7e908c04d876d56a91b29a58a961a15b63d379a99bf5f93502d579e0eceaf7d8",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c0.py",
+            "sha256": "b8a876279cda9c11cfbb7c6607c7f5e0baad7439981dae68188615f57f2545ea",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c1.py",
+            "sha256": "fab6a564115271cfffb758ba2627fbc02b6f2819e2064e4cf40aba9c74ca8b4a",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c10.py",
+            "sha256": "56d38d9608bf3e7f97bf26d792a694576d4492d7da30d86fde735267b75d16c6",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c11.py",
+            "sha256": "935979d8e866ffc0e9a4c3a030d2ae6aa9b28b45f738ba08e3bacc38bfd7995f",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c12.py",
+            "sha256": "0778be0697cd9cc1cfd777b23b364c0cf62cdb655787db7860d5b8e00cf75e5d",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c13.py",
+            "sha256": "9ec978464d4f206e5d5b3b5edfd9da531f8fb76d0a14f64a8835d2d9511f6baa",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c14.py",
+            "sha256": "ce5f78979e0d54b8ba4029322597cd3bd48952679bf6e7bfe6f0fd08c2298b73",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c15.py",
+            "sha256": "dc40401934268e1fc8422aa0ff7192b2f9ab50e83a62e35ad1e11ee02a1596bb",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c2.py",
+            "sha256": "6b31db849d59dcf30b1c8ee881ebb2ae20d9f14004e5c473bbbfc9bd9e58d86d",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c3.py",
+            "sha256": "cb38284ceecfe7cb7342896339cd92365004554a6d1345f9535add49cc6a548e",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c4.py",
+            "sha256": "ece541a07d665025af8812c7639721cd1dd9908bb5748b6ba3dc8796450ba9fc",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c5.py",
+            "sha256": "e7fa7aa23565c073667915717da304828ae92f5a3892a20cfa5446f8bfd7abc7",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c6.py",
+            "sha256": "bd38eedd5ba89e967580f39414a465a307cf0db17746d029a3b79f8eb53fae2d",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c7.py",
+            "sha256": "6532b087c55e332da9867dcb4b70981372ba60a0d8a8066f83b2cb80abaefbe7",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c8.py",
+            "sha256": "cae8d62bd838534f705bd18f43aea7ac3d2f7cf13921a8573ffc7fcfea079f65",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c9.py",
+            "sha256": "bcd622e3423f991b51f9d38a219cc129ef0dc685c1e3e8ae0cfedda8513598a6",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_anat.py",
+            "sha256": "5d197402eb8f021a7d71afd40948d1875eff0c9c6f600af84e8905206100a10c",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_base.py",
+            "sha256": "ac904d0f1e16cb0ff6763c1815452bd953633f44a89d4904a252bdfe6cdb9f5f",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_e2b.py",
+            "sha256": "18ee33306d8b7162fd0965abb31d7882fd9d7e3159ff99e5dc6d99cc0dcf79e7",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_eff.py",
+            "sha256": "f5fef6e0dc18731bcb460a6d5182c6c9989a5a30456ffd44043783c2141c4737",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_fed.py",
+            "sha256": "29ee1fb794be8f9ea47f1a3bc5a1e86d9140155553d440192c00ad3e8637b77c",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_grow.py",
+            "sha256": "8a21b8390a312c6c11ceee248c59091805deee35dc5ce26a48527b649223a7a3",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_ind.py",
+            "sha256": "1f4b2d279435e225642d6622733753cbfc7e36c690eff26d954d6dd13cad4b40",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_legib.py",
+            "sha256": "747ac1e0f6c3d405025b4831db7905b821115b2347d632d503bd0a06d18df0c5",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_manifest.py",
+            "sha256": "2042f8a2a4d068185a7fcaf4b144c3234120374c28a221d62ce5bfa884eb0014",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_neg1.py",
+            "sha256": "0d3c6a885c538df797c265525d9514b40d81692d760c73cbee686d717a1a12d8",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_obs.py",
+            "sha256": "656aff8ed5d4265a3a4d49a3c1d572350ba9de65c6decff9a8cb9145477e94bf",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_organism.py",
+            "sha256": "ea44e2bc494cd5a3a9359cd6fa7dc29c24dfc0fb0c61437030bc74506f0f61db",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_port.py",
+            "sha256": "c23e6c833083ea3a65acf186df76c5c09f9b456e30484613421ebbef0563fcbc",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_proc.py",
+            "sha256": "1d7e2ef611385b45c7423767c453f9e3bcf8f2baa39366597412099bf3ecb91b",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_scale.py",
+            "sha256": "52e5bc04b796c21e9ef1c6a97db8ee07a431b920b532cdcc38c7f7c1ee18e64f",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_c_tally.py",
+            "sha256": "2a6cbdc0367cb63e55c70f70db9070ab266379719af1cea2c7c203197daee928",
+            "present": true
+          },
+          {
+            "path": "scripts/ember_totality/test_surface2.py",
+            "sha256": "70da2f20f60a2ec8774f1493b288e8b180a171fd2efe984ec46e06fd753e49fd",
+            "present": true
+          }
+        ],
+        "package_dir": "scripts/ember_totality",
+        "member_sha256": "e65d3ba9aef3ca72ca033f4b3653533a17b92cefebc3b1a32916bd6f40eb53fc"
+      },
+      {
+        "member": "evaluation_suite_m",
+        "pinned_files": [
+          "docs/spec/evaluation-v1.md"
+        ],
+        "files": [
+          {
+            "path": "docs/spec/evaluation-v1.md",
+            "sha256": "488f21718bb1fc71198554e736bdacb01413863665b4210cfcba1f6b9d549246",
+            "present": true
+          }
+        ],
+        "package_dir": null,
+        "member_sha256": "a700d73fd41dbd127c658564cfbc33757fcefc630c3a7a85aa454349c6374995"
+      },
+      {
+        "member": "gate_semantics",
+        "pinned_files": [
+          "docs/spec/math-core-v1.md",
+          "docs/spec/bootstrap-v1.md",
+          "docs/spec/judge-admission-v1.md"
+        ],
+        "files": [
+          {
+            "path": "docs/spec/math-core-v1.md",
+            "sha256": "3d9d971c58a6ecee240acdb215e18e3f36c76c5d548eae1a1559ac4aa855fb47",
+            "present": true
+          },
+          {
+            "path": "docs/spec/bootstrap-v1.md",
+            "sha256": "45889e9100bffd51c0df5442af00f986f79d42f4d3f8ac0c3fdcb483bb3d3d70",
+            "present": true
+          },
+          {
+            "path": "docs/spec/judge-admission-v1.md",
+            "sha256": "e31818910c5684882eb92a12ac6041fe8ed40ab5d19a4be1585168ec8f589209",
+            "present": true
+          }
+        ],
+        "package_dir": null,
+        "member_sha256": "e91a3671452bceb0e07779d59a35269fbc1aa7b390dd95cd51a51ff6f43b015c"
+      },
+      {
+        "member": "goal_md",
+        "pinned_files": [
+          "GOAL.md",
+          "docs/spec/conditions-v1.md",
+          "docs/spec/operator-acceptance-v1.md"
+        ],
+        "files": [
+          {
+            "path": "GOAL.md",
+            "sha256": "745b89dcbe93d7e908202a8ec7b8c2a15d0dffeb8827a2cb174b47f3108a8ca7",
+            "present": true
+          },
+          {
+            "path": "docs/spec/conditions-v1.md",
+            "sha256": "a9cd357811e9d66007a871ecf5215dbeb307a0076bae91438d173c37e1f894ae",
+            "present": true
+          },
+          {
+            "path": "docs/spec/operator-acceptance-v1.md",
+            "sha256": "3d14b50b96fc1c732d619d3c6e1b5affa53ffd864a5d7cb0902a61d1ceae4082",
+            "present": true
+          }
+        ],
+        "package_dir": null,
+        "member_sha256": "f8949c0a83a33803b1b4da16e2c2f73cddc331d56118b8b36fda88a4358fd92e"
+      },
+      {
+        "member": "governor",
+        "pinned_files": [
+          "scripts/governor.py"
+        ],
+        "files": [
+          {
+            "path": "scripts/governor.py",
+            "sha256": "eb3a9a605de9071dab87d667cef8dcaaa1d509491034f954cfd54d76f8951a36",
+            "present": true
+          }
+        ],
+        "package_dir": null,
+        "member_sha256": "07dcf99c6e1c8cf545c202afcf0c5cb7cc2acc6c2ed68d123c94e664cf221ea2"
+      },
+      {
+        "member": "receipts_discipline",
+        "pinned_files": [
+          "docs/spec/receipts-v1.md",
+          "scripts/receipt_check.py",
+          "scripts/receipt_write.py",
+          "scripts/receipt_semantic_check.py"
+        ],
+        "files": [
+          {
+            "path": "docs/spec/receipts-v1.md",
+            "sha256": "bb1631836eb77ed90380b66aee576d08468482da6b485a8ea024d98a7128fe69",
+            "present": true
+          },
+          {
+            "path": "scripts/receipt_check.py",
+            "sha256": "c98b112afc070b901742e800695354836f046ddb2cbaa271c1cb4006098bc15e",
+            "present": true
+          },
+          {
+            "path": "scripts/receipt_write.py",
+            "sha256": "3c101e1c3f96a9b9dc6ef68c41584e31276047752d2ca5c0d3784bceca928453",
+            "present": true
+          },
+          {
+            "path": "scripts/receipt_semantic_check.py",
+            "sha256": "ec1ebd29c6882a583f141acf0d47235169acfe9ecd464db30befccc7982af403",
+            "present": true
+          }
+        ],
+        "package_dir": null,
+        "member_sha256": "4dfbff7f24320d7fa5fecd447591a3711d2968066861a452092259289e248d8d"
+      }
+    ],
+    "combined_sha256": "51b3f9a930e45e20b27e23d5db4b9d44a6d6be3be5e8cd3779465782ea71ef1d",
+    "pinned": null,
+    "status": "pre-freeze-baseline",
+    "authorization_pairing": null,
+    "authorization_pairing_note": "Pre-clear drafting is ledger-row-authorized, not object-authorized: this baseline's authorizing reference is docs/goalforge-debate-ledger.md row R8b (2026-07-02, I-manifest pinning). Post-clear, any I-member baseline change must PAIR with an operator-acceptance object or a \u00a712 clear->fire repair receipt in this field (GOAL.md \u00a75 item 9); a flip without pairing is invalid_unauthorized_invariant_change. This field is null pre-clear by design, not by omission. (No PENDING_AUTHORIZATION.json declared an in-flight flip this run, and the combined hash is unchanged vs the prior receipt -- steady state.)",
+    "note": "No pinned checksum VALUE exists yet (kernel unfired, freeze-onset per GOAL.md \u00a712) -- this run's hashes BECOME the baseline record; they are not compared against a prior hash pin. The FILE MANIFEST itself (which files belong to which bucket) IS pinned as of 2026-07-02 and is checked every run via manifest_sync above. Post freeze-onset, any I-member edit must flag a manifest change on the very next run (GOAL.md \u00a712)."
+  }
+}

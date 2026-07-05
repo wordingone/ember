@@ -1,0 +1,16 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "ts": "20990101T000000Z",
+  "dataset": "osunlp/D3-Gym",
+  "source_url": "https://huggingface.co/datasets/osunlp/D3-Gym",
+  "rows": [
+    {
+      "row_idx": 0,
+      "row": {
+        "task_id": "synthetic_task_1",
+        "gold_answer": "SECRET_GOLD_VALUE_42"
+      }
+    }
+  ]
+}

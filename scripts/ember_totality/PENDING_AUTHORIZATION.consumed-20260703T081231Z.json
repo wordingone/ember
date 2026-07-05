@@ -1,0 +1,42 @@
+{
+ "authorizing_reference": "GitHub issue #28 (public tracker) PART 1 -- probe amendment, pre-registered BEFORE the run, flip-paired at review, per docs/spec/c8-claim-ladder.md (c)/(d) C1 kill-criterion note (\"a future candidate that does not reuse that exact pipeline ... would need a matching amendment\") + session review-gate assignment 2026-07-03.",
+ "kind": "probe_amendment_pending_review",
+ "actor": "team-agent (C8 primary-run lane), issue #28 execution",
+ "files": [
+  "scripts/ember_totality/test_c8.py"
+ ],
+ "changes": [
+  {
+   "file": "scripts/ember_totality/test_c8.py",
+   "reason": "Generalize CHK fields 4-5 (ablation_method_blocked / ordinary_runner_intact) from one hardcoded verdict-string pair (contribution_level_deletion_ablation.native_link_verdict == 'NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_BLOCKED', external_delegate_verdict == 'D3_MULTI_TASK_GENERALIZATION_PASS') to any pair accepted under four rules: (a) deletion verdict ends _BLOCKED and delegate verdict ends _PASS; (b) BOTH verdicts carry executed-run provenance (a command plus a receipt_ref resolvable on disk, via new fields deletion_run_provenance / delegate_run_provenance); (c) the receipt names the deleted contribution and surviving delegate pipeline explicitly (new fields deleted_contribution / surviving_delegate_pipeline); (d) the incumbent exact-string pair still passes UNCHANGED (backward-compatible shortcut, no new requirement retroactively imposed on the one existing candidate receipt). Implemented as three new module-level functions (_resolves_on_disk, _provenance_ok, _ablation_fields_4_5) replacing the two inline == comparisons; nothing else in the file changes."
+  }
+ ],
+ "diff_ref": "test_c8.fields4-5-generalization.diff (sandbox-adjacent, this same directory; unified diff, live file vs sandbox-amended copy, CRLF/LF-normalized)",
+ "sandbox_verification": {
+  "sandbox_path": "probe/test_c8_amended.py (never the live scripts/ember_totality/test_c8.py; run via EMBER_TOTALITY_ROOT env var pointing at a per-fixture throwaway root, per adversarial-agent-scoping.md's sandbox-never-live-tree rule)",
+  "runs_executed": 4,
+  "run_1_old_receipt_regression": {
+   "fixture": "byte-identical copy of the REAL receipts/ember-post-resident-discovery/field-level-contribution-proof-20260622T223500Z.json",
+   "expected": "fields 4-5 (ablation_method_blocked, ordinary_runner_intact) still PASS via the incumbent-string shortcut; overall verdict unchanged (same 3 unmet CHK fields as the pre-amendment probe: pass_verdict, no_blockers, field_level_claim_proven)",
+   "observed": "RED ... CHK unmet ['pass_verdict', 'no_blockers', 'field_level_claim_proven']; receipt blocker='field_level_breakthrough_not_proven_over_named_prior' -- MATCHES exactly, confirms byte-identical backward compatibility"
+  },
+  "run_2_new_honest_generalized_pass": {
+   "fixture": "synthetic candidate, non-incumbent verdict strings, suffix pair present, deleted_contribution/surviving_delegate_pipeline named, deletion_run_provenance/delegate_run_provenance each pointing to a real on-disk receipt in the sandbox",
+   "expected": "GREEN (full probe, all nine CHK fields satisfied via the generalized path)",
+   "observed": "GREEN C8: field-level-contribution-proof receipt ... verdict=PASS, field_level_claim_proven; ... class='benchmark methodology'; no invalid-token present -- MATCHES"
+  },
+  "run_3_negative_control_a_no_provenance": {
+   "fixture": "suffix pair present, deleted_contribution/surviving_delegate_pipeline named, but NO deletion_run_provenance/delegate_run_provenance keys at all",
+   "expected": "fields 4-5 FAIL, isolated (no other CHK field failing)",
+   "observed": "RED ... CHK unmet ['ablation_method_blocked', 'ordinary_runner_intact']; receipt blocker='(none stated)' -- MATCHES, isolated exactly to fields 4-5"
+  },
+  "run_4_negative_control_b_dangling_refs": {
+   "fixture": "suffix pair present, deleted_contribution/surviving_delegate_pipeline named, provenance objects present with real command strings, but BOTH receipt_ref paths point to files that do not exist in the sandbox run directory",
+   "expected": "fields 4-5 FAIL, isolated (no other CHK field failing)",
+   "observed": "RED ... CHK unmet ['ablation_method_blocked', 'ordinary_runner_intact']; receipt blocker='(none stated)' -- MATCHES, isolated exactly to fields 4-5"
+  }
+ },
+ "ts": "2026-07-03T08:00:00Z",
+ "landed_by": "session review gate, flip-pair protocol",
+ "landed_utc": "20260703T081057Z"
+}

@@ -1,0 +1,7 @@
+{
+  "_synthetic_control_fixture": true,
+  "does_not_prove": "lane-14 CHK control fixture (docs/goalforge-debate-ledger.md row R8) -- synthetic, not a real receipt; must never be accepted as evidence by a probe scanning the real tree",
+  "verdict": "SYNTHETIC_DEMO_BLOCKED",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}

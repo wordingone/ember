@@ -1,0 +1,11 @@
+{
+ "ts": "2026-07-04T00:22:00Z",
+ "actor": "session-review-gate",
+ "kind": "enforcement_layer_edit",
+ "files": [
+  "scripts/ember_totality/test_c_proc.py"
+ ],
+ "edit": "C-PROC clause (f) publication-visibility (issue 42, operator third-repetition mandate 2026-07-03): a receipt at/after cutover 20260703T230000Z declaring open_prs=\"none-open\" must carry a publication_state block {public_master_sha, local_shas, unpublished_landings}; unpublished_landings>0 requires a justification naming an in-flight export/PR-prep lane whose receipt_path exists on disk and is <24h old, else RED invalid_invisible_process. invalid_invisible_process added to the poison-token list. Grandfathered below cutover, same pattern as clause (e). Clauses (a)-(e) byte-unchanged. Sandbox-proven pre-landing: disposable worktree at 3c15adc, three receipt cases (R unjustified-invisible=RED, G justified=GREEN, Z zero-unpublished=GREEN) plus paired full board runs, 30 rows both, only C-PROC differing (scratch/c42-pubvis/sandbox-proof-20260703T231352Z.json).",
+ "expected_effect": "No live board flip at landing (newest live receipt predates cutover, grandfathered); enforcement binds every future process-visibility receipt \u2014 an invisible operating window can no longer coexist with a GREEN C-PROC.",
+ "note": "MISFILED-THEN-RESLOTTED: originally written to the repo root 2026-07-04T00:22Z where the board's consume mechanism never looks; the test_c_proc.py clause-f edit it authorizes has been live and exercised GREEN on boards 023258Z/023436Z/023926Z. Re-slotted to the canonical path 2026-07-04T04:0xZ so the next board run consumes and records it; consumption timestamp therefore postdates the live landing (documented here, not implied otherwise)."
+}

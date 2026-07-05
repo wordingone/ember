@@ -1,0 +1,14 @@
+{
+ "authorizing_reference": "Operator directives 2026-07-02 (verbatim): 'I see zero issues, prs, milestones, merges ... So i gues you lied and left out this process requirement in GOAL.md' / 'I had to explicitly inform you of the github stuff. last tine im doing that. i should not have to.' / 'edit the goal file if that part is missing or under specified. i feel betrayed.' + GOAL.md sec 12 additive-requirement channel and sec 13.",
+ "changes": [
+  {
+   "path": "scripts/ember_totality/ember_totality_spec.py",
+   "why": "register C-PROC (FILENAME_MAP + ORDER) per registry amendment"
+  },
+  {
+   "path": "scripts/ember_totality/test_c_proc.py",
+   "why": "NEW probe: operator-visible process currency (offline receipts+git predicate, GOAL.md sec 13 item 6)"
+  }
+ ],
+ "ts": "2026-07-02T20:28:38Z"
+}

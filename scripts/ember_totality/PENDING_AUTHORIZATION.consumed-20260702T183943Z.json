@@ -1,0 +1,13 @@
+{
+  "authorizing_reference": "GOAL.md sec 4.1 three-valued amendment (2026-07-02, accepted text as of clear anchor defcc562): RED-meaning-unmet vs RED-meaning-probe-couldn't-look is the ambiguity class the section exists to kill; UNEVALUABLE is reserved for env-failure. Repair toward that accepted text under the sec 12 clear-to-fire window -- the SAME correction class test_c9.py already carries in-file ('correction 2026-07-02: the prior UNEVALUABLE reading was FAIL-OPEN').",
+  "changes": [
+    {
+      "file": "scripts/ember_totality/test_c12.py",
+      "reason": "Scanned-corpus-empty (ablation-block artifact type absent) relabeled UNEVALUABLE -> RED evaluated-unmet; env-failure branches unchanged. Completion math identical (UNEVALUABLE already counted RED); the change is honesty of the reported branch."
+    },
+    {
+      "file": "scripts/ember_totality/test_c13.py",
+      "reason": "Both scanned-and-empty branches (organ-probe glob, dissection glob) relabeled UNEVALUABLE -> RED evaluated-unmet; env-failure branches unchanged."
+    }
+  ]
+}

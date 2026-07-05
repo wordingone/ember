@@ -1,0 +1,35 @@
+{
+  "seed_graph": "pre_pretrain seed-graph inspection (fixture)",
+  "machineries_present": {
+    "ingestion": {
+      "machinery_callable": true,
+      "interface_callable": "fixture.PackedShardLoader"
+    },
+    "growth": {
+      "machinery_callable": true,
+      "interface_callable": "fixture.net2net_grow"
+    },
+    "portability": {
+      "machinery_callable": true,
+      "interface_callable": "fixture.governor.device_capability"
+    }
+  },
+  "deletion_sensitivity_summary": {
+    "ingestion": {
+      "active_n_windows": 5,
+      "deleted_n_windows": 0,
+      "deleted_error_class": "ValueError"
+    },
+    "growth": {
+      "active_param_delta": 2506752,
+      "deleted_param_delta": 0,
+      "deleted_error_class": "TypeError"
+    },
+    "portability": {
+      "active_devices_adapted": 4,
+      "deleted_devices_adapted": 0,
+      "deleted_error_class": "AttributeError"
+    }
+  },
+  "invalid_tokens_present": []
+}
