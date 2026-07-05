@@ -55,7 +55,7 @@ async function runGlob(input: GlobInput, ctx: ToolUseContext): Promise<GlobResul
   const startMs = Date.now();
   const limit = ctx.globLimits?.maxResults ?? 100;
   const rawPath = input.path;
-  const searchPath = rawPath ? expandPath(rawPath) : process.cwd();
+  const searchPath = rawPath ? expandPath(rawPath) : (ctx.cwd ?? process.cwd());
 
   if (isUncPath(searchPath)) {
     return {
@@ -90,8 +90,11 @@ async function runGlob(input: GlobInput, ctx: ToolUseContext): Promise<GlobResul
   }
 
   const allFiles: string[] = [];
-  // Bun.Glob is a Bun runtime global — interop cast required
-  const glob = new (globalThis as unknown as { Glob: new (pattern: string) => { scan(opts: { cwd: string; absolute: boolean; onlyFiles: boolean }): AsyncIterable<string> } }).Glob(input.pattern);
+  // issue #156: `globalThis.Glob` is undefined in the Bun runtime (verified:
+  // `typeof globalThis.Glob === "undefined"` while `typeof Bun.Glob ===
+  // "function"`) — the prior interop cast constructed off the wrong global
+  // and threw "undefined is not a constructor". Bun.Glob is the real ctor.
+  const glob = new Bun.Glob(input.pattern);
   for await (const file of glob.scan({ cwd: searchPath, absolute: true, onlyFiles: true })) {
     allFiles.push(file);
   }
@@ -113,7 +116,7 @@ async function runGlob(input: GlobInput, ctx: ToolUseContext): Promise<GlobResul
   const truncated = sorted.length > limit;
   const selected = truncated ? sorted.slice(0, limit) : sorted;
 
-  const cwd = process.cwd();
+  const cwd = ctx.cwd ?? process.cwd();
   const relativized = selected.map((f) => toRelativePath(f, cwd));
   const durationMs = Date.now() - startMs;
 
@@ -201,7 +204,7 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
   const rawPath = input.path;
   const headLimit = input.head_limit ?? 250;
   const offset = input.offset ?? 0;
-  const searchPath = rawPath ? expandPath(rawPath) : process.cwd();
+  const searchPath = rawPath ? expandPath(rawPath) : (ctx.cwd ?? process.cwd());
 
   if (isUncPath(searchPath)) {
     return {
@@ -213,7 +216,7 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
     };
   }
 
-  const cwd = process.cwd();
+  const cwd = ctx.cwd ?? process.cwd();
   const args: string[] = [];
   const pattern = input.pattern;
 

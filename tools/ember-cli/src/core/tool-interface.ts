@@ -35,6 +35,15 @@ export interface ToolUseContextOptions {
 export interface ToolUseContext {
   options: ToolUseContextOptions;
   abortController: AbortController;
+  /**
+   * Resolved working directory tool executors must use in place of raw
+   * process.cwd() (issue #182: process.cwd() is the launch cwd, which is
+   * unreliable for a compiled binary launched from an arbitrary directory —
+   * the same class of bug #172 fixed for repo-root resolution). Sourced from
+   * QueryEngineConfig.cwd; falls back to process.cwd() only when the caller
+   * never set one (e.g. minimal contexts built for unit tests).
+   */
+  cwd?: string;
   getAppState: () => unknown;
   setAppState: (updater: (prev: unknown) => unknown) => void | Promise<void>;
   setAppStateForTasks?: (updater: (prev: unknown) => unknown) => void;

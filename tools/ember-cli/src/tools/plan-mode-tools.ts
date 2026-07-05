@@ -179,7 +179,7 @@ export const ExitPlanModeTool = buildTool({
 
     const isAgent = !!context.agentId;
     const state = context.getAppState() as Record<string, unknown>;
-    const cwd = (state["cwd"] as string | undefined) ?? process.cwd();
+    const cwd = context.cwd ?? (state["cwd"] as string | undefined) ?? process.cwd();
     const filePath = getPlanFilePath(cwd);
 
     // Read plan from disk (or from session-provided content)
