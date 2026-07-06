@@ -52,7 +52,7 @@ worked around by writing the text and the Enter keystroke as two separate writes
   non-busy-path `_onExit?.()`). Verified by exact-PID OS check after the keystroke — PID no
   longer present.
 
-### (b) Goal organ — scenario A only: PASS. Scenarios B/C: out of scope for this lane (see below)
+### (b) Goal organ — scenario A: PASS. Scenarios B: FAIL (binary-side defect, #276). C: SKIPPED
 
 - `/goal <objective>` on a freshly booted binary: response `goal set: <objective>\nstatus:
   Active` rendered live.
@@ -76,16 +76,49 @@ worked around by writing the text and the Enter keystroke as two separate writes
   same rigor as the create step — flagged here rather than silently counted as a full pass.
 - **Scenarios B (>=3 autonomous continuations against a live model) and C (user
   preemption) require an actual reachable model endpoint to run real inference turns.**
-  This lane's rails explicitly forbid touching the reserved live-cockpit ports or spawning
-  any model process, so every test here used a deliberately dead `EMBER_MODEL_URL` — by
-  design, incapable of completing a real turn. Re-running B/C against a real endpoint
-  remains task-tracked separately (the decomposed live-acceptance lane for #211, which also
-  carries the prior wedge history this pass was careful not to repeat). Note found in situ
-  (not run by this pass, cited for context only): an earlier session's own goal-store
-  directory already contains one record that reached `status: Complete` after a real
-  multi-turn autonomous run, which is corroborating history that the mechanism has worked
-  live before — it is not evidence produced by this acceptance pass and is not claimed as
-  such.
+  This pass originally used a deliberately dead `EMBER_MODEL_URL` (rails at the time forbade
+  touching any live/reserved port). A follow-up leg was later granted a scoped, requests-only
+  exception (`EMBER_MODEL_URL=http://127.0.0.1:8082`, the resident model server child of the
+  live cockpit — never any lifecycle op against it, exact-PID teardown throughout) to actually
+  run B/C. Results below.
+
+#### B/C live run (scoped :8082 exception) — 2026-07-06
+
+**Discriminating design** (pre-registered before running, to separate "model is just slow"
+from "the organ doesn't fire"): a control arm first proves the plain request path completes
+at all, then scenario B runs `/goal` against the same binary + same server, with the
+server's own `/slots` endpoint polled read-only throughout as a ground-truth
+did-a-request-ever-arrive signal.
+
+- **Control arm — PASS.** A plain one-word prompt (`"Reply with exactly one word: PONG"`)
+  completed a full round trip (submit -> busy -> rendered reply) in the transcript, latency
+  ~10-20s. (An earlier automated FAIL of this same arm was retracted after manually
+  re-reading the raw transcript: 5s `/slots` poll granularity had straddled the fast busy
+  window entirely and missed it. Re-verified true PASS at 2s granularity.) This proves the
+  binary -> server -> reply path itself works and is fast on this box — ruling out "dead
+  endpoint" or "binary can't talk to the server" as an explanation for what follows.
+- **Scenario B — FAIL.** `/goal <3-step progress.txt-writing objective>` created and
+  persisted correctly (`goal set: ... status: Active` rendered; store record confirmed on
+  disk). Then: nothing, for the full 30.03-minute pre-registered wall cap. Zero `/slots`
+  busy observations at 2-second polling across the entire window, zero transcript growth
+  after the goal-set confirmation, zero tool calls, the objective's target file never
+  created, `continuationTurnsObserved: 0`. Goal store read back after exit: `createdAt` and
+  `updatedAt` byte-identical (`2026-07-06T18:31:49.390Z`), `tokensUsed: 0`, `status: Active`
+  — the record was never touched again after creation.
+- **Verdict per the pre-registered table**: control-PASS + slots-idle-during-B =
+  **BINARY-SIDE CONTINUATION DEFECT**. Filed as
+  [ember#276](https://github.com/wordingone/ember/issues/276), with a root-cause trace
+  posted from the run's own `continuation_skipped` receipt log (two skips — `turn_active`
+  then `queued_user_input` — then total silence for the rest of the window, because the
+  self-chaining poke in `core/goal-continuation-wiring.ts` only re-invokes itself on a
+  *fired* continuation, never on a skip; there is no idle-timer or retry-until-eligible
+  safety net anywhere in the wiring). Task-tracked as issue #276 / task #60 for the fix
+  lane; this doc records the acceptance-leg result, not the fix.
+- **Scenario C — SKIPPED.** Meaningless while B never produces a continuation to preempt,
+  per the same pre-registered design. Deferred to the fix-verification pass.
+- Process safety: cockpit pid 7568 (`ember-cockpit-250.exe`) and the resident llama-server
+  (pid 39720, `:8082`) both confirmed alive and untouched before, during, and after this run
+  via exact-PID checks. Zero leftover test `ember.exe` processes.
 
 ### (c) Circuit breaker + startup disclosure — PASS
 
@@ -114,16 +147,30 @@ then-deployed `ember-cockpit-195.exe`) — on this binary it is registered and r
 
 ### (e) Build identity — recorded above (sha256, size, UTC timestamp, bun version, source commit).
 
-## Verdict: READY for swap
+## Verdict: READY for swap (deploy-gap acceptance) — #211 leg-(b) live acceptance: FAIL, tracked as #276
 
-All in-scope acceptance items pass on a freshly built `public/master` binary. The swap
-itself (kill-then-launch of the live operator cockpit, with kill receipts and an
-announce-first line) is out of scope for this lane per #250's own contract and was not
-performed here — no running process was touched at any point in this pass.
+All of #250's own in-scope acceptance items ((a), (c), (d), (e), and goal-organ scenario A)
+pass on a freshly built `public/master` binary — the deploy-gap swap itself remains READY,
+unchanged from the original pass. The swap (kill-then-launch of the live operator cockpit,
+with kill receipts and an announce-first line) is still out of scope for this lane per
+#250's own contract and was not performed here — no running process was touched at any
+point across either pass.
+
+Separately, the #211 leg-(b) live acceptance (autonomous multi-turn continuation + user
+preemption against a real model) now has a real result, not just a scope note: scenario A
+passes, scenario B fails per the pre-registered discrimination design (control-PASS +
+slots-idle-during-B), and scenario C was correctly skipped as meaningless without B. This is
+a genuine binary-side defect in the goal-continuation organ, filed and root-caused at
+[ember#276](https://github.com/wordingone/ember/issues/276) — it does not block or reverse
+the #250 deploy-gap verdict above (goal mode existing and creating/persisting a goal is
+part of #250's bar; autonomous continuation firing is #211's bar), but it is a real,
+receipted gap that should be fixed before #211's own closure and re-verified with the same
+harness discipline (control arm + `/slots` discriminator) before this doc's B/C section is
+updated to PASS.
 
 ## Scope note for #211 closure
 
 This report satisfies #250's own acceptance bar (a receipted build + binary-level battery
-before a swap), not the full #211 leg-(b) live acceptance (autonomous multi-turn
-continuation + user preemption against a real model). That remains open as its own
-decomposed, separately tracked lane.
+before a swap). It also now carries the full #211 leg-(b) live-acceptance *attempt* (not a
+scope gap anymore) — result: A passes, B fails (see #276), C skipped. #211 itself remains
+open, blocked on the #276 fix landing and a clean B/C re-run.
