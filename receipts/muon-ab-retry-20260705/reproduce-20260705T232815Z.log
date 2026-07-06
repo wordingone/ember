@@ -1,0 +1,13 @@
+[fp35_fused_muon_kernel_ab] c03 hidden=1024 layers=20 ffn=4096 seq=1024 batch=4
+  torch: 2.10.0+cu126  device: NVIDIA GeForce RTX 4090
+  seeds: [16, 17, 18], warmup=5, bench=20
+  fused arm: torch.compile(ns5, mode='reduce-overhead')
+  Checking NS5 equiv on CUDA (1024×4096, seed=7)...
+  NS5 equiv PASS: max_abs_delta=1.90e-07 (tol=1.00e-03)
+  arm=muon-baseline seed=16 ...
+W0705 16:28:39.288000 9112 torch\distributed\elastic\multiprocessing\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+[transformers] use_kernel_func_from_hub is not available in the installed kernels version. Please upgrade kernels to use this feature.
+    11594 tok/s, step=353.3ms, vram=-4.02 GiB, muon_params=140
+  arm=muon-baseline seed=17 ...
+    11607 tok/s, step=352.9ms, vram=8.44 GiB, muon_params=140
+  arm=muon-baseline seed=18 ...
