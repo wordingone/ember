@@ -558,8 +558,9 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   if (didFastPath) return;
 
   // Determine whether we use an external server or spawn our own
-  const externalUrl = modelsCfg?.endpoint ??
-    (!modelsCfg?.binary ? process.env["EMBER_MODEL_URL"] : undefined);
+  // Determine whether we use an external server or spawn our own.
+  // Precedence: EMBER_MODEL_URL (explicit override) > modelsCfg.endpoint > managed spawn.
+  const externalUrl = process.env["EMBER_MODEL_URL"] ?? modelsCfg?.endpoint;
 
   let serverUrl:    string;
   let detectedNCtx: number;
@@ -581,6 +582,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     const logPath    = join(exeDir, "llama_stderr.log");
     const slotSaveDir = join(getEmberConfigHomeDir(), "slots");
 
+    process.stderr.write(`[ember] spawning managed model server: ${modelsCfg?.binary ?? "llama-server.exe"} --port ${port} (set EMBER_MODEL_URL to skip)\n`);
     const doSpawn  = opts.spawnServer ?? spawnLlamaServer;
     const doWait   = opts.waitReady   ?? ((p: number, t: number) => waitForServerReady(p, t));
 

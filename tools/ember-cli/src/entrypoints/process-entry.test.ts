@@ -660,6 +660,40 @@ function makeFakeDeps(): LoopDeps {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// AC14 — EMBER_MODEL_URL precedence over models.json binary/endpoint
+// ---------------------------------------------------------------------------
+
+describe("process-entry — AC14: main() EMBER_MODEL_URL precedence > models.json binary", () => {
+  it("EMBER_MODEL_URL wins over models.json binary (no spawn), uses external URL", async () => {
+    const saved = saveEnv(["EMBER_MODEL_URL"]);
+    process.env["EMBER_MODEL_URL"] = "http://external-mock:7777";
+
+    let spawnWasCalled = false;
+    let receivedServerUrl = "";
+
+    await main({
+      argv: ["node", "ember"],
+      spawnServer: async () => {
+        spawnWasCalled = true;
+        return makeFakeHandle(30001);
+      },
+      waitReady: async () => {},
+      initFn: async (opts) => {
+        receivedServerUrl = opts.serverUrl ?? "";
+      },
+      getLoopDepsFn: makeFakeDeps,
+      exitFn: () => {},
+    });
+
+    // Core assertion: EMBER_MODEL_URL takes precedence; no managed spawn occurs
+    expect(spawnWasCalled).toBe(false);
+    expect(receivedServerUrl).toBe("http://external-mock:7777");
+    restoreEnv(saved);
+  });
+});
+
 describe("process-entry — G3: main() with -p routes to headlessRunner before launchRepl", () => {
   it("-p 'hello headless' calls headlessRunner with the prompt, not launchRepl", async () => {
     let headlessCalled = false;
