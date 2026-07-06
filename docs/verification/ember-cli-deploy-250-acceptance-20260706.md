@@ -52,7 +52,7 @@ worked around by writing the text and the Enter keystroke as two separate writes
   non-busy-path `_onExit?.()`). Verified by exact-PID OS check after the keystroke — PID no
   longer present.
 
-### (b) Goal organ — scenario A: PASS. Scenarios B: FAIL (binary-side defect, #276). C: SKIPPED
+### (b) Goal organ — scenario A: PASS. Scenario B: PASS (post-#278 fix, verified). Scenario C: PASS
 
 - `/goal <objective>` on a freshly booted binary: response `goal set: <objective>\nstatus:
   Active` rendered live.
@@ -120,6 +120,47 @@ did-a-request-ever-arrive signal.
   (pid 39720, `:8082`) both confirmed alive and untouched before, during, and after this run
   via exact-PID checks. Zero leftover test `ember.exe` processes.
 
+#### Fix-verification re-run (post-#278 binary) — 2026-07-06
+
+Fresh binary, `public/master` @ `4cfaf4e32c798d3e86b3520e595f5eb1694770c5` (contains #278's
+`clearInputRefForSubmit`, landed the day of the original run above), sha256
+`bb2cf7ea4e80b1cea2e2bdba407e303ba2bcbdb855f89f94c2a6558e26d8c4b4`, 118,904,832 bytes. Same
+discipline: control arm first, `:8082` requests-only exception, exact-PID teardown throughout.
+
+- **Control arm — PASS.** Plain prompt round-tripped in 2.2s.
+- **Scenario B — PASS.** Receipt log (`continuation_skipped` / `continuation_fired` events)
+  shows a REAL fire this time — no false `queued_user_input` skip. The goal's `createdAt`
+  (20:00:01.148Z) and `updatedAt` (20:01:22.674Z) genuinely differ now, versus byte-identical
+  before the fix. The objective's `progress.txt` artifact was created with the exact required
+  content (`step 1\nstep 2\nstep 3\n`), and `update_goal(Complete)` returned `ok:true`, verified
+  against the raw transcript's own Read/Write tool-call output (not just the auto-scored
+  verdict — the first automated pass on this leg mis-reported FAIL due to a harness path bug
+  checking the wrong directory; corrected by manually reading the receipt log, goal store, and
+  transcript directly). Two engine-level continuation turns fired (not the originally-hoped-for
+  three, and not one) — turn A wrote step 1 alone, turn B wrote steps 2+3 and called
+  `update_goal(Complete)` within itself. Not a #276 regression: the mechanism under test
+  (autonomous continuation actually firing, repeatedly) is exactly what was broken before.
+- **Scenario C — PASS.** Also required a self-caught correction: the first automated pass
+  scored PASS by matching the literal substring "ACK" that appears INSIDE the preemption
+  marker's own instruction text ("reply with exactly the word **ACK** and nothing else"), which
+  was sitting unsubmitted in the live input line the whole time — never a real reply. A
+  corrected discriminator (require the marker to actually leave the live input line before
+  accepting any ACK match) confirms a genuine preemption: raw transcript shows
+  `You ... PREEMPT-CHECK: ... / ●ACK [operator]` — a real, correct, standalone assistant
+  reply, immediately followed by the next autonomous continuation marker. "User always
+  preempts" (docs/goal-mode-mechanism.md §3) holds once the message actually reaches the engine.
+- **New finding, filed separately, does not block this leg:**
+  [ember#283](https://github.com/wordingone/ember/issues/283) — the FIRST Enter pressed while
+  ember-cli is busy (an autonomous continuation in flight) is silently dropped rather than
+  queued; the typed text sits visibly unsubmitted (confirmed ~26s gap in the corrected run
+  before a resent Enter got it through) until the user notices and presses Enter again. An
+  operator-facing paper cut on top of the fix, not a re-opening of #276 — once a message does
+  submit, the reply is correct and immediate.
+- Full evidence (receipt log, goal store, transcripts, `/slots` log, process checks) posted to
+  [ember#276](https://github.com/wordingone/ember/issues/276#issuecomment-4897354419).
+  Process safety: cockpit pid 7568 and resident server pid 39720 (`:8082`) confirmed alive and
+  untouched throughout; zero leftover test processes.
+
 ### (c) Circuit breaker + startup disclosure — PASS
 
 - Startup disclosure line names the dead `EMBER_MODEL_URL` exactly (`[ember] model
@@ -147,30 +188,28 @@ then-deployed `ember-cockpit-195.exe`) — on this binary it is registered and r
 
 ### (e) Build identity — recorded above (sha256, size, UTC timestamp, bun version, source commit).
 
-## Verdict: READY for swap (deploy-gap acceptance) — #211 leg-(b) live acceptance: FAIL, tracked as #276
+## Verdict: READY for swap (deploy-gap acceptance) — #211 leg-(b) live acceptance: PASS (post-#278 fix)
 
 All of #250's own in-scope acceptance items ((a), (c), (d), (e), and goal-organ scenario A)
 pass on a freshly built `public/master` binary — the deploy-gap swap itself remains READY,
 unchanged from the original pass. The swap (kill-then-launch of the live operator cockpit,
 with kill receipts and an announce-first line) is still out of scope for this lane per
 #250's own contract and was not performed here — no running process was touched at any
-point across either pass.
+point across any of the three passes recorded in this doc.
 
-Separately, the #211 leg-(b) live acceptance (autonomous multi-turn continuation + user
-preemption against a real model) now has a real result, not just a scope note: scenario A
-passes, scenario B fails per the pre-registered discrimination design (control-PASS +
-slots-idle-during-B), and scenario C was correctly skipped as meaningless without B. This is
-a genuine binary-side defect in the goal-continuation organ, filed and root-caused at
-[ember#276](https://github.com/wordingone/ember/issues/276) — it does not block or reverse
-the #250 deploy-gap verdict above (goal mode existing and creating/persisting a goal is
-part of #250's bar; autonomous continuation firing is #211's bar), but it is a real,
-receipted gap that should be fixed before #211's own closure and re-verified with the same
-harness discipline (control arm + `/slots` discriminator) before this doc's B/C section is
-updated to PASS.
+The #211 leg-(b) live acceptance (autonomous multi-turn continuation + user preemption
+against a real model) initially found a genuine binary-side defect (scenario B failed, C
+correctly skipped), filed and root-caused at
+[ember#276](https://github.com/wordingone/ember/issues/276), fixed at
+[ember#278](https://github.com/wordingone/ember/pull/278), and re-verified live on the
+post-fix binary: scenario A, B, and C all PASS now (see the fix-verification subsection
+above). One new, separate operator-facing finding surfaced during the C re-run — an
+Enter-while-busy keystroke-drop — filed as [ember#283](https://github.com/wordingone/ember/issues/283)
+and does not block this leg.
 
 ## Scope note for #211 closure
 
 This report satisfies #250's own acceptance bar (a receipted build + binary-level battery
-before a swap). It also now carries the full #211 leg-(b) live-acceptance *attempt* (not a
-scope gap anymore) — result: A passes, B fails (see #276), C skipped. #211 itself remains
-open, blocked on the #276 fix landing and a clean B/C re-run.
+before a swap) and now also carries the FULL #211 leg-(b) live-acceptance result: A, B, and
+C all PASS on the post-#278 binary. #211 can close on this evidence plus #278's own merge;
+#283 (Enter-while-busy drop) is tracked separately and does not gate #211.
