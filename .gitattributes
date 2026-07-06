@@ -7,10 +7,14 @@
 corpus-manifests/** -text
 receipts/** -text
 tokenizer/** -text
-# research/ holds raw-byte-pinned premises (fp26_prereg pins the decision
+# docs/research/ holds raw-byte-pinned premises (fp26_prereg pins the decision
 # artifact's sha256 over exact on-disk bytes); CRLF normalization on Windows
 # checkouts drifts those bytes and fails the prereg premise. Pin -text (eng-47).
-research/** -text
+# Re-anchored 2026-07-06 (#230): the pattern was "research/**", anchored to a
+# bare top-level research/ directory that has never existed in this repo — the
+# real, and only, directory is docs/research/. The gap left the decision
+# artifact unprotected and is the concrete mechanism identified for its drift.
+docs/research/** -text
 # ledger views + probe sets are sha-bound by audit receipts (sp-3/fp-28 bind
 # byte-true sha256); CRLF conversion on fresh checkouts drifts the bytes vs
 # the recorded sha. Pin -text (same class as the eng-47 research/** pin).
@@ -20,9 +24,12 @@ probes/** -text
 # git must not rewrite line endings at checkout (same class as eng-47 research/**).
 GOAL.md -text
 docs/formalization-v0.md -text
-config/v0-pretrain-config.json -text
-config/nck-invariants.json -text
-config/nck-baseline/** -text
+# Updated 2026-07-06 (#230): #219 renamed config/ -> configs/ but missed these
+# three exact-path pins, silently exposing configs/v0-pretrain-config.json (the
+# NC-K governor-headroom-config manifest entry) to LF normalization.
+configs/v0-pretrain-config.json -text
+configs/nck-invariants.json -text
+configs/nck-baseline/** -text
 # scripts and hooks: enforce LF (prevents CRLF creep on Windows checkouts)
 *.sh text eol=lf
 *.py text eol=lf
