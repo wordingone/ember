@@ -8,6 +8,8 @@ Validates receipts/*.json against the minimum schema floor:
     sha256, etc.) requires sha_convention to be present in the receipt.
   INTEGER rule: flip/count-like fields (n_*, *_count, guard_flips, rows,
     and counters inside flips arrays) must be ints, not strings.
+  INVARIANT rule (post-genesis): receipts with ts > genesis timestamp must carry
+    invariant_sha256 field with the correct constitutional hash value.
 
 Modes:
   --all         report-only over every receipt in receipts/ (exit 0 always;
@@ -26,7 +28,14 @@ import os
 import re
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
+
+# Constitutional invariant hash and genesis timestamp
+# genesis_ts is the committerDate of the genesis merge commit (tag: invariant-genesis)
+# commit: 9c89f7f66 "genesis: entrench constitutional invariant (#281)"
+GENESIS_TS = "2026-07-06T14:13:23-07:00"
+INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
 # ---------------------------------------------------------------------------
 # Legacy-exempt list (Row 8 — receipt hygiene triage 2026-06-12)
@@ -69,6 +78,48 @@ _COUNT_TOP_PATTERN = re.compile(
     r"^(n_|.*_count$|guard_flips$|rows$)",
     re.IGNORECASE,
 )
+
+
+def _parse_ts(ts_str: str) -> float:
+    """Parse ISO8601 timestamp to epoch seconds."""
+    try:
+        return datetime.fromisoformat(ts_str.replace('Z', '+00:00')).timestamp()
+    except (ValueError, TypeError):
+        return None
+
+
+def _validate_post_genesis_invariant(d: dict) -> str | None:
+    """Validate that post-genesis receipts carry correct invariant_sha256.
+
+    Pre-genesis receipts are exempt (ts < GENESIS_TS).
+    Post-genesis receipts must have invariant_sha256 == INVARIANT_SHA256.
+
+    Returns error string if invalid, None if valid or exempt.
+    """
+    ts = d.get("ts")
+    if not ts:
+        return None  # No ts field; other validation rules handle this
+
+    receipt_epoch = _parse_ts(ts)
+    genesis_epoch = _parse_ts(GENESIS_TS)
+
+    if receipt_epoch is None or genesis_epoch is None:
+        return None  # Timestamp parse error; other rules will catch this
+
+    # Pre-genesis receipts are exempt
+    if receipt_epoch < genesis_epoch:
+        return None
+
+    # Post-genesis: must have invariant_sha256 field
+    if "invariant_sha256" not in d:
+        return "MISSING_INVARIANT_SHA256: post-genesis receipt missing invariant_sha256"
+
+    # Post-genesis: must have correct value
+    if d["invariant_sha256"] != INVARIANT_SHA256:
+        return (f"WRONG_INVARIANT_SHA256: expected {INVARIANT_SHA256}, "
+                f"got {d['invariant_sha256']}")
+
+    return None
 
 
 def _has_sha_field(d: dict) -> bool:
@@ -130,6 +181,11 @@ def validate_receipt(d: dict) -> list[str]:
     int_violations = _count_violations(d)
     for v in int_violations:
         findings.append(f"INT_AS_STRING: {v}")
+
+    # R4: post-genesis invariant stamping (issue #281)
+    invariant_error = _validate_post_genesis_invariant(d)
+    if invariant_error:
+        findings.append(invariant_error)
 
     return findings
 
