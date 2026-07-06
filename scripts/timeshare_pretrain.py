@@ -1,6 +1,6 @@
 """timeshare_pretrain.py — pretrain segment runner for the v0 owned-core (#123, eng-33).
 
-Implements §3 of docs/research/june22-critical-path.md (timeshare rule):
+Implements §3 of research/june22-critical-path.md (timeshare rule):
   - Pretrain holds the GPU by default.
   - Periodic checkpointing: model + optimizer + RNG state (torch CPU/CUDA +
     python random + numpy), written atomically (tmp + rename) under a run dir.
@@ -67,7 +67,7 @@ FP19_SEQ           = 1024   # c03 seq
 # Launch interlock (default-closed)
 # ---------------------------------------------------------------------------
 
-def _check_launch_interlock(*, live: bool) -> None:
+def _check_launch_interlock(*, live: bool, requested_run: dict | None = None) -> None:
     """Refuse GPU/real-pretrain launch unless both guards are satisfied.
 
     Guards:
@@ -76,6 +76,13 @@ def _check_launch_interlock(*, live: bool) -> None:
 
     If either guard is absent, print a refusal line and raise SystemExit.
     Real v0 pretrain launch fires only on fp-22's gate — not in this PR.
+
+    requested_run: optional descriptor of the run THIS invocation is about to
+    execute, threaded straight through to v0_pretrain_launch_gate.gate() so
+    G-budget can price the ACTUAL requested run (e.g. cbase_grow_live.py's
+    minutes-long net2net grow-continuity micro-run) instead of always pricing
+    the full v0 ladder. None (default; every pre-existing caller) preserves
+    today's full-ladder G-budget behavior byte-for-byte.
     """
     authorized = os.environ.get("EMBER_GATE_AUTHORIZED", "") == "1"
     if not (authorized and live):
@@ -98,7 +105,7 @@ def _check_launch_interlock(*, live: bool) -> None:
     # module top CPU-safe and avoids any cycle — the gate never imports this.)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import v0_pretrain_launch_gate as _lg
-    rows = _lg.gate(datetime.now(timezone.utc).date())
+    rows = _lg.gate(datetime.now(timezone.utc).date(), requested_run=requested_run)
     blocked = [r for r in rows if r[1] != "GREEN"]
     if blocked:
         detail = "; ".join(f"{r[0]}={r[2]}" for r in blocked)
@@ -640,7 +647,7 @@ def run_segment(
 # ===========================================================================
 # v0 SURVIVOR-STACK EXTENSION (eng-43, #167)
 # ===========================================================================
-# Implements the FROZEN contract config/v0-pretrain-config.json against the
+# Implements the FROZEN contract configs/v0-pretrain-config.json against the
 # eng-33 primitives ABOVE (save_checkpoint/load_checkpoint/capture_rng/
 # restore_rng/verify_resume/_apply_governor/_check_launch_interlock/pacing —
 # all reused unchanged; the eng-33 surface is byte-identical). Component
@@ -1093,10 +1100,26 @@ def _tiny_v0_model(vocab: int, hidden: int, n_mtp: int, depth: int = 2):
     return _TinyV0()
 
 
-def build_v0_model(cfg: dict, *, live: bool, tiny_dims: dict | None = None):
-    """Build the v0 model. CPU dry-run: tiny stand-in. live (gated): real c03
-    LlamaModel backbone + tied primary head + MTP heads. Returns (model,
-    vocab, hidden, n_mtp)."""
+def build_v0_model(cfg: dict, *, live: bool, tiny_dims: dict | None = None,
+                    intermediate_override: int | None = None,
+                    device: str = "cuda"):
+    """Build the v0 model. CPU dry-run: tiny stand-in. live (real c03 arch —
+    gated for the actual GPU dispatch, but ALSO reachable CPU-side by callers
+    that pass live=True with device="cpu" for a real-architecture dry-run,
+    e.g. cbase_grow_live.py's --smoke plumbing check, since the tiny stand-in
+    below has a different module layout and cannot carry the net2net FF-widen
+    surgery's backbone_model.layers.N.mlp.{gate,up,down}_proj key names):
+    real c03 LlamaModel backbone + tied primary head + MTP heads.
+
+    intermediate_override: FF width for the LlamaConfig; None preserves the
+    original hardcoded 4096 (byte-identical default behavior for every
+    existing caller). Non-None lets a caller build the SAME architecture at a
+    different FF width (the net2net grow operator's pre/post shape) or a
+    small width for a fast CPU smoke check.
+    device: "cuda" (default, original behavior) or "cpu" (real-architecture
+    CPU path — no .cuda() call, so no GPU/driver is touched).
+
+    Returns (model, vocab, hidden, n_mtp)."""
     import torch
     n_mtp = cfg["objective"]["mtp_aux_heads"]["n_heads"]
     if not live:
@@ -1107,13 +1130,14 @@ def build_v0_model(cfg: dict, *, live: bool, tiny_dims: dict | None = None):
     # live: real c03 — gated by the eng-33 interlock; fires on fp-22's gate.
     from transformers import LlamaConfig, LlamaModel  # type: ignore
     m = cfg["model"]
+    intermediate = 4096 if intermediate_override is None else intermediate_override
 
     class _V0Real(torch.nn.Module):
         def __init__(self):
             super().__init__()
             conf = LlamaConfig(
                 vocab_size=m["vocab"], hidden_size=m["hidden"],
-                intermediate_size=4096, num_hidden_layers=m["layers"],
+                intermediate_size=intermediate, num_hidden_layers=m["layers"],
                 num_attention_heads=m["heads"], num_key_value_heads=m["heads"],
                 max_position_embeddings=m["seq"], tie_word_embeddings=False)
             self.backbone_model = LlamaModel(conf)
@@ -1149,9 +1173,37 @@ def build_v0_model(cfg: dict, *, live: bool, tiny_dims: dict | None = None):
                 return self.backbone_model(inputs_embeds=h).last_hidden_state
             return self.backbone_model(input_ids=ids).last_hidden_state
 
-    model = _V0Real().cuda().to(torch.bfloat16)
+    model = _V0Real().to(device).to(torch.bfloat16)
     model.backbone_model.gradient_checkpointing_enable()
     return model, m["vocab"], m["hidden"], n_mtp
+
+
+# --- QAT fake-quant helpers (STE — int8-grid; identical to fp19_bench and
+#     c04_bf16ns5_qat_throughput._apply_fake_quant/_restore) ----------------
+
+def _apply_fake_quant(model, mode: str):
+    """STE-style weight transform applied in-place pre-forward each step.
+    Returns a restore list.  int8-grid for 'qat'.
+
+    Matches fp19_bench._apply_fake_quant and c04_bf16ns5_qat_throughput
+    exactly — the overhead is the same proxy measured in the c04 probe."""
+    import torch
+    saved = []
+    for m in model.modules():
+        if isinstance(m, torch.nn.Linear):
+            w = m.weight.data
+            saved.append((m, w.clone()))
+            if mode == "qat":
+                s = w.abs().amax(dim=1, keepdim=True).clamp(min=1e-8) / 127.0
+                m.weight.data = (w / s).round().clamp(-127, 127) * s
+    return saved
+
+
+def _restore_weights(saved):
+    """Restore weights from a _apply_fake_quant() save list (post-backward
+    so gradients flow to the full-precision weights — STE semantics)."""
+    for m, w in saved:
+        m.weight.data = w
 
 
 # --- assemble + run a v0 segment (full survivor stack) ---------------------
@@ -1174,15 +1226,49 @@ def run_v0_segment(
     mtp_force_fallback: bool = False,
     opt_force_fallback: bool = False,
     deviation_dir: str | None = None,
+    intermediate_override: int | None = None,
+    reset_optimizer_on_resume: bool = False,
+    real_arch: bool | None = None,
+    device: str | None = None,
+    requested_run: dict | None = None,
 ) -> dict:
     """Run a v0 pretrain segment with the full survivor stack against the
     frozen contract. CPU dry-run by default; the real c03 path is gated by the
     eng-33 launch interlock (EMBER_GATE_AUTHORIZED=1 + --live). Reuses the
-    eng-33 checkpoint/resume/governor/pacing primitives unchanged."""
+    eng-33 checkpoint/resume/governor/pacing primitives unchanged.
+
+    intermediate_override / reset_optimizer_on_resume / real_arch / device are
+    additive (cbase_grow_live.py, the net2net warm-start growth runner):
+      intermediate_override — thread-through to build_v0_model (grow-operator
+        pre/post FF width, or a small width for a CPU smoke check).
+      reset_optimizer_on_resume — skip load_optimizers_state on resume (the
+        grow step changes FF-dim param shapes, so the pre-grow optimizer
+        state cannot be replayed into the post-grow optimizer; model weights
+        still load normally).
+      real_arch — None (default) means "use `live`" (unchanged behavior for
+        every existing caller). Explicit True with live=False builds the REAL
+        LlamaModel architecture (the net2net surgery's key names) but skips
+        the GPU governor/interlock/shard-dir enforcement below — a real-
+        architecture CPU dry-run, distinct from the incompatible tiny stand-in
+        that the plain live=False path builds.
+      device — None (default) means "cuda if live else cpu" (unchanged
+        behavior). Explicit "cpu" with real_arch=True is the real-architecture
+        CPU dry-run's device.
+      requested_run — None (default; unchanged behavior for every existing
+        caller) or a descriptor of THIS segment's own cost (see
+        _check_launch_interlock / v0_pretrain_launch_gate.g_budget), threaded
+        through on the live path so G-budget can price this specific
+        dispatch (e.g. cbase_grow_live.py's minutes-long micro-run) instead
+        of always pricing the full v0 ladder. Ignored when live=False (the
+        interlock is never consulted off the live path).
+    """
     import torch
 
+    use_real_arch = live if real_arch is None else real_arch
+    use_device = device or ("cuda" if live else "cpu")
+
     if live:
-        _check_launch_interlock(live=live)
+        _check_launch_interlock(live=live, requested_run=requested_run)
         gov_receipt = _apply_governor()
         if shard_dir is None:
             raise SystemExit(
@@ -1202,14 +1288,15 @@ def run_v0_segment(
     deviation_dir = deviation_dir or os.path.join(run_dir, "deviations")
     _pace_reset()
 
-    seq = cfg["model"]["seq"] if live else (tiny_dims or {}).get("seq", 16)
-    batch_size = batch_size or (cfg["throughput"]["batch"] if live else 2)
+    seq = cfg["model"]["seq"] if use_real_arch else (tiny_dims or {}).get("seq", 16)
+    batch_size = batch_size or (cfg["throughput"]["batch"] if use_real_arch else 2)
     if total_steps is None:
         total_steps = n_steps
 
     # --- model + heads ---
-    model, vocab, hidden, n_mtp = build_v0_model(cfg, live=live,
-                                                 tiny_dims=tiny_dims)
+    model, vocab, hidden, n_mtp = build_v0_model(
+        cfg, live=use_real_arch, tiny_dims=tiny_dims,
+        intermediate_override=intermediate_override, device=use_device)
 
     # --- packed-shard loader (synthetic fixture for the dry-run ONLY; the
     #     live path already refused shard_dir is None above, eng-54 #194) ---
@@ -1253,13 +1340,22 @@ def run_v0_segment(
     if resume_ckpt_dir is not None:
         m_state, o_state, r_state, manifest = load_checkpoint(resume_ckpt_dir)
         model.load_state_dict(m_state)
-        load_optimizers_state(optimizers, o_state)
+        if not reset_optimizer_on_resume:
+            load_optimizers_state(optimizers, o_state)
         restore_rng(r_state)
         resume_step = manifest["step"]
         resume_checkpoint = {
             "ckpt_dir": resume_ckpt_dir, "step": manifest["step"],
             "files": manifest["files"], "hash_verified": True,
+            "optimizer_state_reset": reset_optimizer_on_resume,
         }
+
+    # --- QAT gate (cfg["precision"]["qat"]["enabled"]) ---
+    # When True: apply int8-grid fake-quant to all Linear weights pre-forward,
+    # restore AFTER backward so gradients flow to full-precision weights (STE).
+    # When False: no-op — the no-qat path is byte-identical to pre-QAT code.
+    _qat_enabled = bool(
+        cfg.get("precision", {}).get("qat", {}).get("enabled", False))
 
     # --- training loop ---
     losses: list[float] = []
@@ -1274,6 +1370,9 @@ def run_v0_segment(
             x = x.cuda()
             y0 = y0.cuda()
             y_mtp = [t.cuda() for t in y_mtp]
+
+        # QAT pre-forward: transform Linear weights to int8-grid (STE).
+        _qat_saved = _apply_fake_quant(model, "qat") if _qat_enabled else []
 
         hidden_out = model.backbone(x)                       # [B, T, H]
         h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
@@ -1292,6 +1391,14 @@ def run_v0_segment(
         lr_mults.append(round(mult, 6))
 
         loss.backward()
+
+        # QAT post-backward: restore full-precision weights AFTER backward.
+        # Gradients accumulated on the int8-rounded weights are applied to the
+        # full-precision originals (STE semantics — identical to fp19_bench and
+        # c04_bf16ns5_qat_throughput pattern).
+        if _qat_enabled:
+            _restore_weights(_qat_saved)
+
         for opt in optimizers.values():
             opt.step()
         for opt in optimizers.values():
@@ -1324,7 +1431,7 @@ def run_v0_segment(
         "scope": "v0 survivor-stack pretrain segment — cpu dry-run"
                  if not live else "v0 survivor-stack pretrain segment — live",
         "segment_id": segment_id,
-        "contract": "config/v0-pretrain-config.json",
+        "contract": "configs/v0-pretrain-config.json",
         "mode": "cpu_dryrun" if not live else "live",
         "steps": n_steps,
         "resume_step": resume_step,
@@ -1348,6 +1455,8 @@ def run_v0_segment(
                          "lr_mult_first": lr_mults[0] if lr_mults else None,
                          "lr_mult_last": lr_mults[-1] if lr_mults else None},
             "ce": {"impl": ce_impl},
+            "qat": {"enabled": _qat_enabled,
+                    "scheme": "int8-grid fake-quant STE on linear weights"},
             "mtp": {"enabled": bool(mtp_enabled),
                     "n_heads": n_mtp if mtp_enabled else 0,
                     "weight": mtp_weight,
@@ -1357,6 +1466,12 @@ def run_v0_segment(
                        "n_windows": loader.n_windows,
                        "batch_size": batch_size,
                        "packing": "no-pad sequence packing, stride=seq"},
+            "arch": {"real_arch": use_real_arch, "device": use_device,
+                     "intermediate_override": intermediate_override,
+                     "note": "additive fields (cbase_grow_live.py net2net "
+                             "warm-start runner); real_arch=True with "
+                             "live=False is a real-LlamaModel-architecture "
+                             "CPU dry-run, distinct from the tiny stand-in"},
         },
         "governor": gov_receipt,
         "pacing": pacing_snapshot(),
@@ -1780,7 +1895,7 @@ def _selftest_v0ext() -> None:
         "ticket": "TIMESHARE-V0EXT-SELFTEST",
         "ts": ts,
         "issue": "wordingone/ember#167",
-        "contract": "config/v0-pretrain-config.json",
+        "contract": "configs/v0-pretrain-config.json",
         "checks": checks,
         "dryrun": dryrun_summary,
         "components_implemented": [
@@ -1967,6 +2082,9 @@ def main(argv: list[str] | None = None) -> None:
                          "(defaults to --steps)")
     ap.add_argument("--checkpoint-every", type=int, default=50,
                     help="Checkpoint cadence in optimizer steps (live v0 path)")
+    ap.add_argument("--ce-chunk-tokens", type=int, default=256,
+                    help="CE chunk size in tokens for chunked/fused CE impl "
+                         "(default 256; use 1024 for the bf16-NS5 C-BASE recipe)")
     ap.add_argument("--verify-resume", action="store_true",
                     help="Scan --run-dir checkpoints and print the safe-resume "
                          "vs restart-from-scratch determination (no training)")
@@ -2032,6 +2150,9 @@ def main(argv: list[str] | None = None) -> None:
             resume_ckpt_dir=args.resume_ckpt,
             checkpoint_every=args.checkpoint_every,
             segment_id=args.segment_id,
+            # ce_chunk_tokens: threaded from --ce-chunk-tokens CLI arg (default 256).
+            # Set to 1024 for the bf16-NS5 C-BASE recipe (frozen; ceff-closure receipt).
+            ce_chunk_tokens=args.ce_chunk_tokens,
         )
         from receipt_write import checked_write
         repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
