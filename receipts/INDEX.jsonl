@@ -1,0 +1,644 @@
+{"issue": "359", "path": "receipts/act-refit-20260612T225108Z.json", "ticket": "FP-39-ACT-REFIT", "ts": "20260612T225108Z"}
+{"issue": "359", "path": "receipts/act-refit-20260612T232016Z.json", "ticket": "FP-39-ACT-REFIT", "ts": "20260612T232016Z"}
+{"path": "receipts/arcade-random-smoke-20260610T233720Z.json", "ticket": "ARCADE-HARNESS", "ts": "20260610T233720Z"}
+{"path": "receipts/arcade-random-smoke-20260610T233807Z.json", "ticket": "ARCADE-HARNESS", "ts": "20260610T233807Z"}
+{"pass": true, "path": "receipts/b-multi-1-acquire-20260616T051423Z.json", "ticket": "B-MULTI-1-ACQUIRE", "ts": "20260616T051423Z"}
+{"path": "receipts/bits-account-20260610T223429Z.json", "ticket": "BITS-ACCOUNT", "ts": "20260610T223429Z"}
+{"path": "receipts/bits-account-20260611T031459Z.json", "ticket": "BITS-ACCOUNT", "ts": "20260611T031459Z"}
+{"issue": "96", "pass": true, "path": "receipts/c-pin-selftest-20260705T040630Z.json", "ticket": "C-PIN-SELFTEST", "ts": "20260705T040630Z"}
+{"path": "receipts/c04-batched-ns5-bench-20260613T112346Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T112346Z"}
+{"path": "receipts/c04-batched-ns5-bench-20260613T114503Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T114503Z"}
+{"path": "receipts/c04-batched-ns5-bench-20260613T115714Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T115714Z"}
+{"path": "receipts/c04-batched-ns5-bench-20260613T123123Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T123123Z"}
+{"path": "receipts/c04-batched-ns5-bench-20260613T123509Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T123509Z"}
+{"path": "receipts/c04-batched-ns5-bench-20260613T132635Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T132635Z"}
+{"path": "receipts/c04-batched-ns5-bench-20260613T134925Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T134925Z"}
+{"issue": "355", "path": "receipts/c04-budget-20260612T222520Z.json", "ticket": "FP-38", "ts": "20260612T222520Z"}
+{"issue": "355", "path": "receipts/c04-budget-20260612T232016Z.json", "ticket": "FP-38", "ts": "20260612T232016Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-c03-h1024-d20-20260613T045046Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T045046Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-c03-h1024-d20-20260613T050336Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T050336Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2048-d12-20260613T045057Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T045057Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2048-d12-20260613T051757Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T051757Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2048-d14-20260613T045101Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T045101Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2048-d14-20260613T051712Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T051712Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2304-d12-20260613T045106Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T045106Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2304-d12-20260613T051633Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T051633Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2560-d12-20260613T045112Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T045112Z"}
+{"issue": "353", "path": "receipts/c04-design-bench-h2560-d12-20260613T051815Z.json", "ticket": "C04-DESIGN-BENCH", "ts": "20260613T051815Z"}
+{"issue": "373", "path": "receipts/c04-dynamo-patch-bench-h2048d12.json", "ticket": "C04-DYNAMO-PATCH", "ts": "2026-06-13T06:12:00Z"}
+{"issue": "353", "path": "receipts/c04-fp8-ab-20260613T044337Z.json", "ticket": "C04-FP8-AB", "ts": "20260613T044337Z"}
+{"issue": "353", "path": "receipts/c04-fp8-ab-20260613T044809Z.json", "ticket": "C04-FP8-AB", "ts": "20260613T044809Z"}
+{"issue": "352", "path": "receipts/c04-grid-20260612T220829Z.json", "ticket": "FP-37", "ts": "20260612T220829Z"}
+{"path": "receipts/c04-pick-rehearsal-20260613T011829Z.json", "ticket": "C04-PICK-REHEARSAL", "ts": "20260613T011829Z"}
+{"issue": "353", "path": "receipts/c04-receipt3-20260613T052223Z.json", "ticket": "C04-RECEIPT-3", "ts": "20260613T052223Z"}
+{"issue": "353", "path": "receipts/c04-receipt3-20260613T052522Z.json", "ticket": "C04-RECEIPT-3", "ts": "20260613T052522Z"}
+{"path": "receipts/c10-resident-live-20260612T213133Z.json", "ticket": "C10", "ts": "2026-06-12T21:31:33Z"}
+{"path": "receipts/c48-gate-stats-review-20260613T042018Z.json", "ticket": "C48-GATE-STATS-REVIEW", "ts": "20260613T042018Z", "verdict": "DISCHARGED"}
+{"path": "receipts/c52-adversarial-pass-20260612T175700Z.json", "ticket": "C52-ADVERSARIAL-PASS", "ts": "20260612T175700Z"}
+{"path": "receipts/c55-surpass-prestage-20260613T042503Z.json", "ticket": "C55-SURPASS-PRESTAGE", "ts": "20260613T042503Z", "verdict": "DISCHARGED (pre-stage only — NOT the surpass receipt itself; the E2B-surpass run is a separate future gate)"}
+{"path": "receipts/calibration-decomp-20260610T223737Z.json", "ticket": "CALIBRATION-DECOMP", "ts": "20260610T223737Z"}
+{"path": "receipts/check-energy-law-theory-all-20260705T030730Z.json", "ticket": "CHECK-ENERGY-LAW-THEORY-ALL", "ts": "20260705T030730Z"}
+{"pass": true, "path": "receipts/citation-check-20260704T203557Z.json"}
+{"pass": true, "path": "receipts/citation-check-20260705T081952Z.json"}
+{"path": "receipts/completeness-sweep/c34-launch-rail-issue-mapping-20260705T125847Z.json", "ticket": "C34", "ts": "20260705T125847Z", "verdict": "ISSUE_MAPPING_COMPLETE"}
+{"path": "receipts/completeness-sweep/c53-fp34-band-freeze-prestage-20260705T125847Z.json", "ticket": "C53", "ts": "20260705T125847Z"}
+{"issue": "wordingone/ember#168", "path": "receipts/corpus-mix-20260611T075802Z.json", "ticket": "CORPUS-MIX-V0", "ts": "20260611T075802Z"}
+{"issue": "wordingone/ember#168", "path": "receipts/corpus-mix-selftest-20260611T075516Z.json", "ticket": "CORPUS-MIX-SELFTEST", "ts": "20260611T075516Z"}
+{"issue": "wordingone/ember#168", "path": "receipts/corpus-mix-selftest-20260628T174035Z.json", "ticket": "CORPUS-MIX-SELFTEST", "ts": "20260628T174035Z"}
+{"issue": "wordingone/ember#168", "path": "receipts/corpus-mix-selftest-20260628T175031Z.json", "ticket": "CORPUS-MIX-SELFTEST", "ts": "20260628T175031Z"}
+{"issue": "301", "path": "receipts/cuda-graph-ab-20260612T071112Z.json", "ticket": "CUDA_GRAPH_AB", "ts": "20260612T071112Z", "verdict": "GRAPH_FAIL"}
+{"issue": "114", "pass": true, "path": "receipts/d-gate-adapter_model-20260611T070448Z.json", "ticket": "D-GATE", "ts": "20260611T070448Z", "verdict": "PASS"}
+{"issue": "29", "path": "receipts/d6-bf16-momentum-ab-20260703T160041Z.json", "ticket": "D6-BF16-MOMENTUM-AB", "ts": "20260703T160041Z", "verdict": "D6_ROUTE_PRICED_OK"}
+{"issue": "225", "path": "receipts/density-ab-arma-seed0-20260613T020407Z.json", "ticket": "DENSITY-AB-V1", "ts": "20260613T020407Z"}
+{"issue": "225", "path": "receipts/density-ab-arma-seed1-20260613T020134Z.json", "ticket": "DENSITY-AB-V1", "ts": "20260613T020134Z"}
+{"issue": "225", "path": "receipts/density-ab-arma-seed2-20260613T043932Z.json", "ticket": "DENSITY-AB-V1", "ts": "20260613T043932Z"}
+{"issue": "225", "path": "receipts/density-ab-armb-seed0-20260613T000119Z.json", "ticket": "DENSITY-AB-V1", "ts": "20260613T000119Z"}
+{"issue": "225", "path": "receipts/density-ab-armb-seed0-20260613T034239Z.json", "ticket": "DENSITY-AB-V1", "ts": "20260613T034239Z"}
+{"issue": "225", "path": "receipts/density-ab-armb-seed1-20260613T030627Z.json", "ticket": "DENSITY-AB-V1", "ts": "20260613T030627Z"}
+{"issue": "225", "path": "receipts/density-ab-armb-seed2-20260613T043937Z.json", "ticket": "DENSITY-AB-V1", "ts": "20260613T043937Z"}
+{"issue": "225", "path": "receipts/density-ab-verdict-20260613T034404Z.json", "ticket": "DENSITY-AB-VERDICT", "ts": "20260613T034404Z", "verdict": "NO_VERDICT"}
+{"issue": "225", "path": "receipts/density-ab-verdict-20260613T043948Z.json", "ticket": "DENSITY-AB-VERDICT", "ts": "20260613T043948Z", "verdict": "DENSITY_CONFIRMED"}
+{"path": "receipts/disconfirmation-eval-20260705T081937Z.json", "ticket": "EMBER-TOTALITY-DISCONFIRMATION", "ts": "20260705T081937Z"}
+{"path": "receipts/dt1-delta-rule-20260616T165810Z.json", "ticket": "DT1-DELTA-RULE-DIAGNOSTIC", "ts": "20260616T165810Z"}
+{"path": "receipts/ember-c-e2b-paired/ember-c-e2b-paired-20260705T041045Z.json", "ticket": "C-E2B-PAIRED-RUN", "ts": "2026-07-05T04:10:45Z", "verdict": "measured_distance"}
+{"issue": "75", "path": "receipts/ember-c-scale/c-scale-s3-working-set-20260704T122236Z.json", "ticket": "C-SCALE-S3-WORKING-SET-LIVE", "ts": "20260704T122236Z", "verdict": "S3_WORKING_SET_LIVE_MEASURED_FIT"}
+{"path": "receipts/ember-c-scale/w2-garm-108-verification-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-108-VERIFICATION", "ts": "20260706T043658Z"}
+{"issue": "113", "path": "receipts/ember-c-scale/w2-garm-dry-run-summary-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-DRY-RUN-SUMMARY", "ts": "20260706T043658Z"}
+{"path": "receipts/ember-c-scale/w2-garm-dump-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-DUMP", "ts": "20260706T043658Z"}
+{"path": "receipts/ember-c-scale/w2-garm-gate-decontam-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-GATE-DECONTAM", "ts": "20260706T043658Z"}
+{"path": "receipts/ember-c-scale/w2-garm-gate-governed-fit-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-GATE-GOVERNED-FIT", "ts": "20260706T043658Z"}
+{"path": "receipts/ember-c-scale/w2-garm-grow-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-GROW", "ts": "20260706T043658Z"}
+{"path": "receipts/ember-c-scale/w2-garm-training-leg-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-TRAINING-LEG", "ts": "20260706T043658Z"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T145316Z/d3-broader-multifamily-loop-receipt.json", "ticket": "EMBER-D3-BROADER-MULTIFAMILY-LOOP", "ts": "20260621T145330Z", "verdict": "D3_BROADER_MULTIFAMILY_LOOP_BLOCKED"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T145316Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260621T145330Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T150246Z/d3-broader-multifamily-loop-receipt.json", "ticket": "EMBER-D3-BROADER-MULTIFAMILY-LOOP", "ts": "20260621T150300Z", "verdict": "D3_BROADER_MULTIFAMILY_LOOP_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T150246Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260621T150300Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T012626Z/d3-broader-multifamily-loop-receipt.json", "ticket": "EMBER-D3-BROADER-MULTIFAMILY-LOOP", "ts": "20260622T012640Z", "verdict": "D3_BROADER_MULTIFAMILY_LOOP_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T012626Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T012640Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013548Z/d3-broader-multifamily-loop-receipt.json", "ticket": "EMBER-D3-BROADER-MULTIFAMILY-LOOP", "ts": "20260622T013602Z", "verdict": "D3_BROADER_MULTIFAMILY_LOOP_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013548Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T013602Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013711Z/d3-broader-multifamily-loop-receipt.json", "ticket": "EMBER-D3-BROADER-MULTIFAMILY-LOOP", "ts": "20260622T013726Z", "verdict": "D3_BROADER_MULTIFAMILY_LOOP_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013711Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T013726Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260621T133823Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260621T133833Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260622T011500Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T011835Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"}
+{"path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260622T011700Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T012001Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"}
+{"path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260622T012000Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T012146Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset24-len4-20260622T154500Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T152601Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset28-len4-20260622T170000Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T154423Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset32-len4-20260622T172000Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T154645Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset36-len6-20260622T174000Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T154824Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset42-len6-20260622T180000Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T155049Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset48-len6-20260622T181000Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T155127Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset54-len12-20260622T190000Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T160041Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset8-len12-20260620T230700Z.json", "ticket": "EMBER-D3-GYM-FRESH-ROWS", "ts": "20260620T230700Z"}
+{"path": "receipts/ember-d3-native-loop/d3-hf-materialized-offset24-len8-20260622T121000Z.json", "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS", "ts": "20260622T135824Z", "verdict": "D3_HF_ROWS_MATERIALIZED"}
+{"path": "receipts/ember-d3-native-loop/d3-native-loop-20260620T230519Z.json", "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP", "ts": "20260620T234435Z", "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-native-loop-20260621T070500Z.json", "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP", "ts": "20260621T124008Z", "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-native-loop-20260622T011400Z.json", "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP", "ts": "20260622T011744Z", "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-native-loop-20260622T150500Z-full-parity-reconciled.json", "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP", "ts": "20260622T145023Z", "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-native-loop-20260704T161315Z-c3-wall-time-rerun-redacted-edition.json", "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP", "ts": "20260705T042056Z", "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-native-loop-20260704T235144Z-c3-wall-time-rerun-redacted-edition.json", "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP", "ts": "20260705T065144Z", "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T-redacted-edition.json", "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP", "ts": "20260705T042031Z", "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-prospective-guard-task21-24-20260622T115500Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T115046Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"}
+{"path": "receipts/ember-d3-native-loop/d3-prospective-task25-28-dryrun-20260622T121500Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T135824Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_DRYRUN_PASS"}
+{"path": "receipts/ember-d3-native-loop/d3-prospective-task25-28-preflight-20260622T122000Z.json", "ticket": "EMBER-D3-PROSPECTIVE-EXECUTION-PREFLIGHT", "ts": "20260622T135824Z", "verdict": "D3_PROSPECTIVE_EXECUTION_BLOCKED"}
+{"path": "receipts/ember-d3-native-loop/d3-transfer-task21-24-20260622T013900Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T014121Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_BLOCKED"}
+{"path": "receipts/ember-d3-native-loop/d3-transfer-task21-24-repair-20260622T014300Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T014542Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/native-link-task57-62-20260622T221000Z/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T214655Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-d3-native-loop/task9-official-abc-20260621T0126Z/d3-task9-official-abc-receipt.json", "ticket": "EMBER-D3-TASK9-OFFICIAL-ABC-EXECUTION", "ts": "20260621T013000Z", "verdict": "D3_TASK9_OFFICIAL_ABC_PASS"}
+{"path": "receipts/ember-d3-native-loop/task9-official-abc-20260621T071000Z/d3-task9-official-abc-receipt.json", "ticket": "EMBER-D3-TASK9-OFFICIAL-ABC-EXECUTION", "ts": "20260621T124216Z", "verdict": "D3_TASK9_OFFICIAL_ABC_PASS"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/arm-A-mle-micro-official-grade-run-20260618T151654Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T151654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/arm-B-mle-micro-official-grade-run-20260618T151654Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T151654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/arm-C-mle-micro-official-grade-run-20260618T151654Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T151654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/benchmark-c-arm-20260617T000000Z-0001.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T151654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/cycle-20260617T000000Z-0001.json", "ticket": "EMBER-MVP-CYCLE", "ts": "20260617T000000Z", "verdict": "accepted"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/official-abc-wheel-runner-20260618T151654Z.json", "ticket": "EMBER-MVP-OFFICIAL-ABC-WHEEL-RUNNER", "ts": "20260618T151654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/readiness-20260618T151701Z.json", "ticket": "EMBER-MVP-READINESS", "ts": "20260618T151701Z", "verdict": "NOT_READY"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/wheel-bound-20260617T000000Z-0001.json", "ticket": "EMBER-WHEEL-REAL-RUN", "ts": "20260618T151654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/core-loop-attempt-1-20260618/wheel-real-20260618T151654Z.json", "ticket": "EMBER-WHEEL-REAL-RUN", "ts": "20260618T151654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/cycle-official-runner-bound-20260618/benchmark-c-arm-20260617T000000Z-0001.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T143007Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/cycle-official-runner-bound-20260618/cycle-20260617T000000Z-0001.json", "ticket": "EMBER-MVP-CYCLE", "ts": "20260617T000000Z", "verdict": "accepted"}
+{"path": "receipts/ember-mvp/cycle-official-runner-bound-20260618/official-abc-wheel-runner-20260618T143007Z.json", "ticket": "EMBER-MVP-OFFICIAL-ABC-WHEEL-RUNNER", "ts": "20260618T143007Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/cycle-official-runner-bound-20260618/readiness-20260618T143014Z.json", "ticket": "EMBER-MVP-READINESS", "ts": "20260618T143014Z", "verdict": "NOT_READY"}
+{"path": "receipts/ember-mvp/cycle-official-runner-bound-20260618/wheel-bound-20260617T000000Z-0001.json", "ticket": "EMBER-WHEEL-REAL-RUN", "ts": "20260618T143007Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/kaggle-auth-surface-probe-20260618/kaggle-auth-preflight-20260618T141735Z.json", "ticket": "EMBER-MLE-KAGGLE-AUTH-PREFLIGHT", "ts": "20260618T141735Z", "verdict": "BLOCKED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "false"}, "path": "receipts/ember-mvp/kaggle-benchmarks-frozen-heldout-cli-20260618/kaggle-benchmarks-livecodebench-frozen-heldout-delta-20260618T144017Z.json", "ticket": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-FROZEN-HELDOUT-DELTA", "ts": "20260618T144017Z", "verdict": "HELDOUT_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "false"}, "path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-livecodebench-candidate-vs-baseline-20260618T131138Z.json", "ticket": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-CANDIDATE-VS-BASELINE", "ts": "20260618T131138Z", "verdict": "PUBLIC_TEST_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "false"}, "path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-livecodebench-frozen-heldout-delta-20260618T132254Z.json", "ticket": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-FROZEN-HELDOUT-DELTA", "ts": "20260618T132254Z", "verdict": "HELDOUT_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "false"}, "path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-livecodebench-public-test-pilot-20260618T130450Z.json", "ticket": "EMBER-KAGGLE-BENCHMARKS-LIVECODEBENCH-PUBLIC-TEST-PILOT", "ts": "20260618T130450Z", "verdict": "PILOT_PUBLIC_TEST_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "false"}, "path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-score-shape-probe-20260618T125847Z.json", "ticket": "EMBER-KAGGLE-BENCHMARKS-SCORE-SHAPE-PROBE", "ts": "20260618T125847Z", "verdict": "SCORE_SHAPE_RECEIPTED"}
+{"claim_fields": {"docs_claim_dataset_evaluation": "true", "docs_claim_task_run_files": "true"}, "path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-sdk-probe-20260618T052234Z.json", "ticket": "EMBER-KAGGLE-BENCHMARKS-SDK-PROBE", "ts": "20260618T052234Z", "verdict": "READY_TO_RUN_PROBE_TASK"}
+{"path": "receipts/ember-mvp/kaggle-benchmarks-lane-20260618/kaggle-benchmarks-task-file-probe-20260618T125207Z.json", "ticket": "EMBER-KAGGLE-BENCHMARKS-TASK-FILE-PROBE", "ts": "20260618T125207Z", "verdict": "TASK_RUN_FILES_MATERIALIZED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/arm-a-benchmark-20260618T134838Z.json", "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA", "ts": "20260618T134838Z", "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/arm-b-benchmark-20260618T134838Z.json", "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA", "ts": "20260618T134838Z", "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/arm-c-benchmark-20260618T135004Z.json", "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA", "ts": "20260618T135004Z", "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"}
+{"path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/cycle-20260617T000000Z-0001.json", "ticket": "EMBER-MVP-CYCLE", "ts": "20260617T000000Z", "verdict": "accepted"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/cycle-bound-benchmark-20260617T000000Z-0001.json", "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA", "ts": "20260618T135004Z", "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/cycle-bound-wheel-20260617T000000Z-0001.json", "ticket": "EMBER-WHEEL-HELDOUT-RUN", "ts": "20260618T135020Z", "verdict": "HELDOUT_WHEEL_RECEIPTED"}
+{"path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/kaggle-dataset-lane-20260618T051510Z.json", "ticket": "EMBER-KAGGLE-DATASET-LANE-MATERIALIZATION", "ts": "20260618T051510Z", "verdict": "MATERIALIZED"}
+{"path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/readiness-20260618T135119Z.json", "ticket": "EMBER-MVP-READINESS", "ts": "20260618T135631Z", "verdict": "NOT_READY"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/kaggle-external-heldout-script-wheel-20260618/wheel-heldout-20260618T135020Z.json", "ticket": "EMBER-WHEEL-HELDOUT-RUN", "ts": "20260618T135020Z", "verdict": "HELDOUT_WHEEL_RECEIPTED"}
+{"path": "receipts/ember-mvp/official-abc-wheel-runner-20260618/arm-a-official-grade-run-20260618T142652Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T142652Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-abc-wheel-runner-20260618/arm-b-official-grade-run-20260618T142652Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T142652Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-abc-wheel-runner-20260618/arm-c-official-grade-run-20260618T142652Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T142652Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-abc-wheel-runner-20260618/official-abc-wheel-runner-20260618T142652Z.json", "ticket": "EMBER-MVP-OFFICIAL-ABC-WHEEL-RUNNER", "ts": "20260618T142652Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-abc-wheel-runner-20260618/wheel-real-20260618T142652Z.json", "ticket": "EMBER-WHEEL-REAL-RUN", "ts": "20260618T142652Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-prepare-attempt-venv-20260618/mle-micro-official-prepare-run-20260618T140654Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-PREPARE-RUN", "ts": "20260618T140654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-prepare-attempt-venv-20260618/mle-micro-raw-data-audit-20260618T140654Z.json", "ticket": "EMBER-MLE-MICRO-RAW-DATA-AUDIT", "ts": "20260618T140654Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-sample-submissions-20260618/auto-grade-sample-bootstrap-20260618T011600Z.json", "ticket": "EMBER-MLE-MICRO-SAMPLE-SUBMISSION-BOOTSTRAP", "ts": "20260618T011600Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-sample-submissions-20260618/official-grade-run-auto-samples-20260618T011600Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADE-RUN", "ts": "20260618T011600Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-sample-submissions-20260618/official-grading-preflight-auto-samples-20260618T011600Z.json", "ticket": "EMBER-MLE-MICRO-OFFICIAL-GRADING-PREFLIGHT", "ts": "20260618T011600Z", "verdict": "BLOCKED"}
+{"path": "receipts/ember-mvp/official-sample-submissions-20260618/sample-bootstrap-after-materialize-20260618T011558Z.json", "ticket": "EMBER-MLE-MICRO-SAMPLE-SUBMISSION-BOOTSTRAP", "ts": "20260618T011558Z", "verdict": "BLOCKED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/trained-external-heldout-wheel-20260618/arm-a-benchmark-20260618T153110Z.json", "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA", "ts": "20260618T153110Z", "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/trained-external-heldout-wheel-20260618/arm-b-benchmark-20260618T153110Z.json", "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA", "ts": "20260618T153110Z", "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/trained-external-heldout-wheel-20260618/arm-c-trained-benchmark-20260618T152822Z.json", "ticket": "EMBER-KAGGLE-DATASET-EXTERNAL-HELDOUT-DELTA", "ts": "20260618T152822Z", "verdict": "EXTERNAL_HELDOUT_DELTA_RECEIPTED"}
+{"path": "receipts/ember-mvp/trained-external-heldout-wheel-20260618/trained-candidate-model-20260618T152822Z.json", "ticket": "EMBER-TRAINED-CANDIDATE-MODEL-ARTIFACT", "ts": "20260618T152822Z", "verdict": "MODEL_METADATA_RECEIPTED"}
+{"claim_fields": {"benchmark_delta_claimed": "true", "external_benchmark_delta_claimed": "true"}, "path": "receipts/ember-mvp/trained-external-heldout-wheel-20260618/wheel-heldout-20260618T153129Z.json", "ticket": "EMBER-WHEEL-HELDOUT-RUN", "ts": "20260618T153129Z", "verdict": "HELDOUT_WHEEL_RECEIPTED"}
+{"path": "receipts/ember-mvp/windows-sandbox-job-assignment-strict-20260618/windows-sandbox-20260618T144938Z.json", "ticket": "EMBER-WINDOWS-SANDBOX-SELFTEST", "ts": "20260618T144938Z"}
+{"path": "receipts/ember-post-resident-discovery/benchmark-discovery-20260620T230519Z.json", "ticket": "EMBER-POST-RESIDENT-BENCHMARK-DISCOVERY", "ts": "20260620T230519Z"}
+{"path": "receipts/ember-post-resident-discovery/benchmark-discovery-20260621T070500Z.json", "ticket": "EMBER-POST-RESIDENT-BENCHMARK-DISCOVERY", "ts": "20260621T070500Z"}
+{"path": "receipts/ember-post-resident-discovery/benchmark-discovery-20260622T011400Z.json", "ticket": "EMBER-POST-RESIDENT-BENCHMARK-DISCOVERY", "ts": "20260622T011400Z"}
+{"path": "receipts/ember-post-resident-discovery/benchmark-discovery-20260622T150000Z.json", "ticket": "EMBER-POST-RESIDENT-BENCHMARK-DISCOVERY", "ts": "20260622T150000Z"}
+{"path": "receipts/ember-post-resident-discovery/benchmark-discovery-20260622T153000Z.json", "ticket": "EMBER-POST-RESIDENT-BENCHMARK-DISCOVERY", "ts": "20260622T153000Z"}
+{"claim_fields": {"field_level_claim_proven": "false"}, "path": "receipts/ember-post-resident-discovery/connected-cycle-field-level-audit-20260622T212500Z.json", "ticket": "EMBER-CONNECTED-CYCLE-FIELD-LEVEL-AUDIT", "ts": "20260622T211456Z", "verdict": "CONNECTED_CYCLE_FIELD_LEVEL_AUDIT_BLOCKED"}
+{"claim_fields": {"field_level_claim_proven": "false"}, "path": "receipts/ember-post-resident-discovery/connected-cycle-field-level-audit-20260622T221500Z.json", "ticket": "EMBER-CONNECTED-CYCLE-FIELD-LEVEL-AUDIT", "ts": "20260622T214735Z", "verdict": "CONNECTED_CYCLE_FIELD_LEVEL_AUDIT_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/d3-broader-multifamily-admission-20260621T074940Z.json", "ticket": "EMBER-D3-BROADER-MULTIFAMILY-ADMISSION", "ts": "20260621T145527Z", "verdict": "D3_BROADER_MULTIFAMILY_ADMITTED"}
+{"path": "receipts/ember-post-resident-discovery/d3-broader-multifamily-admission-20260622T013000Z.json", "ticket": "EMBER-D3-BROADER-MULTIFAMILY-ADMISSION", "ts": "20260622T012614Z", "verdict": "D3_BROADER_MULTIFAMILY_ADMITTED"}
+{"path": "receipts/ember-post-resident-discovery/field-level-breakthrough-evaluation-20260622T193500Z.json", "ticket": "EMBER-FIELD-LEVEL-BREAKTHROUGH-EVALUATION", "ts": "20260622T193500Z", "verdict": "FIELD_LEVEL_BREAKTHROUGH_NOT_PROVEN_STRONGER_TRANSFER_REQUIRED"}
+{"path": "receipts/ember-post-resident-discovery/field-level-breakthrough-evaluation-20260622T211500Z.json", "ticket": "EMBER-FIELD-LEVEL-BREAKTHROUGH-EVALUATION", "ts": "20260622T211500Z", "verdict": "FIELD_LEVEL_BREAKTHROUGH_NOT_PROVEN_CONNECTED_CYCLE_AUDIT_REQUIRED"}
+{"claim_fields": {"candidate_claim": "{\"candidate_name\":\"zero-cost native-operator external-transfer link with connected-cycle audit\",\"external_disjoint_vali…", "field_level_claim_proven": "false"}, "path": "receipts/ember-post-resident-discovery/field-level-contribution-proof-20260622T222500Z.json", "ticket": "EMBER-FIELD-LEVEL-CONTRIBUTION-PROOF", "ts": "20260622T215728Z", "verdict": "FIELD_LEVEL_CONTRIBUTION_PROOF_BLOCKED"}
+{"claim_fields": {"candidate_claim": "{\"candidate_name\":\"zero-cost native-operator external-transfer link with connected-cycle audit\",\"external_disjoint_vali…", "field_level_claim_proven": "false"}, "path": "receipts/ember-post-resident-discovery/field-level-contribution-proof-20260622T223500Z.json", "ticket": "EMBER-FIELD-LEVEL-CONTRIBUTION-PROOF", "ts": "20260622T221223Z", "verdict": "FIELD_LEVEL_CONTRIBUTION_PROOF_BLOCKED"}
+{"claim_fields": {"field_level_claim_proven": "false"}, "path": "receipts/ember-post-resident-discovery/field-level-contribution-protocol-20260622T223500Z/deleted-method-connected-audit.json", "ticket": "EMBER-CONNECTED-CYCLE-FIELD-LEVEL-AUDIT", "ts": "20260622T211456Z", "verdict": "CONNECTED_CYCLE_FIELD_LEVEL_AUDIT_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/field-level-contribution-protocol-20260622T223500Z/deleted-method-native-link-receipt.json", "ticket": "EMBER-NATIVE-OPERATOR-EXTERNAL-TRANSFER-LINK", "ts": "20260622T221223Z", "verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/field-level-contribution-protocol-20260622T223500Z/deleted-method-native-link/d3-generalized-candidate-receipt.json", "ticket": "EMBER-D3-GENERALIZED-CANDIDATE-EXEC", "ts": "20260622T221223Z", "verdict": "D3_MULTI_TASK_GENERALIZATION_PASS"}
+{"path": "receipts/ember-post-resident-discovery/native-operator-external-transfer-link-20260622T221000Z.json", "ticket": "EMBER-NATIVE-OPERATOR-EXTERNAL-TRANSFER-LINK", "ts": "20260622T214655Z", "verdict": "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_PASS"}
+{"path": "receipts/ember-post-resident-discovery/paperbench-admission-20260621T143837Z.json", "ticket": "EMBER-PAPERBENCH-ADMISSION", "ts": "20260621T143837Z", "verdict": "PAPERBENCH_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/paperbench-admission-20260622T012800Z.json", "ticket": "EMBER-PAPERBENCH-ADMISSION", "ts": "20260622T012545Z", "verdict": "PAPERBENCH_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/paperbench-admission-20260622T114144Z.json", "ticket": "EMBER-PAPERBENCH-ADMISSION", "ts": "20260622T114157Z", "verdict": "PAPERBENCH_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/past-ember-technique-mining-20260620T230519Z.json", "ticket": "EMBER-POST-RESIDENT-PAST-TECHNIQUE-MINING", "ts": "20260620T230519Z"}
+{"path": "receipts/ember-post-resident-discovery/past-ember-technique-mining-20260621T070500Z.json", "ticket": "EMBER-POST-RESIDENT-PAST-TECHNIQUE-MINING", "ts": "20260621T070500Z"}
+{"path": "receipts/ember-post-resident-discovery/past-ember-technique-mining-20260622T011400Z.json", "ticket": "EMBER-POST-RESIDENT-PAST-TECHNIQUE-MINING", "ts": "20260622T011400Z"}
+{"path": "receipts/ember-post-resident-discovery/past-ember-technique-mining-20260622T150000Z.json", "ticket": "EMBER-POST-RESIDENT-PAST-TECHNIQUE-MINING", "ts": "20260622T150000Z"}
+{"path": "receipts/ember-post-resident-discovery/past-ember-technique-mining-20260622T153000Z.json", "ticket": "EMBER-POST-RESIDENT-PAST-TECHNIQUE-MINING", "ts": "20260622T153000Z"}
+{"path": "receipts/ember-post-resident-discovery/rebench-admission-20260621T142543Z.json", "ticket": "EMBER-REBENCH-ADMISSION", "ts": "20260621T142543Z", "verdict": "REBENCH_ADMITTED"}
+{"path": "receipts/ember-post-resident-discovery/rebench-admission-20260622T012500Z.json", "ticket": "EMBER-REBENCH-ADMISSION", "ts": "20260622T012425Z", "verdict": "REBENCH_ADMITTED"}
+{"path": "receipts/ember-post-resident-discovery/rebench-first-loop-20260621T143408Z.json", "ticket": "EMBER-REBENCH-FIRST-LOOP", "ts": "20260621T143408Z", "verdict": "REBENCH_FIRST_LOOP_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/rebench-first-loop-20260622T012500Z.json", "ticket": "EMBER-REBENCH-FIRST-LOOP", "ts": "20260622T012500Z", "verdict": "REBENCH_FIRST_LOOP_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-admission-20260621T135309Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ADMISSION", "ts": "20260621T135313Z", "verdict": "SCIENCEAGENTBENCH_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-admission-20260622T012300Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ADMISSION", "ts": "20260622T012341Z", "verdict": "SCIENCEAGENTBENCH_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-admission-20260622T165317Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ADMISSION", "ts": "20260622T165321Z", "verdict": "SCIENCEAGENTBENCH_ADMITTED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-admission-20260622T192000Z-artifact-not-local.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ADMISSION", "ts": "20260622T160458Z", "verdict": "SCIENCEAGENTBENCH_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-artifact-intake-20260622T163746Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ARTIFACT-INTAKE", "ts": "20260622T165246Z", "verdict": "SCIENCEAGENTBENCH_ARTIFACT_INTAKE_READY"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-artifact-materialization-20260622T161656Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ARTIFACT-MATERIALIZATION", "ts": "20260622T161658Z", "verdict": "SCIENCEAGENTBENCH_ARTIFACT_MATERIALIZATION_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-artifact-materialization-blocked-20260621T141732Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ARTIFACT-MATERIALIZATION", "ts": "20260621T141732Z", "verdict": "SCIENCEAGENTBENCH_ARTIFACT_MATERIALIZATION_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-first-loop-20260622T165905Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-FIRST-LOOP", "ts": "20260622T165905Z", "verdict": "SCIENCEAGENTBENCH_FIRST_LOOP_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-first-loop-20260622T170507Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-FIRST-LOOP", "ts": "20260622T170508Z", "verdict": "SCIENCEAGENTBENCH_FIRST_LOOP_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-first-loop-20260622T172643Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-FIRST-LOOP", "ts": "20260622T172643Z", "verdict": "SCIENCEAGENTBENCH_FIRST_LOOP_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-paid-eval-authorization-20260622T173059Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-PAID-EVAL-AUTHORIZATION", "ts": "20260622T173059Z", "verdict": "SCIENCEAGENTBENCH_PAID_EVAL_AUTHORIZATION_BLOCKED"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-stronger-transfer-loop-20260622T194500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-STRONGER-TRANSFER-LOOP", "ts": "20260622T194945Z", "verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-stronger-transfer-loop-20260622T202500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-STRONGER-TRANSFER-LOOP", "ts": "20260622T202838Z", "verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-stronger-transfer-loop-20260622T204000Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-STRONGER-TRANSFER-LOOP", "ts": "20260622T210758Z", "verdict": "SCIENCEAGENTBENCH_STRONGER_TRANSFER_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-stronger-transfer-slice-20260622T193500Z.json", "ticket": "EMBER-SAB-STRONGER-TRANSFER-SLICE", "ts": "20260622T193500Z", "verdict": "STRONGER_EXTERNAL_TRANSFER_SLICE_FROZEN"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-regrade-loop-20260622T182000Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP", "ts": "20260622T180530Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-regrade-loop-20260622T183000Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP", "ts": "20260622T181009Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-regrade-loop-20260622T185500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP", "ts": "20260622T182220Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-regrade-loop-20260622T190500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP", "ts": "20260622T183633Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-regrade-loop-20260622T191500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP", "ts": "20260622T185040Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-regrade-loop-20260622T192500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP", "ts": "20260622T190503Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_REGRADE_LOOP_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-visual-judgments-20260622T180000Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-VISUAL-JUDGMENTS", "ts": "20260622T180000Z"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-visual-judgments-20260622T185500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-VISUAL-JUDGMENTS", "ts": "20260622T185500Z"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-visual-judgments-20260622T190500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-VISUAL-JUDGMENTS", "ts": "20260622T190500Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_VISUAL_JUDGMENTS_PASS"}
+{"path": "receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-visual-judgments-20260622T191500Z.json", "ticket": "EMBER-SCIENCEAGENTBENCH-ZERO-COST-VISUAL-JUDGMENTS", "ts": "20260622T191500Z", "verdict": "SCIENCEAGENTBENCH_ZERO_COST_VISUAL_JUDGMENTS_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_backend_coordinator_agents_receipt"}, "path": "receipts/ember-preloop-resident-gate/backend-coordinator-agents-20260621T224002Z.json", "ticket": "EMBER-reference-CLI-BACKEND-COORDINATOR-AGENTS-GATE", "ts": "20260621T224002Z", "verdict": "BACKEND_COORDINATOR_AGENTS_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "reference_cli_goal_mode_parity_adapter"}, "path": "receipts/ember-preloop-resident-gate/cleanroom-inventory-20260621T153049Z.json", "ticket": "EMBER-reference-CLI-CLEANROOM-INVENTORY", "ts": "20260621T153056Z", "verdict": "reference_CLI_CLEANROOM_INVENTORY_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_cleanroom_legal_boundary_receipt"}, "path": "receipts/ember-preloop-resident-gate/cleanroom-legal-boundary-20260622T003000Z.json", "ticket": "EMBER-reference-CLI-CLEANROOM-LEGAL-BOUNDARY-GATE", "ts": "20260622T010312Z", "verdict": "CLEANROOM_LEGAL_BOUNDARY_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_communication_mailbox_computer_use_receipt"}, "path": "receipts/ember-preloop-resident-gate/communication-mailbox-computer-use-20260622T002000Z.json", "ticket": "EMBER-reference-CLI-COMMUNICATION-MAILBOX-COMPUTER-USE-GATE", "ts": "20260622T005359Z", "verdict": "COMMUNICATION_MAILBOX_COMPUTER_USE_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "reference_cli_full_parity_harness_gate"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T190451Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T190452Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "function_slash_commands"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T195516Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T195518Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "uiux_repl_components"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T221610Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T221611Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "backend_coordinator_agents"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T222716Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T222717Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "launch_packaging"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T224019Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T224020Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "process_supervision"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T224840Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T224841Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "hook_runner"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T225455Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T225457Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "tool_dispatch_permissions"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T231200Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T231146Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "state_persistence"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T232000Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T231847Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "receipt_store"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T232700Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T232602Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "rollback_rewind"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T000300Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260621T233629Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "communication_mailbox_computer_use"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T001100Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260622T002441Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "communication_mailbox_computer_use"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T001200Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260622T002536Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "cleanroom_legal_boundary"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T002100Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260622T005415Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "rlm_igrpo_train_multimodal_adapter"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T003100Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260622T010332Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "rlm_igrpo_train_multimodal_adapter"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T141500Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260622T144353Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rlm_igrpo_train_multimodal_adapter"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T152000Z-final.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260622T152345Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "real_reference_uiux_ax_observation"}, "path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T154500Z-blocked.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE", "ts": "20260622T145908Z", "verdict": "reference_CLI_FULL_PARITY_HARNESS_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_function_slash_commands_receipt"}, "path": "receipts/ember-preloop-resident-gate/function-slash-commands-20260621T221454Z.json", "ticket": "EMBER-reference-CLI-FUNCTION-SLASH-COMMANDS-GATE", "ts": "20260621T221454Z", "verdict": "FUNCTION_SLASH_COMMANDS_GATE_PASS"}
+{"claim_fields": {"gate_allows_next_precondition": "true", "next_missing_precondition": "reference_cli_full_parity_harness_gate"}, "path": "receipts/ember-preloop-resident-gate/goal-mode-parity-adapter-20260621T155157Z.json", "ticket": "EMBER-reference-CLI-GOAL-MODE-PARITY-ADAPTER", "ts": "20260621T155157Z", "verdict": "reference_CLI_GOAL_MODE_PARITY_ADAPTER_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_hook_runner_receipt"}, "path": "receipts/ember-preloop-resident-gate/hook-runner-20260621T230655Z.json", "ticket": "EMBER-reference-CLI-HOOK-RUNNER-GATE", "ts": "20260621T230655Z", "verdict": "HOOK_RUNNER_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_launch_packaging_receipt"}, "path": "receipts/ember-preloop-resident-gate/launch-packaging-20260621T224825Z.json", "ticket": "EMBER-reference-CLI-LAUNCH-PACKAGING-GATE", "ts": "20260621T224826Z", "verdict": "LAUNCH_PACKAGING_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_native_goal_organ_receipt"}, "path": "receipts/ember-preloop-resident-gate/native-goal-organ-20260621T195504Z.json", "ticket": "EMBER-NATIVE-GOAL-ORGAN", "ts": "20260621T195504Z", "verdict": "NATIVE_GOAL_ORGAN_PASS"}
+{"claim_fields": {"next_missing_precondition": "clean_room_reference_cli_resident_harness", "preconditions": "{\"clean_room_reference_cli\":{\"blockers\":[\"reference_ps1_surface_missing_or_command_points_to_missing_script\",\"clean_roo…"}, "path": "receipts/ember-preloop-resident-gate/preloop-resident-gate-20260621T152149Z.json", "ticket": "EMBER-PRELOOP-RESIDENT-GATE", "ts": "20260621T152150Z", "verdict": "PRELOOP_RESIDENT_GATE_BLOCKED"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_process_supervision_receipt"}, "path": "receipts/ember-preloop-resident-gate/process-supervision-20260621T225437Z.json", "ticket": "EMBER-reference-CLI-PROCESS-SUPERVISION-GATE", "ts": "20260621T225437Z", "verdict": "PROCESS_SUPERVISION_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_receipt_store_receipt"}, "path": "receipts/ember-preloop-resident-gate/receipt-store-20260622T000100Z.json", "ticket": "EMBER-reference-CLI-RECEIPT-STORE-GATE", "ts": "20260621T233501Z", "verdict": "RECEIPT_STORE_GATE_PASS"}
+{"path": "receipts/ember-preloop-resident-gate/reference-uiux-ax-observation-20260622T151722Z-meta.json", "ticket": "EMBER-REAL-reference-UIUX-AX-OBSERVATION"}
+{"claim_fields": {"pass_condition": "The full-parity harness may consume this receipt only as real-reference UI/UX/AX observation evidence. It does not sati…"}, "path": "receipts/ember-preloop-resident-gate/reference-uiux-ax-observation-20260622T151722Z.json", "ticket": "EMBER-REAL-reference-UIUX-AX-OBSERVATION", "ts": "20260622T151955Z", "verdict": "REAL_reference_UIUX_AX_OBSERVATION_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_rollback_rewind_receipt"}, "path": "receipts/ember-preloop-resident-gate/rollback-rewind-20260622T001000Z.json", "ticket": "EMBER-reference-CLI-ROLLBACK-REWIND-GATE", "ts": "20260622T002426Z", "verdict": "ROLLBACK_REWIND_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_state_persistence_receipt"}, "path": "receipts/ember-preloop-resident-gate/state-persistence-20260621T232600Z.json", "ticket": "EMBER-reference-CLI-STATE-PERSISTENCE-GATE", "ts": "20260621T232426Z", "verdict": "STATE_PERSISTENCE_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_tool_dispatch_permissions_receipt"}, "path": "receipts/ember-preloop-resident-gate/tool-dispatch-permissions-20260621T231900Z.json", "ticket": "EMBER-reference-CLI-TOOL-DISPATCH-PERMISSIONS-GATE", "ts": "20260621T231712Z", "verdict": "TOOL_DISPATCH_PERMISSIONS_GATE_PASS"}
+{"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_uiux_repl_components_receipt"}, "path": "receipts/ember-preloop-resident-gate/uiux-repl-components-20260621T222342Z.json", "ticket": "EMBER-reference-CLI-UIUX-REPL-COMPONENTS-GATE", "ts": "20260621T222342Z", "verdict": "UIUX_REPL_COMPONENTS_GATE_PASS"}
+{"path": "receipts/ember-resident-training-adapter/20260622T011305Z/neural_policy_update_trace.json", "ticket": "EMBER-TRAIN-MULTIMODAL-RESIDENT-ADAPTER-TRACE", "ts": "20260622T011310Z", "verdict": "POLICY_UPDATE_TRACE_READY"}
+{"claim_fields": {"verifier_conditioned_training_command": "python scripts\\ember_train_multimodal_resident_adapter.py --out-dir <out> # imports scripts/train_multimodal_v0.py, cal…", "verifier_conditioned_update_present": "true"}, "path": "receipts/ember-resident-training-adapter/20260622T011305Z/resident_training_candidate_manifest.json", "ticket": "EMBER-TRAIN-MULTIMODAL-RESIDENT-ADAPTER-CANDIDATE", "ts": "20260622T011310Z"}
+{"path": "receipts/ember-resident-training-adapter/20260622T011305Z/train_multimodal_resident_adapter_receipt.json", "ticket": "EMBER-TRAIN-MULTIMODAL-RESIDENT-ADAPTER", "ts": "20260622T011310Z", "verdict": "RESIDENT_TRAINING_CANDIDATE_PASS"}
+{"path": "receipts/ember-resident-training-candidate/candidate-20260620T202624Z/policy_update_trace.json", "ticket": "EMBER-RESIDENT-TRAINING-CANDIDATE-TRACE", "ts": "20260620T202624Z", "verdict": "POLICY_UPDATE_TRACE_READY"}
+{"claim_fields": {"verifier_conditioned_update_present": "true"}, "path": "receipts/ember-resident-training-candidate/candidate-20260620T202624Z/resident_training_candidate_manifest.json", "ticket": "EMBER-RESIDENT-TRAINING-CANDIDATE", "ts": "20260620T202624Z"}
+{"path": "receipts/ember-resident-training-candidate/candidate-20260620T202624Z/resident_training_candidate_receipt.json", "ticket": "EMBER-RESIDENT-TRAINING-CANDIDATE-RECEIPT", "ts": "20260620T202624Z", "verdict": "RESIDENT_TRAINING_CANDIDATE_PASS"}
+{"claim_fields": {"resident_claims_clean_room_action_channel": "true"}, "path": "receipts/ember-resident-training-gate/resident-gate-conflation-audit-20260622T133000Z.json", "ticket": "EMBER-RESIDENT-GATE-CONFLATION-AUDIT", "ts": "20260622T141354Z", "verdict": "RESIDENT_GATE_CONFLATION_GUARD_BLOCKED"}
+{"path": "receipts/ember-resident-training-gate/resident-training-gate-20260620T181234Z.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260620T181235Z", "verdict": "RESIDENT_TRAINING_GATE_BLOCKED"}
+{"path": "receipts/ember-resident-training-gate/resident-training-gate-20260620T202644Z.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260620T202644Z", "verdict": "RESIDENT_TRAINING_GATE_PASS"}
+{"path": "receipts/ember-resident-training-gate/resident-training-gate-20260622T011305Z.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260622T011319Z", "verdict": "RESIDENT_TRAINING_GATE_PASS"}
+{"path": "receipts/ember-resident-training-gate/resident-training-gate-20260622T145000Z-full-parity-reconciled.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260622T144730Z", "verdict": "RESIDENT_TRAINING_GATE_PASS"}
+{"path": "receipts/ember-resident-training-gate/resident-training-gate-20260622T152500Z-final.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260622T152404Z", "verdict": "RESIDENT_TRAINING_GATE_PASS"}
+{"path": "receipts/ember-resident-training-gate/resident-training-gate-20260622T155000Z-blocked.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260622T150327Z", "verdict": "RESIDENT_TRAINING_GATE_BLOCKED"}
+{"path": "receipts/ember-sovereign-retrieval/design-spec-20260624T142553Z.json", "ticket": "ember-sovereign-retrieval-probe DESIGN", "ts": "20260624T142553Z", "verdict": "CONDITIONAL. Replaceable by sub-linear-in-t content retrieval ONLY IF four conditions jointly hold UNDER MEASUREMENT (not assumption): (C1) live per-step cost INCLUDING index insertion fits log-log s…"}
+{"claim_fields": {"verifier_conditioned_training_command": "python scripts\\ember_tiny_bitnet_comparison.py --out-dir <out>"}, "path": "receipts/ember-tiny-bitnet-comparison/20260622T011334Z-tiny-bitnet-comparison/tiny_bitnet_comparison_receipt.json", "ticket": "EMBER-TINY-BITNET-COMPARISON", "ts": "20260622T011338Z", "verdict": "BITNET_COMPARISON_PASS"}
+{"claim_fields": {"verifier_conditioned_training_command": "python scripts\\ember_tiny_bitnet_comparison.py --out-dir <out>"}, "path": "receipts/ember-tiny-bitnet-comparison/20260622T145500Z-full-parity-reconciled/tiny_bitnet_comparison_receipt.json", "ticket": "EMBER-TINY-BITNET-COMPARISON", "ts": "20260622T144836Z", "verdict": "BITNET_COMPARISON_PASS"}
+{"claim_fields": {"verifier_conditioned_training_command": "python scripts\\ember_tiny_bitnet_comparison.py --out-dir <out>"}, "path": "receipts/ember-tiny-bitnet-comparison/20260622T152800Z-final/tiny_bitnet_comparison_receipt.json", "ticket": "EMBER-TINY-BITNET-COMPARISON", "ts": "20260622T152425Z", "verdict": "BITNET_COMPARISON_PASS"}
+{"path": "receipts/ember437-er2c-20260616T064826Z.json", "ticket": "EMBER-437-ER-2C-PACKED-TOKPS", "ts": "20260616T064826Z"}
+{"path": "receipts/ember437-er2d-20260616T072423Z.json", "ticket": "EMBER-437-ER-2D-MATCHED-PACKED-TOKPS", "ts": "20260616T072423Z"}
+{"path": "receipts/ember437-er3-scope-20260616T074500Z.json", "ticket": "EMBER-437-ER-3-CORPUS-SCOPE", "ts": "20260616T074500Z"}
+{"path": "receipts/ember437-er3b-20260616T080032Z.json", "ticket": "EMBER-437-ER-3B-STREAMING-PATH", "ts": "20260616T080032Z"}
+{"path": "receipts/ember437-er4-20260616T082443Z.json", "ticket": "EMBER-437-ER-4-FLOOR-PROBE-HARNESS", "ts": "20260616T082443Z"}
+{"path": "receipts/ember437-smoke-20260616T054929Z.json", "ticket": "EMBER-437-EARN-THE-RUN-SMOKE", "ts": "20260616T054929Z"}
+{"path": "receipts/ember437-smoke-20260616T062142Z.json", "ticket": "EMBER-437-EARN-THE-RUN-SMOKE", "ts": "20260616T062142Z"}
+{"path": "receipts/eng-sync-20260610T193356Z.json", "ticket": "ENG-SYNC", "ts": "20260610T193356Z"}
+{"path": "receipts/eng-sync-20260610T193413Z.json", "ticket": "ENG-SYNC", "ts": "20260610T193413Z"}
+{"path": "receipts/eng-sync-20260610T193416Z.json", "ticket": "ENG-SYNC", "ts": "20260610T193416Z"}
+{"path": "receipts/eng-sync-20260610T194423Z.json", "ticket": "ENG-SYNC", "ts": "20260610T194423Z"}
+{"path": "receipts/eng-sync-20260610T194712Z.json", "ticket": "ENG-SYNC", "ts": "20260610T194712Z"}
+{"path": "receipts/eng-sync-20260610T210003Z.json", "ticket": "ENG-SYNC", "ts": "20260610T210003Z"}
+{"path": "receipts/eng-sync-20260610T210134Z.json", "ticket": "ENG-SYNC", "ts": "20260610T210134Z"}
+{"path": "receipts/eng-sync-20260610T212046Z.json", "ticket": "ENG-SYNC", "ts": "20260610T212046Z"}
+{"path": "receipts/eng-sync-20260610T212933Z.json", "ticket": "ENG-SYNC", "ts": "20260610T212933Z"}
+{"path": "receipts/eng-sync-20260610T215220Z.json", "ticket": "ENG-SYNC", "ts": "20260610T215220Z"}
+{"path": "receipts/eng-sync-20260610T220940Z.json", "ticket": "ENG-SYNC", "ts": "20260610T220940Z"}
+{"path": "receipts/eng-sync-20260610T222915Z.json", "ticket": "ENG-SYNC", "ts": "20260610T222915Z"}
+{"path": "receipts/eng-sync-20260610T224418Z.json", "ticket": "ENG-SYNC", "ts": "20260610T224418Z"}
+{"path": "receipts/eng-sync-20260610T234015Z.json", "ticket": "ENG-SYNC", "ts": "20260610T234015Z"}
+{"path": "receipts/eng-sync-20260611T003629Z.json", "ticket": "ENG-SYNC", "ts": "20260611T003629Z"}
+{"path": "receipts/eng-sync-20260611T023414Z.json", "ticket": "ENG-SYNC", "ts": "20260611T023414Z"}
+{"path": "receipts/eng-sync-20260611T024343Z.json", "ticket": "ENG-SYNC", "ts": "20260611T024343Z"}
+{"path": "receipts/eng-sync-20260611T024828Z.json", "ticket": "ENG-SYNC", "ts": "20260611T024828Z"}
+{"path": "receipts/eng-sync-20260611T025920Z.json", "ticket": "ENG-SYNC", "ts": "20260611T025920Z"}
+{"path": "receipts/eng-sync-20260611T040104Z.json", "ticket": "ENG-SYNC", "ts": "20260611T040104Z"}
+{"path": "receipts/eng-sync-20260611T053127Z.json", "ticket": "ENG-SYNC", "ts": "20260611T053127Z"}
+{"path": "receipts/eng-sync-20260611T055716Z.json", "ticket": "ENG-SYNC", "ts": "20260611T055716Z"}
+{"path": "receipts/eng-sync-20260611T072949Z.json", "ticket": "ENG-SYNC", "ts": "20260611T072949Z"}
+{"path": "receipts/eng-sync-20260611T075435Z.json", "ticket": "ENG-SYNC", "ts": "20260611T075435Z"}
+{"path": "receipts/eng-sync-20260611T123624Z.json", "ticket": "ENG-SYNC", "ts": "20260611T123624Z"}
+{"path": "receipts/eng-sync-20260611T131458Z.json", "ticket": "ENG-SYNC", "ts": "20260611T131458Z"}
+{"path": "receipts/eng-sync-20260611T133243Z.json", "ticket": "ENG-SYNC", "ts": "20260611T133243Z"}
+{"path": "receipts/eng-sync-20260611T133915Z.json", "ticket": "ENG-SYNC", "ts": "20260611T133915Z"}
+{"path": "receipts/eng-sync-20260611T140819Z.json", "ticket": "ENG-SYNC", "ts": "20260611T140819Z"}
+{"path": "receipts/eng-sync-20260611T144015Z.json", "ticket": "ENG-SYNC", "ts": "20260611T144015Z"}
+{"path": "receipts/eng-sync-20260611T152102Z.json", "ticket": "ENG-SYNC", "ts": "20260611T152102Z"}
+{"path": "receipts/eng-sync-20260611T153511Z.json", "ticket": "ENG-SYNC", "ts": "20260611T153511Z"}
+{"path": "receipts/eng-sync-20260611T160832Z.json", "ticket": "ENG-SYNC", "ts": "20260611T160832Z"}
+{"path": "receipts/eng-sync-20260611T162254Z.json", "ticket": "ENG-SYNC", "ts": "20260611T162254Z"}
+{"path": "receipts/eng-sync-20260611T164209Z.json", "ticket": "ENG-SYNC", "ts": "20260611T164209Z"}
+{"path": "receipts/eng-sync-20260612T022216Z.json", "ticket": "ENG-SYNC", "ts": "20260612T022216Z"}
+{"path": "receipts/eng-sync-20260612T022644Z.json", "ticket": "ENG-SYNC", "ts": "20260612T022644Z"}
+{"path": "receipts/eng-sync-20260612T033921Z.json", "ticket": "ENG-SYNC", "ts": "20260612T033921Z"}
+{"path": "receipts/eng-sync-20260612T043721Z.json", "ticket": "ENG-SYNC", "ts": "20260612T043721Z"}
+{"path": "receipts/eng-sync-20260612T053346Z.json", "ticket": "ENG-SYNC", "ts": "20260612T053346Z"}
+{"path": "receipts/eng-sync-20260612T073007Z.json", "ticket": "ENG-SYNC", "ts": "20260612T073007Z"}
+{"path": "receipts/eng-sync-20260612T082556Z.json", "ticket": "ENG-SYNC", "ts": "20260612T082556Z"}
+{"path": "receipts/eng-sync-20260612T085258Z.json", "ticket": "ENG-SYNC", "ts": "20260612T085258Z"}
+{"path": "receipts/eng-sync-20260612T094032Z.json", "ticket": "ENG-SYNC", "ts": "20260612T094032Z"}
+{"path": "receipts/eng-sync-20260612T100816Z.json", "ticket": "ENG-SYNC", "ts": "20260612T100816Z"}
+{"path": "receipts/eng-sync-20260612T132149Z.json", "ticket": "ENG-SYNC", "ts": "20260612T132149Z"}
+{"path": "receipts/eng-sync-20260612T173714Z.json", "ticket": "ENG-SYNC", "ts": "20260612T173714Z"}
+{"path": "receipts/eng-sync-20260612T180818Z.json", "ticket": "ENG-SYNC", "ts": "20260612T180818Z"}
+{"path": "receipts/eng-sync-20260612T192002Z.json", "ticket": "ENG-SYNC", "ts": "20260612T192002Z"}
+{"path": "receipts/eng-sync-20260612T192318Z.json", "ticket": "ENG-SYNC", "ts": "20260612T192318Z"}
+{"path": "receipts/eng-sync-20260612T194705Z.json", "ticket": "ENG-SYNC", "ts": "20260612T194705Z"}
+{"path": "receipts/eng-sync-20260612T201425Z.json", "ticket": "ENG-SYNC", "ts": "20260612T201425Z"}
+{"path": "receipts/eng-sync-20260612T204420Z.json", "ticket": "ENG-SYNC", "ts": "20260612T204420Z"}
+{"path": "receipts/eng-sync-20260612T204846Z.json", "ticket": "ENG-SYNC", "ts": "20260612T204846Z"}
+{"path": "receipts/eng-sync-20260612T205303Z.json", "ticket": "ENG-SYNC", "ts": "20260612T205303Z"}
+{"path": "receipts/eng-sync-20260612T212030Z.json", "ticket": "ENG-SYNC", "ts": "20260612T212030Z"}
+{"path": "receipts/eng-sync-20260612T214416Z.json", "ticket": "ENG-SYNC", "ts": "20260612T214416Z"}
+{"path": "receipts/eng-sync-20260612T214658Z.json", "ticket": "ENG-SYNC", "ts": "20260612T214658Z"}
+{"path": "receipts/eng-sync-20260612T222007Z.json", "ticket": "ENG-SYNC", "ts": "20260612T222007Z"}
+{"path": "receipts/eng-sync-20260612T224610Z.json", "ticket": "ENG-SYNC", "ts": "20260612T224610Z"}
+{"path": "receipts/eng-sync-20260612T231451Z.json", "ticket": "ENG-SYNC", "ts": "20260612T231451Z"}
+{"path": "receipts/eng-sync-20260613T001455Z.json", "ticket": "ENG-SYNC", "ts": "20260613T001455Z"}
+{"path": "receipts/eng-sync-20260613T011440Z.json", "ticket": "ENG-SYNC", "ts": "20260613T011440Z"}
+{"path": "receipts/eng-sync-20260613T022049Z.json", "ticket": "ENG-SYNC", "ts": "20260613T022049Z"}
+{"path": "receipts/eng-sync-20260613T024836Z.json", "ticket": "ENG-SYNC", "ts": "20260613T024836Z"}
+{"path": "receipts/eng-sync-20260613T043835Z.json", "ticket": "ENG-SYNC", "ts": "20260613T043835Z"}
+{"path": "receipts/eng-sync-20260613T044235Z.json", "ticket": "ENG-SYNC", "ts": "20260613T044235Z"}
+{"issue": "wordingone/ember#105 (eng-29)", "path": "receipts/eng105-verify-20260611T023239Z.json"}
+{"issue": "107", "pass": true, "path": "receipts/eng107-head-coverage-20260611T033645Z.json", "ticket": "ENG107-HEAD-COVERAGE", "ts": "20260611T033645Z", "verdict": "HEAD_COVERAGE_COMPLETE"}
+{"issue": "107", "path": "receipts/eng107-head-coverage-20260611T041136Z.json", "ticket": "ENG107-HEAD-COVERAGE", "ts": "20260611T041136Z"}
+{"path": "receipts/eng107-legacy-sweep-20260611T031146Z.json", "ticket": "ENG-107", "ts": "20260611T031146Z"}
+{"issue": "114", "path": "receipts/eng114-selftest-20260611T025444Z.json", "ticket": "ENG114-SELFTEST", "ts": "20260611T025444Z", "verdict": "PASS"}
+{"issue": "wordingone/ember#123", "pass": true, "path": "receipts/eng123-timeshare-dryrun-20260611T030441Z.json", "ticket": "ENG123-TIMESHARE-DRYRUN", "ts": "20260611T030441Z", "verdict": "DRYRUN_COMPLETE"}
+{"issue": "wordingone/ember#123", "pass": true, "path": "receipts/eng123-timeshare-dryrun-20260611T032029Z.json", "ticket": "ENG123-TIMESHARE-DRYRUN", "ts": "20260611T032029Z", "verdict": "DRYRUN_COMPLETE"}
+{"issue": "wordingone/ember#123", "pass": true, "path": "receipts/eng123-timeshare-dryrun-20260611T033538Z.json", "ticket": "ENG123-TIMESHARE-DRYRUN", "ts": "20260611T033538Z", "verdict": "DRYRUN_COMPLETE"}
+{"issue": "127", "path": "receipts/eng127-ac-summary-20260611T034526Z.json", "ticket": "ENG127-AC-SUMMARY", "ts": "20260611T034526Z"}
+{"path": "receipts/eng127-license-sidecar-backfill-20260611T034141Z.json", "ticket": "ENG127-LICENSE-SIDECAR-BACKFILL", "ts": "20260611T034141Z"}
+{"issue": "wordingone/ember#129", "path": "receipts/eng129-w1-pacing-selftest-20260611T034032Z.json", "ticket": "ENG129-W1-PACING-SELFTEST", "ts": "20260611T034032Z"}
+{"issue": "wordingone/ember#129", "path": "receipts/eng129-w1-pacing-selftest-20260628T174141Z.json", "ticket": "ENG129-W1-PACING-SELFTEST", "ts": "20260628T174141Z"}
+{"issue": "wordingone/ember#129", "path": "receipts/eng129-w1-pacing-selftest-20260628T175123Z.json", "ticket": "ENG129-W1-PACING-SELFTEST", "ts": "20260628T175123Z"}
+{"issue": "wordingone/ember#140", "path": "receipts/eng140-viewpath-selftest-20260611T035650Z.json", "ticket": "ENG140-VIEWPATH-SELFTEST", "ts": "20260611T035650Z"}
+{"issue": "wordingone/ember#140", "path": "receipts/eng140-viewpath-selftest-20260611T043331Z.json", "ticket": "ENG140-VIEWPATH-SELFTEST", "ts": "20260611T043331Z"}
+{"issue": "wordingone/ember#140", "path": "receipts/eng140-viewpath-selftest-20260628T174141Z.json", "ticket": "ENG140-VIEWPATH-SELFTEST", "ts": "20260628T174141Z"}
+{"issue": "wordingone/ember#140", "path": "receipts/eng140-viewpath-selftest-20260628T175123Z.json", "ticket": "ENG140-VIEWPATH-SELFTEST", "ts": "20260628T175123Z"}
+{"issue": "wordingone/ember#142", "path": "receipts/eng142-tasklist-selftest-20260611T040136Z.json", "ticket": "ENG142-TASKLIST-SELFTEST", "ts": "20260611T040136Z"}
+{"issue": "wordingone/ember#142", "path": "receipts/eng142-tasklist-selftest-20260611T041515Z.json", "ticket": "ENG142-TASKLIST-SELFTEST", "ts": "20260611T041515Z"}
+{"issue": "wordingone/ember#142", "path": "receipts/eng142-tasklist-selftest-20260628T174141Z.json", "ticket": "ENG142-TASKLIST-SELFTEST", "ts": "20260628T174141Z"}
+{"issue": "wordingone/ember#142", "path": "receipts/eng142-tasklist-selftest-20260628T175123Z.json", "ticket": "ENG142-TASKLIST-SELFTEST", "ts": "20260628T175123Z"}
+{"path": "receipts/eng20-license-view-20260611T002458Z.json", "ticket": "ENG20-LICENSE-VIEW", "ts": "20260611T002458Z"}
+{"path": "receipts/eng20-license-view-20260611T004457Z.json", "ticket": "ENG20-LICENSE-VIEW", "ts": "20260611T004457Z"}
+{"path": "receipts/eng21-smoke-20260611T003811Z.json", "ticket": "ENG21-SMOKE", "ts": "20260611T003811Z"}
+{"path": "receipts/eng21-smoke-20260611T011921Z.json", "ticket": "ENG21-SMOKE", "ts": "20260611T011921Z"}
+{"path": "receipts/eng23-reachguard-probe-20260611T011439Z.json", "ticket": "V-SOUNDNESS-PROBE", "ts": "20260611T011439Z"}
+{"path": "receipts/eng23-zeroflips-20260611T011921Z.json", "ticket": "ENG21-SMOKE", "ts": "20260611T011921Z"}
+{"path": "receipts/eng24-extstrict-20260611T014818Z.json", "ticket": "ENG24-EXTSTRICT", "ts": "20260611T014818Z"}
+{"path": "receipts/eng24-w1strict-20260611T013909Z.json", "ticket": "ENG24-W1STRICT", "ts": "20260611T013909Z"}
+{"path": "receipts/eng24-w1strict-20260611T014609Z.json", "ticket": "ENG24-W1STRICT", "ts": "20260611T014609Z"}
+{"path": "receipts/eng25-dedup-view-20260611T014521Z.json", "ticket": "ENG25-DEDUP-VIEW", "ts": "20260611T014521Z"}
+{"path": "receipts/eng25-dedup-view-20260611T030744Z.json", "ticket": "ENG25-DEDUP-VIEW", "ts": "20260611T030744Z"}
+{"path": "receipts/eng25-dedup-view-20260611T034209Z.json", "ticket": "ENG25-DEDUP-VIEW", "ts": "20260611T034209Z"}
+{"path": "receipts/eng26-cap-20260611T021302Z.json", "ticket": "ENG26-CAP", "ts": "20260611T021302Z"}
+{"path": "receipts/eng26-replay-20260611T021302Z.json", "ticket": "ENG26-REPLAY", "ts": "20260611T021302Z", "verdict": "EXACT_MATCH"}
+{"path": "receipts/eng27-bytestability-20260611T022233Z.json", "ticket": "ENG27-BYTE-STABILITY", "ts": "20260611T022233Z"}
+{"issue": "106", "path": "receipts/eng30-plumbing-20260611T022304Z.json", "ticket": "eng-30", "ts": "20260611T022304Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-acquire-selftest-20260611T044312Z.json", "ticket": "ENG36-ACQUIRE-SELFTEST", "ts": "20260611T044312Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-acquire-selftest-20260611T044523Z.json", "ticket": "ENG36-ACQUIRE-SELFTEST", "ts": "20260611T044523Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-acquire-selftest-20260611T045527Z.json", "ticket": "ENG36-ACQUIRE-SELFTEST", "ts": "20260611T045527Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-acquire-selftest-20260611T050244Z.json", "ticket": "ENG36-ACQUIRE-SELFTEST", "ts": "20260611T050244Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-acquire-selftest-20260611T051046Z.json", "ticket": "ENG36-ACQUIRE-SELFTEST", "ts": "20260611T051046Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-acquire-selftest-20260628T174034Z.json", "ticket": "ENG36-ACQUIRE-SELFTEST", "ts": "20260628T174034Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-acquire-selftest-20260628T175031Z.json", "ticket": "ENG36-ACQUIRE-SELFTEST", "ts": "20260628T175031Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-assembly-20260611T052337Z.json", "ticket": "ENG36-CORPUS-ASSEMBLY", "ts": "20260611T052337Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-code_github_clean-20260611T051128Z.json", "ticket": "ENG36-CORPUS-CODE_GITHUB_CLEAN", "ts": "20260611T051128Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-fineweb_edu-20260611T044410Z.json", "ticket": "ENG36-CORPUS-FINEWEB_EDU", "ts": "20260611T044410Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-fineweb_edu-20260611T044544Z.json", "ticket": "ENG36-CORPUS-FINEWEB_EDU", "ts": "20260611T044544Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-gutenberg_en-20260611T050315Z.json", "ticket": "ENG36-CORPUS-GUTENBERG_EN", "ts": "20260611T050315Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-ledger_mit-20260611T044328Z.json", "ticket": "ENG36-CORPUS-LEDGER_MIT", "ts": "20260611T044328Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-ledger_mit-20260611T044523Z.json", "ticket": "ENG36-CORPUS-LEDGER_MIT", "ts": "20260611T044523Z"}
+{"issue": "wordingone/ember#130", "path": "receipts/eng36-wikipedia_en-20260611T045542Z.json", "ticket": "ENG36-CORPUS-WIKIPEDIA_EN", "ts": "20260611T045542Z"}
+{"path": "receipts/eng368-gpu-lock-selftest-20260613T042553Z.json", "ticket": "eng-368", "ts": "20260613T042553Z"}
+{"claim_fields": {"claim": "corpus_acquire_multimodal.py + corpus_patch_encode.py created; selftest exits 0", "pass_condition": "python corpus_patch_encode.py --selftest exits 0 with SELFTEST_PASS in output"}, "issue": "422", "path": "receipts/eng38-b-multi-1-20260616T025300Z.json", "ticket": "ENG-38", "ts": "2026-06-16T02:53:00Z", "verdict": "PASS"}
+{"issue": "wordingone/ember#150", "path": "receipts/eng40-t2r2w-viewsha-selftest-20260611T051433Z.json", "ticket": "ENG40-T2R2W-VIEWSHA-SELFTEST", "ts": "20260611T051433Z"}
+{"issue": "wordingone/ember#151", "path": "receipts/eng41-w4-control-selftest-20260611T045748Z.json", "ticket": "ENG41-W4-CONTROL-SELFTEST", "ts": "20260611T045748Z"}
+{"issue": "wordingone/ember#151", "path": "receipts/eng41-w4-control-selftest-20260628T174142Z.json", "ticket": "ENG41-W4-CONTROL-SELFTEST", "ts": "20260628T174142Z"}
+{"issue": "wordingone/ember#151", "path": "receipts/eng41-w4-control-selftest-20260628T175123Z.json", "ticket": "ENG41-W4-CONTROL-SELFTEST", "ts": "20260628T175123Z"}
+{"claim_fields": {"claim": "Lock 2 (inputs_embeds splice) + Lock 3 (bidirectional span mask) + VisionEmbedder wired; t1_multimodal_selftest.py exit…", "pass_condition": "T1_MULTIMODAL_SELFTEST_PASS + exit 0, all 15 checks green"}, "issue": "420", "path": "receipts/eng420-multimodal-arch-20260616T023800Z.json", "ticket": "ENG-420", "ts": "2026-06-16T02:38:00Z", "verdict": "PASS"}
+{"claim_fields": {"claim": "v0-multimodal-config.json created with all four lock fields present; AC check passes", "pass_condition": "all 6 AC fields present in multimodal section AND JSON valid"}, "issue": "421", "path": "receipts/eng421-multimodal-config-20260616T020000Z.json", "ticket": "ENG-421", "ts": "2026-06-16T02:00:00Z", "verdict": "PASS"}
+{"issue": "172", "path": "receipts/eng45-backfill-20260611T080814Z.json", "ticket": "ENG45-BACKFILL-SHA-CONVENTION", "ts": "20260611T080814Z"}
+{"issue": "229", "path": "receipts/eng56-eager-pin-20260611T161105Z.json", "ticket": "ENG-56-EAGER-PIN", "ts": "20260611T161105Z"}
+{"path": "receipts/floor_contract_manifest_final_20260705T132713Z.json", "ts": "2026-07-05T13:27:13Z", "verdict": "FLOOR_CONTRACT_MANIFEST_FINAL_ALL_TESTS_PASS"}
+{"path": "receipts/floor_contract_manifest_selftest_20260705T130358Z.json", "ticket": "FLOOR-CONTRACT-MANIFEST-SELFTEST", "ts": "20260705T130358Z", "verdict": "FLOOR_CONTRACT_MANIFEST_SELFTEST_PASS"}
+{"path": "receipts/founder_likeness_selftest_20260705T111347Z.json", "ticket": "FOUNDER_LIKENESS_SELFTEST", "ts": "20260705T111347Z"}
+{"path": "receipts/fp-verdict-chain-rehearsal-20260612T144614Z.json", "ticket": "FP-VERDICT-CHAIN-REHEARSAL", "ts": "20260612T144614Z"}
+{"path": "receipts/fp1-bits-per-min-20260610.json", "ticket": "FP1-BITS-PER-MIN", "ts": "20260610T225300Z"}
+{"path": "receipts/fp10-idiom-20260611T003930Z.json", "ticket": "FP10-IDIOM", "ts": "20260611T003930Z", "verdict": "demoted"}
+{"path": "receipts/fp11-denominator-20260611T005616Z.json", "ticket": "FP11-DENOMINATOR", "ts": "20260611T005616Z", "verdict": "NOT-ROBUST"}
+{"path": "receipts/fp11-denominator-20260611T010052Z.json", "ticket": "FP11-DENOMINATOR", "ts": "20260611T010052Z", "verdict": "NOT-ROBUST"}
+{"path": "receipts/fp12-band-20260611T010835Z.json", "ticket": "FP12-BAND", "ts": "20260611T010835Z", "verdict": "STABLE-conditional"}
+{"path": "receipts/fp12-band-20260611T010941Z.json", "ticket": "FP12-BAND", "ts": "20260611T010941Z", "verdict": "STABLE-conditional"}
+{"path": "receipts/fp13-concentration-20260611T012048Z.json", "ticket": "FP13-CONCENTRATION", "ts": "20260611T012048Z", "verdict": "CONCENTRATED"}
+{"path": "receipts/fp14-pacing-selftest-20260611T023839Z.json", "ticket": "FP14-PACING-SELFTEST", "ts": "20260611T023839Z"}
+{"path": "receipts/fp14-pacing-selftest-20260628T174125Z.json", "ticket": "FP14-PACING-SELFTEST", "ts": "20260628T174125Z"}
+{"path": "receipts/fp14-pacing-selftest-20260628T175120Z.json", "ticket": "FP14-PACING-SELFTEST", "ts": "20260628T175120Z"}
+{"path": "receipts/fp15-bandtransfer-20260611T033030Z.json", "ticket": "FP15-BANDTRANSFER", "ts": "20260611T033030Z"}
+{"claim_fields": {"flipped_claims": "[\"majority class flips under exact_unique: arc-dsl-mit -> qwen-research\",\"majority class flips under ess: arc-dsl-mit -…", "standing_claims_delta": "{\"ledger_total\":{\"ess\":3.1,\"exact_unique\":1736,\"rows\":2865},\"majority_class_under\":{\"ess\":{\"by_class\":{\"arc-dsl-mit\":1.…"}, "path": "receipts/fp16-census-20260611T013228Z.json", "ticket": "FP16-CENSUS", "ts": "20260611T013228Z"}
+{"path": "receipts/fp17-mixweights-20260611T014512Z.json", "ticket": "FP17-MIXWEIGHTS", "ts": "20260611T014512Z"}
+{"path": "receipts/fp18-promptdiv-20260611T021320Z.json", "ticket": "FP18-PROMPTDIV", "ts": "20260611T021320Z", "verdict": "{\"false_accept\":false,\"p1_bar\":0.5,\"p1_trips\":false,\"p1_within_near_dup_frac\":0.0234,\"p2_bar\":2.0,\"p2_trips\":true,\"p2_within_over_between_ratio\":23.4}"}
+{"path": "receipts/fp19-bench-20260611T024648Z.json", "ticket": "FP19-BENCH", "ts": "20260611T024648Z"}
+{"path": "receipts/fp20b-settle-20260611T040647Z.json", "ticket": "FP20B-SETTLE", "ts": "20260611T040647Z"}
+{"issue": "132", "path": "receipts/fp21b-scope-132-20260611T124051Z.json", "ticket": "FP21B-SCOPE-132", "ts": "20260611T124051Z"}
+{"path": "receipts/fp25-indist-20260611T060416Z.json", "ticket": "FP25-INDIST", "ts": "20260611T060416Z"}
+{"path": "receipts/fp25b-select-20260611T062523Z.json", "ticket": "FP25B-SELECT", "ts": "20260611T062523Z"}
+{"path": "receipts/fp25b-surfaceb-20260611T063604Z.json", "ticket": "FP25B-SURFACEB", "ts": "20260611T063604Z"}
+{"path": "receipts/fp26-prereg-20260611T081213Z.json", "ticket": "FP26-ROUND3-PREREG", "ts": "20260611T081213Z"}
+{"issue": "198", "path": "receipts/fp27-prereg-20260611T130743Z.json", "ticket": "FP27-ROUND1-PREREG", "ts": "20260611T130743Z"}
+{"issue": "198", "path": "receipts/fp27-prereg-20260611T155902Z.json", "ticket": "FP27-ROUND1-PREREG", "ts": "20260611T155902Z"}
+{"issue": "198", "path": "receipts/fp27-prereg-20260612T234831Z.json", "ticket": "FP27-ROUND1-PREREG", "ts": "20260612T234831Z"}
+{"issue": "208", "path": "receipts/fp28b-probe-reconciliation-prestage-20260612T150202Z.json", "ticket": "FP28B-PROBE-RECONCILIATION-PRESTAGE", "ts": "20260612T150202Z"}
+{"path": "receipts/fp29-curriculum-dryrun-20260612T143048Z.json", "ticket": "FP29-CURRICULUM-GENERATOR-DRY-RUN", "ts": "20260612T143048Z"}
+{"issue": "200", "path": "receipts/fp29-kill-gate-20260611T125510Z.json", "ticket": "FP29-KILL-SYNTHESIS-GATE", "ts": "20260611T125510Z"}
+{"path": "receipts/fp3-vram-derivation-20260610T230456Z.json", "ticket": "FP3-VRAM-DERIVATION", "ts": "20260610T230456Z"}
+{"issue": "218", "path": "receipts/fp30b-deviation-registration-20260611T155902Z.json", "ticket": "FP30B-DEVIATION-REGISTRATION", "ts": "20260611T155902Z"}
+{"issue": "247", "path": "receipts/fp30d-shard-gate-20260611T231847Z.json", "ticket": "FP30D-SHARD-GATE", "ts": "20260611T231847Z", "verdict": "GREEN"}
+{"issue": "225", "path": "receipts/fp32-baselines-20260611T142515Z.json", "ticket": "FP32-BASELINES", "ts": "20260611T142515Z"}
+{"issue": "225", "path": "receipts/fp32-l6-compile-ab-20260612T215844Z.json", "ticket": "FP32-L6-COMPILE-AB", "ts": "20260612T215844Z", "verdict": "COMPILE_VIABLE"}
+{"issue": "234", "path": "receipts/fp32-r10-taxonomy-20260611T153307Z.json", "ticket": "FP32-R10-TAXONOMY", "ts": "20260611T153307Z"}
+{"issue": "225", "path": "receipts/fp32-step-econ-20260611T142831Z.json", "ticket": "FP32-STEP-ECON", "ts": "20260611T142831Z"}
+{"issue": "225", "path": "receipts/fp32-step-econ-20260612T213856Z.json", "ticket": "FP32-STEP-ECON", "ts": "20260612T213856Z"}
+{"path": "receipts/fp33-e1-open-base-inventory-20260612T033709Z.json", "ticket": "FP33-E1-OPEN-BASE-INVENTORY", "ts": "20260612T033709Z"}
+{"path": "receipts/fp33-e2-full-tune-ceiling-20260612T034610Z.json", "ticket": "FP33-E2-FULL-TUNE-CEILING", "ts": "20260612T034610Z", "verdict": "FITS_BATCH_2"}
+{"path": "receipts/fp33-e3-gemma-e2b-smoke-20260612T042902Z.json", "ticket": "FP33-E3-GEMMA-E2B-SMOKE", "ts": "20260612T042902Z"}
+{"path": "receipts/fp33-e4-profiler-20260612T032739Z.json", "ticket": "FP33-E4-PROFILER", "ts": "20260612T032739Z"}
+{"path": "receipts/fp33-e5-fp8-bench-20260612T033056Z.json", "ticket": "FP33-E5-FP8-BENCH", "ts": "20260612T033056Z", "verdict": "KERNEL_ROUTE"}
+{"issue": "284", "path": "receipts/fp33-fp8-linear-ab-20260612T051338Z.json", "ticket": "FP33-FP8-LINEAR-AB", "ts": "20260612T051338Z", "verdict": "FAIL"}
+{"path": "receipts/fp33-p1-native-fp8-probe-20260612T044036Z.json", "ticket": "FP33-P1-NATIVE-FP8-PROBE", "ts": "20260612T044036Z", "verdict": "PASS"}
+{"pass": false, "path": "receipts/fp35-fused-muon-ab-20260612T213247Z.json", "ticket": "fp35-fused-muon-ab", "ts": "20260612T213247Z", "verdict": "MUON_FUSED_COMPILE_KILL_TRITON_CC"}
+{"issue": "329", "path": "receipts/fp35-fused-muon-kernel-ab-20260612T215202Z.json", "ticket": "MUON_FUSED_AB", "ts": "20260612T215202Z", "verdict": "MUON_FUSED_VIABLE"}
+{"issue": "329", "path": "receipts/fp35-fused-muon-kernel-ab-20260613T055245Z.json", "ticket": "MUON_FUSED_AB", "ts": "20260613T055245Z", "verdict": "MUON_FUSED_VIABLE"}
+{"issue": "329", "path": "receipts/fp35-fused-muon-kernel-ab-20260705T233603Z.json", "ticket": "MUON_FUSED_AB", "ts": "20260705T233603Z", "verdict": "MUON_FUSED_VIABLE"}
+{"claim_fields": {"fallback_condition": "if FAIL: width-conditional row — fp8 wins at K>=4096 (output_proj seed16: 1.94x in #284) but fails at K=1024 (hidden_pr…"}, "issue": "289", "path": "receipts/fp35c-weight-cache-ab-20260612T055343Z.json", "ticket": "FP35C-WEIGHT-CACHE-AB", "ts": "20260612T055343Z", "verdict": "FAIL"}
+{"claim_fields": {"fallback_condition": "if FAIL: width-conditional row — fp8 wins at K>=4096 (output_proj seed16: 1.94x in #284) but fails at K=1024 (hidden_pr…"}, "issue": "289", "path": "receipts/fp35c-weight-cache-ab-20260612T214509Z.json", "ticket": "FP35C-WEIGHT-CACHE-AB", "ts": "20260612T214509Z", "verdict": "FAIL"}
+{"issue": "294", "path": "receipts/fp35d-k4096-steady-state-20260612T071929Z.json", "ticket": "FP35D-K4096-STEADY-STATE", "ts": "20260612T071929Z", "verdict": "WIDTH_COND_VIABLE"}
+{"issue": "305", "path": "receipts/fp35g-width-cond-fp8-ab-20260612T074129Z.json", "ticket": "FP8_WIDTH_COND_AB", "ts": "20260612T074129Z", "verdict": "FP8_WIDTH_COND_PARK"}
+{"issue": "225", "path": "receipts/fp37-l7-duty-cycle-20260612T222145Z.json", "ticket": "FP37-L7-DUTY-CYCLE", "ts": "20260612T222145Z"}
+{"issue": "225", "path": "receipts/fp37-l7-duty-cycle-v2-20260612T223550Z.json", "ticket": "FP37-L7-DUTY-CYCLE-v2", "ts": "20260612T222145Z"}
+{"issue": "225", "path": "receipts/fp38-l9-flash-ab-20260612T223639Z.json", "ticket": "FP38-L9-FLASH-AB", "ts": "20260612T223639Z", "verdict": "ALL-SKIPPED:['SKIPPED-OOM', 'SKIPPED-OOM', 'SKIPPED-OOM']"}
+{"issue": "225", "path": "receipts/fp38b-l9-completion-20260612T230120Z.json", "ticket": "FP38B-L9-COMPLETION", "ts": "20260612T230120Z", "verdict": "INCONCLUSIVE-CELL-ERROR"}
+{"issue": "225", "path": "receipts/fp38b-l9-completion-20260612T230816Z.json", "ticket": "FP38B-L9-COMPLETION", "ts": "20260612T230816Z", "verdict": "INCONCLUSIVE-CELL-ERROR"}
+{"issue": "225", "path": "receipts/fp38c-l9-eager-20260612T231505Z.json", "ticket": "FP38C-L9-EAGER", "ts": "20260612T231505Z", "verdict": "L9_REVIVE_B8"}
+{"issue": "225", "path": "receipts/fp38d-l9-prod-flash-20260612T232449Z.json", "ticket": "FP38D-L9-PROD-FLASH", "ts": "20260612T232449Z", "verdict": "L9_PROD_MARGINAL_B8"}
+{"claim_fields": {"spec_claimed_mde_pp_n400": "3.85"}, "issue": "359", "path": "receipts/fp39-density-power-audit-20260613T051216Z.json", "ticket": "FP39-DENSITY-POWER-AUDIT", "ts": "20260613T051216Z", "verdict": "DENSITY_UNDERPOWERED_PSEUDOREPLICATION"}
+{"issue": "225", "path": "receipts/fp39-prod-path-bench-20260612T225120Z.json", "ticket": "FP39-PROD-PATH-BENCH", "ts": "20260612T225120Z"}
+{"issue": "225", "path": "receipts/fp39b-prod-compile-20260612T230911Z.json", "ticket": "FP39B-PROD-COMPILE", "ts": "20260612T230911Z"}
+{"path": "receipts/fp4-cross-core-20260610T231029Z.json", "ticket": "FP4-CROSS-CORE", "ts": "20260610T231029Z"}
+{"issue": "363", "path": "receipts/fp40-l10-optimizer-ab-20260613T053950Z.json", "ticket": "FP40-L10-OPTIMIZER-AB", "ts": "20260613T053950Z", "verdict": "C3_CONFIRMED"}
+{"issue": "374", "path": "receipts/fp42-compile-feasibility-20260613T053226Z.json", "ticket": "FP42-COMPILE-FEASIBILITY", "ts": "20260613T053226Z"}
+{"issue": "376", "path": "receipts/fp44-horizon-optimizer-equiv-20260613T102516Z.json", "ticket": "FP44-HORIZON-OPTIMIZER-EQUIV", "ts": "20260613T102516Z"}
+{"path": "receipts/fp44-multimodal-tokps-20260616T044922Z.json", "ticket": "FP44-MULTIMODAL-TOKPS", "ts": "20260616T044922Z"}
+{"path": "receipts/fp6-provenance-20260610T235623Z.json", "ticket": "FP6-PROVENANCE", "ts": "20260610T235623Z"}
+{"path": "receipts/fp7-revalue-20260610T233935Z.json", "ticket": "FP7-REVALUE", "ts": "20260610T233935Z"}
+{"path": "receipts/fp8-vgate-20260611T001730Z.json", "ticket": "FP8-VGATE", "ts": "20260611T001730Z"}
+{"path": "receipts/fp8-vgate-20260611T003919Z.json", "ticket": "FP8-VGATE", "ts": "20260611T003919Z"}
+{"path": "receipts/fp9-parity-20260611T002323Z.json", "ticket": "FP9-PARITY", "ts": "20260611T002323Z"}
+{"path": "receipts/g1-paired-r1w-20260610T222435Z.json", "ticket": "G1-PAIRED-R1W", "ts": "20260610T222435Z"}
+{"path": "receipts/g1-paired-r1w-20260610T225707Z.json", "ticket": "G1-PAIRED-R1W", "ts": "20260610T225707Z"}
+{"path": "receipts/g1-r2w-verdict-20260611T045826Z.json", "ticket": "G1-R2W-VERDICT", "ts": "20260611T045826Z"}
+{"path": "receipts/g1-r2w-verdict-20260611T050209Z.json", "ticket": "G1-R2W-VERDICT", "ts": "20260611T050209Z"}
+{"path": "receipts/gate-stats-346-20260612T202900Z.json", "ticket": "#346", "ts": "20260612T202900Z"}
+{"issue": "128", "path": "receipts/gh128-resident-gate-econ-wiring-selftest-20260705T105938Z.json", "ticket": "GH-128-RESIDENT-GATE-ECON-WIRING-SELFTEST", "ts": "20260705T105938Z"}
+{"path": "receipts/grpo-attempts-fail-20260610.json", "ticket": "NC0-T2-GRPO-FAILTRAIL"}
+{"path": "receipts/heartbeat-runner-selftest-20260612T045619Z.json", "ticket": "HEARTBEAT-RUNNER-SELFTEST", "ts": "20260612T045619Z", "verdict": "PASS"}
+{"pass": true, "path": "receipts/joules-selftest-20260705T024616Z.json", "ticket": "JOULES-SELFTEST", "ts": "20260705T024616Z"}
+{"pass": true, "path": "receipts/joules-selftest-20260705T031506Z.json", "ticket": "JOULES-SELFTEST", "ts": "20260705T031506Z"}
+{"issue": "349", "path": "receipts/launch-efficiency-20260612T220622Z.json", "ticket": "V0-LAUNCH-EFFICIENCY", "ts": "20260612T220622Z"}
+{"issue": "349", "path": "receipts/launch-efficiency-20260613T015000Z.json", "ticket": "V0-LAUNCH-EFFICIENCY", "ts": "20260613T015000Z"}
+{"issue": "349", "path": "receipts/launch-efficiency-20260706T131425Z.json", "ticket": "V0-LAUNCH-EFFICIENCY", "ts": "20260706T131425Z"}
+{"pass": true, "path": "receipts/loop-econ-gate-selftest-20260616T043326Z.json", "ticket": "DT6-LOOP-ECON-GATE-SELFTEST", "ts": "20260616T043326Z"}
+{"pass": true, "path": "receipts/loop-econ-gate-selftest-20260705T024721Z.json", "ticket": "DT6-LOOP-ECON-GATE-SELFTEST", "ts": "20260705T024721Z"}
+{"pass": true, "path": "receipts/loop-econ-gate-selftest-20260705T031523Z.json", "ticket": "DT6-LOOP-ECON-GATE-SELFTEST", "ts": "20260705T031523Z"}
+{"pass": true, "path": "receipts/loop-econ-gate-selftest-20260705T031933Z.json", "ticket": "DT6-LOOP-ECON-GATE-SELFTEST", "ts": "20260705T031933Z"}
+{"path": "receipts/milestone-reconciliation-20260705T081952Z.json", "ticket": "milestone-reconciliation", "ts": "20260705T081952Z"}
+{"pass": true, "path": "receipts/multimodal-b3-tokps-20260616T042337Z.json", "ticket": "B3-MULTIMODAL-SELFTEST", "ts": "20260616T042337Z"}
+{"pass": true, "path": "receipts/multimodal-b3-tokps-20260617T215312Z.json", "ticket": "B3-MULTIMODAL-SELFTEST", "ts": "20260617T215312Z"}
+{"pass": true, "path": "receipts/multimodal-b3-tokps-20260617T220228Z.json", "ticket": "B3-MULTIMODAL-SELFTEST", "ts": "20260617T220228Z"}
+{"pass": true, "path": "receipts/multimodal-b3-tokps-20260617T220906Z.json", "ticket": "B3-MULTIMODAL-SELFTEST", "ts": "20260617T220906Z"}
+{"pass": true, "path": "receipts/multimodal-b3-tokps-20260617T221327Z.json", "ticket": "B3-MULTIMODAL-SELFTEST", "ts": "20260617T221327Z"}
+{"pass": true, "path": "receipts/multimodal-b3-tokps-20260617T221736Z.json", "ticket": "B3-MULTIMODAL-SELFTEST", "ts": "20260617T221736Z"}
+{"pass": true, "path": "receipts/multimodal-b3-tokps-20260617T222310Z.json", "ticket": "B3-MULTIMODAL-SELFTEST", "ts": "20260617T222310Z"}
+{"path": "receipts/muon-ab-retry-20260705/muon-ab-smallfoot-retry-20260705T233603Z.json", "ticket": "MUON_FUSED_AB_SMALLFOOT_RETRY"}
+{"path": "receipts/native-smoke-20260610T230236Z.json", "verdict": "NATIVE_SMOKE_PASS"}
+{"path": "receipts/native-smoke-20260610T230645Z.json", "verdict": "NATIVE_SMOKE_PASS"}
+{"path": "receipts/nck-e2e-proof-20260612T134413Z.json", "ticket": "NCK-E2E-PROOF", "ts": "20260612T134413Z"}
+{"path": "receipts/nck-e2e-proof-20260612T142318Z.json", "ticket": "NCK-E2E-PROOF", "ts": "20260612T142318Z"}
+{"issue": "298", "path": "receipts/none-arm-298-20260612T174042Z.json", "ticket": "NONE-ARM-298", "ts": "20260612T174042Z"}
+{"path": "receipts/owned-core-widen-selftest-20260705T104739Z.json", "ticket": "OWNED-CORE-WIDEN-SELFTEST", "ts": "2026-07-05T10:47:39.546790+00:00Z", "verdict": "OWNED_CORE_WIDEN_SELFTEST_PASS"}
+{"path": "receipts/p-gate-114-post-assembled-20260611T064723Z.json", "ticket": "P-GATE-114-ASSEMBLED", "ts": "20260611T064721Z"}
+{"path": "receipts/p-gate-114-pre-assembled-20260611T064723Z.json", "ticket": "P-GATE-114-ASSEMBLED", "ts": "20260611T064719Z"}
+{"issue": "114", "pass": false, "path": "receipts/p-gate-20260611T025422Z.json", "ticket": "P-GATE", "ts": "20260611T025422Z", "verdict": "FAIL"}
+{"issue": "114", "pass": true, "path": "receipts/p-gate-20260611T064723Z.json", "ticket": "P-GATE", "ts": "20260611T064723Z", "verdict": "PASS"}
+{"issue": "114", "pass": true, "path": "receipts/p-gate-20260611T081608Z.json", "ticket": "P-GATE", "ts": "20260611T081608Z", "verdict": "PASS"}
+{"issue": "114", "pass": false, "path": "receipts/p-gate-20260611T081931Z.json", "ticket": "P-GATE", "ts": "20260611T081931Z", "verdict": "FAIL"}
+{"path": "receipts/power-helper-20260612T210519Z.json", "ticket": "ENG-346", "ts": "20260612T210519Z"}
+{"path": "receipts/power-helper-20260612T210637Z.json", "ticket": "ENG-346", "ts": "20260612T210637Z"}
+{"path": "receipts/power-helper-20260612T210638Z.json", "ticket": "ENG-346", "ts": "20260612T210638Z"}
+{"path": "receipts/power-helper-20260612T210640Z.json", "ticket": "ENG-346", "ts": "20260612T210640Z"}
+{"path": "receipts/power-helper-20260612T210641Z.json", "ticket": "ENG-346", "ts": "20260612T210641Z"}
+{"path": "receipts/power-helper-20260612T210642Z.json", "ticket": "ENG-346", "ts": "20260612T210642Z"}
+{"path": "receipts/power-helper-20260612T210644Z.json", "ticket": "ENG-346", "ts": "20260612T210644Z"}
+{"path": "receipts/power-helper-20260612T210645Z.json", "ticket": "ENG-346", "ts": "20260612T210645Z"}
+{"path": "receipts/power-helper-20260612T210647Z.json", "ticket": "ENG-346", "ts": "20260612T210647Z"}
+{"path": "receipts/prereg-freeze-proof-20260612T163204Z.json", "ticket": "PREREG-FREEZE-PROOF", "ts": "2026-06-12T16:32:04Z"}
+{"path": "receipts/probe-meminfo-20260610T043457Z.json", "ticket": "NC0-r1-diag", "verdict": "H-B: mem_get_info sane idle -> step-0 transient"}
+{"path": "receipts/proxy-speedrun-baseline-20260612T054435Z.json", "ticket": "PROXY_SPEEDRUN_BASELINE", "ts": "20260612T054435Z"}
+{"path": "receipts/publication-gate-20260705T071930Z.json", "ticket": "PUBLICATION-GATE-CHECK", "ts": "20260705T071930Z", "verdict": "FAIL"}
+{"path": "receipts/publication-gate-20260705T072134Z.json", "ticket": "PUBLICATION-GATE-CHECK", "ts": "20260705T072134Z", "verdict": "FAIL"}
+{"path": "receipts/publication-gate-20260705T081939Z.json", "ticket": "PUBLICATION-GATE-CHECK", "ts": "20260705T081939Z", "verdict": "FAIL"}
+{"path": "receipts/r2-grpo-wrapper-20260611T034514Z.json", "ticket": "NC0-T2-R2-GRPO-WRAPPER", "ts": "20260611T034514Z"}
+{"path": "receipts/r2-grpo-wrapper-20260611T041608Z.json", "ticket": "NC0-T2-R2-GRPO-WRAPPER", "ts": "20260611T041608Z"}
+{"path": "receipts/r2-mtp-wrapper-20260611T033826Z.json", "ticket": "NC0-T2-R2-MTP-WRAPPER", "ts": "20260611T033826Z"}
+{"path": "receipts/r2-mtp-wrapper-20260611T043952Z.json", "ticket": "NC0-T2-R2-MTP-WRAPPER", "ts": "20260611T043952Z"}
+{"path": "receipts/r2-power-prereg-20260610T223032Z.json", "ticket": "R2-POWER-PREREG", "ts": "20260610T223032Z"}
+{"path": "receipts/r2-power-prereg-20260611T021546Z.json", "ticket": "R2-POWER-PREREG", "ts": "20260611T021546Z"}
+{"path": "receipts/receipt-hygiene-row8-20260612T143802Z.json", "ticket": "RECEIPT-HYGIENE-ROW8-TRIAGE", "ts": "20260612T143802Z"}
+{"issue": "wordingone/ember#448", "path": "receipts/resume-drill-20260616T161730Z.json", "ticket": "RESUME_DRILL", "ts": "20260616T161730Z", "verdict": "PASS"}
+{"path": "receipts/round-local-loop-20260612T094223Z.json", "ticket": "ROUND-LOCAL-LOOP", "ts": "20260612T094223Z"}
+{"issue": "296", "path": "receipts/selective-recompute-ab-20260612T063250Z.json", "ticket": "SELECTIVE_RECOMPUTE_AB", "ts": "20260612T063250Z", "verdict": "SELECTIVE_PASS"}
+{"path": "receipts/sp-checkpoint-probe-step-25000-20260612T090913Z.json", "ticket": "SP-CHECKPOINT-PROBE", "ts": "20260612T090913Z"}
+{"path": "receipts/sp-checkpoint-probe-step-50000-20260612T093809Z.json", "ticket": "SP-CHECKPOINT-PROBE", "ts": "20260612T093809Z"}
+{"issue": "206", "path": "receipts/sp3-terminal-audit-20260611T132420Z.json", "ticket": "SP3-TERMINAL-AUDIT", "ts": "20260611T132420Z"}
+{"issue": "206", "path": "receipts/sp3-terminal-audit-20260611T135210Z.json", "ticket": "SP3-TERMINAL-AUDIT", "ts": "20260611T135210Z"}
+{"issue": "206", "path": "receipts/sp3-terminal-audit-20260611T135708Z.json", "ticket": "SP3-TERMINAL-AUDIT", "ts": "20260611T135708Z"}
+{"issue": "206", "path": "receipts/sp3-terminal-audit-20260612T085511Z.json", "ticket": "SP3-TERMINAL-AUDIT", "ts": "20260612T085511Z"}
+{"issue": "206", "path": "receipts/sp3-terminal-audit-20260612T094729Z.json", "ticket": "SP3-TERMINAL-AUDIT", "ts": "20260612T094729Z"}
+{"path": "receipts/sp6b-adversarial-pass-20260612T175700Z.json", "ticket": "SP6B-ADVERSARIAL-PASS", "ts": "20260612T175700Z"}
+{"path": "receipts/sp6b-tooling-dryrun-20260612T192300Z.json", "ticket": "#282", "ts": "20260612T155736Z"}
+{"path": "receipts/sp6c-e2b-shakedown-20260612T080215Z.json", "ticket": "SP6C-E2B-SHAKEDOWN", "ts": "20260612T080215Z"}
+{"path": "receipts/sp6c-e2b-shakedown-20260612T085839Z.json", "ticket": "SP6C-E2B-SHAKEDOWN", "ts": "20260612T085839Z"}
+{"path": "receipts/sp6c-ember-shakedown-20260612T082026Z.json", "ticket": "SP6C-EMBER-SHAKEDOWN", "ts": "20260612T082026Z"}
+{"path": "receipts/sp6c-ember-shakedown-20260612T090145Z.json", "ticket": "SP6C-EMBER-SHAKEDOWN", "ts": "20260612T090145Z"}
+{"path": "receipts/special-id-census-20260611T143841Z.json", "ticket": "SPECIAL-ID-CENSUS-V0", "ts": "20260611T143841Z"}
+{"path": "receipts/spend-annex/spend-annex-20260705T091132Z.json", "ticket": "SPEND-ANNEX", "ts": "20260705T091132Z"}
+{"path": "receipts/spend-annex/spend-annex-20260705T100447Z.json", "verdict": "PASS"}
+{"path": "receipts/spend-annex/spend-annex-20260705T103031Z.json", "verdict": "PASS"}
+{"path": "receipts/t0-preflight.json", "ticket": "NC0-T0", "ts": "2026-06-09T22:28:22.997093+00:00"}
+{"path": "receipts/t1-selftest-20260609T223350Z.json", "ticket": "NC0-T1", "ts": "20260609T223350Z"}
+{"path": "receipts/t1-selftest-20260609T223420Z.json", "ticket": "NC0-T1", "ts": "20260609T223420Z"}
+{"path": "receipts/t1-smoke-20260609T224309Z.json", "ticket": "NC0-T1", "ts": "20260609T224309Z"}
+{"path": "receipts/t1-smoke-20260609T231531Z.json", "ticket": "NC0-T1", "ts": "20260609T231531Z"}
+{"path": "receipts/t1-smoke-20260610T115140Z.json", "ticket": "NC0-T1", "ts": "20260610T115140Z"}
+{"path": "receipts/t1-smoke-20260610T150303Z.json", "ticket": "NC0-T1", "ts": "20260610T150303Z"}
+{"path": "receipts/t2-r1-20260610T043757Z.json", "ticket": "NC0-T2", "ts": "20260610T043757Z"}
+{"path": "receipts/t2-r1-control-20260610T052546Z.json", "ticket": "NC0-T2", "ts": "20260610T052546Z"}
+{"path": "receipts/t2-r1-q15-20260610T115819Z.json", "ticket": "NC0-T2", "ts": "20260610T115819Z"}
+{"path": "receipts/t2-r1-q15-control-20260610T122005Z.json", "ticket": "NC0-T2", "ts": "20260610T122005Z"}
+{"path": "receipts/t2-r1-q3-20260610T151637Z.json", "ticket": "NC0-T2", "ts": "20260610T151637Z"}
+{"path": "receipts/t2-r1-q3-control-20260610T154409Z.json", "ticket": "NC0-T2", "ts": "20260610T154409Z"}
+{"path": "receipts/t2-r1w-q3-20260610T211509Z.json", "ticket": "NC0-T2-WCODE", "ts": "20260610T211509Z"}
+{"path": "receipts/t2-r1w-q3-control-20260610T212812Z.json", "ticket": "NC0-T2-WCODE", "ts": "20260610T212812Z"}
+{"path": "receipts/t2-r1w-q3-grpo-20260610T223426Z.json", "ticket": "NC0-T2-GRPO", "ts": "20260610T223426Z"}
+{"path": "receipts/t2-r1w-q3-mtp-20260610T214222Z.json", "ticket": "NC0-T2-MTP", "ts": "20260610T214222Z"}
+{"path": "receipts/t2-r2-q3-grpo-20260611T034525Z.json", "ticket": "NC0-T2-GRPO", "ts": "20260611T034525Z"}
+{"path": "receipts/t2-r2-q3-grpo-20260611T041627Z.json", "ticket": "NC0-T2-GRPO", "ts": "20260611T041627Z"}
+{"path": "receipts/t2-r2-q3-mtp-20260611T034305Z.json", "ticket": "NC0-T2-MTP", "ts": "20260611T034305Z"}
+{"path": "receipts/t2-r2-q3-mtp-20260611T044201Z.json", "ticket": "NC0-T2-MTP", "ts": "20260611T044201Z"}
+{"path": "receipts/t2-r2w-control-20260611T032930Z.json", "ticket": "NC0-T2-R2W", "ts": "20260611T032930Z"}
+{"path": "receipts/t2-r2w-sft-20260611T032027Z.json", "ticket": "NC0-T2-R2W", "ts": "20260611T032027Z"}
+{"path": "receipts/t2-r2w-sft-20260611T032047Z.json", "ticket": "NC0-T2-R2W", "ts": "20260611T032047Z"}
+{"path": "receipts/t3-seed-20260610T002245Z.json", "ticket": "NC0-T3-SEED", "ts": "20260610T002245Z"}
+{"path": "receipts/t3-seed-20260610T021308Z.json", "ticket": "NC0-T3-SEED-v2", "ts": "20260610T021308Z"}
+{"path": "receipts/t3b-diag-20260610T015000Z.json", "ticket": "NC0-T3b-DIAG", "ts": "20260610T015000Z"}
+{"path": "receipts/t4-r1-q15-arc1-seed14-20260610T150153Z.json", "ticket": "NC0-T4-CHUNKED", "ts": "20260610T150153Z"}
+{"path": "receipts/t4-r1-q3-arc1-seed14-20260610T181054Z.json", "ticket": "NC0-T4-CHUNKED", "ts": "20260610T181054Z"}
+{"path": "receipts/t4-r1-q3-arc1-seed15-20260610T201600Z.json", "ticket": "NC0-T4-CHUNKED", "ts": "20260610T201600Z"}
+{"path": "receipts/t5-r1-q3-20260610T203520Z.json", "ticket": "NC0-T5", "ts": "20260610T203520Z"}
+{"path": "receipts/t5-r1w-q3-mtp-20260610T222615Z.json", "ticket": "NC0-T5", "ts": "20260610T222615Z"}
+{"issue": "337", "path": "receipts/tally-20260612T151200Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T151200Z"}
+{"issue": "337", "path": "receipts/tally-20260612T162827Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T162827Z"}
+{"issue": "337", "path": "receipts/tally-20260612T162954Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T162954Z"}
+{"issue": "337", "path": "receipts/tally-20260612T163220Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T163220Z"}
+{"issue": "337", "path": "receipts/tally-20260612T163334Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T163334Z"}
+{"issue": "337", "path": "receipts/tally-20260612T163946Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T163946Z"}
+{"issue": "337", "path": "receipts/tally-20260612T164746Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T164746Z"}
+{"issue": "337", "path": "receipts/tally-20260612T174305Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T174305Z"}
+{"issue": "337", "path": "receipts/tally-20260612T175639Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T175639Z"}
+{"issue": "337", "path": "receipts/tally-20260612T180944Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T180944Z"}
+{"issue": "337", "path": "receipts/tally-20260612T203107Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T203107Z"}
+{"issue": "337", "path": "receipts/tally-20260612T213243Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260612T213243Z"}
+{"issue": "337", "path": "receipts/tally-20260613T004807Z.json", "ticket": "EMBER-COMPLETENESS-TALLY", "ts": "20260613T004807Z"}
+{"path": "receipts/token-shards-v0-20260611T170047Z.json", "ticket": "TOKEN-SHARDS-V0", "ts": "20260611T170047Z"}
+{"path": "receipts/tokenizer-freeze-20260611T060423Z.json", "ticket": "TOKENIZER-FREEZE-V0", "ts": "20260611T060423Z"}
+{"path": "receipts/tokenizer-freeze-20260611T154111Z.json", "ticket": "TOKENIZER-FREEZE-V0", "ts": "20260611T154111Z"}
+{"path": "receipts/tokenizer-freeze-selftest-20260611T053110Z.json", "ticket": "TOKENIZER-FREEZE-SELFTEST", "ts": "20260611T053110Z"}
+{"path": "receipts/tokenizer-freeze-selftest-20260611T060319Z.json", "ticket": "TOKENIZER-FREEZE-SELFTEST", "ts": "20260611T060319Z"}
+{"path": "receipts/tokenizer-freeze-selftest-20260611T060405Z.json", "ticket": "TOKENIZER-FREEZE-SELFTEST", "ts": "20260611T060405Z"}
+{"path": "receipts/tokenizer-freeze-selftest-20260611T133827Z.json", "ticket": "TOKENIZER-FREEZE-SELFTEST", "ts": "20260611T133827Z"}
+{"path": "receipts/tokenizer-freeze-selftest-20260628T174142Z.json", "ticket": "TOKENIZER-FREEZE-SELFTEST", "ts": "20260628T174142Z"}
+{"path": "receipts/tokenizer-freeze-selftest-20260628T175123Z.json", "ticket": "TOKENIZER-FREEZE-SELFTEST", "ts": "20260628T175123Z"}
+{"path": "receipts/v-exploit-probe-20260611T000301Z.json", "ticket": "V-EXPLOIT-PROBE", "ts": "20260611T000301Z"}
+{"path": "receipts/v-extended-20260610T215421Z.json", "ticket": "V-EXTENDED", "ts": "20260610T215421Z"}
+{"path": "receipts/v-soundness-probe-20260611T011439Z.json", "ticket": "V-SOUNDNESS-PROBE", "ts": "20260611T011439Z"}
+{"path": "receipts/v0-launch-gate-20260611T075419Z.json", "ticket": "V0-LAUNCH-GATE", "ts": "20260611T075419Z"}
+{"path": "receipts/v0-launch-gate-20260611T081245Z.json", "ticket": "V0-LAUNCH-GATE", "ts": "20260611T081245Z"}
+{"path": "receipts/v0-launch-gate-20260611T100607Z.json", "ticket": "V0-LAUNCH-GATE", "ts": "20260611T100607Z"}
+{"path": "receipts/v0-launch-gate-20260611T102922Z.json", "ticket": "V0-LAUNCH-GATE", "ts": "20260611T102922Z"}
+{"path": "receipts/v0-launch-gate-20260706T131659Z.json", "ticket": "V0-LAUNCH-GATE", "ts": "20260706T131659Z"}
+{"issue": "wordingone/ember#167", "pass": true, "path": "receipts/v0ext-dryrun-20260611T074548Z.json", "ticket": "TIMESHARE-V0-SEGMENT", "ts": "20260611T074548Z", "verdict": "V0_SEGMENT_COMPLETE"}
+{"issue": "wordingone/ember#167", "path": "receipts/v0ext-selftest-20260611T074545Z.json", "ticket": "TIMESHARE-V0EXT-SELFTEST", "ts": "20260611T074545Z"}
+{"issue": "wordingone/ember#167", "path": "receipts/v0ext-selftest-20260706T131858Z.json", "ticket": "TIMESHARE-V0EXT-SELFTEST", "ts": "20260706T131858Z"}
+{"path": "receipts/verify-timing-20260611T000148Z.json", "ticket": "VERIFY-TIMING", "ts": "20260611T000148Z"}
+{"path": "receipts/w1-floor-g1-a-20260610T220325Z.json", "ticket": "W1-FLOOR", "ts": "20260610T220325Z"}
+{"path": "receipts/w1-floor-g1-base-20260610T215814Z.json", "ticket": "W1-FLOOR", "ts": "20260610T215814Z"}
+{"path": "receipts/w1-floor-g1-base-20260611T064501Z.json", "ticket": "W1-FLOOR", "ts": "20260611T064501Z"}
+{"path": "receipts/w1-floor-g1-control-20260610T220712Z.json", "ticket": "W1-FLOOR", "ts": "20260610T220712Z"}
+{"path": "receipts/w1-floor-g1-grpo-20260610T225450Z.json", "ticket": "W1-FLOOR", "ts": "20260610T225450Z"}
+{"path": "receipts/w1-floor-g1-mtp-20260610T221956Z.json", "ticket": "W1-FLOOR", "ts": "20260610T221956Z"}
+{"path": "receipts/w1-floor-g1-mtp-20260611T064151Z.json", "ticket": "W1-FLOOR", "ts": "20260611T064151Z"}
+{"path": "receipts/w1-floor-g1r2-base-20260611T040544Z.json", "ticket": "W1-FLOOR", "ts": "20260611T040544Z"}
+{"path": "receipts/w1-floor-q15-20260610T202511Z.json", "ticket": "W1-FLOOR", "ts": "20260610T202511Z"}
+{"path": "receipts/w1-floor-q3-20260610T203401Z.json", "ticket": "W1-FLOOR", "ts": "20260610T203401Z"}
+{"path": "receipts/w1-floor-q3-focus-20260610T210228Z.json", "ticket": "W1-FLOOR", "ts": "20260610T210228Z"}
+{"path": "receipts/w1-floor-q3-r2mtp-20260611T030332Z.json", "ticket": "W1-FLOOR", "ts": "20260611T030332Z"}
+{"path": "receipts/w1-humaneval-q3-20260610T234716Z.json", "ticket": "W1-HUMANEVAL-ADMISSION", "ts": "20260610T234716Z"}
+{"issue": "230", "path": "receipts/w1-owned-sampler-20260611T152735Z.json", "ticket": "ENG-57-R6", "ts": "20260611T152735Z"}
+{"path": "receipts/w2-ingest-20260610T211241Z.json", "ticket": "W2-INGEST", "ts": "20260610T211241Z"}
+{"path": "receipts/w2-ingest-20260611T030647Z.json", "ticket": "W2-INGEST", "ts": "20260611T030647Z"}
+{"path": "receipts/w2-ingest-proof-20260611T035410Z.json", "ticket": "W2-INGEST-PROOF", "ts": "20260611T035410Z"}
+{"issue": "wordingone/ember#151", "path": "receipts/w4-control-delta-repair-20260611T044559Z-20260611T045940Z.json", "ticket": "W4-CONTROL-DELTA-REPAIR", "ts": "20260611T045940Z"}
+{"path": "receipts/w4-eval-fp25-recall-20260611T054801Z.json", "ticket": "W4-EVAL", "ts": "20260611T054801Z"}
+{"path": "receipts/w4-eval-fp25b-cov-20260611T060930Z.json", "ticket": "W4-EVAL", "ts": "20260611T060930Z"}
+{"path": "receipts/w4-eval-fp25b-train-20260611T062752Z.json", "ticket": "W4-EVAL", "ts": "20260611T062752Z"}
+{"path": "receipts/w4-eval-fp25b-val-20260611T063117Z.json", "ticket": "W4-EVAL", "ts": "20260611T063117Z"}
+{"path": "receipts/w4-eval-r2w-q3-20260611T044559Z.json", "ticket": "W4-EVAL", "ts": "20260611T044559Z"}
+{"path": "receipts/wsl9p-probe-2026-06-10T225917Z.json", "verdict": "9P penalty >20% on 6/6 ops (seq_write_10m, seq_write_100m, seq_read_10m, seq_read_100m, random_io_1gb, parallel_read_10m)"}
