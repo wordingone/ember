@@ -67,6 +67,7 @@ import {
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
+import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
 import {
   executePromptSuggestion,
   makeSuggestionExecutor,
@@ -639,6 +640,10 @@ export function ReplScreen({
   // Live inference metrics — polled from local model server every 2s; null when unreachable.
   const modelMetrics = useModelMetricsPoller();
 
+  // issue #239: circuit-breaker degraded banner — {active:false} whenever the
+  // model endpoint is healthy (or no guarded client has been wired yet).
+  const degradedBanner = useCircuitBreakerBanner();
+
   // Render dispatch (memoised per lookups + viewport width)
   const renderMessage = useCallback(
     (msg: SessionMessage) =>
@@ -1184,6 +1189,7 @@ export function ReplScreen({
       taskPanel:      taskPanelState,
       modelMetrics:   modelMetrics ?? undefined,
       effort:         retryStatus,
+      degraded:       degradedBanner,
     }),
   );
 }

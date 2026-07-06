@@ -181,6 +181,66 @@ export function EffortCallout({ effort }: EffortCalloutProps): React.ReactElemen
 }
 
 // ---------------------------------------------------------------------------
+// DegradedBanner — issue #239: persistent surface for a model-client circuit
+// breaker in the OPEN (or half-open probing) state. "broken must LOOK
+// broken" -- the operator's law this exists to satisfy: the 20h wedge
+// incident had zero visible signal distinguishing "wedged" from "idle".
+// Follows EffortCallout's hook-free, hidden-when-inactive convention.
+// ---------------------------------------------------------------------------
+
+export interface DegradedBannerState {
+  active: boolean;
+  endpoint?: string | null;
+  lastStatus?: number | null;
+  lastReason?: string | null;
+  attemptCount?: number;
+  /** Epoch ms the next half-open probe becomes eligible. */
+  nextProbeAt?: number;
+  /** True while a half-open probe attempt is currently in flight. */
+  probing?: boolean;
+}
+
+/** Formats the countdown to the next half-open probe, e.g. "next probe in 15s". */
+function formatProbeCountdown(nextProbeAt: number, now: number): string {
+  const remainingMs = Math.max(0, nextProbeAt - now);
+  const remainingSec = Math.ceil(remainingMs / 1000);
+  return remainingSec > 0 ? `next probe in ${remainingSec}s` : "probing now";
+}
+
+/**
+ * Pure formatter: endpoint, last status/error, attempt count, next-probe
+ * time -- exactly the fields the dispatch spec's acceptance criteria name.
+ * Returns "" when inactive (DegradedBanner renders null in that case).
+ */
+export function formatDegradedBannerText(banner: DegradedBannerState, now: number): string {
+  if (!banner.active) return "";
+  const endpointLabel = banner.endpoint ?? "unknown endpoint";
+  const statusLabel = banner.lastStatus != null
+    ? `HTTP ${banner.lastStatus}`
+    : (banner.lastReason ?? "error");
+  const attempts = banner.attemptCount ?? 0;
+  const probeLabel = banner.probing
+    ? "probing…"
+    : (banner.nextProbeAt != null ? formatProbeCountdown(banner.nextProbeAt, now) : "");
+
+  const parts = [`⚠ degraded: ${endpointLabel}`, statusLabel, `attempts ${attempts}`];
+  if (probeLabel) parts.push(probeLabel);
+  return parts.join(SEGMENT_SEPARATOR);
+}
+
+export interface DegradedBannerProps {
+  degraded: DegradedBannerState;
+  /** Current time (epoch ms); injectable for tests, defaults to Date.now(). */
+  now?: number;
+}
+
+export function DegradedBanner({ degraded, now }: DegradedBannerProps): React.ReactElement | null {
+  if (!degraded.active) return null;
+  const resolvedNow = now ?? Date.now();
+  return React.createElement(Text, { color: "red" }, formatDegradedBannerText(degraded, resolvedNow));
+}
+
+// ---------------------------------------------------------------------------
 // CoordinatorAgentStatus — multi-agent coordinator indicator (hook-free)
 // ---------------------------------------------------------------------------
 
@@ -262,6 +322,8 @@ export interface StatusLineProps {
   cognitiveMode?: CognitiveMode;
   /** Live inference metrics from the model server; absent → meter hidden. */
   modelMetrics?: ModelMetrics;
+  /** issue #239: circuit-breaker degraded state; absent/inactive → banner hidden. */
+  degraded?: DegradedBannerState;
 }
 
 export function StatusLine({
@@ -272,6 +334,7 @@ export function StatusLine({
   effort,
   cognitiveMode,
   modelMetrics,
+  degraded,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
     if (key.shift && key.tab)    { permissionMode.cycle(); return; }
@@ -285,6 +348,9 @@ export function StatusLine({
   return React.createElement(
     Box,
     { flexDirection: "column" },
+    degraded != null
+      ? React.createElement(DegradedBanner, { key: "degraded", degraded })
+      : null,
     effort != null
       ? React.createElement(EffortCallout, { key: "effort", effort })
       : null,

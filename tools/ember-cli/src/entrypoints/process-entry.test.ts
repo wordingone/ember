@@ -24,6 +24,7 @@ import {
   parseHeadlessPrint,
   makeServerHandle,
   registerServerCleanup,
+  describeEndpointResolution,
   type ServerSpawnOptions,
   type ServerHandle,
   main,
@@ -279,6 +280,60 @@ describe("process-entry — AC6: models.json endpoint → EMBER_MODEL_URL only i
     applyModelsJsonToEnv({ endpoint: "http://localhost:9999" });
     expect(process.env["EMBER_MODEL_URL"]).toBe("http://pre-existing:8888");
     restoreEnv(saved);
+  });
+});
+
+describe("process-entry — describeEndpointResolution (issue #196 startup disclosure)", () => {
+  it("models.json 'endpoint' wins outright when EMBER_MODEL_URL is unset", () => {
+    const r = describeEndpointResolution({ endpoint: "http://localhost:9999" }, undefined);
+    expect(r.source).toBe("config");
+    expect(r.endpoint).toBe("http://localhost:9999");
+    expect(r.envOverridden).toBe(false);
+    expect(r.text).toContain("http://localhost:9999");
+    expect(r.text).toContain("models.json");
+  });
+
+  it("models.json 'endpoint' wins even when a DIFFERENT EMBER_MODEL_URL is set -- discloses the override", () => {
+    const r = describeEndpointResolution(
+      { endpoint: "http://localhost:9999" },
+      "http://localhost:1111",
+    );
+    expect(r.source).toBe("config");
+    expect(r.envOverridden).toBe(true);
+    expect(r.text).toContain("http://localhost:1111");
+  });
+
+  it("models.json 'binary' forces a managed spawn and IGNORES EMBER_MODEL_URL -- disclosed, not silent (issue #196)", () => {
+    const r = describeEndpointResolution(
+      { binary: "llama-server.exe" },
+      "http://localhost:1111",
+    );
+    expect(r.source).toBe("managed");
+    expect(r.endpoint).toBeNull();
+    expect(r.envOverridden).toBe(true);
+    expect(r.text).toContain("http://localhost:1111");
+    expect(r.text).toContain("IGNORED");
+  });
+
+  it("models.json 'binary' with no EMBER_MODEL_URL set: managed spawn, nothing overridden", () => {
+    const r = describeEndpointResolution({ binary: "llama-server.exe" }, undefined);
+    expect(r.source).toBe("managed");
+    expect(r.envOverridden).toBe(false);
+  });
+
+  it("no models.json config: EMBER_MODEL_URL wins as an explicit env override", () => {
+    const r = describeEndpointResolution(null, "http://localhost:8081");
+    expect(r.source).toBe("env");
+    expect(r.endpoint).toBe("http://localhost:8081");
+    expect(r.text).toContain("http://localhost:8081");
+    expect(r.text).toContain("EMBER_MODEL_URL");
+  });
+
+  it("no models.json config and no EMBER_MODEL_URL: managed spawn with the default binary", () => {
+    const r = describeEndpointResolution(null, undefined);
+    expect(r.source).toBe("managed");
+    expect(r.endpoint).toBeNull();
+    expect(r.envOverridden).toBe(false);
   });
 });
 
