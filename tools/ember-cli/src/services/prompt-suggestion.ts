@@ -119,6 +119,23 @@ const VOICE_PREFIXES = [
 ];
 
 // ---------------------------------------------------------------------------
+// Debug logging (#190)
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal diagnostics for the suggestion engine. Ink owns the terminal frame
+ * during interactive use, so a raw console write from here lands as literal
+ * text on the live status line (e.g. "[suggestion] tryGenerate: too_few_turns
+ * { count: 0 }"). Silent by default; set EMBER_SUGGESTION_DEBUG=1 to opt in
+ * when debugging outside the TUI (headless run, piped stdout).
+ */
+function debugLog(...args: unknown[]): void {
+  if (process.env["EMBER_SUGGESTION_DEBUG"] === "1") {
+    console.debug(...args);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Module-level configuration (evaluated once at load time)
 // ---------------------------------------------------------------------------
 
@@ -158,25 +175,25 @@ export function shouldEnablePromptSuggestion(): boolean {
   const envOverride = process.env["PROMPT_SUGGESTION_ENABLED"];
   if (envOverride !== undefined) {
     const enabled = envOverride !== "false" && envOverride !== "0";
-    console.debug("[suggestion] env override:", enabled);
+    debugLog("[suggestion] env override:", enabled);
     return enabled;
   }
 
   // 2. Feature flag: tengu_chomp_inflection disables the feature when set
   if (globalConfig.tengu_chomp_inflection) {
-    console.debug("[suggestion] disabled by feature flag tengu_chomp_inflection");
+    debugLog("[suggestion] disabled by feature flag tengu_chomp_inflection");
     return false;
   }
 
   // 3. Session type: interactive mode — enabled by default
-  console.debug("[suggestion] session type check: interactive");
+  debugLog("[suggestion] session type check: interactive");
 
   // 4. Team context: single-instance — always enabled
-  console.debug("[suggestion] team context: single-instance");
+  debugLog("[suggestion] team context: single-instance");
 
   // 5. User settings
   const enabled = userConfig.promptSuggestionEnabled;
-  console.debug("[suggestion] user settings enabled:", enabled);
+  debugLog("[suggestion] user settings enabled:", enabled);
   return enabled;
 }
 
@@ -233,7 +250,7 @@ export function getParentCacheSuppressReason(
 export function getSuggestionSuppressReason(appState: AppState): string | null {
   // 1. Feature gate
   if (!shouldEnablePromptSuggestion()) {
-    console.debug("[suggestion] suppress: disabled");
+    debugLog("[suggestion] suppress: disabled");
     return "disabled";
   }
 
@@ -244,7 +261,7 @@ export function getSuggestionSuppressReason(appState: AppState): string | null {
   // 4. Plan mode suppresses suggestions
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ((appState as any).mode === "plan") {
-    console.debug("[suggestion] suppress: plan_mode");
+    debugLog("[suggestion] suppress: plan_mode");
     return "plan_mode";
   }
 
@@ -253,7 +270,7 @@ export function getSuggestionSuppressReason(appState: AppState): string | null {
     process.env["USER_TYPE"] !== "ant" &&
     process.env["RATE_LIMIT_STATUS"] === "blocked"
   ) {
-    console.debug("[suggestion] suppress: rate_limit");
+    debugLog("[suggestion] suppress: rate_limit");
     return "rate_limit";
   }
 
@@ -274,7 +291,7 @@ export function shouldFilterSuggestion(
   source?: string,
 ): boolean {
   if (suggestion === null) {
-    console.debug("[suggestion] filter: null");
+    debugLog("[suggestion] filter: null");
     return true;
   }
 
@@ -282,13 +299,13 @@ export function shouldFilterSuggestion(
 
   // 1. Exact match on "done"
   if (lower === "done") {
-    console.debug("[suggestion] filter: done", { promptId, source });
+    debugLog("[suggestion] filter: done", { promptId, source });
     return true;
   }
 
   // 2. Meta-commentary text
   if (META_TEXT_RE.test(suggestion)) {
-    console.debug("[suggestion] filter: meta_text", { promptId, source });
+    debugLog("[suggestion] filter: meta_text", { promptId, source });
     return true;
   }
 
@@ -297,7 +314,7 @@ export function shouldFilterSuggestion(
     (suggestion.startsWith("(") && suggestion.endsWith(")")) ||
     (suggestion.startsWith("[") && suggestion.endsWith("]"))
   ) {
-    console.debug("[suggestion] filter: meta_wrapped", { promptId, source });
+    debugLog("[suggestion] filter: meta_wrapped", { promptId, source });
     return true;
   }
 
@@ -307,13 +324,13 @@ export function shouldFilterSuggestion(
     /^Error:/.test(suggestion) ||
     /^API Error/.test(suggestion)
   ) {
-    console.debug("[suggestion] filter: error_message", { promptId, source });
+    debugLog("[suggestion] filter: error_message", { promptId, source });
     return true;
   }
 
   // 5. Label-prefixed output ("Label: text")
   if (/^[A-Za-z]+:\s/.test(suggestion)) {
-    console.debug("[suggestion] filter: prefixed_label", { promptId, source });
+    debugLog("[suggestion] filter: prefixed_label", { promptId, source });
     return true;
   }
 
@@ -323,25 +340,25 @@ export function shouldFilterSuggestion(
     .split(/\s+/)
     .filter((w) => w.length > 0);
   if (words.length < 2 && !SHORT_ALLOWLIST.has(lower.trim())) {
-    console.debug("[suggestion] filter: too_few_words", { promptId, source });
+    debugLog("[suggestion] filter: too_few_words", { promptId, source });
     return true;
   }
 
   // 7. Too many words (> 12)
   if (words.length > 12) {
-    console.debug("[suggestion] filter: too_many_words", { promptId, source });
+    debugLog("[suggestion] filter: too_many_words", { promptId, source });
     return true;
   }
 
   // 8. Too long (>= 100 characters)
   if (suggestion.length >= 100) {
-    console.debug("[suggestion] filter: too_long", { promptId, source });
+    debugLog("[suggestion] filter: too_long", { promptId, source });
     return true;
   }
 
   // 9. Multiple sentences (punctuation + space + uppercase)
   if (/[.!?]\s[A-Z]/.test(suggestion)) {
-    console.debug("[suggestion] filter: multiple_sentences", { promptId, source });
+    debugLog("[suggestion] filter: multiple_sentences", { promptId, source });
     return true;
   }
 
@@ -351,14 +368,14 @@ export function shouldFilterSuggestion(
     suggestion.includes("*") ||
     suggestion.includes(" ** ")
   ) {
-    console.debug("[suggestion] filter: has_formatting", { promptId, source });
+    debugLog("[suggestion] filter: has_formatting", { promptId, source });
     return true;
   }
 
   // 11. Evaluative language
   for (const term of EVALUATIVE_TERMS) {
     if (lower.includes(term)) {
-      console.debug("[suggestion] filter: evaluative", { term, promptId, source });
+      debugLog("[suggestion] filter: evaluative", { term, promptId, source });
       return true;
     }
   }
@@ -366,7 +383,7 @@ export function shouldFilterSuggestion(
   // 12. First-person assistant voice prefixes
   for (const prefix of VOICE_PREFIXES) {
     if (lower.startsWith(prefix)) {
-      console.debug("[suggestion] filter: assistant_voice", { prefix, promptId, source });
+      debugLog("[suggestion] filter: assistant_voice", { prefix, promptId, source });
       return true;
     }
   }
@@ -573,14 +590,14 @@ export async function tryGenerateSuggestion(
   try {
     // Guard 1: already aborted
     if (abortController.signal.aborted) {
-      console.debug("[suggestion] tryGenerate: pre-aborted");
+      debugLog("[suggestion] tryGenerate: pre-aborted");
       return null;
     }
 
     // Guard 2 & 3: need at least 2 assistant messages
     const assistantMessages = messages.filter((m) => m.role === "assistant");
     if (assistantMessages.length < 2) {
-      console.debug("[suggestion] tryGenerate: too_few_turns", {
+      debugLog("[suggestion] tryGenerate: too_few_turns", {
         count: assistantMessages.length,
       });
       return null;
@@ -589,21 +606,21 @@ export async function tryGenerateSuggestion(
     // Guard 3: last assistant message must not carry an error stop reason
     const lastAssistant = assistantMessages[assistantMessages.length - 1]!;
     if (lastAssistant.stop_reason === "error") {
-      console.debug("[suggestion] tryGenerate: last message is error");
+      debugLog("[suggestion] tryGenerate: last message is error");
       return null;
     }
 
     // Guard 4: parent cache budget
     const cacheReason = getParentCacheSuppressReason(lastAssistant);
     if (cacheReason !== null) {
-      console.debug("[suggestion] tryGenerate: cache suppress", cacheReason);
+      debugLog("[suggestion] tryGenerate: cache suppress", cacheReason);
       return null;
     }
 
     // Guard 5: feature gate + app-state conditions
     const suppressReason = getSuggestionSuppressReason(getAppState());
     if (suppressReason !== null) {
-      console.debug("[suggestion] tryGenerate: suppressed", suppressReason);
+      debugLog("[suggestion] tryGenerate: suppressed", suppressReason);
       return null;
     }
 
@@ -669,7 +686,7 @@ export function executePromptSuggestion(context: REPLHookContext): Promise<void>
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
-      console.error("[suggestion] executePromptSuggestion error:", err);
+      debugLog("[suggestion] executePromptSuggestion error:", err);
     }
   })();
 }
@@ -691,7 +708,7 @@ export function logSuggestionOutcome(
   const accepted =
     userInput === suggestion || userInput.startsWith(suggestion);
   const elapsed = Date.now() - emittedAt;
-  console.debug("[suggestion] outcome", {
+  debugLog("[suggestion] outcome", {
     outcome: accepted ? "accepted" : "ignored",
     promptId,
     generationRequestId,
@@ -712,7 +729,7 @@ export function logSuggestionSuppressed(
   promptId?: PromptVariant,
   source?: string,
 ): void {
-  console.debug("[suggestion] suppressed", {
+  debugLog("[suggestion] suppressed", {
     outcome: "suppressed",
     reason,
     promptId,

@@ -7,6 +7,7 @@ import { describe, test, expect } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { SlashDropdown } from "./slash-dropdown.ts";
+import { slashDropdownDescriptionWidth, truncateWithEllipsis } from "../services/slash-dropdown.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
 function cmd(name: string, description: string): RegistryCommand {
@@ -175,5 +176,39 @@ describe("SlashDropdown", () => {
     expect(wide).not.toContain("…");
     expect(narrow).toContain("…");
     expect(narrow).not.toContain(desc);
+  });
+
+  // b23 acceptance (operator-surface-pack): the rendered description matches EXACTLY what the pure
+  // truncation helpers compute, at three distinct widths (narrow/default/wide) -- the stronger form
+  // of "never clip mid-word at the border": not just "an ellipsis is present somewhere" but "the
+  // component renders precisely the budget-fitting, ellipsis-terminated string the service layer
+  // derives from the live width," so there is no drift between the tested pure functions and what
+  // actually reaches the screen.
+  test("rendered description matches the exact computed truncation at three widths (30 / 80 / 120)", () => {
+    const longDesc =
+      "C-OBS observatory: MONITOR/UNDERSTAND/INTERACT over the real GOAL/ledger/receipts world-state adapter, with click-to-evidence and a confirm-only encounter membrane";
+    for (const width of [30, 80, 120]) {
+      // Mount at a REAL terminal width matching the logical `width` prop -- otherwise the physical
+      // ink layout clips at the mount's own column count before the component's row ever gets a
+      // chance to use the wider budget (exactly the mismatch this loop is written to avoid).
+      const chunks: string[] = [];
+      const stream = { write(s: string): void { chunks.push(s); } };
+      mountInk(
+        React.createElement(SlashDropdown, {
+          commands: [cmd("cockpit", longDesc)],
+          selectedIndex: 0,
+          overflowCount: 0,
+          width,
+        }),
+        { stream, stdout: { columns: width, rows: 24 } },
+      );
+      const out = chunks.join("");
+      // eslint-disable-next-line no-control-regex
+      const plain = out.replace(/\x1b\[[0-9;]*m/g, "");
+      const expectedWidth = slashDropdownDescriptionWidth(width, "cockpit");
+      const expectedDesc  = truncateWithEllipsis(longDesc, expectedWidth);
+      expect(plain).toContain(expectedDesc);
+      expect(plain).not.toContain(longDesc); // never the untruncated source text
+    }
   });
 });

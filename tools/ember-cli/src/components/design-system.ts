@@ -11,6 +11,10 @@ export const VISIBLE_RESULTS  = 12;
 export const DEBOUNCE_MS      = 100;
 export const LARGE_FILE_BYTES = 1 * 1024 * 1024;
 
+/** Thin single-line box border for lightweight overlay panels (dropdowns, popovers) --
+ *  never the heavier "round"/"double" frame reserved for the welcome/homescreen panel. */
+export const PANEL_BORDER_STYLE = "single";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
