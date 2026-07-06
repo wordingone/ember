@@ -19,15 +19,13 @@ session).
 Grow operator (reuse, never reimplement): scripts/growth_refutation/
 capacity.py's net2net_grow. NOTE ON PROVENANCE: this file did not exist
 anywhere in the public wordingone/ember repo before this change (no git
-history) -- it existed only as untracked local scratch on the maintainer's
-ember work tree (B:/M/ember/scratch/seed-export-v5/dryrun-20260704T211712Z/
-stage/ember_main/scripts/growth_refutation/capacity.py; a compiled
-__pycache__ entry proves it has actually run). It is landed here BYTE-FOR-
-BYTE UNCHANGED -- this is the first time it is committed to any tracked
-repo. Reported to team-lead before landing; see the coordination mail for
-the full divergence report (this file, the event-log convention, and the
-rung-2 dossier citation all diverge between what #113/#108 assume exists
-and what is actually committed anywhere).
+history). Landed byte-for-byte from previously-uncommitted local scratch on
+the maintainer's work tree; provenance anchor = sha256 in the grow receipt
+(capacity_py_sha256) -- this is the first time it is committed to any
+tracked repo. Reported to team-lead before landing; see the coordination
+mail for the full divergence report (this file, the event-log convention,
+and the rung-2 dossier citation all diverge between what #113/#108 assume
+exists and what is actually committed anywhere).
 
 Launch gates (both imported, both hard-refuse):
   (a) W2 sec.4 decontamination gate -- scripts/w2_heldout/launch_gate.py's
@@ -157,6 +155,42 @@ def sha256_file(path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# CONVENTION (binding for every receipt this module writes, and for anyone
+# extending it): a receipt's JSON content NEVER carries an absolute
+# filesystem path. Absolute paths root at wherever this script happened to
+# be checked out, which can embed the caller's local directory naming (e.g.
+# a per-session sandbox path) -- exactly how a founder-name substring leaked
+# into two committed receipts on the first cut of this file (repo-guard
+# caught it; see the coordination mail). Every path written into a receipt
+# -- directly as a field, or indirectly via a reason string returned by an
+# imported gate function that echoes whatever path it was called with --
+# must go through _repo_relpath() or _scrub_absolute_paths() first. Actual
+# filesystem operations (open/os.makedirs) still use real absolute paths;
+# only the JSON OUTPUT is scrubbed.
+# ---------------------------------------------------------------------------
+
+def _repo_relpath(path: str) -> str:
+    """Repo-relative, forward-slashed path for receipt fields."""
+    rel = os.path.relpath(os.path.abspath(path), REPO)
+    return rel.replace(os.sep, "/")
+
+
+def _scrub_absolute_paths(text: str) -> str:
+    """Strips this repo's absolute root prefix out of a string before it is
+    embedded in a receipt. Covers reason strings returned by imported gate
+    functions (launch_gate.refuse_or_pass, w2_derive_s_config.refuse_or_pass)
+    that echo whatever absolute path they were called with verbatim -- the
+    caller has no control over that formatting, so scrubbing the known
+    absolute prefix is the reuse-safe fix (never edit the imported gate to
+    change its message)."""
+    if not text:
+        return text
+    normalized = text.replace("\\", "/")
+    repo_fwd = REPO.replace("\\", "/")
+    return normalized.replace(repo_fwd + "/", "")
+
+
+# ---------------------------------------------------------------------------
 # Event log -- state/runs/active-runs.jsonl. NEW convention (no existing
 # producer of this exact shape found anywhere -- see module docstring).
 # Append+fsync per line, modeled on heartbeat_runner.py's tick-writer idiom.
@@ -259,9 +293,12 @@ def run_grow_step(run_id: str, out_dir: str) -> dict:
             "module": "scripts/growth_refutation/capacity.py",
             "function": "net2net_grow",
             "provenance": (
-                "landed byte-for-byte from the maintainer's local ember work "
-                "tree scratch state (untracked, never previously committed "
-                "anywhere) -- see coordination mail to team-lead"),
+                "landed byte-for-byte from previously-uncommitted local "
+                "scratch on the maintainer's work tree; never committed "
+                "anywhere before this PR -- see coordination mail to "
+                "team-lead"),
+            "capacity_py_sha256": sha256_file(
+                os.path.join(HERE, "growth_refutation", "capacity.py")),
         },
         "input_shape": {"ff": old_ff, "hidden": TOY_CONFIG["hidden"],
                          "layers": TOY_CONFIG["layers"]},
@@ -328,8 +365,10 @@ def run_decontam_gate_selftest(run_id: str, out_dir: str) -> dict:
                            "receipt_path passed so the shared receipts/"
                            "ember-c-scale/w2-heldout-decontam-*.json default "
                            "glob is never touched by this dry run",
-        "allow_case": {"allowed": allow_result.allowed, "reason": allow_result.reason},
-        "refuse_case": {"allowed": refuse_result.allowed, "reason": refuse_result.reason},
+        "allow_case": {"allowed": allow_result.allowed,
+                        "reason": _scrub_absolute_paths(allow_result.reason)},
+        "refuse_case": {"allowed": refuse_result.allowed,
+                         "reason": _scrub_absolute_paths(refuse_result.reason)},
         "both_directions_verified": allow_result.allowed and not refuse_result.allowed,
     }
     path = os.path.join(RECEIPT_DIR, f"w2-garm-gate-decontam-{run_id}.json")
@@ -447,7 +486,7 @@ def build_dump(run_id: str, out_dir: str, grown_ff: int) -> dict:
         "ticket": "ISSUE-113-W2-GARM-DUMP",
         "ts": _ts(),
         "run_id": run_id,
-        "dump_dir": os.path.abspath(dump_dir),
+        "dump_dir": _repo_relpath(dump_dir),
         "config_sha256": sha256_file(config_path),
         "manifest_sha256": sha256_file(manifest_path),
         "manifest_construction": "hand-assembled from post-grow config, not a "
@@ -480,10 +519,11 @@ def run_108_verification(run_id: str, out_dir: str, dump_dir: str) -> dict:
         "ts": _ts(),
         "run_id": run_id,
         "tool": "scripts/w2_derive_s_config.py (imported, not reimplemented)",
-        "derive": {"s_config_path": s_config_path,
-                   "derive_receipt_path": derive_receipt_path,
+        "derive": {"s_config_path": _repo_relpath(s_config_path),
+                   "derive_receipt_path": _repo_relpath(derive_receipt_path),
                    "s_arm_config_sha256": derive_receipt["s_arm_config_sha256"]},
-        "verify": {"allowed": verify_result.allowed, "reason": verify_result.reason},
+        "verify": {"allowed": verify_result.allowed,
+                   "reason": _scrub_absolute_paths(verify_result.reason)},
         "acceptance_a_derive_and_verify_pass": verify_result.allowed,
     }
     path = os.path.join(RECEIPT_DIR, f"w2-garm-108-verification-{run_id}.json")
@@ -543,24 +583,24 @@ def run_dry_run(out_dir: str) -> dict:
             "issue": ISSUE_REF,
             "acceptance_a_pass": acceptance_a_pass,
             "components": {
-                "grow": grow["receipt_path"],
-                "decontam_gate": os.path.join(RECEIPT_DIR, f"w2-garm-gate-decontam-{run_id}.json"),
-                "governed_fit_gate": os.path.join(RECEIPT_DIR, f"w2-garm-gate-governed-fit-{run_id}.json"),
-                "training_leg": os.path.join(RECEIPT_DIR, f"w2-garm-training-leg-{run_id}.json"),
-                "dump": dump["receipt_path"],
-                "issue_108_verification": os.path.join(RECEIPT_DIR, f"w2-garm-108-verification-{run_id}.json"),
+                "grow": _repo_relpath(grow["receipt_path"]),
+                "decontam_gate": _repo_relpath(os.path.join(RECEIPT_DIR, f"w2-garm-gate-decontam-{run_id}.json")),
+                "governed_fit_gate": _repo_relpath(os.path.join(RECEIPT_DIR, f"w2-garm-gate-governed-fit-{run_id}.json")),
+                "training_leg": _repo_relpath(os.path.join(RECEIPT_DIR, f"w2-garm-training-leg-{run_id}.json")),
+                "dump": _repo_relpath(dump["receipt_path"]),
+                "issue_108_verification": _repo_relpath(os.path.join(RECEIPT_DIR, f"w2-garm-108-verification-{run_id}.json")),
             },
-            "event_log": EVENT_LOG_PATH,
+            "event_log": _repo_relpath(EVENT_LOG_PATH),
         }
         summary_path = os.path.join(RECEIPT_DIR, f"w2-garm-dry-run-summary-{run_id}.json")
         _write_json(summary_path, summary)
-        summary["summary_path"] = summary_path
+        summary["summary_path"] = _repo_relpath(summary_path)
 
         if not acceptance_a_pass:
-            append_run_event(run_id, "failed", {"summary_path": summary_path})
+            append_run_event(run_id, "failed", {"summary_path": _repo_relpath(summary_path)})
             raise SystemExit(f"W2_GARM_DRY_RUN_FAIL: acceptance (a) not met -- see {summary_path}")
 
-        append_run_event(run_id, "completed", {"summary_path": summary_path})
+        append_run_event(run_id, "completed", {"summary_path": _repo_relpath(summary_path)})
         return summary
     except SystemExit:
         raise

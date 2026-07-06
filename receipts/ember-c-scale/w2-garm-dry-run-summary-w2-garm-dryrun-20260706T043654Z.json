@@ -1,0 +1,16 @@
+{
+  "acceptance_a_pass": true,
+  "components": {
+    "decontam_gate": "receipts/ember-c-scale/w2-garm-gate-decontam-w2-garm-dryrun-20260706T043654Z.json",
+    "dump": "receipts/ember-c-scale/w2-garm-dump-w2-garm-dryrun-20260706T043654Z.json",
+    "governed_fit_gate": "receipts/ember-c-scale/w2-garm-gate-governed-fit-w2-garm-dryrun-20260706T043654Z.json",
+    "grow": "receipts/ember-c-scale/w2-garm-grow-w2-garm-dryrun-20260706T043654Z.json",
+    "issue_108_verification": "receipts/ember-c-scale/w2-garm-108-verification-w2-garm-dryrun-20260706T043654Z.json",
+    "training_leg": "receipts/ember-c-scale/w2-garm-training-leg-w2-garm-dryrun-20260706T043654Z.json"
+  },
+  "event_log": "state/runs/active-runs.jsonl",
+  "issue": "#113",
+  "run_id": "w2-garm-dryrun-20260706T043654Z",
+  "ticket": "ISSUE-113-W2-GARM-DRY-RUN-SUMMARY",
+  "ts": "20260706T043658Z"
+}

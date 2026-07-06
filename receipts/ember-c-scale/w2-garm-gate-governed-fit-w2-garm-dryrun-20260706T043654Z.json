@@ -16,7 +16,7 @@
     "reason": "VRAM-PREFLIGHT (simulated): 0.5GB free -- need >= 4.0GB free before load; refusing launch",
     "vram_fraction": 0.85
   },
-  "run_id": "w2-garm-dryrun-20260706T034711Z",
+  "run_id": "w2-garm-dryrun-20260706T043654Z",
   "ticket": "ISSUE-113-W2-GARM-GATE-GOVERNED-FIT",
-  "ts": "20260706T034715Z"
+  "ts": "20260706T043658Z"
 }

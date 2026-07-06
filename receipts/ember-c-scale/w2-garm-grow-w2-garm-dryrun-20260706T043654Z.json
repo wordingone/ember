@@ -18,17 +18,18 @@
   },
   "is_real_lineage": false,
   "operator": {
+    "capacity_py_sha256": "72ab4067a7b96886408eb93533ce0dfbc6feed5a9e249d68d7c669ccd275698b",
     "function": "net2net_grow",
     "module": "scripts/growth_refutation/capacity.py",
-    "provenance": "landed byte-for-byte from the maintainer's local ember work tree scratch state (untracked, never previously committed anywhere) -- see coordination mail to team-lead"
+    "provenance": "landed byte-for-byte from previously-uncommitted local scratch on the maintainer's work tree; never committed anywhere before this PR -- see coordination mail to team-lead"
   },
   "output_shape": {
     "ff": 64,
     "hidden": 16,
     "layers": 2
   },
-  "run_id": "w2-garm-dryrun-20260706T034711Z",
+  "run_id": "w2-garm-dryrun-20260706T043654Z",
   "strict_doubling_verified": true,
   "ticket": "ISSUE-113-W2-GARM-GROW",
-  "ts": "20260706T034715Z"
+  "ts": "20260706T043658Z"
 }
