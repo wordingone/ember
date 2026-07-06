@@ -493,6 +493,34 @@ def _row_contains_window(row: list[int], window_tuple: tuple, window_len: int) -
     return False
 
 
+def _build_candidate_window_index(candidate_rows: list[list[int]],
+                                   window_len: int) -> dict[tuple, list[int]]:
+    """Precompute, once per _classify_once call, every contiguous
+    window_len-token tuple present in each candidate row, mapped to the list
+    of candidate indices whose row contains it (issue #193 deviation: this
+    replaces per-match _row_contains_window row-rescans -- O(M x C x L) --
+    with one O(C x L) index build + O(1) average-case dict lookups per
+    match). A tuple occurring at multiple positions within the SAME row is
+    recorded once for that row, matching _row_contains_window's boolean
+    ("does this row contain it at all") semantics; indices are appended in
+    row order so a lookup returns candidates in the same order the original
+    enumerate(candidate_rows) loop visited them, preserving append order
+    into non_self_matches_by_candidate downstream."""
+    index: dict[tuple, list[int]] = {}
+    for idx, row in enumerate(candidate_rows):
+        n = len(row)
+        if n < window_len:
+            continue
+        seen: set[tuple] = set()
+        for i in range(n - window_len + 1):
+            wt = tuple(row[i:i + window_len])
+            if wt in seen:
+                continue
+            seen.add(wt)
+            index.setdefault(wt, []).append(idx)
+    return index
+
+
 def _classify_once(candidate_rows: list[list[int]],
                     candidate_positions: list[dict],
                     shard_dir: str,
@@ -522,6 +550,7 @@ def _classify_once(candidate_rows: list[list[int]],
 
     non_self_matches_by_candidate: list[list[dict]] = [[] for _ in candidate_rows]
     self_matches_excluded = 0
+    window_index = _build_candidate_window_index(candidate_rows, window)
 
     for m in raw["confirmed_matches"]:
         window_tuple = tuple(m["window"])
@@ -529,9 +558,7 @@ def _classify_once(candidate_rows: list[list[int]],
             match_global_start = _match_global_start(m, name_to_index, cum, window)
         else:
             match_global_start = None
-        for idx, row in enumerate(candidate_rows):
-            if not _row_contains_window(row, window_tuple, window):
-                continue
+        for idx in window_index.get(window_tuple, ()):
             pos = candidate_positions[idx]
             # FIXED: self-match check must detect ANY overlap with candidate window,
             # not just exact start-position equality. A candidate covers tokens
