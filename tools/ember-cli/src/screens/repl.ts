@@ -81,6 +81,13 @@ import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
 } from "../services/operator-receipts.ts";
+import { createGoalContinuationEngine, type GoalContinuationEngine } from "../core/goal-continuation.ts";
+import { getGoalStore, getGoalReceiptWriter } from "../core/goal-runtime.ts";
+import {
+  createGoalContinuationPoke,
+  isGoalContinuationFeatureEnabled,
+} from "../core/goal-continuation-wiring.ts";
+import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../commands/goal.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -698,6 +705,65 @@ export function ReplScreen({
     operatorInjectorRef.current?.flush();
   }, [inputState.text, busy]);
 
+  // Goal-mode organ wiring (ember issue #211, live acceptance leg b): one
+  // continuation engine + poke function per mounted REPL session.
+  // queuedUserInput below is read LIVE on every poke, including the
+  // self-chained re-pokes core/goal-continuation-wiring.ts fires internally
+  // (see that file's header for why the chain needs to self-invoke rather
+  // than rely on a single nested call) — from the exact same two sources the
+  // operator-pipe/keyboard priority gate above already reads: the input
+  // buffer (inputStateRef, this file, line ~651) and the operator queue
+  // depth (OperatorInjector.queueLength, services/operator-input.ts:39-41).
+  // Both count as queued user input per docs/goal-mode-mechanism.md §7 delta 3
+  // ("Operator preemption via the operator pipe as well as the TUI").
+  const goalContinuationEngineRef = useRef<GoalContinuationEngine | null>(null);
+  if (!goalContinuationEngineRef.current) {
+    goalContinuationEngineRef.current = createGoalContinuationEngine();
+  }
+  const pokeGoalContinuationRef = useRef<(() => void) | null>(null);
+  if (!pokeGoalContinuationRef.current) {
+    pokeGoalContinuationRef.current = createGoalContinuationPoke({
+      engine:   goalContinuationEngineRef.current,
+      getStore: getGoalStore,
+      getEligibilitySignals: () => ({
+        featureEnabled: isGoalContinuationFeatureEnabled(),
+        // ember-cli's EnterPlanModeTool flips PermissionMode to 'plan' via
+        // ToolUseContext.setAppState (tools/plan-mode-tools.ts) — but
+        // engineCfg.setAppState below (see the QueryEngine construction
+        // further down this file) is still a no-op stub (#182's cwd-only
+        // AppState), so that flip is never threaded back into this
+        // component's reactive state today. Pre-existing gap, not
+        // introduced here; disclosed rather than papered over with a fake
+        // signal — see this PR's body for the follow-up.
+        planMode: false,
+        turnActive: busyRef.current,
+        queuedUserInput:
+          inputStateRef.current.text.length > 0 ||
+          (operatorInjectorRef.current?.queueLength ?? 0) > 0,
+      }),
+      startTurn: async (prompt: string) => {
+        await submitPromptRef.current(prompt, "operator");
+      },
+      getReceiptWriter: () => getGoalReceiptWriter(),
+    });
+  }
+
+  // Registers the module-level hooks commands/goal.ts's /goal command and the
+  // continuation engine call into. Idempotent (safe to call repeatedly) —
+  // registered once per mount and torn down on unmount so a stale closure
+  // never survives a remount.
+  useEffect(() => {
+    setGoalSteeringInjectorProvider(() => ({
+      canInjectNow: () => inputStateRef.current.text.length === 0 && !busyRef.current,
+      inject: (prompt: string) => { void submitPromptRef.current(prompt, "operator"); },
+    }));
+    setGoalContinuationTrigger(() => pokeGoalContinuationRef.current?.());
+    return () => {
+      setGoalSteeringInjectorProvider(null);
+      setGoalContinuationTrigger(null);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Named-pipe transport lifecycle — starts once at mount, torn down at unmount.
   // Fails open: a pipe error/warning is surfaced as a single transcript row and
   // never crashes or delays the CLI (ember #165 acceptance).
@@ -771,6 +837,16 @@ export function ReplScreen({
       ]);
       busyRef.current = false;
       setBusy(false);
+      // ember #211 (found via live compiled-binary acceptance testing, not
+      // unit tests): a slash command is a turn-exit path exactly like a model
+      // round-trip -- /goal's own create handler pokes the continuation
+      // engine synchronously DURING this dispatch, while busyRef.current is
+      // still true, so that first poke always observes turn_active and
+      // no-ops. This early `return` sits before the try/finally below (the
+      // finally's poke is for the model-turn path only), so without this
+      // line nothing would ever re-poke and a goal created via /goal would
+      // stall forever with zero autonomous continuations.
+      pokeGoalContinuationRef.current?.();
       return;
     }
 
@@ -827,6 +903,10 @@ export function ReplScreen({
         ]);
         busyRef.current = false;
         setBusy(false);
+        // Same early-return-bypasses-finally reasoning as the slash-command
+        // branch above: this turn is over (in error) before the try/finally
+        // below is ever entered.
+        pokeGoalContinuationRef.current?.();
         return;
       }
     }
@@ -936,6 +1016,15 @@ export function ReplScreen({
       // terminal error, abort, thrown exception) clears the retry callout, so
       // it can never survive past the request it described.
       setRetryStatus({ active: false });
+      // ember #211: every turn-exit path also pokes the goal continuation
+      // engine (spec §3: "every task/turn completion pokes maybe-continue-
+      // if-idle"). Whenever THIS submitPrompt call was itself invoked as the
+      // engine's own startTurn callback, this poke arrives while that outer
+      // call's semaphore is still held and harmlessly no-ops
+      // ({fired:false, reason:"already_in_flight"}) -- the chain still
+      // continues correctly via the outer call's own self-re-invocation once
+      // its semaphore genuinely releases (core/goal-continuation-wiring.ts).
+      pokeGoalContinuationRef.current?.();
     }
   };
   submitPromptRef.current = submitPrompt;
