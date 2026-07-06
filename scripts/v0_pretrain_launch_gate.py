@@ -47,6 +47,46 @@ FP26_PREREG_GLOB = "receipts/fp26-prereg-*.json"
 TOKEN_SHARDS_GLOB = "receipts/token-shards-v0-*.json"
 SHA_CONVENTION = ("sha256 over the exact on-disk file bytes, no "
                   "normalization; receipt paths carry the git -text pin")
+# G-budget compute-fit grounding (first-principles): the budget envelope's
+# real invariant is "does the run fit the compute budget," which the banked
+# SHATTER verdict answers by MEASUREMENT — the efficiency lever (effective_days
+# <= 1.0 GPU-day for the keystone-certified config on the 2.2e9 ceiling) that
+# makes the run affordable. The calendar-days check is a deadline-tracking
+# artifact; a real SHATTER proof supersedes it. Fail-closed (see g_budget).
+SHATTER_VERDICT_GLOB = "receipts/shatter-verdict-*.json"
+SHATTER_EFFECTIVE_DAYS_FLOOR = 1.0       # the frozen SHATTER bar (1 GPU-day)
+SHATTER_BUDGET_B = 2_200_000_000.0       # the keystone-certified ceiling
+# ANTI-SELF-REFERENCE (2026-06-23): a SHATTER receipt's effective_days MUST be
+# the real wall-clock days = budget_b / (sustained_tok_s * 86400). The retracted
+# SHATTER defined effective_days = K_floor/throughput (K_floor = budget_b *
+# tokens_to_match_ref / budget_tokens / 86400) — a SELF-REFERENTIAL construct, not
+# wall-clock days. _shatter_compute_fit recomputes and requires consistency; a
+# receipt whose stated effective_days disagrees with the recompute is rejected.
+SHATTER_EFF_DAYS_TOL = 0.05              # consistency tolerance (5%)
+
+# ---- G-budget REQUESTED-RUN compute-fit (per-run-truthful micro path) -----
+# The calendar/SHATTER math above answers "does the FULL v0 pretrain LADDER
+# fit the budget" -- correct for a real multi-day dispatch, wrong for a
+# minutes-long GPU probe (e.g. cbase_grow_live.py's ~120-step net2net
+# grow-continuity micro-run). A caller that knows EXACTLY what THIS launch
+# will execute may pass a `requested_run` descriptor; g_budget then prices
+# THAT run instead of the full ladder. The ceiling is a FIXED absolute FLOPs
+# number derived from the certified c03 params pin (never from the caller's
+# own claimed params), so a caller cannot buy a bigger ceiling by under- or
+# over-stating its model size.
+MICRO_FIT_FRACTION = 0.005   # 0.5% of the certified full-ladder FLOPs budget.
+                             # Chosen so a handful of minutes-long probes per
+                             # day cannot approach the 1.0 GPU-day SHATTER
+                             # floor this same file requires for the real
+                             # ladder: a 120-step/batch16/seq1024 grow probe
+                             # on the certified c03 shape lands at ~18% of
+                             # this ceiling -- comfortably inside, not at it.
+V0_CERTIFIED_PARAMS = 368354304   # c03 measured param count (fp19-bench) --
+                                  # the SAME pin v0_config_check.py binds
+                                  # G-config to (model.params_estimate in the
+                                  # frozen v0 config).
+MICRO_FIT_CEILING_FLOPS = (MICRO_FIT_FRACTION * SHATTER_BUDGET_B
+                          * 6.0 * V0_CERTIFIED_PARAMS)
 
 
 # ---- helpers -------------------------------------------------------------
@@ -288,11 +328,151 @@ def g_world():
     return "GREEN", f"world specs present ({len(WORLD_SPECS)})"
 
 
-def g_budget(launch_date):
+def _shatter_compute_fit():
+    """Measured budget-fit grounding for g_budget. Returns (True, citation)
+    ONLY when a banked SHATTER verdict in receipts/ proves the efficiency lever
+    that makes the run affordable: SHATTER==true, the shatter_variant's
+    quality_ok==true AND effective_days <= SHATTER_EFFECTIVE_DAYS_FLOOR, on the
+    keystone-certified method.budget_b ceiling. (False, reason) otherwise.
+
+    Fail-closed: no receipt, unreadable, SHATTER!=true, missing/non-numeric
+    effective_days, quality_ok!=true, budget_b!=ceiling, or effective_days>floor
+    all return (False, ...). Scans all candidates; accepts the first that passes
+    every check (so filename ordering cannot gate the proof)."""
+    cands = sorted(glob.glob(f"{NC}/{SHATTER_VERDICT_GLOB}"))
+    if not cands:
+        return False, "no shatter-verdict-*.json in receipts/ (lever unproven)"
+    last_reason = "no shatter-verdict receipt passed every compute-fit check"
+    for p in cands:
+        name = os.path.basename(p)
+        try:
+            d = json.load(open(p, encoding="utf-8"))
+        except Exception as e:                      # noqa: BLE001
+            last_reason = f"{name} unreadable: {e}"
+            continue
+        if d.get("SHATTER") is not True:
+            last_reason = f"{name} SHATTER != true"
+            continue
+        var = d.get("shatter_variant")
+        vd = (d.get("variants") or {}).get(var) or {}
+        eff = vd.get("effective_days")
+        if not isinstance(eff, (int, float)) or isinstance(eff, bool):
+            last_reason = f"{name} variants[{var}].effective_days not numeric"
+            continue
+        if vd.get("quality_ok") is not True:
+            last_reason = f"{name} variants[{var}].quality_ok != true"
+            continue
+        budget_b = (d.get("method") or {}).get("budget_b")
+        if budget_b != SHATTER_BUDGET_B:
+            last_reason = f"{name} method.budget_b {budget_b} != {SHATTER_BUDGET_B}"
+            continue
+        # ANTI-SELF-REFERENCE: effective_days must equal the real wall-clock
+        # days = budget_b / (sustained_tok_s * 86400). Recompute and require the
+        # receipt's stated value to agree; this rejects the K_floor/throughput
+        # self-referential number (0.9803) that does not equal the honest 1.30.
+        tok_s = vd.get("sustained_tok_s")
+        if not isinstance(tok_s, (int, float)) or isinstance(tok_s, bool) or tok_s <= 0:
+            last_reason = f"{name} variants[{var}].sustained_tok_s not numeric/positive"
+            continue
+        honest_eff = budget_b / (tok_s * 86400.0)
+        if abs(honest_eff - eff) / honest_eff > SHATTER_EFF_DAYS_TOL:
+            last_reason = (f"{name} {var} effective_days {eff} inconsistent with "
+                           f"budget_b/(sustained_tok_s*86400)={honest_eff:.4f} "
+                           f"(self-referential effective_days REJECTED)")
+            continue
+        if honest_eff > SHATTER_EFFECTIVE_DAYS_FLOOR:
+            last_reason = (f"{name} {var} honest effective_days {honest_eff:.4f} > "
+                           f"floor {SHATTER_EFFECTIVE_DAYS_FLOOR}")
+            continue
+        return True, (f"{name}: {var} honest effective_days={honest_eff:.4f} <= "
+                      f"{SHATTER_EFFECTIVE_DAYS_FLOOR} GPU-day on "
+                      f"{budget_b:.4g} ceiling (consistency-checked; "
+                      f"budget-fit MEASURED, not calendar-projected)")
+    return False, last_reason
+
+
+def _requested_run_compute_fit(requested_run):
+    """Fail-closed validate+price a REQUESTED-RUN descriptor for the
+    per-run-truthful G-budget path.
+
+    requested_run: {"source": <str>, "total_steps": <number>,
+                    "flops_per_step": <number>}  OR
+                   {"source": <str>, "total_steps": <number>,
+                    "params": <number>, "batch": <number>, "seq": <number>}
+    (flops_per_step, when absent, is derived as 6*params*batch*seq -- the
+    Kaplan/Chinchilla dense-transformer forward+backward convention already
+    used by cbase_grow_live.py's own _flops_per_step.)
+
+    Returns (well_formed, fit_ok, detail):
+      well_formed=False -> the descriptor itself is broken; g_budget MUST
+      treat this as BLOCKED, never as "no descriptor supplied" -- a malformed
+      descriptor is a NEW error path and fails closed, it is never silently
+      absorbed into the old byte-identical fallback."""
+    def _pos_num(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and x > 0
+
+    if not isinstance(requested_run, dict):
+        return False, None, f"requested_run is not a dict: {requested_run!r}"
+    source = requested_run.get("source")
+    if not isinstance(source, str) or not source.strip():
+        return False, None, "requested_run.source missing/empty"
+    total_steps = requested_run.get("total_steps")
+    if not _pos_num(total_steps):
+        return False, None, f"requested_run.total_steps invalid: {total_steps!r}"
+
+    flops_per_step = requested_run.get("flops_per_step")
+    if flops_per_step is not None:
+        if not _pos_num(flops_per_step):
+            return False, None, f"requested_run.flops_per_step invalid: {flops_per_step!r}"
+    else:
+        params = requested_run.get("params")
+        batch = requested_run.get("batch")
+        seq = requested_run.get("seq")
+        if not (_pos_num(params) and _pos_num(batch) and _pos_num(seq)):
+            return False, None, (
+                "requested_run needs flops_per_step OR (params, batch, seq); "
+                f"got params={params!r} batch={batch!r} seq={seq!r}")
+        flops_per_step = 6.0 * params * batch * seq   # Kaplan/Chinchilla 6N
+
+    cost_flops = flops_per_step * total_steps
+    fit_ok = cost_flops <= MICRO_FIT_CEILING_FLOPS
+    detail = (f"requested_run[{source}]: total_steps={total_steps:g}, "
+             f"cost={cost_flops:.4g} FLOPs (6*params*tokens estimate) vs "
+             f"micro-fit ceiling {MICRO_FIT_CEILING_FLOPS:.4g} FLOPs "
+             f"({MICRO_FIT_FRACTION * 100:g}% of the certified full-ladder "
+             f"FLOPs budget) -> {'FIT' if fit_ok else 'EXCEEDS'}")
+    return True, fit_ok, detail
+
+
+def g_budget(launch_date, shatter_fit=None, requested_run=None):
+    # REQUESTED-RUN compute fit: only engages when the caller names exactly
+    # what THIS launch will execute. A malformed descriptor fails closed
+    # (BLOCKED) -- it is a NEW error path, never silently treated as "absent"
+    # (which would fall through to the possibly-GREEN full-ladder math below).
+    if requested_run is not None:
+        well_formed, fit_ok, rr_detail = _requested_run_compute_fit(requested_run)
+        if not well_formed:
+            return "BLOCKED", f"requested_run malformed: {rr_detail}"
+        if fit_ok:
+            return "GREEN", rr_detail
+        # Above the micro-fit ceiling: falls through to the byte-identical
+        # full-ladder math below -- this call may still be a real full-ladder
+        # dispatch that passes calendar/SHATTER on its own merits.
+
+    # First-principles grounding (supersedes the calendar proxy): when a banked
+    # SHATTER verdict proves the efficiency lever (effective_days <= 1 GPU-day
+    # for the certified config on the 2.2e9 ceiling), the budget-fit holds by
+    # MEASUREMENT and the calendar countdown is a stale deadline artifact. The
+    # calendar floor remains the fail-closed fallback when no such proof exists.
+    # shatter_fit is injectable for the selftest; main() leaves it None -> live.
+    fit_ok, fit_why = shatter_fit if shatter_fit is not None else _shatter_compute_fit()
+    if fit_ok:
+        return "GREEN", fit_why
     days = (DEADLINE - launch_date).days
     if days < ENVELOPE_DAYS_FLOOR:
         return "BLOCKED", (f"days-remaining {days} < envelope floor "
-                           f"{ENVELOPE_DAYS_FLOOR} (fp19-bench unstacked)")
+                           f"{ENVELOPE_DAYS_FLOOR} (fp19-bench unstacked); "
+                           f"no banked SHATTER compute-fit ({fit_why})")
     return "GREEN", (f"{days} d to {DEADLINE.isoformat()} >= "
                      f"{ENVELOPE_DAYS_FLOOR} d unstacked envelope")
 
@@ -438,7 +618,7 @@ ROWS = ["G-corpus", "G-tokenizer", "G-shards", "G-config", "G-governor",
 def gate(launch_date, multimodal_config_path=None,
          mm_manifest_path=None, mm_tokenizer_path=None,
          mm_holdout_size=None, mm_holdout_manifest_path=None,
-         efficiency_receipt_path=None):
+         efficiency_receipt_path=None, requested_run=None):
     """Returns [(row, status, detail), ...] in table order.
 
     multimodal_config_path: if provided, G-efficiency binds against this config's SHA
@@ -448,6 +628,10 @@ def gate(launch_date, multimodal_config_path=None,
     mm_holdout_size: if provided, item 2 asserts holdout_n==mm_holdout_size (--probe-holdout-size).
     mm_holdout_manifest_path: if provided, item 3 validates that explicit frozen holdout manifest.
     efficiency_receipt_path: if provided, G-efficiency validates that explicit receipt.
+    requested_run: if provided, G-budget prices THIS descriptor's measured cost against
+    the fixed micro-fit ceiling instead of the full v0-ladder calendar/SHATTER math (see
+    g_budget / _requested_run_compute_fit). Absent (default, every existing caller),
+    above-ceiling, or malformed values fall back to today's byte-identical behavior.
     """
     out = []
     for name in ROWS:
@@ -472,7 +656,7 @@ def gate(launch_date, multimodal_config_path=None,
         elif name == "G-world":
             st, dt = g_world()
         elif name == "G-budget":
-            st, dt = g_budget(launch_date)
+            st, dt = g_budget(launch_date, requested_run=requested_run)
         elif name == "G-prereg":
             st, dt = g_prereg()
         elif name == "G-efficiency":
@@ -553,9 +737,53 @@ def _selftest():
         # a receipt present is GREEN only if its declared shards are present +
         # byte-matched; the validator is exercised in token_shards_v0 selftest.
         assert g_shards()[0] in ("GREEN", "BLOCKED")
-    # budget: green with margin, blocks past the envelope floor
-    assert g_budget(date(2026, 6, 11))[0] == "GREEN"
-    assert g_budget(date(2026, 6, 20))[0] == "BLOCKED"   # 2 d < 4.55
+    # budget: calendar fail-closed path (shatter_fit injected as False so the
+    # calendar governs, regardless of which shatter receipts are on disk today).
+    assert g_budget(date(2026, 6, 11), shatter_fit=(False, "no-proof"))[0] == "GREEN"
+    assert g_budget(date(2026, 6, 20), shatter_fit=(False, "no-proof"))[0] == "BLOCKED"  # 2d < 4.55
+    # compute-fit grounding: a proven SHATTER lever greens regardless of the
+    # (possibly stale) calendar — and a false proof must NOT green a sub-floor date.
+    assert g_budget(date(2026, 6, 20), shatter_fit=(True, "lever-proven"))[0] == "GREEN"
+    # proof overrides even a wildly-expired calendar (days far negative).
+    assert g_budget(date(2999, 1, 1), shatter_fit=(True, "lever-proven"))[0] == "GREEN"
+    # ...but with NO proof, that same expired date BLOCKS (fail-closed).
+    assert g_budget(date(2999, 1, 1), shatter_fit=(False, "no-proof"))[0] == "BLOCKED"
+    # live grounding: _shatter_compute_fit is fail-closed (tuple shape, no raise).
+    _live_fit = _shatter_compute_fit()
+    assert isinstance(_live_fit, tuple) and isinstance(_live_fit[0], bool)
+    # REQUESTED-RUN compute-fit (per-run-truthful micro path, cbase_grow_live.py):
+    # a well-formed micro descriptor GREENs on measured cost, overriding even a
+    # wildly-expired calendar with no SHATTER proof -- G-budget is now truthful
+    # about what THIS launch costs, not the full ladder.
+    _micro_rr = {"source": "selftest-micro", "total_steps": 120,
+                 "params": 368354304, "batch": 16, "seq": 1024}
+    st_rr, dt_rr = g_budget(date(2999, 1, 1), shatter_fit=(False, "no-proof"),
+                            requested_run=_micro_rr)
+    assert st_rr == "GREEN" and "FIT" in dt_rr, (st_rr, dt_rr)
+    # a descriptor whose measured cost EXCEEDS the micro-fit ceiling falls
+    # through to the byte-identical full-ladder math -- unchanged BLOCKED on
+    # a sub-floor date with no SHATTER proof (same status+detail as if no
+    # requested_run had been passed at all).
+    _huge_rr = {"source": "selftest-huge", "total_steps": 10**9,
+                "params": 368354304, "batch": 16, "seq": 1024}
+    _baseline = g_budget(date(2026, 6, 20), shatter_fit=(False, "no-proof"))
+    st_huge, dt_huge = g_budget(date(2026, 6, 20), shatter_fit=(False, "no-proof"),
+                                requested_run=_huge_rr)
+    assert (st_huge, dt_huge) == _baseline, (st_huge, dt_huge, _baseline)
+    # a malformed descriptor is a NEW error path and fails closed regardless
+    # of date/proof -- it must NEVER silently fall through to a possibly-
+    # GREEN calendar/SHATTER verdict.
+    st_bad, dt_bad = g_budget(date(2026, 6, 11), shatter_fit=(True, "lever-proven"),
+                              requested_run={"source": "selftest-bad"})  # no total_steps
+    assert st_bad == "BLOCKED" and "malformed" in dt_bad, (st_bad, dt_bad)
+    st_bad2, dt_bad2 = g_budget(date(2026, 6, 11), shatter_fit=(True, "lever-proven"),
+                                requested_run="not-a-dict")
+    assert st_bad2 == "BLOCKED" and "malformed" in dt_bad2, (st_bad2, dt_bad2)
+    # gate() threads requested_run through to G-budget only; other rows unaffected.
+    _rows_rr = gate(date(2999, 1, 1), requested_run=_micro_rr)
+    assert [r[0] for r in _rows_rr] == ROWS
+    _budget_row = next(r for r in _rows_rr if r[0] == "G-budget")
+    assert _budget_row[1] == "GREEN" and "FIT" in _budget_row[2], _budget_row
     # prereg: blocked iff no frozen receipt (time-robust)
     cands = glob.glob(f"{NC}/{FP26_PREREG_GLOB}")
     if not cands:
