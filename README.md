@@ -142,6 +142,11 @@ this repository alone:
    leaderboard. Any receipt that depends on paid access is
    `invalid_paid_api_exit_ramp` and is not authoritative evidence.
 
+See `docs/spec/conditions-v1.md` for the full board-condition registry
+(C0–C15, C-ORGANISM, C-SCALE, and the rest) that these limits are scoped
+against — it is the canonical machine-checkable definition of what "done"
+requires.
+
 ## Repository layout
 
 | path | what |
@@ -149,6 +154,7 @@ this repository alone:
 | `GOAL.md` | the standing goal, verbatim, with binding reading notes |
 | `STATE.md` | the single bounded position ledger |
 | `GOVERNANCE.md` | repository structure, branch lifecycle, and commit policy |
+| `kernel-v1.0.manifest` | frozen sha256 integrity record over the NC-K kernel files under `scripts/nck/` (see `docs/nck-spec-v0.md`); a per-file checksum drift here is a gate violation, not a stylistic diff |
 | `scripts/` | the harness: cycle spine, readiness gate, benchmark harness, A/B/C wheel, governor binding, state substrate, training/eval surfaces |
 | `receipts/` | one JSON per executed job — the only admissible evidence |
 | `receipts/ledger/` | verified-episode ledger + matched-control pool + committed views |
