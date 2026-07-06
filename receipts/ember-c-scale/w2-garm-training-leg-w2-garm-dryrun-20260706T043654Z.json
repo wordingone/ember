@@ -1,0 +1,9 @@
+{
+  "maintainer_window_env": "EMBER_W2_MAINTAINER_WINDOW_CONFIRMED",
+  "reason": "acceptance (a) proves the full sequence minus the training leg; the real GPU training leg (acceptance (b)) fires only inside a maintainer-opened window, behind the decontam receipt -- never fired by this builder",
+  "run_id": "w2-garm-dryrun-20260706T043654Z",
+  "status": "SKIPPED_DRY_RUN",
+  "ticket": "ISSUE-113-W2-GARM-TRAINING-LEG",
+  "ts": "20260706T043658Z",
+  "window_confirmed": false
+}
