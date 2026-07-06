@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C2 (status probe / TDD).
+"""Ember totality test â€” Condition C2 (status probe / TDD).
 
-C2 — Real external held-out world task.
+C2 â€” Real external held-out world task.
   R: task/heldout/labels/evaluator/source/license/hashes from an EXTERNAL
      source, FROZEN BEFORE the candidate run.
   Does NOT count: candidate path reading heldout labels, gold echoes,
@@ -10,13 +10,13 @@ C2 — Real external held-out world task.
   CHK: frozen-rows hash predates the candidate receipt; no label-read in the
      candidate path.
 
-Authoritative text: <<external>>/state/<spec> §4.2 (C2).
-Receipt hint: receipts/<peer-loop>/* — frozen-rows hash vs candidate
+Authoritative text: <<external>>/state/<spec> Â§4.2 (C2).
+Receipt hint: receipts/<peer-loop>/* â€” frozen-rows hash vs candidate
 receipt.
 
 This is a STATUS PROBE. It ALWAYS exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
-inspecting state under <external-state> — never hardcoded.
+inspecting state under <external-state> â€” never hardcoded.
 
 LANE-14 HARDENING (2026-07-02, R8 probe-faithfulness audit,
 docs/goalforge-debate-ledger.md row R8): C2 was graded the one
@@ -225,7 +225,7 @@ def main():
         fr_disk = win_to_wsl(fr_path)
         if fr_disk is None:
             # The receipt records a C:\tmp build path; the frozen rows also live
-            # under ROOT/receipts/<peer-loop>/ — locate by basename.
+            # under ROOT/receipts/<peer-loop>/ â€” locate by basename.
             base = os.path.basename(fr_path.replace("\\", "/"))
             alt = os.path.join(ROOT, "receipts", "<peer-loop>", base)
             fr_disk = alt if os.path.isfile(alt) else None

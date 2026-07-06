@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""test_surface2.py — STATUS PROBE for Ember goal condition C-SURFACE2.
+"""test_surface2.py â€” STATUS PROBE for Ember goal condition C-SURFACE2.
 
 Registry text: DRAFT, not yet landed in docs/spec/conditions-v1.md (see
 scratch/surface2-registry-entry.md for the exact snippet). gh issue #11
@@ -15,14 +15,14 @@ Surface-2 telemetry receipts live on the physically separate EXECUTION
 tree. Root resolution: `EMBER_EXEC_ROOT` env var, default `<local-exec-root>`
 (frozen spec v1, verbatim).
 
-CHK enforced here (offline, filesystem + one local subprocess — git log,
+CHK enforced here (offline, filesystem + one local subprocess â€” git log,
 no network): GREEN iff ALL THREE hold, checked in this order (first
 failing clause is the reported reason, same short-circuit discipline as
 test_c_proc.py / test_c_legib.py):
 
   (a) the NEWEST receipt under `<EMBER_EXEC_ROOT>/receipts/
       ember-surface2-telemetry/*/*.json` (excluding underscore-prefixed
-      meta dirs such as `_gate/` — see below) is non-synthetic AND its
+      meta dirs such as `_gate/` â€” see below) is non-synthetic AND its
       `ts` is within STALE_DAYS=14 days of the newest work commit on
       EMBER_EXEC_ROOT (`git log -1 --format=%ct HEAD`). Non-synthetic is
       checked two ways, both real fields:
@@ -34,23 +34,23 @@ test_c_proc.py / test_c_legib.py):
           receipts/ember-surface2-telemetry/2026-06-28T05-30-45-Z/
           render-test-receipt.json, whose own `note` field reads
           "Synthetic marker event appended as test artifact; does NOT
-          represent real training data." — a self-declared test fixture,
+          represent real training data." â€” a self-declared test fixture,
           not live telemetry, even though it carries no
           `_synthetic_control_fixture` flag).
       Stale telemetry (age > STALE_DAYS) or a synthetic newest receipt =
-      RED, quoting which sub-check fired and the receipt name — the
+      RED, quoting which sub-check fired and the receipt name â€” the
       surface must be CURRENTLY alive, not archaeologically alive.
       Receipt-absent (no `*/*.json` found under the surface-2 telemetry
       dir) or tree-absent (the dir itself does not exist under
       EMBER_EXEC_ROOT) = RED (frozen spec v1, verbatim: "Receipt-absent
       or tree-absent = RED"). This is the one distinction from the
-      EMBER_EXEC_ROOT-not-found case just below, which is UNEVALUABLE —
+      EMBER_EXEC_ROOT-not-found case just below, which is UNEVALUABLE â€”
       that is a probe/environment failure ("could not even look"), while
       an EMBER_EXEC_ROOT that exists but has no surface-2 receipts is a
       real, looked-at absence (RED, per the frozen spec).
 
   (b) that receipt, or a SIBLING file in the same timestamped receipt
-      directory, names a steer/kill event via a schema-checked field —
+      directory, names a steer/kill event via a schema-checked field â€”
       not a keyword grep. The real schema is `FinetuneControlCmd` (
       tools/ember-cli/src/services/finetune-control.ts, spec:
       tools/ember-cli/specs/surface2-steerable-watch-control.md AC5-AC7):
@@ -59,44 +59,44 @@ test_c_proc.py / test_c_legib.py):
       `state/ember-finetune-control.jsonl` (CONTROL_CHANNEL_PATH). Per
       that schema: `verb="stop"` is KILL; `verb` in {"pause","resume",
       "adjust"} is STEER (mid-run redirection); `verb="start"` is neither
-      and does not count. The probe checks the literal `verb` key —
+      and does not count. The probe checks the literal `verb` key â€”
       first on the receipt itself (in case a receipt IS a captured
       control-channel record), then on every sibling file in the same
       directory (parsed whole-file as JSON, falling back to JSONL
       line-by-line, matching how the control channel is actually
-      written). No event found = RED — this is also the clause that
+      written). No event found = RED â€” this is also the clause that
       correctly stays RED on the real June-28 receipts today: the
       control-channel writer (Part B of the spec above) exists as tested
       CLI code, but the spec's own "NOT in this spec" section states the
       live receipt of the CLI actually steering/killing a REAL governed
-      finetune "rides the next GPU window" — it has not happened yet,
+      finetune "rides the next GPU window" â€” it has not happened yet,
       confirmed by receipts/ember-surface2-telemetry/_gate/verdict.json's
       own `finetune_watch_half: PENDING` verdict.
 
   (c) a token-delta anti-fixture field is present and >0 (the /metrics
-      gate class — reference_local_model_receipt_metrics_antifixture_gate;
+      gate class â€” reference_local_model_receipt_metrics_antifixture_gate;
       doc shorthand `token_delta`, but the REAL field name observed in
       this receipt family is `metrics_delta`, pinned from
       receipts/ember-surface2-telemetry/2026-06-28T04-08-08Z/receipt.json
       (`"metrics_delta": 0`, a top-level int in the surface-2 schema).
       A sibling surface (surface-1, ember-cockpit-live) nests the same
-      concept as `metrics_delta.tokens_predicted_delta` — the probe
+      concept as `metrics_delta.tokens_predicted_delta` â€” the probe
       accepts either shape (plain number, or dict with that key) since
       both are real, observed shapes of the identically-named field
-      across this repo's receipt families. Missing or <=0 = RED — no
+      across this repo's receipt families. Missing or <=0 = RED â€” no
       proof a real model process produced real output, not a canned
       marker.
 
 Why offline except one subprocess: (a)'s age check needs the EXECUTION
 tree's real commit clock (local bytes via git, same discipline as
-test_c_proc.py's `_git`/`_commit_time` helpers) — no receipt could stand
+test_c_proc.py's `_git`/`_commit_time` helpers) â€” no receipt could stand
 in for that without becoming a second, driftable copy of git's own
 timestamp.
 
-DISCIPLINE: status probe — always exits 0, one line, real bytes decide, no
+DISCIPLINE: status probe â€” always exits 0, one line, real bytes decide, no
 hardcoded verdict. RED / GREEN / UNEVALUABLE(env); receipt-absent is RED
 (frozen spec v1 override of this package's usual receipt-absent-on-a-
-scannable-tree convention — see clause (a) note above for the exact split
+scannable-tree convention â€” see clause (a) note above for the exact split
 this probe draws between "tree not found" (UNEVALUABLE) and "tree found,
 no receipts in it" (RED)).
 """
@@ -114,7 +114,7 @@ from datetime import datetime, timezone
 DEFAULT_EXEC_ROOT = os.environ.get("EMBER_EXEC_ROOT", "<local-exec-root>")
 STALE_DAYS = 14
 SURFACE_SUBPATH = os.path.join("receipts", "ember-surface2-telemetry")
-STEER_KILL_VERBS = {"stop", "pause", "resume", "adjust"}  # "start" excluded — neither steer nor kill
+STEER_KILL_VERBS = {"stop", "pause", "resume", "adjust"}  # "start" excluded â€” neither steer nor kill
 
 INVALID_TOKENS = [
     "invalid_surface2_receipt_absent",
@@ -195,7 +195,7 @@ def _iter_receipt_candidates(surface_dir):
     Underscore-prefixed dirs (e.g. `_gate/`) are excluded: `_gate/
     verdict.json` is the review gate's own PARTIAL/PENDING assessment of the
     surface (a different, meta artifact class), never a raw per-run
-    telemetry receipt — the three real timestamped sibling dirs observed
+    telemetry receipt â€” the three real timestamped sibling dirs observed
     2026-06-28 (`2026-06-28T04-08-08Z/`, `2026-06-28T05-15-00Z/`,
     `2026-06-28T05-30-45-Z/`) are the actual receipt-carrying shape."""
     if not os.path.isdir(surface_dir):
@@ -248,7 +248,7 @@ def _verb_of(obj):
 def _find_steer_kill_event(receipt_path, data):
     """Schema-checked per FinetuneControlCmd (tools/ember-cli/src/services/
     finetune-control.ts): checks the receipt's own `verb` field first, then
-    every sibling file in the same directory — whole-file JSON, falling
+    every sibling file in the same directory â€” whole-file JSON, falling
     back to JSONL line-by-line (the control channel's real on-disk format
     is one JSONL line per command). Returns (verb, source_filename) or
     (None, None)."""

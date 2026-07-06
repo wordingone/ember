@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C11 (status probe / TDD).
+"""Ember totality test â€” Condition C11 (status probe / TDD).
 
-C11 — Cycle-duration developmental growth.
+C11 â€” Cycle-duration developmental growth.
   R: receipt-backed progression toward 1h/3h/24h milestones, each buying deeper
      horizon / larger heldout / stronger consolidation / broader transfer / real
      capacity growth, and deletion-sensitive (removing the longer-horizon
@@ -23,7 +23,7 @@ Receipt hint: scripts/ember_native_one_hour_cycle.py,
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
-inspecting state under <external-state> — never hardcoded.
+inspecting state under <external-state> â€” never hardcoded.
 
 Run ONLY via:  wsl python3 <this file>
 Under WSL the execution root may mount at <local-mount-point>/ or /mnt<local-mount-point>/ on this host.
@@ -137,7 +137,7 @@ def raw_text(path):
 
 def check_invalid_tokens(label, text):
     """Return a list of (token, label) hits for any invalid-token appearing as a
-    LIVE string in the receipt — never inside a legitimate field name or an
+    LIVE string in the receipt â€” never inside a legitimate field name or an
     explanatory field that NEGATES the failure mode.
 
     Two classes of legitimate, non-violating mentions are scrubbed before

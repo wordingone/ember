@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C14 (status probe / TDD).
+"""Ember totality test â€” Condition C14 (status probe / TDD).
 
-C14 — RLM/iGRPO harness-native training organ (pre-loop gate; non-killable).
+C14 â€” RLM/iGRPO harness-native training organ (pre-loop gate; non-killable).
   R, conjunctive: unsupervised pretraining created the OWNED base (C-BASE;
     frozen is closed); a CC-level resident harness with the clean-room port of
     `avir-cli` as the visible body at near-99% parity (function/UI/UX/backend/
     launch/process-supervision/hooks/dispatch/state/comms/receipts/rollback/
-    native goal mechanics — headless is one surface, not parity); a TRAINABLE
+    native goal mechanics â€” headless is one surface, not parity); a TRAINABLE
     NEURAL POLICY whose parameters update from verifier-conditioned experience
     during the run (full weights / adapter / LoRA / inspectable state_dict delta
     tied to the action-selecting policy); `train_multimodal_v0.py` inventoried+
@@ -35,7 +35,7 @@ C14 — RLM/iGRPO harness-native training organ (pre-loop gate; non-killable).
 
 This is a STATUS PROBE. It ALWAYS exits 0 and prints exactly one line beginning
 with "RED " or "GREEN ". RED/GREEN is determined by really inspecting the real
-receipts/artifacts under <external-state> — never hardcoded.
+receipts/artifacts under <external-state> â€” never hardcoded.
 
 What a GREEN here actually requires (receipts-only, no self-attestation):
   1. The LATEST resident-training-gate receipt (newest by internal `ts`, with
