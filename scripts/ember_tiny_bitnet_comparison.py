@@ -15,8 +15,8 @@ from receipt_write import checked_write
 
 TICKET = "EMBER-TINY-BITNET-COMPARISON"
 SHA_CONVENTION = "bytes/tensors as-is; tensor hash includes name, shape, dtype, and CPU contiguous bytes"
-DEFAULT_OUT_ROOT = Path(r"<local-path>")
-DEFAULT_GATE_ROOT = Path(r"<local-path>")
+DEFAULT_OUT_ROOT = Path(__file__).resolve().parent.parent / "scratch" / "tiny-bitnet-comparison"
+DEFAULT_GATE_ROOT = Path(__file__).resolve().parent.parent / "scratch" / "resident-training-gate"
 
 
 def ts() -> str:
