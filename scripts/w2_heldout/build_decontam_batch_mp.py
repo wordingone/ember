@@ -1039,7 +1039,12 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
     n_windows = compute_n_windows_from_manifest(manifest, seq, n_mtp=n_mtp)
 
     pool_size = batch_size * pool_oversample
-    pool_start, disjoint_check = reserve_pool(n_windows, pool_size, ceiling_steps, train_batch)
+    # If --pool-start-index is provided, use it directly; otherwise compute via reserve_pool
+    if args.pool_start_index is not None:
+        pool_start = args.pool_start_index
+        disjoint_check = assert_disjoint_from_training(pool_start, ceiling_steps, train_batch)
+    else:
+        pool_start, disjoint_check = reserve_pool(n_windows, pool_size, ceiling_steps, train_batch)
     # First index training can NEVER reach (assert_disjoint_from_training's own
     # boundary: max_training_window_index = ceiling_steps*train_batch - 1, so
     # this is max_training_window_index + 1). Replacement draws must never go
@@ -1233,6 +1238,8 @@ def main():
                     help="Run self-match exclusion equivalence test (issue GF-W2-01 verification)")
     ap.add_argument("--equivalence-test-external", action="store_true",
                     help="Run external contamination detection equivalence test (validates fix doesn't suppress real contamination)")
+    ap.add_argument("--pool-start-index", type=int, default=None,
+                    help="Override pool start index (default: tail placement via held_out_window_start). Use for mid-corpus placement etc.")
     args = ap.parse_args()
 
     if not args.shard_dir:
