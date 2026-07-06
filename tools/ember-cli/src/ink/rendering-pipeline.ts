@@ -630,11 +630,25 @@ export function createRenderer(options: RendererOptions): Renderer {
 
   let prevFrame: Frame | null = null;
   let currentFrame: Frame | null = null;
+  // issue #286: the diff in diffFrames() only ever iterates curr's own width/height, so on a
+  // resize to SMALLER dimensions, cells the previous (larger) frame held outside the new bounds
+  // are never targeted by any patch -- they're simply never mentioned again. That's fine on a
+  // real terminal ONLY if the terminal itself guarantees those cells are gone; ConPTY (and,
+  // per the operator's own screenshots, real terminals too) can reflow/carry old wide-frame
+  // content into rows the new narrower frame never touches, leaving stale fragments (this is
+  // exactly the "stray border fragment" / "disconnected header" class of defect). Tracking the
+  // last-painted width/height and forcing a full clear + full repaint (bypass the diff entirely)
+  // the moment either changes guarantees no off-frame leftovers survive a live resize.
+  let prevW = -1;
+  let prevH = -1;
 
   return {
     render(rootNode: RenderNode): void {
       const w = stdout.columns;
       const h = stdout.rows;
+      const geometryChanged = w !== prevW || h !== prevH;
+      prevW = w;
+      prevH = h;
 
       // Build output for the whole frame
       const output = new Output(stylePool, hyperlinkPool);
@@ -654,12 +668,15 @@ export function createRenderer(options: RendererOptions): Renderer {
 
       currentFrame = frame;
 
-      // Diff
-      const patch = diffFrames(prevFrame, currentFrame);
+      // Diff -- force a full repaint (nothing carried from prevFrame) on any geometry change,
+      // so a shrink never leaves stale off-frame content unaddressed.
+      const patch = diffFrames(geometryChanged ? null : prevFrame, currentFrame);
       const runs  = optimizePatch(patch);
 
-      // Write minimal output
-      let buf = "";
+      // Write minimal output -- clear-screen first on a geometry change so any terminal-side
+      // reflow of the previous (differently-sized) frame's content can't leave visible remnants
+      // outside the cells this frame's diff will actually (re)write.
+      let buf = geometryChanged ? "\x1b[2J\x1b[H" : "";
       let prevStyleRef: StyleRef = 0;
       for (const run of runs) {
         buf += cursorPosition(run.row + 1, run.startCol + 1);

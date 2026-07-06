@@ -1,0 +1,28 @@
+{
+  "ts": "2026-07-06T21:38:24.594Z",
+  "tag": "after",
+  "pid": 17432,
+  "receipts": [
+    {
+      "label": "wide",
+      "cols": 208,
+      "rows": 22,
+      "txtName": "after-wide-208x22.txt",
+      "pngName": "after-wide-208x22.png"
+    },
+    {
+      "label": "tall",
+      "cols": 105,
+      "rows": 55,
+      "txtName": "after-tall-105x55.txt",
+      "pngName": "after-tall-105x55.png"
+    },
+    {
+      "label": "wide-again",
+      "cols": 208,
+      "rows": 22,
+      "txtName": "after-wide-again-208x22.txt",
+      "pngName": "after-wide-again-208x22.png"
+    }
+  ]
+}
