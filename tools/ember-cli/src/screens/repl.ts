@@ -30,6 +30,7 @@ import {
   PromptInput,
   usePromptInput,
   parseInputMode,
+  type PromptInputState,
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
 import { Homescreen }                   from "../components/logo-homescreen.ts";
@@ -172,6 +173,36 @@ export function shouldUseVirtualScroll(env: NodeJS.ProcessEnv = process.env): bo
 
 export function shouldShowMessageActions(env: NodeJS.ProcessEnv = process.env): boolean {
   return !env["EMBER_DISABLE_MESSAGE_ACTIONS"];
+}
+
+/**
+ * Eagerly marks the input buffer as consumed in its ref mirror, synchronously
+ * -- ember #276 (live acceptance leg (b): /goal <objective> persisted a goal
+ * then fired ZERO continuations across a 30-minute wall cap).
+ *
+ * inputStateRef (below) is a plain ref synced to usePromptInput's React state
+ * only on this component's NEXT render (`inputStateRef.current = inputState`
+ * in the render body). This app's custom react-reconciler host config
+ * schedules updates triggered from outside React's own event dispatch via
+ * queueMicrotask/setTimeout -- and keyboard input always arrives that way
+ * (ink/stdin-bridge.ts's raw stdin listener calling _deliverKeyEvent, never a
+ * React SyntheticEvent) -- which needs a REAL event-loop turn to flush, not
+ * just a couple of promise-microtask ticks (empirically confirmed: see
+ * ink/app-resize.test.ts's resize-reflow finding, the same reconciler).
+ * submitPrompt's own slash-command dispatch (tryDispatchSlashCommand) only
+ * awaits already-resolved promises, so it resolves well before that pending
+ * render lands. A continuation poke that reads inputStateRef.current.text
+ * right after /goal's create handler cleared the input for submission
+ * therefore observed the STALE pre-clear text, wrongly reported
+ * queued_user_input, and silently skipped the very first continuation
+ * attempt -- with no later user input or turn-completion left to ever
+ * re-poke it, the goal sat at Active forever. Calling this at the exact
+ * moment inputActions.setText("") is invoked to submit removes that window.
+ */
+export function clearInputRefForSubmit(
+  inputStateRef: { current: PromptInputState },
+): void {
+  inputStateRef.current = { ...inputStateRef.current, text: "", cursor: 0 };
 }
 
 export function cycleReplPermissionMode(current: ReplPermissionMode): ReplPermissionMode {
@@ -727,6 +758,7 @@ export function ReplScreen({
       submit:       (text, origin) => {
         operatorReceiptsRef.current?.append("prompt_injected", text);
         inputActions.setText("");
+        clearInputRefForSubmit(inputStateRef);
         void submitPromptRef.current(text, origin);
       },
     });
@@ -1097,6 +1129,7 @@ export function ReplScreen({
       if (busyRef.current || !inputState.text.trim()) return;
       const text = inputState.text;
       inputActions.setText("");
+      clearInputRefForSubmit(inputStateRef);
       // Clear any pending suggestion when the user submits.
       setCurrentSuggestion(null);
       void submitPrompt(text, "keyboard");
