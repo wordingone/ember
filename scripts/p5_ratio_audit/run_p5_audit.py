@@ -87,65 +87,161 @@ N/A -- never assumed):
     itself IS implemented and unit-tested in --selftest against a
     synthetic 8-bit state tensor (per the spec's letter: the metric must
     be correct and tested even though currently unreachable in production).
-  - Checkpoint discovery: NO clean single receipt was found in this repo
-    snapshot recording an actual file path or HF-repo id for a "368M QAT",
-    "718M D6-segment", or "1.22B rung-1" checkpoint. Param-count
-    fingerprints exist (368354304 in receipts/fp19-bench-*.json and
-    receipts/fp33-e4-profiler-*.json; 718316544 in receipts/d6-bf16-
-    momentum-ab-20260703T160041Z.json) but carry no path field, and the
-    growth-chain receipts referenced BY NAME in other files (e.g.
-    "cbase-grow-live-live-20260703T053225Z.json") are not present as files
-    in this worktree. Per the spec's own INPUTS clause ("runtime-
-    discovered, fail-closed if absent"), discover_checkpoints() below scans
-    receipts/ for these fingerprints, records every receipt it consulted,
-    and reports MISSING (not a guess) for any checkpoint whose actual
-    weight location cannot be resolved. The real (no-flag) run is
-    EXPECTED to self-block on this box today -- that is the fail-closed
-    contract working as designed, not a harness defect. discover_checkpoints
-    is the single extension point: once a maintainer supplies real
-    receipts/HF-repo ids for the three checkpoints, wire them into
-    CHECKPOINT_FINGERPRINTS below; no other function needs to change.
+  - Checkpoint discovery (SUPERSEDED by the v1.2 ruling below): the
+    original grounding pass here found no clean receipt for a "368M QAT",
+    "718M D6-segment", or "1.22B rung-1" checkpoint (only param-count
+    fingerprints, no path field). The team lead independently verified the
+    real on-disk manifests and issued a corrected, binding ground-truth
+    ruling -- see "GROUND-TRUTH RULING (v1.2 amendment)" immediately below,
+    which is what discover_checkpoints() now targets. The three-fictional-
+    checkpoint framing above is kept in this docstring only as the
+    "what we thought going in, what we found instead" record the project's
+    own honesty discipline expects -- CHECKPOINT_FINGERPRINTS/the generic
+    param-count-guessing scan it drove no longer exist in this file.
 
-STATE + LR PINS (confound guards, verdict-critical -- spec verbatim):
-  Optimizer-state provenance must be identical IN KIND across the three
-  checkpoints. This harness reads optimizer_reset_on_resume per checkpoint
-  (from its own receipt) and computes a provenance_mismatch flag: True
-  unless all three checkpoints share the same reset-kind (all warm-loaded,
-  or all reset-at-grow). On provenance_mismatch, every cross-width
-  comparison (the rho_SR headline verdict) is forced UNRESOLVED rather
-  than KILL/PROMOTE/GRAY -- never silently compared across a provenance
-  discontinuity. The in-copy update is computed TWICE per checkpoint: at
-  the checkpoint's own LR (checkpoint-LR series, reported alongside) and
-  at pinned unit LR (lr=1.0, all else identical -- the UNIT-LR series is
-  the one all cross-width rho_SR verdicts are taken on).
+GROUND-TRUTH RULING (v1.2 amendment, team lead, 2026-07-06 -- pending
+formal landing in state/prereg-p0-probes-p5-p1tier0-v1.md as a dated
+deviation + docs/deviations.md entry, filed BEFORE any real-checkpoint
+execution per the freeze rule's own pre-execution-amendment allowance;
+nothing in this file has executed against real checkpoints, so this
+lands clean). The team lead verified the real on-disk manifests directly
+(not reproducible from a receipt in THIS worktree for every field) and
+ruled:
+  REAL INVENTORY is ONE lineage, TWO widths, ONE executed grow event --
+  not three independent checkpoints:
+    PRE-GROW  -- models/cbase-grow-rung/rung1-20260703T155447Z/checkpoints/
+                 step-00000730 (~467M class, ff_seed=8192, model.pt sha256
+                 74a5b1d4c21b38fb4a8037bd079c2073516dee9a242849fc33fda191f4
+                 fa0f3b -- full hash per the team lead's follow-up ruling
+                 message, validated at runtime against the on-disk
+                 manifest.json['files']['model.pt'], never fabricated
+                 here), 3.8GB. optimizer.pt carried VERBATIM from an
+                 earlier parent segment ("stale shapes post-widening"
+                 caveat) -- stamped, NOT treated as a blocking provenance
+                 mismatch per this ruling (see real_inventory_provenance()
+                 below).
+    GROW      -- ff_widening_net2net at step 730 -- the SAME deterministic
+                 duplication already grounded above
+                 (scripts/cbase_grow_dryrun.py::widen_state_dict): no
+                 noise term, function-preserving.
+    POST-GROW -- .../rung1-20260703T155447Z/stabilize/checkpoints/
+                 step-00000766 (4.7GB; model.pt sha256
+                 58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0
+                 c5e4659b -- pinned identically FOUR times in
+                 receipts/ember-c-e2b-paired/ember-c-e2b-paired-
+                 20260705T041045Z.json (owned_core_identity.checkpoint,
+                 .base_checkpoint_path, .model_pt_sha256,
+                 .base_model_pt_sha256 all agree; muon_split=True,
+                 mtp_enabled=True, quantized=False,
+                 no_borrowed_weights=True in the same receipt) -- this is
+                 the one identity this harness can independently confirm
+                 from a file already committed in this repo, not merely
+                 asserted by the ruling). Its OWN (fresh, post-stabilize)
+                 optimizer state -- admissible against the pre-grow side's
+                 parent-carried state because both are muon_split (same
+                 optimizer KIND), caveat stamped, per this ruling.
+    "368M QAT"     -- DOES NOT EXIST. receipts/fp19-bench-* is a pure
+                 fake-quant THROUGHPUT bench (QAT arm vs bf16/ternary
+                 arms) -- no checkpoint was ever saved. Dropped as a
+                 target (was never real).
+    "1.22B rung-1" (docs/spec/c-scale-s1-growth-chain-DRAFT.md's OWN
+                 "rung 1" row, N=1,221,633,024 at ff=16384) -- NEVER
+                 EXECUTED, priced only (pure-Python G-budget FIT estimate,
+                 no CUDA). NAMING COLLISION, resolved by this ruling: the
+                 folder-name "rung1-20260703T155447Z" (the ALREADY-
+                 EXECUTED 467M-class -> larger-class ff-widening above) IS
+                 this harness's "rung-1"; the DRAFT's 1.22B row is
+                 unrelated, un-started future work and is never conflated
+                 with it here.
+  Absolute filesystem roots are NEVER hardcoded in this published source
+  (leak-gate discipline: absolute local paths are never published). The
+  relative path suffixes above are already published verbatim in the
+  committed receipt cited above, so repeating them here (relative form
+  only) discloses nothing new. The absolute root is resolved ONLY at
+  runtime from the EMBER_MODELS_ROOT environment variable (see
+  MODELS_ROOT_ENV below) -- never guessed, never embedded literally.
+  Manifest schema note: the exact manifest.json key names for ff_seed /
+  ff_grown are INFERRED (not independently confirmed against a real
+  manifest.json in this worktree -- none exists here); the first real
+  execution against the actual manifests should verify these key names
+  and amend read_manifest_ff_fields() if they differ (a schema-name
+  discovery, filed before that execution, not a numeric/logic deviation).
+
+STATE + LR PINS (confound guards, verdict-critical -- spec verbatim,
+  AMENDED per the v1.2 ruling's specific admissibility call):
+  Optimizer-state provenance must be identical IN KIND across checkpoints
+  being compared. For the GENERIC (hypothetical three-checkpoint) case
+  this harness still enforces the strict spec rule via
+  provenance_mismatch() (used by --selftest/--dry-run, unchanged): True
+  unless every checkpoint shares the same reset-kind, forcing UNRESOLVED
+  on any cross-width comparison. For the REAL rung-1 pair specifically,
+  the team lead's ruling is a NAMED EXCEPTION, not a relaxation of the
+  rule in general: pre-grow's parent-carried state and post-grow's own
+  state are DIFFERENT in origin but the SAME KIND (both muon_split) --
+  real_inventory_provenance() encodes this as admissible-with-caveat,
+  never as a silent pass; the caveat text is stamped verbatim in every
+  real-run receipt. The in-copy update is computed TWICE per checkpoint:
+  at the checkpoint's own LR (checkpoint-LR series, reported alongside)
+  and at pinned unit LR (lr=1.0, all else identical -- the UNIT-LR series
+  is the one all cross-width comparisons are taken on).
 
 MEASUREMENTS (per checkpoint, per tensor class: attention / FF /
 embedding, computed separately) -- see the module-level functions:
   rho_sr        -- per-block ||update_b||_RMS / Delta_b (median over
                    blocks -> per-tensor; median over tensors -> per-class).
                    Block granularity is per-channel (see quantizer above);
-                   one "block" = one output-row scale.
+                   one "block" = one output-row scale. Real run: NO native
+                   QAT-trained checkpoint exists, so rho_sr/rho_noise's
+                   grid-step reads are INSTRUMENTED (the production
+                   _apply_fake_quant transform applied transiently, in-
+                   copy, to the two real bf16 checkpoints) rather than
+                   read off a resident QAT weight -- every real-run value
+                   is tagged measurement_mode="instrumented-not-resident"
+                   (see probe_qat_instrumented()); the regime-conditional
+                   assertion paths already in v1.1 ("fake-quant cells:
+                   assert quantized view != master view somewhere") cover
+                   this labeling directly.
   rho_noise     -- epsilon / Delta; epsilon = the REALIZED (measured, not
                    assumed) net2net duplicate-pair delta, empirically 0 for
                    this production grow path (see grounding above).
   rho_rank,
-  rho_grow      -- N/A-by-construction, all checkpoints (no projector).
-  rho_spec      -- at the grow event only (1.22B rung-1, PRE-grow state):
-                   ||M - P_dup(M)||_2 / sigma_max(M). N/A-by-construction
-                   at non-grow checkpoints (368M/718M). At the grow event:
+  rho_grow      -- N/A-by-construction, both real checkpoints (no
+                   projector exists in production).
+  rho_spec      -- at the grow event only (the rung-1 PRE-grow state,
+                   step-00000730): ||M - P_dup(M)||_2 / sigma_max(M).
                    N/A-with-reason="production-reset" whenever
-                   optimizer_reset_on_resume reads True for that checkpoint
-                   (the momentum matrix does not carry state across the
-                   grow, so there is no M to measure) -- itself a
-                   law-relevant finding per the spec.
+                   optimizer_reset_on_resume reads True for the grow
+                   segment (the momentum matrix does not carry state
+                   across the grow, so there is no M to measure) -- itself
+                   a law-relevant finding per the spec.
   rho_batch     -- Welford over the 16 frozen microbatches:
                    B_simple = tr(Sigma_g) / ||g_bar||^2;
                    rho_batch = (batch_size * (1-beta)^-1) / B_simple, beta
                    read from the live Muon param group's "momentum".
   rho_block     -- N/A (structural, no 8-bit optimizer state in
                    production; formula implemented + selftested anyway).
-  d_comm        -- commutation defect at the rung-1 grow event (measurement
-                   only, no pass bar at v1.1).
+  d_comm        -- commutation defect at the rung-1 grow event -- UPGRADED
+                   by the v1.2 ruling from aspiration to the harness's
+                   HEADLINE deliverable: theta = step-00000730, G = the
+                   deterministic ff-widening duplication reconstructed
+                   in-code from step-730's own weights, U = one Muon step
+                   (pre-grow's parent-carried state / LR for U_k,
+                   post-grow's own state / LR for U_{k+1}) on the frozen
+                   probe batch -- both U-then-G and G-then-U are fully
+                   computable from the two on-disk artifacts named above.
+                   Still a MEASUREMENT (no pass bar at v1.1/v1.2).
+
+CROSS-WIDTH SCOPING (v1.2 amendment): the real inventory gives exactly
+  TWO width points (pre-grow ~467M-class, post-grow larger-class), not
+  three. The frozen spec's own missing-point rule ("any missing width
+  point... UNRESOLVED; two-point 'monotone' is meaningless and is pre-
+  registered as non-evidence") applies directly and is NOT softened: the
+  formal per-class verdict on the real inventory is always
+  "UNRESOLVED-by-inventory" (see two_point_direction_report()), never
+  KILL/PROMOTE/GRAY. Per the ruling, the raw 2-point direction (which way
+  rho_SR moved, and by how much) is additionally reported as SUPPLEMENTARY
+  information alongside the forced UNRESOLVED verdict -- never promoted
+  to a verdict itself.
 
 ENGAGEMENT ASSERTIONS (before ANY artifact write; #216 fail-closed rule):
   checkpoint sha recorded; Delta read from the live quantizer (grid object
@@ -189,9 +285,12 @@ MODES:
                noise-floor rule, missing-point rule, mixed-per-class rule,
                provenance-mismatch-forces-UNRESOLVED rule), and receipt-
                schema round trip. Prints P5_AUDIT_SELFTEST_PASS.
-  --dry-run    CPU only, toy widths (24/32/48 hidden, standing in for the
-               368M/718M/1.22B ladder), NO real checkpoints -- builds three
-               self-contained toy transformers (own module, decoupled from
+  --dry-run    CPU only, toy widths (24/32/48 hidden -- an illustrative
+               THREE-point toy ladder, kept unchanged by the v1.2 ruling;
+               independent of the real TWO-checkpoint inventory below, it
+               exists only to exercise the generic 3-point verdict logic
+               end-to-end), NO real checkpoints -- builds three self-
+               contained toy transformers (own module, decoupled from
                timeshare_pretrain's contract loader -- same discipline as
                expc1), but reuses the PRODUCTION math byte-for-byte: the
                _apply_fake_quant per-channel int8 formula, the Muon/
@@ -201,10 +300,17 @@ MODES:
                engagement assertions + verdict logic) at zero real-
                experiment weight. NOT research-conclusive (receipt says
                so). Receipt -> receipts/p5-ratio-audit-dryrun-<ts>.json.
-  (no flag)    The real run: discover_checkpoints() (fail-closed if any
-               checkpoint is unresolved) then, only under
-               EMBER_GATE_AUTHORIZED=1, the full probe on the three real
-               checkpoints. NOT fired by this authoring session.
+  (no flag)    The real run: discover_checkpoints() resolves the TWO real
+               rung-1 lineage checkpoints (pre-grow step-00000730, post-
+               grow step-00000766, per the v1.2 ground-truth ruling above)
+               from EMBER_MODELS_ROOT + the manifests/receipts named
+               there, fail-closed if either is unresolved, then, only
+               under EMBER_GATE_AUTHORIZED=1, the full probe (headlined by
+               the real commutation defect d_comm) on those two
+               checkpoints, with the cross-width comparison reported as
+               UNRESOLVED-by-inventory + supplementary 2-point direction
+               (never KILL/PROMOTE/GRAY, per the no-2-point-monotone
+               rule). NOT fired by this authoring session.
 
 No git commits from inside this file. No downloads. No founder/user names
 anywhere in this file or its receipts. UTF-8 / plain-ASCII source.
@@ -234,8 +340,15 @@ from receipt_write import checked_write  # noqa: E402  (light; no torch)
 # ---------------------------------------------------------------------------
 
 SPEC_REF = "state/prereg-p0-probes-p5-p1tier0-v1.md#PROBE-P5"
-SPEC_VERSION = "v1.1"
+SPEC_VERSION = "v1.1+ckpt-inventory-v1.2"  # measurement spec is v1.1 (frozen,
+# unchanged); checkpoint-inventory amendment is v1.2 (team lead ruling,
+# 2026-07-06, pending formal landing in the frozen spec doc + docs/deviations.md)
 ISSUE = "#207"
+
+# Absolute root of the models/ directory tree on whatever box actually runs
+# the live path -- NEVER hardcoded (leak-gate discipline: absolute local
+# paths are never published). Resolved at runtime only.
+MODELS_ROOT_ENV = "EMBER_MODELS_ROOT"
 
 PROBE_SEED = 20260706
 PROBE_N_MICROBATCHES = 16
@@ -252,40 +365,67 @@ TENSOR_CLASSES = ("attention", "ff", "embedding")
 RATIO_NAMES = ("rho_sr", "rho_noise", "rho_rank", "rho_grow", "rho_spec",
                "rho_batch", "rho_block")
 
-# Checkpoint fingerprints -- the ONLY extension point for wiring in real
-# checkpoint locations once a maintainer supplies them. Each entry names the
-# param-count signature this authoring session found receipted (see module
-# docstring grounding pass) and the receipt-name substrings to search.
-CHECKPOINT_FINGERPRINTS = {
-    "368M_QAT": {
-        "label": "368M QAT",
-        "param_count_hint": 368354304,
-        "receipt_name_hints": ["fp19-bench", "fp33-e4-profiler", "qat", "368"],
-        "role": "non_grow",
+# RUNG1_LINEAGE -- the v1.2 ground-truth checkpoint registry (team lead
+# ruling, 2026-07-06). ONE lineage, TWO real checkpoints, ONE executed grow
+# event. Relative path suffixes are already published verbatim in the
+# committed receipt cited in known_sha256_source below -- republishing them
+# here (relative form only) discloses nothing new; the absolute root comes
+# ONLY from MODELS_ROOT_ENV at runtime. This is the SINGLE extension point:
+# if a maintainer later corrects a field (e.g. completes the pre-grow sha256
+# beyond its known prefix), edit ONLY this dict.
+# ff-shape naming-collision guard (v1.2 ruling item 4): NOT a manifest field
+# (grep-confirmed against scripts/cbase_grow_rung.py and
+# scripts/cbase_grow_dryrun.py -- both derive ff from the LOADED tensor's own
+# shape: `ff_seed = int(m_state["backbone_model.layers.0.mlp.gate_proj.weight"]
+# .shape[0])`, never from a manifest key). load_real_checkpoint() below
+# reproduces that exact check; RUNG1_LINEAGE's "expected_ff" is compared
+# against the OBSERVED tensor shape, not a manifest guess.
+RUNG1_LINEAGE = {
+    "pre_grow_rung1": {
+        "label": "rung-1 PRE-grow (~467M class)",
+        "role": "pre_grow",
+        "relative_path": "models/cbase-grow-rung/rung1-20260703T155447Z/checkpoints/step-00000730",
+        "known_model_pt_sha256": "74a5b1d4c21b38fb4a8037bd079c2073516dee9a242849fc33fda191f4fa0f3b",
+            # full hash, per the team-lead's follow-up ruling message (their
+            # first message gave only a "74a5b1d4..." prefix; the revision
+            # supplied the complete hash) -- validated against the on-disk
+            # manifest.json['files']['model.pt'] at runtime
+            # (scripts/timeshare_pretrain.py::read_manifest/load_checkpoint
+            # schema, grep-confirmed), never fabricated here.
+        "expected_ff": 8192,
+        "optimizer_state_provenance": "parent-carried (stale-shape caveat: "
+            "optimizer.pt carried verbatim from an earlier parent segment, "
+            "per the team-lead's manifest read)",
+        "known_sha256_source": None,  # not independently confirmed from a
+            # receipt committed in THIS worktree -- sourced from the ruling
+            # itself (team lead verified the manifest directly).
     },
-    "718M_D6_segment": {
-        "label": "718M D6-segment",
-        "param_count_hint": 718316544,
-        "receipt_name_hints": ["d6-bf16-momentum-ab", "d6", "718"],
-        "role": "non_grow",
-    },
-    "1_22B_rung1": {
-        "label": "1.22B rung-1",
-        "param_count_hint": 1_220_000_000,  # approximate; rung-1 is a grow target, not exact
-        "receipt_name_hints": ["cbase-grow-rung1", "cbase-grow-live", "rung1", "rung-1"],
-        "role": "grow_event",
+    "post_grow_rung1": {
+        "label": "rung-1 POST-grow (stabilized)",
+        "role": "post_grow",
+        "relative_path": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+        "known_model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+        "expected_ff": 16384,
+        "optimizer_state_provenance": "own (fresh, post-stabilize state)",
+        "known_sha256_source": "receipts/ember-c-e2b-paired/ember-c-e2b-paired-"
+            "20260705T041045Z.json (owned_core_identity.checkpoint, "
+            ".base_checkpoint_path, .model_pt_sha256, .base_model_pt_sha256 "
+            "all agree; muon_split=True, mtp_enabled=True, quantized=False)",
     },
 }
 
-PATH_KEY_HINTS = ("checkpoint", "checkpoint_path", "ckpt", "ckpt_path",
-                  "last_checkpoint", "hf_repo", "hf_repo_id", "local_path",
-                  "save_path", "output_dir", "run_dir")
+FF_GUARD_VALUES = frozenset({8192, 16384})  # naming-collision guard, per the ruling
 
 PRE_REGISTRATION = {
     "spec_ref": SPEC_REF, "spec_version": SPEC_VERSION, "issue": ISSUE,
     "prediction": "rho_SR (unit-LR series) is NOT invariant -- it drifts "
-        "monotonically with width across 368M -> 718M -> 1.22B under the "
-        "default per-channel-referenced int8 grid.",
+        "with width under the default per-channel-referenced int8 grid. "
+        "v1.2 SCOPING: the real inventory gives exactly TWO width points "
+        "(rung-1 pre-grow ~467M-class, post-grow larger-class), not the "
+        "originally-envisioned three -- per the frozen spec's own "
+        "missing-point/non-evidence rule, the formal cross-width verdict "
+        "is always UNRESOLVED-by-inventory; the 2-point direction is "
+        "reported supplementarily, never promoted to a verdict.",
     "verdict_bands": {
         "kill_per_class": "max/min rho_SR across the three widths <= "
             f"{KILL_RATIO_MAX} (~+-10%) -> KILL (drift rejected, promote-the-"
@@ -304,9 +444,18 @@ PRE_REGISTRATION = {
             "of one leg) -> UNRESOLVED; two-point 'monotone' is non-"
             "evidence, pre-registered.",
         "provenance_mismatch_rule": "optimizer-state provenance must be "
-            "identical in kind across the three checkpoints; on mismatch "
-            "every cross-width comparison is forced UNRESOLVED, never "
-            "compared across the discontinuity.",
+            "identical in kind across checkpoints being compared; on "
+            "mismatch every cross-width comparison is forced UNRESOLVED, "
+            "never compared across the discontinuity. NAMED EXCEPTION "
+            "(v1.2 ruling, real rung-1 pair only): pre-grow's parent-"
+            "carried state and post-grow's own state are admissible "
+            "together because both are the SAME KIND (muon_split), "
+            "caveat stamped -- see real_inventory_provenance().",
+        "two_point_rule": "v1.2: the real inventory has exactly two width "
+            "points; the frozen spec's own missing-point rule ('two-point "
+            "monotone is meaningless... pre-registered as non-evidence') "
+            "applies directly -- formal verdict is always "
+            "UNRESOLVED-by-inventory, direction reported supplementarily.",
     },
     "state_lr_pins": {
         "optimizer_state_provenance": "warm-loaded from the checkpoint's "
@@ -337,11 +486,23 @@ PRE_REGISTRATION = {
         "by diffing the realized duplicate pair post-widen; production's "
         "cat([w,w]) operator carries no noise term, so epsilon=0 is "
         "expected but never hardcoded.",
-        "checkpoint discovery is fail-closed: no confirmed real path/HF-"
-        "repo-id exists in this repo snapshot for any of the three named "
-        "checkpoints (param-count fingerprints only); the real run is "
-        "expected to self-block on this box (BLOCKED/FAILED-ENGAGEMENT), "
-        "which is the fail-closed contract working as designed.",
+        "checkpoint discovery targets the v1.2 ground-truth registry "
+        "(RUNG1_LINEAGE): a real, team-lead-verified two-checkpoint "
+        "lineage (rung-1 pre-grow step-00000730 / post-grow "
+        "step-00000766). Neither weight file nor its manifest.json is "
+        "present in THIS git worktree (multi-GB weights are never "
+        "git-tracked) -- the real run is still expected to self-block "
+        "(FAILED-ENGAGEMENT) on THIS box even once authorized, until run "
+        "on a box with EMBER_MODELS_ROOT pointed at the real models/ tree; "
+        "that is the fail-closed contract working as designed, not a "
+        "harness defect. The '368M QAT' and 'unexecuted 1.22B rung-1' "
+        "targets from the original v1.1 grounding pass were dropped: "
+        "neither is real (see the GROUND-TRUTH RULING docstring section).",
+        "no native QAT-trained checkpoint exists in the real inventory -- "
+        "rho_sr/rho_noise grid-step reads on the two real checkpoints are "
+        "INSTRUMENTED (_apply_fake_quant applied transiently, in-copy) "
+        "rather than resident; tagged measurement_mode="
+        "'instrumented-not-resident' in the real-run receipt.",
     ],
 }
 
@@ -372,7 +533,8 @@ def _sha256_file(path: str) -> str:
 
 # ---------------------------------------------------------------------------
 # Checkpoint discovery -- runtime, fail-closed if absent (spec INPUTS
-# clause). The ONLY extension point: CHECKPOINT_FINGERPRINTS above.
+# clause). The ONLY extension point: RUNG1_LINEAGE above (v1.2 targeted
+# manifest-driven discovery; superseded the generic fingerprint scan).
 # ---------------------------------------------------------------------------
 
 def _load_json_safe(path: str):
@@ -383,118 +545,195 @@ def _load_json_safe(path: str):
         return None
 
 
-def _find_path_field(obj, depth: int = 4):
-    """Recursively search a receipt dict for a checkpoint-location field.
-    Returns (key_path, value) for the first hit, or None. Depth-bounded so a
-    malformed/huge receipt cannot hang discovery."""
-    if depth <= 0 or not isinstance(obj, dict):
-        return None
-    for k, v in obj.items():
-        lk = k.lower()
-        if isinstance(v, str) and any(h in lk for h in PATH_KEY_HINTS):
-            return (k, v)
-        if isinstance(v, dict):
-            hit = _find_path_field(v, depth - 1)
-            if hit is not None:
-                return hit
-    return None
+def _resolve_models_root() -> str | None:
+    """Absolute filesystem root for models/ -- resolved ONLY from
+    EMBER_MODELS_ROOT (env). Never guessed, never hardcoded (leak-gate
+    discipline: absolute local paths are never published in this source)."""
+    return os.environ.get(MODELS_ROOT_ENV) or None
 
 
-def _receipt_mentions_param_count(obj, param_count_hint: int, tolerance: float = 0.02):
-    """True if any int field in obj (recursively, depth-bounded) is within
-    `tolerance` fraction of param_count_hint -- a soft fingerprint match
-    since the exact rung-1 param count is a target, not a fixed constant."""
-    def _walk(o, depth):
-        if depth <= 0:
-            return False
-        if isinstance(o, dict):
-            for v in o.values():
-                if isinstance(v, (int, float)) and not isinstance(v, bool):
-                    if abs(v - param_count_hint) <= param_count_hint * tolerance:
-                        return True
-                if isinstance(v, (dict, list)):
-                    if _walk(v, depth - 1):
-                        return True
-        elif isinstance(o, list):
-            for item in o[:20]:
-                if _walk(item, depth - 1):
-                    return True
-        return False
-    return _walk(obj, 5)
+def _read_e2b_paired_receipt():
+    """Locate + parse a receipts/ember-c-e2b-paired/*.json receipt -- the one
+    receipt committed in THIS worktree that independently confirms the
+    post-grow checkpoint's identity (owned_core_identity.*). Returns
+    (parsed_dict, relative_path) or (None, None) if absent."""
+    d = Path(RECEIPTS, "ember-c-e2b-paired")
+    if not d.is_dir():
+        return None, None
+    for fpath in sorted(d.glob("*.json")):
+        obj = _load_json_safe(str(fpath))
+        if obj is not None and "owned_core_identity" in obj:
+            rel = str(fpath.relative_to(REPO_ROOT)) if fpath.is_relative_to(Path(REPO_ROOT)) else str(fpath)
+            return obj, rel
+    return None, None
 
 
-def discover_checkpoints(receipts_dir: str = RECEIPTS) -> dict:
-    """Scan receipts_dir for each of the three named checkpoints. Returns a
-    dict keyed by CHECKPOINT_FINGERPRINTS key with:
-      found: bool
-      checkpoint_path: str | None
-      consulted_receipts: list[str]  -- EVERY receipt examined for this
-        checkpoint (spec: "the receipt file consulted is itself recorded in
-        the artifact"), whether or not a path was found in it.
-      matched_receipt: str | None    -- the receipt a path field was found in
-      reason: str                    -- present when found=False
-      optimizer_reset_on_resume: bool | None -- runtime-read from the
-        matched receipt when present; None if unresolved/absent.
-    Never raises; never fabricates a path. This is the ONLY function that
-    needs to change when real checkpoint locations become available.
+def _import_timeshare_pretrain():
+    """Reuse discipline (no duplicated math): scripts/timeshare_pretrain.py
+    already implements fail-closed checkpoint read/load (read_manifest --
+    manifest.json only, no tensor load; load_checkpoint -- sha256-verifies
+    EVERY file in manifest['files'] before trusting any tensor) -- imported
+    directly rather than re-derived, matching this repo's own convention
+    (scripts/cbase_grow_rung.py's own docstring: "Reuse discipline (no
+    duplicated math): imports timeshare_pretrain.")."""
+    import importlib
+    return importlib.import_module("timeshare_pretrain")
+
+
+def _import_production_widen():
+    """Import the REAL production net2net widen operator
+    (scripts/cbase_grow_dryrun.py::widen_state_dict) for the live path --
+    the live path runs against REAL checkpoints with REAL production key
+    names ("backbone_model.layers.{i}.mlp.{gate,up,down}_proj.weight"), so
+    it imports the actual function rather than the self-contained toy copy
+    (net2net_widen_linear below) that --selftest/--dry-run use to stay
+    decoupled from production key-name assumptions."""
+    import importlib
+    return importlib.import_module("cbase_grow_dryrun").widen_state_dict
+
+
+def discover_checkpoints(models_root: str | None = None) -> dict:
+    """v1.2 ground-truth discovery (team-lead ruling, 2026-07-06) against
+    RUNG1_LINEAGE: the real, verified rung-1 pre-grow/post-grow pair.
+    LIGHTWEIGHT -- reads only manifest.json via
+    scripts/timeshare_pretrain.py::read_manifest (no tensor load, no
+    per-file sha verification beyond the manifest's own model.pt claim;
+    the FULL per-file sha256 verification + ff-shape naming-collision guard
+    happens in load_real_checkpoint() below, which reuses ::load_checkpoint
+    -- deliberately heavier, only invoked once discovery + authorization
+    both pass). Independently cross-checks the post-grow identity against
+    receipts/ember-c-e2b-paired/*.json. Returns a dict keyed
+    "pre_grow_rung1"/"post_grow_rung1" with:
+      found, checkpoint_path (absolute, only when found), relative_path,
+      consulted (every receipt/manifest path examined -- spec: "the
+      receipt file consulted is itself recorded in the artifact"),
+      manifest_model_pt_sha256, state_provenance (from RUNG1_LINEAGE),
+      reason (present when found=False).
+    Never raises; never fabricates a path. RUNG1_LINEAGE is the single
+    extension point for correcting a field.
     """
+    models_root = models_root or _resolve_models_root()
+    try:
+        ts_mod = _import_timeshare_pretrain()
+    except Exception:
+        ts_mod = None  # torch/the production module may be unavailable in a
+                       # pure-discovery context; discovery degrades to
+                       # MISSING rather than raising.
+
+    e2b_obj, e2b_rel = _read_e2b_paired_receipt()
+
     result = {}
-    dir_path = Path(receipts_dir)
-    all_receipt_files = sorted(dir_path.glob("*.json")) if dir_path.is_dir() else []
-
-    for key, spec in CHECKPOINT_FINGERPRINTS.items():
+    for key, entry in RUNG1_LINEAGE.items():
         consulted = []
-        matched_receipt = None
-        checkpoint_path = None
-        reset_flag = None
-        for fpath in all_receipt_files:
-            name_lower = fpath.name.lower()
-            name_hit = any(h.lower() in name_lower for h in spec["receipt_name_hints"])
-            if not name_hit:
-                continue
-            obj = _load_json_safe(str(fpath))
-            if obj is None:
-                continue
-            consulted.append(str(fpath.relative_to(REPO_ROOT)) if fpath.is_relative_to(Path(REPO_ROOT)) else str(fpath))
-            param_hit = _receipt_mentions_param_count(obj, spec["param_count_hint"])
-            path_field = _find_path_field(obj)
-            if path_field is not None and (param_hit or True):
-                # Prefer a receipt that ALSO matches the param-count
-                # fingerprint, but record any path field found under a
-                # name-matched receipt -- never silently discard a hit.
-                matched_receipt = str(fpath.relative_to(REPO_ROOT)) if fpath.is_relative_to(Path(REPO_ROOT)) else str(fpath)
-                checkpoint_path = path_field[1]
-                reset_flag = _find_reset_flag(obj)
-                if param_hit:
-                    break  # strong match; stop scanning further candidates
+        reason_parts = []
+        found = False
+        abs_path = None
+        manifest_sha = None
 
-        if checkpoint_path is not None:
+        if e2b_obj is not None:
+            consulted.append(e2b_rel)
+            if entry["role"] == "post_grow":
+                oci = e2b_obj.get("owned_core_identity", {})
+                sha_a, sha_b = oci.get("model_pt_sha256"), oci.get("base_model_pt_sha256")
+                known = entry["known_model_pt_sha256"]
+                if not (sha_a == sha_b == known):
+                    reason_parts.append(
+                        f"e2b-paired receipt identity mismatch: "
+                        f"model_pt_sha256={sha_a!r} base_model_pt_sha256={sha_b!r} "
+                        f"known={known!r}")
+
+        if not models_root:
+            reason_parts.append(f"{MODELS_ROOT_ENV} not set -- cannot resolve "
+                                 "an absolute path; never guessed.")
+        else:
+            abs_candidate = os.path.join(models_root, entry["relative_path"])
+            manifest_path = os.path.join(abs_candidate, "manifest.json")
+            consulted.append(manifest_path)
+            manifest = None
+            if ts_mod is not None:
+                try:
+                    manifest = ts_mod.read_manifest(abs_candidate)
+                except Exception as e:
+                    reason_parts.append(f"read_manifest failed at {manifest_path}: {e}")
+            else:
+                reason_parts.append("timeshare_pretrain module unavailable in "
+                                     "this environment -- cannot read_manifest")
+
+            if manifest is not None:
+                manifest_sha = (manifest.get("files") or {}).get("model.pt")
+                known_full = entry.get("known_model_pt_sha256")
+                known_prefix = entry.get("known_model_pt_sha256_prefix")
+                sha_ok = (
+                    (known_full and manifest_sha == known_full) or
+                    (known_prefix and manifest_sha and manifest_sha.startswith(known_prefix))
+                )
+                if not sha_ok:
+                    reason_parts.append(
+                        f"manifest files['model.pt']={manifest_sha!r} does not "
+                        f"match the known identity ({known_full or known_prefix!r})")
+                else:
+                    found = True
+                    abs_path = abs_candidate
+
+        if found:
             result[key] = {
-                "label": spec["label"], "role": spec["role"], "found": True,
-                "checkpoint_path": checkpoint_path,
-                "matched_receipt": matched_receipt,
-                "consulted_receipts": consulted,
-                "optimizer_reset_on_resume": reset_flag,
+                "label": entry["label"], "role": entry["role"], "found": True,
+                "checkpoint_path": abs_path, "relative_path": entry["relative_path"],
+                "consulted": consulted, "manifest_model_pt_sha256": manifest_sha,
+                "state_provenance": entry["optimizer_state_provenance"],
             }
         else:
             result[key] = {
-                "label": spec["label"], "role": spec["role"], "found": False,
-                "checkpoint_path": None,
-                "matched_receipt": None,
-                "consulted_receipts": consulted,
-                "optimizer_reset_on_resume": None,
-                "reason": (
-                    f"MISSING: no receipt under {receipts_dir} matching "
-                    f"name-hints {spec['receipt_name_hints']} carried a "
-                    f"checkpoint-location field (checked keys: "
-                    f"{PATH_KEY_HINTS}). {len(consulted)} candidate "
-                    f"receipt(s) consulted (listed above); param-count "
-                    f"fingerprint {spec['param_count_hint']} alone is not "
-                    f"sufficient evidence of a resolvable weight location. "
-                    "Fail-closed per spec INPUTS clause."
-                ),
+                "label": entry["label"], "role": entry["role"], "found": False,
+                "checkpoint_path": None, "relative_path": entry["relative_path"],
+                "consulted": consulted, "state_provenance": entry["optimizer_state_provenance"],
+                "reason": "MISSING: " + "; ".join(reason_parts) +
+                    ". Fail-closed per spec INPUTS clause -- never fabricated.",
             }
     return result
+
+
+def load_real_checkpoint(discovery_entry: dict):
+    """Full, fail-closed load of a real rung-1 checkpoint -- reuses
+    scripts/timeshare_pretrain.py::load_checkpoint (sha256-verifies EVERY
+    file named in the checkpoint's OWN manifest.json['files'] dict --
+    model.pt, optimizer.pt, rng.pt -- raising on any mismatch; "fail-closed
+    if the shas on disk mismatch the manifests" per the v1.2 ruling item 4).
+    Then applies the naming-collision guard (ruling item 4) by reproducing
+    the EXACT check scripts/cbase_grow_rung.py itself performs on this
+    lineage (`ff_seed = int(m_state["backbone_model.layers.0.mlp."
+    "gate_proj.weight"].shape[0])`) -- NOT a manifest-field guess, the
+    observed tensor shape. Returns (model_state, optimizer_state, rng_state,
+    manifest, observed_ff). Raises EngagementFailure on any guard failure.
+    NOT executed this authoring session -- no real checkpoint file exists in
+    this worktree to load."""
+    if not discovery_entry.get("found"):
+        raise EngagementFailure(
+            f"load_real_checkpoint called on an unresolved checkpoint: "
+            f"{discovery_entry.get('reason')}")
+    ts_mod = _import_timeshare_pretrain()
+    model_state, optimizer_state, rng_state, manifest = ts_mod.load_checkpoint(
+        discovery_entry["checkpoint_path"])
+
+    gate_key = "backbone_model.layers.0.mlp.gate_proj.weight"
+    if gate_key not in model_state:
+        raise EngagementFailure(
+            f"expected key {gate_key!r} not found in loaded model state dict "
+            "-- the real on-disk key layout differs from the assumed "
+            "production convention; structural finding, not silently "
+            "worked around.")
+    observed_ff = int(model_state[gate_key].shape[0])
+    expected_ff = RUNG1_LINEAGE[
+        "pre_grow_rung1" if discovery_entry["role"] == "pre_grow" else "post_grow_rung1"
+    ]["expected_ff"]
+    if observed_ff not in FF_GUARD_VALUES or observed_ff != expected_ff:
+        raise EngagementFailure(
+            f"naming-collision guard failed: observed ff "
+            f"(gate_proj.weight.shape[0])={observed_ff}, expected "
+            f"{expected_ff} (one of {sorted(FF_GUARD_VALUES)}) for "
+            f"role={discovery_entry['role']!r}")
+
+    return model_state, optimizer_state, rng_state, manifest, observed_ff
 
 
 def _find_reset_flag(obj, depth: int = 5):
@@ -521,11 +760,86 @@ def all_checkpoints_found(discovery: dict) -> bool:
 def provenance_mismatch(discovery: dict) -> bool:
     """STATE+LR PIN: provenance must be identical IN KIND across all three.
     None (unresolved) counts as a mismatch (fail-closed -- never assume a
-    missing flag means 'same as the others')."""
+    missing flag means 'same as the others'). GENERIC rule -- used unchanged
+    by --selftest/--dry-run. The REAL rung-1 pair uses
+    real_inventory_provenance() instead (a named exception, see below), NOT
+    this function."""
     flags = [v.get("optimizer_reset_on_resume") for v in discovery.values()]
     if any(f is None for f in flags):
         return True
     return len(set(flags)) > 1
+
+
+def real_inventory_provenance(discovery: dict) -> dict:
+    """v1.2 ruling (team lead, 2026-07-06): pre-grow's parent-carried
+    optimizer state and post-grow's own (fresh, post-stabilize) state are
+    DIFFERENT IN ORIGIN but the SAME KIND (both muon_split) -- ruled
+    ADMISSIBLE for comparison, caveat stamped verbatim, rather than a
+    blocking provenance mismatch. This is a NAMED EXCEPTION for this
+    specific rung-1 pair, NOT a general relaxation of the frozen rule --
+    provenance_mismatch() above still enforces the strict rule for the
+    generic/--selftest/--dry-run path."""
+    pre = discovery.get("pre_grow_rung1", {})
+    post = discovery.get("post_grow_rung1", {})
+    return {
+        "admissible": True,
+        "pre_grow_state_provenance": pre.get("state_provenance"),
+        "post_grow_state_provenance": post.get("state_provenance"),
+        "caveat": "pre-grow optimizer.pt was carried VERBATIM from an "
+            "earlier parent segment (stale-shape caveat, per the team-"
+            "lead's manifest read); post-grow optimizer state is its own, "
+            "fresh post-stabilize state. Both are muon_split (same "
+            "optimizer KIND) -- ruled ADMISSIBLE for comparison with this "
+            "caveat stamped, per the v1.2 ground-truth ruling "
+            "(2026-07-06). Named exception for this rung-1 pair only.",
+    }
+
+
+def two_point_direction_report(val_pre, val_post, *, class_name: str) -> dict:
+    """v1.2 CROSS-WIDTH SCOPING: the real inventory has exactly two width
+    points (pre-grow, post-grow). Per the frozen spec's own missing-point/
+    non-evidence rule ("two-point 'monotone' is meaningless... pre-
+    registered as non-evidence"), the FORMAL verdict here is ALWAYS
+    "UNRESOLVED-by-inventory" -- this function never returns KILL/PROMOTE/
+    GRAY. The raw direction/ratio is reported as SUPPLEMENTARY information
+    only, per the v1.2 ruling ("report the 2-point DIRECTION per class with
+    that scoping. Do not soften the rule")."""
+    if val_pre is None or val_post is None:
+        return {
+            "verdict": "UNRESOLVED-by-inventory", "class": class_name,
+            "direction": None, "ratio": None,
+            "reason": "at least one of the two width points has no value "
+                "for this class (N/A or missing) -- direction cannot be "
+                "computed; verdict is UNRESOLVED-by-inventory regardless.",
+        }
+    ratio = (val_post / val_pre) if val_pre != 0 else float("inf")
+    if val_post > val_pre:
+        direction = "increased"
+    elif val_post < val_pre:
+        direction = "decreased"
+    else:
+        direction = "unchanged"
+    return {
+        "verdict": "UNRESOLVED-by-inventory", "class": class_name,
+        "direction": direction, "ratio": ratio,
+        "pre_grow_value": val_pre, "post_grow_value": val_post,
+        "reason": "two-point 'monotone' is meaningless and is "
+            "pre-registered as non-evidence (frozen spec, v1.1) -- this "
+            "direction/ratio is SUPPLEMENTARY information only, never a "
+            "verdict, per the v1.2 cross-width scoping ruling.",
+    }
+
+
+def probe_qat_instrumented(weight) -> dict:
+    """Real-run wrapper (v1.2 ruling item 3): no native QAT-trained
+    checkpoint exists in the real inventory, so rho_sr/rho_noise's grid-step
+    reads are INSTRUMENTED -- the production _apply_fake_quant transform
+    (quant_delta_per_channel, byte-identical formula) applied transiently,
+    in-copy, to a real bf16 checkpoint tensor, rather than read off a
+    resident QAT weight. Tags the result accordingly so no receipt
+    conflates an instrumented probe with a resident QAT measurement."""
+    delta = quant_delta_per_channel(weight)
+    return {"delta_per_channel": delta, "measurement_mode": "instrumented-not-resident"}
 
 
 # ---------------------------------------------------------------------------
@@ -860,6 +1174,117 @@ def compute_d_comm(theta_k, U_k_apply, U_kplus1_apply, G_apply) -> dict:
     num = rms(Ukp1_G_theta - G_Uk_theta)
     value = num / denom if denom > 0 else float("nan")
     return {"d_comm": value, "numerator_rms": num, "denominator_rms": denom}
+
+
+def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_opt_state,
+                               gate_key: str, up_key: str, down_key: str,
+                               pre_lr: float, post_lr: float,
+                               grad_pre_gate, grad_post_gate):
+    """Builds the U_k / U_{k+1} / G closures for compute_d_comm() (above,
+    already selftested against synthetic commuting/non-commuting cases)
+    from REAL loaded rung-1 checkpoint state -- reused rather than
+    re-derived. gate_key/up_key/down_key: the production key names for one
+    transformer layer's SwiGLU MLP tensors
+    ("backbone_model.layers.{i}.mlp.{gate,up,down}_proj.weight"). G uses the
+    REAL production widen_state_dict (scripts/cbase_grow_dryrun.py,
+    imported via _import_production_widen() -- NOT the self-contained toy
+    copy net2net_widen_linear that --selftest/--dry-run use). U_k uses
+    pre-grow's own (parent-carried) momentum_buffer + LR; U_{k+1} uses
+    post-grow's own (fresh) momentum_buffer + LR -- both admissible per
+    real_inventory_provenance()."""
+    import torch
+    widen_state_dict = _import_production_widen()
+
+    pre_momentum = None
+    if pre_opt_state is not None:
+        pre_momentum = pre_opt_state.get("state", {}).get(gate_key, {}).get("momentum_buffer")
+
+    def U_k(theta_gate):
+        buf = pre_momentum if pre_momentum is not None else torch.zeros_like(theta_gate)
+        new_w, _, _ = _muon_step_in_copy(theta_gate, grad_pre_gate, buf, lr=pre_lr)
+        return new_w
+
+    def G(theta_gate):
+        grown = widen_state_dict(
+            {gate_key: theta_gate, up_key: pre_model_state[up_key],
+             down_key: pre_model_state[down_key]}, n_layers=1)
+        return grown[gate_key]
+
+    def U_kplus1(theta_gate_grown):
+        buf = None
+        if post_opt_state is not None:
+            buf = post_opt_state.get("state", {}).get(gate_key, {}).get("momentum_buffer")
+        if buf is None:
+            buf = torch.zeros_like(theta_gate_grown)
+        new_w, _, _ = _muon_step_in_copy(theta_gate_grown, grad_post_gate, buf, lr=post_lr)
+        return new_w
+
+    return U_k, U_kplus1, G
+
+
+def compute_d_comm_real_run(discovery: dict, grad_pre_gate, grad_post_gate,
+                            pre_lr: float, post_lr: float, layer_index: int = 0) -> dict:
+    """v1.2-upgraded HEADLINE deliverable: the real commutation defect at
+    the rung-1 grow event. theta_k = the FF gate/up/down weights for
+    `layer_index` from the real pre-grow checkpoint (step-00000730,
+    production key convention, per build_v0_model's real-architecture
+    LlamaModel wrapper in scripts/timeshare_pretrain.py). G = the REAL
+    production widen_state_dict. U_k / U_{k+1} = one Muon step in-copy,
+    using each checkpoint's own LR and own momentum_buffer (pre-grow:
+    parent-carried; post-grow: own -- both admissible per
+    real_inventory_provenance()).
+
+    Reachable ONLY once discover_checkpoints() resolves BOTH rung-1
+    checkpoints AND EMBER_GATE_AUTHORIZED=1 is set. NOT executed this
+    authoring session -- no real checkpoint file exists in this worktree to
+    load; this function's correctness against the ACTUAL on-disk
+    state_dict key layout is UNVERIFIED here (the first real execution
+    should confirm the assumed key convention against the real file and
+    amend if it differs -- a structural discovery, filed before that
+    execution, not a numeric/logic deviation).
+
+    grad_pre_gate / grad_post_gate: the real backward-pass gradients at the
+    chosen FF gate tensor from one forward+backward through the actual pre-
+    /post-grow model on the frozen probe batch -- running that forward/
+    backward (through the real transformers.LlamaModel architecture) is the
+    caller's responsibility, not reproduced here; this function is scoped
+    to the update/grow/commutation arithmetic only (reusing compute_d_comm,
+    already selftested).
+    """
+    pre = discovery["pre_grow_rung1"]
+    post = discovery["post_grow_rung1"]
+    if not (pre.get("found") and post.get("found")):
+        raise EngagementFailure(
+            "compute_d_comm_real_run called before both rung-1 checkpoints "
+            "were resolved by discover_checkpoints()")
+
+    pre_model_state, pre_opt_state, _, _, pre_ff = load_real_checkpoint(pre)
+    _, post_opt_state, _, _, post_ff = load_real_checkpoint(post)
+
+    prefix = f"backbone_model.layers.{layer_index}.mlp."
+    gate_key = prefix + "gate_proj.weight"
+    up_key = prefix + "up_proj.weight"
+    down_key = prefix + "down_proj.weight"
+    for k in (gate_key, up_key, down_key):
+        if k not in pre_model_state:
+            raise EngagementFailure(
+                f"expected key {k!r} not found in pre-grow model state dict "
+                "-- the real on-disk key layout differs from the assumed "
+                "convention; structural finding, not silently worked around.")
+
+    import torch
+    theta_gate = pre_model_state[gate_key].to(torch.float32)
+
+    U_k, U_kplus1, G = build_real_d_comm_closures(
+        pre_model_state, pre_opt_state, post_opt_state, gate_key, up_key, down_key,
+        pre_lr, post_lr, grad_pre_gate, grad_post_gate)
+
+    result = compute_d_comm(theta_gate, U_k, U_kplus1, G)
+    result["layer_index"] = layer_index
+    result["measurement_mode"] = "real-checkpoint"
+    result["pre_grow_observed_ff"] = pre_ff
+    result["post_grow_observed_ff"] = post_ff
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1272,7 +1697,57 @@ def selftest() -> None:
     print("  discover_checkpoints logic: all-found / provenance-mismatch / "
           "unresolved-counts-as-mismatch / missing-checkpoint  PASS")
 
-    # 12. Receipt-shape round trip via the shared schema-floor validator.
+    # 12. v1.2 additions: real_inventory_provenance / two_point_direction_report /
+    #     probe_qat_instrumented / the real discover_checkpoints() against THIS
+    #     repo (no EMBER_MODELS_ROOT set -- must resolve MISSING, never crash).
+    synth_discovery = {
+        "pre_grow_rung1": {"state_provenance": "parent-carried (stale-shape caveat)"},
+        "post_grow_rung1": {"state_provenance": "own (fresh, post-stabilize state)"},
+    }
+    riprov = real_inventory_provenance(synth_discovery)
+    assert riprov["admissible"] is True
+    assert "parent-carried" in riprov["pre_grow_state_provenance"]
+    assert "own" in riprov["post_grow_state_provenance"]
+    assert "muon_split" in riprov["caveat"]
+    print("  real_inventory_provenance: admissible-with-caveat, both "
+          "provenance strings stamped  PASS")
+
+    tp_up = two_point_direction_report(1.0, 1.6, class_name="ff")
+    assert tp_up["verdict"] == "UNRESOLVED-by-inventory" and tp_up["direction"] == "increased"
+    tp_down = two_point_direction_report(2.0, 1.2, class_name="ff")
+    assert tp_down["verdict"] == "UNRESOLVED-by-inventory" and tp_down["direction"] == "decreased"
+    tp_same = two_point_direction_report(1.0, 1.0, class_name="ff")
+    assert tp_same["direction"] == "unchanged"
+    tp_missing = two_point_direction_report(None, 1.0, class_name="ff")
+    assert tp_missing["verdict"] == "UNRESOLVED-by-inventory" and tp_missing["direction"] is None
+    print("  two_point_direction_report: increased/decreased/unchanged/missing, "
+          "verdict ALWAYS UNRESOLVED-by-inventory (never KILL/PROMOTE/GRAY)  PASS")
+
+    w_probe = torch.randn(6, 5) * 2.0
+    qat_probe = probe_qat_instrumented(w_probe)
+    assert qat_probe["measurement_mode"] == "instrumented-not-resident"
+    assert torch.allclose(qat_probe["delta_per_channel"], quant_delta_per_channel(w_probe))
+    print("  probe_qat_instrumented: tags measurement_mode, delta matches "
+          "quant_delta_per_channel exactly  PASS")
+
+    real_discovery = discover_checkpoints(models_root=None)
+    assert set(real_discovery.keys()) == {"pre_grow_rung1", "post_grow_rung1"}
+    for key, entry in real_discovery.items():
+        assert entry["found"] is False, (
+            f"{key} unexpectedly found=True with no EMBER_MODELS_ROOT set -- "
+            "discovery must fail closed without a resolvable absolute root")
+        assert "MISSING" in entry["reason"]
+        assert entry["consulted"], f"{key} recorded no consulted receipts/manifests"
+    # the post-grow leg's e2b-paired cross-check should have actually run
+    # against the real committed receipt in this repo (independent of the
+    # missing EMBER_MODELS_ROOT) -- confirms the discovery code exercises a
+    # real file in this worktree, not just a synthetic path.
+    assert any("ember-c-e2b-paired" in c for c in real_discovery["post_grow_rung1"]["consulted"])
+    print("  discover_checkpoints (real, this repo, no EMBER_MODELS_ROOT): "
+          "both legs MISSING with reasons + consulted list, e2b-paired "
+          "receipt exercised for the post-grow cross-check  PASS")
+
+    # 13. Receipt-shape round trip via the shared schema-floor validator.
     import receipt_check
     synth = {
         "ticket": "P5-RATIO-AUDIT", "ts": "20260706T000000Z", "mode": "selftest",
@@ -1293,6 +1768,21 @@ def selftest() -> None:
 # ---------------------------------------------------------------------------
 
 DRY_WIDTHS = {"368M_QAT": 24, "718M_D6_segment": 32, "1_22B_rung1": 48}
+
+# Toy-scoped role/label bookkeeping for the dry-run's synthetic 3-point
+# sweep ONLY -- decoupled from RUNG1_LINEAGE (the real, 2-checkpoint
+# discovery target above). These key names are historical dry-run stand-
+# ins (three synthetic widths for a fast plumbing proof); they are NOT
+# claims about real checkpoints -- the v1.2 ruling's "no 368M-QAT ckpt, no
+# 1.22B ckpt" finding applies to the REAL inventory (RUNG1_LINEAGE), not to
+# this synthetic toy sweep, which the ruling explicitly left unchanged
+# ("dry-run modes unchanged").
+DRY_ROLE_LABELS = {
+    "368M_QAT": {"label": "368M QAT (toy stand-in)", "role": "non_grow"},
+    "718M_D6_segment": {"label": "718M D6-segment (toy stand-in)", "role": "non_grow"},
+    "1_22B_rung1": {"label": "1.22B rung-1 (toy stand-in)", "role": "grow_event"},
+}
+
 DRY_VOCAB = 48
 DRY_BATCH = 2
 DRY_SEQ = 16
@@ -1331,7 +1821,9 @@ def _muon_step_in_copy(weight, grad, momentum_buffer, lr, momentum=0.95,
     """One Muon step, IN COPY (returns a new weight tensor + new momentum
     buffer; never mutates the inputs). Byte-identical math to
     scripts/timeshare_pretrain.py::_muon_class (self-contained copy, same
-    discipline as scripts/expc1)."""
+    discipline as scripts/expc1). Generic over plain tensors -- reused by
+    both the toy dry-run path below AND build_real_d_comm_closures() above
+    (the real-checkpoint commutation-defect wiring); not toy-specific."""
     import torch
     a, b, c = 3.4445, -4.7750, 2.0315
 
@@ -1405,7 +1897,7 @@ def run_and_emit_dry() -> Path:
 
         na_rank_grow = rho_rank_rho_grow_na()
 
-        role = CHECKPOINT_FINGERPRINTS[key]["role"]
+        role = DRY_ROLE_LABELS[key]["role"]
         # Dry-run stands in reset_on_resume=True only for the grow-event
         # slot, mirroring production's cbase_grow_* convention exactly.
         reset_flag = True if role == "grow_event" else False
@@ -1452,7 +1944,7 @@ def run_and_emit_dry() -> Path:
             ratio_values=ratio_values)
 
         checkpoints_report[key] = {
-            "label": CHECKPOINT_FINGERPRINTS[key]["label"], "toy_hidden": hidden,
+            "label": DRY_ROLE_LABELS[key]["label"], "toy_hidden": hidden,
             "role": role, "optimizer_reset_on_resume": reset_flag,
             "ratios": ratio_values, "engagement_assertions_passed": passed_assertions,
             "net2net_epsilon_measurement": eps_meas,
@@ -1584,28 +2076,63 @@ def run_and_emit_live() -> Path:
         reasons = {k: v.get("reason") for k, v in discovery.items() if not v["found"]}
         return write_failed_engagement_receipt(
             ticket="P5-RATIO-AUDIT", mode="live",
-            reason=(f"checkpoint discovery MISSING for: {missing}. Fail-"
-                    f"closed per spec INPUTS clause -- see checkpoint_discovery "
-                    f"in this receipt for every receipt consulted per checkpoint."),
-            extra={"checkpoint_discovery": discovery_summary, "missing_reasons": reasons})
+            reason=(f"v1.2 checkpoint discovery MISSING for: {missing} "
+                    f"(EMBER_MODELS_ROOT={os.environ.get(MODELS_ROOT_ENV)!r}). "
+                    f"Fail-closed per spec INPUTS clause -- see "
+                    f"checkpoint_discovery in this receipt for every "
+                    f"manifest/receipt consulted per checkpoint."),
+            extra={"checkpoint_discovery": discovery_summary, "missing_reasons": reasons,
+                   "rung1_lineage_targets": {k: v["relative_path"] for k, v in RUNG1_LINEAGE.items()}})
 
-    # Reachable only under explicit maintainer authorization WITH all three
-    # checkpoints resolved. NOT reachable this authoring session (checkpoint
-    # discovery is expected to self-block first -- see module docstring
-    # grounding pass). Real checkpoint-loading + model-instantiation glue is
-    # intentionally NOT implemented past this point: wiring it in without a
-    # confirmed real checkpoint to load against would be inventing unfounded
-    # facts, exactly what this harness's own discipline forbids. The
-    # extension point is discover_checkpoints() (CHECKPOINT_FINGERPRINTS) --
-    # once real locations are confirmed, the loader is the next authored
-    # increment, built against the ACTUAL discovered path/format.
+    # Both real rung-1 checkpoints resolved by discover_checkpoints() (real
+    # manifest + sha256 + e2b-paired cross-check all passed) AND authorized.
+    # Reachable only under explicit maintainer authorization on a box with
+    # EMBER_MODELS_ROOT pointed at the real models/ tree. NOT reachable this
+    # authoring session (no real checkpoint file exists in this worktree).
+    #
+    # load_real_checkpoint() (real: full per-file sha256 verification via
+    # scripts/timeshare_pretrain.py::load_checkpoint + the ff-shape naming-
+    # collision guard) and compute_d_comm_real_run() (real: the v1.2-
+    # upgraded headline commutation-defect wiring, reusing the already-
+    # selftested compute_d_comm core) are both fully authored and ready.
+    # What is NOT authored past this point is the forward+backward pass
+    # through the actual production LlamaModel architecture on the frozen
+    # probe batch (requires `transformers`, real GPU/CPU compute, and
+    # produces the grad_pre_gate/grad_post_gate tensors
+    # compute_d_comm_real_run needs) -- wiring that up without ever being
+    # able to run it against a real checkpoint this session risks
+    # inventing unfounded facts about the real forward-pass shape/behavior,
+    # exactly what this harness's discipline forbids. This function
+    # therefore stops at "checkpoints resolved + load-verified", honestly,
+    # rather than fabricating a further-along status.
+    try:
+        pre_model_state, pre_opt_state, pre_rng_state, pre_manifest, pre_ff = \
+            load_real_checkpoint(discovery["pre_grow_rung1"])
+        post_model_state, post_opt_state, post_rng_state, post_manifest, post_ff = \
+            load_real_checkpoint(discovery["post_grow_rung1"])
+    except Exception as e:
+        return write_failed_engagement_receipt(
+            ticket="P5-RATIO-AUDIT", mode="live",
+            reason=(f"checkpoint discovery succeeded but load_real_checkpoint "
+                    f"failed (sha256/ff-shape guard or file I/O): {e}"),
+            extra={"checkpoint_discovery": discovery_summary})
+
+    provenance = real_inventory_provenance(discovery)
     return write_failed_engagement_receipt(
         ticket="P5-RATIO-AUDIT", mode="live",
-        reason=("checkpoints resolved by discovery but real-checkpoint "
-                "loading is not yet authored (no confirmed checkpoint "
-                "format/path existed to build it against honestly during "
-                "this authoring session) -- fail-closed rather than guess."),
-        extra={"checkpoint_discovery": discovery_summary})
+        reason=("both rung-1 checkpoints resolved AND load-verified "
+                "(sha256 + ff-shape naming-collision guard both passed) -- "
+                "the forward+backward pass through the real production "
+                "LlamaModel architecture (needed to produce the gradients "
+                "compute_d_comm_real_run requires) is not yet authored; "
+                "fail-closed rather than fabricate that pass's output. "
+                "This IS real progress beyond discovery: both checkpoints "
+                "were actually loaded and sha/ff-verified this run."),
+        extra={"checkpoint_discovery": discovery_summary,
+               "pre_grow_observed_ff": pre_ff, "post_grow_observed_ff": post_ff,
+               "pre_grow_manifest_files": list((pre_manifest or {}).get("files", {}).keys()),
+               "post_grow_manifest_files": list((post_manifest or {}).get("files", {}).keys()),
+               "real_inventory_provenance": provenance})
 
 
 def main() -> int:
