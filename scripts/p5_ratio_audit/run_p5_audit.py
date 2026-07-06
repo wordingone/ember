@@ -382,23 +382,20 @@ RATIO_NAMES = ("rho_sr", "rho_noise", "rho_rank", "rho_grow", "rho_spec",
 # against the OBSERVED tensor shape, not a manifest guess.
 RUNG1_LINEAGE = {
     "pre_grow_rung1": {
-        "label": "rung-1 PRE-grow (~467M class)",
+        "label": "rung-1 PRE-grow (~467M class, RECONSTRUCTED)",
         "role": "pre_grow",
-        "relative_path": "models/cbase-grow-rung/rung1-20260703T155447Z/checkpoints/step-00000730",
-        "known_model_pt_sha256": "74a5b1d4c21b38fb4a8037bd079c2073516dee9a242849fc33fda191f4fa0f3b",
-            # full hash, per the team-lead's follow-up ruling message (their
-            # first message gave only a "74a5b1d4..." prefix; the revision
-            # supplied the complete hash) -- validated against the on-disk
-            # manifest.json['files']['model.pt'] at runtime
-            # (scripts/timeshare_pretrain.py::read_manifest/load_checkpoint
-            # schema, grep-confirmed), never fabricated here.
+        "relative_path": "models/cbase-grow-rung/rung1-20260703T155447Z/derived/pregrow-ff8192",
+        "known_model_pt_sha256": "285ebb7f9a65d8c430e1ab14586d6daad9c20eca4f3229b6df0d00ff78a103e6",
+            # derived via inverse net2net from post-grow step-00000766; self-tested
+            # bitwise roundtrip via forward grow (RECONSTRUCT_PREGROW_SELFTEST_PASS);
+            # all four fail-closed guards (sha256, shapes, twin bit-identity,
+            # down_proj halves) passed. Reconstructed from the grown checkpoint
+            # (step-00000730, source sha 74a5b1d4...) with guards + selftest.
         "expected_ff": 8192,
-        "optimizer_state_provenance": "parent-carried (stale-shape caveat: "
-            "optimizer.pt carried verbatim from an earlier parent segment, "
-            "per the team-lead's manifest read)",
-        "known_sha256_source": None,  # not independently confirmed from a
-            # receipt committed in THIS worktree -- sourced from the ruling
-            # itself (team lead verified the manifest directly).
+        "optimizer_state_provenance": "derived (inverse net2net from post-grow; "
+            "no optimizer state carried)",
+        "known_sha256_source": "receipts/reconstruct-pregrow/reconstruction-PASS-*.json "
+            "(script: scripts/reconstruct_pregrow.py, all guards + selftest PASS)",
     },
     "post_grow_rung1": {
         "label": "rung-1 POST-grow (stabilized)",
