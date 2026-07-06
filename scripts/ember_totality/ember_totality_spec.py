@@ -955,7 +955,7 @@ def main():
         pass
 
     # Extract C-INV probe status from the rows (comes from test_c_invariant.py)
-    c_inv_status = "GREEN"  # Default to GREEN if C-INV not found
+    c_inv_status = "RED"  # fail-closed: absent C-INV probe = RED, never assumed GREEN
     for r in rows:
         if r["condition"] == "C-INV":
             c_inv_status = r["status"]
