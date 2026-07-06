@@ -121,10 +121,25 @@ export interface LoopDeps {
    * Default: crypto.randomUUID().
    */
   generateUuid: () => string;
+  /**
+   * Waits `ms` milliseconds, resolving early if `signal` aborts (issue #197:
+   * the retry backoff wait must stay responsive to a user-initiated Ctrl+C
+   * mid-backoff rather than blocking the full delay). Default: a real timer.
+   * Tests override this to make backoff waits instant.
+   */
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
 /** Partial override type for createLoopDeps (all keys optional). */
 export type LoopDepsOverrides = Partial<LoopDeps>;
+
+function _defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) { resolve(); return; }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true });
+  });
+}
 
 /**
  * Creates a LoopDeps object with production defaults, overridden by any provided values.
@@ -141,5 +156,6 @@ export function createLoopDeps(overrides: LoopDepsOverrides = {}): LoopDeps {
     microcompact: overrides.microcompact ?? (async (msgs) => msgs),
     autocompact: overrides.autocompact ?? (async () => {}),
     generateUuid: overrides.generateUuid ?? (() => crypto.randomUUID()),
+    sleep: overrides.sleep ?? _defaultSleep,
   };
 }

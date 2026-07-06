@@ -13,10 +13,13 @@ import {
   type LoopDeps,
   type LoopDepsOverrides,
   type ModelResponse,
+  type CallModelParams,
 } from "../query/query-loop-support.ts";
 import type { Tool, ToolUseContext } from "./tool-interface.ts";
 import { createAutocompact } from "../services/compaction.ts";
 import { markPostCompaction } from "../session-state.ts";
+import { shouldRetry, computeRetryDelay, MAX_RETRY_ATTEMPTS } from "../api-backend.ts";
+import { ModelHttpError, CHARS_PER_TOKEN_ESTIMATE } from "../services/api-openai-adapter.ts";
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -140,9 +143,6 @@ function synthesizeFinalMessage(
 // whatever still slips through (cumulative multi-turn history, etc).
 // ---------------------------------------------------------------------------
 
-/** No tokenizer available at this layer; matches the estimate FM_91 already uses. */
-const CHARS_PER_TOKEN_ESTIMATE = 3.5;
-
 /**
  * Default per-tool-result token budget when the caller supplies none via
  * ToolUseContext.toolResultBudget. Sized conservatively against the smallest
@@ -178,6 +178,106 @@ function truncateToolResultContent(content: string, maxChars: number): string {
   const tail = tailChars > 0 ? content.slice(content.length - tailChars) : "";
   const omitted = content.length - head.length - tail.length;
   return `${head}\n\n[...truncated ${omitted} chars of ${content.length} -- re-read with offset/limit for more...]\n\n${tail}`;
+}
+
+// ---------------------------------------------------------------------------
+// Conversation-total context budgeting (issue #197)
+//
+// Per-result truncation (above) bounds any ONE tool result, but not the SUM
+// of the assembled conversation. Operator session #5 (2026-07-06): a single
+// turn burning five tool calls -- each result individually within its own
+// 25%-of-n_ctx budget -- still summed past an 8192-token n_ctx and 400'd.
+// Before every model call, estimate the total payload (system prompt + full
+// history) and, if over budget, evict the OLDEST already-truncated
+// tool_result contents (replacing them with a short marker) until it fits --
+// never the current turn's live user prompt, never the most recent message.
+// ---------------------------------------------------------------------------
+
+/**
+ * Conservative pre-init fallback conversation budget (chars), used only when
+ * the caller supplies no ToolUseContext.toolResultBudget.conversationMaxChars
+ * (e.g. a direct query() caller, or a test harness). In production this never
+ * applies: session-init.ts's init() resolves the real n_ctx before
+ * getLoopDeps() can return, so getToolResultBudget().conversationMaxChars is
+ * always populated by the time a live turn runs.
+ */
+const DEFAULT_CONVERSATION_MAX_CHARS = DEFAULT_TOOL_RESULT_MAX_CHARS * 4;
+
+function getConversationMaxChars(ctx: ToolUseContext): number {
+  return ctx.toolResultBudget?.conversationMaxChars ?? DEFAULT_CONVERSATION_MAX_CHARS;
+}
+
+function estimateConversationChars(messages: unknown[], systemPrompt: string): number {
+  return systemPrompt.length + JSON.stringify(messages).length;
+}
+
+const EVICTED_MARKER_PREFIX = "[evicted:";
+
+/**
+ * Looks up the tool_use block (name + a short input descriptor) that produced
+ * a given tool_result, by scanning backward for the nearest preceding
+ * assistant message carrying a matching tool_use id. Best-effort: falls back
+ * to a generic label if the pairing can't be found (never blocks eviction).
+ */
+function describeToolUse(messages: unknown[], upToIndex: number, toolUseId: string): string {
+  for (let i = upToIndex - 1; i >= 0; i--) {
+    const m = messages[i] as EngineMessage;
+    if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+    const block = (m.content as Array<Record<string, unknown>>).find(
+      (b) => b["type"] === "tool_use" && b["id"] === toolUseId,
+    );
+    if (!block) continue;
+    const name = String(block["name"] ?? "tool");
+    const input = block["input"] as Record<string, unknown> | undefined;
+    const target =
+      typeof input?.["file_path"] === "string" ? input["file_path"]
+      : typeof input?.["path"] === "string" ? input["path"]
+      : typeof input?.["pattern"] === "string" ? input["pattern"]
+      : typeof input?.["command"] === "string" ? input["command"]
+      : undefined;
+    return target ? `${name} ${target}` : name;
+  }
+  return "tool result";
+}
+
+/**
+ * Evicts the oldest tool_result contents (replacing them with a short
+ * `[evicted: ...]` marker) until the estimated conversation size fits
+ * `maxChars`, or every evictable result has been evicted. Never touches the
+ * last message (the current turn's most recent content) so the model is
+ * never blinded to what it just produced. Idempotent: an already-evicted
+ * result is skipped, and the untouched-array reference is returned when
+ * nothing needs evicting (preserves reference equality for callers/tests
+ * relying on it, e.g. the microcompact-ordering test).
+ */
+function evictOldestToolResults(
+  messages: unknown[],
+  systemPrompt: string,
+  maxChars: number,
+): unknown[] {
+  if (maxChars <= 0) return messages;
+  if (estimateConversationChars(messages, systemPrompt) <= maxChars) return messages;
+
+  const next = messages.slice();
+  for (let i = 0; i < next.length - 1; i++) {
+    const m = next[i] as EngineMessage;
+    if (m.role !== "user" || !Array.isArray(m.toolUseResult) || m.toolUseResult.length === 0) {
+      continue;
+    }
+    if (m.toolUseResult.every((r) => r.content.startsWith(EVICTED_MARKER_PREFIX))) continue;
+
+    const evictedResults: ToolResultBlock[] = m.toolUseResult.map((r) => {
+      if (r.content.startsWith(EVICTED_MARKER_PREFIX)) return r;
+      const estTokens = Math.ceil(r.content.length / CHARS_PER_TOKEN_ESTIMATE);
+      const label = describeToolUse(next, i, r.tool_use_id);
+      return { ...r, content: `${EVICTED_MARKER_PREFIX} ${label} -- ${estTokens} tokens]` };
+    });
+    next[i] = { ...m, content: evictedResults, toolUseResult: evictedResults };
+
+    if (estimateConversationChars(next, systemPrompt) <= maxChars) return next;
+  }
+
+  return next; // evicted everything evictable; session-init's proactive guard is the backstop
 }
 
 // ---------------------------------------------------------------------------
@@ -286,10 +386,145 @@ export interface QueryParams {
   skipCacheWrite?: boolean;
 }
 
+/**
+ * Reported once per retried (not the original) attempt, before the backoff
+ * wait begins (issue #197 Leg 3/4) -- lets a UI show a live "retrying" status
+ * that is guaranteed to clear (the loop either yields another RetryAttemptInfo,
+ * a terminal ResultEvent, or an assistant/user event; it never just stops).
+ */
+export interface RetryAttemptInfo {
+  /** 1-based count of retry attempts made so far (the failed original call is not counted). */
+  attempt: number;
+  /** Ceiling this attempt count is bounded by (api-backend.ts's MAX_RETRY_ATTEMPTS). */
+  maxAttempts: number;
+  /** Backoff delay before the next attempt fires. */
+  delayMs: number;
+  /** HTTP status that triggered this retry, or null for a connection/timeout failure. */
+  status: number | null;
+  /** Short human-readable cause, e.g. "HTTP 503" or "connection error". */
+  reason: string;
+}
+
 /** Extra config passed alongside QueryParams (elicitation, schema overrides). */
 interface QueryConfig {
   handleElicitation?: (url: string) => Promise<void>;
   jsonSchema?: unknown;
+  /** issue #197: notified before each retry's backoff wait; see RetryAttemptInfo. */
+  onRetryAttempt?: (info: RetryAttemptInfo) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Retry policy (issue #197 Leg 3/4)
+//
+// The production callModel (session-init.ts's buildProductionCallModel) made
+// exactly one attempt per turn: any failure -- a deterministic 400 as much as
+// a transient connection drop -- terminated the turn immediately, and the
+// REPL's "Retrying..." UI text (message-renderers.ts's SystemAPIErrorMessage,
+// AC9: hidden until retryCount>3) was in practice ALWAYS shown on any
+// terminal error because repl.ts's renderMsgDispatch defaulted the never-set
+// retryCount to 4 -- a live claim of an in-progress retry that had never
+// actually happened, let alone finished (operator session #5: "all 4 server
+// slots idle, GPU 0%, yet Retrying... persists"). This wires the existing,
+// already-unit-tested api-backend.ts classification/backoff helpers
+// (shouldRetry/computeRetryDelay -- built for exactly this, never called from
+// production code before) to the one seam that knows the real failure shape:
+// a deterministic 4xx (except 429/408) throws straight through on the first
+// attempt, exactly as before; a transient 5xx/timeout/connection failure gets
+// bounded retries with backoff, each one reported via onRetryAttempt before
+// its wait begins, so a caller can render live retry status -- and the
+// caller-side retryCount default fix (repl.ts) means a message only ever
+// claims "retrying" while a retry mechanism that can actually clear it exists.
+// ---------------------------------------------------------------------------
+
+/**
+ * Transport-level error codes Bun's own fetch() actually throws for a
+ * connection-level failure. Issue #197 acceptance leg C (kill the model
+ * server mid-turn) exposed that Bun does NOT wrap these in a TypeError the
+ * way the original classifier assumed -- it throws a plain `Error` carrying
+ * a `.code` string. Measured directly (two live-process probes against the
+ * real llama-server binary, one killed before any connection and one killed
+ * mid-SSE-stream): a from-scratch refused connection throws
+ * `Error("Unable to connect...")` with `code: "ConnectionRefused"`; a
+ * mid-stream kill throws `Error("The socket connection was closed
+ * unexpectedly...")` with `code: "ECONNRESET"`. Both are plain Errors, so
+ * the old `err instanceof TypeError` check silently matched neither --
+ * meaning a killed/crashed server produced ZERO retries and went straight
+ * to a terminal error, never satisfying "bounded visible retries" at all.
+ * The Node-style codes (ECONNREFUSED/ETIMEDOUT/EPIPE/EHOSTUNREACH/
+ * EAI_AGAIN) are included too so this still holds under Node or a future
+ * Bun version that reverts to Node-compatible codes.
+ */
+const RETRYABLE_TRANSPORT_ERROR_CODES = new Set([
+  "ConnectionRefused",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "EHOSTUNREACH",
+  "EAI_AGAIN",
+]);
+
+/**
+ * True only for recognized connection-level failure shapes -- a real
+ * fetch() transport error (classified by `.code`, see
+ * RETRYABLE_TRANSPORT_ERROR_CODES above; TypeError is also still accepted
+ * as a fallback for runtimes/versions that DO wrap this way) or our OWN
+ * request-timeout abort (an AbortError from session-init.ts's internal
+ * AbortController, distinct from the user's abortController checked
+ * separately below). Anything else -- a plain Error with no recognized
+ * code, or a non-Error throw entirely -- is NOT a recognized transport
+ * failure, so it is never retried: blindly retrying an unclassified
+ * condition risks masking a real bug behind a multi-attempt backoff storm
+ * instead of surfacing it (caught by query-engine.error-event.test.ts: a
+ * synthetic plain-Error and a raw-string throw both regressed to a 5s
+ * retry-storm timeout before this narrowing -- the first version of this
+ * classifier treated "not a ModelHttpError" as "is a network error", which
+ * is too broad).
+ */
+function isRetryableTransportError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  if (err instanceof Error && err.name === "AbortError") return true;
+  if (err instanceof Error) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "string" && RETRYABLE_TRANSPORT_ERROR_CODES.has(code)) return true;
+  }
+  return false;
+}
+
+async function callModelWithRetry(
+  deps: LoopDeps,
+  callParams: CallModelParams,
+  abortController: AbortController,
+  onRetryAttempt?: (info: RetryAttemptInfo) => void,
+): Promise<ModelResponse> {
+  let attempt = 0;
+  let count529 = 0;
+
+  while (true) {
+    try {
+      return await deps.callModel(callParams);
+    } catch (err) {
+      // A user-initiated abort is never retried -- let the caller's own
+      // abort handling take over exactly as it did before this loop existed.
+      if (abortController.signal.aborted) throw err;
+
+      const status = err instanceof ModelHttpError ? err.status : null;
+      const isNetworkError = status === null && isRetryableTransportError(err);
+      if (!shouldRetry(status, isNetworkError, attempt, count529, false)) throw err;
+
+      if (status === 529) count529 += 1;
+      const delayMs = computeRetryDelay(attempt);
+      attempt += 1;
+      onRetryAttempt?.({
+        attempt,
+        maxAttempts: MAX_RETRY_ATTEMPTS,
+        delayMs,
+        status,
+        reason: status !== null ? `HTTP ${status}` : "connection error",
+      });
+      await deps.sleep(delayMs, abortController.signal);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -327,16 +562,30 @@ export async function* query(
       // Micro-compaction: minimally trim the running log when it nears the
       // context budget (identity when under budget). Persists forward.
       messages = await deps.microcompact(messages);
-      response = await deps.callModel({
+      // Conversation-total budget (issue #197): evict oldest tool_results
+      // BEFORE every model call so a multi-tool-call turn's SUM never
+      // overflows n_ctx, even though each individual result already fits
+      // its own per-result budget (getToolResultMaxChars, above).
+      messages = evictOldestToolResults(
         messages,
-        systemPrompt: params.systemPrompt,
-        tools: toolsToEmberDefs(tools),
-        model: params.toolUseContext.options.mainLoopModel ?? "default",
-        maxTokens: params.maxOutputTokensOverride ?? 8192,
-        skipCacheWrite: params.skipCacheWrite,
-        abortSignal: params.toolUseContext.abortController.signal,
-        jsonSchema: _config?.jsonSchema,
-      });
+        params.systemPrompt,
+        getConversationMaxChars(params.toolUseContext),
+      );
+      response = await callModelWithRetry(
+        deps,
+        {
+          messages,
+          systemPrompt: params.systemPrompt,
+          tools: toolsToEmberDefs(tools),
+          model: params.toolUseContext.options.mainLoopModel ?? "default",
+          maxTokens: params.maxOutputTokensOverride ?? 8192,
+          skipCacheWrite: params.skipCacheWrite,
+          abortSignal: params.toolUseContext.abortController.signal,
+          jsonSchema: _config?.jsonSchema,
+        },
+        params.toolUseContext.abortController,
+        _config?.onRetryAttempt,
+      );
     } catch (err) {
       if (params.toolUseContext.abortController.signal.aborted) {
         const abortMsg = synthesizeFinalMessage("abort");
@@ -531,8 +780,11 @@ export interface QueryEngineConfig {
   setAppState: (updater: (prev: unknown) => unknown) => void | Promise<void>;
   initialMessages?: unknown[];
   readFileCache?: Map<string, unknown>;
-  /** Threaded to every ToolUseContext this engine builds (issue #157 tool-output truncation). */
-  toolResultBudget?: { maxChars: number };
+  /**
+   * Threaded to every ToolUseContext this engine builds: per-result budget
+   * (issue #157) and conversation-total budget (issue #197).
+   */
+  toolResultBudget?: { maxChars: number; conversationMaxChars?: number };
   customSystemPrompt?: string;
   appendSystemPrompt?: string;
   userSpecifiedModel?: string;
@@ -546,6 +798,8 @@ export interface QueryEngineConfig {
   replayUserMessages?: boolean;
   setSDKStatus?: unknown;
   handleElicitation?: (url: string) => Promise<void>;
+  /** issue #197: notified before each retry's backoff wait; see RetryAttemptInfo. */
+  onRetryAttempt?: (info: RetryAttemptInfo) => void;
   /** Test-only override for the conversation-store-bound autocompact. */
   autocompact?: () => Promise<void>;
 }
@@ -630,6 +884,7 @@ export class QueryEngine {
       const replayConfigExtras: QueryConfig = {
         handleElicitation: this.config.handleElicitation,
         jsonSchema: this.config.jsonSchema,
+        onRetryAttempt: this.config.onRetryAttempt,
       };
 
       const replayTurnMessages: EngineMessage[] = [];
@@ -679,6 +934,7 @@ export class QueryEngine {
     const configExtras: QueryConfig = {
       handleElicitation: this.config.handleElicitation,
       jsonSchema: this.config.jsonSchema,
+      onRetryAttempt: this.config.onRetryAttempt,
     };
 
     const turnMessages: EngineMessage[] = [];

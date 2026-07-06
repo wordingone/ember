@@ -22,6 +22,32 @@ export const NCTX_PROBE_TIMEOUT_MS = 10_000;
 /** Prefill overflow guard threshold (FM_91): fraction of n_ctx. */
 export const PREFILL_OVERFLOW_FRACTION = 0.95;
 
+/**
+ * Chars-per-token estimate used everywhere a real tokenizer isn't available at
+ * this layer (query-engine.ts's per-result truncation + conversation-total
+ * budget, session-init.ts's proactive prefill guard). Issue #197: the prior
+ * value (3.5) was a guess and measurably too optimistic for the escaped-JSON-
+ * heavy tool_result strings ember actually sends -- it undercounted real token
+ * usage enough that a payload the estimator judged safe still 400'd against
+ * the server. Measured directly against the production model's own real
+ * llama-server /tokenize endpoint (Qwen3.6-27B-Q4_K_M, the exact checkpoint
+ * the cockpit serves turns through) on two representative samples: a 6590-char
+ * escaped-JSON tool_result (nested object, `\n`/`\"`/`\\` escapes, code lines,
+ * file paths) tokenized at 2424 tokens = 2.72 chars/token; an 8023-char
+ * JSON-escaped markdown-prose sample tokenized at 1512 tokens = 5.31
+ * chars/token. The two diverge because JSON escaping and code/path tokens
+ * fragment into more, shorter sub-word tokens than prose. Since the failure
+ * mode this constant guards against is UNDERcounting tokens (a payload the
+ * estimator judged small enough that overflows for real), the conservative
+ * choice is the lower (denser) measurement -- an estimate too pessimistic for
+ * prose only costs a little extra truncation/eviction headroom; one too
+ * optimistic for JSON is the exact bug being fixed. 2.7 sits just under the
+ * measured JSON floor (2.72), so it never reports a smaller token count than
+ * the real tokenizer would for the content shape that actually causes
+ * overflows. See the PR body for the calibration script and raw output.
+ */
+export const CHARS_PER_TOKEN_ESTIMATE = 2.7;
+
 // ---------------------------------------------------------------------------
 // Tool choice conversion (AC2)
 // ---------------------------------------------------------------------------
@@ -244,6 +270,24 @@ export class PrefillOverflowError extends Error {
 }
 
 /**
+ * Issue #197: buildProductionCallModel threw a bare Error on a non-ok HTTP
+ * response, discarding the status code by the time it reached query-engine.ts's
+ * retry loop -- which needs the real status to tell a deterministic 4xx (never
+ * retry) from a transient 5xx (retry with backoff) per api-backend.ts's
+ * shouldRetry contract. Carries the same message text the bare Error used, so
+ * anything already surfacing `.message` to the user is unaffected.
+ */
+export class ModelHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    statusText: string,
+  ) {
+    super(`Model server returned HTTP ${status}: ${statusText}`);
+    this.name = "ModelHttpError";
+  }
+}
+
+/**
  * AC4: Fetches n_ctx from the server's /props endpoint (or returns override value).
  */
 export async function fetchNCtx(serverUrl: string): Promise<number> {
@@ -297,6 +341,19 @@ export interface SseParserContext {
   thinkingBuffer: string;
   textBuffer: string;
   toolCallsByIndex: Map<number, { id: string; name: string; arguments: string }>;
+  // issue #197: true only once a chunk carrying a non-null
+  // `choices[0].finish_reason` has actually been seen. Before this field
+  // existed, session-init.ts's buildProductionCallModel treated ANY stream
+  // end (`reader.read()` returning `done: true`) as a successful "end_turn"
+  // completion -- with no way to tell "the model genuinely finished" from
+  // "the connection died mid-stream and the runtime's fetch() silently
+  // reported a clean EOF instead of throwing" (measured directly: a real
+  // llama-server killed mid-generation sometimes produces exactly this
+  // silent-EOF shape, no error ever thrown). That gap meant a killed/
+  // crashed server produced a TRUNCATED response rendered as a normal,
+  // complete, successful turn -- worse than a visible error, since nothing
+  // ever signaled the user or the retry logic that anything went wrong.
+  sawFinishReason: boolean;
 }
 
 /**
@@ -311,6 +368,7 @@ export function createSseParserContext(opts: SseParserOptions = {}): SseParserCo
     thinkingBuffer: "",
     textBuffer: "",
     toolCallsByIndex: new Map(),
+    sawFinishReason: false,
   };
 }
 
@@ -332,7 +390,13 @@ export async function processSseLine(
 
   if (!rawLine.startsWith("data:")) return;
   const jsonStr = rawLine.slice(5).trim();
-  if (jsonStr === "[DONE]") return;
+  if (jsonStr === "[DONE]") {
+    // issue #197: a genuine [DONE] sentinel is also a valid finish signal,
+    // defensive against a server that sends it without a finish_reason on
+    // the preceding chunk (the primary signal is checked below).
+    ctx.sawFinishReason = true;
+    return;
+  }
 
   let data: unknown;
   try {
@@ -345,9 +409,17 @@ export async function processSseLine(
 
   // Route delta based on state machine
   const choice = (data as Record<string, unknown>)?.["choices"];
-  const delta = Array.isArray(choice)
-    ? (choice[0] as Record<string, unknown>)?.["delta"]
-    : null;
+  const firstChoice = Array.isArray(choice) ? (choice[0] as Record<string, unknown>) : null;
+
+  // issue #197: record a genuine finish signal BEFORE the `!delta` early
+  // return below, since the real final chunk (finish_reason set) commonly
+  // carries an empty-but-present delta -- checked on `choice`, not `delta`,
+  // so it's captured regardless of that chunk's delta shape.
+  if (firstChoice && firstChoice["finish_reason"] != null) {
+    ctx.sawFinishReason = true;
+  }
+
+  const delta = firstChoice?.["delta"];
   if (!delta) return;
 
   const content = (delta as Record<string, unknown>)?.["content"];
