@@ -35,7 +35,7 @@ import {
   WelcomeV2,
   LogoV2,
   IDENTITY_TAGLINE,
-} from "../components/logo-homescreen.ts";
+} from "./components/logo-homescreen.ts";
 import { Markdown, renderInline } from "../components/markdown-and-code.ts";
 import type { SessionMessage } from "../components/app-shell.ts";
 import { color } from "./components/design-system.ts";

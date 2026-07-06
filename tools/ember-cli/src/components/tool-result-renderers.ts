@@ -152,6 +152,66 @@ export function contentToString(content: string | unknown[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// #173: JSON-wrapped tool content -> human-readable display text
+// ---------------------------------------------------------------------------
+
+/**
+ * Every builtin tool's mapToolResultToToolResultBlockParam JSON.stringifies its
+ * structured output (BashOutput, PowerShellOutput, etc) into the block's `content`
+ * -- correct for the model-facing wire format, but nothing ever wires the optional
+ * per-tool `renderToolResultMessage` hook, so the generic path used to display that
+ * same JSON-stringified blob verbatim (raw `{"stdout":"...", ...}` inline with
+ * assistant prose). This reformats recognized shapes into their readable text and
+ * otherwise pretty-prints the JSON (multi-line, indented) instead of a dense
+ * single-line blob. Falls through untouched for content that isn't JSON at all
+ * (plain-string tool outputs).
+ */
+export function formatToolResultForDisplay(text: string): string {
+  const trimmed = text.trimStart();
+  if (trimmed[0] !== "{" && trimmed[0] !== "[") return text;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return text;
+  }
+
+  if (parsed === null || typeof parsed !== "object") return text;
+
+  if (!Array.isArray(parsed)) {
+    const obj = parsed as Record<string, unknown>;
+
+    // Bash / PowerShell shape: { stdout, stderr, returnCodeInterpretation, ... }
+    if (typeof obj["stdout"] === "string") {
+      const lines: string[] = [];
+      const stdout = (obj["stdout"] as string).replace(/\r\n/g, "\n").replace(/\n+$/, "");
+      if (stdout.length > 0) lines.push(stdout);
+      const stderr = obj["stderr"];
+      if (typeof stderr === "string" && stderr.trim().length > 0) {
+        lines.push(`stderr: ${stderr.trim()}`);
+      }
+      const interp = obj["returnCodeInterpretation"];
+      if (typeof interp === "string" && interp.length > 0) {
+        lines.push(`(${interp})`);
+      }
+      if (lines.length > 0) return lines.join("\n");
+    }
+
+    // Glob/search shape: { filenames, numFiles, ... }
+    if (Array.isArray(obj["filenames"]) && typeof obj["numFiles"] === "number") {
+      const names = obj["filenames"] as unknown[];
+      const count = obj["numFiles"] as number;
+      if (count === 0) return "No files found.";
+      return names.map((n) => String(n)).join("\n");
+    }
+  }
+
+  // Fallback: pretty-print instead of a dense single-line blob.
+  return JSON.stringify(parsed, null, 2);
+}
+
+// ---------------------------------------------------------------------------
 // Signal classification (priority order from spec)
 // ---------------------------------------------------------------------------
 
@@ -286,8 +346,9 @@ export function UserToolErrorMessage(props: UserToolErrorMessageProps): React.Re
     return React.createElement(Text, { dimColor: true }, "Access denied by classifier.");
   }
 
-  // Generic fallback (AC2)
-  return FallbackToolUseErrorMessage({ errorText: text, isExpanded });
+  // Generic fallback (AC2) -- #173: unwrap JSON-stringified wire content for display
+  // (checks above run against the raw `text` so sentinel/prefix matching is unaffected).
+  return FallbackToolUseErrorMessage({ errorText: formatToolResultForDisplay(text), isExpanded });
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +408,10 @@ export function UserToolSuccessMessage(props: UserToolSuccessMessageProps): Reac
     }
 
     // If the tool result looks like a unified diff, render word-level (S06 / M10 A2).
-    const text = contentToString(content);
+    // #173: unwrap the JSON-stringified wire content into display text FIRST -- diff
+    // detection and large-output truncation need to see the actual stdout/output text,
+    // not the `{"stdout":"..."}` wrapper it arrives in.
+    const text = formatToolResultForDisplay(contentToString(content));
     const diffEl = tryRenderAsDiff(text);
     if (diffEl !== null) return diffEl;
 
