@@ -2,6 +2,7 @@
   "evidence_class": "Haiku/Fable-family MINED EVIDENCE with citations + refuter adjustments \u2014 attack surface, NOT certification; certification only from executed receipts (adopted design-zone boundary, STATE 2026-06-11)",
   "source": "gpu-math-attack workflow wf_b2f8b412-ecf, 2026-06-11, 24 haiku agents (8 mine + 16 refute)",
   "discipline": "verdict is the lead's from receipts; this table is evidence legs only",
+  "version_status": "SUPERSEDED (issue #248 item 4, 2026-07-06) — this is the 24-agent (8 mine + 16 refute) first pass. The 127-agent, more thoroughly refuted follow-up pass docs/research/gpu-math-multiplier-table-v2-2026-06-11.json is VERSION-ACTIVE: it is what configs/v0-pretrain-config.json and every baseline/ citation actually treat as the survivor stack. This file is retained for provenance (it is what fp19-envelope.md's frozen 2026-06-11 rationale actually cited, e.g. the 1.77x Muon figure) — do not cite it as a current multiplier source.",
   "multiplier_table": [
     {
       "technique": "Muon optimizer (momentum-orthogonalized updates via Newton-Schulz iteration)",
