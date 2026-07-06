@@ -32,6 +32,17 @@ import {
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
 import { Homescreen }                   from "../components/logo-homescreen.ts";
+import { SlashDropdown }                from "../components/slash-dropdown.ts";
+import {
+  shouldShowSlashDropdown,
+  slashQueryFrom,
+  filterSlashCommands,
+  moveDropdownSelection,
+  completeSlashSelection,
+  computeSlashDropdownDisplay,
+} from "../services/slash-dropdown.ts";
+import { getCommands } from "../command-registry.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildMessageLookups,
   UserTextMessage,
@@ -549,6 +560,32 @@ export function ReplScreen({
   const inputStateRef = useRef(inputState);
   inputStateRef.current = inputState;
 
+  // Slash-command completion dropdown (b22 item 1 / b23 ellipsis-clip fix). Commands load once
+  // at mount; the dropdown itself is a pure function of the live input text + terminal width, so
+  // it stays in sync with both typing (narrows the match list) and resize (b23's description
+  // truncation re-derives its budget from `terminalCols` on every render).
+  const [slashCommands, setSlashCommands]           = useState<RegistryCommand[]>([]);
+  const [dropdownSelectedIndex, setDropdownSelIndex] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCommands(cwd).then((cmds) => { if (!cancelled) setSlashCommands(cmds); });
+    return () => { cancelled = true; };
+  }, [cwd]);
+
+  const dropdownOpen    = shouldShowSlashDropdown(inputState.text);
+  const dropdownMatches = dropdownOpen
+    ? filterSlashCommands(slashCommands, slashQueryFrom(inputState.text))
+    : [];
+  const dropdownDisplay = computeSlashDropdownDisplay(dropdownMatches, dropdownSelectedIndex);
+
+  // Back to the top row whenever the composed query text changes (narrows/widens the match
+  // list) -- never fires on a pure Up/Down navigation, since those only touch
+  // dropdownSelectedIndex, not inputState.text.
+  useEffect(() => {
+    setDropdownSelIndex(0);
+  }, [inputState.text]);
+
   // Constructed once (usePromptInput's setText is referentially stable across
   // renders): the queue/inject semantics that give the keyboard priority over
   // operator-pipe lines. See services/operator-input.ts.
@@ -715,13 +752,22 @@ export function ReplScreen({
             prev.map((m) => (m.id === assistantId ? { ...m, content } : m)),
           );
         } else if (event.type === "user") {
+          // #173: the engine's "user" event carries one ToolResultBlock per tool
+          // invoked in the preceding assistant turn (parallel tool calls yield
+          // several). Each block already has tool_use_id/content/is_error typed
+          // and ready to render -- JSON.stringify-ing the whole array (the prior
+          // behavior) dumped raw wire JSON into the transcript instead of routing
+          // per-block through UserToolResultMessage's formatted card.
+          const toolResultBlocks = event.message.toolUseResult ?? [];
           setMessages((prev) => [
             ...prev,
-            {
-              id:      crypto.randomUUID(),
-              type:    "tool_result",
-              content: JSON.stringify(event.message.content ?? ""),
-            },
+            ...toolResultBlocks.map((block) => ({
+              id:          crypto.randomUUID(),
+              type:        "tool_result",
+              tool_use_id: block.tool_use_id,
+              content:     block.content,
+              is_error:    block.is_error === true,
+            })),
           ]);
         } else if (event.type === "result") {
           break;
@@ -779,6 +825,25 @@ export function ReplScreen({
 
   // Main keyboard handler
   useInput((input, key) => {
+    // Slash-command dropdown navigation takes priority over every other binding while it's open
+    // (b22 item 1) -- Enter completes the highlighted command into the input instead of falling
+    // through to message-submit below.
+    if (dropdownOpen && dropdownDisplay.visible.length > 0) {
+      if (key.downArrow) {
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, 1));
+        return;
+      }
+      if (key.upArrow) {
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, -1));
+        return;
+      }
+      if (key.return) {
+        const chosen = dropdownDisplay.visible[dropdownDisplay.selectedIndex];
+        if (chosen) inputActions.setText(completeSlashSelection(chosen));
+        return;
+      }
+    }
+
     // Submit on Enter
     if (!key.shift && key.tab) {
       // Accept the current ghost suggestion into the input.
@@ -846,6 +911,19 @@ export function ReplScreen({
           key:         "spinner",
           elapsedMs:   spinnerElapsed,
           startedAtMs: spinnerStartRef.current,
+        })
+      : null,
+
+    // Slash-command completion dropdown (b22 item 1) — sits directly above the input line while
+    // composing a command name; b23: each row's description ellipsis-truncates to the live
+    // terminal width instead of hard-clipping mid-word.
+    dropdownOpen && dropdownDisplay.visible.length > 0
+      ? React.createElement(SlashDropdown, {
+          key:           "slash-dropdown",
+          commands:      dropdownDisplay.visible,
+          selectedIndex: dropdownDisplay.selectedIndex,
+          overflowCount: dropdownDisplay.overflowCount,
+          width:         terminalCols,
         })
       : null,
 
