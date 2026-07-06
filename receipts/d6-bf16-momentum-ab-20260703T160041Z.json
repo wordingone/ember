@@ -1,0 +1,180 @@
+{
+  "ticket": "D6-BF16-MOMENTUM-AB",
+  "ts": "20260703T160041Z",
+  "mode": "live",
+  "issue": "#29",
+  "spec_ref": "docs/spec/c-scale-s1-growth-chain-DRAFT.md \u00a79 D6",
+  "scope": "reduced-precision (bf16) momentum optimizer-state VRAM route, pre-registered authorized route for S1 rung 2+, priced by A/B at the CURRENT 718.3M shape before rung 2 opens",
+  "harness_sha": "24c86e77ae174700d605ebf358a7112a5c533e314145578d5354c35c479a3252",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "flags": [
+    "ONE GPU job at a time",
+    "governor rails HOLD \u2014 never loosened",
+    "no git commits, no downloads, no founder/user names",
+    "arm A UNMODIFIED production optimizer; arm B differs ONLY by a post-.step() momentum-state downcast hook (Muon momentum_buffer + AdamW exp_avg, NOT exp_avg_sq/the v term)"
+  ],
+  "status": "OK",
+  "governor": {
+    "vram_fraction_applied": 0.8,
+    "fp19_fraction_floor": 0.8,
+    "free_gib": 22.45,
+    "total_gib": 23.99,
+    "margin_gib_floor": 4.0
+  },
+  "g_budget": {
+    "status": "GREEN",
+    "detail": "requested_run[ember_d6_bf16_momentum_ab--live]: total_steps=50, cost=3.531e+15 FLOPs (6*params*tokens estimate) vs micro-fit ceiling 2.431e+16 FLOPs (0.5% of the certified full-ladder FLOPs budget) -> FIT"
+  },
+  "requested_run": {
+    "source": "ember_d6_bf16_momentum_ab--live",
+    "total_steps": 50,
+    "params": 718316544,
+    "batch": 16,
+    "seq": 1024
+  },
+  "current_shape": {
+    "ff": 8192,
+    "params_state_dict_sum": 718316544
+  },
+  "recipe": {
+    "source": "timeshare_pretrain production builders (build_v0_model/build_split_optimizer/resolve_ce_impl) \u2014 UNMODIFIED for arm A; arm B differs ONLY by the post-.step() momentum downcast hook",
+    "batch": 16,
+    "seq": 1024,
+    "ce_chunk_tokens": 256,
+    "warmup": 5,
+    "timed": 20,
+    "pace_s": 0.05,
+    "model_seed": 42,
+    "batch_gen_seed": 20260703,
+    "data": "synthetic (torch.randint, dedicated fixed-seed Generator, IDENTICAL sequence across both arms)"
+  },
+  "arms": {
+    "A_production_as_is": {
+      "arm": "A_production_as_is",
+      "status": "OK",
+      "force_bf16_momentum": false,
+      "measured_momentum_dtypes_after_warmup": {
+        "momentum_buffer": "torch.bfloat16",
+        "exp_avg": "torch.bfloat16"
+      },
+      "tok_s_paced": 11703.93,
+      "tok_s_raw": 12137.45,
+      "mean_step_ms": 1344.542,
+      "loss_trajectory": [
+        13.9375,
+        13.9375,
+        13.875,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.9375,
+        14.0,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375
+      ],
+      "first_loss": 13.9375,
+      "last_loss": 13.9375,
+      "n_muon": 140,
+      "n_adamw": 44,
+      "ce_impl": "cut_ce_chunked",
+      "routing_mode": "muon_split",
+      "optimizer_state_health": {
+        "all_finite": true,
+        "momentum_global_norm": 6.278000574966719,
+        "n_tensors": 184
+      },
+      "vram_high_water_gib": 6.6723,
+      "vram_used_delta_gib": 8.055
+    },
+    "B_bf16_momentum": {
+      "arm": "B_bf16_momentum",
+      "status": "OK",
+      "force_bf16_momentum": true,
+      "measured_momentum_dtypes_after_warmup": {
+        "momentum_buffer": "torch.bfloat16",
+        "exp_avg": "torch.bfloat16"
+      },
+      "tok_s_paced": 11704.9,
+      "tok_s_raw": 12138.49,
+      "mean_step_ms": 1343.458,
+      "loss_trajectory": [
+        13.9375,
+        13.9375,
+        13.875,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.9375,
+        14.0,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375
+      ],
+      "first_loss": 13.9375,
+      "last_loss": 13.9375,
+      "n_muon": 140,
+      "n_adamw": 44,
+      "ce_impl": "cut_ce_chunked",
+      "routing_mode": "muon_split",
+      "optimizer_state_health": {
+        "all_finite": true,
+        "momentum_global_norm": 6.278340292857538,
+        "n_tensors": 184
+      },
+      "vram_high_water_gib": 6.6746,
+      "vram_used_delta_gib": 7.889
+    }
+  },
+  "conjuncts": {
+    "a_weight_delta_bf16_granularity": {
+      "max_abs_delta": 7.62939e-05,
+      "max_rel_delta": 0.00075483,
+      "worst_param": "backbone_model.layers.18.mlp.gate_proj.weight",
+      "rel_tolerance": 0.0078,
+      "pass": true
+    },
+    "b_loss_trajectory_equality": {
+      "max_abs_rel_loss_delta": 0.0,
+      "envelope": 0.02,
+      "pass": true
+    },
+    "c_optimizer_state_health": {
+      "all_finite_both_arms": true,
+      "momentum_global_norm_a": 6.278000574966719,
+      "momentum_global_norm_b": 6.278340292857538,
+      "ratio_b_over_a": 1.000054,
+      "ratio_band": [
+        0.9,
+        1.1
+      ],
+      "pass": true
+    }
+  },
+  "kill_criteria": {
+    "a_weight_delta_bf16_granularity": true,
+    "b_loss_trajectory_equality": true,
+    "c_optimizer_state_health": true
+  },
+  "verdict": "D6_ROUTE_PRICED_OK"
+}
