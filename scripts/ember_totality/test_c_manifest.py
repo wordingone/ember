@@ -38,18 +38,20 @@ from __future__ import annotations
 import os
 import re
 
-# --- locate <external-state> + goal file regardless of WSL vs Windows path conv --
+# --- locate the external state root + goal file regardless of path convention -----
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-_NC_ROOTS = [
-    p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
-                os.path.join(REPO_ROOT, "<external-state>"))
-    if p
-]
+# [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
+# REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
+# cover every real invocation shape, and the dropped candidate never resolved to
+# anything -- a latent probe defect if it were ever reached first.
+_NC_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 # The §4 condition-bullet prose now lives in docs/spec/conditions-v1.md (the
-# canonical registry, GOAL.md §4 header) rather than the legacy
-# <spec> name; GOAL.md itself is tried too (its §4 may inline
-# amendments/bullets directly). Order = most-authoritative first; the legacy
-# name is kept as a last-resort candidate for older trees that still have it.
+# canonical registry, GOAL.md §4 header); GOAL.md itself is tried too (its §4
+# may inline amendments/bullets directly). Order = most-authoritative first.
+# [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial legacy
+# "<spec>" last-resort candidate: a literal bracketed placeholder never exists
+# verbatim on disk, so it could never resolve on any real tree -- a latent
+# probe defect if the first two candidates were ever both absent.
 #
 # [LANE-14 REPAIR 2, 2026-07-02] These candidates MUST be resolved relative to
 # the resolved nc_root (which honors EMBER_TOTALITY_ROOT), not the fixed
@@ -62,7 +64,6 @@ def _goal_files_for(root: str) -> list[str]:
     return [
         os.path.join(root, "docs", "spec", "conditions-v1.md"),
         os.path.join(root, "GOAL.md"),
-        os.path.join(root, "<spec>"),
     ]
 
 # Invalid-token whose REAL match -> RED (does-NOT-count); negative assertion.
@@ -84,6 +85,31 @@ def _read(path: str) -> str:
         return fh.read()
 
 
+def _parse_legacy_id_map(text: str) -> dict[str, str]:
+    """Parse the manifest's own "| Legacy ID | Current ID |" table (present since the
+    2026-06-?? id-scheme migration from C1..C55 condition-numbered rows to M1..M55
+    piece-numbered rows). Returns {legacy_c_id: current_m_id}. [RULING-DRIFT
+    CORRECTION, 2026-07-06, gh #254]: _parse_manifest_rows used to require id cells to
+    start with "C", so it silently matched only this 2-column legacy table (which
+    fails the >=6-cell check and lands in `malformed`, never `rows`) while skipping
+    the real 6-column M1..M55 data table entirely -- the file's actual, current
+    manifest rows were never parsed at all, producing the false "no parseable rows
+    found" verdict. This map lets the id-matching step below translate a §4
+    condition's legacy C-id to its current M-id before checking manifestation."""
+    legacy_map: dict[str, str] = {}
+    for line in text.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if len(cells) != 2:
+            continue
+        legacy, current = cells[0], cells[1]
+        if re.match(r"^C[\w()−\-]+$", legacy) and re.match(r"^M[\w()−\-]+$", current):
+            legacy_map[legacy] = current
+    return legacy_map
+
+
 def _parse_manifest_rows(text: str) -> tuple[list[dict], list[str]]:
     """Parse the markdown table rows. Returns (rows, malformed[])."""
     rows: list[dict] = []
@@ -101,7 +127,18 @@ def _parse_manifest_rows(text: str) -> tuple[list[dict], list[str]]:
         # _CID_RE's goal-side repair -- "C(−1)" rows were skipped as non-data
         # rows, leaving that condition permanently ABSENT however the manifest
         # spelled it (fail-closed asymmetry between the two parsers).
-        if not re.match(r"^C[\w()−\-]+$", cells[0]):
+        # [RULING-DRIFT CORRECTION, 2026-07-06, gh #254]: the manifest's own row-id
+        # scheme migrated from C1..C55 to M1..M55 (see _parse_legacy_id_map's
+        # docstring) -- widened to accept both prefixes so the CURRENT 6-column
+        # M-numbered data rows are actually parsed, not silently skipped.
+        if not re.match(r"^[CM][\w()−\-]+$", cells[0]):
+            continue
+        # [RULING-DRIFT CORRECTION, 2026-07-06, gh #254]: a genuine 2-cell row here is
+        # the "| Legacy ID | Current ID |" cross-reference table (see
+        # _parse_legacy_id_map), not a malformed manifest row -- skip it silently
+        # rather than counting 55 harmless legacy-map entries as field-incomplete
+        # manifest rows, which would falsely RED an otherwise-complete manifest.
+        if len(cells) == 2:
             continue
         if len(cells) < 6:
             malformed.append(f"{cells[0]} (only {len(cells)} cells)")
@@ -206,6 +243,7 @@ def main() -> int:
         return 0
 
     manifested_ids = {r["id"] for r in rows}
+    legacy_id_map = _parse_legacy_id_map(manifest_text)
 
     # The planned pieces the manifest MUST enumerate include the goal file's §4
     # conditions (each is an explicit planned/known piece of the organism). An
@@ -229,18 +267,27 @@ def main() -> int:
         )
         return 0
 
-    # A §4 condition is "manifested" iff its id appears as a manifest row id.
-    # (The manifest is dated 2026-06-12 with rows C1..C55 keyed to S1-S7; the
-    # 2026-06-23 goal rewrite added C-PORT/C-FED/C-GROW/C-ORGANISM/C-OBS/C-ANAT/
-    # C-EFF/C-BASE/... which are planned pieces NOT yet rowed.)
-    unmanifested = [cid for cid in section4_ids if cid not in manifested_ids]
+    # A §4 condition is "manifested" iff its id appears as a manifest row id --
+    # DIRECTLY, or via the manifest's own "Legacy ID -> Current ID" table if the
+    # condition's C-id was renamed to an M-id ([RULING-DRIFT CORRECTION, 2026-07-06,
+    # gh #254]: the manifest was originally dated 2026-06-12 with rows C1..C55 keyed
+    # to S1-S7; it has since migrated its own row-id scheme to M1..M55 and records
+    # the C->M mapping in-file. The 2026-06-23 goal rewrite added
+    # C-PORT/C-FED/C-GROW/C-ORGANISM/C-OBS/C-ANAT/C-EFF/C-BASE/... after that
+    # migration, so they have no legacy-map entry and are checked directly against
+    # manifested_ids -- if truly not yet rowed, they correctly stay unmanifested.)
+    unmanifested = [
+        cid for cid in section4_ids
+        if legacy_id_map.get(cid, cid) not in manifested_ids
+    ]
 
     if unmanifested:
         print(
             f"RED {INVALID_TOKEN}: {len(unmanifested)}/{len(section4_ids)} §4 "
             f"planned condition(s) ABSENT from docs/ember-completeness.md "
-            f"({len(rows)} rows present, ids C1..); missing="
-            f"{','.join(unmanifested)}"
+            f"({len(rows)} rows present, ids M1..M{len(rows)} per the in-file "
+            f"legacy-id migration, {len(legacy_id_map)} legacy C-id mappings "
+            f"applied); missing={','.join(unmanifested)}"
         )
         return 0
 

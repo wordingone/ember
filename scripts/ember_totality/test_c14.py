@@ -85,13 +85,13 @@ from receipt_ts_authority import effective_event_ts  # noqa: E402 -- shared
 # receipt this probe actually consulted is never silent.
 _DIVERGENCE_NOTES = []
 
-# --- Locate <external-state> robustly across WSL mount conventions ----------------
+# --- Locate the external state root robustly across invocation conventions --------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-CANDIDATE_ROOTS = [
-    p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
-                os.path.join(REPO_ROOT, "<external-state>"))
-    if p
-]
+# [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
+# REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
+# cover every real invocation shape, and the dropped candidate never resolved to
+# anything -- a latent probe defect if it were ever reached first.
+CANDIDATE_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
 # C14's explicit ? invalid-tokens (the does-NOT-count outcomes), encoded as
@@ -179,11 +179,19 @@ def main():
     rec_dir = os.path.join(ROOT, "receipts")
 
     # --- (1) Latest resident-training-gate receipt ---------------------------
+    # [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: the public-export
+    # scrub tool had rewritten the real receipt directory name into the literal
+    # bracketed placeholder `<peer-gate>` -- which never exists verbatim on disk --
+    # in these functional path-join calls, so this probe could never locate its own
+    # evidence (live reproduction pre-fix: "RED C14: no resident-training-gate
+    # receipt found (receipts/<peer-gate>/ empty)" against a tree where
+    # receipts/ember-resident-training-gate/ is real and populated). Restored to
+    # the real, already-public name.
     resident_path = latest(os.path.join(
-        rec_dir, "<peer-gate>", "resident-training-gate-*.json"))
+        rec_dir, "ember-resident-training-gate", "resident-training-gate-*.json"))
     if resident_path is None:
         emit("RED", "C14: no resident-training-gate receipt found "
-                    "(receipts/<peer-gate>/ empty) "
+                    "(receipts/ember-resident-training-gate/ empty) "
                     "-> satisfying artifact ABSENT")
     try:
         res_raw, res = load(resident_path)
@@ -192,8 +200,10 @@ def main():
                     f"({os.path.basename(resident_path)}): {exc}")
 
     # --- (4) Latest conflation-guard audit (binds SYMBOLIC_PROXY / runner) ---
+    # [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259] restored from
+    # `<peer-gate>` -- see note above.
     conflation_path = latest(os.path.join(
-        rec_dir, "<peer-gate>", "resident-gate-conflation-audit-*.json"))
+        rec_dir, "ember-resident-training-gate", "resident-gate-conflation-audit-*.json"))
     confl_raw, confl = ("", {})
     if conflation_path is not None:
         try:

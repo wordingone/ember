@@ -11,8 +11,10 @@ C2 — Real external held-out world task.
      candidate path.
 
 Authoritative text: <<external>>/state/<spec> §4.2 (C2).
-Receipt hint: receipts/<peer-loop>/* — frozen-rows hash vs candidate
-receipt.
+Receipt hint: receipts/ember-d3-native-loop/* — frozen-rows hash vs candidate
+receipt. [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: this hint
+previously read the literal bracketed placeholder `<peer-loop>`, which never
+exists verbatim on disk; restored to the real, already-public directory name.
 
 This is a STATUS PROBE. It ALWAYS exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
@@ -82,13 +84,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lane14_common import git_last_commit_time  # noqa: E402
 
-# --- Locate <external-state> robustly across WSL mount conventions ----------------
+# --- Locate the external state root robustly across invocation conventions --------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-CANDIDATE_ROOTS = [
-    p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
-                os.path.join(REPO_ROOT, "<external-state>"))
-    if p
-]
+# [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
+# REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
+# cover every real invocation shape, and the dropped candidate never resolved to
+# anything -- a latent probe defect if it were ever reached first.
+CANDIDATE_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
 # Invalid-tokens that C2 declares as NON-counting outcomes. The first is the
@@ -172,9 +174,14 @@ def main():
     # The D3 native-loop candidate receipts carry fresh_rows_path +
     # fresh_rows_sha256 + external_task_source. Scan all of them and require at
     # least ONE that fully satisfies the CHK with no invalid-token / leak.
+    # [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: the first two
+    # patterns were the literal bracketed placeholder `<peer-loop>` (never exists
+    # verbatim on disk), masked here only because the third, broader recursive
+    # glob still unioned in real matches -- restored to the real, already-public
+    # name (receipts/ember-d3-native-loop/) so these two patterns also contribute.
     patterns = [
-        os.path.join(ROOT, "receipts", "<peer-loop>", "*native-loop*.json"),
-        os.path.join(ROOT, "receipts", "<peer-loop>", "*candidate*.json"),
+        os.path.join(ROOT, "receipts", "ember-d3-native-loop", "*native-loop*.json"),
+        os.path.join(ROOT, "receipts", "ember-d3-native-loop", "*candidate*.json"),
         os.path.join(ROOT, "receipts", "**", "*native-loop*.json"),
     ]
     found = set()
@@ -183,7 +190,7 @@ def main():
     candidates = sorted(found)
     if not candidates:
         emit("RED", "C2: no D3 native-loop candidate receipt found "
-                    "(receipts/<peer-loop>/*native-loop* absent) "
+                    "(receipts/ember-d3-native-loop/*native-loop* absent) "
                     "-> satisfying artifact ABSENT")
 
     failures = []
@@ -225,9 +232,11 @@ def main():
         fr_disk = win_to_wsl(fr_path)
         if fr_disk is None:
             # The receipt records a C:\tmp build path; the frozen rows also live
-            # under ROOT/receipts/<peer-loop>/ — locate by basename.
+            # under ROOT/receipts/ember-d3-native-loop/ — locate by basename.
+            # [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: restored
+            # from the literal bracketed placeholder `<peer-loop>`.
             base = os.path.basename(fr_path.replace("\\", "/"))
-            alt = os.path.join(ROOT, "receipts", "<peer-loop>", base)
+            alt = os.path.join(ROOT, "receipts", "ember-d3-native-loop", base)
             fr_disk = alt if os.path.isfile(alt) else None
         if fr_disk is None:
             failures.append(f"{os.path.basename(rp)}: frozen-rows file not on disk "

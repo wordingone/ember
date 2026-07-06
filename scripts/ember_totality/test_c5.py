@@ -41,6 +41,12 @@ in-tree and hash-verify (an off-tree path FAILS, named per the GOAL.md
 Execution-surface imports-owed row / anti-gaming S10 import debt) -- and
 sample-recompute -- at least one row's b_score/c_score must recompute from
 its own best_reward_table, where the receipt carries that structure.
+
+[REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: the public-export scrub
+tool had rewritten the real receipt directory name into the literal bracketed
+placeholder `<peer-gate>` -- which never exists verbatim on disk -- in the functional
+path-join constant below, so this probe could never locate its own evidence
+(receipts/ember-resident-training-gate/). Restored to the real, already-public name.
 """
 
 # [PATH-REWRITE 2026-07-01] Imported from
@@ -63,13 +69,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lane14_common import check_path_sha_pairs, sample_recompute_row  # noqa: E402
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+# [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
+# REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
+# cover every real invocation shape, and the dropped candidate never resolved to
+# anything -- a latent probe defect if it were ever reached first.
 EXTERNAL_STATE = next(
-    (p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
-                 os.path.join(REPO_ROOT, "<external-state>"))
+    (p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT)
      if p and os.path.isdir(p)),
-    os.path.join(REPO_ROOT, "<external-state>"),
+    REPO_ROOT,
 )
-RESIDENT_GATE_DIR = os.path.join(EXTERNAL_STATE, "receipts", "<peer-gate>")
+# [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259] restored the real,
+# already-public directory name -- see docstring note above.
+RESIDENT_GATE_DIR = os.path.join(EXTERNAL_STATE, "receipts", "ember-resident-training-gate")
 
 # C5's only does-NOT-count invalid token (encoded as a negative assertion below).
 C5_INVALID_TOKENS = ["invalid_no_rows"]

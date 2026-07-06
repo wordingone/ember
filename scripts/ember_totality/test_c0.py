@@ -47,13 +47,13 @@ from receipt_ts_authority import effective_event_ts  # noqa: E402 -- shared
 # vs-filename-stamp resolution is implemented -- test_c14.py imports the same
 # module so the two probes can never drift into different orderings.
 
-# --- Locate <external-state> robustly across WSL mount conventions ----------------
+# --- Locate the external state root robustly across invocation conventions --------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-CANDIDATE_ROOTS = [
-    p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
-                os.path.join(REPO_ROOT, "<external-state>"))
-    if p
-]
+# [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
+# REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
+# cover every real invocation shape, and the dropped candidate never resolved to
+# anything -- a latent probe defect if it were ever reached first.
+CANDIDATE_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
 # --- Invalid-tokens (negative assertions) ------------------------------------
@@ -174,7 +174,7 @@ def _sha256_of(path):
     """Content-identity hash of an on-disk artifact, recomputed live from
     actual bytes -- never trusted from any receipt's self-reported field.
     A regular file hashes its own bytes. A directory (e.g. a loop-artifact
-    directory NODE such as receipts/<peer-loop>/<ts>/, which
+    directory NODE such as receipts/ember-d3-native-loop/<ts>/, which
     _loop_paths_in_window treats as a single artifact -- see docs/spec/
     c0-incident-cure-contract.md §3 item 3) has no bytes of its own, so it
     hashes a deterministic digest of every regular file recursively inside
@@ -233,7 +233,12 @@ def _loop_paths_in_window(min_ts):
     exact-set-match a disposition's incident_receipts against it) so the two
     can never drift apart."""
     loop_globs = [
-        os.path.join(ROOT, "receipts", "<peer-loop>", "**", "*"),
+        # [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: was the
+        # literal bracketed placeholder `<peer-loop>` (never exists verbatim on
+        # disk), masked here only because the two broader globs below still
+        # union in real matches -- restored to the real, already-public name
+        # (receipts/ember-d3-native-loop/) so this pattern also contributes.
+        os.path.join(ROOT, "receipts", "ember-d3-native-loop", "**", "*"),
         os.path.join(ROOT, "receipts", "round-local-loop-*.json"),
         os.path.join(ROOT, "receipts", "*local-loop*.json"),
     ]
@@ -524,7 +529,15 @@ def scan(min_ts):
 
     window = f">= {min_ts}" if min_ts is not None else "ALL (unfiltered, pre-epoch)"
 
-    gate_dir = os.path.join(ROOT, "receipts", "<peer-gate>")
+    # [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: was the literal
+    # bracketed placeholder `<peer-gate>` (never exists verbatim on disk), which
+    # previously fell straight through to the "no C14 evidence" vacuous-satisfaction
+    # branch below EVERY run -- masked (never visibly wrong) only because that
+    # branch is itself a valid, honest outcome for a window with no gate receipts,
+    # not because the directory was actually being checked. Restored to the real,
+    # already-public name (receipts/ember-resident-training-gate/) so this check
+    # now inspects real evidence when it exists.
+    gate_dir = os.path.join(ROOT, "receipts", "ember-resident-training-gate")
     if not os.path.isdir(gate_dir):
         # No C14 evidence at all in the window: vacuously no loop could have
         # been authorized either -- falls through to the vacuous-satisfaction
