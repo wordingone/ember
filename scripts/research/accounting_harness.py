@@ -21,53 +21,68 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
-# FLOP computation: derive formula from timeshare_pretrain.py model config
+# FLOP computation: exact param-count formula per cbase_grow_live.py D1 budget
 # ---------------------------------------------------------------------------
-# Source: scripts/timeshare_pretrain.py, lines 531-536 (LlamaConfig for c03):
-#   vocab_size=32000, hidden_size=1024, intermediate_size=4096,
-#   num_hidden_layers=20, num_attention_heads=16, max_position_embeddings=1024
+# Source: scripts/cbase_grow_live.py lines 94-100 (receipted precedent convention)
+# and _backbone_param_estimate lines 103-118 (exact parameter count formula).
 #
-# FLOPs per step formula (dense transformer, Chinchilla estimate):
-# FLOPs = 6 * B * T * d_model * (d_model + 4 * d_ffn)
-# Where:
-#   B = batch size
-#   T = sequence length
-#   d_model = hidden_size (1024)
-#   d_ffn = intermediate_size (4096)
+# Standard dense-transformer FLOPs/step: 6 * params * batch * seq
+# (Kaplan et al. 2020 / Chinchilla convention: forward+backward ~= 6N FLOPs per token)
 #
-# Breakdown per token per layer:
-#   - Self-attention: 4 * T * d_model^2 (Q, K, V, O projections + matmuls)
-#   - Feed-forward: 2 * d_model * d_ffn (forward + backward equivalent in FLOPs)
-# Total per token, all layers: 6 * L * T * d_model * (d_model + 4*d_ffn/3)
-# Approximate (Chinchilla form): 6 * B * T * d_model * (d_model + 4*d_ffn)
+# Exact param count (Llama with SwiGLU MLP, no GQA reduction):
+#   Per layer: 4*h^2 (attention: q/k/v/o) + 3*h*ff (SwiGLU: gate/up/down)
+#             + 2*h (RMSNorm: input + post-attn)
+#   Total: layers * per_layer + h (final RMSNorm) + vocab*h (tied embedding)
+#   Optional: n_mtp * h * vocab (aux head linears, conservative)
+# Verified exact pin: h=1024, layers=20, vocab=32000, ff=4096, n_mtp=0 -> 368354304
+
+def compute_param_count(
+    hidden_size: int,
+    num_layers: int,
+    vocab_size: int,
+    intermediate_size: int,
+    n_mtp: int = 0,
+) -> int:
+    """Compute exact parameter count for a Llama model.
+
+    Per layer: 4*h^2 (q/k/v/o attention) + 3*h*ff (gate/up/down SwiGLU MLP)
+              + 2*h (input + post-attn RMSNorm)
+    Total: layers * per_layer + h (final RMSNorm) + vocab*h (tied embedding)
+           + n_mtp * h * vocab (optional aux heads, conservative)
+
+    Args:
+        hidden_size: hidden dimension
+        num_layers: number of transformer layers
+        vocab_size: vocabulary size
+        intermediate_size: feed-forward intermediate width (SwiGLU)
+        n_mtp: number of auxiliary MTP heads (default: 0)
+
+    Returns:
+        Total parameter count.
+    """
+    per_layer = 4 * hidden_size * hidden_size + 3 * hidden_size * intermediate_size + 2 * hidden_size
+    return num_layers * per_layer + hidden_size + vocab_size * hidden_size + n_mtp * hidden_size * vocab_size
+
 
 def compute_flops_per_step(
     batch_size: int,
     seq_len: int,
-    hidden_size: int,
-    intermediate_size: int,
-    num_layers: int,
+    param_count: int,
 ) -> int:
-    """Compute FLOPs per training step from model config.
+    """Compute FLOPs per training step from parameter count.
 
-    Formula (Chinchilla): 6 * B * T * d_model * (d_model + 4 * d_ffn)
-    Multiplied by num_layers for the full model.
+    Standard dense-transformer formula: 6 * params * batch * seq
+    (Kaplan et al. 2020 / Chinchilla convention)
 
     Args:
         batch_size: batch size
         seq_len: sequence length
-        hidden_size: d_model (hidden dimension)
-        intermediate_size: d_ffn (feed-forward intermediate dimension)
-        num_layers: number of transformer layers
+        param_count: total model parameter count
 
     Returns:
         Total FLOPs per step (forward + backward).
     """
-    # Per-token FLOPs: 6 * d_model * (d_model + 4 * d_ffn)
-    per_token_per_layer = 6 * hidden_size * (hidden_size + 4 * intermediate_size)
-    # Total: multiply by batch * seq_len * num_layers
-    flops = batch_size * seq_len * num_layers * per_token_per_layer
-    return int(flops)
+    return int(6 * param_count * batch_size * seq_len)
 
 
 # ---------------------------------------------------------------------------
@@ -92,26 +107,33 @@ class AccountingHarness:
     def __init__(self, model_config: dict[str, Any] | None = None):
         """Initialize with optional model config for FLOP computation.
 
-        Default model_config is c03 (from timeshare_pretrain.py).
+        Default model_config is c03 (from timeshare_pretrain.py lines 531-536).
         """
         self.model_config = model_config or {
             "batch_size": 4,  # c03 typical batch
             "seq_len": 1024,
             "hidden_size": 1024,
+            "vocab_size": 32000,
             "intermediate_size": 4096,
             "num_layers": 20,
+            "n_mtp": 0,  # MTP auxiliary heads (optional)
         }
 
     def compute_flops(self, batch_size: int | None = None) -> int:
         """Compute per-step FLOPs using current model config (optionally override batch)."""
         cfg = self.model_config
         bs = batch_size if batch_size is not None else cfg["batch_size"]
+        param_count = compute_param_count(
+            hidden_size=cfg["hidden_size"],
+            num_layers=cfg["num_layers"],
+            vocab_size=cfg["vocab_size"],
+            intermediate_size=cfg["intermediate_size"],
+            n_mtp=cfg.get("n_mtp", 0),
+        )
         return compute_flops_per_step(
             batch_size=bs,
             seq_len=cfg["seq_len"],
-            hidden_size=cfg["hidden_size"],
-            intermediate_size=cfg["intermediate_size"],
-            num_layers=cfg["num_layers"],
+            param_count=param_count,
         )
 
     def accumulate_ledger_from_logs(
@@ -239,13 +261,21 @@ def run_selftest() -> bool:
     """
     harness = AccountingHarness()
 
-    # Known fixture: compute FLOPs for c03 config
+    # Known fixture: compute param count then FLOPs for c03 config
+    param_count = compute_param_count(
+        hidden_size=1024,
+        num_layers=20,
+        vocab_size=32000,
+        intermediate_size=4096,
+        n_mtp=0,
+    )
+    # Verified exact param count per cbase_grow_live.py: 368354304
+    assert param_count == 368354304, f"Param count mismatch: {param_count} != 368354304"
+
     flops_per_step = compute_flops_per_step(
         batch_size=4,
         seq_len=1024,
-        hidden_size=1024,
-        intermediate_size=4096,
-        num_layers=20,
+        param_count=param_count,
     )
 
     # Synthetic run A: 100 steps
