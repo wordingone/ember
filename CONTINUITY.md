@@ -76,15 +76,16 @@ Similarly, condition counts other than `conditions-v1.md §4.3`'s are stale.
 
 ## 4. Lanes — exact in-flight state (UPDATE ON EVERY LANDING)
 
-| Lane | State (2026-07-06T01:25Z) | Next action (exact) |
+| Lane | State (2026-07-06T05:05Z) | Next action (exact) |
 |---|---|---|
-| **W2 decontam** | #115 CLOSED (honest-exhaustion receipt; PR #183 pool fix, PR #186 worker cap). Finding: 0/192 candidates clean under any-match window=13 → convention v2 pre-registered in #193 (blocks #121); collision-stats leg running (#185). | Mint #115/#185 collision-stats receipt. |
-| **operator-seat** | #182 tool-cwd + #156 Glob + #157 loop-stall + #192 read-stub all FIXED (PRs #187, #195). Sessions #4/#5: silent wedge → loud diagnosable failure; residual = #197 (conversation-total budget, 400-terminal, zombie-retry) — builder in flight. Cockpit live on the #195 build. | Gate #197 builder delivery; verify cockpit stability. |
-| **research queue #155** | leg 1 fused-Muon VIABLE — env wall gone, 1.3459x at small footprint (PR #188, #175 closed); full-scale sweep rides the next GPU-residency window per the #53 runbook refresh (with #81 diagnosis). | Dispatch full-scale sweep when GPU residency available. |
-| **operator surface** | #199 MERGED (f545129) — #173/#190/#176/b23 landed; live-seat check rides next session. | Verify seat stability across session boundary. |
-| **tree health** | typecheck 70→53 errors (PR #194 excised dead activity feature; #189 open for the rest); suite baseline 2511/24/9; #196 filed (EMBER_MODEL_URL precedence). | Fix remaining typecheck errors per #189. |
-| **board** | 29-GREEN / 2-AUDIT-OK / 1-AUDIT-INCIDENT / 6-RED per ember-totality-20260705T081932Z; parity artifacts quarantined to scripts/ember_totality/receipts-parity/ (PR #180). | Re-run totality after the #197 seat fix lands; audit the AUDIT-INCIDENT row. |
-| **W2 G-arm** | #113 frozen spec filed; CPU dry-run lane pending dispatch (queued behind seat + decontam chains). | Dispatch dry-run builder when a budget slot frees; scope gate on cost before any GPU leg. |
+| **constitution** | GOAL.md re-founded as the constitution (PR #212, merge 98093ae): C1-C4 completion, L1-L10 laws, co-equal pillars, nativization, /goal organ. docs/goal-clear-protocol.md (17 v1 conditions conserved) + docs/goal-mode-mechanism.md landed beside it. #206 corrective + #207 bottleneck ledger subordinated to it (earned-compute L6 wording). | Constitution is live; all lanes dispatch under it. |
+| **W2 decontam** | #185 closed (shard-repetition anomaly ruling; v1 any-match vindicated); #193 revised pre-registration: mid-corpus re-draw at index 3,400,000; #203 filed (v0-00025 hygiene). Cure PR #205 (bounded pool placement + insanity guard + test_pool_placement.py) reviewed line-by-line PASS; merge gated ONLY on the independent pytest receipt (owed). | Harvest test receipt -> merge #205 -> relaunch re-draw -> decontam receipt. |
+| **W2 G-arm** | #113 acceptance (a) MERGED (PR #209, 7e32941): capacity.py landed byte-parity (sha256 anchored in receipt), runner + 7 receipts, grow identity fp_diff=0.0, launch gates both directions, #108 derive+verify clean. | GPU leg (acceptance b) fires ONLY in a maintainer GPU window, after the decontam receipt, behind #121 W1. |
+| **operator-seat** | #197 FIXED (PR #213, merge e384497): conversation-total budget eviction, chars/token calibrated 2.7 vs measured, retry policy (4xx deterministic / bounded visible transient retries, Bun real error-code classifier), zombie-retry cleared, silent stream-truncation fixed (keep-alive removed + sawFinishReason). Live acceptance legs A/B/C on compiled binary. | Re-run totality board on the post-#213 build; audit the AUDIT-INCIDENT row. |
+| **body (P-C)** | #211 filed: ember-cli /goal organ — 1:1 port per docs/goal-mode-mechanism.md, then improve. #214 filed: flame-truth (real-state-driven observatory; current flame = named failure baseline). #213's budget/retry legs harden the long-goal-session substrate. | Dispatch #211 spec-to-build lane; #214 binding-table design after #211 status feed exists. |
+| **research queue #155** | Fused-Muon 1.3459x receipted (PR #188); full-scale sweep rides a GPU-residency window per #53 runbook, AFTER the W-arm chain (earned order, #207 rule 4). | Queue behind decontam -> #121 -> #113 GPU leg. |
+| **tree health** | #199 merged (f545129); typecheck 43 baseline (#189 open); untracked-deliverable hazard #210 filed (130 research-core .py only in local scratch — ember_resident_igrpo.py, growth_refutation tests, cbase grow runners). | Triage #210 (land-now / lane / obsolete-archive tiers). |
+| **board** | 29-GREEN / 2-AUDIT-OK / 1-AUDIT-INCIDENT / 6-RED per ember-totality-20260705T081932Z (pre-#213). | Re-run totality after #213 seat fix; audit the incident row. |
 
 
 ## 5. Pre-registrations and standing rulings that BIND future claims
