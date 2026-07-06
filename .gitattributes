@@ -40,3 +40,4 @@ baseline/**/*.sh text eol=lf
 baseline/**/*.md text eol=lf
 baseline/**/*.json text eol=lf
 baseline/**/*.jsonl text eol=lf
+INVARIANT.md -text
