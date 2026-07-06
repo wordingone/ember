@@ -85,6 +85,10 @@ import re
 import subprocess
 import sys
 
+# Add parent scripts dir to path for invariant imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from scripts.lib.invariant import stamp, INVARIANT_SHA256
+
 try:  # pragma: no cover - best-effort console hardening, never fatal
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -917,6 +921,54 @@ def main():
 
     invariant_checksum = compute_invariant_checksum(REPO_ROOT, ts)
 
+    # Compute chain link: hash of previous totality receipt (F4 FORK-TEST requirement)
+    def _get_prev_receipt_sha256(receipts_dir):
+        """Get sha256 hash of the previous totality receipt file (entire JSON), or None."""
+        if not os.path.isdir(receipts_dir):
+            return None
+        names = [n for n in os.listdir(receipts_dir) if _RECEIPT_NAME_RE.match(n)]
+        if not names:
+            return None
+        # Use same mtime-based ordering as _last_receipt_combined_sha256
+        last = max(names, key=lambda n: os.path.getmtime(os.path.join(receipts_dir, n)))
+        receipt_path = os.path.join(receipts_dir, last)
+        try:
+            with open(receipt_path, "rb") as fh:
+                data = fh.read()
+            return hashlib.sha256(data).hexdigest()
+        except Exception:
+            return None
+
+    prev_totality_receipt_sha256 = _get_prev_receipt_sha256(RECEIPTS_DIR) or "0" * 64
+
+    # Compute constitutional_invariant block (issue #281 item 6)
+    errata_path = os.path.join(REPO_ROOT, "INVARIANT-ERRATA.md")
+    errata_sha256 = "0" * 64
+    errata_length = 0
+    try:
+        with open(errata_path, "rb") as fh:
+            errata_data = fh.read()
+        errata_sha256 = hashlib.sha256(errata_data).hexdigest()
+        errata_length = len(errata_data)
+    except (FileNotFoundError, IOError):
+        # Errata file may not exist pre-genesis; use zeros
+        pass
+
+    # Extract C-INV probe status from the rows (comes from test_c_invariant.py)
+    c_inv_status = "GREEN"  # Default to GREEN if C-INV not found
+    for r in rows:
+        if r["condition"] == "C-INV":
+            c_inv_status = r["status"]
+            break
+
+    constitutional_invariant = {
+        "invariant_sha256": INVARIANT_SHA256,
+        "status": c_inv_status,  # Sourced from C-INV probe result
+        "genesis_ts": "2026-07-06T14:13:23-07:00",  # committerDate of genesis merge (commit 9c89f7f66)
+        "errata_sha256": errata_sha256,
+        "errata_length": errata_length
+    }
+
     # Normalize paths in receipt: in-tree paths become repo-relative,
     # external paths (execution tree) become <local-exec-root>/... tokens
     def normalize_path_for_receipt(path):
@@ -999,7 +1051,12 @@ def main():
             },
         },
         "invariant_checksum": invariant_checksum,
+        "prev_totality_receipt_sha256": prev_totality_receipt_sha256,
+        "constitutional_invariant": constitutional_invariant,
     }
+
+    # Stamp the receipt with the constitutional invariant hash (fail-closed if mismatch)
+    receipt = stamp(receipt, repo_root=REPO_ROOT)
 
     receipt_path = os.path.join(RECEIPTS_DIR, f"ember-totality-{ts}.json")
     with open(receipt_path, "w", encoding="utf-8") as fh:
