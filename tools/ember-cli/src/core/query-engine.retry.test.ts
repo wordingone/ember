@@ -146,6 +146,78 @@ describe("query loop — retry policy (issue #197 Legs 3/4)", () => {
     expect((result as { subtype: string }).subtype).toBe("success");
   });
 
+  it("a Bun-real connection-refused Error (plain Error, code='ConnectionRefused', NOT a TypeError) is retried", async () => {
+    // Measured directly against Bun's fetch(): a from-scratch refused
+    // connection throws `Error("Unable to connect...")` with
+    // `code: "ConnectionRefused"` -- NOT a TypeError. The synthetic
+    // `new TypeError(...)` test above does not exercise this real shape;
+    // this is the exact classification gap acceptance leg C exposed (kill
+    // the model server -> zero retries -> immediate terminal error).
+    let callCount = 0;
+    const testDeps: LoopDepsOverrides = {
+      callModel: async () => {
+        callCount += 1;
+        if (callCount < 3) {
+          const err = new Error("Unable to connect. Is the computer able to access the url?");
+          (err as { code?: string }).code = "ConnectionRefused";
+          throw err;
+        }
+        return finalResponse;
+      },
+      generateUuid: () => "u",
+      sleep: async () => {},
+    };
+    const toolUseContext = makeToolUseContext();
+
+    const events: QueryEvent[] = [];
+    for await (const event of query(
+      { messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }], systemPrompt: "test", toolUseContext },
+      testDeps,
+    )) {
+      events.push(event);
+    }
+
+    expect(callCount).toBe(3);
+    const result = events.find((e) => e.type === "result");
+    expect((result as { subtype: string }).subtype).toBe("success");
+  });
+
+  it("a Bun-real mid-stream ECONNRESET Error (plain Error, code='ECONNRESET') is retried", async () => {
+    // Measured directly against Bun's fetch() reading an active SSE stream
+    // whose server process was killed mid-response: throws
+    // `Error("The socket connection was closed unexpectedly...")` with
+    // `code: "ECONNRESET"` -- same non-TypeError shape as above.
+    let callCount = 0;
+    const testDeps: LoopDepsOverrides = {
+      callModel: async () => {
+        callCount += 1;
+        if (callCount < 2) {
+          const err = new Error(
+            "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
+          );
+          (err as { code?: string }).code = "ECONNRESET";
+          throw err;
+        }
+        return finalResponse;
+      },
+      generateUuid: () => "u",
+      sleep: async () => {},
+    };
+    const toolUseContext = makeToolUseContext();
+
+    const events: QueryEvent[] = [];
+    for await (const event of query(
+      { messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }], systemPrompt: "test", toolUseContext },
+      testDeps,
+    )) {
+      events.push(event);
+    }
+
+    expect(callCount).toBe(2);
+    const result = events.find((e) => e.type === "result");
+    expect((result as { subtype: string }).subtype).toBe("success");
+  });
+
   it("a plain Error (not TypeError, not ModelHttpError, not AbortError) is never retried", async () => {
     // Regression guard for the exact bug this suite caught: classifying
     // "not a ModelHttpError" as "is a network error" retried this case into a

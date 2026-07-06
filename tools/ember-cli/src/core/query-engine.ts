@@ -437,24 +437,57 @@ interface QueryConfig {
 // ---------------------------------------------------------------------------
 
 /**
- * True only for the two throw shapes a real fetch() failure actually produces
- * when there is no ModelHttpError -- a connection-level failure (Node/Bun's
- * fetch throws a TypeError wrapping the underlying cause: ECONNREFUSED,
- * ECONNRESET, DNS failure, ...) or our OWN request-timeout abort (an
- * AbortError from session-init.ts's internal AbortController, distinct from
- * the user's abortController checked separately below). Anything else --
- * a plain Error, or a non-Error throw entirely -- is NOT a recognized
- * transport failure, so it is never retried: blindly retrying an
- * unclassified condition risks masking a real bug behind a multi-attempt
- * backoff storm instead of surfacing it (caught by
- * query-engine.error-event.test.ts: a synthetic plain-Error and a raw-string
- * throw both regressed to a 5s retry-storm timeout before this narrowing --
- * the first version of this classifier treated "not a ModelHttpError" as
- * "is a network error", which is too broad).
+ * Transport-level error codes Bun's own fetch() actually throws for a
+ * connection-level failure. Issue #197 acceptance leg C (kill the model
+ * server mid-turn) exposed that Bun does NOT wrap these in a TypeError the
+ * way the original classifier assumed -- it throws a plain `Error` carrying
+ * a `.code` string. Measured directly (two live-process probes against the
+ * real llama-server binary, one killed before any connection and one killed
+ * mid-SSE-stream): a from-scratch refused connection throws
+ * `Error("Unable to connect...")` with `code: "ConnectionRefused"`; a
+ * mid-stream kill throws `Error("The socket connection was closed
+ * unexpectedly...")` with `code: "ECONNRESET"`. Both are plain Errors, so
+ * the old `err instanceof TypeError` check silently matched neither --
+ * meaning a killed/crashed server produced ZERO retries and went straight
+ * to a terminal error, never satisfying "bounded visible retries" at all.
+ * The Node-style codes (ECONNREFUSED/ETIMEDOUT/EPIPE/EHOSTUNREACH/
+ * EAI_AGAIN) are included too so this still holds under Node or a future
+ * Bun version that reverts to Node-compatible codes.
+ */
+const RETRYABLE_TRANSPORT_ERROR_CODES = new Set([
+  "ConnectionRefused",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "EHOSTUNREACH",
+  "EAI_AGAIN",
+]);
+
+/**
+ * True only for recognized connection-level failure shapes -- a real
+ * fetch() transport error (classified by `.code`, see
+ * RETRYABLE_TRANSPORT_ERROR_CODES above; TypeError is also still accepted
+ * as a fallback for runtimes/versions that DO wrap this way) or our OWN
+ * request-timeout abort (an AbortError from session-init.ts's internal
+ * AbortController, distinct from the user's abortController checked
+ * separately below). Anything else -- a plain Error with no recognized
+ * code, or a non-Error throw entirely -- is NOT a recognized transport
+ * failure, so it is never retried: blindly retrying an unclassified
+ * condition risks masking a real bug behind a multi-attempt backoff storm
+ * instead of surfacing it (caught by query-engine.error-event.test.ts: a
+ * synthetic plain-Error and a raw-string throw both regressed to a 5s
+ * retry-storm timeout before this narrowing -- the first version of this
+ * classifier treated "not a ModelHttpError" as "is a network error", which
+ * is too broad).
  */
 function isRetryableTransportError(err: unknown): boolean {
   if (err instanceof TypeError) return true;
   if (err instanceof Error && err.name === "AbortError") return true;
+  if (err instanceof Error) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "string" && RETRYABLE_TRANSPORT_ERROR_CODES.has(code)) return true;
+  }
   return false;
 }
 

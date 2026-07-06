@@ -29,18 +29,22 @@ export const PREFILL_OVERFLOW_FRACTION = 0.95;
  * value (3.5) was a guess and measurably too optimistic for the escaped-JSON-
  * heavy tool_result strings ember actually sends -- it undercounted real token
  * usage enough that a payload the estimator judged safe still 400'd against
- * the server. Measured against a real llama-server /tokenize endpoint on two
- * samples: a representative ~6.6KB escaped-JSON tool_result (nested objects,
- * `\n`/`\"`/`\\` escapes, file paths) tokenized at 2.67 chars/token; a ~8.1KB
- * JSON-escaped markdown-prose sample tokenized at 4.12 chars/token. The two
- * diverge because JSON escaping and code/path tokens fragment into more,
- * shorter sub-word tokens than prose. Since the failure mode this constant
- * guards against is UNDERcounting tokens (a payload the estimator judged
- * small enough that overflows for real), the conservative choice is the
- * lower (denser) measurement -- an estimate too pessimistic for prose only
- * costs a little extra truncation/eviction headroom; one too optimistic for
- * JSON is the exact bug being fixed. See the PR body for the raw sample
- * chars/token-count pairs this constant was derived from.
+ * the server. Measured directly against the production model's own real
+ * llama-server /tokenize endpoint (Qwen3.6-27B-Q4_K_M, the exact checkpoint
+ * the cockpit serves turns through) on two representative samples: a 6590-char
+ * escaped-JSON tool_result (nested object, `\n`/`\"`/`\\` escapes, code lines,
+ * file paths) tokenized at 2424 tokens = 2.72 chars/token; an 8023-char
+ * JSON-escaped markdown-prose sample tokenized at 1512 tokens = 5.31
+ * chars/token. The two diverge because JSON escaping and code/path tokens
+ * fragment into more, shorter sub-word tokens than prose. Since the failure
+ * mode this constant guards against is UNDERcounting tokens (a payload the
+ * estimator judged small enough that overflows for real), the conservative
+ * choice is the lower (denser) measurement -- an estimate too pessimistic for
+ * prose only costs a little extra truncation/eviction headroom; one too
+ * optimistic for JSON is the exact bug being fixed. 2.7 sits just under the
+ * measured JSON floor (2.72), so it never reports a smaller token count than
+ * the real tokenizer would for the content shape that actually causes
+ * overflows. See the PR body for the calibration script and raw output.
  */
 export const CHARS_PER_TOKEN_ESTIMATE = 2.7;
 

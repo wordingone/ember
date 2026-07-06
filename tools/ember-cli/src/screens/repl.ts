@@ -326,16 +326,20 @@ export function renderMsgDispatch(
     }
 
     case "error":
-      // issue #197: default was 4 (SystemAPIErrorMessage hides its "Retrying…"
-      // trailer only when retryCount<=3), so EVERY terminal error message --
-      // including one where zero retries ever happened -- claimed an
-      // in-progress retry that had already ended (operator session #5: "all
-      // 4 server slots idle, GPU 0%, yet Retrying… persists"). A terminal
-      // error message is, by definition, no longer retrying: 0 is the only
-      // correct default. Live in-flight retry attempts are shown separately,
-      // via the status-bar effort callout (see retryStatus state below),
-      // which clears the moment the turn ends -- never via a stale count
-      // baked into a past transcript entry.
+      // issue #197: default was 4 (SystemAPIErrorMessage hid EVERYTHING for
+      // retryCount<=3 and showed a "Retrying…" trailer above that), so EVERY
+      // terminal error message -- including one where zero retries ever
+      // happened -- claimed an in-progress retry that had already ended
+      // (operator session #5: "all 4 server slots idle, GPU 0%, yet
+      // Retrying… persists"). Fixing just this default to 0 would have made
+      // things WORSE (a deterministic 4xx, retryCount=0, would then hide the
+      // error entirely) -- so message-renderers.ts's SystemAPIErrorMessage
+      // was also corrected to always render a terminal error, with an
+      // honest completed-attempts note instead of a live "Retrying…" claim.
+      // Live in-flight retry attempts are shown separately, via the
+      // status-bar effort callout (see retryStatus state below), which
+      // clears the moment the turn ends -- never via a stale count baked
+      // into a past transcript entry.
       return React.createElement(SystemAPIErrorMessage, {
         key:        msg.id,
         errorText:  String(msg["content"]    ?? ""),
