@@ -157,77 +157,60 @@ export function applyModelsJsonToEnv(cfg: ModelsJson): void {
 // Endpoint disclosure (issue #196) — resolves and explains WHY, before
 // applyModelsJsonToEnv's ??= writes can blur the distinction between "the
 // operator set EMBER_MODEL_URL" and "models.json's endpoint just populated
-// it". Mirrors main()'s own externalUrl precedence exactly (models.json
-// "endpoint" > models.json "binary" forcing a managed spawn, which SILENTLY
-// discards EMBER_MODEL_URL even when it was explicitly set > EMBER_MODEL_URL
-// > managed spawn with the default binary) so the disclosed reason is never
-// out of sync with what main() actually does.
+// it". Precedence (issue #196 follow-up): an explicit EMBER_MODEL_URL always
+// WINS -- env > models.json ("endpoint" then "binary") > managed spawn with
+// the default binary. Mirrors main()'s own externalUrl precedence exactly,
+// so the disclosed reason is never out of sync with what main() actually does.
 // ---------------------------------------------------------------------------
 
 export interface EndpointResolution {
   source: "env" | "config" | "managed";
   /** Resolved endpoint URL, or null when a managed spawn's URL isn't known until the server starts. */
   endpoint: string | null;
-  /** True when EMBER_MODEL_URL was set in the environment but a different source won (issue #196's silent-override class). */
-  envOverridden: boolean;
   /** One human-readable line for the startup transcript. */
   text: string;
 }
 
 /**
  * Resolves the model endpoint using the SAME precedence main() applies, and
- * explains why -- so a leaked/stale EMBER_MODEL_URL can never silently
- * reroute the cockpit again (issue #196's actual defect: it was routed
- * around with zero visible signal). Pass the environment's EMBER_MODEL_URL
- * value BEFORE applyModelsJsonToEnv's ??= may have populated it from config,
- * or "envOverridden" cannot distinguish an operator-set value from one
- * config just wrote.
+ * explains why -- so an explicit EMBER_MODEL_URL override is never silently
+ * lost to models.json again (issue #196's original defect: a "binary" field
+ * routed around a set EMBER_MODEL_URL with zero visible signal; an "endpoint"
+ * field beat it too). Pass the environment's EMBER_MODEL_URL value BEFORE
+ * applyModelsJsonToEnv's ??= may have populated it from config, or an
+ * operator-set value could be indistinguishable from one config just wrote.
  */
 export function describeEndpointResolution(
   modelsCfg: ModelsJson | null,
   envModelUrlBeforeConfigApply: string | undefined,
 ): EndpointResolution {
-  if (modelsCfg?.endpoint) {
-    const envOverridden =
-      envModelUrlBeforeConfigApply !== undefined &&
-      envModelUrlBeforeConfigApply !== modelsCfg.endpoint;
-    const suffix = envOverridden
-      ? ` (EMBER_MODEL_URL="${envModelUrlBeforeConfigApply}" set but models.json's "endpoint" wins)`
-      : "";
-    return {
-      source: "config",
-      endpoint: modelsCfg.endpoint,
-      envOverridden,
-      text: `[ember] model endpoint: ${modelsCfg.endpoint} -- resolved from models.json "endpoint"${suffix}`,
-    };
-  }
-
-  if (modelsCfg?.binary) {
-    const envOverridden = envModelUrlBeforeConfigApply !== undefined;
-    const suffix = envOverridden
-      ? ` -- EMBER_MODEL_URL="${envModelUrlBeforeConfigApply}" is set but IGNORED because models.json names a binary (issue #196)`
-      : "";
-    return {
-      source: "managed",
-      endpoint: null,
-      envOverridden,
-      text: `[ember] model endpoint: managed spawn (models.json "binary": "${modelsCfg.binary}")${suffix}`,
-    };
-  }
-
   if (envModelUrlBeforeConfigApply !== undefined) {
     return {
       source: "env",
       endpoint: envModelUrlBeforeConfigApply,
-      envOverridden: false,
-      text: `[ember] model endpoint: ${envModelUrlBeforeConfigApply} -- resolved from EMBER_MODEL_URL (skips the managed spawn)`,
+      text: `[ember] model endpoint: ${envModelUrlBeforeConfigApply} -- resolved from EMBER_MODEL_URL (wins over models.json)`,
+    };
+  }
+
+  if (modelsCfg?.endpoint) {
+    return {
+      source: "config",
+      endpoint: modelsCfg.endpoint,
+      text: `[ember] model endpoint: ${modelsCfg.endpoint} -- resolved from models.json "endpoint"`,
+    };
+  }
+
+  if (modelsCfg?.binary) {
+    return {
+      source: "managed",
+      endpoint: null,
+      text: `[ember] model endpoint: managed spawn (models.json "binary": "${modelsCfg.binary}")`,
     };
   }
 
   return {
     source: "managed",
     endpoint: null,
-    envOverridden: false,
     text: `[ember] model endpoint: managed spawn (no EMBER_MODEL_URL or models.json set, default binary)`,
   };
 }
@@ -503,7 +486,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  new, list, reply, environment-runner, self-hosted-runner\n` +
       `\n` +
       `Environment:\n` +
-      `  EMBER_MODEL_URL   Use an external model server (skips the managed spawn)\n` +
+      `  EMBER_MODEL_URL   External model server URL; wins over models.json (skips the managed spawn)\n` +
       `  EMBER_API_KEY     API key for the model endpoint (default: local)\n`,
     );
     process.exit(0);
@@ -649,9 +632,11 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply).text + "\n",
   );
 
-  // Determine whether we use an external server or spawn our own
-  const externalUrl = modelsCfg?.endpoint ??
-    (!modelsCfg?.binary ? process.env["EMBER_MODEL_URL"] : undefined);
+  // Determine whether we use an external server or spawn our own. issue #196:
+  // an explicit EMBER_MODEL_URL always wins over models.json (env > config >
+  // managed) -- envModelUrlBeforeConfigApply is the pre-config snapshot, so a
+  // config-populated env value can never masquerade as an operator override.
+  const externalUrl = envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
 
   let serverUrl:    string;
   let detectedNCtx: number;
