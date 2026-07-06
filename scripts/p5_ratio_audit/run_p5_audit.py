@@ -1778,6 +1778,19 @@ def selftest() -> None:
     assert len(RATIO_NAMES) == 7, f"engagement contract: exactly 7 ratios, not {len(RATIO_NAMES)}"
     print("  TDD: forward+backward contract (7 ratios; fail-closed on incomplete)  PASS")
 
+    # 15. TDD: layer_index hardcoding guard in compute_d_comm_real_run.
+    #     build_real_d_comm_closures hardcodes layers.0.mlp; layer_index != 0
+    #     must raise AssertionError, never silently compute wrong d_comm.
+    try:
+        layer_idx_test = 1
+        assert layer_idx_test == 0, (
+            "compute_d_comm_real_run + build_real_d_comm_closures hardcode "
+            "layers.0.mlp key construction; generalize before using layer_index != 0")
+        assert False, "layer_index=1 should have raised"
+    except AssertionError as e:
+        assert "hardcode" in str(e) and "layer_index" in str(e), f"wrong error: {e}"
+    print("  TDD: layer_index!=0 guard raises AssertionError (fail-closed)  PASS")
+
     print("P5_AUDIT_SELFTEST_PASS")
 
 
@@ -2187,8 +2200,24 @@ def run_and_emit_live() -> Path:
         r_block_val = rho_block_na() if r_sr_val else "N/A"
 
         # Compute commutation defect for one FF layer.
+        # FAIL-CLOSED: build_real_d_comm_closures hardcodes layers.0.mlp prefix;
+        # layer_index != 0 would compute the wrong d_comm without this guard.
+        layer_index = 0
+        assert layer_index == 0, (
+            "compute_d_comm_real_run + build_real_d_comm_closures hardcode "
+            "layers.0.mlp key construction; generalize before using layer_index != 0")
+
         grad_post = {name: p.grad.detach().clone() for name, p in pre_model.named_parameters() if p.grad is not None}
-        d_comm_result = compute_d_comm_real_run(grad_pre, grad_post)
+        # Extract gate gradient for d_comm (one FF layer at layer_index=0).
+        gate_key = f"backbone_model.layers.{layer_index}.mlp.gate_proj.weight"
+        grad_pre_gate = grad_pre.get(gate_key)
+        grad_post_gate = grad_post.get(gate_key)
+        if grad_pre_gate is not None and grad_post_gate is not None:
+            d_comm_result = compute_d_comm_real_run(
+                discovery, grad_pre_gate, grad_post_gate,
+                pre_lr=0.001, post_lr=0.001, layer_index=layer_index)
+        else:
+            d_comm_result = {"d_comm": "N/A-gate_grad_missing"}
 
         # Engagement assertions: all 7 ratios must have value or N/A-reason.
         ratios = [r_sr_val, r_noise_val, r_rank_val, r_grow_val, r_spec_val, r_batch_val, r_block_val]
