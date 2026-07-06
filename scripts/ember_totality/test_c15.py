@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""test_c15.py — STATUS PROBE for Ember goal condition C15.
+"""test_c15.py โ€” STATUS PROBE for Ember goal condition C15.
 
-C15 (from <<external>>/state/<spec>, ง4.2):
+C15 (from <<external>>/state/<spec>, ยง4.2):
   "Immediate tiny BitNet comparison after the fp16 neural gate."
   R: first valid action after C14's fp16 gate is a REAL tiny BitNet/1.58 neural
      comparison (same harness/verifier/frozen slices/seeds/budget; record both
@@ -17,7 +17,7 @@ C15 (from <<external>>/state/<spec>, ง4.2):
 
 This probe ALSO enforces the C15 dependency on C14 (the fp16 *neural* gate):
 the BitNet comparison only counts if the resident gate it rides was a REAL
-neural update, never a SYMBOLIC_PROXY_PASS (ง2 receipted reality + the C14
+neural update, never a SYMBOLIC_PROXY_PASS (ยง2 receipted reality + the C14
 does-NOT-count token). A PASS BitNet receipt sitting on a symbolic-proxy gate
 would be a smuggled C15 clear, so the probe re-derives the gate's neural-ness
 from the gate receipt's own fields.
@@ -25,11 +25,11 @@ from the gate receipt's own fields.
 DISCIPLINE: this is a STATUS PROBE. It ALWAYS exits 0. It prints exactly one
 line determined by really inspecting the receipts under the resolved root.
 Nothing is hardcoded to a verdict; every branch is decided by reading real
-bytes on disk. C15 is a STANDING PROCESS-INVARIANT (GOAL.md ง4.0(9)), not a
+bytes on disk. C15 is a STANDING PROCESS-INVARIANT (GOAL.md ยง4.0(9)), not a
 STATE-condition: it never prints RED/GREEN. It renders one of AUDIT-OK /
 AUDIT-INCIDENT (a cadence audit from the goalforge-clear epoch) or, pre-epoch
-(no operator-acceptance object exists yet), AUDIT-PENDING-EPOCH — never RED.
-Pre-epoch history is explicitly OUT OF AUDIT SCOPE (ง4.0(9)): this probe only
+(no operator-acceptance object exists yet), AUDIT-PENDING-EPOCH โ€” never RED.
+Pre-epoch history is explicitly OUT OF AUDIT SCOPE (ยง4.0(9)): this probe only
 ever considers receipts dated at/after the epoch once one exists.
 
 Run ONLY via:  wsl python3 test_c15.py
@@ -61,15 +61,15 @@ from typing import Any
 # canonical location is the <external-state> checkout.
 # ---------------------------------------------------------------------------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-_KAI_CANDIDATES = [
+_ROOT_CANDIDATES = [
     p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
                 os.path.join(REPO_ROOT, "<external-state>"))
     if p
 ]
 
 
-def _kai_root() -> str | None:
-    for c in _KAI_CANDIDATES:
+def _resolve_root() -> str | None:
+    for c in _ROOT_CANDIDATES:
         if os.path.isdir(c):
             return c
     return None
@@ -89,7 +89,7 @@ def _find_epoch(root: str) -> tuple[str | None, str | None]:
     acceptance object (docs/spec/operator-acceptance-v1.md schema
     acceptance/v1, scope goalforge-clear, stored at
     receipts/acceptance/goalforge-clear-<date>.json), or (None, None) if no
-    epoch has been recorded yet. GOAL.md ง4.0(9): the epoch is the operator
+    epoch has been recorded yet. GOAL.md ยง4.0(9): the epoch is the operator
     acceptance of this goal; C15 is a process-invariant with no meaning
     before it exists."""
     acc_dir = os.path.join(root, "receipts", "acceptance")
@@ -231,7 +231,7 @@ def scan(root: str, min_ts: "str | None") -> tuple[str, str]:
                 # landed yet.
                 benign_blocks.append(
                     f"{rel}: BITNET_BLOCKED naming surface '{mis.strip()}' "
-                    f"(next: {nec.strip()}) — honest block, no incident"
+                    f"(next: {nec.strip()}) โ€” honest block, no incident"
                 )
                 continue
             incidents.append(
@@ -429,11 +429,11 @@ def scan(root: str, min_ts: "str | None") -> tuple[str, str]:
 def main() -> int:
     """Resolve the epoch, run scan() in the appropriate window, and relabel
     the raw RED/GREEN finding against the AUDIT-OK/AUDIT-INCIDENT/
-    AUDIT-PENDING-EPOCH contract (GOAL.md ง4.0(9)) before printing."""
-    root = _kai_root()
+    AUDIT-PENDING-EPOCH contract (GOAL.md ยง4.0(9)) before printing."""
+    root = _resolve_root()
     if root is None:
         print("AUDIT-PENDING-EPOCH state root not found under any of "
-              f"{_KAI_CANDIDATES}; cannot even locate receipts/acceptance to "
+              f"{_ROOT_CANDIDATES}; cannot even locate receipts/acceptance to "
               "check for an epoch")
         return 0
 
@@ -447,7 +447,7 @@ def main() -> int:
             "goalforge-clear operator-acceptance object exists yet at "
             "receipts/acceptance/goalforge-clear-*.json (schema "
             "acceptance/v1); this is NOT an audit verdict, pre-epoch "
-            "history is OUT OF AUDIT SCOPE per GOAL.md ง4.0(9), the actual "
+            "history is OUT OF AUDIT SCOPE per GOAL.md ยง4.0(9), the actual "
             "status is never RED/GREEN for this row]"
         )
         return 0

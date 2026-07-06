@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""test_enforcement_leg.py — fixture-based unit tests + a fixture-analog negative control
+"""test_enforcement_leg.py â€” fixture-based unit tests + a fixture-analog negative control
 for scripts/ember_totality/enforcement_leg.py (issue #38 Deliverable 2).
 
 No real-checker dependence: every case here uses tiny FIXTURE checker scripts written to
 disk under <local-exec-root>/scratch/pubgate-enforce/fixtures/<case>/ (never the live tree's
 receipts, never check_publication_gate.py / check_energy_law_theory.py, which do not exist
-in this working tree — see the builder report for that disclosed conflict).
+in this working tree â€” see the builder report for that disclosed conflict).
 
 Run: python -m pytest scripts/ember_totality/test_enforcement_leg.py -v
 """
@@ -41,7 +41,7 @@ def _make_checker(case_dir: Path, filename: str, source: str) -> str:
 def _case_dir(name: str) -> Path:
     """Fresh per-invocation case dir. Removed and recreated every call so re-running the
     suite (builder, gater, or twice back-to-back) never inherits a prior run's timestamped
-    enforcement-leg-*.json receipts — a test that only passes on a virgin tree produces
+    enforcement-leg-*.json receipts â€” a test that only passes on a virgin tree produces
     divergent results between independent re-runs (gate finding, 2026-07-03)."""
     d = SANDBOX_ROOT / name
     if d.exists():
@@ -113,7 +113,7 @@ def test_timeout():
 
 
 # ---------------------------------------------------------------------------
-# 4. exit-verdict disagreement — both directions
+# 4. exit-verdict disagreement â€” both directions
 # ---------------------------------------------------------------------------
 
 def test_disagreement_exit0_but_red_line():
@@ -253,7 +253,7 @@ def test_overall_red_when_any_checker_not_pass():
 
 
 # ---------------------------------------------------------------------------
-# 10. Negative control — FIXTURE ANALOG of "sandbox COPY of the contract tree with one
+# 10. Negative control â€” FIXTURE ANALOG of "sandbox COPY of the contract tree with one
 #     publication-gate conjunct's input deliberately broken must yield RED through the leg."
 #
 #     NOT the real negative control the issue specifies: check_publication_gate.py does not
