@@ -116,5 +116,7 @@ self-operates, audited. Operator and ember converse bidirectionally through the 
 
 ## 9. Precedence
 
-This constitution > protocol/spec docs > ledgers > history. A conflict between goal surfaces
+INVARIANT.md > this constitution > protocol/spec docs > ledgers > history. A conflict between goal surfaces
 stops the affected work until reconciled (goal-source-split rule, conserved from v1).
+
+invariant_sha256: 08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6

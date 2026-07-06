@@ -18,6 +18,10 @@ field-level receipt exists, and the C-SCALE receipt exists. Difficulty/credentia
 never downgrades a condition. A planned piece absent from the completeness manifest is itself a
 violation. Premature clearing is a spec violation.
 
+### 4.0.5 Constitutional Invariant (C-INV)
+
+- **C-INV — Constitutional invariant persisted, stamped, and chained.** R: INVARIANT.md exists at repo root with the canonical hash; GOAL.md pins the hash; every post-genesis artifact (manifest, receipt, board totality) carries the invariant_sha256 stamp and passes verification; board receipts chain by predecessor hash from genesis. Does NOT count: INVARIANT.md missing or hash mismatch (BREACH — not UNEVALUABLE — the receipt is written anyway with invariant_breach:true); post-genesis artifact unstamped or mis-stamped; chain link broken; incidents ledger missing or unaudited. ✗ `invariant_breach`, `invariant_unstamped_receipt`, `invariant_chain_broken`, `invariant_incidents_missing`. CHK (per `scripts/ember_totality/test_c_invariant.py`): INVARIANT.md file exists and hashes correctly to INVARIANT_SHA256; GOAL.md pin line matches; (genesis state) structure ready for post-genesis stamping; incident ledger structure ready.
+
 ### 4.1 Substrate pre-conditions (gate C14)
 
 - **C-EFF — efficiency keystone measured/closed.** R: an efficiency-closure receipt via gate-9 with
