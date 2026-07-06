@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Reconstruct pre-grow checkpoint from grown (step-00000730).
 
+COLLISION WARNING: Two step-00000730 checkpoints exist in the repo:
+  1. models/cbase-grow-live/live-20260703T053225Z/post/checkpoints/step-00000730
+     (live run, 1.37GB, model.pt sha ac43445b)
+  2. models/cbase-grow-rung/rung1-20260703T155447Z/checkpoints/step-00000730
+     (rung-1 seed, 2.44GB, model.pt sha 74a5b1d4) ← RECONSTRUCTION SOURCE
+Use --source to explicitly pin the rung1 checkpoint; no implicit default.
+
 The forward grow operation (cbase_grow_dryrun.py:85-93) performs FF-widening
 via net2net for SwiGLU MLPs:
   gate_proj: cat([w, w], dim=0)      -- duplicate rows (8192 -> 16384)
@@ -42,9 +49,12 @@ from receipt_write import checked_write  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 
-# Source checkpoint configuration
-SOURCE_CKPT_DEFAULT = REPO / "models" / "cbase-grow-rung" / "rung1-20260703T155447Z" / "checkpoints" / "step-00000730"
+# Expected SHA for rung-1 source checkpoint (step-00000730, cbase-grow-rung)
 SOURCE_SHA_EXPECTED = "74a5b1d4c21b38fb4a8037bd079c2073516dee9a242849fc33fda191f4fa0f3b"
+# NOTE: Two step-00000730 checkpoints exist; rung1 is at
+# models/cbase-grow-rung/rung1-20260703T155447Z/checkpoints/step-00000730 (this sha),
+# and live is at models/cbase-grow-live/live-20260703T053225Z/post/checkpoints/step-00000730 (sha ac43445b).
+# Use --source-ckpt explicitly to avoid collision.
 FF_SEED = 8192
 FF_GROWN = 16384
 
@@ -145,8 +155,13 @@ def selftest_forward_grow_roundtrip(sd_original: dict, sd_reconstructed: dict, n
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--source-ckpt", default=str(SOURCE_CKPT_DEFAULT),
-                    help="Path to step-00000730 checkpoint (grown)")
+    ap.add_argument("--source-ckpt", required=True,
+                    help="REQUIRED: Path to rung1 step-00000730 checkpoint (grown, sha 74a5b1d4). "
+                         "COLLISION: two step-00000730 checkpoints exist; "
+                         "use models/cbase-grow-rung/rung1-20260703T155447Z/checkpoints/step-00000730 "
+                         "(rung1 seed, 2.44GB, sha 74a5b1d4), NOT "
+                         "models/cbase-grow-live/live-20260703T053225Z/post/checkpoints/step-00000730 "
+                         "(live run, 1.37GB, sha ac43445b)")
     ap.add_argument("--out-dir", default=str(REPO / "models" / "cbase-grow-rung" / "rung1-20260703T155447Z" / "derived" / "pregrow-ff8192"),
                     help="Output directory for reconstructed checkpoint")
     ap.add_argument("--receipt-dir", default=str(REPO / "receipts" / "reconstruct-pregrow"),
