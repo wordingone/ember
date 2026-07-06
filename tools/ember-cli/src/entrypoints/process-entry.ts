@@ -153,6 +153,85 @@ export function applyModelsJsonToEnv(cfg: ModelsJson): void {
   if (cfg.samplingParams !== undefined)     process.env["EMBER_SAMPLING_PARAMS"]      ??= JSON.stringify(cfg.samplingParams);
 }
 
+// ---------------------------------------------------------------------------
+// Endpoint disclosure (issue #196) — resolves and explains WHY, before
+// applyModelsJsonToEnv's ??= writes can blur the distinction between "the
+// operator set EMBER_MODEL_URL" and "models.json's endpoint just populated
+// it". Mirrors main()'s own externalUrl precedence exactly (models.json
+// "endpoint" > models.json "binary" forcing a managed spawn, which SILENTLY
+// discards EMBER_MODEL_URL even when it was explicitly set > EMBER_MODEL_URL
+// > managed spawn with the default binary) so the disclosed reason is never
+// out of sync with what main() actually does.
+// ---------------------------------------------------------------------------
+
+export interface EndpointResolution {
+  source: "env" | "config" | "managed";
+  /** Resolved endpoint URL, or null when a managed spawn's URL isn't known until the server starts. */
+  endpoint: string | null;
+  /** True when EMBER_MODEL_URL was set in the environment but a different source won (issue #196's silent-override class). */
+  envOverridden: boolean;
+  /** One human-readable line for the startup transcript. */
+  text: string;
+}
+
+/**
+ * Resolves the model endpoint using the SAME precedence main() applies, and
+ * explains why -- so a leaked/stale EMBER_MODEL_URL can never silently
+ * reroute the cockpit again (issue #196's actual defect: it was routed
+ * around with zero visible signal). Pass the environment's EMBER_MODEL_URL
+ * value BEFORE applyModelsJsonToEnv's ??= may have populated it from config,
+ * or "envOverridden" cannot distinguish an operator-set value from one
+ * config just wrote.
+ */
+export function describeEndpointResolution(
+  modelsCfg: ModelsJson | null,
+  envModelUrlBeforeConfigApply: string | undefined,
+): EndpointResolution {
+  if (modelsCfg?.endpoint) {
+    const envOverridden =
+      envModelUrlBeforeConfigApply !== undefined &&
+      envModelUrlBeforeConfigApply !== modelsCfg.endpoint;
+    const suffix = envOverridden
+      ? ` (EMBER_MODEL_URL="${envModelUrlBeforeConfigApply}" set but models.json's "endpoint" wins)`
+      : "";
+    return {
+      source: "config",
+      endpoint: modelsCfg.endpoint,
+      envOverridden,
+      text: `[ember] model endpoint: ${modelsCfg.endpoint} -- resolved from models.json "endpoint"${suffix}`,
+    };
+  }
+
+  if (modelsCfg?.binary) {
+    const envOverridden = envModelUrlBeforeConfigApply !== undefined;
+    const suffix = envOverridden
+      ? ` -- EMBER_MODEL_URL="${envModelUrlBeforeConfigApply}" is set but IGNORED because models.json names a binary (issue #196)`
+      : "";
+    return {
+      source: "managed",
+      endpoint: null,
+      envOverridden,
+      text: `[ember] model endpoint: managed spawn (models.json "binary": "${modelsCfg.binary}")${suffix}`,
+    };
+  }
+
+  if (envModelUrlBeforeConfigApply !== undefined) {
+    return {
+      source: "env",
+      endpoint: envModelUrlBeforeConfigApply,
+      envOverridden: false,
+      text: `[ember] model endpoint: ${envModelUrlBeforeConfigApply} -- resolved from EMBER_MODEL_URL (skips the managed spawn)`,
+    };
+  }
+
+  return {
+    source: "managed",
+    endpoint: null,
+    envOverridden: false,
+    text: `[ember] model endpoint: managed spawn (no EMBER_MODEL_URL or models.json set, default binary)`,
+  };
+}
+
 export function applyAblationBaseline(): void {
   if (!process.env["EMBER_ABLATION_BASELINE"]) return;
   process.env["EMBER_SIMPLE"]                   = "1";
@@ -548,6 +627,11 @@ export interface MainOptions {
 export async function main(opts: MainOptions = {}): Promise<void> {
   const argv = opts.argv ?? process.argv;
 
+  // issue #196: captured BEFORE applyModelsJsonToEnv's ??= writes below may
+  // populate EMBER_MODEL_URL from config -- otherwise the disclosure below
+  // could never tell "the operator set this" from "config just wrote it".
+  const envModelUrlBeforeConfigApply = process.env["EMBER_MODEL_URL"];
+
   applyAblationBaseline();
 
   const modelsCfg = await loadModelsJson();
@@ -557,6 +641,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
 
   const didFastPath = await dispatchFastPath(argv);
   if (didFastPath) return;
+
+  // issue #196: one disclosure line, always -- so a leaked/stale
+  // EMBER_MODEL_URL (or a models.json "binary" field silently discarding an
+  // explicit one) can never reroute the cockpit with zero visible signal.
+  process.stdout.write(
+    describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply).text + "\n",
+  );
 
   // Determine whether we use an external server or spawn our own
   const externalUrl = modelsCfg?.endpoint ??

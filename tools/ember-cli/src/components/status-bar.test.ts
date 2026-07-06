@@ -7,7 +7,10 @@ import {
   formatTokenCount,
   formatGb,
   formatModelMetrics,
+  formatDegradedBannerText,
+  DegradedBanner,
   type ModelMetrics,
+  type DegradedBannerState,
 } from "./status-bar.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 
@@ -144,5 +147,89 @@ describe("AC6: formatModelMetrics", () => {
   it("0 t/s renders as '0t/s' (not NaN)", () => {
     const zero = { ...sample, tokensPerSec: 0 };
     expect(formatModelMetrics(zero)).toContain("0t/s");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issue #239 mission 2: DegradedBanner — the persistent degraded-state
+// surface shown once the model-client circuit breaker opens. "broken must
+// LOOK broken" (the operator's law from the dispatch spec): a silent wedge
+// with no visible signal is the defect this exists to close.
+// ---------------------------------------------------------------------------
+
+describe("formatDegradedBannerText — issue #239 degraded banner content", () => {
+  const inactive: DegradedBannerState = { active: false };
+
+  it("inactive banner formats to an empty string", () => {
+    expect(formatDegradedBannerText(inactive, 0)).toBe("");
+  });
+
+  const active: DegradedBannerState = {
+    active: true,
+    endpoint: "http://localhost:8081",
+    lastStatus: 400,
+    lastReason: "HTTP 400",
+    attemptCount: 1,
+    nextProbeAt: 60_000,
+    probing: false,
+  };
+
+  it("includes the endpoint URL", () => {
+    expect(formatDegradedBannerText(active, 0)).toContain("http://localhost:8081");
+  });
+
+  it("includes the last HTTP status", () => {
+    expect(formatDegradedBannerText(active, 0)).toContain("400");
+  });
+
+  it("includes the attempt count", () => {
+    expect(formatDegradedBannerText(active, 0)).toContain("attempts 1");
+  });
+
+  it("includes a next-probe countdown derived from nextProbeAt - now", () => {
+    const text = formatDegradedBannerText(active, 45_000); // 15s remaining
+    expect(text).toContain("15s");
+  });
+
+  it("shows 'probing' instead of a countdown while a half-open probe is in flight", () => {
+    const probing: DegradedBannerState = { ...active, probing: true };
+    const text = formatDegradedBannerText(probing, 60_000);
+    expect(text.toLowerCase()).toContain("probing");
+  });
+
+  it("falls back to lastReason (connection error) when there is no HTTP status", () => {
+    const networkFailure: DegradedBannerState = {
+      active: true,
+      endpoint: "http://localhost:8081",
+      lastStatus: null,
+      lastReason: "connection error",
+      attemptCount: 6,
+      nextProbeAt: 60_000,
+      probing: false,
+    };
+    expect(formatDegradedBannerText(networkFailure, 0)).toContain("connection error");
+  });
+});
+
+describe("DegradedBanner component — hook-free, follows EffortCallout conventions", () => {
+  it("renders null when inactive", () => {
+    expect(DegradedBanner({ degraded: { active: false }, now: 0 })).toBeNull();
+  });
+
+  it("renders a red Text element with the formatted banner text when active", () => {
+    const degraded: DegradedBannerState = {
+      active: true,
+      endpoint: "http://localhost:8081",
+      lastStatus: 400,
+      lastReason: "HTTP 400",
+      attemptCount: 1,
+      nextProbeAt: 1000,
+      probing: false,
+    };
+    const el = DegradedBanner({ degraded, now: 0 });
+    expect(el).not.toBeNull();
+    expect((el as { props: { color: string } }).props.color).toBe("red");
+    const text = (el as { props: { children: string } }).props.children;
+    expect(text).toContain("http://localhost:8081");
   });
 });
