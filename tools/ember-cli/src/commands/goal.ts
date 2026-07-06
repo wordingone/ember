@@ -1,202 +1,178 @@
-// commands/goal.ts — /goal <objective> slash command: a bounded ~GOAL_MAX_ITERATIONS-iteration
-// loop wrapping QueryEngine.submitMessage(), publishing real setLoopPhase() transitions per event
-// (the SAME event -> phase derivation screens/repl.ts's key.return handler uses inline, extracted
-// here as deriveLoopPhaseForEvent so it's independently testable) -- this feeds the existing,
-// already-built fireball/cognitive-mode rendering, which until now no command ever drove.
+// commands/goal.ts — /goal slash command (ember issue #211, spec §2): set/view/
+// clear the goal objective, available mid-task. This REPLACES the earlier
+// bounded ~5-iteration prototype (a fixed-iteration loop wrapping
+// QueryEngine.submitMessage, never wired into command-registry.ts's builtin
+// list -- dead code) with the actual 1:1-ported mechanism: a persisted goal
+// record (core/goal-store.ts) driving an EVENT-DRIVEN continuation engine
+// (core/goal-continuation.ts), not a scheduler. The bounded-loop's
+// event->fireball phase wiring is left for the separate flame-integration
+// work (issue #214, spec §7.2) rather than folded in here.
 //
-// Also maintains a module-level GoalSegmentSnapshot (getGoalStatus/resetGoalStatusForTests) for
-// the status-bar's persistent GOAL segment (components/status-bar.ts), following the exact
-// poll-from-repl pattern already used for the R0 activity segment.
-//
-// Bounded, never open-ended: the loop always stops at maxIterations regardless of model behavior
-// -- an autonomy-relinquishment-ladder rail, not a heuristic "the model said it's done" guess
-// (inferring completion from free-text content would be exactly the kind of unverified signal the
-// R0 anti-fixture discipline forbids).
+// Command surface:
+//   /goal <objective>   -- sets a NEW goal (if none exists) or EDITS the
+//                          existing one (spec §2: "mid-flight edits inject an
+//                          objective-updated steering prompt so the model
+//                          re-anchors"). Either way, also pokes the
+//                          continuation engine once so a genuinely idle
+//                          session starts working immediately rather than
+//                          waiting for the next unrelated turn to end.
+//   /goal               -- view status (objective, status, usage/budget,
+//                          blocked-turn count).
+//   /goal clear         -- clears the goal record entirely.
 
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
-import type { QueryEvent } from "../core/query-engine.ts";
-import { setLoopPhase } from "../state/app-state.ts";
+import { getGoalStore, isCurrentSessionEphemeral } from "../core/goal-runtime.ts";
+import type { GoalStore, GoalRecord } from "../core/goal-store.ts";
+import { renderObjectiveUpdatedPrompt } from "../core/goal-continuation-prompt.ts";
 
-export const GOAL_MAX_ITERATIONS = 5;
+// ---------------------------------------------------------------------------
+// Steering injection — mirrors the existing OperatorInjector shape
+// (services/operator-input.ts: canInjectNow/submit) so an objective-updated
+// edit goes through the SAME "only when genuinely idle, real user input still
+// wins" gate the operator-pipe feature already established, rather than a
+// second competing injection path.
+// ---------------------------------------------------------------------------
 
-export type GoalRunStatus = "running" | "completed" | "aborted" | "error";
-
-export interface GoalStatusSnapshot {
-  objective: string;
-  /** 1-based current iteration; 0 before the first iteration starts. */
-  step: number;
-  maxSteps: number;
-  /** The LoopPhase label at the moment of the last observed event ("idle" before start / after
-   * a clean finish). Same vocabulary state/app-state.ts's setLoopPhase() accepts. */
-  phase: string;
-  status: GoalRunStatus;
+export interface GoalSteeringInjector {
+  canInjectNow(): boolean;
+  inject(prompt: string): void;
 }
 
-let _goalStatus: GoalStatusSnapshot | null = null;
+let _steeringInjectorProvider: (() => GoalSteeringInjector | null) | null = null;
 
-/** Read by the status-bar GOAL segment (and any poller); null when no goal loop has run yet in
- * this session. Never cleared back to null after a run finishes -- the last snapshot (status:
- * "completed"/"error"/"aborted") stays visible until a new /goal call overwrites it, same as the
- * activity segment never blanks itself back to "nothing fetched yet" once fetched once. */
-export function getGoalStatus(): GoalStatusSnapshot | null {
-  return _goalStatus;
+/** screens/repl.ts calls this once, right after constructing its own
+ *  OperatorInjector, so /goal's mid-task edits reuse the SAME idle-gated
+ *  injection path (safe to call repeatedly; idempotent). */
+export function setGoalSteeringInjectorProvider(
+  provider: (() => GoalSteeringInjector | null) | null,
+): void {
+  _steeringInjectorProvider = provider;
 }
 
-/** Test-only reset -- isolates module-level state between test cases. */
-export function resetGoalStatusForTests(): void {
-  _goalStatus = null;
-}
-
-/**
- * The event -> LoopPhase mapping screens/repl.ts's key.return handler applies inline to
- * QueryEngine events. Extracted here (not imported FROM repl.ts, to avoid an L4-screen -> L3-
- * command dependency) so goal.ts's loop uses the identical, already-proven convention rather than
- * inventing a second one. Returns null for "result" events -- those are terminal for the current
- * sub-turn, not a phase in their own right; the caller decides the next transition.
- */
-export function deriveLoopPhaseForEvent(
-  event: QueryEvent,
-): "tool_call" | "streaming_text" | "tool_result" | null {
-  if (event.type === "assistant") {
-    const raw = event.message.content;
-    const invokesTool =
-      Array.isArray(raw) && (raw as Array<{ type?: string }>).some((b) => b.type === "tool_use");
-    return invokesTool ? "tool_call" : "streaming_text";
-  }
-  if (event.type === "user") return "tool_result";
-  return null;
-}
-
-/** The minimal QueryEngine surface goal.ts needs -- keeps this module testable with a fake
- * engine instead of constructing a full QueryEngine (tools/cwd/system-prompt wiring). */
-export interface GoalEngineLike {
-  submitMessage(userMessage: string): AsyncGenerator<QueryEvent>;
-}
-
-export interface GoalLoopDeps {
-  /** Builds each iteration's user-turn prompt from the objective + step counters. Overridable
-   * for tests; defaults to a plain deterministic template (no model call of its own). */
-  buildIterationPrompt?: (objective: string, step: number, maxSteps: number) => string;
-}
-
-function defaultBuildIterationPrompt(objective: string, step: number, maxSteps: number): string {
-  return step === 1
-    ? `Goal: ${objective}\n\nBegin working toward this goal now. You have ${maxSteps} bounded ` +
-        `iterations total; use them efficiently and report real, verifiable progress at each step.`
-    : `Continue toward the goal: ${objective}\n\n(step ${step}/${maxSteps})`;
-}
-
-/**
- * Drives the bounded goal loop: up to `maxIterations` calls to engine.submitMessage(), each
- * streaming QueryEvents that publish real setLoopPhase() transitions (lighting the existing
- * fireball) and update the module-level GoalStatusSnapshot (feeding the status-bar GOAL segment).
- *
- * Returns the final snapshot. Stops early only on a genuine engine error/abort (never on an
- * inferred "the model thinks it's done" heuristic) -- an error mid-iteration ends the run at
- * status:"error" rather than silently completing early.
- */
-export async function runGoalLoop(
-  engine: GoalEngineLike,
-  objective: string,
-  maxIterations: number = GOAL_MAX_ITERATIONS,
-  deps: GoalLoopDeps = {},
-): Promise<GoalStatusSnapshot> {
-  const buildPrompt = deps.buildIterationPrompt ?? defaultBuildIterationPrompt;
-
-  _goalStatus = { objective, step: 0, maxSteps: maxIterations, phase: "idle", status: "running" };
-
-  for (let step = 1; step <= maxIterations; step++) {
-    _goalStatus = { ..._goalStatus, step, status: "running" };
-    const prompt = buildPrompt(objective, step, maxIterations);
-
-    try {
-      for await (const event of engine.submitMessage(prompt)) {
-        const phase = deriveLoopPhaseForEvent(event);
-        if (phase) {
-          setLoopPhase(phase);
-          _goalStatus = { ..._goalStatus, phase };
-        }
-        if (event.type === "result" && (event.subtype === "error" || event.subtype === "abort")) {
-          setLoopPhase("error");
-          _goalStatus = { ..._goalStatus, phase: "error", status: "error" };
-          return _goalStatus;
-        }
-      }
-    } catch (err) {
-      setLoopPhase("error");
-      _goalStatus = {
-        ..._goalStatus,
-        phase: "error",
-        status: "error",
-      };
-      return _goalStatus;
-    }
-  }
-
-  setLoopPhase("idle");
-  _goalStatus = { ..._goalStatus, phase: "idle", status: "completed" };
-  return _goalStatus;
+export function resetGoalSteeringInjectorForTests(): void {
+  _steeringInjectorProvider = null;
 }
 
 // ---------------------------------------------------------------------------
-// /goal slash command
+// Continuation kickoff — fire-and-forget poke so a freshly-created goal
+// starts working immediately if the session happens to be idle right now,
+// instead of waiting for some UNRELATED turn to end first.
 // ---------------------------------------------------------------------------
 
-let _engineProvider: (() => GoalEngineLike | null) | null = null;
+let _continuationTrigger: (() => void) | null = null;
 
-/**
- * Registers the live engine the /goal command should drive. screens/repl.ts calls this once,
- * right after it lazy-inits its own QueryEngine, so /goal reuses the SAME conversation-state
- * engine instead of constructing a second, competing one. Safe to call repeatedly (idempotent).
- */
-export function setGoalEngineProvider(provider: (() => GoalEngineLike | null) | null): void {
-  _engineProvider = provider;
+/** screens/repl.ts wires this to a single call into its continuation engine's
+ *  maybeContinueIfIdle (fire-and-forget; the engine's own semaphore and
+ *  eligibility gates make an extra/early poke here harmless). */
+export function setGoalContinuationTrigger(trigger: (() => void) | null): void {
+  _continuationTrigger = trigger;
 }
 
-/** Test-only reset. */
-export function resetGoalEngineProviderForTests(): void {
-  _engineProvider = null;
+export function resetGoalContinuationTriggerForTests(): void {
+  _continuationTrigger = null;
 }
 
-interface GoalCommandDeps {
-  getEngine?: () => GoalEngineLike | null;
-  maxIterations?: number;
-  runLoop?: typeof runGoalLoop;
+// ---------------------------------------------------------------------------
+// Status formatting
+// ---------------------------------------------------------------------------
+
+export function formatGoalStatus(goal: GoalRecord | null): string {
+  if (!goal) return "no active goal. usage: /goal <objective>";
+
+  const lines = [
+    `objective: ${goal.objective}`,
+    `status: ${goal.status}`,
+    goal.tokenBudget !== undefined
+      ? `usage: ${goal.usage.tokensUsed} / ${goal.tokenBudget} tokens`
+      : `usage: ${goal.usage.tokensUsed} tokens (no budget set)`,
+  ];
+  if (goal.consecutiveBlockedTurns > 0) {
+    lines.push(`consecutive same-blocker turns: ${goal.consecutiveBlockedTurns}`);
+  }
+  return lines.join("\n");
 }
 
-/** Creates the /goal command with injected deps (test seam, same shape as createActivityCommand). */
+// ---------------------------------------------------------------------------
+// /goal command
+// ---------------------------------------------------------------------------
+
+export interface GoalCommandDeps {
+  getStore?: () => GoalStore;
+  isEphemeralSession?: () => boolean;
+  getSteeringInjector?: () => GoalSteeringInjector | null;
+  triggerContinuationCheck?: () => void;
+}
+
+/** Creates the /goal command with injected deps (test seam, same shape as commands/observatory.ts). */
 export function createGoalCommand(deps: GoalCommandDeps = {}): RegistryCommand {
-  const getEngine = deps.getEngine ?? (() => _engineProvider?.() ?? null);
-  const maxIterations = deps.maxIterations ?? GOAL_MAX_ITERATIONS;
-  const runLoop = deps.runLoop ?? runGoalLoop;
+  const getStore = deps.getStore ?? getGoalStore;
+  const isEphemeralSession = deps.isEphemeralSession ?? (() => isCurrentSessionEphemeral());
+  const getSteeringInjector = deps.getSteeringInjector ?? (() => _steeringInjectorProvider?.() ?? null);
+  const triggerContinuationCheck = deps.triggerContinuationCheck ?? (() => _continuationTrigger?.());
 
   return {
     name: "goal",
-    description: "Start a bounded autonomous goal-mode loop: /goal <objective>",
+    description: "Set, view, or clear the goal objective: /goal <objective> | /goal | /goal clear",
     isEnabled(): boolean {
       return true;
     },
     async execute(args: string, _ctx: CommandContext) {
-      const objective = args.trim();
-      if (!objective) {
-        return { type: "message" as const, message: "usage: /goal <objective>" };
-      }
-      const engine = getEngine();
-      if (!engine) {
-        // Honest failure, not a fabricated "started" claim: no live session engine exists yet
-        // (matches the R0 anti-fixture rule -- never report progress on a run that isn't real).
+      const trimmed = args.trim();
+      const store = getStore();
+
+      if (trimmed === "clear") {
+        const existed = store.getGoal() !== null;
+        store.clear();
         return {
           type: "message" as const,
-          message: "no active session engine yet -- send at least one message first, then /goal <objective>",
+          message: existed ? "goal cleared." : "no active goal to clear.",
         };
       }
-      // Fire-and-forget, same non-blocking pattern as /activity's background watch start: the
-      // command returns immediately so the TUI stays responsive; the status-bar GOAL segment
-      // (fed by getGoalStatus() on a poll) is what shows live progress, not this return message.
-      void runLoop(engine, objective, maxIterations);
+
+      if (trimmed === "") {
+        return { type: "message" as const, message: formatGoalStatus(store.getGoal()) };
+      }
+
+      const existing = store.getGoal();
+
+      if (!existing) {
+        const result = store.createGoal(trimmed, { isEphemeralSession: isEphemeralSession() });
+        if (!result.ok) {
+          return { type: "message" as const, message: `goal not set: ${result.message}` };
+        }
+        // Fire-and-forget: if the session happens to be idle right now, start
+        // working immediately rather than waiting for an unrelated turn to end.
+        triggerContinuationCheck();
+        return {
+          type: "message" as const,
+          message: `goal set: ${result.goal.objective}\nstatus: ${result.goal.status}`,
+        };
+      }
+
+      // Existing goal present -- this is a mid-task EDIT (spec §2), not a
+      // second create. Objective immutability still holds for the MODEL:
+      // this path is reachable only through the human-typed /goal command,
+      // never through a model-side tool call.
+      const editResult = store.editObjective(trimmed);
+      if (!editResult.ok) {
+        return { type: "message" as const, message: `objective not updated: ${editResult.message}` };
+      }
+
+      const injector = getSteeringInjector();
+      const steeringPrompt = renderObjectiveUpdatedPrompt(editResult.goal.objective);
+      let injected = false;
+      if (injector && injector.canInjectNow()) {
+        injector.inject(steeringPrompt);
+        injected = true;
+      }
+
       return {
         type: "message" as const,
-        message: `goal loop started: ${objective} (bounded to ${maxIterations} iterations)`,
+        message:
+          `objective updated: ${editResult.goal.objective}` +
+          (injected
+            ? "\n(steering message injected -- the model will re-anchor on the next turn)"
+            : "\n(will re-anchor once the current turn finishes and the session is idle)"),
       };
     },
   };

@@ -5,6 +5,7 @@ import { createObservatoryCommand } from './commands/observatory.ts';
 import { createWatchCommand } from './commands/watch.ts';
 import { createFinetuneCommand } from './commands/finetune.ts';
 import { createModelCommand } from './commands/model.ts';
+import { createGoalCommand } from './commands/goal.ts';
 import { getModeHistory } from './state/app-state.ts';
 
 export type { RegistryCommand };
@@ -44,6 +45,7 @@ const defaultDeps: CommandRegistryDeps = {
     createWatchCommand(),
     createFinetuneCommand(),
     createModelCommand(),
+    createGoalCommand(),
   ],
   getSkillDirCommands: async () => [],
   getPluginCommands: async () => [],
