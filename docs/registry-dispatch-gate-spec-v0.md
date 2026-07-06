@@ -54,6 +54,23 @@ flags it as a coverage WARN so the table never silently rots.
 - `ADOPT` — binds dispatch (this gate). `CANDIDATE`/`TESTED`/`WATCH-NEGATIVE`
   — never bind; they are worked through the proxy harness. `KILL` is a
   status, not a removal; killed rows never bind.
+- `PARK` — legalized 2026-07-06 (#230). Never binds dispatch. **PARK != KILL**:
+  the claim tested TRUE (a real, stable, receipted effect) but the prize is
+  below the accept bar at the CURRENT config (e.g. below measurement noise
+  after Amdahl-bounding by the site's step-time share). A parked row keeps
+  its revival path — it is re-examined when the config it was measured
+  against changes (wider layer, different shape) rather than re-litigated
+  from scratch. Distinguishing PARK from KILL is load-bearing for the
+  kill-protection law: KILL means the technique itself lost; PARK means the
+  technique won but the current config can't cash the win yet.
+- `ADOPT-PENDING-SEGMENT` — legalized 2026-07-06 (#230). Does not bind
+  dispatch (only literal `ADOPT` rows bind, per `check()`). Marks a technique
+  that measured TESTED-and-winning but whose adoption is gated on a specific
+  future event (e.g. a WSD segment boundary, so switching mid-segment isn't
+  a confound) rather than on more measurement. The row is promoted to
+  `ADOPT` on the receipt that proves the gating event occurred; until then
+  a consuming config with a corroborating predicate hit still needs an
+  explicit exemption if it wants the effect early.
 - Promotion to ADOPT requires a TESTED proxy receipt + `measured_multiplier`
   set; that promotion discipline lives in the registry doc — the gate only
   trusts `status`.

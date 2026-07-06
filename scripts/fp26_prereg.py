@@ -32,20 +32,20 @@ ROUND = 3
 
 # ---- pinned premises (tamper guard: sha must match at freeze time) -------
 DECISION_ARTIFACT = "docs/research/fp26-round3-shape-decision.md"
-DECISION_SHA = ("5ef7cc20f22168878f139af00e6ac9a75d43c758"
-                "ffd2b3eb181372c50081c939")
+DECISION_SHA = ("4ca49a27059fb2db0e1f5a0b2f4d538c473e3a0e"
+                "853d6488eb4dca7d51933a74")
 # the two load-bearing fp-25 premise receipts (Surface-A learn, Surface-B
 # ceiling) — both must receipt_check PASS and match these shas
 PREMISE_RECEIPTS = {
     "surface_a_recipe_learns": {
         "name": "fp25-indist-20260611T060416Z.json",
-        "sha": ("c6a318a184934744a97617f37dbe51c4"
-                "7dcc9e8cbe87a6c8e746390c307a276a"),
+        "sha": ("5305e366840abfb4f0b97bd7bf0ee17c"
+                "fe67cfef3f9782accf0fc07193c8828b"),
     },
     "surface_b_transfer_ceiling": {
         "name": "fp25b-surfaceb-20260611T063604Z.json",
-        "sha": ("50c24afe86dc2ebcd6c06d339ed677bc"
-                "b236f26ded36ef62165d00b309d8ebd0"),
+        "sha": ("505b67cb10d49dc33be8378cd311fa72"
+                "e46972260f78f3b11bef3915941b6528"),
     },
 }
 # corpus + envelope premises (existence + receipt_check only; not sha-pinned
@@ -187,7 +187,10 @@ def _selftest():
     assert r["result"]["shape"] == ROUND3_SHAPE
     # tamper guard: a drifted decision sha refuses
     with tempfile.TemporaryDirectory() as td:
-        os.makedirs(f"{td}/research")
+        # #230: fixture dir must match DECISION_ARTIFACT's real path
+        # (docs/research/, not research/ — the same class #219 renamed
+        # config/->configs/ for; this one test fixture was missed).
+        os.makedirs(f"{td}/docs/research")
         os.makedirs(f"{td}/receipts")
         # write a decision artifact with wrong content (sha won't match)
         open(f"{td}/{DECISION_ARTIFACT}", "w").write("tampered")

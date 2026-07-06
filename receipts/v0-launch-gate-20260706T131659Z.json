@@ -1,0 +1,77 @@
+{
+  "ticket": "V0-LAUNCH-GATE",
+  "ts": "20260706T131659Z",
+  "launch_date": "2026-07-06",
+  "deadline": "2026-06-22",
+  "rows": {
+    "G-corpus": {
+      "status": "GREEN",
+      "detail": "sha pin match; 25.30 GB < 100 GB"
+    },
+    "G-tokenizer": {
+      "status": "GREEN",
+      "detail": "pin match; 6,973,632,300 real tokens; band 8 ids"
+    },
+    "G-shards": {
+      "status": "GREEN",
+      "detail": "token-shards-v0-20260611T170047Z.json shards present + byte-matched; --live input ready"
+    },
+    "G-config": {
+      "status": "GREEN",
+      "detail": "V0_CONFIG_GREEN (launch mode)"
+    },
+    "G-governor": {
+      "status": "GREEN",
+      "detail": "floor vram<=0.80 / margin>=1.5GiB / pace>=0.05s (tighten-only)"
+    },
+    "G-world": {
+      "status": "GREEN",
+      "detail": "world specs present (2)"
+    },
+    "G-budget": {
+      "status": "BLOCKED",
+      "detail": "days-remaining -14 < envelope floor 4.55 (fp19-bench unstacked); no banked SHATTER compute-fit (no shatter-verdict-*.json in receipts/ (lever unproven))"
+    },
+    "G-prereg": {
+      "status": "GREEN",
+      "detail": "fp26-prereg-20260611T081213Z.json frozen; premises hold"
+    },
+    "G-efficiency": {
+      "status": "GREEN",
+      "detail": "launch-efficiency-20260706T131425Z.json: applied=['batch_size', 'fused_muon', 'torch_compile'], killed=['checkpointing_off', 'fp8_matmul'], waived=[('duty_cycle', 0.05)]"
+    }
+  },
+  "all_green": false,
+  "blocked_rows": [
+    "G-budget"
+  ],
+  "pins": {
+    "assembly_receipt": "eng36-assembly-20260611T052337Z.json",
+    "assembly_sha256": "f6d0734e090fcaef84ac2361f42c7419f5e40b586355bc4a385e7a695250c841",
+    "tokenizer_receipt": "tokenizer-freeze-20260611T154111Z.json",
+    "config": "configs/v0-pretrain-config.json",
+    "envelope_days_floor": 4.55
+  },
+  "dispatch_rule": "v0 pretrain refuses unless all_green; the failing G-row(s) are named in blocked_rows. No row waivable except by the user by name.",
+  "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; receipt paths carry the git -text pin",
+  "no_gpu": true,
+  "provenance": {
+    "event": "RE-FREEZE, not continuity reconstruction (#230 ruling item 1)",
+    "ts": "20260706T000000Z",
+    "root_cause": "This repo begins at a single consolidation root commit 58ddf8d (2026-06-28, zero parents, \"Remove predecessor-project lineage from all paths, filenames, and contents\"). All launch-gate premise files were added fresh in that commit. The frozen pins (ASSEMBLY_SHA / DECISION_SHA / PREMISE_RECEIPTS shas in v0_pretrain_launch_gate.py + fp26_prereg.py, plus embedded cross-reference fields in tokenizer-freeze-20260611T154111Z.json and token-shards-v0-20260611T170047Z.json) date to 2026-06-11/13, set in the PREDECESSOR tree. For six of the seven drifted premises there is no divergence commit IN THIS REPOSITORY: the consolidation content scrub IS the discontinuity.",
+    "not_a_claim": "This re-freeze does NOT claim the June-11/13 bytes survive, and does NOT attempt continuity reconstruction (impossible-by-design: the scrub was deliberate; undesirable: the scrubbed content is what belongs public). It re-anchors every drifted pin to the CURRENT public tree's actual on-disk bytes as a NEW baseline.",
+    "audit_trail": "issue #230 (audit + ruling); #113 blocker report; #219",
+    "per_row_disposition": {
+      "G-corpus": "RE-ANCHORED \u2014 ASSEMBLY_SHA constant now pins the current eng36-assembly receipt bytes",
+      "G-tokenizer": "RE-ANCHORED \u2014 tokenizer-freeze-20260611T154111Z.json embedded assembly_receipt_sha256 field re-anchored (disclosed hand-edit; no live corpus/tokenizer pipeline available in this checkout to re-run the one-shot freeze, which explicitly refuses a second run by design)",
+      "G-shards": "RE-ANCHORED \u2014 token-shards-v0-20260611T170047Z.json premises.{assembly_receipt,tokenizer_freeze_receipt,tokenizer_json}.sha256 re-anchored (disclosed hand-edit; the actual shard bytes/shards[]/per_source/counts are untouched real production output and are NOT re-derivable here \u2014 no raw corpus or .bin shard data in this checkout to re-run produce_shards_v0)",
+      "G-config": "unaffected (config premise check is a live-file check, not a frozen pin)",
+      "G-governor": "unaffected (floor check, not a frozen pin)",
+      "G-world": "unaffected (existence check, not a frozen pin)",
+      "G-budget": "UNCHANGED \u2014 correctly BLOCKED on calendar (no banked SHATTER verdict); this re-freeze does not attempt to green it",
+      "G-prereg": "RE-ANCHORED \u2014 fp26_prereg.py DECISION_SHA + PREMISE_RECEIPTS[surface_a/surface_b] shas now pin the current docs/research/fp26-round3-shape-decision.md + fp25-indist/fp25b-surfaceb receipt bytes",
+      "G-efficiency": "RE-EMITTED \u2014 receipts/launch-efficiency-20260706T131425Z.json supersedes 20260613T015000Z with config_sha256 bound to the current configs/v0-pretrain-config.json; same lever state (legitimate config evolution per the gate's own refusal-message remediation, #365; NOT a scrub artifact)"
+    },
+    "disclosed_hand_edits": "Two receipt files had an embedded cross-reference sha256 field re-anchored directly (never a receipt content/measurement field, only the pin field) because the ONLY mechanism available in this environment IS authoring the pin -- no live corpus/tokenizer/shard production pipeline exists in this checkout to regenerate them for real: tokenizer-freeze-20260611T154111Z.json.assembly_receipt_sha256, and token-shards-v0-20260611T170047Z.json.premises.*.sha256 (3 fields). Both receipts carry a provenance_230 audit stanza recording old->new values inline; full accounting also in the PR body per the #230 ruling."
+  }
+}

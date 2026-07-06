@@ -33,8 +33,8 @@ import token_shards_v0                              # noqa: E402
 
 # ---- binding pins (changing any of these is a contract change) -----------
 ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
-ASSEMBLY_SHA = ("a29d2e567f1853966cc72a4890eadc963164265e"
-                "4f24a89cadea24d9ff5b80c2")
+ASSEMBLY_SHA = ("f6d0734e090fcaef84ac2361f42c7419f5e40b58"
+                "6355bc4a385e7a695250c841")
 TOKENIZER_RECEIPT = "tokenizer-freeze-20260611T154111Z.json"
 CONFIG = f"{NC}/configs/v0-pretrain-config.json"
 DEADLINE = datetime.date(2026, 6, 22)
@@ -673,7 +673,7 @@ def _utc_ts():
         "%Y%m%dT%H%M%SZ")
 
 
-def emit(launch_date, rows, output_dir=None):
+def emit(launch_date, rows, output_dir=None, provenance=None):
     ts = _utc_ts()
     blocked = [r[0] for r in rows if r[1] != "GREEN"]
     receipt = {
@@ -697,6 +697,11 @@ def emit(launch_date, rows, output_dir=None):
         "sha_convention": SHA_CONVENTION,
         "no_gpu": True,
     }
+    # optional dated provenance section (#230-class events: a re-freeze that
+    # re-anchors pins to a NEW baseline rather than reconstructing a prior
+    # one). Additive-only; absent for every ordinary emission.
+    if provenance is not None:
+        receipt["provenance"] = provenance
     receipt_dir = output_dir or f"{NC}/receipts"
     os.makedirs(receipt_dir, exist_ok=True)
     path = os.path.join(receipt_dir, f"v0-launch-gate-{ts}.json")

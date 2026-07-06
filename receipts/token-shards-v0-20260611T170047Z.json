@@ -193,18 +193,39 @@
   "premises": {
     "assembly_receipt": {
       "name": "eng36-assembly-20260611T052337Z.json",
-      "sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2"
+      "sha256": "f6d0734e090fcaef84ac2361f42c7419f5e40b586355bc4a385e7a695250c841"
     },
     "tokenizer_freeze_receipt": {
       "name": "tokenizer-freeze-20260611T154111Z.json",
-      "sha256": "1e2da479d09f896d1ef15cece19255347aff2bc78a450b4160905579910e56ee"
+      "sha256": "2e96e70fe7463b272c00ea49e61e001402319a398a447debb9afe283586ac1c4"
     },
     "tokenizer_json": {
       "path": "tokenizer/tokenizer.json",
-      "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+      "sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d"
     }
   },
   "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; shard + receipt paths carry the git -text pin",
   "emit": true,
-  "no_gpu": true
+  "no_gpu": true,
+  "provenance_230": [
+    {
+      "ts": "20260706T000000Z",
+      "fields": [
+        "premises.assembly_receipt.sha256",
+        "premises.tokenizer_freeze_receipt.sha256",
+        "premises.tokenizer_json.sha256"
+      ],
+      "reason": "#230 re-freeze: all three premise files' bytes changed at the 58ddf8d consolidation scrub (assembly + tokenizer-freeze receipts) or could not be bisected against a predecessor tree that no longer exists (tokenizer.json); the real shard bytes (shards[], per_source, total_stream_tokens, etc.) are untouched production output and are NOT re-derivable here (no raw corpus/shard data in this checkout) -- only these three premise pins are re-anchored to current on-disk bytes.",
+      "old": {
+        "assembly_receipt.sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+        "tokenizer_freeze_receipt.sha256": "1e2da479d09f896d1ef15cece19255347aff2bc78a450b4160905579910e56ee",
+        "tokenizer_json.sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+      },
+      "new": {
+        "assembly_receipt.sha256": "f6d0734e090fcaef84ac2361f42c7419f5e40b586355bc4a385e7a695250c841",
+        "tokenizer_freeze_receipt.sha256": "2e96e70fe7463b272c00ea49e61e001402319a398a447debb9afe283586ac1c4",
+        "tokenizer_json.sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d"
+      }
+    }
+  ]
 }
