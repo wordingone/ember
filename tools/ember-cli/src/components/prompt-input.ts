@@ -52,6 +52,10 @@ export interface Notification {
 
 export interface PromptInputState {
   text:           string;
+  /** Index into `text` (0..text.length) where the next insert/delete acts. Optional for callers
+   * that construct state directly (tests, fixtures) -- PromptInput treats an absent cursor as
+   * "at the end of text" (the pre-P0-#64 behavior), so existing fixtures are unaffected. */
+  cursor?:        number;
   mode:           InputMode;
   isStashed:      boolean;
   permissionMode: PermissionMode;
@@ -61,8 +65,17 @@ export interface PromptInputState {
 
 export interface PromptInputActions {
   setText:             (t: string) => void;
-  appendText:          (ch: string) => void;
-  dropLastChar:        () => void;
+  /** Inserts at the current cursor position (mid-line insert when the cursor isn't at the end;
+   * ordinary typing keeps the cursor at the end, so this also covers plain append). */
+  insertText:          (ch: string) => void;
+  /** Backspace: removes the character immediately BEFORE the cursor. */
+  deleteBackward:      () => void;
+  /** Delete key: removes the character immediately AFTER the cursor. */
+  deleteForward:       () => void;
+  moveCursorLeft:      () => void;
+  moveCursorRight:     () => void;
+  moveCursorHome:      () => void;
+  moveCursorEnd:       () => void;
   paste:               (text: string) => void;
   stash:               () => void;
   restoreStash:        () => void;
@@ -121,6 +134,69 @@ export function applyPaste(current: string, pasted: string): ApplyPasteResult {
       truncatedLength: truncated.length,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Cursor-aware editing (P0 #64 fix, 2026-07-03): replaces the previous append-at-end /
+// pop-from-end-only model. See prompt-input.test.ts's "cursor-aware text editing" describe
+// block for the failing-receipt-driven rationale (real-PTY proof that a long, overflowing
+// single-line input silently truncated past the visible column budget, making backspace
+// presses on the invisible tail produce zero rendered change -- indistinguishable from a dead
+// key).
+// ---------------------------------------------------------------------------
+
+export interface TextCursor {
+  text:   string;
+  cursor: number;
+}
+
+export function clampCursor(cursor: number, length: number): number {
+  return Math.max(0, Math.min(cursor, length));
+}
+
+export function insertAtCursor(text: string, cursor: number, insertion: string): TextCursor {
+  const c        = clampCursor(cursor, text.length);
+  const combined = text.slice(0, c) + insertion + text.slice(c);
+  const result   = combined.slice(0, MAX_INPUT_CHARS);
+  return { text: result, cursor: Math.min(c + insertion.length, result.length) };
+}
+
+export function deleteBackward(text: string, cursor: number): TextCursor {
+  const c = clampCursor(cursor, text.length);
+  if (c === 0) return { text, cursor: c };
+  return { text: text.slice(0, c - 1) + text.slice(c), cursor: c - 1 };
+}
+
+export function deleteForward(text: string, cursor: number): TextCursor {
+  const c = clampCursor(cursor, text.length);
+  if (c >= text.length) return { text, cursor: c };
+  return { text: text.slice(0, c) + text.slice(c + 1), cursor: c };
+}
+
+export function moveCursorBy(text: string, cursor: number, delta: number): number {
+  return clampCursor(cursor + delta, text.length);
+}
+
+export interface InputViewport {
+  visibleText: string;
+  cursorCol:   number;
+}
+
+/** Computes the visible slice of `text` and the cursor's column within it, keeping the cursor
+ * always in view. Right-biased: when the cursor is past the current window's right edge, the
+ * window scrolls just far enough to put the cursor at the last visible column (matches the
+ * behavior of a normal shell readline / CLI single-line input). This is the direct cure for the
+ * "invisible-tail truncation" defect class -- text longer than `width` is windowed instead of
+ * silently clipped, so every edit at the cursor is within the rendered viewport. */
+export function computeInputViewport(text: string, cursor: number, width: number): InputViewport {
+  const w = Math.max(0, width);
+  const c = clampCursor(cursor, text.length);
+  if (w === 0 || text.length <= w) {
+    return { visibleText: w === 0 ? "" : text, cursorCol: w === 0 ? 0 : c };
+  }
+  const maxStart = text.length - w;
+  const start    = Math.max(0, Math.min(c - w + 1, maxStart));
+  return { visibleText: text.slice(start, start + w), cursorCol: c - start };
 }
 
 export function computeQueueDisplay(items: string[]): QueueDisplay {
@@ -208,44 +284,68 @@ export class FastModeHint {
 export function usePromptInput(
   deps: PromptInputDeps = {},
 ): [PromptInputState, PromptInputActions] {
-  const [text,      setText_]     = useState("");
+  // text + cursor are updated together (P0 #64): a single state object so every transition
+  // computes a mutually-consistent pair in one reducer call, rather than two separate useState
+  // calls racing against each other across renders.
+  const [tc,        setTc]        = useState<TextCursor>({ text: "", cursor: 0 });
   const [permMode,  setPermMode]  = useState<PermissionMode>("bypass");
   const [pasted,    setPasted]    = useState<PastedContents | null>(null);
   const [isStashed, setIsStashed] = useState(false);
   const stashRef = useRef(new StashManager());
   const fastRef  = useRef(new FastModeHint());
 
-  const parsed = parseInputMode(text);
+  const parsed = parseInputMode(tc.text);
 
   const setText = useCallback((t: string) => {
-    setText_(t.slice(0, MAX_INPUT_CHARS));
+    const truncated = t.slice(0, MAX_INPUT_CHARS);
+    setTc({ text: truncated, cursor: truncated.length });
   }, []);
 
-  const appendText = useCallback((ch: string) => {
-    setText_(prev => (prev + ch).slice(0, MAX_INPUT_CHARS));
+  const insertText = useCallback((ch: string) => {
+    setTc(prev => insertAtCursor(prev.text, prev.cursor, ch));
   }, []);
 
-  const dropLastChar = useCallback(() => {
-    setText_(prev => prev.slice(0, -1));
+  const deleteBackwardAction = useCallback(() => {
+    setTc(prev => deleteBackward(prev.text, prev.cursor));
+  }, []);
+
+  const deleteForwardAction = useCallback(() => {
+    setTc(prev => deleteForward(prev.text, prev.cursor));
+  }, []);
+
+  const moveCursorLeft = useCallback(() => {
+    setTc(prev => ({ text: prev.text, cursor: moveCursorBy(prev.text, prev.cursor, -1) }));
+  }, []);
+
+  const moveCursorRight = useCallback(() => {
+    setTc(prev => ({ text: prev.text, cursor: moveCursorBy(prev.text, prev.cursor, 1) }));
+  }, []);
+
+  const moveCursorHome = useCallback(() => {
+    setTc(prev => ({ text: prev.text, cursor: 0 }));
+  }, []);
+
+  const moveCursorEnd = useCallback(() => {
+    setTc(prev => ({ text: prev.text, cursor: prev.text.length }));
   }, []);
 
   const paste = useCallback((pastedText: string) => {
-    setText_(current => {
-      const result = applyPaste(current, pastedText);
+    setTc(current => {
+      const result = applyPaste(current.text, pastedText);
       if (result.pastedContents) setPasted(result.pastedContents);
-      return result.text;
+      return { text: result.text, cursor: result.text.length };
     });
   }, []);
 
   const stash = useCallback(() => {
-    stashRef.current.stash(text);
-    setText_("");
+    stashRef.current.stash(tc.text);
+    setTc({ text: "", cursor: 0 });
     setIsStashed(true);
-  }, [text]);
+  }, [tc.text]);
 
   const restoreStash = useCallback(() => {
     const v = stashRef.current.restore();
-    if (v !== null) setText_(v);
+    if (v !== null) setTc({ text: v, cursor: v.length });
     setIsStashed(false);
   }, []);
 
@@ -258,8 +358,8 @@ export function usePromptInput(
   }, []);
 
   const openEditor = useCallback(() => {
-    deps.onEditorOpen?.(text);
-  }, [text, deps]);
+    deps.onEditorOpen?.(tc.text);
+  }, [tc.text, deps]);
 
   const openModelPicker = useCallback(() => {
     deps.onModelPickerOpen?.();
@@ -277,7 +377,8 @@ export function usePromptInput(
   });
 
   const state: PromptInputState = {
-    text,
+    text:           tc.text,
+    cursor:         tc.cursor,
     mode:           parsed.mode,
     isStashed,
     permissionMode: permMode,
@@ -287,8 +388,13 @@ export function usePromptInput(
 
   const actions: PromptInputActions = {
     setText,
-    appendText,
-    dropLastChar,
+    insertText,
+    deleteBackward:  deleteBackwardAction,
+    deleteForward:   deleteForwardAction,
+    moveCursorLeft,
+    moveCursorRight,
+    moveCursorHome,
+    moveCursorEnd,
     paste,
     stash,
     restoreStash,
@@ -314,6 +420,18 @@ export interface PromptInputProps {
   showStatusLine?:       boolean;
   /** Dimmed ghost text rendered after the cursor — Tab accepts it into the input. */
   suggestion?:           string;
+  /** Terminal width for the rule lines framing the input row; absent → 80 (mirrors StatusLine's
+   * width convention). */
+  width?:                number;
+}
+
+/** B7 item 5 ("input affordance", operator regrade 2026-07-03): a full-width dim "─" repeat,
+ * matching mock1's thinRule() (state/design-mockups/gen-mockups.mjs) exactly -- the prompt was a
+ * bare '❯' with no structural presence, vs the field-standard TUI bordered input region. mock1
+ * frames the input between two of these, before the status bar; this gives PromptInput the same
+ * presence. */
+function inputRule(width: number): React.ReactElement {
+  return React.createElement(Text, { dimColor: true }, "─".repeat(Math.max(0, width)));
 }
 
 export function PromptInput({
@@ -324,6 +442,7 @@ export function PromptInput({
   prefersReducedMotion = false,
   showStatusLine       = true,
   suggestion,
+  width                = 80,
 }: PromptInputProps): React.ReactElement {
   const qDisplay    = computeQueueDisplay(queuedItems);
   const showShimmer = shouldShowShimmer(isProcessing, prefersReducedMotion);
@@ -346,15 +465,32 @@ export function PromptInput({
     children.push(React.createElement(Text, { key: "stash", dimColor: true }, state.stashNotice));
   }
 
+  // P0 #64 fix: the text row is WINDOWED around the cursor instead of rendering `state.text`
+  // unconditionally. Un-windowed rendering was the "invisible-tail truncation" defect -- once
+  // typed text exceeded the visible column budget, the tail silently clipped off-screen, and
+  // backspace (which only ever removed the last character) edited that invisible tail, producing
+  // a diff-render with zero visible change: indistinguishable from a dead key.
+  const cursor        = state.cursor ?? state.text.length;
+  const availableCols = Math.max(0, width - 2); // "❯ " prefix consumes 2 columns
+  const viewport      = computeInputViewport(state.text, cursor, availableCols);
+  const before         = viewport.visibleText.slice(0, viewport.cursorCol);
+  const atCursorChar   = viewport.visibleText[viewport.cursorCol] ?? " ";
+  const after          = viewport.visibleText.slice(viewport.cursorCol + 1);
+  const cursorAtEnd    = viewport.cursorCol === viewport.visibleText.length;
+
   children.push(
+    React.createElement(Box, { key: "rule-above" }, inputRule(width)),
     React.createElement(
       Box, { key: "input" },
       React.createElement(Text, { bold: true }, glyph),
-      React.createElement(Text, null, ` ${state.text}`),
-      suggestion
+      React.createElement(Text, null, ` ${before}`),
+      React.createElement(Text, { inverse: true }, atCursorChar),
+      after ? React.createElement(Text, null, after) : null,
+      suggestion && cursorAtEnd
         ? React.createElement(Text, { dimColor: true }, suggestion)
         : null,
     ),
+    React.createElement(Box, { key: "rule-below" }, inputRule(width)),
   );
 
   for (let i = 0; i < qDisplay.visible.length; i++) {
