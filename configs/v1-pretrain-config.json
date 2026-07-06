@@ -1,0 +1,74 @@
+{
+  "ticket": "CLEAN-CORPUS-V1-ASSEMBLY-285",
+  "description": "v1 corpus assembly: drops fineweb_edu (TAINTED), retains CLEAN sources only",
+  "v0_assembly_reference": "eng36-assembly-20260611T052337Z.json, sha256: a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+  "removed_sources": [
+    {
+      "source": "fineweb_edu",
+      "reason": "TAINTED — document inclusion via classifier trained on Llama-3-70B-Instruct annotations",
+      "bytes_removed": 7400001608,
+      "docs_removed": 1549860,
+      "genesis_audit_citation": "receipts/genesis/genesis-audit-20260706.md §1, row 1"
+    }
+  ],
+  "sources": {
+    "code_github_clean": {
+      "manifest_path": "manifests/corpus/code_github_clean-manifest-20260611T051128Z.json",
+      "manifest_sha256": "5aa29ff07b1fa97c21e5bd788da04def7342550e49c5a51d868bdd45b3b384df",
+      "text_bytes": 13000000267,
+      "license_class": "permissive-per-file",
+      "provenance_verdict": "CLEAN",
+      "filter_justification": "Per-file license-field filter, fail-closed; deterministic; RECEIPTED",
+      "docs_count": 1867710
+    },
+    "wikipedia_en": {
+      "manifest_path": "manifests/corpus/wikipedia_en-manifest-20260611T045542Z.json",
+      "manifest_sha256": "3d33c10da0ab4e1591616e221ca6411377c14e81c844e6ea6c1bce7d55c55abd",
+      "text_bytes": 3000005917,
+      "license_class": "cc-by-sa-4.0",
+      "provenance_verdict": "CLEAN",
+      "filter_justification": "Deterministic extraction of human text; no classifier involvement",
+      "docs_count": 813598
+    },
+    "gutenberg_en": {
+      "manifest_path": "manifests/corpus/gutenberg_en-manifest-20260611T050315Z.json",
+      "manifest_sha256": "ceb22ac3fcd4ecc6664f880b1a3410c6dd13193186bd56c0692c5dee651cf2d4",
+      "text_bytes": 1900007704,
+      "license_class": "public-domain",
+      "provenance_verdict": "CLEAN",
+      "filter_justification": "Deterministic extraction of public-domain texts",
+      "docs_count": 4510
+    },
+    "ledger_mit": {
+      "manifest_path": "manifests/corpus/ledger_mit-manifest-20260611T044523Z.json",
+      "manifest_sha256": "d42826b8062ce226883a53cf51d5954c50ab007d91e7d735992c492748d5da5e",
+      "text_bytes": 521867,
+      "license_class": "arc-dsl-mit",
+      "provenance_verdict": "CLEAN",
+      "filter_justification": "Ember's own MIT-clean slice; RECEIPTED internal provenance",
+      "docs_count": 780
+    }
+  },
+  "assembly_parameters": {
+    "dedup_method": "exact-hash at document level (sha256 over utf-8 text)",
+    "dedup_scope": "doc-level, per-source (matching v0 methodology)",
+    "filtering_classes": "RULE-BASED ONLY",
+    "ml_filtering_models": "NONE",
+    "external_model_contribution": "ZERO — clause 3 compliant",
+    "fail_closed_on_unknown": true
+  },
+  "expected_output": {
+    "total_docs_est": 2686598,
+    "total_text_bytes_est": 17901535488,
+    "total_text_bytes_gb_est": 17.9,
+    "v0_percentage_est": 70.8,
+    "shortfall_bytes": 7400001608,
+    "shortfall_note": "No additional local CLEAN sources available; replacement sources require external fetch (escalation path)"
+  },
+  "clause3_compliance": {
+    "status": "COMPLIANT",
+    "reasoning": "All included sources use deterministic or rule-based filtering with no external-model contribution. Fineweb-Edu (source of external-model taint) is excluded fail-closed.",
+    "external_model_ban": "STRICT — no fasttext, no quality classifiers, no perplexity filters by external models, no embedding-based dedup",
+    "verification_method": "Rule-based filters only; sha256 manifest verification; deterministic dedup"
+  }
+}
