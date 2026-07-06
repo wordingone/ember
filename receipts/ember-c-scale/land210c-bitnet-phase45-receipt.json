@@ -1,0 +1,127 @@
+{
+  "family": "bitnet + phase4_c15 + phase5_c7",
+  "ruling": "issue #210 Tier 1",
+  "stage_id": "dryrun-20260704T211712Z",
+  "scope_note": "Original triage enumerated 15 files across two sub-families (bitnet+phase4_c15: 6 files, phase5_c7: 9 files). Mid-flight discovery: 2 of those 15 (scripts/ember_tiny_bitnet_comparison.py, scripts/ember_tiny_bitnet_comparison_selftest.py) are NOT new additions -- they are already tracked on master via an earlier 'Consolidate to a clean, externally-auditable public root' commit (58ddf8d), caught because git showed the copied file as modified rather than untracked. ember_tiny_bitnet_comparison_selftest.py is byte-identical to stage already (nothing to do). ember_tiny_bitnet_comparison.py's landed copy already carries its OWN broken placeholder (Path(r'<local-path>')) at the same two lines stage carries a different placeholder ([REDACTED]) at -- same class as timeshare_pretrain.py/v0_pretrain_launch_gate.py before it, so it is being spun into its own standalone fix-PR rather than folded into this addition, per standing precedent. This receipt covers the remaining 13 genuinely-new files only.",
+  "import_closure_note": "ember_phase4_c15/bitlinear_unit.py imports ember_bitnet_core (in-scope sibling, landed alongside). Four ember_phase5_c7 files (c7_curriculum_corpus.py, c7_cycle_runner.py, c7_deletion_test.py, held_out_probe.py) import from ember_resident_igrpo and/or ember_c14_contract_rig -- both already landed via #217, confirmed present on master before this branch was cut. ember_phase5_c7/c7_selftest.py, gate9_regime_enforcer.py, operator_constants.py, regime_operator.py, __init__.py are fully self-contained (stdlib+torch only). No dynamic/subprocess/importlib cross-references found anywhere in the 15-file stage set. No new prerequisite PR was needed for this family.",
+  "files": [
+    {
+      "path": "scripts/ember_bitnet_core.py",
+      "sha256": "b2a450bcbd5183d0144e0a6b7b2fe854c9cfd908b2e4031b409f484629b2e60c",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase4_c15/bitlinear_unit.py",
+      "sha256": "113999a60f979158961b3ab24279b02a459fe1cfc10f53c4307f5ee9a9a8083e",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase4_c15/bitnet_blocked_emitter.py",
+      "sha256": "7fa2a9b537892a1cf52aab1147ceadb7bacea4a670d18361ab6265e08ea764c7",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase4_c15/c15_comparison_verifier.py",
+      "sha256": "c8434a20b22d997ef8f5cb509eec0af0eca24cd9c531f57ef248e323e9b8de1f",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/__init__.py",
+      "sha256": "71bb441adb37414467975ff510918b826ef84a439f7613592c1ae575492643ba",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/c7_curriculum_corpus.py",
+      "sha256": "55e3e00a31cae9e265cf5a4e414cb5d822b8177c9ceddb752cdae82f2bbebf97",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/c7_cycle_runner.py",
+      "sha256": "11ecf96ebb7d310afb576cb2a993017460e2a13cc77cd58877cf67ad9cf5728c",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/c7_deletion_test.py",
+      "sha256": "4028b188bd5d8dcd65856d7c872d5bd5b9b9b98b17e586d6b07412c42f22ad4c",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/c7_selftest.py",
+      "sha256": "ba3320bd8ebb7eaab45a41bf87a5bf41bdb599f45d3ae4b61b97ab49a01513dd",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/gate9_regime_enforcer.py",
+      "sha256": "d4cda5f14d20eaaa728c17f3efb6c172bec2673d80ead75a03d85f8ea1127a4b",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/held_out_probe.py",
+      "sha256": "0cb81ca888bd60cf7c28c4cad66cb45e6f5ee90228500e66b3f8d4ada0ee03de",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/operator_constants.py",
+      "sha256": "a82db00b42b1e4cf8791a5afb3f61272c3ed8a7d281623adc807c722fcd7e909",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase5_c7/regime_operator.py",
+      "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
+      "provenance": "byte-identical, unmodified"
+    }
+  ],
+  "deferred_to_standalone_fix_pr": [
+    {
+      "path": "scripts/ember_tiny_bitnet_comparison.py",
+      "reason": "already landed on master (58ddf8d); landed copy carries its own broken placeholder Path(r'<local-path>') at DEFAULT_OUT_ROOT/DEFAULT_GATE_ROOT; needs a standalone fix-PR per the stale-already-landed-sibling precedent (timeshare_pretrain.py #218, v0_pretrain_launch_gate.py #220), pending team-lead confirmation of the split."
+    }
+  ],
+  "already_landed_no_action_needed": [
+    {
+      "path": "scripts/ember_tiny_bitnet_comparison_selftest.py",
+      "landed_sha256": "47856cee596a3131828e586b0749199c0711739ad638827d8c2b8b7c3d3ddf68",
+      "note": "Byte-identical to stage already; confirmed via diff (zero delta). Dropped from scope, no action taken."
+    }
+  ],
+  "selftests": {
+    "ember_bitnet_core.py (__main__, no flag)": {
+      "landed_result": "EMBER_BITNET_CORE_SELFTEST_PASS, 15/15 passed"
+    },
+    "ember_phase4_c15/bitlinear_unit.py (__main__, no flag)": {
+      "landed_result": "BITLINEAR_UNIT_SELFTEST_PASS, 6/6 passed"
+    },
+    "ember_phase4_c15/bitnet_blocked_emitter.py --selftest": {
+      "landed_result": "BITNET_BLOCKED_EMITTER_SELFTEST_PASS"
+    },
+    "ember_phase4_c15/c15_comparison_verifier.py --selftest": {
+      "landed_result": "C15_COMPARISON_VERIFIER_SELFTEST_PASS"
+    },
+    "ember_phase5_c7/c7_curriculum_corpus.py --test": {
+      "landed_result": "15/15 passed (ALL PASS)"
+    },
+    "ember_phase5_c7/c7_cycle_runner.py (__main__, no flag)": {
+      "landed_result": "7/7 passed (ALL PASS)"
+    },
+    "ember_phase5_c7/c7_deletion_test.py (__main__, no flag, defaults cycles=16 seed=42)": {
+      "landed_result": "SOME FAILED -- T1a verdict==LOAD_BEARING: FAIL (verdict=NOT_LOAD_BEARING, deletion_gap=-0.1250, threshold*0.8=0.1200); T1d, T1e also FAIL; T1f and T2a PASS",
+      "note": "PRE-EXISTING, byte-identical reproduction in untouched stage: identical deletion_gap=-0.1250 and identical pass/fail pattern on both the stage copy and this landed copy. Confirmed deterministic (re-run produces the same numbers). NOT masked or exercised by ember_phase5_c7/c7_selftest.py's own '[c7_deletion_test] ... PASS' line -- verified c7_selftest.py does not import or call this file at all; it contains its own independent from-scratch reimplementation of a similar deletion-test concept (different seeds, different n_cycles=n_cycles+2=5 vs this file's own default of 16) inside c7_selftest.py itself. This is a real, isolated, pre-existing defect in this file's own standalone selftest, unrelated to this landing's copy."
+    },
+    "ember_phase5_c7/c7_selftest.py (default --quick, n_cycles=3)": {
+      "landed_result": "PASS -- all C7 gate assertions satisfied in 1.3s (7 sub-checks: operator_constants, c7_curriculum_corpus, held_out_probe, regime_operator, gate9_regime_enforcer, c7_cycle_runner, its own internal c7_deletion_test reimplementation)",
+      "note": "This is an aggregate umbrella selftest with independent internal reimplementations of some sibling files' logic, not a caller of the actual sibling modules for cycle_runner/deletion_test -- see the c7_deletion_test.py note above."
+    },
+    "ember_phase5_c7/gate9_regime_enforcer.py (__main__, no flag)": {
+      "landed_result": "ALL TESTS PASSED, loadbearing_proved = True"
+    },
+    "ember_phase5_c7/held_out_probe.py (__main__, no flag)": {
+      "landed_result": "9/9 passed (ALL PASS), load-bearing property proved"
+    },
+    "ember_phase5_c7/operator_constants.py (__main__, no flag)": {
+      "landed_result": "ALL SELFTESTS PASSED, selftest_proves_loadbearing: True"
+    },
+    "ember_phase5_c7/regime_operator.py (__main__, no flag)": {
+      "landed_result": "SELFTEST PASSED -- all assertions green, load-bearing property holds: True"
+    }
+  }
+}
