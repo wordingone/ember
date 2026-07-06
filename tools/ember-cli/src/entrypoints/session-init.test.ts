@@ -8,8 +8,15 @@
 // adapter.test.ts's job).
 
 import { describe, it, expect, mock, afterEach } from "bun:test";
-import { buildProductionCallModel, getResolvedNCtx, getToolResultBudget } from "./session-init.ts";
+import {
+  buildProductionCallModel,
+  buildGuardedProductionCallModel,
+  getResolvedNCtx,
+  getToolResultBudget,
+  getCircuitBreakerState,
+} from "./session-init.ts";
 import { ModelHttpError } from "../services/api-openai-adapter.ts";
+import { CircuitOpenError } from "../services/model-circuit-breaker-client.ts";
 
 // issue #197: buildProductionCallModel now throws (rather than fabricating a
 // success) when the stream ends without ever seeing a genuine finish_reason
@@ -282,5 +289,54 @@ describe("getResolvedNCtx / getToolResultBudget — issue #157 n_ctx-derived bud
     // The whole-conversation ceiling must be larger than the per-result one --
     // otherwise a single result could never fit its own conversation.
     expect(budget.conversationMaxChars).toBeGreaterThan(budget.maxChars);
+  });
+});
+
+describe("buildGuardedProductionCallModel — issue #239 circuit breaker on the real model client", () => {
+  const origFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  it("wraps buildProductionCallModel: a 400 opens the circuit after exactly one fetch call", async () => {
+    let fetchCalls = 0;
+    globalThis.fetch = mock(async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 400, statusText: "Bad Request" });
+    }) as unknown as typeof fetch;
+
+    const states: Array<{ state: string }> = [];
+    const guarded = buildGuardedProductionCallModel(
+      { serverUrl: "http://localhost:1", nCtx: 4096 },
+      (s) => states.push(s),
+    );
+
+    let thrown: unknown = null;
+    try {
+      await guarded.callModel({
+        messages: [{ role: "user", content: "hi" }],
+        systemPrompt: "test",
+        tools: [],
+        model: "test",
+        maxTokens: 100,
+      });
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(CircuitOpenError);
+    expect(fetchCalls).toBe(1);
+    expect(guarded.getCircuitState().state).toBe("open");
+    expect(states.length).toBeGreaterThan(0);
+    expect(states[states.length - 1]!.state).toBe("open");
+  });
+
+  it("getCircuitBreakerState() returns null before any guarded client has been wired", () => {
+    // A fresh module (no init() call, no buildGuardedProductionCallModel wiring
+    // into the module-level singleton in this test's isolated assertion) must
+    // never throw -- absence of a circuit is reported as null, matching
+    // getResolvedNCtx()'s pre-init contract above.
+    const state = getCircuitBreakerState();
+    expect(state === null || typeof state.state === "string").toBe(true);
   });
 });

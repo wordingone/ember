@@ -21,6 +21,8 @@ import {
   ModelHttpError,
 } from "../services/api-openai-adapter.ts";
 import { createMicrocompact } from "../services/compaction.ts";
+import { wrapModelClientWithCircuitBreaker } from "../services/model-circuit-breaker-client.ts";
+import type { CircuitBreakerState } from "../services/model-circuit-breaker.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level state (singletons)
@@ -33,6 +35,8 @@ let _telemetryInitialized = false;
 let _cleanupHandlers:   Array<() => unknown>  = [];
 /** The server's actual n_ctx once probed (issue #157); null before init() completes. */
 let _resolvedNCtx:       number | null        = null;
+/** issue #239: the live circuit breaker guarding the production model client; null before init(). */
+let _circuitBreakerHandle: GuardedProductionCallModel | null = null;
 
 // ---------------------------------------------------------------------------
 // n_ctx-derived tool-result budget (issue #157; conversation-total extension #197)
@@ -357,6 +361,59 @@ export function buildProductionCallModel(
 }
 
 // ---------------------------------------------------------------------------
+// Circuit breaker wiring (issue #239) — the model-client request path
+// ---------------------------------------------------------------------------
+
+export interface GuardedProductionCallModel {
+  callModel: (params: CallModelParams) => Promise<ModelResponse>;
+  getCircuitState: () => CircuitBreakerState;
+}
+
+/**
+ * Wraps buildProductionCallModel's raw HTTP client with the cross-call
+ * circuit breaker (services/model-circuit-breaker-client.ts): a deterministic
+ * 4xx fails fast to a degraded state instead of retrying, 429/5xx/network
+ * failures get bounded backoff before the same degraded state, and once open
+ * every further call is rejected locally (no network) until a single
+ * half-open probe is due. This is the actual cure for the 20h wedge (issue
+ * #239): the existing per-turn retry (issue #197) has no memory across
+ * turns, so a broken endpoint got retried from a clean slate on every new
+ * turn or goal-continuation re-invocation, forever. Exported standalone (not
+ * just inlined into _runInit) so it is testable against a mocked fetch
+ * without driving the whole init() singleton lifecycle.
+ *
+ * Always self-registers into the module-level _circuitBreakerHandle
+ * singleton before returning, regardless of what the caller does with the
+ * returned handle -- getCircuitBreakerState() (polled by the TUI's degraded
+ * banner) must reflect ANY guarded client this function ever builds, not
+ * only one a caller happened to also assign manually. A caller that builds
+ * its own throwaway guarded client (a unit test, say) still moves the
+ * singleton; _resetInitForTests() exists precisely to undo that between tests.
+ */
+export function buildGuardedProductionCallModel(
+  opts: ProductionCallModelOpts,
+  onStateChange?: (state: CircuitBreakerState) => void,
+): GuardedProductionCallModel {
+  const raw = buildProductionCallModel(opts);
+  const handle = wrapModelClientWithCircuitBreaker(raw, {
+    endpoint: opts.serverUrl,
+    onStateChange,
+  });
+  const guarded: GuardedProductionCallModel = { callModel: handle.callModel, getCircuitState: handle.getState };
+  _circuitBreakerHandle = guarded;
+  return guarded;
+}
+
+/**
+ * Returns the live circuit-breaker state for the production model client, or
+ * null before init() has wired one up. Polled by the TUI's degraded-state
+ * banner (status-bar.ts's DegradedBanner via repl.ts).
+ */
+export function getCircuitBreakerState(): CircuitBreakerState | null {
+  return _circuitBreakerHandle?.getCircuitState() ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Compaction wiring
 // ---------------------------------------------------------------------------
 
@@ -483,11 +540,14 @@ async function _runInit(opts: InitOpts): Promise<void> {
   }
   _resolvedNCtx = nCtx;
 
-  const productionCallModel    = buildProductionCallModel({ serverUrl, nCtx });
+  // issue #239: every production call goes through the circuit breaker, not
+  // just buildProductionCallModel's raw fetch -- see buildGuardedProductionCallModel's
+  // docstring for why this replaces the bare productionCallModel wiring.
+  _circuitBreakerHandle        = buildGuardedProductionCallModel({ serverUrl, nCtx });
   const productionMicrocompact = buildProductionMicrocompact();
 
   _loopDeps = createLoopDeps({
-    callModel:    productionCallModel,
+    callModel:    _circuitBreakerHandle.callModel,
     microcompact: productionMicrocompact,
     // autocompact is engine-store-bound (it rewrites the persisted conversation),
     // so QueryEngine builds it against its own message log; the LoopDeps default
@@ -535,6 +595,7 @@ export function _resetInitForTests(): void {
   _telemetryInitialized = false;
   _cleanupHandlers.length = 0;
   _resolvedNCtx          = null;
+  _circuitBreakerHandle  = null;
 }
 
 export function _getLoopDepsForTests(): LoopDeps | null {
