@@ -35,3 +35,6 @@ tools/.repo-guard-denylist
 baseline/fragments/external-refs-*.jsonl
 
 .remediation/
+
+# leak-gate runtime log artifact — never tracked (PR #293 fallback)
+tools/.leak-gate.log
