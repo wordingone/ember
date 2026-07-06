@@ -76,15 +76,17 @@ Similarly, condition counts other than `conditions-v1.md §4.3`'s are stale.
 
 ## 4. Lanes — exact in-flight state (UPDATE ON EVERY LANDING)
 
-| Lane | State (2026-07-05T08:19Z) | Next action (exact) |
+| Lane | State (2026-07-06T05:05Z) | Next action (exact) |
 |---|---|---|
-| **operator-seat** | #172 FIXED (PR #178, merge 33fb503); operator session #3 pending one cockpit swap; #165 input channel closed-verified; #154 open (standing practice). | Continue session cockpit swap delivery. |
-| **cockpit** | flame build (PR #170) live since 2026-07-05 21:28Z; swap delivering the #172 binary in flight. | Gate binary delivery + flamebuild stability surface. |
-| **issue hygiene** | #164/#168/#169 closed with verified dispositions; #176 filed (duplicate logo-homescreen.ts copies). | Sweep duplicates per #176 criteria. |
-| **W2 decontam** | DOWN (third memory-class death, silent); #174 forensics lane active (probe-174 receipts under goalforge scratch/w2-heldout-run/). | Diagnose memory-class failure; halt W2 until mechanism known. |
-| **research queue #155** | leg-1 attempt REJECTED (PR #177, fabricated receipt); re-dispatch pending under hardened telemetry rails (see #175 amendment). | Gate #175 hardening; queue re-dispatch. |
-| **board** | 29-GREEN / 2-AUDIT-OK / 1-AUDIT-INCIDENT / 6-RED per ember-totality-20260705T081932Z; the 15xxZ receipts are port-parity artifacts. | Audit the AUDIT-INCIDENT row; certify parity. |
-| **W2 G-arm** | #113 frozen spec filed; CPU dry-run lane pending dispatch. | Dispatch dry-run via builder; scope gate on cost before GPU leg. |
+| **constitution** | GOAL.md re-founded as the constitution (PR #212, merge 98093ae): C1-C4 completion, L1-L10 laws, co-equal pillars, nativization, /goal organ. docs/goal-clear-protocol.md (17 v1 conditions conserved) + docs/goal-mode-mechanism.md landed beside it. #206 corrective + #207 bottleneck ledger subordinated to it (earned-compute L6 wording). | Constitution is live; all lanes dispatch under it. |
+| **W2 decontam** | #185 closed (shard-repetition anomaly ruling; v1 any-match vindicated); #193 revised pre-registration: mid-corpus re-draw at index 3,400,000; #203 filed (v0-00025 hygiene). Cure PR #205 (bounded pool placement + insanity guard + test_pool_placement.py) reviewed line-by-line PASS; merge gated ONLY on the independent pytest receipt (owed). | Harvest test receipt -> merge #205 -> relaunch re-draw -> decontam receipt. |
+| **W2 G-arm** | #113 acceptance (a) MERGED (PR #209, 7e32941): capacity.py landed byte-parity (sha256 anchored in receipt), runner + 7 receipts, grow identity fp_diff=0.0, launch gates both directions, #108 derive+verify clean. | GPU leg (acceptance b) fires ONLY in a maintainer GPU window, after the decontam receipt, behind #121 W1. |
+| **operator-seat** | #197 FIXED (PR #213, merge e384497): conversation-total budget eviction, chars/token calibrated 2.7 vs measured, retry policy (4xx deterministic / bounded visible transient retries, Bun real error-code classifier), zombie-retry cleared, silent stream-truncation fixed (keep-alive removed + sawFinishReason). Live acceptance legs A/B/C on compiled binary. | Re-run totality board on the post-#213 build; audit the AUDIT-INCIDENT row. |
+| **body (P-C)** | #211 filed: ember-cli /goal organ — 1:1 port per docs/goal-mode-mechanism.md, then improve. #214 filed: flame-truth (real-state-driven observatory; current flame = named failure baseline). #213's budget/retry legs harden the long-goal-session substrate. | Dispatch #211 spec-to-build lane; #214 binding-table design after #211 status feed exists. |
+| **research queue #155** | Fused-Muon 1.3459x receipted (PR #188); full-scale sweep rides a GPU-residency window per #53 runbook, AFTER the W-arm chain (earned order, #207 rule 4). | Queue behind decontam -> #121 -> #113 GPU leg. |
+| **tree health** | #199 merged (f545129); typecheck 43 baseline (#189 open); untracked-deliverable hazard #210 filed (130 research-core .py only in local scratch — ember_resident_igrpo.py, growth_refutation tests, cbase grow runners). | Triage #210 (land-now / lane / obsolete-archive tiers). |
+| **board** | 29-GREEN / 2-AUDIT-OK / 1-AUDIT-INCIDENT / 6-RED per ember-totality-20260705T081932Z (pre-#213). | Re-run totality after #213 seat fix; audit the incident row. |
+
 
 ## 5. Pre-registrations and standing rulings that BIND future claims
 
