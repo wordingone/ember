@@ -1,0 +1,407 @@
+{
+  "ticket": "EXPC1-RANK-SWEEP",
+  "ts": "20260706T170642Z",
+  "mode": "dry-run",
+  "dry_run": true,
+  "issue": "#207",
+  "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+  "scope": "CPU plumbing proof only, toy H=64 shape, 2 warmup + 3 timed steps per arm -- proves projection math, momentum quantization round-trip, rho/identity_gap computation, kill-criteria + verdict logic, and receipt shape end-to-end. NOT the real EXP-C1 evidence; per-arm kill_criteria values below are plumbing artifacts of a toy 3-step run, not research-conclusive. The real run requires the live H=256 shape (LIVE_DIMS) with LIVE_WARMUP+LIVE_TIMED=25 steps, held for maintainer GPU authorization.",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "harness_sha": "2495eaa3838ca003ac3dfb43bccd2a61ffeb03e1344b324293053b1c96ca5ab4",
+  "flags": [
+    "NO torch.cuda.* call anywhere in this mode",
+    "self-contained toy MicroTransformer, no production-module coupling",
+    "control arm run first; per-step per-param full updates cached for every other arm's rho off-subspace diagnostic"
+  ],
+  "dims": {
+    "vocab": 64,
+    "d_model": 64,
+    "n_layers": 2,
+    "n_heads": 2,
+    "d_ff": 128,
+    "seq": 16,
+    "batch": 4
+  },
+  "warmup": 2,
+  "timed": 3,
+  "pre_registration": {
+    "hypotheses": {
+      "H1_identity": "relative Frobenius gap between polar(P.M_r) and P.polar(M_r) ('identity_gap') is ~0 at r=full (exact, orthogonal equivariance of the polar decomposition under a left orthogonal transform) and grows as r shrinks / as P misaligns with M's dominant subspace.",
+      "H2_quality": "some rank r < full preserves eval-loss within 2%% of the full-Muon control over a short matched training window.",
+      "H3_rho_monotone": "rho (fraction of the CONTROL arm's true update norm falling outside a rank-r random subspace) decreases as r grows -- a sanity check on the projection mechanism, not a kill criterion."
+    },
+    "arms": {
+      "full": "control: standard full-rank Muon, no projection. Also the r=full sweep point by the exact orthogonal-equivariance identity (verified numerically in --selftest) -- aliased to control's own result, no separate run.",
+      "r8": "rank-8 lifted-NS projected Muon momentum",
+      "r32": "rank-32 lifted-NS projected Muon momentum",
+      "r128": "rank-128 lifted-NS projected Muon momentum (clamped to a parameter's own out_dim when out_dim < 128, reported per-param)",
+      "B0_r32_int8": "rank-32 lifted-NS projected Muon momentum, with the (r x in_dim) momentum buffer STORED as symmetric per-tensor int8 + fp32 scale between steps (genuine storage dtype, not injected fp32 noise)"
+    },
+    "kill_criteria": {
+      "eval_loss_delta_pct_le_2": "abs(arm_eval_loss_last - control_eval_loss_last) / abs(control_eval_loss_last) * 100 <= 2.0 at the end of the TIMED window -- REJECT that rank if violated",
+      "rho_sustained_le_half": "fraction of TIMED-window steps with rho > 0.5 must be <= 0.5 -- REJECT ('projection is fiction') if violated"
+    },
+    "eval_protocol": "one frozen held-out batch (EVAL_SEED, generated once, never drawn into the training stream); eval_loss measured before any step (eval_loss_first) and after the full warmup+timed window (eval_loss_last); identical model init and identical training-batch sequence reused across every arm.",
+    "seeds": {
+      "model_seed": 42,
+      "batch_gen_seed": 20260706,
+      "eval_seed": 20260707,
+      "projection_seed": 20260708
+    },
+    "scope_disclosures": [
+      "projection subspace P is FIXED for the entire run (frozen at init) -- periodic subspace resampling / momentum rotation across subspace switches (the fuller production mechanism) is OUT OF SCOPE here; disclosed follow-on, not tested.",
+      "targets are synthetic random tokens independent of inputs -- adequate for a matched-condition optimizer-equivalence test, not a language-modeling claim.",
+      "toy model's head/embedding are UNTIED (production c03 ties them) -- immaterial since both are routed to AdamW (excluded from Muon) either way.",
+      "VRAM sizing on the (held) live GPU path uses nvidia-smi subprocess ONLY, never torch.cuda.mem_get_info -- WDDM over-reports ~17 GiB free on this box per the P3 ledger's Deviation 2 finding."
+    ]
+  },
+  "control": {
+    "arm": "full",
+    "is_control": true,
+    "rank_requested": "full",
+    "rank_effective_per_param": {
+      "blocks.0.qkv.weight": 192,
+      "blocks.0.attn_out.weight": 64,
+      "blocks.0.fc1.weight": 128,
+      "blocks.0.fc2.weight": 64,
+      "blocks.1.qkv.weight": 192,
+      "blocks.1.attn_out.weight": 64,
+      "blocks.1.fc1.weight": 128,
+      "blocks.1.fc2.weight": 64
+    },
+    "quantize_momentum": false,
+    "n_muon": 8,
+    "n_adamw": 13,
+    "train_loss_first": 4.350039,
+    "train_loss_last": 4.40838,
+    "train_loss_trajectory": [
+      4.350039,
+      4.281574,
+      4.323517,
+      4.21498,
+      4.40838
+    ],
+    "eval_loss_first": 4.243429,
+    "eval_loss_last": 4.236565,
+    "rho_per_step": [],
+    "identity_gap_per_step": [],
+    "rho_timed_window": [],
+    "identity_gap_timed_window": [],
+    "momentum_quant_check": null
+  },
+  "arms": {
+    "full": {
+      "arm": "full",
+      "is_control": true,
+      "rank_requested": "full",
+      "rank_effective_per_param": {
+        "blocks.0.qkv.weight": 192,
+        "blocks.0.attn_out.weight": 64,
+        "blocks.0.fc1.weight": 128,
+        "blocks.0.fc2.weight": 64,
+        "blocks.1.qkv.weight": 192,
+        "blocks.1.attn_out.weight": 64,
+        "blocks.1.fc1.weight": 128,
+        "blocks.1.fc2.weight": 64
+      },
+      "quantize_momentum": false,
+      "n_muon": 8,
+      "n_adamw": 13,
+      "train_loss_first": 4.350039,
+      "train_loss_last": 4.40838,
+      "train_loss_trajectory": [
+        4.350039,
+        4.281574,
+        4.323517,
+        4.21498,
+        4.40838
+      ],
+      "eval_loss_first": 4.243429,
+      "eval_loss_last": 4.236565,
+      "rho_per_step": [],
+      "identity_gap_per_step": [],
+      "rho_timed_window": [],
+      "identity_gap_timed_window": [],
+      "momentum_quant_check": null
+    },
+    "r8": {
+      "arm": "r8",
+      "is_control": false,
+      "rank_requested": 8,
+      "rank_effective_per_param": {
+        "blocks.0.qkv.weight": 8,
+        "blocks.0.attn_out.weight": 8,
+        "blocks.0.fc1.weight": 8,
+        "blocks.0.fc2.weight": 8,
+        "blocks.1.qkv.weight": 8,
+        "blocks.1.attn_out.weight": 8,
+        "blocks.1.fc1.weight": 8,
+        "blocks.1.fc2.weight": 8
+      },
+      "quantize_momentum": false,
+      "n_muon": 8,
+      "n_adamw": 13,
+      "train_loss_first": 4.350039,
+      "train_loss_last": 4.407481,
+      "train_loss_trajectory": [
+        4.350039,
+        4.283577,
+        4.329062,
+        4.223515,
+        4.407481
+      ],
+      "eval_loss_first": 4.243429,
+      "eval_loss_last": 4.241647,
+      "rho_per_step": [
+        0.955534,
+        0.956378,
+        0.956421,
+        0.954176,
+        0.953986
+      ],
+      "identity_gap_per_step": [
+        1.8e-05,
+        0.38507,
+        0.385873,
+        0.380537,
+        0.374087
+      ],
+      "rho_timed_window": [
+        0.956421,
+        0.954176,
+        0.953986
+      ],
+      "identity_gap_timed_window": [
+        0.385873,
+        0.380537,
+        0.374087
+      ],
+      "momentum_quant_check": null,
+      "kill_criteria": {
+        "eval_loss_delta_pct_le_2": {
+          "value_pct": 0.12,
+          "threshold_pct": 2.0,
+          "pass": true
+        },
+        "rho_sustained_le_half": {
+          "fraction_over_threshold": 1.0,
+          "rho_threshold": 0.5,
+          "sustained_fraction_max": 0.5,
+          "pass": false
+        }
+      },
+      "verdict": "EXPC1_r8_REJECT"
+    },
+    "r32": {
+      "arm": "r32",
+      "is_control": false,
+      "rank_requested": 32,
+      "rank_effective_per_param": {
+        "blocks.0.qkv.weight": 32,
+        "blocks.0.attn_out.weight": 32,
+        "blocks.0.fc1.weight": 32,
+        "blocks.0.fc2.weight": 32,
+        "blocks.1.qkv.weight": 32,
+        "blocks.1.attn_out.weight": 32,
+        "blocks.1.fc1.weight": 32,
+        "blocks.1.fc2.weight": 32
+      },
+      "quantize_momentum": false,
+      "n_muon": 8,
+      "n_adamw": 13,
+      "train_loss_first": 4.350039,
+      "train_loss_last": 4.407262,
+      "train_loss_trajectory": [
+        4.350039,
+        4.282814,
+        4.330727,
+        4.221617,
+        4.407262
+      ],
+      "eval_loss_first": 4.243429,
+      "eval_loss_last": 4.238972,
+      "rho_per_step": [
+        0.807609,
+        0.806612,
+        0.807217,
+        0.80603,
+        0.805611
+      ],
+      "identity_gap_per_step": [
+        8e-06,
+        0.417973,
+        0.423383,
+        0.422603,
+        0.42372
+      ],
+      "rho_timed_window": [
+        0.807217,
+        0.80603,
+        0.805611
+      ],
+      "identity_gap_timed_window": [
+        0.423383,
+        0.422603,
+        0.42372
+      ],
+      "momentum_quant_check": null,
+      "kill_criteria": {
+        "eval_loss_delta_pct_le_2": {
+          "value_pct": 0.0568,
+          "threshold_pct": 2.0,
+          "pass": true
+        },
+        "rho_sustained_le_half": {
+          "fraction_over_threshold": 1.0,
+          "rho_threshold": 0.5,
+          "sustained_fraction_max": 0.5,
+          "pass": false
+        }
+      },
+      "verdict": "EXPC1_r32_REJECT"
+    },
+    "r128": {
+      "arm": "r128",
+      "is_control": false,
+      "rank_requested": 128,
+      "rank_effective_per_param": {
+        "blocks.0.qkv.weight": 128,
+        "blocks.0.attn_out.weight": 64,
+        "blocks.0.fc1.weight": 128,
+        "blocks.0.fc2.weight": 64,
+        "blocks.1.qkv.weight": 128,
+        "blocks.1.attn_out.weight": 64,
+        "blocks.1.fc1.weight": 128,
+        "blocks.1.fc2.weight": 64
+      },
+      "quantize_momentum": false,
+      "n_muon": 8,
+      "n_adamw": 13,
+      "train_loss_first": 4.350039,
+      "train_loss_last": 4.407285,
+      "train_loss_trajectory": [
+        4.350039,
+        4.281597,
+        4.324004,
+        4.21553,
+        4.407285
+      ],
+      "eval_loss_first": 4.243429,
+      "eval_loss_last": 4.237362,
+      "rho_per_step": [
+        0.289434,
+        0.292848,
+        0.292332,
+        0.291734,
+        0.289699
+      ],
+      "identity_gap_per_step": [
+        6e-06,
+        0.388447,
+        0.408149,
+        0.414569,
+        0.420911
+      ],
+      "rho_timed_window": [
+        0.292332,
+        0.291734,
+        0.289699
+      ],
+      "identity_gap_timed_window": [
+        0.408149,
+        0.414569,
+        0.420911
+      ],
+      "momentum_quant_check": null,
+      "kill_criteria": {
+        "eval_loss_delta_pct_le_2": {
+          "value_pct": 0.0188,
+          "threshold_pct": 2.0,
+          "pass": true
+        },
+        "rho_sustained_le_half": {
+          "fraction_over_threshold": 0.0,
+          "rho_threshold": 0.5,
+          "sustained_fraction_max": 0.5,
+          "pass": true
+        }
+      },
+      "verdict": "EXPC1_r128_OK"
+    },
+    "B0_r32_int8": {
+      "arm": "B0_r32_int8",
+      "is_control": false,
+      "rank_requested": 32,
+      "rank_effective_per_param": {
+        "blocks.0.qkv.weight": 32,
+        "blocks.0.attn_out.weight": 32,
+        "blocks.0.fc1.weight": 32,
+        "blocks.0.fc2.weight": 32,
+        "blocks.1.qkv.weight": 32,
+        "blocks.1.attn_out.weight": 32,
+        "blocks.1.fc1.weight": 32,
+        "blocks.1.fc2.weight": 32
+      },
+      "quantize_momentum": true,
+      "n_muon": 8,
+      "n_adamw": 13,
+      "train_loss_first": 4.350039,
+      "train_loss_last": 4.407243,
+      "train_loss_trajectory": [
+        4.350039,
+        4.282814,
+        4.33073,
+        4.221617,
+        4.407243
+      ],
+      "eval_loss_first": 4.243429,
+      "eval_loss_last": 4.238968,
+      "rho_per_step": [
+        0.807609,
+        0.806612,
+        0.807217,
+        0.80603,
+        0.805611
+      ],
+      "identity_gap_per_step": [
+        8e-06,
+        0.418237,
+        0.423486,
+        0.422764,
+        0.423571
+      ],
+      "rho_timed_window": [
+        0.807217,
+        0.80603,
+        0.805611
+      ],
+      "identity_gap_timed_window": [
+        0.423486,
+        0.422764,
+        0.423571
+      ],
+      "momentum_quant_check": {
+        "sample_param": "blocks.0.qkv.weight",
+        "dtype_after_store": "torch.int8",
+        "scale_sample": 2.8803005931884285e-05,
+        "dequant_max_abs_error": 1.439478546672035e-05,
+        "roundtrip_is_lossy": true
+      },
+      "kill_criteria": {
+        "eval_loss_delta_pct_le_2": {
+          "value_pct": 0.0567,
+          "threshold_pct": 2.0,
+          "pass": true
+        },
+        "rho_sustained_le_half": {
+          "fraction_over_threshold": 1.0,
+          "rho_threshold": 0.5,
+          "sustained_fraction_max": 0.5,
+          "pass": false
+        }
+      },
+      "verdict": "EXPC1_B0_r32_int8_REJECT"
+    }
+  },
+  "note": "dry-run at toy H=64 scale over 3 timed steps -- per-arm kill_criteria values are NOT research-conclusive; they demonstrate the harness computes and gates on them correctly, nothing more."
+}
