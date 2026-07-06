@@ -47,7 +47,7 @@ import {
   SpinnerAnimationRow,
   ANIMATION_LOOP_MS,
 }                                        from "../components/spinner.ts";
-import { QueryEngine, type QueryEvent } from "../core/query-engine.ts";
+import { QueryEngine, type QueryEvent, type ResultEvent } from "../core/query-engine.ts";
 import type { Tool }                    from "../core/tool-interface.ts";
 import {
   getState,
@@ -338,6 +338,73 @@ export function renderMsgDispatch(
     default:
       return React.createElement(Text, { key: msg.id }, String(msg["content"] ?? ""));
   }
+}
+
+// ---------------------------------------------------------------------------
+// applyResultEvent — issue #157/#49: the submit loop's for-await terminates on
+// every "result" event by just breaking, discarding whatever the event carried.
+// On the error/max_turns paths that's the ONLY place the loop's synthesized
+// closing text (or the real transport error) ever lands -- query-engine.ts
+// never emits a matching "assistant" event for those subtypes. Dropping the
+// result event silently left the empty streaming placeholder on screen
+// forever: exactly the "spinner alive, no answer" symptom from the operator-
+// session receipts. This is a pure decision function so it's unit-testable
+// without mounting the REPL; the submit loop below calls it on every result.
+// ---------------------------------------------------------------------------
+
+function extractFinalText(finalMessage: ModelResponse | undefined): string {
+  if (!finalMessage || !Array.isArray(finalMessage.content)) return "";
+  return (finalMessage.content as Array<{ type?: string; text?: string }>)
+    .filter((b) => b && b.type === "text")
+    .map((b) => b.text ?? "")
+    .join("");
+}
+
+export function applyResultEvent(
+  event: ResultEvent,
+  messages: SessionMessage[],
+  pendingId: string,
+): SessionMessage[] {
+  // User-initiated cancel: intentional, not a failure -- no error surface.
+  if (event.subtype === "abort") return messages;
+
+  if (event.subtype === "error") {
+    const errText =
+      event.errorMessage && event.errorMessage.length > 0
+        ? event.errorMessage
+        : "An error occurred while processing your request. Unable to complete the operation.";
+    return [
+      ...messages.filter((m) => m.id !== pendingId),
+      { id: crypto.randomUUID(), type: "error", content: errText },
+    ];
+  }
+
+  const finalMessage = (event as { finalMessage?: ModelResponse }).finalMessage;
+
+  if (event.subtype === "max_turns") {
+    // The loop's synthesized closing text (synthesizeFinalMessage in
+    // query-engine.ts) never arrives via a streaming "assistant" event for
+    // this subtype -- surface it here or the placeholder stays empty forever.
+    const text = extractFinalText(finalMessage);
+    return [
+      ...messages.filter((m) => m.id !== pendingId),
+      {
+        id: crypto.randomUUID(),
+        type: "error",
+        content: text || "Reached the turn limit without a final answer.",
+      },
+    ];
+  }
+
+  // success / error_max_tokens: content already arrived via the preceding
+  // "assistant" event -- this seam only threads stop_reason/usage metadata
+  // onto the pending message, never rewriting content that's already there.
+  if (!finalMessage) return messages;
+  return messages.map((m) =>
+    m.id === pendingId
+      ? { ...m, stop_reason: finalMessage.stop_reason, usage: finalMessage.usage }
+      : m,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -669,6 +736,9 @@ export function ReplScreen({
           getAppState:        () => ({ cwd } as Record<string, unknown>),
           setAppState:        async () => {},
           readFileCache:      new Map<string, unknown>(),
+          // #157: size tool-result truncation off the server's real n_ctx
+          // (siMod probed it during init via /props), not a guessed default.
+          toolResultBudget:   siMod.getToolResultBudget(),
           customSystemPrompt: systemPromptRef.current,
           userSpecifiedModel: config.model,
         };
@@ -724,6 +794,9 @@ export function ReplScreen({
             },
           ]);
         } else if (event.type === "result") {
+          // #157/#49: never discard the result event -- error/max_turns carry
+          // the ONLY closing text the loop will ever produce for that turn.
+          setMessages((prev) => applyResultEvent(event, prev, assistantId));
           break;
         }
       }

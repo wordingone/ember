@@ -123,6 +123,64 @@ function synthesizeFinalMessage(
 }
 
 // ---------------------------------------------------------------------------
+// Tool-result context budgeting (issue #157)
+//
+// A single oversized tool result (e.g. Read on a large file) can make the
+// follow-up model call's prefill exceed n_ctx. Depending on the server, that
+// either errors (handled fine by the try/catch around callModel below) or
+// silently wedges: the connection stays open, no tokens generate, and the
+// loop sits in the caller's spinner indefinitely (receipt:
+// receipts/operator-sessions/session-20260705T234943Z.jsonl -- a 46,634-byte
+// GOAL.md read into an 8192-token n_ctx slot, GPU idle, spinner alive >4min).
+// This truncates every tool_result content string to a bounded budget BEFORE
+// it enters the conversation -- the single seam all tools funnel through, so
+// Read/Bash/PowerShell/Grep/Glob (and any future tool) are covered uniformly
+// with no per-tool patching. This is the primary cure; session-init.ts's
+// proactive prefill check (FM_91 checkPrefillOverflow) is the backstop for
+// whatever still slips through (cumulative multi-turn history, etc).
+// ---------------------------------------------------------------------------
+
+/** No tokenizer available at this layer; matches the estimate FM_91 already uses. */
+const CHARS_PER_TOKEN_ESTIMATE = 3.5;
+
+/**
+ * Default per-tool-result token budget when the caller supplies none via
+ * ToolUseContext.toolResultBudget. Sized conservatively against the smallest
+ * observed production n_ctx (8192 tokens/slot) -- leaves headroom for the
+ * system prompt, conversation history, tool schemas, and generation within
+ * one slot. session-init.ts derives a sharper value from the server's actual
+ * /props n_ctx and threads it through toolResultBudget when available.
+ */
+const DEFAULT_TOOL_RESULT_MAX_TOKENS = 2000;
+const DEFAULT_TOOL_RESULT_MAX_CHARS = Math.floor(
+  DEFAULT_TOOL_RESULT_MAX_TOKENS * CHARS_PER_TOKEN_ESTIMATE,
+);
+
+function getToolResultMaxChars(ctx: ToolUseContext): number {
+  const override = process.env["EMBER_TOOL_RESULT_MAX_CHARS"];
+  if (override) {
+    const n = parseInt(override, 10);
+    if (!isNaN(n) && n > 0) return n;
+  }
+  return ctx.toolResultBudget?.maxChars ?? DEFAULT_TOOL_RESULT_MAX_CHARS;
+}
+
+/**
+ * Truncates a tool_result content string to fit the budget, keeping a head
+ * and tail slice with an explicit marker in between -- never a silent drop,
+ * and re-reading with offset/limit remains possible for text-file results.
+ */
+function truncateToolResultContent(content: string, maxChars: number): string {
+  if (content.length <= maxChars) return content;
+  const headChars = Math.floor(maxChars * 0.6);
+  const tailChars = Math.max(maxChars - headChars, 0);
+  const head = content.slice(0, headChars);
+  const tail = tailChars > 0 ? content.slice(content.length - tailChars) : "";
+  const omitted = content.length - head.length - tail.length;
+  return `${head}\n\n[...truncated ${omitted} chars of ${content.length} -- re-read with offset/limit for more...]\n\n${tail}`;
+}
+
+// ---------------------------------------------------------------------------
 // Tool schema conversion
 // ---------------------------------------------------------------------------
 
@@ -378,13 +436,17 @@ export async function* query(
               undefined,
             );
             const blockParam = tool.mapToolResultToToolResultBlockParam(result.data, block.id);
+            const rawContent =
+              typeof blockParam.content === "string"
+                ? blockParam.content
+                : JSON.stringify(blockParam.content);
             toolResultContent.push({
               type: "tool_result",
               tool_use_id: block.id,
-              content:
-                typeof blockParam.content === "string"
-                  ? blockParam.content
-                  : JSON.stringify(blockParam.content),
+              content: truncateToolResultContent(
+                rawContent,
+                getToolResultMaxChars(params.toolUseContext),
+              ),
               is_error: blockParam.is_error,
             });
             break;
@@ -398,10 +460,14 @@ export async function* query(
               retries += 1;
               continue;
             }
+            const rawErrContent = err instanceof Error ? err.message : String(err);
             toolResultContent.push({
               type: "tool_result",
               tool_use_id: block.id,
-              content: err instanceof Error ? err.message : String(err),
+              content: truncateToolResultContent(
+                rawErrContent,
+                getToolResultMaxChars(params.toolUseContext),
+              ),
               is_error: true,
             });
             break;
@@ -465,6 +531,8 @@ export interface QueryEngineConfig {
   setAppState: (updater: (prev: unknown) => unknown) => void | Promise<void>;
   initialMessages?: unknown[];
   readFileCache?: Map<string, unknown>;
+  /** Threaded to every ToolUseContext this engine builds (issue #157 tool-output truncation). */
+  toolResultBudget?: { maxChars: number };
   customSystemPrompt?: string;
   appendSystemPrompt?: string;
   userSpecifiedModel?: string;
@@ -659,6 +727,7 @@ export class QueryEngine {
         void this.config.setAppState(updater);
       },
       readFileState: this.config.readFileCache,
+      toolResultBudget: this.config.toolResultBudget,
       messages: [...this.messages],
       appendSystemMessage: () => {},
       nestedMemoryAttachmentTriggers: new Set<string>(),

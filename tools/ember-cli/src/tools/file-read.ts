@@ -15,7 +15,6 @@ import { buildTool, type ToolUseContext } from "../core/tool-interface.ts";
 const DEFAULT_MAX_SIZE_BYTES = 256 * 1024;
 const DEFAULT_MAX_TOKENS = 25_000;
 const CHARS_PER_TOKEN = 4;
-const FILE_UNCHANGED_STUB_TYPE = "unchanged";
 
 const BLOCKED_DEVICE_PATHS = new Set([
   "/dev/zero", "/dev/random", "/dev/urandom", "/dev/full",
@@ -174,7 +173,6 @@ function truncateToTokenCap(content: string, maxTokens: number): string {
 
 export type ReadOutput =
   | { type: "error"; error: string }
-  | { type: typeof FILE_UNCHANGED_STUB_TYPE; filePath: string }
   | {
       type: "image";
       content: string;
@@ -234,13 +232,18 @@ async function readFile_(
   }
 
   const mtimeMs = fileStat.mtimeMs;
-  const cached = ctx.readFileState?.get(resolvedPath) as
-    | { mtime: number; content: string }
-    | undefined;
-  if (cached && cached.mtime === mtimeMs) {
-    return { type: FILE_UNCHANGED_STUB_TYPE, filePath: resolvedPath };
-  }
 
+  // issue #192: this used to short-circuit here and return a lightweight
+  // "unchanged since last read" stub when ctx.readFileState (a session-wide,
+  // cross-turn cache) had a matching mtime -- but that cache tracks nothing
+  // about whether the CURRENT model context actually still carries the
+  // content (a turn can be abandoned, compacted away, or simply never
+  // started). The stub then blinds the model to a file it's asking about,
+  // with no way to recover other than a doomed retry loop (live repro:
+  // receipts/operator-sessions/session-20260705T234943Z.jsonl). The
+  // read-state cache below is still populated/consulted by file-edit.ts and
+  // file-write.ts for external-modification detection -- that use is
+  // unaffected. Read itself now always returns real content.
   const buf = await readFile(resolvedPath);
   const rawContent = buf.toString("utf-8");
   ctx.readFileState?.set(resolvedPath, { mtime: mtimeMs, content: rawContent });
@@ -345,7 +348,6 @@ Use the Read tool to read files from the filesystem. Always use absolute paths.
 - Image files (.png, .jpg, .jpeg): returned as base64-encoded content with dimensions.
 - PDF files (.pdf): requires \`pages\` parameter for files with >10 pages.
 - Jupyter notebooks (.ipynb): cells returned as structured list.
-- Files read once are cached; re-reading an unchanged file returns a lightweight stub.
 - The \`limit\` (default 2000) and \`offset\` (default 0) parameters control line range.`,
 
     call: async (args: ReadInput, ctx: ToolUseContext) => {
@@ -360,13 +362,6 @@ Use the Read tool to read files from the filesystem. Always use absolute paths.
           tool_use_id: toolUseId,
           content: content.error,
           is_error: true,
-        };
-      }
-      if (content.type === FILE_UNCHANGED_STUB_TYPE) {
-        return {
-          type: "tool_result" as const,
-          tool_use_id: toolUseId,
-          content: `File unchanged since last read: ${content.filePath}`,
         };
       }
       return {
