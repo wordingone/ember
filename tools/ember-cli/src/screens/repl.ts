@@ -179,6 +179,34 @@ export function cycleReplPermissionMode(current: ReplPermissionMode): ReplPermis
   return next ?? "bypass";
 }
 
+/**
+ * B7 item 2 ("kill the void", operator regrade 2026-07-03): bottom-anchors (flex-end) a
+ * sparse/in-session transcript's content toward the prompt, unchanged from the existing
+ * behavior. B7 item 2 regrade ("welcome void dominance", 2026-07-03): a FRESH BOOT (welcome
+ * panel only, no conversation entry yet) instead top-anchors (flex-start) -- this flips the
+ * moment a real turn lands, and is one-way for the session: no scenario removes a landed entry.
+ */
+export function transcriptJustifyContent(messages: SessionMessage[]): "flex-start" | "flex-end" {
+  const isWelcomeOnly = messages.length > 0 && messages.every((m) => m.type === "welcome");
+  return isWelcomeOnly ? "flex-start" : "flex-end";
+}
+
+/**
+ * issue #44 item (c), "document-flow" (operator's live-pixel verdict, 2026-07-04) -- REVERTED by
+ * issue #114's final leg (operator's live DESKTOP-scale verdict, 2026-07-05). The document-flow
+ * fix set flexGrow:0 for welcome-only sessions on the theory that the field exemplar "never
+ * stretches at session start" -- a real side-by-side desktop capture (half-split 1720x1440, the
+ * exemplar visible in the same frame) disproved that: the exemplar pins prompt+status to the
+ * WINDOW BOTTOM even when almost no content exists above. flexGrow:0 instead left input+status
+ * floating directly under a content-sized panel with ~85% of the terminal below the status bar
+ * completely unclaimed. flexGrow is therefore always 1 -- input+status pin to the true bottom
+ * rows in every state, welcome-only included; transcriptJustifyContent (unchanged) still controls
+ * where content sits inside that grown box.
+ */
+export function transcriptFlexGrow(_messages: SessionMessage[]): 0 | 1 {
+  return 1;
+}
+
 export function isThinkingChunk(chunk: { stop_reason: string | null }): boolean {
   return chunk.stop_reason === null;
 }
@@ -1081,15 +1109,19 @@ export function ReplScreen({
     }
 
     // Backspace / delete
-    if (key.backspace || key.delete) {
-      inputActions.dropLastChar();
+    if (key.backspace) {
+      inputActions.deleteBackward();
+      return;
+    }
+    if (key.delete) {
+      inputActions.deleteForward();
       return;
     }
 
     // Regular character input — clears ghost suggestion on first keystroke.
     if (input && !key.ctrl && !key.meta && !key.alt) {
       if (currentSuggestion) setCurrentSuggestion(null);
-      inputActions.appendText(input);
+      inputActions.insertText(input);
     }
   });
 
@@ -1104,7 +1136,7 @@ export function ReplScreen({
     // Transcript
     React.createElement(
       Box,
-      { key: "transcript", flexDirection: "column", flexGrow: 1, overflow: "hidden" },
+      { key: "transcript", flexDirection: "column", flexGrow: transcriptFlexGrow(messages), overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
       transcript,
     ),
 

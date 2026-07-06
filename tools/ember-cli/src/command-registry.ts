@@ -6,6 +6,7 @@ import { createWatchCommand } from './commands/watch.ts';
 import { createFinetuneCommand } from './commands/finetune.ts';
 import { createModelCommand } from './commands/model.ts';
 import { createGoalCommand } from './commands/goal.ts';
+import { createWorldStateCommand } from './commands/world-state.ts';
 import { getModeHistory } from './state/app-state.ts';
 
 export type { RegistryCommand };
@@ -46,6 +47,7 @@ const defaultDeps: CommandRegistryDeps = {
     createFinetuneCommand(),
     createModelCommand(),
     createGoalCommand(),
+    createWorldStateCommand(),
   ],
   getSkillDirCommands: async () => [],
   getPluginCommands: async () => [],
