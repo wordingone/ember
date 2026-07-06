@@ -1,0 +1,74 @@
+{
+  "family": "growth-refutation + grow runners",
+  "ruling": "issue #210 Tier 1",
+  "stage_id": "dryrun-20260704T211712Z",
+  "scope_note": "Original triage scoped 5 files (growth_refutation/run_growth_refutation.py, growth_refutation/test_net2net_instrumentation.py, cbase_grow_rung.py, cbase_grow_live.py, cbase_grow_dryrun.py). run_growth_refutation.py imports 21 named symbols from accumulation_law.run_accumulation; that import-closure sibling and its own test file were out of the original boundary, so scope was expanded to 7 files per follow-up ruling. cbase_grow_rung.py needed two prerequisite PRs before it could pass its own --selftest: #218 (timeshare_pretrain.py stage sync) and #220 (v0_pretrain_launch_gate.py hand-curated compute-fit patch), both merged before this landing.",
+  "files": [
+    {
+      "path": "scripts/growth_refutation/run_growth_refutation.py",
+      "sha256": "e36e5117ae7cda92706f81cd8409edb5e361905c62843d9d4597e42d909358a9",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/growth_refutation/test_net2net_instrumentation.py",
+      "sha256": "00fb3768add9199aa3b3d79bfaf77a0e6577c3a1bd9611a898bad315039f4513",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/cbase_grow_rung.py",
+      "sha256": "0da21be4b65f3dface349b11f7b2915ac580b41dd45eb4c3ed228b866f41fc98",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/cbase_grow_live.py",
+      "stage_sha256": "f2fadfb622263ed1bbf70609ec4a95c27385d14b85f7b45ed0568d9630dfbf1a",
+      "landed_sha256": "62f9abae508d6159bb7ee0baf13f04880bb7d92e5f7681d7cb76d21389581d5f",
+      "provenance": "disclosed redaction",
+      "disclosed_redaction": "docstring line 5 de-localized; only change. Original text cited an absolute local drive path (a sibling working tree's path). Replaced with 'the goal-forge working tree' while keeping the repo-relative spec pointer (scripts/ember_totality/test_c_grow.py) intact as portable documentation. Verified via diff: docstring line 5 is the ONLY line that differs between stage and landed copy; post-edit grep for drive-letter path pattern on the landed file returns zero hits."
+    },
+    {
+      "path": "scripts/cbase_grow_dryrun.py",
+      "sha256": "50786bf6669f6caa4fe8646f553d4e47e2aff22967bec62fe92ff50b8c7fbb9e",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/accumulation_law/run_accumulation.py",
+      "sha256": "8b79160a12b2399f77b88fa52ffa220a88af2b2e4e41107ee2b75485190bbf61",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/accumulation_law/test_accumulation_verify.py",
+      "sha256": "0c0ca0c0dbdb42fce364f5959a3dd551464d49f5212474f4824547bd790fcc9b",
+      "provenance": "byte-identical, unmodified"
+    }
+  ],
+  "selftests": {
+    "growth_refutation/run_growth_refutation.py --mode mock": {
+      "landed_result": "SMOKE STATUS: MECHANICS PASS (true default, rounds=12; 2 growth events in arm G at rounds [5, 10])",
+      "note": "First attempt used explicit --rounds 3 and --rounds 8 overrides, which crashed on 'assert g_events >= 2, MECHANICS FAIL: expected >= 2 growth events in G, got 0/1' -- confirmed via reading main() that --seeds is consumed only in gpu mode and the mock-mode growth-trigger schedule needs the file's own built-in default round count (N_ROUNDS_MOCK) to produce 2 growth events. This was a test-invocation error on my part (under-specified rounds), not a landed defect: re-run with no --rounds override (the file's true default) passes cleanly. Real GPU/CPU sweep modes (--mode cpu / --mode gpu) not exercised (no GPU experiment budget in a landing-lane parity check); mock mode is the file's own CPU-safe mechanics-proof path."
+    },
+    "growth_refutation/test_net2net_instrumentation.py (direct run, CPU-safe default)": {
+      "landed_result": "ALL CPU UNIT TESTS PASSED (use --gpu for real-model validation)",
+      "note": "main()'s run_gpu flag defaults False ('--gpu' in sys.argv); GPU validation path not exercised, matching the file's own documented CPU/GPU split."
+    },
+    "cbase_grow_rung.py --selftest": {
+      "landed_result": "CBASE_GROW_RUNG_SELFTEST_PASS (D1 formula, dedup logic, receipt schema, KILL/BLOCKED receipt shapes all pass)",
+      "note": "Initially failed with AttributeError: module 'v0_pretrain_launch_gate' has no attribute 'MICRO_FIT_CEILING_FLOPS' against the pre-#220 landed gate. Passes cleanly in-tree now that #220 (v0_pretrain_launch_gate.py compute-fit patch) is merged onto master and this worktree is rebased onto it."
+    },
+    "cbase_grow_live.py": {
+      "landed_result": "not pass/fail-shaped -- no --selftest flag. Only --smoke/--live, both of which run the SAME real governed net2net warm-start training loop (timeshare_pretrain.run_v0_segment) end to end, producing real checkpoints/receipts under models/cbase-grow-live and receipts/cbase-grow-live. This is a genuine GPU/CPU training job, not a lightweight parity check, and was not executed as part of this landing.",
+      "note": "AST-parsed and module-level-imported clean (no syntax/import errors). --help output inspected and matches the docstring's documented pipeline."
+    },
+    "cbase_grow_dryrun.py": {
+      "landed_result": "not pass/fail-shaped for this environment -- no --selftest flag. Its own docstring states it is CPU + float32, no GPU touched (a shape-growability proof), but it requires the real owned seed checkpoint at models/cbase-smoke-run/checkpoints/step-00000610, which does not exist in this worktree (models/ directory itself is absent -- confirmed via find). Cannot be run to completion here.",
+      "note": "AST-parsed and module-level-imported clean (no syntax/import errors, SEED_CKPT_DEFAULT resolves correctly to the expected path); --help output inspected and matches the docstring."
+    },
+    "accumulation_law/run_accumulation.py --mode mock": {
+      "landed_result": "VERDICT: INCONCLUSIVE:insufficient_rounds (default rounds=3; need >=4 for compounding verdict per the runner's own printed message)",
+      "note": "Completes without error and writes a valid receipt; INCONCLUSIVE at the default 3-round mock invocation is the file's own documented/expected outcome (mock mode is a synthetic gate/curriculum/verdict logic proof, not intended to render a real verdict at its default round count), not a bug. --mode smoke / --mode gpu not exercised."
+    },
+    "accumulation_law/test_accumulation_verify.py (direct run)": {
+      "landed_result": "ALL TESTS PASSED (strip_code_fences, extract_func_name, execution_verify plain/fenced/wrong-name-extracted, canned_verified_count)"
+    }
+  }
+}
