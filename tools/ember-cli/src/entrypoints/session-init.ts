@@ -14,6 +14,8 @@ import {
   buildOpenAIRequest,
   createSseParserContext,
   processSseLine,
+  fetchNCtx,
+  checkPrefillOverflow,
 } from "../services/api-openai-adapter.ts";
 import { createMicrocompact } from "../services/compaction.ts";
 
@@ -26,6 +28,50 @@ let _initPromise:        Promise<void> | null = null;
 let _loopDeps:           LoopDeps | null      = null;
 let _telemetryInitialized = false;
 let _cleanupHandlers:   Array<() => unknown>  = [];
+/** The server's actual n_ctx once probed (issue #157); null before init() completes. */
+let _resolvedNCtx:       number | null        = null;
+
+// ---------------------------------------------------------------------------
+// n_ctx-derived tool-result budget (issue #157)
+// ---------------------------------------------------------------------------
+
+/** No tokenizer available at this layer; matches the estimate query-engine.ts uses. */
+const CHARS_PER_TOKEN_ESTIMATE = 3.5;
+
+/** Fraction of n_ctx reserved for a single tool result, leaving headroom for
+ *  the system prompt, conversation history, tool schemas, and generation. */
+const TOOL_RESULT_BUDGET_FRACTION = 0.25;
+
+/**
+ * Minimum generation headroom (tokens) the overflow guard reserves below
+ * (issue #157 Leg 2). query-engine.ts's default request is an UNCAPPED
+ * maxTokens=8192 ("no explicit limit set" -- not "we expect 8192 tokens of
+ * output"); llama-server treats max_tokens as a ceiling, not a reservation,
+ * and simply stops generation early when less room remains. Reserving the
+ * FULL requested maxTokens here would false-positive on every short exchange
+ * once nCtx <= ~8192 (verified live: a trivial one-line prompt tripped
+ * "estimatedPrefill=22 + maxTokens=8192 > nCtx*0.95=7782.4" against the
+ * throwaway CPU test server at ctx-size 8192, the exact live-cockpit config).
+ * The real danger this guard exists for is the PROMPT ALONE not fitting
+ * (that's what silently wedges the server) -- so cap the reserved amount at
+ * this floor, never the raw request, and let an explicit smaller override
+ * still be honored if the caller asked for less than the floor.
+ */
+const MIN_GENERATION_RESERVE_TOKENS = 512;
+
+/** Returns the server's actual n_ctx as resolved by init()'s /props probe, or
+ *  null if init() has not completed (or the probe failed and no fallback ran yet). */
+export function getResolvedNCtx(): number | null {
+  return _resolvedNCtx;
+}
+
+/** Derives the per-tool-result char budget from the resolved n_ctx (issue #157
+ *  Leg 1's context-budgeting seam in query-engine.ts consumes this). Falls
+ *  back to a conservative 4096 assumption when init() has not run yet. */
+export function getToolResultBudget(): { maxChars: number } {
+  const nCtx = _resolvedNCtx ?? 4096;
+  return { maxChars: Math.floor(nCtx * TOOL_RESULT_BUDGET_FRACTION * CHARS_PER_TOKEN_ESTIMATE) };
+}
 
 // ---------------------------------------------------------------------------
 // Cleanup registry
@@ -73,6 +119,7 @@ export function buildProductionCallModel(
 ): (params: CallModelParams) => Promise<ModelResponse> {
   const serverUrl  = opts.serverUrl;
   const timeoutMs  = opts.timeoutMs ?? 30 * 60 * 1000;
+  const nCtx       = opts.nCtx ?? 4096;
 
   return async function callModel(params: CallModelParams): Promise<ModelResponse> {
     const {
@@ -102,6 +149,24 @@ export function buildProductionCallModel(
       tools:     (assembled["tools"]    as any[] | undefined) ?? undefined,
       maxTokens: assembled["max_tokens"] as number,
     });
+
+    // issue #157 Leg 2 (backstop): query-engine.ts's tool-result truncation
+    // (Leg 1) is the primary cure for oversized prefill, but cumulative
+    // multi-turn history or a tool exempted from truncation can still
+    // overflow. Rather than send an oversized request and risk the server
+    // silently wedging (receipt: receipts/operator-sessions/
+    // session-20260705T234943Z.jsonl -- GPU idle, spinner alive >4min after a
+    // 46,634-byte tool result vs n_ctx 8192), refuse it here, synchronously,
+    // before any network call. This throw propagates out of callModel and is
+    // already caught by query-engine.ts's try/catch around deps.callModel(),
+    // which synthesizes a proper result/error event -- never a hang.
+    // checkPrefillOverflow/fetchNCtx were built for this (FM_91, AC3/AC4) but
+    // were never actually wired to the production request path until now.
+    const estimatedPrefill = Math.ceil(
+      (JSON.stringify(openAiReq.messages).length + systemPrompt.length) / CHARS_PER_TOKEN_ESTIMATE,
+    );
+    const reservedGenerationTokens = Math.min(maxTokens, MIN_GENERATION_RESERVE_TOKENS);
+    checkPrefillOverflow(estimatedPrefill, reservedGenerationTokens, nCtx);
 
     const reqBody: Record<string, unknown> = { ...openAiReq };
     reqBody["cache_prompt"] = false;
@@ -310,7 +375,7 @@ async function _runInit(opts: InitOpts): Promise<void> {
   const serverUrl = opts.serverUrl
     ?? process.env["EMBER_MODEL_URL"]
     ?? "http://localhost:8081";
-  const nCtx = opts.nCtx ?? 4096;
+  const nCtxFallback = opts.nCtx ?? 4096;
 
   await _loadConfig();
   _applyTlsCerts();
@@ -337,6 +402,26 @@ async function _runInit(opts: InitOpts): Promise<void> {
 
   await _ensureScratchpad().catch(() => {});
   Promise.all([analyticsP, ideP]);
+
+  // issue #157: resolve the server's ACTUAL n_ctx so the proactive overflow
+  // guard and the tool-result truncation budget are sized against the real
+  // running server, not a guessed default. process-entry.ts's -p/TUI path
+  // already probes this itself (detectNCtx) and passes it in via opts.nCtx --
+  // trust that rather than re-probing (avoids a redundant /props round trip).
+  // Callers that DON'T pre-detect (e.g. mcp-server-entry.ts calls init() with
+  // no options at all) get it here instead, via FM_91's fetchNCtx -- built for
+  // exactly this, previously never called from anywhere. Best-effort: falls
+  // back to the default when the probe fails (server not up yet, offline test
+  // run, etc) -- never blocks init on a broken probe.
+  let nCtx = nCtxFallback;
+  if (opts.nCtx === undefined) {
+    try {
+      nCtx = await fetchNCtx(serverUrl);
+    } catch {
+      nCtx = nCtxFallback;
+    }
+  }
+  _resolvedNCtx = nCtx;
 
   const productionCallModel    = buildProductionCallModel({ serverUrl, nCtx });
   const productionMicrocompact = buildProductionMicrocompact();
@@ -389,6 +474,7 @@ export function _resetInitForTests(): void {
   _loopDeps             = null;
   _telemetryInitialized = false;
   _cleanupHandlers.length = 0;
+  _resolvedNCtx          = null;
 }
 
 export function _getLoopDepsForTests(): LoopDeps | null {
