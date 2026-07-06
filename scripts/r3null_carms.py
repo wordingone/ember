@@ -159,7 +159,7 @@ def selftest() -> None:
 
     max_diff = (c1_losses_t - c2_losses_t).abs().max().item()
     print(f"  [OK] Planted equality PASS: C1 == C2 traces when both fresh (max diff={max_diff:.2e})")
-    print(f"CBASE_GROW_RUNG_SELFTEST_PASS")
+    print(f"R3NULL_CARMS_SELFTEST_PASS")
     return
 
 
@@ -181,17 +181,17 @@ def run_live(args) -> int:
 
     print(f"[r3null_carms] live: verifying parent checkpoint shas...", flush=True)
     actual_model_sha = _sha256_file(str(model_pt))
-    if actual_model_sha != PARENT_MODEL_SHA:
+    if actual_model_sha != args.parent_model_sha:
         raise SystemExit(
             f"parent model.pt sha mismatch:\n"
-            f"  expected: {PARENT_MODEL_SHA}\n"
+            f"  expected (arg): {args.parent_model_sha}\n"
             f"  actual: {actual_model_sha}")
 
     actual_opt_sha = _sha256_file(str(optimizer_pt))
-    if actual_opt_sha != PARENT_OPTIMIZER_SHA:
+    if actual_opt_sha != args.parent_optimizer_sha:
         raise SystemExit(
             f"parent optimizer.pt sha mismatch:\n"
-            f"  expected: {PARENT_OPTIMIZER_SHA}\n"
+            f"  expected (arg): {args.parent_optimizer_sha}\n"
             f"  actual: {actual_opt_sha}")
 
     print(f"[r3null_carms] parent checkpoint shas verified ✓", flush=True)
@@ -217,7 +217,7 @@ def run_live(args) -> int:
     c1_dir = out_root / "c1"
     c1_receipt = ts.run_v0_segment(
         str(c1_dir), cfg, n_steps=C_ARM_STEPS, total_steps=TOTAL_STEPS, live=True,
-        real_arch=True, device="cuda", resume_ckpt_dir=str(parent_path),
+        real_arch=True, device=args.device, resume_ckpt_dir=str(parent_path),
         shard_dir=args.shard_dir, checkpoint_every=C_ARM_STEPS,
         segment_id="r3null-c1-36steps",
         intermediate_override=None,  # use loaded ff width
@@ -234,7 +234,7 @@ def run_live(args) -> int:
     c2_dir = out_root / "c2"
     c2_receipt = ts.run_v0_segment(
         str(c2_dir), cfg, n_steps=C_ARM_STEPS, total_steps=TOTAL_STEPS, live=True,
-        real_arch=True, device="cuda", resume_ckpt_dir=str(parent_path),
+        real_arch=True, device=args.device, resume_ckpt_dir=str(parent_path),
         shard_dir=args.shard_dir, checkpoint_every=C_ARM_STEPS,
         segment_id="r3null-c2-36steps",
         intermediate_override=None,  # use loaded ff width
@@ -294,8 +294,8 @@ def run_live(args) -> int:
             "interpretation": "C1−C2 = value of parent-optimizer warmth (expected small, |Δloss|<0.01 per K2 equivalence)",
         },
         "note": "G receipt (G−C2, G−C1 comparisons) is produced separately by the board runner; C-arms reported here are the input pair.",
-        "device": "cuda",
-        "measured_on_train_daemon": True,
+        "device": args.device,
+        "measured_on_train_daemon": args.device == "cuda",
         "script": "scripts/r3null_carms.py",
         "pass": True,
         "verdict": "R3NULL_CARMS_PASS",
@@ -319,6 +319,12 @@ def main() -> int:
                        help="2-step CPU micro fixture with planted equality (no torch/GPU needed)")
     parser.add_argument("--parent-checkpoint", default="models/cbase-grow-live/live-20260703T053225Z/post/checkpoints/step-00000730/",
                        help="path to parent checkpoint (default: models/cbase-grow-live/.../step-00000730/, relative to repo root)")
+    parser.add_argument("--parent-model-sha", default=PARENT_MODEL_SHA,
+                       help=f"parent model.pt sha256 (required for live; default: {PARENT_MODEL_SHA})")
+    parser.add_argument("--parent-optimizer-sha", default=PARENT_OPTIMIZER_SHA,
+                       help=f"parent optimizer.pt sha256 (required for live; default: {PARENT_OPTIMIZER_SHA})")
+    parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"],
+                       help="device for training: cpu or cuda (default: cpu, NEVER auto-cuda)")
     parser.add_argument("--receipt-dir", default=str(RECEIPT_DIR_DEFAULT),
                        help="output receipt directory")
     parser.add_argument("--out-dir", default=str(OUT_DIR_DEFAULT),
