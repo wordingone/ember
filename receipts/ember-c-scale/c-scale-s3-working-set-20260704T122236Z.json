@@ -1,0 +1,51 @@
+{
+  "ticket": "C-SCALE-S3-WORKING-SET-LIVE",
+  "ts": "20260704T122236Z",
+  "issue": "#75",
+  "schema": "c-scale-s3-working-set/v1",
+  "spec_ref": "docs/spec/c-scale-s3-compute-protocol-v1.md section 3",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "mode": "gpu_live",
+  "dry_run": false,
+  "device": "cuda",
+  "rung": 1,
+  "rung_receipt_citation": {
+    "path": "B:\\M\\ember\\receipts\\cbase-grow-rung\\cbase-grow-rung1-live-20260703T155711Z.json",
+    "sha256": "b7a37964d3cd101d09c3db025be6efbbfed89e6a29e41b413618e1bcc507b7b1"
+  },
+  "checkpoint": {
+    "dir": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
+  },
+  "operating_point": {
+    "batch": 16,
+    "seq": 1024,
+    "vocab": 32000,
+    "ff_grown": 16384,
+    "params_unique_after": 1188865024
+  },
+  "note": "ONE governed no_grad forward pass (model.eval(), full-vocab logits materialized -- the serving shape, deliberately not training's chunked-CE, per spec section 3's 'governed serving forward pass') at the operating point (batch/seq from configs/v0-pretrain-config.json); model built via cross-repo scripts/timeshare_pretrain.py's build_v0_model(intermediate_override=ff_grown) -- the SAME model-build path as training, never reimplemented; governor applied via _apply_governor(), also reused unchanged.",
+  "governor": {
+    "vram_fraction_applied": 0.8,
+    "fp19_fraction_floor": 0.8,
+    "free_gib": 17.89,
+    "total_gib": 23.99,
+    "margin_gib_floor": 4.0
+  },
+  "device_mem_get_info": {
+    "free_before_bytes": 19212009472,
+    "free_after_bytes": 16536043520,
+    "total_bytes": 25756696576
+  },
+  "resident_weight_bytes": 2377730048,
+  "resident_weight_bytes_derivation": "sum(p.numel()*p.element_size() for p in model.parameters()) -- bf16, 2 bytes/element",
+  "active_working_set_bytes": 5473659904,
+  "active_working_set_bytes_source": "torch.cuda.max_memory_allocated(), reset via reset_peak_memory_stats() immediately before the forward pass (so the peak floor is the already-resident weights) -- resident weight bytes + peak activation/logit bytes, measured, never computed from shapes alone",
+  "device_working_set_floor_bytes": 20605357260,
+  "device_working_set_floor_formula": "governor.vram_fraction_applied * device_vram_total_bytes (torch.cuda.mem_get_info()) -- the governor-capped budget in force during THIS measurement, never the raw device total",
+  "fit": true,
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "S3_WORKING_SET_LIVE_MEASURED_FIT"
+}
