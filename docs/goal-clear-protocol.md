@@ -83,3 +83,17 @@ global gates), never WHETHER it binds.
 all of B; the completion audit discipline of the /goal organ applies (prove, never
 fail-to-find); the revival queue is swept (C.10); the verdict receipt states every test's
 evidence or the claim is invalid.
+
+## E. Addendum 2026-07-06 — multimodal-unified made explicit (operator correction)
+
+The v1 system carried the unified-multimodal requirement IMPLICITLY: the nc2 owned-technique
+contract binds a unified multimodal architecture as an owned-core component (silent pivot = gate
+violation), the train_multimodal_v0 launch vehicle carries the multimodal floor (reserved IDs,
+soft-token splice, bidirectional span, 2D RoPE locks), and the floor contract holds the
+encoder-free multimodal training row. The v2 re-founding conserved all three surfaces (Map, §8)
+but the completion text itself did not state the requirement, and the constitutional interview
+never asked — the operator caught the omission on 2026-07-06 ("that was always a req").
+
+Cure: C1 now names the requirement explicitly — the created model is a unified multimodal FM;
+a text-only result does not satisfy C1; modality scope is operator-owned (L8). This row records
+an implicit-to-explicit promotion. No v1 condition was weakened; conservation table unchanged.

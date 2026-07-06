@@ -13,8 +13,8 @@ The proof target is the CREATION-INFERENCE GAP: this machine already runs >27B-c
 it cannot yet create one. Ember closes that gap.
 
 The deliverable is a trinity, inseparable: the PRIMITIVE (published, reproducible), the MODEL
-(a true FM born on this machine), the ORGANISM (a living system that keeps growing through its
-own receipted cycles). Absence of any one is failure.
+(a true FM born on this machine — natively MULTIMODAL, UNIFIED architecture), the ORGANISM (a
+living system that keeps growing through its own receipted cycles). Absence of any one is failure.
 
 ## 2. Completion
 
@@ -22,7 +22,9 @@ The goal clears when ALL FOUR hold, receipted per docs/goal-clear-protocol.md:
 
 - C1 SCALE PARITY: a locally-created model in the scale-class of the largest locally-inferable
   models (>27B-class), matching or beating the open-weights models of that class on frozen
-  external evals.
+  external evals. The created model is a UNIFIED MULTIMODAL FM — one backbone across modalities
+  (per docs/nc2-own-technique-contract.md); a text-only result does not satisfy C1. Modality
+  scope is operator-owned (L8): narrowing it is a scope reduction only the operator can make.
 - C2 RATIO: creatable-scale / inferable-scale >= 1.0, tracked continuously on the bottleneck
   ledger; every wall receipt must move it measurably.
 - C3 FRONTIER BEND: the capability-per-local-resource frontier (P1 energy law) provably bent
