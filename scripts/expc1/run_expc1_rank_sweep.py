@@ -128,8 +128,16 @@ MODES:
                emission) at zero real-experiment weight. Numbers here are
                NOT research-conclusive (see the receipt's own "note"
                field). Receipt -> receipts/expc1-dryrun-<ts>.json.
-  (no flag)    The real run at the live H=256 shape. NOT fired by this
-               authoring session -- see GOVERNOR / LAUNCH-GATE above.
+  (no flag)    The real run at the live H=256 shape. HARD-FAILS (status
+               FAILED, receipt written, no CPU fallback) if CUDA is
+               unavailable -- a mode="live" receipt that never touched a GPU
+               would be a false claim. Fail-closed device-engagement
+               assertions (#216 rule) check every model parameter and batch
+               tensor is on a CUDA device at step 1 and the final step of
+               every arm; device, torch.version.cuda, GPU name, and
+               nvidia-smi memory-used before/after/delta are recorded in the
+               receipt and asserted present before it is written. NOT fired
+               by this authoring session -- see GOVERNOR / LAUNCH-GATE above.
 
 No git commits from inside this file. No downloads. No founder/user names
 anywhere in this file or its receipts. UTF-8 / plain-ASCII source.
@@ -265,6 +273,30 @@ def _nvidia_smi_free_mib():
         return {"error": str(e)}
 
 
+def _nvidia_smi_used_mib():
+    """Memory-USED sizing for the live path's before/after receipt fields --
+    subprocess to nvidia-smi ONLY, same discipline as _nvidia_smi_free_mib
+    (never torch.cuda.mem_get_info)."""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10, check=True)
+        return float(out.stdout.strip().splitlines()[0])
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _assert_cuda_engaged(model, batch, label: str) -> None:
+    """Fail-closed device-engagement assertion (#216 rule): every model
+    parameter and every batch tensor must actually be resident on a CUDA
+    device. Called at step 1 and at the final step of the live path only --
+    never for --dry-run/--selftest, which stay CPU by design."""
+    for name, p in model.named_parameters():
+        assert p.device.type == "cuda", f"{label}: param {name!r} on {p.device}, expected cuda"
+    for t in batch:
+        assert t.device.type == "cuda", f"{label}: batch tensor on {t.device}, expected cuda"
+
+
 # ---------------------------------------------------------------------------
 # Newton-Schulz polar-orthogonalization -- copied verbatim from
 # scripts/timeshare_pretrain.py::_zeropower_via_newtonschulz5 (see module
@@ -373,24 +405,33 @@ def split_params(model):
     return muon, adamw
 
 
-def make_batch(dims, generator):
+def make_batch(dims, generator, device=None):
     """Synthetic batch: random tokens, targets independent of inputs (see
-    module docstring's scope disclosure on why this is adequate here)."""
+    module docstring's scope disclosure on why this is adequate here).
+    Generation is always on CPU (the seeded Generator is CPU-bound, keeping
+    reproducibility identical whether or not device is set); the result is
+    moved to device afterward when one is given."""
     import torch
     vocab, seq, batch = dims["vocab"], dims["seq"], dims["batch"]
     x = torch.randint(1, vocab, (batch, seq), generator=generator)
     y = torch.randint(1, vocab, (batch, seq), generator=generator)
+    if device is not None:
+        x, y = x.to(device), y.to(device)
     return x, y
 
 
-def make_projection(out_dim, r, generator):
+def make_projection(out_dim, r, generator, device=None):
     """QR of a seeded Gaussian -> (out_dim, r_eff) matrix with orthonormal
     columns. r_eff = min(r, out_dim) -- clamped, never silently ignored
-    (caller records r_eff in the receipt)."""
+    (caller records r_eff in the receipt). Generation is always on CPU (the
+    seeded Generator is CPU-bound); the result is moved to device afterward
+    when one is given."""
     import torch
     r_eff = min(r, out_dim)
     g = torch.randn(out_dim, r_eff, generator=generator)
     Q, _ = torch.linalg.qr(g)
+    if device is not None:
+        Q = Q.to(device)
     return Q, r_eff
 
 
@@ -417,7 +458,7 @@ def dequantize_int8(q, scale):
 # ---------------------------------------------------------------------------
 
 def run_arm(arm_id, rank_or_full, quantize_momentum, model, batches, eval_batch,
-            warmup, timed, control_updates=None):
+            warmup, timed, control_updates=None, device=None):
     import torch
     import torch.nn.functional as F
 
@@ -425,22 +466,24 @@ def run_arm(arm_id, rank_or_full, quantize_momentum, model, batches, eval_batch,
     muon_params, adamw_params = split_params(model)
     adamw_opt = torch.optim.AdamW(adamw_params, lr=ADAMW_LR)
 
+    require_cuda_engaged = device is not None and torch.device(device).type == "cuda"
+
     proj_gen = torch.Generator().manual_seed(PROJECTION_SEED)
     state = {}
     rank_effective = {}
     for name, p in muon_params.items():
         out_dim, in_dim = p.shape
         if is_control:
-            state[name] = {"M_full": torch.zeros(out_dim, in_dim)}
+            state[name] = {"M_full": torch.zeros(out_dim, in_dim, device=device)}
             rank_effective[name] = out_dim
         else:
-            P, r_eff = make_projection(out_dim, rank_or_full, proj_gen)
+            P, r_eff = make_projection(out_dim, rank_or_full, proj_gen, device=device)
             rank_effective[name] = r_eff
             if quantize_momentum:
-                q0, sc0 = quantize_int8(torch.zeros(r_eff, in_dim))
+                q0, sc0 = quantize_int8(torch.zeros(r_eff, in_dim, device=device))
                 state[name] = {"P": P, "M_r_int8": q0, "M_r_scale": sc0}
             else:
-                state[name] = {"P": P, "M_r": torch.zeros(r_eff, in_dim)}
+                state[name] = {"P": P, "M_r": torch.zeros(r_eff, in_dim, device=device)}
 
     def eval_loss(batch):
         model.eval()
@@ -459,7 +502,11 @@ def run_arm(arm_id, rank_or_full, quantize_momentum, model, batches, eval_batch,
     step_updates_cache = [] if is_control else None
     quant_check = None
 
+    n_steps = len(batches)
     for step_idx, (x, y) in enumerate(batches):
+        if require_cuda_engaged and (step_idx == 0 or step_idx == n_steps - 1):
+            _assert_cuda_engaged(model, (x, y), f"arm={arm_id} step={step_idx}")
+
         for p in muon_params.values():
             p.grad = None
         adamw_opt.zero_grad(set_to_none=True)
@@ -601,7 +648,7 @@ def score_arm(control_result, arm_result):
 # Sweep orchestration.
 # ---------------------------------------------------------------------------
 
-def run_sweep(dims, warmup, timed):
+def run_sweep(dims, warmup, timed, device=None):
     import torch
 
     MicroTransformer = _build_model_class()
@@ -613,22 +660,26 @@ def run_sweep(dims, warmup, timed):
     init_state = copy.deepcopy(base_model.state_dict())
 
     batch_gen = torch.Generator().manual_seed(BATCH_GEN_SEED)
-    batches = [make_batch(dims, batch_gen) for _ in range(warmup + timed)]
+    batches = [make_batch(dims, batch_gen, device=device) for _ in range(warmup + timed)]
     eval_gen = torch.Generator().manual_seed(EVAL_SEED)
-    eval_batch = make_batch(dims, eval_gen)
+    eval_batch = make_batch(dims, eval_gen, device=device)
 
     control_model = MicroTransformer(**model_kwargs)
     control_model.load_state_dict(init_state)
+    if device is not None:
+        control_model = control_model.to(device)
     control_result, control_updates = run_arm(
         "full", "full", False, control_model, batches, eval_batch, warmup, timed,
-        control_updates=None)
+        control_updates=None, device=device)
 
     arms = {"full": control_result}
     for r in [8, 32, 128]:
         m = MicroTransformer(**model_kwargs)
         m.load_state_dict(init_state)
+        if device is not None:
+            m = m.to(device)
         res, _ = run_arm(f"r{r}", r, False, m, batches, eval_batch, warmup, timed,
-                          control_updates=control_updates)
+                          control_updates=control_updates, device=device)
         kc, verdict = score_arm(control_result, res)
         res["kill_criteria"] = kc
         res["verdict"] = verdict
@@ -636,8 +687,10 @@ def run_sweep(dims, warmup, timed):
 
     m = MicroTransformer(**model_kwargs)
     m.load_state_dict(init_state)
+    if device is not None:
+        m = m.to(device)
     res_b0, _ = run_arm("B0_r32_int8", B0_RANK, True, m, batches, eval_batch, warmup, timed,
-                         control_updates=control_updates)
+                         control_updates=control_updates, device=device)
     kc_b0, verdict_b0 = score_arm(control_result, res_b0)
     res_b0["kill_criteria"] = kc_b0
     res_b0["verdict"] = verdict_b0
@@ -676,8 +729,49 @@ def run_and_emit_live() -> Path:
 
     # Reachable only under explicit maintainer authorization (never set by
     # this authoring session). VRAM margin check uses nvidia-smi ONLY.
+    import torch
+
+    # HARD FAIL if CUDA is unavailable -- no CPU fallback for mode="live".
+    # A "live" receipt that never touched a GPU is a false claim; this path
+    # writes a FAILED receipt and stops rather than silently running on CPU.
+    if not torch.cuda.is_available():
+        ts = _ts()
+        receipt = {
+            "ticket": "EXPC1-RANK-SWEEP", "ts": ts, "mode": "live", "dry_run": False,
+            "issue": "#207",
+            "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+            "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+            "harness_sha": _harness_sha(),
+            "status": "FAILED",
+            "failure_reason": "CUDA not available in this process/environment -- the live "
+                "path requires CUDA with NO CPU fallback (a mode='live' receipt that never "
+                "touched a GPU would be a false claim). Not retried with modifications; this "
+                "is itself the plumbing finding.",
+            "pre_registration": PRE_REGISTRATION,
+        }
+        os.makedirs(RECEIPTS, exist_ok=True)
+        path = os.path.join(RECEIPTS, f"expc1-rank-sweep-FAILED-{ts}.json")
+        checked_write(path, receipt)
+        print(f"[expc1-rank-sweep] CUDA_UNAVAILABLE: {receipt['failure_reason']}", flush=True)
+        print(f"EXPC1_RANK_SWEEP_DONE status=FAILED receipt={path}", flush=True)
+        return Path(path)
+
+    device = torch.device("cuda")
+    gpu_name = torch.cuda.get_device_name(device)
+    torch_cuda_version = torch.version.cuda
     free_mib = _nvidia_smi_free_mib()
-    control_result, arms = run_sweep(LIVE_DIMS, LIVE_WARMUP, LIVE_TIMED)
+    used_mib_before = _nvidia_smi_used_mib()
+
+    control_result, arms = run_sweep(LIVE_DIMS, LIVE_WARMUP, LIVE_TIMED, device=device)
+
+    torch.cuda.synchronize(device)
+    used_mib_after = _nvidia_smi_used_mib()
+    used_mib_delta = (
+        used_mib_after - used_mib_before
+        if isinstance(used_mib_before, (int, float)) and isinstance(used_mib_after, (int, float))
+        else None
+    )
+
     ts = _ts()
     receipt = {
         "ticket": "EXPC1-RANK-SWEEP", "ts": ts, "mode": "live", "dry_run": False,
@@ -686,12 +780,33 @@ def run_and_emit_live() -> Path:
         "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
         "harness_sha": _harness_sha(),
         "status": "OK",
+        "device": str(device),
+        "torch_version_cuda": torch_cuda_version,
+        "gpu_name": gpu_name,
         "nvidia_smi_free_mib_at_start": free_mib,
+        "nvidia_smi_memory_used_mib_before": used_mib_before,
+        "nvidia_smi_memory_used_mib_after": used_mib_after,
+        "nvidia_smi_memory_used_delta_mib": used_mib_delta,
         "dims": LIVE_DIMS, "warmup": LIVE_WARMUP, "timed": LIVE_TIMED,
         "pre_registration": PRE_REGISTRATION,
         "control": control_result,
         "arms": arms,
     }
+
+    # Fail-closed device-engagement field check (#216 rule) BEFORE any
+    # artifact write: a live receipt without these fields is invalid by
+    # construction. The per-step tensor-residency assertions already ran
+    # inside run_arm (step 1 + final step, every arm); this is the
+    # receipt-level companion check.
+    required_live_fields = [
+        "device", "torch_version_cuda", "gpu_name",
+        "nvidia_smi_memory_used_mib_before", "nvidia_smi_memory_used_mib_after",
+        "nvidia_smi_memory_used_delta_mib",
+    ]
+    for f in required_live_fields:
+        assert receipt.get(f) is not None, f"live receipt missing required field: {f}"
+    assert receipt["device"].startswith("cuda"), receipt["device"]
+
     os.makedirs(RECEIPTS, exist_ok=True)
     path = os.path.join(RECEIPTS, f"expc1-rank-sweep-{ts}.json")
     checked_write(path, receipt)
