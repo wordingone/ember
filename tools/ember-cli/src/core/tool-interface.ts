@@ -56,6 +56,14 @@ export interface ToolUseContext {
   discoveredSkillNames?: Set<string>;
   fileReadingLimits?: { maxTokens: number; maxSizeBytes: number };
   globLimits?: { maxResults: number };
+  /**
+   * Per-tool-result character budget (issue #157: an oversized tool result
+   * silently wedges the follow-up model call when it can't fit inside
+   * n_ctx). When set, query-engine.ts truncates every tool_result string to
+   * this size before it enters the conversation; when absent, query-engine.ts
+   * falls back to its own conservative default.
+   */
+  toolResultBudget?: { maxChars: number };
   toolUseId?: string;
   setSDKStatus?: unknown;
   /** Present when call() is invoked from within an agent task. */
