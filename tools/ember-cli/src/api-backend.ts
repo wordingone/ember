@@ -94,7 +94,15 @@ export function shouldRetry(
   // 429 rate-limited: retry (respects global cap above)
   if (status === 429) return true;
 
-  // Other 4xx: do not retry
+  // 408 request timeout: the server gave up waiting, not a permanent client
+  // error -- retry like 429 (issue #197's fix contract: "4xx except 429/408
+  // is deterministic"). Distinct from a *connection*-level timeout (handled
+  // above via isNetworkError), this is a real HTTP response the server chose
+  // to send.
+  if (status === 408) return true;
+
+  // Other 4xx: deterministic client errors (bad request, oversized payload,
+  // auth, not found, ...) -- retrying can never succeed, do not retry.
   if (status !== null && status >= 400 && status < 500) return false;
 
   // 5xx server errors: retry

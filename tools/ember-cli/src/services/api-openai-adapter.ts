@@ -22,6 +22,28 @@ export const NCTX_PROBE_TIMEOUT_MS = 10_000;
 /** Prefill overflow guard threshold (FM_91): fraction of n_ctx. */
 export const PREFILL_OVERFLOW_FRACTION = 0.95;
 
+/**
+ * Chars-per-token estimate used everywhere a real tokenizer isn't available at
+ * this layer (query-engine.ts's per-result truncation + conversation-total
+ * budget, session-init.ts's proactive prefill guard). Issue #197: the prior
+ * value (3.5) was a guess and measurably too optimistic for the escaped-JSON-
+ * heavy tool_result strings ember actually sends -- it undercounted real token
+ * usage enough that a payload the estimator judged safe still 400'd against
+ * the server. Measured against a real llama-server /tokenize endpoint on two
+ * samples: a representative ~6.6KB escaped-JSON tool_result (nested objects,
+ * `\n`/`\"`/`\\` escapes, file paths) tokenized at 2.67 chars/token; a ~8.1KB
+ * JSON-escaped markdown-prose sample tokenized at 4.12 chars/token. The two
+ * diverge because JSON escaping and code/path tokens fragment into more,
+ * shorter sub-word tokens than prose. Since the failure mode this constant
+ * guards against is UNDERcounting tokens (a payload the estimator judged
+ * small enough that overflows for real), the conservative choice is the
+ * lower (denser) measurement -- an estimate too pessimistic for prose only
+ * costs a little extra truncation/eviction headroom; one too optimistic for
+ * JSON is the exact bug being fixed. See the PR body for the raw sample
+ * chars/token-count pairs this constant was derived from.
+ */
+export const CHARS_PER_TOKEN_ESTIMATE = 2.7;
+
 // ---------------------------------------------------------------------------
 // Tool choice conversion (AC2)
 // ---------------------------------------------------------------------------
@@ -240,6 +262,24 @@ export class PrefillOverflowError extends Error {
       `Prefill overflow: estimatedPrefill=${estimatedPrefill} + maxTokens=${maxTokens} > nCtx*0.95=${nCtx * PREFILL_OVERFLOW_FRACTION}`,
     );
     this.name = "PrefillOverflowError";
+  }
+}
+
+/**
+ * Issue #197: buildProductionCallModel threw a bare Error on a non-ok HTTP
+ * response, discarding the status code by the time it reached query-engine.ts's
+ * retry loop -- which needs the real status to tell a deterministic 4xx (never
+ * retry) from a transient 5xx (retry with backoff) per api-backend.ts's
+ * shouldRetry contract. Carries the same message text the bare Error used, so
+ * anything already surfacing `.message` to the user is unaffected.
+ */
+export class ModelHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    statusText: string,
+  ) {
+    super(`Model server returned HTTP ${status}: ${statusText}`);
+    this.name = "ModelHttpError";
   }
 }
 

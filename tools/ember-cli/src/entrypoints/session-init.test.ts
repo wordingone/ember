@@ -9,6 +9,7 @@
 
 import { describe, it, expect, mock, afterEach } from "bun:test";
 import { buildProductionCallModel, getResolvedNCtx, getToolResultBudget } from "./session-init.ts";
+import { ModelHttpError } from "../services/api-openai-adapter.ts";
 
 describe("buildProductionCallModel — proactive prefill overflow guard (issue #157)", () => {
   const origFetch = globalThis.fetch;
@@ -109,6 +110,58 @@ describe("buildProductionCallModel — proactive prefill overflow guard (issue #
 
     expect(fetchCalled).toBe(true);
   });
+
+  // issue #197 Leg 3: query-engine.ts's retry loop classifies on `.status` --
+  // a bare Error carries no status and would be misread as a network error
+  // (see query-engine.retry.test.ts's regression guard), so a non-ok HTTP
+  // response must throw the TYPED ModelHttpError, not a plain Error.
+  it("throws a ModelHttpError carrying the real HTTP status on a non-ok response (issue #197)", async () => {
+    globalThis.fetch = mock(async () => {
+      return { ok: false, status: 400, statusText: "Bad Request" } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const callModel = buildProductionCallModel({ serverUrl: "http://localhost:1", nCtx: 8192 });
+
+    let thrown: unknown = null;
+    try {
+      await callModel({
+        messages: [{ role: "user" as const, content: "hello" }],
+        systemPrompt: "test",
+        tools: [],
+        model: "test-model",
+        maxTokens: 256,
+      });
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(ModelHttpError);
+    expect((thrown as ModelHttpError).status).toBe(400);
+  });
+
+  it("ModelHttpError.status reflects a 5xx just as faithfully as a 4xx", async () => {
+    globalThis.fetch = mock(async () => {
+      return { ok: false, status: 503, statusText: "Service Unavailable" } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const callModel = buildProductionCallModel({ serverUrl: "http://localhost:1", nCtx: 8192 });
+
+    let thrown: unknown = null;
+    try {
+      await callModel({
+        messages: [{ role: "user" as const, content: "hello" }],
+        systemPrompt: "test",
+        tools: [],
+        model: "test-model",
+        maxTokens: 256,
+      });
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(ModelHttpError);
+    expect((thrown as ModelHttpError).status).toBe(503);
+  });
 });
 
 describe("getResolvedNCtx / getToolResultBudget — issue #157 n_ctx-derived budget", () => {
@@ -123,5 +176,18 @@ describe("getResolvedNCtx / getToolResultBudget — issue #157 n_ctx-derived bud
   it("getResolvedNCtx returns null or a positive number, never NaN/undefined-as-number", () => {
     const n = getResolvedNCtx();
     expect(n === null || (typeof n === "number" && n > 0)).toBe(true);
+  });
+
+  // issue #197 Leg 1: query-engine.ts's conversation-total eviction reads
+  // ToolUseContext.toolResultBudget.conversationMaxChars -- if this getter
+  // ever stopped populating it (or returned 0/NaN), eviction would silently
+  // no-op (evictOldestToolResults treats maxChars<=0 as "no budget, skip").
+  it("getToolResultBudget derives a positive conversationMaxChars, strictly larger than a single-result maxChars", () => {
+    const budget = getToolResultBudget();
+    expect(budget.conversationMaxChars).toBeGreaterThan(0);
+    expect(Number.isFinite(budget.conversationMaxChars)).toBe(true);
+    // The whole-conversation ceiling must be larger than the per-result one --
+    // otherwise a single result could never fit its own conversation.
+    expect(budget.conversationMaxChars).toBeGreaterThan(budget.maxChars);
   });
 });

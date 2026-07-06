@@ -16,6 +16,9 @@ import {
   processSseLine,
   fetchNCtx,
   checkPrefillOverflow,
+  PREFILL_OVERFLOW_FRACTION,
+  CHARS_PER_TOKEN_ESTIMATE,
+  ModelHttpError,
 } from "../services/api-openai-adapter.ts";
 import { createMicrocompact } from "../services/compaction.ts";
 
@@ -32,11 +35,8 @@ let _cleanupHandlers:   Array<() => unknown>  = [];
 let _resolvedNCtx:       number | null        = null;
 
 // ---------------------------------------------------------------------------
-// n_ctx-derived tool-result budget (issue #157)
+// n_ctx-derived tool-result budget (issue #157; conversation-total extension #197)
 // ---------------------------------------------------------------------------
-
-/** No tokenizer available at this layer; matches the estimate query-engine.ts uses. */
-const CHARS_PER_TOKEN_ESTIMATE = 3.5;
 
 /** Fraction of n_ctx reserved for a single tool result, leaving headroom for
  *  the system prompt, conversation history, tool schemas, and generation. */
@@ -65,12 +65,36 @@ export function getResolvedNCtx(): number | null {
   return _resolvedNCtx;
 }
 
-/** Derives the per-tool-result char budget from the resolved n_ctx (issue #157
- *  Leg 1's context-budgeting seam in query-engine.ts consumes this). Falls
- *  back to a conservative 4096 assumption when init() has not run yet. */
-export function getToolResultBudget(): { maxChars: number } {
+/**
+ * Derives the per-tool-result char budget AND the conversation-total char
+ * budget from the resolved n_ctx. Falls back to a conservative 4096
+ * assumption when init() has not run yet.
+ *
+ * `maxChars` (issue #157 Leg 1) bounds a single tool_result string.
+ *
+ * `conversationMaxChars` (issue #197) bounds the WHOLE assembled conversation
+ * (system prompt + full history) query-engine.ts sends per model call. Per-
+ * result truncation alone is necessary but not sufficient: five individually-
+ * small (already-truncated) tool results can still sum past n_ctx (receipt:
+ * operator session #5, five tool calls in one turn against an 8192-ctx
+ * server -- each result fit its own 25%-of-n_ctx budget, the SUM didn't fit).
+ * Deliberately reuses the exact threshold formula checkPrefillOverflow (the
+ * backstop below) enforces -- estimatedPrefill + reservedGeneration >
+ * nCtx*PREFILL_OVERFLOW_FRACTION -- so query-engine.ts's proactive eviction
+ * targets fitting under the SAME ceiling the backstop guards, and the
+ * backstop should only ever fire on what eviction's cruder (raw
+ * JSON.stringify, no tool-schema accounting) estimate under-counts.
+ */
+export function getToolResultBudget(): { maxChars: number; conversationMaxChars: number } {
   const nCtx = _resolvedNCtx ?? 4096;
-  return { maxChars: Math.floor(nCtx * TOOL_RESULT_BUDGET_FRACTION * CHARS_PER_TOKEN_ESTIMATE) };
+  const conversationBudgetTokens = Math.max(
+    nCtx * PREFILL_OVERFLOW_FRACTION - MIN_GENERATION_RESERVE_TOKENS,
+    0,
+  );
+  return {
+    maxChars: Math.floor(nCtx * TOOL_RESULT_BUDGET_FRACTION * CHARS_PER_TOKEN_ESTIMATE),
+    conversationMaxChars: Math.floor(conversationBudgetTokens * CHARS_PER_TOKEN_ESTIMATE),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -208,9 +232,10 @@ export function buildProductionCallModel(
 
     if (!response.ok) {
       clearTimeout(timeoutId);
-      throw new Error(
-        `Model server returned HTTP ${response.status}: ${response.statusText}`,
-      );
+      // issue #197: a typed error carrying the real status, not a bare Error --
+      // query-engine.ts's retry loop classifies on `.status` to tell a
+      // deterministic 4xx (never retry) from a transient 5xx (retry+backoff).
+      throw new ModelHttpError(response.status, response.statusText);
     }
 
     const ctx    = createSseParserContext();
