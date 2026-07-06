@@ -91,3 +91,28 @@ describe("live renderMsgDispatch — smoke for a known type", () => {
     expect(el.type).toBe(AssistantTextMessage);
   });
 });
+
+// issue #197 (zombie "Retrying..." fix): an "error" message's retryCount used
+// to default to 4 whenever the field was absent -- and applyResultEvent
+// (below in this file's module) NEVER sets retryCount on the error messages
+// it creates, so every terminal error unconditionally crossed
+// SystemAPIErrorMessage's retryCount<=3 hidden-threshold and claimed an
+// in-progress retry that had already ended (operator session #5: "all 4
+// server slots idle, GPU 0%, yet Retrying... persists"). A terminal error
+// message is by definition no longer retrying, so the only correct default
+// is 0 -- live in-flight retries are shown separately via the status-bar
+// effort callout (see ReplScreen's retryStatus state), which is wired to
+// clear the moment the turn ends.
+describe("live renderMsgDispatch — error retryCount default (issue #197)", () => {
+  it("defaults retryCount to 0 (not 4) when the field is absent from the message", () => {
+    const msg: SessionMessage = { id: "e1", type: "error", content: "boom" };
+    const props = renderMsgDispatch(msg, emptyLookups, 80).props as { retryCount: number };
+    expect(props.retryCount).toBe(0);
+  });
+
+  it("still honors an explicit retryCount when the message carries one", () => {
+    const msg: SessionMessage = { id: "e2", type: "error", content: "boom", retryCount: 7 };
+    const props = renderMsgDispatch(msg, emptyLookups, 80).props as { retryCount: number };
+    expect(props.retryCount).toBe(7);
+  });
+});

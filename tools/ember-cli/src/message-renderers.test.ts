@@ -249,20 +249,39 @@ describe("AC8: CompactBoundaryMessage literal text", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC9: SystemAPIErrorMessage not rendered for first 3 retry attempts.
+// issue #197 leg 4: SystemAPIErrorMessage always renders a terminal error,
+// regardless of retryCount. Supersedes the old "AC9: hidden for retries ≤ 3"
+// spec -- that threshold assumed every terminal error had already retried
+// past 3 attempts, which a deterministic 4xx (retryCount=0, no retry ever
+// attempted) never does; hiding on retryCount<=3 made every such error
+// invisible, a strictly worse regression than the "Retrying…" zombie text
+// it was meant to guard against. A message only reaches this component once
+// the turn has definitively ended (repl.ts's applyResultEvent), so there is
+// no "still retrying, don't alarm the user yet" case left to hide.
 // ---------------------------------------------------------------------------
-describe("AC9: API error hidden for retries ≤ 3", () => {
-  test("retryCount=1 → null", () => {
-    expect(SystemAPIErrorMessage({ errorText: "err", retryCount: 1 })).toBeNull();
+describe("issue #197: API error always renders, any retryCount", () => {
+  test("retryCount=0 (deterministic 4xx, never retried) → non-null", () => {
+    expect(SystemAPIErrorMessage({ errorText: "err", retryCount: 0 })).not.toBeNull();
   });
-  test("retryCount=3 → null", () => {
-    expect(SystemAPIErrorMessage({ errorText: "err", retryCount: 3 })).toBeNull();
+  test("retryCount=1 → non-null", () => {
+    expect(SystemAPIErrorMessage({ errorText: "err", retryCount: 1 })).not.toBeNull();
+  });
+  test("retryCount=3 → non-null", () => {
+    expect(SystemAPIErrorMessage({ errorText: "err", retryCount: 3 })).not.toBeNull();
   });
   test("retryCount=4 → non-null", () => {
     expect(SystemAPIErrorMessage({ errorText: "err", retryCount: 4 })).not.toBeNull();
   });
-  test("retryCount=10 → non-null (shown after threshold)", () => {
-    expect(SystemAPIErrorMessage({ errorText: "err", retryCount: 10 })).not.toBeNull();
+  test("retryCount=0 never claims an in-progress retry (no 'Retrying…' text)", () => {
+    const el = SystemAPIErrorMessage({ errorText: "err", retryCount: 0 })!;
+    const rendered = JSON.stringify(el);
+    expect(rendered).not.toContain("Retrying");
+  });
+  test("retryCount>0 surfaces a completed attempt count, not a live retry claim", () => {
+    const el = SystemAPIErrorMessage({ errorText: "err", retryCount: 2 })!;
+    const rendered = JSON.stringify(el);
+    expect(rendered).toContain("Gave up after 2 retry attempts");
+    expect(rendered).not.toContain("Retrying");
   });
 });
 
