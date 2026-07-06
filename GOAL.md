@@ -2,7 +2,7 @@ Full historical context: docs/goal-archive.md
 
 # Ember Breakthrough Loop - Self-Improvement Plan
 
-Date: 2026-06-17
+Date: 2026-06-17. Re-founded 2026-07-06 (operator mandate restored to top precedence).
 Status: Spec and proof boundary. Not an implementation receipt. This document
 sheds the MVP framing: Ember's target is a self-growing self-improvement loop
 that can produce reusable, reproducible evidence toward an ML/AI field-level
@@ -13,6 +13,47 @@ about: observe a world or workflow, form a hypothesis, act or experiment,
 evaluate, revise, preserve the method, and transfer it. The target is not
 "become a model that excels at research"; the target is "become a local
 self-growing organism whose own methods improve through receipted cycles."
+
+## The Mandate (top precedence - outranks every section below)
+
+Operator, standing since 2026-06-25, restored here 2026-07-06 after three
+documented pushes of the same directive:
+
+> "Discover the computation primitive that could lower the barrier to
+> foundation model creation."
+
+Concretely: break the bottlenecks that make FULL local foundation-model
+creation - pretraining included - impossible on one consumer GPU (the single
+local 4090). This is what the energy law was commissioned to encapsulate. A
+model reachable by standard-stack arithmetic on this hardware (Chinchilla
+scaling, dense states, 6ND compute) is NOT a foundation model and is never the
+goal; the FM bar is the capability-per-local-resource frontier BENDING past
+what the standard stack yields at the same budget, receipted.
+
+Binding consequences:
+
+1. The BOTTLENECK LEDGER (issue #207) enumerates the walls (B1 data, B2
+   training-state memory, B3 compute, B4 inference-to-training transfer,
+   B5 the capability bar) and is the standing dispatch authority for all
+   goal work. The highest-priority open ledger row outranks every other
+   work class, machinery and surface work included.
+2. No ledger row, and no track named non-killable anywhere in this file, can
+   be killed, archived, deferred, or descoped by any self-verdict. Only the
+   operator kills a track. A self-kill is void, auto-revived, and disclosed.
+   (Receipt of need: RLM/iGRPO were declared non-killable below and were
+   still self-killed on 2026-07-05. The clause failed as prose; this section
+   plus ledger row-state is the mechanism.)
+3. `docs/ember-floor-contract.md` is re-designated from deferral ledger to
+   REVIVAL QUEUE: its rows (BitNet/1.58-bit, MLA/KV compression, FP8, MoE,
+   MTP, iGRPO/GRPO verifier RL, sleep consolidation, encoder-free multimodal,
+   external research intake) map onto ledger walls and queue behind live
+   falsifiable legs - parked-with-a-path, never parked-as-disposal.
+4. Any capability or ceiling statement about Ember that contains only
+   standard-stack terms is the named FAILURE STATE of this goal, not an
+   answer to it.
+5. Live bend-claims and their pre-registered verdicts (current: G-arm
+   token_bill_collapse_ratio, generalize <=0.5 / revoke >=1.0, issues
+   #121/#113) are the only currency that closes ledger rows.
 
 ## Authority And Precedence
 
@@ -26,6 +67,7 @@ with `invalid_goal_source_split` until the surfaces are reconciled.
 
 Precedence order for goal-mode execution:
 
+0. `The Mandate` in this file, and the Bottleneck Ledger (issue #207) it binds.
 1. `Authority And Precedence` and `Current Blocker Packet` in this file.
 2. `Goal Injection Contract` and `Goal Clear Condition` in this file.
 3. `Do Not Infer` and the active `Next` section in this file.
