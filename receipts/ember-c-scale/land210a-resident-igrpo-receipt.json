@@ -1,0 +1,89 @@
+{
+  "family": "resident-igrpo",
+  "ruling": "issue #210 Tier 1",
+  "stage_id": "dryrun-20260704T211712Z",
+  "scope_note": "Original triage scoped 7 files (the keystone + ember_phase3_c14/*). Parity check showed 2 of those 7 (ember_resident_igrpo.py, ember_phase3_c14/abc_deleted_harness.py) cannot pass their own selftest suites standalone because they import sibling modules (ember_c14_owned_run.py, ember_c14_contract_rig.py) that were outside the original 7-file boundary. Scope expanded to the full import closure (9 files) per follow-up ruling so the landed family is not a fake Tier-1 that fails 3/24 standalone.",
+  "files": [
+    {
+      "path": "scripts/ember_resident_igrpo.py",
+      "sha256": "e2a07346810b59f200381b19bca86899f0078930ad55d438a1fc9beadd1a6c2e",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase3_c14/abc_deleted_harness.py",
+      "sha256": "3048e71de0ce58a3fae3093f742ec9c11e435723b90d4e9009a9dc9f950de824",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase3_c14/avir_resident_arch_spec.py",
+      "sha256": "46bf521199d40b6737eb48ab562863fc5af9eecf572cfee620c14b411b32488e",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase3_c14/floor_contract_manifest.py",
+      "stage_sha256": "5e526da741e6044368c2b609edf54c7071c35d9c124b7033c7f5e103f78faa62",
+      "landed_sha256": "b90b0dac35e794753c19e505eabcf10e53b9e1e206b7ebe4ab0b058910943c59",
+      "provenance": "disclosed redaction",
+      "disclosed_redaction": "line 599 de-personalized; only change, semantics preserved. Original string named a founder by name and cited an internal memory filename that itself embeds the name. Replaced with an equivalent de-personalized statement of the same standing ruling (launch authorization comes from the work-system, the operator is informed, never the gate). Verified via diff: line 599 is the ONLY line that differs between stage and landed copy."
+    },
+    {
+      "path": "scripts/ember_phase3_c14/igrpo_trainer.py",
+      "sha256": "59e1ee01bbb4b637aee93b7a3418f3b0502e029b3109298bd4ca07059a0bf2be",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase3_c14/resident_adapter.py",
+      "sha256": "cb53d48a86ebe4693d4a9eed24dc0e445b37252a04d7a3a983580edd0bfad6fb",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_phase3_c14/verifier_interface.py",
+      "sha256": "37468610d63909306b0602c0d7b5d19f744c52221965187c2c6858ed0a61dc44",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_c14_owned_run.py",
+      "stage_sha256": "b1c5249eb7be7ca4c2883258b9480cc61106a2682f1fddfa8fe213799244aa20",
+      "landed_sha256": "377fe61b38a5feef175e2d2501bc7273fd379675c2fcf52c161d0a3ebf864abb",
+      "provenance": "disclosed redaction",
+      "disclosed_redaction": "docstring lines 1303/1305 de-localized; only change. Original text cited two absolute local drive paths (a sibling working tree's path, and this repo's own local path). Replaced with role-based references (\"the goal-forge working tree\", \"this repo\") while keeping the sibling tree's repo-relative helper path (scripts/ember_totality/_lane14_common.py::resolve_in_tree + check_path_sha_pairs) intact as portable documentation. Verified via diff: docstring lines 1302-1305 are the ONLY lines that differ between stage and landed copy; post-edit grep for drive-letter path pattern on the landed file returns zero hits."
+    },
+    {
+      "path": "scripts/ember_c14_contract_rig.py",
+      "sha256": "067dedd3db034350a888bd6c4406962d7643a369e6ebdd169d3c77acf309601e",
+      "provenance": "byte-identical, unmodified"
+    }
+  ],
+  "selftests": {
+    "ember_resident_igrpo.py --test": {
+      "landed_result": "24/24 passed",
+      "note": "Only reaches full parity with the import closure present (ember_c14_owned_run.py landed alongside). Standalone with the original 7-file scope this was 21/24 (3 failures: ModuleNotFoundError ember_c14_owned_run) -- resolved by the scope expansion, not a code change."
+    },
+    "ember_c14_contract_rig.py --test": {
+      "landed_result": "38/38 passed"
+    },
+    "ember_phase3_c14/igrpo_trainer.py (__main__, no flag)": {
+      "landed_result": "5/5 passed (ALL PASS)"
+    },
+    "ember_phase3_c14/floor_contract_manifest.py --test": {
+      "landed_result": "7/7 passed (ALL TESTS PASSED)",
+      "note": "Run against the redacted landed copy; redaction did not affect this file's own selftest, which validates manifest structure (31 rows, dispositions) and does not assert on the specific wording of any kill_promote_condition string."
+    },
+    "ember_phase3_c14/avir_resident_arch_spec.py (__main__, no flag)": {
+      "landed_result": "exit 0; not pass/fail-shaped -- a gap-report tool enumerating 48 tracked surfaces (ported/stubbed/unported)"
+    },
+    "ember_phase3_c14/resident_adapter.py (__main__, no flag)": {
+      "landed_result": "RESIDENT_ADAPTER_SELFTEST_PASS (all sub-checks a/b/c/d/e/f pass)"
+    },
+    "ember_phase3_c14/verifier_interface.py --test": {
+      "landed_result": "14/15 passed, 1 FAIL",
+      "failed_test": "igrpo_step.state_dict_changes_after_verifier_conditioned_update",
+      "note": "PRE-EXISTING, byte-identical reproduction in untouched stage: identical failure and identical pre/post state_dict hash (6e502a5ceb30e3fe) on both the stage copy and this landed copy. Unrelated to this landing's copy or redaction. Tracked in the maintainer-filed defect issue."
+    },
+    "ember_phase3_c14/abc_deleted_harness.py --test": {
+      "landed_result": "8 passed, 2 FAIL",
+      "failed_tests": ["T3_predicates_passed_true", "T7_assert_gate_predicates_no_raise"],
+      "note": "PRE-EXISTING, byte-identical reproduction in untouched stage: identical 8-passed/2-failed result and identical gate-predicate failure (GATE FAIL 1a: C does not beat A on train, C_train=0.000, A_train=0.125) on both the stage copy and this landed copy. Unrelated to this landing's copy or redaction. Only reaches this comparable result with the import closure present (ember_c14_contract_rig.py landed alongside) -- standalone with the original 7-file scope this failed at import (ModuleNotFoundError). Tracked in the maintainer-filed defect issue."
+    }
+  }
+}
