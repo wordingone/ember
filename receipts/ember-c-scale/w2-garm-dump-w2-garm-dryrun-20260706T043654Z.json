@@ -1,0 +1,9 @@
+{
+  "config_sha256": "ae3b29f1f634314ebaa653c0a1085b4ebf1d326357da46f152134d4a069576a6",
+  "dump_dir": "scratch/w2-garm/dry-run/acceptance-a/dump",
+  "manifest_construction": "hand-assembled from post-grow config, not a raw state_dict() dump (see module docstring re: tied-embeddings lm_head.weight)",
+  "manifest_sha256": "d1102e070a7e3e3586c410567473d2af266450a3d7ec2c27f6e96a776ee02444",
+  "run_id": "w2-garm-dryrun-20260706T043654Z",
+  "ticket": "ISSUE-113-W2-GARM-DUMP",
+  "ts": "20260706T043658Z"
+}
