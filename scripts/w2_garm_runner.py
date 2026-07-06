@@ -52,7 +52,7 @@ pid_assigned, heartbeat, completed, failed, refused) at
 state/runs/active-runs.jsonl, modeled on heartbeat_runner.py's write idiom.
 
 Dump contract (binding, #108 coordination ruling): config.json nested like
-config/v0-pretrain-config.json (model.{vocab,hidden,layers,heads,ff,seq,
+configs/v0-pretrain-config.json (model.{vocab,hidden,layers,heads,ff,seq,
 tied_embeddings,norm_placement}, objective.mtp_aux_heads.n_heads -- ff
 carries the GROWN value) + state_dict_shape_manifest.json (flat key->shape,
 RealW1Model naming per #113's own text: model.embed_tokens.weight,

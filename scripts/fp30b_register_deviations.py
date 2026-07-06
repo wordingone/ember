@@ -7,7 +7,7 @@ lands, `--check` flips RED naming each stale pin. This module is the
 APPLY half — it turns that worklist into registered deviations
 mechanically, fail-closed, receipt-emitting:
 
-  config pin    — config/v0-pretrain-config.json  "real_token_total":
+  config pin    — configs/v0-pretrain-config.json  "real_token_total":
                   textual single-match edit (whole-file json round-trip
                   would reformat the frozen contract; a 0- or >1-match
                   regex is a refusal, never a guess).

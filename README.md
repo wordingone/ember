@@ -153,7 +153,7 @@ this repository alone:
 | `receipts/` | one JSON per executed job — the only admissible evidence |
 | `receipts/ledger/` | verified-episode ledger + matched-control pool + committed views |
 | `scripts/probes/` | canonical frozen probe sets (sha-stamped) |
-| `config/` | frozen v0 pretrain + multimodal configs and validator contract |
+| `configs/` | frozen v0 pretrain + multimodal configs and validator contract |
 | `tokenizer/` | the frozen 32k tokenizer (byte-pinned; reserved band ids 0–7) |
 | `manifests/corpus/` | per-source manifests of the license-clean v0 corpus |
 | `docs/` | specs and contracts |

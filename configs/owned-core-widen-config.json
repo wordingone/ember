@@ -74,7 +74,7 @@
   },
   "deliverables": {
     "cpu_stage": {
-      "config_file": "config/owned-core-widen-config.json (spec: rank 8→34, param-count, preservation strategy)",
+      "config_file": "configs/owned-core-widen-config.json (spec: rank 8→34, param-count, preservation strategy)",
       "tests_file": "tests/test_owned_core_widen.py (param-count arithmetic, D7 guards, config-loads, cpu function-preservation harness)",
       "selftest_receipt": "receipts/owned-core-widen-selftest-*.json (api_spend_usd: 0.0, all tests pass)"
     },

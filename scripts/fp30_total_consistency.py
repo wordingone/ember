@@ -13,7 +13,7 @@ validator is the standing alarm + the registration checklist:
   live freeze   = newest receipts/tokenizer-freeze-*.json by timestamp
                   (must be receipt_check-clean; carries
                   real_token_counts.total)
-  tracked pins  = config/v0-pretrain-config.json real_token_total
+  tracked pins  = configs/v0-pretrain-config.json real_token_total
                   scripts/v0_pretrain_launch_gate.py TOKENIZER_RECEIPT
                   (must NAME the live freeze receipt)
                   the live fp27-prereg receipt's BASE_POLICY budget
@@ -44,7 +44,7 @@ NC = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from receipt_check import validate_receipt             # noqa: E402
 
-CONFIG = "config/v0-pretrain-config.json"
+CONFIG = "configs/v0-pretrain-config.json"
 GATE = "scripts/v0_pretrain_launch_gate.py"
 FP27_GLOB = "receipts/fp27-prereg-*.json"
 FREEZE_GLOB = "receipts/tokenizer-freeze-*.json"
