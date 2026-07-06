@@ -1041,11 +1041,16 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
 
     pool_size = batch_size * pool_oversample
     # If pool_start_index is provided, use it directly; otherwise compute via reserve_pool
-    if pool_start_index is not None:
+    explicit_pool_placement = pool_start_index is not None
+
+    if explicit_pool_placement:
+        # Explicit placement: use provided pool_start_index and verify disjointness
         pool_start = pool_start_index
         disjoint_check = assert_disjoint_from_training(pool_start, ceiling_steps, train_batch)
     else:
+        # Tail mode: compute pool_start as the tail placement
         pool_start, disjoint_check = reserve_pool(n_windows, pool_size, ceiling_steps, train_batch)
+
     # First index training can NEVER reach (assert_disjoint_from_training's own
     # boundary: max_training_window_index = ceiling_steps*train_batch - 1, so
     # this is max_training_window_index + 1). Replacement draws must never go
@@ -1077,10 +1082,22 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
         this_pool_size = max(need * pool_oversample, need)
 
         if round_no == 1:
-            this_pool_start, this_pool_end = pool_start, n_windows
+            if explicit_pool_placement:
+                # Explicit placement: start from pool_start_index, extend upward by pool_size
+                this_pool_start = pool_start
+                this_pool_end = min(pool_start + this_pool_size, n_windows)
+            else:
+                # Tail mode: original behavior (reserve the tail)
+                this_pool_start, this_pool_end = pool_start, n_windows
         else:
-            this_pool_end = pool_floor
-            this_pool_start = max(disjoint_lower_bound, this_pool_end - this_pool_size)
+            if explicit_pool_placement:
+                # Upward extension: extend from previous round's end
+                this_pool_start = pool_floor
+                this_pool_end = min(pool_floor + this_pool_size, n_windows)
+            else:
+                # Downward extension (tail mode): march downward from tail
+                this_pool_end = pool_floor
+                this_pool_start = max(disjoint_lower_bound, this_pool_end - this_pool_size)
 
         pool_indices = list(range(this_pool_start, this_pool_end))
         if not pool_indices:
@@ -1088,6 +1105,15 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
                 "W2_DECONTAM_POOL_EXHAUSTED: ran out of training-disjoint window "
                 f"indices before assembling {batch_size} clean windows "
                 f"(selected {len(selected_rows)}).")
+
+        # Fail-closed guard: pool materialized at once must be sane (bounded by pool_size * 100)
+        max_allowed_pool = batch_size * pool_oversample * 100
+        if len(pool_indices) > max_allowed_pool:
+            raise SystemExit(
+                f"W2_DECONTAM_POOL_RANGE_INSANE: round {round_no} pool size "
+                f"{len(pool_indices)} exceeds safety bound {max_allowed_pool} "
+                f"(batch_size={batch_size}, pool_oversample={pool_oversample}). "
+                f"This indicates a bug in pool placement logic.")
 
         # Fail-closed disjointness proof for the FULL range actually drawn
         # this round (not just the initial reserve_pool call).
@@ -1123,7 +1149,11 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
             "disjoint_check": round_disjoint_check,
         })
 
-        pool_floor = this_pool_start
+        # Update pool_floor for next round: tail mode uses start, upward mode uses end
+        if explicit_pool_placement:
+            pool_floor = this_pool_end
+        else:
+            pool_floor = this_pool_start
 
     if len(selected_rows) < batch_size:
         raise SystemExit(
@@ -1240,7 +1270,7 @@ def main():
     ap.add_argument("--equivalence-test-external", action="store_true",
                     help="Run external contamination detection equivalence test (validates fix doesn't suppress real contamination)")
     ap.add_argument("--pool-start-index", type=int, default=None,
-                    help="Override pool start index (default: tail placement via held_out_window_start). Use for mid-corpus placement etc.")
+                    help="Override pool start index for explicit placement (e.g. mid-corpus; default: tail placement via held_out_window_start). Rounds extend UPWARD from this index; omit for tail mode (rounds extend DOWNWARD).")
     args = ap.parse_args()
 
     if not args.shard_dir:
