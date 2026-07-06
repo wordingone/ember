@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C7 (status probe / TDD).
+"""Ember totality test â€” Condition C7 (status probe / TDD).
 
-C7 — Self-growing operator is load-bearing.
+C7 â€” Self-growing operator is load-bearing.
   R: Ember's prospective receipt-trained operator (not Codex/manual) selects/
      routes the next loop action; a deletion/ablation test shows removal
      degrades/blocks that next-loop decision.
@@ -14,18 +14,18 @@ C7 — Self-growing operator is load-bearing.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
-inspecting state under <external-state> — never hardcoded.
+inspecting state under <external-state> â€” never hardcoded.
 
 What a GREEN here actually requires (receipts-only, no self-attestation):
   1. A real c7-selftest receipt exists with verdict==PASS and
      proves_load_bearing==true.
   2. The receipt's held_out_slices are out-of-closure (>=1) and the
-     degenerate/deleted-arm slice is the closure slice {0} — i.e. the
+     degenerate/deleted-arm slice is the closure slice {0} â€” i.e. the
      deletion is tested on tasks the deleted operator was NOT trained for
      (the "degraded next-decision on held-out" requirement).
   3. The receipt's operator_constants_hash equals the LIVE operator's
      canonical_hash (imported from the real c7_selftest module). This binds
-     the receipt to the live, un-tampered operator definition — a stale or
+     the receipt to the live, un-tampered operator definition â€” a stale or
      forged receipt whose hash no longer matches the code FAILS.
   4. The live operator is genuinely PROSPECTIVE (the regime_operator source
      declares "fires before the cycle it governs"), defeating the
@@ -119,7 +119,7 @@ def live_operator_canonical_hash():
             sys.path.insert(0, p)
     try:
         # Load under the module's REAL name and register it in sys.modules
-        # BEFORE exec_module — the module's @dataclass machinery resolves type
+        # BEFORE exec_module â€” the module's @dataclass machinery resolves type
         # forward-refs via sys.modules.get(cls.__module__), which is None if the
         # module is loaded anonymously.
         spec = importlib.util.spec_from_file_location("c7_selftest", selftest_py)
@@ -194,7 +194,7 @@ def main():
         hit = [t for t in INVALID_TOKENS if t.lower() in lowered]
         # Allow the literal "not_load_bearing" ONLY when it is the degenerate-
         # arm's expected NON-counting verdict described alongside a positive
-        # load-bearing verdict — but the c7-selftest receipt schema does not
+        # load-bearing verdict â€” but the c7-selftest receipt schema does not
         # store arm verdict strings, so any appearance here is a real hit.
         if hit:
             failures.append(f"{base}: invalid-token present {hit}")

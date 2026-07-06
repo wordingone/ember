@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C8 (status probe / TDD).
+"""Ember totality test â€” Condition C8 (status probe / TDD).
 
-C8 — ML/AI field-level breakthrough.
+C8 â€” ML/AI field-level breakthrough.
   R: a falsifiable contribution in exactly ONE primary class (new/improved
      self-improvement mechanism | training/eval protocol | model/harness
      component | compression/inference technique | agent-learning substrate |
@@ -18,7 +18,7 @@ C8 — ML/AI field-level breakthrough.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
-inspecting state under <external-state> — never hardcoded.
+inspecting state under <external-state> â€” never hardcoded.
 
 Run ONLY via:  wsl python3 <this file>
 Under WSL the execution root is <local-mount-point>/ or /mnt<local-mount-point>/ on this host.
@@ -35,7 +35,7 @@ Under WSL the execution root is <local-mount-point>/ or /mnt<local-mount-point>/
 # under the new repo root, so these probes are expected to emit a clean RED
 # 'root not found' line, which is the correct, non-error outcome.
 
-# [SANDBOX-AMENDMENT 2026-07-03 — issue #28 PART 1, PENDING_AUTHORIZATION]
+# [SANDBOX-AMENDMENT 2026-07-03 â€” issue #28 PART 1, PENDING_AUTHORIZATION]
 # This is a SANDBOX COPY, never the live scripts/ember_totality/test_c8.py.
 # The only change vs the live file is fields 4-5 of the CHK (ablation_method_
 # blocked / ordinary_runner_intact): generalized from one hardcoded verdict-
@@ -213,7 +213,7 @@ def main():
 
         # --- (B) Negative assertions: NONE of the invalid-tokens may appear --
         # as the proving verdict / blocker / claim. We check the *load-bearing*
-        # fields (verdict, blocked_reasons, candidate class) — not the raw text,
+        # fields (verdict, blocked_reasons, candidate class) â€” not the raw text,
         # because the script legitimately NAMES the does-NOT-count list when it
         # is refusing to overclaim.
         verdict = str(data.get("verdict", ""))
@@ -232,7 +232,7 @@ def main():
         # PASS verdict and zero blockers, AND carry the contribution-level
         # deletion ablation showing: method-trigger deletion BLOCKS the
         # native-link proof while the ordinary external runner plumbing stays
-        # intact (D3_MULTI_TASK_GENERALIZATION_PASS) — i.e. degrades a broader
+        # intact (D3_MULTI_TASK_GENERALIZATION_PASS) â€” i.e. degrades a broader
         # external/disjoint benchmark while ordinary files remain intact.
         pass_verdict = verdict.endswith("_PASS")
         no_blockers = len(blockers) == 0

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C1 (status probe / TDD).
+"""Ember totality test â€” Condition C1 (status probe / TDD).
 
-C1 — Exact historical + modern benchmark/dataset discovery.
+C1 â€” Exact historical + modern benchmark/dataset discovery.
   R: a source-backed receipt naming URLs/licenses/evaluator-forms/
      local-run-requirements/hashes + why the selected benchmark is the best
      self-improvement-by-action proxy.
@@ -12,7 +12,7 @@ C1 — Exact historical + modern benchmark/dataset discovery.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
-inspecting state under <external-state> — never hardcoded.
+inspecting state under <external-state> â€” never hardcoded.
 
 LANE-14 HARDENING (2026-07-02, R8 probe-faithfulness audit,
 docs/goalforge-debate-ledger.md row R8): the pre-hardening version treated
