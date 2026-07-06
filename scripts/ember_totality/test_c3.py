@@ -17,15 +17,20 @@ attempts, seed policy, verifier path.
 Receipt hint (task): A<local-mount-point>/C/deleted contract receipts, per-arm budget rows.
 
 WHERE C3'S EVIDENCE ACTUALLY LIVES (verified by inspection 2026-06-23):
-  - The `<peer-gate>/<peer-gate>-*.json` receipts carry the
+  - The `ember-resident-training-gate/resident-training-gate-*.json` receipts carry the
     A<local-mount-point>/C/deleted contract and scores but have NO budget keys whatsoever.
-  - The `<peer-loop>/<peer-loop>-*.json` receipts carry a real
+  - The `ember-d3-native-loop/d3-native-loop-*.json` receipts carry a real
     top-level `equal_budget` block: {attempts_per_arm_per_task, cpu_gpu,
     data_access, verifier} plus `reproducibility.seeds` (seed policy) and an
     `arm_contract` enumerating A<local-mount-point>/C/Deleted.
   So the peer-loop receipt is the canonical C3 budget artifact; this probe
   reads it. (If a future receipt grows a real per-arm wall-time row, the probe
   picks it up automatically -- nothing about the verdict is hardcoded.)
+  [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259]: the public-export
+  scrub tool had rewritten these real directory names into literal bracketed
+  placeholders `<peer-gate>`/`<peer-loop>` -- which never exist verbatim on disk --
+  in this docstring AND the functional path-join constants below, so the probe
+  could never find its own evidence. Restored to the real, already-public names.
 
 This is a STATUS PROBE:
   - exit code is ALWAYS 0
@@ -54,14 +59,19 @@ import os
 import glob
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+# [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
+# REPO_ROOT-relative fallback candidate here: EMBER_TOTALITY_ROOT and REPO_ROOT
+# already cover every real invocation shape, and the dropped candidate never
+# resolved to anything -- a latent probe defect if it were ever reached first.
 EXTERNAL_STATE = next(
-    (p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
-                 os.path.join(REPO_ROOT, "<external-state>"))
+    (p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT)
      if p and os.path.isdir(p)),
-    os.path.join(REPO_ROOT, "<external-state>"),
+    REPO_ROOT,
 )
-D3_LOOP_DIR = os.path.join(EXTERNAL_STATE, "receipts", "<peer-loop>")
-RESIDENT_GATE_DIR = os.path.join(EXTERNAL_STATE, "receipts", "<peer-gate>")
+# [REDACTION-BROKE-PATH CORRECTION, 2026-07-06, gh #254/#259] restored the real,
+# already-public directory names -- see docstring note above.
+D3_LOOP_DIR = os.path.join(EXTERNAL_STATE, "receipts", "ember-d3-native-loop")
+RESIDENT_GATE_DIR = os.path.join(EXTERNAL_STATE, "receipts", "ember-resident-training-gate")
 
 # C3's invalid-token (the X mark) plus its enumerated does-NOT-count substitutes,
 # each encoded as a negative assertion below. None may match for a GREEN.

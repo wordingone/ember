@@ -8,12 +8,21 @@ hold on every admitted row, not merely asserted in prose. Board CHK for the trus
 every downstream capability condition's input data rests on (gh issue #95).
 
 RULING [R1, ledger scope, 2026-07-04]: "ledger" in THIS probe means EXACTLY two files, by
-literal path relative to ROOT -- ledger/episodes.jsonl and ledger/control_pool.jsonl. It
-NEVER means the totality-board receipt trail (receipts/ember-totality-*,
-EMBER_TOTALITY_BOARD.md) -- a same-named but unrelated object elsewhere in this codebase's
-vocabulary. (The issue text's own "receipts/ledger/" path reference was wrong -- that
-directory does not exist; corrected here. See
-docs/audit/c-ladm-sec1-1-admission-recon-20260704.md sec2 Finding 0.)
+literal path relative to ROOT -- receipts/ledger/episodes.jsonl and
+receipts/ledger/control_pool.jsonl. It NEVER means the totality-board receipt trail
+(receipts/ember-totality-*, EMBER_TOTALITY_BOARD.md) -- a same-named but unrelated object
+elsewhere in this codebase's vocabulary.
+
+[RULING-DRIFT CORRECTION, 2026-07-06, gh issue #254]: R1's original text (2026-07-04) claimed
+"the issue text's own 'receipts/ledger/' path reference was wrong -- that directory does not
+exist" and moved LEDGER_REL/CONTROL_POOL_REL to a bare `ledger/` path. That claim was false:
+receipts/ledger/episodes.jsonl and receipts/ledger/control_pool.jsonl are real, current files
+(verified present at audit time; a bare `ledger/` directory exists nowhere at the state root).
+R1's false premise is quoted here rather than silently edited out, per the reproducibility
+audit's finding, so a future reader can see exactly what was wrong and why the path below
+reverted to receipts/ledger/. See gh issue #254 (RULING-DRIFT class) and
+docs/audit/c-ladm-sec1-1-admission-recon-20260704.md sec2 Finding 0 for the original
+(incorrect) reasoning this superseded.
 
 Rules enforced (recon dossier sec3, frozen 2026-07-04) and their mechanization:
 
@@ -41,7 +50,7 @@ Rules enforced (recon dossier sec3, frozen 2026-07-04) and their mechanization:
   [RULING R5, control_pool.jsonl integrity, 2026-07-04] -- MACHINE-CHECKED, dual-source:
      this probe's OWN sha256 read of control_pool.jsonl taken immediately before and after
      shelling out to scripts/ledger_dedup.py's existing byte-unchanged assertion (invoked
-     against TEMP view/receipt outputs -- never the live ledger/views/ tree or a new
+     against TEMP view/receipt outputs -- never the live receipts/ledger/views/ tree or a new
      receipts/ file -- so this probe never writes anywhere under the live ledger). If
      ledger_dedup.py cannot be invoked cleanly (env/path issue), that is disclosed as its own
      UNAVAILABLE note, never silently treated as a pass; this probe's own direct sha
@@ -68,7 +77,7 @@ Rules enforced (recon dossier sec3, frozen 2026-07-04) and their mechanization:
 
 DISCIPLINE: status probe -- always exits 0, one line, real bytes decide, no hardcoded
 verdict. RED / GREEN / UNEVALUABLE(env); primary-ledger-absent is RED (input-missing).
-This probe NEVER writes to ledger/episodes.jsonl or ledger/control_pool.jsonl -- read-only
+This probe NEVER writes to receipts/ledger/episodes.jsonl or receipts/ledger/control_pool.jsonl -- read-only
 throughout; the one subprocess it may invoke is redirected to temp outputs only.
 """
 from __future__ import annotations
@@ -84,9 +93,11 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file_
 CANDIDATE_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
-# RULING R1 -- literal paths, never the totality-board receipt trail.
-LEDGER_REL = os.path.join("ledger", "episodes.jsonl")
-CONTROL_POOL_REL = os.path.join("ledger", "control_pool.jsonl")
+# RULING R1 -- literal paths, never the totality-board receipt trail. Restored to
+# receipts/ledger/ 2026-07-06 (gh #254 RULING-DRIFT correction) -- see the docstring note
+# above; the bare ledger/ path this constant held before was never a real location.
+LEDGER_REL = os.path.join("receipts", "ledger", "episodes.jsonl")
+CONTROL_POOL_REL = os.path.join("receipts", "ledger", "control_pool.jsonl")
 RECEIPTS_DIR_REL = "receipts"
 SEED_BLANKET_RECEIPT_REL = os.path.join("receipts", "t3-seed-20260610T021308Z.json")
 VERIFIER_INSTRUMENT_REL = os.path.join("scripts", "v_compare.py")
@@ -146,7 +157,7 @@ def _resolve_receipt(root, receipt_name):
 
 def _ledger_dedup_verdict(root, control_path):
     """RULING R5: shell out to ledger_dedup.py's existing control_pool byte-unchanged
-    assertion, redirected to TEMP outputs only (never the live ledger/views/ tree, never a
+    assertion, redirected to TEMP outputs only (never the live receipts/ledger/views/ tree, never a
     new file under receipts/). Returns (verdict: "unchanged"|"changed"|"unavailable", note).
     A failure to invoke cleanly is disclosed, never silently treated as a pass."""
     script = os.path.join(root, LEDGER_DEDUP_SCRIPT_REL)
@@ -250,8 +261,8 @@ def main():
                 offenders.append((key, "invalid_ladm_dangling_receipt"))
 
         # Rule 5 (partial) -- matched-control pool membership for non-seed episodes.
-        # RULING R1: scope is literally ledger/control_pool.jsonl -- not the broader
-        # ledger/views/*control*.jsonl sidecars (checked separately this phase and found
+        # RULING R1: scope is literally receipts/ledger/control_pool.jsonl -- not the broader
+        # receipts/ledger/views/*control*.jsonl sidecars (checked separately this phase and found
         # NOT to change the offender set here; see report).
         if not is_seed and e.get("task") not in control_tasks:
             offenders.append((key, "invalid_ladm_no_matched_control"))
@@ -282,8 +293,8 @@ def main():
              f"C-LADM: {len(offenders)} offending row(s) across {len(by_token)} rule(s) "
              f"{by_token} -> {shown}{more}"
              + (f" [{len(no_control_tasks_live)} distinct task(s) with zero matched-control "
-                f"coverage in ledger/control_pool.jsonl (RULING R1 scope; also absent from "
-                f"ledger/views/*control*.jsonl sidecars, checked separately -- widening scope "
+                f"coverage in receipts/ledger/control_pool.jsonl (RULING R1 scope; also absent from "
+                f"receipts/ledger/views/*control*.jsonl sidecars, checked separately -- widening scope "
                 f"does not change this verdict)]"
                 if no_control_tasks_live else ""))
 
