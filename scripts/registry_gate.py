@@ -16,7 +16,14 @@ ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = ROOT / "docs" / "technique-registry.jsonl"
 RECEIPT_LOG = ROOT / "receipts" / "registry-gate.jsonl"
 
-LEGAL_STATUSES = {"CANDIDATE", "TESTED", "ADOPT", "KILL", "WATCH-NEGATIVE"}
+# PARK and ADOPT-PENDING-SEGMENT legalized 2026-07-06 (#230): both statuses
+# were already in live use (technique-registry.jsonl rows 17-18) with a
+# richer, reasoned vocabulary than this enum recognized, so load_registry()
+# raised on every load -- the registry gate was fail-CLOSED-BY-EXCEPTION on
+# its own live data. Semantics: docs/registry-dispatch-gate-spec-v0.md
+# "Status semantics" + docs/technique-registry.md schema line.
+LEGAL_STATUSES = {"CANDIDATE", "TESTED", "ADOPT", "KILL", "WATCH-NEGATIVE",
+                  "PARK", "ADOPT-PENDING-SEGMENT"}
 REQUIRED_FIELDS = {
     "id", "axis", "claim", "physics_ceiling", "proxy_protocol",
     "receipts", "measured_multiplier", "composes_with", "conflicts",

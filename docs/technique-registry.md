@@ -54,11 +54,20 @@ experiments beat human records. Our local equivalent:
   µP-class parametrization mitigates but does not waive this).
 - **Kill is data:** KILLed techniques stay in the registry with their receipt —
   the negative result is part of the permanent store.
+- **Park is not kill (legalized 2026-07-06, #230):** a PARKed technique's
+  claim tested TRUE — real, stable, receipted — but the prize is below the
+  accept bar at the config it was measured against. It keeps a revival path
+  (re-examined when the config changes) instead of being treated as a dead
+  end; conflating PARK with KILL would erase that revival path, which is why
+  the two are separate statuses, not one.
+- **ADOPT-PENDING-SEGMENT** is TESTED-and-winning but gated on a future event
+  (typically a WSD segment boundary) rather than more measurement; it
+  promotes to ADOPT on the receipt proving the gating event occurred.
 
 ## Registry schema (`technique-registry.jsonl`, append-only)
 
 `{id, axis, claim, physics_ceiling, proxy_protocol, receipts[], measured_multiplier,
-composes_with[], conflicts[], status: CANDIDATE|TESTED|ADOPT|KILL, source}`
+composes_with[], conflicts[], status: CANDIDATE|TESTED|ADOPT|KILL|WATCH-NEGATIVE|PARK|ADOPT-PENDING-SEGMENT, source}`
 
 Seed rows (status at mint, 2026-06-12): muon (ADOPT — in v0), wsd-schedule
 (ADOPT — in v0), qat (ADOPT — in v0), governor-pacing (ADOPT — rail),
