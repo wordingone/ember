@@ -29,6 +29,7 @@ import {
   type ServerHandle,
   main,
 } from "./process-entry.ts";
+import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { Tool } from "../core/tool-interface.ts";
@@ -283,42 +284,42 @@ describe("process-entry — AC6: models.json endpoint → EMBER_MODEL_URL only i
   });
 });
 
-describe("process-entry — describeEndpointResolution (issue #196 startup disclosure)", () => {
-  it("models.json 'endpoint' wins outright when EMBER_MODEL_URL is unset", () => {
+describe("process-entry — describeEndpointResolution (issue #196 precedence: env > models.json > managed)", () => {
+  it("models.json 'endpoint' wins over managed spawn when EMBER_MODEL_URL is unset", () => {
     const r = describeEndpointResolution({ endpoint: "http://localhost:9999" }, undefined);
     expect(r.source).toBe("config");
     expect(r.endpoint).toBe("http://localhost:9999");
-    expect(r.envOverridden).toBe(false);
     expect(r.text).toContain("http://localhost:9999");
     expect(r.text).toContain("models.json");
   });
 
-  it("models.json 'endpoint' wins even when a DIFFERENT EMBER_MODEL_URL is set -- discloses the override", () => {
+  it("EMBER_MODEL_URL WINS over models.json 'endpoint' when both are set (issue #196 precedence fix -- was: config wins)", () => {
     const r = describeEndpointResolution(
       { endpoint: "http://localhost:9999" },
       "http://localhost:1111",
     );
-    expect(r.source).toBe("config");
-    expect(r.envOverridden).toBe(true);
+    expect(r.source).toBe("env");
+    expect(r.endpoint).toBe("http://localhost:1111");
     expect(r.text).toContain("http://localhost:1111");
+    expect(r.text).not.toContain("http://localhost:9999");
   });
 
-  it("models.json 'binary' forces a managed spawn and IGNORES EMBER_MODEL_URL -- disclosed, not silent (issue #196)", () => {
+  it("EMBER_MODEL_URL WINS over models.json 'binary' -- no managed spawn, no longer silently/disclosed-ly ignored (issue #196 precedence fix -- was: managed spawn, env IGNORED)", () => {
     const r = describeEndpointResolution(
       { binary: "llama-server.exe" },
       "http://localhost:1111",
     );
-    expect(r.source).toBe("managed");
-    expect(r.endpoint).toBeNull();
-    expect(r.envOverridden).toBe(true);
+    expect(r.source).toBe("env");
+    expect(r.endpoint).toBe("http://localhost:1111");
     expect(r.text).toContain("http://localhost:1111");
-    expect(r.text).toContain("IGNORED");
+    expect(r.text).not.toContain("IGNORED");
+    expect(r.text).not.toContain("llama-server.exe");
   });
 
-  it("models.json 'binary' with no EMBER_MODEL_URL set: managed spawn, nothing overridden", () => {
+  it("models.json 'binary' with no EMBER_MODEL_URL set: managed spawn unchanged", () => {
     const r = describeEndpointResolution({ binary: "llama-server.exe" }, undefined);
     expect(r.source).toBe("managed");
-    expect(r.envOverridden).toBe(false);
+    expect(r.endpoint).toBeNull();
   });
 
   it("no models.json config: EMBER_MODEL_URL wins as an explicit env override", () => {
@@ -333,7 +334,6 @@ describe("process-entry — describeEndpointResolution (issue #196 startup discl
     const r = describeEndpointResolution(null, undefined);
     expect(r.source).toBe("managed");
     expect(r.endpoint).toBeNull();
-    expect(r.envOverridden).toBe(false);
   });
 });
 
@@ -839,5 +839,110 @@ describe("process-entry — G1: headlessRunner receives LoopDeps from getLoopDep
     }
     expect(msg).not.toContain("No model sampling function provided");
     expect(msg).toContain("fake-callModel");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #196 acceptance: main() end-to-end precedence (env > models.json > managed)
+// ---------------------------------------------------------------------------
+
+describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over models.json (issue #196 acceptance)", () => {
+  let tmpDir: string;
+  let savedEnv: Record<string, string | undefined>;
+
+  beforeEach(async () => {
+    tmpDir = join(tmpdir(), `pe-196-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(tmpDir, { recursive: true });
+    savedEnv = saveEnv(["EMBER_HOME", "EMBER_MODEL_URL", "EMBER_MODEL_NAME"]);
+    delete process.env["EMBER_MODEL_NAME"];
+    process.env["EMBER_HOME"] = tmpDir;
+    _resetConfigHomeMemo();
+  });
+
+  afterEach(async () => {
+    restoreEnv(savedEnv);
+    _resetConfigHomeMemo();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("acceptance (1): models.json 'binary' present + EMBER_MODEL_URL set -> no managed spawn, serverUrl is the env URL", async () => {
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: "llama-server.exe" }));
+    process.env["EMBER_MODEL_URL"] = "http://localhost:19191";
+
+    let spawnCalls = 0;
+    let receivedServerUrl = "UNSET";
+
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29997); },
+      waitReady: async () => {},
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? "UNSET"; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(spawnCalls).toBe(0); // env wins -- no managed spawn ever invoked
+    expect(receivedServerUrl).toBe("http://localhost:19191");
+  });
+
+  it("acceptance (2): models.json 'binary' present + EMBER_MODEL_URL unset -> managed spawn still occurs unchanged", async () => {
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: "llama-server.exe" }));
+    delete process.env["EMBER_MODEL_URL"];
+
+    let spawnCalls = 0;
+
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29996); },
+      waitReady: async () => {},
+      initFn: async () => {},
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(spawnCalls).toBe(1); // no env override present -- managed spawn behavior is unchanged
+  });
+
+  it("acceptance (3): models.json 'endpoint' present + EMBER_MODEL_URL set to a DIFFERENT url -> env url is used, not config's", async () => {
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ endpoint: "http://localhost:9999" }));
+    process.env["EMBER_MODEL_URL"] = "http://localhost:19192";
+
+    let receivedServerUrl = "UNSET";
+
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      spawnServer: async () => makeFakeHandle(29995),
+      waitReady: async () => {},
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? "UNSET"; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(receivedServerUrl).toBe("http://localhost:19192");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC13 follow-up: --help's Environment paragraph reflects the new precedence
+// ---------------------------------------------------------------------------
+
+describe("process-entry — AC13 --help contract: EMBER_MODEL_URL precedence paragraph", () => {
+  it("--help discloses that EMBER_MODEL_URL wins over models.json (issue #196 precedence fix)", async () => {
+    const exitMock = mockProcessExit();
+    const stdoutCap = captureStdout();
+    try {
+      await dispatchFastPath(["node", "ember", "--help"]);
+    } catch (e) {
+      if (!(e instanceof Error && "code" in e)) throw e;
+    } finally {
+      exitMock.restore();
+      stdoutCap.restore();
+    }
+    const out = stdoutCap.output();
+    expect(out).toContain("EMBER_MODEL_URL");
+    expect(out.toLowerCase()).toContain("wins over models.json");
   });
 });
