@@ -239,7 +239,7 @@ def build_receipt(ts, cells, freeze_name, total):
         "cells": cells,
         "result": analyze(cells, total),
         "deviation_note": "a GAIN here is EVIDENCE for a registered "
-                          "deviation to config/v0-pretrain-config.json "
+                          "deviation to configs/v0-pretrain-config.json "
                           "throughput.batch (+ optimizer-coupling note); "
                           "it changes NOTHING by itself — the config stays "
                           "frozen until the deviation PR lands through "

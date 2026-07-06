@@ -1,5 +1,5 @@
 {
-  "note": "Protected-invariant manifest for NC-K boot checksum layer. This file and its baseline copy (config/nck-baseline/) must match at boot. Do not edit manually; regenerate via scripts/nck/invariants.py --update-manifest.",
+  "note": "Protected-invariant manifest for NC-K boot checksum layer. This file and its baseline copy (configs/nck-baseline/) must match at boot. Do not edit manually; regenerate via scripts/nck/invariants.py --update-manifest.",
   "protected_paths": [
     {
       "label": "three-test-gain-gate",
@@ -8,7 +8,7 @@
     },
     {
       "label": "governor-headroom-config",
-      "path": "config/v0-pretrain-config.json",
+      "path": "configs/v0-pretrain-config.json",
       "sha256": "92cf1b21946f9397d6964ca6d21bddae4c21a8cd1f33640d7ef69f669e3c6960"
     },
     {
@@ -28,7 +28,7 @@
     },
     {
       "label": "nck-invariants-manifest",
-      "path": "config/nck-invariants.json",
+      "path": "configs/nck-invariants.json",
       "sha256": "SELF"
     }
   ],

@@ -69,7 +69,7 @@ fail-before-continue) apply identically to the multimodal run.
 
 ## Current repo state (grounding — read 2026-06-14)
 
-The only pretrain config in the committed repo is `config/v0-pretrain-config.json`
+The only pretrain config in the committed repo is `configs/v0-pretrain-config.json`
 = **ember-v0, text-only**: hidden 1024 / 20 layers / vocab 32000 / seq 1024 /
 next-token CE + 2 MTP aux heads / 368M params (the "0.37B" all fp-44/fp-41 work
 measured). No vision encoder, patch-embed, image-token, or modality-fusion file

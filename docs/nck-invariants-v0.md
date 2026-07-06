@@ -17,7 +17,7 @@ resident fails loudly and immediately rather than accumulating silent drift.
 
 ## Architecture
 
-### 1. Invariant manifest  (`config/nck-invariants.json`)
+### 1. Invariant manifest  (`configs/nck-invariants.json`)
 
 A JSON file listing every protected path and its sha256 hash.  The five
 invariant slots (sp5 §5):
@@ -25,25 +25,25 @@ invariant slots (sp5 §5):
 | Invariant | File | Label |
 |---|---|---|
 | Three-test gain gate | `docs/formalization-v0.md` | `three-test-gain-gate` |
-| Resource governor + headroom config | `config/v0-pretrain-config.json` | `governor-headroom-config` |
+| Resource governor + headroom config | `configs/v0-pretrain-config.json` | `governor-headroom-config` |
 | GOAL.md + only-the-user-retires-it | `GOAL.md` | `goal-md` |
 | Receipts-only truth | `GOAL.md` (contains verbatim) | `receipts-only-truth-statement` |
 | This enforcement layer itself | `scripts/nck/invariants.py` | `invariants-py` |
 
-The manifest also lists itself (`config/nck-invariants.json`) with
+The manifest also lists itself (`configs/nck-invariants.json`) with
 `sha256: "SELF"` — a sentinel that skips the content-hash check, relying
 instead on the baseline-comparison step (see §2).  This is correct: a file
 cannot hash itself without a fixed-point, and the baseline comparison is the
 actual self-verification mechanism.
 
-### 2. Outside-write-surface baseline  (`config/nck-baseline/`)
+### 2. Outside-write-surface baseline  (`configs/nck-baseline/`)
 
-A second copy of the manifest lives at `config/nck-baseline/nck-invariants.json`.
+A second copy of the manifest lives at `configs/nck-baseline/nck-invariants.json`.
 The resident's tool registry CANNOT write to this directory:
 
 - The `check_write_path(path)` function in `invariants.py` raises
   `PermissionError("WRITE_PROTECTED: ...")` for any path under
-  `config/nck-baseline/`.
+  `configs/nck-baseline/`.
 - The `IdempotenceEnforcingRegistry.register()` method calls `check_write_path`
   for every path in the verb's declared `write_paths` list.
 - Verbs that do not declare `write_paths` are not blocked at registration time;
@@ -120,14 +120,14 @@ manifest entry for itself is present and the checker cannot silently omit it.
 The following paths are protected — the registered verb layer cannot write
 to them through `IdempotenceEnforcingRegistry`:
 
-- `config/nck-baseline/` — the baseline directory (hard-enforced via
+- `configs/nck-baseline/` — the baseline directory (hard-enforced via
   `check_write_path`).
 
 The following paths are protected by hash (in the manifest) but not by the
 write-surface block (they are inside the write surface, reachable by a branch
 promotion):
 
-- `docs/formalization-v0.md`, `config/v0-pretrain-config.json`, `GOAL.md`,
+- `docs/formalization-v0.md`, `configs/v0-pretrain-config.json`, `GOAL.md`,
   `scripts/nck/invariants.py`
 
 These are protected against ACCIDENTAL mutation, not against a deliberate
@@ -170,7 +170,7 @@ and in-repo Python.
 | `docs/nck-invariant-contract-v0.md` | 15 behavioral invariants; uniform tool interface (inv 5) |
 | `GOAL.md` | Source of receipts-only-truth statement (invariant 4); hash target |
 | `docs/formalization-v0.md` | Three-test gain gate (§4); hash target |
-| `config/v0-pretrain-config.json` | Governor + headroom config; hash target |
+| `configs/v0-pretrain-config.json` | Governor + headroom config; hash target |
 
 No file outside this repository was read.  No predecessor-CLI source was accessed.
 
@@ -196,7 +196,7 @@ No file outside this repository was read.  No predecessor-CLI source was accesse
    dir is "outside the write surface" (enforced by the registry) while the
    other invariant files are inside the write surface (reachable by promotion).
    Resolution: `check_write_path` blocks registered-verb writes to
-   `config/nck-baseline/` only.  Protection of the other files is hash-based
+   `configs/nck-baseline/` only.  Protection of the other files is hash-based
    (boot-time detection) rather than filesystem-ACL-based, matching the threat
    model (accidental self-modification, not adversarial attack).
 

@@ -264,8 +264,8 @@ if build_multimodal_v0_model and base_cfg:
         receipt = {
             "ticket": "B3-MULTIMODAL-SELFTEST",
             "ts": ts,
-            "config_base": "config/v0-pretrain-config.json",
-            "config_mm_ext": "config/v0-multimodal-config.json",
+            "config_base": "configs/v0-pretrain-config.json",
+            "config_mm_ext": "configs/v0-multimodal-config.json",
             "lock2_splice_pass": lock2_ok,
             "lock3_span_mask_pass": lock3_ok,
             "lock4_rope_2d_exclusive_pass": lock4_pass,

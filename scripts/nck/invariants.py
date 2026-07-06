@@ -7,14 +7,14 @@ start and names the mismatched path.
 
 Architecture
 ------------
-1.  INVARIANT MANIFEST  (config/nck-invariants.json)
+1.  INVARIANT MANIFEST  (configs/nck-invariants.json)
     Lists protected paths and their expected sha256 hashes.
     The manifest itself is ALSO listed (self-covering).
 
-2.  OUTSIDE-WRITE-SURFACE baseline  (config/nck-baseline/)
+2.  OUTSIDE-WRITE-SURFACE baseline  (configs/nck-baseline/)
     A second copy of the manifest lives at a path the resident's tool
     registry CANNOT write.  The write-surface allowlist stored inside
-    ToolRegistry excludes config/nck-baseline/.  File-writing verbs
+    ToolRegistry excludes configs/nck-baseline/.  File-writing verbs
     (verbs registered with write_paths declared) are refused if ANY target
     path falls under the baseline dir.
 
@@ -52,21 +52,21 @@ from typing import Any
 # promotion).  The boot checker validates it against the baseline copy.
 MANIFEST_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "config", "nck-invariants.json",
+    "configs", "nck-invariants.json",
 )
 
 # The baseline copy lives OUTSIDE the write surface.  The resident's registered
 # file-writing verbs are refused if they target this directory.
 BASELINE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "config", "nck-baseline",
+    "configs", "nck-baseline",
 )
 BASELINE_MANIFEST_PATH = os.path.join(BASELINE_DIR, "nck-invariants.json")
 
 # The write surface allowlist root.  Verbs that declare write_paths are
 # checked against this: any path NOT under the allowlist root (or
 # explicitly in the exception set) is refused.
-# config/nck-baseline is excluded from the write surface.
+# configs/nck-baseline is excluded from the write surface.
 WRITE_SURFACE_ROOT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
 )
@@ -391,7 +391,7 @@ def write_manifest_and_baseline(
         "schema_version": schema_version,
         "note": (
             "Protected-invariant manifest for NC-K boot checksum layer. "
-            "This file and its baseline copy (config/nck-baseline/) must match at boot. "
+            "This file and its baseline copy (configs/nck-baseline/) must match at boot. "
             "Do not edit manually; regenerate via scripts/nck/invariants.py --update-manifest."
         ),
         "protected_paths": entries,
@@ -435,7 +435,7 @@ if __name__ == "__main__":
         if not os.path.isfile(MANIFEST_PATH):
             print(
                 f"ERROR: no existing manifest at {MANIFEST_PATH}. "
-                "Create config/nck-invariants.json first.",
+                "Create configs/nck-invariants.json first.",
                 file=sys.stderr,
             )
             sys.exit(1)

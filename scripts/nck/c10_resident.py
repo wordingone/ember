@@ -6,7 +6,7 @@ ScheduleSource) against the NCKEventLoop and runs forever.
 Usage:
     python scripts/nck/c10_resident.py [--config <path>]
 
-Default config: config/nck-c10.json (relative to repo root).
+Default config: configs/nck-c10.json (relative to repo root).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from nck.event_loop import (
     ScheduleSource,
 )
 
-_DEFAULT_CONFIG = os.path.join(_REPO, "config", "nck-c10.json")
+_DEFAULT_CONFIG = os.path.join(_REPO, "configs", "nck-c10.json")
 
 _BUILTIN_DEFAULTS: dict = {
     "governor": {
@@ -56,7 +56,7 @@ _BUILTIN_DEFAULTS: dict = {
     # Job receipt source
     "job_receipts_dir": os.path.join(_REPO, "receipts"),
     # Schedule source
-    "schedule_path": os.path.join(_REPO, "config", "nck-schedule.json"),
+    "schedule_path": os.path.join(_REPO, "configs", "nck-schedule.json"),
     # RSS cap (MiB, 0=disabled)
     "rss_cap_mib": 512,
     # Kill-switch sentinel
