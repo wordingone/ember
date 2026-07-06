@@ -1,0 +1,16 @@
+{
+  "acceptance_a_derive_and_verify_pass": true,
+  "derive": {
+    "derive_receipt_path": "scratch/w2-garm/dry-run/acceptance-a\\s_arm_derivation_receipt.json",
+    "s_arm_config_sha256": "588dd0b7eb733d4465e73beecd69cd2b96a0463faac641f279afb9f62987af7e",
+    "s_config_path": "scratch/w2-garm/dry-run/acceptance-a\\s_arm_config.json"
+  },
+  "run_id": "w2-garm-dryrun-20260706T034711Z",
+  "ticket": "ISSUE-113-W2-GARM-108-VERIFICATION",
+  "tool": "scripts/w2_derive_s_config.py (imported, not reimplemented)",
+  "ts": "20260706T034715Z",
+  "verify": {
+    "allowed": true,
+    "reason": "S-arm config 'scratch/w2-garm/dry-run/acceptance-a\\\\s_arm_config.json' matches fresh re-derivation from 'scratch/w2-garm/dry-run/acceptance-a\\\\dump' field-for-field -- W2 S-arm launch ALLOWED"
+  }
+}

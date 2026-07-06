@@ -1,0 +1,34 @@
+{
+  "dry_run": true,
+  "identity_preservation": {
+    "fp_diff_tolerance": 0.0001,
+    "fp_diff_tolerance_source": "docs/spec/rung2-grow-spec-v1.md (fp_diff <= 1e-4)",
+    "gate": "net2net_grow's internal GATE_A (fp64 forward pre/post on the fixed probe batch)",
+    "measured": {
+      "net2net_bf16_argmax_agree": 1.0,
+      "net2net_bf16_kl_mean": 0.0,
+      "net2net_fp32_max_abs_diff": 0.0
+    },
+    "passed": true
+  },
+  "input_shape": {
+    "ff": 32,
+    "hidden": 16,
+    "layers": 2
+  },
+  "is_real_lineage": false,
+  "operator": {
+    "function": "net2net_grow",
+    "module": "scripts/growth_refutation/capacity.py",
+    "provenance": "landed byte-for-byte from the maintainer's local ember work tree scratch state (untracked, never previously committed anywhere) -- see coordination mail to team-lead"
+  },
+  "output_shape": {
+    "ff": 64,
+    "hidden": 16,
+    "layers": 2
+  },
+  "run_id": "w2-garm-dryrun-20260706T034711Z",
+  "strict_doubling_verified": true,
+  "ticket": "ISSUE-113-W2-GARM-GROW",
+  "ts": "20260706T034715Z"
+}

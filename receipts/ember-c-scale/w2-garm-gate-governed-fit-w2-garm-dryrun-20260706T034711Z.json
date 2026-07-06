@@ -1,0 +1,22 @@
+{
+  "allow_case": {
+    "allowed": true,
+    "free_gb_injected": 8.0,
+    "margin_gb": 4.0,
+    "reason": "free_gb=8.0 >= margin_gb=4.0 -- ALLOWED",
+    "vram_fraction": 0.85
+  },
+  "both_directions_verified": true,
+  "gate": "governor.py:env_limits() policy constants reused; preflight()'s exact refusal condition/receipt shape mirrored in a CPU-safe wrapper (preflight() itself hard-imports torch.cuda and cannot run in this dry run)",
+  "governed_fit_dry_run_simulated": true,
+  "refuse_case": {
+    "allowed": false,
+    "free_gb_injected": 0.5,
+    "margin_gb": 4.0,
+    "reason": "VRAM-PREFLIGHT (simulated): 0.5GB free -- need >= 4.0GB free before load; refusing launch",
+    "vram_fraction": 0.85
+  },
+  "run_id": "w2-garm-dryrun-20260706T034711Z",
+  "ticket": "ISSUE-113-W2-GARM-GATE-GOVERNED-FIT",
+  "ts": "20260706T034715Z"
+}
