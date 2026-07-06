@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C0 (status probe / TDD).
+"""Ember totality test โ€” Condition C0 (status probe / TDD).
 
-C0 — No additional Ember loops before resident-training preconditions.
+C0 โ€” No additional Ember loops before resident-training preconditions.
   R: before any further cycle/loop/benchmark/growth/scale-up/readiness/proof,
      the clean-room `avir-cli` resident harness precondition and both RLM and
      iGRPO preconditions (C14) are receipted.
@@ -15,11 +15,11 @@ Gloss (task): no additional Ember loops before resident-training preconditions:
 Receipt hint: C14 receipt timestamp vs loop receipt timestamps.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line. C0 is a
-STANDING PROCESS-INVARIANT (GOAL.md ง4.0(9)), not a STATE-condition: it never
+STANDING PROCESS-INVARIANT (GOAL.md ยง4.0(9)), not a STATE-condition: it never
 prints RED/GREEN/UNEVALUABLE. It renders one of AUDIT-OK / AUDIT-INCIDENT (a
 cadence audit from the goalforge-clear epoch) or, pre-epoch (no operator-
-acceptance object exists yet), AUDIT-PENDING-EPOCH — never RED. Pre-epoch
-history is explicitly OUT OF AUDIT SCOPE (ง4.0(9)): this probe only ever
+acceptance object exists yet), AUDIT-PENDING-EPOCH โ€” never RED. Pre-epoch
+history is explicitly OUT OF AUDIT SCOPE (ยง4.0(9)): this probe only ever
 scans receipts dated at/after the epoch once one exists.
 
 Run ONLY via:  wsl python3 <this file>
@@ -58,7 +58,7 @@ ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
 # --- Invalid-tokens (negative assertions) ------------------------------------
 # C0's explicit ? token, PLUS the C14-disqualifying tokens that render any
-# cited resident-training "PASS" label invalid (C14 ง4.2). C0's CHK requires a
+# cited resident-training "PASS" label invalid (C14 ยง4.2). C0's CHK requires a
 # *real* C14 PASS; a PASS revoked by the conflation guard or downgraded to a
 # symbolic/runner/parity-with-model interpretation is NOT a C14 PASS.
 INVALID_TOKENS = [
@@ -126,7 +126,7 @@ def find_epoch():
     acceptance object (docs/spec/operator-acceptance-v1.md schema
     acceptance/v1, scope goalforge-clear, stored at
     receipts/acceptance/goalforge-clear-<date>.json), or (None, None) if no
-    epoch has been recorded yet. GOAL.md ง4.0(9): the epoch is the operator
+    epoch has been recorded yet. GOAL.md ยง4.0(9): the epoch is the operator
     acceptance of this goal; C0 is a process-invariant with no meaning before
     it exists. epoch_ts is normalized (see _norm_ts) for stable comparison.
     """
@@ -161,7 +161,7 @@ def load_json(path):
 
 
 # --- Incident-disposition support (issue #31, docs/spec/
-# c0-incident-cure-contract.md ง5) -------------------------------------------
+# c0-incident-cure-contract.md ยง5) -------------------------------------------
 # There is no disposition concept in scan()'s core detection; these helpers
 # add ONE additional, independently-verified escape hatch checked only on the
 # RED paths that would otherwise flag invalid_precondition_bypass. Nothing
@@ -176,7 +176,7 @@ def _sha256_of(path):
     A regular file hashes its own bytes. A directory (e.g. a loop-artifact
     directory NODE such as receipts/<peer-loop>/<ts>/, which
     _loop_paths_in_window treats as a single artifact -- see docs/spec/
-    c0-incident-cure-contract.md ง3 item 3) has no bytes of its own, so it
+    c0-incident-cure-contract.md ยง3 item 3) has no bytes of its own, so it
     hashes a deterministic digest of every regular file recursively inside
     it (sorted relative path, then that file's own sha256, newline-joined)."""
     if os.path.isdir(path):
@@ -386,7 +386,7 @@ def _find_valid_disposition(loop_paths_in_window, gate_receipts_all, epoch_ts):
     """Return a disposition reason string if a receipted, independently
     verified process-invariant-incident-disposition (receipts/ember-process-
     incident-dispositions/c0-disposition-*.json, docs/spec/
-    c0-incident-cure-contract.md ง5.1) covers EXACTLY the current in-window
+    c0-incident-cure-contract.md ยง5.1) covers EXACTLY the current in-window
     loop artifact set, else None. ALL of the following must hold, verified
     against live on-disk content every call -- the disposition's own claims
     (its incident_receipts sha256 list, its scope_classification verdict
@@ -633,7 +633,7 @@ def scan(min_ts):
 def main():
     """Resolve the epoch, run scan() in the appropriate window, and relabel
     the raw RED/GREEN finding against the AUDIT-OK/AUDIT-INCIDENT/
-    AUDIT-PENDING-EPOCH contract (GOAL.md ง4.0(9)) before printing.
+    AUDIT-PENDING-EPOCH contract (GOAL.md ยง4.0(9)) before printing.
     """
     epoch_ts, epoch_path = find_epoch()
     try:
@@ -648,7 +648,7 @@ def main():
             "goalforge-clear operator-acceptance object exists yet at "
             "receipts/acceptance/goalforge-clear-*.json (schema "
             "acceptance/v1); this is NOT an audit verdict, pre-epoch "
-            "history is OUT OF AUDIT SCOPE per GOAL.md ง4.0(9), the actual "
+            "history is OUT OF AUDIT SCOPE per GOAL.md ยง4.0(9), the actual "
             "status is never RED/GREEN/UNEVALUABLE for this row]"
         )
         return

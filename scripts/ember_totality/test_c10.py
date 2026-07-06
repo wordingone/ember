@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C10 (status probe / TDD).
+"""Ember totality test â€” Condition C10 (status probe / TDD).
 
-C10 — No deferred-work escape hatch.
+C10 â€” No deferred-work escape hatch.
   R: every previously deferred/dormant/post-MVP/trigger-gated/historical/
      founder-side item that can affect the loop is completed, integrated into
      the next cycle, or killed with a named successor + receipt.
@@ -20,7 +20,7 @@ Receipt hint: docs/ember-debt-ledger.md.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
-inspecting state under <external-state> — never hardcoded.
+inspecting state under <external-state> â€” never hardcoded.
 
 Run ONLY via:  wsl python3 <this file>
 Under WSL the execution root may mount at <local-mount-point>/ or /mnt<local-mount-point>/ on this host.
