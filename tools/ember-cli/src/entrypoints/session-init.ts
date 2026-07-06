@@ -202,9 +202,22 @@ export function buildProductionCallModel(
       };
     }
 
+    // issue #197: an explicit `Connection: keep-alive` header here was
+    // silently DEFEATING the retry mechanism -- measured directly (two live
+    // kill-mid-stream probes against the real llama-server binary, one with
+    // this header, one without): with it set, Bun's fetch() pools the
+    // request onto its keep-alive connection machinery and treats a server
+    // process killed mid-SSE-stream as a normal, silent end-of-stream
+    // (`done: true`, zero error) instead of throwing -- so a crashed/killed
+    // server produced a SILENTLY TRUNCATED response with no error, no
+    // retry, and no user-visible signal anything went wrong. Without the
+    // header, the identical kill throws a real `Error` (`code: "ECONNRESET"`)
+    // that reaches callModelWithRetry's classifier correctly. Modern fetch
+    // clients manage connection reuse themselves; this header was
+    // boilerplate from the CLI's initial publish, never load-bearing for
+    // anything else, and actively harmful here.
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      Connection:     "keep-alive",
     };
 
     if (skipCacheWrite) {
@@ -270,6 +283,28 @@ export function buildProductionCallModel(
     } finally {
       clearTimeout(timeoutId);
       reader.releaseLock();
+    }
+
+    // issue #197: `reader.read()` returning `done: true` is a TRANSPORT-level
+    // signal (the underlying stream ended), not proof the model actually
+    // finished. Measured directly against the real llama-server binary: a
+    // server killed mid-generation sometimes makes Bun's fetch() report a
+    // silent, non-throwing EOF here -- with no finish_reason chunk and no
+    // [DONE] sentinel ever seen. Before this check, that silently produced a
+    // fabricated "end_turn" response built from whatever partial content had
+    // streamed so far -- a TRUNCATED answer rendered as a normal, complete,
+    // successful turn, with no error, no retry, and no signal to the user
+    // that anything went wrong (worse than a visible error). A stream that
+    // ends without ever having seen a genuine finish signal is a transport
+    // failure, classified the same way an ECONNRESET is (see
+    // query-engine.ts's isRetryableTransportError) so it gets a real,
+    // bounded, visible retry instead of a silently-corrupted success.
+    if (!ctx.sawFinishReason) {
+      const err = new Error(
+        "Model server connection ended before a finish signal was received (stream truncated).",
+      );
+      (err as { code?: string }).code = "ECONNRESET";
+      throw err;
     }
 
     // Merge thinking prefix into text when still in 'pre' state

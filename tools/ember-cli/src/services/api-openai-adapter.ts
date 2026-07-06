@@ -341,6 +341,19 @@ export interface SseParserContext {
   thinkingBuffer: string;
   textBuffer: string;
   toolCallsByIndex: Map<number, { id: string; name: string; arguments: string }>;
+  // issue #197: true only once a chunk carrying a non-null
+  // `choices[0].finish_reason` has actually been seen. Before this field
+  // existed, session-init.ts's buildProductionCallModel treated ANY stream
+  // end (`reader.read()` returning `done: true`) as a successful "end_turn"
+  // completion -- with no way to tell "the model genuinely finished" from
+  // "the connection died mid-stream and the runtime's fetch() silently
+  // reported a clean EOF instead of throwing" (measured directly: a real
+  // llama-server killed mid-generation sometimes produces exactly this
+  // silent-EOF shape, no error ever thrown). That gap meant a killed/
+  // crashed server produced a TRUNCATED response rendered as a normal,
+  // complete, successful turn -- worse than a visible error, since nothing
+  // ever signaled the user or the retry logic that anything went wrong.
+  sawFinishReason: boolean;
 }
 
 /**
@@ -355,6 +368,7 @@ export function createSseParserContext(opts: SseParserOptions = {}): SseParserCo
     thinkingBuffer: "",
     textBuffer: "",
     toolCallsByIndex: new Map(),
+    sawFinishReason: false,
   };
 }
 
@@ -376,7 +390,13 @@ export async function processSseLine(
 
   if (!rawLine.startsWith("data:")) return;
   const jsonStr = rawLine.slice(5).trim();
-  if (jsonStr === "[DONE]") return;
+  if (jsonStr === "[DONE]") {
+    // issue #197: a genuine [DONE] sentinel is also a valid finish signal,
+    // defensive against a server that sends it without a finish_reason on
+    // the preceding chunk (the primary signal is checked below).
+    ctx.sawFinishReason = true;
+    return;
+  }
 
   let data: unknown;
   try {
@@ -389,9 +409,17 @@ export async function processSseLine(
 
   // Route delta based on state machine
   const choice = (data as Record<string, unknown>)?.["choices"];
-  const delta = Array.isArray(choice)
-    ? (choice[0] as Record<string, unknown>)?.["delta"]
-    : null;
+  const firstChoice = Array.isArray(choice) ? (choice[0] as Record<string, unknown>) : null;
+
+  // issue #197: record a genuine finish signal BEFORE the `!delta` early
+  // return below, since the real final chunk (finish_reason set) commonly
+  // carries an empty-but-present delta -- checked on `choice`, not `delta`,
+  // so it's captured regardless of that chunk's delta shape.
+  if (firstChoice && firstChoice["finish_reason"] != null) {
+    ctx.sawFinishReason = true;
+  }
+
+  const delta = firstChoice?.["delta"];
   if (!delta) return;
 
   const content = (delta as Record<string, unknown>)?.["content"];
