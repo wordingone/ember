@@ -76,15 +76,16 @@ Similarly, condition counts other than `conditions-v1.md §4.3`'s are stale.
 
 ## 4. Lanes — exact in-flight state (UPDATE ON EVERY LANDING)
 
-| Lane | State (2026-07-05T08:19Z) | Next action (exact) |
+| Lane | State (2026-07-06T01:25Z) | Next action (exact) |
 |---|---|---|
-| **operator-seat** | #172 FIXED (PR #178, merge 33fb503); operator session #3 pending one cockpit swap; #165 input channel closed-verified; #154 open (standing practice). | Continue session cockpit swap delivery. |
-| **cockpit** | flame build (PR #170) live since 2026-07-05 21:28Z; swap delivering the #172 binary in flight. | Gate binary delivery + flamebuild stability surface. |
-| **issue hygiene** | #164/#168/#169 closed with verified dispositions; #176 filed (duplicate logo-homescreen.ts copies). | Sweep duplicates per #176 criteria. |
-| **W2 decontam** | DOWN (third memory-class death, silent); #174 forensics lane active (probe-174 receipts under goalforge scratch/w2-heldout-run/). | Diagnose memory-class failure; halt W2 until mechanism known. |
-| **research queue #155** | leg-1 attempt REJECTED (PR #177, fabricated receipt); re-dispatch pending under hardened telemetry rails (see #175 amendment). | Gate #175 hardening; queue re-dispatch. |
-| **board** | 29-GREEN / 2-AUDIT-OK / 1-AUDIT-INCIDENT / 6-RED per ember-totality-20260705T081932Z; the 15xxZ receipts are port-parity artifacts. | Audit the AUDIT-INCIDENT row; certify parity. |
-| **W2 G-arm** | #113 frozen spec filed; CPU dry-run lane pending dispatch. | Dispatch dry-run via builder; scope gate on cost before GPU leg. |
+| **W2 decontam** | #115 CLOSED (honest-exhaustion receipt; PR #183 pool fix, PR #186 worker cap). Finding: 0/192 candidates clean under any-match window=13 → convention v2 pre-registered in #193 (blocks #121); collision-stats leg running (#185). | Mint #115/#185 collision-stats receipt. |
+| **operator-seat** | #182 tool-cwd + #156 Glob + #157 loop-stall + #192 read-stub all FIXED (PRs #187, #195). Sessions #4/#5: silent wedge → loud diagnosable failure; residual = #197 (conversation-total budget, 400-terminal, zombie-retry) — builder in flight. Cockpit live on the #195 build. | Gate #197 builder delivery; verify cockpit stability. |
+| **research queue #155** | leg 1 fused-Muon VIABLE — env wall gone, 1.3459x at small footprint (PR #188, #175 closed); full-scale sweep rides the next GPU-residency window per the #53 runbook refresh (with #81 diagnosis). | Dispatch full-scale sweep when GPU residency available. |
+| **operator surface** | #199 MERGED (f545129) — #173/#190/#176/b23 landed; live-seat check rides next session. | Verify seat stability across session boundary. |
+| **tree health** | typecheck 70→53 errors (PR #194 excised dead activity feature; #189 open for the rest); suite baseline 2511/24/9; #196 filed (EMBER_MODEL_URL precedence). | Fix remaining typecheck errors per #189. |
+| **board** | 29-GREEN / 2-AUDIT-OK / 1-AUDIT-INCIDENT / 6-RED per ember-totality-20260705T081932Z; parity artifacts quarantined to scripts/ember_totality/receipts-parity/ (PR #180). | Re-run totality after the #197 seat fix lands; audit the AUDIT-INCIDENT row. |
+| **W2 G-arm** | #113 frozen spec filed; CPU dry-run lane pending dispatch (queued behind seat + decontam chains). | Dispatch dry-run builder when a budget slot frees; scope gate on cost before any GPU leg. |
+
 
 ## 5. Pre-registrations and standing rulings that BIND future claims
 
