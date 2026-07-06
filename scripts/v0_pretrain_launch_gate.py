@@ -3,7 +3,7 @@ v0 pretrain (NC2-own, c03 shape: 0.368B QAT, seq 1024, w1-governed 4090).
 
 This shim embeds docs/research/v0-launch-gate.md as named, receipt-checkable
 assertions. The v0 trainer (#167 — scripts/timeshare_pretrain.py extended
-against config/v0-pretrain-config.json) is dispatched THROUGH this gate:
+against configs/v0-pretrain-config.json) is dispatched THROUGH this gate:
 it loads each named receipt, receipt_checks it, verifies the pins, and
 REFUSES with the failing G-row(s) named. No row is waivable except by the
 user, by name. Same fail-closed grammar as fp25_surfaceb select mode.
@@ -36,7 +36,7 @@ ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
 ASSEMBLY_SHA = ("a29d2e567f1853966cc72a4890eadc963164265e"
                 "4f24a89cadea24d9ff5b80c2")
 TOKENIZER_RECEIPT = "tokenizer-freeze-20260611T154111Z.json"
-CONFIG = f"{NC}/config/v0-pretrain-config.json"
+CONFIG = f"{NC}/configs/v0-pretrain-config.json"
 DEADLINE = datetime.date(2026, 6, 22)
 # fp19-bench receipted-unstacked days-to-compute-optimal for the c03-qat core
 ENVELOPE_DAYS_FLOOR = 4.55
@@ -688,7 +688,7 @@ def emit(launch_date, rows, output_dir=None):
             "assembly_receipt": ASSEMBLY_RECEIPT,
             "assembly_sha256": ASSEMBLY_SHA,
             "tokenizer_receipt": TOKENIZER_RECEIPT,
-            "config": "config/v0-pretrain-config.json",
+            "config": "configs/v0-pretrain-config.json",
             "envelope_days_floor": ENVELOPE_DAYS_FLOOR,
         },
         "dispatch_rule": ("v0 pretrain refuses unless all_green; the failing "

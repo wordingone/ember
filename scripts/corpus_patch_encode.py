@@ -1,6 +1,6 @@
 """corpus_patch_encode.py — encode images as 48×48px patches for multimodal training.
 
-Spec: config/v0-multimodal-config.json vision_embedder (patch_px=48, in_dim=6912).
+Spec: configs/v0-multimodal-config.json vision_embedder (patch_px=48, in_dim=6912).
 Reserved vocab band: DELIM_START=32000, DELIM_END=32001 (from lock1_reserved_vocab_band).
 Output format: .npy dict per pair (numpy npz-style via np.save with allow_pickle=True).
 """

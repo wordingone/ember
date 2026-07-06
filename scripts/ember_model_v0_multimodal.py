@@ -1,7 +1,7 @@
 """ember_model_v0_multimodal.py — architecture extension for ember-multimodal-v0.
 
 Implements NC2-own §8 architecture locks for the multimodal config
-(config/ember-multimodal-v0-pretrain-config.json, #26, 2026-06-14).
+(configs/ember-multimodal-v0-pretrain-config.json, #26, 2026-06-14).
 
 Locks implemented here:
   Lock 2 — inputs_embeds splice path
@@ -433,7 +433,7 @@ def _rope_1d(seq_len: int, head_dim: int, base: float = 10000.0, device=None):
 class VisionEmbedder:
     """48×48px patch → 6912-float → Linear(6912, 1024) + LayerNorm + factorized XY pos.
 
-    Spec: config/v0-multimodal-config.json vision_embedder:
+    Spec: configs/v0-multimodal-config.json vision_embedder:
       patch_px=48, in_dim=6912, out_dim=1024, pos_type=xy_factorized.
 
     Style: Fuyu-style continuous soft tokens (NOT discrete codes). Each 48×48 RGB

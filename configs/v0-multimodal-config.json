@@ -2,10 +2,10 @@
   "ticket": "V0-MULTIMODAL-CONFIG",
   "version": 1,
   "authored": "2026-06-16",
-  "basis": "config/v0-pretrain-config.json (frozen v3) + the lead/state/nc-ladder/docs/ember-multimodal-v0-config-spec.md (eng-421)",
+  "basis": "configs/v0-pretrain-config.json (frozen v3) + the lead/state/nc-ladder/docs/ember-multimodal-v0-config-spec.md (eng-421)",
   "rule": "Extends v0-pretrain-config.json with multimodal locks. All v0 fields carry forward unchanged. DO NOT modify v0-pretrain-config.json (frozen at v3). This config is the target for ember-multimodal-v0 training.",
 
-  "extends": "config/v0-pretrain-config.json",
+  "extends": "configs/v0-pretrain-config.json",
 
   "multimodal": {
     "enabled": true,
@@ -98,7 +98,7 @@
     "interlock": "EMBER_GATE_AUTHORIZED=1 + --live (unchanged from v0)"
   },
 
-  "ac_check": "python -c \"import json; c=json.load(open('config/v0-multimodal-config.json')); m=c['multimodal']; assert all(k in m for k in ['enabled','qk_norm','bidirectional_spans','vision_embedder','reserved_vocab_band','inputs_embeds_path']); print('OK')\"",
+  "ac_check": "python -c \"import json; c=json.load(open('configs/v0-multimodal-config.json')); m=c['multimodal']; assert all(k in m for k in ['enabled','qk_norm','bidirectional_spans','vision_embedder','reserved_vocab_band','inputs_embeds_path']); print('OK')\"",
   "ac_fields": {
     "reserved_vocab_band": "lock1_reserved_vocab_band.ids",
     "note": "AC check references top-level alias fields below"
