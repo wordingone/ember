@@ -491,11 +491,33 @@ export function App({ children, onExit }: AppProps): React.ReactElement {
 
   useEffect(() => {
     const onResize = () => {
+      // issue #286 root cause: on Windows, Bun's process.stdout.columns/rows (and
+      // getWindowSize()) are snapshotted at stream-creation time and never refresh on their
+      // own after a real console resize -- confirmed live (a minimal poll-only repro outside
+      // this app never observed a change) and matches the documented Bun limitation
+      // (oven-sh/bun#17803: "getWindowSize() doesn't update unless _refreshSize() is called").
+      // Calling the private refresh hook first forces Bun to re-query the OS console buffer
+      // size before we read columns/rows below; without it, neither the 'resize' event nor
+      // this poller has a live value to read in the first place, no matter how often either
+      // fires. Optional-chained + try/guarded because _refreshSize is a Bun-internal, not a
+      // standard Node API -- harmless no-op if a future runtime removes it once fixed upstream.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      try { (process.stdout as any)._refreshSize?.(); } catch { /* not available; ignore */ }
       setColumns(process.stdout.columns ?? 80);
       setRows(process.stdout.rows ?? 24);
     };
     process.stdout.on("resize", onResize);
-    return () => { process.stdout.off("resize", onResize); };
+
+    // Bun-compiled binaries under Windows ConPTY also don't reliably emit the 'resize' event
+    // itself (a real node-pty resize() call never fired it in this session's repro either), so
+    // a live mid-session resize can silently never update columns/rows and the tree keeps
+    // rendering at launch-time dimensions while the terminal hard-wraps the stale-width output.
+    // This 250ms poller is the fallback: it re-checks the live dimensions (via onResize's own
+    // refresh) on an interval and updates state only on an actual change, so the event listener
+    // above still gives instant updates when it does fire, and the poller is the guarantee when
+    // it doesn't. (app-resize.test.ts's second case names this exact poller.)
+    const poll = setInterval(onResize, 250);
+    return () => { process.stdout.off("resize", onResize); clearInterval(poll); };
   }, []);
 
   useEffect(() => {

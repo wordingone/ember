@@ -17,6 +17,7 @@ import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { App as InkApp } from "../ink/components.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -773,14 +774,30 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     (r, _AppComponent, REPLComponent, props) => {
       // as React.ComponentType<Record<string, unknown>>: REPLComponent is
       // ComponentType<unknown>; cast to typed-props variant for createElement.
+      //
+      // issue #286 root cause: this render tree used to mount REPLComponent bare, with no
+      // TerminalSizeContext.Provider anywhere above it -- so screens/repl.ts's terminalCols/
+      // terminalRows (and every Homescreen/StatusLine width computed from them) permanently
+      // read TerminalSizeContext's static module-load-time default and NEVER updated, no matter
+      // what resize-detection existed inside ink/components.ts's App (the one component that
+      // actually provides a live TerminalSizeContext) -- because App was never in this tree at
+      // all (`_AppComponent`, app-shell.ts's separate/unused AppRoot prototype, was discarded
+      // here already and doesn't provide it either). Wrapping with the real ink App restores
+      // the live context: its resize listener + 250ms/_refreshSize() poller (ink/components.ts)
+      // now actually reach the REPL, so a live terminal resize reflows instead of leaving stale-
+      // width content for the terminal to hard-wrap.
       r.render(
         React.createElement(
-          REPLComponent as React.ComponentType<Record<string, unknown>>,
-          {
-            config: (props as Record<string, unknown>)["config"],
-            cwd:    (props as Record<string, unknown>)["cwd"],
-            onExit: (props as Record<string, unknown>)["onExit"],
-          },
+          InkApp,
+          null,
+          React.createElement(
+            REPLComponent as React.ComponentType<Record<string, unknown>>,
+            {
+              config: (props as Record<string, unknown>)["config"],
+              cwd:    (props as Record<string, unknown>)["cwd"],
+              onExit: (props as Record<string, unknown>)["onExit"],
+            },
+          ),
         ),
       );
     },

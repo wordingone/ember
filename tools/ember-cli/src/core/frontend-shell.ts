@@ -9,6 +9,23 @@ import type { ReactElement } from "react";
 import type { MountHandle } from "../ink/reconciler.ts";
 
 // ---------------------------------------------------------------------------
+// issue #286: mountInk/createRenderer close over whatever `stdout` object is
+// handed to them and read `.columns`/`.rows` fresh on every render() call --
+// but every call site below used to build a PLAIN {columns, rows} literal
+// once, at mount time, which then never changes again for the renderer's
+// lifetime. That froze the actual frame/paint width forever at boot-time
+// dimensions, even after App's own TerminalSizeContext (ink/components.ts)
+// correctly picks up a live resize -- a re-render just repaints the SAME
+// stale width. Getters here make every read live, so any later render()
+// call (including one triggered by the resize poller) sees the true current
+// terminal size.
+// ---------------------------------------------------------------------------
+const liveStdoutSize = {
+  get columns(): number { return process.stdout.columns ?? 80; },
+  get rows():    number { return process.stdout.rows    ?? 24; },
+};
+
+// ---------------------------------------------------------------------------
 // Design system re-exports (AC10)
 // ---------------------------------------------------------------------------
 
@@ -171,7 +188,7 @@ async function getInkRender(): Promise<(node: ReactElement, options?: RenderOpti
       : process.stdout;
     const handle = mountInk(wrapped, {
       stream,
-      stdout: { columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 },
+      stdout: liveStdoutSize,
       debug: options?.debug,
     });
     return {
@@ -199,7 +216,7 @@ export function render(node: ReactElement, options?: RenderOptions): InkInstance
   import("../ink/reconciler.ts").then(({ mountInk }) => {
     handle = mountInk(wrapped, {
       stream,
-      stdout: { columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 },
+      stdout: liveStdoutSize,
       debug: options?.debug,
     });
   }).catch(() => { /* reconciler load failure — degrade silently */ });
@@ -222,7 +239,7 @@ export function createRoot(_options?: RenderOptions): { render: (node: ReactElem
   if (_rootInstance !== null) return _rootInstance;
 
   const stream = process.stdout as { write(s: string): void };
-  const stdout = { columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 };
+  const stdout = liveStdoutSize;
 
   // M9-DIAG-LIVE: capture stdout dimensions at createRoot() time
   try {
