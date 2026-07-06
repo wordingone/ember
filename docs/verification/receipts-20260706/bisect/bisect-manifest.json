@@ -1,0 +1,98 @@
+[
+  {
+    "bin": "new",
+    "geo": "100x30",
+    "pid": 26504,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-new-100x30.txt"
+  },
+  {
+    "bin": "new",
+    "geo": "213x35",
+    "pid": 38200,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-new-213x35.txt"
+  },
+  {
+    "bin": "new",
+    "geo": "140x50",
+    "pid": 35456,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-new-140x50.txt"
+  },
+  {
+    "bin": "172",
+    "geo": "100x30",
+    "pid": 35440,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-172-100x30.txt"
+  },
+  {
+    "bin": "172",
+    "geo": "213x35",
+    "pid": 35548,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-172-213x35.txt"
+  },
+  {
+    "bin": "172",
+    "geo": "140x50",
+    "pid": 29160,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-172-140x50.txt"
+  },
+  {
+    "bin": "187",
+    "geo": "100x30",
+    "pid": 35512,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-187-100x30.txt"
+  },
+  {
+    "bin": "187",
+    "geo": "213x35",
+    "pid": 6592,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-187-213x35.txt"
+  },
+  {
+    "bin": "187",
+    "geo": "140x50",
+    "pid": 9408,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-187-140x50.txt"
+  },
+  {
+    "bin": "195",
+    "geo": "100x30",
+    "pid": 36844,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-195-100x30.txt"
+  },
+  {
+    "bin": "195",
+    "geo": "213x35",
+    "pid": 15064,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-195-213x35.txt"
+  },
+  {
+    "bin": "195",
+    "geo": "140x50",
+    "pid": 24624,
+    "exitedEarly": false,
+    "exitCode": null,
+    "file": "C:\\WINDOWS\\TEMP\\claude\\B--M-avir-agent\\exec-session\\scratchpad\\liveverify242\\receipts\\bisect\\welcome-195-140x50.txt"
+  }
+]
