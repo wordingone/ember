@@ -62,8 +62,16 @@ export interface ToolUseContext {
    * n_ctx). When set, query-engine.ts truncates every tool_result string to
    * this size before it enters the conversation; when absent, query-engine.ts
    * falls back to its own conservative default.
+   *
+   * `conversationMaxChars` (issue #197) bounds the SUM of the whole assembled
+   * conversation (system prompt + full history), not a single result --
+   * per-result truncation alone doesn't stop several individually-small
+   * results from together overflowing n_ctx. When set, query-engine.ts evicts
+   * the oldest tool_result contents (oldest-first, replaced with a short
+   * marker) before every model call until the total fits; when absent, it
+   * falls back to its own conservative default.
    */
-  toolResultBudget?: { maxChars: number };
+  toolResultBudget?: { maxChars: number; conversationMaxChars?: number };
   toolUseId?: string;
   setSDKStatus?: unknown;
   /** Present when call() is invoked from within an agent task. */

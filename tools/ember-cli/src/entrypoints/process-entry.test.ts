@@ -657,6 +657,9 @@ function makeFakeDeps(): LoopDeps {
     microcompact: async (msgs) => msgs,
     autocompact: async () => {},
     generateUuid: () => "test-uuid",
+    // issue #197: LoopDeps.sleep is required; this test never exercises a
+    // retry path, so an instant no-op resolve is sufficient.
+    sleep: async () => {},
   };
 }
 

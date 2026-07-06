@@ -24,6 +24,7 @@ import {
   type InterruptHandler,
   type TaskPanelState,
   type Task,
+  type EffortCalloutState,
 } from "../components/status-bar.ts";
 import {
   PromptInput,
@@ -58,7 +59,7 @@ import {
   SpinnerAnimationRow,
   ANIMATION_LOOP_MS,
 }                                        from "../components/spinner.ts";
-import { QueryEngine, type QueryEvent, type ResultEvent } from "../core/query-engine.ts";
+import { QueryEngine, type QueryEvent, type ResultEvent, type RetryAttemptInfo } from "../core/query-engine.ts";
 import type { Tool }                    from "../core/tool-interface.ts";
 import {
   getState,
@@ -325,10 +326,24 @@ export function renderMsgDispatch(
     }
 
     case "error":
+      // issue #197: default was 4 (SystemAPIErrorMessage hid EVERYTHING for
+      // retryCount<=3 and showed a "Retrying…" trailer above that), so EVERY
+      // terminal error message -- including one where zero retries ever
+      // happened -- claimed an in-progress retry that had already ended
+      // (operator session #5: "all 4 server slots idle, GPU 0%, yet
+      // Retrying… persists"). Fixing just this default to 0 would have made
+      // things WORSE (a deterministic 4xx, retryCount=0, would then hide the
+      // error entirely) -- so message-renderers.ts's SystemAPIErrorMessage
+      // was also corrected to always render a terminal error, with an
+      // honest completed-attempts note instead of a live "Retrying…" claim.
+      // Live in-flight retry attempts are shown separately, via the
+      // status-bar effort callout (see retryStatus state below), which
+      // clears the moment the turn ends -- never via a stale count baked
+      // into a past transcript entry.
       return React.createElement(SystemAPIErrorMessage, {
         key:        msg.id,
         errorText:  String(msg["content"]    ?? ""),
-        retryCount: Number(msg["retryCount"] ?? 4),
+        retryCount: Number(msg["retryCount"] ?? 0),
       });
 
     case "command":
@@ -485,6 +500,14 @@ export function ReplScreen({
   const busyRef                             = useRef(false);
   const [spinnerElapsed, setSpinnerElapsed] = useState(0);
   const spinnerStartRef                     = useRef(0);
+
+  // Live retry-attempt status (issue #197 Leg 3/4) — shown via the status
+  // bar's existing effort callout, NEVER as a transcript message: a retry is
+  // an in-progress, ephemeral condition, not a historical record. Cleared at
+  // the start of every submit and in submitPrompt's finally, so it can never
+  // outlive the request it describes (the exact zombie-state class this fix
+  // targets, one layer up from the render-default bug above).
+  const [retryStatus, setRetryStatus] = useState<EffortCalloutState>({ active: false });
 
   // Animate spinner at ANIMATION_LOOP_MS cadence
   useInterval(() => {
@@ -710,6 +733,7 @@ export function ReplScreen({
     setBusy(true);
     spinnerStartRef.current = Date.now();
     setSpinnerElapsed(0);
+    setRetryStatus({ active: false });
 
     // Echo slash commands distinctly (UserCommandMessage), ordinary input as
     // a chat message (UserTextMessage). parseSlashInput mirrors the dispatch's
@@ -775,9 +799,21 @@ export function ReplScreen({
           readFileCache:      new Map<string, unknown>(),
           // #157: size tool-result truncation off the server's real n_ctx
           // (siMod probed it during init via /props), not a guessed default.
+          // #197: conversationMaxChars (same call) bounds the whole assembled
+          // conversation, not just one result.
           toolResultBudget:   siMod.getToolResultBudget(),
           customSystemPrompt: systemPromptRef.current,
           userSpecifiedModel: config.model,
+          // #197: live retry-attempt status → the status-bar effort callout,
+          // never a transcript message. Cleared on the next assistant/user/
+          // result event and in submitPrompt's finally, so it can't outlive
+          // the request that produced it.
+          onRetryAttempt: (info: RetryAttemptInfo) => {
+            setRetryStatus({
+              active: true,
+              label: `⟳ retrying ${info.attempt}/${info.maxAttempts} in ${Math.ceil(info.delayMs / 1000)}s — ${info.reason}`,
+            });
+          },
         };
         engineRef.current = new QueryEngine(engineCfg, deps);
       } catch (err) {
@@ -811,6 +847,10 @@ export function ReplScreen({
         const event = ev as QueryEvent;
 
         if (event.type === "assistant") {
+          // A model response arrived -- any retry that was in flight has by
+          // definition succeeded. Clear immediately rather than let a stale
+          // "retrying" label linger until the finally block below.
+          setRetryStatus({ active: false });
           const raw = event.message.content;
           const content = Array.isArray(raw)
             ? (raw as Array<{ type?: string; text?: string }>)
@@ -892,6 +932,10 @@ export function ReplScreen({
       abortRef.current = null;
       busyRef.current  = false;
       setBusy(false);
+      // issue #197: unconditional backstop -- every turn-exit path (success,
+      // terminal error, abort, thrown exception) clears the retry callout, so
+      // it can never survive past the request it described.
+      setRetryStatus({ active: false });
     }
   };
   submitPromptRef.current = submitPrompt;
@@ -1010,12 +1054,15 @@ export function ReplScreen({
     }),
 
     // Status bar — modelMetrics is null when the model server is unreachable (meter hidden).
+    // effort: issue #197's live retry-attempt indicator (transient; never a
+    // transcript message — see retryStatus state and its clear sites above).
     React.createElement(StatusLine, {
       key:            "status",
       permissionMode: permModeState,
       interrupt:      interruptHandler,
       taskPanel:      taskPanelState,
       modelMetrics:   modelMetrics ?? undefined,
+      effort:         retryStatus,
     }),
   );
 }

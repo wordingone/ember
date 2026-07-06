@@ -462,7 +462,7 @@ export function AttachmentMessage(props: AttachmentMessageProps): React.ReactEle
 }
 
 // ---------------------------------------------------------------------------
-// SystemAPIErrorMessage (AC9: hidden for first 3 retry attempts)
+// SystemAPIErrorMessage
 // ---------------------------------------------------------------------------
 
 export interface SystemAPIErrorMessageProps {
@@ -472,23 +472,46 @@ export interface SystemAPIErrorMessageProps {
   isExpanded?:   boolean;
 }
 
+/**
+ * Renders a TERMINAL API error: the query engine has already stopped
+ * retrying (query-engine.ts's callModelWithRetry either exhausted its
+ * bounded attempts or hit a deterministic 4xx that skips retry entirely) by
+ * the time repl.ts's applyResultEvent ever creates the "error" message this
+ * component renders. Issue #197: this used to early-return null whenever
+ * retryCount<=3 (AC9, written for an earlier design where the SAME message
+ * updated in place across live retry attempts and was deliberately hidden
+ * until the count got "persistent enough"). Nothing in the current code
+ * calls this component more than once per message, so with repl.ts's
+ * retryCount default corrected from 4 to 0 (the zombie-"Retrying…" fix),
+ * that threshold started hiding EVERY deterministic-4xx terminal error
+ * outright (retryCount is legitimately 0 whenever no retry ever ran) --
+ * a strictly worse regression than the stale-text bug it replaced. A
+ * terminal error message must always render: it is the only record of what
+ * went wrong. The retryCount is still surfaced, but honestly -- as a
+ * completed attempt count, never as an in-progress "Retrying…" claim (that
+ * live state now belongs to the status bar's effort callout in repl.ts,
+ * cleared the instant the turn ends).
+ */
 export function SystemAPIErrorMessage(props: SystemAPIErrorMessageProps): React.ReactElement | null {
-  const { errorText, retryCount, nextRetryMs = 0, isExpanded = false } = props;
-
-  // AC9: not rendered for first 3 retry attempts
-  if (retryCount <= 3) return null;
+  const { errorText, retryCount, isExpanded = false } = props;
 
   const text = errorText.length > MAX_API_ERROR_CHARS && !isExpanded
     ? errorText.slice(0, MAX_API_ERROR_CHARS) + "… (Ctrl+O to expand)"
     : errorText;
 
-  const retryLabel = nextRetryMs > 0
-    ? `Retrying in ${Math.ceil(nextRetryMs / 1000)}s…`
-    : "Retrying…";
+  const attemptsLabel = retryCount > 0
+    ? `Gave up after ${retryCount} retry attempt${retryCount === 1 ? "" : "s"}.`
+    : null;
 
-  return React.createElement(Box, { flexDirection: "column", borderStyle: "single", borderColor: "red" },
-    React.createElement(Text, { color: "red" }, text),
-    React.createElement(Text, { dimColor: true }, retryLabel),
+  const children = [React.createElement(Text, { key: "text", color: "red" }, text)];
+  if (attemptsLabel) {
+    children.push(React.createElement(Text, { key: "attempts", dimColor: true }, attemptsLabel));
+  }
+
+  return React.createElement(
+    Box,
+    { flexDirection: "column", borderStyle: "single", borderColor: "red" },
+    ...children,
   );
 }
 

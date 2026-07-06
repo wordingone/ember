@@ -76,10 +76,27 @@ describe("retry logic", () => {
     expect(shouldRetry(503, false, 1, 0, false)).toBe(true);
   });
 
-  test("AC4: 4xx (except 429, 529) is NOT retried", () => {
+  test("AC4: 4xx (except 429, 408, 529) is NOT retried", () => {
     expect(shouldRetry(400, false, 0, 0, false)).toBe(false);
     expect(shouldRetry(403, false, 0, 0, false)).toBe(false);
     expect(shouldRetry(404, false, 0, 0, false)).toBe(false);
+  });
+
+  // issue #197: 400 is a deterministic client error (bad request / oversized
+  // payload) and must never be retried, at any retry count -- retrying can
+  // never make an already-malformed request succeed.
+  test("issue #197: 400 is never retried, even at retryCount 0 with cap far away", () => {
+    for (let i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
+      expect(shouldRetry(400, false, i, 0, false)).toBe(false);
+    }
+  });
+
+  // issue #197 fix contract: "4xx except 429/408" retries -- 408 (request
+  // timeout) is the server giving up waiting, not a permanent client error.
+  test("issue #197: 408 request timeout IS retried, like 429", () => {
+    expect(shouldRetry(408, false, 0, 0, false)).toBe(true);
+    expect(shouldRetry(408, false, MAX_RETRY_ATTEMPTS - 1, 0, false)).toBe(true);
+    expect(shouldRetry(408, false, MAX_RETRY_ATTEMPTS, 0, false)).toBe(false); // global cap still applies
   });
 
   test("AC3: 529 in foreground retried up to 3 times", () => {
