@@ -71,7 +71,7 @@
     }
   ],
   "assembly_receipt": "receipts\\eng36-assembly-20260611T052337Z.json",
-  "assembly_receipt_sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+  "assembly_receipt_sha256": "f6d0734e090fcaef84ac2361f42c7419f5e40b586355bc4a385e7a695250c841",
   "assembly_pin_basis": "eng #160 AC-1 (an agent 14560): freeze runs ONLY against the merged assembly receipt, pinned by name + sha256, verified before any sampling work",
   "real_token_counts": {
     "code_github_clean": 4053253615,
@@ -113,5 +113,14 @@
       "name": "special-id-census-20260611T143841Z.json",
       "sha256": "dabe30c3efd07d0f1ed16eb2fe5c1e2cc8c0cd20f7a467ae9f8e1b9be94fa0a2"
     }
-  }
+  },
+  "provenance_230": [
+    {
+      "ts": "20260706T000000Z",
+      "field": "assembly_receipt_sha256",
+      "reason": "#230 re-freeze: eng36-assembly receipt bytes changed at the 58ddf8d consolidation (predecessor-lineage content scrub); this field re-anchors to the current on-disk sha rather than the stale predecessor-tree value. No other field in this receipt was touched.",
+      "old_assembly_receipt_sha256": "a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",
+      "new_assembly_receipt_sha256": "f6d0734e090fcaef84ac2361f42c7419f5e40b586355bc4a385e7a695250c841"
+    }
+  ]
 }
