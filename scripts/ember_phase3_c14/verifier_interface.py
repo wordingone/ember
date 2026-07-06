@@ -633,6 +633,21 @@ def _run_selftest(verbose: bool = False) -> int:
     # -----------------------------------------------------------------------
     # Test 7: iGRPO integration — state_dict CHANGES after one igrpo_step
     # with verifier-conditioned reward (the core C14 property)
+    #
+    # Loops over all STATE_VALS rather than one fixed state_val, mirroring
+    # ember_resident_igrpo.py's own policy_weights_change_after_reward_update
+    # test. A single fixed-state draw is fragile: compute_advantages() returns
+    # an all-zero advantage vector BY SPEC whenever a Stage-2 reward group is
+    # degenerate (std(rewards)==0 -- paper Eq.4 + App A.3), which makes that
+    # one igrpo_step a legitimate, documented no-op rather than a real
+    # verifier-update failure. Measured fragility (issue #216): an untrained
+    # policy draws a degenerate all-equal reward group in 132/200 = 66% of
+    # single draws at G=4, so a single-state test has a ~2-in-3 a-priori
+    # false-failure chance -- seed 42 at state_val=3 was simply unlucky.
+    # Looping across all 8 states and requiring only ONE non-degenerate
+    # (state-dict-changing) update drops the residual flake to
+    # 0.66^8 ~= 3.6%/pass -- kept for uniformity with the sibling test;
+    # tighten both together if either ever fires in CI.
     # -----------------------------------------------------------------------
     torch.manual_seed(42)
     policy = TinyPolicyTransformer()
@@ -645,23 +660,27 @@ def _run_selftest(verbose: bool = False) -> int:
     # The verifier here is verifier-conditioned: the reward signal that drives
     # the policy-gradient update comes from ExecutingVerifierWrapper/
     # executing_verifier, not from a symbolic proxy.
-    step_result = igrpo_step(
-        policy=policy,
-        optimizer=optimizer,
-        state_val=3,
-        N=4,
-        G=4,
-        max_depth=2,
-        epsilon=0.2,
-        beta=0.0,
-        temperature=1.5,
-    )
+    post_hash = pre_hash
+    for state_val in STATE_VALS:
+        step_result = igrpo_step(
+            policy=policy,
+            optimizer=optimizer,
+            state_val=state_val,
+            N=4,
+            G=4,
+            max_depth=2,
+            epsilon=0.2,
+            beta=0.0,
+            temperature=1.5,
+        )
+        post_hash = _hash_state_dict(policy)
+        if post_hash != pre_hash:
+            break
 
-    post_hash = _hash_state_dict(policy)
     check(
         "igrpo_step.state_dict_changes_after_verifier_conditioned_update",
         pre_hash != post_hash,
-        f"state_dict hash unchanged after igrpo_step "
+        f"state_dict hash unchanged after igrpo_step across all {len(STATE_VALS)} states "
         f"(pre={pre_hash[:16]}, post={post_hash[:16]}); "
         "the verifier-conditioned gradient did not reach model parameters",
     )
