@@ -1,8 +1,8 @@
 # Ember Genesis Audit — Report
 
 Auditor: genesisaudit (read-only). Scope: every live training lineage under
-`models/` in B:/M/ember, graded against clause 3 (CREATION) of
-`B:/M/avir/leo/state/INVARIANT-draft-v2.md`. Repo state audited: `public/master`
+`models/` in the repository working tree, graded against clause 3 (CREATION) of
+the INVARIANT.md candidate text (v2 draft). Repo state audited: `public/master`
 (HEAD `15e467e9279222a4da5bc21925289ffe7d5150cb`, fetched from
 `https://github.com/wordingone/ember.git` 2026-07-06) for tracked
 scripts/docs/receipts, plus the on-disk `models/` and `receipts/` trees (which
@@ -157,6 +157,12 @@ rest on them").
    acked at the time but represents the same class of risk (frozen-design
    deviation under schedule pressure) as the fuse that was NOT caught in
    time (FineWeb-Edu)?
+
+---
+
+## Amendment: v2 → v3 Draft Delta (2026-07-06)
+
+This audit was conducted against the INVARIANT.md v2 candidate text. Between v2 and v3, only one substantive change was applied: clause 7's lineage-start sentence was refined to clarify the genesis-audit-names-none path (see issue #281 comment). That clause 7 amendment does not alter the verdicts in this report with respect to clause 3 (CREATION). All five findings (FineWeb-Edu taint, SFT-generator-missing, design-deviation, C-BASE-gap, teacher-system-risk) are pre-registered and stand unchanged under v3.
 
 ---
 
