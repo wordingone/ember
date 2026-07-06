@@ -1029,7 +1029,8 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
                  use_mp: bool = True,
                  n_workers: int = DEFAULT_MP_WORKERS,
                  progress_file: str | None = None,
-                 chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS) -> dict:
+                 chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
+                 pool_start_index: int | None = None) -> dict:
     t_start = time.perf_counter()
     block_len = seq + 1 + n_mtp
 
@@ -1039,9 +1040,9 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
     n_windows = compute_n_windows_from_manifest(manifest, seq, n_mtp=n_mtp)
 
     pool_size = batch_size * pool_oversample
-    # If --pool-start-index is provided, use it directly; otherwise compute via reserve_pool
-    if args.pool_start_index is not None:
-        pool_start = args.pool_start_index
+    # If pool_start_index is provided, use it directly; otherwise compute via reserve_pool
+    if pool_start_index is not None:
+        pool_start = pool_start_index
         disjoint_check = assert_disjoint_from_training(pool_start, ceiling_steps, train_batch)
     else:
         pool_start, disjoint_check = reserve_pool(n_windows, pool_size, ceiling_steps, train_batch)
@@ -1291,7 +1292,8 @@ def main():
                           use_mp=not args.serial_only,
                           n_workers=args.n_workers,
                           progress_file=progress_file,
-                          chunk_tokens=args.scan_chunk_tokens)
+                          chunk_tokens=args.scan_chunk_tokens,
+                          pool_start_index=args.pool_start_index)
 
     write_batch_file(result, out_path=args.out_batch)
     receipt_path = write_receipt(result, receipt_dir=args.receipt_dir)
