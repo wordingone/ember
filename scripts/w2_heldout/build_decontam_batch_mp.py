@@ -1298,6 +1298,8 @@ def main():
                     help="Run external contamination detection equivalence test (validates fix doesn't suppress real contamination)")
     ap.add_argument("--pool-start-index", type=int, default=None,
                     help="Override pool start index for explicit placement (e.g. mid-corpus; default: tail placement via held_out_window_start). Rounds extend UPWARD from this index; omit for tail mode (rounds extend DOWNWARD).")
+    ap.add_argument("--dump-matches", type=str, default=None,
+                    help="Optional JSONL file to dump matched contamination records (one per line)")
     args = ap.parse_args()
 
     if not args.shard_dir:
@@ -1354,6 +1356,23 @@ def main():
 
     write_batch_file(result, out_path=args.out_batch)
     receipt_path = write_receipt(result, receipt_dir=args.receipt_dir)
+
+    # Dump matches to JSONL if requested
+    if args.dump_matches:
+        os.makedirs(os.path.dirname(args.dump_matches) or ".", exist_ok=True)
+        match_count = 0
+        with open(args.dump_matches, "w") as f:
+            for match in result.get("contamination_recheck", {}).get("confirmed_matches", []):
+                row = {
+                    "shard": match.get("shard"),
+                    "offset": match.get("offset"),
+                    "match_len_tokens": 13,
+                    "window_idx": match.get("offset"),
+                    "basis": "v1-any-match"
+                }
+                f.write(json.dumps(row) + "\n")
+                match_count += 1
+        print(f"[DUMP] {match_count} matches written to {args.dump_matches}")
 
     print(f"batch_size={result['batch_size']} "
           f"windows_checked={result['total_candidates_checked']} "
