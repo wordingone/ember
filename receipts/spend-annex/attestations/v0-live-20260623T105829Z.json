@@ -1,0 +1,11 @@
+{
+    "attested_by":  "team-lead build lane, issue #378 sidecar restoration",
+    "evidence":  "v0-live receipt declares LOCAL execution: mode=\u0027live\u0027, contract=\u0027configs/v0-pretrain-config.json\u0027 (local file), no api_spend_usd field, no paid_api_surface_used field. Content is training metadata: segment_id=\u0027cbase-v0\u0027, loss curve, learning rate schedule, optimizer (muon_split), MTP, governors. All resources are local or checked-in: checkpoint path \u0027models/cbase-smoke-run/checkpoints/step-00000610\u0027, config from configs/. No external service dependency.",
+    "evidence_class":  "generator_absent_content_clean",
+    "target_sha256":  "8b3d7738839e6c8b4686276c027a42bf8d533346b673ba3e27e0ebe0fac518d8",
+    "attested_ts":  "2026-07-07T15:22:00Z",
+    "target_path":  "receipts/v0-live-20260623T105829Z.json",
+    "cites":  [
+                  "receipts/v0-live-20260623T105829Z.json fields: mode, contract, checkpoint"
+              ]
+}

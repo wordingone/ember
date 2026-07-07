@@ -1,0 +1,79 @@
+{
+  "ticket": "C-BASE-PROVENANCE-GAP-ARCHAEOLOGY",
+  "ts": "2026-07-07T02:56:47Z",
+  "verdict": "L4_PROVENANCE_VIOLATION_CONFIRMED",
+  "checkpoint_identity": {
+    "path": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "created_ts": "2026-07-03T08:57:00Z",
+    "manifest_training_loss_claimed": 0.3203125,
+    "manifest_step_claimed": 766
+  },
+  "trainedness_evidence": {
+    "source": "receipts/ember-c-e2b-paired/ember-c-e2b-paired-20260705T041045Z.json",
+    "eval_task": "c14-increment-mod-8-executing-verifier (corpus-v2, 5-train / 3-heldout)",
+    "checkpoint_train_performance": "2/5 tasks solved (40% success on in-distribution tasks)",
+    "e2b_baseline_performance": "1/5 tasks solved (20% success on same distribution)",
+    "checkpoint_score": 0.4,
+    "baseline_score": 0.2,
+    "ratio": "2.0x (checkpoint beats baseline significantly)",
+    "interpretation": "The checkpoint learned task-specific behavior beyond random init; this is TRAINEDNESS SIGNAL via post-hoc eval. However, post-hoc eval data alone does NOT constitute L4 PROVENANCE (which requires source → tokenization → training → verification receipted chain)."
+  },
+  "five_leads_archaeology": {
+    "lead_1_rung1_lineage": {
+      "result": "SUCCESS",
+      "finding": "RUNG1_LINEAGE constant found in scripts/p5_ratio_audit/run_p5_audit.py (line 383-411); points to post-facto evaluation receipt.",
+      "source_file": "scripts/p5_ratio_audit/run_p5_audit.py",
+      "source_line": 407
+    },
+    "lead_2_receipt_examination": {
+      "result": "NULL",
+      "finding": "Receipt receipts/ember-c-e2b-paired/ember-c-e2b-paired-20260705T041045Z.json confirms checkpoint evaluation post-hoc (Jul 5, created AFTER checkpoint on Jul 3); is NOT a training receipt; does not name training data source."
+    },
+    "lead_3_pregrow_derive_search": {
+      "result": "NULL",
+      "finding": "Grep across receipts/ and checkpoint tree: only RECONSTRUCTION references found (inverse net2net derived checkpoint backward from post-grow, Jul 6). No forward training run documentation."
+    },
+    "lead_4_git_log_models_path": {
+      "result": "NULL",
+      "finding": "models/cbase-grow-rung/ not tracked in git; no commit history available."
+    },
+    "lead_5_continuity_md_history": {
+      "result": "NULL",
+      "finding": "git log -p on CONTINUITY.md spanning 2026-07-02T00:00 to 2026-07-04T23:59: zero entries during checkpoint generation window."
+    },
+    "lead_6a_receipts_by_mtime": {
+      "result": "NULL",
+      "finding": "Receipts directory filtered by mtime 2026-07-02..04: zero receipts created during checkpoint generation window (2026-07-03T08:57Z)."
+    },
+    "lead_6b_checkpoint_tree_artifacts": {
+      "result": "NULL",
+      "finding": "Recursive listing of models/cbase-grow-rung/rung1-20260703T155447Z/: contains ONLY checkpoint files (model.pt, optimizer.pt, rng.pt, manifest.json). ZERO training logs, stdout transcripts, loss CSVs, tensorboard dirs, config dumps, or run metadata. The training run produced outputs but left no provenance trail beside the checkpoint manifest (which itself does not name the data source)."
+    }
+  },
+  "l4_law_assessment": {
+    "law": "L4 PROVENANCE (GOAL.md, binding): Every training token carries a receipted lineage (source → generator → verifier chain, all local). Data auditability is constitutional.",
+    "finding": "The checkpoint step-00000766 exists, has integrity (hash verified), and demonstrates trainedness (2× baseline performance on in-distribution eval). However, the ORIGINAL TRAINING RUN has no discoverable receipt linking its input data source to this checkpoint output. The checkpoint manifests its own hash but does not name the corpus it trained on. No training receipt exists in accessible records.",
+    "conclusion": "L4 PROVENANCE VIOLATION CONFIRMED — the checkpoint's training data source is not recoverable from local records. The violation is CLOSURE-BLOCKING: C-BASE cannot proceed to in-distribution verification without knowing what distribution it trained on."
+  },
+  "cure_paths": {
+    "path_a_locate_missing_receipt": {
+      "action": "Search cold storage, archived receipts, or off-session logs for the training receipt that generated step-00000766 on Jul 3 2026 ~08:55-08:57Z. The receipt would name the corpus, tokenization, and produce the checkpoint with hash 58e8e989....",
+      "effort": "Archaeology/recovery",
+      "outcome_if_successful": "Provides training data source → Leg 2 in-distribution eval proceeds → Trainedness verified or refuted."
+    },
+    "path_b_re_run_with_provenance": {
+      "action": "Re-run rung-1 stabilize training (cfg: v0-pretrain-config.json) with proper receipt logging: (a) document input corpus (receipt path + hash), (b) document tokenization (receipt path + config), (c) log training metrics + loss curve, (d) write training receipt naming all three. Re-run must be from the same corpus to match the manifest's claimed loss=0.3203.",
+      "effort": "Training run + receipt authorship",
+      "outcome_if_successful": "New checkpoint with documented provenance → Leg 2 eval against in-distribution data → L4 compliance."
+    },
+    "path_c_accept_trained_without_receipt": {
+      "action": "Accept the post-facto trainedness signal (2× baseline on in-distribution eval) as sufficient evidence of training, DESPITE missing provenance receipt. This would be a L4 WAIVER (requires operator approval per L7 KILL-PROTECTION: no ledger row dies by self-verdict).",
+      "effort": "Decision only",
+      "outcome_if_approved": "C-BASE marked GREEN with noted L4 gap (disclosed in board + completion record), proceeds to C-GROW. Future work must re-source and document the corpus."
+    }
+  },
+  "recommendation": "Path B (re-run with provenance) is the lowest-risk cure. The checkpoint shows trainedness but its provenance is lost. A re-run produces a new checkpoint with full documentation, satisfies L4, and is gated by the same budget-approved training harness. Path A (locate missing receipt) is archaeology with uncertain recovery time. Path C (waive L4) sets a precedent for provenance gaps.",
+  "next_action": "Awaiting team-lead ruling on cure path.",
+  "notes": "Post-hoc eval demonstrates trainedness convincingly (2× baseline is not random-init performance). However, evaluation IS NOT provenance. The eval named the data distribution (c14-increment-mod-8 corpus-v2) but that is WHICH TASK the checkpoint learned, not WHERE IT TRAINED. The fact that the checkpoint learned task-specific behavior proves it trained on SOME corpus, but leaves L4 violated (the source corpus, its generation receipts, and the training-to-checkpoint link are all unknown)."
+}
