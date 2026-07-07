@@ -1,0 +1,38 @@
+{
+  "rows": [
+    {
+      "path": "receipts/completeness-sweep/c34-launch-rail-issue-mapping-20260705T125847Z.json",
+      "sha256": "acf18e396a6ded5792b67deff7bdc9ecc04bbc866d770807d1f04d6cd7d45aef",
+      "evidence_class": "generator_absent_content_clean",
+      "notes": "Undeclared spend fields, zero-cost inference",
+      "api_spend_usd": 0.0,
+      "spend_basis": "zero-cost inference, no paid-api surface dependency"
+    },
+    {
+      "path": "receipts/ember-preloop-resident-gate/reference-uiux-ax-observation-20260622T151722Z.json",
+      "sha256": "09cc93b9a40aa91e894f1ce36a312fb11cf43707e3152577c5e7e5c3458fd80e",
+      "evidence_class": "generator_absent_content_clean",
+      "notes": "Undeclared spend fields, zero-cost inference",
+      "api_spend_usd": 0.0,
+      "spend_basis": "zero-cost inference, no paid-api surface dependency"
+    },
+    {
+      "path": "receipts/ember-sovereign-retrieval/design-spec-20260624T142553Z.json",
+      "sha256": "f03401eb95162881a9ded5ab3308a4e1d96e82d1f02623de08f324c5e71f1eff",
+      "evidence_class": "generator_absent_content_clean",
+      "notes": "Undeclared spend fields, zero-cost inference",
+      "api_spend_usd": 0.0,
+      "spend_basis": "zero-cost inference, no paid-api surface dependency"
+    },
+    {
+      "path": "receipts/fp35-fused-muon-kernel-ab-20260705T233603Z.json",
+      "sha256": "4f40546770fee01324495ed736aab9cd33c109b209a3a8c5aab0850c6fdc2185",
+      "evidence_class": "generator_absent_content_clean",
+      "notes": "Undeclared spend fields, zero-cost inference",
+      "api_spend_usd": 0.0,
+      "spend_basis": "zero-cost inference, no paid-api surface dependency"
+    }
+  ],
+  "supersedes": "spend-annex-20260707T020500Z.json",
+  "reason": "UTF-16 encoding defect in source file; content preserved; added api_spend_usd to decisive rows"
+}

@@ -1,0 +1,18 @@
+---
+# problems-meta.yaml — metadata for meta-problems
+meta_problems:
+  H0:
+    name: "Proof of Concept"
+    description: "baseline capability demonstrated"
+  H1:
+    name: "Reproducibility"
+    description: "results reproduce across seeds/runs"
+  H2:
+    name: "Scalability"
+    description: "holds at larger scale"
+  H3:
+    name: "Optimization"
+    description: "training efficiency/convergence"
+  H4:
+    name: "Generalization"
+    description: "generalizes beyond test distribution"
