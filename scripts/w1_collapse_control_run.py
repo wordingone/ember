@@ -87,6 +87,11 @@ from timeshare_pretrain import (  # reused, not edited (hard rail: new files onl
     mtp_total_loss,
 )
 from receipt_write import checked_write
+from w1_recheck_cache import (
+    check_recheck_cache,
+    write_recheck_cache,
+    disclose_cache_hit,
+)
 
 # ---------------------------------------------------------------------------
 # Citations (paths + the exact figures pinned by the pricing/rung receipts).
@@ -2063,7 +2068,21 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     # reconstruct the full seq+1 window per held-out row (x_np is w[0:seq],
     # y_np is w[1:seq+1], so w = x_np + [y_np[-1]]) before scanning.
     eval_rows = [list(x_np) + [int(y_np[-1])] for x_np, y_np in zip(xs, ys)]
-    contamination = contamination_recheck(eval_rows, args.shard_dir)
+
+    # Issue #351: Content-addressed contamination recheck cache. If the triple
+    # key (batch sha + decontam receipt sha + classifier code sha) matches a
+    # cached PASS result, skip the expensive recheck and cite the cached receipt.
+    # Any mismatch or non-PASS verdict triggers a full recheck.
+    contamination = check_recheck_cache(
+        eval_rows, args.shard_dir, args.decontam_receipt, out_dir,
+        classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
+    if not contamination:
+        # Cache miss or non-PASS verdict: run full recheck
+        contamination = contamination_recheck(eval_rows, args.shard_dir)
+        # Write to cache if this is a PASS result (non-PASS results are not cached)
+        write_recheck_cache(
+            contamination, eval_rows, args.decontam_receipt, out_dir,
+            classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
     # Defect A v2 (2026-07-07 fork-A fix): gate on the SELF-EXCLUSION-AWARE
     # classification, not the raw verdict -- contamination_recheck() cannot
     # tell the held-out batch's own true source windows (unavoidable matches)
