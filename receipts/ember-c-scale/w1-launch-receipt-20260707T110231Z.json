@@ -1,0 +1,26 @@
+{
+    "out_dir":  "scratch/w1-control/live/w1-live-20260707T110231Z",
+    "preflight_dual_assertion":  {
+                                     "pass":  true,
+                                     "vram_free_mib":  23277,
+                                     "port_8082_listening":  false,
+                                     "vram_free_pct":  94.8,
+                                     "note":  "New dual preflight per team-lead\u0027s post-attempt-3-OOM instruction: assert no llama-server process alive AND nothing listening on :8082, in addition to VRAM headroom. Attempt 3 OOM\u0027d because a cockpit-spawned llama-server (27B model, ~10.5GB) was launched ~1 min after attempt 3\u0027s own (then-passing) headroom check invaded the pool mid-run.",
+                                     "gpu_util_pct":  1,
+                                     "llama_server_process_alive":  false,
+                                     "vram_total_mib":  24564
+                                 },
+    "fix_pr":  "https://github.com/wordingone/ember/pull/340",
+    "joules_cmdline":  "python .claude\\worktrees\\w1-real-launch\\scripts\\joules.py --watch 7800",
+    "main_cmdline":  "python .claude\\worktrees\\w1-real-launch\\scripts\\w1_collapse_control_run.py --live --device cuda --shard-dir external-corpus/shards-v0 --decontam-receipt receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json --rung-manifest models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/manifest.json --out-dir scratch\\w1-control\\live\\w1-live-20260707T110231Z --live-eval-every 25",
+    "ts":  "20260707T110231Z",
+    "joules_pid":  37292,
+    "attempt":  4,
+    "prior_attempts_preserved":  [
+                                     "scratch/w1-control/live/w1-live-20260707T091615Z",
+                                     "scratch/w1-control/live/w1-live-20260707T101234Z"
+                                 ],
+    "fix_commit_squash_merged":  "56a85a4237e73d0ec1436874278cfe06685e2a1c",
+    "main_pid":  10468,
+    "joules_window_s":  7800
+}
