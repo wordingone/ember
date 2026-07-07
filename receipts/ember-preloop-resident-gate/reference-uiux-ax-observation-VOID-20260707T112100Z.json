@@ -1,0 +1,16 @@
+{
+  "ticket": "EMBER-REAL-reference-UIUX-AX-OBSERVATION-VOID",
+  "ts": "2026-07-07T11:21:00Z",
+  "verdict": "VOID",
+  "supersedes": [
+    {
+      "filename": "reference-uiux-ax-observation-20260622T151722Z.json",
+      "sha256": "09cc93b9a40aa91e894f1ce36a312fb11cf43707e3152577c5e7e5c3458fd80e"
+    }
+  ],
+  "reason": "Evidence-untraceable + content-dirty, three independently reproduced findings (2026-07-07): (1) the superseded receipt's evidence_files section cites all 5 evidence artifacts under a 'real-' prefixed basename (e.g. real-reference-uiux-ax-observation-20260622T151722Z-adapter-trace.log); none of the 5 cited filenames exist anywhere under receipts/ember-preloop-resident-gate/ -- confirmed by directory listing. (2) The near-name files that DO exist in that directory use the same basenames WITHOUT the 'real-' prefix, and their independently recomputed sha256 hashes do not match any of the receipt's claimed hashes -- checked all 5 (adapter_trace, observation_meta, process_after, stub_server_log, terminal_transcript_clean): 5/5 mismatch. A receipt whose own cited evidence cannot be located under its claimed name, and whose nearest on-disk match hash-mismatches, fails the identical evidentiary bar (path + sha256 verified against on-disk bytes) this repo's own spend-annex consumer applies to every other decisive-claim receipt. (3) A direct paid-surface pattern re-scan of the receipt family (the same fixed pattern list used elsewhere: anthropic/openai/cohere/googleapis/mistralai/replicate/together/paid_api_key/api_key/gpt-4/gpt-5/claude-3) hits on reference-uiux-ax-observation-20260622T151722Z.json itself (fields reference_API_KEY, backend, note) and on -meta.json and -stub-server-log.jsonl -- mechanical substring hits, not a claim that a paid surface was actually reached (the hits sit inside the receipt's own 'isolated local stub' / loopback-endpoint self-description), but content-dirty under the scanner's own rule regardless of surrounding context. Net: the evidence chain is broken and the content scan is dirty; per issue #349's disposition, this receipt is disposed via supersession, never deletion or edit. The original file is untouched on disk.",
+  "cites": [
+    "https://github.com/wordingone/ember/pull/348",
+    "https://github.com/wordingone/ember/issues/349"
+  ]
+}
