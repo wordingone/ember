@@ -22,6 +22,10 @@ violation. Premature clearing is a spec violation.
 
 - **C-INV — Constitutional invariant persisted, stamped, and chained.** R: INVARIANT.md exists at repo root with the canonical hash; GOAL.md pins the hash; every post-genesis artifact (manifest, receipt, board totality) carries the invariant_sha256 stamp and passes verification; board receipts chain by predecessor hash from genesis. Does NOT count: INVARIANT.md missing or hash mismatch (BREACH — not UNEVALUABLE — the receipt is written anyway with invariant_breach:true); post-genesis artifact unstamped or mis-stamped; chain link broken; incidents ledger missing or unaudited. ✗ `invariant_breach`, `invariant_unstamped_receipt`, `invariant_chain_broken`, `invariant_incidents_missing`. CHK (per `scripts/ember_totality/test_c_invariant.py`): INVARIANT.md file exists and hashes correctly to INVARIANT_SHA256; GOAL.md pin line matches; (genesis state) structure ready for post-genesis stamping; incident ledger structure ready.
 
+### 4.0.6 Receipts Custody (C-CUSTODY)
+
+- **C-CUSTODY — Receipts custody and integrity.** R: every receipt in receipts/ is git-tracked, parseable as JSON (utf-8 or utf-8-sig encoding), and every receipts/ path cited in verdict-bearing receipts or board receipts exists on disk. Does NOT count: receipts with acknowledged staging files (disclosed via __allowlist_untracked); cited paths that are conditional/planned (those must use future-date cond ition status, never be left missing). ✗ `invalid_untracked_receipt`, `invalid_unparseable_receipt`, `invalid_missing_cited_path`. CHK (per `scripts/ember_totality/test_c_custody.py`): (a) git ls-files check over receipts/ recursive, no untracked except allowlisted; (b) json.load with utf-8 then utf-8-sig fallback on every receipts/*.json, no parse errors; (c) walk verdict-bearing receipts and board totality, verify every receipts/ citation exists as a file on disk.
+
 ### 4.1 Substrate pre-conditions (gate C14)
 
 - **C-EFF — efficiency keystone measured/closed.** R: an efficiency-closure receipt via gate-9 with
