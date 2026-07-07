@@ -62,6 +62,8 @@ export interface LogoState {
   version?:             string;
   /** Standard CLI version-nudge row -- only rendered when a newer version is actually known. */
   updateAvailable?:     string;
+  /** Data root path indicator (issue #303: visible indicator of which tree's data is being read). */
+  dataRoot?:            string;
 }
 
 export interface FeedEntry { text: string; }
@@ -312,6 +314,10 @@ function renderIdentityBlock(state: LogoState, fireballTick: number): React.Reac
       : null,
     state.cwd
       ? React.createElement(Text, { key: "l3", dimColor: true }, clipToWidth(state.cwd, LEFT_TEXT_WIDTH))
+      : null,
+    // #303: visible data-root indicator — a disconnected cockpit is immediately self-evident.
+    state.dataRoot
+      ? React.createElement(Text, { key: "l4", dimColor: true }, clipToWidth(`Data: ${state.dataRoot}`, LEFT_TEXT_WIDTH))
       : null,
   ];
 
