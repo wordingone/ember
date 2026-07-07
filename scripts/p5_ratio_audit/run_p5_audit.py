@@ -2209,15 +2209,23 @@ def run_and_emit_live() -> Path:
 
         # Forward+backward on pre-grow checkpoint.
         # LlamaModel.forward expects input_ids as positional arg
-        outputs = pre_model(x)
-        logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
+        print(f"[p5-ratio-audit] Pre-model forward: x.shape={x.shape}, y.shape={y.shape}", flush=True)
+        try:
+            outputs = pre_model(x)
+            logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
+            print(f"[p5-ratio-audit] Forward success: logits.shape={logits.shape}", flush=True)
 
-        # Adjust y targets to be within vocab size (probe was generated for 32000 but model may differ)
-        vocab_size = logits.shape[-1]
-        y_adjusted = torch.clamp(y, max=vocab_size-1)
+            # Adjust y targets to be within vocab size (probe was generated for 32000 but model may differ)
+            vocab_size = logits.shape[-1]
+            y_adjusted = torch.clamp(y, max=vocab_size-1)
+            print(f"[p5-ratio-audit] Vocab size: {vocab_size}, y_adjusted.shape={y_adjusted.shape}", flush=True)
 
-        loss = torch.nn.functional.cross_entropy(logits.reshape(-1, vocab_size), y_adjusted.reshape(-1))
-        loss.backward()
+            loss = torch.nn.functional.cross_entropy(logits.reshape(-1, vocab_size), y_adjusted.reshape(-1))
+            print(f"[p5-ratio-audit] Loss computed: {loss.item()}", flush=True)
+            loss.backward()
+        except Exception as e:
+            print(f"[p5-ratio-audit] Forward/backward error: {e}", flush=True)
+            raise
 
         # Extract gradients for ratio computation.
         grad_pre = {name: p.grad.detach().clone() for name, p in pre_model.named_parameters() if p.grad is not None}
