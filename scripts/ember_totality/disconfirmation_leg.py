@@ -83,7 +83,7 @@ def run_disconfirmation_leg(
     contract_root = Path(contract_root)
     result = _run_one_checker(contract_root, DISCONFIRMATION_CHECKER, timeout_s)
     results = {DISCONFIRMATION_CHECKER.name: result}
-    out_dir = Path(receipt_dir) if receipt_dir is not None else (contract_root / "scratch" / "ember_totality")
+    out_dir = Path(receipt_dir) if receipt_dir is not None else (contract_root / "scripts" / "ember_totality" / "receipts-disconfirmation")
     _write_leg_receipt(results, out_dir)
     return results
 
