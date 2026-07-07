@@ -584,6 +584,62 @@ def test_refusal_receipt_written_on_genuine_foreign_duplicate():
         assert receipt["resolved_args"]["decontam_receipt"] is None
 
 
+def test_continuation_source_verification_block_structure():
+    """Issue #375: verify_continuation_source_checkpoint() computes the
+    verification block structure correctly: checkpoint_dir, manifest_sha256,
+    on_disk_model_pt_sha256, and match boolean.
+
+    Direct unit test of the verification function with minimal fixture."""
+    from w1_collapse_control_run import verify_continuation_source_checkpoint, sha256_file
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt_dir = os.path.join(tmpdir, "checkpoint")
+        os.makedirs(ckpt_dir, exist_ok=True)
+
+        # Create minimal checkpoint files
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"embed_tokens.weight": torch.zeros(100, 64)}, model_pt_path)
+
+        # Compute sha256
+        model_pt_sha = sha256_file(model_pt_path)
+
+        # Create manifest with matching sha
+        manifest = {
+            "step": 5,
+            "files": {
+                "model.pt": model_pt_sha,
+                "optimizer.pt": "0" * 64,
+                "rng.pt": "0" * 64,
+            }
+        }
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f)
+
+        # Call the verification function
+        result = verify_continuation_source_checkpoint(ckpt_dir, manifest)
+
+        # Verify structure
+        assert isinstance(result, dict), "Result must be a dict"
+        assert "checkpoint_dir" in result, "Must have checkpoint_dir"
+        assert "manifest_sha256" in result, "Must have manifest_sha256"
+        assert "on_disk_model_pt_sha256" in result, "Must have on_disk_model_pt_sha256"
+        assert "match" in result, "Must have match boolean"
+
+        # Verify values
+        assert result["checkpoint_dir"] == ckpt_dir
+        assert len(result["manifest_sha256"]) == 64, "manifest_sha256 should be 64 hex chars"
+        assert len(result["on_disk_model_pt_sha256"]) == 64, "on_disk_model_pt_sha256 should be 64 hex chars"
+        assert all(c in "0123456789abcdef" for c in result["manifest_sha256"].lower())
+        assert all(c in "0123456789abcdef" for c in result["on_disk_model_pt_sha256"].lower())
+
+        # Verify match is True (model.pt sha matches manifest)
+        assert result["match"] is True, \
+            f"model.pt sha should match manifest record (match={result['match']}, " \
+            f"manifest sha={result['on_disk_model_pt_sha256']}, " \
+            f"expected={model_pt_sha})"
+
+
 def test_accepted_run_receipt_carries_derivation_mode():
     """Issue #371 requirement: derivation_mode line must appear in EVERY receipt
     (both accepted and refused). This is a placeholder test that verifies the

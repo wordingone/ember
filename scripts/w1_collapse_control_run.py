@@ -817,6 +817,7 @@ def run_phase2_dryrun(cfg: dict, *, ceiling_steps: int, eval_every: int,
                                       if continue_from else None),
         "continuation_source_manifest_step": (
             (continuation_source_manifest or {}).get("step")),
+        "continuation_source_manifest": continuation_source_manifest,  # added for issue #375
         "lr_schedule": {"source": LR_SCHEDULE_SOURCE, "base_lr": base_lr,
                         "warmup_frac": 0.1, "min_lr_frac": 0.1,
                         "total_steps_for_schedule": ceiling_steps,
@@ -849,6 +850,38 @@ def run_phase2_dryrun(cfg: dict, *, ceiling_steps: int, eval_every: int,
 # control on real shard tokens. Reachable ONLY through refuse_unless_dry_
 # run_safe's two independent interlocks -- never fired by this builder.
 # ---------------------------------------------------------------------------
+
+def verify_continuation_source_checkpoint(checkpoint_dir: str, manifest: dict) -> dict:
+    """Issue #375: Verify continuation-source checkpoint (the one passed to
+    --continue-from) by computing sha256 of both the manifest.json and the
+    model.pt file on disk, verifying the model.pt sha matches the manifest's
+    recorded sha. Returns a dict with checkpoint_dir, manifest_sha256,
+    on_disk_model_pt_sha256, and match=True/False.
+
+    This is a receipted verification block added to the terminal receipt so
+    the lineage claim is auditable from the receipt alone (no out-of-band
+    hand-verification required).
+    """
+    manifest_path = os.path.join(checkpoint_dir, "manifest.json")
+    model_pt_path = os.path.join(checkpoint_dir, "model.pt")
+
+    # Compute sha256 of manifest.json
+    manifest_sha = sha256_file(manifest_path)
+
+    # Compute sha256 of model.pt on disk
+    model_pt_sha = sha256_file(model_pt_path)
+
+    # Compare against the model.pt sha from the manifest
+    expected_model_pt_sha = manifest.get("files", {}).get("model.pt")
+    match = model_pt_sha == expected_model_pt_sha
+
+    return {
+        "checkpoint_dir": checkpoint_dir,
+        "manifest_sha256": manifest_sha,
+        "on_disk_model_pt_sha256": model_pt_sha,
+        "match": match,
+    }
+
 
 def verify_real_checkpoint(ckpt_dir: str, rung_receipt: dict) -> dict:
     """Fail-closed real-checkpoint verification (issue #82 point 3, first
@@ -2092,6 +2125,7 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
                                       if continue_from else None),
         "continuation_source_manifest_step": (
             (continuation_source_manifest or {}).get("step")),
+        "continuation_source_manifest": continuation_source_manifest,  # added for issue #375
         "lr_schedule": {"source": MATCHED_RECIPE_SCHEDULE_SOURCE,
                         "base_lrs": base_lrs, "warmup_frac": 0.1,
                         "min_lr_frac": 0.1,
@@ -2595,6 +2629,15 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             "wall_hours_estimate": phase2["wall_hours_estimate"],
         },
         "w1b_continuation": w1b_continuation,
+    }
+
+    # Issue #375: Add continuation_source_verification block if --continue-from was used
+    if args.continue_from and phase2.get("continuation_source_manifest"):
+        receipt["continuation_source_verification"] = verify_continuation_source_checkpoint(
+            args.continue_from, phase2["continuation_source_manifest"])
+
+    # Add remaining receipt fields
+    receipt.update({
         "cap_disclosure": {
             "note": "Two different 'L0 budget cap' multipliers exist in this "
                     "program's documentation and must not be conflated. This run "
@@ -2642,7 +2685,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         "note": ("" if is_real_lineage else
                  f"is_real_lineage=False -- failing assertions: {lineage_reasons}. "
                  "Fail-closed per issue #82 point 3: never a silent/blanket True."),
-    }
+    })
 
     receipts_dir = os.path.join(REPO, "receipts", "ember-c-scale")
     os.makedirs(receipts_dir, exist_ok=True)
@@ -2836,6 +2879,15 @@ def main(argv: list[str] | None = None) -> int:
             "dry_run_capability_point": True,
         },
         "w1b_continuation": w1b_continuation,
+    }
+
+    # Issue #375: Add continuation_source_verification block if --continue-from was used
+    if args.continue_from and phase2.get("continuation_source_manifest"):
+        receipt["continuation_source_verification"] = verify_continuation_source_checkpoint(
+            args.continue_from, phase2["continuation_source_manifest"])
+
+    # Add remaining receipt fields
+    receipt.update({
         "ratio": outcome["ratio"],
         "outcome": outcome["outcome"],
         "lower_bound": outcome["lower_bound"],
@@ -2854,7 +2906,7 @@ def main(argv: list[str] | None = None) -> int:
             "physical claim about the real W1 collapse ratio -- that is the "
             "real GPU run's job (maintainer-window-scheduled, issue #53)."
             if dry_run else ""),
-    }
+    })
 
     # issue #361 fix-forward: dry-run receipts default under scratch/, never
     # the canonical receipts/ tree -- a launch lane's own dry-run smoke test
