@@ -85,8 +85,10 @@ import re
 import subprocess
 import sys
 
-# Add parent scripts dir to path for invariant imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Add repo root to path for invariant imports (needed for scripts.lib)
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, REPO_ROOT)
 from scripts.lib.invariant import stamp, INVARIANT_SHA256
 
 try:  # pragma: no cover - best-effort console hardening, never fatal
@@ -95,8 +97,6 @@ try:  # pragma: no cover - best-effort console hardening, never fatal
 except (AttributeError, ValueError):
     pass
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 RECEIPTS_DIR = os.path.join(HERE, "receipts-totality")
 CONDITIONS_SPEC_PATH = os.path.join(REPO_ROOT, "docs", "spec", "conditions-v1.md")
 
