@@ -189,29 +189,42 @@ def _decisive_claim_files():
     return sorted(out, key=lambda t: t[0])
 
 
-def _newest_spend_annex(root):
-    """Return (rows_by_path: dict[str, dict], annex_path_or_None). rows_by_path keys
-    are the annex row's own 'path' field (already root-relative, forward-slashed).
-    Picks the lexicographically-newest spend-annex-*.json under receipts/spend-annex/
-    (the compact-ts filename convention sorts correctly). Malformed/missing annex ->
-    ({}, None), never raises -- absence must fall back to the pre-amendment behavior,
-    not crash the probe."""
-    cand = sorted(glob.glob(os.path.join(root, "receipts", "spend-annex", "spend-annex-*.json")))
-    if not cand:
-        return {}, None
-    newest = cand[-1]
+def _load_annex_file(path):
+    """Parse one spend-annex-*.json file. utf-8-sig strips a leading UTF-8 BOM
+    when present and is a no-op when absent, so a file written with or without
+    a BOM parses identically. Returns the rows_by_path dict on success, None on
+    any parse/shape failure -- never raises."""
     try:
-        with open(newest, "r", encoding="utf-8", errors="ignore") as fh:
+        with open(path, "r", encoding="utf-8-sig", errors="ignore") as fh:
             annex = json.load(fh)
     except Exception:
-        return {}, None
+        return None
     if not isinstance(annex, dict) or not isinstance(annex.get("rows"), list):
-        return {}, None
+        return None
     by_path = {}
     for row in annex["rows"]:
         if isinstance(row, dict) and isinstance(row.get("path"), str):
             by_path[row["path"]] = row
-    return by_path, newest
+    return by_path
+
+
+def _newest_spend_annex(root):
+    """Return (rows_by_path: dict[str, dict], annex_path_or_None). rows_by_path keys
+    are the annex row's own 'path' field (already root-relative, forward-slashed).
+    Walks spend-annex-*.json under receipts/spend-annex/ from lexicographically
+    NEWEST to oldest (the compact-ts filename convention sorts correctly) and
+    returns the first one that parses. A single malformed newest file no longer
+    blinds the probe to every older, still-valid annex (2026-07-07 incident: a
+    BOM'd newest file made C(-1) regress from 18 to 229 undeclared receipts,
+    because the old single-file check treated "newest is bad" as "no annex at
+    all"). No file at all, or every candidate malformed -> ({}, None), never
+    raises -- total absence still falls back to the pre-amendment behavior."""
+    cand = sorted(glob.glob(os.path.join(root, "receipts", "spend-annex", "spend-annex-*.json")))
+    for path in reversed(cand):
+        by_path = _load_annex_file(path)
+        if by_path is not None:
+            return by_path, path
+    return {}, None
 
 
 def main():
