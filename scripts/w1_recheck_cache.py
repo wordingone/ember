@@ -78,27 +78,35 @@ def compute_cache_key(
     return batch_sha, receipt_sha, code_sha
 
 
-def cache_dir(out_dir: str) -> str:
-    """Return the cache directory (created if missing)."""
-    cache_path = os.path.join(out_dir, ".w1-recheck-cache")
-    os.makedirs(cache_path, exist_ok=True)
-    return cache_path
+def cache_dir(cache_root: str) -> str:
+    """Return the cache directory (created if missing).
+
+    Args:
+      cache_root: the stable cache root directory (e.g., scratch/w1-control/recheck-cache/)
+    """
+    os.makedirs(cache_root, exist_ok=True)
+    return cache_root
 
 
-def cache_entry_path(batch_sha: str, receipt_sha: str, code_sha: str, out_dir: str) -> str:
-    """Return the cache entry path for the given triple key."""
+def cache_entry_path(batch_sha: str, receipt_sha: str, code_sha: str, cache_root: str) -> str:
+    """Return the cache entry path for the given triple key.
+
+    Args:
+      batch_sha, receipt_sha, code_sha: components of the cache key
+      cache_root: the stable cache root directory (not a per-launch out_dir)
+    """
     # Use triple as filename: batch-receipt-code.json
     # Empty receipt_sha becomes "none"
     r_part = receipt_sha if receipt_sha else "none"
     filename = f"{batch_sha}-{r_part}-{code_sha}.json"
-    return os.path.join(cache_dir(out_dir), filename)
+    return os.path.join(cache_dir(cache_root), filename)
 
 
 def check_recheck_cache(
     eval_rows: "list[list[int]]",
     shard_dir: str,
     decontam_receipt_path: Optional[str],
-    out_dir: str,
+    cache_root: str,
     classifier_code_path: str = None,
 ) -> Optional[dict]:
     """Check if a cached recheck result exists and is valid.
@@ -107,7 +115,7 @@ def check_recheck_cache(
       eval_rows: the evaluation batch rows
       shard_dir: shard directory path (unused for cache check, but required for API consistency)
       decontam_receipt_path: path to decontam receipt (may be None)
-      out_dir: output directory
+      cache_root: stable cache root directory (e.g., scratch/w1-control/recheck-cache/)
       classifier_code_path: path to the classifier code file (defaults to w1_collapse_control_run.py)
 
     Returns:
@@ -125,7 +133,7 @@ def check_recheck_cache(
         eval_rows, decontam_receipt_path, classifier_code_path
     )
 
-    entry_path = cache_entry_path(batch_sha, receipt_sha, code_sha, out_dir)
+    entry_path = cache_entry_path(batch_sha, receipt_sha, code_sha, cache_root)
 
     if not os.path.exists(entry_path):
         return None
@@ -151,7 +159,7 @@ def write_recheck_cache(
     contamination: dict,
     eval_rows: "list[list[int]]",
     decontam_receipt_path: Optional[str],
-    out_dir: str,
+    cache_root: str,
     classifier_code_path: str = None,
 ) -> str:
     """Write a contamination recheck result to the cache (if it's a CLEAN pass).
@@ -160,7 +168,7 @@ def write_recheck_cache(
       contamination: the result dict from contamination_recheck()
       eval_rows: the evaluation batch rows
       decontam_receipt_path: path to decontam receipt (may be None)
-      out_dir: output directory
+      cache_root: stable cache root directory (e.g., scratch/w1-control/recheck-cache/)
       classifier_code_path: path to the classifier code file
 
     Returns:
@@ -180,7 +188,7 @@ def write_recheck_cache(
         eval_rows, decontam_receipt_path, classifier_code_path
     )
 
-    entry_path = cache_entry_path(batch_sha, receipt_sha, code_sha, out_dir)
+    entry_path = cache_entry_path(batch_sha, receipt_sha, code_sha, cache_root)
 
     # Create cache entry: copy original verdict but add disclosure fields
     cache_entry = {

@@ -300,6 +300,9 @@ class TestRecheckCacheIntegration(unittest.TestCase):
         with open(self.code_file, 'w') as f:
             f.write('# test code')
 
+        # Create a stable cache root (not per-launch out_dir)
+        self.cache_root = os.path.join(self.temp_dir, "stable-cache")
+
     def test_cache_skip_integration(self):
         """Integration test: cache hit skips recheck (test case 3)."""
         mock_result = {
@@ -309,14 +312,14 @@ class TestRecheckCacheIntegration(unittest.TestCase):
         }
 
         # Pre-populate cache
-        write_recheck_cache(mock_result, self.eval_rows, None, self.temp_dir, self.code_file)
+        write_recheck_cache(mock_result, self.eval_rows, None, self.cache_root, self.code_file)
 
         # Now simulate the runner's cache check
         cached = check_recheck_cache(
             self.eval_rows,
             "/fake/shard/dir",
             None,
-            self.temp_dir,
+            self.cache_root,
             classifier_code_path=self.code_file
         )
 
@@ -327,6 +330,39 @@ class TestRecheckCacheIntegration(unittest.TestCase):
         # Verify cache disclosure fields are present
         self.assertIn("cache_write_ts", cached)
         self.assertIn("cache_key_batch_sha256", cached)
+
+    def test_cross_launch_cache_hit(self):
+        """Cross-launch cache hit: different out_dirs, same stable cache_root (test case 3a).
+
+        This test verifies the core requirement: attempts 2/3/4 in #351 should hit
+        the cache written by attempt 1 despite having different timestamped out_dirs.
+        """
+        mock_result = {
+            "verdict": "CLEAN",
+            "method": "test",
+            "confirmed_matches": [],
+        }
+
+        # Simulate first launch: write cache with stable cache_root
+        write_recheck_cache(mock_result, self.eval_rows, None, self.cache_root, self.code_file)
+
+        # Simulate second launch: check cache with SAME stable cache_root.
+        # In real runner, out_dir would be different (w1-live-<ts1> vs w1-live-<ts2>),
+        # but cache_root is STABLE and shared across launches.
+        cached = check_recheck_cache(
+            self.eval_rows,
+            "/fake/shard/dir",
+            None,
+            self.cache_root,
+            classifier_code_path=self.code_file
+        )
+
+        # Cross-launch hit! Same batch/code/receipt triple → cache hit despite different out_dirs.
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["verdict"], "CLEAN")
+        self.assertIn("cache_write_ts", cached)
+        # Verify the cache disclosure carries the timestamp
+        self.assertTrue(cached.get("cache_write_ts"))
 
 
 if __name__ == "__main__":
