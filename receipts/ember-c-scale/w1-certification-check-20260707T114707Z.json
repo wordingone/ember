@@ -1,0 +1,71 @@
+{
+  "ticket": "W1-CERTIFICATION-CHECK",
+  "ts": "20260707T114707Z",
+  "issue": "#71",
+  "schema": "w1-certification-check/v1",
+  "terminal_receipt_ref": "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json",
+  "method": "CPU-side, no model load. Every check is a plain sha256 recomputation or field-equality comparison against the terminal receipt's own recorded values and the on-disk artifacts it references. Chain verified: decontam receipt path/identity -> selected_window_indices -> rebuilt batch sha256 -> on-disk batch npy artifact -> progress JSONL vs eval trace vs terminal receipt consistency -> checkpoint manifest shas (both the grow terminal checkpoint and the control step-25 resume checkpoint).",
+  "decontam_receipt": {
+    "path": "receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
+    "sha256": "24e471f072d07d32bb3e012c695e9219ea35de0a0eafa1ce1d9a2c442660bbb3",
+    "path_matches_terminal_receipt_held_out_batch_decontam_receipt_path": true,
+    "path_matches_terminal_receipt_launch_gate_receipt_path": true
+  },
+  "selected_window_indices": {
+    "decontam_receipt_count": 16,
+    "terminal_receipt_count": 16,
+    "exact_match": true
+  },
+  "batch_sha256": {
+    "recomputed_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+    "decontam_receipt_pinned_batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+    "terminal_receipt_eval_batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+    "matches_decontam_pinned": true,
+    "matches_terminal_receipt": true
+  },
+  "batch_npy_artifact": {
+    "path": "scratch/w1-control/live/w1-live-20260707T110231Z/w1-live-decontam-rebuilt-batch-20260707T110256Z.npy",
+    "sha256_of_file_bytes": "aea531d13ed23b4524ca9add219994f8f2eec54c9353bee0e9f5923d7ce9b1c7",
+    "shape": [16, 1025],
+    "expected_shape": [16, 1025],
+    "shape_matches": true
+  },
+  "progress_jsonl": {
+    "path": "scratch/w1-control/live/w1-live-20260707T110231Z/w1-live-progress-20260707T110256Z.jsonl",
+    "n_rows": 3,
+    "rows": [
+      {"step": 0, "tokens_so_far": 0, "eval_loss": 10.5625, "target_eval_loss": 9.375, "ts": "20260707T112842Z"},
+      {"step": 25, "tokens_so_far": 409600, "eval_loss": 10.0, "target_eval_loss": 9.375, "ts": "20260707T112954Z"},
+      {"step": 50, "tokens_so_far": 819200, "eval_loss": 9.25, "target_eval_loss": 9.375, "ts": "20260707T113048Z"}
+    ],
+    "eval_cadence_K_expected": 25,
+    "steps_run_expected": 50,
+    "last_row_step_matches_steps_run": true,
+    "last_row_eval_loss_le_target": true,
+    "matches_eval_trace_json": true,
+    "eval_trace_sha256_recomputed": "becf8f904787c6ef0c0f2ffa0e1f805b046b2e79add772c87389a670d1128694",
+    "eval_trace_sha256_terminal_receipt": "becf8f904787c6ef0c0f2ffa0e1f805b046b2e79add772c87389a670d1128694",
+    "eval_trace_sha_matches": true
+  },
+  "grow_checkpoint_manifest": {
+    "checkpoint_dir": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+    "files": {
+      "model.pt": {"manifest_pinned": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b", "recomputed": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b", "matches": true},
+      "optimizer.pt": {"manifest_pinned": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1", "recomputed": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1", "matches": true},
+      "rng.pt": {"manifest_pinned": "2e30b6c87ed2e1edb9d4077e569da2115c2377d952bf256071ad93e990c8e6c7", "recomputed": "2e30b6c87ed2e1edb9d4077e569da2115c2377d952bf256071ad93e990c8e6c7", "matches": true}
+    },
+    "all_match_own_manifest": true,
+    "model_pt_sha_matches_terminal_receipt": true
+  },
+  "control_step25_checkpoint_manifest": {
+    "checkpoint_dir": "scratch/w1-control/live/w1-live-20260707T110231Z/phase2-live/checkpoints/step-00000025",
+    "files": {
+      "model.pt": {"manifest_pinned": "3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac", "recomputed": "3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac", "matches": true},
+      "optimizer.pt": {"manifest_pinned": "d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0", "recomputed": "d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0", "matches": true},
+      "rng.pt": {"manifest_pinned": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379", "recomputed": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379", "matches": true}
+    },
+    "all_match_own_manifest": true
+  },
+  "overall_pass": true,
+  "verdict_language": "None -- this receipt reports chain-verification checks only (sha/field equality, pass/fail per link). No interpretation of what the W1 result means is asserted here; that reading belongs to issue #339's pre-registered rules."
+}

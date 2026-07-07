@@ -1,0 +1,17 @@
+[
+  {
+    "step": 0,
+    "tokens_so_far": 0,
+    "eval_loss": 10.5625
+  },
+  {
+    "step": 25,
+    "tokens_so_far": 409600,
+    "eval_loss": 10.0
+  },
+  {
+    "step": 50,
+    "tokens_so_far": 819200,
+    "eval_loss": 9.25
+  }
+]
