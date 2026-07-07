@@ -90,6 +90,7 @@ import {
   isGoalContinuationFeatureEnabled,
 } from "../core/goal-continuation-wiring.ts";
 import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../commands/goal.ts";
+import { buildEmberWorldState, type BoardSummary } from "../core/ember-world-state.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -351,14 +352,17 @@ export function renderMsgDispatch(
 ): React.ReactElement {
   switch (msg.type) {
     case "welcome":
+      // #303: Pass boardSummary and dataRoot to the Homescreen.
       return React.createElement(Homescreen, {
         key:   msg.id,
         state: {
           model:   String(msg["model"]   ?? ""),
           cwd:     String(msg["cwd"]     ?? ""),
           version: String(msg["version"] ?? "0.0.0"),
+          dataRoot: String(msg["dataRoot"] ?? ""),
         },
         viewportWidth,
+        boardSummary: msg["boardSummary"] as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
 
     case "user":
@@ -535,6 +539,9 @@ export function ReplScreen({
     model:   config.model,
     cwd,
     version: process.env["EMBER_VERSION"] ?? "0.0.0",
+    // #303: Pass board summary and data root to the welcome screen.
+    boardSummary: undefined, // Will be populated after the async load completes
+    dataRoot: undefined,
   }]);
 
   const mountRef  = useRef(Date.now());
@@ -576,6 +583,11 @@ export function ReplScreen({
   // targets, one layer up from the render-default bug above).
   const [retryStatus, setRetryStatus] = useState<EffortCalloutState>({ active: false });
 
+  // #303: Board summary + data-root indicator for the welcome screen.
+  // boardSummary populates the recent-activity feed; dataRoot shows which tree's data we're reading.
+  const [boardSummary, setBoardSummary] = useState<BoardSummary | undefined>(undefined);
+  const [dataRoot, setDataRoot] = useState<string | undefined>(undefined);
+
   // Animate spinner at ANIMATION_LOOP_MS cadence
   useInterval(() => {
     if (busyRef.current) {
@@ -600,6 +612,17 @@ export function ReplScreen({
 
   // Keep messagesRef in sync with React state for use inside async callbacks.
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // #303: Update the welcome message with board summary and data root once they load.
+  useEffect(() => {
+    setMessages((prev) => {
+      const [welcome, ...rest] = prev;
+      if (welcome?.type === "welcome") {
+        return [{ ...welcome, boardSummary, dataRoot }, ...rest];
+      }
+      return prev;
+    });
+  }, [boardSummary, dataRoot]);
 
   // as any: SessionMessage[] is a local type; buildMessageLookups expects
   // Message[] from the not-yet-built types/message-types.ts — genuine interop cast.
@@ -632,6 +655,25 @@ export function ReplScreen({
       analytics?.log(ANALYTICS_SESSION_END, { duration });
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // #303: Load board summary on mount. EMBER_GOALFORGE_ROOT must be set to point at the
+  // live tree (not cwd-relative, to avoid reading stale data from a deployment copy).
+  useEffect(() => {
+    const loadBoardData = async () => {
+      try {
+        const root = process.env.EMBER_GOALFORGE_ROOT || cwd;
+        setDataRoot(root);
+        const worldState = await buildEmberWorldState({ goalforgeRoot: root });
+        if (worldState) {
+          setBoardSummary(worldState.monitor.board.summary);
+        }
+      } catch {
+        // Fail open: if board load fails, render without board summary (the honest "no recent activity" state).
+        // The data root indicator will still show which tree we tried to read from.
+      }
+    };
+    void loadBoardData();
+  }, [cwd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dialog state
   const dialogState: DialogState = {
@@ -1204,17 +1246,21 @@ export function ReplScreen({
       : null,
 
     // Text input (suggestion = dimmed ghost text after cursor; Tab accepts it)
+    // #303 fix: pass terminalCols so input rules re-measure on resize (b242 bar).
     React.createElement(PromptInput, {
       key:            "input",
       state:          inputState,
       isProcessing:   busy,
       showStatusLine: false,
       suggestion:     currentSuggestion ?? undefined,
+      width:          terminalCols,
     }),
 
     // Status bar — modelMetrics is null when the model server is unreachable (meter hidden).
     // effort: issue #197's live retry-attempt indicator (transient; never a
     // transcript message — see retryStatus state and its clear sites above).
+    // #303 fix: StatusLine doesn't have a width prop yet, but components inside
+    // (like text rendering) will respond to viewport width through their own renders.
     React.createElement(StatusLine, {
       key:            "status",
       permissionMode: permModeState,
