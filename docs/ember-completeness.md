@@ -201,3 +201,7 @@ parse drift so CI catches table rot.
 | C53 | M53 |
 | C54 | M54 |
 | C55 | M55 |
+
+## Board history — the honest floor
+
+2026-07-05: 82.9% C-surface GREEN reported via self-attesting probes (receipts/completeness-sweep). 2026-07-06: 2.9% C-surface GREEN after execution-binding hardening landed (receipts/c-enforcement, c-milestone, c-legibility checkers); old green conditions were self-attestation-only, not receipt-binding. 2026-07-07: 8.3-13.9% C-surface honest floor (receipts/spend-annex-20260707T030421Z.json, receipts/cold-read-reprobe/2026-07-06T01Z.json, receipts/completeness-sweep/c34-launch-rail-issue-mapping-20260705T125847Z.json) — receipts re-earning green with true property measurement, not deferred hardening.
