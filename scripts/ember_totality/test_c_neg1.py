@@ -228,6 +228,22 @@ def _newest_spend_annex(root):
     return {}, None
 
 
+def _check_annex_cited_files_exist(root, annex_rows):
+    """ISSUE #394: Check if all receipts cited by annex rows actually exist on disk.
+    A cited-but-missing receipt is fail-closed RED (deletion-induced GREEN protection).
+
+    Returns: (missing_paths: list[str], all_ok: bool).
+    missing_paths: OS-native paths (backslash on Windows) of cited receipts not on disk.
+    all_ok: True if all cited receipts exist, False if any are missing."""
+    missing = []
+    for path_key in annex_rows.keys():
+        # path_key is forward-slashed (annex convention); convert to OS-native for disk check
+        os_path = os.path.join(root, path_key.replace("/", os.sep))
+        if not os.path.isfile(os_path):
+            missing.append(path_key.replace("/", os.sep))
+    return missing, len(missing) == 0
+
+
 def main():
     if ROOT is None:
         emit("UNEVALUABLE",
@@ -334,6 +350,19 @@ def main():
     # accept as a second path to the same "proven through a zero-incremental-spend
     # path" requirement the registry text already states.
     annex_rows, annex_path = _newest_spend_annex(ROOT)
+
+    # ISSUE #394 AMENDMENT: fail-closed on cited-but-missing receipts.
+    # The scanner's evidence universe must include receipts cited by tracked
+    # artifacts (the annex) but missing from disk. A cited-but-missing receipt
+    # means the decision depends on evidence that is not present -- RED, fail-closed.
+    if annex_rows:
+        missing_cited, all_cited_ok = _check_annex_cited_files_exist(ROOT, annex_rows)
+        if not all_cited_ok:
+            sample = missing_cited[:5]
+            emit("RED", f"C(-1): spend-annex cites {len(missing_cited)} receipt(s) "
+                        f"that do not exist on disk (deletion-induced GREEN protection, "
+                        f"issue #394) -> fail-closed RED. sample={sample}"
+                        + (f" ... +{len(missing_cited) - 5} more" if len(missing_cited) > 5 else ""))
 
     annex_violations = [r for p, r in annex_rows.items() if r.get("evidence_class") == "paid_surface_violation"]
     if annex_violations:
