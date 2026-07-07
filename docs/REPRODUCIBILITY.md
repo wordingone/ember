@@ -5,8 +5,8 @@ What can be reproduced from this repository, and how.
 ## Prerequisites
 
 - Python 3.11+
-- Install dependencies: `pip install -r requirements.txt`
-- No GPU required for selftests and schema checks
+- **For selftests and schema checks:** No external dependencies (stdlib only)
+- **For corpus acquisition and full training:** Additional packages required (pinned separately; not in this repo)
 - NVIDIA RTX 4090 (24 GB VRAM) required for training runs
 
 ## Checks that require no model weights and no GPU

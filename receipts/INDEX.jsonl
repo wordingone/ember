@@ -5,6 +5,7 @@
 {"pass": true, "path": "receipts/b-multi-1-acquire-20260616T051423Z.json", "ticket": "B-MULTI-1-ACQUIRE", "ts": "20260616T051423Z"}
 {"path": "receipts/bits-account-20260610T223429Z.json", "ticket": "BITS-ACCOUNT", "ts": "20260610T223429Z"}
 {"path": "receipts/bits-account-20260611T031459Z.json", "ticket": "BITS-ACCOUNT", "ts": "20260611T031459Z"}
+{"claim_fields": {"condition": "C-INV"}, "path": "receipts/c-invariant-probe.json"}
 {"issue": "96", "pass": true, "path": "receipts/c-pin-selftest-20260705T040630Z.json", "ticket": "C-PIN-SELFTEST", "ts": "20260705T040630Z"}
 {"path": "receipts/c04-batched-ns5-bench-20260613T112346Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T112346Z"}
 {"path": "receipts/c04-batched-ns5-bench-20260613T114503Z.json", "ticket": "C04-BATCHED-NS5-BENCH", "ts": "20260613T114503Z"}
@@ -398,6 +399,9 @@
 {"claim_fields": {"claim": "v0-multimodal-config.json created with all four lock fields present; AC check passes", "pass_condition": "all 6 AC fields present in multimodal section AND JSON valid"}, "issue": "421", "path": "receipts/eng421-multimodal-config-20260616T020000Z.json", "ticket": "ENG-421", "ts": "2026-06-16T02:00:00Z", "verdict": "PASS"}
 {"issue": "172", "path": "receipts/eng45-backfill-20260611T080814Z.json", "ticket": "ENG45-BACKFILL-SHA-CONVENTION", "ts": "20260611T080814Z"}
 {"issue": "229", "path": "receipts/eng56-eager-pin-20260611T161105Z.json", "ticket": "ENG-56-EAGER-PIN", "ts": "20260611T161105Z"}
+{"issue": "207", "path": "receipts/expc1-dryrun-20260706T170642Z.json", "ticket": "EXPC1-RANK-SWEEP", "ts": "20260706T170642Z"}
+{"issue": "207", "path": "receipts/expc1-rank-sweep-20260706T175635Z.json", "ticket": "EXPC1-RANK-SWEEP", "ts": "20260706T175635Z"}
+{"issue": "207", "path": "receipts/expc1b-spectrum-20260706T220949Z.json", "ticket": "EXPC1B-SPECTRUM", "ts": "20260706T220949Z"}
 {"path": "receipts/floor_contract_manifest_final_20260705T132713Z.json", "ts": "2026-07-05T13:27:13Z", "verdict": "FLOOR_CONTRACT_MANIFEST_FINAL_ALL_TESTS_PASS"}
 {"path": "receipts/floor_contract_manifest_selftest_20260705T130358Z.json", "ticket": "FLOOR-CONTRACT-MANIFEST-SELFTEST", "ts": "20260705T130358Z", "verdict": "FLOOR_CONTRACT_MANIFEST_SELFTEST_PASS"}
 {"path": "receipts/founder_likeness_selftest_20260705T111347Z.json", "ticket": "FOUNDER_LIKENESS_SELFTEST", "ts": "20260705T111347Z"}
@@ -510,6 +514,7 @@
 {"issue": "114", "pass": true, "path": "receipts/p-gate-20260611T064723Z.json", "ticket": "P-GATE", "ts": "20260611T064723Z", "verdict": "PASS"}
 {"issue": "114", "pass": true, "path": "receipts/p-gate-20260611T081608Z.json", "ticket": "P-GATE", "ts": "20260611T081608Z", "verdict": "PASS"}
 {"issue": "114", "pass": false, "path": "receipts/p-gate-20260611T081931Z.json", "ticket": "P-GATE", "ts": "20260611T081931Z", "verdict": "FAIL"}
+{"issue": "207", "path": "receipts/p5-ratio-audit-dryrun-20260706T182854Z.json", "ticket": "P5-RATIO-AUDIT", "ts": "20260706T182854Z"}
 {"path": "receipts/power-helper-20260612T210519Z.json", "ticket": "ENG-346", "ts": "20260612T210519Z"}
 {"path": "receipts/power-helper-20260612T210637Z.json", "ticket": "ENG-346", "ts": "20260612T210637Z"}
 {"path": "receipts/power-helper-20260612T210638Z.json", "ticket": "ENG-346", "ts": "20260612T210638Z"}
