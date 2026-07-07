@@ -1,0 +1,88 @@
+{
+  "ticket": "C9-CADENCE-AUDIT",
+  "ts": "20260702T180521Z",
+  "receipt_type": "code_vs_docs_metric",
+  "claim": "C9 cadence audit of the post-epoch progress window (defcc562..working-tree): verdict computed from executed git/file reads, never asserted",
+  "window": {
+    "epoch_ts": "20260702T174352Z",
+    "epoch_object": "receipts/acceptance/goalforge-clear-2026-07-02.json",
+    "from_git_anchor": "defcc562ba6eed526b9e9ad072f0e8e16f5026ba",
+    "to_head": "f84cef8ce07c913125c209634e5705b69a0d4350",
+    "includes": "committed-since-anchor + uncommitted tracked + untracked with mtime >= epoch",
+    "excluded_untracked": [
+      "scratch/placement-9p-probe/leg-outputs/leg-mnt_b-20260702T161111Z.json (pre-epoch mtime)",
+      "scratch/placement-9p-probe/leg-outputs/leg-mnt_b-20260702T161250Z.json (pre-epoch mtime)",
+      "scratch/placement-9p-probe/leg-outputs/leg-native_windows-20260702T161129Z.json (pre-epoch mtime)",
+      "scratch/placement-9p-probe/leg-outputs/leg-native_windows-20260702T161317Z.json (pre-epoch mtime)",
+      "scratch/placement-9p-probe/leg-outputs/leg-wsl_native-20260702T161307Z.json (pre-epoch mtime)",
+      "scratch/placement-9p-probe/shards-v0/v0-00000.bin (pre-epoch mtime)"
+    ]
+  },
+  "metric": {
+    "line_totals": {
+      "code": 264,
+      "docs": 584
+    },
+    "doc_lifecycle_totals": {
+      "before_project": 0,
+      "during_project": 572,
+      "after_project": 12
+    },
+    "code_vs_docs": {
+      "code_fraction": 0.3113,
+      "docs_fraction": 0.6887
+    },
+    "verdict": "mixed_code_and_docs"
+  },
+  "rows": [
+    {
+      "path": "docs/goalforge-debate-ledger.md",
+      "source": "tracked-diff",
+      "added_lines": 12,
+      "deleted_lines": 0,
+      "category": "documentation_receipt_spec"
+    },
+    {
+      "path": "receipts/acceptance/goalforge-clear-2026-07-02.json",
+      "source": "tracked-diff",
+      "added_lines": 21,
+      "deleted_lines": 0,
+      "category": "documentation_receipt_spec"
+    },
+    {
+      "path": "receipts/citation-check-20260702T174352Z.json",
+      "source": "tracked-diff",
+      "added_lines": 510,
+      "deleted_lines": 0,
+      "category": "documentation_receipt_spec"
+    },
+    {
+      "path": "scripts/governor.py",
+      "source": "tracked-diff",
+      "added_lines": 6,
+      "deleted_lines": 3,
+      "category": "code"
+    },
+    {
+      "path": "receipts/governor-repair-080-20260702T180248Z.json",
+      "source": "untracked-post-epoch",
+      "added_lines": 41,
+      "deleted_lines": 0,
+      "category": "documentation_receipt_spec"
+    },
+    {
+      "path": "scripts/ember_c9_cadence_audit.py",
+      "source": "untracked-post-epoch",
+      "added_lines": 258,
+      "deleted_lines": 0,
+      "category": "code"
+    }
+  ],
+  "lifecycle_heuristic": "docs/spec/+*plan*+*prereg* = before_project; receipts/+*.json = during_project; other .md/docs = after_project",
+  "process_evidence": {
+    "cmd": "C:\\Program Files\\Python310\\python.exe B:\\M\\ember-goalforge\\scripts\\ember_c9_cadence_audit.py",
+    "pid": 6304,
+    "host": "DESKTOPHH",
+    "cwd": "B:\\M\\ember-goalforge"
+  }
+}
