@@ -2,7 +2,7 @@
 
 **Purpose:** Enforce that public-facing documentation in the ember repository remains accurate, reachable, and up-to-date.
 
-**Enforcement:** Every PR touching `scripts/`, `configs/`, or top-level command-line interfaces must pass the freshness check before merge. The check runs at merge time via CI status.
+**Enforcement:** Every PR touching `scripts/`, `configs/`, or top-level command-line interfaces must pass the freshness check before merge. The check runs as a local merge-gate.
 
 ## What the checker verifies
 
@@ -61,9 +61,9 @@ python scripts/check_docs_freshness.py --fix-report
 python scripts/check_docs_freshness.py --selftest
 ```
 
-## Integration with CI
+## Merge-gate integration
 
-The check runs as a required status on every PR:
+The check runs before merge on every PR:
 
 ```bash
 python scripts/check_docs_freshness.py
@@ -78,7 +78,7 @@ If a PR introduces a docs defect but the defect is not in the PR's scope, the au
 
 1. File an issue describing the defect
 2. Reference that issue in the PR body as "docs debt: #NNN"
-3. The CI check passes if the defect is pre-existing (not introduced by the PR)
+3. The merge-gate passes if the defect is pre-existing (not introduced by the PR)
 
 **Example PR body:**
 ```

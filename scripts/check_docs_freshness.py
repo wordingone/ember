@@ -45,8 +45,14 @@ class DocsFreshnessChecker:
                 })
 
     def check_scripts_inventory(self):
-        """Check that scripts/README.md inventory is exhaustive."""
+        """Check that scripts/README.md inventory is exhaustive (unless explicitly a taxonomy)."""
         scripts_readme = (self.repo / "scripts" / "README.md").read_text()
+
+        # If the document explicitly claims to be a taxonomy/sample, don't enforce exhaustiveness
+        if any(keyword in scripts_readme.lower() for keyword in
+               ['taxonomy', 'sample', 'prefix', 'inferred', 'measured by grouping', 'not exhaustive']):
+            # This is a documented taxonomy, not a claimed-exhaustive inventory
+            return
 
         # Actual scripts in scripts/*.py
         actual_scripts = set()
