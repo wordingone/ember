@@ -203,7 +203,7 @@ def test_override_returns_pass_fire_stays_on_record():
 
         # the underlying evaluation receipt still records trigger_fired=True for the hinge --
         # the override does not erase the fire, only acknowledges it (R7).
-        receipts_dir = root / "receipts"
+        receipts_dir = root / "scripts" / "ember_totality" / "receipts-disconfirmation"
         eval_receipts = sorted(receipts_dir.glob("disconfirmation-eval-*.json"))
         assert eval_receipts, "no disconfirmation-eval receipt written"
         payload = json.loads(eval_receipts[-1].read_text(encoding="utf-8"))
@@ -240,7 +240,7 @@ def test_falsifier_selftest_receipt_excluded_from_b2_tally():
         assert r["verdict"] == "PASS", r
         assert "fired=0" in r["verdict_line"]
 
-        receipts_dir = root / "receipts"
+        receipts_dir = root / "scripts" / "ember_totality" / "receipts-disconfirmation"
         payload = json.loads(sorted(receipts_dir.glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
         b2_hinge = next(h for h in payload["hinges"] if h["hinge"] == "B2_BOOTSTRAP")
         assert b2_hinge["attempts_seen"] == 0, b2_hinge
@@ -266,7 +266,7 @@ def test_unevaluable_attempt_is_skipped_not_breaking():
         # B2_BOOTSTRAP threshold is 3; the trailing evaluable streak (skipping the
         # UNEVALUABLE one) is exactly 3 -> fired, and no escalation/override -> FAIL.
         assert r["verdict"] == "FAIL", r
-        payload = json.loads(sorted((root / "receipts").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
+        payload = json.loads(sorted((root / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
         b2_hinge = next(h for h in payload["hinges"] if h["hinge"] == "B2_BOOTSTRAP")
         assert b2_hinge["consecutive_fail_streak"] == 3, b2_hinge
         assert b2_hinge["attempts_seen"] == 4  # the UNEVALUABLE one is still counted as "seen"
@@ -286,7 +286,7 @@ def test_h0_ceiling_does_not_fire_without_lever_status_sidecar():
         r = _run_one_checker(root, DISCONFIRMATION_CHECKER, timeout_s=30)
         assert r["executed"] is True
         assert r["verdict"] == "PASS", r
-        payload = json.loads(sorted((root / "receipts").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
+        payload = json.loads(sorted((root / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
         h0 = next(h for h in payload["hinges"] if h["hinge"] == "H0_CEILING")
         assert h0["all_levers_resolved"] is False
         assert h0["trigger_fired"] is False
@@ -308,7 +308,7 @@ def test_h0_ceiling_fires_with_sidecar_all_resolved_and_escalation_present():
         r = _run_one_checker(root, DISCONFIRMATION_CHECKER, timeout_s=30)
         assert r["executed"] is True
         assert r["verdict"] == "PASS", r
-        payload = json.loads(sorted((root / "receipts").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
+        payload = json.loads(sorted((root / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
         h0 = next(h for h in payload["hinges"] if h["hinge"] == "H0_CEILING")
         assert h0["all_levers_resolved"] is True
         assert h0["trigger_fired"] is True
@@ -330,7 +330,7 @@ def test_h0_ceiling_one_unresolved_lever_blocks_fire():
         r = _run_one_checker(root, DISCONFIRMATION_CHECKER, timeout_s=30)
         assert r["executed"] is True
         assert r["verdict"] == "PASS", r
-        payload = json.loads(sorted((root / "receipts").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
+        payload = json.loads(sorted((root / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"))[-1].read_text(encoding="utf-8"))
         h0 = next(h for h in payload["hinges"] if h["hinge"] == "H0_CEILING")
         assert h0["all_levers_resolved"] is False
         assert h0["trigger_fired"] is False
