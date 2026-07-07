@@ -87,7 +87,7 @@ export async function runWorldStateTurn(argsLine: string): Promise<string> {
     const receipts = await findNewestReceipts(GOALFORGE_ROOT, 3);
     const width = process.stdout.columns || 80;
     return [
-      ...renderMonitorPanel(cachedState, { colorEnabled, width }),
+      ...renderMonitorPanel(cachedState, { colorEnabled, width, boardTs: cachedState.monitor.boardTs, nowMs: Date.now() }),
       ...renderReceiptsTail(receipts, Date.now()),
     ].join("\n");
   }
