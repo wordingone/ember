@@ -2177,12 +2177,28 @@ def run_and_emit_live() -> Path:
         pre_model = wrapper.backbone_model if hasattr(wrapper, 'backbone_model') else wrapper
 
         # State dict from checkpoint; extract backbone_model part and strip prefix
+        # Only load keys that belong to the backbone model
         adjusted_state = {}
         for key, val in pre_model_state.items():
             if key.startswith('backbone_model.'):
                 # Strip 'backbone_model.' prefix
                 adjusted_key = key[len('backbone_model.'):]
                 adjusted_state[adjusted_key] = val
+            elif key == 'lm_head.weight' or key == 'lm_head.bias':
+                # Skip head-level keys; we're only loading backbone
+                pass
+            elif not key.startswith('objective.') and not key.startswith('mtp_heads.'):
+                # Skip objective and MTP head parameters; only backbone
+                pass
+
+        # Verify FF dimension in loaded state matches model
+        if 'layers.0.mlp.gate_proj.weight' in adjusted_state:
+            state_ff = adjusted_state['layers.0.mlp.gate_proj.weight'].shape[0]
+            if state_ff != pre_ff:
+                raise RuntimeError(
+                    f"FF mismatch: state dict has FF={state_ff} but model "
+                    f"expects FF={pre_ff} -- likely a checkpoint/model alignment issue"
+                )
 
         pre_model.load_state_dict(adjusted_state, strict=False)
         pre_model.eval()
