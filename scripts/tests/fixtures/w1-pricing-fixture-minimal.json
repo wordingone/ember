@@ -1,0 +1,27 @@
+{
+  "verdict": "PRICING_RECEIPT_READY_FOR_LAUNCH",
+  "control_arm": {
+    "batch": 16,
+    "seq": 1024,
+    "target_architecture": "vocab=32000 seq=1024 1221633024 params",
+    "eval_cadence_K": 100
+  },
+  "grow_arm": {
+    "tokens_total": 12550144,
+    "terminal_checkpoint_ref": "rung-1 (1,221,633,024 params)",
+    "bill_aggregation_rows": [
+      {
+        "tokens_computed": "610 * 16 * 1024 = 9994240",
+        "seq": 1024,
+        "batch": 16,
+        "steps": 610,
+        "tokens_value": 9994240,
+        "segment": "synthetic-fixture",
+        "note": "Minimal fixture for fresh-clone test"
+      }
+    ]
+  },
+  "wall_hours_pricing": {
+    "control_arm_ceiling_tokens": 25100288
+  }
+}
