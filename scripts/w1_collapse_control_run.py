@@ -87,6 +87,11 @@ from timeshare_pretrain import (  # reused, not edited (hard rail: new files onl
     mtp_total_loss,
 )
 from receipt_write import checked_write
+from w1_recheck_cache import (
+    check_recheck_cache,
+    write_recheck_cache,
+    disclose_cache_hit,
+)
 
 # ---------------------------------------------------------------------------
 # Citations (paths + the exact figures pinned by the pricing/rung receipts).
@@ -1903,6 +1908,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
                          "batch_sha256, refusing on any mismatch. Omit to keep "
                          "the frozen protocol's original default behavior "
                          "unchanged.")
+    ap.add_argument("--recheck-cache-dir", default=None,
+                    help="issue #351: stable cache directory for contamination "
+                         "recheck results. Defaults to scratch/w1-control/recheck-cache/. "
+                         "The cache key is (batch_sha, decontam_receipt_sha, "
+                         "classifier_code_sha); cache hits skip the expensive recheck. "
+                         "Must be stable across launches (NOT a per-run out-dir). "
+                         "Non-PASS verdicts are never cached.")
     return ap
 
 
@@ -2063,7 +2075,24 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     # reconstruct the full seq+1 window per held-out row (x_np is w[0:seq],
     # y_np is w[1:seq+1], so w = x_np + [y_np[-1]]) before scanning.
     eval_rows = [list(x_np) + [int(y_np[-1])] for x_np, y_np in zip(xs, ys)]
-    contamination = contamination_recheck(eval_rows, args.shard_dir)
+
+    # Issue #351: Content-addressed contamination recheck cache. If the triple
+    # key (batch sha + decontam receipt sha + classifier code sha) matches a
+    # cached PASS result, skip the expensive recheck and cite the cached receipt.
+    # Cache root is stable across launches (not per-run out-dir) to enable
+    # cross-launch cache hits. Any mismatch or non-PASS verdict triggers full recheck.
+    cache_root = args.recheck_cache_dir or os.path.join(
+        REPO, "scratch", "w1-control", "recheck-cache")
+    contamination = check_recheck_cache(
+        eval_rows, args.shard_dir, args.decontam_receipt, cache_root,
+        classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
+    if not contamination:
+        # Cache miss or non-PASS verdict: run full recheck
+        contamination = contamination_recheck(eval_rows, args.shard_dir)
+        # Write to cache if this is a PASS result (non-PASS results are not cached)
+        write_recheck_cache(
+            contamination, eval_rows, args.decontam_receipt, cache_root,
+            classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
     # Defect A v2 (2026-07-07 fork-A fix): gate on the SELF-EXCLUSION-AWARE
     # classification, not the raw verdict -- contamination_recheck() cannot
     # tell the held-out batch's own true source windows (unavoidable matches)
@@ -2143,6 +2172,12 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             "disjointness_check": disjoint_check,
             "decontam_receipt_path": args.decontam_receipt,
             "launch_gate_result": launch_gate_result,
+        },
+        "recheck_cache_config": {
+            "cache_root": cache_root,
+            "cache_hit": contamination.get("cache_write_ts") is not None,
+            "cached_receipt_path": contamination.get("cached_receipt_path"),
+            "cached_receipt_ts": contamination.get("cache_write_ts"),
         },
         "contamination_recheck": contamination,
         "contamination_recheck_self_exclusion": contamination_classified,
