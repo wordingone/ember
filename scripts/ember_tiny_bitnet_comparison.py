@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import time
 import tracemalloc
 from datetime import datetime, timezone
@@ -46,7 +47,13 @@ def write_json(path: Path, obj: dict[str, Any], *, receipt: bool = False) -> Non
 def latest_resident_gate_receipt(gate_root: Path = DEFAULT_GATE_ROOT) -> tuple[Path | None, dict[str, Any] | None]:
     if not gate_root.exists():
         return None, None
-    candidates = sorted(gate_root.glob("resident-training-gate-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    # Extract timestamp from filename (resident-training-gate-YYYYMMDDTHHMMSSZ.json)
+    # instead of relying on filesystem mtime (which can be refreshed by git checkout).
+    def extract_timestamp(path: Path) -> str:
+        match = re.search(r"(\d{8}T\d{6}Z)", path.name)
+        return match.group(1) if match else ""
+
+    candidates = sorted(gate_root.glob("resident-training-gate-*.json"), key=extract_timestamp, reverse=True)
     for path in candidates:
         try:
             receipt = json.loads(path.read_text(encoding="utf-8-sig"))
