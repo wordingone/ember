@@ -380,6 +380,16 @@ function resolveBorderColorStyle(colorName: string | undefined): Style {
   return idx !== undefined ? { fg: { type: "named", index: idx } } : {};
 }
 
+/** Threads the REAL, currently-active style across an entire render() pass (text nodes, border
+ * paint, and every recursive call), instead of each write site assuming it starts from a blank
+ * terminal. #343: writeSGR's "additions-only" fast path only removes an attribute when the style
+ * it's diffing AGAINST actually still has it set -- if every call lies and claims "previous style
+ * is always {}" (as both call sites here used to), an attribute a PRIOR write left active (e.g.
+ * the cursor's inverse) never gets the removal codes it needs, and the next write's own attributes
+ * (e.g. a dim rule line's "2") land ON TOP of it instead of replacing it -- producing exactly the
+ * observed bold+dim+inverse ("\x1b[1;2;7m") stack over what should be a plain dim "─" rule. */
+export interface PrevStyleTracker { current: Style; }
+
 /** Paints a box's perimeter (all 4 edges) at its own layout rect, clipped to
  * clipRect exactly like text painting. Embeds borderTitle in the top edge when
  * given (falls back to a truncated title, never throwing, when it overflows the
@@ -389,6 +399,7 @@ function paintBorder(
   output: Output,
   lx: number, ly: number, lw: number, lh: number,
   clipRect: ClipRect,
+  prevStyleTracker: PrevStyleTracker,
 ): void {
   if (!node.borderStyle || lw < 2 || lh < 2) return;
   const glyphs = resolveBorderGlyphs(node.borderStyle);
@@ -399,7 +410,8 @@ function paintBorder(
     if (col < clipRect.x || col >= clipRect.x + clipRect.width) return;
     if (row < clipRect.y || row >= clipRect.y + clipRect.height) return;
     output.write(cursorPosition(row + 1, col + 1));
-    output.writeSGR(style, {});
+    output.writeSGR(style, prevStyleTracker.current);
+    prevStyleTracker.current = style;
     output.write(ch);
   };
 
@@ -434,12 +446,15 @@ function paintBorder(
   const bottomRow = glyphs.bottomLeft + glyphs.horizontal.repeat(inner) + glyphs.bottomRight;
   for (let i = 0; i < bottomRow.length && i < lw; i++) writeAt(ly + lh - 1, lx + i, bottomRow[i]!);
 
-  // Self-terminating (style-bleed.test.ts): every glyph write above assumes the SAME
-  // always-empty previous style text painting does, so a colored border leaves the real
-  // terminal state non-default with nothing downstream aware it must reset. Explicitly
-  // closing out the color here, once, keeps the border's own paint self-contained instead
-  // of leaking into whatever renders immediately after it.
-  if (style.fg || style.bg) output.write("\x1b[m");
+  // Self-terminating (style-bleed.test.ts): a colored border leaves the real terminal state
+  // non-default with nothing downstream aware it must reset. Explicitly closing out the color
+  // here, once, keeps the border's own paint self-contained instead of leaking into whatever
+  // renders immediately after it -- and updates the shared tracker to match, so the NEXT write
+  // (text/border, sibling or child) correctly sees the terminal as default again.
+  if (style.fg || style.bg) {
+    output.write("\x1b[m");
+    prevStyleTracker.current = {};
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +473,10 @@ export function renderNodeToOutput(
   clipRect: ClipRect,
   stylePool: StylePool,
   hyperlinkPool: HyperlinkPool,
+  // #343: shared across the WHOLE tree walk (one per render() pass) so every write site knows
+  // the real, currently-active style instead of each independently assuming "starts from {}".
+  // Optional + defaulted so any external caller still constructing a bare 7-arg call keeps working.
+  prevStyleTracker: PrevStyleTracker = { current: {} },
 ): void {
   const lx = x + node.layout.computedLeft;
   const ly = y + node.layout.computedTop;
@@ -478,10 +497,10 @@ export function renderNodeToOutput(
     for (const ch of node.text) {
       if (col >= clipRect.x + clipRect.width) break;
       if (col >= clipRect.x && row >= clipRect.y && row < clipRect.y + clipRect.height) {
-        const ref = stylePool.intern(style);
+        stylePool.intern(style);
         output.write(cursorPosition(row + 1, col + 1));
-        const prevStyle = stylePool.lookup(0);
-        output.writeSGR(style, prevStyle);
+        output.writeSGR(style, prevStyleTracker.current);
+        prevStyleTracker.current = style;
         output.write(ch);
       }
       col += charWidth(ch);
@@ -489,13 +508,17 @@ export function renderNodeToOutput(
   } else if (node.kind === "raw-ansi" && node.rawAnsi !== undefined) {
     output.write(cursorPosition(ly + 1, lx + 1));
     output.write(node.rawAnsi);
+    // raw-ansi content (e.g. the fireball's per-cell RESET convention) is expected to be
+    // self-terminating, same as the border-color reset below -- treat the shared tracker as
+    // back to default afterward rather than carrying an unknown internal state forward.
+    prevStyleTracker.current = {};
   } else if (node.kind === "box" && node.borderStyle) {
-    paintBorder(node, output, lx, ly, lw, lh, clipRect);
+    paintBorder(node, output, lx, ly, lw, lh, clipRect, prevStyleTracker);
   }
 
   // Recurse into children
   for (const child of node.children) {
-    renderNodeToOutput(child, output, lx, ly, clipRect, stylePool, hyperlinkPool);
+    renderNodeToOutput(child, output, lx, ly, clipRect, stylePool, hyperlinkPool, prevStyleTracker);
   }
 }
 
@@ -657,7 +680,10 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Run layout
       rootNode.layout.calculateLayout(w, h, "ltr");
 
-      renderNodeToOutput(rootNode, output, 0, 0, clipRect, stylePool, hyperlinkPool);
+      // #343: one fresh tracker per render() pass -- the real terminal is back to default at
+      // the START of every render (guaranteed by #325's own unconditional trailing reset below),
+      // so {} is the correct starting point; it then threads through the WHOLE tree walk.
+      renderNodeToOutput(rootNode, output, 0, 0, clipRect, stylePool, hyperlinkPool, { current: {} });
       const rendered = output.flush();
 
       // Build current frame from rendered output by re-parsing
