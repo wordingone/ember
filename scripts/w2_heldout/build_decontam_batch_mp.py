@@ -123,6 +123,64 @@ def _preflight_check_commit() -> tuple[float, float]:
     return commit_total_gb, commit_free_gb
 
 
+LOCK_FILE = os.path.join(REPO_ROOT, "scratch", "w2-heldout-run", ".decontam.lock")
+
+
+def _lock_holder_alive(pid: int) -> bool:
+    """True iff `pid` is a live process actually running this script.
+
+    NOTE: psutil.Process.name() returns only the executable name (e.g.
+    "python.exe" on Windows), never the invoked script -- checking
+    "build_decontam" in proc.name() is therefore always False and can never
+    detect a live holder. Must check cmdline() (the actual argv, which
+    includes the script path) instead."""
+    try:
+        proc = psutil.Process(pid)
+        cmdline = " ".join(proc.cmdline())
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
+        return False
+    return proc.is_running() and "build_decontam_batch_mp" in cmdline
+
+
+def _check_singleton_lock() -> None:
+    """Refuse to start if another build_decontam_batch_mp.py is running.
+
+    Atomic: acquires the lock via O_CREAT|O_EXCL (single winner even under a
+    race), verifies a losing process is dead before reclaiming, retries a
+    bounded number of times to resolve stale-lock churn."""
+    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    my_pid = os.getpid()
+
+    for _ in range(5):
+        try:
+            fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(fd, "w") as f:
+                f.write(str(my_pid))
+            return
+        except FileExistsError:
+            pass
+
+        try:
+            with open(LOCK_FILE, "r") as f:
+                existing_pid = int(f.read().strip())
+        except (ValueError, IOError):
+            existing_pid = None
+
+        if existing_pid is not None and existing_pid != my_pid and _lock_holder_alive(existing_pid):
+            raise SystemExit(
+                f"W2_DECONTAM_ALREADY_RUNNING: Another build_decontam_batch_mp.py is active "
+                f"(PID {existing_pid}). Abort. Kill the existing process first or wait for it "
+                f"to complete.")
+
+        # Stale lock (dead PID, unrelated process, or corrupted content) -- reclaim.
+        try:
+            os.remove(LOCK_FILE)
+        except OSError:
+            pass
+
+    raise SystemExit("W2_DECONTAM_LOCK_CONTENTION: could not acquire singleton lock after retries.")
+
+
 # ---------------------------------------------------------------------------
 # Cheap manifest (same as serial version)
 # ---------------------------------------------------------------------------
@@ -452,6 +510,13 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
         result = contamination_recheck(eval_rows, shard_dir, window=window, roll_base=roll_base)
         result["wall_s"] = round(time.perf_counter() - t0_serial, 3)
         result["n_workers"] = 1
+        if dump_matches:
+            dump_dir = os.path.dirname(dump_matches)
+            if dump_dir and not os.path.exists(dump_dir):
+                os.makedirs(dump_dir, exist_ok=True)
+            with open(dump_matches, "a", encoding="utf-8") as fh:
+                for match in result["confirmed_matches"]:
+                    fh.write(json.dumps(match) + "\n")
         return result
 
     # Distribute shards into EXACTLY min(n_workers, len(shard_paths)) balanced groups.
@@ -464,9 +529,12 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
     # Filter out empty groups (shouldn't happen, but safe)
     worker_shards = [g for g in worker_shards if g]
 
-    # Create dump directory for workers to stream matches
+    # Create dump directory for workers to stream matches (per-run subdirectory --
+    # a shared fixed name collides across concurrent/successive runs on Windows,
+    # which is exactly how attempts 5+6 mutually clobbered each other's worker files).
+    run_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ_%f")
     tmp_match_dir = os.path.join(os.path.dirname(progress_file) if progress_file else ".",
-                                  "worker-matches-tmp")
+                                  f"worker-matches-tmp-{run_timestamp}")
     os.makedirs(tmp_match_dir, exist_ok=True)
 
     # Dispatch workers with dump_dir parameter
@@ -506,22 +574,23 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
     # Clean up temp files
     shutil.rmtree(tmp_match_dir, ignore_errors=True)
 
-    # Write matches to dump file if requested (atomic write: temp → rename)
+    # Write matches to dump file if requested. APPEND mode: build_batch() calls
+    # this function once per round (plus once for the final verification pass),
+    # each scanning the full corpus against that round's candidate pool -- so
+    # the caller (build_batch) truncates dump_matches once up front, and every
+    # call here appends its own real matches. This is the fix for the CLI
+    # --dump-matches wiring: previously build_batch()'s returned
+    # contamination_recheck dict never carried a "confirmed_matches" list (only
+    # aggregate counts), and nothing else ever passed dump_matches into this
+    # function -- so main()'s post-hoc dump loop always iterated an empty list
+    # and every run silently wrote a 0-line file regardless of corpus findings.
     if dump_matches:
         dump_dir = os.path.dirname(dump_matches)
         if dump_dir and not os.path.exists(dump_dir):
             os.makedirs(dump_dir, exist_ok=True)
-
-        # Write to temp file first, then rename for atomicity
-        dump_temp = dump_matches + ".tmp"
-        with open(dump_temp, "w", encoding="utf-8") as fh:
+        with open(dump_matches, "a", encoding="utf-8") as fh:
             for match in all_matches:
                 fh.write(json.dumps(match) + "\n")
-
-        # Atomic rename
-        if os.path.exists(dump_matches):
-            os.remove(dump_matches)
-        os.rename(dump_temp, dump_matches)
 
     return {
         "method": "13-token polynomial rolling hash (uint64 mod 2**64), "
@@ -589,14 +658,16 @@ def _classify_once(candidate_rows: list[list[int]],
                     n_workers: int = DEFAULT_MP_WORKERS,
                     progress_file: str | None = None,
                     block_len: int | None = None,
-                    chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS) -> dict:
+                    chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
+                    dump_matches: str | None = None) -> dict:
     """Runs contamination recheck (serial or parallel) once."""
     t0 = time.perf_counter()
     # If n_workers <= 1 or MP disabled, use serial version (avoid multiprocessing spawn on Windows)
     if use_mp and n_workers > 1:
         raw = contamination_recheck_mp(candidate_rows, shard_dir, window=window,
                                         roll_base=roll_base, n_workers=n_workers,
-                                        progress_file=progress_file, chunk_tokens=chunk_tokens)
+                                        progress_file=progress_file, chunk_tokens=chunk_tokens,
+                                        dump_matches=dump_matches)
         # contamination_recheck_mp includes wall_s in its return dict
         wall_s = raw.pop("wall_s")
     else:
@@ -685,13 +756,15 @@ def classify_candidates(candidate_rows: list[list[int]],
                          n_workers: int = DEFAULT_MP_WORKERS,
                          progress_file: str | None = None,
                          block_len: int | None = None,
-                         chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS) -> dict:
+                         chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
+                         dump_matches: str | None = None) -> dict:
     """Adaptive wrapper, same as serial version."""
     try:
         return _classify_once(candidate_rows, candidate_positions, shard_dir,
                                window=window, roll_base=roll_base, files=files, cum=cum,
                                use_mp=use_mp, n_workers=n_workers, progress_file=progress_file,
-                               block_len=block_len, chunk_tokens=chunk_tokens)
+                               block_len=block_len, chunk_tokens=chunk_tokens,
+                               dump_matches=dump_matches)
     except MemoryError:
         if len(candidate_rows) <= 1:
             raise
@@ -699,11 +772,13 @@ def classify_candidates(candidate_rows: list[list[int]],
         left = classify_candidates(candidate_rows[:mid], candidate_positions[:mid], shard_dir,
                                     window=window, roll_base=roll_base, files=files, cum=cum,
                                     use_mp=use_mp, n_workers=n_workers, progress_file=progress_file,
-                                    block_len=block_len, chunk_tokens=chunk_tokens)
+                                    block_len=block_len, chunk_tokens=chunk_tokens,
+                                    dump_matches=dump_matches)
         right = classify_candidates(candidate_rows[mid:], candidate_positions[mid:], shard_dir,
                                      window=window, roll_base=roll_base, files=files, cum=cum,
                                      use_mp=use_mp, n_workers=n_workers, progress_file=progress_file,
-                                     block_len=block_len, chunk_tokens=chunk_tokens)
+                                     block_len=block_len, chunk_tokens=chunk_tokens,
+                                     dump_matches=dump_matches)
         return _merge_classify_results(left, right, right_offset=mid)
 
 
@@ -1115,9 +1190,21 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
                  n_workers: int = DEFAULT_MP_WORKERS,
                  progress_file: str | None = None,
                  chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
-                 pool_start_index: int | None = None) -> dict:
+                 pool_start_index: int | None = None,
+                 dump_matches: str | None = None) -> dict:
     t_start = time.perf_counter()
     block_len = seq + 1 + n_mtp
+
+    # Truncate/create the dump file once up front. Every classify_candidates()
+    # call below (one per round + the final verification pass) APPENDS its own
+    # real matches to this same path, so the file accumulates the full corpus
+    # scan's findings across the whole build_batch run instead of each call
+    # overwriting the previous one's data.
+    if dump_matches:
+        dump_dir = os.path.dirname(dump_matches)
+        if dump_dir:
+            os.makedirs(dump_dir, exist_ok=True)
+        open(dump_matches, "w", encoding="utf-8").close()
 
     files = cheap_shard_sizes(shard_dir)
     cum = _cumulative_token_offsets(files)
@@ -1211,7 +1298,8 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
         result = classify_candidates(candidate_rows, candidate_positions, shard_dir,
                                       files=files, cum=cum, use_mp=use_mp,
                                       n_workers=n_workers, progress_file=progress_file,
-                                      block_len=block_len, chunk_tokens=chunk_tokens)
+                                      block_len=block_len, chunk_tokens=chunk_tokens,
+                                      dump_matches=dump_matches)
         total_candidates_checked += len(pool_indices)
 
         newly_clean = result["clean_idx"][:need]
@@ -1253,7 +1341,8 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
     final_check = classify_candidates(selected_rows, final_positions, shard_dir,
                                        files=files, cum=cum, use_mp=use_mp,
                                        n_workers=n_workers, progress_file=progress_file,
-                                       block_len=block_len, chunk_tokens=chunk_tokens)
+                                       block_len=block_len, chunk_tokens=chunk_tokens,
+                                       dump_matches=dump_matches)
     final_non_self_count = sum(len(m) for m in final_check["non_self_matches_by_candidate"])
 
     sha = batch_sha256(selected_rows, seq)
@@ -1358,10 +1447,15 @@ def main():
                     help="Override pool start index for explicit placement (e.g. mid-corpus; default: tail placement via held_out_window_start). Rounds extend UPWARD from this index; omit for tail mode (rounds extend DOWNWARD).")
     ap.add_argument("--dump-matches", type=str, default=None,
                     help="Optional JSONL file to dump matched contamination records (one per line)")
+    ap.add_argument("--progress-file", type=str, default=None,
+                    help="Optional JSONL file for worker heartbeats (one per chunk per worker). Auto-generated if omitted.")
     args = ap.parse_args()
 
     if not args.shard_dir:
         raise SystemExit("W2_DECONTAM_SHARD_DIR_REQUIRED")
+
+    # Check singleton lock before any work
+    _check_singleton_lock()
 
     # Preflight checks
     total_commit, free_commit = _preflight_check_commit()
@@ -1393,10 +1487,14 @@ def main():
         print()
 
     # Setup progress file
-    run_dir = os.path.join(REPO_ROOT, "scratch", "w2-heldout-run")
-    os.makedirs(run_dir, exist_ok=True)
-    ts = _utc_ts()
-    progress_file = os.path.join(run_dir, f"mp-progress-{ts}.jsonl")
+    if args.progress_file:
+        progress_file = args.progress_file
+        os.makedirs(os.path.dirname(progress_file) or ".", exist_ok=True)
+    else:
+        run_dir = os.path.join(REPO_ROOT, "scratch", "w2-heldout-run")
+        os.makedirs(run_dir, exist_ok=True)
+        ts = _utc_ts()
+        progress_file = os.path.join(run_dir, f"mp-progress-{ts}.jsonl")
 
     print(f"[LAUNCH] Starting build with {args.n_workers} workers")
     print(f"[LAUNCH] Progress file: {progress_file}")
@@ -1410,26 +1508,21 @@ def main():
                           n_workers=args.n_workers,
                           progress_file=progress_file,
                           chunk_tokens=args.scan_chunk_tokens,
-                          pool_start_index=args.pool_start_index)
+                          pool_start_index=args.pool_start_index,
+                          dump_matches=args.dump_matches)
 
     write_batch_file(result, out_path=args.out_batch)
     receipt_path = write_receipt(result, receipt_dir=args.receipt_dir)
 
-    # Dump matches to JSONL if requested
-    if args.dump_matches:
-        os.makedirs(os.path.dirname(args.dump_matches) or ".", exist_ok=True)
-        match_count = 0
-        with open(args.dump_matches, "w") as f:
-            for match in result.get("contamination_recheck", {}).get("confirmed_matches", []):
-                row = {
-                    "shard": match.get("shard"),
-                    "offset": match.get("offset"),
-                    "match_len_tokens": 13,
-                    "window_idx": match.get("offset"),
-                    "basis": "v1-any-match"
-                }
-                f.write(json.dumps(row) + "\n")
-                match_count += 1
+    # Matches (if --dump-matches was given) were already written directly by
+    # build_batch()/contamination_recheck_mp() as they were found -- each
+    # round's real corpus scan appends its own matches to args.dump_matches.
+    # (Previously this block re-read result["contamination_recheck"]["confirmed_matches"],
+    # a key that dict never contained -- see fix note above contamination_recheck_mp's
+    # dump_matches write. That always silently produced a 0-line file.)
+    if args.dump_matches and os.path.exists(args.dump_matches):
+        with open(args.dump_matches, "r", encoding="utf-8") as f:
+            match_count = sum(1 for _ in f)
         print(f"[DUMP] {match_count} matches written to {args.dump_matches}")
 
     print(f"batch_size={result['batch_size']} "
