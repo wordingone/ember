@@ -2031,6 +2031,32 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             "wall_s": phase2["wall_s"],
             "wall_hours_estimate": phase2["wall_hours_estimate"],
         },
+        "cap_disclosure": {
+            "note": "Two different 'L0 budget cap' multipliers exist in this "
+                    "program's documentation and must not be conflated. This run "
+                    "enforces ONLY the first one.",
+            "w1_pricing_receipt_ceiling": {
+                "multiplier": "2.0 * grow_arm",
+                "tokens": pricing_receipt["wall_hours_pricing"]["control_arm_ceiling_tokens"],
+                "source": args.pricing_receipt,
+                "matches_issue_71_stated_hard_ceiling": True,
+            },
+            "w2_scale_preregistration_multiplier_1p5x": {
+                "multiplier": "1.5 * grow.projected",
+                "source": "docs/spec/w2-scale-preregistration-v1.md section 3 (L0 "
+                           "definition) -- a DIFFERENT experiment's convention "
+                           "(rung-2 scale arms), not this W1 from-scratch control "
+                           "run's own frozen ceiling. Referenced here only because "
+                           "a launch instruction cited it alongside this run; NOT "
+                           "enforced by this script.",
+            },
+            "bound_enforced_this_run": (
+                "w1_pricing_receipt_ceiling (ceiling_steps, "
+                f"REAL_HARD_CEILING_STEPS_ISSUE_STATED={REAL_HARD_CEILING_STEPS_ISSUE_STATED}), "
+                "or target_eval_loss match if that fired first -- see "
+                "control_arm.tokens_to_match vs control_arm.tokens_at_ceiling above "
+                "for which one actually terminated this run."),
+        },
         "phase_boundary_hygiene": phase_boundary_hygiene,
         "pytorch_alloc_conf": pytorch_alloc_conf_receipt,
         "capability_point": {
