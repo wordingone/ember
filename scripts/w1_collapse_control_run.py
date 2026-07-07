@@ -1431,7 +1431,8 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
                      eval_every: int, checkpoint_every: int,
                      target_eval_loss: float, seed: int, device: str,
                      out_dir: str, shard_dir: str, eval_x, eval_y,
-                     loader=None, rung_receipt: dict | None = None) -> dict:
+                     loader=None, rung_receipt: dict | None = None,
+                     progress_path: str | None = None) -> dict:
     """Real control leg, REWORKED to the full matched-recipe control (issue
     #82 live-fire finding 2, 2026-07-04): the prior plain-AdamW single-
     optimizer design OOM'd at 17.32GiB allocated + 1.61GiB fragmentation-
@@ -1501,7 +1502,14 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
     rung_receipt: if given, the wall/throughput estimate (requirement 4) is
     derived fresh from its own stabilization_segment.tok_s_paced field (see
     derive_wall_hours_from_rung) instead of the prior pricing-receipt
-    pass-through."""
+    pass-through.
+
+    progress_path: instrumentation-only addition (observability for a
+    detached, multi-hour background launch) -- when given, do_eval() appends
+    one JSON line (step, tokens_so_far, eval_loss, ts) per evaluation,
+    flushed immediately, so a monitor can confirm the run is alive without
+    waiting for the terminal receipt. Never affects training/eval math or
+    any gate decision -- purely a side-channel write."""
     if device == "cuda":
         from timeshare_pretrain import _apply_governor
         gov_receipt = _apply_governor()
@@ -1553,6 +1561,16 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
         el = eval_loss_fn(model, eval_x, eval_y)
         eval_trace.append({"step": step_idx, "tokens_so_far": tokens_so_far,
                             "eval_loss": el})
+        if progress_path:
+            row = {"step": step_idx, "tokens_so_far": tokens_so_far,
+                   "eval_loss": el, "target_eval_loss": target_eval_loss,
+                   "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}
+            with open(progress_path, "a", encoding="utf-8", newline="\n") as pf:
+                pf.write(json.dumps(row) + "\n")
+                pf.flush()
+                os.fsync(pf.fileno())
+            print(f"[w1-live-progress] step={step_idx} tokens={tokens_so_far} "
+                  f"eval_loss={el} target={target_eval_loss}", flush=True)
         return el
 
     resume_at_step = checkpoint_every
@@ -1905,6 +1923,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     phase_boundary_hygiene = hard_free_and_assert_phase_boundary(device)
 
     cfg_real = real_config_dict(real_arch)
+    progress_path = os.path.join(out_dir, f"w1-live-progress-{ts}.jsonl")
     phase2 = run_phase2_live(
         cfg_real, real_arch, ceiling_steps=ceiling_steps, eval_every=eval_every,
         checkpoint_every=checkpoint_every, target_eval_loss=phase1["target_eval_loss"],
@@ -1912,7 +1931,8 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         out_dir=os.path.join(out_dir, "phase2-live"), shard_dir=args.shard_dir,
         eval_x=eval_x, eval_y=eval_y,
         loader=eval_loader,  # reuse -- avoid a second ~14-27GB corpus load
-        rung_receipt=rung_receipt)
+        rung_receipt=rung_receipt,
+        progress_path=progress_path)
 
     is_real_lineage, lineage_reasons = assess_real_lineage(
         checkpoint_verified=True,   # run_phase1_live raises before returning if not
