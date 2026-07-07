@@ -1004,14 +1004,22 @@ def assert_disjoint_from_training(held_out_start: int, ceiling_steps: int,
 # ---------------------------------------------------------------------------
 
 def repo_relative_path(path: str) -> str:
-    """Best-effort relpath to REPO, forward-slash normalized. Falls back to
-    the input unchanged only if relpath itself raises (e.g. a different
-    drive on Windows) -- never used for a path that might carry an operator
-    name; callers with that risk use corpus_identity_for_receipt instead."""
+    """Best-effort relpath to REPO, forward-slash normalized. FAILS CLOSED
+    on a cross-drive path: os.path.relpath raises ValueError on Windows when
+    `path` and REPO sit on different drive letters -- this is the exact
+    defect a B:-drive launch-lane run caught (issue #361 fix-forward): REPO
+    lives on B:, tempfile.TemporaryDirectory() defaults to C:, so every
+    checkpoint path built in a temp dir hit this branch and (before this
+    fix) returned the raw C:\\... path verbatim into a generated receipt.
+    Never returns the raw input on failure -- returns a name-safe
+    'external:<basename>' marker instead, same convention as
+    corpus_identity_for_receipt (basename only, never more): this is the
+    same #357 class of leak, just triggered by a drive boundary instead of
+    an external corpus mount."""
     try:
         rel = os.path.relpath(os.path.abspath(path), REPO)
     except ValueError:
-        return path
+        return f"external:{os.path.basename(os.path.normpath(path))}"
     return rel.replace(os.sep, "/")
 
 
@@ -2058,6 +2066,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
                          "to fabricate (eng-54 #194 guard)")
     ap.add_argument("--out-dir", default=os.path.join(
         REPO, "scratch", "w1-control", "dry-run"))
+    ap.add_argument("--receipts-out-dir", default=None,
+                    help="issue #361 fix-forward: override the receipt "
+                    "output directory. Dry-run mode (default) writes its "
+                    "receipt under scratch/, never the canonical receipts/ "
+                    "tree, unless this is set explicitly -- a launch lane's "
+                    "own dry-run smoke test previously landed a toy-fixture "
+                    "receipt in receipts/ember-c-scale/. --live is "
+                    "unaffected: a real live run always writes to the "
+                    "canonical receipts/ember-c-scale/ tree.")
     ap.add_argument("--pricing-receipt", default=DEFAULT_PRICING_RECEIPT)
     ap.add_argument("--rung-receipt", default=DEFAULT_RUNG_RECEIPT)
     ap.add_argument("--rung-manifest", default=None,
@@ -2414,10 +2431,13 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         "mode": "live",
         "device": device,
         "real_lineage_reference": {
-            "pricing_receipt_path": args.pricing_receipt,
+            # issue #361 fix-forward: pricing_receipt_path/rung_provenance_path
+            # were written raw with no repo_relative_path call at all (same
+            # #357 class as the shard_dir leak, now cured here too).
+            "pricing_receipt_path": repo_relative_path(args.pricing_receipt),
             "pricing_receipt_sha256": sha256_file(args.pricing_receipt),
             "rung_provenance_mode": rung_prov["mode"],
-            "rung_provenance_path": rung_prov["path"],
+            "rung_provenance_path": repo_relative_path(rung_prov["path"]),
             "rung_provenance_sha256": rung_prov["sha256"],
             "corpus_verification_receipt": CORPUS_VERIFICATION_RECEIPT,
             "derived_target_architecture": real_arch,
@@ -2638,10 +2658,13 @@ def main(argv: list[str] | None = None) -> int:
                      "receipt's ratio/outcome. Real grow-arm token bill and "
                      "bill_aggregation_rows imported verbatim from the pricing "
                      "receipt, with citation, per issue #71's instruction."),
-            "pricing_receipt_path": args.pricing_receipt,
+            # issue #361 fix-forward: pricing_receipt_path/rung_provenance_path
+            # were written raw with no repo_relative_path call at all (same
+            # #357 class as the shard_dir leak, now cured here too).
+            "pricing_receipt_path": repo_relative_path(args.pricing_receipt),
             "pricing_receipt_sha256": sha256_file(args.pricing_receipt),
             "rung_provenance_mode": rung_prov["mode"],
-            "rung_provenance_path": rung_prov["path"],
+            "rung_provenance_path": repo_relative_path(rung_prov["path"]),
             "rung_provenance_sha256": rung_prov["sha256"],
             "grow_arm_terminal_checkpoint_ref": pricing_receipt["grow_arm"]["terminal_checkpoint_ref"],
             "grow_arm_tokens_total": pricing_receipt["grow_arm"]["tokens_total"],
@@ -2730,7 +2753,13 @@ def main(argv: list[str] | None = None) -> int:
             if dry_run else ""),
     }
 
-    receipts_dir = os.path.join(REPO, "receipts", "ember-c-scale")
+    # issue #361 fix-forward: dry-run receipts default under scratch/, never
+    # the canonical receipts/ tree -- a launch lane's own dry-run smoke test
+    # previously landed a toy-fixture receipt in receipts/ember-c-scale/.
+    # --receipts-out-dir overrides explicitly; --live is unaffected (see
+    # main_live's own unconditional receipts/ember-c-scale/ write, below).
+    receipts_dir = (args.receipts_out_dir if args.receipts_out_dir
+                     else os.path.join(REPO, "scratch", "w1-control", "receipts"))
     os.makedirs(receipts_dir, exist_ok=True)
     out_path = os.path.join(receipts_dir, f"w1-collapse-control-{ts}.json")
     checked_write(out_path, receipt)
