@@ -244,10 +244,7 @@ def derive_rung_receipt_from_manifest(manifest_path: str) -> dict:
     manifest = load_json(manifest_path)
     extra = manifest.get("extra", {})
     ff_grown = extra.get("ff_grown")
-    if ff_grown is None:
-        raise SystemExit(
-            f"W1_LIVE_RUNG_MANIFEST_NO_FF_GROWN: {manifest_path!r} extra.ff_grown "
-            "missing -- cannot derive architecture, refusing.")
+    ff_grown_derivation = "read_from_manifest.extra.ff_grown"
 
     model_pt = os.path.join(ckpt_dir, "model.pt")
     state = torch.load(model_pt, map_location="cpu")
@@ -257,6 +254,31 @@ def derive_rung_receipt_from_manifest(manifest_path: str) -> dict:
             f"W1_LIVE_RUNG_MANIFEST_NO_EMBED_KEY: no *embed_tokens.weight key in "
             f"{model_pt!r}'s state_dict -- cannot derive vocab/hidden, refusing.")
     vocab, hidden = (int(x) for x in state[embed_key].shape)
+
+    if ff_grown is None:
+        # extra.ff_grown is not written into every checkpoint's manifest (e.g.
+        # rung1-.../step-00000766, confirmed absent by direct read) even
+        # though the SAME state_dict this function already loads for
+        # vocab/hidden carries the FF width directly, in the MLP gate/up
+        # projection's output dim -- the identical
+        # derived_from_checkpoint_tensor_shape class already used for
+        # vocab/hidden above, just applied to a second tensor. Never a
+        # workaround around a safety gate: this is not a contamination/
+        # authorization interlock, only an incomplete field read. Falls
+        # back to the manifest-missing hard refusal only if the state_dict
+        # itself lacks any MLP gate/up projection to read.
+        gate_key = next((k for k in state if k.endswith("mlp.gate_proj.weight")
+                          or k.endswith("mlp.up_proj.weight")), None)
+        if gate_key is None:
+            raise SystemExit(
+                f"W1_LIVE_RUNG_MANIFEST_NO_FF_GROWN: {manifest_path!r} "
+                "extra.ff_grown missing AND no mlp.{gate,up}_proj.weight key "
+                f"found in {model_pt!r}'s state_dict -- cannot derive "
+                "architecture, refusing.")
+        ff_grown = int(state[gate_key].shape[0])
+        ff_grown_derivation = (
+            f"derived_from_checkpoint_tensor_shape: extra.ff_grown absent from "
+            f"{manifest_path!r}; {gate_key}.shape[0]={ff_grown}")
     del state  # free the multi-GB state_dict promptly
 
     return {
@@ -267,7 +289,7 @@ def derive_rung_receipt_from_manifest(manifest_path: str) -> dict:
         "stabilization_segment": {"checkpoint": ckpt_dir, "tok_s_paced": None},
         "_derivation": {
             "source_manifest": manifest_path,
-            "ff_grown": "read_from_manifest.extra.ff_grown",
+            "ff_grown": ff_grown_derivation,
             "params_dedup.measured_duplicate_numel": (
                 f"derived_from_checkpoint_tensor_shape: {embed_key}.shape="
                 f"({vocab}, {hidden}) -> vocab*hidden"),
