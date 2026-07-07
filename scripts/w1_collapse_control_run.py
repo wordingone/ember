@@ -225,6 +225,71 @@ def sha256_tokens(token_ids: "torch.Tensor") -> str:
 #                                              assumed.)
 # ---------------------------------------------------------------------------
 
+def derive_rung_receipt_from_manifest(manifest_path: str) -> dict:
+    """Issue #121 item 7: DEFAULT_RUNG_RECEIPT (a bespoke aggregate receipt
+    documenting the rung-1 grow+stabilize run) does not exist on disk or in
+    any git history reachable from this branch (mapped separately). What DOES
+    exist is the real, sha-verifiable per-checkpoint manifest.json the
+    timeshare_pretrain checkpoint format already writes (files{sha256}, step,
+    extra{...}). This builds a rung_receipt-SHAPED dict from that manifest
+    plus the checkpoint's own model.pt tensor shapes -- every field is
+    disclosed as read_from_manifest / derived_from_checkpoint_tensor_shape /
+    unavailable under "_derivation" (never invented). NEVER writes a receipt
+    file to disk -- purely an in-memory substitution consumed directly by
+    derive_real_arch_config / verify_real_checkpoint / derive_wall_hours_
+    from_rung, which already tolerate a None tok_s_paced (wall_hours_estimate
+    becomes None) and never compute on params_unique_after/params_state_dict_
+    sum_after (carried through as receipt metadata only)."""
+    ckpt_dir = os.path.dirname(os.path.abspath(manifest_path))
+    manifest = load_json(manifest_path)
+    extra = manifest.get("extra", {})
+    ff_grown = extra.get("ff_grown")
+    if ff_grown is None:
+        raise SystemExit(
+            f"W1_LIVE_RUNG_MANIFEST_NO_FF_GROWN: {manifest_path!r} extra.ff_grown "
+            "missing -- cannot derive architecture, refusing.")
+
+    model_pt = os.path.join(ckpt_dir, "model.pt")
+    state = torch.load(model_pt, map_location="cpu")
+    embed_key = next((k for k in state if k.endswith("embed_tokens.weight")), None)
+    if embed_key is None:
+        raise SystemExit(
+            f"W1_LIVE_RUNG_MANIFEST_NO_EMBED_KEY: no *embed_tokens.weight key in "
+            f"{model_pt!r}'s state_dict -- cannot derive vocab/hidden, refusing.")
+    vocab, hidden = (int(x) for x in state[embed_key].shape)
+    del state  # free the multi-GB state_dict promptly
+
+    return {
+        "params_dedup": {"measured_duplicate_numel": vocab * hidden},
+        "ff_grown": int(ff_grown),
+        "params_unique_after": None,
+        "params_state_dict_sum_after": None,
+        "stabilization_segment": {"checkpoint": ckpt_dir, "tok_s_paced": None},
+        "_derivation": {
+            "source_manifest": manifest_path,
+            "ff_grown": "read_from_manifest.extra.ff_grown",
+            "params_dedup.measured_duplicate_numel": (
+                f"derived_from_checkpoint_tensor_shape: {embed_key}.shape="
+                f"({vocab}, {hidden}) -> vocab*hidden"),
+            "params_unique_after": "unavailable -- not reconstructable from the "
+                                    "checkpoint manifest or tensor shapes alone "
+                                    "(needs the original D4 param-dedup methodology)",
+            "params_state_dict_sum_after": "unavailable -- same reason",
+            "stabilization_segment.tok_s_paced": (
+                "unavailable -- a historical wall-clock throughput measurement, "
+                "not present in the checkpoint manifest and not reconstructable "
+                "after the fact; wall_hours_estimate will be None, not fabricated"),
+            "chain_of_custody_note": (
+                "verify_real_checkpoint's path-identity check compares the "
+                "derived checkpoint path to itself in this mode (there is no "
+                "separate rung_receipt authority) -- the per-file sha re-hash "
+                "against the checkpoint's OWN manifest is the real protection "
+                "this mode retains; it still fails closed on bit-rot/corruption/"
+                "a substituted directory with a stale manifest."),
+        },
+    }
+
+
 def derive_real_arch_config(pricing_receipt: dict, rung_receipt: dict) -> dict:
     target_arch_str = pricing_receipt["control_arm"]["target_architecture"]
     vocab_match = re.search(r"vocab=(\d+)", target_arch_str)
@@ -954,6 +1019,94 @@ def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
     }
 
 
+# ---------------------------------------------------------------------------
+# Issue #121 spec-compliance additions (Defect A + Defect B). W2 sec.4:
+# "contamination_recheck must report 0 matches or the launch gate refuses" --
+# contamination_recheck() above computed and disclosed the verdict but never
+# gated on it. Two independent fixes, both fail-closed, neither touching the
+# frozen protocol's default behavior when unused:
+# ---------------------------------------------------------------------------
+
+def refuse_if_contaminated(contamination: dict) -> None:
+    """Defect A: hard-refuse the live launch when THIS run's own fresh
+    contamination_recheck() (scanned against the real shard corpus at launch
+    time, not a cached receipt) finds any confirmed match. Unconditional --
+    applies whether or not --decontam-receipt is given, since this is a live
+    re-verification of the actual eval batch about to be trained against, not
+    a trust of a prior receipt's claim."""
+    verdict = contamination.get("verdict")
+    if verdict != "CLEAN":
+        raise SystemExit(
+            "W1_LIVE_CONTAMINATION_REFUSED: contamination_recheck.verdict="
+            f"{verdict!r} (confirmed_matches="
+            f"{len(contamination.get('confirmed_matches', []))}) -- W2 sec.4 "
+            "requires the held-out batch to be contamination-clean before "
+            f"training; refusing launch. {json.dumps(contamination)}")
+
+
+def rebuild_batch_from_decontam_receipt(loader, receipt: dict, device: str
+                                         ) -> tuple["torch.Tensor", "torch.Tensor", str]:
+    """Defect B: rebuild the held-out batch from an EXTERNAL decontamination
+    receipt's own `selected_window_indices` (schema w2-heldout-decontam/v1)
+    instead of this script's internal 'last batch-many windows' convention --
+    the receipt's curated pool may sit anywhere in the corpus (replacement
+    rounds swap out any window that scanned CONTAMINATED), so the two
+    conventions are not interchangeable. Asserts the rebuilt batch's sha256
+    (SAME convention as sha256_tokens/batch_sha256: concat([x, y], dim=1) of
+    the raw window, sha256 over the int64 bytes) matches the receipt's own
+    pinned batch_sha256 -- fail-closed on any mismatch (tampered/stale
+    receipt, wrong --shard-dir, or a receipt built for a different seq)."""
+    indices = receipt.get("selected_window_indices")
+    if not isinstance(indices, list) or not indices:
+        raise SystemExit(
+            "W1_LIVE_DECONTAM_RECEIPT_NO_WINDOWS: receipt missing/empty "
+            "selected_window_indices -- refusing launch.")
+    xs, ys = [], []
+    for idx in indices:
+        x_np, y_np, _y_mtp = loader.window_np(int(idx))
+        xs.append(x_np)
+        ys.append(y_np)
+    eval_x = torch.as_tensor(np.stack(xs), dtype=torch.long, device=device)
+    eval_y = torch.as_tensor(np.stack(ys), dtype=torch.long, device=device)
+    eval_sha = sha256_tokens(torch.cat([eval_x, eval_y], dim=1))
+    expected_sha = receipt.get("batch_sha256")
+    if eval_sha != expected_sha:
+        raise SystemExit(
+            f"W1_LIVE_DECONTAM_BATCH_SHA_MISMATCH: rebuilt batch sha256={eval_sha} "
+            f"!= receipt-pinned batch_sha256={expected_sha!r} -- refusing launch "
+            "(tampered/stale receipt, wrong --shard-dir, or seq/n_mtp mismatch).")
+    return eval_x, eval_y, eval_sha
+
+
+def wire_launch_gate_check(xs: list, ys: list, *, seq: int, receipt_path: str,
+                            out_dir: str, ts: str) -> dict:
+    """Literal integration of scripts/w2_heldout/launch_gate.py's
+    assert_launch_allowed -- an independent, separately-coded re-verification
+    of the SAME two facts rebuild_batch_from_decontam_receipt just checked
+    (receipt pass/contamination_recheck fields + batch sha256), via a
+    completely separate hashing code path (launch_gate._batch_sha256_from_file
+    vs this file's sha256_tokens) so a bug in either implementation alone
+    cannot silently pass a launch. Writes the rebuilt raw windows to a
+    temp .npy in the exact layout launch_gate expects ([batch, seq+1] raw
+    token ids, not pre-split x/y) -- same convention build_decontam_batch.py
+    uses for its own batch_sha256, confirmed by reading both functions."""
+    HERE_DIR = os.path.dirname(os.path.abspath(__file__))
+    if HERE_DIR not in sys.path:
+        sys.path.insert(0, HERE_DIR)
+    from w2_heldout.launch_gate import assert_launch_allowed
+
+    raw_windows = np.stack([
+        np.concatenate([np.asarray(x_np, dtype=np.int64),
+                         [int(y_np[-1])]])
+        for x_np, y_np in zip(xs, ys)
+    ])
+    tmp_npy = os.path.join(out_dir, f"w1-live-decontam-rebuilt-batch-{ts}.npy")
+    np.save(tmp_npy, raw_windows)
+    result = assert_launch_allowed(batch_path=tmp_npy, receipt_path=receipt_path)
+    return {"allowed": result.allowed, "reason": result.reason,
+            "receipt_path": result.receipt_path, "batch_path": tmp_npy}
+
+
 class RealW1Model(torch.nn.Module):
     """Real rung-1-shaped model for the W1 live path. Mirrors timeshare_
     pretrain._V0Real's key naming (backbone_model / head / mtp_heads, tied
@@ -1545,6 +1698,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         REPO, "scratch", "w1-control", "dry-run"))
     ap.add_argument("--pricing-receipt", default=DEFAULT_PRICING_RECEIPT)
     ap.add_argument("--rung-receipt", default=DEFAULT_RUNG_RECEIPT)
+    ap.add_argument("--rung-manifest", default=None,
+                    help="issue #121 item 7: path to a real per-checkpoint "
+                         "manifest.json (e.g. models/cbase-grow-rung/.../"
+                         "stabilize/checkpoints/step-NNNNNN/manifest.json) to "
+                         "use INSTEAD of --rung-receipt, when no aggregate "
+                         "rung_receipt file exists. Builds a rung_receipt-"
+                         "shaped dict via derive_rung_receipt_from_manifest -- "
+                         "disclosed derivation, never a hand-authored receipt.")
     # tiny dry-run architecture (task-specified defaults)
     ap.add_argument("--vocab", type=int, default=512)
     ap.add_argument("--hidden", type=int, default=32)
@@ -1577,6 +1738,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--live-checkpoint-every", type=int, default=None,
                     help="live checkpoint cadence; defaults to --live-eval-every "
                          "unless given (spec sec.6: 'checkpoint + eval every K steps').")
+    ap.add_argument("--decontam-receipt", default=None,
+                    help="issue #121 spec-compliance (Defect B): path to an "
+                         "external w2-heldout-decontam/v1 receipt. When given, "
+                         "the live held-out batch is rebuilt from the receipt's "
+                         "own selected_window_indices (not this script's default "
+                         "'last batch-many windows' convention) and the rebuilt "
+                         "batch's sha256 is asserted against the receipt's pinned "
+                         "batch_sha256, refusing on any mismatch. Omit to keep "
+                         "the frozen protocol's original default behavior "
+                         "unchanged.")
     return ap
 
 
@@ -1666,27 +1837,64 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     ceiling_steps = args.live_ceiling_steps or REAL_HARD_CEILING_STEPS
     eval_every = args.live_eval_every or REAL_EVAL_CADENCE_K
     checkpoint_every = args.live_checkpoint_every or eval_every
-    held_out_start = held_out_window_start(n_windows, real_arch["batch"])
-    disjoint_check = assert_disjoint_from_training(
-        held_out_start, ceiling_steps, real_arch["batch"])
 
     eval_loader = PackedShardLoader(args.shard_dir, real_arch["seq"],
                                     n_mtp=real_arch["n_mtp"])
-    xs, ys = [], []
-    for j in range(real_arch["batch"]):
-        x_np, y_np, _y_mtp = eval_loader.window_np(held_out_start + j)
-        xs.append(x_np)
-        ys.append(y_np)
-    eval_x = torch.as_tensor(np.stack(xs), dtype=torch.long, device=device)
-    eval_y = torch.as_tensor(np.stack(ys), dtype=torch.long, device=device)
-    eval_sha = sha256_tokens(torch.cat([eval_x, eval_y], dim=1))
-    eval_batch_pinned_ok = bool(eval_sha)
+
+    decontam_receipt = None
+    launch_gate_result = None
+    if args.decontam_receipt:
+        # Defect B: external decontam receipt drives WHICH windows are held
+        # out (never this script's internal 'last batch-many windows' rule --
+        # the receipt's curated pool may sit anywhere in the corpus).
+        decontam_receipt = load_json(args.decontam_receipt)
+        held_out_start = None
+        disjoint_check = {
+            "mode": "external_decontam_receipt",
+            "receipt_path": args.decontam_receipt,
+            "selected_window_indices": decontam_receipt.get("selected_window_indices"),
+            "note": ("disjointness against training's reachable window range was "
+                     "already verified INSIDE the decontam receipt itself "
+                     "(source_pool.pool_reservation.disjoint_check / per-round "
+                     "disjoint_check) -- not re-derived here, since the receipt's "
+                     "own indices are authoritative once its sha assertion passes."),
+        }
+        eval_x, eval_y, eval_sha = rebuild_batch_from_decontam_receipt(
+            eval_loader, decontam_receipt, device)
+        xs = [eval_x[i].to("cpu").numpy() for i in range(eval_x.shape[0])]
+        ys = [eval_y[i].to("cpu").numpy() for i in range(eval_y.shape[0])]
+        eval_batch_pinned_ok = bool(eval_sha)
+        # Literal reuse of scripts/w2_heldout/launch_gate.py's assert_launch_
+        # allowed -- an independently-coded re-verification (separate hashing
+        # code path) of the same receipt's pass/contamination_recheck fields
+        # and the rebuilt batch's sha256, layered on top of the assertion
+        # rebuild_batch_from_decontam_receipt already performed above.
+        launch_gate_result = wire_launch_gate_check(
+            xs, ys, seq=real_arch["seq"], receipt_path=args.decontam_receipt,
+            out_dir=out_dir, ts=ts)
+    else:
+        held_out_start = held_out_window_start(n_windows, real_arch["batch"])
+        disjoint_check = assert_disjoint_from_training(
+            held_out_start, ceiling_steps, real_arch["batch"])
+        xs, ys = [], []
+        for j in range(real_arch["batch"]):
+            x_np, y_np, _y_mtp = eval_loader.window_np(held_out_start + j)
+            xs.append(x_np)
+            ys.append(y_np)
+        eval_x = torch.as_tensor(np.stack(xs), dtype=torch.long, device=device)
+        eval_y = torch.as_tensor(np.stack(ys), dtype=torch.long, device=device)
+        eval_sha = sha256_tokens(torch.cat([eval_x, eval_y], dim=1))
+        eval_batch_pinned_ok = bool(eval_sha)
 
     # Contamination re-check hook (corpus-verification receipt's open item):
     # reconstruct the full seq+1 window per held-out row (x_np is w[0:seq],
     # y_np is w[1:seq+1], so w = x_np + [y_np[-1]]) before scanning.
     eval_rows = [list(x_np) + [int(y_np[-1])] for x_np, y_np in zip(xs, ys)]
     contamination = contamination_recheck(eval_rows, args.shard_dir)
+    # Defect A: unconditional, fail-closed gate on THIS run's own fresh
+    # contamination_recheck() -- previously computed and disclosed, never
+    # gated. Applies whether or not --decontam-receipt was given.
+    refuse_if_contaminated(contamination)
 
     phase1 = run_phase1_live(real_arch, rung_receipt, device=device,
                               eval_x=eval_x, eval_y=eval_y)
@@ -1751,6 +1959,8 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             "window_start": held_out_start,
             "n_windows_total": n_windows,
             "disjointness_check": disjoint_check,
+            "decontam_receipt_path": args.decontam_receipt,
+            "launch_gate_result": launch_gate_result,
         },
         "contamination_recheck": contamination,
         "grow_arm": {
@@ -1830,7 +2040,8 @@ def main(argv: list[str] | None = None) -> int:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     pricing_receipt = load_json(args.pricing_receipt)
-    rung_receipt = load_json(args.rung_receipt)
+    rung_receipt = (derive_rung_receipt_from_manifest(args.rung_manifest)
+                     if args.rung_manifest else load_json(args.rung_receipt))
     real_arch = derive_real_arch_config(pricing_receipt, rung_receipt)
 
     if not dry_run:
