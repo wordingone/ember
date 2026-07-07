@@ -267,7 +267,7 @@ def run():
         "violations": violations,
         "exit": exit_status,
     }
-    receipts_dir = os.path.join(ROOT, "receipts")
+    receipts_dir = os.path.join(ROOT, "scripts", "ember_totality", "receipts-disconfirmation")
     os.makedirs(receipts_dir, exist_ok=True)
     receipt_path = os.path.join(receipts_dir, f"disconfirmation-eval-{ts}.json")
     with open(receipt_path, "w", encoding="utf-8") as f:
