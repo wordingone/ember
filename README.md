@@ -94,8 +94,7 @@ python scripts/ember_gate_receipt_store_selftest.py
 ```
 
 Each selftest prints a `*_SELFTEST_PASS` sentinel on success and exits
-non-zero on failure. They require only Python 3.11+ and the packages in
-`requirements.txt`; no model weights, no credentials, no GPU.
+non-zero on failure. They require only Python 3.11+; no external packages, no model weights, no credentials, no GPU.
 
 ## What is NOT reproducible from this repo
 
