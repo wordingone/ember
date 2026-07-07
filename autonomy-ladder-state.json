@@ -1,0 +1,9 @@
+{
+  "schema": "autonomy-ladder-state-v1",
+  "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+  "current_rung": null,
+  "rungs": {},
+  "reversion_log": [],
+  "promotion_rule": "Each rung requires K>=5 consecutive execution windows with proper provenance fields and receipts.",
+  "safety_floor": "This state file records: escalation set (never delegated), governor caps (resource limits), kill-discipline (PID-cohort only, never names, kill-receipts required). These three never-transfer capabilities are binding across all rungs."
+}
