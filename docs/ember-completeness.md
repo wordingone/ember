@@ -107,6 +107,33 @@ pieces" with the source named:
       → M25) and 6 (#214 → M29) both map; discharged rows map via their
       merged PRs (M6/M7/M19/M20). No unmapped parents.
 
+## Additional condition rows (added 2026-07-06 enumeration sweep)
+
+| id | subgoal | piece | AC / test | receipt | status |
+|----|---------|-------|-----------|---------|--------|
+| C-INV | S6 | Constitutional invariant persisted and chained | INVARIANT.md exists and hashes correctly; board receipts chain by predecessor hash | invariant verification receipts | planned |
+| C-EFF | S1 | Efficiency keystone measured and closed | Efficiency closure receipt with measured throughput, MFU, token projection | efficiency-closure receipts | planned |
+| C-BASE | S1 | Owned growable seed exists (not frozen) | From-scratch owned pilot checkpoint with growth operator interface | checkpoint-seed receipts | planned |
+| C(−1) | S7 | Spend annex — 4 receipts missing api_spend_usd | Spend declarations for missing receipts | spend-annex documentation | planned |
+| C0 | S6 | Process invariant: freshness contract | README state-as-of marker matches actual state | freshness monitoring receipts | planned |
+| C-PORT | S3 | Predecessor-CLI port complete | Clean-room port with NCK-E2E proofs | port verification receipts | planned |
+| C-FED | S3 | Federation surface (inter-founder coordination) | Mailbox routing and coordination surface | federation routing receipts | planned |
+| C-GROW | S1 | Growth operator executes function-preserving transforms | Growth chain receipts and verification | growth chain receipts | planned |
+| C-ORGANISM | S3 | Self-improvement loop closure | Complete loop: experience → train → improve → verify → use | organism-loop-closure receipts | planned |
+| C-OBS | S3 | Observability and monitoring | Activity feed, telemetry, and inspection surface | observability receipts | planned |
+| C-ANAT | S3 | Anatomy: component registry and interfaces | Complete component catalog with interface specifications | component registry receipts | planned |
+| C-SCALE | S4 | Foundation-model-scale training on one-GPU budget | Scaled training receipts with verified results | scale training receipts | planned |
+| C-E2B | S5 | Paired measured-distance protocol against frozen reference | E2B paired protocol execution receipts | e2b protocol receipts | planned |
+| C-IND | S6 | Independence: operator-minimal operations | Operator decision receipts for necessary-only cases | independence operation receipts | planned |
+| C-PROC | S6 | Process integrity: execution gate stack | Landing gates and pre-commit hooks enforced | process gate execution receipts | planned |
+| C-SURFACE2 | S6 | Live surface: CLI/TUI operational in real time | Live session receipts with user interaction | surface operation receipts | planned |
+| C-LEGIB | S6 | Repository legibility and documentation | Entry map, cold-read reprobe, citation gate all passing | legibility verification receipts | planned |
+| C-ENF | S6 | Enforcement layer execution integrity | All registered checkers execute with correct verdicts | enforcement checker receipts | planned |
+| C-MILE | S6 | Milestone reconciliation | Milestone mapping and reconciliation passing | milestone reconciliation receipts | planned |
+| C-DISC | S6 | Disconfirmation: falsifiability gates | D-gate and P-gate results falsifiable and recorded | disconfirmation gate receipts | planned |
+| C-LADM | S6 | Ladder administration: autonomy relinquishment tracking | Autonomy-ladder-state.json consistent and versioned | ladder state receipts | planned |
+| C-AUTO | S6 | Autonomy-ladder-state faithfulness | Ladder state file valid with proper provenance | autonomy state verification receipts | planned |
+
 Tally script AC (to be minted as eng issue): parse this table; for each row
 with a receipt pointer, locate + validate (receipt_check pass + named AC
 fields); GATED rows count as not-implemented but listed separately; emit
