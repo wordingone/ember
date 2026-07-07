@@ -105,6 +105,8 @@ def build_receipt(
             if ready else
             "Provide visual-judge key/config plus explicit paid-eval authorization and call cap, then rerun this authorization packet."
         ),
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": False,
         "verdict": "SCIENCEAGENTBENCH_PAID_EVAL_AUTHORIZATION_READY" if ready else "SCIENCEAGENTBENCH_PAID_EVAL_AUTHORIZATION_BLOCKED",
     }
     write_json(out, receipt)

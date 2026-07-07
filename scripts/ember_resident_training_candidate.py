@@ -233,6 +233,8 @@ def build_candidate(tasks_path: Path, out_dir: Path) -> dict[str, Any]:
         "selected_template": policy["selected_template"],
         "rlm_mapping": "recursive snippet choices over task_instruction, dataset_previews, and eval_script",
         "igrpo_mapping": "sample draft policies, score with verifier reward, update toward highest reward draft",
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": false,
         "verdict": "POLICY_UPDATE_TRACE_READY",
     }
     write_json(trace_path, trace)
@@ -370,6 +372,8 @@ def build_candidate(tasks_path: Path, out_dir: Path) -> dict[str, Any]:
         "policy_update_trace_sha256": sha256(trace_path),
         "heldout_rows": rows,
         "status": "SYMBOLIC_PROXY_PASS" if all_c_beats and all_deleted_degrades and manifest["persistence_checked"] else "BLOCKED",
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": false,
         "verdict": "SYMBOLIC_PROXY_PASS" if all_c_beats and all_deleted_degrades and manifest["persistence_checked"] else "RESIDENT_TRAINING_CANDIDATE_BLOCKED",
     }
     write_json(receipt_path, receipt, receipt=True)

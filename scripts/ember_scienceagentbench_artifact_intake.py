@@ -155,6 +155,8 @@ def build_receipt(
             "script_code_lines": len((repo / "scripts" / "ember_scienceagentbench_artifact_intake.py").read_text(encoding="utf-8").splitlines()) if (repo / "scripts" / "ember_scienceagentbench_artifact_intake.py").exists() else 0,
             "receipt_lines": 0,
         },
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": False,
         "verdict": verdict,
     }
     receipt["code_vs_docs_metric"]["receipt_lines"] = len(json.dumps(receipt, indent=2, sort_keys=True).splitlines())

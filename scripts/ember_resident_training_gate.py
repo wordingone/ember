@@ -1139,6 +1139,8 @@ def build_gate_receipt(
         "next_command_if_blocked": _next_command(next_blocker, out_path),
         "code_vs_docs_metric": code_vs_docs_metric(repo, changed_paths),
         "resident_training_gate_status": status,
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": False,
         "verdict": f"RESIDENT_TRAINING_GATE_{status}",
     }
     return receipt
@@ -1361,12 +1363,12 @@ def build_valid_candidate_manifest(root: Path, repo: Path, dt6_fields: dict[str,
     failing DT-6 fixtures without re-deriving the rest of this fixture. Does
     not write the manifest itself; callers json.dumps() it wherever they
     choose."""
-    receipt_payload: dict[str, Any] = {"verdict": "RESIDENT_TRAINING_CANDIDATE_PASS"}
+    receipt_payload: dict[str, Any] = {"verdict": "RESIDENT_TRAINING_CANDIDATE_PASS", "api_spend_usd": 0.0, "paid_api_surface_used": false}
     if dt6_fields:
         receipt_payload.update(dt6_fields)
     for artifact_name in ["trace.json", "policy.py", "goal.py", "harness.py", "receipt.json", "tasks.json", "adapter.py"]:
         (root / artifact_name).write_text(
-            json.dumps({"verdict": "POLICY_UPDATE_TRACE_READY", "updates": [1], "selected_template": "eval_script_recursive"})
+            json.dumps({"verdict": "POLICY_UPDATE_TRACE_READY", "updates": [1], "selected_template": "eval_script_recursive", "api_spend_usd": 0.0, "paid_api_surface_used": false})
             if artifact_name == "trace.json"
             else json.dumps(receipt_payload)
             if artifact_name == "receipt.json"

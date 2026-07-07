@@ -149,6 +149,8 @@ def build_blocked_receipt(
             "script_code_lines": len((repo / "scripts" / "ember_scienceagentbench_artifact_materialization.py").read_text(encoding="utf-8").splitlines()) if (repo / "scripts" / "ember_scienceagentbench_artifact_materialization.py").exists() else 0,
             "receipt_lines": 0,
         },
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": False,
         "verdict": "SCIENCEAGENTBENCH_ARTIFACT_MATERIALIZATION_BLOCKED",
     }
     receipt["code_vs_docs_metric"]["receipt_lines"] = len(json.dumps(receipt, indent=2, sort_keys=True).splitlines())
@@ -171,6 +173,8 @@ def main() -> int:
     artifact = Path(args.artifact)
     if artifact.exists():
         print(json.dumps({
+            "api_spend_usd": 0.0,
+            "paid_api_surface_used": False,
             "verdict": "SCIENCEAGENTBENCH_ARTIFACT_ALREADY_LOCAL",
             "artifact": str(artifact),
             "sha256": sha256_file(artifact),

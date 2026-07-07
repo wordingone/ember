@@ -258,6 +258,8 @@ def build_receipt_from_materialized(
             "Run first ScienceAgentBench A/B/C/deleted heldout loop against frozen rows in " + str(frozen_rows_path)
         ),
         "fallback_order_if_blocked_after_artifact_attempt": ["re-bench", "paperbench", "broader-d3-multifamily"],
+        "api_spend_usd": 0.0,
+        "paid_api_surface_used": False,
         "verdict": verdict,
     }
     receipt["code_vs_docs_metric"]["receipt_lines"] = len(json.dumps(receipt, indent=2, sort_keys=True).splitlines())
