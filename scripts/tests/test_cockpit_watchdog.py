@@ -23,6 +23,7 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 from cockpit_watchdog import (
     WindowInfo,
+    TabInfo,
     WatchdogConfig,
     check_window_leg,
     check_process_leg,
@@ -62,11 +63,67 @@ def test_window_leg_absent_when_enumeration_empty():
 
 
 # ---------------------------------------------------------------------------
+# Leg 1 (v1.1) -- window via UIA tab enumeration (wt.exe tabs)
+# ---------------------------------------------------------------------------
+
+def test_window_leg_present_when_title_found_in_wt_tabs():
+    """v1.1: cockpit inside Windows Terminal is detected via UIA TabItem enumeration."""
+    fake_tabs = [TabInfo(title="ember-resident", hwnd=555, pid=666),
+                  TabInfo(title="other tab", hwnd=555, pid=666)]
+    leg = check_window_leg("ember-resident",
+                          window_lister=lambda: [],  # no top-level windows
+                          tab_lister=lambda: fake_tabs)
+    assert leg["present"] is True
+    assert leg["hwnd"] == 555
+    assert leg["pid_from_window"] == 666
+    assert leg["found_in"] == "wt-tab"
+
+
+def test_window_leg_present_when_title_found_in_toplevel_window():
+    """Fallback: cockpit as a standalone top-level window (non-wt case)."""
+    fake_windows = [WindowInfo(hwnd=111, title="ember-resident", pid=222)]
+    leg = check_window_leg("ember-resident",
+                          window_lister=lambda: fake_windows,
+                          tab_lister=lambda: [])  # no wt tabs
+    assert leg["present"] is True
+    assert leg["hwnd"] == 111
+    assert leg["pid_from_window"] == 222
+    assert leg["found_in"] == "toplevel-window"
+
+
+def test_window_leg_prefers_wt_tab_over_toplevel_window():
+    """When title exists in both wt tabs and top-level windows, tab wins
+    (the wt case is primary under modern Terminal usage patterns)."""
+    fake_tabs = [TabInfo(title="ember-resident", hwnd=555, pid=666)]
+    fake_windows = [WindowInfo(hwnd=111, title="ember-resident", pid=222),
+                   WindowInfo(hwnd=333, title="other", pid=444)]
+    leg = check_window_leg("ember-resident",
+                          window_lister=lambda: fake_windows,
+                          tab_lister=lambda: fake_tabs)
+    assert leg["present"] is True
+    assert leg["hwnd"] == 555  # wt hwnd, not the top-level window hwnd
+    assert leg["pid_from_window"] == 666  # wt pid
+    assert leg["found_in"] == "wt-tab"
+
+
+def test_window_leg_absent_when_not_in_tabs_or_windows():
+    """Title not found in either wt tabs or top-level windows."""
+    fake_tabs = [TabInfo(title="other tab", hwnd=555, pid=666)]
+    fake_windows = [WindowInfo(hwnd=333, title="unrelated window", pid=444)]
+    leg = check_window_leg("ember-resident",
+                          window_lister=lambda: fake_windows,
+                          tab_lister=lambda: fake_tabs)
+    assert leg["present"] is False
+    assert leg["hwnd"] is None
+    assert leg["found_in"] is None
+
+
+# ---------------------------------------------------------------------------
 # Leg 2 -- backing process (fake process lookup, no real psutil/GetWindow call)
 # ---------------------------------------------------------------------------
 
 def test_process_leg_present_when_pid_matches_expected_name():
-    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222}
+    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222, "found_in": "toplevel-window"}
     leg = check_process_leg(window_leg, "ember.exe",
                              process_lookup=lambda pid: "ember.exe" if pid == 222 else None)
     assert leg["present"] is True
@@ -74,13 +131,13 @@ def test_process_leg_present_when_pid_matches_expected_name():
 
 
 def test_process_leg_absent_when_pid_dead():
-    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222}
+    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222, "found_in": "toplevel-window"}
     leg = check_process_leg(window_leg, "ember.exe", process_lookup=lambda pid: None)
     assert leg["present"] is False
 
 
 def test_process_leg_absent_when_name_mismatch():
-    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222}
+    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222, "found_in": "toplevel-window"}
     leg = check_process_leg(window_leg, "ember.exe",
                              process_lookup=lambda pid: "notepad.exe")
     assert leg["present"] is False
@@ -112,10 +169,52 @@ def test_process_leg_orphan_process_detected_via_independent_name_scan():
 
 
 def test_process_leg_parented_true_when_window_backs_it():
-    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222}
+    window_leg = {"present": True, "hwnd": 111, "pid_from_window": 222, "found_in": "toplevel-window"}
     leg = check_process_leg(window_leg, "ember.exe", process_lookup=lambda pid: "ember.exe")
     assert leg["present"] is True
     assert leg["parented"] is True
+
+
+def test_process_leg_wt_tab_case_skips_pid_validation():
+    """v1.1: when cockpit is found in a wt tab, the pid is wt.exe's process,
+    not the expected ember.exe process. Skip the pid-parented check and verify
+    the backing process exists via independent scan instead."""
+    # Window found in a wt tab (found_in="wt-tab"), with wt's pid
+    window_leg = {
+        "present": True,
+        "hwnd": 555,  # The wt window HWND
+        "pid_from_window": 24280,  # This is wt.exe's PID, not ember.exe
+        "found_in": "wt-tab",
+    }
+    # The process lookup would show pid 24280 is wt.exe, not ember.exe
+    leg = check_process_leg(
+        window_leg, "ember.exe",
+        process_lookup=lambda pid: "wt.exe" if pid == 24280 else None,
+        process_finder=lambda name: 999 if name == "ember.exe" else None,
+    )
+    # The process leg should report success because we found ember.exe via scan,
+    # not because we validated the wt.exe process
+    assert leg["present"] is True
+    assert leg["pid"] == 999  # The found ember.exe PID
+    assert leg["parented"] is False
+    assert leg["wt_tab_case"] is True
+
+
+def test_process_leg_wt_tab_case_absent_when_ember_not_running():
+    """v1.1: wt tab case, but the ember process isn't running."""
+    window_leg = {
+        "present": True,
+        "hwnd": 555,
+        "pid_from_window": 24280,
+        "found_in": "wt-tab",
+    }
+    leg = check_process_leg(
+        window_leg, "ember.exe",
+        process_lookup=lambda pid: "wt.exe" if pid == 24280 else None,
+        process_finder=lambda name: None,  # ember not running
+    )
+    assert leg["present"] is False
+    assert leg["wt_tab_case"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +371,7 @@ def test_run_cycle_healthy_writes_receipt_and_heartbeat_no_capture():
         receipt = run_cycle(
             cfg,
             window_lister=lambda: [WindowInfo(hwnd=111, title="ember-resident", pid=222)],
+            tab_lister=lambda: [],
             process_lookup=lambda pid: "ember.exe",
             lease_reader=lambda path: None,
             vram_query=lambda gpu_index: 8000.0,
@@ -307,6 +407,7 @@ def test_run_cycle_missing_state_no_capture_no_hwnd():
         receipt = run_cycle(
             cfg,
             window_lister=lambda: [],
+            tab_lister=lambda: [],
             process_lookup=lambda pid: None,
             process_finder=lambda name: None,  # nothing running either -- true corpse/gone
             lease_reader=lambda path: None,
@@ -333,6 +434,7 @@ def test_run_cycle_orphan_process_no_capture_no_hwnd():
         receipt = run_cycle(
             cfg,
             window_lister=lambda: [],  # window closed/hidden
+            tab_lister=lambda: [],
             process_lookup=lambda pid: None,
             process_finder=lambda name: 999,  # but the process is still alive
             lease_reader=lambda path: None,
@@ -364,6 +466,7 @@ def test_run_cycle_corpse_captures_the_stray_window():
         receipt = run_cycle(
             cfg,
             window_lister=lambda: [WindowInfo(hwnd=111, title="ember-resident", pid=222)],
+            tab_lister=lambda: [],
             process_lookup=lambda pid: None,  # process dead -- window is a corpse pane
             lease_reader=lambda path: None,
             vram_query=lambda gpu_index: 0.0,
@@ -391,6 +494,7 @@ def test_run_cycle_lease_down_healthy_no_capture():
         receipt = run_cycle(
             cfg,
             window_lister=lambda: [],
+            tab_lister=lambda: [],
             process_lookup=lambda pid: None,
             process_finder=lambda name: None,  # cockpit deliberately down for the lease
             lease_reader=lambda path: lease,
