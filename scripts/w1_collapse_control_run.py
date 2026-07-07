@@ -225,6 +225,22 @@ def sha256_tokens(token_ids: "torch.Tensor") -> str:
 #                                              assumed.)
 # ---------------------------------------------------------------------------
 
+def rung_provenance_info(args: argparse.Namespace) -> dict:
+    """Attempt-2 crash fix (issue #121): the terminal receipt writer used to
+    hash args.rung_receipt unconditionally, even in --rung-manifest mode
+    (item 7 above) where args.rung_receipt is never loaded and keeps its
+    DEFAULT_RUNG_RECEIPT value -- a path that does not resolve inside this
+    worktree. That crashed sha256_file with FileNotFoundError on receipt
+    write, after a real run had already trained through to an early-stop
+    match. Discloses which provenance source was actually used, and hashes
+    that one -- never the unused default."""
+    if args.rung_manifest:
+        return {"mode": "manifest", "path": args.rung_manifest,
+                "sha256": sha256_file(args.rung_manifest)}
+    return {"mode": "receipt", "path": args.rung_receipt,
+            "sha256": sha256_file(args.rung_receipt)}
+
+
 def derive_rung_receipt_from_manifest(manifest_path: str) -> dict:
     """Issue #121 item 7: DEFAULT_RUNG_RECEIPT (a bespoke aggregate receipt
     documenting the rung-1 grow+stabilize run) does not exist on disk or in
@@ -2089,6 +2105,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     with open(eval_trace_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(phase2["eval_trace"], f, indent=2)
     eval_trace_sha = sha256_file(eval_trace_path)
+    rung_prov = rung_provenance_info(args)
 
     receipt = {
         "ticket": "W1-COLLAPSE-CONTROL",
@@ -2105,8 +2122,9 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         "real_lineage_reference": {
             "pricing_receipt_path": args.pricing_receipt,
             "pricing_receipt_sha256": sha256_file(args.pricing_receipt),
-            "rung_receipt_path": args.rung_receipt,
-            "rung_receipt_sha256": sha256_file(args.rung_receipt),
+            "rung_provenance_mode": rung_prov["mode"],
+            "rung_provenance_path": rung_prov["path"],
+            "rung_provenance_sha256": rung_prov["sha256"],
             "corpus_verification_receipt": CORPUS_VERIFICATION_RECEIPT,
             "derived_target_architecture": real_arch,
         },
@@ -2269,6 +2287,7 @@ def main(argv: list[str] | None = None) -> int:
     with open(eval_trace_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(phase2["eval_trace"], f, indent=2)
     eval_trace_sha = sha256_file(eval_trace_path)
+    rung_prov = rung_provenance_info(args)
 
     receipt = {
         "ticket": "W1-COLLAPSE-CONTROL",
@@ -2288,8 +2307,9 @@ def main(argv: list[str] | None = None) -> int:
                      "receipt, with citation, per issue #71's instruction."),
             "pricing_receipt_path": args.pricing_receipt,
             "pricing_receipt_sha256": sha256_file(args.pricing_receipt),
-            "rung_receipt_path": args.rung_receipt,
-            "rung_receipt_sha256": sha256_file(args.rung_receipt),
+            "rung_provenance_mode": rung_prov["mode"],
+            "rung_provenance_path": rung_prov["path"],
+            "rung_provenance_sha256": rung_prov["sha256"],
             "grow_arm_terminal_checkpoint_ref": pricing_receipt["grow_arm"]["terminal_checkpoint_ref"],
             "grow_arm_tokens_total": pricing_receipt["grow_arm"]["tokens_total"],
             "grow_arm_bill_aggregation_rows": pricing_receipt["grow_arm"]["bill_aggregation_rows"],
