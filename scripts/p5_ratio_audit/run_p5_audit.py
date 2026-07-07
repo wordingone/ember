@@ -2155,26 +2155,42 @@ def run_and_emit_live() -> Path:
     # write metrics artifact.
     try:
         import torch
-        from scripts.timeshare_pretrain import build_v0_model
-        from scripts.lib.writers_integration_example import build_probe_batch as get_probe
+        from scripts.timeshare_pretrain import build_v0_model, load_contract
 
         # Load production model + probe batch.
-        pre_model = build_v0_model(
-            n_layers=32, d_model=hidden_dim(pre_ff), vocab_size=32000,
-            seed=PROBE_SEED, dtype=torch.float32)
-        pre_model.load_state_dict(pre_model_state)
+        # build_v0_model returns (model, vocab, hidden, n_mtp); extract backbone for forward pass
+        cfg = load_contract()
+        wrapper, vocab, hidden, n_mtp = build_v0_model(
+            cfg, live=True, intermediate_override=pre_ff, device="cpu")
+
+        # Use backbone_model for forward pass (it's the actual LlamaModel)
+        pre_model = wrapper.backbone_model if hasattr(wrapper, 'backbone_model') else wrapper
+
+        # State dict from checkpoint; extract backbone_model part and strip prefix
+        adjusted_state = {}
+        for key, val in pre_model_state.items():
+            if key.startswith('backbone_model.'):
+                # Strip 'backbone_model.' prefix
+                adjusted_key = key[len('backbone_model.'):]
+                adjusted_state[adjusted_key] = val
+
+        pre_model.load_state_dict(adjusted_state, strict=False)
         pre_model.eval()
 
         probe_tmp = os.path.join(REPO_ROOT, "receipts", ".p5_live_tmp")
-        probe_batches, _, _ = get_probe(32000, 8, probe_tmp, n_micro=1, seq_len=256, seed=PROBE_SEED)
+        probe_batches, _, _ = build_probe_batch(32000, 8, probe_tmp, n_micro=1, seq_len=256, seed=PROBE_SEED)
         x, y = probe_batches[0]
 
         # Forward+backward on pre-grow checkpoint.
-        with torch.no_grad():
-            x_emb = pre_model.embed(x)
-        x_emb.requires_grad = True
-        logits = pre_model(x)[0]
-        loss = torch.nn.functional.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
+        # LlamaModel.forward expects input_ids as positional arg
+        outputs = pre_model(x)
+        logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
+
+        # Adjust y targets to be within vocab size (probe was generated for 32000 but model may differ)
+        vocab_size = logits.shape[-1]
+        y_adjusted = torch.clamp(y, max=vocab_size-1)
+
+        loss = torch.nn.functional.cross_entropy(logits.reshape(-1, vocab_size), y_adjusted.reshape(-1))
         loss.backward()
 
         # Extract gradients for ratio computation.
@@ -2206,7 +2222,8 @@ def run_and_emit_live() -> Path:
 
         grad_post = {name: p.grad.detach().clone() for name, p in pre_model.named_parameters() if p.grad is not None}
         # Extract gate gradient for d_comm (one FF layer at layer_index=0).
-        gate_key = f"backbone_model.layers.{layer_index}.mlp.gate_proj.weight"
+        # Gates are named without 'backbone_model' prefix since we extracted from pre_model directly
+        gate_key = f"layers.{layer_index}.mlp.gate_proj.weight"
         grad_pre_gate = grad_pre.get(gate_key)
         grad_post_gate = grad_post.get(gate_key)
         if grad_pre_gate is not None and grad_post_gate is not None:
