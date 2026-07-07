@@ -1,0 +1,13 @@
+{
+    "attested_by":  "team-lead build lane, scope addition for untracked canonical custody (found during hygiene forensics)",
+    "evidence":  "C-BASE provenance archaeology receipt: manual investigation artifact. Verdict=\u0027L4_PROVENANCE_VIOLATION_CONFIRMED\u0027 represents analysis-only output (no training execution). Five leads archaeology conducted: grep across receipts/ and checkpoint tree, git log search, mtime filter on receipts/ directory. Finding: post-hoc evaluation receipt (ember-c-e2b-paired-20260705T041045Z.json from Jul 5, AFTER checkpoint creation Jul 3), no forward training run receipt found during checkpoint generation window (2026-07-03T08:57Z). No external service calls in receipt content or referenced source artifacts. Archaeology is local git/file investigation.",
+    "evidence_class":  "generator_absent_content_clean",
+    "target_sha256":  "5b9c5064249145e50bd12c9e70b888c9582db9ea043ada9b16357b333e941168",
+    "attested_ts":  "2026-07-07T15:27:00Z",
+    "target_path":  "receipts/c-base-provenance-gap-archaeology-20260707T025647Z.json",
+    "cites":  [
+                  "receipts/c-base-provenance-gap-archaeology-20260707T025647Z.json",
+                  "artifacts cited: scripts/p5_ratio_audit/run_p5_audit.py (local), receipts/ember-c-e2b-paired-20260705T041045Z.json (post-hoc eval, no training data source named)",
+                  "grep/git/mtime searches: all local, no external service dependency"
+              ]
+}
