@@ -33,7 +33,7 @@ import {
   type PromptInputState,
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
-import { Homescreen }                   from "../components/logo-homescreen.ts";
+import { Homescreen, type BoardSummary } from "../components/logo-homescreen.ts";
 import { SlashDropdown }                from "../components/slash-dropdown.ts";
 import {
   shouldShowSlashDropdown,
@@ -90,7 +90,7 @@ import {
   isGoalContinuationFeatureEnabled,
 } from "../core/goal-continuation-wiring.ts";
 import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../commands/goal.ts";
-import { buildEmberWorldState, type BoardSummary } from "../core/ember-world-state.ts";
+import { buildEmberWorldState } from "../core/ember-world-state.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -665,7 +665,17 @@ export function ReplScreen({
         setDataRoot(root);
         const worldState = await buildEmberWorldState({ goalforgeRoot: root });
         if (worldState) {
-          setBoardSummary(worldState.monitor.board.summary);
+          const topAttention = worldState.monitor.conditions
+            .filter((c) => c.detail.startsWith("RED"))
+            .slice(0, 3)
+            .map((c) => c.label);
+          const summary: BoardSummary = {
+            green:        worldState.monitor.green,
+            total:        worldState.monitor.total,
+            pctComplete:  worldState.monitor.pctComplete,
+            topAttention,
+          };
+          setBoardSummary(summary);
         }
       } catch {
         // Fail open: if board load fails, render without board summary (the honest "no recent activity" state).
