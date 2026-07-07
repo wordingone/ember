@@ -5,10 +5,10 @@ Composed liveness predicate over three legs (v1; leg 3 renderer-heartbeat is
 DEFERRED per the issue-362 spec addendum -- it needs #309's activity-event
 transport to expose a persisted pulse, and is tracked in a follow-up issue):
 
-  1. window    -- a visible top-level window with the ledgered title exists.
-                  UIA/enumeration tier only (EnumWindows + IsWindowVisible +
-                  GetWindowText) -- process listings cannot see wt.exe's
-                  sibling windows (single-process multi-window).
+  1. window    -- a visible tab with the ledgered title exists in Windows Terminal
+                  (or a top-level non-wt window with the ledgered title).
+                  v1.1: UIA TabItem enumeration over WindowsTerminal.exe's HWNDs,
+                  falling back to exact-title matching for non-wt windows.
   2. process   -- the window's owning process (GetWindowThreadProcessId) is
                   alive and its image name matches the ledgered process name.
   4. residency -- VRAM tenant state is consistent with the declared mode read
@@ -99,20 +99,154 @@ def enumerate_visible_windows() -> list[WindowInfo]:
     return results
 
 
+@dataclass(frozen=True)
+class TabInfo:
+    """Represents a Windows Terminal tab enumerated via UIA."""
+    title: str
+    hwnd: int  # the wt.exe window HWND that owns this tab
+    pid: int   # the wt.exe process ID
+
+
+def enumerate_wt_tabs() -> list[TabInfo]:
+    """Real backend: enumerate TabItem descendants of WindowsTerminal.exe windows
+    via UIA (AutomationElement tree traversal). Returns the title of each tab
+    plus the HWND/PID of its parent wt.exe window.
+
+    This handles the case where the cockpit is a tab inside Windows Terminal,
+    not a top-level window itself. Absent UIAutomation or wt not running returns [].
+    """
+    try:
+        import uiautomation as uia
+    except ImportError:
+        return []
+
+    tabs: list[TabInfo] = []
+
+    try:
+        # Enumerate all visible top-level windows
+        user32 = ctypes.windll.user32
+        results: list[tuple[int, int]] = []  # (hwnd, pid)
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+
+        def _cb(hwnd, _lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return 1
+            length = user32.GetWindowTextLengthW(hwnd)
+            # Match wt window class; exact title is less reliable since it changes
+            class_name_buf = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, class_name_buf, 256)
+            class_name = class_name_buf.value
+            if "CASCADIA" not in class_name and class_name != "WindowsTerminal":
+                return 1  # Not a wt window
+            pid = ctypes.c_ulong(0)
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            results.append((int(hwnd), int(pid.value)))
+            return 1
+
+        user32.EnumWindows(WNDENUMPROC(_cb), 0)
+
+        # For each wt window, enumerate its TabItem children via UIA
+        for hwnd, pid in results:
+            try:
+                # Get the AutomationElement for this window
+                elem = uia.ControlFromHandle(hwnd)
+                if not elem:
+                    continue
+
+                # Walk the tree looking for TabItem controls
+                def walk_for_tabs(control, hwnd_val, pid_val):
+                    nonlocal tabs
+                    try:
+                        if control.ControlType == uia.ControlType.TabItemControl:
+                            # Extract the tab name (usually the Name property)
+                            name = control.Name
+                            if name:
+                                tabs.append(TabInfo(title=name, hwnd=hwnd_val, pid=pid_val))
+                    except Exception:
+                        pass
+
+                    # Recurse into children
+                    try:
+                        for child in control.GetChildren():
+                            walk_for_tabs(child, hwnd_val, pid_val)
+                    except Exception:
+                        pass
+
+                walk_for_tabs(elem, hwnd, pid)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return tabs
+
+
 def check_window_leg(
     expected_title: str,
     window_lister: Callable[[], "list[WindowInfo]"] = enumerate_visible_windows,
+    tab_lister: Callable[[], "list[TabInfo]"] = enumerate_wt_tabs,
 ) -> dict[str, Any]:
-    """Leg 1: does a visible window with exactly expected_title exist?"""
+    """Leg 1: does the expected_title exist as a visible window or as a tab in
+    Windows Terminal?
+
+    v1.1: First checks wt tabs via UIA enumeration; if not found, falls back
+    to exact-title matching on top-level windows. This eliminates the false
+    "orphan-process" alarm when the cockpit is inside a wt tab (the common case
+    under Windows Terminal) vs a standalone window.
+    """
+    # First check: is the title present as a wt tab?
+    tabs = tab_lister()
+    tab_match = next((t for t in tabs if t.title == expected_title), None)
+    if tab_match is not None:
+        return {
+            "leg": "window",
+            "present": True,
+            "hwnd": tab_match.hwnd,
+            "pid_from_window": tab_match.pid,
+            "all_visible_titles": [t.title for t in tabs],
+            "found_in": "wt-tab",
+        }
+
+    # Fallback: check top-level windows (for non-wt cases, or wt windows that
+    # update their title to match the active tab)
     windows = window_lister()
     match = next((w for w in windows if w.title == expected_title), None)
+    if match is None:
+        return {
+            "leg": "window",
+            "present": False,
+            "hwnd": None,
+            "pid_from_window": None,
+            "all_visible_titles": [w.title for w in windows],
+            "found_in": None,
+        }
+
+    # Check if this is actually a Windows Terminal window (class CASCADIA_*).
+    # If so, treat it as a wt-tab case (skip parented pid validation).
+    is_wt_window = _is_windows_terminal_window(match.hwnd)
+    found_in = "wt-tab" if is_wt_window else "toplevel-window"
+
     return {
         "leg": "window",
-        "present": match is not None,
-        "hwnd": match.hwnd if match is not None else None,
-        "pid_from_window": match.pid if match is not None else None,
-        "all_visible_titles": [w.title for w in windows if match is None or w is not match],
+        "present": True,
+        "hwnd": match.hwnd,
+        "pid_from_window": match.pid,
+        "all_visible_titles": [w.title for w in windows if w is not match],
+        "found_in": found_in,
     }
+
+
+def _is_windows_terminal_window(hwnd: int) -> bool:
+    """Check if an HWND belongs to a Windows Terminal window."""
+    try:
+        user32 = ctypes.windll.user32
+        class_name_buf = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, class_name_buf, 256)
+        class_name = class_name_buf.value
+        return "CASCADIA" in class_name or class_name == "WindowsTerminal"
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -171,20 +305,38 @@ def check_process_leg(
     """Leg 2: is the backing process alive and parented to the ledgered
     window?
 
-    If leg 1 found a window, its pid is authoritative: check THAT pid is
-    alive and named expected_process_name (this is the "parented to that
-    window" half of the predicate, not just "some process somewhere").
+    Special case (v1.1): if the window was found inside Windows Terminal (a
+    wt-tab), the hwnd's process is wt.exe, not the expected process. In this
+    case, skip the pid-parented check and instead verify the expected process
+    exists via independent process scan -- finding the cockpit tab in wt
+    already proves the window is present; we just need to verify the backing
+    ember process is still alive.
+
+    If leg 1 found a non-wt window, its pid is authoritative: check THAT pid
+    is alive and named expected_process_name (parented).
 
     If leg 1 found no window, there is no pid to parent-check -- fall back
     to an independent process-name scan so a process-alive-but-window-gone
-    case is still detectable as orphan-process rather than silently
-    collapsing into 'nothing here'.
+    case is still detectable as orphan-process.
     """
     pid = window_leg.get("pid_from_window")
+    found_in = window_leg.get("found_in")
+
+    # v1.1: if found in a wt tab, the pid is the wt.exe process, not our process.
+    # Skip the parented check and verify the backing process exists.
+    if pid is not None and found_in == "wt-tab":
+        if process_finder is None:
+            process_finder = find_process_by_name
+        found_pid = process_finder(expected_process_name)
+        return {"leg": "process", "present": found_pid is not None, "pid": found_pid,
+                "parented": False, "wt_tab_case": True}
+
+    # Top-level window case (non-wt): validate the pid matches our expected process
     if pid is not None:
         alive = is_process_alive(pid, expected_process_name, process_lookup)
         return {"leg": "process", "present": alive, "pid": pid, "parented": True}
 
+    # No window found: independent process-name scan
     if process_finder is None:
         process_finder = find_process_by_name
     found_pid = process_finder(expected_process_name)
@@ -438,6 +590,7 @@ class WatchdogConfig:
 def run_cycle(
     cfg: WatchdogConfig,
     window_lister: Callable[[], "list[WindowInfo]"] = enumerate_visible_windows,
+    tab_lister: Callable[[], "list[TabInfo]"] = enumerate_wt_tabs,
     process_lookup: Optional[Callable[[int], Optional[str]]] = None,
     process_finder: Optional[Callable[[str], Optional[int]]] = None,
     lease_reader: Callable[[str], Optional[dict[str, Any]]] = read_gpu_lease,
@@ -451,7 +604,7 @@ def run_cycle(
     """
     ts = _now_iso()
 
-    window_leg = check_window_leg(cfg.expected_title, window_lister)
+    window_leg = check_window_leg(cfg.expected_title, window_lister, tab_lister)
     process_leg = check_process_leg(window_leg, cfg.expected_process_name,
                                      process_lookup, process_finder)
     lease = lease_reader(cfg.lease_path)
