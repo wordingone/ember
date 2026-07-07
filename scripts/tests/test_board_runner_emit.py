@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Test board runner emit side — demonstrates real events from board evaluation."""
+"""Test board runner emit side — demonstrates fixture events (unmistakably synthetic).
+
+Fixture events use actor='fixture-runner' to distinguish from real board-runner output.
+"""
 
 import json
 import tempfile
@@ -14,16 +17,17 @@ from activity_log import emit
 
 
 def test_board_runner_emits_events():
-    """Simulate board runner emitting start/verdict/end events."""
+    """Simulate board runner emitting start/verdict/end events (FIXTURE, not real)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         orig_cwd = os.getcwd()
         try:
             os.chdir(tmpdir)
             
-            # Simulate board runner start
-            emit("board-runner", "status", "Starting totality evaluation")
+            # Simulate board runner start (FIXTURE: actor='fixture-runner')
+            emit("fixture-runner", "status", "Starting totality evaluation")
             
-            # Simulate evaluating several conditions
+            # Simulate evaluating several conditions (FIXTURE: synthetic verdicts)
+            # Using real condition names for demo, but actor='fixture-runner' marks as fixture
             conditions = [
                 ("C-BASE", "green", "Base inference pipeline passed all tests"),
                 ("C-GROW", "green", "Growth metrics within target range"),
@@ -34,10 +38,10 @@ def test_board_runner_emits_events():
             
             for cid, status, detail in conditions:
                 kind = "error" if status == "red" else "output"
-                emit("board-runner", kind, f"{cid}: {status.upper()}", body=detail)
+                emit("fixture-runner", kind, f"{cid}: {status.upper()}", body=detail)
             
             # Simulate board runner end
-            emit("board-runner", "status", "Evaluation complete — 4 green, 1 red")
+            emit("fixture-runner", "status", "Evaluation complete — 4 green, 1 red")
             
             # Read and verify
             date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -50,14 +54,18 @@ def test_board_runner_emits_events():
             assert events[0]["title"] == "Starting totality evaluation"
             assert events[-1]["title"] == "Evaluation complete — 4 green, 1 red"
             
+            # Verify all events marked as fixture (actor='fixture-runner')
+            for event in events:
+                assert event["actor"] == "fixture-runner", f"Event not marked as fixture: {event}"
+            
             # Print sample for receipt
-            print("\n[SAMPLE] Real board runner activity events:")
+            print("\n[SAMPLE] Fixture board runner activity events (actor='fixture-runner'):")
             print("-" * 80)
             for event in events[:3]:
                 print(json.dumps(event))
             print("... (4 more events)")
             print("-" * 80)
-            print(f"[PASS] Board runner emitted {len(events)} events successfully")
+            print(f"[PASS] Fixture events emitted {len(events)} events (all marked fixture-runner)")
         finally:
             os.chdir(orig_cwd)
 
