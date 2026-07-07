@@ -1,0 +1,11 @@
+{
+  "target_path": "receipts/ember-sovereign-retrieval/design-spec-20260624T142553Z.json",
+  "target_sha256": "f03401eb95162881a9ded5ab3308a4e1d96e82d1f02623de08f324c5e71f1eff",
+  "evidence_class": "generator_absent_content_clean",
+  "evidence": "evidence (c) manually-authored by explicit self-declaration: the receipt's own 'counting_gate' field states verbatim \"This is a design verdict from an adversarial Opus debate (workflow wtrl34wzh), NOT an executed run\" -- a prose design document, not a script's measured output; nothing executed, so no paid-API surface is even possible.",
+  "cites": [
+    "receipts/ember-sovereign-retrieval/design-spec-20260624T142553Z.json (counting_gate field)"
+  ],
+  "attested_by": "boardrun6, issue #353 durable-attestation sidecar (supersedes the throwaway attest_extend.py hand-stamp from the 2026-07-07 annex-refresh mission -- see PR #350's body for the durability finding)",
+  "attested_ts": "2026-07-07T11:32:00Z"
+}
