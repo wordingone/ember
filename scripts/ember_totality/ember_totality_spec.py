@@ -84,6 +84,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 # Add repo root to path for invariant imports (needed for scripts.lib)
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -101,6 +102,21 @@ RECEIPTS_DIR = os.path.join(HERE, "receipts-totality")
 CONDITIONS_SPEC_PATH = os.path.join(REPO_ROOT, "docs", "spec", "conditions-v1.md")
 
 PROBE_TIMEOUT_SECONDS = 180
+
+# Per-probe timeout overrides (gh issue #342): the default 180s budget has no
+# headroom for a probe whose own genuine work is heavy -- C-BASE hashes a
+# 2.38GB on-disk checkpoint and runs a real GPU forward-pass verify, and was
+# observed flapping UNEVALUABLE<->RED/GREEN across consecutive board runs
+# purely on HARNESS TIMEOUT, a harness-budget defect, not evidence about the
+# condition itself. Keyed by probe filename; any probe not listed here still
+# uses PROBE_TIMEOUT_SECONDS.
+PROBE_TIMEOUT_OVERRIDES = {
+    "test_c_base.py": 600,
+}
+
+
+def _probe_timeout_seconds(fname):
+    return PROBE_TIMEOUT_OVERRIDES.get(fname, PROBE_TIMEOUT_SECONDS)
 
 # Deterministic filename -> canonical condition id fallback. Used only when a
 # probe's output line does not begin with a recognizable C-id token.
@@ -775,10 +791,19 @@ def run_probe(path, env):
     Never lets an exception or hang propagate as a raw traceback: a harness-
     level failure (probe crash, timeout, contract violation) is UNEVALUABLE
     with the failure text in reason, never a fabricated RED/GREEN.
+
+    Elapsed wall-clock time is appended to `reason` on EVERY exit path (gh
+    issue #342) -- a probe flapping UNEVALUABLE<->RED/GREEN across board runs
+    is otherwise undiagnosable from the receipt alone: with elapsed time
+    disclosed, a PASS that took 175s out of a 180s budget shows the thin
+    headroom even when it happens to complete, and a timeout shows exactly
+    how long the probe ran before being killed.
     """
     fname = os.path.basename(path)
     fallback_id = FILENAME_ID.get(fname, fname)
+    timeout_s = _probe_timeout_seconds(fname)
 
+    start = time.monotonic()
     try:
         proc = subprocess.run(
             [sys.executable, path],
@@ -789,25 +814,29 @@ def run_probe(path, env):
             encoding="utf-8",
             errors="replace",
             env=env,
-            timeout=PROBE_TIMEOUT_SECONDS,
+            timeout=timeout_s,
         )
     except subprocess.TimeoutExpired:
+        elapsed = time.monotonic() - start
         return {
             "condition": fallback_id,
             "status": "UNEVALUABLE",
             "reason": (f"HARNESS TIMEOUT: {fname} exceeded "
-                       f"{PROBE_TIMEOUT_SECONDS}s -- probe did not complete"),
+                       f"{timeout_s}s -- probe did not complete "
+                       f"(elapsed {elapsed:.1f}s)"),
             "test_file": fname,
             "exit_code": None,
         }
     except OSError as exc:
+        elapsed = time.monotonic() - start
         return {
             "condition": fallback_id,
             "status": "UNEVALUABLE",
-            "reason": f"HARNESS EXEC ERROR: could not launch {fname}: {exc}",
+            "reason": f"HARNESS EXEC ERROR: could not launch {fname}: {exc} (elapsed {elapsed:.1f}s)",
             "test_file": fname,
             "exit_code": None,
         }
+    elapsed = time.monotonic() - start
 
     stdout = proc.stdout or ""
     stderr = proc.stderr or ""
@@ -828,9 +857,9 @@ def run_probe(path, env):
         status = "UNEVALUABLE"
         reason = (f"PROBE CONTRACT VIOLATION: {fname} emitted no recognized "
                   f"status line (exit={proc.returncode}); "
-                  f"stderr[:300]={stderr[:300]!r}")
+                  f"stderr[:300]={stderr[:300]!r} (elapsed {elapsed:.1f}s)")
     else:
-        reason = chosen
+        reason = f"{chosen} (elapsed {elapsed:.1f}s)"
     return {
         "condition": condition,
         "status": status,
