@@ -31,7 +31,6 @@ import json
 import os
 import sys
 import time
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -103,14 +102,6 @@ DEFAULT_MAX_ROUNDS = 6
 DEFAULT_MP_WORKERS = min(8, max(1, psutil.cpu_count() - 4))
 MIN_COMMIT_FREE_GB = 12
 DEFAULT_SCAN_CHUNK_TOKENS = 33554432  # 32M tokens per chunk (memory-safe slicing)
-# issue #193 relaunch-6 post-mortem: a worker's np.isin(h[:n_keep], needle_arr)
-# call (internally np.unique -> ar[perm] fancy-indexing) raised an
-# ArrayMemoryError trying to allocate scratch for a 33,554,432-element (=
-# DEFAULT_SCAN_CHUNK_TOKENS) uint64 hash buffer, uncaught, killing the whole
-# run. Retry-smaller floor: below this, a single sub-chunk's hash buffer is
-# ~8MB -- if THAT still can't allocate, the box is genuinely exhausted and
-# the failure is named (shard/chunk) instead of a bare numpy trace.
-MIN_SCAN_SUBCHUNK_TOKENS = 1 << 20  # 1,048,576 tokens
 HEARTBEAT_INTERVAL_S = 20  # intra-shard progress heartbeat cadence (issue #174 Phase 2)
 
 RECEIPT_DIR = os.path.join(REPO_ROOT, "receipts", "ember-c-scale")
@@ -118,35 +109,6 @@ RECEIPT_DIR = os.path.join(REPO_ROOT, "receipts", "ember-c-scale")
 
 def _utc_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
-def _write_parent_rss_event(progress_file: str | None, phase: str, **extra) -> None:
-    """PARENT-process RSS heartbeat (issue #193 run-8 post-mortem: the parent's
-    own match-aggregation loop -- reading every worker's streamed JSONL into a
-    single Python list -- is the suspected memory-pressure source that led to a
-    multi-hour crash with zero live memory signal; this makes that phase's RSS
-    visible in the same progress_file the worker heartbeats already use, tagged
-    worker_id="parent" so existing per-worker heartbeat consumers can ignore
-    it without a schema break)."""
-    if not progress_file:
-        return
-    try:
-        rss_mb = round(psutil.Process().memory_info().rss / (1024 ** 2), 1)
-    except Exception:
-        rss_mb = None
-    event = {
-        "ts": datetime.now(timezone.utc).isoformat() + "Z",
-        "worker_id": "parent",
-        "phase": phase,
-        "parent_rss_mb": rss_mb,
-    }
-    event.update(extra)
-    try:
-        with open(progress_file, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(event) + "\n")
-            fh.flush()
-    except OSError:
-        pass
 
 
 def _preflight_check_commit() -> tuple[float, float]:
@@ -159,74 +121,6 @@ def _preflight_check_commit() -> tuple[float, float]:
             f"W2_DECONTAM_INSUFFICIENT_HEADROOM: {commit_free_gb:.1f}GB free commit < "
             f"{MIN_COMMIT_FREE_GB}GB required. Abort.")
     return commit_total_gb, commit_free_gb
-
-
-LOCK_FILE = os.path.join(REPO_ROOT, "scratch", "w2-heldout-run", ".decontam.lock")
-
-
-def _lock_holder_alive(pid: int) -> bool:
-    """True iff `pid` is a live process actually running this script.
-
-    NOTE: psutil.Process.name() returns only the executable name (e.g.
-    "python.exe" on Windows), never the invoked script -- checking
-    "build_decontam" in proc.name() is therefore always False and can never
-    detect a live holder. Must check cmdline() (the actual argv, which
-    includes the script path) instead."""
-    try:
-        proc = psutil.Process(pid)
-        cmdline = " ".join(proc.cmdline())
-    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, ValueError):
-        return False
-    return proc.is_running() and "build_decontam_batch_mp" in cmdline
-
-
-def _check_singleton_lock(lock_file: str | None = None) -> None:
-    """Refuse to start if another build_decontam_batch_mp.py is running.
-
-    Atomic: acquires the lock via O_CREAT|O_EXCL (single winner even under a
-    race), verifies a losing process is dead before reclaiming, retries a
-    bounded number of times to resolve stale-lock churn.
-
-    NOTE: LOCK_FILE is derived from this module's own __file__ location (via
-    REPO_ROOT), so a copy of this script running out of a git worktree
-    resolves a DIFFERENT lock path than a copy running from the main repo
-    checkout -- two worktree copies do NOT see each other's lock by default.
-    Pass an explicit lock_file (or --lock-file at the CLI) pointing at the
-    shared repo's scratch dir when you need genuine cross-checkout mutual
-    exclusion (e.g. a worktree-launched relaunch that must refuse while a
-    main-checkout run is still alive)."""
-    target = lock_file or LOCK_FILE
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    my_pid = os.getpid()
-
-    for _ in range(5):
-        try:
-            fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            with os.fdopen(fd, "w") as f:
-                f.write(str(my_pid))
-            return
-        except FileExistsError:
-            pass
-
-        try:
-            with open(target, "r") as f:
-                existing_pid = int(f.read().strip())
-        except (ValueError, IOError):
-            existing_pid = None
-
-        if existing_pid is not None and existing_pid != my_pid and _lock_holder_alive(existing_pid):
-            raise SystemExit(
-                f"W2_DECONTAM_ALREADY_RUNNING: Another build_decontam_batch_mp.py is active "
-                f"(PID {existing_pid}). Abort. Kill the existing process first or wait for it "
-                f"to complete.")
-
-        # Stale lock (dead PID, unrelated process, or corrupted content) -- reclaim.
-        try:
-            os.remove(target)
-        except OSError:
-            pass
-
-    raise SystemExit("W2_DECONTAM_LOCK_CONTENTION: could not acquire singleton lock after retries.")
 
 
 # ---------------------------------------------------------------------------
@@ -394,13 +288,6 @@ def _worker_scan_shards(args: tuple) -> dict:
         if not force and (now - last_heartbeat_mono[0]) < HEARTBEAT_INTERVAL_S:
             return
         last_heartbeat_mono[0] = now
-        # RSS of THIS worker process (issue #193 run-8 post-mortem: a multi-hour
-        # crash was diagnosed after the fact with no live memory signal at all --
-        # this makes the cascade visible in real time on the next run).
-        try:
-            worker_rss_mb = round(psutil.Process().memory_info().rss / (1024 ** 2), 1)
-        except Exception:
-            worker_rss_mb = None
         with open(progress_file, "a", encoding="utf-8") as fh:
             fh.write(json.dumps({
                 "ts": datetime.now(timezone.utc).isoformat() + "Z",
@@ -409,60 +296,8 @@ def _worker_scan_shards(args: tuple) -> dict:
                 "shard": name,
                 "windows_hashed": windows_so_far,
                 "matches_found": confirmed_matches_count,
-                "worker_rss_mb": worker_rss_mb,
             }) + "\n")
             fh.flush()
-
-    def _hash_and_hit_offsets(data, n_keep_local, sub_chunk_tokens):
-        """Rolling-hash + isin() over `data` (n_keep_local absolute positions
-        wanted), returning LOCAL hit offsets (relative to data's own start).
-        On MemoryError (e.g. np.isin's internal np.unique failing to
-        allocate its ar[perm] scratch -- issue #193 relaunch-6's actual crash
-        site), halves sub_chunk_tokens and re-processes in overlap-safe
-        sub-chunks -- the same chunking strategy _scan_for_hits already uses
-        one level up, just recursed at finer granularity. Bottoms out at
-        MIN_SCAN_SUBCHUNK_TOKENS with a NAMED MemoryError instead of letting
-        numpy's bare internal trace propagate uncaught to main()."""
-        n = data.shape[0]
-        if n < window:
-            return []
-        try:
-            arr64 = data.astype(np.uint64)
-            n_out = n - window + 1
-            h = np.zeros(n_out, dtype=np.uint64)
-            power = np.uint64(1)
-            rb = np.uint64(roll_base)
-            with np.errstate(over="ignore"):
-                for k in range(window):
-                    h += arr64[k:k + n_out] * power
-                    power = power * rb
-            keep = min(n_keep_local, n_out)
-            if not (needle_hash_set and keep):
-                return []
-            local_hits = np.where(np.isin(h[:keep], needle_arr))[0]
-            return [int(li) for li in local_hits]
-        except MemoryError:
-            if sub_chunk_tokens <= MIN_SCAN_SUBCHUNK_TOKENS or n <= MIN_SCAN_SUBCHUNK_TOKENS:
-                raise MemoryError(
-                    f"W2_DECONTAM_SCAN_OOM: exhausted memory hashing a {n}-token "
-                    f"span even at the {MIN_SCAN_SUBCHUNK_TOKENS}-token retry floor "
-                    f"(window={window})."
-                ) from None
-            half = max(sub_chunk_tokens // 2, MIN_SCAN_SUBCHUNK_TOKENS)
-            all_hits: list[int] = []
-            pos = 0
-            n_keep_local = min(n_keep_local, n)
-            while pos < n_keep_local:
-                sub_end_keep = min(pos + half, n_keep_local)
-                # extend by (window-1) overlap tokens so this sub-chunk can
-                # still hash its own last few positions correctly
-                sub_data_end = min(sub_end_keep + (window - 1), n)
-                sub_data = data[pos:sub_data_end]
-                sub_keep = sub_end_keep - pos
-                sub_hits = _hash_and_hit_offsets(sub_data, sub_keep, half)
-                all_hits.extend(pos + hh for hh in sub_hits)
-                pos = sub_end_keep
-            return all_hits
 
     def _scan_for_hits(arr_u16, chunk_tokens_param, shard_idx=None, name=None,
                         prior_windows_hashed=0):
@@ -508,25 +343,25 @@ def _worker_scan_shards(args: tuple) -> dict:
             chunk_len = chunk_data.shape[0]
 
             if chunk_len >= window:
+                arr64 = chunk_data.astype(np.uint64)
                 n_out = chunk_len - window + 1
+                h = np.zeros(n_out, dtype=np.uint64)
+                power = np.uint64(1)
+                rb = np.uint64(roll_base)
+                with np.errstate(over="ignore"):
+                    for k in range(window):
+                        h += arr64[k:k + n_out] * power
+                        power = power * rb
+
                 # Only keep hashes that don't cross into overlap region (boundary-safe)
                 n_keep = n_out if is_last_chunk else min(chunk_tokens_param, n_out)
                 total_hashes += n_keep
 
-                try:
-                    local_hits = _hash_and_hit_offsets(chunk_data, n_keep, chunk_tokens_param)
-                except MemoryError as mem_exc:
-                    _write_heartbeat(shard_idx, name, prior_windows_hashed + total_hashes,
-                                      force=True)
-                    raise MemoryError(
-                        f"W2_DECONTAM_SCAN_OOM: shard={name} shard_idx={shard_idx} "
-                        f"chunk={chunk_i}/{n_chunks} chunk_tokens={chunk_tokens_param}: "
-                        f"{mem_exc}"
-                    ) from mem_exc
-                hit_offsets.extend(chunk_start + li for li in local_hits)
-                # chunk_data (and the arrays _hash_and_hit_offsets derives from
-                # it) fall out of scope here -- nothing shard-sized is
-                # retained across iterations.
+                if needle_hash_set and n_keep:
+                    local_hits = np.where(np.isin(h[:n_keep], needle_arr))[0]
+                    hit_offsets.extend(chunk_start + int(li) for li in local_hits)
+                # h / arr64 / chunk_data fall out of scope here -- nothing
+                # shard-sized is retained across iterations.
 
             if shard_idx is not None:
                 _write_heartbeat(shard_idx, name, prior_windows_hashed + total_hashes)
@@ -617,13 +452,6 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
         result = contamination_recheck(eval_rows, shard_dir, window=window, roll_base=roll_base)
         result["wall_s"] = round(time.perf_counter() - t0_serial, 3)
         result["n_workers"] = 1
-        if dump_matches:
-            dump_dir = os.path.dirname(dump_matches)
-            if dump_dir and not os.path.exists(dump_dir):
-                os.makedirs(dump_dir, exist_ok=True)
-            with open(dump_matches, "a", encoding="utf-8") as fh:
-                for match in result["confirmed_matches"]:
-                    fh.write(json.dumps(match) + "\n")
         return result
 
     # Distribute shards into EXACTLY min(n_workers, len(shard_paths)) balanced groups.
@@ -636,12 +464,9 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
     # Filter out empty groups (shouldn't happen, but safe)
     worker_shards = [g for g in worker_shards if g]
 
-    # Create dump directory for workers to stream matches (per-run subdirectory --
-    # a shared fixed name collides across concurrent/successive runs on Windows,
-    # which is exactly how attempts 5+6 mutually clobbered each other's worker files).
-    run_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ_%f")
+    # Create dump directory for workers to stream matches
     tmp_match_dir = os.path.join(os.path.dirname(progress_file) if progress_file else ".",
-                                  f"worker-matches-tmp-{run_timestamp}")
+                                  "worker-matches-tmp")
     os.makedirs(tmp_match_dir, exist_ok=True)
 
     # Dispatch workers with dump_dir parameter
@@ -659,8 +484,6 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
 
     # Collect matches from worker-written JSONL files
     # Workers have already streamed matches to <tmp_match_dir>/worker-<id>.jsonl
-    _write_parent_rss_event(progress_file, "aggregate_start",
-                             n_candidates=len(eval_rows))
     all_matches = []
     total_windows_hashed = 0
     total_collisions = 0
@@ -680,29 +503,25 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
         total_collisions += r["hash_collisions_ruled_out"]
         total_shards += r["shards_scanned"]
 
-    _write_parent_rss_event(progress_file, "aggregate_end",
-                             n_candidates=len(eval_rows), n_matches=len(all_matches))
-
     # Clean up temp files
     shutil.rmtree(tmp_match_dir, ignore_errors=True)
 
-    # Write matches to dump file if requested. APPEND mode: build_batch() calls
-    # this function once per round (plus once for the final verification pass),
-    # each scanning the full corpus against that round's candidate pool -- so
-    # the caller (build_batch) truncates dump_matches once up front, and every
-    # call here appends its own real matches. This is the fix for the CLI
-    # --dump-matches wiring: previously build_batch()'s returned
-    # contamination_recheck dict never carried a "confirmed_matches" list (only
-    # aggregate counts), and nothing else ever passed dump_matches into this
-    # function -- so main()'s post-hoc dump loop always iterated an empty list
-    # and every run silently wrote a 0-line file regardless of corpus findings.
+    # Write matches to dump file if requested (atomic write: temp → rename)
     if dump_matches:
         dump_dir = os.path.dirname(dump_matches)
         if dump_dir and not os.path.exists(dump_dir):
             os.makedirs(dump_dir, exist_ok=True)
-        with open(dump_matches, "a", encoding="utf-8") as fh:
+
+        # Write to temp file first, then rename for atomicity
+        dump_temp = dump_matches + ".tmp"
+        with open(dump_temp, "w", encoding="utf-8") as fh:
             for match in all_matches:
                 fh.write(json.dumps(match) + "\n")
+
+        # Atomic rename
+        if os.path.exists(dump_matches):
+            os.remove(dump_matches)
+        os.rename(dump_temp, dump_matches)
 
     return {
         "method": "13-token polynomial rolling hash (uint64 mod 2**64), "
@@ -760,95 +579,6 @@ def _build_candidate_window_index(candidate_rows: list[list[int]],
     return index
 
 
-def _classify_matches(candidate_rows: list[list[int]],
-                       candidate_positions: list[dict],
-                       confirmed_matches: list[dict],
-                       *, window: int,
-                       files: list[dict] | None,
-                       cum: list[int] | None,
-                       block_len: int | None = None,
-                       progress_file: str | None = None) -> dict:
-    """Partitions an ALREADY-OBTAINED confirmed_matches list into per-candidate
-    self/non-self buckets. On MemoryError, halves candidate_rows/positions and
-    re-classifies EACH half against the SAME confirmed_matches list -- no corpus
-    rescan. A rescan (re-invoking contamination_recheck_mp) is only legitimate
-    when the candidate SET itself changes (a new round), never for recovering
-    from a classification-phase MemoryError on the same set (issue #193 run-8
-    post-mortem: the prior recursive halving re-ran the full-corpus scan at
-    every halving, multiplying wall-clock and repeating the exact memory
-    pressure that triggered the error in the first place, without ever
-    shrinking the actual match volume being classified)."""
-    try:
-        _write_parent_rss_event(progress_file, "classify_start",
-                                 n_candidates=len(candidate_rows), n_matches=len(confirmed_matches))
-        name_to_index = {f["name"]: i for i, f in enumerate(files)} if files else None
-        non_self_matches_by_candidate: list[list[dict]] = [[] for _ in candidate_rows]
-        self_matches_excluded = 0
-        window_index = _build_candidate_window_index(candidate_rows, window)
-
-        for m in confirmed_matches:
-            window_tuple = tuple(m["window"])
-            if name_to_index is not None and cum is not None:
-                match_global_start = _match_global_start(m, name_to_index, cum, window)
-            else:
-                match_global_start = None
-            for idx in window_index.get(window_tuple, ()):
-                pos = candidate_positions[idx]
-                # FIXED: self-match check must detect ANY overlap with candidate window,
-                # not just exact start-position equality. A candidate covers tokens
-                # [global_start, global_start + block_len). A 13-token match at
-                # match_global_start occupies [match_global_start, match_global_start+13).
-                # Overlap exists if match_global_start < global_start+block_len AND
-                # match_global_start+window > global_start. This catches self-contamination
-                # anywhere within the candidate, not just at its exact start (issue GF-W2-01).
-                if block_len is not None:
-                    candidate_end = pos["global_start"] + block_len
-                    is_self = (match_global_start is not None
-                               and pos["global_start"] <= match_global_start
-                               and match_global_start + window <= candidate_end)
-                else:
-                    # Fallback: block_len not provided, use exact-start check (conservative)
-                    is_self = (match_global_start is not None
-                               and match_global_start == pos["global_start"])
-                if is_self:
-                    self_matches_excluded += 1
-                else:
-                    non_self_matches_by_candidate[idx].append(m)
-
-        clean_idx = [i for i, ms in enumerate(non_self_matches_by_candidate) if not ms]
-        contaminated_idx = [i for i, ms in enumerate(non_self_matches_by_candidate) if ms]
-        _write_parent_rss_event(progress_file, "classify_end", n_candidates=len(candidate_rows))
-        return {
-            "n_calls": 1,
-            "split_occurred": False,
-            "clean_idx": clean_idx,
-            "contaminated_idx": contaminated_idx,
-            "self_matches_excluded": self_matches_excluded,
-            "non_self_matches_by_candidate": non_self_matches_by_candidate,
-        }
-    except MemoryError:
-        _write_parent_rss_event(progress_file, "classify_memoryerror_split",
-                                 n_candidates=len(candidate_rows))
-        if len(candidate_rows) <= 1:
-            raise
-        mid = len(candidate_rows) // 2
-        left = _classify_matches(candidate_rows[:mid], candidate_positions[:mid], confirmed_matches,
-                                  window=window, files=files, cum=cum, block_len=block_len,
-                                  progress_file=progress_file)
-        right = _classify_matches(candidate_rows[mid:], candidate_positions[mid:], confirmed_matches,
-                                   window=window, files=files, cum=cum, block_len=block_len,
-                                   progress_file=progress_file)
-        return {
-            "n_calls": left["n_calls"] + right["n_calls"],
-            "split_occurred": True,
-            "clean_idx": left["clean_idx"] + [i + mid for i in right["clean_idx"]],
-            "contaminated_idx": left["contaminated_idx"] + [i + mid for i in right["contaminated_idx"]],
-            "self_matches_excluded": left["self_matches_excluded"] + right["self_matches_excluded"],
-            "non_self_matches_by_candidate": left["non_self_matches_by_candidate"]
-                                             + right["non_self_matches_by_candidate"],
-        }
-
-
 def _classify_once(candidate_rows: list[list[int]],
                     candidate_positions: list[dict],
                     shard_dir: str,
@@ -859,19 +589,14 @@ def _classify_once(candidate_rows: list[list[int]],
                     n_workers: int = DEFAULT_MP_WORKERS,
                     progress_file: str | None = None,
                     block_len: int | None = None,
-                    chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
-                    dump_matches: str | None = None) -> dict:
-    """Runs contamination recheck (serial or parallel) EXACTLY ONCE for this
-    candidate set, then classifies the resulting matches. Classification-phase
-    MemoryErrors are recovered by _classify_matches's own candidate-halving,
-    which reuses this same scan's matches -- see _classify_matches docstring."""
+                    chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS) -> dict:
+    """Runs contamination recheck (serial or parallel) once."""
     t0 = time.perf_counter()
     # If n_workers <= 1 or MP disabled, use serial version (avoid multiprocessing spawn on Windows)
     if use_mp and n_workers > 1:
         raw = contamination_recheck_mp(candidate_rows, shard_dir, window=window,
                                         roll_base=roll_base, n_workers=n_workers,
-                                        progress_file=progress_file, chunk_tokens=chunk_tokens,
-                                        dump_matches=dump_matches)
+                                        progress_file=progress_file, chunk_tokens=chunk_tokens)
         # contamination_recheck_mp includes wall_s in its return dict
         wall_s = raw.pop("wall_s")
     else:
@@ -879,19 +604,73 @@ def _classify_once(candidate_rows: list[list[int]],
         raw = contamination_recheck(candidate_rows, shard_dir, window=window, roll_base=roll_base)
         wall_s = round(time.perf_counter() - t0, 3)
 
-    classified = _classify_matches(candidate_rows, candidate_positions, raw["confirmed_matches"],
-                                    window=window, files=files, cum=cum, block_len=block_len,
-                                    progress_file=progress_file)
+    name_to_index = {f["name"]: i for i, f in enumerate(files)} if files else None
+
+    non_self_matches_by_candidate: list[list[dict]] = [[] for _ in candidate_rows]
+    self_matches_excluded = 0
+    window_index = _build_candidate_window_index(candidate_rows, window)
+
+    for m in raw["confirmed_matches"]:
+        window_tuple = tuple(m["window"])
+        if name_to_index is not None and cum is not None:
+            match_global_start = _match_global_start(m, name_to_index, cum, window)
+        else:
+            match_global_start = None
+        for idx in window_index.get(window_tuple, ()):
+            pos = candidate_positions[idx]
+            # FIXED: self-match check must detect ANY overlap with candidate window,
+            # not just exact start-position equality. A candidate covers tokens
+            # [global_start, global_start + block_len). A 13-token match at
+            # match_global_start occupies [match_global_start, match_global_start+13).
+            # Overlap exists if match_global_start < global_start+block_len AND
+            # match_global_start+window > global_start. This catches self-contamination
+            # anywhere within the candidate, not just at its exact start (issue GF-W2-01).
+            if block_len is not None:
+                candidate_end = pos["global_start"] + block_len
+                is_self = (match_global_start is not None
+                           and pos["global_start"] <= match_global_start
+                           and match_global_start + window <= candidate_end)
+            else:
+                # Fallback: block_len not provided, use exact-start check (conservative)
+                is_self = (match_global_start is not None
+                           and match_global_start == pos["global_start"])
+            if is_self:
+                self_matches_excluded += 1
+            else:
+                non_self_matches_by_candidate[idx].append(m)
+
+    clean_idx = [i for i, ms in enumerate(non_self_matches_by_candidate) if not ms]
+    contaminated_idx = [i for i, ms in enumerate(non_self_matches_by_candidate) if ms]
 
     return {
         "raw": raw,
         "wall_s": wall_s,
-        "n_calls": classified["n_calls"],
-        "split_occurred": classified["split_occurred"],
-        "clean_idx": classified["clean_idx"],
-        "contaminated_idx": classified["contaminated_idx"],
-        "self_matches_excluded": classified["self_matches_excluded"],
-        "non_self_matches_by_candidate": classified["non_self_matches_by_candidate"],
+        "n_calls": 1,
+        "split_occurred": False,
+        "clean_idx": clean_idx,
+        "contaminated_idx": contaminated_idx,
+        "self_matches_excluded": self_matches_excluded,
+        "non_self_matches_by_candidate": non_self_matches_by_candidate,
+    }
+
+
+def _merge_classify_results(left: dict, right: dict, right_offset: int) -> dict:
+    return {
+        "raw": {"confirmed_matches": left["raw"]["confirmed_matches"]
+                                      + right["raw"]["confirmed_matches"],
+                "method": left["raw"].get("method") or right["raw"].get("method"),
+                "shards_scanned": left["raw"].get("shards_scanned"),
+                "windows_hashed": left["raw"].get("windows_hashed", 0)
+                                  + right["raw"].get("windows_hashed", 0)},
+        "wall_s": round(left["wall_s"] + right["wall_s"], 3),
+        "n_calls": left["n_calls"] + right["n_calls"],
+        "split_occurred": True,
+        "clean_idx": left["clean_idx"] + [i + right_offset for i in right["clean_idx"]],
+        "contaminated_idx": left["contaminated_idx"]
+                            + [i + right_offset for i in right["contaminated_idx"]],
+        "self_matches_excluded": left["self_matches_excluded"] + right["self_matches_excluded"],
+        "non_self_matches_by_candidate": left["non_self_matches_by_candidate"]
+                                          + right["non_self_matches_by_candidate"],
     }
 
 
@@ -906,32 +685,26 @@ def classify_candidates(candidate_rows: list[list[int]],
                          n_workers: int = DEFAULT_MP_WORKERS,
                          progress_file: str | None = None,
                          block_len: int | None = None,
-                         chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
-                         dump_matches: str | None = None) -> dict:
-    """Scans the corpus ONCE for this candidate set and classifies the result.
-
-    Previously this function itself caught MemoryError and recursively halved
-    candidate_rows, re-invoking _classify_once (and therefore a full fresh
-    contamination_recheck_mp corpus scan) for EVERY halving -- issue #193
-    run-8 post-mortem showed this cascading into ~20 full-corpus rescans in a
-    single build_batch() invocation (vs. DEFAULT_MAX_ROUNDS=6 legitimate outer
-    rounds), each rescan paying the full worker-scan wall-clock cost while
-    never reducing the actual memory-pressure source (corpus-side match
-    density, which does not shrink proportionally with candidate count in a
-    heavily-duplicated corpus) -- and five of those rescans' aggregation
-    phases themselves crashed before cleanup (evidenced by leftover
-    worker-matches-tmp-* dirs of monotonically shrinking size), consistent
-    with the process eventually dying to an uncaught MemoryError once
-    recursion bottomed out. The corpus scan now runs exactly once per call
-    (i.e. once per outer round in build_batch); any MemoryError during
-    CLASSIFICATION of that scan's matches is recovered inside _classify_once
-    -> _classify_matches, which halves only the candidate/classification
-    work and reuses the already-obtained matches -- never re-scanning."""
-    return _classify_once(candidate_rows, candidate_positions, shard_dir,
-                           window=window, roll_base=roll_base, files=files, cum=cum,
-                           use_mp=use_mp, n_workers=n_workers, progress_file=progress_file,
-                           block_len=block_len, chunk_tokens=chunk_tokens,
-                           dump_matches=dump_matches)
+                         chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS) -> dict:
+    """Adaptive wrapper, same as serial version."""
+    try:
+        return _classify_once(candidate_rows, candidate_positions, shard_dir,
+                               window=window, roll_base=roll_base, files=files, cum=cum,
+                               use_mp=use_mp, n_workers=n_workers, progress_file=progress_file,
+                               block_len=block_len, chunk_tokens=chunk_tokens)
+    except MemoryError:
+        if len(candidate_rows) <= 1:
+            raise
+        mid = len(candidate_rows) // 2
+        left = classify_candidates(candidate_rows[:mid], candidate_positions[:mid], shard_dir,
+                                    window=window, roll_base=roll_base, files=files, cum=cum,
+                                    use_mp=use_mp, n_workers=n_workers, progress_file=progress_file,
+                                    block_len=block_len, chunk_tokens=chunk_tokens)
+        right = classify_candidates(candidate_rows[mid:], candidate_positions[mid:], shard_dir,
+                                     window=window, roll_base=roll_base, files=files, cum=cum,
+                                     use_mp=use_mp, n_workers=n_workers, progress_file=progress_file,
+                                     block_len=block_len, chunk_tokens=chunk_tokens)
+        return _merge_classify_results(left, right, right_offset=mid)
 
 
 # ---------------------------------------------------------------------------
@@ -1342,22 +1115,9 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
                  n_workers: int = DEFAULT_MP_WORKERS,
                  progress_file: str | None = None,
                  chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
-                 pool_start_index: int | None = None,
-                 dump_matches: str | None = None,
-                 receipt_dir: str | None = None) -> dict:
+                 pool_start_index: int | None = None) -> dict:
     t_start = time.perf_counter()
     block_len = seq + 1 + n_mtp
-
-    # Truncate/create the dump file once up front. Every classify_candidates()
-    # call below (one per round + the final verification pass) APPENDS its own
-    # real matches to this same path, so the file accumulates the full corpus
-    # scan's findings across the whole build_batch run instead of each call
-    # overwriting the previous one's data.
-    if dump_matches:
-        dump_dir = os.path.dirname(dump_matches)
-        if dump_dir:
-            os.makedirs(dump_dir, exist_ok=True)
-        open(dump_matches, "w", encoding="utf-8").close()
 
     files = cheap_shard_sizes(shard_dir)
     cum = _cumulative_token_offsets(files)
@@ -1400,220 +1160,132 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
     replacements_made = 0
     total_candidates_checked = 0
 
-    # issue #193 run-8 post-mortem: a multi-hour run died with NO on-disk trace
-    # at all (no receipt, no batch, no traceback) -- everything from here on is
-    # wrapped so ANY termination (a deliberate SystemExit like POOL_EXHAUSTED /
-    # INSUFFICIENT_CLEAN_WINDOWS, or a genuinely uncaught exception such as a
-    # MemoryError that outlived _classify_matches's own recovery) writes a
-    # CRASHED-class receipt carrying the partial round ledger before the
-    # exception propagates -- fail-CLOSED, never receiptless.
-    try:
-        for round_no in range(1, max_rounds + 1):
-            need = batch_size - len(selected_rows)
-            if need <= 0:
-                break
-            this_pool_size = max(need * pool_oversample, need)
+    for round_no in range(1, max_rounds + 1):
+        need = batch_size - len(selected_rows)
+        if need <= 0:
+            break
+        this_pool_size = max(need * pool_oversample, need)
 
-            if round_no == 1:
-                if explicit_pool_placement:
-                    # Explicit placement: start from pool_start_index, extend upward by pool_size
-                    this_pool_start = pool_start
-                    this_pool_end = min(pool_start + this_pool_size, n_windows)
-                else:
-                    # Tail mode: original behavior (reserve the tail)
-                    this_pool_start, this_pool_end = pool_start, n_windows
-            else:
-                if explicit_pool_placement:
-                    # Upward extension: extend from previous round's end
-                    this_pool_start = pool_floor
-                    this_pool_end = min(pool_floor + this_pool_size, n_windows)
-                else:
-                    # Downward extension (tail mode): march downward from tail
-                    this_pool_end = pool_floor
-                    this_pool_start = max(disjoint_lower_bound, this_pool_end - this_pool_size)
-
-            pool_indices = list(range(this_pool_start, this_pool_end))
-            if not pool_indices:
-                raise SystemExit(
-                    "W2_DECONTAM_POOL_EXHAUSTED: ran out of training-disjoint window "
-                    f"indices before assembling {batch_size} clean windows "
-                    f"(selected {len(selected_rows)}).")
-
-            # Fail-closed guard: pool materialized at once must be sane (bounded by pool_size * 100)
-            max_allowed_pool = batch_size * pool_oversample * 100
-            if len(pool_indices) > max_allowed_pool:
-                raise SystemExit(
-                    f"W2_DECONTAM_POOL_RANGE_INSANE: round {round_no} pool size "
-                    f"{len(pool_indices)} exceeds safety bound {max_allowed_pool} "
-                    f"(batch_size={batch_size}, pool_oversample={pool_oversample}). "
-                    f"This indicates a bug in pool placement logic.")
-
-            # Fail-closed disjointness proof for the FULL range actually drawn
-            # this round (not just the initial reserve_pool call).
-            round_disjoint_check = assert_disjoint_from_training(this_pool_start, ceiling_steps, train_batch)
-
-            candidate_rows = [read_window_tokens(shard_dir, files, cum, seq, block_len, i)
-                               for i in pool_indices]
-            candidate_positions = [window_source_position(files, cum, seq, i) for i in pool_indices]
-
-            result = classify_candidates(candidate_rows, candidate_positions, shard_dir,
-                                          files=files, cum=cum, use_mp=use_mp,
-                                          n_workers=n_workers, progress_file=progress_file,
-                                          block_len=block_len, chunk_tokens=chunk_tokens,
-                                          dump_matches=dump_matches)
-            total_candidates_checked += len(pool_indices)
-
-            newly_clean = result["clean_idx"][:need]
-            for ci in newly_clean:
-                selected_rows.append(candidate_rows[ci])
-                selected_indices.append(pool_indices[ci])
-            replacements_made += len(result["contaminated_idx"])
-
-            rounds.append({
-                "round": round_no,
-                "pool_start": this_pool_start,
-                "pool_end": this_pool_end,
-                "pool_size": len(pool_indices),
-                "wall_s": result["wall_s"],
-                "n_contamination_recheck_calls": result["n_calls"],
-                "memory_split_occurred": result["split_occurred"],
-                "clean_found": len(result["clean_idx"]),
-                "contaminated_found": len(result["contaminated_idx"]),
-                "self_matches_excluded": result["self_matches_excluded"],
-                "disjoint_check": round_disjoint_check,
-            })
-
-            # Update pool_floor for next round: tail mode uses start, upward mode uses end
+        if round_no == 1:
             if explicit_pool_placement:
-                pool_floor = this_pool_end
+                # Explicit placement: start from pool_start_index, extend upward by pool_size
+                this_pool_start = pool_start
+                this_pool_end = min(pool_start + this_pool_size, n_windows)
             else:
-                pool_floor = this_pool_start
+                # Tail mode: original behavior (reserve the tail)
+                this_pool_start, this_pool_end = pool_start, n_windows
+        else:
+            if explicit_pool_placement:
+                # Upward extension: extend from previous round's end
+                this_pool_start = pool_floor
+                this_pool_end = min(pool_floor + this_pool_size, n_windows)
+            else:
+                # Downward extension (tail mode): march downward from tail
+                this_pool_end = pool_floor
+                this_pool_start = max(disjoint_lower_bound, this_pool_end - this_pool_size)
 
-        if len(selected_rows) < batch_size:
+        pool_indices = list(range(this_pool_start, this_pool_end))
+        if not pool_indices:
             raise SystemExit(
-                f"W2_DECONTAM_INSUFFICIENT_CLEAN_WINDOWS: found {len(selected_rows)} clean "
-                f"windows in {max_rounds} rounds ({total_candidates_checked} candidates "
-                f"checked), needed {batch_size}. Corpus may be too repetitive at "
-                f"window={CONTAMINATION_WINDOW_TOKENS} for a clean batch to exist under "
-                "the strict any-match convention.")
+                "W2_DECONTAM_POOL_EXHAUSTED: ran out of training-disjoint window "
+                f"indices before assembling {batch_size} clean windows "
+                f"(selected {len(selected_rows)}).")
 
-        # Final verification pass
-        final_positions = [window_source_position(files, cum, seq, i) for i in selected_indices]
-        final_check = classify_candidates(selected_rows, final_positions, shard_dir,
-                                           files=files, cum=cum, use_mp=use_mp,
-                                           n_workers=n_workers, progress_file=progress_file,
-                                           block_len=block_len, chunk_tokens=chunk_tokens,
-                                           dump_matches=dump_matches)
-        final_non_self_count = sum(len(m) for m in final_check["non_self_matches_by_candidate"])
+        # Fail-closed guard: pool materialized at once must be sane (bounded by pool_size * 100)
+        max_allowed_pool = batch_size * pool_oversample * 100
+        if len(pool_indices) > max_allowed_pool:
+            raise SystemExit(
+                f"W2_DECONTAM_POOL_RANGE_INSANE: round {round_no} pool size "
+                f"{len(pool_indices)} exceeds safety bound {max_allowed_pool} "
+                f"(batch_size={batch_size}, pool_oversample={pool_oversample}). "
+                f"This indicates a bug in pool placement logic.")
 
-        sha = batch_sha256(selected_rows, seq)
-        wall_total = round(time.perf_counter() - t_start, 3)
+        # Fail-closed disjointness proof for the FULL range actually drawn
+        # this round (not just the initial reserve_pool call).
+        round_disjoint_check = assert_disjoint_from_training(this_pool_start, ceiling_steps, train_batch)
 
-        return {
-            "shard_dir": shard_dir,
-            "seq": seq,
-            "n_mtp": n_mtp,
-            "batch_size": batch_size,
-            "block_len": block_len,
-            "ceiling_steps": ceiling_steps,
-            "train_batch": train_batch,
-            "n_windows_total": n_windows,
-            "pool_reservation": {"pool_start": pool_start, "pool_size": pool_size,
-                                  "disjoint_check": disjoint_check},
-            "rounds": rounds,
-            "replacements_made": replacements_made,
-            "total_candidates_checked": total_candidates_checked,
-            "selected_window_indices": selected_indices,
-            "selected_rows": selected_rows,
-            "batch_sha256": sha,
-            "contamination_recheck": {
-                "method": final_check["raw"]["method"],
-                "shards_scanned": final_check["raw"]["shards_scanned"],
-                "windows_hashed": final_check["raw"]["windows_hashed"],
-                "self_matches_excluded_as_expected": final_check["self_matches_excluded"],
-                "confirmed_non_self_matches": final_non_self_count,
-                "verdict": "CLEAN" if final_non_self_count == 0 else "CONTAMINATED",
-            },
-            "wall_s_total": wall_total,
-        }
-    except BaseException as exc:
-        if receipt_dir:
-            try:
-                _write_crash_receipt(
-                    exc, rounds=rounds, receipt_dir=receipt_dir,
-                    wall_s_at_crash=round(time.perf_counter() - t_start, 3),
-                    total_candidates_checked=total_candidates_checked,
-                    replacements_made=replacements_made,
-                    selected_so_far=len(selected_rows))
-            except Exception:
-                # Best-effort: never let a failure to WRITE the crash receipt
-                # mask the original exception.
-                pass
-        raise
+        candidate_rows = [read_window_tokens(shard_dir, files, cum, seq, block_len, i)
+                           for i in pool_indices]
+        candidate_positions = [window_source_position(files, cum, seq, i) for i in pool_indices]
 
+        result = classify_candidates(candidate_rows, candidate_positions, shard_dir,
+                                      files=files, cum=cum, use_mp=use_mp,
+                                      n_workers=n_workers, progress_file=progress_file,
+                                      block_len=block_len, chunk_tokens=chunk_tokens)
+        total_candidates_checked += len(pool_indices)
 
-def _write_crash_receipt(exc: BaseException, *, rounds: list[dict] | None = None,
-                          receipt_dir: str, wall_s_at_crash: float = 0.0,
-                          total_candidates_checked: int = 0, replacements_made: int = 0,
-                          selected_so_far: int = 0, source: str = "build_batch") -> str:
-    """Fail-closed terminal receipt (issue #193 run-8 post-mortem): a run that
-    dies -- whether a deliberate SystemExit (POOL_EXHAUSTED, INSUFFICIENT_CLEAN_
-    WINDOWS, ...) or a genuinely uncaught exception -- must NEVER leave zero
-    on-disk trace. Run-8 crashed after ~98 minutes with no receipt, no batch
-    file, and no captured stdout/stderr; the only reconstruction path was
-    after-the-fact heartbeat-file forensics. This receipt is written from
-    INSIDE build_batch's except clause, so it has the real partial round
-    ledger even when the failure happens mid-round.
+        newly_clean = result["clean_idx"][:need]
+        for ci in newly_clean:
+            selected_rows.append(candidate_rows[ci])
+            selected_indices.append(pool_indices[ci])
+        replacements_made += len(result["contaminated_idx"])
 
-    relaunch-6 post-mortem (issue #193, 2026-07-07): this wrap existed and
-    covers this exact call path (probe-verified), yet no receipt appeared on
-    disk for the real crash -- the leading hypothesis is that the write
-    ITSELF silently failed under the same memory exhaustion that caused the
-    crash (this function's own try/except Exception at the call site
-    swallowed a secondary MemoryError with zero trace). Defense in depth:
-    try the full pretty JSON, fall back to compact JSON, fall back to a bare
-    plain-text line -- each cheaper than the last, so at least ONE survives
-    even if the box is critically starved at the exact moment of the crash.
-    `source` distinguishes this receipt from build_batch's own inner-wrap
-    receipt when main()'s outer wrap (order-B(i)) is the one writing it."""
-    os.makedirs(receipt_dir, exist_ok=True)
-    ts = _utc_ts()
-    receipt = {
-        "schema": "w2-heldout-decontam-crashed/v1",
-        "ts": ts,
-        "status": "CRASHED",
-        "source": source,
-        "exception_type": type(exc).__name__,
-        "exception_message": str(exc),
-        "traceback": traceback.format_exc(),
-        "rounds_completed": len(rounds or []),
-        "rounds": rounds or [],
-        "wall_s_at_crash": wall_s_at_crash,
-        "total_candidates_checked": total_candidates_checked,
+        rounds.append({
+            "round": round_no,
+            "pool_start": this_pool_start,
+            "pool_end": this_pool_end,
+            "pool_size": len(pool_indices),
+            "wall_s": result["wall_s"],
+            "n_contamination_recheck_calls": result["n_calls"],
+            "memory_split_occurred": result["split_occurred"],
+            "clean_found": len(result["clean_idx"]),
+            "contaminated_found": len(result["contaminated_idx"]),
+            "self_matches_excluded": result["self_matches_excluded"],
+            "disjoint_check": round_disjoint_check,
+        })
+
+        # Update pool_floor for next round: tail mode uses start, upward mode uses end
+        if explicit_pool_placement:
+            pool_floor = this_pool_end
+        else:
+            pool_floor = this_pool_start
+
+    if len(selected_rows) < batch_size:
+        raise SystemExit(
+            f"W2_DECONTAM_INSUFFICIENT_CLEAN_WINDOWS: found {len(selected_rows)} clean "
+            f"windows in {max_rounds} rounds ({total_candidates_checked} candidates "
+            f"checked), needed {batch_size}. Corpus may be too repetitive at "
+            f"window={CONTAMINATION_WINDOW_TOKENS} for a clean batch to exist under "
+            "the strict any-match convention.")
+
+    # Final verification pass
+    final_positions = [window_source_position(files, cum, seq, i) for i in selected_indices]
+    final_check = classify_candidates(selected_rows, final_positions, shard_dir,
+                                       files=files, cum=cum, use_mp=use_mp,
+                                       n_workers=n_workers, progress_file=progress_file,
+                                       block_len=block_len, chunk_tokens=chunk_tokens)
+    final_non_self_count = sum(len(m) for m in final_check["non_self_matches_by_candidate"])
+
+    sha = batch_sha256(selected_rows, seq)
+    wall_total = round(time.perf_counter() - t_start, 3)
+
+    return {
+        "shard_dir": shard_dir,
+        "seq": seq,
+        "n_mtp": n_mtp,
+        "batch_size": batch_size,
+        "block_len": block_len,
+        "ceiling_steps": ceiling_steps,
+        "train_batch": train_batch,
+        "n_windows_total": n_windows,
+        "pool_reservation": {"pool_start": pool_start, "pool_size": pool_size,
+                              "disjoint_check": disjoint_check},
+        "rounds": rounds,
         "replacements_made": replacements_made,
-        "selected_windows_so_far": selected_so_far,
+        "total_candidates_checked": total_candidates_checked,
+        "selected_window_indices": selected_indices,
+        "selected_rows": selected_rows,
+        "batch_sha256": sha,
+        "contamination_recheck": {
+            "method": final_check["raw"]["method"],
+            "shards_scanned": final_check["raw"]["shards_scanned"],
+            "windows_hashed": final_check["raw"]["windows_hashed"],
+            "self_matches_excluded_as_expected": final_check["self_matches_excluded"],
+            "confirmed_non_self_matches": final_non_self_count,
+            "verdict": "CLEAN" if final_non_self_count == 0 else "CONTAMINATED",
+        },
+        "wall_s_total": wall_total,
     }
-    path = os.path.join(receipt_dir, f"w2-heldout-decontam-CRASHED-{ts}.json")
-    try:
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(receipt, fh, indent=2)
-        return path
-    except Exception:
-        pass
-    try:
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(receipt, fh)  # compact: no indent scratch buffer
-        return path
-    except Exception:
-        pass
-    # Last-resort floor: a single plain-text line, no json module scratch
-    # allocation at all beyond the string itself.
-    fallback_path = os.path.join(receipt_dir, f"w2-heldout-decontam-CRASHED-{ts}.txt")
-    with open(fallback_path, "w", encoding="utf-8") as fh:
-        fh.write(f"CRASHED source={source} ts={ts} type={type(exc).__name__} "
-                 f"msg={exc} rounds_completed={len(rounds or [])} "
-                 f"total_candidates_checked={total_candidates_checked}\n")
-    return fallback_path
 
 
 def write_receipt(result: dict, *, receipt_dir: str = RECEIPT_DIR) -> str:
@@ -1686,21 +1358,10 @@ def main():
                     help="Override pool start index for explicit placement (e.g. mid-corpus; default: tail placement via held_out_window_start). Rounds extend UPWARD from this index; omit for tail mode (rounds extend DOWNWARD).")
     ap.add_argument("--dump-matches", type=str, default=None,
                     help="Optional JSONL file to dump matched contamination records (one per line)")
-    ap.add_argument("--progress-file", type=str, default=None,
-                    help="Optional JSONL file for worker heartbeats (one per chunk per worker). Auto-generated if omitted.")
-    ap.add_argument("--lock-file", type=str, default=None,
-                    help="Override the singleton-lock path. Needed when running a copy of this "
-                         "script from a different checkout/worktree than another instance you "
-                         "want to mutually exclude against -- the default lock path is derived "
-                         "from THIS file's own location, so two checkouts don't see each other's "
-                         "lock unless pointed at the same path explicitly.")
     args = ap.parse_args()
 
     if not args.shard_dir:
         raise SystemExit("W2_DECONTAM_SHARD_DIR_REQUIRED")
-
-    # Check singleton lock before any work
-    _check_singleton_lock(lock_file=args.lock_file)
 
     # Preflight checks
     total_commit, free_commit = _preflight_check_commit()
@@ -1732,88 +1393,53 @@ def main():
         print()
 
     # Setup progress file
-    if args.progress_file:
-        progress_file = args.progress_file
-        os.makedirs(os.path.dirname(progress_file) or ".", exist_ok=True)
-    else:
-        run_dir = os.path.join(REPO_ROOT, "scratch", "w2-heldout-run")
-        os.makedirs(run_dir, exist_ok=True)
-        ts = _utc_ts()
-        progress_file = os.path.join(run_dir, f"mp-progress-{ts}.jsonl")
+    run_dir = os.path.join(REPO_ROOT, "scratch", "w2-heldout-run")
+    os.makedirs(run_dir, exist_ok=True)
+    ts = _utc_ts()
+    progress_file = os.path.join(run_dir, f"mp-progress-{ts}.jsonl")
 
     print(f"[LAUNCH] Starting build with {args.n_workers} workers")
     print(f"[LAUNCH] Progress file: {progress_file}")
     print()
 
-    # issue #193 relaunch-6 post-mortem: build_batch's OWN internal wrap
-    # covers this call (probe-verified) yet the real crash left no receipt --
-    # leading hypothesis is the inner wrap's receipt write silently failed
-    # under the same memory exhaustion that caused the crash. This OUTER
-    # wrap is a second, independent chance: it fires on ANY exit path from
-    # here through the final summary print (write_batch_file/write_receipt
-    # are also in scope -- a failure there was previously receiptless too),
-    # and skips writing only if a receipt already landed in the last few
-    # seconds (avoids double-receipting the common case where the inner
-    # wrap succeeded).
-    _main_wrap_t0 = time.perf_counter()
-    try:
-        result = build_batch(shard_dir=args.shard_dir, seq=args.seq, n_mtp=args.n_mtp,
-                              batch_size=args.batch_size, ceiling_steps=args.ceiling_steps,
-                              train_batch=args.train_batch, pool_oversample=args.pool_oversample,
-                              max_rounds=args.max_rounds,
-                              use_mp=not args.serial_only,
-                              n_workers=args.n_workers,
-                              progress_file=progress_file,
-                              chunk_tokens=args.scan_chunk_tokens,
-                              pool_start_index=args.pool_start_index,
-                              dump_matches=args.dump_matches,
-                              receipt_dir=args.receipt_dir)
+    result = build_batch(shard_dir=args.shard_dir, seq=args.seq, n_mtp=args.n_mtp,
+                          batch_size=args.batch_size, ceiling_steps=args.ceiling_steps,
+                          train_batch=args.train_batch, pool_oversample=args.pool_oversample,
+                          max_rounds=args.max_rounds,
+                          use_mp=not args.serial_only,
+                          n_workers=args.n_workers,
+                          progress_file=progress_file,
+                          chunk_tokens=args.scan_chunk_tokens,
+                          pool_start_index=args.pool_start_index)
 
-        write_batch_file(result, out_path=args.out_batch)
-        receipt_path = write_receipt(result, receipt_dir=args.receipt_dir)
+    write_batch_file(result, out_path=args.out_batch)
+    receipt_path = write_receipt(result, receipt_dir=args.receipt_dir)
 
-        # Matches (if --dump-matches was given) were already written directly by
-        # build_batch()/contamination_recheck_mp() as they were found -- each
-        # round's real corpus scan appends its own matches to args.dump_matches.
-        # (Previously this block re-read result["contamination_recheck"]["confirmed_matches"],
-        # a key that dict never contained -- see fix note above contamination_recheck_mp's
-        # dump_matches write. That always silently produced a 0-line file.)
-        if args.dump_matches and os.path.exists(args.dump_matches):
-            with open(args.dump_matches, "r", encoding="utf-8") as f:
-                match_count = sum(1 for _ in f)
-            print(f"[DUMP] {match_count} matches written to {args.dump_matches}")
+    # Dump matches to JSONL if requested
+    if args.dump_matches:
+        os.makedirs(os.path.dirname(args.dump_matches) or ".", exist_ok=True)
+        match_count = 0
+        with open(args.dump_matches, "w") as f:
+            for match in result.get("contamination_recheck", {}).get("confirmed_matches", []):
+                row = {
+                    "shard": match.get("shard"),
+                    "offset": match.get("offset"),
+                    "match_len_tokens": 13,
+                    "window_idx": match.get("offset"),
+                    "basis": "v1-any-match"
+                }
+                f.write(json.dumps(row) + "\n")
+                match_count += 1
+        print(f"[DUMP] {match_count} matches written to {args.dump_matches}")
 
-        print(f"batch_size={result['batch_size']} "
-              f"windows_checked={result['total_candidates_checked']} "
-              f"replacements_made={result['replacements_made']} "
-              f"contamination_recheck={result['contamination_recheck']['confirmed_non_self_matches']} "
-              f"wall_s_total={result['wall_s_total']} "
-              f"receipt={receipt_path} "
-              f"batch_file={args.out_batch} "
-              f"exit=PASS")
-    except BaseException as exc:
-        receipt_dir = args.receipt_dir
-        already_receipted = False
-        try:
-            if receipt_dir and os.path.isdir(receipt_dir):
-                now = time.time()
-                for fn in os.listdir(receipt_dir):
-                    if fn.startswith("w2-heldout-decontam-CRASHED-"):
-                        fpath = os.path.join(receipt_dir, fn)
-                        if (now - os.path.getmtime(fpath)) < 30:
-                            already_receipted = True
-                            break
-        except Exception:
-            pass
-        if not already_receipted:
-            try:
-                _write_crash_receipt(
-                    exc, receipt_dir=receipt_dir,
-                    wall_s_at_crash=round(time.perf_counter() - _main_wrap_t0, 3),
-                    source="main_wrap")
-            except Exception:
-                pass
-        raise
+    print(f"batch_size={result['batch_size']} "
+          f"windows_checked={result['total_candidates_checked']} "
+          f"replacements_made={result['replacements_made']} "
+          f"contamination_recheck={result['contamination_recheck']['confirmed_non_self_matches']} "
+          f"wall_s_total={result['wall_s_total']} "
+          f"receipt={receipt_path} "
+          f"batch_file={args.out_batch} "
+          f"exit=PASS")
 
 
 if __name__ == "__main__":
