@@ -142,18 +142,28 @@ def _lock_holder_alive(pid: int) -> bool:
     return proc.is_running() and "build_decontam_batch_mp" in cmdline
 
 
-def _check_singleton_lock() -> None:
+def _check_singleton_lock(lock_file: str | None = None) -> None:
     """Refuse to start if another build_decontam_batch_mp.py is running.
 
     Atomic: acquires the lock via O_CREAT|O_EXCL (single winner even under a
     race), verifies a losing process is dead before reclaiming, retries a
-    bounded number of times to resolve stale-lock churn."""
-    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    bounded number of times to resolve stale-lock churn.
+
+    NOTE: LOCK_FILE is derived from this module's own __file__ location (via
+    REPO_ROOT), so a copy of this script running out of a git worktree
+    resolves a DIFFERENT lock path than a copy running from the main repo
+    checkout -- two worktree copies do NOT see each other's lock by default.
+    Pass an explicit lock_file (or --lock-file at the CLI) pointing at the
+    shared repo's scratch dir when you need genuine cross-checkout mutual
+    exclusion (e.g. a worktree-launched relaunch that must refuse while a
+    main-checkout run is still alive)."""
+    target = lock_file or LOCK_FILE
+    os.makedirs(os.path.dirname(target), exist_ok=True)
     my_pid = os.getpid()
 
     for _ in range(5):
         try:
-            fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             with os.fdopen(fd, "w") as f:
                 f.write(str(my_pid))
             return
@@ -161,7 +171,7 @@ def _check_singleton_lock() -> None:
             pass
 
         try:
-            with open(LOCK_FILE, "r") as f:
+            with open(target, "r") as f:
                 existing_pid = int(f.read().strip())
         except (ValueError, IOError):
             existing_pid = None
@@ -174,7 +184,7 @@ def _check_singleton_lock() -> None:
 
         # Stale lock (dead PID, unrelated process, or corrupted content) -- reclaim.
         try:
-            os.remove(LOCK_FILE)
+            os.remove(target)
         except OSError:
             pass
 
@@ -1449,13 +1459,19 @@ def main():
                     help="Optional JSONL file to dump matched contamination records (one per line)")
     ap.add_argument("--progress-file", type=str, default=None,
                     help="Optional JSONL file for worker heartbeats (one per chunk per worker). Auto-generated if omitted.")
+    ap.add_argument("--lock-file", type=str, default=None,
+                    help="Override the singleton-lock path. Needed when running a copy of this "
+                         "script from a different checkout/worktree than another instance you "
+                         "want to mutually exclude against -- the default lock path is derived "
+                         "from THIS file's own location, so two checkouts don't see each other's "
+                         "lock unless pointed at the same path explicitly.")
     args = ap.parse_args()
 
     if not args.shard_dir:
         raise SystemExit("W2_DECONTAM_SHARD_DIR_REQUIRED")
 
     # Check singleton lock before any work
-    _check_singleton_lock()
+    _check_singleton_lock(lock_file=args.lock_file)
 
     # Preflight checks
     total_commit, free_commit = _preflight_check_commit()
