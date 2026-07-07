@@ -199,8 +199,17 @@ def scan(root: str, min_ts: "str | None") -> tuple[str, str]:
             "vacuously no BitNet-comparison incident in the audited window"
         )
 
-    # Pick the newest receipt by mtime; that is the live cursor.
-    receipt_paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    # Pick the newest receipt by canonical timestamp, not mtime (which can be
+    # refreshed by git checkout). Extract timestamp from path or receipt content.
+    def _sort_key(path: str) -> str:
+        try:
+            obj = _load_json(path)
+        except Exception:
+            obj = None
+        ts = _receipt_ts(path, obj)
+        return ts if ts is not None else ""
+
+    receipt_paths.sort(key=_sort_key, reverse=True)
 
     # We accept the FIRST receipt (newest-first) that cleanly PASSes the full
     # positive CHK with a real neural C14 gate -> AUDIT-OK. A well-formed
