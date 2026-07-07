@@ -1,0 +1,15 @@
+{
+  "ticket": "C-BASE-VOID",
+  "ts": "2026-07-07T06:48:00Z",
+  "verdict": "VOID",
+  "supersedes": [
+    {
+      "filename": "cbase-gpu-verify-REAL-20260707T063919Z.json",
+      "sha256": "0ed7dc19fa9e0007"
+    }
+  ],
+  "reason": "Wrong-verdict receipt: body is HONEST (forward_implementation states 'embedding + head weight projection only (INCOMPLETE - missing 20 transformer layers)'; diagnosis states 'loss at random baseline indicates incomplete implementation'; losses 10.31-10.375 at the ln(32000) floor) but the verdict field says PASS - a downstream probe consuming verdict would read verification where the receipt's own diagnosis denies it. Not fabrication-class (telemetry real: sha-verified load, 185 state-dict keys, CUDA 2.52GB peak, real uint16 shard data) - the checkpoint-loading and data-loading halves of this receipt are genuine progress. Voided for the verdict/diagnosis contradiction only.",
+  "cites": [
+    "cbase-gpu-verify-VOID2-20260707T054500Z.json"
+  ]
+}

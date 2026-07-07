@@ -1,0 +1,71 @@
+{
+  "ticket": "CBASE-VERIFY-ATTEMPT-3",
+  "ts": "2026-07-07T07:38:43.255128Z",
+  "checkpoint_path": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+  "checkpoint_sha": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+  "expected_sha": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+  "sha_match": true,
+  "model_code_path": "<REPO_ROOT>/scripts/timeshare_pretrain.py build_v0_model() line ~460",
+  "model_code_git_provenance": "ember repo (public wordingone/ember)",
+  "eval_batches": 10,
+  "per_batch_losses": [
+    6.5872802734375,
+    6.336582660675049,
+    8.069329261779785,
+    6.720792770385742,
+    7.477339744567871,
+    6.033032417297363,
+    6.821501731872559,
+    6.364552974700928,
+    7.120275497436523,
+    5.431121349334717
+  ],
+  "mean_loss": 6.6961808681488035,
+  "loss_std": 0.7059179658016081,
+  "vram_peaks_gb": [
+    5.29863936,
+    5.568259072,
+    5.568259072,
+    5.568259072,
+    5.568259072,
+    5.568259072,
+    5.568259072,
+    5.568259072,
+    5.568259072,
+    5.568259072
+  ],
+  "vram_peak_max_gb": 5.568259072,
+  "vram_fraction_of_total": 0.2161868489450811,
+  "config": {
+    "vocab": 32000,
+    "hidden": 1024,
+    "layers": 20,
+    "heads": 16,
+    "seq": 1024,
+    "mtp_heads": 2
+  },
+  "self_checks": {
+    "mean_loss_single_digits": 1.0,
+    "mean_loss_above_threshold": 1.0,
+    "vram_peak_minimum": 1.0,
+    "losses_varied": 1.0,
+    "vram_fraction_cap": 1.0,
+    "ram_margin": 1.0
+  },
+  "verdict": "PASS",
+  "provenance_notes": [
+    "Checkpoint loaded with strict=True (no missing/unexpected keys)",
+    "Model code from timeshare_pretrain.py build_v0_model (used by cbase_grow_rung.py trainer)",
+    "Data from real shards-v0 uint16 binary files",
+    "No hand-rolled transformer forward \u2014 using repo's own model class",
+    "Data->weights lineage: shard training lineage TBD (marked open for attestation)"
+  ],
+  "redaction": {
+    "redacted_fields": [
+      "model_code_path"
+    ],
+    "original_sha256": "ee82e507a492cf47a8101ae52a330ac2e6a2b8ec5dafe70738b0fa1de26a3b86",
+    "reason": "custody: founder-scoped local paths",
+    "redaction_ts": "2026-07-07T18:48:51.361773Z"
+  }
+}
