@@ -1,0 +1,32 @@
+{
+  "ticket": "W1B-FP32-REEVAL-CHECK",
+  "issue": "#355",
+  "schema": "w1b-fp32-check/v1",
+  "w1b_terminal_receipt_ref": "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json",
+  "method": "All model/eval code imported from scripts/w1_collapse_control_run.py and scripts/timeshare_pretrain.py, never reimplemented. eval_loss_fn is the SAME function both arms and both dtypes use; only the model's parameter dtype differs between the bf16 and fp32 evals of a given arm. Certified eval batch rebuilt via rebuild_batch_from_decontam_receipt() over the same --shard-dir and w2-heldout-decontam receipt the W1b live run used; its sha256 asserted equal to the certified capability_point.eval_batch_sha256 before any loss was computed.",
+  "certified_batch_check": {
+    "eval_batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+    "matches_expected_certified_sha": true
+  },
+  "grown_766_arm": {
+    "checkpoint_dir": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+    "eval_loss_bf16": 9.375,
+    "eval_loss_fp32": 9.3680419921875,
+    "fp32_minus_bf16": -0.0069580078125
+  },
+  "seed_610_arm": {
+    "checkpoint_dir": "models/cbase-smoke-run/checkpoints/step-00000610",
+    "eval_loss_bf16": 9.375,
+    "eval_loss_fp32": 9.404376983642578,
+    "fp32_minus_bf16": 0.029376983642578125
+  },
+  "margins": {
+    "bf16_margin_grown_minus_seed": 0.0,
+    "fp32_margin_grown_minus_seed": -0.036334991455078125
+  },
+  "seeds": 1,
+  "seed_sensitivity_unmeasured": true,
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "verdict_language": "None -- this receipt reports measured numbers only. No pass/fail, significance, or collapse-claim language is asserted here; reading against #355's pre-registered rules is out of this receipt's scope."
+}
