@@ -387,11 +387,15 @@ def _last_receipt_combined_sha256(receipts_dir):
     names = [n for n in os.listdir(receipts_dir) if _RECEIPT_NAME_RE.match(n)]
     if not names:
         return None, None
-    # mtime, not name order: receipt 20260702T131845Z was stamped from a
-    # non-UTC clock by its producing run and sorts AFTER genuinely newer
-    # receipts -- name-ordered chronology would compare future runs against
-    # the wrong baseline and fire spurious unpaired_baseline_flip incidents.
-    last = max(names, key=lambda n: os.path.getmtime(os.path.join(receipts_dir, n)))
+    # Select by canonical timestamp from filename (YYYYMMDDTHHMMSSZ), not mtime.
+    # mtime can be inverted by git checkout <sha> -- <paths> refreshing tracked
+    # files' mtimes; the filename timestamp is the authoritative source of
+    # receipt chronology (defect incident 2026-07-07: older-named receipt had
+    # newer mtime, causing prev-selection to skip newer receipts).
+    def extract_timestamp(name):
+        m = _RECEIPT_NAME_RE.match(name)
+        return m.group(1) if m else ""
+    last = max(names, key=extract_timestamp)
     try:
         with open(os.path.join(receipts_dir, last), "r", encoding="utf-8") as fh:
             d = json.load(fh)
@@ -925,14 +929,21 @@ def main():
 
     # Compute chain link: hash of previous totality receipt (F4 FORK-TEST requirement)
     def _get_prev_receipt_sha256(receipts_dir):
-        """Get sha256 hash of the previous totality receipt file (entire JSON), or None."""
+        """Get sha256 hash of the previous totality receipt file (entire JSON), or None.
+
+        Selects prev by canonical timestamp from filename (YYYYMMDDTHHMMSSZ), not mtime,
+        to match the fixed _last_receipt_combined_sha256 logic.
+        """
         if not os.path.isdir(receipts_dir):
             return None
         names = [n for n in os.listdir(receipts_dir) if _RECEIPT_NAME_RE.match(n)]
         if not names:
             return None
-        # Use same mtime-based ordering as _last_receipt_combined_sha256
-        last = max(names, key=lambda n: os.path.getmtime(os.path.join(receipts_dir, n)))
+        # Select by canonical timestamp from filename, not mtime
+        def extract_timestamp(name):
+            m = _RECEIPT_NAME_RE.match(name)
+            return m.group(1) if m else ""
+        last = max(names, key=extract_timestamp)
         receipt_path = os.path.join(receipts_dir, last)
         try:
             with open(receipt_path, "rb") as fh:
