@@ -11,6 +11,7 @@
 // on the first ": " rather than adding a new field to the shared Claim shape.
 
 import type { Claim, EmberWorldState } from "./ember-world-state.ts";
+import { formatReceiptAge, isReceiptStale } from "./receipt-age.ts";
 import { color as tokenColor } from "../components/design-system.ts";
 
 // ---------------------------------------------------------------------------
@@ -297,8 +298,9 @@ function hexToAnsi24(hex: string): string {
 
 export interface MonitorPanelOptions extends MonitorRenderOptions {
   width: number;
+  boardTs?: string;  // ISO8601 timestamp of the board receipt
+  nowMs?: number;    // Current time in ms, for testing receipt age
 }
-
 /**
  * Wraps renderMonitor()'s existing (unchanged, still-tested) lines in a round-cornered bordered
  * panel using the Observatory identity color for the border -- the Step-A mockup3 visual
@@ -310,27 +312,63 @@ export interface MonitorPanelOptions extends MonitorRenderOptions {
  * mockup3's own rows always fit, so every rendered row must too.
  */
 export function renderMonitorPanel(state: EmberWorldState, opts: MonitorPanelOptions): string[] {
-  const { colorEnabled, width } = opts;
+  const { colorEnabled, width, boardTs, nowMs } = opts;
   const inner = renderMonitor(state, { colorEnabled });
   const borderColor = hexToAnsi24(tokenColor("identity", "fg", "dark"));
+  const warningColor = ANSI.red; // Red for stale badge
   const h = "─".repeat(Math.max(0, width - 2));
   const innerWidth = Math.max(0, width - 4);
 
   const top    = colorEnabled ? `${borderColor}╭${h}╮${ANSI.reset}` : `╭${h}╮`;
   const bottom = colorEnabled ? `${borderColor}╰${h}╯${ANSI.reset}` : `╰${h}╯`;
 
-  const body = inner.map((rawLine) => {
+  // Build the header line with receipt age if boardTs is provided
+  let headerLine = "";
+  if (boardTs) {
+    const age = formatReceiptAge(boardTs, nowMs);
+    const stale = isReceiptStale(boardTs, nowMs);
+    const badge = stale ? `${warningColor}STALE${ANSI.reset}` : "board";
+    headerLine = `${badge}: ${age}`;
+    
+    // Ensure the header fits within the inner width
+    const headerWidth = visiblePanelWidth(headerLine);
+    if (headerWidth > innerWidth) {
+      // Truncate the header if it's too long
+      headerLine = truncateAnsiLineToWidth(headerLine, innerWidth);
+    }
+  }
+
+  // Build the body lines with padding
+  const bodyLines: string[] = [];
+  
+  // Add header line if present
+  if (headerLine) {
+    const contentWidth = visiblePanelWidth(headerLine);
+    const padWidth = Math.max(0, innerWidth - contentWidth);
+    const padded = `${headerLine}${" ".repeat(padWidth)}`;
+    if (!colorEnabled) {
+      bodyLines.push(`│ ${padded} │`);
+    } else {
+      bodyLines.push(`${borderColor}│${ANSI.reset} ${padded} ${borderColor}│${ANSI.reset}`);
+    }
+  }
+
+  // Add condition lines
+  for (const rawLine of inner) {
     const line = visiblePanelWidth(rawLine) > innerWidth
       ? truncateAnsiLineToWidth(rawLine, innerWidth)
       : rawLine;
     const contentWidth = visiblePanelWidth(line);
     const padWidth = Math.max(0, innerWidth - contentWidth);
     const padded = `${line}${" ".repeat(padWidth)}`;
-    if (!colorEnabled) return `│ ${padded} │`;
-    return `${borderColor}│${ANSI.reset} ${padded} ${borderColor}│${ANSI.reset}`;
-  });
+    if (!colorEnabled) {
+      bodyLines.push(`│ ${padded} │`);
+    } else {
+      bodyLines.push(`${borderColor}│${ANSI.reset} ${padded} ${borderColor}│${ANSI.reset}`);
+    }
+  }
 
-  return [top, ...body, bottom];
+  return [top, ...bodyLines, bottom];
 }
 
 /** Visible-cell width of a string: strips ANSI SGR escapes first, then counts Unicode codepoints
