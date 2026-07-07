@@ -376,14 +376,21 @@ def test_main_dryrun_manifest_mode_receipt_write_does_not_crash():
     crash exactly. After the fix it must return 0 and the written receipt's
     real_lineage_reference must disclose rung_provenance_mode="manifest",
     the manifest path, and a real sha256 -- never touching
-    DEFAULT_RUNG_RECEIPT's broken path at all."""
+    DEFAULT_RUNG_RECEIPT's broken path at all.
+
+    Fresh-clone fixture (issue #368): uses committed
+    scripts/tests/fixtures/w1-pricing-fixture-minimal.json so the test
+    passes on any fresh clone without machine-local files."""
     assert not os.path.exists(DEFAULT_RUNG_RECEIPT), (
         "fixture assumption: DEFAULT_RUNG_RECEIPT must NOT exist in this "
         "worktree (the real condition attempt 2 crashed under) -- if this "
         "ever exists, the test is no longer proving the crash class")
-    assert os.path.exists(DEFAULT_PRICING_RECEIPT), (
-        "fixture assumption: the real (read-only, never written to) "
-        "pricing receipt must exist for main()'s dry-run branch to load")
+
+    # Use committed fixture for fresh-clone reproducibility (issue #368)
+    pricing_receipt_path = os.path.join(
+        HERE, "tests", "fixtures", "w1-pricing-fixture-minimal.json")
+    assert os.path.exists(pricing_receipt_path), (
+        f"fixture must exist: {pricing_receipt_path}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         ckpt_dir = os.path.join(tmpdir, "step-00000001")
@@ -408,8 +415,10 @@ def test_main_dryrun_manifest_mode_receipt_write_does_not_crash():
         written_path = None
         try:
             rc = w1_main([
+                "--pricing-receipt", pricing_receipt_path,
                 "--rung-manifest", manifest_path,
                 "--out-dir", out_dir,
+                "--receipts-out-dir", receipts_dir_repo,
                 "--phase1-train-steps", "2",
                 "--ceiling-steps", "2",
                 "--eval-every", "1",
@@ -428,7 +437,17 @@ def test_main_dryrun_manifest_mode_receipt_write_does_not_crash():
                 receipt = json.load(f)
             ref = receipt["real_lineage_reference"]
             assert ref["rung_provenance_mode"] == "manifest"
-            assert ref["rung_provenance_path"] == manifest_path
+            # On Windows, tempfile.TemporaryDirectory() defaults to C: drive,
+            # while the repo is on B: -- cross-drive paths are sanitized to
+            # 'external:<basename>' format per repo_relative_path (issue #361
+            # fix-forward). Verify the path is safely recorded (either
+            # repo-relative for in-repo paths, or external:<name> for out-of-
+            # repo ones), never the raw absolute path.
+            assert (ref["rung_provenance_path"] == manifest_path or
+                    ref["rung_provenance_path"].startswith("external:")), (
+                f"rung_provenance_path must be either the original path (if "
+                f"in-repo) or sanitized to 'external:' format (if cross-drive), "
+                f"never a raw absolute path: {ref['rung_provenance_path']!r}")
             assert len(ref["rung_provenance_sha256"]) == 64
             assert "rung_receipt_path" not in ref
             assert "rung_receipt_sha256" not in ref
