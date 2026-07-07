@@ -5,7 +5,7 @@
   "checkpoint_sha": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
   "expected_sha": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
   "sha_match": true,
-  "model_code_path": "B:/M/ember/scripts/timeshare_pretrain.py build_v0_model() line ~460",
+  "model_code_path": "<REPO_ROOT>/scripts/timeshare_pretrain.py build_v0_model() line ~460",
   "model_code_git_provenance": "ember repo (public wordingone/ember)",
   "eval_batches": 10,
   "per_batch_losses": [
@@ -59,5 +59,14 @@
     "Data from real shards-v0 uint16 binary files",
     "No hand-rolled transformer forward \u2014 using repo's own model class",
     "Data->weights lineage: shard training lineage TBD (marked open for attestation)"
-  ]
+  ],
+  "redaction": {
+    "redacted_fields": [
+      "B:/M/ember/scripts"
+    ],
+    "original_sha256": "47763cdc9f748a1c51d5a3ff0f7955825098dd41e3e0afa79be40fae613ee36d",
+    "reason": "public-repo name policy (founder-local paths)",
+    "redaction_ts": "2026-07-07T17:04:16.533168Z",
+    "transformation": "scripts/redact_receipt_paths.py"
+  }
 }

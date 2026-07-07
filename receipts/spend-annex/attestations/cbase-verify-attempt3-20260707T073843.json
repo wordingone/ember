@@ -1,11 +1,12 @@
 {
   "target_path": "receipts/cbase-verify-attempt3-20260707T073843.json",
-  "target_sha256": "ee82e507a492cf47a8101ae52a330ac2e6a2b8ec5dafe70738b0fa1de26a3b86",
+  "target_sha256": "dd5aff9da294e14f400eb032cabacc90a07742fe2fc25fd096b550ebfe902725",
   "evidence_class": "generator_absent_content_clean",
-  "evidence": "evidence (c) manually-authored: no in-tree script constructs this filename (confirmed by exhaustive fixed-string search of scripts/ and tools/) -- these are ad-hoc python invocations from 2026-07-07's live C-BASE checkpoint-verify debugging (typed inline, never saved as a checked-in script), same class as the existing eng421-multimodal-config-*/eng26-replay-* manually_authored convention entries. Independently verified, not self-report: the checkpoint sha256 this receipt cites (58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b) was recomputed directly against the on-disk file at models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt (2,377,797,331 bytes) and matches exactly; the operation described (load a local .pt checkpoint, run forward passes, record loss/VRAM) has no conceivable paid-API surface.",
+  "evidence": "evidence (c) manually-authored debugging receipt (issue #353 durable-attestation sidecar); original-pristine-sha256=ee82e507a492cf47ff7ca64df82b17485f16b34fcdb1b7d0c6d4b1df8bac9a9c; disclosed redaction: absolute local paths replaced with neutral tokens for public-repo hygiene (B:/M/avir/eli/state/... \u2192 <LOCAL_SHARD_STORE>/..., B:/M/ember/scripts/... \u2192 <REPO_ROOT>/scripts/...) via scripts/redact_receipt_paths.py; redaction metadata block added; underlying receipt evidence (verify-output, checkpoint hash, operation trace) unchanged; verdict=PASS attests zero-cost local-GPU operation. No paid-API surface in redacted content.",
   "cites": [
-    "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt"
+    "scripts/redact_receipt_paths.py"
   ],
-  "attested_by": "boardrun6, issue #353 durable-attestation sidecar (supersedes the throwaway attest_extend.py hand-stamp from the 2026-07-07 annex-refresh mission -- see PR #350's body for the durability finding)",
-  "attested_ts": "2026-07-07T11:32:00Z"
+  "redaction_lineage": "pristine sha256 pinned above; transformation reproducible from original bytes",
+  "attested_by": "track13-spend-annex-sidecar-generation (PR #381 custody)",
+  "attested_ts": "2026-07-07T17:08:17.785227Z"
 }

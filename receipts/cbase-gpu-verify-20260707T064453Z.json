@@ -22,7 +22,7 @@
   "eval_config": {
     "seq_len": 512,
     "num_batches": 10,
-    "data_source": "real shards B:/M/avir/eli/state/ember-eng/shards-v0"
+    "data_source": "real shards <LOCAL_SHARD_STORE>/shards-v0"
   },
   "results": {
     "batch_losses": [
@@ -59,5 +59,14 @@
     "Batch 8: loss=7.8876, VRAM=2.54GB",
     "Batch 9: loss=8.0972, VRAM=2.54GB"
   ],
-  "verdict": "INVESTIGATE"
+  "verdict": "INVESTIGATE",
+  "redaction": {
+    "redacted_fields": [
+      "B:/M/avir/eli/state/ember-eng/shards-v0"
+    ],
+    "original_sha256": "506d072c06c995450998e14b6b58745342b042363877b20a4f2335b83d770c1a",
+    "reason": "public-repo name policy (founder-local paths)",
+    "redaction_ts": "2026-07-07T17:04:16.417237Z",
+    "transformation": "scripts/redact_receipt_paths.py"
+  }
 }

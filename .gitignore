@@ -38,3 +38,4 @@ baseline/fragments/external-refs-*.jsonl
 
 # leak-gate runtime log artifact — never tracked (PR #293 fallback)
 tools/.leak-gate.log
+receipts-local/

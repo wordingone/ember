@@ -9,7 +9,7 @@
   "eval_config": {
     "seq_len": 512,
     "num_batches": 10,
-    "source": "real shards B:/M/avir/eli/state/ember-eng/shards-v0",
+    "source": "real shards <LOCAL_SHARD_STORE>/shards-v0",
     "forward_implementation": "embedding + head weight projection only (INCOMPLETE \u2014 missing 20 transformer layers)"
   },
   "results": {
@@ -51,5 +51,14 @@
     "Batch 9: loss=10.3750, VRAM=2.52GB"
   ],
   "diagnosis": "Checkpoint loaded successfully, real shard data evaluated on CUDA, but forward computation does not use transformer layers \u2014 loss at random baseline indicates incomplete implementation",
-  "verdict": "PASS"
+  "verdict": "PASS",
+  "redaction": {
+    "redacted_fields": [
+      "B:/M/avir/eli/state/ember-eng/shards-v0"
+    ],
+    "original_sha256": "4b6deda70787e400caefffe7a3966c0d7b2d0129e400ec3e41e05469321824c4",
+    "reason": "public-repo name policy (founder-local paths)",
+    "redaction_ts": "2026-07-07T17:04:16.476461Z",
+    "transformation": "scripts/redact_receipt_paths.py"
+  }
 }
