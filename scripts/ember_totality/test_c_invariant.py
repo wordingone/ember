@@ -140,17 +140,28 @@ def check_errata_structure() -> tuple[bool, str]:
     return True, "INVARIANT-ERRATA.md structure ready (genesis state)"
 
 
-def write_receipt(status: str, reason: str, breach: bool = False) -> None:
-    """Write the C-INV receipt to receipts/c-invariant-probe.json.
+def write_receipt(status: str, reason: str, breach: bool = False) -> str:
+    """Write timestamped C-INV receipt to scripts/ember_totality/receipts-c-invariant/<ts>.json.
+
+    The genesis snapshot at receipts/c-invariant-probe.json stays frozen (never rewritten).
+    All board runs write fresh timestamped receipts to scripts/ember_totality/receipts-c-invariant/
+    (outside the canonical receipts/ tree, mirroring receipts-totality/ pattern).
+
+    Returns:
+        Path to the written timestamped receipt file (repo-relative).
 
     Args:
         status: "GREEN" or "RED"
         reason: Human-readable reason
         breach: If True, sets invariant_breach:true and complete:false
     """
-    # Create receipts directory if needed
-    RECEIPTS.mkdir(parents=True, exist_ok=True)
+    # Create scripts/ember_totality/receipts-c-invariant directory for timestamped receipts
+    # (outside canonical receipts/ tree to avoid C-CUSTODY probe conflicts)
+    script_dir = Path(__file__).resolve().parent
+    c_inv_dir = script_dir / "receipts-c-invariant"
+    c_inv_dir.mkdir(parents=True, exist_ok=True)
 
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     receipt = {
         "probe": "c_invariant",
         "condition": "C-INV",
@@ -168,9 +179,14 @@ def write_receipt(status: str, reason: str, breach: bool = False) -> None:
     else:
         receipt["complete"] = status == "GREEN"
 
-    receipt_path = RECEIPTS / "c-invariant-probe.json"
-    with receipt_path.open("w") as f:
+    # Write timestamped receipt to scripts/ember_totality/receipts-c-invariant/c-invariant-probe-<ts>.json
+    receipt_path = c_inv_dir / f"c-invariant-probe-{ts}.json"
+    with receipt_path.open("w", encoding="utf-8") as f:
         json.dump(receipt, f, indent=2)
+        f.write("\n")
+
+    # Return repo-relative path for board receipt
+    return f"scripts/ember_totality/receipts-c-invariant/c-invariant-probe-{ts}.json"
 
 
 def main():
