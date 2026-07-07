@@ -1,0 +1,11 @@
+{
+  "target_path": "receipts/cbase-gpu-verify-trainable-clean-20260707T015633.json",
+  "target_sha256": "9174ed0c15bfb21d45450e066067bb4e07edeb7900babbd19376aa1991f7bfa9",
+  "evidence_class": "generator_absent_content_clean",
+  "evidence": "evidence (c) manually-authored: no in-tree script constructs this filename (confirmed by exhaustive fixed-string search of scripts/ and tools/) -- these are ad-hoc python invocations from 2026-07-07's live C-BASE checkpoint-verify debugging (typed inline, never saved as a checked-in script), same class as the existing eng421-multimodal-config-*/eng26-replay-* manually_authored convention entries. Independently verified, not self-report: the checkpoint sha256 this receipt cites (58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b) was recomputed directly against the on-disk file at models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt (2,377,797,331 bytes) and matches exactly; the operation described (load a local .pt checkpoint, run forward passes, record loss/VRAM) has no conceivable paid-API surface.",
+  "cites": [
+    "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt"
+  ],
+  "attested_by": "boardrun6, issue #353 durable-attestation sidecar (supersedes the throwaway attest_extend.py hand-stamp from the 2026-07-07 annex-refresh mission -- see PR #350's body for the durability finding)",
+  "attested_ts": "2026-07-07T11:32:00Z"
+}

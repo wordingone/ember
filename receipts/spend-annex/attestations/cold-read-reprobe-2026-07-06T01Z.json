@@ -1,0 +1,11 @@
+{
+  "target_path": "receipts/cold-read-reprobe/2026-07-06T01Z.json",
+  "target_sha256": "b69b8de73596f10af002f1cc6365f92fa6eb23787bd8a33f881693f3c2d0bac6",
+  "evidence_class": "generator_absent_content_clean",
+  "evidence": "evidence (c) manually-authored by design, same reasoning as the existing cold-read-reprobe-*.json CONVENTION_MAP entry (scripts/ember_totality/test_c_legib.py only READS receipts/cold-read-reprobe/, confirmed never writes it -- the exercise is meant to be authored freshly by whoever performs it). This file lives at receipts/cold-read-reprobe/2026-07-06T01Z.json -- the 'cold-read-reprobe' token is the DIRECTORY name rather than a basename prefix, which is why the existing basename-only regex (^cold-read-reprobe-.*\\.json$) doesn't match; the underlying evidence is identical to the already-accepted convention.",
+  "cites": [
+    "scripts/ember_totality/test_c_legib.py"
+  ],
+  "attested_by": "boardrun6, issue #353 durable-attestation sidecar (supersedes the throwaway attest_extend.py hand-stamp from the 2026-07-07 annex-refresh mission -- see PR #350's body for the durability finding)",
+  "attested_ts": "2026-07-07T11:32:00Z"
+}

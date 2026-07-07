@@ -1,0 +1,11 @@
+{
+  "target_path": "receipts/completeness-sweep/c34-launch-rail-issue-mapping-20260705T125847Z.json",
+  "target_sha256": "acf18e396a6ded5792b67deff7bdc9ecc04bbc866d770807d1f04d6cd7d45aef",
+  "evidence_class": "generator_absent_content_clean",
+  "evidence": "evidence (c) manually-authored, cross-confirmed by (b): a hand-typed issue-to-receipt mapping table (same class as the existing c48-gate-stats-review-* manually_authored convention entry) -- 'receipts' and 'git_commit' fields per row are pointers to be checked, not measured script output. Spot-verified: git_commit 92264d1 (cited for issue 181) exists exactly as claimed (`git log --oneline -1 92264d1` -> \"eng-48: v0_pretrain_launch_gate G-prereg calls fp26_prereg.check_premises() -- close the fail-open (#181) (#182)\").",
+  "cites": [
+    "git commit 92264d1"
+  ],
+  "attested_by": "boardrun6, issue #353 durable-attestation sidecar (supersedes the throwaway attest_extend.py hand-stamp from the 2026-07-07 annex-refresh mission -- see PR #350's body for the durability finding)",
+  "attested_ts": "2026-07-07T11:32:00Z"
+}

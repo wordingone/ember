@@ -1,0 +1,11 @@
+{
+  "target_path": "receipts/dcomm-null-mc-20260707T075453Z.json",
+  "target_sha256": "a668321dac674289bf00e5dec7adf39ccddf478f5725f9ba5ea6c52a60255317",
+  "evidence_class": "generator_absent_content_clean",
+  "evidence": "evidence (c) manually-authored: the receipt's own 'widen_semantics_source' field cites scripts/cbase_grow_dryrun.py lines 89-92 -- read directly and confirmed byte-for-byte matching the cited gate_proj/up_proj/down_proj torch.cat operations; not a self-report, an independently re-read citation. The computation itself (Monte Carlo SVD orthogonalization + tensor concatenation, seeds=30, pure torch/CUDA linear algebra) has no conceivable paid-API surface. No candidate field name matched this receipt because the generating context is cited under a non-standard field name ('widen_semantics_source', not cmd/command/script/rerun_command).",
+  "cites": [
+    "scripts/cbase_grow_dryrun.py:89-92"
+  ],
+  "attested_by": "boardrun6, issue #353 durable-attestation sidecar (supersedes the throwaway attest_extend.py hand-stamp from the 2026-07-07 annex-refresh mission -- see PR #350's body for the durability finding)",
+  "attested_ts": "2026-07-07T11:32:00Z"
+}

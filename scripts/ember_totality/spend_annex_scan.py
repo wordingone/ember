@@ -172,6 +172,59 @@ For every decisive-claim receipt this script does exactly one of:
                         unexplained coverage gap. Listed HONESTLY, never
                         hidden, never silently coerced into "clean".
 
+VOID-SUPERSESSION SEMANTICS (2026-07-07, gh issue #353): a decisive-claim receipt
+named in ANY VOID receipt's `supersedes` list -- matched by (basename, sha256),
+since every VOID receipt in this repo's convention records only a bare `filename`
+in its supersedes entries, never a directory-qualified path, and sha256-pinning is
+what actually disambiguates a basename collision -- is excluded from the
+decisive-claim classification set entirely, BEFORE per-row classification begins
+(same treatment as the corpus-membership rule above, structurally: a separate
+`excluded_superseded` list, always listed in full, never an `evidence_class`, never
+counted toward unresolvable/uncovered). The superseded receipt has been formally
+disposed; continuing to demand spend-coverage on it would be litigating a claim the
+repo has already voided. The VOID receipt itself is NOT excluded -- it stays IN the
+decisive-claim set and is classified via a new structural rule inside
+_check_generator_absent_historical (verdict=="VOID" AND a `supersedes` list is
+present): evidence_subtype "manually_authored" (a VOID disposition is, by
+definition, hand-authored governance text, never a script output), subject to the
+identical content re-scan every generator_absent_historical row gets -- a VOID
+receipt whose own reason-text happens to be content-dirty gets
+`generator_absent_historical` (still-dirty), not silently waved through as clean.
+
+ATTESTATION SIDECARS (2026-07-07, gh issue #353): a durable replacement for the
+2026-07-07 incident where a throwaway build-time helper (`scratch/attest_extend.py`,
+never committed) hand-stamped `evidence_class` directly onto a frozen annex JSON
+snapshot for 17 receipts without ever teaching THIS generator's own classification
+tables about them -- so the very next real regeneration silently lost all 17
+upgrades back to `unresolvable`. Sidecar files under
+`receipts/spend-annex/attestations/*.json` are the fix: each names a `target_path`,
+a PINNED `target_sha256`, a proposed `evidence_class` (restricted to
+ATTESTATION_ADMISSIBLE_CLASSES -- a sidecar can never invent a brand-new class that
+bypasses classification review), free-text `evidence`, and `cites` (real evidence
+pointers -- receipts, scripts, git commits). The generator itself loads every
+sidecar on each run (_load_attestation_sidecars), and for any receipt that would
+otherwise fall through every other resolution path to `unresolvable`:
+
+  1. PIN CHECK -- the sidecar's `target_sha256` must equal the target's CURRENT
+     on-disk sha256. A mismatch means the target mutated since attestation was
+     written; the attestation is REJECTED (row stays `unresolvable`, notes name
+     the pin failure) rather than silently trusted.
+  2. CONTENT CHECK -- content-dirty ALWAYS overrides a valid attestation: the
+     target's own raw text is re-scanned with the identical PAID_CLIENT_PATTERNS /
+     API_KEY_ENV_NAME_RE detectors used everywhere else in this file. A dirty hit
+     REJECTS the attestation (row stays `unresolvable`, content_scan_hits named)
+     regardless of what the sidecar claims.
+  3. Only if BOTH checks pass does the row take the sidecar's declared
+     evidence_class, with evidence_subtype "attested_sidecar" and an
+     `attestation_sidecar` field naming which sidecar file resolved it -- fully
+     reproducible: every future regeneration re-verifies the same pin and re-runs
+     the same content scan against the same sidecar, nothing is ever hand-stamped
+     onto an output snapshot again.
+
+Malformed sidecars (missing required fields, or an evidence_class outside the
+admissible set) are never silently dropped -- they are collected into
+`attestation_sidecar_skipped` in the result, always disclosed.
+
 (b) Tree-wide, independent of any single receipt: every *.py/*.ts/*.js/
     *.mjs/*.sh under scripts/ is scanned (sorted walk) for paid-API-key
     env-var names, and every file under config/ or configs/ is scanned for
@@ -711,6 +764,23 @@ def _check_generator_absent_historical(rel, d):
                 "and imported here with its own provenance block; the original "
                 "receipt was never edited."
             )
+    # Structural VOID-governance detector (2026-07-07, gh issue #353): a receipt
+    # whose OWN shape is verdict=="VOID" plus a non-empty `supersedes` list is, by
+    # definition, hand-authored disposition/governance text -- there is no script
+    # in this tree (or any tree) that could generate a VOID verdict; a human wrote
+    # the disposition. Evidence (c) manually-authored, derived generically from the
+    # receipt's own structure rather than a fixed basename table entry (same
+    # generic-detector pattern as the import_provenance block above). The content
+    # re-scan every generator_absent_historical row gets still applies below --
+    # a VOID receipt's own reason-text tripping a paid-client pattern is not waved
+    # through just because its disposition is legitimate.
+    if d.get("verdict") == "VOID" and isinstance(d.get("supersedes"), list) and d.get("supersedes"):
+        return "manually_authored", (
+            f"evidence (c) manually-authored: verdict=='VOID' with a non-empty "
+            f"supersedes list ({len(d['supersedes'])} entry/entries) -- a VOID "
+            "disposition is hand-authored governance/disposition text by definition; "
+            "no generating script produces a VOID verdict."
+        )
     return None
 
 
@@ -787,6 +857,65 @@ def _check_external_live_generator(rel, d):
         if pattern.match(base):
             return evidence_fn(d)
     return None
+
+
+# --- Attestation sidecars (2026-07-07, gh issue #353). See the ATTESTATION SIDECARS
+# paragraph in the module docstring for the full mechanism and the incident it fixes.
+ATTESTATION_DIR_REL = "receipts/spend-annex/attestations"
+
+# Restricted on purpose: a sidecar may only claim one of the evidence_class values
+# that ALREADY exist as annex-coverage-eligible buckets elsewhere in this scanner --
+# it can never invent a brand-new class that skips classification review.
+ATTESTATION_ADMISSIBLE_CLASSES = (
+    "generator_absent_content_clean",
+    "script_scanned_clean_via_convention",
+    "external_generator_content_clean",
+)
+
+ATTESTATION_REQUIRED_FIELDS = ("target_path", "target_sha256", "evidence_class", "evidence", "cites")
+
+
+def _load_attestation_sidecars(root):
+    """Load every receipts/spend-annex/attestations/*.json sidecar under root.
+    Returns (sidecars: dict[target_path -> sidecar_dict], skipped: list[dict]).
+    A missing directory is not an error (zero sidecars, zero skipped) -- this
+    mechanism is additive and optional. A malformed sidecar (parse failure,
+    missing required field, or evidence_class outside the admissible set) is
+    NEVER silently dropped -- it lands in `skipped` with a named reason, always
+    disclosed in the run's `attestation_sidecar_skipped` output."""
+    sidecars = {}
+    skipped = []
+    attestation_dir = os.path.join(root, *ATTESTATION_DIR_REL.split("/"))
+    if not os.path.isdir(attestation_dir):
+        return sidecars, skipped
+    for p in sorted(glob.glob(os.path.join(attestation_dir, "*.json"))):
+        rel_p = os.path.relpath(p, root).replace("\\", "/")
+        try:
+            with open(p, "r", encoding="utf-8-sig") as fh:
+                sc = json.load(fh)
+        except Exception as exc:
+            skipped.append({"path": rel_p, "reason": f"parse error: {exc}"})
+            continue
+        if not isinstance(sc, dict) or any(k not in sc for k in ATTESTATION_REQUIRED_FIELDS):
+            skipped.append({"path": rel_p, "reason": f"missing required field(s), need {ATTESTATION_REQUIRED_FIELDS}"})
+            continue
+        if sc["evidence_class"] not in ATTESTATION_ADMISSIBLE_CLASSES:
+            skipped.append({
+                "path": rel_p,
+                "reason": f"evidence_class {sc['evidence_class']!r} not in admissible set "
+                          f"{ATTESTATION_ADMISSIBLE_CLASSES}",
+            })
+            continue
+        target = str(sc["target_path"]).replace("\\", "/")
+        sc = dict(sc)
+        sc["_sidecar_path"] = rel_p
+        if target in sidecars:
+            skipped.append({"path": rel_p, "reason": f"duplicate attestation for target_path {target!r} "
+                                                       f"(first seen: {sidecars[target]['_sidecar_path']!r}) -- "
+                                                       "first sidecar (sorted glob order) wins, this one skipped"})
+            continue
+        sidecars[target] = sc
+    return sidecars, skipped
 
 
 def _resolve_via_convention(rel):
@@ -966,6 +1095,9 @@ def main(out_path=None):
                                f"({c_neg1.CANDIDATE_ROOTS})",
             "rows": [],
             "counts": {},
+            "excluded_ledger": [],
+            "excluded_superseded": [],
+            "attestation_sidecar_skipped": [],
         }
         _emit(result, out_path)
         return result
@@ -973,9 +1105,33 @@ def main(out_path=None):
     decisive = c_neg1._decisive_claim_files()
     tree_wide = _tree_wide_scan()
     flagged_script_relpaths = {f["path"] for f in tree_wide["flagged_scripts"]}
+    attestation_sidecars, attestation_sidecar_skipped = _load_attestation_sidecars(ROOT)
+
+    # VOID-supersession pre-pass (2026-07-07, gh issue #353) -- see the
+    # VOID-SUPERSESSION SEMANTICS paragraph in the module docstring. Built as a
+    # separate pass over the full decisive corpus BEFORE the per-row loop below,
+    # because any receipt (regardless of scan order) may be named in any VOID
+    # receipt's supersedes list. Matched on (basename, sha256) -- every VOID
+    # receipt in this repo's convention records only a bare `filename`, never a
+    # directory-qualified path.
+    superseded_targets = {}
+    for void_path, void_d, _void_raw in decisive:
+        if void_d.get("verdict") != "VOID":
+            continue
+        supersedes = void_d.get("supersedes")
+        if not isinstance(supersedes, list):
+            continue
+        void_rel = os.path.relpath(void_path, ROOT).replace("\\", "/")
+        for entry in supersedes:
+            if not isinstance(entry, dict):
+                continue
+            fname, esha = entry.get("filename"), entry.get("sha256")
+            if isinstance(fname, str) and isinstance(esha, str):
+                superseded_targets[(fname, esha)] = void_rel
 
     rows = []
     excluded_ledger = []
+    excluded_superseded = []
     for path, d, raw in decisive:
         rel = os.path.relpath(path, ROOT).replace("\\", "/")
 
@@ -997,13 +1153,36 @@ def main(out_path=None):
             })
             continue
 
+        receipt_sha = sha256_file(path)
+
+        # VOID-SUPERSESSION EXCLUSION (2026-07-07, gh issue #353) -- checked before
+        # any other classification: a receipt formally disposed by a VOID receipt
+        # is excluded from the decisive-claim set entirely, never classified, never
+        # counted toward unresolvable/uncovered. The VOID receipt itself is not
+        # excluded by this check (it is never a key in superseded_targets unless
+        # some OTHER VOID receipt happens to supersede it too).
+        supersession_key = (os.path.basename(rel), receipt_sha)
+        if supersession_key in superseded_targets:
+            excluded_superseded.append({
+                "path": rel,
+                "sha256": receipt_sha,
+                "superseded_by": superseded_targets[supersession_key],
+                "reason": "named in a VOID receipt's supersedes list, matched by "
+                          "(basename, sha256) -- formally disposed, excluded from the "
+                          "decisive-claim classification set per issue #353's VOID-"
+                          "supersession semantics; never classified, never counted "
+                          "toward unresolvable/uncovered. The superseding VOID receipt "
+                          "itself remains IN the decisive-claim set (see "
+                          "'manually_authored' governance-text convention row).",
+            })
+            continue
+
         has_both = (SPEND_KEY in d) and (PAID_FLAG_KEY in d)
         if has_both:
             rows.append(_row_for_declared(rel, path, d))
             continue
 
         resolved, fields_seen, fields_with_unresolved_token = _resolve_generating_script(d)
-        receipt_sha = sha256_file(path)
 
         via_convention = False
         if resolved is None:
@@ -1102,6 +1281,71 @@ def main(out_path=None):
                 })
                 continue
 
+            # Attestation-sidecar fallback (2026-07-07, gh issue #353) -- the LAST
+            # resolution path before plain unresolvable. See ATTESTATION SIDECARS in
+            # the module docstring: pin check, then content check (content-dirty
+            # ALWAYS overrides a valid attestation), then and only then the sidecar's
+            # declared evidence_class is honored.
+            attestation = attestation_sidecars.get(rel)
+            if attestation is not None:
+                if attestation["target_sha256"] != receipt_sha:
+                    rows.append({
+                        "path": rel,
+                        "sha256": receipt_sha,
+                        "evidence_class": "unresolvable",
+                        "scanned_surfaces": [],
+                        "verdict_pass_class": bool(c_neg1._is_pass_class(d.get(c_neg1.VERDICT_KEY, ""))),
+                        "resolved_script": None,
+                        "notes": (
+                            f"an attestation sidecar exists at {attestation['_sidecar_path']!r} but its "
+                            f"pinned target_sha256={attestation['target_sha256']!r} does NOT match this "
+                            f"receipt's current on-disk sha256={receipt_sha!r} -- the target has been "
+                            "mutated since attestation, the pin is invalid, and the attestation is "
+                            "REJECTED (sha-pin invalidation, issue #353); treated as if no attestation "
+                            f"existed. fields_present={fields_seen or 'none'}, "
+                            f"fields_with_unresolved_token={fields_with_unresolved_token or 'none'}"
+                        ),
+                    })
+                    continue
+                content_client_hits, content_key_env_hits = _scan_text_for_paid_surface(raw)
+                if content_client_hits or content_key_env_hits:
+                    reasons = []
+                    if content_client_hits:
+                        reasons.append(f"paid-client pattern(s) in receipt's own content: {content_client_hits}")
+                    if content_key_env_hits:
+                        reasons.append(f"paid-API-key env name(s) in receipt's own content: {content_key_env_hits}")
+                    rows.append({
+                        "path": rel,
+                        "sha256": receipt_sha,
+                        "evidence_class": "unresolvable",
+                        "scanned_surfaces": SCANNED_SURFACES,
+                        "verdict_pass_class": bool(c_neg1._is_pass_class(d.get(c_neg1.VERDICT_KEY, ""))),
+                        "resolved_script": None,
+                        "content_scan_hits": {
+                            "client_patterns": content_client_hits,
+                            "key_env_names": content_key_env_hits,
+                        },
+                        "notes": f"an attestation sidecar exists at {attestation['_sidecar_path']!r} "
+                                 f"(sha-pin verified) citing: {attestation['evidence']} -- but "
+                                 "content-dirty ALWAYS overrides attestation (issue #353): "
+                                 f"{'; '.join(reasons)}. Attestation REJECTED.",
+                    })
+                    continue
+                rows.append({
+                    "path": rel,
+                    "sha256": receipt_sha,
+                    "evidence_class": attestation["evidence_class"],
+                    "evidence_subtype": "attested_sidecar",
+                    "scanned_surfaces": SCANNED_SURFACES,
+                    "verdict_pass_class": bool(c_neg1._is_pass_class(d.get(c_neg1.VERDICT_KEY, ""))),
+                    "resolved_script": None,
+                    "attestation_sidecar": attestation["_sidecar_path"],
+                    "attestation_cites": attestation["cites"],
+                    "notes": f"sha-pin verified against {attestation['_sidecar_path']!r}; receipt's own "
+                             f"content scanned clean. Evidence: {attestation['evidence']}",
+                })
+                continue
+
             rows.append({
                 "path": rel,
                 "sha256": receipt_sha,
@@ -1175,6 +1419,7 @@ def main(out_path=None):
     counts = {
         "decisive_total": len(decisive),
         "excluded_ledger": len(excluded_ledger),
+        "excluded_superseded": len(excluded_superseded),
         "declared": sum(1 for r in rows if r["evidence_class"] == "declared"),
         "script_scanned_clean": sum(1 for r in rows if r["evidence_class"] == "script_scanned_clean"),
         "script_scanned_clean_via_convention": sum(
@@ -1188,6 +1433,8 @@ def main(out_path=None):
             1 for r in rows if r["evidence_class"] == "external_generator_content_clean"),
         "unresolvable": sum(1 for r in rows if r["evidence_class"] == "unresolvable"),
         "paid_surface_violation": sum(1 for r in rows if r["evidence_class"] == "paid_surface_violation"),
+        "attested_via_sidecar": sum(1 for r in rows if r.get("evidence_subtype") == "attested_sidecar"),
+        "attestation_sidecar_skipped": len(attestation_sidecar_skipped),
     }
 
     violation_rows = [r for r in rows if r["evidence_class"] == "paid_surface_violation"]
@@ -1203,13 +1450,16 @@ def main(out_path=None):
         verdict_reason = (
             f"zero rows show a paid-surface dependency across {len(decisive)} decisive-claim "
             f"receipts ({counts['excluded_ledger']} excluded as this scanner's own coverage-ledger "
-            f"output family, never classified/never counted toward uncovered; {len(rows)} "
+            f"output family, {counts['excluded_superseded']} excluded as VOID-superseded (issue #353), "
+            f"neither classified/never counted toward uncovered; {len(rows)} "
             f"classified: {counts['declared']} "
             f"declared, {counts['script_scanned_clean']} "
             f"script-scanned-clean, {counts['script_scanned_clean_via_convention']} "
             f"script-scanned-clean-via-convention, {counts['generator_absent_content_clean']} "
             f"generator-absent-content-clean (evidenced external-import/git-archaeology/manual-authorship "
-            f"gone AND the receipt's own content re-scanned clean), {counts['external_generator_content_clean']} "
+            f"gone AND the receipt's own content re-scanned clean; {counts['attested_via_sidecar']} of "
+            "these via a sha-pinned, content-re-verified attestation sidecar, issue #353), "
+            f"{counts['external_generator_content_clean']} "
             "external-generator-content-clean (evidenced train-daemon-family external-live generator AND "
             f"the receipt's own content re-scanned clean), {counts['generator_absent_historical']} "
             f"generator-absent-historical still CONTENT-DIRTY on re-scan (script-absence evidence holds "
@@ -1229,6 +1479,8 @@ def main(out_path=None):
         "counts": counts,
         "tree_wide_scan": tree_wide,
         "excluded_ledger": sorted(excluded_ledger, key=lambda r: r["path"]),
+        "excluded_superseded": sorted(excluded_superseded, key=lambda r: r["path"]),
+        "attestation_sidecar_skipped": sorted(attestation_sidecar_skipped, key=lambda r: r["path"]),
         "rows": sorted(rows, key=lambda r: r["path"]),
     }
     _emit(result, out_path)
