@@ -269,6 +269,7 @@ if _THIS_DIR not in sys.path:
 
 import test_c_neg1 as c_neg1  # noqa: E402  (reuse root resolution + _decisive_claim_files)
 from _lane14_common import resolve_in_tree, sha256_file  # noqa: E402
+import void_supersession  # noqa: E402  (shared VOID-supersession partition, gh issue #358)
 
 ROOT = c_neg1.ROOT
 SPEND_KEY = c_neg1.SPEND_KEY
@@ -1107,31 +1108,15 @@ def main(out_path=None):
     flagged_script_relpaths = {f["path"] for f in tree_wide["flagged_scripts"]}
     attestation_sidecars, attestation_sidecar_skipped = _load_attestation_sidecars(ROOT)
 
-    # VOID-supersession pre-pass (2026-07-07, gh issue #353) -- see the
-    # VOID-SUPERSESSION SEMANTICS paragraph in the module docstring. Built as a
-    # separate pass over the full decisive corpus BEFORE the per-row loop below,
-    # because any receipt (regardless of scan order) may be named in any VOID
-    # receipt's supersedes list. Matched on (basename, sha256) -- every VOID
-    # receipt in this repo's convention records only a bare `filename`, never a
-    # directory-qualified path.
-    superseded_targets = {}
-    for void_path, void_d, _void_raw in decisive:
-        if void_d.get("verdict") != "VOID":
-            continue
-        supersedes = void_d.get("supersedes")
-        if not isinstance(supersedes, list):
-            continue
-        void_rel = os.path.relpath(void_path, ROOT).replace("\\", "/")
-        for entry in supersedes:
-            if not isinstance(entry, dict):
-                continue
-            fname, esha = entry.get("filename"), entry.get("sha256")
-            if isinstance(fname, str) and isinstance(esha, str):
-                superseded_targets[(fname, esha)] = void_rel
+    # VOID-supersession (2026-07-07, gh issue #353; factored into a shared
+    # helper module consumed by BOTH this scanner and test_c_neg1.py's own
+    # decisive-claim corpus per gh issue #358 -- see void_supersession.py's
+    # module docstring for the full semantics and the cbase-checkpoint-sha
+    # non-match case).
+    decisive, excluded_superseded = void_supersession.partition_superseded(decisive, ROOT)
 
     rows = []
     excluded_ledger = []
-    excluded_superseded = []
     for path, d, raw in decisive:
         rel = os.path.relpath(path, ROOT).replace("\\", "/")
 
@@ -1154,28 +1139,6 @@ def main(out_path=None):
             continue
 
         receipt_sha = sha256_file(path)
-
-        # VOID-SUPERSESSION EXCLUSION (2026-07-07, gh issue #353) -- checked before
-        # any other classification: a receipt formally disposed by a VOID receipt
-        # is excluded from the decisive-claim set entirely, never classified, never
-        # counted toward unresolvable/uncovered. The VOID receipt itself is not
-        # excluded by this check (it is never a key in superseded_targets unless
-        # some OTHER VOID receipt happens to supersede it too).
-        supersession_key = (os.path.basename(rel), receipt_sha)
-        if supersession_key in superseded_targets:
-            excluded_superseded.append({
-                "path": rel,
-                "sha256": receipt_sha,
-                "superseded_by": superseded_targets[supersession_key],
-                "reason": "named in a VOID receipt's supersedes list, matched by "
-                          "(basename, sha256) -- formally disposed, excluded from the "
-                          "decisive-claim classification set per issue #353's VOID-"
-                          "supersession semantics; never classified, never counted "
-                          "toward unresolvable/uncovered. The superseding VOID receipt "
-                          "itself remains IN the decisive-claim set (see "
-                          "'manually_authored' governance-text convention row).",
-            })
-            continue
 
         has_both = (SPEND_KEY in d) and (PAID_FLAG_KEY in d)
         if has_both:
