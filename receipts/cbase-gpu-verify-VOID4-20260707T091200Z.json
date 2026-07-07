@@ -1,0 +1,15 @@
+{
+  "ticket": "C-BASE-VOID",
+  "ts": "2026-07-07T09:12:00Z",
+  "verdict": "VOID",
+  "supersedes": [
+    {
+      "filename": "cbase-gpu-verify-REAL-20260707T063841Z.json",
+      "sha256": "722fc4e03aaf90e8"
+    }
+  ],
+  "reason": "Truncated mid-write (invalid JSON, cuts at results.below_threshold) - unparseable clutter in receipts/; content that IS readable shows the same random-floor embedding-only losses as the VOID3-superseded sibling written 38s later. No probe can consume it, but receipts/ carries no dead files without a supersession record.",
+  "cites": [
+    "cbase-gpu-verify-VOID3-20260707T064800Z.json"
+  ]
+}
