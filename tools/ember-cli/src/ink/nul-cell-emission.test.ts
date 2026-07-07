@@ -11,16 +11,25 @@
 // cursor, dim status text -- every ingredient named in the issue).
 //
 // IMPORTANT PROVENANCE NOTE (do not delete/water down without re-reading the investigation):
-// this suite is GREEN at master, not RED. Root-causing #343 required going one level below
-// mountInk's in-memory capture -- direct instrumentation of `process.stdout.write` inside a
-// real node-pty child process proved the string THIS PROCESS hands to stdout.write never
-// contains a NUL byte (0 of 0, across repeated real-pty repros that DO show ~400+ NUL bytes on
-// the pty's *receiving* side, byte-for-byte reproducing the issue's own capture). The corruption
-// is added strictly between this process's write() call and the pty's read side -- i.e. by the
-// Windows ConPTY/conhost layer, not by this renderer. mountInk cannot observe that layer (it
-// never goes through a real pty), so it cannot be RED for this defect -- which is exactly the
-// point of this suite: it's the receipt that our OWN emission code is provably clean, so any
-// future regression here is a REAL bug in rendering-pipeline.ts, not a re-run of #343.
+// this suite's two halves have DIFFERENT master status -- do not flatten that into one claim.
+//
+// The NUL-byte tests are GREEN at master, BY DESIGN, not because #343 is unreproducible here.
+// Root-causing #343 required going one level below mountInk's in-memory capture -- direct
+// instrumentation of `process.stdout.write` inside a real node-pty child process proved the
+// string THIS PROCESS hands to stdout.write never contains a NUL byte (0 of 0, across repeated
+// real-pty repros that DO show ~400+ NUL bytes on the pty's *receiving* side, byte-for-byte
+// reproducing the issue's own capture). That corruption is added strictly between this
+// process's write() call and the pty's read side -- i.e. by the Windows ConPTY/conhost layer,
+// not by this renderer -- and mountInk never goes through a real pty, so it structurally cannot
+// observe that layer. These tests are the receipt that our OWN emission code is provably clean
+// of the NUL half of the defect; a future regression here is a REAL bug in rendering-pipeline.ts,
+// not a re-run of #343's NUL corruption.
+//
+// The inverse-run tests ARE the RED-at-master proof for the OTHER half of #343 (the visual
+// bold+dim+inverse "bar" stack): the style leak lives in this file's own JS code, so mountInk
+// sees it directly. Before the fix: 6 of these failing (largest observed leaked-inverse run:
+// 319 chars, at 220x60). After the fix: 11/11 pass, all sizes. See the PR body for the full
+// master-run failing-test-name list.
 import { describe, test, expect } from "bun:test";
 import React from "react";
 import { Box } from "./components.ts";
