@@ -2170,8 +2170,10 @@ def run_and_emit_live() -> Path:
         # Load production model + probe batch.
         # build_v0_model returns (model, vocab, hidden, n_mtp); extract backbone for forward pass
         cfg = load_contract()
+        print(f"[p5-ratio-audit] Config vocab_size: {cfg['model']['vocab']}, FF override: {pre_ff}", flush=True)
         wrapper, vocab, hidden, n_mtp = build_v0_model(
             cfg, live=True, intermediate_override=pre_ff, device="cpu")
+        print(f"[p5-ratio-audit] Model created: vocab={vocab}, hidden={hidden}, intermediate={pre_ff}", flush=True)
 
         # Use backbone_model for forward pass (it's the actual LlamaModel)
         pre_model = wrapper.backbone_model if hasattr(wrapper, 'backbone_model') else wrapper
