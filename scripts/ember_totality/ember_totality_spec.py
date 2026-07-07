@@ -105,6 +105,7 @@ PROBE_TIMEOUT_SECONDS = 180
 # Deterministic filename -> canonical condition id fallback. Used only when a
 # probe's output line does not begin with a recognizable C-id token.
 FILENAME_ID = {
+    "test_c_invariant.py": "C-INV",
     "test_c_eff.py": "C-EFF",
     "test_c_base.py": "C-BASE",
     "test_c_port.py": "C-PORT",
@@ -151,6 +152,7 @@ FILENAME_ID = {
 # v1 §9). Keep in sync by construction, not by hand: if this list and the
 # spec ever diverge, main() aborts the whole run before any probe executes.
 ORDER = [
+    "C-INV",
     "C-EFF", "C-BASE", "C-PORT", "C-FED", "C-GROW", "C-ORGANISM",
     "C(-1)", "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9",
     "C10", "C11", "C12", "C13", "C14", "C15",
