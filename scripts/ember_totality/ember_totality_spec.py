@@ -997,6 +997,25 @@ def main():
         # Errata file may not exist pre-genesis; use zeros
         pass
 
+    # Find the newest C-INV timestamped receipt (issue #377): reads from scripts/ember_totality/receipts-c-invariant/
+    # (outside canonical receipts/ tree, mirroring receipts-totality/ pattern to avoid C-CUSTODY probe conflicts)
+    c_inv_receipt_path = None
+    try:
+        c_inv_dir = os.path.join(HERE, "receipts-c-invariant")
+        if os.path.isdir(c_inv_dir):
+            # List c-invariant-probe-*.json files and select the most recent by timestamp
+            c_inv_files = [
+                f for f in os.listdir(c_inv_dir)
+                if f.startswith("c-invariant-probe-") and f.endswith(".json")
+            ]
+            if c_inv_files:
+                # Sort by the timestamp in the filename (YYYYMMDDTHHMMSSZ format)
+                c_inv_files.sort()
+                newest = c_inv_files[-1]
+                c_inv_receipt_path = f"scripts/ember_totality/receipts-c-invariant/{newest}"
+    except (OSError, ValueError):
+        pass
+
     # Extract C-INV probe status from the rows (comes from test_c_invariant.py)
     c_inv_status = "RED"  # fail-closed: absent C-INV probe = RED, never assumed GREEN
     for r in rows:
@@ -1009,7 +1028,8 @@ def main():
         "status": c_inv_status,  # Sourced from C-INV probe result
         "genesis_ts": "2026-07-06T14:13:23-07:00",  # committerDate of genesis merge (commit 9c89f7f66)
         "errata_sha256": errata_sha256,
-        "errata_length": errata_length
+        "errata_length": errata_length,
+        "c_inv_receipt_path": c_inv_receipt_path,  # Path to the newest timestamped C-INV receipt (issue #377)
     }
 
     # Normalize paths in receipt: in-tree paths become repo-relative,
