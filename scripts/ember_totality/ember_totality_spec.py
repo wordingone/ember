@@ -160,6 +160,7 @@ FILENAME_ID = {
     "test_c_auto.py": "C-AUTO",
     "test_c_legib.py": "C-LEGIB",
     "test_surface2.py": "C-SURFACE2",
+    "test_c_custody.py": "C-CUSTODY",
 }
 
 # Stable board ordering: the program order from the goal §4. This IS the
@@ -168,7 +169,7 @@ FILENAME_ID = {
 # v1 §9). Keep in sync by construction, not by hand: if this list and the
 # spec ever diverge, main() aborts the whole run before any probe executes.
 ORDER = [
-    "C-INV",
+    "C-INV", "C-CUSTODY",
     "C-EFF", "C-BASE", "C-PORT", "C-FED", "C-GROW", "C-ORGANISM",
     "C(-1)", "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9",
     "C10", "C11", "C12", "C13", "C14", "C15",
