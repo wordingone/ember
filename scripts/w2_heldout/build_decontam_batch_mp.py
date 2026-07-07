@@ -103,6 +103,14 @@ DEFAULT_MAX_ROUNDS = 6
 DEFAULT_MP_WORKERS = min(8, max(1, psutil.cpu_count() - 4))
 MIN_COMMIT_FREE_GB = 12
 DEFAULT_SCAN_CHUNK_TOKENS = 33554432  # 32M tokens per chunk (memory-safe slicing)
+# issue #193 relaunch-6 post-mortem: a worker's np.isin(h[:n_keep], needle_arr)
+# call (internally np.unique -> ar[perm] fancy-indexing) raised an
+# ArrayMemoryError trying to allocate scratch for a 33,554,432-element (=
+# DEFAULT_SCAN_CHUNK_TOKENS) uint64 hash buffer, uncaught, killing the whole
+# run. Retry-smaller floor: below this, a single sub-chunk's hash buffer is
+# ~8MB -- if THAT still can't allocate, the box is genuinely exhausted and
+# the failure is named (shard/chunk) instead of a bare numpy trace.
+MIN_SCAN_SUBCHUNK_TOKENS = 1 << 20  # 1,048,576 tokens
 HEARTBEAT_INTERVAL_S = 20  # intra-shard progress heartbeat cadence (issue #174 Phase 2)
 
 RECEIPT_DIR = os.path.join(REPO_ROOT, "receipts", "ember-c-scale")
@@ -405,6 +413,57 @@ def _worker_scan_shards(args: tuple) -> dict:
             }) + "\n")
             fh.flush()
 
+    def _hash_and_hit_offsets(data, n_keep_local, sub_chunk_tokens):
+        """Rolling-hash + isin() over `data` (n_keep_local absolute positions
+        wanted), returning LOCAL hit offsets (relative to data's own start).
+        On MemoryError (e.g. np.isin's internal np.unique failing to
+        allocate its ar[perm] scratch -- issue #193 relaunch-6's actual crash
+        site), halves sub_chunk_tokens and re-processes in overlap-safe
+        sub-chunks -- the same chunking strategy _scan_for_hits already uses
+        one level up, just recursed at finer granularity. Bottoms out at
+        MIN_SCAN_SUBCHUNK_TOKENS with a NAMED MemoryError instead of letting
+        numpy's bare internal trace propagate uncaught to main()."""
+        n = data.shape[0]
+        if n < window:
+            return []
+        try:
+            arr64 = data.astype(np.uint64)
+            n_out = n - window + 1
+            h = np.zeros(n_out, dtype=np.uint64)
+            power = np.uint64(1)
+            rb = np.uint64(roll_base)
+            with np.errstate(over="ignore"):
+                for k in range(window):
+                    h += arr64[k:k + n_out] * power
+                    power = power * rb
+            keep = min(n_keep_local, n_out)
+            if not (needle_hash_set and keep):
+                return []
+            local_hits = np.where(np.isin(h[:keep], needle_arr))[0]
+            return [int(li) for li in local_hits]
+        except MemoryError:
+            if sub_chunk_tokens <= MIN_SCAN_SUBCHUNK_TOKENS or n <= MIN_SCAN_SUBCHUNK_TOKENS:
+                raise MemoryError(
+                    f"W2_DECONTAM_SCAN_OOM: exhausted memory hashing a {n}-token "
+                    f"span even at the {MIN_SCAN_SUBCHUNK_TOKENS}-token retry floor "
+                    f"(window={window})."
+                ) from None
+            half = max(sub_chunk_tokens // 2, MIN_SCAN_SUBCHUNK_TOKENS)
+            all_hits: list[int] = []
+            pos = 0
+            n_keep_local = min(n_keep_local, n)
+            while pos < n_keep_local:
+                sub_end_keep = min(pos + half, n_keep_local)
+                # extend by (window-1) overlap tokens so this sub-chunk can
+                # still hash its own last few positions correctly
+                sub_data_end = min(sub_end_keep + (window - 1), n)
+                sub_data = data[pos:sub_data_end]
+                sub_keep = sub_end_keep - pos
+                sub_hits = _hash_and_hit_offsets(sub_data, sub_keep, half)
+                all_hits.extend(pos + hh for hh in sub_hits)
+                pos = sub_end_keep
+            return all_hits
+
     def _scan_for_hits(arr_u16, chunk_tokens_param, shard_idx=None, name=None,
                         prior_windows_hashed=0):
         """Compute rolling hashes in chunks; check needle matches PER CHUNK
@@ -449,25 +508,25 @@ def _worker_scan_shards(args: tuple) -> dict:
             chunk_len = chunk_data.shape[0]
 
             if chunk_len >= window:
-                arr64 = chunk_data.astype(np.uint64)
                 n_out = chunk_len - window + 1
-                h = np.zeros(n_out, dtype=np.uint64)
-                power = np.uint64(1)
-                rb = np.uint64(roll_base)
-                with np.errstate(over="ignore"):
-                    for k in range(window):
-                        h += arr64[k:k + n_out] * power
-                        power = power * rb
-
                 # Only keep hashes that don't cross into overlap region (boundary-safe)
                 n_keep = n_out if is_last_chunk else min(chunk_tokens_param, n_out)
                 total_hashes += n_keep
 
-                if needle_hash_set and n_keep:
-                    local_hits = np.where(np.isin(h[:n_keep], needle_arr))[0]
-                    hit_offsets.extend(chunk_start + int(li) for li in local_hits)
-                # h / arr64 / chunk_data fall out of scope here -- nothing
-                # shard-sized is retained across iterations.
+                try:
+                    local_hits = _hash_and_hit_offsets(chunk_data, n_keep, chunk_tokens_param)
+                except MemoryError as mem_exc:
+                    _write_heartbeat(shard_idx, name, prior_windows_hashed + total_hashes,
+                                      force=True)
+                    raise MemoryError(
+                        f"W2_DECONTAM_SCAN_OOM: shard={name} shard_idx={shard_idx} "
+                        f"chunk={chunk_i}/{n_chunks} chunk_tokens={chunk_tokens_param}: "
+                        f"{mem_exc}"
+                    ) from mem_exc
+                hit_offsets.extend(chunk_start + li for li in local_hits)
+                # chunk_data (and the arrays _hash_and_hit_offsets derives from
+                # it) fall out of scope here -- nothing shard-sized is
+                # retained across iterations.
 
             if shard_idx is not None:
                 _write_heartbeat(shard_idx, name, prior_windows_hashed + total_hashes)
@@ -1493,9 +1552,10 @@ def build_batch(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
         raise
 
 
-def _write_crash_receipt(exc: BaseException, *, rounds: list[dict], receipt_dir: str,
-                          wall_s_at_crash: float, total_candidates_checked: int,
-                          replacements_made: int, selected_so_far: int) -> str:
+def _write_crash_receipt(exc: BaseException, *, rounds: list[dict] | None = None,
+                          receipt_dir: str, wall_s_at_crash: float = 0.0,
+                          total_candidates_checked: int = 0, replacements_made: int = 0,
+                          selected_so_far: int = 0, source: str = "build_batch") -> str:
     """Fail-closed terminal receipt (issue #193 run-8 post-mortem): a run that
     dies -- whether a deliberate SystemExit (POOL_EXHAUSTED, INSUFFICIENT_CLEAN_
     WINDOWS, ...) or a genuinely uncaught exception -- must NEVER leave zero
@@ -1503,27 +1563,57 @@ def _write_crash_receipt(exc: BaseException, *, rounds: list[dict], receipt_dir:
     file, and no captured stdout/stderr; the only reconstruction path was
     after-the-fact heartbeat-file forensics. This receipt is written from
     INSIDE build_batch's except clause, so it has the real partial round
-    ledger even when the failure happens mid-round."""
+    ledger even when the failure happens mid-round.
+
+    relaunch-6 post-mortem (issue #193, 2026-07-07): this wrap existed and
+    covers this exact call path (probe-verified), yet no receipt appeared on
+    disk for the real crash -- the leading hypothesis is that the write
+    ITSELF silently failed under the same memory exhaustion that caused the
+    crash (this function's own try/except Exception at the call site
+    swallowed a secondary MemoryError with zero trace). Defense in depth:
+    try the full pretty JSON, fall back to compact JSON, fall back to a bare
+    plain-text line -- each cheaper than the last, so at least ONE survives
+    even if the box is critically starved at the exact moment of the crash.
+    `source` distinguishes this receipt from build_batch's own inner-wrap
+    receipt when main()'s outer wrap (order-B(i)) is the one writing it."""
     os.makedirs(receipt_dir, exist_ok=True)
     ts = _utc_ts()
     receipt = {
         "schema": "w2-heldout-decontam-crashed/v1",
         "ts": ts,
         "status": "CRASHED",
+        "source": source,
         "exception_type": type(exc).__name__,
         "exception_message": str(exc),
         "traceback": traceback.format_exc(),
-        "rounds_completed": len(rounds),
-        "rounds": rounds,
+        "rounds_completed": len(rounds or []),
+        "rounds": rounds or [],
         "wall_s_at_crash": wall_s_at_crash,
         "total_candidates_checked": total_candidates_checked,
         "replacements_made": replacements_made,
         "selected_windows_so_far": selected_so_far,
     }
     path = os.path.join(receipt_dir, f"w2-heldout-decontam-CRASHED-{ts}.json")
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(receipt, fh, indent=2)
-    return path
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(receipt, fh, indent=2)
+        return path
+    except Exception:
+        pass
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(receipt, fh)  # compact: no indent scratch buffer
+        return path
+    except Exception:
+        pass
+    # Last-resort floor: a single plain-text line, no json module scratch
+    # allocation at all beyond the string itself.
+    fallback_path = os.path.join(receipt_dir, f"w2-heldout-decontam-CRASHED-{ts}.txt")
+    with open(fallback_path, "w", encoding="utf-8") as fh:
+        fh.write(f"CRASHED source={source} ts={ts} type={type(exc).__name__} "
+                 f"msg={exc} rounds_completed={len(rounds or [])} "
+                 f"total_candidates_checked={total_candidates_checked}\n")
+    return fallback_path
 
 
 def write_receipt(result: dict, *, receipt_dir: str = RECEIPT_DIR) -> str:
@@ -1655,40 +1745,75 @@ def main():
     print(f"[LAUNCH] Progress file: {progress_file}")
     print()
 
-    result = build_batch(shard_dir=args.shard_dir, seq=args.seq, n_mtp=args.n_mtp,
-                          batch_size=args.batch_size, ceiling_steps=args.ceiling_steps,
-                          train_batch=args.train_batch, pool_oversample=args.pool_oversample,
-                          max_rounds=args.max_rounds,
-                          use_mp=not args.serial_only,
-                          n_workers=args.n_workers,
-                          progress_file=progress_file,
-                          chunk_tokens=args.scan_chunk_tokens,
-                          pool_start_index=args.pool_start_index,
-                          dump_matches=args.dump_matches,
-                          receipt_dir=args.receipt_dir)
+    # issue #193 relaunch-6 post-mortem: build_batch's OWN internal wrap
+    # covers this call (probe-verified) yet the real crash left no receipt --
+    # leading hypothesis is the inner wrap's receipt write silently failed
+    # under the same memory exhaustion that caused the crash. This OUTER
+    # wrap is a second, independent chance: it fires on ANY exit path from
+    # here through the final summary print (write_batch_file/write_receipt
+    # are also in scope -- a failure there was previously receiptless too),
+    # and skips writing only if a receipt already landed in the last few
+    # seconds (avoids double-receipting the common case where the inner
+    # wrap succeeded).
+    _main_wrap_t0 = time.perf_counter()
+    try:
+        result = build_batch(shard_dir=args.shard_dir, seq=args.seq, n_mtp=args.n_mtp,
+                              batch_size=args.batch_size, ceiling_steps=args.ceiling_steps,
+                              train_batch=args.train_batch, pool_oversample=args.pool_oversample,
+                              max_rounds=args.max_rounds,
+                              use_mp=not args.serial_only,
+                              n_workers=args.n_workers,
+                              progress_file=progress_file,
+                              chunk_tokens=args.scan_chunk_tokens,
+                              pool_start_index=args.pool_start_index,
+                              dump_matches=args.dump_matches,
+                              receipt_dir=args.receipt_dir)
 
-    write_batch_file(result, out_path=args.out_batch)
-    receipt_path = write_receipt(result, receipt_dir=args.receipt_dir)
+        write_batch_file(result, out_path=args.out_batch)
+        receipt_path = write_receipt(result, receipt_dir=args.receipt_dir)
 
-    # Matches (if --dump-matches was given) were already written directly by
-    # build_batch()/contamination_recheck_mp() as they were found -- each
-    # round's real corpus scan appends its own matches to args.dump_matches.
-    # (Previously this block re-read result["contamination_recheck"]["confirmed_matches"],
-    # a key that dict never contained -- see fix note above contamination_recheck_mp's
-    # dump_matches write. That always silently produced a 0-line file.)
-    if args.dump_matches and os.path.exists(args.dump_matches):
-        with open(args.dump_matches, "r", encoding="utf-8") as f:
-            match_count = sum(1 for _ in f)
-        print(f"[DUMP] {match_count} matches written to {args.dump_matches}")
+        # Matches (if --dump-matches was given) were already written directly by
+        # build_batch()/contamination_recheck_mp() as they were found -- each
+        # round's real corpus scan appends its own matches to args.dump_matches.
+        # (Previously this block re-read result["contamination_recheck"]["confirmed_matches"],
+        # a key that dict never contained -- see fix note above contamination_recheck_mp's
+        # dump_matches write. That always silently produced a 0-line file.)
+        if args.dump_matches and os.path.exists(args.dump_matches):
+            with open(args.dump_matches, "r", encoding="utf-8") as f:
+                match_count = sum(1 for _ in f)
+            print(f"[DUMP] {match_count} matches written to {args.dump_matches}")
 
-    print(f"batch_size={result['batch_size']} "
-          f"windows_checked={result['total_candidates_checked']} "
-          f"replacements_made={result['replacements_made']} "
-          f"contamination_recheck={result['contamination_recheck']['confirmed_non_self_matches']} "
-          f"wall_s_total={result['wall_s_total']} "
-          f"receipt={receipt_path} "
-          f"batch_file={args.out_batch} "
-          f"exit=PASS")
+        print(f"batch_size={result['batch_size']} "
+              f"windows_checked={result['total_candidates_checked']} "
+              f"replacements_made={result['replacements_made']} "
+              f"contamination_recheck={result['contamination_recheck']['confirmed_non_self_matches']} "
+              f"wall_s_total={result['wall_s_total']} "
+              f"receipt={receipt_path} "
+              f"batch_file={args.out_batch} "
+              f"exit=PASS")
+    except BaseException as exc:
+        receipt_dir = args.receipt_dir
+        already_receipted = False
+        try:
+            if receipt_dir and os.path.isdir(receipt_dir):
+                now = time.time()
+                for fn in os.listdir(receipt_dir):
+                    if fn.startswith("w2-heldout-decontam-CRASHED-"):
+                        fpath = os.path.join(receipt_dir, fn)
+                        if (now - os.path.getmtime(fpath)) < 30:
+                            already_receipted = True
+                            break
+        except Exception:
+            pass
+        if not already_receipted:
+            try:
+                _write_crash_receipt(
+                    exc, receipt_dir=receipt_dir,
+                    wall_s_at_crash=round(time.perf_counter() - _main_wrap_t0, 3),
+                    source="main_wrap")
+            except Exception:
+                pass
+        raise
 
 
 if __name__ == "__main__":
