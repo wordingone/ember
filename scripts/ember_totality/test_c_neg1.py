@@ -82,6 +82,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lane14_common import sha256_file as _sha256_file  # noqa: E402
+import void_supersession  # noqa: E402  (shared VOID-supersession partition, gh issue #358)
 
 # --- Locate the state root ----------------------------------------------------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -234,10 +235,21 @@ def main():
              f"({CANDIDATE_ROOTS}) -> input-missing, dead branch under the "
              "flat-layout resolver (paper-consistency flip, 2026-07-02)")
 
-    decisive = _decisive_claim_files()
+    decisive_raw = _decisive_claim_files()
+    # VOID-supersession (gh issue #353, shared with spend_annex_scan.py via
+    # void_supersession.py per gh issue #358): a receipt formally disposed by
+    # a VOID receipt's supersedes list is excluded from THIS probe's own
+    # decisive-claim corpus too, not just the annex's. The exclusion is
+    # disclosed below in every message that counts the corpus -- an
+    # exclusion that only shrinks a number with no trace is indistinguishable
+    # from laundering.
+    decisive, excluded_superseded = void_supersession.partition_superseded(decisive_raw, ROOT)
+    superseded_note = (f" ({len(excluded_superseded)} VOID-superseded receipt(s) excluded "
+                        "per issue #353/#358, disclosed not silent)"
+                        if excluded_superseded else "")
     if not decisive:
         emit("RED", "C(-1): no decisive-claim (verdict-bearing) receipts found "
-                    "under receipts/ -> clear-packet artifact ABSENT")
+                    f"under receipts/ -> clear-packet artifact ABSENT{superseded_note}")
 
     declared_ok = []          # (rel, verdict) -- declares zero-cost cleanly, no invalid-token
     declared_pass_ok = []     # subset of declared_ok whose verdict is PASS-class
@@ -375,14 +387,16 @@ def main():
                  f"-> zero-incremental-spend is UNPROVEN for those claims "
                  "(undeclared != proven-zero); 'every decisive claim' is not "
                  f"satisfied by one clean packet alone. sample={sample}"
-                 + (f" ... +{len(still_undeclared) - 5} more" if len(still_undeclared) > 5 else ""))
+                 + (f" ... +{len(still_undeclared) - 5} more" if len(still_undeclared) > 5 else "")
+                 + superseded_note)
         emit("RED",
              f"C(-1): {len(undeclared)}/{len(decisive)} decisive-claim "
              f"(verdict-bearing) receipts never declare {SPEND_KEY}/"
              f"{PAID_FLAG_KEY} -> zero-incremental-spend is UNPROVEN for "
              "those claims (undeclared != proven-zero); 'every decisive "
              f"claim' is not satisfied by one clean packet alone. sample={sample}"
-             + (f" ... +{len(undeclared) - 5} more" if len(undeclared) > 5 else ""))
+             + (f" ... +{len(undeclared) - 5} more" if len(undeclared) > 5 else "")
+             + superseded_note)
 
     best_rel, best_verdict = declared_pass_ok[-1]
     if annex_covered:
@@ -393,13 +407,13 @@ def main():
              f"declares {SPEND_KEY}=0, {PAID_FLAG_KEY}=false, no invalid-token; "
              f"ALL {len(decisive)} decisive-claim (verdict-bearing) receipts under "
              "receipts/ declare zero paid-surface dependency (none undeclared-and-"
-             f"uncovered, none violating){annex_note}")
+             f"uncovered, none violating){annex_note}{superseded_note}")
     emit("GREEN",
          f"C(-1): PASS-class clear packet {best_rel} (verdict={best_verdict!r}) "
          f"declares {SPEND_KEY}=0, {PAID_FLAG_KEY}=false, no invalid-token; "
          f"ALL {len(decisive)} decisive-claim (verdict-bearing) receipts under "
          "receipts/ declare zero paid-surface dependency (none undeclared, "
-         "none violating)")
+         f"none violating){superseded_note}")
 
 
 if __name__ == "__main__":
