@@ -2281,9 +2281,55 @@ def build_c_auto_fresh_reversion_climb():
 # --- end C-AUTO section -----
 
 
+def preflight_check_probe_files():
+    """Preflight: assert all referenced control probe files exist before suite starts.
+
+    If any referenced probe file is missing, fail loud at t=0 with a list of all
+    missing files, rather than crashing mid-suite.
+    """
+    # Hardcoded list of all probe files referenced in record() calls below.
+    # Maintain this list in sync with the record() calls in main().
+    EXPECTED_PROBES = [
+        "test_c_tally.py",
+        "test_c_neg1.py",
+        "test_c1.py",
+        "test_c0.py",
+        "test_c4.py",
+        "test_c5.py",
+        "test_c3.py",
+        "test_c7.py",
+        "test_c2.py",
+        "test_c_obs.py",
+        "test_c11.py",
+        "test_c_scale.py",
+        "test_c_e2b.py",
+        "test_c14.py",
+        "test_c_fed.py",
+        "test_c_ind.py",
+        "test_c_legib.py",
+        "test_c_manifest.py",
+        "test_c_organism.py",
+        "test_c_port.py",
+        "test_c_ladm.py",
+        "test_c_auto.py",
+    ]
+
+    missing_files = []
+    for probe_name in EXPECTED_PROBES:
+        probe_path = os.path.join(PROBES_DIR, probe_name)
+        if not os.path.isfile(probe_path):
+            missing_files.append(probe_name)
+
+    if missing_files:
+        print("PREFLIGHT FAIL: CHK control suite references missing probe files at t=0:")
+        for f in sorted(missing_files):
+            print(f"  {f}")
+        sys.exit(1)
+
 
 def main():
     os.makedirs(FIXTURES_DIR, exist_ok=True)
+    preflight_check_probe_files()
 
     tally_pos, tally_neg = build_c_tally()
     record("1 C-TALLY recompute-from-live-rows", "POS all-GREEN board", "test_c_tally.py", tally_pos, "GREEN")
@@ -2392,31 +2438,31 @@ def main():
     record("21 ISSUE#95 C-LADM ledger admission integrity", "NEG non-seed row with receipt entirely absent -> seed exception must not over-suppress", "test_c_ladm.py", ladm_unreceipted_neg, "RED")
 
     auto_base = build_c_auto_base()
-    record("22 C-AUTO autonomy-ladder-state faithfulness", "POS zero claims (honest baseline)", "test_c_auto.py.new", auto_base, "GREEN")
+    record("22 C-AUTO autonomy-ladder-state faithfulness", "POS zero claims (honest baseline)", "test_c_auto.py", auto_base, "GREEN")
 
     auto_unreceipt = build_c_auto_unreceipted_claim()
-    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG claimed rung with no claim receipt found", "test_c_auto.py.new", auto_unreceipt, "RED")
+    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG claimed rung with no claim receipt found", "test_c_auto.py", auto_unreceipt, "RED")
 
     auto_dangling = build_c_auto_dangling_window()
-    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG window receipt ref does not resolve on disk", "test_c_auto.py.new", auto_dangling, "RED")
+    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG window receipt ref does not resolve on disk", "test_c_auto.py", auto_dangling, "RED")
 
     auto_provenance = build_c_auto_missing_provenance()
-    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG window receipt missing required provenance field", "test_c_auto.py.new", auto_provenance, "RED")
+    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG window receipt missing required provenance field", "test_c_auto.py", auto_provenance, "RED")
 
     auto_mismatch = build_c_auto_state_claim_mismatch()
-    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG current_rung does not match highest claimed rung", "test_c_auto.py.new", auto_mismatch, "RED")
+    record("22 C-AUTO autonomy-ladder-state faithfulness", "NEG current_rung does not match highest claimed rung", "test_c_auto.py", auto_mismatch, "RED")
 
     auto_absent_dir = build_c_auto_receipts_dir_absent()
-    record("22 C-AUTO CURE-1 receipts dir absent", "NEG claimed rung, receipts/autonomy-ladder/ dir entirely absent (crash path fixed)", "test_c_auto.py.new", auto_absent_dir, "RED")
+    record("22 C-AUTO CURE-1 receipts dir absent", "NEG claimed rung, receipts/autonomy-ladder/ dir entirely absent (crash path fixed)", "test_c_auto.py", auto_absent_dir, "RED")
 
     auto_empty_prov = build_c_auto_empty_provenance()
-    record("22 C-AUTO CURE-2 empty provenance", "NEG window receipt with empty provenance field (theater hole fixed)", "test_c_auto.py.new", auto_empty_prov, "RED")
+    record("22 C-AUTO CURE-2 empty provenance", "NEG window receipt with empty provenance field (theater hole fixed)", "test_c_auto.py", auto_empty_prov, "RED")
 
     auto_stale_rev = build_c_auto_stale_reversion_claim()
-    record("22 C-AUTO CURE-3 stale reversion claim", "NEG claimed rung above reversion target with stale claim ts (before reversion ts)", "test_c_auto.py.new", auto_stale_rev, "RED")
+    record("22 C-AUTO CURE-3 stale reversion claim", "NEG claimed rung above reversion target with stale claim ts (before reversion ts)", "test_c_auto.py", auto_stale_rev, "RED")
 
     auto_fresh_rev = build_c_auto_fresh_reversion_climb()
-    record("22 C-AUTO CURE-3 fresh reversion climb", "POS claimed rung above reversion target with fresh claim ts (after reversion ts, legitimate re-climb)", "test_c_auto.py.new", auto_fresh_rev, "GREEN")
+    record("22 C-AUTO CURE-3 fresh reversion climb", "POS claimed rung above reversion target with fresh claim ts (after reversion ts, legitimate re-climb)", "test_c_auto.py", auto_fresh_rev, "GREEN")
 
     # --- report --------------------------------------------------------------
     print("=" * 100)
