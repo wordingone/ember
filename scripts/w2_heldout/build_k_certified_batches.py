@@ -4,8 +4,10 @@ Produces K=10 fresh 16-window batches from the clean held-out stratum,
 each disjoint from training front, each disjoint from every other batch,
 each disjoint from the original batch (sha 91069e33…).
 
-Uses a persistent corpus window-hash index (amortization per #370) to classify
-candidates instead of re-scanning the full corpus 10 independent times.
+Uses a persistent Bloom filter index to classify candidates:
+- Bloom negatives = definite clean (no further check needed) — O(1)
+- Bloom positives = might be contaminated (run contamination_recheck) — absorbs FPs
+- One full-corpus Bloom build, then amortization across all K batches
 
 Each batch gets a full certification receipt matching the w2-heldout-decontam
 schema, with per-batch sha, determinist re-derivation, and MODE disclosure per #371.
@@ -49,9 +51,9 @@ from w2_heldout.build_decontam_batch import (
     batch_sha256,
     reserve_pool,
 )
-from w2_heldout.corpus_window_index import (
-    build_corpus_index,
-    load_index,
+from w2_heldout.corpus_bloom_index import (
+    build_corpus_bloom_filter,
+    load_bloom_filter,
 )
 
 DEFAULT_SHARD_DIR = os.environ.get("EMBER_SHARD_DIR", "")
@@ -74,12 +76,15 @@ def _utc_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def classify_candidate_with_index(candidate_tokens: list[int], candidate_global_start: int,
-                                   window_to_positions: dict,
-                                   window: int = CONTAMINATION_WINDOW_TOKENS) -> bool:
-    """Classify a candidate as clean/contaminated using index lookup.
+def classify_candidate_with_bloom(candidate_tokens: list[int], candidate_global_start: int,
+                                   bloom_filter, shard_dir: str, files: list,
+                                   cum: list, window: int = CONTAMINATION_WINDOW_TOKENS,
+                                   roll_base: int = CONTAMINATION_ROLL_BASE) -> tuple[bool, bool]:
+    """Classify a candidate using Bloom filter + re-verify.
 
-    Returns True if clean (no non-self matches found in index), False if contaminated.
+    Returns (is_clean, used_bloom_rejection):
+      - is_clean: True if window passed all checks (definitely clean)
+      - used_bloom_rejection: True if Bloom negative short-circuited the check
     """
     # Extract all window_len-token windows from the candidate
     window_len = window
@@ -88,28 +93,36 @@ def classify_candidate_with_index(candidate_tokens: list[int], candidate_global_
         w = tuple(candidate_tokens[i : i + window_len])
         candidate_windows.add(w)
 
-    # Check if any of these windows appear in the corpus index
-    # (excluding a self-match at candidate_global_start)
+    # Bloom filter check: if ANY window in the candidate is not in Bloom,
+    # the candidate is definitely clean (Bloom has no false negatives)
     for w in candidate_windows:
-        if w in window_to_positions:
-            positions = window_to_positions[w]
-            # Check if any position is NOT a self-match
-            for pos in positions:
-                if pos["global_start"] != candidate_global_start:
-                    # Found a non-self match -> contaminated
-                    return False
-    # No non-self matches found -> clean
-    return True
+        if not bloom_filter.contains(w):
+            # Definite clean: Bloom said NO, and Bloom never says NO falsely
+            return True, True
+
+    # All windows passed Bloom (all might be in corpus), so run exact verification
+    # This absorbs Bloom false positives via contamination_recheck re-verification
+    exact_result = contamination_recheck(
+        [candidate_tokens], shard_dir,
+        window=window, roll_base=roll_base
+    )
+
+    final_non_self_count = len(exact_result["confirmed_matches"])
+    is_clean = final_non_self_count == 0
+
+    return is_clean, False
 
 
 def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SEQ,
                     n_mtp: int = DEFAULT_N_MTP, batch_size: int = DEFAULT_BATCH_SIZE,
                     ceiling_steps: int = DEFAULT_CEILING_STEPS,
                     train_batch: int = DEFAULT_TRAIN_BATCH, k: int = DEFAULT_K,
-                    index_path: str | None = None) -> dict:
-    """Build K fresh certified batches.
+                    bloom_filter_path: str | None = None,
+                    bloom_receipt_path: str | None = None) -> dict:
+    """Build K fresh certified batches using Bloom filter index.
 
-    If index_path is None, builds the index first. Otherwise loads from disk.
+    If bloom_filter_path/receipt_path are None, builds the filter first.
+    Otherwise loads from disk.
     """
     t_start = time.perf_counter()
     block_len = seq + 1 + n_mtp
@@ -120,20 +133,18 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
     manifest = {"total_size_bytes": sum(f["size_bytes"] for f in files), "files": files}
     n_windows = compute_n_windows_from_manifest(manifest, seq, n_mtp=n_mtp)
 
-    # Build or load index
-    if index_path is None:
-        print("Building corpus window index...")
-        index_receipt = build_corpus_index(shard_dir=shard_dir, seq=seq, n_mtp=n_mtp,
-                                            window=CONTAMINATION_WINDOW_TOKENS,
-                                            roll_base=CONTAMINATION_ROLL_BASE)
-        window_to_positions = index_receipt["window_to_positions"]
-        index_build_wall_s = index_receipt["wall_s"]
-        index_build_ts = _utc_ts()
+    # Build or load Bloom filter
+    if bloom_filter_path is None:
+        print("Building corpus Bloom filter...")
+        index_result = build_corpus_bloom_filter(shard_dir=shard_dir, seq=seq, n_mtp=n_mtp)
+        bloom_filter = index_result["bloom_filter"]
+        bloom_build_wall_s = index_result["wall_s"]
+        bloom_build_ts = _utc_ts()
     else:
-        print(f"Loading corpus window index from {index_path}...")
-        window_to_positions = load_index(index_path)
-        index_build_wall_s = None
-        index_build_ts = None
+        print(f"Loading Bloom filter from {bloom_filter_path}...")
+        bloom_filter, bloom_receipt = load_bloom_filter(bloom_filter_path, bloom_receipt_path)
+        bloom_build_wall_s = bloom_receipt.get("wall_s")
+        bloom_build_ts = bloom_receipt.get("ts")
 
     # Reserve pool (same as single-batch build)
     pool_size = batch_size * 2  # modest oversample
@@ -143,6 +154,7 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
     batches = []
     next_pool_start = pool_start
     total_wall_s = {}
+    bloom_rejections_total = 0
 
     for batch_no in range(1, k + 1):
         print(f"\nBatch {batch_no}/{k}...")
@@ -151,6 +163,7 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
         selected_rows = []
         selected_indices = []
         rounds = []
+        bloom_rejections_this_batch = 0
 
         for round_no in range(1, DEFAULT_MAX_ROUNDS + 1):
             need = batch_size - len(selected_rows)
@@ -167,6 +180,7 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
 
             clean_found = 0
             contaminated_found = 0
+            bloom_rejections_round = 0
 
             for pool_idx in pool_indices:
                 if len(selected_rows) >= batch_size:
@@ -175,11 +189,16 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
                 tokens = read_window_tokens(shard_dir, files, cum, seq, block_len, pool_idx)
                 global_start = pool_idx * seq
 
-                # Use index to classify
-                is_clean = classify_candidate_with_index(
-                    tokens, global_start, window_to_positions,
-                    window=CONTAMINATION_WINDOW_TOKENS
+                # Classify using Bloom filter + re-verify
+                is_clean, used_bloom_reject = classify_candidate_with_bloom(
+                    tokens, global_start, bloom_filter, shard_dir, files, cum,
+                    window=CONTAMINATION_WINDOW_TOKENS,
+                    roll_base=CONTAMINATION_ROLL_BASE
                 )
+
+                if used_bloom_reject:
+                    bloom_rejections_round += 1
+                    bloom_rejections_this_batch += 1
 
                 if is_clean:
                     selected_rows.append(tokens)
@@ -194,6 +213,7 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
                 "pool_size": len(pool_indices),
                 "clean_found": clean_found,
                 "contaminated_found": contaminated_found,
+                "bloom_rejections": bloom_rejections_round,
             })
 
             next_pool_start = pool_indices[-1] + 1 if pool_indices else next_pool_start
@@ -232,6 +252,7 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
         sha = batch_sha256(selected_rows, seq)
         wall_s = round(time.perf_counter() - t_batch, 3)
         total_wall_s[batch_no] = wall_s
+        bloom_rejections_total += bloom_rejections_this_batch
 
         batches.append({
             "batch_no": batch_no,
@@ -241,17 +262,20 @@ def build_k_batches(*, shard_dir: str = DEFAULT_SHARD_DIR, seq: int = DEFAULT_SE
             "selected_rows": selected_rows,
             "rounds": rounds,
             "wall_s": wall_s,
+            "bloom_rejections": bloom_rejections_this_batch,
         })
 
-        print(f"  ✓ Batch {batch_no}: {batch_size} clean windows, sha={sha[:16]}..., wall_s={wall_s}s")
+        print(f"  ✓ Batch {batch_no}: {batch_size} clean windows, sha={sha[:16]}..., "
+              f"bloom_rejections={bloom_rejections_this_batch}, wall_s={wall_s}s")
 
     wall_total = round(time.perf_counter() - t_start, 3)
 
     return {
         "k": k,
         "batches": batches,
-        "index_build_wall_s": index_build_wall_s,
-        "index_build_ts": index_build_ts,
+        "bloom_build_wall_s": bloom_build_wall_s,
+        "bloom_build_ts": bloom_build_ts,
+        "bloom_rejections_total": bloom_rejections_total,
         "total_wall_s": wall_total,
         "seq": seq,
         "n_mtp": n_mtp,
@@ -275,8 +299,8 @@ def write_batch_receipts(result: dict, *, receipt_dir: str = RECEIPT_DIR) -> lis
             "spec_ref": "docs/spec/w2-scale-preregistration-v1.md#4-decontamination-precondition",
             "batch_no": batch_data["batch_no"],
             "k_total": result["k"],
-            "index_build_wall_s": result["index_build_wall_s"],
-            "candidate_window_derivation_mode": "index_lookup (amortized; #370 cure 1)",
+            "bloom_build_wall_s": result["bloom_build_wall_s"],
+            "candidate_window_derivation_mode": "bloom_filter (amortized; #370 cure 1, soundness fix)",
             "batch_sha256": batch_data["batch_sha256"],
             "seq": result["seq"],
             "n_mtp": result["n_mtp"],
@@ -304,7 +328,8 @@ def main():
     ap.add_argument("--ceiling-steps", type=int, default=DEFAULT_CEILING_STEPS)
     ap.add_argument("--train-batch", type=int, default=DEFAULT_TRAIN_BATCH)
     ap.add_argument("--k", type=int, default=DEFAULT_K)
-    ap.add_argument("--index-path", default=None, help="Path to pre-built index JSON")
+    ap.add_argument("--bloom-filter-path", default=None, help="Path to pre-built Bloom filter .bin")
+    ap.add_argument("--bloom-receipt-path", default=None, help="Path to Bloom receipt .json")
     ap.add_argument("--receipt-dir", default=RECEIPT_DIR)
     args = ap.parse_args()
 
@@ -322,12 +347,14 @@ def main():
         ceiling_steps=args.ceiling_steps,
         train_batch=args.train_batch,
         k=args.k,
-        index_path=args.index_path,
+        bloom_filter_path=args.bloom_filter_path,
+        bloom_receipt_path=args.bloom_receipt_path,
     )
 
     clean_count = sum(1 for b in result["batches"] if b["status"] == "CLEAN")
     print(f"\n{'='*60}")
     print(f"K-batch certification complete: {clean_count}/{args.k} clean batches")
+    print(f"Bloom filter rejections (O(1) clean shortcuts): {result['bloom_rejections_total']}")
     if clean_count > 0:
         receipt_paths = write_batch_receipts(result, receipt_dir=args.receipt_dir)
         print(f"Receipts written: {clean_count} files")
