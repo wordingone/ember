@@ -2221,7 +2221,8 @@ def run_and_emit_live() -> Path:
         # rho_noise: compute from collected delta tensors, not hardcoded values
         if r_sr_val and per_class_delta["ff"]:
             import torch
-            delta_all = torch.cat(per_class_delta["ff"], dim=0)  # Stack all deltas
+            # Flatten all deltas to 1D and concatenate (different layers have different shapes)
+            delta_all = torch.cat([d.flatten() for d in per_class_delta["ff"]], dim=0)
             r_noise_val = rho_noise(1e-4, delta_all)  # Pass actual delta tensor
         else:
             r_noise_val = "N/A"
