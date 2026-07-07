@@ -690,6 +690,13 @@ export function createRenderer(options: RendererOptions): Renderer {
           prevStyleRef = cell.styleRef;
         }
       }
+      // issue #310: unconditional trailing reset ensures the real terminal is always left in a
+      // default state at the end of each patch write. Without this, a non-default style (e.g.
+      // the cursor's inverse) painted as the last cell in a patch leaves the terminal inverted;
+      // the NEXT render() call assumes prevStyleRef=0 (empty state) but the terminal is actually
+      // non-empty, so plain content needing no SGR is written without SGR and inherits the
+      // stale inverse. The reset makes each patch self-terminating, breaking the cross-patch leak.
+      if (runs.length > 0) buf += "\x1b[m";
       if (buf) stream.write(buf);
 
       // M9-DIAG-LIVE: capture per-paint diagnostic for live root-cause
