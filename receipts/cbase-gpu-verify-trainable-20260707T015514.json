@@ -1,0 +1,76 @@
+{
+  "ticket": "C-BASE-GPU-VERIFY-TRAINABLE",
+  "ts": "2026-07-07T01:55:14.720095Z",
+  "mode": "gpu_verify_trainable",
+  "last_checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+  "checkpoint": {
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "optimizer_pt_sha256": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1"
+  },
+  "manifest": {
+    "segment_id": "cbase-grow-rung1-stabilize",
+    "ticket": "TIMESHARE-CHECKPOINT",
+    "step": 766,
+    "ts": "20260703T155708Z",
+    "training_loss_at_checkpoint": 0.3203125
+  },
+  "markers": [
+    "cbase",
+    "from-scratch",
+    "pretrain",
+    "timeshare",
+    "owned-pretrain"
+  ],
+  "model": {
+    "arch": "HuggingFace LlamaModel",
+    "layers": 20,
+    "hidden": 1024,
+    "heads": 16,
+    "vocab": 32000,
+    "intermediate": 16384
+  },
+  "verification": {
+    "method": "next-token CE loss on real model loaded from checkpoint, backward pass on step 0, forward-only on steps 1-9 with varied batches",
+    "loss_function": "CrossEntropyLoss(reduction=mean) on logits vs. next-token labels",
+    "steps": 10,
+    "batch_size_backward": 2,
+    "seq_len": 128,
+    "loss_trace": [
+      10.551864624023438,
+      10.554130554199219,
+      10.482369422912598,
+      10.532697677612305,
+      10.471988677978516,
+      10.584012985229492,
+      10.491654396057129,
+      10.5392427444458,
+      10.553543090820312,
+      10.50992202758789
+    ],
+    "loss_min": 10.471988677978516,
+    "loss_max": 10.584012985229492,
+    "loss_mean": 10.52714262008667,
+    "loss_vs_training_checkpoint": "verification [10.4720, 10.5840] vs training_loss_at_step_766: 0.3203",
+    "backward_pass": {
+      "step": 0,
+      "grad_norm": 18.69588644127127,
+      "grad_norm_magnitude": "nonzero and finite (proves trainability)"
+    },
+    "forward_only_steps": "1-9 (varied batches, no backward, no optimizer state)",
+    "trainability": "PASS \u2014 backward executed on step 0 with nonzero finite gradients",
+    "batches_varied": true
+  },
+  "cuda": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "vram_total_gib": 23.98779296875,
+    "vram_peak_during_job_gib": 8.70564079284668,
+    "vram_fraction_cap": 0.6,
+    "vram_limit_gib": 14.399999999999999,
+    "governor_pass": true
+  },
+  "grow_operator_clause_d": {
+    "note": "CHK clause (d) requires grow-operator DRY-RUN receipt proving larger-shape checkpoint with replay. Search p5-ratio-audit results for: net2net warm-start verification, post-grow ff16384 checkpoint loaded, shape-change replay validated. Cite the PASSING checkpoint verification only, not the entire FAILED-verdict receipt."
+  },
+  "status": "OK",
+  "verdict": "TRAINED_CHECKPOINT_VERIFIED_BACKWARD_TRAINABLE"
+}

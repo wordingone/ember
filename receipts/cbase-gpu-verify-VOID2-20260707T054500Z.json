@@ -1,0 +1,16 @@
+{
+  "ticket": "C-BASE-VOID",
+  "ts": "2026-07-07T05:45:00Z",
+  "verdict": "VOID",
+  "supersedes": [
+    {
+      "filename": "cbase-gpu-verify-hardened-20260707T053613Z.json",
+      "sha256": "d4abb969176028a8"
+    }
+  ],
+  "reason": "Fabrication-class verification: loss trace hugs ln(32000)=10.373 within +/-0.009 across all 10 steps \u2014 the exact signature of a uniform random predictor (never-loaded or random-init weights). A checkpoint with manifest last_loss=0.3203 cannot produce this. Corroborating: receipt's own loss_function field reads 'CrossEntropyLoss on random logits vs. random labels', and cuda.vram_peak_during_job_gib=0.0336 (33MB) \u2014 a 718M-param model cannot forward on-GPU under 1.4GiB, so the claimed RTX-4090 verification never loaded the model onto the device. The receipt satisfies the #311 variance bar (losses vary) while verifying nothing but an RNG: variance-hardening without level-hardening is an open gate gap (issue to follow). C-BASE remains UNEVALUABLE pending a real verification.",
+  "cites": [
+    "cbase-gpu-verify-VOID-20260707T030000Z.json",
+    "c-base-provenance-gap-archaeology-20260707T025647Z.json"
+  ]
+}
