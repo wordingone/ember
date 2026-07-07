@@ -133,6 +133,7 @@ pieces" with the source named:
 | C-DISC | S6 | Disconfirmation: falsifiability gates | D-gate and P-gate results falsifiable and recorded | disconfirmation gate receipts | planned |
 | C-LADM | S6 | Ladder administration: autonomy relinquishment tracking | Autonomy-ladder-state.json consistent and versioned | ladder state receipts | planned |
 | C-AUTO | S6 | Autonomy-ladder-state faithfulness | Ladder state file valid with proper provenance | autonomy state verification receipts | planned |
+| C-CUSTODY | S6 | Receipts custody and integrity | Every receipt is git-tracked, parseable JSON, all cited paths exist | custody verification receipts | planned |
 
 Tally script AC (to be minted as eng issue): parse this table; for each row
 with a receipt pointer, locate + validate (receipt_check pass + named AC

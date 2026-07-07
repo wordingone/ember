@@ -405,16 +405,17 @@ pre-epoch history.
 
 **Count ruling (2026-07-02, relocated from GOAL.md §4.1; re-ruled same day on C-IND's addition,
 GOAL.md §4.0 amendment 10; re-ruled 2026-07-02 later the same day on C-PROC's addition per
-GOAL.md §13; re-ruled again same day on C-LEGIB's addition, gh issue #13):** the registry = 33
+GOAL.md §13; re-ruled again same day on C-LEGIB's addition, gh issue #13):** the registry = 37
 primary conditions (C(−1), C0–C15, C-EFF, C-BASE, C-PORT, C-FED, C-GROW, C-ORGANISM, C-OBS,
 C-ANAT, C-SCALE, C-E2B, C-IND, C-PROC, C-LEGIB, C-SURFACE2, C-ENF, C-MILE, C-DISC, C-LADM,
-C-AUTO) + 2 roll-ups (C-MANIFEST, C-TALLY) = 38 entries (re-ruled 2026-07-03 on C-SURFACE2's
+C-AUTO, C-CUSTODY) + 2 roll-ups (C-MANIFEST, C-TALLY) = 39 entries (re-ruled 2026-07-03 on C-SURFACE2's
 addition, gh issue #11: 31 primary + 2 roll-ups; re-ruled 2026-07-04 on C-ENF's addition, gh
 issue #38: 32 primary + 2 roll-ups; re-ruled 2026-07-04 on C-MILE's addition, gh issue #35
 DISPATCH 3 of 3: 33 primary + 2 roll-ups; re-ruled 2026-07-04 on C-DISC's addition, gh issue
 #94: 34 primary + 2 roll-ups; re-ruled 2026-07-04 on C-LADM's addition, gh issue #95: 35
 primary + 2 roll-ups; re-ruled 2026-07-04 on C-AUTO's addition, gh issue #104: 36 primary + 2
-roll-ups); any "37", "36", "35", "34", "33", "31", "30", "29" or "28" elsewhere is a stale
+roll-ups; re-ruled 2026-07-07 on C-CUSTODY's addition, gh issue #382: 37 primary + 2
+roll-ups); any "38", "37", "36", "35", "34", "33", "31", "30", "29" or "28" elsewhere is a stale
 intermediate count, corrected by this ruling.
 
 - **C-MANIFEST.** `docs/ember-completeness.md` enumerates every planned piece (id, subgoal, AC, test,
