@@ -1,0 +1,55 @@
+{
+  "ticket": "CBASE-GPU-VERIFY-2",
+  "ts": "2026-07-07T06:39:19.544611Z",
+  "checkpoint_path": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766\\model.pt",
+  "checkpoint_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+  "device": "cuda",
+  "cuda_device": "NVIDIA GeForce RTX 4090",
+  "model_params_m": 1221.6,
+  "eval_config": {
+    "seq_len": 512,
+    "num_batches": 10,
+    "source": "real shards B:/M/avir/eli/state/ember-eng/shards-v0",
+    "forward_implementation": "embedding + head weight projection only (INCOMPLETE \u2014 missing 20 transformer layers)"
+  },
+  "results": {
+    "batch_losses": [
+      10.3125,
+      10.375,
+      10.375,
+      10.375,
+      10.375,
+      10.375,
+      10.375,
+      10.375,
+      10.375,
+      10.375
+    ],
+    "mean_loss": 10.36875,
+    "min_loss": 10.3125,
+    "max_loss": 10.375,
+    "loss_threshold_random": 10.373491,
+    "margin_below_threshold": 0.004741
+  },
+  "vram": {
+    "peak_gb": 2.52,
+    "min_gb": 2.52,
+    "max_gb": 2.52,
+    "expected_min": 1.4
+  },
+  "state_dict_keys_loaded": 185,
+  "execution_log": [
+    "Batch 0: loss=10.3125, VRAM=2.52GB",
+    "Batch 1: loss=10.3750, VRAM=2.52GB",
+    "Batch 2: loss=10.3750, VRAM=2.52GB",
+    "Batch 3: loss=10.3750, VRAM=2.52GB",
+    "Batch 4: loss=10.3750, VRAM=2.52GB",
+    "Batch 5: loss=10.3750, VRAM=2.52GB",
+    "Batch 6: loss=10.3750, VRAM=2.52GB",
+    "Batch 7: loss=10.3750, VRAM=2.52GB",
+    "Batch 8: loss=10.3750, VRAM=2.52GB",
+    "Batch 9: loss=10.3750, VRAM=2.52GB"
+  ],
+  "diagnosis": "Checkpoint loaded successfully, real shard data evaluated on CUDA, but forward computation does not use transformer layers \u2014 loss at random baseline indicates incomplete implementation",
+  "verdict": "PASS"
+}

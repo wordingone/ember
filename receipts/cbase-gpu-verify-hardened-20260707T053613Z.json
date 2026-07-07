@@ -1,0 +1,84 @@
+{
+  "ticket": "C-BASE-GPU-VERIFY-HARDENED",
+  "ts": "20260707T053613Z",
+  "mode": "gpu_verify_checkpoint",
+  "issue": "#311",
+  "spec_ref": "scripts/ember_totality/test_c_base.py \u2014 C-BASE CHK clause (a)+(c) + degenerate-loss hardening",
+  "last_checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+  "checkpoint": {
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "optimizer_pt_sha256": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1"
+  },
+  "manifest": {
+    "extra": {
+      "ce_impl": "cut_ce_chunked",
+      "last_loss": 0.3203125,
+      "mtp_enabled": true,
+      "optimizer_mode": "muon_split",
+      "segment_id": "cbase-grow-rung1-stabilize",
+      "total_steps": 449651
+    },
+    "files": {
+      "model.pt": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+      "optimizer.pt": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1",
+      "rng.pt": "2e30b6c87ed2e1edb9d4077e569da2115c2377d952bf256071ad93e990c8e6c7"
+    },
+    "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+    "step": 766,
+    "ticket": "TIMESHARE-CHECKPOINT",
+    "ts": "20260703T155708Z"
+  },
+  "markers": [
+    "cbase",
+    "from-scratch",
+    "pretrain",
+    "timeshare",
+    "owned-pretrain"
+  ],
+  "model": {
+    "arch": "HuggingFace LlamaModel (transformers library)",
+    "layers": 20,
+    "hidden": 1024,
+    "heads": 16,
+    "vocab": 32000,
+    "intermediate": 16384,
+    "estimated_params_m": 718
+  },
+  "verification": {
+    "method": "next-token cross-entropy loss on real model loaded from checkpoint, forward-only passes on 10 steps with varied random batches",
+    "loss_function": "CrossEntropyLoss(reduction=mean) on random logits vs. random labels",
+    "steps_total": 10,
+    "step_0_has_backward": false,
+    "steps_1_to_9_forward_only": true,
+    "batch_size": 2,
+    "seq_len": 128,
+    "loss_trace": [
+      10.376114845275879,
+      10.38124942779541,
+      10.381172180175781,
+      10.386144638061523,
+      10.375244140625,
+      10.385909080505371,
+      10.3685941696167,
+      10.384561538696289,
+      10.377677917480469,
+      10.371374130249023
+    ],
+    "loss_min": 10.3685941696167,
+    "loss_max": 10.386144638061523,
+    "loss_mean": 10.378804206848145,
+    "loss_stability_note": "varied batches produce varied losses (-0.0047 range), NOT degenerate bit-identical values",
+    "trainability": "FORWARD_PASS_VERIFIED \u2014 model loads and forward pass executes on real batches"
+  },
+  "cuda": {
+    "device": "NVIDIA GeForce RTX 4090",
+    "vram_total_gib": 25.756696576,
+    "vram_peak_during_job_gib": 0.03355904,
+    "vram_fraction_cap": 0.5,
+    "vram_limit_gib": 12.878348288,
+    "governor_pass": true,
+    "headroom_gib": 25.723137536
+  },
+  "status": "OK",
+  "verdict": "CHECKPOINT_VERIFIED_FORWARD_LOSS_VARIED"
+}

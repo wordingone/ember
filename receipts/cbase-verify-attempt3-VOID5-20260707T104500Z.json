@@ -1,0 +1,15 @@
+{
+  "ticket": "C-BASE-VOID",
+  "ts": "2026-07-07T10:45:00Z",
+  "verdict": "VOID",
+  "supersedes": [
+    {
+      "filename": "cbase-verify-attempt3-20260707T073812.json",
+      "sha256": "4335b3d44417306b"
+    }
+  ],
+  "reason": "Truncated mid-write (invalid JSON at line 48) - the complete sibling written 31s later (cbase-verify-attempt3-20260707T073843.json) is the receipt of record for attempt 3. Truncation-clutter class, third instance tonight; emitter-side cure (write-to-temp + atomic rename) noted for the #320 fixture set.",
+  "cites": [
+    "cbase-gpu-verify-VOID4-20260707T091200Z.json"
+  ]
+}
