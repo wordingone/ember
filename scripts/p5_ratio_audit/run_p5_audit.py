@@ -975,15 +975,25 @@ def rho_noise(epsilon: float, delta_per_channel) -> float:
 # rho_rank / rho_grow -- N/A-by-construction (no production rank projector).
 # ---------------------------------------------------------------------------
 
-def rho_rank_rho_grow_na() -> dict:
-    return {
-        "rho_rank": None, "rho_grow": None,
-        "na_reason": "structural: no rank-projection code exists in "
-            "production (scripts/timeshare_pretrain.py, scripts/"
-            "cbase_grow_*.py grep-confirmed clean); scripts/expc1's "
-            "rank-sweep is a separate, unwired research harness -- "
-            "recorded per checkpoint, per tensor class.",
-    }
+def rho_rank_rho_grow_na() -> tuple:
+    return (None, None)  # Both rho_rank and rho_grow return None
+
+
+def rho_spec_na() -> str:
+    """rho_spec N/A at pre-grow checkpoint (no duplicated pairs in structure)."""
+    return "N/A-pregrow"
+
+
+def rho_batch_na() -> str:
+    """rho_batch N/A-by-construction (per-batch gradient noise measurement requires
+    independent batch replicates; live run uses single probe batch)."""
+    return "N/A-single-batch"
+
+
+def rho_block_na() -> str:
+    """rho_block N/A-by-construction (production optimizer state is bf16-native
+    end-to-end; no 8-bit optimizer-state path exists for computing per-block state norms)."""
+    return "N/A-bf16-native"
 
 
 # ---------------------------------------------------------------------------
@@ -2198,16 +2208,28 @@ def run_and_emit_live() -> Path:
 
         # Compute all 7 ratios using existing functions.
         per_class = {cls: [] for cls in TENSOR_CLASSES}
+        per_class_delta = {cls: [] for cls in TENSOR_CLASSES}  # Collect delta tensors for rho_noise
         for name, grad in grad_pre.items():
             if "ff" in name or "gate" in name or "up" in name:
                 delta = quant_delta_per_channel(grad)
                 r_sr = rho_sr_per_tensor(grad, delta)
                 per_class["ff"].append(r_sr)
+                per_class_delta["ff"].append(delta)
 
         r_sr_val = sum(per_class["ff"]) / max(len(per_class["ff"]), 1) if per_class["ff"] else None
-        r_noise_val = rho_noise(1e-4, 1e-5) if r_sr_val else "N/A"
-        r_rank_val = rho_rank_rho_grow_na()[0] if r_sr_val else "N/A"
-        r_grow_val = rho_rank_rho_grow_na()[1] if r_sr_val else "N/A"
+
+        # rho_noise: compute from collected delta tensors, not hardcoded values
+        if r_sr_val and per_class_delta["ff"]:
+            import torch
+            delta_all = torch.cat(per_class_delta["ff"], dim=0)  # Stack all deltas
+            r_noise_val = rho_noise(1e-4, delta_all)  # Pass actual delta tensor
+        else:
+            r_noise_val = "N/A"
+
+        # rho_rank, rho_grow: N/A-by-construction
+        r_rank_val, r_grow_val = rho_rank_rho_grow_na() if r_sr_val else ("N/A", "N/A")
+
+        # rho_spec, rho_batch, rho_block: N/A-by-construction (pre-grow, single-batch, bf16-native)
         r_spec_val = rho_spec_na() if r_sr_val else "N/A"
         r_batch_val = rho_batch_na() if r_sr_val else "N/A"
         r_block_val = rho_block_na() if r_sr_val else "N/A"
