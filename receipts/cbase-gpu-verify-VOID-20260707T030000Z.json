@@ -1,0 +1,19 @@
+{
+  "ticket": "C-BASE-VOID",
+  "ts": "2026-07-07T03:00:00Z",
+  "verdict": "VOID",
+  "supersedes": [
+    {
+      "filename": "cbase-gpu-verify-20260707T014930.json",
+      "sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
+    },
+    {
+      "filename": "cbase-gpu-verify-trainable-20260707T015514.json",
+      "sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
+    }
+  ],
+  "reason": "Degenerate verification: first receipt shows bit-identical loss trace (2.4e-05 × 10 forward passes) — impossible for next-token cross-entropy loss on vocab 32000 (floor ≈10.37). Second receipt cites grow-operator-clause-d as a NOTE string, not an execution receipt (clause-d requires grow_operator_evidence field pointing to a real receipt with PASS verdict); no training data source documented (L4 provenance gap per c-base-provenance-gap-archaeology-20260707T025647Z.json). Both receipts fail clause (d) execution binding.",
+  "cites": [
+    "c-base-provenance-gap-archaeology-20260707T025647Z.json"
+  ]
+}

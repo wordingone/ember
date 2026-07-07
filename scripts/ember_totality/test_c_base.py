@@ -127,6 +127,87 @@ def _sha256_first16(path: Path) -> str | None:
         return None
 
 
+def _is_superseded(receipt_path: Path, all_receipts: list[Path]) -> bool:
+    """Check if this receipt is superseded by a VOID receipt.
+
+    A VOID receipt supersedes another if it lists the target receipt's
+    filename or sha256 in its 'supersedes' array.
+    """
+    receipt_name = receipt_path.name
+    receipt_hash = _sha256_first16(receipt_path)
+
+    for void_candidate in all_receipts:
+        obj = _read_json(void_candidate)
+        if obj is None or not isinstance(obj, dict):
+            continue
+        # VOID receipts have verdict="VOID"
+        if obj.get("verdict") != "VOID":
+            continue
+        supersedes = obj.get("supersedes", [])
+        if not isinstance(supersedes, list):
+            continue
+        # Check if this receipt is named or hashed in the supersession list
+        for sup in supersedes:
+            if isinstance(sup, dict):
+                if sup.get("filename") == receipt_name:
+                    return True
+                if receipt_hash and sup.get("sha256") == receipt_hash:
+                    return True
+            elif isinstance(sup, str):
+                if sup == receipt_name or (receipt_hash and sup == receipt_hash):
+                    return True
+    return False
+
+
+def _is_degenerate_loss_trace(loss_trace) -> bool:
+    """Check if a loss trace is degenerate (impossible for real training).
+
+    Criteria for rejection:
+    - All values are bit-identical (indicates broken computation)
+    - Loss is < 1e-3 for a from-scratch checkpoint (floor ~ln(32000) ≈ 10.37)
+    """
+    if not isinstance(loss_trace, list) or len(loss_trace) == 0:
+        return False
+
+    # Check if all values are identical (bit-level)
+    if len(set(loss_trace)) == 1:
+        return True
+
+    # Check if all values are suspiciously low (< 1e-3)
+    if all(isinstance(v, (int, float)) and v < 1e-3 for v in loss_trace):
+        return True
+
+    return False
+
+
+def _validate_grow_operator_evidence(evidence_path: str, all_receipts: list[Path]) -> bool:
+    """Validate grow_operator_evidence points to a real receipt with PASS verdict.
+
+    The evidence must be:
+    - A receipt filename that exists in receipts/
+    - Contains a verdict field with "PASS" in its value (or similar pass marker)
+    """
+    if not isinstance(evidence_path, str) or not evidence_path:
+        return False
+
+    # evidence_path should be relative (e.g., "receipts/grow-op-verify-20260707T123456Z.json")
+    # or just the filename. Search for it.
+    evidence_name = Path(evidence_path).name
+
+    for receipt in all_receipts:
+        if receipt.name == evidence_name:
+            obj = _read_json(receipt)
+            if obj is None:
+                return False
+            # Look for a PASS-class verdict (contains "PASS" or "VERIFIED" or similar)
+            verdict = obj.get("verdict", "").upper()
+            if "PASS" in verdict or "VERIFIED" in verdict or "TRAINABLE" in verdict:
+                return True
+            return False
+
+    return False
+
+
 def main() -> int:
     # ---- Pre-flight: the artifact root must really exist. --------------------
     if not RECEIPTS.is_dir():
@@ -146,6 +227,10 @@ def main() -> int:
     n_owned_candidates = 0
 
     for rp in receipt_files:
+        # Check for supersession first
+        if _is_superseded(rp, receipt_files):
+            continue
+
         obj = _read_json(rp)
         if obj is None:
             continue
@@ -187,15 +272,48 @@ def main() -> int:
 
     # ---- CHK clause (d): find a REAL grow-operator DRY-RUN receipt proving a --
     #      larger-shape checkpoint produced function-preserving that REPLAYS.
+    #      HARDENED: require explicit grow_operator_evidence field pointing to a
+    #      real receipt with PASS verdict (not just keyword matching).
     grow_op_receipt = None
     for rp in receipt_files:
+        # Check for supersession first
+        if _is_superseded(rp, receipt_files):
+            continue
+
         obj = _read_json(rp)
         if obj is None:
             continue
         text = _flatten_text(obj)
-        if any(g in text for g in GROW_OP_MARKERS) and any(r in text for r in GROW_REPLAY_MARKERS):
-            grow_op_receipt = rp
-            break
+
+        # Must have grow-operator markers AND replay markers
+        if not (any(g in text for g in GROW_OP_MARKERS) and any(r in text for r in GROW_REPLAY_MARKERS)):
+            continue
+
+        # HARDENED: require explicit grow_operator_evidence field
+        evidence = obj.get("grow_operator_evidence")
+        if not evidence:
+            # Try legacy field name
+            evidence = obj.get("grow_operator_clause_d")
+            if isinstance(evidence, dict):
+                evidence = evidence.get("receipt_path") or evidence.get("receipt")
+            if isinstance(evidence, str) and evidence.startswith("receipts/"):
+                # Valid evidence path
+                pass
+            else:
+                # Clause (d) requires execution binding, not a decision note
+                continue
+
+        # Validate the evidence receipt exists and has PASS verdict
+        if evidence and not _validate_grow_operator_evidence(evidence, receipt_files):
+            continue
+
+        # HARDENED: check for degenerate loss traces (indicates broken computation)
+        loss_trace = obj.get("verification", {}).get("loss_trace")
+        if loss_trace and _is_degenerate_loss_trace(loss_trace):
+            continue
+
+        grow_op_receipt = rp
+        break
 
     # ---- (2) NEGATIVE ASSERTIONS: none of the invalid-tokens may appear in ----
     #      a candidate satisfying receipt (checkpoint receipt or grow receipt).
