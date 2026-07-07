@@ -2167,80 +2167,64 @@ def run_and_emit_live() -> Path:
         import torch
         from scripts.timeshare_pretrain import build_v0_model, load_contract
 
-        # Load production model + probe batch.
-        # build_v0_model returns (model, vocab, hidden, n_mtp); extract backbone for forward pass
+        # Performance mitigation: CPU contention from 8 scan workers + faulthandler for crashes
+        torch.set_num_threads(2)
+
+        # Load production models: PRE-GROW and POST-GROW with their RESPECTIVE FF dimensions
+        # (EACH checkpoint has its own architecture; must not share a single model)
         cfg = load_contract()
-        print(f"[p5-ratio-audit] Config vocab_size: {cfg['model']['vocab']}, FF override: {pre_ff}", flush=True)
-        wrapper, vocab, hidden, n_mtp = build_v0_model(
+
+        # PRE-GROW model (FF=8192)
+        print(f"[p5-ratio-audit] PRE-GROW: building model with FF={pre_ff}", flush=True)
+        pre_wrapper, vocab_pre, hidden_pre, n_mtp = build_v0_model(
             cfg, live=True, intermediate_override=pre_ff, device="cpu")
-        print(f"[p5-ratio-audit] Model created: vocab={vocab}, hidden={hidden}, intermediate={pre_ff}", flush=True)
+        print(f"[p5-ratio-audit] PRE-GROW model: vocab={vocab_pre}, hidden={hidden_pre}, n_mtp={n_mtp}", flush=True)
 
-        # Use backbone_model for forward pass (it's the actual LlamaModel)
-        pre_model = wrapper.backbone_model if hasattr(wrapper, 'backbone_model') else wrapper
+        # Load pre-grow checkpoint with strict=True (all keys must match)
+        pre_wrapper.load_state_dict(pre_model_state, strict=True)
+        pre_wrapper.eval()
+        print(f"[p5-ratio-audit] PRE-GROW checkpoint loaded (strict=True, all keys matched)", flush=True)
 
-        # State dict from checkpoint; extract backbone_model part and strip prefix
-        # Only load keys that belong to the backbone model
-        adjusted_state = {}
-        for key, val in pre_model_state.items():
-            if key.startswith('backbone_model.'):
-                # Strip 'backbone_model.' prefix
-                adjusted_key = key[len('backbone_model.'):]
-                adjusted_state[adjusted_key] = val
-            elif key == 'lm_head.weight' or key == 'lm_head.bias':
-                # Skip head-level keys; we're only loading backbone
-                pass
-            elif not key.startswith('objective.') and not key.startswith('mtp_heads.'):
-                # Skip objective and MTP head parameters; only backbone
-                pass
+        # POST-GROW model (FF=16384) — SEPARATE instance, different FF
+        print(f"[p5-ratio-audit] POST-GROW: building model with FF={post_ff}", flush=True)
+        post_wrapper, vocab_post, hidden_post, n_mtp_post = build_v0_model(
+            cfg, live=True, intermediate_override=post_ff, device="cpu")
+        print(f"[p5-ratio-audit] POST-GROW model: vocab={vocab_post}, hidden={hidden_post}, n_mtp={n_mtp_post}", flush=True)
 
-        # Verify FF dimension in loaded state matches model
-        # Check all FF dimensions present in the state dict
-        ff_dims_in_state = set()
-        for key, val in adjusted_state.items():
-            if 'gate_proj.weight' in key:
-                ff_dims_in_state.add(int(val.shape[0]))
-            elif 'up_proj.weight' in key:
-                ff_dims_in_state.add(int(val.shape[0]))
-
-        print(f"[p5-ratio-audit] FF dims in checkpoint state: {sorted(ff_dims_in_state)}, expected: {pre_ff}", flush=True)
-
-        if 'layers.0.mlp.gate_proj.weight' in adjusted_state:
-            state_ff = adjusted_state['layers.0.mlp.gate_proj.weight'].shape[0]
-            if state_ff != pre_ff:
-                raise RuntimeError(
-                    f"FF mismatch: state dict has FF={state_ff} but model "
-                    f"expects FF={pre_ff} -- likely a checkpoint/model alignment issue"
-                )
-
-        pre_model.load_state_dict(adjusted_state, strict=False)
-        pre_model.eval()
+        # Load post-grow checkpoint with strict=True
+        post_wrapper.load_state_dict(post_model_state, strict=True)
+        post_wrapper.eval()
+        print(f"[p5-ratio-audit] POST-GROW checkpoint loaded (strict=True, all keys matched)", flush=True)
 
         probe_tmp = os.path.join(REPO_ROOT, "receipts", ".p5_live_tmp")
         probe_batches, _, _ = build_probe_batch(32000, 8, probe_tmp, n_micro=1, seq_len=256, seed=PROBE_SEED)
         x, y = probe_batches[0]
 
-        # Forward+backward on pre-grow checkpoint.
-        # LlamaModel.forward expects input_ids as positional arg
-        print(f"[p5-ratio-audit] Pre-model forward: x.shape={x.shape}, y.shape={y.shape}", flush=True)
-        try:
-            outputs = pre_model(x)
-            logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
-            print(f"[p5-ratio-audit] Forward success: logits.shape={logits.shape}", flush=True)
+        # Forward+backward on PRE-GROW checkpoint
+        print(f"[p5-ratio-audit] PRE-GROW forward: x.shape={x.shape}, y.shape={y.shape}", flush=True)
+        outputs_pre = pre_wrapper(x)
+        logits_pre = outputs_pre.logits if hasattr(outputs_pre, 'logits') else outputs_pre[0]
+        vocab_size_pre = logits_pre.shape[-1]
+        y_adjusted = torch.clamp(y, max=vocab_size_pre-1)
+        loss_pre = torch.nn.functional.cross_entropy(logits_pre.reshape(-1, vocab_size_pre), y_adjusted.reshape(-1))
+        print(f"[p5-ratio-audit] PRE-GROW loss: {loss_pre.item():.4f}", flush=True)
+        loss_pre.backward()
 
-            # Adjust y targets to be within vocab size (probe was generated for 32000 but model may differ)
-            vocab_size = logits.shape[-1]
-            y_adjusted = torch.clamp(y, max=vocab_size-1)
-            print(f"[p5-ratio-audit] Vocab size: {vocab_size}, y_adjusted.shape={y_adjusted.shape}", flush=True)
+        # Extract pre-grow gradients for ratio computation
+        grad_pre = {name: p.grad.detach().clone() for name, p in pre_wrapper.named_parameters() if p.grad is not None}
 
-            loss = torch.nn.functional.cross_entropy(logits.reshape(-1, vocab_size), y_adjusted.reshape(-1))
-            print(f"[p5-ratio-audit] Loss computed: {loss.item()}", flush=True)
-            loss.backward()
-        except Exception as e:
-            print(f"[p5-ratio-audit] Forward/backward error: {e}", flush=True)
-            raise
+        # Forward+backward on POST-GROW checkpoint (for commutation defect)
+        print(f"[p5-ratio-audit] POST-GROW forward: x.shape={x.shape}, y.shape={y.shape}", flush=True)
+        outputs_post = post_wrapper(x)
+        logits_post = outputs_post.logits if hasattr(outputs_post, 'logits') else outputs_post[0]
+        vocab_size_post = logits_post.shape[-1]
+        y_adjusted = torch.clamp(y, max=vocab_size_post-1)
+        loss_post = torch.nn.functional.cross_entropy(logits_post.reshape(-1, vocab_size_post), y_adjusted.reshape(-1))
+        print(f"[p5-ratio-audit] POST-GROW loss: {loss_post.item():.4f}", flush=True)
+        loss_post.backward()
 
-        # Extract gradients for ratio computation.
-        grad_pre = {name: p.grad.detach().clone() for name, p in pre_model.named_parameters() if p.grad is not None}
+        # Extract post-grow gradients for commutation defect
+        grad_post = {name: p.grad.detach().clone() for name, p in post_wrapper.named_parameters() if p.grad is not None}
 
         # Compute all 7 ratios using existing functions.
         per_class = {cls: [] for cls in TENSOR_CLASSES}
@@ -2287,7 +2271,7 @@ def run_and_emit_live() -> Path:
             r_batch_val = "N/A"
             r_block_val = "N/A"
 
-        # Compute commutation defect for one FF layer.
+        # Compute commutation defect for one FF layer (layer_index=0).
         # FAIL-CLOSED: build_real_d_comm_closures hardcodes layers.0.mlp prefix;
         # layer_index != 0 would compute the wrong d_comm without this guard.
         layer_index = 0
@@ -2295,12 +2279,11 @@ def run_and_emit_live() -> Path:
             "compute_d_comm_real_run + build_real_d_comm_closures hardcode "
             "layers.0.mlp key construction; generalize before using layer_index != 0")
 
-        grad_post = {name: p.grad.detach().clone() for name, p in pre_model.named_parameters() if p.grad is not None}
-        # Extract gate gradient for d_comm (one FF layer at layer_index=0).
-        # Gates are named without 'backbone_model' prefix since we extracted from pre_model directly
-        gate_key = f"layers.{layer_index}.mlp.gate_proj.weight"
-        grad_pre_gate = grad_pre.get(gate_key)
-        grad_post_gate = grad_post.get(gate_key)
+        # Extract gate gradients from BOTH models: pre (FF=8192) and post (FF=16384)
+        # Keys use backbone_model prefix since they come from the loaded checkpoint structure
+        gate_key_full = f"backbone_model.layers.{layer_index}.mlp.gate_proj.weight"
+        grad_pre_gate = grad_pre.get(gate_key_full)
+        grad_post_gate = grad_post.get(gate_key_full)
         if grad_pre_gate is not None and grad_post_gate is not None:
             d_comm_result = compute_d_comm_real_run(
                 discovery, grad_pre_gate, grad_post_gate,
