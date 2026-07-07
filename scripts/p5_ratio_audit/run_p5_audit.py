@@ -2194,6 +2194,16 @@ def run_and_emit_live() -> Path:
                 pass
 
         # Verify FF dimension in loaded state matches model
+        # Check all FF dimensions present in the state dict
+        ff_dims_in_state = set()
+        for key, val in adjusted_state.items():
+            if 'gate_proj.weight' in key:
+                ff_dims_in_state.add(int(val.shape[0]))
+            elif 'up_proj.weight' in key:
+                ff_dims_in_state.add(int(val.shape[0]))
+
+        print(f"[p5-ratio-audit] FF dims in checkpoint state: {sorted(ff_dims_in_state)}, expected: {pre_ff}", flush=True)
+
         if 'layers.0.mlp.gate_proj.weight' in adjusted_state:
             state_ff = adjusted_state['layers.0.mlp.gate_proj.weight'].shape[0]
             if state_ff != pre_ff:
