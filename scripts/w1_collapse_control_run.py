@@ -1055,7 +1055,16 @@ def refuse_if_contaminated(contamination: dict) -> None:
     time, not a cached receipt) finds any confirmed match. Unconditional --
     applies whether or not --decontam-receipt is given, since this is a live
     re-verification of the actual eval batch about to be trained against, not
-    a trust of a prior receipt's claim."""
+    a trust of a prior receipt's claim.
+
+    SUPERSEDED as main_live's actual gate by refuse_if_non_self_contaminated
+    below (2026-07-07 real-launch refusal, fork-A fix) -- this raw-verdict
+    gate is kept, and still tested, because it is technically correct for
+    what it claims to do (refuse on ANY confirmed match); the bug was calling
+    it directly on a held-out batch's OWN true source windows, which will
+    ALWAYS match themselves and are not contamination. See
+    classify_contamination_self_matches's docstring for the root-cause
+    analysis and receipt reference."""
     verdict = contamination.get("verdict")
     if verdict != "CLEAN":
         raise SystemExit(
@@ -1064,6 +1073,96 @@ def refuse_if_contaminated(contamination: dict) -> None:
             f"{len(contamination.get('confirmed_matches', []))}) -- W2 sec.4 "
             "requires the held-out batch to be contamination-clean before "
             f"training; refusing launch. {json.dumps(contamination)}")
+
+
+def classify_contamination_self_matches(
+        contamination: dict, candidate_window_indices: "list[int]", *,
+        seq: int, n_mtp: int, shard_dir: str,
+        window: int = CONTAMINATION_WINDOW_TOKENS) -> dict:
+    """2026-07-07 real-launch refusal, fork-A fix (issue #121 followup): the
+    W1 real launch refused with confirmed_matches=16208 -- EXACTLY 16 selected
+    windows x 1013 sliding 13-token sub-windows/row (1025-13+1), i.e. every
+    single 'confirmed match' was the held-out batch matching ITSELF at its
+    own true source location (v0-00016.bin, sequential offsets from 1024) --
+    zero evidence of a genuine foreign duplicate. refuse_if_contaminated
+    gates on contamination_recheck()'s raw verdict, which has no way to tell
+    a self-match (unavoidable -- the batch WAS drawn from the real corpus)
+    from a genuine foreign duplicate. scripts/w2_heldout/build_decontam_
+    batch_mp.py's _classify_once already solves exactly this for RECEIPT
+    GENERATION (is_self via global-position overlap against each candidate's
+    own known [global_start, global_start+block_len) range,
+    self_matches_excluded / confirmed_non_self_matches fields) -- this is the
+    same class of check, applied at LAUNCH time, using window indices the
+    launcher already knows it asked for (never re-derived from the match
+    data itself).
+
+    candidate_window_indices: the exact PackedShardLoader window indices the
+    held-out batch's rows were built from (decontam_receipt['selected_
+    window_indices'] on the --decontam-receipt path; [held_out_start+j, ...]
+    on the default path)."""
+    block_len = seq + 1 + n_mtp
+    candidate_ranges = [(idx * seq, idx * seq + block_len)
+                        for idx in candidate_window_indices]
+
+    shard_names = sorted(p for p in os.listdir(shard_dir) if p.endswith(".bin"))
+    cum = [0]
+    for name in shard_names:
+        n_tokens = os.path.getsize(os.path.join(shard_dir, name)) // 2  # <u2
+        cum.append(cum[-1] + n_tokens)
+    name_to_cum_start = {name: cum[i] for i, name in enumerate(shard_names)}
+
+    def _match_global_start(m: dict):
+        if "shard" in m:
+            base = name_to_cum_start.get(m["shard"])
+            return None if base is None else base + m["offset"]
+        if "boundary" in m:
+            _, right_name = m["boundary"].split("|", 1)
+            right_base = name_to_cum_start.get(right_name)
+            if right_base is None:
+                return None
+            # The join array is [prev_tail(last window-1 tokens of the LEFT
+            # shard), first window-1 tokens of the RIGHT shard] (see
+            # contamination_recheck's boundary branch) -- position 0 of the
+            # join is (window-1) tokens before the right shard's global start.
+            return right_base - (window - 1) + m["offset_in_join"]
+        return None
+
+    non_self_matches = []
+    self_matches_excluded = 0
+    for m in contamination.get("confirmed_matches", []):
+        gstart = _match_global_start(m)
+        is_self = False
+        if gstart is not None:
+            gend = gstart + window
+            is_self = any(gstart < c_end and gend > c_start
+                          for c_start, c_end in candidate_ranges)
+        if is_self:
+            self_matches_excluded += 1
+        else:
+            non_self_matches.append(m)
+
+    return {
+        "verdict": "CLEAN" if not non_self_matches else "CONTAMINATED",
+        "confirmed_non_self_matches": non_self_matches,
+        "self_matches_excluded": self_matches_excluded,
+        "raw_confirmed_matches": len(contamination.get("confirmed_matches", [])),
+    }
+
+
+def refuse_if_non_self_contaminated(classified: dict) -> None:
+    """Defect A v2 (2026-07-07 fork-A fix): gates on classify_contamination_
+    self_matches's non-self verdict, not the raw contamination_recheck()
+    verdict -- see that function's docstring for why the raw gate false-
+    positives on a held-out batch's own true source windows."""
+    if classified["verdict"] != "CLEAN":
+        raise SystemExit(
+            "W1_LIVE_CONTAMINATION_REFUSED: confirmed_non_self_matches="
+            f"{len(classified['confirmed_non_self_matches'])} "
+            f"(self_matches_excluded={classified['self_matches_excluded']} of "
+            f"{classified['raw_confirmed_matches']} raw matches) -- W2 sec.4 "
+            "requires the held-out batch to be contamination-clean, EXCLUDING "
+            "its own true source windows, before training; refusing launch. "
+            f"{json.dumps(classified['confirmed_non_self_matches'])}")
 
 
 def rebuild_batch_from_decontam_receipt(loader, receipt: dict, device: str
@@ -1889,15 +1988,32 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         # the receipt's curated pool may sit anywhere in the corpus).
         decontam_receipt = load_json(args.decontam_receipt)
         held_out_start = None
+        candidate_window_indices = decontam_receipt.get("selected_window_indices") or []
+        # 2026-07-07 fork-B hardening: the receipt's OWN cached disjoint_check
+        # was computed at RECEIPT-GENERATION time, against WHATEVER
+        # ceiling_steps/batch that generation run assumed -- never previously
+        # re-derived against THIS live invocation's ACTUAL ceiling_steps/
+        # real_arch["batch"] (which can differ via --live-ceiling-steps or a
+        # different --batch). Re-derive independently here; a receipt that
+        # happens to still be disjoint under this run's real numbers passes
+        # silently, a receipt that is NOT refuses fail-closed instead of
+        # trusting a figure that was never about this run.
+        this_run_disjoint_check = assert_disjoint_from_training(
+            min(candidate_window_indices) if candidate_window_indices else 0,
+            ceiling_steps, real_arch["batch"])
         disjoint_check = {
             "mode": "external_decontam_receipt",
             "receipt_path": args.decontam_receipt,
-            "selected_window_indices": decontam_receipt.get("selected_window_indices"),
-            "note": ("disjointness against training's reachable window range was "
-                     "already verified INSIDE the decontam receipt itself "
-                     "(source_pool.pool_reservation.disjoint_check / per-round "
-                     "disjoint_check) -- not re-derived here, since the receipt's "
-                     "own indices are authoritative once its sha assertion passes."),
+            "selected_window_indices": candidate_window_indices,
+            "receipt_own_disjoint_check": (decontam_receipt.get("source_pool", {})
+                                            .get("pool_reservation", {})
+                                            .get("disjoint_check")),
+            "this_run_disjoint_check": this_run_disjoint_check,
+            "note": ("disjointness is re-derived HERE against this run's actual "
+                     "ceiling_steps/batch (this_run_disjoint_check), not merely "
+                     "cited from the receipt's own generation-time figure "
+                     "(receipt_own_disjoint_check) -- 2026-07-07 fork-B "
+                     "hardening."),
         }
         eval_x, eval_y, eval_sha = rebuild_batch_from_decontam_receipt(
             eval_loader, decontam_receipt, device)
@@ -1916,6 +2032,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         held_out_start = held_out_window_start(n_windows, real_arch["batch"])
         disjoint_check = assert_disjoint_from_training(
             held_out_start, ceiling_steps, real_arch["batch"])
+        candidate_window_indices = [held_out_start + j for j in range(real_arch["batch"])]
         xs, ys = [], []
         for j in range(real_arch["batch"]):
             x_np, y_np, _y_mtp = eval_loader.window_np(held_out_start + j)
@@ -1931,10 +2048,15 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     # y_np is w[1:seq+1], so w = x_np + [y_np[-1]]) before scanning.
     eval_rows = [list(x_np) + [int(y_np[-1])] for x_np, y_np in zip(xs, ys)]
     contamination = contamination_recheck(eval_rows, args.shard_dir)
-    # Defect A: unconditional, fail-closed gate on THIS run's own fresh
-    # contamination_recheck() -- previously computed and disclosed, never
-    # gated. Applies whether or not --decontam-receipt was given.
-    refuse_if_contaminated(contamination)
+    # Defect A v2 (2026-07-07 fork-A fix): gate on the SELF-EXCLUSION-AWARE
+    # classification, not the raw verdict -- contamination_recheck() cannot
+    # tell the held-out batch's own true source windows (unavoidable matches)
+    # from a genuine foreign duplicate. Applies whether or not
+    # --decontam-receipt was given.
+    contamination_classified = classify_contamination_self_matches(
+        contamination, candidate_window_indices,
+        seq=real_arch["seq"], n_mtp=real_arch["n_mtp"], shard_dir=args.shard_dir)
+    refuse_if_non_self_contaminated(contamination_classified)
 
     phase1 = run_phase1_live(real_arch, rung_receipt, device=device,
                               eval_x=eval_x, eval_y=eval_y)
@@ -2005,6 +2127,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             "launch_gate_result": launch_gate_result,
         },
         "contamination_recheck": contamination,
+        "contamination_recheck_self_exclusion": contamination_classified,
         "grow_arm": {
             "terminal_checkpoint_ref": phase1["terminal_checkpoint_ref"],
             "tokens_total": pricing_receipt["grow_arm"]["tokens_total"],

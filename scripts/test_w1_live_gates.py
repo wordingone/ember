@@ -9,6 +9,13 @@ spec-compliance additions to scripts/w1_collapse_control_run.py:
     windows are held out, with the rebuilt batch's sha256 asserted against
     the receipt's pinned batch_sha256, fail-closed on mismatch.
 
+Plus (2026-07-07, real-launch refusal fork-A fix): classify_contamination_
+self_matches() / refuse_if_non_self_contaminated() -- a held-out batch's own
+true source windows will ALWAYS match themselves when contamination_recheck()
+scans the real corpus (they were drawn from it); refuse_if_contaminated
+cannot tell that apart from a genuine foreign duplicate. The new gate must
+still refuse on a genuine foreign duplicate.
+
 Real code under test (imported, never reimplemented), synthetic-only data
 (tempfile.TemporaryDirectory() per case, a tiny made-up token stream) -- same
 convention as scripts/w2_heldout/test_launch_gate.py. No real corpus or real
@@ -32,6 +39,9 @@ from w1_collapse_control_run import (  # noqa: E402
     rebuild_batch_from_decontam_receipt,
     derive_rung_receipt_from_manifest,
     sha256_tokens,
+    contamination_recheck,
+    classify_contamination_self_matches,
+    refuse_if_non_self_contaminated,
 )
 from timeshare_pretrain import PackedShardLoader  # noqa: E402
 
@@ -163,6 +173,127 @@ def test_derive_rung_receipt_from_manifest():
         assert rung_receipt["stabilization_segment"]["tok_s_paced"] is None
         assert rung_receipt["stabilization_segment"]["checkpoint"] == ckpt_dir
         assert "unavailable" in rung_receipt["_derivation"]["params_unique_after"]
+
+
+# ---------------------------------------------------------------------------
+# Tests 5-7 (2026-07-07 real-launch refusal, fork-A fix): a held-out batch's
+# own true source windows will ALWAYS match themselves when
+# contamination_recheck() scans the real corpus -- classify_contamination_
+# self_matches must exclude those (matching build_decontam_batch_mp.py's
+# is_self convention) while STILL refusing on a genuine foreign duplicate.
+# window=13 (CONTAMINATION_WINDOW_TOKENS) needs row length (seq+1) >= 13, so
+# these tests use a wider SEQ2 than the SEQ=8 fixture above.
+# ---------------------------------------------------------------------------
+
+SEQ2 = 16
+N_MTP2 = 1
+
+
+def _eval_rows_for_indices(loader: PackedShardLoader, indices: list[int]) -> list[list[int]]:
+    rows = []
+    for idx in indices:
+        x_np, y_np, _y_mtp = loader.window_np(idx)
+        rows.append(list(x_np) + [int(y_np[-1])])
+    return rows
+
+
+def test_self_match_only_refuses_raw_but_passes_classified():
+    """The exact class of the 2026-07-07 refusal: a batch drawn from windows
+    that ARE part of the corpus (unavoidable -- that's what 'held out'
+    means) must refuse on the RAW gate (reproducing the bug) but PASS on the
+    self-exclusion-aware gate (the fix)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        shard_dir = os.path.join(tmpdir, "shards")
+        os.makedirs(shard_dir, exist_ok=True)
+        # Unique-valued stream (no modulo) so no incidental 13-gram repeats
+        # anywhere else in the corpus can confound this test's assumptions.
+        n_tokens = 2000
+        tokens = np.arange(n_tokens, dtype="<u2")
+        tokens.tofile(os.path.join(shard_dir, "shard-0000.bin"))
+        loader = PackedShardLoader(shard_dir, SEQ2, n_mtp=N_MTP2)
+
+        candidate_indices = [5, 20, 40]  # disjoint from each other and small
+        eval_rows = _eval_rows_for_indices(loader, candidate_indices)
+
+        contamination = contamination_recheck(eval_rows, shard_dir)
+        assert contamination["verdict"] == "CONTAMINATED"
+        assert len(contamination["confirmed_matches"]) > 0
+        with pytest.raises(SystemExit, match="W1_LIVE_CONTAMINATION_REFUSED"):
+            refuse_if_contaminated(contamination)  # reproduces the 2026-07-07 bug
+
+        classified = classify_contamination_self_matches(
+            contamination, candidate_indices,
+            seq=SEQ2, n_mtp=N_MTP2, shard_dir=shard_dir)
+        assert classified["verdict"] == "CLEAN"
+        assert classified["confirmed_non_self_matches"] == []
+        assert classified["self_matches_excluded"] == len(contamination["confirmed_matches"])
+        refuse_if_non_self_contaminated(classified)  # must NOT raise
+
+
+def test_genuine_foreign_duplicate_still_refuses():
+    """A candidate window whose token sequence ALSO appears somewhere else
+    in the corpus (not at its own location) is real contamination -- the
+    self-exclusion fix must not neuter this."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        shard_dir = os.path.join(tmpdir, "shards")
+        os.makedirs(shard_dir, exist_ok=True)
+        n_tokens = 3000
+        tokens = np.arange(n_tokens, dtype="<u2")
+        block_len = SEQ2 + 1 + N_MTP2  # 18
+
+        candidate_idx = 5  # window covers tokens [5*16, 5*16+18) = [80, 98)
+        foreign_copy_start = 2000  # far away, no overlap with any candidate
+        tokens[foreign_copy_start:foreign_copy_start + block_len] = \
+            tokens[candidate_idx * SEQ2: candidate_idx * SEQ2 + block_len]
+        tokens.tofile(os.path.join(shard_dir, "shard-0000.bin"))
+
+        loader = PackedShardLoader(shard_dir, SEQ2, n_mtp=N_MTP2)
+        eval_rows = _eval_rows_for_indices(loader, [candidate_idx])
+
+        contamination = contamination_recheck(eval_rows, shard_dir)
+        classified = classify_contamination_self_matches(
+            contamination, [candidate_idx],
+            seq=SEQ2, n_mtp=N_MTP2, shard_dir=shard_dir)
+
+        assert classified["verdict"] == "CONTAMINATED"
+        assert len(classified["confirmed_non_self_matches"]) > 0
+        # The candidate's OWN home-location matches are still excluded --
+        # only the foreign copy's matches remain.
+        assert classified["self_matches_excluded"] > 0
+        with pytest.raises(SystemExit, match="W1_LIVE_CONTAMINATION_REFUSED"):
+            refuse_if_non_self_contaminated(classified)
+
+
+def test_boundary_match_global_start_conversion():
+    """A confirmed match reported in 'boundary' form (a hit spanning two
+    shard files, as contamination_recheck's join-array branch produces) must
+    convert to the correct global position too, not just the plain 'shard'
+    form -- otherwise a real cross-shard-boundary contamination would be
+    silently misclassified as self (or vice versa)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        shard_dir = os.path.join(tmpdir, "shards")
+        os.makedirs(shard_dir, exist_ok=True)
+        # Two shards; candidate lives entirely in shard 0, nowhere near the
+        # boundary -- so a fabricated 'boundary' match must be classified
+        # non-self (it cannot overlap the candidate's true range).
+        shard0 = np.arange(0, 100, dtype="<u2")
+        shard1 = np.arange(100, 200, dtype="<u2")
+        shard0.tofile(os.path.join(shard_dir, "shard-0000.bin"))
+        shard1.tofile(os.path.join(shard_dir, "shard-0001.bin"))
+
+        candidate_idx = 1  # tokens [16, 34) -- nowhere near the shard0|shard1 join
+        contamination = {
+            "confirmed_matches": [
+                {"boundary": "shard-0000.bin|shard-0001.bin", "offset_in_join": 0,
+                 "window": list(range(13))},
+            ],
+        }
+        classified = classify_contamination_self_matches(
+            contamination, [candidate_idx],
+            seq=SEQ2, n_mtp=N_MTP2, shard_dir=shard_dir)
+        assert classified["verdict"] == "CONTAMINATED"
+        assert classified["self_matches_excluded"] == 0
+        assert len(classified["confirmed_non_self_matches"]) == 1
 
 
 if __name__ == "__main__":
