@@ -165,6 +165,18 @@ MAINTAINER_WINDOW_ENV = "EMBER_W1_MAINTAINER_WINDOW_CONFIRMED"
 CONTAMINATION_WINDOW_TOKENS = 13
 CONTAMINATION_ROLL_BASE = 1000000007
 
+# ---------------------------------------------------------------------------
+# W1b (#355) -- unwidened-continuation control. The grow arm's MARGINAL
+# (post-seed) token bill: 156 steps @ batch16 seq1024 = 156*16*1024, cited
+# verbatim from #355's own pre-registration and cross-checked here via exact
+# arithmetic (never just copied): 156 * 16 * 1024 = 2,555,904.
+W1B_MARGINAL_TOKENS_GROWPATH = 2_555_904
+W1B_ISSUE_REF = "#355"
+# #355's pre-registered early-stop target (informational default only --
+# the actual gate is always target_eval_loss from phase 1, computed fresh;
+# this constant is never used to drive a comparison, only carried/citable).
+W1B_PREREGISTERED_EARLY_STOP_EVAL_LOSS = 9.375
+
 
 def real_hard_ceiling_derivation(ceiling_tokens: int, batch: int, seq: int) -> int:
     """ceil(ceiling_tokens / (batch*seq)) -- the real-run step ceiling,
@@ -700,10 +712,22 @@ def run_phase1_dryrun(cfg: dict, *, train_steps: int, seed: int, device: str,
 def run_phase2_dryrun(cfg: dict, *, ceiling_steps: int, eval_every: int,
                        checkpoint_every: int, target_eval_loss: float,
                        seed: int, device: str, out_dir: str,
-                       eval_x, eval_y) -> dict:
-    model = build_model(cfg, seed, device)
+                       eval_x, eval_y, continue_from: str | None = None) -> dict:
+    """continue_from (W1b, #355): when given, NO from-scratch init -- the
+    model/optimizer/rng state is loaded from this checkpoint dir instead
+    (load_continuation_checkpoint, fail-closed on missing/mismatched),
+    before the identical from-here-on control-arm loop below runs. Never a
+    silent fallback to random init on any failure of that load."""
     base_lr = 0.05
+    model = build_model(cfg, seed, device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=base_lr)
+    continuation_source_manifest: dict | None = None
+    if continue_from:
+        o_state, r_state, continuation_source_manifest = load_continuation_checkpoint(
+            continue_from, model)
+        optimizer.load_state_dict(o_state)
+        restore_rng(r_state)
+    init_mode = "continuation" if continue_from else "from_scratch"
     # same diversity rationale as phase 1 (see its comment) -- ceiling_steps
     # is the worst case (a run that never early-stops).
     corpus = synthetic_corpus(cfg["vocab"], cfg["seq"],
@@ -788,6 +812,11 @@ def run_phase2_dryrun(cfg: dict, *, ceiling_steps: int, eval_every: int,
     return {
         "config_sha": config_sha(cfg),
         "init_seed": seed,
+        "init_mode": init_mode,
+        "continue_from_checkpoint": (repo_relative_path(continue_from)
+                                      if continue_from else None),
+        "continuation_source_manifest_step": (
+            (continuation_source_manifest or {}).get("step")),
         "lr_schedule": {"source": LR_SCHEDULE_SOURCE, "base_lr": base_lr,
                         "warmup_frac": 0.1, "min_lr_frac": 0.1,
                         "total_steps_for_schedule": ceiling_steps,
@@ -942,6 +971,80 @@ def assert_disjoint_from_training(held_out_start: int, ceiling_steps: int,
             "W1_LIVE_HELDOUT_NOT_DISJOINT: held-out window range overlaps "
             f"training's reachable window range -- {result}")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Receipt path sanitization (issue #357 cure).
+#
+# First occurrence (PR #356 landing): the terminal-receipt writer embedded
+# the raw --shard-dir absolute path, and that path contained a founder-name
+# fragment -- repo-guard (tools/repo-guard.sh sections 2/2b/3: absolute-path
+# scan, local-path-fragment scan, operator-name scan) correctly blocked the
+# landing; the lane had to hand-sanitize 6 receipt files post-generation.
+# Two shapes, matching the cure's own two categories:
+#   repo_relative_path()          -- for paths THIS repo owns (checkpoints
+#                                     under --out-dir, etc.): a plain relpath
+#                                     is safe because the divergent path
+#                                     component is internal directory
+#                                     structure, never an operator name.
+#   corpus_identity_for_receipt() -- for the EXTERNAL shard corpus
+#                                     specifically: relpath is NOT safe here
+#                                     (the divergent component IS the
+#                                     founder-named directory itself), so
+#                                     this substitutes a name-safe logical
+#                                     corpus_id -- the corpus dir's own
+#                                     basename ('shards-v0' is already the
+#                                     established repo-wide name for this
+#                                     corpus: docs/density-ab-spec-v1.md,
+#                                     scripts/token_shards_v0.py) -- plus the
+#                                     manifest's own combined_sha256, which
+#                                     pins CONTENT strictly more precisely
+#                                     than a path string ever did (a path
+#                                     names a location; a sha names bytes).
+# ---------------------------------------------------------------------------
+
+def repo_relative_path(path: str) -> str:
+    """Best-effort relpath to REPO, forward-slash normalized. Falls back to
+    the input unchanged only if relpath itself raises (e.g. a different
+    drive on Windows) -- never used for a path that might carry an operator
+    name; callers with that risk use corpus_identity_for_receipt instead."""
+    try:
+        rel = os.path.relpath(os.path.abspath(path), REPO)
+    except ValueError:
+        return path
+    return rel.replace(os.sep, "/")
+
+
+def corpus_identity_for_receipt(shard_dir: str, manifest: dict) -> dict:
+    """issue #357 cure. Returns {"corpus_id", "corpus_manifest_sha256"} --
+    NEVER the raw shard_dir string. corpus_id is the directory's own
+    basename (e.g. 'shards-v0'), never a path, so it stays name-safe
+    regardless of what absolute, possibly founder-named prefix the real
+    corpus happens to live under."""
+    corpus_id = os.path.basename(os.path.normpath(shard_dir)) or "external-corpus"
+    return {"corpus_id": corpus_id,
+            "corpus_manifest_sha256": manifest["combined_sha256"]}
+
+
+def build_shard_corpus_verification_block(shard_dir: str, shard_manifest: dict,
+                                           expected_combined_sha256: str | None,
+                                           verified: bool) -> dict:
+    """Pure, CUDA-free construction of the receipt's shard_corpus_verification
+    block -- factored out of main_live so the path-sanitization fix (never
+    embed the raw shard_dir string) is unit-testable without a live GPU
+    launch. Field shape is otherwise unchanged from before this fix (n_files/
+    total_tokens/combined_sha256/expected_combined_sha256/verified) -- only
+    the corpus-reference field swaps from shard_dir (raw path) to corpus_id +
+    corpus_manifest_sha256 (name-safe identifier + content pin)."""
+    block = corpus_identity_for_receipt(shard_dir, shard_manifest)
+    block.update({
+        "n_files": shard_manifest["n_files"],
+        "total_tokens": shard_manifest["total_tokens"],
+        "combined_sha256": shard_manifest["combined_sha256"],
+        "expected_combined_sha256": expected_combined_sha256,
+        "verified": verified,
+    })
+    return block
 
 
 def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
@@ -1421,6 +1524,48 @@ def verify_checkpoint_key_shape_parity(model_state: dict,
     return {"n_keys_checked": len(ckpt_keys), "keys_match": True, "shapes_match": True}
 
 
+def load_continuation_checkpoint(checkpoint_dir: str, model: "torch.nn.Module"
+                                  ) -> tuple[dict, dict, dict]:
+    """W1b (#355) continuation-mode checkpoint load -- fail-closed, reusing
+    (never reimplementing) load_checkpoint's own sha256 manifest re-verify
+    and verify_checkpoint_key_shape_parity's key/shape diff (the SAME parity
+    check run_phase1_live already runs before its own strict load, just
+    applied here at step 0 instead of before an eval-only forward pass).
+    Applies model_state to `model` in place via strict=True load and returns
+    (optimizer_state, rng_state, manifest) for the caller to apply the same
+    way the pre-existing mid-run resume cycle already does (save_checkpoint
+    -> load_checkpoint -> load_state_dict -> optimizer.load_state_dict ->
+    restore_rng) -- this is that exact cycle, run once at t=0, NO from-
+    scratch init anywhere on this path (#355's core requirement).
+
+    Refuses fail-closed on:
+      - checkpoint_dir missing or unreadable (no manifest.json)
+      - a corrupt checkpoint (load_checkpoint's own sha256 re-verify)
+      - a shape/key mismatch between the checkpoint and `model`'s own
+        architecture (verify_checkpoint_key_shape_parity, reused verbatim --
+        this is what catches the true 'mismatched checkpoint' case, e.g. a
+        seed checkpoint from a different width/depth than the current cfg)
+    Never refuses a healthy, matching checkpoint -- that path returns
+    normally with model already loaded in place."""
+    manifest_path = os.path.join(checkpoint_dir, "manifest.json")
+    if not os.path.isdir(checkpoint_dir) or not os.path.isfile(manifest_path):
+        raise SystemExit(
+            "W1B_CONTINUE_FROM_CHECKPOINT_MISSING: "
+            f"{checkpoint_dir!r} is not a checkpoint directory (no "
+            "manifest.json found) -- refusing continuation-mode launch "
+            f"({W1B_ISSUE_REF}: NO from-scratch init is ever a silent "
+            "fallback in this mode).")
+    try:
+        m_state, o_state, r_state, manifest = load_checkpoint(checkpoint_dir)
+    except (ValueError, FileNotFoundError, EOFError) as e:
+        raise SystemExit(
+            f"W1B_CONTINUE_FROM_CHECKPOINT_CORRUPT: {checkpoint_dir!r} "
+            f"failed to load/verify -- {e}") from e
+    verify_checkpoint_key_shape_parity(m_state, model)  # raises on mismatch
+    model.load_state_dict(m_state, strict=True)
+    return o_state, r_state, manifest
+
+
 def optimizer_state_shape_parity(resumed_bundle: dict, original_bundle: dict) -> dict:
     """Explicit, named optimizer-state shape-parity check (issue #82
     live-fire finding 2, requirement 6) -- verifies a resumed split-optimizer
@@ -1569,12 +1714,44 @@ def run_phase1_live(real_arch: dict, rung_receipt: dict, *, device: str,
     }
 
 
+def derive_continuation_arch(checkpoint_dir: str, real_arch: dict) -> dict:
+    """W1b (#355): the continuation checkpoint is the UNWIDENED pre-grow
+    seed -- its FF width is NOT real_arch['ff_grown'] (the grow arm's
+    TARGET width; that is exactly what got widened). Derives a
+    continuation-specific arch dict by reading the checkpoint's own
+    model.pt tensor shape directly (same derived_from_checkpoint_tensor_
+    shape convention as derive_rung_receipt_from_manifest's ff_grown
+    fallback) so the continuation model is built at the checkpoint's OWN
+    width -- vocab/hidden/n_mtp/seq/batch/layers/heads are shared with
+    real_arch (only the FF width differs across the grow step)."""
+    model_pt = os.path.join(checkpoint_dir, "model.pt")
+    state = torch.load(model_pt, map_location="cpu")
+    gate_key = next((k for k in state if k.endswith("mlp.gate_proj.weight")
+                      or k.endswith("mlp.up_proj.weight")), None)
+    if gate_key is None:
+        raise SystemExit(
+            "W1B_CONTINUE_FROM_NO_FF_WIDTH: no mlp.{gate,up}_proj.weight key "
+            f"found in {model_pt!r}'s state_dict -- cannot derive the "
+            "continuation checkpoint's FF width, refusing.")
+    ff_seed = int(state[gate_key].shape[0])
+    del state
+    arch = dict(real_arch)
+    arch["ff_grown"] = ff_seed
+    arch["ff_grown_derivation"] = (
+        f"derived_from_checkpoint_tensor_shape (W1b continuation checkpoint): "
+        f"{gate_key}.shape[0]={ff_seed} -- deliberately NOT real_arch's "
+        f"grow-target width ({real_arch['ff_grown']}); {W1B_ISSUE_REF} loads "
+        "the UNWIDENED pre-grow seed, never the grown target.")
+    return arch
+
+
 def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
                      eval_every: int, checkpoint_every: int,
                      target_eval_loss: float, seed: int, device: str,
                      out_dir: str, shard_dir: str, eval_x, eval_y,
                      loader=None, rung_receipt: dict | None = None,
-                     progress_path: str | None = None) -> dict:
+                     progress_path: str | None = None,
+                     continue_from: str | None = None) -> dict:
     """Real control leg, REWORKED to the full matched-recipe control (issue
     #82 live-fire finding 2, 2026-07-04): the prior plain-AdamW single-
     optimizer design OOM'd at 17.32GiB allocated + 1.61GiB fragmentation-
@@ -1676,14 +1853,29 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
 
     deviation_dir = os.path.join(out_dir, "deviations")
 
+    # W1b (#355): continuation mode builds the model at the CHECKPOINT's own
+    # (unwidened) FF width, never real_arch's grow-target width -- see
+    # derive_continuation_arch's docstring.
+    build_arch = derive_continuation_arch(continue_from, real_arch) if continue_from else real_arch
+
     def _build_model_and_optimizers():
-        m = build_real_model(real_arch, device, seed=seed)
+        m = build_real_model(build_arch, device, seed=seed)
         opts, blrs, routing_ = build_split_optimizer(
             m, pretrain_contract, force_fallback=False,
             deviation_dir=deviation_dir)
         return m, opts, blrs, routing_
 
     model, optimizers, base_lrs, routing = _build_model_and_optimizers()
+    continuation_source_manifest: dict | None = None
+    if continue_from:
+        # NO from-scratch init in this mode (#355's core requirement) --
+        # fail-closed on a missing/mismatched checkpoint, reusing the exact
+        # same load_continuation_checkpoint every other mode-entry path uses.
+        o_state, r_state, continuation_source_manifest = load_continuation_checkpoint(
+            continue_from, model)
+        load_optimizers_state(optimizers, o_state)
+        restore_rng(r_state)
+    init_mode = "continuation" if continue_from else "from_scratch"
     ce_impl, ce_fn = resolve_ce_impl(prefer_liger=(device == "cuda"))
 
     if loader is None:
@@ -1782,9 +1974,19 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
     wall_hours_estimate = (derive_wall_hours_from_rung(rung_receipt, tokens_at_ceiling)
                           if rung_receipt is not None else None)
 
+    # W1b (#355): config_sha must describe the model actually built --
+    # build_arch (checkpoint's own FF width) in continuation mode, never the
+    # caller-supplied cfg_real (which describes real_arch, the grow-TARGET).
+    actual_cfg_real = real_config_dict(build_arch) if continue_from else cfg_real
+
     return {
-        "config_sha": config_sha(cfg_real),
+        "config_sha": config_sha(actual_cfg_real),
         "init_seed": seed,
+        "init_mode": init_mode,
+        "continue_from_checkpoint": (repo_relative_path(continue_from)
+                                      if continue_from else None),
+        "continuation_source_manifest_step": (
+            (continuation_source_manifest or {}).get("step")),
         "lr_schedule": {"source": MATCHED_RECIPE_SCHEDULE_SOURCE,
                         "base_lrs": base_lrs, "warmup_frac": 0.1,
                         "min_lr_frac": 0.1,
@@ -1915,6 +2117,38 @@ def build_arg_parser() -> argparse.ArgumentParser:
                          "classifier_code_sha); cache hits skip the expensive recheck. "
                          "Must be stable across launches (NOT a per-run out-dir). "
                          "Non-PASS verdicts are never cached.")
+    ap.add_argument("--continue-from", default=None,
+                    help=f"W1b ({W1B_ISSUE_REF}): resume-from-checkpoint-"
+                         "UNWIDENED continuation mode. Path to a checkpoint "
+                         "dir (save_checkpoint format) to load INSTEAD of "
+                         "from-scratch init -- everything else (eval_loss_fn, "
+                         "certified held-out batch, anti-poison cosine+"
+                         "warmup schedule, contamination recheck, receipt "
+                         "schema) is identical to the W1 control path. "
+                         "Refuses fail-closed on a missing or architecture-"
+                         "mismatched checkpoint (load_continuation_"
+                         "checkpoint); NEVER silently falls back to random "
+                         "init. Omit to keep the original from-scratch "
+                         "control-arm behavior unchanged.")
+    ap.add_argument("--tokens-growpath-marginal", type=int,
+                    default=W1B_MARGINAL_TOKENS_GROWPATH,
+                    help=f"W1b ({W1B_ISSUE_REF}): the grow arm's MARGINAL "
+                         f"(post-seed) token bill -- default "
+                         f"{W1B_MARGINAL_TOKENS_GROWPATH} (156 steps @ "
+                         "batch16 seq1024). Drives the outcome classifier's "
+                         "PRIMARY ratio/outcome/lower_bound fields in "
+                         "continuation mode (--continue-from given); only "
+                         "used in that mode.")
+    ap.add_argument("--tokens-growpath-cumulative", type=int, default=None,
+                    help=f"W1b ({W1B_ISSUE_REF}) context-only field, only "
+                         "used in continuation mode: the ORIGINAL W1 "
+                         "cumulative grow-arm bill (seed+pre-grow+stabilize). "
+                         "Carried alongside the marginal ratio so the "
+                         "pre-registered reading rules have both figures -- "
+                         "NEVER drives the primary outcome/ratio fields. "
+                         "Defaults to this run's own phase-1 tokens_total "
+                         "(dry-run) or the pricing receipt's grow_arm."
+                         "tokens_total (live) when omitted.")
     return ap
 
 
@@ -2121,14 +2355,45 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         eval_x=eval_x, eval_y=eval_y,
         loader=eval_loader,  # reuse -- avoid a second ~14-27GB corpus load
         rung_receipt=rung_receipt,
-        progress_path=progress_path)
+        progress_path=progress_path,
+        continue_from=args.continue_from)
 
     is_real_lineage, lineage_reasons = assess_real_lineage(
         checkpoint_verified=True,   # run_phase1_live raises before returning if not
         shard_verified=shard_verified_ok,
         eval_batch_pinned=eval_batch_pinned_ok)
 
-    outcome = classify_outcome(pricing_receipt["grow_arm"]["tokens_total"], phase2)
+    # W1b (#355): continuation mode prices the outcome classifier against the
+    # MARGINAL bill; the cumulative W1 bill is carried alongside as context
+    # only (w1b_continuation block below) -- same split as the dry-run branch.
+    w1b_continuation = None
+    if args.continue_from:
+        tokens_growpath_marginal = args.tokens_growpath_marginal
+        tokens_growpath_cumulative = (
+            args.tokens_growpath_cumulative
+            if args.tokens_growpath_cumulative is not None
+            else pricing_receipt["grow_arm"]["tokens_total"])
+        outcome = classify_outcome(tokens_growpath_marginal, phase2)
+        outcome_cumulative = classify_outcome(tokens_growpath_cumulative, phase2)
+        w1b_continuation = {
+            "issue_ref": W1B_ISSUE_REF,
+            "mode": "continuation",
+            "continue_from_checkpoint": phase2["continue_from_checkpoint"],
+            "continuation_source_manifest_step": phase2["continuation_source_manifest_step"],
+            "tokens_growpath_marginal": tokens_growpath_marginal,
+            "tokens_growpath_cumulative": tokens_growpath_cumulative,
+            "ratio_marginal": outcome["ratio"],
+            "outcome_marginal": outcome["outcome"],
+            "ratio_cumulative": outcome_cumulative["ratio"],
+            "outcome_cumulative": outcome_cumulative["outcome"],
+            "note": ("ratio/outcome/lower_bound at the receipt's top level are "
+                     "the MARGINAL reading (this run's primary classification, "
+                     f"per {W1B_ISSUE_REF}); ratio_cumulative/outcome_cumulative "
+                     "above are context only, carried so the pre-registered "
+                     "reading rules have both figures."),
+        }
+    else:
+        outcome = classify_outcome(pricing_receipt["grow_arm"]["tokens_total"], phase2)
 
     eval_trace_path = os.path.join(out_dir, f"w1-eval-trace-live-{ts}.json")
     with open(eval_trace_path, "w", encoding="utf-8", newline="\n") as f:
@@ -2158,14 +2423,10 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             "derived_target_architecture": real_arch,
         },
         "checkpoint_verification": phase1["checkpoint_verify"],
-        "shard_corpus_verification": {
-            "shard_dir": args.shard_dir,
-            "n_files": shard_manifest["n_files"],
-            "total_tokens": shard_manifest["total_tokens"],
-            "combined_sha256": shard_manifest["combined_sha256"],
-            "expected_combined_sha256": expected_corpus_sha,
-            "verified": shard_verified_ok,
-        },
+        # issue #357 cure: corpus_id + corpus_manifest_sha256, never the raw
+        # --shard-dir string (see build_shard_corpus_verification_block).
+        "shard_corpus_verification": build_shard_corpus_verification_block(
+            args.shard_dir, shard_manifest, expected_corpus_sha, shard_verified_ok),
         "held_out_batch": {
             "window_start": held_out_start,
             "n_windows_total": n_windows,
@@ -2191,6 +2452,9 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
         "control_arm": {
             "config_sha": phase2["config_sha"],
             "init_seed": phase2["init_seed"],
+            "init_mode": phase2["init_mode"],
+            "continue_from_checkpoint": phase2["continue_from_checkpoint"],
+            "continuation_source_manifest_step": phase2["continuation_source_manifest_step"],
             "lr_schedule": phase2["lr_schedule"],
             "optimizer": phase2["optimizer"],
             "tokens_to_match": phase2["tokens_to_match"],
@@ -2207,6 +2471,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             "wall_s": phase2["wall_s"],
             "wall_hours_estimate": phase2["wall_hours_estimate"],
         },
+        "w1b_continuation": w1b_continuation,
         "cap_disclosure": {
             "note": "Two different 'L0 budget cap' multipliers exist in this "
                     "program's documentation and must not be conflated. This run "
@@ -2309,14 +2574,47 @@ def main(argv: list[str] | None = None) -> int:
         checkpoint_every=args.checkpoint_every,
         target_eval_loss=phase1["target_eval_loss"], seed=args.phase2_seed,
         device=device, out_dir=os.path.join(args.out_dir, "phase2"),
-        eval_x=eval_x, eval_y=eval_y)
+        eval_x=eval_x, eval_y=eval_y, continue_from=args.continue_from)
 
     assert phase2["config_sha"] == cfg_sha, (
         "W1_ARCH_MISMATCH: control-arm config_sha diverged from the shared "
         "architecture dict -- spec section 2's identical-architecture "
         "requirement violated")
 
-    outcome = classify_outcome(phase1["tokens_total"], phase2)
+    # W1b (#355): in continuation mode the outcome classifier is priced
+    # against the MARGINAL (post-seed) bill, not the cumulative one -- the
+    # cumulative figure is carried alongside as context only (w1b_continuation
+    # block below), never as the classifying figure (issue's own outcome-
+    # semantics framing: "the outcome classifier gets the marginal bill as
+    # tokens_growpath when in this mode").
+    w1b_continuation = None
+    if args.continue_from:
+        tokens_growpath_marginal = args.tokens_growpath_marginal
+        tokens_growpath_cumulative = (
+            args.tokens_growpath_cumulative
+            if args.tokens_growpath_cumulative is not None
+            else phase1["tokens_total"])
+        outcome = classify_outcome(tokens_growpath_marginal, phase2)
+        outcome_cumulative = classify_outcome(tokens_growpath_cumulative, phase2)
+        w1b_continuation = {
+            "issue_ref": W1B_ISSUE_REF,
+            "mode": "continuation",
+            "continue_from_checkpoint": phase2["continue_from_checkpoint"],
+            "continuation_source_manifest_step": phase2["continuation_source_manifest_step"],
+            "tokens_growpath_marginal": tokens_growpath_marginal,
+            "tokens_growpath_cumulative": tokens_growpath_cumulative,
+            "ratio_marginal": outcome["ratio"],
+            "outcome_marginal": outcome["outcome"],
+            "ratio_cumulative": outcome_cumulative["ratio"],
+            "outcome_cumulative": outcome_cumulative["outcome"],
+            "note": ("ratio/outcome/lower_bound at the receipt's top level are "
+                     "the MARGINAL reading (this run's primary classification, "
+                     f"per {W1B_ISSUE_REF}); ratio_cumulative/outcome_cumulative "
+                     "above are context only, carried so the pre-registered "
+                     "reading rules have both figures."),
+        }
+    else:
+        outcome = classify_outcome(phase1["tokens_total"], phase2)
 
     eval_trace_path = os.path.join(args.out_dir, f"w1-eval-trace-{ts}.json")
     with open(eval_trace_path, "w", encoding="utf-8", newline="\n") as f:
@@ -2388,6 +2686,9 @@ def main(argv: list[str] | None = None) -> int:
         "control_arm": {
             "config_sha": phase2["config_sha"],
             "init_seed": phase2["init_seed"],
+            "init_mode": phase2["init_mode"],
+            "continue_from_checkpoint": phase2["continue_from_checkpoint"],
+            "continuation_source_manifest_step": phase2["continuation_source_manifest_step"],
             "lr_schedule": phase2["lr_schedule"],
             "tokens_to_match": phase2["tokens_to_match"],
             "tokens_at_ceiling": phase2["tokens_at_ceiling"],
@@ -2408,6 +2709,7 @@ def main(argv: list[str] | None = None) -> int:
             "target_eval_loss": phase1["target_eval_loss"],
             "dry_run_capability_point": True,
         },
+        "w1b_continuation": w1b_continuation,
         "ratio": outcome["ratio"],
         "outcome": outcome["outcome"],
         "lower_bound": outcome["lower_bound"],
