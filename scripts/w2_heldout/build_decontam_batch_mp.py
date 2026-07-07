@@ -249,17 +249,26 @@ def _extract_needle_hashes(candidate_rows: list[list[int]], window: int,
 
 
 def _worker_scan_shards(args: tuple) -> dict:
-    """Worker: scan a subset of shards, return matches."""
+    """Worker: scan a subset of shards, stream matches to file, return counts only."""
     (shard_dir, shard_names, needle_hash_to_windows, needle_hash_set,
-     window, roll_base, worker_id, progress_file, chunk_tokens) = args
+     window, roll_base, worker_id, progress_file, chunk_tokens, dump_dir) = args
 
     mod = 1 << 64
-    confirmed_matches: list[dict] = []
+    confirmed_matches_count = 0
     candidate_collisions = 0
     total_windows_hashed = 0
     prev_tail = None
     prev_name = None
     last_heartbeat_mono = [time.monotonic()]
+
+    # Open per-worker dump file for streaming matches
+    worker_dump_file = None
+    if dump_dir:
+        os.makedirs(dump_dir, exist_ok=True)
+        worker_dump_file = os.path.join(dump_dir, f"worker-{worker_id}.jsonl")
+        worker_dump_fh = open(worker_dump_file, "w", encoding="utf-8")
+    else:
+        worker_dump_fh = None
 
     needle_arr = (np.fromiter(needle_hash_set, dtype=np.uint64, count=len(needle_hash_set))
                   if needle_hash_set else np.array([], dtype=np.uint64))
@@ -286,7 +295,7 @@ def _worker_scan_shards(args: tuple) -> dict:
                 "shard_idx": shard_idx,
                 "shard": name,
                 "windows_hashed": windows_so_far,
-                "matches_found": len(confirmed_matches),
+                "matches_found": confirmed_matches_count,
             }) + "\n")
             fh.flush()
 
@@ -372,8 +381,11 @@ def _worker_scan_shards(args: tuple) -> dict:
             candidate = tuple(int(x) for x in arr[i:i + window])
             hh = _needle_hash_local(candidate)
             if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
-                confirmed_matches.append({"shard": name, "offset": i,
-                                           "window": list(candidate)})
+                match_record = {"shard": name, "offset": i,
+                               "window": list(candidate)}
+                if worker_dump_fh:
+                    worker_dump_fh.write(json.dumps(match_record) + "\n")
+                confirmed_matches_count += 1
             else:
                 candidate_collisions += 1
 
@@ -385,9 +397,12 @@ def _worker_scan_shards(args: tuple) -> dict:
                 candidate = tuple(int(x) for x in join[i:i + window])
                 hh = _needle_hash_local(candidate)
                 if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
-                    confirmed_matches.append({
+                    match_record = {
                         "boundary": f"{prev_name}|{name}",
-                        "offset_in_join": i, "window": list(candidate)})
+                        "offset_in_join": i, "window": list(candidate)}
+                    if worker_dump_fh:
+                        worker_dump_fh.write(json.dumps(match_record) + "\n")
+                    confirmed_matches_count += 1
 
         prev_tail = arr[-(window - 1):].copy() if n >= (window - 1) else prev_tail
         prev_name = name
@@ -396,11 +411,16 @@ def _worker_scan_shards(args: tuple) -> dict:
         # marking a shard boundary regardless of the intra-shard cadence above.
         _write_heartbeat(idx, name, total_windows_hashed, force=True)
 
+    # Close the dump file
+    if worker_dump_fh:
+        worker_dump_fh.close()
+
+    # Return counts only — Pool.map unpickling is now 26 small dicts, not 216M match dicts
     return {
         "worker_id": worker_id,
         "shards_scanned": len(shard_names),
         "windows_hashed": total_windows_hashed,
-        "confirmed_matches": confirmed_matches,
+        "matches_found": confirmed_matches_count,
         "hash_collisions_ruled_out": candidate_collisions,
     }
 
@@ -410,8 +430,11 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
                               roll_base: int = CONTAMINATION_ROLL_BASE,
                               n_workers: int = DEFAULT_MP_WORKERS,
                               progress_file: str | None = None,
-                              chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS) -> dict:
-    """Parallelized contamination_recheck. Same receipt semantics as serial version."""
+                              chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
+                              dump_matches: str | None = None) -> dict:
+    """Parallelized contamination_recheck. Same receipt semantics as serial version.
+
+    If dump_matches is provided, writes matching contamination records to that JSONL file."""
     t0 = time.perf_counter()
 
     # Extract needle hashes (shared across all workers)
@@ -441,12 +464,17 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
     # Filter out empty groups (shouldn't happen, but safe)
     worker_shards = [g for g in worker_shards if g]
 
-    # Dispatch workers
+    # Create dump directory for workers to stream matches
+    tmp_match_dir = os.path.join(os.path.dirname(progress_file) if progress_file else ".",
+                                  "worker-matches-tmp")
+    os.makedirs(tmp_match_dir, exist_ok=True)
+
+    # Dispatch workers with dump_dir parameter
     worker_args = []
     for worker_id, shard_names in enumerate(worker_shards):
         worker_args.append((
             shard_dir, shard_names, needle_hash_to_windows, needle_hash_set,
-            window, roll_base, worker_id, progress_file, chunk_tokens
+            window, roll_base, worker_id, progress_file, chunk_tokens, tmp_match_dir
         ))
 
     with Pool(processes=len(worker_shards)) as pool:
@@ -454,16 +482,46 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
 
     wall_s = round(time.perf_counter() - t0, 3)
 
-    # Merge results deterministically
+    # Collect matches from worker-written JSONL files
+    # Workers have already streamed matches to <tmp_match_dir>/worker-<id>.jsonl
     all_matches = []
     total_windows_hashed = 0
     total_collisions = 0
     total_shards = 0
-    for r in results:
-        all_matches.extend(r["confirmed_matches"])
+
+    for worker_idx, r in enumerate(results):
+        # Read matches that this worker already wrote to file
+        worker_match_file = os.path.join(tmp_match_dir, f"worker-{worker_idx}.jsonl")
+        if os.path.exists(worker_match_file):
+            with open(worker_match_file, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.strip():
+                        all_matches.append(json.loads(line))
+
+        # Accumulate counts (lightweight — workers returned only counts, not match dicts)
         total_windows_hashed += r["windows_hashed"]
         total_collisions += r["hash_collisions_ruled_out"]
         total_shards += r["shards_scanned"]
+
+    # Clean up temp files
+    shutil.rmtree(tmp_match_dir, ignore_errors=True)
+
+    # Write matches to dump file if requested (atomic write: temp → rename)
+    if dump_matches:
+        dump_dir = os.path.dirname(dump_matches)
+        if dump_dir and not os.path.exists(dump_dir):
+            os.makedirs(dump_dir, exist_ok=True)
+
+        # Write to temp file first, then rename for atomicity
+        dump_temp = dump_matches + ".tmp"
+        with open(dump_temp, "w", encoding="utf-8") as fh:
+            for match in all_matches:
+                fh.write(json.dumps(match) + "\n")
+
+        # Atomic rename
+        if os.path.exists(dump_matches):
+            os.remove(dump_matches)
+        os.rename(dump_temp, dump_matches)
 
     return {
         "method": "13-token polynomial rolling hash (uint64 mod 2**64), "
