@@ -2216,24 +2216,40 @@ def run_and_emit_live() -> Path:
                 per_class["ff"].append(r_sr)
                 per_class_delta["ff"].append(delta)
 
-        r_sr_val = sum(per_class["ff"]) / max(len(per_class["ff"]), 1) if per_class["ff"] else None
+        try:
+            r_sr_val = sum(per_class["ff"]) / max(len(per_class["ff"]), 1) if per_class["ff"] else None
+        except Exception as e:
+            r_sr_val = None
+            print(f"[p5-ratio-audit] Warning: rho_sr computation failed: {e}", flush=True)
 
-        # rho_noise: compute from collected delta tensors, not hardcoded values
-        if r_sr_val and per_class_delta["ff"]:
-            import torch
-            # Flatten all deltas to 1D and concatenate (different layers have different shapes)
-            delta_all = torch.cat([d.flatten() for d in per_class_delta["ff"]], dim=0)
-            r_noise_val = rho_noise(1e-4, delta_all)  # Pass actual delta tensor
+        if r_sr_val:
+            # rho_noise: compute from collected delta tensors, not hardcoded values
+            try:
+                if per_class_delta["ff"]:
+                    import torch
+                    # Flatten all deltas to 1D and concatenate (different layers have different shapes)
+                    delta_all = torch.cat([d.flatten() for d in per_class_delta["ff"]], dim=0)
+                    r_noise_val = rho_noise(1e-4, delta_all)
+                else:
+                    r_noise_val = "N/A-no-deltas"
+            except Exception as e:
+                r_noise_val = f"N/A-error:{type(e).__name__}"
+                print(f"[p5-ratio-audit] Warning: rho_noise failed: {e}", flush=True)
+
+            # rho_rank, rho_grow: N/A-by-construction
+            r_rank_val, r_grow_val = rho_rank_rho_grow_na()
+
+            # rho_spec, rho_batch, rho_block: N/A-by-construction (pre-grow, single-batch, bf16-native)
+            r_spec_val = rho_spec_na()
+            r_batch_val = rho_batch_na()
+            r_block_val = rho_block_na()
         else:
+            # All N/A if rho_sr cannot be computed
             r_noise_val = "N/A"
-
-        # rho_rank, rho_grow: N/A-by-construction
-        r_rank_val, r_grow_val = rho_rank_rho_grow_na() if r_sr_val else ("N/A", "N/A")
-
-        # rho_spec, rho_batch, rho_block: N/A-by-construction (pre-grow, single-batch, bf16-native)
-        r_spec_val = rho_spec_na() if r_sr_val else "N/A"
-        r_batch_val = rho_batch_na() if r_sr_val else "N/A"
-        r_block_val = rho_block_na() if r_sr_val else "N/A"
+            r_rank_val, r_grow_val = ("N/A", "N/A")
+            r_spec_val = "N/A"
+            r_batch_val = "N/A"
+            r_block_val = "N/A"
 
         # Compute commutation defect for one FF layer.
         # FAIL-CLOSED: build_real_d_comm_closures hardcodes layers.0.mlp prefix;
