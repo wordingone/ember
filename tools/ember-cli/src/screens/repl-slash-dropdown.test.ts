@@ -103,7 +103,14 @@ describe("slash-command dropdown wired into the real ReplScreen (b22 item 1)", (
     // pattern (it has a space), so the dropdown must be gone from THIS frame's diff. This also
     // proves Enter did NOT fall through to message-submit (which would have cleared the input
     // back to empty and echoed a transcript entry instead of leaving "/watch " in place).
-    expect(delta).toContain("/watch");
+    //
+    // The leading "/" was already on screen (typed in an earlier frame) and is unchanged by
+    // completion, so a correctly-minimal cell diff omits it here and this frame's delta contains
+    // only the newly-painted "watch" -- checked against the full cumulative buffer instead, which
+    // is where "/watch" together actually needs to appear (issue #343's style-tracker fix made
+    // the diff stop spuriously repainting unchanged cells whose computed style used to drift).
+    expect(delta).toContain("watch");
+    expect(chunks.join("")).toContain("/watch");
     // None of the OTHER dropdown rows remain -- the command-list panel itself is gone, not just
     // re-labeled (unrelated bordered panels exist elsewhere in this screen's real board/status
     // chrome, so asserting "no border anywhere" would be the wrong, over-broad invariant).
