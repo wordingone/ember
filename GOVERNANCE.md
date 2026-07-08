@@ -19,9 +19,10 @@ by personal name — see §7.)
   project's current state. No long-lived parallel "real work lives elsewhere"
   branch is permitted. If `master` is stale, that is a defect to fix, not a
   condition to route around.
-- **`STATE.md` is the single position ledger** — current state only, kept short.
-  It is *not* an append-only narration log, and it is *not* duplicated by commit
-  messages or by files under `receipts/`.
+- **`CONTINUITY.md` is the single position ledger** — current state only, kept
+  short. It is *not* an append-only narration log, and it is *not* duplicated by
+  commit messages or by files under `receipts/`. (`STATE.md` is a pointer stub
+  to `CONTINUITY.md`, per `GOAL.md`'s Map.)
 - **`GOAL.md` is the single goal document.** There is exactly one. Derived paste
   blocks or prompt snippets are not kept as separate tracked files.
 - **`receipts/` holds evidence**, never status or goal text.
@@ -63,7 +64,7 @@ prefixes are not used in branch names or commit subjects.
 
 - The subject is a factual description of the change in the imperative mood.
 - Commit messages are **not a status board**: no `DONE`/`FROZEN`/`ADVANCE`-style
-  state verbs standing in for the position ledger. State lives in `STATE.md`.
+  state verbs standing in for the position ledger. State lives in `CONTINUITY.md`.
 - A commit changing the goal (`GOAL.md`) must **not** also change the evidence
   (`receipts/`) that grades against it. Goal edits and evidence edits are
   separate commits, so the target never moves in lockstep with its own proof.

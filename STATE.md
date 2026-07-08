@@ -1,21 +1,11 @@
 # State
 
-Single position ledger for `ember`. Current state only; short by design. Not an
-append log, not duplicated by commit messages or `receipts/`. See `GOVERNANCE.md`
-for why.
+State lives in `CONTINUITY.md`, not here (per `GOAL.md`'s Map, §8). This file is a
+pointer stub, kept only so old links resolve.
 
-## Position (2026-06-24)
-
-The repository is under **structural consolidation**. The prior `STATE.md` was an
-append-only narration log carrying operator names and absolute local paths; it has
-been replaced by this current-state-only ledger (names/paths removed from the tip;
-a history pass is tracked separately).
-
-- **Canonical branch:** `master`.
-- **Goal document:** `GOAL.md` (the single standing goal + its reading notes).
-- **Evidence:** `receipts/` (executed-job JSON only).
-- **Governance:** `GOVERNANCE.md` (ownership, lifecycle, naming, privacy).
-
-Project status claims are made from receipts, not from this file's prose. When the
-goal and its verification surface are re-established on a single canonical footing,
-the current position is recorded here in one short block — replacing, not appending.
+This file's prior content — the 2026-06-24 position ledger (`STATE.md` as the
+single bounded position ledger) — is preserved in git history at the commit
+before this stub replaced it; it was a frozen snapshot as of that date and is
+no longer maintained. For the current, actively-maintained state, see
+`CONTINUITY.md`. For the standing goal, see `GOAL.md`. For repository structure
+and lifecycle, see `GOVERNANCE.md`.
