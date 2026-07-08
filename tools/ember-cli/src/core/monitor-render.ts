@@ -12,7 +12,7 @@
 // "${status}: ${reason}" (core/ember-world-state.ts), so splitStatusAndReason parses it back out
 // on the first ": " rather than adding a new field to the shared Claim shape.
 
-import type { Claim, EmberWorldState } from "./ember-world-state.ts";
+import type { Claim, EmberWorldState, BoardConditionTransition } from "./ember-world-state.ts";
 import { formatReceiptAge, isReceiptStale } from "./receipt-age.ts";
 import { color as tokenColor } from "../components/design-system.ts";
 
@@ -226,6 +226,29 @@ export function buildTopAttentionLines(conditions: Claim[], max: number): string
       const formatted = truncateReason(cleaned, ATTENTION_LINE_REASON_LIMIT, SENTENCE_MIN, { wordSafeFallback: true });
       return `${id}: ${status} — ${formatted}`;
     });
+}
+
+// ---------------------------------------------------------------------------
+// Board condition transition events (issue #433: GREEN<->RED flips as activity events)
+// ---------------------------------------------------------------------------
+
+/**
+ * Formats one board condition transition (ember-world-state.ts's diffBoardConditions) as a
+ * "Recent activity" feed line, e.g. "board: C(-1) GREEN->RED (27 red / 8 green)" -- the literal
+ * example format from issue #433. `counts` is the NEW receipt's totals (the board state AFTER
+ * this transition), matching how the welcome-screen badge already reports green/total elsewhere.
+ * Colors the line red when the condition just went RED, green when it just went GREEN, and plain
+ * for any other status (e.g. an AUDIT-* variant) -- the same statusGlyph color convention used
+ * for the full /monitor panel above.
+ */
+export function formatBoardTransitionEvent(
+  transition: BoardConditionTransition,
+  counts: { green: number; red: number },
+): { text: string; color?: string } {
+  const text = `board: ${transition.condition} ${transition.from}->${transition.to} (${counts.red} red / ${counts.green} green)`;
+  if (transition.to === "RED") return { text, color: "red" };
+  if (transition.to === "GREEN") return { text, color: "green" };
+  return { text };
 }
 
 // ---------------------------------------------------------------------------
