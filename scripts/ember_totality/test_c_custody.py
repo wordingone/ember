@@ -98,6 +98,32 @@ def _extract_citations(obj, citations=None):
     return citations
 
 
+# Characters that mark a cited string as a regex/glob literal rather than a
+# concrete file path (issue #410): `*` and `?` (glob), `[` `]` (char class),
+# `(` `)` (grouping / prose parenthetical), `<` `>` (placeholder), `\` (regex
+# escape), `+` (quantifier / glob-alt).
+_CITATION_METACHARS = frozenset("*?[]()<>\\+")
+
+
+def _classify_citation(path):
+    """Classify a receipts/ citation string as "concrete" (a real, checkable
+    file path) or "pattern" (a regex/glob literal or a prose fragment swept
+    in by the citation-extraction regex). Only "concrete" citations are
+    checked for existence / counted toward cited_missing."""
+    if any(ch in _CITATION_METACHARS for ch in path):
+        return "pattern"
+    if path.endswith("/"):
+        # bare directory reference (e.g. "receipts/") -- not a checkable file
+        return "pattern"
+    for seg in path.split("/"):
+        if seg and not re.match(r"^[A-Za-z0-9_]", seg):
+            # a real path segment never starts with punctuation; a segment
+            # like "-style" is a prose fragment (e.g. "a receipts/-style gate"),
+            # not a cited path
+            return "pattern"
+    return "concrete"
+
+
 def _get_allowlist_for_receipt(receipt_data):
     """Extract __allowlist_untracked from receipt, if present. Returns set of basename patterns."""
     allowlist = receipt_data.get("__allowlist_untracked", [])
@@ -223,7 +249,11 @@ def main():
 
     # --- (E) Check cited paths exist -------
     missing_citations = []
+    pattern_citations = []
     for cited_path in sorted(citations_to_verify):
+        if _classify_citation(cited_path) == "pattern":
+            pattern_citations.append(cited_path)
+            continue
         full_path = os.path.join(ROOT, cited_path)
         if not os.path.isfile(full_path):
             missing_citations.append(cited_path)
@@ -244,6 +274,7 @@ def main():
                 "untracked": [f for f in failures if f.startswith("UNTRACKED:")],
                 "unparseable": [f for f in failures if f.startswith("UNPARSEABLE:")],
                 "cited_missing": [f for f in failures if f.startswith("CITED-MISSING:")],
+                "pattern_citation": [f"PATTERN: {p}" for p in pattern_citations],
             },
             "pending_landing": pending_landing,
         }
@@ -252,6 +283,7 @@ def main():
                     f"untracked={len(receipt_obj['offenders']['untracked'])} "
                     f"unparseable={len(receipt_obj['offenders']['unparseable'])} "
                     f"cited_missing={len(receipt_obj['offenders']['cited_missing'])} "
+                    f"pattern={len(pattern_citations)} "
                     f"pending_landing={len(pending_landing)}; "
                     f"sidecar={sidecar_path}")
 
@@ -266,6 +298,7 @@ def main():
             "untracked": [],
             "unparseable": [],
             "cited_missing": [],
+            "pattern_citation": [f"PATTERN: {p}" for p in pattern_citations],
         },
         "pending_landing": [],
     }
@@ -273,6 +306,7 @@ def main():
     emit("GREEN", f"C-CUSTODY: all receipts in receipts/ are git-tracked, "
                   f"parseable as JSON, and cited paths exist "
                   f"({len(found_files)} files checked, 0 violations); "
+                  f"pattern={len(pattern_citations)} "
                   f"pending_landing={len(pending_landing)}; "
                   f"sidecar={sidecar_path}")
 
