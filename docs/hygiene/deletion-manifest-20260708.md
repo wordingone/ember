@@ -158,6 +158,16 @@ per issue #488's own instruction ("counts + rules, not per-file listing"
 for the bulk of a triage) while still naming every file that IS proposed
 for action, per file, above.
 
+## B2. Directed addition — `tools/ember-cli/` (outside the docs/scripts scan scope)
+
+Flagged by the feed485 lane, cross-checked against PR #491's review, and
+independently re-verified here against a clean `public/master` snapshot
+(taken post-#491-merge) before inclusion:
+
+| File | Evidence |
+|---|---|
+| `tools/ember-cli/src/components/activity-pane.ts` | Fully-formed component (relative-time formatting, glyphs, `watchActivityLog`). Zero imports anywhere in the tracked tree — the only repo-wide text hit for its own filename is its own header comment. No test file (compare its replacement, which has `activity-feed-pane.test.ts`). Its data source, `state/activity/activity-<date>.jsonl`, does have a writer — `scripts/lib/activity_log.py`'s `emit()` — but `emit()` is called only from two test files (`test_activity_pty_smoke.py`, `test_board_runner_emit.py`); no production code path ever calls it, and no `activity-*.jsonl` file has ever existed on disk. **Superseded by** `services/activity-feed.ts` + `components/activity-feed-pane.ts` (merged the same day, PR #491), which read a different, actually-wired data source (`state/activity-ledger.jsonl`). This is a second confirmed instance of issue #485's named "keyframed flame" pattern — a fully-formed rendering surface wired to a data source nothing in production ever populates. #485 quotes the constitution directly on this exact failure mode: *"a keyframed flame is a fabricated receipt in visual form."* |
+
 ## C. Untracked receipts on disk — measured 5,262 (issue cited ~1,637)
 
 Measured against the **main tree** (the primary checkout, not an isolated
@@ -207,6 +217,7 @@ worth a separate look.
 |---|---|
 | DELETE-CANDIDATE, docs | 0 |
 | DELETE-CANDIDATE, scripts | 1 (`fp33_e3_gemma_e2b_smoke.py`, superseded by `fp33_e3b_gemma_e2b_proper.py`) |
+| DELETE-CANDIDATE, `tools/ember-cli/` (directed addition, B2) | 1 (`activity-pane.ts`, superseded by `activity-feed.ts` + `activity-feed-pane.ts`, PR #491; second confirmed instance of issue #485's "keyframed flame" pattern) |
 | CONSOLIDATE-INTO-\<target\>, docs/scripts | 0 distinct (the 1 delete above is itself a 2-file consolidation) |
 | KEEP — zero-ref, flagged for owner triage, not proposed (docs) | 51 |
 | KEEP — zero-ref, flagged for owner triage, not proposed (scripts) | 106 |
