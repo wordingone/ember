@@ -33,7 +33,18 @@ def verify():
     with open(RECEIPT_PATH, "r") as f:
         receipt = json.load(f)
 
-    storage_root = Path(receipt["storage_root"])
+    # Resolve storage_root relative to receipt directory
+    # Receipt is at: ember/.claude/worktrees/evalfreeze-487/receipts/eval-suite-freeze/eval-suite-freeze-v1.json
+    storage_root_str = receipt["storage_root"]
+    if storage_root_str.startswith(".."):
+        # Relative path from receipt directory
+        receipt_dir = RECEIPT_PATH.resolve().parent
+        # receipt_dir = ember/.claude/worktrees/evalfreeze-487/receipts/eval-suite-freeze/
+        # storage_root_str = ../../../../../data/eval-suite-v1-{ts}
+        storage_root = (receipt_dir / storage_root_str).resolve()
+    else:
+        storage_root = Path(storage_root_str).resolve()
+
     all_match = True
 
     print(f"[INFO] Verifying {len(receipt['datasets'])} datasets against receipt...")

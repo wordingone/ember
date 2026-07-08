@@ -63,6 +63,23 @@ Reference scores are **locally reproduced, never paper-quoted**. The 27B-class c
 }
 ```
 
+## Pinning Status
+
+As of 2026-07-08, the following datasets have been successfully pinned and verified:
+
+| Dataset | Rows | Test Split Hash | Status |
+|---------|------|-----------------|--------|
+| MMLU-Pro | 12032 | 5fdd1b7583302292... | Pinned |
+| GSM8K | 1319 | fb581f0270b25988... | Pinned |
+| MATH-500 | 500 | 200806fb17234213... | Pinned |
+| ARC-Challenge | 1172 | c0e7635ee91b9ca4... | Pinned |
+| HumanEval+ | 164 | 4e8dbe9885c253ae... | Pinned |
+| MBPP | 500 | 88d690200dbe7f37... | Pinned |
+| HellaSwag | 10003 | 6a78734fc71263f4... | Pinned |
+| GPQA-diamond | — | — | PIN-PENDING (license gate) |
+
+**PIN-PENDING Status Note**: GPQA-diamond requires operator-session authorization via HuggingFace. The automated pin process refuses to accept consent on behalf of the operator. This pin is queued for when the operator is next active.
+
 ## Amendments
 
 Amendments to this frozen specification require entries in `docs/deviations.md` under the battery-14 section. The deviation rule is: only deviations from this freeze are documented in that file; the document itself is immutable except via that mechanism.

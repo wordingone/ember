@@ -26,38 +26,35 @@
     {
       "name": "MATH-500",
       "source": "huggingface",
-      "canonical_url": "https://huggingface.co/datasets/lighteval/MATH",
+      "canonical_url": "https://huggingface.co/datasets/HuggingFaceH4/MATH-500",
       "revision": "main",
       "test_split_name": "test",
-      "test_split_sha256": "PIN-PENDING",
-      "row_count": 0,
-      "size_bytes": 0,
-      "blocker": "Dataset 'lighteval/MATH' doesn't exist on the Hub or cannot be accessed.",
-      "pin_status": "PIN-PENDING"
+      "test_split_sha256": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+      "row_count": 500,
+      "size_bytes": 442443,
+      "blocker": null
     },
     {
       "name": "ARC-Challenge",
       "source": "huggingface",
-      "canonical_url": "https://huggingface.co/datasets/allenai/ARC",
+      "canonical_url": "https://huggingface.co/datasets/allenai/ai2_arc",
       "revision": "main",
       "test_split_name": "test",
-      "test_split_sha256": "PIN-PENDING",
-      "row_count": 0,
-      "size_bytes": 0,
-      "blocker": "Dataset 'allenai/ARC' doesn't exist on the Hub or cannot be accessed.",
-      "pin_status": "PIN-PENDING"
+      "test_split_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+      "row_count": 1172,
+      "size_bytes": 425043,
+      "blocker": null
     },
     {
       "name": "HumanEval+",
       "source": "huggingface",
-      "canonical_url": "https://huggingface.co/datasets/nuprl/HumanEvalPlus",
+      "canonical_url": "https://huggingface.co/datasets/evalplus/humanevalplus",
       "revision": "main",
       "test_split_name": "test",
-      "test_split_sha256": "PIN-PENDING",
-      "row_count": 0,
-      "size_bytes": 0,
-      "blocker": "Dataset 'nuprl/HumanEvalPlus' doesn't exist on the Hub or cannot be accessed.",
-      "pin_status": "PIN-PENDING"
+      "test_split_sha256": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+      "row_count": 164,
+      "size_bytes": 11320600,
+      "blocker": null
     },
     {
       "name": "MBPP",
@@ -101,8 +98,8 @@
   },
   "templates_sha256": "FROZEN_IN_EVAL_HARNESS_CONFIG",
   "scoring_config_sha256": "FROZEN_IN_EVAL_HARNESS_CONFIG",
-  "total_size_bytes": 22303308,
-  "storage_root": "../data/eval-suite-v1-20260708_230148",
-  "timestamp": "2026-07-08T23:01:55.123074+00:00",
-  "pin_notes": "Datasets with PIN-PENDING status require manual intervention; see blocker field. Storage root path is relative to repo root."
+  "total_size_bytes": 34491394,
+  "storage_root": "../../../../../data/eval-suite-v1-20260708_231128",
+  "timestamp": "2026-07-08T23:11:38.401147+00:00",
+  "pin_notes": "Datasets with PIN-PENDING status require manual intervention; see blocker field. Storage root path is relative to receipt file directory (receipts/eval-suite-freeze/)."
 }
