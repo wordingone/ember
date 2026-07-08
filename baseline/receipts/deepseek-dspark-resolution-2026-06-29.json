@@ -27,7 +27,7 @@
   "commands": [
     {
       "command": "& .\\tools\\github\\gh-safe.ps1 api orgs/deepseek-ai/repos --paginate --jq '.[] | {name, html_url, description, updated_at}'",
-      "cwd": "C:\\Users\\Admin\\.codex\\worktrees\\9232\\upstream-org\\internal-handle",
+      "cwd": "<USER_HOME>/.codex/worktrees/9232/upstream-org/internal-handle",
       "result": "PASS",
       "note": "DeepSpec repository observed in DeepSeek org listing; initial standalone-DSpark search was insufficient."
     },

@@ -52,7 +52,7 @@ describe("clipToWidth", () => {
   });
 
   test("a real long scratchpad-style path is clipped to the given width", () => {
-    const longPath = "C:\\WINDOWS\\TEMP\\ember-cli\\9f3a2c1d-8b44-4e21-9a10-7c5d3f2e1a90\\scratchpad\\b2-pty\\cwd-welcome-check";
+    const longPath = "C:\\WINDOWS\\TEMP\\ember-cli\\00000000-0000-0000-0000-000000000000\\scratchpad\\b2-pty\\cwd-welcome-check";
     const result = clipToWidth(longPath, 36);
     expect([...result].length).toBeLessThanOrEqual(36);
   });
@@ -68,7 +68,7 @@ describe("clipToWidth", () => {
 // ---------------------------------------------------------------------------
 
 describe("D3: no left-column child overflows into the right column", () => {
-  const LONG_CWD = "C:\\WINDOWS\\TEMP\\ember-cli\\9f3a2c1d-8b44-4e21-9a10-7c5d3f2e1a90\\scratchpad\\b2-pty\\cwd-welcome-check\\resume-for-more-scratchpad";
+  const LONG_CWD = "C:\\WINDOWS\\TEMP\\ember-cli\\00000000-0000-0000-0000-000000000000\\scratchpad\\b2-pty\\cwd-welcome-check\\resume-for-more-scratchpad";
 
   for (const cols of [100, 125]) {
     test(`at width ${cols}, no cursor write in the hero rows exceeds the terminal width`, () => {

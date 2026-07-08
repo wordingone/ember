@@ -98,14 +98,14 @@
       },
       "claims_map_complete": {
         "verdict": "RED",
-        "reason": "paper/claims-evidence-map.md unreadable: FileNotFoundError: [Errno 2] No such file or directory: 'B:\\\\M\\\\ember\\\\paper\\\\claims-evidence-map.md'",
+        "reason": "paper/claims-evidence-map.md unreadable: FileNotFoundError: [Errno 2] No such file or directory: '<TEMP_WORKSPACE>/ember/paper/claims-evidence-map.md'",
         "evidence": {
           "path": "paper/claims-evidence-map.md"
         }
       },
       "research_focus_test": {
         "verdict": "RED",
-        "reason": "paper/claims-evidence-map.md unreadable: FileNotFoundError: [Errno 2] No such file or directory: 'B:\\\\M\\\\ember\\\\paper\\\\claims-evidence-map.md'",
+        "reason": "paper/claims-evidence-map.md unreadable: FileNotFoundError: [Errno 2] No such file or directory: '<TEMP_WORKSPACE>/ember/paper/claims-evidence-map.md'",
         "evidence": {
           "path": "paper/claims-evidence-map.md"
         }

@@ -745,8 +745,13 @@ export function createRenderer(options: RendererOptions): Renderer {
           live_stdout_cols: process.stdout.columns ?? null,
         });
         // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const _diagPath = (require("path") as typeof import("path")).join(
+          (require("os") as typeof import("os")).tmpdir(),
+          "ember-m9-diag.jsonl",
+        );
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         (require("fs") as typeof import("fs")).appendFileSync(
-          "C:/WINDOWS/TEMP/ember-m9-diag.jsonl",
+          _diagPath,
           _diagEntry + "\n",
         );
       } catch { /* M9-DIAG-LIVE silent */ }

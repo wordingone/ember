@@ -3,6 +3,6 @@
   "not_ready_sources": [],
   "ready_for_promotion": false,
   "report_declares_incomplete": true,
-  "root": "C:\\Users\\Admin\\.codex\\worktrees\\9232\\upstream-org\\internal-handle\\state\\ember-baseline",
+  "root": "<USER_HOME>/.codex/worktrees/9232/upstream-org/internal-handle/state/ember-baseline",
   "verdict": "INVALID-RUN"
 }

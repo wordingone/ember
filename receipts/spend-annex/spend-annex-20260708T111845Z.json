@@ -1,6 +1,6 @@
 {
   "spec": "gh issue #17 FROZEN SPEC v1",
-  "root": "B:\\M\\wt-annexcure431",
+  "root": "<TEMP_WORKSPACE>/wt-annexcure431",
   "verdict": "PASS",
   "verdict_reason": "zero rows show a paid-surface dependency across 278 decisive-claim receipts (0 excluded as this scanner's own coverage-ledger output family, 1 excluded as VOID-superseded (issue #353), neither classified/never counted toward uncovered; 278 classified: 39 declared, 102 script-scanned-clean, 59 script-scanned-clean-via-convention, 78 generator-absent-content-clean (evidenced external-import/git-archaeology/manual-authorship gone AND the receipt's own content re-scanned clean; 14 of these via a sha-pinned, content-re-verified attestation sidecar, issue #353), 0 external-generator-content-clean (evidenced train-daemon-family external-live generator AND the receipt's own content re-scanned clean), 0 generator-absent-historical still CONTENT-DIRTY on re-scan (script-absence evidence holds but the receipt's own content trips a paid-client pattern or key-env name -- see content_scan_hits per row; this does not itself flip verdict), 0 external-live-generator still CONTENT-DIRTY on re-scan (same non-flipping treatment), 0 unresolvable -- unresolvable rows are coverage gaps, listed honestly, and do not themselves block PASS)",
   "counts": {

@@ -9,7 +9,7 @@
   "issue": 411,
   "scope": "MEASURED CONTENDED-FIRST launch-gate check for the DEV-002 candidate 3/4 (CPU-offloaded optimizer + micro-batch/accum) config, per PR #429's own 'MEASURED RECEIPTS PENDING' follow-up-push note. Narrower than the full cbase_grow_rung2_dryrun.py harness: computes the REAL param_count_after (via widen_state_dict on the real seed checkpoint, reused not reimplemented) and prices it against the REAL, live nvidia-smi numbers under CONTENDED conditions (llama-server resident, never stopped -- the primary receipt condition per mandate). Does NOT re-run the net2net function-preservation check or the CPU sanity-training segments (both already receipted, see related_receipts) or attempt a real GPU training launch (needs a real shard_dir + the declared serving-pause window per PR #429's own disclosed exclusion; explicitly not this run).",
   "seed_identity": {
-    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "checkpoint": "<TEMP_WORKSPACE>\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
     "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
     "manifest_claim_verified": true,
     "attested_match": true,

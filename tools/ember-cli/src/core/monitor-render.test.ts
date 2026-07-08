@@ -307,18 +307,18 @@ describe("buildTopAttentionLines (B7 item 2: welcome-screen ambient board snapsh
   // shell/path fragment. Two-part cure: (a) drop everything from the first raw-internals marker
   // before truncating, (b) truncate at the last WORD boundary that fits, never mid-token.
   it("drops raw shell/path internals (' >&...') before truncating, showing only the human clause", () => {
-    const raw = [claim("C0", "AUDIT-INCIDENT", "4 Ember loop receipt(s) cited in window >&B:\\M\\ember\\tools\\ember-cli\\scratchpad\\somefile.log for review")];
+    const raw = [claim("C0", "AUDIT-INCIDENT", "4 Ember loop receipt(s) cited in window >&Z:\\M\\ember\\tools\\ember-cli\\scratchpad\\somefile.log for review")];
     const lines = buildTopAttentionLines(raw, 1);
     expect(lines[0]).toBe("C0: AUDIT-INCIDENT — 4 Ember loop receipt(s) cited in window");
     expect(lines[0]).not.toContain(">&");
-    expect(lines[0]).not.toContain("B:\\");
+    expect(lines[0]).not.toContain("Z:\\");
   });
 
-  it("drops raw internals introduced by an arrow ('-> B:\\...') before truncating", () => {
-    const raw = [claim("C0", "AUDIT-INCIDENT", "board write failed -> B:\\M\\ember\\tools\\ember-cli\\scratchpad\\out.json permission denied")];
+  it("drops raw internals introduced by an arrow ('-> Z:\\...') before truncating", () => {
+    const raw = [claim("C0", "AUDIT-INCIDENT", "board write failed -> Z:\\M\\ember\\tools\\ember-cli\\scratchpad\\out.json permission denied")];
     const lines = buildTopAttentionLines(raw, 1);
     expect(lines[0]).toBe("C0: AUDIT-INCIDENT — board write failed");
-    expect(lines[0]).not.toContain("B:\\");
+    expect(lines[0]).not.toContain("Z:\\");
   });
 
   it("truncates a long clean reason at the last WORD boundary, never mid-token", () => {

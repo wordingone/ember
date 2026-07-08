@@ -68,9 +68,28 @@ else
 fi
 
 # ---- 2. no absolute local filesystem paths in tracked text ---------------
-# Matches B:/M, B:\M, C:/Users, C:\Users, <local> /mnt/c/ and similar.
-PATHPAT='([A-Za-z]:[/\\](Users|M|Downloads))|(/mnt/[a-z]/)'
-if git grep -nIE "$PATHPAT" -- . ':(exclude)tools/repo-guard.sh' >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+# Matches B:/M, B:\M, C:/Users, C:\Users, C:\Windows\Temp, <local> /mnt/c/ and
+# similar. Separator is one-OR-MORE / or \ (not exactly one): a real path
+# embedded via json.dumps() or Python repr() has every backslash doubled
+# (B:\M on disk becomes literal B:\\M in the tracked text), and a single-
+# separator class silently misses that doubled form (issue #456 -- six such
+# occurrences shipped in #455 before this fix, hand-redacted, never caught by
+# this check). Windows+Temp is scoped to require the Temp segment specifically
+# so a universal, non-identifying path like C:\Windows\System32\cmd.exe never
+# false-positives here.
+PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\]+[Tt][Ee][Mm][Pp])|(/mnt/[a-z]/)'
+# Files that intentionally embed a leaked-path-shaped literal as adversarial
+# test input (proving the app's own sanitization/redaction/clipping logic
+# strips exactly this shape) -- these are the fixture, not a leak, and must
+# keep the literal string to stay meaningful. See REDACTIONS.md (issue #456).
+PATHPAT_EXCLUDE=(
+  ':(exclude)tools/repo-guard.sh'
+  ':(exclude)scripts/test_w1b_continuation.py'
+  ':(exclude)tools/ember-cli/src/core/monitor-render.test.ts'
+  ':(exclude)tools/ember-cli/src/components/homescreen-mock1-parity.test.ts'
+  ':(exclude)tools/ember-cli/src/components/logo-homescreen.test.ts'
+)
+if git grep -nIE "$PATHPAT" -- . "${PATHPAT_EXCLUDE[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
   fail "paths" "absolute local filesystem paths in tracked files"
   sed 's/^/      /' /tmp/rg_paths | head -20
 else
