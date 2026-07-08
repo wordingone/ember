@@ -1,0 +1,117 @@
+{
+  "ticket": "PUBLICATION-GATE-CHECK",
+  "ts": "20260707T184909Z",
+  "kind": "gate",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "verdict": "FAIL",
+  "verdict_detail": "0/5 GREEN \u2014 gate CLOSED (publication-v1.md sec3)",
+  "chk_name": "check_publication_gate",
+  "spec_ref": "docs/spec/publication-v1.md sec3 (premature-publication gate); paper/claims-evidence-map.md rows 18/19/21; GOAL.md sec1b (research-focus test)",
+  "generator": {
+    "path": "scripts/check_publication_gate.py",
+    "sha256": "8442fc7e2bd0c0adc1f59758a318f741d61b3b352a8e37f542f5017a70e492e7"
+  },
+  "execution": {
+    "pid": 37772,
+    "host": "DESKTOPHH",
+    "start_ts": "2026-07-07T18:49:04Z",
+    "total_secs": 5.067433800024446,
+    "model_load_secs": null,
+    "overhead_secs": null,
+    "overhead_pct": null
+  },
+  "inputs_sha": {
+    "args_fingerprint": "8d7a337b881192a1"
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "result": {
+    "conjuncts": {
+      "kernel_fired": {
+        "verdict": "RED",
+        "map_row": 21,
+        "reason": "no receipt found demonstrating the math-core sec9 flywheel-turn condition (dB/dround > 0 and G1_delta > 0) under a frozen kernel",
+        "evidence": {
+          "manifest_hits": [
+            ".claude/worktrees/annex-refresh-boardrun6/kernel-v1.0.manifest",
+            ".claude/worktrees/annex-sidecars-20260707/kernel-v1.0.manifest",
+            ".claude/worktrees/baseline-119/kernel-v1.0.manifest",
+            ".claude/worktrees/build-375/kernel-v1.0.manifest",
+            ".claude/worktrees/c-inv-probe-377/kernel-v1.0.manifest",
+            ".claude/worktrees/c1brepl/kernel-v1.0.manifest",
+            ".claude/worktrees/cinvfix/kernel-v1.0.manifest",
+            ".claude/worktrees/cneg1-bom-fix-boardrun6/kernel-v1.0.manifest",
+            ".claude/worktrees/cockpit-swap-388-20260707/kernel-v1.0.manifest",
+            ".claude/worktrees/cockpit303/kernel-v1.0.manifest",
+            ".claude/worktrees/cockpit305-deploy/kernel-v1.0.manifest",
+            ".claude/worktrees/continuity-refresh-20260706/kernel-v1.0.manifest",
+            ".claude/worktrees/custody-lane-v4-20260707T113255/kernel-v1.0.manifest",
+            ".claude/worktrees/docstale/kernel-v1.0.manifest",
+            ".claude/worktrees/feat-62-pregrow-reconstruction/kernel-v1.0.manifest",
+            ".claude/worktrees/fix-196-v2/kernel-v1.0.manifest",
+            ".claude/worktrees/gate325-master/kernel-v1.0.manifest",
+            ".claude/worktrees/gate325b/kernel-v1.0.manifest",
+            ".claude/worktrees/genesispr-lane/kernel-v1.0.manifest",
+            ".claude/worktrees/issue-367-lease-placeholder/kernel-v1.0.manifest",
+            ".claude/worktrees/p5-audit-real/kernel-v1.0.manifest",
+            ".claude/worktrees/p5-engagement-fix/kernel-v1.0.manifest",
+            ".claude/worktrees/p5-engagement-leg-wt/kernel-v1.0.manifest",
+            ".claude/worktrees/pr309fix3-20260706-235705/kernel-v1.0.manifest",
+            ".claude/worktrees/pr334-gate-boardrun6/kernel-v1.0.manifest",
+            ".claude/worktrees/probe-dir-fix-boardrun6/kernel-v1.0.manifest",
+            ".claude/worktrees/r3runner/kernel-v1.0.manifest",
+            ".claude/worktrees/sgr-cap-250/kernel-v1.0.manifest",
+            ".claude/worktrees/sgr-cap-291/kernel-v1.0.manifest",
+            ".claude/worktrees/track13-build/kernel-v1.0.manifest",
+            ".claude/worktrees/w1-contamination-receipts-371/kernel-v1.0.manifest",
+            ".claude/worktrees/w1-launch-gate-fix/kernel-v1.0.manifest",
+            ".claude/worktrees/w1-real-launch/kernel-v1.0.manifest",
+            ".claude/worktrees/w2-dump-patch/kernel-v1.0.manifest",
+            ".claude/worktrees/w2-lockfile-fix/kernel-v1.0.manifest",
+            "kernel-v1.0.manifest",
+            "scratch/pr337-gate/kernel-v1.0.manifest"
+          ],
+          "flywheel_turn_receipts": [],
+          "receipt_parse_errors": 3
+        }
+      },
+      "bootstrap_pass_real_world": {
+        "verdict": "RED",
+        "map_row": 18,
+        "reason": "no receipt with a truthy BOOTSTRAP_PASS-shaped field found under receipts/ at all (bootstrap-v1.md sec2: B1/B2 -- the real-world, >=1e6-param rungs -- are ABSENT; only the B0 synthetic witness is receipted)",
+        "evidence": {
+          "bootstrap_pass_shaped_candidates": [],
+          "qualifying_real_world_hits": [],
+          "receipt_parse_errors": 3,
+          "min_real_core_params": 1000000
+        }
+      },
+      "earned_growth_rung": {
+        "verdict": "RED",
+        "map_row": 19,
+        "reason": "no receipt with a growth-EARNED shape (kind:growth or an 'earned' block) found under receipts/",
+        "evidence": {
+          "growth_shaped_candidates": [],
+          "positive_earned_hits": [],
+          "receipt_parse_errors": 3
+        }
+      },
+      "claims_map_complete": {
+        "verdict": "RED",
+        "reason": "paper/claims-evidence-map.md unreadable: FileNotFoundError: [Errno 2] No such file or directory: 'B:\\\\M\\\\ember\\\\paper\\\\claims-evidence-map.md'",
+        "evidence": {
+          "path": "paper/claims-evidence-map.md"
+        }
+      },
+      "research_focus_test": {
+        "verdict": "RED",
+        "reason": "paper/claims-evidence-map.md unreadable: FileNotFoundError: [Errno 2] No such file or directory: 'B:\\\\M\\\\ember\\\\paper\\\\claims-evidence-map.md'",
+        "evidence": {
+          "path": "paper/claims-evidence-map.md"
+        }
+      }
+    },
+    "overall_verdict": "RED",
+    "gate_state": "CLOSED 0/5"
+  }
+}
