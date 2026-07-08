@@ -26,6 +26,19 @@ mechanisms that make coverage durable:
       listed honestly). The VOID receipt itself stays IN the set, classified
       via a new structural rule (verdict=="VOID" + non-empty supersedes) as
       manually-authored governance text, content-scanned like everything else.
+
+Amendment (2026-07-08, gh issue #428): even a durable, correctly-pinned attestation
+can drift AFTER the fact -- 3 already-attested receipts were redacted (a custody pass
+stripping founder-scoped local paths) hours after their sidecars were written, so a
+fresh regen's direct pin check correctly rejected the now-stale hash and 3 previously-
+covered rows silently regressed to unresolvable. The receipt itself self-documents the
+mutation (a `redaction` block naming `original_sha256`), so the generator now also
+accepts a pin match against THAT field -- a redaction-chain match, distinct from a
+direct match, disclosed via `attestation_pin_match` on the row -- while the content
+re-scan still always runs against the receipt's CURRENT (post-redaction) text. The
+tests below (test_attestation_redaction_chain_*) lock this in without weakening the
+content-dirty-always-overrides invariant or accepting an unrelated redaction as a
+free pass.
 """
 
 import hashlib
@@ -177,6 +190,108 @@ def test_content_dirty_overrides_attestation():
     print("[PASS] content-dirty target overrides a sha-pin-valid attestation sidecar")
 
 
+def _write_redacted_target(tmpdir, original_content):
+    """Write the sandbox's target receipt with a `redaction` block recording the
+    PRE-redaction sha256, mirroring the real 2026-07-07 custody redaction shape
+    (receipts/cbase-gpu-verify-20260707T064453Z.json etc.) that gh issue #428
+    disclosed: a receipt attested, then legitimately mutated afterward by a
+    redaction pass, invalidating the sidecar's original pin."""
+    target_path = os.path.join(tmpdir, "receipts", "hand-run-probe-20260707T000000Z.json")
+    original_sha = _sha256_of(target_path) if os.path.exists(target_path) else None
+    if original_sha is None:
+        original_sha = hashlib.sha256(json.dumps(original_content, indent=2).encode("utf-8")).hexdigest()
+    redacted_content = dict(original_content)
+    redacted_content["redaction"] = {
+        "redacted_fields": ["eval_config.data_source"],
+        "original_sha256": original_sha,
+        "reason": "test fixture: founder-scoped local path redaction",
+        "redaction_ts": "2026-07-07T18:48:51.000000Z",
+    }
+    _write_json(target_path, redacted_content)
+    return target_path
+
+
+def test_attestation_redaction_chain_pin_covers_when_content_clean():
+    """gh issue #428: an attestation pinned to a receipt's PRE-redaction hash
+    still resolves the row -- via the redaction-chain fallback, not the direct
+    pin -- because the receipt's own `redaction.original_sha256` field matches
+    the sidecar's target_sha256, and the CURRENT (redacted) content re-scans
+    clean."""
+    tmpdir, target_path = _make_sandbox()
+    pre_redaction_sha = _sha256_of(target_path)
+    _write_sidecar(tmpdir, pre_redaction_sha)  # sidecar pinned to the OLD hash
+    _write_redacted_target(tmpdir, {"verdict": "PASS", "claim": "a hand-run probe with no generating script recorded"})
+
+    mod, _ = _load_scanner_module(tmpdir, "redaction_chain_clean")
+    result = mod.main(out_path=None)
+
+    row = next(r for r in result["rows"] if r["path"] == "receipts/hand-run-probe-20260707T000000Z.json")
+    assert row["evidence_class"] == "generator_absent_content_clean", row
+    assert row.get("attestation_pin_match") == "redaction_chain", row
+    assert "redaction" in row["notes"].lower(), row
+    assert result["counts"]["attested_via_sidecar"] == 1, result["counts"]
+    print("[PASS] redaction-chain pin covers a receipt redacted after attestation, content clean")
+
+
+def test_attestation_redaction_chain_content_dirty_still_rejected():
+    """The redaction-chain fallback must NOT weaken the content-dirty override:
+    a receipt whose CURRENT (post-redaction) text trips the paid-client scan
+    is rejected exactly like the direct-pin path."""
+    tmpdir, target_path = _make_sandbox()
+    pre_redaction_sha = _sha256_of(target_path)
+    _write_sidecar(tmpdir, pre_redaction_sha)
+    _write_redacted_target(tmpdir, {
+        "verdict": "PASS", "claim": "script text follows",
+        "embedded_source_sample": "call openai.OpenAI() to init the client",
+    })
+
+    mod, _ = _load_scanner_module(tmpdir, "redaction_chain_dirty")
+    result = mod.main(out_path=None)
+
+    row = next(r for r in result["rows"] if r["path"] == "receipts/hand-run-probe-20260707T000000Z.json")
+    assert row["evidence_class"] == "unresolvable", row
+    assert row.get("content_scan_hits", {}).get("client_patterns"), row
+    assert result["counts"]["attested_via_sidecar"] == 0, result["counts"]
+    print("[PASS] redaction-chain pin still rejected when the CURRENT content is dirty")
+
+
+def test_attestation_redaction_original_sha_mismatch_still_rejected():
+    """A `redaction.original_sha256` that does NOT match the sidecar's pin is
+    not a free pass -- neither the direct nor the redaction-chain path fires,
+    and the row stays unresolvable (guards against the fallback becoming a
+    bare exemption)."""
+    tmpdir, target_path = _make_sandbox()
+    stale_sha = "1" * 64  # neither the current hash nor a real prior hash
+    _write_sidecar(tmpdir, stale_sha)
+    redacted_content = {"verdict": "PASS", "claim": "a hand-run probe with no generating script recorded",
+                         "redaction": {"redacted_fields": ["x"], "original_sha256": "2" * 64,
+                                       "reason": "unrelated redaction", "redaction_ts": "2026-07-07T00:00:00Z"}}
+    _write_json(target_path, redacted_content)
+
+    mod, _ = _load_scanner_module(tmpdir, "redaction_chain_mismatch")
+    result = mod.main(out_path=None)
+
+    row = next(r for r in result["rows"] if r["path"] == "receipts/hand-run-probe-20260707T000000Z.json")
+    assert row["evidence_class"] == "unresolvable", row
+    assert "REJECTED" in row["notes"], row
+    print("[PASS] a redaction.original_sha256 that doesn't match the sidecar's pin is still rejected")
+
+
+def test_redaction_chain_regeneration_is_idempotent():
+    tmpdir, target_path = _make_sandbox()
+    pre_redaction_sha = _sha256_of(target_path)
+    _write_sidecar(tmpdir, pre_redaction_sha)
+    _write_redacted_target(tmpdir, {"verdict": "PASS", "claim": "a hand-run probe with no generating script recorded"})
+
+    mod1, _ = _load_scanner_module(tmpdir, "redaction_idem_run1")
+    result1 = mod1.main(out_path=None)
+    mod2, _ = _load_scanner_module(tmpdir, "redaction_idem_run2")
+    result2 = mod2.main(out_path=None)
+
+    assert result1["rows"] == result2["rows"], "rows differ across two identical redaction-chain regenerations"
+    print("[PASS] redaction-chain coverage regenerates byte-identically across two runs")
+
+
 def test_void_supersession_excludes_target_keeps_void_row():
     tmpdir, _target_path = _make_sandbox()
 
@@ -217,6 +332,10 @@ if __name__ == "__main__":
     test_attestation_sidecar_covers_when_pin_and_content_are_clean()
     test_attestation_sidecar_rejected_on_sha_pin_mismatch()
     test_content_dirty_overrides_attestation()
+    test_attestation_redaction_chain_pin_covers_when_content_clean()
+    test_attestation_redaction_chain_content_dirty_still_rejected()
+    test_attestation_redaction_original_sha_mismatch_still_rejected()
+    test_redaction_chain_regeneration_is_idempotent()
     test_void_supersession_excludes_target_keeps_void_row()
     test_idempotent_regeneration()
     print("\n[SUCCESS] All tests passed!")

@@ -221,6 +221,27 @@ otherwise fall through every other resolution path to `unresolvable`:
      the same content scan against the same sidecar, nothing is ever hand-stamped
      onto an output snapshot again.
 
+REDACTION-CHAIN PIN (2026-07-08, gh issue #428 durability amendment): a receipt can
+legitimately mutate AFTER its attestation was written -- the custody redaction pass
+strips founder-scoped local paths from a receipt's own fields and writes a `redaction`
+block back onto that SAME receipt recording `original_sha256` (the PRE-redaction hash),
+`reason`, and `redaction_ts`. Disclosed by gh issue #428: a fresh regen of 3 already-
+attested receipts (cbase-gpu-verify-20260707T064453Z, cbase-gpu-verify-
+REAL-20260707T063919Z, cbase-verify-attempt3-20260707T073843) silently regressed to
+`unresolvable` because each was redacted (2026-07-07T18:48:51Z) AFTER its attestation
+sidecar was written (2026-07-07T11:32:00Z) -- the direct pin check correctly rejected
+the now-stale hash, but had no way to recognize the mutation as an EVIDENCED,
+receipt-self-disclosed one rather than an unexplained drift. The fix: if the direct pin
+fails, and the receipt carries a `redaction` dict whose own `original_sha256` equals
+the sidecar's `target_sha256`, the pin is ALSO considered valid -- the redaction event
+is itself the evidence (self-documented on the receipt, naming its own reason and
+timestamp), never a bare exemption. This does NOT weaken the content check: the
+re-scan in step 2 always runs against the receipt's CURRENT (post-redaction) raw text,
+never the pre-redaction content, so a redaction that happened to introduce a
+paid-surface reference would still be caught. Rows resolved this way carry
+`attestation_pin_match: "redaction_chain"` (a direct match carries `"direct"`) so the
+distinction is always disclosed, never silently folded into one undifferentiated shape.
+
 Malformed sidecars (missing required fields, or an evidence_class outside the
 admissible set) are never silently dropped -- they are collected into
 `attestation_sidecar_skipped` in the result, always disclosed.
@@ -597,6 +618,24 @@ CONVENTION_MAP = [
 #   fields with no measured-data shape. Several are cross-confirmed via
 #   git-archaeology too (receipt-only commits, e.g. pr1-review-verdict,
 #   raw-corpus-materiality, cloud-reference-leg-disposition, heartbeat-runner-selftest).
+#
+# Evidence (d) CROSS-BRANCH UNMERGED (2026-07-08, gh issue #431): distinct from (b)
+#   git-archaeology-gone -- the generating script is NOT vacant; it is confirmed to
+#   exist, with a confirmed write-site constructing this exact receipt filename, via
+#   `git show <commit>:<path>`. But that commit is reachable ONLY from a sibling branch
+#   of this same repository (confirmed via `git merge-base --is-ancestor <commit> HEAD`
+#   returning false, and `git branch --all --contains <commit>` naming the branches it
+#   DOES live on) -- never merged into, or reachable from, master's own HEAD history.
+#   These three receipts were generated on the `goalforge/definitive-goal-20260701` /
+#   `lane/ceff-ab-run` branch family and later imported into master's receipts/ via the
+#   #415/#432 custody restoration; their generating scripts were never part of that
+#   restoration and remain off-branch. Stronger evidence than (b): the real generating
+#   script's actual source text (not just the receipt's own content) was read directly
+#   off that branch and re-scanned with the identical PAID_CLIENT_PATTERNS /
+#   API_KEY_ENV_NAME_RE detectors used everywhere else in this file -- confirmed clean,
+#   quoted per-entry below. The receipt's own content still gets the same content-dirty
+#   re-scan every generator_absent_historical row gets (see _check_generator_absent_historical
+#   callers) -- this evidence proves the SCRIPT is clean, not that the RECEIPT's own text is.
 GENERATOR_ABSENT_HISTORICAL_PATH_PREFIXES = [
     ("receipts/ember-mvp/", "external_tree_import",
      "evidence (a) external-tree import: this receipt lives under receipts/ember-mvp/, "
@@ -710,6 +749,33 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "literal '-import-edition-' suffix; no in-tree code does. Most likely this file is a v0-live "
      "output copied/renamed post-hoc to flag the C-BASE import-edition milestone (commit 67a784e "
      "adds only this receipt + STATE.md, no script -- evidence (b) too)."),
+    # --- Evidence (d) cross-branch unmerged (gh issue #431, 2026-07-08) -- restored via
+    # the #415/#432 custody recovery; generating scripts confirmed real but off-branch.
+    (re.compile(r"^ceff-composition-ab-20260703T111351Z\.json$"), "cross_branch_unmerged",
+     "evidence (d) cross-branch unmerged: generating script scripts/ember_ceff_composition_ab.py "
+     "confirmed at commit 85e6d7f (write-site line 706, `path = os.path.join(RECEIPTS, "
+     "f\"ceff-composition-ab-{ts}.json\")`, exact match); `git merge-base --is-ancestor 85e6d7f HEAD` "
+     "is false -- that commit is reachable only from lane/ceff-ab-run and sibling branches, never "
+     "master. The real script's own source (read via `git show 85e6d7f:scripts/"
+     "ember_ceff_composition_ab.py`) was re-scanned with this file's own paid-client/key-env "
+     "detectors: zero hits (47943 bytes scanned)."),
+    (re.compile(r"^proof-frontier-protocol-20260702T065351Z\.json$"), "cross_branch_unmerged",
+     "evidence (d) cross-branch unmerged: generating script scripts/proofs/frontier_projection.py "
+     "confirmed at commit e5603df (write-site line 463, `out_path = out_dir / "
+     "f\"proof-frontier-protocol-{receipt['ts']}.json\"`, exact match; same script CONVENTION_MAP "
+     "already names for this basename family, confirmed write-site line drifted 467->463 across "
+     "intervening off-branch edits, not a mismatch). `git merge-base --is-ancestor e5603df HEAD` is "
+     "false -- reachable only from goalforge/definitive-goal-20260701 and derived lane/* branches, "
+     "never master. The real script's own source was re-scanned with this file's own paid-client/"
+     "key-env detectors: zero hits (22941 bytes scanned)."),
+    (re.compile(r"^proof-ocal-sweep-20260702T094209Z\.json$"), "cross_branch_unmerged",
+     "evidence (d) cross-branch unmerged: generating script scripts/proofs/ocal_calibration_sweep.py "
+     "confirmed at commit 9968c51 (write-site line 617, `out_path = out_dir / "
+     "f\"proof-ocal-sweep-{receipt['ts']}.json\"`, exact match, identical line number CONVENTION_MAP "
+     "already names for this basename family). `git merge-base --is-ancestor 9968c51 HEAD` is false -- "
+     "reachable only from goalforge/definitive-goal-20260701 and derived lane/* branches, never "
+     "master. The real script's own source was re-scanned with this file's own paid-client/key-env "
+     "detectors: zero hits (32064 bytes scanned)."),
 ]
 
 # resident-training-gate-*.json is resolved via CONVENTION_MAP (scripts/ember_resident_training_gate.py,
@@ -726,7 +792,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
 # derived from which table/branch matched (never parsed back out of free-text
 # notes; the tables above now carry the subtype as their own second element).
 GENERATOR_ABSENT_EVIDENCE_SUBTYPES = (
-    "external_tree_import", "git_archaeology_gone", "manually_authored",
+    "external_tree_import", "git_archaeology_gone", "manually_authored", "cross_branch_unmerged",
 )
 
 
@@ -1251,7 +1317,24 @@ def main(out_path=None):
             # declared evidence_class is honored.
             attestation = attestation_sidecars.get(rel)
             if attestation is not None:
-                if attestation["target_sha256"] != receipt_sha:
+                # Direct pin: sidecar's target_sha256 matches the receipt's CURRENT
+                # on-disk hash. Redaction-chain pin (gh issue #428): the receipt
+                # mutated legitimately AFTER attestation via a custody redaction
+                # pass, which self-documents the pre-redaction hash on the receipt's
+                # own `redaction.original_sha256` field -- see the REDACTION-CHAIN
+                # PIN paragraph in the module docstring. Never trusts a redaction
+                # block that doesn't itself match the sidecar's pin.
+                pin_match = None
+                if attestation["target_sha256"] == receipt_sha:
+                    pin_match = "direct"
+                else:
+                    redaction = d.get("redaction")
+                    if (isinstance(redaction, dict)
+                            and isinstance(redaction.get("original_sha256"), str)
+                            and redaction["original_sha256"] == attestation["target_sha256"]):
+                        pin_match = "redaction_chain"
+
+                if pin_match is None:
                     rows.append({
                         "path": rel,
                         "sha256": receipt_sha,
@@ -1262,10 +1345,12 @@ def main(out_path=None):
                         "notes": (
                             f"an attestation sidecar exists at {attestation['_sidecar_path']!r} but its "
                             f"pinned target_sha256={attestation['target_sha256']!r} does NOT match this "
-                            f"receipt's current on-disk sha256={receipt_sha!r} -- the target has been "
-                            "mutated since attestation, the pin is invalid, and the attestation is "
-                            "REJECTED (sha-pin invalidation, issue #353); treated as if no attestation "
-                            f"existed. fields_present={fields_seen or 'none'}, "
+                            f"receipt's current on-disk sha256={receipt_sha!r}, nor does it match a "
+                            "self-documented redaction.original_sha256 on the receipt (redaction-chain "
+                            "pin, issue #428) -- the target has been mutated since attestation for an "
+                            "unexplained reason, the pin is invalid, and the attestation is REJECTED "
+                            "(sha-pin invalidation, issue #353); treated as if no attestation existed. "
+                            f"fields_present={fields_seen or 'none'}, "
                             f"fields_with_unresolved_token={fields_with_unresolved_token or 'none'}"
                         ),
                     })
@@ -1289,23 +1374,34 @@ def main(out_path=None):
                             "key_env_names": content_key_env_hits,
                         },
                         "notes": f"an attestation sidecar exists at {attestation['_sidecar_path']!r} "
-                                 f"(sha-pin verified) citing: {attestation['evidence']} -- but "
-                                 "content-dirty ALWAYS overrides attestation (issue #353): "
-                                 f"{'; '.join(reasons)}. Attestation REJECTED.",
+                                 f"(sha-pin verified via {pin_match}) citing: {attestation['evidence']} -- but "
+                                 "content-dirty ALWAYS overrides attestation (issue #353), re-scanned "
+                                 f"against the receipt's CURRENT text: {'; '.join(reasons)}. "
+                                 "Attestation REJECTED.",
                     })
                     continue
+                notes = (f"sha-pin verified via {pin_match} against {attestation['_sidecar_path']!r}; "
+                         f"receipt's own CURRENT content scanned clean. Evidence: {attestation['evidence']}")
+                if pin_match == "redaction_chain":
+                    redaction = d["redaction"]
+                    notes += (
+                        f" Redaction-chain pin (issue #428): this receipt was redacted at "
+                        f"{redaction.get('redaction_ts')!r} (reason: {redaction.get('reason')!r}) AFTER "
+                        f"the attestation was written -- the sidecar's pinned hash matches the receipt's "
+                        f"own self-documented pre-redaction redaction.original_sha256, not its current hash."
+                    )
                 rows.append({
                     "path": rel,
                     "sha256": receipt_sha,
                     "evidence_class": attestation["evidence_class"],
                     "evidence_subtype": "attested_sidecar",
+                    "attestation_pin_match": pin_match,
                     "scanned_surfaces": SCANNED_SURFACES,
                     "verdict_pass_class": bool(c_neg1._is_pass_class(d.get(c_neg1.VERDICT_KEY, ""))),
                     "resolved_script": None,
                     "attestation_sidecar": attestation["_sidecar_path"],
                     "attestation_cites": attestation["cites"],
-                    "notes": f"sha-pin verified against {attestation['_sidecar_path']!r}; receipt's own "
-                             f"content scanned clean. Evidence: {attestation['evidence']}",
+                    "notes": notes,
                 })
                 continue
 
