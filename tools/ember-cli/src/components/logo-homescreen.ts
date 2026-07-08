@@ -163,6 +163,24 @@ export function clipToWidth(text: string, width: number): string {
   return budget.join("") + "…";
 }
 
+/** #303 narrow-viewport fix: `Data: <path>` collapsed to a bare "Data:…" at LEFT_TEXT_WIDTH --
+ * clipToWidth's word-boundary clip finds the ONE space in the "Data: " label itself (a filesystem
+ * path has no spaces at all) and cuts everything after it, same failure class as the #447 `run:`
+ * line's narrow-viewport collapse. Fix: when the full `Data: <path>` label doesn't fit, shorten
+ * the PATH to its last two segments with a leading ellipsis (still identifies which tree/worktree
+ * is active -- the #303 comment's actual purpose, "a disconnected cockpit is immediately
+ * self-evident") *before* clipToWidth ever sees it; clipToWidth remains the final safety net for
+ * pathological cases. Short paths that already fit are returned untouched -- never lossy when
+ * there's room to show the real path in full. */
+export function shortenDataRootForDisplay(fullPath: string, budget: number): string {
+  const fullLabel = `Data: ${fullPath}`;
+  if ([...fullLabel].length <= budget) return fullPath;
+  const sep = fullPath.includes("\\") ? "\\" : "/";
+  const segments = fullPath.split(/[\\/]/).filter((s) => s.length > 0);
+  if (segments.length <= 2) return fullPath;
+  return `…${sep}${segments.slice(-2).join(sep)}`;
+}
+
 /** B5 W6: the right column's available content width -- the full panel content width when
  * stacked (rightCol isn't sharing a row with leftCol), or the remainder after leftCol claims its
  * share when row-flex. Panel content width already accounts for the outer titled panel's own
@@ -398,7 +416,10 @@ function renderIdentityBlock(state: LogoState, fireballTick: number): React.Reac
       : null,
     // #303: visible data-root indicator — a disconnected cockpit is immediately self-evident.
     state.dataRoot
-      ? React.createElement(Text, { key: "l4", dimColor: true }, clipToWidth(`Data: ${state.dataRoot}`, LEFT_TEXT_WIDTH))
+      ? React.createElement(
+          Text, { key: "l4", dimColor: true },
+          clipToWidth(`Data: ${shortenDataRootForDisplay(state.dataRoot, LEFT_TEXT_WIDTH)}`, LEFT_TEXT_WIDTH),
+        )
       : null,
   ];
 
