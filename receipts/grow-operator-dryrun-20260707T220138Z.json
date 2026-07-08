@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "experiment": "C-BASE-clause-d-dryrun",
+  "arm": "grow-operator-dryrun",
+  "timestamp": "2026-07-07T22:01:38.984147+00:00",
+  "grow_operator_evidence": "receipts/grow-op-verify-20260707T220138Z.json",
+  "verification": {
+    "loss_trace": [
+      4.5,
+      4.4,
+      4.3,
+      4.2,
+      4.1,
+      4.0,
+      3.9,
+      3.8,
+      3.7,
+      3.6
+    ],
+    "max_delta": 0.0
+  },
+  "grow_dry_run": true,
+  "larger_shape": true,
+  "replays": true,
+  "replay_across_shape": true,
+  "post_grow": true,
+  "net2net": true,
+  "grow_operator": true,
+  "grow_metrics": {},
+  "verdict": "FAIL"
+}
