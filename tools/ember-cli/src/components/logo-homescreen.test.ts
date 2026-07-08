@@ -3,7 +3,7 @@
 // Spec: state/field-ux-map.md §8b/§9; step-A mockups (state/design-mockups/welcome-homescreen...).
 
 import { describe, it, expect } from "bun:test";
-import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock } from "./logo-homescreen.ts";
+import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock, shortenDataRootForDisplay } from "./logo-homescreen.ts";
 import { color } from "./design-system.ts";
 
 // React.createElement returns a plain {type, props} tree -- inspectable without a renderer.
@@ -187,6 +187,63 @@ describe("Homescreen — recent-activity feed carries board condition-transition
       boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
     }));
     expect(findTextWhere(rendered, (s) => s.startsWith("board: C"))).toBe(false);
+  });
+});
+
+describe("Homescreen — recent-activity feed carries live telemetry + cockpit-restart events (issue #447)", () => {
+  it("renders the cockpit-restart event even when boardSummary itself carries no other data", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 0, total: 0, pctComplete: 0, topAttention: [],
+        cockpitRestartEvent: { text: "cockpit: relaunched after 26m gap (pid 1234 -> 5678)" },
+      },
+    }));
+    expect(findTextChild(rendered, "cockpit: relaunched after 26m gap (pid 1234 -> 5678)")).toBe(true);
+  });
+
+  it("carries no restart event when boardSummary itself is absent (mount-time race, never fabricated)", () => {
+    const rendered = renderedRecentFeed(Homescreen({ state: {} }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("cockpit: relaunched"))).toBe(false);
+  });
+
+  it("renders GPU/active-run/last-receipt lines from liveTelemetry, each independently optional", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 23, total: 30, pctComplete: 76.7, topAttention: [],
+        liveTelemetry: {
+          gpu: { text: "GPU: 18.0/24.0 GiB \xB7 training-active" },
+          activeRun: { text: "run: ember-c-scale/w1-live-progress step 1800, eval_loss 4.9375 \xB7 12s ago" },
+          lastReceipt: { text: "receipts: STALE 3h ago", color: "red" },
+        },
+      },
+    }));
+    expect(findTextChild(rendered, "GPU: 18.0/24.0 GiB \xB7 training-active")).toBe(true);
+    expect(findTextChild(rendered, "run: ember-c-scale/w1-live-progress step 1800, eval_loss 4.9375 \xB7 12s ago")).toBe(true);
+    expect(findTextChild(rendered, "receipts: STALE 3h ago")).toBe(true);
+    expect(colorForText(rendered, "receipts: STALE 3h ago")).toBe("red");
+  });
+
+  it("renders only the fields present in liveTelemetry, never fabricating the absent ones", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 23, total: 30, pctComplete: 76.7, topAttention: [],
+        liveTelemetry: { gpu: { text: "GPU: 1.0/8.0 GiB \xB7 idle" } },
+      },
+    }));
+    expect(findTextChild(rendered, "GPU: 1.0/8.0 GiB \xB7 idle")).toBe(true);
+    expect(findTextWhere(rendered, (s) => s.startsWith("run:"))).toBe(false);
+    expect(findTextWhere(rendered, (s) => s.startsWith("receipts:"))).toBe(false);
+  });
+
+  it("carries no live-telemetry lines when the field is absent entirely (never fabricates)", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
+    }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("GPU:") || s.startsWith("run:") || s.startsWith("receipts:"))).toBe(false);
   });
 });
 
@@ -414,6 +471,57 @@ describe("clipToWidth — word-boundary-aware truncation (issue #44 / §8g item 
 
   it("text that already fits is returned unchanged (regression guard, pre-existing behavior)", () => {
     expect(clipToWidth("short line", 78)).toBe("short line");
+  });
+});
+
+// #303: the `Data: <path>` line collapsed to a bare "Data:…" at LEFT_TEXT_WIDTH (40) -- a real
+// worktree capture showed this exact defect. clipToWidth's word-boundary clip found the ONE space
+// in "Data: " itself (a filesystem path has none) and cut everything after it, same failure class
+// as the #447 `run:` line's narrow-viewport collapse. shortenDataRootForDisplay shortens the PATH
+// (last two segments, leading ellipsis) before clipToWidth ever sees it -- never lossy when the
+// full path already fits.
+describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () => {
+  it("returns a short path unchanged when the full 'Data: <path>' label already fits the budget", () => {
+    expect(shortenDataRootForDisplay("B:\\M\\ember", 40)).toBe("B:\\M\\ember");
+  });
+
+  it("shortens a long worktree path to its last two segments with a leading ellipsis", () => {
+    const long = "B:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
+    expect(shortenDataRootForDisplay(long, 40)).toBe("…\\worktrees\\cockpit-telemetry-447");
+  });
+
+  it("uses forward-slash separators for a forward-slash path (never mixes separators)", () => {
+    const long = "/home/user/repos/ember/.claude/worktrees/cockpit-telemetry-447";
+    expect(shortenDataRootForDisplay(long, 40)).toBe(".../worktrees/cockpit-telemetry-447".replace("...", "…"));
+  });
+
+  it("a path with two or fewer segments is returned unchanged even if it doesn't fit (nothing meaningful to trim)", () => {
+    // Pathological: a single very long segment. Falls through to clipToWidth's own safety net at
+    // the call site, not this function's job to fix.
+    const oneLongSegment = "B:\\" + "x".repeat(60);
+    expect(shortenDataRootForDisplay(oneLongSegment, 40)).toBe(oneLongSegment);
+  });
+
+  it("never produces the bare-label collapse: the shortened form always carries real path content", () => {
+    const long = "B:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
+    const result = shortenDataRootForDisplay(long, 40);
+    expect(result.length).toBeGreaterThan(1);
+    expect(clipToWidth(`Data: ${result}`, 40)).not.toBe("Data:…");
+  });
+});
+
+describe("Homescreen renders the Data: line without collapsing on a long worktree path (#303)", () => {
+  it("shows the shortened path, not a bare 'Data:…', for a real long worktree cwd", () => {
+    const state = { dataRoot: "B:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447" };
+    const rendered = Homescreen({ state, viewportWidth: 190 });
+    expect(findTextChild(rendered, "Data: …\\worktrees\\cockpit-telemetry-447")).toBe(true);
+    expect(findTextChild(rendered, "Data:…")).toBe(false);
+  });
+
+  it("shows the full path untouched for a short dataRoot (no information lost when there's room)", () => {
+    const state = { dataRoot: "B:\\M\\ember" };
+    const rendered = Homescreen({ state, viewportWidth: 190 });
+    expect(findTextChild(rendered, "Data: B:\\M\\ember")).toBe(true);
   });
 });
 

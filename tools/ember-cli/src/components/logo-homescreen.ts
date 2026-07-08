@@ -96,6 +96,23 @@ export interface BoardSummary {
    * green)"), newest first, from services/board-ts-poller.ts's live poll. Optional so existing
    * callers without any detected transitions yet still render, just without this section. */
   recentTransitions?: Array<{ text: string; color?: string }>;
+  /** #447: one-shot cockpit self-restart event ("cockpit: relaunched after 26m gap (pid P1 ->
+   * P2)"), computed once at mount from the previous session's liveness-heartbeat row (see
+   * screens/repl.ts). Absent on a normal boot (no prior heartbeat, or no meaningful gap) -- an
+   * "an hour of real organism work rendered as idleness" incident is exactly what this answers:
+   * the pane's own downtime is now a visible fact, not silence. */
+  cockpitRestartEvent?: { text: string; color?: string };
+  /** #447: live-state strip -- GPU state (VRAM + compute classification), the newest active
+   * training/inference run's phase, and the last-receipt-landing age. Each line is pre-formatted
+   * upstream by its own poller (services/gpu-state-poller.ts, services/run-progress-scanner.ts,
+   * services/receipt-landing-poller.ts) -- this component only ever renders strings, never
+   * re-derives the formatting. Any absent field renders nothing, same never-fabricate discipline
+   * as boardTs/topAttention below. */
+  liveTelemetry?: {
+    gpu?: { text: string; color?: string };
+    activeRun?: { text: string; color?: string };
+    lastReceipt?: { text: string; color?: string };
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +161,24 @@ export function clipToWidth(text: string, width: number): string {
   }
   if (lastSpace > 0) return budget.slice(0, lastSpace).join("") + "…";
   return budget.join("") + "…";
+}
+
+/** #303 narrow-viewport fix: `Data: <path>` collapsed to a bare "Data:…" at LEFT_TEXT_WIDTH --
+ * clipToWidth's word-boundary clip finds the ONE space in the "Data: " label itself (a filesystem
+ * path has no spaces at all) and cuts everything after it, same failure class as the #447 `run:`
+ * line's narrow-viewport collapse. Fix: when the full `Data: <path>` label doesn't fit, shorten
+ * the PATH to its last two segments with a leading ellipsis (still identifies which tree/worktree
+ * is active -- the #303 comment's actual purpose, "a disconnected cockpit is immediately
+ * self-evident") *before* clipToWidth ever sees it; clipToWidth remains the final safety net for
+ * pathological cases. Short paths that already fit are returned untouched -- never lossy when
+ * there's room to show the real path in full. */
+export function shortenDataRootForDisplay(fullPath: string, budget: number): string {
+  const fullLabel = `Data: ${fullPath}`;
+  if ([...fullLabel].length <= budget) return fullPath;
+  const sep = fullPath.includes("\\") ? "\\" : "/";
+  const segments = fullPath.split(/[\\/]/).filter((s) => s.length > 0);
+  if (segments.length <= 2) return fullPath;
+  return `…${sep}${segments.slice(-2).join(sep)}`;
 }
 
 /** B5 W6: the right column's available content width -- the full panel content width when
@@ -287,6 +322,10 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
   // yet (liveness must be visible from the very first frame, never gated on board data arriving).
   // Same style token as the line below it: plain text, no color -- "no new colors" per spec.
   const entries: FeedEntry[] = [{ text: `clock: ${formatWallClock(nowMs)}` }];
+  // #447: cockpit self-restart -- "was this pane just resurrected" is the most orienting fact a
+  // fresh session can show, so it renders right after the clock and BEFORE the board-data early
+  // return below (it doesn't depend on board data at all -- it's a fact about the pane itself).
+  if (boardSummary?.cockpitRestartEvent) entries.push(boardSummary.cockpitRestartEvent);
   if (!boardSummary) {
     entries.push({ text: "No recent activity" });
     return entries;
@@ -300,6 +339,15 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
     entries.push(
       stale ? { text: `STALE: ${age}`, color: "red" } : { text: `board: ${age}` },
     );
+  }
+  // #447: live-state strip -- GPU/active-run/last-receipt-age, grouped with the board-state
+  // lines above (all "what's true right now") and ahead of the discrete event/attention lines
+  // below (all "what just happened" / "what needs looking at"). Any absent field renders nothing.
+  if (boardSummary.liveTelemetry) {
+    const { gpu, activeRun, lastReceipt } = boardSummary.liveTelemetry;
+    if (gpu) entries.push(gpu);
+    if (activeRun) entries.push(activeRun);
+    if (lastReceipt) entries.push(lastReceipt);
   }
   // #433: condition-transition events ("board: C(-1) GREEN->RED (...)") -- what just CHANGED --
   // ahead of topAttention's static "what's currently not-GREEN" snapshot below.
@@ -368,7 +416,10 @@ function renderIdentityBlock(state: LogoState, fireballTick: number): React.Reac
       : null,
     // #303: visible data-root indicator — a disconnected cockpit is immediately self-evident.
     state.dataRoot
-      ? React.createElement(Text, { key: "l4", dimColor: true }, clipToWidth(`Data: ${state.dataRoot}`, LEFT_TEXT_WIDTH))
+      ? React.createElement(
+          Text, { key: "l4", dimColor: true },
+          clipToWidth(`Data: ${shortenDataRootForDisplay(state.dataRoot, LEFT_TEXT_WIDTH)}`, LEFT_TEXT_WIDTH),
+        )
       : null,
   ];
 
