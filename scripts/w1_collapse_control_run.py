@@ -1290,7 +1290,20 @@ def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
                   if needle_hash_set else np.array([], dtype=np.uint64))
 
     for name in shard_paths:
-        arr = np.fromfile(os.path.join(shard_dir, name), dtype="<u2")
+        # 2026-07-08 (issue #118 P1 sweep, coordinator ruling -- third site,
+        # same class as the corpus loader and build_decontam_batch_mp.py's
+        # scan worker): np.fromfile read the WHOLE shard (up to 512MiB) into
+        # one contiguous RAM block before #451's chunked hashing even started
+        # -- #451 chunked the HASH computation but not this read, and this
+        # exact call crashed with a real 512MiB ArrayMemoryError at 28.7GB
+        # free RAM (fragmentation, not capacity -- same signature as the
+        # 13GB corpus-loader failures). np.memmap(mode='r') defers paging to
+        # _scan_shard_for_hits's own chunk slicing below, so peak materialized
+        # RAM per shard is bounded by scan_chunk_tokens (~64MB), not shard
+        # size -- composes correctly with #451's chunking because every
+        # consumer here (._astype(), tuple(...) candidate extraction, the
+        # tiny window-1 boundary join) only ever reads, never mutates, arr.
+        arr = np.memmap(os.path.join(shard_dir, name), dtype="<u2", mode="r")
         n = arr.shape[0]
 
         n_out, hit_offsets = _scan_shard_for_hits(arr, window, roll_base, needle_arr,

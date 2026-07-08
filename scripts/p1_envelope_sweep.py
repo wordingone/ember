@@ -136,6 +136,16 @@ if HERE not in sys.path:
 from receipt_write import checked_write  # reused, not reimplemented
 import joules  # reused, not reimplemented
 import w1_collapse_control_run as w1c  # reused, not reimplemented
+# 2026-07-08: this lane previously swapped in w2_heldout.build_decontam_
+# batch_mp's adaptive-chunked contamination_recheck wrapper here, after an
+# ArrayMemoryError on the raw serial w1c.contamination_recheck's np.unique
+# call. REVERTED (coordinator ruling) now that #451 folded the same
+# chunk-halving guard directly into w1c.contamination_recheck itself (issue
+# #445), PLUS this lane's own follow-up memmap fix for the per-shard
+# np.fromfile read #451 didn't cover -- the wrapper is now a redundant
+# extra layer over an already-hardened function; calling w1c's own
+# contamination_recheck directly is one fewer indirection for the same
+# safety guarantee.
 
 # ---------------------------------------------------------------------------
 # Point table (prereg section 1). See module docstring item 1 for the
@@ -166,7 +176,22 @@ FF_NATIVE_C03 = 4096  # see module docstring item 4
 ABSOLUTE_WARMUP_STEPS_CAP = round(0.1 * w1c.REAL_HARD_CEILING_STEPS_ISSUE_STATED)
 
 DECONTAM_RECEIPT_DEFAULT = os.path.join(
-    REPO, "receipts", "ember-c-scale", "w2-heldout-decontam-20260707T055843Z.json")
+    REPO, "receipts", "ember-c-scale", "w2-heldout-decontam-20260708T121128Z.json")
+# 2026-07-08: the prior default (...-20260707T055843Z.json) named a receipt
+# that was NEVER found in this repo's history (issue #435, the custody
+# defect this lane's decontam regen exists to cure) -- pointing the default
+# at a file that never existed was itself a latent defect. Updated to the
+# regenerated, true-continuity receipt (exact selected_window_indices match
+# to the banked W1 control receipt, verified 2026-07-08).
+
+# Corpus memmap cache (issue #118, coordinator ruling 2026-07-08): repo-
+# relative default so no absolute path ever lands in source (repo-guard);
+# EMBER_CORPUS_CACHE_DIR overrides it at launch time to point every
+# consumer (any worktree, any lane) at ONE shared cache instead of each
+# worktree building its own 13GB copy -- same env-var-override convention
+# as w2_heldout/build_decontam_batch_mp.py's EMBER_SHARD_DIR.
+CORPUS_CACHE_DIR = os.environ.get(
+    "EMBER_CORPUS_CACHE_DIR", os.path.join(REPO, "scratch", "corpus-cache"))
 
 RAM_FLOOR_GIB = 15.0     # coordinator-narrowed rule-m RAM preflight
 VRAM_MARGIN_GIB = 2.0    # frozen spec section "Preflight"
@@ -413,8 +438,14 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             "ff_grown": FF_NATIVE_C03, "layers_assumed": LAYERS, "heads_assumed": HEADS,
         }
 
-        from timeshare_pretrain import PackedShardLoader
-        loader = PackedShardLoader(args.shard_dir, real_arch["seq"], n_mtp=n_mtp)
+        from timeshare_pretrain import (
+            PackedShardLoader, verify_memmap_stream_equivalence)
+        loader = PackedShardLoader(
+            args.shard_dir, real_arch["seq"], n_mtp=n_mtp,
+            mmap_cache_dir=CORPUS_CACHE_DIR,
+            expected_manifest_sha256=w1c.CORPUS_MANIFEST_COMBINED_SHA256_EXPECTED)
+        equivalence_report = verify_memmap_stream_equivalence(
+            loader.stream, args.shard_dir, loader.shards)
 
         decontam_receipt = w1c.load_json(args.decontam_receipt)
         candidate_window_indices = decontam_receipt.get("selected_window_indices") or []
@@ -437,13 +468,49 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             eval_rows, args.shard_dir, args.decontam_receipt, cache_root,
             classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
         if not contamination:
-            contamination = w1c.contamination_recheck(eval_rows, args.shard_dir)
+            contamination = w1c.contamination_recheck(
+                eval_rows, args.shard_dir,
+                window=w1c.CONTAMINATION_WINDOW_TOKENS,
+                roll_base=w1c.CONTAMINATION_ROLL_BASE)
+            contamination["recheck_implementation"] = (
+                "w1_collapse_control_run.contamination_recheck direct call "
+                "(reverted from the w2_heldout.build_decontam_batch_mp "
+                "adaptive-chunked wrapper this lane used earlier the same "
+                "day, 2026-07-08 -- #451 folded the same chunk-halving "
+                "MemoryError guard directly into this function [issue #445], "
+                "and this lane's own follow-up fix replaced the per-shard "
+                "np.fromfile whole-shard read with np.memmap(mode='r') after "
+                "a 512MiB ArrayMemoryError at 28.7GB free RAM survived #451 "
+                "-- the wrapper is now redundant, direct call kept)")
             write_recheck_cache(
                 contamination, eval_rows, args.decontam_receipt, cache_root,
                 classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
         contamination_classified = w1c.classify_contamination_self_matches(
             contamination, candidate_window_indices, seq=real_arch["seq"],
             n_mtp=n_mtp, shard_dir=args.shard_dir)
+
+        # Cross-instrument agreement check (coordinator condition, 2026-07-08
+        # chunked-wrapper swap): this run's OWN fresh recheck must agree with
+        # the decontam receipt's own recorded verdict on the SAME batch -- a
+        # disagreement means the serial and chunked implementations disagree
+        # on the same predicate, which is an instrument defect, not a normal
+        # refusal, and stops the run immediately rather than proceeding.
+        this_run_confirmed_non_self = len(
+            contamination_classified.get("confirmed_non_self_matches", []))
+        receipt_recorded_non_self = (
+            decontam_receipt.get("contamination_recheck", {})
+            .get("confirmed_non_self_matches"))
+        if (receipt_recorded_non_self is not None
+                and this_run_confirmed_non_self != receipt_recorded_non_self):
+            raise SystemExit(
+                "P1_SWEEP_RECHECK_INSTRUMENT_DISAGREEMENT: this run's fresh "
+                f"contamination recheck found confirmed_non_self_matches="
+                f"{this_run_confirmed_non_self}, but the decontam receipt "
+                f"{args.decontam_receipt} recorded "
+                f"confirmed_non_self_matches={receipt_recorded_non_self} for "
+                "the SAME batch -- the two instruments disagree on the same "
+                "predicate. Refusing to proceed; this is an instrument "
+                "defect finding, not a normal contamination refusal.")
 
         fake_args = argparse.Namespace(
             decontam_receipt=args.decontam_receipt, shard_dir=args.shard_dir,
@@ -525,6 +592,8 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             "governor_preflight": {"ram": ram_receipt, "vram": vram_receipt},
             "corpus_manifest_sha256": shard_manifest.get("combined_sha256"),
             "corpus_manifest_ref": "scripts/manifest_sha.py",
+            "corpus_loader": loader.mmap_cache_report,
+            "corpus_loader_equivalence_check": equivalence_report,
             "held_out_batch": {
                 "decontam_receipt_path": args.decontam_receipt,
                 "selected_window_indices": candidate_window_indices,

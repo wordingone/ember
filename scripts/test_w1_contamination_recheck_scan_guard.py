@@ -110,6 +110,52 @@ def test_contamination_recheck_scan_guard_reraises_at_min_chunk_floor(monkeypatc
                 scan_chunk_tokens=n_tokens, min_scan_subchunk_tokens=8)
 
 
+def test_contamination_recheck_memmap_read_matches_fromfile_read():
+    """2026-07-08 (issue #118 P1 sweep, coordinator ruling -- third memmap
+    site): contamination_recheck's per-shard read switched from
+    np.fromfile (whole-shard, one contiguous RAM block -- the exact call
+    that crashed with a real 512MiB ArrayMemoryError at 28.7GB free RAM)
+    to np.memmap(mode='r'). Proves the swap is behavior-preserving: the
+    function's real (memmap-backed) output must match an independently
+    computed reference that reads the SAME shard bytes via plain
+    np.fromfile and does its own brute-force exact-match scan -- two
+    different read strategies over the same content, same answer."""
+    with tempfile.TemporaryDirectory() as shard_dir:
+        n_tokens = 200
+        tokens = [(i * 37 + 5) % 97 for i in range(n_tokens)]  # deterministic, non-trivial
+        _write_shard(shard_dir, "shard-0000.bin", tokens)
+        _write_shard(shard_dir, "shard-0001.bin",
+                     [(i * 13 + 2) % 97 for i in range(n_tokens)])
+        # needles drawn from BOTH shards' real content -> real matches on each
+        eval_rows = [tokens[10:10 + 6], tokens[150:150 + 6],
+                     [(i * 13 + 2) % 97 for i in range(20, 26)]]
+
+        via_function = contamination_recheck(
+            eval_rows, shard_dir, window=WINDOW, roll_base=ROLL_BASE,
+            scan_chunk_tokens=64, min_scan_subchunk_tokens=8)
+
+        # independent reference: plain np.fromfile + brute-force exact match,
+        # never touching _hash_chunk_for_hits / _scan_shard_for_hits / the
+        # memmap path at all.
+        needle_windows = set()
+        for row in eval_rows:
+            for i in range(len(row) - WINDOW + 1):
+                needle_windows.add(tuple(row[i:i + WINDOW]))
+        reference_matches = []
+        for name in sorted(os.listdir(shard_dir)):
+            arr = np.fromfile(os.path.join(shard_dir, name), dtype="<u2")
+            for i in range(len(arr) - WINDOW + 1):
+                window_vals = tuple(int(x) for x in arr[i:i + WINDOW])
+                if window_vals in needle_windows:
+                    reference_matches.append({"shard": name, "offset": i,
+                                               "window": list(window_vals)})
+
+        assert reference_matches, "fixture must produce real matches to be meaningful"
+        assert (sorted(via_function["confirmed_matches"], key=str)
+                == sorted(reference_matches, key=str))
+        assert via_function["verdict"] == "CONTAMINATED"
+
+
 def test_contamination_recheck_default_scan_params_match_build_decontam_batch_mp():
     """Issue #445's fold-in must reuse build_decontam_batch_mp.py's exact
     chunk/floor bounds, not invent new ones -- a silent divergence here would

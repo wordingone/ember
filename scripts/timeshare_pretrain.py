@@ -1003,6 +1003,202 @@ def write_packed_shard(path: str, token_ids) -> str:
     return path
 
 
+CORPUS_CACHE_BIN_NAME = "shards-v0-stream.uint16.bin"
+CORPUS_CACHE_MANIFEST_NAME = "shards-v0-stream.manifest.json"
+CORPUS_CACHE_BUILD_CHUNK_BYTES = 256 * 1024 * 1024  # 256MB per read/write --
+# bounded so the build never asks for one large contiguous RAM block, unlike
+# the legacy np.concatenate path this cache exists to replace.
+
+
+def _build_or_open_memmap_cache(shard_dir: str, shards: "list[str]",
+                                 cache_dir: str, *,
+                                 expected_manifest_sha256: str | None = None):
+    """Build-once, memmap-always corpus cache (issue #118 P1 sweep,
+    coordinator ruling 2026-07-08 -- ArrayMemoryError on the legacy
+    np.concatenate path at BOTH 17.5GB and 30.6GB free RAM: a contiguous-
+    address-space/fragmentation ceiling, not a capacity one). Streams every
+    shard's raw bytes to <cache_dir>/shards-v0-stream.uint16.bin in bounded
+    chunks (never holding more than one chunk in RAM), reopens it read-only
+    via np.memmap, and reuses it on later calls IFF a sidecar manifest
+    proves it still matches shard_dir's current content.
+
+    expected_manifest_sha256: optional pinned-corpus lineage check (the
+    caller's own known-good sha, e.g. w1_collapse_control_run.py's
+    CORPUS_MANIFEST_COMBINED_SHA256_EXPECTED) -- if given, a cache or
+    shard_dir whose manifest sha does not match it is refused loudly rather
+    than silently trusted. Left generic/optional here (not imported from
+    w1_collapse_control_run.py) so this loader stays reusable by callers
+    with no pinned corpus at all, e.g. tests with synthetic fixture shards.
+
+    Returns (np.memmap array, mode='r'; report dict) -- the report is meant
+    to be quoted verbatim in a caller's receipt (build vs reuse, shas,
+    paths)."""
+    import numpy as np
+    from manifest_sha import compute_manifest, BYTES_PER_TOKEN
+
+    os.makedirs(cache_dir, exist_ok=True)
+    bin_path = os.path.join(cache_dir, CORPUS_CACHE_BIN_NAME)
+    manifest_path = os.path.join(cache_dir, CORPUS_CACHE_MANIFEST_NAME)
+
+    fresh_manifest = compute_manifest(shard_dir)
+    fresh_sha = fresh_manifest["combined_sha256"]
+
+    if expected_manifest_sha256 is not None and fresh_sha != expected_manifest_sha256:
+        raise SystemExit(
+            "CORPUS_CACHE_LINEAGE_MISMATCH: shard_dir "
+            f"{shard_dir!r} manifest sha256={fresh_sha} does not match "
+            f"expected_manifest_sha256={expected_manifest_sha256} -- "
+            "refusing to build or trust any cache against a corpus that "
+            "isn't the pinned one.")
+
+    reused = False
+    if os.path.exists(bin_path) and os.path.exists(manifest_path):
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            sidecar = json.load(f)
+        sidecar_sha = sidecar.get("combined_manifest_sha256")
+        if sidecar_sha == fresh_sha:
+            expected_bytes = sidecar["n_tokens"] * BYTES_PER_TOKEN
+            actual_bytes = os.path.getsize(bin_path)
+            if actual_bytes == expected_bytes:
+                reused = True
+            # size mismatch = truncated/corrupt cache despite a matching sha
+            # sidecar (e.g. an interrupted prior build) -- fall through to a
+            # full rebuild rather than memmap a short/corrupt file.
+
+    if not reused:
+        tmp_path = bin_path + ".building"
+        with open(tmp_path, "wb") as out:
+            for s in shards:
+                src_path = os.path.join(shard_dir, s)
+                with open(src_path, "rb") as f:
+                    while True:
+                        chunk = f.read(CORPUS_CACHE_BUILD_CHUNK_BYTES)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+        os.replace(tmp_path, bin_path)  # atomic swap-in, no partial-file window
+        sidecar = {
+            "combined_manifest_sha256": fresh_sha,
+            "n_tokens": fresh_manifest["total_tokens"],
+            "n_files": fresh_manifest["n_files"],
+            "per_shard_sha256": {f["name"]: f["sha256"]
+                                 for f in fresh_manifest["files"]},
+            "built_ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+            "source_shard_dir_at_build": shard_dir,  # informational only;
+            # the sha above, not this path, is what future trust checks use.
+        }
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(sidecar, f, indent=2)
+
+    stream = np.memmap(bin_path, dtype=PACK_DTYPE, mode="r")
+    report = {
+        "impl": "timeshare_pretrain._build_or_open_memmap_cache (np.memmap, "
+                "mode='r')",
+        "why": ("legacy np.concatenate in-RAM path raised "
+                "numpy._core._exceptions._ArrayMemoryError requesting a "
+                "13.0 GiB contiguous array at BOTH 17.5GB and 30.6GB free "
+                "RAM (two tracebacks banked, 2026-07-08) -- fragmentation, "
+                "not capacity"),
+        "cache_bin_path": bin_path,
+        "cache_manifest_path": manifest_path,
+        "reused_existing_cache": reused,
+        "combined_manifest_sha256": fresh_sha,
+        "expected_manifest_sha256_checked": expected_manifest_sha256,
+        "n_tokens": int(stream.shape[0]),
+    }
+    return stream, report
+
+
+def verify_memmap_stream_equivalence(stream, shard_dir: str,
+                                      shards: "list[str]",
+                                      n_samples: int = 32,
+                                      window_tokens: int = 32,
+                                      seed: int = 0) -> dict:
+    """Proves the memmap stream is byte-identical to what the legacy
+    np.concatenate(per-shard np.fromfile(...)) path would have produced,
+    WITHOUT ever materializing that full concatenation -- reads a small
+    window directly from the relevant shard file(s) at each sampled offset
+    and compares against the memmap's own read at the same offset.
+
+    Samples >= n_samples offsets: both edges of every shard boundary
+    reachable within window_tokens of the boundary (cheap, high-value --
+    exactly where a streaming-build off-by-one would show up first), plus
+    random interior offsets to fill out n_samples. Returns a dict meant to
+    be quoted verbatim in a receipt; raises SystemExit on ANY mismatch
+    (silent stream corruption is exactly what mode='r' + this check together
+    are meant to make impossible)."""
+    import random
+    import numpy as np
+
+    sizes = [os.path.getsize(os.path.join(shard_dir, s)) for s in shards]
+    n_tokens_per_shard = [sz // BYTES_PER_TOKEN_LOCAL for sz in sizes]  # noqa
+    cum = [0]
+    for n in n_tokens_per_shard:
+        cum.append(cum[-1] + n)
+    total_tokens = cum[-1]
+
+    offsets: "list[int]" = []
+    for shard_idx in range(len(shards)):
+        start, end = cum[shard_idx], cum[shard_idx + 1]
+        # both edges of this shard's own range, reachable within the corpus
+        offsets.append(max(0, start))
+        offsets.append(max(0, min(end, total_tokens) - window_tokens))
+    rng = random.Random(seed)
+    while len(offsets) < n_samples:
+        offsets.append(rng.randint(0, max(0, total_tokens - window_tokens)))
+    offsets = sorted(set(o for o in offsets if 0 <= o <= total_tokens - window_tokens))
+
+    def _direct_read(offset: int, n: int):
+        """Read n tokens starting at global offset directly from shard
+        files (never via the memmap/cache), spanning a shard boundary if
+        needed."""
+        out = []
+        remaining = n
+        pos = offset
+        while remaining > 0:
+            shard_idx = next(i for i in range(len(shards))
+                              if cum[i] <= pos < cum[i + 1])
+            local_start = pos - cum[shard_idx]
+            local_n = min(remaining, n_tokens_per_shard[shard_idx] - local_start)
+            with open(os.path.join(shard_dir, shards[shard_idx]), "rb") as f:
+                f.seek(local_start * BYTES_PER_TOKEN_LOCAL)
+                buf = f.read(local_n * BYTES_PER_TOKEN_LOCAL)
+            out.append(np.frombuffer(buf, dtype=PACK_DTYPE))
+            pos += local_n
+            remaining -= local_n
+        return np.concatenate(out) if len(out) > 1 else out[0]
+
+    mismatches = []
+    checked = []
+    for offset in offsets:
+        direct = _direct_read(offset, window_tokens)
+        via_stream = np.asarray(stream[offset:offset + window_tokens])
+        if not np.array_equal(direct, via_stream):
+            mismatches.append(offset)
+        checked.append(int(offset))
+
+    if mismatches:
+        raise SystemExit(
+            "CORPUS_CACHE_EQUIVALENCE_MISMATCH: memmap stream disagrees "
+            f"with direct per-shard reads at offsets {mismatches} -- "
+            "refusing to trust the cache.")
+
+    return {
+        "n_offsets_checked": len(checked),
+        "offsets_checked": checked,
+        "window_tokens": window_tokens,
+        "n_shards_covered": len(shards),
+        "all_boundary_edges_included": True,
+        "mismatches": mismatches,
+        "verdict": "EQUIVALENT",
+    }
+
+
+BYTES_PER_TOKEN_LOCAL = 2  # matches PACK_DTYPE "<u2" / manifest_sha.BYTES_PER_TOKEN;
+# a local literal here (not importing manifest_sha.BYTES_PER_TOKEN at module
+# scope) keeps this file's own module-load path free of a new hard import.
+
+
 class PackedShardLoader:
     """No-pad sequence packing over tokenizer-freeze output shards.
 
@@ -1020,7 +1216,9 @@ class PackedShardLoader:
     (the round-trip claim). batch(step, B) is a pure function of step (windows
     indexed mod n_windows), so resume re-derives the identical data stream."""
 
-    def __init__(self, shard_dir: str, seq: int, n_mtp: int):
+    def __init__(self, shard_dir: str, seq: int, n_mtp: int, *,
+                 mmap_cache_dir: str | None = None,
+                 expected_manifest_sha256: str | None = None):
         import numpy as np
         self.seq = seq
         self.n_mtp = n_mtp
@@ -1028,9 +1226,27 @@ class PackedShardLoader:
         shards = sorted(p for p in os.listdir(shard_dir) if p.endswith(".bin"))
         if not shards:
             raise ValueError(f"no .bin packed shards in {shard_dir}")
-        arrs = [np.fromfile(os.path.join(shard_dir, s), dtype=PACK_DTYPE)
-                for s in shards]
-        self.stream = np.concatenate(arrs) if len(arrs) > 1 else arrs[0]
+        self.mmap_cache_report: dict | None = None
+        if mmap_cache_dir is None:
+            # LEGACY path -- byte-identical to prior behavior for every
+            # caller that doesn't opt in. This is the only path any caller
+            # used before 2026-07-08; never touched by the memmap addition.
+            arrs = [np.fromfile(os.path.join(shard_dir, s), dtype=PACK_DTYPE)
+                    for s in shards]
+            self.stream = np.concatenate(arrs) if len(arrs) > 1 else arrs[0]
+        else:
+            # OPT-IN memmap path (issue #118 P1 sweep, coordinator ruling
+            # 2026-07-08): the legacy path's single np.concatenate call needs
+            # one contiguous 13GB block and has now failed twice at two very
+            # different free-RAM levels (17.5GB and 30.6GB) -- a fragmentation/
+            # contiguous-address-space ceiling, not a capacity one. Retires
+            # that class for any caller that passes mmap_cache_dir: build the
+            # flat stream ONCE on disk (bounded-chunk streaming, never a
+            # large contiguous RAM ask) and reopen it read-only via np.memmap
+            # on every call after the first.
+            self.stream, self.mmap_cache_report = _build_or_open_memmap_cache(
+                shard_dir, shards, mmap_cache_dir,
+                expected_manifest_sha256=expected_manifest_sha256)
         self.n_tokens = int(self.stream.shape[0])
         if self.n_tokens < self.block_len:
             raise ValueError(
