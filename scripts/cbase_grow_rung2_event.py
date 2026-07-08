@@ -757,6 +757,9 @@ def phase_b1m(args) -> dict:
     if pre_momentum is None:
         pre_momentum = torch.zeros_like(theta_gate_pre)
 
+    # Move pre_momentum to device (issue #486 device-placement fix)
+    pre_momentum = pre_momentum.to(args.device)
+
     # Fail-closed validation: issue #466 (#449 addendum) requires explicit
     # nonzero momentum or explicit refusal, never a silent fallback to zeros
     pre_momentum_rms = float(rms(pre_momentum))
@@ -770,6 +773,13 @@ def phase_b1m(args) -> dict:
             f"to reset-arm, violating #449 addendum: explicit different measurements). "
             f"For initial-training runs (no prior momentum), transplant arm is N/A "
             f"(structural impossibility, not a defect). See issue #466 / #449 / #452.")
+
+    # TDD: issue #486 device-placement fix validation
+    assert theta_gate_pre.device == grad_pre_gate.device == pre_momentum.device, \
+        f"TENSOR DEVICE MISMATCH in B1M: theta_gate_pre={theta_gate_pre.device}, " \
+        f"grad_pre_gate={grad_pre_gate.device}, pre_momentum={pre_momentum.device}. " \
+        f"All must be on {args.device}."
+
     new_weight, new_buf, upd = _muon_step_in_copy(theta_gate_pre, grad_pre_gate, pre_momentum, lr=pre_lr)
     u_pre_rms = float(rms(new_weight - theta_gate_pre))
 
@@ -989,6 +999,16 @@ def phase_b3(args) -> dict:
     pre_model_state = torch.load(fork_dir / "model.pt", map_location="cpu", weights_only=True)
     pre_model_state = {k: v.float().to(args.device) for k, v in pre_model_state.items()}
     pre_opt_state = torch.load(fork_dir / "optimizer.pt", map_location="cpu", weights_only=True)
+    # Move pre_opt_state tensors to device (issue #486 device-placement fix)
+    def _move_nested_tensors_to_device(obj, device):
+        if isinstance(obj, torch.Tensor):
+            return obj.to(device)
+        elif isinstance(obj, dict):
+            return {k: _move_nested_tensors_to_device(v, device) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return type(obj)(_move_nested_tensors_to_device(v, device) for v in obj)
+        return obj
+    pre_opt_state = _move_nested_tensors_to_device(pre_opt_state, args.device)
 
     grown_bf16 = torch.load(
         _make_path_absolute_from_receipt(b2["cache"]["cache_path"], data_root=data_root),
@@ -1043,7 +1063,7 @@ def phase_b3(args) -> dict:
         pre_model_state, pre_opt_state, None, gate_key, up_key, down_key,
         pre_lr, post_lr, torch.load(
             _make_path_absolute_from_receipt(b1m["cache_paths"]["grad_pre_gate"], data_root=data_root),
-            weights_only=True),
+            weights_only=True).to(args.device),  # issue #486 device-placement fix
         grad_post_gate)
 
     theta_gate = pre_model_state[gate_key].to(torch.float32)
@@ -1056,6 +1076,10 @@ def phase_b3(args) -> dict:
         zero_buf = torch.zeros_like(theta_gate_grown)
         assert float(zero_buf.abs().sum()) == 0.0, \
             "RESET-arm momentum must be exactly zero (explicit assertion, #449 addendum)"
+        # TDD: issue #486 device-placement fix validation
+        assert theta_gate_grown.device == grad_post_gate.device == zero_buf.device, \
+            f"TENSOR DEVICE MISMATCH in B3 RESET: theta_gate_grown={theta_gate_grown.device}, " \
+            f"grad_post_gate={grad_post_gate.device}, zero_buf={zero_buf.device}"
         new_w, _, _ = _muon_step_in_copy(theta_gate_grown, grad_post_gate, zero_buf, lr=post_lr)
         return new_w
 
@@ -1069,7 +1093,7 @@ def phase_b3(args) -> dict:
     # pushforward the pre-grow momentum buffer for gate_proj through G.
     pre_gate_momentum = torch.load(
         _make_path_absolute_from_receipt(b1m["cache_paths"]["pre_momentum"], data_root=data_root),
-        weights_only=True)
+        weights_only=True).to(args.device)  # issue #486 device-placement fix
 
     transplanted_momentum = _pushforward_gate_momentum(
         pre_gate_momentum, pre_model_state[up_key], pre_model_state[down_key],
@@ -1094,6 +1118,10 @@ def phase_b3(args) -> dict:
             f"(structural impossibility, not a defect). See issue #466 / #449 / #452.")
 
     def U_kplus1_transplant(theta_gate_grown):
+        # TDD: issue #486 device-placement fix validation
+        assert theta_gate_grown.device == grad_post_gate.device == transplanted_momentum.device, \
+            f"TENSOR DEVICE MISMATCH in B3 TRANSPLANT: theta_gate_grown={theta_gate_grown.device}, " \
+            f"grad_post_gate={grad_post_gate.device}, transplanted_momentum={transplanted_momentum.device}"
         new_w, _, _ = _muon_step_in_copy(theta_gate_grown, grad_post_gate,
                                           transplanted_momentum, lr=post_lr)
         return new_w
