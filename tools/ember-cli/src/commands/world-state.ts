@@ -4,11 +4,13 @@
 // Wires the real adapter (core/ember-world-state.ts) and the confirm-only encounter membrane
 // (core/encounter-membrane.ts) into the ember-cli command surface. This command IS the current
 // home of that logic -- the original standalone `node core/ember-world-state-repl.ts` proof-pack
-// this was split out of no longer exists (its rendering rules live on in core/monitor-render.ts
-// and core/repl-render.ts, extracted for unit-testability); this is the only way to exercise the
-// adapter today. It renders exactly one MONITOR/UNDERSTAND/INTERACT turn per invocation (a REPL
-// turn, not a persistent session) and keeps state (outstanding offers, the last-rendered board) in
-// module scope across invocations within one running cockpit process.
+// this was split out of no longer exists (its sort/color/truncation rules live on in
+// core/monitor-render.ts, extracted for unit-testability; the OTHER sibling that file was split
+// into, core/repl-render.ts, was removed as dead code in #417 -- it had zero importers); this is
+// the only way to exercise the adapter today. It renders exactly one MONITOR/UNDERSTAND/INTERACT
+// turn per invocation (a REPL turn, not a persistent session) and keeps state (outstanding
+// offers, the last-rendered board) in module scope across invocations within one running cockpit
+// process.
 //
 // Registered in command-registry.ts's builtins list. Reaching a running compiled cockpit requires
 // whatever binary is currently launched to have been built AFTER this file last changed -- run
