@@ -1,0 +1,105 @@
+{
+  "suite_version": "v1",
+  "datasets": [
+    {
+      "name": "MMLU-Pro",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
+      "row_count": 12032,
+      "size_bytes": 9604506,
+      "blocker": null
+    },
+    {
+      "name": "GSM8K",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/openai/gsm8k",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+      "row_count": 1319,
+      "size_bytes": 748022,
+      "blocker": null
+    },
+    {
+      "name": "MATH-500",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/HuggingFaceH4/MATH-500",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+      "row_count": 500,
+      "size_bytes": 442443,
+      "blocker": null
+    },
+    {
+      "name": "ARC-Challenge",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/allenai/ai2_arc",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+      "row_count": 1172,
+      "size_bytes": 425043,
+      "blocker": null
+    },
+    {
+      "name": "HumanEval+",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/evalplus/humanevalplus",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+      "row_count": 164,
+      "size_bytes": 11320600,
+      "blocker": null
+    },
+    {
+      "name": "MBPP",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/google-research-datasets/mbpp",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
+      "row_count": 500,
+      "size_bytes": 287032,
+      "blocker": null
+    },
+    {
+      "name": "HellaSwag",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/Rowan/hellaswag",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f",
+      "row_count": 10003,
+      "size_bytes": 11663748,
+      "blocker": null
+    },
+    {
+      "name": "GPQA-diamond",
+      "source": "huggingface",
+      "canonical_url": "https://huggingface.co/datasets/Idavidc/gpqa",
+      "revision": "main",
+      "test_split_name": "test",
+      "test_split_sha256": "PIN-PENDING",
+      "row_count": 0,
+      "size_bytes": 0,
+      "blocker": "GPQA requires HuggingFace license acceptance; automated download blocked to prevent unauthorized consent.",
+      "pin_status": "PIN-PENDING"
+    }
+  ],
+  "harness": {
+    "name": "EleutherAI/lm-evaluation-harness",
+    "commit": "97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176",
+    "install_recipe": "pip install lm_eval @ git+https://github.com/EleutherAI/lm-evaluation-harness.git@97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176"
+  },
+  "templates_sha256": "FROZEN_IN_EVAL_HARNESS_CONFIG",
+  "scoring_config_sha256": "FROZEN_IN_EVAL_HARNESS_CONFIG",
+  "total_size_bytes": 34491394,
+  "storage_root": "../../../../../data/eval-suite-v1-20260708_231128",
+  "timestamp": "2026-07-08T23:11:38.401147+00:00",
+  "pin_notes": "Datasets with PIN-PENDING status require manual intervention; see blocker field. Storage root path is relative to receipt file directory (receipts/eval-suite-freeze/)."
+}
