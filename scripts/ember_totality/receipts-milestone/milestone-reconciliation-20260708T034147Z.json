@@ -1,0 +1,15 @@
+{
+  "ticket": "milestone-reconciliation",
+  "ts": "20260708T034147Z",
+  "mapped": 0,
+  "unmapped": [],
+  "lattice_diff": [],
+  "floor_contract_gaps": [],
+  "inputs": {
+    "docs/ember-completeness.md": "goalforge",
+    "docs/PROBLEMS.md": "goalforge",
+    "docs/problems-meta.yaml": "goalforge"
+  },
+  "exit": "FAIL",
+  "error": "docs/spec/milestones-v1.md: absent from the goalforge worktree (no fallback permitted)"
+}
