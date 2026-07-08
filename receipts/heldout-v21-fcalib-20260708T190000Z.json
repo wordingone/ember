@@ -1,6 +1,8 @@
 {
   "ticket": "HELDOUT-V21-FCALIB",
   "ts": "20260708T230457Z",
+  "runner_git_sha": "20ffd56129312ae08a39f6614b8eabf83d7d4df5",
+  "runner_git_sha_note": "confirmed post-hoc: all 28 chunked invocations ran against the uncommitted working tree of this exact code; it was committed verbatim (zero further edits) immediately after the final chunk, as 20ffd56129312ae08a39f6614b8eabf83d7d4df5; that topic branch was squash-merged to master as 3f9400f (PR #460) -- the receipt file itself is byte-identical between the two, this note just cross-references both for permanence since PR-460-branch commits may not survive indefinitely once the branch is deleted post-merge.",
   "predicate_version": "v2.1-exact50-droponly",
   "predicate_source": "https://github.com/wordingone/ember/issues/440#issuecomment-4916781765",
   "status": "complete",
