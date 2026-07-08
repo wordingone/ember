@@ -221,7 +221,8 @@ def _assemble_receipt(*, rung: int, mode: str, ts_stamp: str,
                        loss_continuity: dict | None = None,
                        stab: dict | None = None, grow_ckpt_dir: str | None = None,
                        kill_reason: str | None = None,
-                       commit_margin_preflight: dict | None = None) -> dict:
+                       commit_margin_preflight: dict | None = None,
+                       grow_respec: dict | None = None) -> dict:
     params_unique_before = param_count_before - dup_numel
     params_unique_after = param_count_after - dup_numel
 
@@ -323,6 +324,8 @@ def _assemble_receipt(*, rung: int, mode: str, ts_stamp: str,
             "checkpoint": grow_ckpt_dir,
             "mechanism": "ff_widening_net2net (grow_operator, imported from cbase_grow_dryrun.widen_state_dict)",
         }
+    if grow_respec is not None:
+        receipt["grow_respec_280"] = grow_respec
     if loss_continuity is not None:
         receipt["loss_continuity"] = loss_continuity
     if stab is not None:
@@ -382,6 +385,36 @@ def run_live(args) -> int:
     import v0_pretrain_launch_gate as gate_mod
     import governor
 
+    # --- tick-6 freeze launch gate (issue #113 comment, K1 chain / #280) ---
+    # "The G-arm may not launch until: (1) the #280 respec'd symmetry-broken
+    # grow operator has landed AND ... (2) the runner uses the respec'd
+    # operator with its registered noise parameters." grow_eps_sigma<=0.0 IS
+    # the exact-duplication operator #280's R1 twin-divergence audit proved
+    # CAPACITY-NULL (twins never diverge; Newton-Schulz/Muon permutation
+    # symmetry is never broken) -- refuse unconditionally, before touching
+    # any checkpoint, exactly like this file's other hard-refuse gates
+    # (fp_check, g_budget).
+    if args.grow_eps_sigma <= 0.0:
+        receipt_dir = Path(args.receipt_dir)
+        receipt_dir.mkdir(parents=True, exist_ok=True)
+        refusal = {
+            "ticket": "CBASE-GROW-RUNG", "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "mode": "live", "rung": args.rung, "pass": False,
+            "verdict": "GROW_RUNG_REFUSED_NULL_OPERATOR",
+            "reason": ("tick-6 freeze (issue #113, K1 chain) binds the G-arm launch on the "
+                       "#280 respec'd symmetry-broken grow operator; --grow-eps-sigma<=0.0 "
+                       "is the proven-capacity-null exact-duplication operator (#280 finding: "
+                       "median twin cosine 1.0000001, ties never broken). This refuses "
+                       "unconditionally. Pass --grow-eps-sigma > 0.0 with a REGISTERED value "
+                       "(frozen before the run, per #280 item 2) to use the respec'd cure."),
+            "grow_eps_sigma_received": args.grow_eps_sigma,
+            "script": "scripts/cbase_grow_rung.py",
+        }
+        out = receipt_dir / f"cbase-grow-rung-refused-{_ts()}.json"
+        checked_write(str(out.relative_to(REPO)) if out.is_relative_to(REPO) else str(out), refusal)
+        print(f"GROW_RUNG_REFUSED_NULL_OPERATOR receipt={out}")
+        return 2
+
     rung = args.rung
     parent_path = Path(args.parent_receipt or RUNG_PARENT_RECEIPT_DEFAULT[rung])
     parent = json.loads(parent_path.read_text(encoding="utf-8"))
@@ -410,11 +443,22 @@ def run_live(args) -> int:
     ff_grown = ff_seed * 2
 
     sd_pre_f32 = {k: v.float() for k, v in m_state.items()}
-    grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers)
+    grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers,
+                                     eps_sigma=args.grow_eps_sigma, eps_seed=args.grow_eps_seed)
     param_count_before = int(sum(v.numel() for v in sd_pre_f32.values()))
     param_count_after = int(sum(v.numel() for v in grown_sd_f32.values()))
 
     fp_check = _function_preservation_check(cfg["model"], n_mtp, sd_pre_f32, grown_sd_f32, ff_seed, ff_grown)
+
+    import grow_respec_280 as gr280
+    twin_audit_live = gr280.twin_cosine_audit(grown_sd_f32, n_layers, ff_seed)
+    grow_respec_block = {
+        "eps_sigma": args.grow_eps_sigma, "eps_seed": args.grow_eps_seed,
+        "expected_twin_cosine_down_proj": gr280.expected_twin_cosine(args.grow_eps_sigma),
+        "twin_cosine_audit_at_grow_step": twin_audit_live,
+        "mechanism": "antisymmetric out-proj perturbation (#280 K1 respec) -- "
+                     "down_proj column pair (a/2, a/2) -> (a/2+eta, a/2-eta)",
+    }
 
     parent_lineage = parent.get("growth_lineage") or [{
         "rung": "seed", "checkpoint": parent["seed_identity"]["checkpoint"],
@@ -437,7 +481,8 @@ def run_live(args) -> int:
             param_count_before=param_count_before, param_count_after=param_count_after,
             fp_check=fp_check, d1_steps=d1_steps, d1_anchor_flops=D1_ANCHOR_FLOPS,
             g_budget={"skipped": "function preservation failed before g_budget preflight"},
-            stage="fp_check_kill", kill_reason="function_preservation_failed")
+            stage="fp_check_kill", kill_reason="function_preservation_failed",
+            grow_respec=grow_respec_block)
         return _write_and_report(receipt, receipt_dir, "live")
 
     requested_run = {
@@ -454,7 +499,8 @@ def run_live(args) -> int:
             ff_seed=ff_seed, ff_grown=ff_grown,
             param_count_before=param_count_before, param_count_after=param_count_after,
             fp_check=fp_check, d1_steps=d1_steps, d1_anchor_flops=D1_ANCHOR_FLOPS,
-            g_budget=g_budget_block, stage="g_budget_blocked")
+            g_budget=g_budget_block, stage="g_budget_blocked",
+            grow_respec=grow_respec_block)
         return _write_and_report(receipt, receipt_dir, "live")
 
     grown_sd_bf16 = {k: v.to(torch.bfloat16) for k, v in grown_sd_f32.items()}
@@ -506,6 +552,24 @@ def run_live(args) -> int:
         "checkpoint": stab_receipt["last_checkpoint"], "governor": stab_receipt["governor"],
         "batch": batch, "seq": seq,
     }
+    # Post-stabilize twin-cosine telemetry -- co-primary with loss (tick-6
+    # item 4: "in-flight twin-cosine telemetry runs co-primary with loss so
+    # a re-nulled grow is caught in-run, not post-hoc"). Loads the terminal
+    # checkpoint's own state dict (never re-derives it) and re-runs the same
+    # audit used at the grow step, so a re-tied twin pair after real
+    # training is visible in the SAME receipt as the loss curve.
+    post_m_state, _, _, _ = ts.load_checkpoint(stab_receipt["last_checkpoint"])
+    post_sd_f32 = {k: v.float() for k, v in post_m_state.items()}
+    twin_audit_post = gr280.twin_cosine_audit(post_sd_f32, n_layers, ff_seed)
+    grow_respec_block["twin_cosine_audit_post_stabilize"] = twin_audit_post
+    grow_respec_block["checkpoint_identity"] = gr280.checkpoint_identity(
+        grow_ckpt_dir, segment_id=f"cbase-grow-rung{rung}-grown", step=ckpt_manifest["step"])
+    grow_respec_block["schedule_position"] = gr280.schedule_position_block(
+        step=stab_receipt["global_step_end"], total_steps=total_steps,
+        warmup_frac=cfg["schedule"]["warmup_frac"],
+        stable_until_frac=cfg["schedule"]["stable_until_frac"],
+        decay_to_lr_frac=cfg["schedule"]["decay_to_lr_frac"])
+
     receipt = _assemble_receipt(
         rung=rung, mode="live", ts_stamp=ts_stamp,
         parent_receipt_path=_relpath(parent_path), parent_receipt_sha256=parent_sha,
@@ -516,7 +580,7 @@ def run_live(args) -> int:
         g_budget=g_budget_block, stage=stage, loss_continuity=loss_continuity,
         stab=stab_block, grow_ckpt_dir=grow_ckpt_dir,
         kill_reason=None if stage == "pass" else "post_grow_divergence",
-        commit_margin_preflight=commit_margin_block)
+        commit_margin_preflight=commit_margin_block, grow_respec=grow_respec_block)
     return _write_and_report(receipt, receipt_dir, "live")
 
 
@@ -563,11 +627,37 @@ def run_dry(args) -> int:
     ff_grown = ff_seed * 2
 
     sd_pre_f32 = {k: v.float() for k, v in m_state.items()}
-    grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers)
+    grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers,
+                                     eps_sigma=args.grow_eps_sigma, eps_seed=args.grow_eps_seed)
     param_count_before = int(sum(v.numel() for v in sd_pre_f32.values()))
     param_count_after = int(sum(v.numel() for v in grown_sd_f32.values()))
 
     fp_check = _function_preservation_check(cfg["model"], n_mtp, sd_pre_f32, grown_sd_f32, ff_seed, ff_grown)
+
+    # #280 K1 respec exercised at CPU/toy-fixture scale (tick-6 items 1-6,
+    # to the extent a dry-run can prove them without GPU/real training):
+    # twin-cosine telemetry at the grow step, the derived acceptance band,
+    # and (below, once the toy stabilize segment completes) the same audit
+    # again post-training -- co-primary with loss, never post-hoc.
+    import grow_respec_280 as gr280
+    twin_audit_grow_step = gr280.twin_cosine_audit(grown_sd_f32, n_layers, ff_seed)
+    grow_respec_block = {
+        "eps_sigma": args.grow_eps_sigma, "eps_seed": args.grow_eps_seed,
+        "expected_twin_cosine_down_proj": gr280.expected_twin_cosine(args.grow_eps_sigma),
+        "twin_cosine_audit_at_grow_step": twin_audit_grow_step,
+        "mechanism": "antisymmetric out-proj perturbation (#280 K1 respec) -- "
+                     "down_proj column pair (a/2, a/2) -> (a/2+eta, a/2-eta)",
+        "acceptance_gate": {
+            "rule": "median down_proj twin cosine at grow step < capacity_null_tolerance "
+                    "AND within a registered relative tolerance of the derived band "
+                    "(tick-6 item 4: R1 twin-audit ties broken AND function preservation "
+                    "within pre-registered tolerance)",
+            "capacity_null_tolerance": 0.999,
+            "measured_median": twin_audit_grow_step["down_proj_twin_cosine"]["median"],
+            "ties_broken": twin_audit_grow_step["down_proj_twin_cosine"]["median"] < 0.999,
+            "function_preserving": fp_check["function_preserving"],
+        },
+    }
 
     parent_lineage = [{
         "rung": "dryrun-parent-stand-in", "checkpoint": parent_receipt["last_checkpoint"],
@@ -620,6 +710,27 @@ def run_dry(args) -> int:
         "batch": batch, "seq": seq,
     }
 
+    # Post-stabilize twin-cosine telemetry -- co-primary with loss (tick-6
+    # item 4). Loads the toy stabilize segment's OWN terminal checkpoint
+    # (never re-derives it) so a re-tied twin pair after real (toy-scale)
+    # training steps is visible in the same receipt as stab_block's losses.
+    post_m_state, _, _, _ = ts.load_checkpoint(stab_receipt["last_checkpoint"])
+    post_sd_f32 = {k: v.float() for k, v in post_m_state.items()}
+    grow_respec_block["twin_cosine_audit_post_stabilize"] = gr280.twin_cosine_audit(
+        post_sd_f32, n_layers, ff_seed)
+    grow_respec_block["checkpoint_identity"] = gr280.checkpoint_identity(
+        grow_ckpt_dir, segment_id="cbase-grow-rung-dryrun-grown", step=ckpt_manifest["step"])
+    grow_respec_block["schedule_position"] = gr280.schedule_position_block(
+        step=stab_receipt["global_step_end"], total_steps=dryrun_steps_executed * 4,
+        warmup_frac=cfg["schedule"]["warmup_frac"],
+        stable_until_frac=cfg["schedule"]["stable_until_frac"],
+        decay_to_lr_frac=cfg["schedule"]["decay_to_lr_frac"])
+    grow_respec_block["schedule_position_note"] = (
+        "toy-scale stand-in denominator (dryrun_steps_executed*4), disclosed as such -- "
+        "tick-6 item 6's own cited real figure is total_steps=449651; a live G-arm launch "
+        "receipt states schedule_position against the REAL total_steps, this dry-run proves "
+        "the mechanism/shape only")
+
     stage = "pass" if loss_continuity["training_loss_continuity_within_pre_grow_variance_envelope"] \
         else "divergence_kill"
     receipt = _assemble_receipt(
@@ -631,7 +742,8 @@ def run_dry(args) -> int:
         fp_check=fp_check, d1_steps=d1_steps_at_real_scale, d1_anchor_flops=D1_ANCHOR_FLOPS,
         g_budget=g_budget_block, stage=stage, loss_continuity=loss_continuity,
         stab=stab_block, grow_ckpt_dir=grow_ckpt_dir,
-        kill_reason=None if stage == "pass" else "post_grow_divergence")
+        kill_reason=None if stage == "pass" else "post_grow_divergence",
+        grow_respec=grow_respec_block)
     receipt["dry_run"] = True
     receipt["d1_sizing"]["steps_computed_at_dryrun_scale"] = d1_steps_at_dryrun_scale
     receipt["d1_sizing"]["steps_executed_this_run"] = dryrun_steps_executed
@@ -815,6 +927,15 @@ def main() -> int:
     ap.add_argument("--ce-chunk-tokens", type=int, default=256)
     ap.add_argument("--out-dir", default=str(OUT_DIR_DEFAULT))
     ap.add_argument("--receipt-dir", default=str(RECEIPT_DIR_DEFAULT))
+    ap.add_argument("--grow-eps-sigma", type=float, default=0.0, dest="grow_eps_sigma",
+                     help="#280 K1 respec: registered antisymmetric out-proj perturbation "
+                          "noise scale (relative to each down_proj column's own norm). "
+                          "default 0.0 = the exact-duplication operator #280 proved "
+                          "CAPACITY-NULL -- the --live path refuses unconditionally at that "
+                          "default (tick-6 freeze). Must be frozen/registered BEFORE any real "
+                          "run, never chosen ad hoc (#280 item 2).")
+    ap.add_argument("--grow-eps-seed", type=int, default=0, dest="grow_eps_seed",
+                     help="deterministic seed for the #280 respec noise generator")
     args = ap.parse_args()
 
     if args.selftest:
