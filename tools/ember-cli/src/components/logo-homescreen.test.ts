@@ -153,6 +153,43 @@ describe("Homescreen — recent-activity feed carries the receipt-age badge (#40
   });
 });
 
+describe("Homescreen — recent-activity feed carries board condition-transition events (issue #433)", () => {
+  it("renders a recentTransitions entry above the topAttention lines, with its color", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 23, total: 30, pctComplete: 76.7,
+        topAttention: ["C-TALLY: RED — invalid-token pct<100"],
+        recentTransitions: [{ text: "board: C(-1) GREEN->RED (27 red / 8 green)", color: "red" }],
+      },
+    }));
+    expect(findTextChild(rendered, "board: C(-1) GREEN->RED (27 red / 8 green)")).toBe(true);
+    expect(colorForText(rendered, "board: C(-1) GREEN->RED (27 red / 8 green)")).toBe("red");
+    // Still carries the pre-existing static attention line too -- transitions are additive.
+    expect(findTextWhere(rendered, (s) => s.includes("C-TALLY"))).toBe(true);
+  });
+
+  it("renders a plain (no color) transition entry when the formatter carried none", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 23, total: 30, pctComplete: 76.7, topAttention: [],
+        recentTransitions: [{ text: "board: C0 RED->AUDIT-INCIDENT (10 red / 20 green)" }],
+      },
+    }));
+    expect(findTextChild(rendered, "board: C0 RED->AUDIT-INCIDENT (10 red / 20 green)")).toBe(true);
+    expect(colorForText(rendered, "board: C0 RED->AUDIT-INCIDENT (10 red / 20 green)")).toBeUndefined();
+  });
+
+  it("carries no transition lines when recentTransitions is absent (never fabricates)", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
+    }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("board: C"))).toBe(false);
+  });
+});
+
 describe("formatWallClock — HH:MM:SS local (issue #413: cockpit liveness clock)", () => {
   it("zero-pads hours, minutes, and seconds", () => {
     const nowMs = new Date(2026, 6, 7, 9, 5, 3).getTime(); // local 09:05:03

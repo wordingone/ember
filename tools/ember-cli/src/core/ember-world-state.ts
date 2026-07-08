@@ -181,6 +181,49 @@ export interface BoardReceipt {
   };
 }
 
+// ---------------------------------------------------------------------------
+// #433: board condition transitions -- GREEN<->RED (or any status<->status) flips between two
+// board receipts, surfaced as cockpit activity events instead of being visible only by diffing
+// two JSON files by hand.
+// ---------------------------------------------------------------------------
+
+export interface BoardConditionTransition {
+  condition: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * Diffs two board-receipt row sets, matched by `condition`, and returns one
+ * BoardConditionTransition per condition whose `status` differs between `prevRows` and
+ * `nextRows`. A condition present in `nextRows` but absent from `prevRows` (or present with a
+ * missing/malformed `condition`/`status`) produces NO transition -- there is nothing sound to
+ * diff against. This is also what makes the first poll after boot silent: an undefined/empty
+ * `prevRows` baseline (no receipt seen yet this session) yields zero transitions, never a fake
+ * "everything just changed" storm (#433 bar). Fails open on malformed rows -- a row missing
+ * `condition`/`status`, or a non-array input, is skipped/treated as empty rather than thrown.
+ */
+export function diffBoardConditions(
+  prevRows: BoardRow[] | undefined,
+  nextRows: BoardRow[] | undefined,
+): BoardConditionTransition[] {
+  const prevByCondition = new Map<string, string>();
+  for (const row of prevRows ?? []) {
+    if (row && typeof row.condition === "string" && typeof row.status === "string") {
+      prevByCondition.set(row.condition, row.status);
+    }
+  }
+  const transitions: BoardConditionTransition[] = [];
+  for (const row of nextRows ?? []) {
+    if (!row || typeof row.condition !== "string" || typeof row.status !== "string") continue;
+    const prevStatus = prevByCondition.get(row.condition);
+    if (prevStatus !== undefined && prevStatus !== row.status) {
+      transitions.push({ condition: row.condition, from: prevStatus, to: row.status });
+    }
+  }
+  return transitions;
+}
+
 /** Lists the board-receipts directory's *.json filenames, lexicographically sorted (the board's
  * own <ts> naming sorts chronologically) -- the shared cheap-discovery step behind
  * findNewestBoardReceipt and the #420 live-badge poll below. Returns [] (never throws) when the
@@ -219,6 +262,12 @@ export async function findNewestBoardReceipt(
 export interface BoardTsPollResult {
   filename: string;
   boardTs: string;
+  // #433: the parsed receipt's rows + green/red totals, added alongside the pre-existing
+  // filename/boardTs fields so a caller can diff conditions (diffBoardConditions above) and
+  // format a transition event's counts without a second read of the same file.
+  rows: BoardRow[];
+  green: number;
+  red: number;
 }
 
 /**
@@ -241,7 +290,13 @@ export async function pollForNewerBoardTs(
 
   const raw = await readFile(path.join(goalforgeRoot, BOARD_DIR, filename), "utf-8");
   const parsed = JSON.parse(raw) as BoardReceipt;
-  return { filename, boardTs: parsed.ts };
+  return {
+    filename,
+    boardTs: parsed.ts,
+    rows: parsed.rows ?? [],
+    green: parsed.summary?.green ?? 0,
+    red: parsed.summary?.red ?? 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
