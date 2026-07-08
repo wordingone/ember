@@ -58,6 +58,7 @@ import argparse
 import gc
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -84,6 +85,21 @@ SEED_SHA_ATTESTATION_RECEIPT = "receipts/spend-annex/attestations/cbase-gpu-veri
 MARGIN_GIB_FLOOR = 2.0
 KILL_PCT_OVER_ESTIMATE = 15.0  # DEV-002 kill/promote criterion
 
+# widen becomes build-once (issue #446): widen_state_dict() crashed natively
+# (SIGSEGV/ACCESS_VIOLATION) 3/3 times even inside a fresh subprocess, after
+# succeeding cleanly once -- see issue #446 for the full timeline. Rather than
+# re-run the crash-prone widen step on every retry, it runs AT MOST ONCE per
+# seed SHA and the grown bf16 state dict is persisted here; every subsequent
+# probe run (this one and future rung-2 work) loads it directly and never
+# calls widen_state_dict() again. `models/` is gitignored -- this cache is
+# local-only, never committed.
+GROWN_CACHE_DIR = REPO / "models" / "cbase-grow-rung" / "rung2-grown-cache"
+
+
+def _grown_cache_paths(seed_sha: str) -> tuple[Path, Path]:
+    stem = GROWN_CACHE_DIR / f"grown-{seed_sha[:16]}.pt"
+    return stem, Path(str(stem) + ".meta.json")
+
 
 def _ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -98,6 +114,55 @@ def _probe_server(url: str) -> dict:
         return {"reachable": False, "error": str(e)}
 
 
+def _widen_cast_worker(seed_ckpt_str: str, out_path: str) -> int:
+    """SHA-verify + load + widen + bf16-cast, run as a FRESH subprocess and
+    result written to disk -- NOT inline in the main process.
+
+    Cause of the two reproduced SIGSEGVs (exit 139) when this ran inline: the
+    SAME native-crash class cbase_grow_rung2_dryrun.py's own module docstring
+    documents for this exact machine at this ~1.19B->2.2B param scale
+    (allocator/fragmentation state, reproduced even at 24-33GiB free RAM, not
+    a raw memory-shortage problem) -- specifically the bf16-cast step, which
+    transiently holds grown_sd_f32 (~8.8GiB fp32) AND the growing
+    grown_sd_bf16 dict simultaneously mid dict-comprehension. Part A of
+    cbase_grow_rung2_dryrun.py dispatches this exact sequence to a fresh
+    subprocess for the same reason; this mirrors that established remedy
+    rather than inventing a new one."""
+    import torch
+    seed_ckpt = Path(seed_ckpt_str)
+    model_pt = seed_ckpt / "model.pt"
+    manifest = json.loads((seed_ckpt / "manifest.json").read_text(encoding="utf-8"))
+    actual_sha = sha256_file(model_pt)
+    claimed_sha = (manifest.get("files") or {}).get("model.pt")
+    if not (actual_sha == claimed_sha == SEED_SHA_ATTESTED):
+        raise SystemExit(f"CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE: seed checkpoint hash mismatch: "
+                          f"manifest={claimed_sha} attested={SEED_SHA_ATTESTED} actual={actual_sha}")
+    print(f"seed checkpoint SHA verified: {actual_sha}", flush=True)
+
+    cfg = ts.load_contract()
+    n_layers = cfg["model"]["layers"]
+    sd_seed_bf16 = torch.load(model_pt, map_location="cpu", weights_only=True)
+    ff_seed = int(sd_seed_bf16["backbone_model.layers.0.mlp.gate_proj.weight"].shape[0])
+    ff_grown = ff_seed * 2
+    sd_pre_f32 = {k: v.float() for k, v in sd_seed_bf16.items()}
+    sd_seed_bf16 = None
+    gc.collect()
+    grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers)
+    param_count_after = int(sum(v.numel() for v in grown_sd_f32.values()))
+    sd_pre_f32 = None
+    gc.collect()
+    grown_sd_bf16 = {k: v.to(torch.bfloat16) for k, v in grown_sd_f32.items()}
+    grown_sd_f32 = None
+    gc.collect()
+    torch.save(grown_sd_bf16, out_path)
+    meta = {"ff_seed": ff_seed, "ff_grown": ff_grown, "param_count_after": param_count_after,
+            "actual_sha": actual_sha, "claimed_sha": claimed_sha, "step": manifest.get("step")}
+    Path(out_path + ".meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    print(f"WIDEN_CAST_WORKER_DONE out_path={out_path} ff_seed={ff_seed} ff_grown={ff_grown} "
+          f"param_count_after={param_count_after}", flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -110,7 +175,13 @@ def main() -> int:
     ap.add_argument("--grad-accum-steps", type=int, default=8, help="DEV-002 config: accum_steps")
     ap.add_argument("--micro-batch", type=int, default=2, help="DEV-002 config: micro_batch")
     ap.add_argument("--sample-interval-s", type=float, default=1.0)
+    ap.add_argument("--widen-cast-worker", action="store_true",
+                     help=argparse.SUPPRESS)  # internal: re-exec entry point, see _widen_cast_worker
+    ap.add_argument("--out-path", help=argparse.SUPPRESS)
     args = ap.parse_args()
+
+    if args.widen_cast_worker:
+        return _widen_cast_worker(args.seed_ckpt, args.out_path)
 
     ts_stamp = _ts()
     timestamp_iso = datetime.now(timezone.utc).isoformat()
@@ -129,35 +200,46 @@ def main() -> int:
     print(f"[{ts_stamp}] BEFORE nvidia-smi: {nvsmi_before}", flush=True)
     print(f"[{ts_stamp}] BEFORE server: {server_before}", flush=True)
 
-    # ---- SHA-verify the real seed checkpoint (reuse: sha256_file) ----
-    actual_sha = sha256_file(model_pt)
-    claimed_sha = (manifest.get("files") or {}).get("model.pt")
-    sha_ok = actual_sha == claimed_sha == SEED_SHA_ATTESTED
-    print(f"[{ts_stamp}] seed checkpoint SHA verified: {actual_sha} (attested match: {sha_ok})", flush=True)
-    if not sha_ok:
-        raise SystemExit(f"CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE: seed checkpoint hash mismatch: "
-                          f"manifest={claimed_sha} attested={SEED_SHA_ATTESTED} actual={actual_sha}")
-
-    # ---- real widen computation (reuse: widen_state_dict, never reimplemented) ----
+    # ---- SHA-verify + widen + bf16-cast: build-once, persisted cache
+    # (issue #446 -- widen_state_dict() crashed natively 3/3 times, including
+    # inside a FRESH subprocess with a clean heap, after succeeding cleanly
+    # once; the fresh-subprocess mitigation that fixes #406's class did not
+    # prevent this one). Cache hit skips the crash-prone step entirely; a
+    # cache miss still dispatches to a fresh subprocess (never worse than
+    # before) and persists the result so this is the LAST time this seed ever
+    # needs widening. ----
     import torch
     cfg = ts.load_contract()
-    n_layers = cfg["model"]["layers"]
-
-    sd_seed_bf16 = torch.load(model_pt, map_location="cpu", weights_only=True)
-    ff_seed = int(sd_seed_bf16["backbone_model.layers.0.mlp.gate_proj.weight"].shape[0])
-    ff_grown = ff_seed * 2
-    sd_pre_f32 = {k: v.float() for k, v in sd_seed_bf16.items()}
-    sd_seed_bf16 = None
-    gc.collect()
-    grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers)
-    param_count_after = int(sum(v.numel() for v in grown_sd_f32.values()))
-    sd_pre_f32 = None
-    gc.collect()
-    grown_sd_bf16 = {k: v.to(torch.bfloat16) for k, v in grown_sd_f32.items()}
-    grown_sd_f32 = None
-    gc.collect()
+    cache_path, cache_meta_path = _grown_cache_paths(SEED_SHA_ATTESTED)
+    if cache_path.exists() and cache_meta_path.exists():
+        meta = json.loads(cache_meta_path.read_text(encoding="utf-8"))
+        cache_hit = True
+        print(f"[{ts_stamp}] grown-checkpoint cache HIT: {cache_path} (no widen_state_dict() call "
+              f"this run -- issue #446 build-once cure)", flush=True)
+    else:
+        cache_hit = False
+        GROWN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        worker_cmd = [sys.executable, str(Path(__file__).resolve()), "--widen-cast-worker",
+                      "--seed-ckpt", str(seed_ckpt), "--out-path", str(cache_path)]
+        worker_proc = subprocess.run(worker_cmd, cwd=str(Path(__file__).resolve().parent),
+                                      capture_output=True, text=True)
+        print(worker_proc.stdout, end="", flush=True)
+        if worker_proc.returncode != 0 or not cache_meta_path.exists():
+            print(worker_proc.stderr, file=sys.stderr, flush=True)
+            raise SystemExit(f"CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE: widen-cast worker failed "
+                              f"(exit={worker_proc.returncode}); see stderr above; issue #446")
+        meta = json.loads(cache_meta_path.read_text(encoding="utf-8"))
+        print(f"[{ts_stamp}] grown-checkpoint cache MISS -> widened fresh, cached at {cache_path} "
+              f"for all future rung-2 work (issue #446 build-once cure)", flush=True)
+    ff_seed = meta["ff_seed"]
+    ff_grown = meta["ff_grown"]
+    param_count_after = meta["param_count_after"]
+    actual_sha = meta["actual_sha"]
+    claimed_sha = meta["claimed_sha"]
+    sha_ok = actual_sha == claimed_sha == SEED_SHA_ATTESTED
+    grown_sd_bf16 = torch.load(cache_path, map_location="cpu", weights_only=True)
     print(f"[{ts_stamp}] ff_seed={ff_seed} ff_grown={ff_grown} "
-          f"param_count_after={param_count_after}", flush=True)
+          f"param_count_after={param_count_after} (verified: {sha_ok}, cache_hit={cache_hit})", flush=True)
 
     # ---- the actual launch-gate: DEV-002 candidate 3/4 offloaded estimate,
     # priced against CONTENDED live nvidia-smi (reuse: estimate_required_gib_
@@ -404,6 +486,29 @@ def main() -> int:
             "attestation_receipt": SEED_SHA_ATTESTATION_RECEIPT,
             "step": manifest.get("step"),
         },
+        "widen_state_dict_provenance": {
+            "issue": 446,
+            "cache_hit": cache_hit,
+            "cache_path": str(cache_path),
+            "method": ("build-once: widen_state_dict() runs at most once per seed SHA, in a fresh "
+                       "subprocess, with the grown bf16 state dict persisted to cache_path; every "
+                       "subsequent run (this one included, on a cache hit) loads it directly and "
+                       "never calls widen_state_dict() again for this seed."),
+            "prior_crash_history": (
+                "Before this cure: the identical widen_state_dict() call succeeded cleanly once "
+                "(2026-07-08T12:59:47Z, commit 1ff844e, cbase_grow_rung2_contended_launch_gate.py), "
+                "then crashed natively 3/3 consecutive times ~30min later with no code change: "
+                "(1) inline in this probe's main process, exit 139 SIGSEGV; (2) inside a FRESH "
+                "subprocess with a clean heap (this repo's own established Part-A-style mitigation "
+                "for this crash class), exit 3221225477 / ACCESS_VIOLATION; (3) a minimal isolated "
+                "3-line repro (torch.load -> .float() -> widen_state_dict(), no probe code, no "
+                "CUDA) pinpointing the crash to inside widen_state_dict() itself, exit 139. All 3 "
+                "crashes: ~28-29GiB free RAM, GPU flat at server-only baseline, server 200 OK, "
+                "nothing left wedged. Timing correlates with a concurrent lane (P1) finishing a "
+                "~13.96GiB corpus-cache disk write ~13:29Z, just before the crashes started -- "
+                "filed as issue #446 with the full timeline; not yet confirmed as causal."
+            ),
+        },
         "param_count_after": param_count_after,
         "server_contention": {
             "before": server_before,
@@ -465,6 +570,17 @@ def main() -> int:
                          "unconditional enable). Disclosed because checkpointing ON lowers "
                          "activation memory, so this measured peak is likely an UNDER-estimate "
                          "of what a grad_checkpointing:false production launch would need."),
+                "estimate_function_assumption": ("cpu_offload_adamw.estimate_required_gib_offloaded's "
+                         "activation term (ACTIVATION_ESTIMATE_GIB_AT_PROD_SHAPE=6.0GiB @ batch16/"
+                         "seq1024/20-layers/ff32768, scaled linearly by micro_batch/prod_batch) "
+                         "documents NO gradient-checkpointing assumption at all -- it is a bare "
+                         "'coarse' constant, silent on checkpointing state. So this receipt's "
+                         "measured-vs-estimate comparison has a real confound: measured=checkpointing-ON "
+                         "(forced by build_v0_model), estimate=checkpointing-state-UNSPECIFIED, intended "
+                         "production=checkpointing-OFF per the contract. A measured peak that PASSES "
+                         "close to the estimate/margin floor should NOT be read as proof the "
+                         "checkpointing-OFF production config also fits -- that direction is untested "
+                         "here and the bias runs toward UNDER-measuring true production VRAM need."),
             },
         },
         "wall_s": {"total": wall_s, "training_only": t_train_s},
