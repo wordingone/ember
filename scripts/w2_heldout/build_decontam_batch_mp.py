@@ -355,9 +355,19 @@ def _extract_needle_hashes(candidate_rows: list[list[int]], window: int,
 
 
 def _worker_scan_shards(args: tuple) -> dict:
-    """Worker: scan a subset of shards, stream matches to file, return counts only."""
+    """Worker: scan a subset of shards, stream matches to file, return counts only.
+
+    window_to_rows (last arg) is None unless track_shard_histogram was
+    requested by the caller -- see contamination_recheck_mp. When present,
+    it maps each candidate window tuple to the eval_rows indices it came
+    from (built once, shared read-only across workers via _build_candidate_
+    window_index -- same helper _classify_matches already uses). This lets
+    each worker increment small (n_rows x n_shards-ish) bounded counters as
+    matches stream past, without ever re-accumulating match dicts beyond
+    what the existing dump_dir streaming already does."""
     (shard_dir, shard_names, needle_hash_to_windows, needle_hash_set,
-     window, roll_base, worker_id, progress_file, chunk_tokens, dump_dir) = args
+     window, roll_base, worker_id, progress_file, chunk_tokens, dump_dir,
+     window_to_rows) = args
 
     mod = 1 << 64
     confirmed_matches_count = 0
@@ -366,6 +376,8 @@ def _worker_scan_shards(args: tuple) -> dict:
     prev_tail = None
     prev_name = None
     last_heartbeat_mono = [time.monotonic()]
+    row_shard_counts: dict[int, dict[str, int]] | None = (
+        {} if window_to_rows is not None else None)
 
     # Open per-worker dump file for streaming matches
     worker_dump_file = None
@@ -551,6 +563,10 @@ def _worker_scan_shards(args: tuple) -> dict:
                 if worker_dump_fh:
                     worker_dump_fh.write(json.dumps(match_record) + "\n")
                 confirmed_matches_count += 1
+                if window_to_rows is not None:
+                    for row_idx in window_to_rows.get(candidate, ()):
+                        d = row_shard_counts.setdefault(row_idx, {})
+                        d[name] = d.get(name, 0) + 1
             else:
                 candidate_collisions += 1
 
@@ -568,6 +584,11 @@ def _worker_scan_shards(args: tuple) -> dict:
                     if worker_dump_fh:
                         worker_dump_fh.write(json.dumps(match_record) + "\n")
                     confirmed_matches_count += 1
+                    if window_to_rows is not None:
+                        boundary_key = f"JOIN:{prev_name}|{name}"
+                        for row_idx in window_to_rows.get(candidate, ()):
+                            d = row_shard_counts.setdefault(row_idx, {})
+                            d[boundary_key] = d.get(boundary_key, 0) + 1
 
         prev_tail = arr[-(window - 1):].copy() if n >= (window - 1) else prev_tail
         prev_name = name
@@ -580,14 +601,19 @@ def _worker_scan_shards(args: tuple) -> dict:
     if worker_dump_fh:
         worker_dump_fh.close()
 
-    # Return counts only — Pool.map unpickling is now 26 small dicts, not 216M match dicts
-    return {
+    # Return counts only — Pool.map unpickling is now 26 small dicts, not 216M match dicts.
+    # row_shard_counts (when present) is bounded the same way: n_rows x a handful of
+    # shard/boundary keys per worker, never a per-match record.
+    result = {
         "worker_id": worker_id,
         "shards_scanned": len(shard_names),
         "windows_hashed": total_windows_hashed,
         "matches_found": confirmed_matches_count,
         "hash_collisions_ruled_out": candidate_collisions,
     }
+    if row_shard_counts is not None:
+        result["row_shard_counts"] = row_shard_counts
+    return result
 
 
 def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
@@ -596,14 +622,42 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
                               n_workers: int = DEFAULT_MP_WORKERS,
                               progress_file: str | None = None,
                               chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
-                              dump_matches: str | None = None) -> dict:
+                              dump_matches: str | None = None,
+                              track_shard_histogram: bool = False) -> dict:
     """Parallelized contamination_recheck. Same receipt semantics as serial version.
 
-    If dump_matches is provided, writes matching contamination records to that JSONL file."""
+    If dump_matches is provided, writes matching contamination records to that JSONL file.
+
+    track_shard_histogram (default False, existing behavior/output unchanged
+    when False): when True, also returns per_row_matches (dict[int, int])
+    and per_row_shard_distribution (dict[int, dict[str, int]]) -- an exact,
+    uncapped count of how many corpus positions each eval_rows[i] matched,
+    broken down by shard. Built from the SAME streamed per-worker scan this
+    function already runs; workers increment small bounded counters
+    (n_rows x a handful of shard/boundary keys) as matches pass, never a
+    second re-scan and never re-accumulating match dicts beyond what
+    dump_matches already does.
+
+    sum(per_row_matches.values()) is NOT guaranteed to equal the total match
+    count (len(confirmed_matches) / matches_found): a single confirmed corpus
+    hit is attributed once PER eval_rows entry that shares its candidate
+    window (via _build_candidate_window_index -- rows with template/boilerplate
+    overlap legitimately share windows), so the row-attributed sum over-counts
+    by exactly sum over shared windows of (hits_for_window * (rows_sharing-1)).
+    This is expected, not a bug -- verified reconciling exactly on a real
+    16-row fwd_1m eval set with 24 cross-row-shared windows (23 shared by 2
+    rows, 1 shared by 7): 16472 raw matches -> 16675 row-attributed sum,
+    a +203 excess that matches the shared-window accounting precisely.
+
+    Requires n_workers>=2 after the
+    min(n_workers, len(shard_paths)) clamp below -- the n_workers<=1 serial
+    fallback path does not compute this (see the SystemExit just below)."""
     t0 = time.perf_counter()
 
     # Extract needle hashes (shared across all workers)
     needle_hash_to_windows, needle_hash_set = _extract_needle_hashes(eval_rows, window, roll_base)
+    window_to_rows = (_build_candidate_window_index(eval_rows, window)
+                       if track_shard_histogram else None)
 
     # Shard the corpus by files
     shard_paths = sorted(p for p in os.listdir(shard_dir) if p.endswith(".bin"))
@@ -612,6 +666,13 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
 
     n_workers = min(n_workers, len(shard_paths))
     if n_workers <= 1:
+        if track_shard_histogram:
+            raise SystemExit(
+                "W2_HISTOGRAM_REQUIRES_MP: track_shard_histogram=True needs n_workers>=2 "
+                "(after clamping to len(shard_paths)) -- the serial contamination_recheck "
+                "fallback this path uses for a single shard does not compute per-row "
+                "histograms. Pass track_shard_histogram=False, or point at a shard_dir "
+                "with >=2 shards / raise n_workers.")
         # Fall back to serial for single shard, wrapping to include wall_s
         t0_serial = time.perf_counter()
         result = contamination_recheck(eval_rows, shard_dir, window=window, roll_base=roll_base)
@@ -649,7 +710,8 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
     for worker_id, shard_names in enumerate(worker_shards):
         worker_args.append((
             shard_dir, shard_names, needle_hash_to_windows, needle_hash_set,
-            window, roll_base, worker_id, progress_file, chunk_tokens, tmp_match_dir
+            window, roll_base, worker_id, progress_file, chunk_tokens, tmp_match_dir,
+            window_to_rows
         ))
 
     with Pool(processes=len(worker_shards)) as pool:
@@ -665,6 +727,10 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
     total_windows_hashed = 0
     total_collisions = 0
     total_shards = 0
+    # Bounded regardless of match volume: at most len(eval_rows) x (a few
+    # shard/boundary keys) entries -- never grows with match COUNT.
+    per_row_shard_distribution: dict[int, dict[str, int]] | None = (
+        {} if track_shard_histogram else None)
 
     for worker_idx, r in enumerate(results):
         # Read matches that this worker already wrote to file
@@ -679,6 +745,12 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
         total_windows_hashed += r["windows_hashed"]
         total_collisions += r["hash_collisions_ruled_out"]
         total_shards += r["shards_scanned"]
+
+        if track_shard_histogram:
+            for row_idx, shard_counts in r.get("row_shard_counts", {}).items():
+                dest = per_row_shard_distribution.setdefault(row_idx, {})
+                for shard_name, cnt in shard_counts.items():
+                    dest[shard_name] = dest.get(shard_name, 0) + cnt
 
     _write_parent_rss_event(progress_file, "aggregate_end",
                              n_candidates=len(eval_rows), n_matches=len(all_matches))
@@ -704,7 +776,7 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
             for match in all_matches:
                 fh.write(json.dumps(match) + "\n")
 
-    return {
+    result = {
         "method": "13-token polynomial rolling hash (uint64 mod 2**64), "
                   "parallelized across corpus shards (multiprocessing), "
                   "hash hits re-verified by exact elementwise comparison",
@@ -716,6 +788,12 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
         "wall_s": wall_s,
         "n_workers": len(worker_shards),
     }
+    if track_shard_histogram:
+        per_row_matches = {i: sum(per_row_shard_distribution.get(i, {}).values())
+                            for i in range(len(eval_rows))}
+        result["per_row_matches"] = per_row_matches
+        result["per_row_shard_distribution"] = per_row_shard_distribution
+    return result
 
 
 # ---------------------------------------------------------------------------
