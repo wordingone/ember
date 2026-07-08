@@ -38,13 +38,20 @@ reviewer should know which rule is code-enforced and which is enforced by habit.
 
 Every path below was checked against this repository at the time this document was written —
 each one either opens to a real file, or is marked otherwise. Issue #487's original fill (quoted
-per-question below) was written the same day against a live engineering session; a few of its own
-cited artifacts (most visibly a newer totality-board receipt, `ember-totality-20260708T215158Z`,
-and a newer D3 loop receipt, `d3-native-loop-20260708T221708Z`) are not yet present in this public
-repository's tree as of this PR. That is disclosed per-row below, not silently smoothed over — per
-this document's own rule 4, an artifact a stranger cannot open does not support a STRONG or WEAK
-grade; where this repo cannot yet show the cited artifact, the closest artifact this repo **can**
-show is cited instead, and the gap is named.
+per-question below) cited a few artifacts that were, at the time, generated locally in this
+repository's own working tree but not yet landed by a PR — most visibly a newer totality-board
+receipt, `ember-totality-20260708T215158Z`, and a newer D3 loop receipt,
+`d3-native-loop-20260708T221708Z`. Neither is a different or private repository's artifact: this
+repo's own custody check (`scripts/ember_totality/test_c_custody.py`) names exactly this state
+`pending_landing` — a fresh, untracked file in the working tree, real and locally generated,
+simply not yet committed. As of this PR's rebase onto `public/master`, both remain untracked-
+pending-landing (a custody lane is landing the D3 receipts; board receipts land with board-run
+PRs) — disclosed per-row below, not silently smoothed over. One prior gap in this same family has
+since closed: the eval-suite-freeze spec and pin receipt this document's Q14 originally disclosed
+as absent landed via PR #490 and are cited directly there now. Per this document's own rule 4, an
+artifact a stranger cannot open does not support a STRONG or WEAK grade; where this repo cannot
+yet show a cited artifact, the closest artifact this repo **can** show is cited instead, and the
+gap is named.
 
 ---
 
@@ -66,9 +73,10 @@ loop receipts, but the *program-level* from-scratch baseline is not yet a single
   openable now).
 - `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — the newest
   board receipt in this checkout; its `C1` row reads `RED` for exactly this reason. Issue #487's
-  fill cites a later board receipt (`ember-totality-20260708T215158Z`) not present in this
-  checkout — the `RED` verdict itself is confirmed by both; the exact violation count may differ
-  between the two receipts.
+  fill cites a later board receipt (`ember-totality-20260708T215158Z`) generated locally in this
+  repository's working tree but not yet landed via a board-run PR (`pending_landing`, per
+  `scripts/ember_totality/test_c_custody.py`) — the `RED` verdict itself is confirmed by both;
+  the exact violation count may differ between the two receipts.
 
 ## Q2 — Exact claim
 
@@ -98,9 +106,11 @@ filed; the momentum-side ablation is only half-valid pending a re-measure (the s
   and `receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T-redacted-edition.json` —
   executed instances of this repo's fixed A/B/C/Deleted contract (`docs/spec/conditions-v1.md`
   §6), the general mechanism this question's ablation runs against.
-- **Disclosed gap:** issue #487 cites a same-day receipt, `d3-native-loop-20260708T221708Z.json`
-  (the specific 1.0 → 0.054 collapse number), that is not present in this checkout. That specific
-  number is not independently verifiable from this repository yet.
+- **Disclosed gap:** issue #487 cites a receipt, `d3-native-loop-20260708T221708Z.json` (the
+  specific 1.0 → 0.054 collapse number), generated locally in this repository's working tree but
+  not yet landed — a custody lane is landing it now (`pending_landing`, per
+  `scripts/ember_totality/test_c_custody.py`), not a different repository's artifact. That
+  specific number is not independently verifiable from this checkout until it lands.
 
 ## Q4 — Matched compute control
 
@@ -262,21 +272,29 @@ consolidated closure row exists yet — this is exactly what board condition `C-
 **Strong-form schema, instantiated:** the model's score on a frozen, external, zero-cost,
 contamination-audited eval suite.
 
-**Grade: WEAK** (issue #487) — **this is the battery's single most claim-blocking gap.** The
-frozen external eval suite does not exist in this repository yet.
+**Grade: WEAK** (updated post-#490 landing) — the suite is now frozen and pinned, but no
+reference run has executed against it yet, so no capability claim can cite a score from it. This
+is an upgrade from issue #487's original gap ("the frozen external eval suite does not exist in
+this repository yet") — the suite exists now; running it does not.
 
-**Related spec (pointer, not duplicated here):** issue #487's follow-up comment authors
-`docs/spec/eval-suite-freeze-v1.md` (suite composition, harness pin, contamination-audit
-interlock, local-reproduction-not-paper-quoted rule) as a separate lane's landing — read the
-issue comment or that spec doc directly for its content; it is not yet present in this checkout
-as of this PR.
+`docs/spec/eval-suite-freeze-v1.md` (landed via PR #490) freezes 7 of 8 test splits by sha256
+(MMLU-Pro, GSM8K, MATH-500, ARC-Challenge, HumanEval+, MBPP, HellaSwag) plus the harness commit
+(`EleutherAI/lm-evaluation-harness@97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176`); the 8th split,
+GPQA-diamond, is honestly `PIN-PENDING` — its automated download is blocked pending HuggingFace
+license acceptance (the receipt's own `blocker` field states this). The spec's Clause 2 (Binding
+Clauses) requires reference scores to be locally reproduced, never paper-quoted, and names the
+first such run as still riding "the next free GPU window" — it has not happened yet.
 
 **Check it yourself:**
-- `receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset8-len12-20260620T230700Z.json` (and
-  sibling `d3-gym-fresh-rows-*.json` files) — the D3-Gym external-task rows that exist today; not
-  the frozen multi-suite battery this question is graded against.
-- **Disclosed gap:** the eval-suite-freeze spec and its pin receipt are not present in this
-  checkout as of this PR.
+- `docs/spec/eval-suite-freeze-v1.md` — suite composition, the harness pin, and both binding
+  clauses (Clause 1: text+code-only, explicitly insufficient for a C1 parity claim; Clause 2:
+  local-reproduction-not-paper-quoted).
+- `receipts/eval-suite-freeze/eval-suite-freeze-v1.json` — the freeze receipt itself: per-split
+  sha256/row-count/size-bytes, the pinned harness commit, and GPQA's `PIN-PENDING` status with
+  its blocker reason, openable directly.
+- **Disclosed gap:** no reference-run receipt exists yet against this suite. Until one lands,
+  this question stays WEAK regardless of how complete the frozen suite itself is — a suite nobody
+  has run yet proves nothing about any model's score.
 
 ## Q15 — Internal benchmarks
 
