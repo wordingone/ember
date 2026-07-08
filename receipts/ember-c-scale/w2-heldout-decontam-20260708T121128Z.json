@@ -1,0 +1,128 @@
+{
+  "schema": "w2-heldout-decontam/v1",
+  "ts": "20260708T121128Z",
+  "spec_ref": "docs/spec/w2-scale-preregistration-v1.md#4-decontamination-precondition",
+  "reused_matcher": "scripts/w1_collapse_control_run.py:contamination_recheck (parallelized via multiprocessing, same semantics)",
+  "batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+  "source_pool": {
+    "shard_dir": "external-corpus/shards-v0",
+    "n_windows_total": 6814324,
+    "pool_reservation": {
+      "pool_start": 4194304,
+      "pool_size": 32,
+      "disjoint_check": {
+        "held_out_window_start": 4194304,
+        "max_training_window_index_at_ceiling": 24527,
+        "arithmetic": "4194304 > 1533*16-1=24527",
+        "disjoint": true
+      }
+    }
+  },
+  "seq": 1024,
+  "n_mtp": 2,
+  "batch_size": 16,
+  "windows_checked": 50,
+  "replacements_made": 33,
+  "rounds": [
+    {
+      "round": 1,
+      "pool_start": 4194304,
+      "pool_end": 4194336,
+      "pool_size": 32,
+      "wall_s": 297.209,
+      "n_contamination_recheck_calls": 1,
+      "memory_split_occurred": false,
+      "clean_found": 13,
+      "contaminated_found": 19,
+      "self_matches_excluded": 32480,
+      "disjoint_check": {
+        "held_out_window_start": 4194304,
+        "max_training_window_index_at_ceiling": 24527,
+        "arithmetic": "4194304 > 1533*16-1=24527",
+        "disjoint": true
+      }
+    },
+    {
+      "round": 2,
+      "pool_start": 4194336,
+      "pool_end": 4194342,
+      "pool_size": 6,
+      "wall_s": 305.161,
+      "n_contamination_recheck_calls": 1,
+      "memory_split_occurred": false,
+      "clean_found": 0,
+      "contaminated_found": 6,
+      "self_matches_excluded": 6090,
+      "disjoint_check": {
+        "held_out_window_start": 4194336,
+        "max_training_window_index_at_ceiling": 24527,
+        "arithmetic": "4194336 > 1533*16-1=24527",
+        "disjoint": true
+      }
+    },
+    {
+      "round": 3,
+      "pool_start": 4194342,
+      "pool_end": 4194348,
+      "pool_size": 6,
+      "wall_s": 304.63,
+      "n_contamination_recheck_calls": 1,
+      "memory_split_occurred": false,
+      "clean_found": 0,
+      "contaminated_found": 6,
+      "self_matches_excluded": 6090,
+      "disjoint_check": {
+        "held_out_window_start": 4194342,
+        "max_training_window_index_at_ceiling": 24527,
+        "arithmetic": "4194342 > 1533*16-1=24527",
+        "disjoint": true
+      }
+    },
+    {
+      "round": 4,
+      "pool_start": 4194348,
+      "pool_end": 4194354,
+      "pool_size": 6,
+      "wall_s": 304.97,
+      "n_contamination_recheck_calls": 1,
+      "memory_split_occurred": false,
+      "clean_found": 4,
+      "contaminated_found": 2,
+      "self_matches_excluded": 6090,
+      "disjoint_check": {
+        "held_out_window_start": 4194348,
+        "max_training_window_index_at_ceiling": 24527,
+        "arithmetic": "4194348 > 1533*16-1=24527",
+        "disjoint": true
+      }
+    }
+  ],
+  "selected_window_indices": [
+    4194305,
+    4194308,
+    4194310,
+    4194311,
+    4194312,
+    4194320,
+    4194323,
+    4194325,
+    4194326,
+    4194327,
+    4194329,
+    4194331,
+    4194335,
+    4194349,
+    4194350,
+    4194351
+  ],
+  "contamination_recheck": {
+    "method": "13-token polynomial rolling hash (uint64 mod 2**64), parallelized across corpus shards (multiprocessing), hash hits re-verified by exact elementwise comparison",
+    "shards_scanned": 26,
+    "windows_hashed": 6977868662,
+    "self_matches_excluded_as_expected": 16240,
+    "confirmed_non_self_matches": 0,
+    "verdict": "CLEAN"
+  },
+  "wall_s_total": 1514.758,
+  "pass": true
+}
