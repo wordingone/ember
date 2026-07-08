@@ -237,46 +237,110 @@ class CPUOffloadOptimizer:
         return self._inner.param_groups
 
 
+
+# Issue #459 follow-up (2026-07-08): the two constants below REPLACE the old
+# `activation_estimate_gib_at_prod_shape=6.0 @ prod_batch=16` guess, which
+# predicted 9.301GiB total at micro_batch=2 -- measured peak was 20.605GiB
+# over baseline (verdict OOM_ESTIMATE_WRONG, receipt
+# cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json), an 86-121%
+# understatement depending on which delta is compared. Per-phase attribution
+# (torch.cuda.reset_peak_memory_stats + max_memory_allocated around each
+# training-loop phase, gs=0/mi=0) found the estimator was missing/wrong in
+# TWO places, not one:
+#
+# 1. A QAT fake-quant clone term was MISSING ENTIRELY. `_apply_fake_quant`
+#    clones every Linear weight for the STE round-trip; measured delta during
+#    that phase was 4.2125GiB, and it releases cleanly at `_restore_weights`
+#    (confirmed: resident memory drops back down every microstep) -- so it is
+#    a real, recurring, per-microstep transient cost, not a leak, but the old
+#    estimator never had a line for it at all.
+# 2. The activation term was undercounted by ~14.6x. Measured backbone_forward
+#    delta (gradient checkpointing genuinely OFF, per the #459 fix -- the OLD
+#    9.301GiB estimate was implicitly measured against a run where
+#    checkpointing was silently ON) was 10.9797GiB at micro_batch=2, vs the
+#    old formula's 0.75GiB (6.0GiB @ prod_batch=16, linearly scaled to
+#    micro_batch=2). The prior "6.0GiB @ batch16" constant was never itself
+#    measured on THIS architecture (2.2B grown, MTP+QAT, seq=1024) -- it was
+#    inherited from a different bench.
+#
+# The weights+grad VRAM-resident term was NOT wrong -- 8.2994GiB predicted
+# vs ~8.20-8.24GiB measured resident after a full microstep cycle (model_
+# build_and_load + qat_restore phases) -- so that part of the original
+# design is kept unchanged below.
+QAT_CLONE_GIB_MEASURED = 4.2125
+ACTIVATION_GIB_MEASURED_AT_MICRO_BATCH = 10.9797
+ACTIVATION_CALIBRATION_MICRO_BATCH = 2
+ACTIVATION_CALIBRATION_RECEIPT = "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json"
+
+
 def estimate_required_gib_offloaded(n_params: int, *, micro_batch: int,
-                                     activation_estimate_gib_at_prod_shape: float = 6.0,
-                                     prod_batch: int = 16,
+                                     qat_clone_gib: float = QAT_CLONE_GIB_MEASURED,
+                                     activation_gib_at_calibration_batch: float = ACTIVATION_GIB_MEASURED_AT_MICRO_BATCH,
+                                     activation_calibration_micro_batch: int = ACTIVATION_CALIBRATION_MICRO_BATCH,
                                      staging_overhead_gib: float = 0.25) -> dict:
     """VRAM estimate for the CPU-offloaded strategy: weights (2N) + grad (2N)
-    stay VRAM-resident; the 8N optimizer-state term is removed entirely (host
-    RAM now); activations are scaled by micro_batch/prod_batch (linear in
-    batch size, same coarse convention the VRAM-resident estimate used) plus
-    a small fixed overhead for the grad/param staging tensors this module's
-    to("cpu")/to(device) copies transiently allocate.
+    stay VRAM-resident (unchanged, validated against measurement -- see
+    module-level comment above); the 8N optimizer-state term is removed
+    entirely (host RAM now); PLUS a QAT fake-quant clone term and an
+    activation term, both now anchored to a REAL measured calibration point
+    (issue #459 follow-up) instead of an unverified constant borrowed from a
+    different bench.
+
+    Calibration point: micro_batch=2, seq=1024, MTP+QAT enabled, gradient
+    checkpointing genuinely OFF (per the #459 fix), on the 2.2B grown
+    architecture -- see ACTIVATION_CALIBRATION_RECEIPT for the full per-phase
+    attribution this is sourced from.
+
+    qat_clone_gib is treated as roughly CONSTANT across micro_batch (it is a
+    function of Linear-layer parameter count, not batch size -- confirmed by
+    reading _apply_fake_quant, which clones per-weight-tensor regardless of
+    any activation/batch dimension). activation_gib scales LINEARLY with
+    micro_batch relative to the calibration point -- the same linear-in-batch
+    assumption the OLD estimator used (kept, not new), now anchored to a real
+    measurement instead of an unverified constant. This is a ONE-DATA-POINT
+    calibration: the linear-scaling assumption for a DIFFERENT micro_batch
+    (e.g. 1) is not yet independently verified and should be treated as a
+    falsifiable prediction, not a second measurement, until a probe at that
+    micro_batch confirms it.
 
     Returns the same field shape as cbase_grow_rung2_dryrun.py's
     _estimate_required_gib() (VRAM-resident convention) so the two can be
-    compared side by side in a receipt, plus an extra `optimizer_state_host_ram_gib`
-    field disclosing where the removed 8N term now lives."""
+    compared side by side in a receipt, plus `optimizer_state_host_ram_gib`
+    (where the removed 8N term now lives) and `qat_clone_gib` (the newly
+    added term)."""
     weights = n_params * BYTES_PER_PARAM_WEIGHTS_BF16
     grad = n_params * BYTES_PER_PARAM_GRAD_BF16
     optimizer_host_ram = n_params * BYTES_PER_PARAM_OPTIMIZER_FP32
-    activation_scale = micro_batch / prod_batch
-    activation_gib = round(activation_estimate_gib_at_prod_shape * activation_scale, 4)
+    activation_gib = round(
+        activation_gib_at_calibration_batch * (micro_batch / activation_calibration_micro_batch), 4)
     fixed_gib = (weights + grad) / (1 << 30)
-    total_gib = fixed_gib + activation_gib + staging_overhead_gib
+    total_gib = fixed_gib + qat_clone_gib + activation_gib + staging_overhead_gib
     return {
         "weights_gib": round(weights / (1 << 30), 3),
         "grad_gib": round(grad / (1 << 30), 3),
         "optimizer_state_gib_vram_resident": 0.0,
         "optimizer_state_host_ram_gib": round(optimizer_host_ram / (1 << 30), 3),
+        "qat_clone_gib": qat_clone_gib,
         "activation_estimate_gib": activation_gib,
         "staging_overhead_gib": staging_overhead_gib,
         "total_estimate_gib": round(total_gib, 3),
+        "calibration_receipt": ACTIVATION_CALIBRATION_RECEIPT,
         "method": ("bf16 weights (2B/param) + bf16 grad (2B/param) VRAM-resident, "
-                   "UNCHANGED from the VRAM-resident-AdamW estimate; the 8B/param "
-                   "conservative AdamW-equivalent optimizer-state term moves OFF "
-                   "VRAM entirely (host RAM, disclosed separately) per DEV-002 "
-                   "candidate 3; activation estimate scaled linearly by "
-                   f"micro_batch/prod_batch ({micro_batch}/{prod_batch}) per DEV-002 "
-                   "candidate 2 (micro-batch + grad accumulation, effective batch "
-                   "unchanged); a fixed staging-buffer overhead covers the transient "
-                   "grad/param copies this module's host<->device shuttling "
-                   "allocates. An ESTIMATE (labeled), not a measured peak."),
+                   "UNCHANGED from the VRAM-resident-AdamW estimate (validated against "
+                   "measurement); the 8B/param conservative AdamW-equivalent optimizer-state "
+                   "term moves OFF VRAM entirely (host RAM, disclosed separately) per DEV-002 "
+                   "candidate 3; qat_clone_gib and activation_estimate_gib are BOTH now "
+                   f"anchored to one real measured calibration point (micro_batch="
+                   f"{activation_calibration_micro_batch}, see calibration_receipt) instead of "
+                   "an unverified borrowed constant (issue #459 follow-up -- the prior estimate "
+                   "was 9.301GiB vs a measured 20.605GiB delta, an OOM). qat_clone_gib treated "
+                   "as constant across micro_batch (function of param count, confirmed by "
+                   "reading _apply_fake_quant); activation_estimate_gib scales LINEARLY with "
+                   f"micro_batch/{activation_calibration_micro_batch} (same assumption "
+                   "structure as before, now anchored to real data) -- this linear-scaling "
+                   "assumption is UNVERIFIED for any micro_batch other than the calibration "
+                   "point until a probe at that micro_batch confirms it. An ESTIMATE (labeled), "
+                   "not a measured peak."),
     }
 
 

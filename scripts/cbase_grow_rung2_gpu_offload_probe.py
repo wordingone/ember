@@ -383,10 +383,17 @@ def main() -> int:
     # ---- the actual launch-gate: DEV-002 candidate 3/4 offloaded estimate,
     # priced against CONTENDED live nvidia-smi (reuse: estimate_required_gib_
     # offloaded / vram_preflight, cpu_offload_adamw.py). Refuse-to-launch,
-    # never fix-forward, if this fails -- that IS a valid receipt. ----
-    prod_batch = cfg["throughput"]["batch"] if cfg["throughput"]["batch"] >= 16 else 16
+    # never fix-forward, if this fails -- that IS a valid receipt.
+    #
+    # prod_batch/activation_estimate_gib_at_prod_shape kwargs REMOVED (issue
+    # #459 follow-up): that estimate (9.301GiB) was wrong by 86-121% against
+    # measurement (verdict OOM_ESTIMATE_WRONG, receipt cbase-grow-rung2-gpu-
+    # offload-probe-20260708T171259Z.json) -- replaced with a measured-
+    # calibration-point estimator (qat_clone_gib + activation_gib both
+    # anchored to real per-phase attribution). See cpu_offload_adamw.py's
+    # estimate_required_gib_offloaded docstring for the full correction. ----
     required_offloaded = estimate_required_gib_offloaded(
-        param_count_after, micro_batch=args.micro_batch, prod_batch=prod_batch)
+        param_count_after, micro_batch=args.micro_batch)
     offload_preflight = vram_preflight(
         required_offloaded["total_estimate_gib"], margin_gib_floor=MARGIN_GIB_FLOOR,
         nvsmi=nvsmi_before)
@@ -881,17 +888,16 @@ def main() -> int:
                          "MODEL ITSELF (getattr(model.backbone_model, 'gradient_checkpointing', "
                          "False)), not from the config claim -- the prior bug is exactly why the "
                          "config claim alone was never trustworthy evidence of what actually ran."),
-                "estimate_function_assumption": ("cpu_offload_adamw.estimate_required_gib_offloaded's "
-                         "activation term (ACTIVATION_ESTIMATE_GIB_AT_PROD_SHAPE=6.0GiB @ batch16/"
-                         "seq1024/20-layers/ff32768, scaled linearly by micro_batch/prod_batch) "
-                         "documents NO gradient-checkpointing assumption at all -- it is a bare "
-                         "'coarse' constant, silent on checkpointing state. So this receipt's "
-                         "measured-vs-estimate comparison has a real confound: measured=checkpointing-ON "
-                         "(forced by build_v0_model), estimate=checkpointing-state-UNSPECIFIED, intended "
-                         "production=checkpointing-OFF per the contract. A measured peak that PASSES "
-                         "close to the estimate/margin floor should NOT be read as proof the "
-                         "checkpointing-OFF production config also fits -- that direction is untested "
-                         "here and the bias runs toward UNDER-measuring true production VRAM need."),
+                "estimate_function_assumption": ("SUPERSEDED (issue #459 second fix, same day): "
+                         "this receipt's OWN run is the one that exposed the confound described in "
+                         "the ORIGINAL version of this note (checkpointing silently ON while the "
+                         "estimator was silent on checkpointing state) -- checkpointing is now "
+                         "genuinely OFF (effective_readback above proves it), and "
+                         "cpu_offload_adamw.estimate_required_gib_offloaded's activation term is "
+                         "now calibrated from a REAL measured peak taken under checkpointing-OFF "
+                         "conditions (this run's own per-phase attribution), not a borrowed "
+                         "constant. See vram_attribution below for the phase-by-phase measurement "
+                         "and cpu_offload_adamw.py's module-level comment for the full correction."),
             },
         },
         "wall_s": {"total": wall_s, "training_only": t_train_s},
