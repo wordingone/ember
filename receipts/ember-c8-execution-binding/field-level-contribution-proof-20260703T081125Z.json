@@ -1,0 +1,108 @@
+{
+ "ticket": "EMBER-FIELD-LEVEL-CONTRIBUTION-PROOF",
+ "ts": "20260703T081125Z",
+ "verdict": "FIELD_LEVEL_CONTRIBUTION_PROOF_PASS",
+ "field_level_claim_proven": true,
+ "blocked_reasons": [],
+ "execution": {
+  "pid": 10465,
+  "host": "DESKTOPHH",
+  "start_ts": "2026-07-03T08:02:23.199Z",
+  "total_secs": 2.00516,
+  "command": [
+   "python",
+   "run_ablation.py"
+  ],
+  "cwd": "<goalforge repo root> (in-tree re-execution; original sandbox cwd redacted)"
+ },
+ "candidate_claim": {
+  "candidate_name": "Receipt-semantic execution-binding self-attestation detector (scripts/receipt_semantic_check.py's S1-S7 pattern set + scripts/receipt_write.py's write-time checked_write deletion + the PENDING_AUTHORIZATION.json flip-pair authorization discipline on the enforcement layer itself)",
+  "primary_contribution_class": "benchmark methodology",
+  "primary_contribution_class_alternate_reading": "training/eval protocol -- both readings were considered; 'benchmark methodology' was chosen because the contribution is a methodology for evaluating whether an autonomous system's OWN self-reported results are trustworthy (a testable claim about detector coverage, measured via a held-out adversarial fixture suite), not a change to the training protocol itself.",
+  "external_disjoint_validation": [
+   "8 fabricated adversarial fixtures, each authored from a REAL incident already ledgered in this repo (anti-gaming-contract-v1.md sec5 founding incidents, goalforge-debate-ledger.md R13 IND-3 self-reported-teardown, the real C-EFF SHATTER_COMPOUND finding, the real C2 net2net FLOP-saving contradiction, the real C11 duration-cycle ablation schema) -- disjoint by construction from the 11 --selftest calibration cases and from the 36/649 receipts the live --scan has already flagged",
+   "2 clean control fixtures (honest counterparts to 2 of the 8, in the same two domains) proving zero false positives in either arm",
+   "the pre-existing 11-case --selftest run under both arms, corroborating the same collapse pattern independently"
+  ],
+  "reusable_artifacts": [
+   "scripts/receipt_semantic_check.py (existing, live, unmodified)",
+   "scripts/receipt_write.py checked_write (existing, live, unmodified)",
+   "PROPOSED new landing (not yet in the live tree): the 10-fixture external-disjoint suite + run_ablation.py driver + FIXTURE-MANIFEST.md, currently at this receipt's own scratch directory, proposed to land at scripts/ember_totality/c1_external_disjoint_fixtures/ pending review"
+  ]
+ },
+ "closest_known_prior_comparison": {
+  "name": "AutoResearchClaw: Self-Reinforcing Autonomous Research with Human-AI Collaboration (arXiv 2605.20025)",
+  "independently_checked": true,
+  "not_reused_from_k2_regimes": "Confirmed NOT the K2/Regimes citation (arXiv 2606.10241) already in docs/spec/publication-v1.md -- that citation is written against K2's G1/G2/G3 capability-delta gain gate, a materially different mechanism (per anti-gaming-contract-v1.md (c) C1's own kill-criterion note, reusing it here without independent verification would itself be a plausible_not_falsifiable_claim). This is a fresh, independently-run literature check for THIS specific mechanism.",
+  "why_closest": "Same application domain as Ember's own use case: an autonomous, self-reinforcing AI research loop that must prevent fabricated numeric results and hallucinated citations from its own agents, evaluated with an explicit human-in-the-loop ablation across seven intervention modes (per the paper's own abstract, verified via WebFetch this session). This is the closest SAME-DOMAIN prior found (autonomous-research self-fabrication prevention), as opposed to a general reward-hacking-detection paper from a different application area.",
+  "material_difference": "AutoResearchClaw's verification mechanism is GROUND-TRUTH-DEPENDENT: it constructs and maintains an independently-populated 'verified numeric registry' and post-hoc checks every generated numeric claim against that separate registry (plus human-in-the-loop intervention). C1's mechanism is SELF-CONTAINED per-record: it re-derives a verdict from a single receipt's OWN already-written internal fields (placeholder markers, hash well-formedness, nested pass/fail consistency, deletion-vs-treatment score comparison, explicit value/threshold/claim consistency, delta/ratio sign, paid-surface disclosure) with NO external registry, no independent execution log, and no human intervention required at check time. This trades recall for zero infrastructure dependency and near-zero marginal cost: it is honestly documented (anti-gaming-contract-v1.md sec11 A1, and this run's own fx04/fx06 findings) that internally-CONSISTENT fabrication -- or a fabrication using a field-naming/nesting shape the current S1-S7 patterns do not yet cover -- evades it in both the intact and deleted arm identically, exactly the class of gap a registry-based or re-execution-based check (like AutoResearchClaw's) would still catch. C1 is a narrower, cheaper, complementary layer, not a replacement for ground-truth verification.",
+  "secondary_taxonomic_reference": "From Agent Traces to Trust: A Survey of Evidence Tracing and Execution Provenance in LLM Agents (arXiv 2606.04990, WebFetch-verified this session) frames the broader design space C1 sits inside -- 'logging vs semantic provenance' and 'static schema vs runtime enforcement' are named axes in that survey's own taxonomy -- but the survey itself is a taxonomy/framework paper, not a proposed-and-ablated mechanism, so AutoResearchClaw (same domain, concrete ablated mechanism) is cited as the primary closest prior per the one-prior requirement.",
+  "search_receipts": {
+   "queries_run": [
+    "self-attestation detection reward hacking specification gaming autonomous agent reported metrics vs actual execution (WebSearch)",
+    "detecting fabricated experiment logs LLM agent research automated verification provenance checking (WebSearch)",
+    "\"From Agent Traces to Trust\" arXiv 2606.04990 survey evidence tracing execution provenance (WebSearch, title/ID confirmation)",
+    "arXiv 2606.04990 abstract fetch (WebFetch) -- taxonomy summary",
+    "arXiv 2605.20025 abstract fetch (WebFetch) -- AutoResearchClaw mechanism summary"
+   ],
+   "honest_note": "Full-PDF alphaXiv queries were attempted for deeper mechanism detail on both papers and returned HTTP 429 (rate-limited) twice; the citation above is built from verified abstract-level content (WebFetch) plus title/venue confirmation (WebSearch), not full-text reading. This is disclosed rather than papered over."
+  }
+ },
+ "material_difference_over_prior": {
+  "claim": "For receipt shapes within the CURRENT S1-S7 pattern coverage (unfilled operator-fill markers in load-bearing fields; malformed or unfilled cryptographic-digest values; a top-level PASS riding a nested failing gate/verdict; a deletion/ablation arm reported numerically equal to its own sibling treatment-arm leaf key in the same dict; an explicit or trio value/threshold/claims_pass assertion that contradicts its own arithmetic; a delta or suffix-anchored _ratio field with the wrong sign; undisclosed paid-API-surface use) -- contribution-level deletion of the S1-S7 detector collapses detection of externally-authored, ledgered-incident-shaped fabricated receipts from providing real coverage to providing none, while leaving genuinely clean receipts unaffected in either arm.",
+  "falsifiable_predictions": [
+   "With the detector present (intact arm), the 8-fixture external-disjoint suite is caught at >0/8 and the 2 clean controls are caught at 0/2 (measured: 5/8 caught, 0/2 false positives).",
+   "With the detector contribution-level deleted (S1-S7 short-circuited to an unconditional empty finding list, all other plumbing -- schema shape, CLI, dedup -- left byte-identical), the SAME 8-fixture suite's detection rate strictly decreases and the 2 clean controls remain at 0/2 false positives (measured: 0/8 caught, 0/2 false positives -- a full collapse, not merely a decrease).",
+   "The pre-existing 11-case --selftest, run unmodified under both arms, shows the identical collapse pattern independently of this run's own fixture authorship (measured: 11/11 to 2/11, the 2 survivors being the two cases that already expect a CLEAN result)."
+  ],
+  "ml_ai_contribution_scope": "An evaluation/verification methodology for autonomous self-improvement loops: how to test, with a held-out adversarial fixture set grounded in real incidents (not the detector's own calibration set), whether a receipt-level self-attestation detector is load-bearing versus decorative. Not a new model architecture, not a benchmark SOTA result, not a training-loop change."
+ },
+ "contribution_level_deletion_ablation": {
+  "native_link_verdict": "C1_SEMANTIC_DETECTOR_ABLATED_DETECTION_BLOCKED",
+  "external_delegate_verdict": "C1_CLEAN_RECEIPT_PLUMBING_PASS",
+  "deleted_contribution": "receipt_semantic_check.py's semantic_validate() body -- the seven pattern-check functions (_check_placeholders/_check_provenance/_check_pass_with_failing_subfield/_check_deletion_load_bearing/_check_assertions/_check_delta_sign/_check_paid_surface) short-circuited to an unconditional empty findings list in the sandbox 'deleted' copy; nothing else in the file changed",
+  "surviving_delegate_pipeline": "the same file's schema-shape handling, --file/--scan/--selftest CLI, and dedup loop -- verified still running and still correctly returning a clean OK result on both clean-control fixtures with the detector deleted",
+  "with_gate": {
+   "detection_rate_on_disjoint_set": "5/8 (0.625) on the 8-fixture external-disjoint fabricated suite",
+   "selftest_rate": "11/11 (1.0) on the pre-existing calibration set",
+   "clean_false_positive_rate": "0/2 (0.0)"
+  },
+  "without_gate_ablated": {
+   "detection_rate_on_disjoint_set": "0/8 (0.0) on the SAME 8-fixture external-disjoint fabricated suite",
+   "selftest_rate": "2/11 (0.182 -- the two cases that already expect a clean/no-finding result)",
+   "clean_false_positive_rate": "0/2 (0.0, unchanged)"
+  },
+  "deletion_run_provenance": {
+   "command": "python scripts/ember_c8_execution_binding/run_ablation.py",
+   "receipt_ref": "receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json"
+  },
+  "delegate_run_provenance": {
+   "command": "python scripts/ember_c8_execution_binding/run_ablation.py",
+   "receipt_ref": "receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json"
+  },
+  "known_limitations_disclosed_not_hidden": [
+   "fx04 (S4 shape): the REAL C11 receipt's actual ablation schema nests the with/without arms as two separate sub-dicts (deletion_ablation.with_carry_forward{...} / deletion_ablation.without_carry_forward_ablated{...}); the current _check_deletion_load_bearing only compares sibling LEAF keys within the SAME dict (the selftest's flat arms:{a_score,b_score,c_score,deleted_score} shape). A fabricated receipt using the real nested shape with faked-equal numbers is MISSED by the intact checker too -- a genuine, newly-discovered structural coverage gap, not a fixture-authoring error (verified against the real receipt's own schema).",
+   "fx06 (S6 shape): _RATIO_KEY_RE requires the key to literally END in '_ratio' (or be 'speedup'/'compound'); the real field name flop_saving_ratio_fromscratch_over_growpath (taken verbatim from the actual C2 receipt cited in docs/spec/c8-claim-ladder.md) has '_ratio_' in the middle, not at the end, so S6 never fires on this exact real field name, in either arm. A second genuine coverage gap.",
+   "fx08 (phantom-receipt shape): missing-file phantom detection is check_goal_citations.py's job (path-existence), a DIFFERENT already-built mechanism, not S1-S7's. Both arms correctly miss it; this is a scope boundary, not a defect, and is not counted against the detection-rate claim above beyond being excluded from the 'within current pattern coverage' scope statement."
+  ]
+ },
+ "required_goal_fields": {
+  "closest_known_prior_or_baseline_present": true,
+  "contribution_level_deletion_ablation_present": true,
+  "external_disjoint_validation_present": true,
+  "material_difference_defined": true,
+  "primary_contribution_class_present": true,
+  "reusable_artifact_present": true,
+  "zero_cost": true
+ },
+ "api_spend_usd": 0,
+ "paid_api_surface_used": false,
+ "leaderboard_dependency": false,
+ "lit_check_tooling_note": "The closest-prior literature search used WebSearch/WebFetch (agent research tooling), not a paid inference API charged against this run -- kept distinct from the receipted mechanism's own zero-cost measurement above.",
+ "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+ "regenerated_from_draft": {
+  "note": "regenerated at landing after relocating the fixture suite + ablation driver in-tree; cites the in-tree ablation receipt re-executed this session (5/8 intact, 0/8 deleted, 0/2 clean false positives, selftest 11/11 vs exit-1) - numbers identical to the original sandbox run",
+  "in_tree_ablation_receipt": "receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json",
+  "fixture_suite": "scripts/ember_c8_execution_binding/fixtures/"
+ }
+}

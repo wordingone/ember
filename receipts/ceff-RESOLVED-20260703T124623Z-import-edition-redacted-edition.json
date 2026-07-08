@@ -1,0 +1,112 @@
+{
+  "ticket": "CEFF-RESOLVED-CLOSURE",
+  "ts": "20260703T124623Z",
+  "issue": "#24",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "gate": "gate-9 efficiency-closure (C-EFF)",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "harness_sha": "aa57f5c77f6dbc6c5d58c1f3c816435bfcabe0ae4cfb47b8174187ccdcd5df19",
+  "dry_run": false,
+  "no_gpu": false,
+  "flags": [
+    "ONE GPU job at a time \u2014 do not dispatch concurrently with another train job",
+    "governor rails HOLD \u2014 never loosened",
+    "no git commits, no downloads, no founder/user names"
+  ],
+  "verdict": "PRICED_SCALEOUT_RESIDUAL",
+  "verdict_reason": "self-check fit_ok=False (shatter-verdict-selfcheck.json ceff_closure_confirmation honest effective_days 1.3252 > floor 1.0); compound_speedup_over_anchor=2.1473 (bar 3.3) -- does not clear SHATTER on both magnitudes, so this closes as an honestly-priced residual (effective_days may exceed 1.0 governed day -- a VALID closure per the goal, never a failure), not a fabricated shatter.",
+  "effective_days_basis": "useful_base_tokens_div_governed_day",
+  "useful_base_tokens": 2200000000.0,
+  "sustained_tok_s": 19213.78,
+  "effective_days": 1.3252448483829296,
+  "compound_speedup_over_anchor": 2.1472968398288312,
+  "projected_tok_s": 20948.0843,
+  "confirmation_band_frac": 0.1,
+  "band_check": {
+    "pass": true,
+    "detail": "measured=19213.78 projected=20948.0843 rel_diff=0.0828 band=\u00b110% -> PASS"
+  },
+  "confirmation_run": {
+    "sustained_tok_s": 19213.78,
+    "median_tok_s": 20572.52,
+    "quality_ok": true,
+    "quality_detail": "finite, non-diverging over the timed confirmation window",
+    "recipe": {
+      "source": "timeshare_pretrain production builders + bf16-NS5 patch + torch.compile(mode='reduce-overhead', fullgraph=False) -- the FULL composed configuration, matching ember_ceff_composition_ab.py's D_both_composed arm",
+      "batch": 16,
+      "seq": 1024,
+      "ce_chunk_tokens": 256,
+      "warmup": 10,
+      "timed": 60,
+      "pace_s": 0.05,
+      "model_seed": 42,
+      "batch_gen_seed": 20260703,
+      "data": "synthetic (torch.randint, dedicated fixed-seed Generator) -- matches every other bench-shape harness in this family"
+    },
+    "governor": {
+      "vram_fraction_applied": 0.8,
+      "fp19_fraction_floor": 0.8,
+      "free_gib": 22.45,
+      "total_gib": 23.99,
+      "margin_gib_floor": 4.0
+    },
+    "g_budget": {
+      "status": "GREEN",
+      "detail": "requested_run[ember_ceff_closure_confirmation--live]: total_steps=70, cost=2.535e+15 FLOPs (6*params*tokens estimate) vs micro-fit ceiling 2.431e+16 FLOPs (0.5% of the certified full-ladder FLOPs budget) -> FIT"
+    },
+    "requested_run": {
+      "source": "ember_ceff_closure_confirmation--live",
+      "total_steps": 70,
+      "params": 368354304,
+      "batch": 16,
+      "seq": 1024
+    },
+    "synthetic": false
+  },
+  "projection": {
+    "h0_stack": 1.85,
+    "h0_stack_source": "receipts\\ceff-shatter-REPUDIATED-20260623T170000Z.json",
+    "bf16_ns5_lever": 1.182649,
+    "bf16_ns5_source": [
+      "receipts\\conv-muon_split_bf16ns5-20260623T090201Z.json",
+      "receipts\\conv-muon_split-20260623T072149Z.json"
+    ],
+    "composition_increment": 1.07003,
+    "composition_source": "receipts\\ceff-composition-ab-20260703T111351Z.json",
+    "composition_verdict": "COMPOSITION_CLOSES_RESIDUAL_GAP",
+    "composition_rule": "only receipted factors compound (ceff-lever-ladder.md \u00a7d); FP8 excluded (shape-coupled, non-composable per its own class-scope rule); C2 (batch-size) / C3 (selective-recompute) excluded (UNVERIFIED at production shape, and named VRAM-budget substitutes for each other, not independent factors); TF32 excluded (tf32_needs_quality_recheck: true, unresolved)",
+    "anchor_tok_s": 8947.8919,
+    "compound_projected_over_anchor": 2.34112,
+    "verdict": "CLOSURE_PROJECTION_SHORT"
+  },
+  "shatter_selfcheck": {
+    "candidate_effective_days": 1.3252448483829296,
+    "candidate_budget_b": 2200000000.0,
+    "fit_ok": false,
+    "reason": "shatter-verdict-selfcheck.json ceff_closure_confirmation honest effective_days 1.3252 > floor 1.0"
+  },
+  "c04_deciding_axes": {
+    "L10_optimizer_swap": "WAIVED-priced",
+    "density_ab": "APPLIED"
+  },
+  "c04_deciding_axes_detail": {
+    "L10_optimizer_swap": "docs/c04-pick-decision-table-v1.md Axis 1 (#363): L10 candidate never cleared the <=15% optimizer-wall bar (receipts/c04-receipt3-20260613T052223Z.json c3_summary: 'ALL FAIL -- optimizer >15% step wall on all candidates', measured opt_share 0.4137/0.6838/0.6485/0.5895/0.7318 across all 5 candidates) -- the table's own L10-FAIL row. Production stayed on muon_split (every conv/c04/composition-ab receipt in this tree shows routing_mode='muon_split'); accepted at the L10-FAIL band per the table's own 'user fraction call' cell -- priced, not silently dropped.",
+    "density_ab": "docs/c04-pick-decision-table-v1.md Axis 2: density A/B verdict DENSITY_CONFIRMED (receipts/c04-receipt3-20260613T052223Z.json density_verdict) maps to D-CONF per the frozen aggregator; consumed as a directional prior for curriculum/budget sizing (seed-level Fisher p=0.50, underpowering disclosed in the same receipt, not buried) -- APPLIED."
+  },
+  "import_provenance": {
+    "imported_into": "<REDACTED_GOALFORGE_PATH> (contract tree)",
+    "source_tree": "<REDACTED_PATH> (execution tree, GPU confirmation run -- READ-ONLY source, not edited)",
+    "source_commit_sha": "9d79cb864fc8b8fa62080019f4121951a4b965a4",
+    "source_commit_subject": "c-eff closure: runner declares api_spend_usd=0 / paid_api_surface_used=false in the assembled receipt (the C(-1) spend-annex probe correctly flagged the first closure receipt as undeclared - undeclared is not proven-zero; the generator-level declaration is the standing fix, matching the c8 ablation driver's pattern) + fresh confirmation run receipt with the declaration: PRICED_SCALEOUT_RESIDUAL, compound 2.1473x, sustained 19213.78 tok/s (consistent with the first run's 19133.03 - two independent confirmations now on disk), effective_days 1.3252. The first receipt (124058Z) stays in this tree as the audit trail",
+    "original_receipt_path": "receipts/ceff-RESOLVED-20260703T124623Z.json",
+    "original_receipt_sha256": "720edbc0a8bb8c7b7c67365ed0239f02f7d277599d7fdb0cf533ca9f6feea862",
+    "copy_method": "byte-identical copy of the receipt JSON content -- every original key/value unchanged; only 'import_provenance' added as a new top-level key",
+    "original_receipt_edited": false,
+    "imported_at": "20260703T124653Z",
+    "import_edition_of_ts": "20260703T124623Z",
+    "supersedes_import_edition": "ceff-RESOLVED-20260703T124058Z-import-edition.json (removed from the contract tree this landing: its generator predated the spend declaration so it tripped the C(-1) undeclared-spend probe; the original 124058Z receipt is PRESERVED untouched in the execution tree and in this tree's git history - two independent confirmation runs exist, 19133.03 and 19213.78 tok/s, mutually consistent)",
+    "note": "The closure runner executed test_c_eff.py as a subprocess against the execution tree BEFORE keeping this receipt (GREEN); the goalforge-native probe re-run at this import's landing is the authoritative board input."
+  },
+  "redaction_note": "Redacted edition: cross-tree paths replaced per repo-guard convention"
+}
