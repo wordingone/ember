@@ -73,18 +73,35 @@ These got a minimal functional fix instead of a text redaction:
 
 ## What was intentionally left untouched (guard-excluded, not a leak)
 
-Three test files deliberately embed a leaked-path-shaped literal as adversarial input,
-specifically to prove the app's own sanitization/redaction/clipping logic strips
-exactly this shape. Redacting the fixture string would make the assertion it exists to
-test vacuous (e.g. an assertion that a certain org-token substring is absent from the
-sanitizer's output is meaningless if the input never contained that substring to begin
-with). These are excluded by name from `repo-guard.sh`'s path check (see
-`PATHPAT_EXCLUDE` in `tools/repo-guard.sh`), the same mechanism the guard already used
-to exclude itself:
+Four test files deliberately embed a leaked-path-shaped literal as adversarial input,
+specifically to prove the app's own sanitization/redaction/clipping/shortening logic
+strips or shortens exactly this shape. Redacting the fixture string to a placeholder
+token would make the assertion it exists to test vacuous (e.g. an assertion that a
+certain org-token substring is absent from the sanitizer's output is meaningless if the
+input never contained that substring to begin with; a path-shortening test needs a
+genuinely multi-segment absolute path to shorten). These are excluded by name from
+`repo-guard.sh`'s path check (see `PATHPAT_EXCLUDE` in `tools/repo-guard.sh`), the same
+mechanism the guard already used to exclude itself:
 
 - `scripts/test_w1b_continuation.py`
 - `tools/ember-cli/src/core/monitor-render.test.ts`
 - `tools/ember-cli/src/components/homescreen-mock1-parity.test.ts`
+- `tools/ember-cli/src/components/logo-homescreen.test.ts`
+
+**Amendment (2026-07-08):** the exclusion mechanism was sound from the start, but the
+literal content of these four fixtures was not -- they carried the real drive-mount
+letter, the real org token, and the real sibling-project name, not just a shape that
+happened to match the pattern. Fixed by synthesizing same-shape-but-fake values (fake
+drive letter, fake org token, fake project name) in place of the real ones, updating
+every assertion that keyed on the specific literal so the tests stay meaningful. Traced
+each function under test first (`corpus_identity_for_receipt`,
+`build_shard_corpus_verification_block`, `repo_relative_path`, `stripRawInternals`,
+`clipToWidth`, `shortenDataRootForDisplay`) to confirm none hardcodes a literal check
+against the real values -- this was purely a fixture-content issue, not a source-level
+leak. `logo-homescreen.test.ts` was not part of the original ~59-file enumeration: it
+landed on `master` via an unrelated, concurrently-merged PR (#303, path-shortening for
+the cockpit `Data:` line) after this branch forked, and was caught fresh by this PR's
+own guard fix once the branch was brought current with `master`.
 
 `tools/ember-cli/src/entrypoints/session-init.ts` hardcodes the standard Windows
 command-interpreter path (drive letter, `Windows`, `System32`, `cmd.exe`) as the
