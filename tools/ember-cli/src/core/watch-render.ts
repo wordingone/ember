@@ -1,54 +1,18 @@
-// core/watch-render.ts — pure/small-I/O helpers for the REPL's `--watch` ambient observatory mode.
-// Kept separate from repl-render.ts (interactive prompt/wrap/banner) and monitor-render.ts (the
-// board itself): this module owns only what's specific to unattended, timer-driven refresh --
-// arg parsing, the watch header line, the newest-receipts tail, the refresh-error line, and the
-// single-cycle composer (runWatchCycle). Deliberately NOT in ember-world-state-repl.ts: that file
-// calls main() unconditionally at import time, so anything a test needs to import directly (like
-// runWatchCycle) has to live somewhere import-safe -- same reasoning that keeps monitor-render.ts
-// and repl-render.ts as separate pure modules.
+// core/watch-render.ts — small receipts-tail helpers used by commands/world-state.ts's /cockpit
+// (/board) "monitor" turn: scans the goalforge root's receipts/ tree for the newest N files and
+// renders a short "<path> (<age>)" tail alongside the board panel.
+//
+// #405 cleanup: this file previously also hosted a "--watch ambient observatory mode"
+// (parseWatchArgs/renderWatchHeader/renderRefreshError/runWatchCycle) that was never wired to any
+// real entrypoint -- a full-tree import search found zero production callers. It had already misled
+// two lanes into believing runWatchCycle was the boot screen's renderer (the actual boot-screen
+// painter is components/logo-homescreen.ts's BoardSummary widget). Removed rather than left in place
+// to mislead a third reader; findNewestReceipts/renderReceiptsTail below are the only exports this
+// file ever had a real caller for. If ambient --watch mode is wanted later, rebuild it against the
+// real CLI entrypoint from scratch, not by resurrecting this dead composer.
 
 import { readdir, stat } from "fs/promises";
 import path from "path";
-import { buildEmberWorldState, GOALFORGE_ROOT } from "./ember-world-state.ts";
-import { renderMonitor } from "./monitor-render.ts";
-
-// ---------------------------------------------------------------------------
-// --watch / --interval arg parsing
-// ---------------------------------------------------------------------------
-
-export const DEFAULT_INTERVAL_SEC = 30;
-export const MIN_INTERVAL_SEC = 5;
-
-export interface WatchArgs {
-  watch: boolean;
-  intervalSec: number;
-}
-
-/** Parses argv (already sliced to just the CLI args, e.g. process.argv.slice(2)). Unknown
- * flags/values never throw -- an unparsable --interval falls back to the default, and any
- * requested interval below MIN_INTERVAL_SEC is floored, never rejected. */
-export function parseWatchArgs(argv: string[]): WatchArgs {
-  const watch = argv.includes("--watch");
-  let intervalSec = DEFAULT_INTERVAL_SEC;
-  const idx = argv.indexOf("--interval");
-  if (idx !== -1 && argv[idx + 1] !== undefined) {
-    const parsed = Number(argv[idx + 1]);
-    if (Number.isFinite(parsed)) intervalSec = parsed;
-  }
-  return { watch, intervalSec: Math.max(MIN_INTERVAL_SEC, intervalSec) };
-}
-
-// ---------------------------------------------------------------------------
-// Header / error lines
-// ---------------------------------------------------------------------------
-
-export function renderWatchHeader(now: Date, intervalSec: number): string {
-  return `EMBER OBSERVATORY  ${now.toLocaleTimeString()}  refresh ${intervalSec}s`;
-}
-
-export function renderRefreshError(reason: string, intervalSec: number): string {
-  return `refresh failed (${reason}), retrying in ${intervalSec}s`;
-}
 
 // ---------------------------------------------------------------------------
 // Newest-receipts tail
@@ -109,42 +73,4 @@ export async function findNewestReceipts(
 export function renderReceiptsTail(receipts: ReceiptStat[], nowMs: number): string[] {
   if (receipts.length === 0) return ["no receipts found"];
   return receipts.map((r) => `${r.path} (${formatAge(nowMs - r.mtimeMs)})`);
-}
-
-// ---------------------------------------------------------------------------
-// Single-refresh-cycle composer
-// ---------------------------------------------------------------------------
-
-const CLEAR_SCREEN = "\x1b[2J\x1b[H";
-
-export interface WatchCycleOptions {
-  intervalSec: number;
-  isTTY: boolean;
-  colorEnabled: boolean;
-  goalforgeRoot?: string; // override for tests; defaults to the real GOALFORGE_ROOT below
-  now?: Date; // override for tests
-}
-
-/**
- * Renders exactly ONE watch refresh as an array of lines -- exported standalone so tests can run
- * a single cycle directly without a timer or a spawned process. Rebuilds EmberWorldState fresh
- * every call (buildEmberWorldState() never caches -- see core/ember-world-state.ts), so a new
- * receipt landing between calls is picked up on the very next cycle. On any failure (a receipt
- * mid-write, a transient FS error, a missing goalforge root) this returns a one-line error message
- * instead of throwing -- the caller's timer loop must survive indefinitely.
- */
-export async function runWatchCycle(opts: WatchCycleOptions): Promise<string[]> {
-  const now = opts.now ?? new Date();
-  const root = opts.goalforgeRoot ?? GOALFORGE_ROOT;
-  const lines: string[] = [opts.isTTY ? CLEAR_SCREEN : "----------------------------------------"];
-  try {
-    const state = await buildEmberWorldState({ goalforgeRoot: root });
-    const receipts = await findNewestReceipts(root, 3);
-    lines.push(renderWatchHeader(now, opts.intervalSec));
-    lines.push(...renderMonitor(state, { colorEnabled: opts.colorEnabled }));
-    lines.push(...renderReceiptsTail(receipts, now.getTime()));
-  } catch (err) {
-    lines.push(renderRefreshError((err as Error).message, opts.intervalSec));
-  }
-  return lines;
 }

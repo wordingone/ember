@@ -21,6 +21,7 @@ import React from "react";
 import { Box, Text, RawAnsi } from "../ink/components.ts";
 import { color, type FeatureFlags } from "./design-system.ts";
 import { renderFireballLines, FIREBALL_IDLE_POSE_FRAME } from "./fireball.ts";
+import { formatReceiptAge, isReceiptStale } from "../core/receipt-age.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -66,7 +67,11 @@ export interface LogoState {
   dataRoot?:            string;
 }
 
-export interface FeedEntry { text: string; }
+export interface FeedEntry {
+  text:   string;
+  /** Ink `<Text color>` value (e.g. "red") -- optional, plain entries carry none. */
+  color?: string;
+}
 
 export interface Feed {
   title:   string;
@@ -83,6 +88,10 @@ export interface BoardSummary {
   total:        number;
   pctComplete:  number;
   topAttention: string[];
+  /** ISO8601/receipt-format timestamp of the board receipt this summary was built from -- optional
+   * so existing callers (and older serialized messages, see screens/repl.ts's Homescreen
+   * boardSummary handoff) without it still render, just without the age badge below. */
+  boardTs?:     string;
 }
 
 // ---------------------------------------------------------------------------
@@ -212,7 +221,7 @@ export function FeedComponent({ feed, width }: FeedComponentProps): React.ReactE
     React.createElement(Text, { key: "title", bold: true }, feed.title),
     React.createElement(Text, { key: "underline", dimColor: true }, titleUnderline(feed.title)),
     ...feed.entries.map((e, i) =>
-      React.createElement(Text, { key: String(i) }, clip(e.text)),
+      React.createElement(Text, { key: String(i), color: e.color }, clip(e.text)),
     ),
     feed.footer
       ? React.createElement(Text, { key: "footer", dimColor: true }, clip(feed.footer))
@@ -253,11 +262,23 @@ export function ChannelsNotice({ state, flags }: ChannelsNoticeProps): React.Rea
 // when available, the honest placeholder when not; never fabricates either way)
 // ---------------------------------------------------------------------------
 
-function recentFeedEntries(boardSummary?: BoardSummary): FeedEntry[] {
+/** #404/#405: the boot-screen board line now carries the same receipt-age badge as the /cockpit
+ * (/board) path -- "board: <age>" when fresh, red "STALE: <age>" past receipt-age.ts's threshold --
+ * built from the SAME formatReceiptAge/isReceiptStale primitives so the semantics never drift
+ * between the two surfaces. Silent (no badge line) when boardSummary carries no boardTs, matching
+ * this function's existing never-fabricate posture. */
+function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now()): FeedEntry[] {
   if (!boardSummary) return [{ text: "No recent activity" }];
   const entries: FeedEntry[] = [
     { text: `${boardSummary.green}/${boardSummary.total} GREEN (${boardSummary.pctComplete}%)` },
   ];
+  if (boardSummary.boardTs) {
+    const stale = isReceiptStale(boardSummary.boardTs, nowMs);
+    const age = formatReceiptAge(boardSummary.boardTs, nowMs);
+    entries.push(
+      stale ? { text: `STALE: ${age}`, color: "red" } : { text: `board: ${age}` },
+    );
+  }
   for (const line of boardSummary.topAttention) entries.push({ text: line });
   return entries;
 }
