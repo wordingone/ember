@@ -33,7 +33,12 @@ export function formatReceiptAge(boardTs: string, nowMs: number = Date.now()): s
 // "board: 25m ago" then "STALE: 30m ago" for the same underlying receipt, one refresh apart). Red
 // should mean "outside expected cadence", not "no one has merged in the last half hour" -- 2h
 // matches the audit-loop's own cadence and is the signal actually worth a red badge.
-export function isReceiptStale(boardTs: string, nowMs: number = Date.now(), staleThresholdMs: number = 2 * 60 * 60 * 1000): boolean {
+// Exported (#412) so callers that need to reason about the threshold -- test fixtures especially --
+// derive from this single source instead of re-hardcoding the number, which is exactly how the
+// world-state.test.ts fixture went stale against this same value twice already.
+export const DEFAULT_STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+
+export function isReceiptStale(boardTs: string, nowMs: number = Date.now(), staleThresholdMs: number = DEFAULT_STALE_THRESHOLD_MS): boolean {
   const receiptTime = parseIso8601(boardTs);
   if (!receiptTime) return false;
 

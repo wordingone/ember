@@ -1,8 +1,12 @@
-// core/repl-render.ts — pure rendering helpers shared across the WHOLE cockpit REPL surface
-// (prompt, banner, word-wrap): banner/monitor/evidence output all funnel through the same
-// wrap-and-print choke point in core/ember-world-state-repl.ts, so this module owns the one
-// place that decides "how does a line of cockpit text become terminal-safe output" -- no I/O,
-// no process.stdout, no console.log; every function here takes data in and returns strings.
+// core/repl-render.ts — pure rendering helpers for cockpit REPL surface text (prompt, banner,
+// word-wrap): "how does a line of cockpit text become terminal-safe output" -- no I/O, no
+// process.stdout, no console.log; every function here takes data in and returns strings.
+//
+// Originally extracted out of core/ember-world-state-repl.ts, a standalone proof-pack REPL that
+// no longer exists (see commands/world-state.ts's header for where that logic lives now). Note
+// for whoever touches this next: a repo-wide search turned up no current importer of this file's
+// exports outside its own test -- worth confirming with whoever owns #412 before assuming it's
+// still wired to a live caller.
 //
 // Fixes two visual defects found from a real capture of the operator's window:
 //   1. No prompt was ever rendered -- the REPL only ever called rl.on("line", ...) and never

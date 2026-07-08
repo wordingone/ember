@@ -1,9 +1,11 @@
 // core/monitor-render.ts — pure rendering helpers for the cockpit `monitor` surface.
 //
-// Extracted out of core/ember-world-state-repl.ts so the sort/color/truncation rules are
-// unit-testable without a readline/REPL harness. Every function here is pure: given an
-// EmberWorldState (or a Claim[]/string), it returns data or strings -- no I/O, no process.stdout,
-// no console.log. The REPL decides whether color is enabled and does the actual printing.
+// Originally extracted out of core/ember-world-state-repl.ts (a standalone proof-pack REPL that
+// no longer exists -- its logic was folded into commands/world-state.ts's /cockpit command) so
+// the sort/color/truncation rules are unit-testable without a readline/REPL harness. Every
+// function here is pure: given an EmberWorldState (or a Claim[]/string), it returns data or
+// strings -- no I/O, no process.stdout, no console.log. The caller (commands/world-state.ts's
+// /cockpit command) decides whether color is enabled and does the actual printing.
 //
 // Status is not a separate field on Claim (Claim is shared by monitor/understand/interact and
 // stays untouched) -- the adapter always formats a monitor condition's detail as

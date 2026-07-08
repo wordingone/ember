@@ -29,6 +29,13 @@ describe("formatReceiptAge", () => {
     expect(isReceiptStale(boardTs, now)).toBe(false);
   });
 
+  it("boundary: 90min old is fresh -- this is exactly the age that cried wolf under the old 30min default", () => {
+    const now = Date.now();
+    const ninetyMinutesAgo = now - 90 * 60 * 1000;
+    const boardTs = new Date(ninetyMinutesAgo).toISOString();
+    expect(isReceiptStale(boardTs, now)).toBe(false);
+  });
+
   it("should return true for stale receipts (>2h)", () => {
     const now = Date.now();
     const threeHoursAgo = now - 3 * 60 * 60 * 1000;
