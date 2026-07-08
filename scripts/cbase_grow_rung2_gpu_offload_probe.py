@@ -208,6 +208,49 @@ def _va_report() -> dict:
     }
 
 
+def _phase_measure(label: str, fn, phases_list: list):
+    """Per-phase CUDA memory attribution (issue #459 follow-up, 2026-07-08):
+    the KILL_ESTIMATOR_UNDERSTATED verdict (measured 17.334GiB delta vs
+    9.301GiB estimate, +86.4%) means the estimator is the defect, and fixing
+    it requires knowing WHERE the missing ~8GiB actually goes -- not guessing
+    (candidates named going in: QAT fake-quant clones of every Linear weight,
+    cut_ce_chunked's chunk buffers, MTP head activations). This measures ONE
+    phase's genuine incremental cost, not just an absolute peak:
+
+    baseline_before = memory already resident when the phase starts (so a
+    later phase's own footprint doesn't get blamed on an earlier phase's
+    still-resident tensors). reset_peak_memory_stats() resets the PEAK
+    tracking to the current level (not to zero -- confirmed from torch's own
+    semantics), so max_memory_allocated() read after the phase reflects the
+    highest level reached DURING this phase specifically. delta_gib =
+    peak_during - baseline_before is this phase's actual incremental cost;
+    resident_after_gib shows what it left behind (e.g. QAT clones should
+    mostly vanish after qat_restore, cut_ce/activation buffers should mostly
+    vanish after backward -- a phase that does NOT give memory back after
+    it "should" is itself a finding)."""
+    import torch
+    baseline_gib = round(torch.cuda.memory_allocated() / (1 << 30), 4)
+    torch.cuda.reset_peak_memory_stats()
+    result = fn()
+    torch.cuda.synchronize()
+    peak_alloc_gib = round(torch.cuda.max_memory_allocated() / (1 << 30), 4)
+    peak_reserved_gib = round(torch.cuda.max_memory_reserved() / (1 << 30), 4)
+    active_peak_gib = round(torch.cuda.memory_stats().get("active_bytes.all.peak", 0) / (1 << 30), 4)
+    after_gib = round(torch.cuda.memory_allocated() / (1 << 30), 4)
+    entry = {
+        "phase": label,
+        "baseline_before_gib": baseline_gib,
+        "peak_during_gib": peak_alloc_gib,
+        "delta_gib": round(peak_alloc_gib - baseline_gib, 4),
+        "reserved_peak_gib": peak_reserved_gib,
+        "active_bytes_peak_gib": active_peak_gib,
+        "resident_after_gib": after_gib,
+    }
+    phases_list.append(entry)
+    print(f"  VRAM_PHASE {json.dumps(entry)}", flush=True)
+    return result
+
+
 def _widen_cast_worker(seed_ckpt_str: str, out_path: str) -> int:
     """SHA-verify + load + widen + bf16-cast, run as a FRESH subprocess and
     result written to disk -- NOT inline in the main process.
@@ -432,17 +475,34 @@ def main() -> int:
 
     # ---- build the REAL model (real architecture, real device placement,
     # gradient checkpointing) via the real build_v0_model -- not reimplemented ----
-    model, vocab, hidden, n_mtp = ts.build_v0_model(
-        cfg, live=True, intermediate_override=ff_grown, device="cuda")
-    missing, unexpected = model.load_state_dict(grown_sd_bf16, strict=False)
+    vram_attribution_phases: list[dict] = []
+    _build_result: dict = {}
+
+    def _do_model_build():
+        model, vocab, hidden, n_mtp = ts.build_v0_model(
+            cfg, live=True, intermediate_override=ff_grown, device="cuda")
+        missing, unexpected = model.load_state_dict(grown_sd_bf16, strict=False)
+        real_missing = [k for k in missing if k != "head.weight"]
+        if real_missing or unexpected:
+            raise SystemExit(f"CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE: grown checkpoint load mismatch: "
+                              f"missing={real_missing} unexpected={unexpected}")
+        _build_result.update(model=model, vocab=vocab, hidden=hidden, n_mtp=n_mtp)
+
+    _phase_measure("model_build_and_load", _do_model_build, vram_attribution_phases)
+    model, vocab, hidden, n_mtp = (_build_result["model"], _build_result["vocab"],
+                                    _build_result["hidden"], _build_result["n_mtp"])
     grown_sd_bf16 = None
     gc.collect()
-    real_missing = [k for k in missing if k != "head.weight"]
-    if real_missing or unexpected:
-        raise SystemExit(f"CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE: grown checkpoint load mismatch: "
-                          f"missing={real_missing} unexpected={unexpected}")
+    # Effective checkpointing readback (issue #459 fix): read from the model
+    # ITSELF, not the config claim -- build_v0_model used to enable
+    # checkpointing unconditionally regardless of what the contract said, so
+    # the config value alone was never trustworthy evidence of what actually
+    # ran. This is the same "measure, don't assume" discipline the phase
+    # attribution above applies to memory.
+    effective_grad_checkpointing = bool(getattr(model.backbone_model, "gradient_checkpointing", False))
     print(f"[{ts_stamp}] real grown model loaded onto cuda (bf16), vocab={vocab} hidden={hidden} "
-          f"n_mtp={n_mtp}", flush=True)
+          f"n_mtp={n_mtp}, effective_grad_checkpointing={effective_grad_checkpointing} "
+          f"(config claims {cfg['model'].get('grad_checkpointing')})", flush=True)
 
     # ---- real optimizer via the real build_split_optimizer, offload wrapper ----
     optimizers, base_lrs, routing = ts.build_split_optimizer(
@@ -515,45 +575,106 @@ def main() -> int:
                 micro_losses = []
                 for micro_idx in range(args.grad_accum_steps):
                     ckpt = f"gs={global_step} mi={micro_idx}"
+                    # Fine-grained per-phase VRAM attribution (issue #459
+                    # follow-up) ONLY on the very first micro-step: this is
+                    # a "short re-fire" whose job is to ATTRIBUTE the
+                    # KILL_ESTIMATOR_UNDERSTATED gap, not re-verify every
+                    # micro-step -- 8 resets/step * n_optimizer_steps would
+                    # bloat the run and the log for no attribution benefit
+                    # (later micro-steps repeat the same phase shape).
+                    attribute_this_microstep = (global_step == 0 and micro_idx == 0)
+                    _box: dict = {}
+
                     loader_idx = global_step * args.grad_accum_steps + micro_idx
                     x, y0, y_mtp = loader.batch(loader_idx, args.micro_batch)
                     print(f"  CKPT[{ckpt}] batch loaded", flush=True)
-                    x = x.cuda()
-                    y0 = y0.cuda()
-                    y_mtp = [t.cuda() for t in y_mtp]
+
+                    def _do_cuda_transfer():
+                        _box["x"] = x.cuda()
+                        _box["y0"] = y0.cuda()
+                        _box["y_mtp"] = [t.cuda() for t in y_mtp]
+                    if attribute_this_microstep:
+                        _phase_measure(f"[{ckpt}] cuda_transfer", _do_cuda_transfer, vram_attribution_phases)
+                    else:
+                        _do_cuda_transfer()
+                    x, y0, y_mtp = _box["x"], _box["y0"], _box["y_mtp"]
                     print(f"  CKPT[{ckpt}] .cuda() transfers done", flush=True)
 
                     # QAT pre-forward: transform Linear weights to int8-grid (STE) --
                     # same helper, same placement as run_v0_segment's real loop.
-                    _qat_saved = ts._apply_fake_quant(model, "qat") if qat_enabled else []
+                    def _do_qat_apply():
+                        _box["qat_saved"] = ts._apply_fake_quant(model, "qat") if qat_enabled else []
+                    if attribute_this_microstep:
+                        _phase_measure(f"[{ckpt}] qat_fakequant_apply", _do_qat_apply, vram_attribution_phases)
+                    else:
+                        _do_qat_apply()
+                    _qat_saved = _box["qat_saved"]
                     print(f"  CKPT[{ckpt}] QAT fake-quant applied (enabled={qat_enabled})", flush=True)
 
-                    hidden_out = model.backbone(x)
+                    def _do_backbone_forward():
+                        _box["hidden_out"] = model.backbone(x)
+                    if attribute_this_microstep:
+                        _phase_measure(f"[{ckpt}] backbone_forward", _do_backbone_forward, vram_attribution_phases)
+                    else:
+                        _do_backbone_forward()
+                    hidden_out = _box["hidden_out"]
                     print(f"  CKPT[{ckpt}] backbone forward done", flush=True)
                     h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
-                    primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1), chunk_tokens=256)
+
+                    def _do_primary_ce():
+                        _box["primary_ce"], _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1), chunk_tokens=256)
+                    if attribute_this_microstep:
+                        _phase_measure(f"[{ckpt}] primary_ce (cut_ce_chunked)", _do_primary_ce, vram_attribution_phases)
+                    else:
+                        _do_primary_ce()
+                    primary_ce = _box["primary_ce"]
                     print(f"  CKPT[{ckpt}] primary CE done", flush=True)
-                    mtp_ces = []
-                    if mtp_enabled:
-                        for k, head in enumerate(model.mtp_heads):
-                            ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1), chunk_tokens=256)
-                            mtp_ces.append(ce_k)
+
+                    def _do_mtp_ce():
+                        _mtp_ces = []
+                        if mtp_enabled:
+                            for k, head in enumerate(model.mtp_heads):
+                                ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1), chunk_tokens=256)
+                                _mtp_ces.append(ce_k)
+                        _box["mtp_ces"] = _mtp_ces
+                    if attribute_this_microstep:
+                        _phase_measure(f"[{ckpt}] mtp_ce ({n_mtp} heads)", _do_mtp_ce, vram_attribution_phases)
+                    else:
+                        _do_mtp_ce()
+                    mtp_ces = _box["mtp_ces"]
                     print(f"  CKPT[{ckpt}] MTP CE done ({len(mtp_ces)} heads)", flush=True)
                     micro_loss = ts.mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
                     loss_val = float(micro_loss.detach())
                     micro_losses.append(loss_val)
                     micro_loss_log.append(loss_val)
                     print(f"  CKPT[{ckpt}] loss computed = {loss_val:.6f}", flush=True)
-                    (micro_loss / args.grad_accum_steps).backward()
+
+                    def _do_backward():
+                        (micro_loss / args.grad_accum_steps).backward()
+                    if attribute_this_microstep:
+                        _phase_measure(f"[{ckpt}] backward", _do_backward, vram_attribution_phases)
+                    else:
+                        _do_backward()
                     print(f"  CKPT[{ckpt}] backward done", flush=True)
 
                     # QAT post-backward: restore full-precision weights (STE semantics).
-                    if qat_enabled:
-                        ts._restore_weights(_qat_saved)
+                    def _do_qat_restore():
+                        if qat_enabled:
+                            ts._restore_weights(_qat_saved)
+                    if attribute_this_microstep:
+                        _phase_measure(f"[{ckpt}] qat_restore", _do_qat_restore, vram_attribution_phases)
+                    else:
+                        _do_qat_restore()
                     print(f"  CKPT[{ckpt}] QAT weights restored", flush=True)
 
-                for opt in optimizers.values():
-                    opt.step()
+                def _do_optimizer_step():
+                    for opt in optimizers.values():
+                        opt.step()
+                if global_step == 0:
+                    _phase_measure(f"[gs={global_step}] optimizer_step (all groups)",
+                                    _do_optimizer_step, vram_attribution_phases)
+                else:
+                    _do_optimizer_step()
                 for opt in optimizers.values():
                     opt.zero_grad(set_to_none=True)
                 losses.append(sum(micro_losses) / len(micro_losses))
@@ -695,6 +816,27 @@ def main() -> int:
             "margin_gib_floor": MARGIN_GIB_FLOOR,
             "fits_total_minus_margin": fits_total_minus_margin,
         },
+        "vram_attribution": {
+            "issue": 459,
+            "scope": ("Per-phase torch.cuda memory attribution -- issue #459 follow-up to the "
+                      "KILL_ESTIMATOR_UNDERSTATED verdict (measured 17.334GiB delta vs 9.301GiB "
+                      "estimate, +86.4%). Each phase entry's delta_gib = peak allocated DURING "
+                      "that phase minus what was already resident BEFORE it (reset_peak_memory_"
+                      "stats() resets the peak tracker to the current level, not to zero -- "
+                      "confirmed against torch's own semantics before relying on it). Fine-grained "
+                      "phases (cuda_transfer/qat_fakequant_apply/backbone_forward/primary_ce/"
+                      "mtp_ce/backward/qat_restore) are measured on gs=0 mi=0 ONLY (a full 8-"
+                      "microstep repeat would not add attribution signal); optimizer_step is "
+                      "measured once for the whole gs=0 accumulation window. nvidia-smi (used "
+                      "elsewhere in this receipt) reports the DRIVER's view of device memory "
+                      "(includes CUDA context/driver overhead + allocator-reserved-but-unallocated "
+                      "blocks); torch.cuda.memory_allocated/max_memory_allocated report the "
+                      "CACHING ALLOCATOR's view (tensor bytes actually requested by PyTorch) -- "
+                      "the two are expected to differ, and that difference is itself diagnostic "
+                      "(a large reserved-vs-allocated gap points at allocator fragmentation/"
+                      "caching rather than a genuine tensor-level cost)."),
+            "phases": vram_attribution_phases,
+        },
         "offloaded_config": {
             "micro_batch": args.micro_batch,
             "accum_steps": args.grad_accum_steps,
@@ -727,16 +869,18 @@ def main() -> int:
             "oom_error": oom_error,
             "wall_s_training_only": t_train_s,
             "gradient_checkpointing": {
-                "active": True,
-                "note": ("build_v0_model() unconditionally calls "
-                         "backbone_model.gradient_checkpointing_enable() regardless of "
-                         "cfg['model']['grad_checkpointing'] (contract says False, per PR #298's "
-                         "own receipted 1.213x-vs-full-ckpt A/B) -- a pre-existing contract/code "
-                         "discrepancy this probe did not introduce (every real-arch caller, "
-                         "including the already-receipted Part A/B2 runs, gets the same "
-                         "unconditional enable). Disclosed because checkpointing ON lowers "
-                         "activation memory, so this measured peak is likely an UNDER-estimate "
-                         "of what a grad_checkpointing:false production launch would need."),
+                "config_claims": cfg["model"].get("grad_checkpointing"),
+                "effective_readback": effective_grad_checkpointing,
+                "active": effective_grad_checkpointing,
+                "note": ("issue #459 FIXED (2026-07-08): build_v0_model() used to call "
+                         "backbone_model.gradient_checkpointing_enable() UNCONDITIONALLY "
+                         "regardless of cfg['model']['grad_checkpointing'] -- every real-arch "
+                         "caller silently got checkpointing ON even though the contract says "
+                         "False (per PR #298's own receipted 1.213x-vs-full-ckpt A/B). Now "
+                         "conditional on the config key, AND this field is read back from the "
+                         "MODEL ITSELF (getattr(model.backbone_model, 'gradient_checkpointing', "
+                         "False)), not from the config claim -- the prior bug is exactly why the "
+                         "config claim alone was never trustworthy evidence of what actually ran."),
                 "estimate_function_assumption": ("cpu_offload_adamw.estimate_required_gib_offloaded's "
                          "activation term (ACTIVATION_ESTIMATE_GIB_AT_PROD_SHAPE=6.0GiB @ batch16/"
                          "seq1024/20-layers/ff32768, scaled linearly by micro_batch/prod_batch) "

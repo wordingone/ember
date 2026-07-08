@@ -1202,7 +1202,15 @@ def build_v0_model(cfg: dict, *, live: bool, tiny_dims: dict | None = None,
             return self.backbone_model(input_ids=ids).last_hidden_state
 
     model = _V0Real().to(device).to(torch.bfloat16)
-    model.backbone_model.gradient_checkpointing_enable()
+    # Conditional on the contract's own key (issue #459 fix, 2026-07-08): this
+    # call used to fire UNCONDITIONALLY regardless of cfg["model"]["grad_
+    # checkpointing"] (contract says False, per PR #298's receipted 1.213x-
+    # vs-full-ckpt A/B) -- every real-arch caller silently got checkpointing
+    # ON, which lowers activation memory and biases any measured-vs-estimate
+    # VRAM comparison toward UNDER-measuring true no-checkpoint production
+    # need. Now the model actually gets what the contract claims.
+    if m.get("grad_checkpointing", False):
+        model.backbone_model.gradient_checkpointing_enable()
     return model, m["vocab"], m["hidden"], n_mtp
 
 
