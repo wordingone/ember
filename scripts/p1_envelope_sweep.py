@@ -132,26 +132,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
-W2_HELDOUT_DIR = os.path.join(HERE, "w2_heldout")
-if W2_HELDOUT_DIR not in sys.path:
-    sys.path.insert(0, W2_HELDOUT_DIR)  # build_decontam_batch_mp's own bare
-    # `from decon_scan_worker import ...` needs its own dir on sys.path when
-    # imported from elsewhere (only self-evident when run as __main__).
 
 from receipt_write import checked_write  # reused, not reimplemented
 import joules  # reused, not reimplemented
 import w1_collapse_control_run as w1c  # reused, not reimplemented
-# Coordinator-approved swap (2026-07-08, after an ArrayMemoryError on the raw
-# serial w1c.contamination_recheck's np.unique call during a live point-3 run):
-# reuse the ALREADY-PROVEN adaptive-chunked wrapper from build_decontam_batch_mp
-# (used successfully by this lane's own decontam-batch regen run the same day)
-# in place of the raw serial call -- same predicate (identical window/roll_base
-# defaults), split into memory-safe chunks on MemoryError/ArrayMemoryError.
-# Reuse, not reimplementation -- no new algorithm, just the existing hardened
-# entrypoint for the same function.
-from w2_heldout.build_decontam_batch_mp import (
-    contamination_recheck as chunked_contamination_recheck,
-)
+# 2026-07-08: this lane previously swapped in w2_heldout.build_decontam_
+# batch_mp's adaptive-chunked contamination_recheck wrapper here, after an
+# ArrayMemoryError on the raw serial w1c.contamination_recheck's np.unique
+# call. REVERTED (coordinator ruling) now that #451 folded the same
+# chunk-halving guard directly into w1c.contamination_recheck itself (issue
+# #445), PLUS this lane's own follow-up memmap fix for the per-shard
+# np.fromfile read #451 didn't cover -- the wrapper is now a redundant
+# extra layer over an already-hardened function; calling w1c's own
+# contamination_recheck directly is one fewer indirection for the same
+# safety guarantee.
 
 # ---------------------------------------------------------------------------
 # Point table (prereg section 1). See module docstring item 1 for the
@@ -182,7 +176,13 @@ FF_NATIVE_C03 = 4096  # see module docstring item 4
 ABSOLUTE_WARMUP_STEPS_CAP = round(0.1 * w1c.REAL_HARD_CEILING_STEPS_ISSUE_STATED)
 
 DECONTAM_RECEIPT_DEFAULT = os.path.join(
-    REPO, "receipts", "ember-c-scale", "w2-heldout-decontam-20260707T055843Z.json")
+    REPO, "receipts", "ember-c-scale", "w2-heldout-decontam-20260708T121128Z.json")
+# 2026-07-08: the prior default (...-20260707T055843Z.json) named a receipt
+# that was NEVER found in this repo's history (issue #435, the custody
+# defect this lane's decontam regen exists to cure) -- pointing the default
+# at a file that never existed was itself a latent defect. Updated to the
+# regenerated, true-continuity receipt (exact selected_window_indices match
+# to the banked W1 control receipt, verified 2026-07-08).
 
 # Corpus memmap cache (issue #118, coordinator ruling 2026-07-08): repo-
 # relative default so no absolute path ever lands in source (repo-guard);
@@ -468,17 +468,20 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             eval_rows, args.shard_dir, args.decontam_receipt, cache_root,
             classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
         if not contamination:
-            contamination = chunked_contamination_recheck(
+            contamination = w1c.contamination_recheck(
                 eval_rows, args.shard_dir,
                 window=w1c.CONTAMINATION_WINDOW_TOKENS,
                 roll_base=w1c.CONTAMINATION_ROLL_BASE)
             contamination["recheck_implementation"] = (
-                "w2_heldout.build_decontam_batch_mp.contamination_recheck "
-                "(adaptive-chunked wrapper, swapped in after an "
-                "ArrayMemoryError on the raw serial w1c.contamination_recheck "
-                "path during a live point-3 run 2026-07-08; same predicate, "
-                "same window/roll_base defaults -- traceback banked in this "
-                "lane's report to the coordinator)")
+                "w1_collapse_control_run.contamination_recheck direct call "
+                "(reverted from the w2_heldout.build_decontam_batch_mp "
+                "adaptive-chunked wrapper this lane used earlier the same "
+                "day, 2026-07-08 -- #451 folded the same chunk-halving "
+                "MemoryError guard directly into this function [issue #445], "
+                "and this lane's own follow-up fix replaced the per-shard "
+                "np.fromfile whole-shard read with np.memmap(mode='r') after "
+                "a 512MiB ArrayMemoryError at 28.7GB free RAM survived #451 "
+                "-- the wrapper is now redundant, direct call kept)")
             write_recheck_cache(
                 contamination, eval_rows, args.decontam_receipt, cache_root,
                 classifier_code_path=os.path.join(HERE, "w1_collapse_control_run.py"))
