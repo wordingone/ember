@@ -820,12 +820,28 @@ def recommend_f(per_source_results: dict, f_values) -> dict:
 # Receipt assembly
 # ---------------------------------------------------------------------------
 
+def _runner_git_sha(repo_root=None) -> str:
+    """Full git commit sha of the runner code's working tree HEAD, so a
+    receipt produced across many chunked invocations answers "which code
+    produced this" without relying on wall-clock proximity to a commit.
+    Never raises: an unknown sha is disclosed, not silently omitted."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root or REPO,
+            capture_output=True, text=True, timeout=10, check=True)
+        return out.stdout.strip()
+    except Exception as e:  # noqa: BLE001 — disclose, never silently omit
+        return f"UNKNOWN: {e}"
+
+
 def build_receipt(args, commit_preflight, boundaries, checksum_results,
                    checksum_ok, k_table, per_source_results, status: str,
                    mmap_cache_report=None, f_recommendation=None) -> dict:
     receipt = {
         "ticket": TICKET,
         "ts": _utc_ts(),
+        "runner_git_sha": _runner_git_sha(),
         "predicate_version": PREDICATE_VERSION,
         "predicate_source": PREDICATE_ISSUE_COMMENT,
         "status": status,
