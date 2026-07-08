@@ -6,6 +6,76 @@ artifact + its freeze SHA/date, what changes, why, and who owns the call.
 
 ---
 
+## DEV-003 — p1-envelope-sweep-prereg-v1: point-numbering clarification, E0 operational formula, warmup-rule implementation
+
+**Date filed:** 2026-07-08 (the lead, ruling on findings from the P1 envelope-sweep runner
+build, issue #118). **Filed pre-run** (no live gate-probe run has executed clean against
+this prereg; the point-3 attempt failed on unrelated environmental blockers -- see PR #434
+-- before reaching the schedule/numbering surfaces this deviation touches). **Frozen
+artifact:** `docs/spec/p1-envelope-sweep-prereg-v1.md` (FROZEN 2026-07-05).
+
+**What changes:** three clerical/operational clarifications to section 2's frozen run
+protocol and section 1/4's point inventory. No threshold is relaxed; no run's acceptance
+bar changes.
+
+### 1. H-MLI point-numbering clarification
+
+Section 4 states "points 4 (1.0x) and 6 (1.0x replicate) ARE the two control replicates"
+for the H-MLI lever-arm design. This is arithmetically impossible against section 1's own
+inventory table, which lists only six sweep values in order for points 3-8 (0.1x, 0.2x,
+0.5x, 1.0x(replicate), 2.0x, 4.0x) -- one 1.0x entry, not two. Section 4's indices are
+RULED clerical errors. The authoritative point-value mapping is the section 1 table read
+positionally: point3=0.1x, point4=0.2x, point5=0.5x, point6=1.0x(replicate), point7=2.0x,
+point8=4.0x. The H-MLI null-control trio (section 4) is: row 1's W1 control (1.0x, already
+banked), the sweep's own point 6 (1.0x replicate, fresh seed), and one additional
+lever-arm run at 1.0x WITH L1 enabled. "Points 4 and 6" as written in section 4 is void as
+numbering; "points 4-8" elsewhere in the doc still means the sweep's six from-scratch runs.
+
+### 2. E0-to-token-budget operational formula
+
+Section 5 states E0 = 0.067478 gpu-h ("derived retrofit, banked") with no operational
+formula for converting a multiplier x E0 into a token/step budget for a NEW from-scratch
+run -- and no receipt anywhere in the repo carries that field literally. The BINDING
+operational reading (ruled): `REFERENCE_THROUGHPUT_TOK_S` = the only real measured
+throughput on record for the exact matched recipe (muon-split + AdamW + MTP aux, governor
+pacing 0.80) on the pinned RTX4090 -- the banked W1 control-arm's own real run,
+`receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json`
+(`control_arm.tokens_to_match=819200` tokens / `control_arm.wall_s=126.484s` = 6476.24
+tok/s). `tokens(point) = multiplier * E0_GPU_HOURS * 3600 * REFERENCE_THROUGHPUT_TOK_S`;
+`steps = round(tokens / (batch*seq))`. Sanity: point 3 (0.1x) lands at ~24.3s of intended
+GPU time, matching the P1 sweep-runner build spec's own stated "~24s GPU" almost exactly --
+the strongest evidence this is the reading the program intended.
+
+### 3. Warmup rule -- now implementable
+
+Section 2's "warmup = min(2% of budget, the c03 recipe's absolute warmup)" referenced an
+"absolute warmup" constant that does not exist anywhere in the repo (grepped for
+`warmup_steps`, zero hits outside worktrees/fixtures). RULED: implement the rule properly
+rather than disclose-and-diverge. `scripts/w1_collapse_control_run.py`'s
+`cosine_warmup_frac` / `apply_cosine_warmup` / `run_phase2_live` now accept an OPTIONAL
+`warmup_steps` override (default `None`, byte-identical prior behavior for every
+pre-existing caller -- additive reuse, unit-tested regression, never a fork). The absolute
+cap is 153 steps (10% of the banked W1 control's own 1533-step ceiling -- the only concrete
+number on record for "the c03 recipe's" warmup allocation). `p1_envelope_sweep.py` computes
+`intended_warmup = min(round(0.02*budget_steps), 153)` and passes it as `warmup_steps`, so
+the prereg-intended figure and the actually-applied one are identical by construction, both
+quoted in the point receipt (`lr_schedule.prereg_intended_warmup_steps` /
+`lr_schedule.effective_warmup_steps`).
+
+**Who owns the call:** all three rulings are the lead's, given verbatim in response to the
+P1 envelope-sweep runner build lane's disclosed findings (PR #434); the runner's disclosure
+text and this deviation note describe the SAME three items from the two sides (finding vs
+ruling).
+
+**Receipts:** PR #434 (`feat/p1-envelope-sweep-runner`, `scripts/p1_envelope_sweep.py` +
+`scripts/test_p1_envelope_sweep.py` + this warmup-override commit); no run receipt yet --
+point 3's gate probe has not completed clean (two unrelated environmental blockers,
+reported in the same PR: a 13GiB contiguous-allocation failure in the reused corpus loader,
+and a missing sha-pinned decontam receipt the banked W1 control run cites). Relates to
+issue #118.
+
+---
+
 ## DEV-002 — rung2-grow-spec-v1 production stabilization: VRAM-resident-AdamW config infeasible on L1
 
 **Date filed:** 2026-07-08 (the lead). **Filed pre-run** (no full-param production training
