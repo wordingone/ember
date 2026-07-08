@@ -31,18 +31,74 @@ implications: none (CPU-only module; no paid API surface).
 from __future__ import annotations
 
 import subprocess
+import tempfile
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 BYTES_PER_PARAM_WEIGHTS_BF16 = 2
 BYTES_PER_PARAM_GRAD_BF16 = 2
 BYTES_PER_PARAM_OPTIMIZER_FP32 = 4 * 2  # 2 fp32 moment buffers/param (host RAM now, not VRAM)
 
+_REPO = Path(__file__).resolve().parent.parent
+_DEFAULT_OPTSTATE_DIR = _REPO / "scratch" / "rung2-optstate"
+
+
+def _sanitize_name(name: str) -> str:
+    return name.replace(".", "_")
+
+
+def _memmap_zeros(path: Path, shape: tuple, dtype=None):
+    """A fresh, zero-initialized, file-backed CPU tensor. File-backed pages
+    charge no Windows commit (vs the pagefile-backed regular heap allocations
+    this replaces) -- root cause of 2026-07-08's crash sites, see module
+    docstring. mode='w+' always creates/truncates fresh; explicit zero-fill,
+    not relied on filesystem behavior."""
+    import numpy as np
+    import torch
+
+    dtype = dtype or np.float32
+    path.parent.mkdir(parents=True, exist_ok=True)
+    arr = np.memmap(str(path), dtype=dtype, mode="w+", shape=shape)
+    arr[:] = 0
+    arr.flush()
+    return torch.from_numpy(arr)
+
+
+def _memmap_from_tensor(path: Path, src):
+    """Same as _memmap_zeros but seeded with src's real values (for the
+    shadow parameter copy, which must start at the real weight, not zero).
+    Casts to fp32 CPU BEFORE .numpy() -- a bf16 tensor (the real params, in
+    production) has no native numpy dtype and .numpy() raises on it."""
+    import numpy as np
+    import torch
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    src_f32_cpu = src.detach().to("cpu", dtype=torch.float32)
+    arr = np.memmap(str(path), dtype=np.float32, mode="w+", shape=tuple(src_f32_cpu.shape))
+    arr[:] = src_f32_cpu.numpy()
+    arr.flush()
+    return torch.from_numpy(arr)
+
 
 class CPUOffloadOptimizer:
     """Wraps an existing torch.optim.Optimizer-shaped constructor so its
-    per-parameter state lives in host RAM (pinned, when CUDA is present) and
-    its step() arithmetic executes on CPU tensors, while the real params it
+    per-parameter state (shadow weight, grad, and the inner optimizer's own
+    moment/momentum buffers) lives in FILE-BACKED host storage and its
+    step() arithmetic executes on CPU tensors, while the real params it
     updates may live anywhere (GPU or CPU).
+
+    File-backed, not just "host RAM" (redesigned 2026-07-08, issue #446
+    follow-up): a regular CPU tensor's backing pages charge Windows COMMIT
+    (physical RAM + pagefile), and this box's pagefile is a small fixed
+    16GiB -- the real, unifying cause of every native crash (ACCESS_VIOLATION/
+    SIGSEGV) hit across widen_state_dict, this class's own grad-clone, and
+    the CPU-side probe launches that day, per the measured commit-exhaustion
+    receipt (commit available ~19GiB while free-PHYSICAL read ~31GiB -- free-
+    physical is the wrong, and dangerously reassuring, metric). Memory-mapped
+    (file-backed) tensors are paged via the filesystem cache, not the
+    pagefile, and charge zero commit. Fresh-each-construction, never resumed
+    here -- a future consumer (e.g. a rung-3 momentum-transplant workflow)
+    can read the same files for that; this wrapper's job is memory strategy.
 
     named_params: iterable of (name, real_param) -- the actual model
         parameters (as built by the harness; may be bf16/CUDA in production).
@@ -51,17 +107,24 @@ class CPUOffloadOptimizer:
         the REAL optimizer class (e.g. `lambda ps: torch.optim.AdamW(ps,
         lr=lr, weight_decay=wd)`) with the SAME hyperparameters the
         VRAM-resident path would have used. This is where "same optimizer
-        math" is enforced -- the class is never reimplemented here.
-    pin_memory: None (default) pins the shadow buffers iff CUDA is available
-        (matches the DEV-002 framing: pinning only matters for a real
-        host<->device transfer; a pure-CPU probe environment gets ordinary
-        CPU tensors, functionally identical for the update-rule math this
-        module is responsible for).
+        math" is enforced -- the class is never reimplemented here. Its
+        per-parameter state (exp_avg/exp_avg_sq for an Adam-family optimizer,
+        momentum_buffer for this repo's own Muon) is PRE-SEEDED with
+        file-backed zero buffers before the optimizer's own lazy-init runs,
+        so the real class's zero-tensor creation is skipped in favor of
+        these -- confirmed against torch.optim.adam.Adam._init_group and
+        timeshare_pretrain.py's _Muon.step(), not assumed.
+    optstate_dir: where the per-parameter files live. Defaults to a shared,
+        non-unique directory under the repo's scratch/ -- safe because every
+        file here is named by (sanitized) parameter name, and muon/adamw
+        param names never collide (split_param_groups partitions them), and
+        every file is mode='w+' (truncate+recreate) on each construction, so
+        stale files from a prior run are simply overwritten, never resumed.
     """
 
     def __init__(self, named_params: Iterable[tuple[str, Any]],
                  opt_factory: Callable[[list], Any], *,
-                 pin_memory: bool | None = None) -> None:
+                 optstate_dir: str | Path | None = None) -> None:
         import torch
 
         self._names: list[str] = []
@@ -70,34 +133,73 @@ class CPUOffloadOptimizer:
             self._names.append(name)
             self._real_params.append(p)
 
-        pin = torch.cuda.is_available() if pin_memory is None else pin_memory
+        self._optstate_dir = Path(optstate_dir) if optstate_dir is not None else _DEFAULT_OPTSTATE_DIR
+        self._optstate_dir.mkdir(parents=True, exist_ok=True)
+
         self._shadow: list[Any] = []
-        for p in self._real_params:
-            shadow = p.detach().to("cpu", dtype=torch.float32).clone()
-            if pin:
-                try:
-                    shadow = shadow.pin_memory()
-                except RuntimeError:
-                    pass  # no CUDA context available to pin against; plain CPU tensor is correct still
+        for name, p in zip(self._names, self._real_params):
+            stem = self._optstate_dir / _sanitize_name(name)
+            shadow = _memmap_from_tensor(Path(str(stem) + ".shadow.f32"), p)
             shadow.requires_grad_(True)
             self._shadow.append(shadow)
 
         self._inner = opt_factory(self._shadow)
+
+        # Pre-seed BEFORE any step() -- both real optimizer classes this repo
+        # uses do `if <lazy-init check>: allocate zeros` on first touch, so
+        # seeding first means their own init is skipped and these file-backed
+        # tensors are what the class actually operates on, with zero changes
+        # to either optimizer's own code.
+        for name, p, shadow_p in zip(self._names, self._real_params, self._shadow):
+            stem = self._optstate_dir / _sanitize_name(name)
+            if isinstance(self._inner, torch.optim.Adam):  # covers AdamW (subclass)
+                group = self._inner.param_groups[0]
+                state = {
+                    "step": torch.tensor(0.0, dtype=torch.float32),
+                    "exp_avg": _memmap_zeros(Path(str(stem) + ".exp_avg.f32"), tuple(shadow_p.shape)),
+                    "exp_avg_sq": _memmap_zeros(Path(str(stem) + ".exp_avg_sq.f32"), tuple(shadow_p.shape)),
+                }
+                if group.get("amsgrad", False):
+                    state["max_exp_avg_sq"] = _memmap_zeros(
+                        Path(str(stem) + ".max_exp_avg_sq.f32"), tuple(shadow_p.shape))
+                self._inner.state[shadow_p] = state
+            else:
+                # This repo's own Muon (timeshare_pretrain.py:_Muon): single
+                # key, matches its `if "momentum_buffer" not in state`.
+                self._inner.state[shadow_p] = {
+                    "momentum_buffer": _memmap_zeros(
+                        Path(str(stem) + ".momentum.f32"), tuple(shadow_p.shape)),
+                }
 
     def step(self, closure=None) -> None:
         import torch
 
         assert closure is None, "CPUOffloadOptimizer does not support closures"
         with torch.no_grad():
-            for real_p, shadow_p in zip(self._real_params, self._shadow):
+            for name, real_p, shadow_p in zip(self._names, self._real_params, self._shadow):
                 if real_p.grad is None:
                     shadow_p.grad = None
                     continue
-                g = real_p.grad.detach().to("cpu", dtype=torch.float32, non_blocking=True)
+                # non_blocking=True removed here (was the trigger for a real
+                # cudaErrorAlreadyMapped hit on this call's FIRST-EVER real
+                # GPU execution, 2026-07-08): the destination is a freshly
+                # allocated CPU tensor each call, never pre-pinned, so async
+                # semantics were never actually in effect as intended and the
+                # per-parameter loop's overlapping unsynchronized copies raced
+                # against the caching host allocator. Synchronous transfer is
+                # slower but identical math -- no optimizer semantics change.
+                g = real_p.grad.detach().to("cpu", dtype=torch.float32)
                 if shadow_p.grad is None:
-                    shadow_p.grad = g.clone()
-                else:
-                    shadow_p.grad.copy_(g)
+                    # File-backed, not a regular clone() (2026-07-08 redesign):
+                    # this buffer PERSISTS for the optimizer's lifetime once
+                    # created (reused via copy_ below on every later call, only
+                    # torn down to None by zero_grad(set_to_none=True)) -- a
+                    # full-parameter-sized regular allocation here was a third
+                    # of the day's ~26GiB commit-exhaustion total, not a
+                    # rounding error.
+                    stem = self._optstate_dir / _sanitize_name(name)
+                    shadow_p.grad = _memmap_zeros(Path(str(stem) + ".grad.f32"), tuple(g.shape))
+                shadow_p.grad.copy_(g)
         self._inner.step()
         with torch.no_grad():
             for real_p, shadow_p in zip(self._real_params, self._shadow):

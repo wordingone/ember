@@ -55,6 +55,7 @@ paid_api_surface_used=false.
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import gc
 import json
 import shutil
@@ -66,6 +67,11 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+faulthandler.enable()  # on a native SIGSEGV, prints the exact crashing Python
+                        # frame to stderr instead of a bare exit code -- added
+                        # after 3 crashes at 3 different, previously-unlocated
+                        # code points in this run's history.
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cbase_grow_dryrun import sha256_file, widen_state_dict          # noqa: E402
@@ -114,6 +120,94 @@ def _probe_server(url: str) -> dict:
         return {"reachable": False, "error": str(e)}
 
 
+def _nvidia_smi_vram_resilient(retries: int = 3, backoff_s: float = 1.0) -> dict:
+    """nvidia_smi_vram() raises CalledProcessError on a transient nvidia-smi
+    failure (observed once: exit 255 immediately after a torch CUDA OOM/
+    context-teardown moment -- resolved on manual retry within a second).
+    An uncaught failure here must never crash the receipt-writing pipeline
+    (the run's actual result, e.g. a real OOM, is the valuable data and must
+    not be lost to an unrelated query hiccup). Retries briefly, then returns
+    a disclosed error dict rather than raising."""
+    last_err = None
+    for attempt in range(retries):
+        try:
+            return nvidia_smi_vram()
+        except Exception as e:
+            last_err = str(e)
+            if attempt < retries - 1:
+                time.sleep(backoff_s)
+    return {"error": last_err, "note": f"nvidia-smi failed {retries}x, giving up (see error)"}
+
+
+def _va_report() -> dict:
+    """Allocator-level snapshot (issue #446 discriminator): GlobalMemoryStatusEx
+    + a VirtualQuery walk of this process's own virtual address space for the
+    largest contiguous FREE region. A native SIGSEGV/ACCESS_VIOLATION kills the
+    process before any post-hoc capture is possible -- this must run and print
+    (flush=True, so it survives in the parent's captured stdout even if this
+    process dies moments later) immediately BEFORE the crash-prone call, not
+    after. This is "largest free block right before the attempt", the closest
+    non-invasive proxy to "state at the moment of fault" without a debugger
+    attach or crash dump."""
+    import ctypes
+    import ctypes.wintypes as wintypes
+
+    class MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", wintypes.DWORD), ("dwMemoryLoad", wintypes.DWORD),
+            ("ullTotalPhys", ctypes.c_uint64), ("ullAvailPhys", ctypes.c_uint64),
+            ("ullTotalPageFile", ctypes.c_uint64), ("ullAvailPageFile", ctypes.c_uint64),
+            ("ullTotalVirtual", ctypes.c_uint64), ("ullAvailVirtual", ctypes.c_uint64),
+            ("ullAvailExtendedVirtual", ctypes.c_uint64),
+        ]
+
+    class MEMORY_BASIC_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("BaseAddress", ctypes.c_void_p), ("AllocationBase", ctypes.c_void_p),
+            ("AllocationProtect", wintypes.DWORD), ("PartitionId", wintypes.WORD),
+            ("RegionSize", ctypes.c_size_t), ("State", wintypes.DWORD),
+            ("Protect", wintypes.DWORD), ("Type", wintypes.DWORD),
+        ]
+
+    MEM_FREE = 0x10000
+    kernel32 = ctypes.windll.kernel32
+    stat = MEMORYSTATUSEX()
+    stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+    kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+
+    mbi = MEMORY_BASIC_INFORMATION()
+    addr = 0
+    max_addr = stat.ullTotalVirtual or (1 << 47)
+    largest_free = 0
+    largest_free_addr = 0
+    n_free_regions = 0
+    total_free = 0
+    iterations = 0
+    while addr < max_addr and iterations < 2_000_000:
+        iterations += 1
+        ret = kernel32.VirtualQuery(ctypes.c_void_p(addr), ctypes.byref(mbi), ctypes.sizeof(mbi))
+        if ret == 0:
+            break
+        if mbi.State == MEM_FREE:
+            n_free_regions += 1
+            total_free += mbi.RegionSize
+            if mbi.RegionSize > largest_free:
+                largest_free = mbi.RegionSize
+                largest_free_addr = addr
+        addr += mbi.RegionSize if mbi.RegionSize else 0x1000
+
+    return {
+        "mem_load_pct": stat.dwMemoryLoad,
+        "avail_phys_gib": round(stat.ullAvailPhys / (1024 ** 3), 3),
+        "avail_pagefile_gib": round(stat.ullAvailPageFile / (1024 ** 3), 3),
+        "avail_virtual_gib": round(stat.ullAvailVirtual / (1024 ** 3), 3),
+        "largest_free_va_region_gib": round(largest_free / (1024 ** 3), 3),
+        "largest_free_va_region_addr_hex": hex(largest_free_addr),
+        "n_free_va_regions": n_free_regions,
+        "total_free_va_gib": round(total_free / (1024 ** 3), 3),
+    }
+
+
 def _widen_cast_worker(seed_ckpt_str: str, out_path: str) -> int:
     """SHA-verify + load + widen + bf16-cast, run as a FRESH subprocess and
     result written to disk -- NOT inline in the main process.
@@ -147,6 +241,8 @@ def _widen_cast_worker(seed_ckpt_str: str, out_path: str) -> int:
     sd_pre_f32 = {k: v.float() for k, v in sd_seed_bf16.items()}
     sd_seed_bf16 = None
     gc.collect()
+    va_before_widen = _va_report()
+    print(f"VA_REPORT_BEFORE_WIDEN {json.dumps(va_before_widen)}", flush=True)
     grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers)
     param_count_after = int(sum(v.numel() for v in grown_sd_f32.values()))
     sd_pre_f32 = None
@@ -255,7 +351,29 @@ def main() -> int:
           f"verdict={offload_preflight['verdict']} margin_gib={offload_preflight['margin_gib']}",
           flush=True)
 
-    if not offload_preflight["sufficient"]:
+    # ---- commit-aware preflight (2026-07-08, post-mortem on the day's 4
+    # crash sites): free-PHYSICAL RAM is BANNED as a launch gate from here on
+    # -- the measured root cause was Windows COMMIT exhaustion (a small fixed
+    # 16GiB pagefile), which reads completely differently from free-physical
+    # (commit-available ~19GiB while free-physical read ~31GiB the same
+    # moment). PLANNED_NEW_COMMIT_GIB is a deliberately conservative residual
+    # estimate: the 2026-07-08 memmap redesign moved the dominant ~26GiB/param
+    # buffer term (shadow+grad+exp_avg/momentum) to file-backed storage (zero
+    # commit charge), so what's left is CUDA driver host allocations + torch/
+    # python overhead + the transient per-param grad-staging tensor + the
+    # shard loader's small arrays -- all sub-GiB individually. ----
+    PLANNED_NEW_COMMIT_GIB = 2.0
+    COMMIT_MARGIN_GIB_FLOOR = 8.0
+    va_before_probe = _va_report()
+    commit_available_gib = va_before_probe["avail_pagefile_gib"]
+    commit_sufficient = commit_available_gib > (PLANNED_NEW_COMMIT_GIB + COMMIT_MARGIN_GIB_FLOOR)
+    print(f"[{ts_stamp}] commit preflight: commit_available={commit_available_gib}GiB "
+          f"planned_new_commit={PLANNED_NEW_COMMIT_GIB}GiB margin_floor={COMMIT_MARGIN_GIB_FLOOR}GiB "
+          f"sufficient={commit_sufficient} (free_physical={va_before_probe['avail_phys_gib']}GiB "
+          f"shown for contrast only -- NOT the gate)", flush=True)
+
+    launch_sufficient = bool(offload_preflight["sufficient"] and commit_sufficient)
+    if not launch_sufficient:
         # Refuse-to-launch (abort-not-degrade, DEV-002 acceptance #3). A
         # refused launch IS a valid, honest receipt -- no attempt made.
         wall_s = round(time.monotonic() - wall_start, 3)
@@ -272,6 +390,13 @@ def main() -> int:
                                   "accum_steps": args.grad_accum_steps,
                                   "required_estimate": required_offloaded,
                                   "preflight": offload_preflight},
+            "commit_preflight": {
+                "commit_available_gib": commit_available_gib,
+                "planned_new_commit_gib": PLANNED_NEW_COMMIT_GIB,
+                "margin_floor_gib": COMMIT_MARGIN_GIB_FLOOR,
+                "sufficient": commit_sufficient,
+                "free_physical_gib_not_the_gate": va_before_probe["avail_phys_gib"],
+            },
             "attempted": False,
             "wall_s": {"total": wall_s},
             "api_spend_usd": 0, "paid_api_surface_used": False,
@@ -287,11 +412,23 @@ def main() -> int:
     # _apply_governor() itself is coupled to the production interlock this
     # probe intentionally bypasses, so this is an explicit, disclosed
     # stand-in, not a silent skip) ----
-    budget_gib = 12.0  # generous vs the 9.301GiB estimate, well under real free margin
-    safe_fraction = min(0.95, (nvsmi_before["used_gib"] + budget_gib) / nvsmi_before["total_gib"])
+    # Bug fixed here (this run's own prior attempt): set_per_process_memory_
+    # fraction(f) caps THIS process at f * TOTAL device memory, not "baseline
+    # + a budget" -- the previous ad hoc (used_gib + 12.0) / total_gib formula
+    # produced a cap of 18.43GiB that bound TIGHTER than the real device
+    # headroom: the OOM message it produced explicitly reported "18.43 GiB
+    # allowed" while cudaMemGetInfo showed 6.18GiB still genuinely free on the
+    # device at that exact moment -- a self-imposed-governor artifact, not a
+    # real hardware limit, and not the measurement this probe exists to make.
+    # Fixed to reuse this repo's own MARGIN_GIB_FLOOR convention (same margin
+    # vram_preflight already applies) against the WHOLE device instead.
+    safe_fraction = min(0.97, (nvsmi_before["total_gib"] - MARGIN_GIB_FLOOR) / nvsmi_before["total_gib"])
     torch.cuda.set_per_process_memory_fraction(safe_fraction)
+    allowed_gib = round(safe_fraction * nvsmi_before["total_gib"], 3)
     print(f"[{ts_stamp}] self-imposed VRAM fraction cap: {safe_fraction:.4f} "
-          f"(budget {budget_gib}GiB above the {nvsmi_before['used_gib']}GiB baseline)", flush=True)
+          f"({allowed_gib}GiB of {nvsmi_before['total_gib']}GiB total allowed, "
+          f"{MARGIN_GIB_FLOOR}GiB margin floor reserved, matching vram_preflight's own "
+          f"convention)", flush=True)
 
     # ---- build the REAL model (real architecture, real device placement,
     # gradient checkpointing) via the real build_v0_model -- not reimplemented ----
@@ -349,11 +486,20 @@ def main() -> int:
         stop_flag = threading.Event()
 
         def _sampler():
+            # Prints every sample (not just appends) -- 2026-07-08 fix: a
+            # SIGSEGV crash mid-run kills this thread's in-memory `samples`
+            # list along with the process, and it was NEVER printed, so a
+            # crashed run's entire VRAM trace was unrecoverable. Printing
+            # means the trace survives in captured stdout even if the
+            # process dies moments later.
             while not stop_flag.is_set():
                 try:
-                    samples.append(nvidia_smi_vram())
+                    s = nvidia_smi_vram()
+                    samples.append(s)
+                    print(f"  VRAM_SAMPLE {json.dumps(s)}", flush=True)
                 except Exception as e:
                     samples.append({"error": str(e)})
+                    print(f"  VRAM_SAMPLE_ERROR {e}", flush=True)
                 stop_flag.wait(args.sample_interval_s)
 
         sampler_thread = threading.Thread(target=_sampler, daemon=True)
@@ -368,33 +514,43 @@ def main() -> int:
             for global_step in range(args.n_optimizer_steps):
                 micro_losses = []
                 for micro_idx in range(args.grad_accum_steps):
+                    ckpt = f"gs={global_step} mi={micro_idx}"
                     loader_idx = global_step * args.grad_accum_steps + micro_idx
                     x, y0, y_mtp = loader.batch(loader_idx, args.micro_batch)
+                    print(f"  CKPT[{ckpt}] batch loaded", flush=True)
                     x = x.cuda()
                     y0 = y0.cuda()
                     y_mtp = [t.cuda() for t in y_mtp]
+                    print(f"  CKPT[{ckpt}] .cuda() transfers done", flush=True)
 
                     # QAT pre-forward: transform Linear weights to int8-grid (STE) --
                     # same helper, same placement as run_v0_segment's real loop.
                     _qat_saved = ts._apply_fake_quant(model, "qat") if qat_enabled else []
+                    print(f"  CKPT[{ckpt}] QAT fake-quant applied (enabled={qat_enabled})", flush=True)
 
                     hidden_out = model.backbone(x)
+                    print(f"  CKPT[{ckpt}] backbone forward done", flush=True)
                     h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
                     primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1), chunk_tokens=256)
+                    print(f"  CKPT[{ckpt}] primary CE done", flush=True)
                     mtp_ces = []
                     if mtp_enabled:
                         for k, head in enumerate(model.mtp_heads):
                             ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1), chunk_tokens=256)
                             mtp_ces.append(ce_k)
+                    print(f"  CKPT[{ckpt}] MTP CE done ({len(mtp_ces)} heads)", flush=True)
                     micro_loss = ts.mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
                     loss_val = float(micro_loss.detach())
                     micro_losses.append(loss_val)
                     micro_loss_log.append(loss_val)
+                    print(f"  CKPT[{ckpt}] loss computed = {loss_val:.6f}", flush=True)
                     (micro_loss / args.grad_accum_steps).backward()
+                    print(f"  CKPT[{ckpt}] backward done", flush=True)
 
                     # QAT post-backward: restore full-precision weights (STE semantics).
                     if qat_enabled:
                         ts._restore_weights(_qat_saved)
+                    print(f"  CKPT[{ckpt}] QAT weights restored", flush=True)
 
                 for opt in optimizers.values():
                     opt.step()
@@ -421,8 +577,9 @@ def main() -> int:
     finally:
         shutil.rmtree(shard_tmp, ignore_errors=True)
 
-    # ---- after-baseline ----
-    nvsmi_after = nvidia_smi_vram()
+    # ---- after-baseline (resilient: a transient nvidia-smi failure here must
+    # never lose an already-captured training result, e.g. a real OOM) ----
+    nvsmi_after = _nvidia_smi_vram_resilient()
     server_after = _probe_server(args.server_health_url)
     print(f"[{ts_stamp}] AFTER nvidia-smi: {nvsmi_after}", flush=True)
     print(f"[{ts_stamp}] AFTER server: {server_after}", flush=True)
@@ -510,6 +667,16 @@ def main() -> int:
             ),
         },
         "param_count_after": param_count_after,
+        "commit_preflight": {
+            "commit_available_gib": commit_available_gib,
+            "planned_new_commit_gib": PLANNED_NEW_COMMIT_GIB,
+            "margin_floor_gib": COMMIT_MARGIN_GIB_FLOOR,
+            "sufficient": commit_sufficient,
+            "free_physical_gib_not_the_gate": va_before_probe["avail_phys_gib"],
+            "note": ("free-physical RAM is BANNED as a launch gate (2026-07-08): the day's 4 "
+                     "crash sites unified under Windows COMMIT exhaustion (fixed 16GiB pagefile), "
+                     "which reads completely differently from free-physical at the same moment."),
+        },
         "server_contention": {
             "before": server_before,
             "during_after_step_0": server_during,
