@@ -873,7 +873,7 @@ def main() -> int:
     # Regression test: if synthetic arm with seed 20260706, validate against leg-1
     regression_status = None
     if arm == "synthetic" and 20260706 in seeds:
-        leg1_receipt_path = "B:\\M\\ember\\receipts\\expc1b-spectrum-20260706T220949Z.json"
+        leg1_receipt_path = str(Path(__file__).resolve().parents[2] / "receipts" / "expc1b-spectrum-20260706T220949Z.json")
         for r in all_results:
             if r.get("seed") == 20260706:
                 passed, report = regression_test_vs_leg1(r.get("result", {}), leg1_receipt_path)

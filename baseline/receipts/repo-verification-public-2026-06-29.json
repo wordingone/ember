@@ -1,7 +1,7 @@
 {
     "access_date":  "2026-06-29",
-    "repo":  "B:\\M\\ember-public",
-    "baseline_path":  "B:\\M\\ember-public\\baseline",
+    "repo":  "<TEMP_WORKSPACE>/ember-public",
+    "baseline_path":  "<TEMP_WORKSPACE>/ember-public/baseline",
     "verdict":  "PASS",
     "line_endings":  {
                          "files":  [
@@ -210,7 +210,7 @@
                                            "path":  "sources.jsonl"
                                        }
                                    ],
-                         "root":  "B:\\M\\ember-public\\baseline"
+                         "root":  "<TEMP_WORKSPACE>/ember-public/baseline"
                      },
     "source_validation":  {
                               "duplicate_ids":  [

@@ -32,7 +32,7 @@ Run (Git Bash):  MSYS_NO_PATHCONV=1 wsl python3 \
 # <<external>>/state/ember-totality-build/ into
 # <local-exec-root>-goalforge/scripts/ember_totality/. Original WSL dual/triple-mount
 # candidates pointing at <<external>>/state/<external-state> (and /mnt<local-mount-point>/M/...,
-# <local-mount-point>/M/..., B:\\M\\... variants) replaced with a single REPO_ROOT-relative
+# <local-mount-point>/M/..., <TEMP_WORKSPACE>/... variants) replaced with a single REPO_ROOT-relative
 # candidate, REPO_ROOT computed from this file's own location (two levels up
 # from scripts/ember_totality/), for native Windows system-python execution.
 # No probe logic changed -- only path resolution. <external-state> does not exist

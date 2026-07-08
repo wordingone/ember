@@ -2,4 +2,4 @@
 │    ▀       ember  v0.0.0                                 Tips for getting started                 
 │   ▀▀▀      inference + training, on this machine         ────────────────────────                 
 │  ▀▀▀▀▀     qwen3.6-27b · Local                           Run /init to create an EMBER.md file with
-│   ▀▀▀      C:\WINDOWS\TEMP\claude\B--M-avir-agent\96…      Try "what changed on the board today?"   
+│   ▀▀▀      <TEMP_WORKSPACE>…      Try "what changed on the board today?"   

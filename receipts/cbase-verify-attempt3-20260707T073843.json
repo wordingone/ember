@@ -1,7 +1,7 @@
 {
   "ticket": "CBASE-VERIFY-ATTEMPT-3",
   "ts": "2026-07-07T07:38:43.255128Z",
-  "checkpoint_path": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+  "checkpoint_path": "<TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
   "checkpoint_sha": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
   "expected_sha": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
   "sha_match": true,

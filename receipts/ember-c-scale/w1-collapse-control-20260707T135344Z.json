@@ -16,14 +16,14 @@
     "rung_provenance_mode": "manifest",
     "rung_provenance_path": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/manifest.json",
     "rung_provenance_sha256": "573f615847ec7e2592beec8a059882082c938aafe0151ddfe49fc77259aead88",
-    "corpus_verification_receipt": "B:\\M\\ember\\receipts\\corpus-verification-20260704T095213Z.json",
+    "corpus_verification_receipt": "<TEMP_WORKSPACE>/ember/receipts/corpus-verification-20260704T095213Z.json",
     "derived_target_architecture": {
       "vocab": 32000,
       "seq": 1024,
       "batch": 16,
       "hidden": 1024,
       "n_mtp": 2,
-      "n_mtp_source": "B:\\M\\ember\\configs\\v0-pretrain-config.json objective.mtp_aux_heads.n_heads=2 -- the SAME contract path production's _V0Real reads (timeshare_pretrain.CONTRACT_PATH), read fresh, never hardcoded",
+      "n_mtp_source": "<TEMP_WORKSPACE>/ember/configs/v0-pretrain-config.json objective.mtp_aux_heads.n_heads=2 -- the SAME contract path production's _V0Real reads (timeshare_pretrain.CONTRACT_PATH), read fresh, never hardcoded",
       "hidden_derivation": "params_dedup.measured_duplicate_numel=32768000 / vocab=32000 = 1024 (tied embed/head dedup count = vocab*hidden)",
       "ff_grown": 16384,
       "params_unique_after": null,
@@ -31,13 +31,13 @@
       "layers_heads_source": "layers=20, heads=16 carried from the v0/c03 config precedent (fp19-envelope.md, quoted in scripts/timeshare_pretrain.py's module docstring) -- NOT independently present in the grow-rung receipt chain; flagged, not silently assumed",
       "layers_assumed": 20,
       "heads_assumed": 16,
-      "terminal_checkpoint_ref": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
-      "terminal_checkpoint_receipt": "B:\\M\\ember\\receipts\\cbase-grow-rung\\cbase-grow-rung1-live-20260703T155711Z.json"
+      "terminal_checkpoint_ref": "<TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+      "terminal_checkpoint_receipt": "<TEMP_WORKSPACE>/ember/receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json"
     }
   },
   "checkpoint_verification": {
-    "checkpoint_dir": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
-    "rung_receipt_terminal_checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "checkpoint_dir": "<TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+    "rung_receipt_terminal_checkpoint": "<TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
     "path_identity_verified": true,
     "files_sha256_verified": {
       "model.pt": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
@@ -96,20 +96,20 @@
     "decontam_receipt_path": "receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
     "launch_gate_result": {
       "allowed": true,
-      "reason": "receipt 'receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json' pinned sha matches 'B:\\\\M\\\\ember\\\\scratch\\\\w1-control\\\\dry-run\\\\w1-live-decontam-rebuilt-batch-20260707T135344Z.npy', contamination_recheck.confirmed_non_self_matches=0 -- W2 launch ALLOWED",
+      "reason": "receipt 'receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json' pinned sha matches '<TEMP_WORKSPACE>/ember/scratch/w1-control/dry-run/w1-live-decontam-rebuilt-batch-20260707T135344Z.npy', contamination_recheck.confirmed_non_self_matches=0 -- W2 launch ALLOWED",
       "receipt_path": "receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
-      "batch_path": "B:\\M\\ember\\scratch\\w1-control\\dry-run\\w1-live-decontam-rebuilt-batch-20260707T135344Z.npy"
+      "batch_path": "<TEMP_WORKSPACE>/ember/scratch/w1-control/dry-run/w1-live-decontam-rebuilt-batch-20260707T135344Z.npy"
     }
   },
   "recheck_cache_config": {
-    "cache_root": "B:\\M\\ember\\scratch\\w1-control\\recheck-cache",
+    "cache_root": "<TEMP_WORKSPACE>/ember/scratch/w1-control/recheck-cache",
     "cache_hit": false,
     "cached_receipt_path": null,
     "cached_receipt_ts": null
   },
   "contamination_recheck": {
     "method": "13-token polynomial rolling hash (uint64 mod 2**64), hash hits re-verified by exact elementwise comparison, shard-to-shard boundary windows checked -- same convention as scratch/corpus-wire/contamination_check.py",
-    "corpus_verification_open_item_ref": "B:\\M\\ember\\receipts\\corpus-verification-20260704T095213Z.json",
+    "corpus_verification_open_item_ref": "<TEMP_WORKSPACE>/ember/receipts/corpus-verification-20260704T095213Z.json",
     "shards_scanned": 26,
     "windows_hashed": 6977868746,
     "confirmed_matches": [
@@ -308076,7 +308076,7 @@
     "raw_confirmed_matches": 16208
   },
   "grow_arm": {
-    "terminal_checkpoint_ref": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "terminal_checkpoint_ref": "<TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
     "tokens_total": 12550144,
     "bill_aggregation_rows": [
       {
@@ -308152,7 +308152,7 @@
     },
     "tokens_to_match": 0,
     "tokens_at_ceiling": null,
-    "eval_trace_ref": "B:\\M\\ember\\scratch\\w1-control\\dry-run\\w1-eval-trace-live-20260707T135344Z.json",
+    "eval_trace_ref": "<TEMP_WORKSPACE>/ember/scratch/w1-control/dry-run/w1-eval-trace-live-20260707T135344Z.json",
     "eval_trace_sha256": "c81aea502104d4246fd9061a3632e3761fda58f46eb01e9fe27805ec82612e8e",
     "eval_cadence_K": 100,
     "ceiling_steps": 156,
@@ -308200,7 +308200,7 @@
     "w1_pricing_receipt_ceiling": {
       "multiplier": "2.0 * grow_arm",
       "tokens": 25100288,
-      "source": "B:\\M\\ember\\scratch\\w1-control\\w1-pricing-20260704T063236Z.json",
+      "source": "<TEMP_WORKSPACE>/ember/scratch/w1-control/w1-pricing-20260704T063236Z.json",
       "matches_issue_71_stated_hard_ceiling": true
     },
     "w2_scale_preregistration_multiplier_1p5x": {

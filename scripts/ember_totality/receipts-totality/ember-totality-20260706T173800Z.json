@@ -3,7 +3,7 @@
   "ticket": "EMBER-TOTALITY-BOARD",
   "ts": "20260706T173800Z",
   "sha_convention": "bytes on disk as-is",
-  "root": "B:\\M\\ember-goalforge",
+  "root": "<TEMP_WORKSPACE>/ember-goalforge",
   "registry_spec": "docs\\spec\\conditions-v1.md",
   "registry_sync": {
     "runner_ids": 38,
@@ -21,7 +21,7 @@
       "condition": "C-BASE",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-BASE: no owned from-scratch checkpoint receipt under B:\\M\\ember-goalforge\\receipts names a checkpoint whose on-disk model.pt bytes hash-match its manifest weight-hash claim (1 owned-pretrain candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause (a)/(c) unmet)"
+      "reason": "RED C-BASE: no owned from-scratch checkpoint receipt under <TEMP_WORKSPACE>/ember-goalforge/receipts names a checkpoint whose on-disk model.pt bytes hash-match its manifest weight-hash claim (1 owned-pretrain candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause (a)/(c) unmet)"
     },
     {
       "condition": "C-PORT",
@@ -45,7 +45,7 @@
       "condition": "C-ORGANISM",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under B:\\M\\ember-goalforge\\receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 687 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT)."
+      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under <TEMP_WORKSPACE>/ember-goalforge/receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 687 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT)."
     },
     {
       "condition": "C(-1)",
@@ -63,7 +63,7 @@
       "condition": "C1",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"]"
+      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"]"
     },
     {
       "condition": "C2",
@@ -81,13 +81,13 @@
       "condition": "C4",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=B:\\M\\ember-goalforge -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o'"
+      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember-goalforge -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o'"
     },
     {
       "condition": "C5",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=B:\\M\\ember-goalforge -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A<local-mount-point>/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2"
+      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember-goalforge -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A<local-mount-point>/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2"
     },
     {
       "condition": "C6",
@@ -111,7 +111,7 @@
       "condition": "C9",
       "status": "AUDIT-PENDING-EPOCH",
       "is_process_invariant": true,
-      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under B:\\M\\ember-goalforge/receipts in window ALL (unfiltered, pre-epoch) (687/687 window/total json files scanned, 1 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \ufffd4.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
+      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under <TEMP_WORKSPACE>/ember-goalforge/receipts in window ALL (unfiltered, pre-epoch) (687/687 window/total json files scanned, 1 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \ufffd4.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
     },
     {
       "condition": "C10",
@@ -147,7 +147,7 @@
       "condition": "C15",
       "status": "AUDIT-PENDING-EPOCH",
       "is_process_invariant": true,
-      "reason": "[RUNNER RECLASSIFIED from UNEVALUABLE] PROBE CONTRACT VIOLATION: test_c15.py emitted no recognized status line (exit=1); stderr[:300]=\"SyntaxError: Non-UTF-8 code starting with '\\\\x97' in file C:\\\\WINDOWS\\\\TEMP\\\\ember-rerun3-fresh\\\\scripts\\\\ember_totality\\\\test_c15.py on line 3, but no encoding declared; see https://python.org/dev/peps/pep-0263/ for details\\n\" -- process-invariant rows (C0/C9/C15, GOAL.md \u00a74.0(9)) may never carry a STATE-condition status; treated as AUDIT-PENDING-EPOCH pending investigation of the probe fault"
+      "reason": "[RUNNER RECLASSIFIED from UNEVALUABLE] PROBE CONTRACT VIOLATION: test_c15.py emitted no recognized status line (exit=1); stderr[:300]=\"SyntaxError: Non-UTF-8 code starting with '\\\\x97' in file <TEMP_WORKSPACE> on line 3, but no encoding declared; see https://python.org/dev/peps/pep-0263/ for details\\n\" -- process-invariant rows (C0/C9/C15, GOAL.md \u00a74.0(9)) may never carry a STATE-condition status; treated as AUDIT-PENDING-EPOCH pending investigation of the probe fault"
     },
     {
       "condition": "C-OBS",
@@ -159,7 +159,7 @@
       "condition": "C-ANAT",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under B:\\M\\ember-goalforge; CHK 'all 16 present and consistent with receipts' unmet"
+      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under <TEMP_WORKSPACE>/ember-goalforge; CHK 'all 16 present and consistent with receipts' unmet"
     },
     {
       "condition": "C-SCALE",
@@ -177,7 +177,7 @@
       "condition": "C-IND",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=B:\\M\\ember-goalforge"
+      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=<TEMP_WORKSPACE>/ember-goalforge"
     },
     {
       "condition": "C-PROC",
@@ -201,19 +201,19 @@
       "condition": "C-ENF",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ENF: enforcement layer incoherent -- check_energy_law_theory: never executed (checker script not found: B:\\M\\ember-goalforge\\scripts\\check_energy_law_theory.py); check_publication_gate: never executed (checker script not found: B:\\M\\ember-goalforge\\scripts\\check_publication_gate.py) [invalid_enforcement_regression]"
+      "reason": "RED C-ENF: enforcement layer incoherent -- check_energy_law_theory: never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/scripts/check_energy_law_theory.py); check_publication_gate: never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/scripts/check_publication_gate.py) [invalid_enforcement_regression]"
     },
     {
       "condition": "C-MILE",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-MILE: check_milestone_reconciliation never executed (checker script not found: B:\\M\\ember-goalforge\\scripts\\check_milestone_reconciliation.py) [invalid_milestone_regression]"
+      "reason": "RED C-MILE: check_milestone_reconciliation never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/scripts/check_milestone_reconciliation.py) [invalid_milestone_regression]"
     },
     {
       "condition": "C-DISC",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: B:\\M\\ember-goalforge\\scripts\\check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
+      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/scripts/check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
     },
     {
       "condition": "C-LADM",
@@ -231,7 +231,7 @@
       "condition": "C-MANIFEST",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED denominator implausibly small (<20) -- parser/goal drift: only 0 \u00a74 condition(s) parsed from B:\\M\\ember-goalforge\\GOAL.md"
+      "reason": "RED denominator implausibly small (<20) -- parser/goal drift: only 0 \u00a74 condition(s) parsed from <TEMP_WORKSPACE>/ember-goalforge/GOAL.md"
     },
     {
       "condition": "C-TALLY",
@@ -249,12 +249,12 @@
     {
       "condition": "C9",
       "status": "AUDIT-PENDING-EPOCH",
-      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under B:\\M\\ember-goalforge/receipts in window ALL (unfiltered, pre-epoch) (687/687 window/total json files scanned, 1 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \ufffd4.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
+      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under <TEMP_WORKSPACE>/ember-goalforge/receipts in window ALL (unfiltered, pre-epoch) (687/687 window/total json files scanned, 1 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \ufffd4.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
     },
     {
       "condition": "C15",
       "status": "AUDIT-PENDING-EPOCH",
-      "reason": "[RUNNER RECLASSIFIED from UNEVALUABLE] PROBE CONTRACT VIOLATION: test_c15.py emitted no recognized status line (exit=1); stderr[:300]=\"SyntaxError: Non-UTF-8 code starting with '\\\\x97' in file C:\\\\WINDOWS\\\\TEMP\\\\ember-rerun3-fresh\\\\scripts\\\\ember_totality\\\\test_c15.py on line 3, but no encoding declared; see https://python.org/dev/peps/pep-0263/ for details\\n\" -- process-invariant rows (C0/C9/C15, GOAL.md \u00a74.0(9)) may never carry a STATE-condition status; treated as AUDIT-PENDING-EPOCH pending investigation of the probe fault"
+      "reason": "[RUNNER RECLASSIFIED from UNEVALUABLE] PROBE CONTRACT VIOLATION: test_c15.py emitted no recognized status line (exit=1); stderr[:300]=\"SyntaxError: Non-UTF-8 code starting with '\\\\x97' in file <TEMP_WORKSPACE> on line 3, but no encoding declared; see https://python.org/dev/peps/pep-0263/ for details\\n\" -- process-invariant rows (C0/C9/C15, GOAL.md \u00a74.0(9)) may never carry a STATE-condition status; treated as AUDIT-PENDING-EPOCH pending investigation of the probe fault"
     }
   ],
   "summary": {
