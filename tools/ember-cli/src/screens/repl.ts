@@ -67,6 +67,11 @@ import {
   startTelemetryWatch,
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
+import {
+  getActivityFeedState,
+  startActivityFeed,
+  type ActivityFeedState,
+}                                        from "../services/activity-feed.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
 import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
 import {
@@ -354,6 +359,18 @@ function _telemetryMemoKey(state: TelemetryState): string | null {
     parts.push(runPart);
   }
   return `⚡ ${parts.join(" · ")}`;
+}
+
+// ---------------------------------------------------------------------------
+// Internal: activity-feed memo key (issue #485 rung 1) — re-render only when the
+// last line actually changed, same discipline as _telemetryMemoKey above.
+// ---------------------------------------------------------------------------
+
+function _activityFeedMemoKey(state: ActivityFeedState): string | null {
+  const n = state.recentLines.length;
+  if (n === 0) return null;
+  const last = state.recentLines[n - 1];
+  return `${n}:${last.ts}:${last.text}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -656,6 +673,24 @@ export function ReplScreen({
     const next = getState();
     setTelemetry((prev) =>
       _telemetryMemoKey(prev) === _telemetryMemoKey(next) ? prev : { ...next },
+    );
+  }, 500);
+
+  // #485 rung 1: activity feed — real receipts-landing/outage/watchdog/board events, polled
+  // every 500ms and deduped by memo key (same discipline as telemetry above). The engine itself
+  // is event-driven (fs.watch on receipts/**) plus a couple of cheap poll ticks internally; this
+  // is just the render-side pickup.
+  const [activityFeed, setActivityFeed] = useState<ActivityFeedState>(() => getActivityFeedState());
+
+  useEffect(() => {
+    const handle = startActivityFeed();
+    return () => handle.stop();
+  }, []);
+
+  useInterval(() => {
+    const next = getActivityFeedState();
+    setActivityFeed((prev) =>
+      _activityFeedMemoKey(prev) === _activityFeedMemoKey(next) ? prev : { ...next },
     );
   }, 500);
 
@@ -1379,6 +1414,7 @@ export function ReplScreen({
       modelMetrics:   modelMetrics ?? undefined,
       effort:         retryStatus,
       degraded:       degradedBanner,
+      activityFeed:   activityFeed.recentLines,
     }),
   );
 }
