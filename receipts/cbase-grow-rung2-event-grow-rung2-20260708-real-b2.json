@@ -1,0 +1,51 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EVENT-B2",
+  "ts": "2026-07-08T20:14:11.691022+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 466,
+  "refs": [
+    449,
+    452,
+    280
+  ],
+  "run_id": "grow-rung2-20260708-real",
+  "scope": "B2: fresh widen at eps_sigma>0 (banned eps=0 dry-run cache never touched); realized proof from the LOADED post-grow weights.",
+  "eps": {
+    "eps_sigma": 0.05,
+    "eps_seed": 0,
+    "banned_zero_assertion_passed": true
+  },
+  "eps_sigma_authorization": {
+    "note": "APPENDED post-hoc after the runner produced this receipt (measured fields above are unmodified) -- eps_sigma is a measurement-condition knob the #449 addendum deliberately left unpinned (froze eps>0, not a specific value), not a prereg band. eps_sigma=0.05/eps_seed=0 confirmed by team-lead as an acting-coordinator measurement-condition choice: grounds are the #452 worked example (twin-cosine 0.9824 at grow) and the runner's own selftest constant (cbase_grow_rung2_event.py:1331) -- the exact code path this run exercised; the tick-21 linearization freeze on #449 (comment 4918705188) bounds the worst-case down-class effect at eps=0.05 to ~2.75e-3 in q, with realized-q extraction zeroing the residual by construction -- no prereg surface touched by this choice.",
+    "confirmed_by": "team-lead (fellow agent, this session's runner-lane mission)"
+  },
+  "operator_sha256": "5d9c16f49b2c4ad056cc174a692a92f18ab034d881699a8564f3da763f51a40f",
+  "operator_file": "scripts/cbase_grow_dryrun.py",
+  "cache": {
+    "cache_path": "receipts/.rung2-event-cache/grown-eps-58e8e98916823941-sigma0.05-seed0.pt",
+    "cache_hit": false,
+    "eps0_banned_cache_path": "<REDACTED_WORKTREE_PATH>/models/cbase-grow-rung/rung2-grown-cache/grown-58e8e98916823941.pt",
+    "distinct_from_eps0_cache": true
+  },
+  "realized_proof": {
+    "n_pairs_checked": 327680,
+    "eta_rms_over_tau_ratio_mean": 0.9998706770398712,
+    "eta_rms_over_tau_ratio_std": 0.022086251800327486,
+    "eta_band_pass": true,
+    "eta_band_rule": "mean ratio in [0.7, 1.3] (law-of-large-numbers band around 1.0 for iid-per-column gaussian draws)",
+    "twin_cosine_max": 0.9836896061897278,
+    "twin_cosine_pass": true,
+    "twin_cosine_rule": "strictly < 1.0 for every split pair (fail-closed)"
+  },
+  "column_pair_map": {
+    "hidden": 1024,
+    "interm_seed": 16384,
+    "interm_grown": 32768,
+    "mapping": "grown down_proj column j in [0, interm_seed) pairs with column j+interm_seed (torch.cat([d_a, d_b], dim=1) convention)"
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "B2_REALIZED_PASS"
+}

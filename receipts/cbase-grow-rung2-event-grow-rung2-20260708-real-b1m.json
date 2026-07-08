@@ -1,0 +1,54 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EVENT-B1M",
+  "ts": "2026-07-08T20:12:57.439033+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 466,
+  "refs": [
+    449,
+    448,
+    327
+  ],
+  "run_id": "grow-rung2-20260708-real",
+  "scope": "B1m: u_pre on the pinned 8-microstep measurement batch, gate_proj layer-0, via build_real_d_comm_closures'/_muon_step_in_copy's own in-copy Muon step. grad_pre_gate cached for B3's compute_d_comm wiring.",
+  "ff_seed": 16384,
+  "qat_enabled": true,
+  "mtp_enabled": true,
+  "ce_impl": "cut_ce_chunked",
+  "batch": {
+    "microstep_shas": [
+      "f04b36707b9922828f28ed4bac6f24a222f93e39e91132b0d08bfc09f3a63aa7",
+      "7668263c3a2638da147a7aa1a878a04287b8c235eeef4eadc2d3392898ec72ee",
+      "14505ddc27b468a482fe44a750fb8fdf7178c6f6b79c7c9441a3d964644c2a44",
+      "de286529a302fbc6ec8fa1b33d55160c36f13ea6b684ab55080a267ab4d9de82",
+      "ae2a5395cc8710194cbd5cc0d58957458c060846d13e51947c5098fa5263089d",
+      "316c79c1d3a549cf6012134fd1e1b822896d230f3d1793b5d0344b3a41e21df1",
+      "6667c059ec7003f47b45be9bda90a318bc26ac93e6cfe6a9d29b140ca0b60b87",
+      "77688fa1c454452d83a22098a5372bfad23adaca26680658b7949f40cc6bf651"
+    ],
+    "overall_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+    "convention": "synthetic packed shard, np.random.default_rng(0), same construction as cbase_grow_rung2_gpu_offload_probe.py's probe batch",
+    "dataloader_bypassed": true,
+    "attention_mask_position_ids_constructed_explicitly_not_fed_to_forward": true
+  },
+  "deterministic_forward": {
+    "dropout_modules_with_nonzero_p": [],
+    "deterministic": true
+  },
+  "u_pre": {
+    "gate_key": "backbone_model.layers.0.mlp.gate_proj.weight",
+    "rms_update": 0.0003719785891007632,
+    "momentum_buffer_source": "B1 snapshot pre-grow momentum_buffer (parent-carried)",
+    "lr_used": 0.02,
+    "lr_note": "base configured lr_muon, no WSD multiplier applied -- disclosed simplification for the commutation-defect measurement leg only (the STABILIZE phase applies the real WSD schedule via apply_wsd)."
+  },
+  "cache_paths": {
+    "grad_pre_gate": "receipts/.rung2-event-cache/grow-rung2-20260708-real-grad-pre-gate.pt",
+    "theta_gate_pre": "receipts/.rung2-event-cache/grow-rung2-20260708-real-theta-gate-pre.pt",
+    "pre_momentum": "receipts/.rung2-event-cache/grow-rung2-20260708-real-pre-momentum.pt"
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "B1M_CAPTURED"
+}
