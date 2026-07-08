@@ -1,0 +1,86 @@
+{
+  "created_at_utc": "2026-07-02T06:41:30Z",
+  "inner_adversarial_trials_per_case": 50000,
+  "inner_kills": [],
+  "inner_kills_found": 0,
+  "outer_adversarial_cases": {
+    "average_gain_masking_case": {
+      "avg_only_would_pass": true,
+      "bar_G": 0.15999999999999975,
+      "blocked": true,
+      "p_G": 0.9,
+      "p_G_pass": false
+    },
+    "future_decay_case": {
+      "A_n": 1.0,
+      "A_n_plus_m": 0.5,
+      "blocked": true,
+      "decay_pass": false
+    }
+  },
+  "outer_kills": [],
+  "outer_kills_found": 0,
+  "positive_inner": {
+    "metrics": {
+      "D_a": 0.12245933120182595,
+      "G_c": 0.0,
+      "G_r": 0.12245933120182595,
+      "O_a": 1.0,
+      "P_b": 0.0,
+      "R_g": -0.00505710464456105,
+      "T_s": 0.0,
+      "conds": {
+        "D_a>eps": true,
+        "G_r>G_c+eps": true,
+        "G_r>eps": true,
+        "O_a>=omega": true,
+        "P_b<tau": true,
+        "R_g>-gamma": true,
+        "T_s<tau": true,
+        "norm_assim<=B_a": true,
+        "norm_nonR<=rho": true,
+        "norm_total<=B_t": true
+      },
+      "norm_assim": 0.5,
+      "norm_nonR": 0.0,
+      "norm_total": 0.5,
+      "pass": true
+    },
+    "trial": 0
+  },
+  "positive_outer": {
+    "A_n": 1.0,
+    "A_n_plus_m": 1.0,
+    "bar_G_n": 0.12121499981317646,
+    "bar_G_n_plus_m": 0.11918482257822091,
+    "bar_R_n": -0.004049772374914211,
+    "bar_T_n": 0.0,
+    "outer_pass": true,
+    "p_G": 1.0
+  },
+  "random_seed": 811,
+  "scope": {
+    "does_not_prove": "The current Ember repository already implements the witness architecture or passes the criterion on real checkpoints.",
+    "proves": "The formal blockers reject modeled adversarial loopholes and the witness architecture has satisfiable inner and outer examples in this executable model."
+  },
+  "sha256_preimage_without_sha_field": "6a07c508edd4b7d3394284117f0371db8cb71c6e37ec91a17db33bed5df9e454",
+  "thresholds": {
+    "A_min": 0.95,
+    "B_a": 0.5,
+    "B_t": 0.5,
+    "Gamma": 0.05,
+    "alpha": 0.05,
+    "beta": 0.05,
+    "delta_G": 0.05,
+    "eps": 0.01,
+    "eta": 0.2,
+    "gamma": 0.05,
+    "kappa": 0.02,
+    "lam": 1e-09,
+    "omega": 1.0,
+    "rho": 1e-08,
+    "tau": 0.02
+  },
+  "valid_receipt": true,
+  "version": "ember_bootstrap_package_v1"
+}

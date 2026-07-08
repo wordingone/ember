@@ -1,0 +1,1329 @@
+{
+  "ticket": "C14-OWNED-RUN",
+  "ts": "2026-07-03T21:51:30Z",
+  "sha_convention": "sha256",
+  "mode": "live",
+  "script": "scripts/ember_c14_owned_run.py",
+  "corpus": {
+    "seed": 20260702,
+    "split_rule": "increment-modulo-8 executing-verifier family (ember_resident_igrpo.executing_verifier semantics: correct=(state_val+1)%8, executed not looked-up); state_val domain {0..7} shuffled by random.Random(seed=20260702) then partitioned into disjoint SETS \u2014 heldout_state_vals=[1, 3, 4] (3 values), train_state_vals=[0, 2, 5, 6, 7] (5 values); zero state_val overlap between splits (a genuinely held-out family-parameter range, not merely held-out task IDs over a value range shared with train).",
+    "n_train": 5,
+    "n_heldout": 3,
+    "train_state_vals": [
+      0,
+      2,
+      5,
+      6,
+      7
+    ],
+    "heldout_state_vals": [
+      1,
+      3,
+      4
+    ],
+    "corpus_version": "v2",
+    "k_exemplars": 3,
+    "exemplar_assignment": {
+      "train_s00": [
+        2,
+        5,
+        6
+      ],
+      "train_s02": [
+        0,
+        6,
+        7
+      ],
+      "train_s05": [
+        0,
+        2,
+        7
+      ],
+      "train_s06": [
+        0,
+        2,
+        7
+      ],
+      "train_s07": [
+        2,
+        5,
+        6
+      ],
+      "held_s01": [
+        5,
+        6,
+        7
+      ],
+      "held_s03": [
+        0,
+        5,
+        7
+      ],
+      "held_s04": [
+        0,
+        2,
+        5
+      ]
+    }
+  },
+  "candidate_manifest": {
+    "seed_checkpoint_path": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt",
+    "seed_checkpoint_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
+  },
+  "resident_training_candidate": {
+    "resident_checkpoint_path": "receipts/ember-c14-owned-run/resident-adapter-20260703T215130Z.pt",
+    "resident_checkpoint_sha256": "401939b2429912a911bcc1f7d38e871c53554aa3bcdfda96fd3f674527b05f4e",
+    "adapter_param_hash": "d23fe458a880d06d8da12457cd9aa842cb22264c69263c226eb958fa883870da",
+    "persisted_on_verdicts": [
+      "C14-LIVE-PASS",
+      "C14-LIVE-NOT-CLEARED"
+    ],
+    "persisted": true,
+    "artifact_shape": "lora_adapter_state_dict_only_file_not_directory",
+    "final_train_step": 1023,
+    "size_bytes": 1058933,
+    "known_gap": "ember_e2b_surpass_run.py::resolve_c14_checkpoint() requires resident_checkpoint_path to be a DIRECTORY containing a merged model.pt loadable unchanged through make_owned_core_factory(); this is the LoRA delta only, at a file path -- a --live e2b-surpass run against this receipt will refuse loudly ('resolved checkpoint dir does not exist on disk'), by design, rather than silently load the untrained base. See this function's docstring for why the merge is not attempted here."
+  },
+  "arm_scores": {
+    "A": {
+      "train": {
+        "pass_rate": 0.0,
+        "n_tasks": 5,
+        "pass_count": 0,
+        "rows": [
+          {
+            "id": "train_s00",
+            "state_val": 0,
+            "action": 2,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s02",
+            "state_val": 2,
+            "action": 4,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s05",
+            "state_val": 5,
+            "action": 7,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s06",
+            "state_val": 6,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s07",
+            "state_val": 7,
+            "action": 1,
+            "reward": 0.0
+          }
+        ]
+      },
+      "heldout": {
+        "pass_rate": 0.0,
+        "n_tasks": 3,
+        "pass_count": 0,
+        "rows": [
+          {
+            "id": "held_s01",
+            "state_val": 1,
+            "action": 3,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s03",
+            "state_val": 3,
+            "action": 5,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s04",
+            "state_val": 4,
+            "action": 6,
+            "reward": 0.0
+          }
+        ]
+      }
+    },
+    "B": {
+      "train": {
+        "pass_rate": 0.2,
+        "n_tasks": 5,
+        "pass_count": 1,
+        "rows": [
+          {
+            "id": "train_s00",
+            "state_val": 0,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s02",
+            "state_val": 2,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s05",
+            "state_val": 5,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s06",
+            "state_val": 6,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s07",
+            "state_val": 7,
+            "action": 0,
+            "reward": 1.0
+          }
+        ]
+      },
+      "heldout": {
+        "pass_rate": 0.0,
+        "n_tasks": 3,
+        "pass_count": 0,
+        "rows": [
+          {
+            "id": "held_s01",
+            "state_val": 1,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s03",
+            "state_val": 3,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s04",
+            "state_val": 4,
+            "action": 0,
+            "reward": 0.0
+          }
+        ]
+      }
+    },
+    "C": {
+      "train": {
+        "pass_rate": 0.4,
+        "n_tasks": 5,
+        "pass_count": 2,
+        "rows": [
+          {
+            "id": "train_s00",
+            "state_val": 0,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s02",
+            "state_val": 2,
+            "action": 3,
+            "reward": 1.0
+          },
+          {
+            "id": "train_s05",
+            "state_val": 5,
+            "action": 3,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s06",
+            "state_val": 6,
+            "action": 3,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s07",
+            "state_val": 7,
+            "action": 0,
+            "reward": 1.0
+          }
+        ]
+      },
+      "heldout": {
+        "pass_rate": 0.0,
+        "n_tasks": 3,
+        "pass_count": 0,
+        "rows": [
+          {
+            "id": "held_s01",
+            "state_val": 1,
+            "action": 3,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s03",
+            "state_val": 3,
+            "action": 3,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s04",
+            "state_val": 4,
+            "action": 3,
+            "reward": 0.0
+          }
+        ]
+      }
+    },
+    "Deleted": {
+      "train": {
+        "pass_rate": 0.0,
+        "n_tasks": 5,
+        "pass_count": 0,
+        "rows": [
+          {
+            "id": "train_s00",
+            "state_val": 0,
+            "action": 2,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s02",
+            "state_val": 2,
+            "action": 4,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s05",
+            "state_val": 5,
+            "action": 7,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s06",
+            "state_val": 6,
+            "action": 0,
+            "reward": 0.0
+          },
+          {
+            "id": "train_s07",
+            "state_val": 7,
+            "action": 1,
+            "reward": 0.0
+          }
+        ]
+      },
+      "heldout": {
+        "pass_rate": 0.0,
+        "n_tasks": 3,
+        "pass_count": 0,
+        "rows": [
+          {
+            "id": "held_s01",
+            "state_val": 1,
+            "action": 3,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s03",
+            "state_val": 3,
+            "action": 5,
+            "reward": 0.0
+          },
+          {
+            "id": "held_s04",
+            "state_val": 4,
+            "action": 6,
+            "reward": 0.0
+          }
+        ]
+      }
+    }
+  },
+  "gate_predicates": {
+    "c_beats_a_train": true,
+    "c_beats_b_train": true,
+    "deleted_degrades_to_a_train": true,
+    "deleted_a_delta": 0.0,
+    "c_beats_a_heldout": false,
+    "c_beats_b_heldout": false,
+    "deletion_drops_heldout_c_tasks": false,
+    "c_new_passes_heldout": 0,
+    "deleted_drops_count": 0
+  },
+  "guard_results": {
+    "guard_a_c_changes_core": true,
+    "guard_a_deleted_restores_core": true,
+    "pre_c_hash": "19345552e32c045ef352a95eed4487691e18ffe9bddedd57204f9e2b63434b88",
+    "post_c_hash": "94718930f8489c1cc4a0fdbe3771f01dae6c641a005be1cf3259a8d463777e05",
+    "deleted_hash": "19345552e32c045ef352a95eed4487691e18ffe9bddedd57204f9e2b63434b88",
+    "guard_b_verifier_executing": true,
+    "guard_c_echo_proof": true,
+    "guard_d_core_not_frozen": true,
+    "guard_e_not_side_classifier": true,
+    "guard_g_gradient_flow": true,
+    "guard_h_reward_dependence": true,
+    "c_train_rate": 0.4,
+    "c_scrambled_train_rate": 0.2,
+    "a_train_rate": 0.0
+  },
+  "clearance": false,
+  "elapsed_s": 12768.556052446365,
+  "envelope_v1_7": {
+    "temp_schedule": "1.5:1.0:384",
+    "entropy_beta": 0.02,
+    "degenerate_resample": true,
+    "per_state_reward_norm": false,
+    "corpus_v3_resample": true,
+    "corpus_v3_resample_start_step": 768
+  },
+  "verdict": "C14-LIVE-NOT-CLEARED",
+  "checkpoint_evals": [
+    {
+      "step": 64,
+      "train_pass_count": 0,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 2,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 1,
+          "reward": 0.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 0,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 128,
+      "train_pass_count": 1,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 0,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 192,
+      "train_pass_count": 1,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 0,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 256,
+      "train_pass_count": 1,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 0,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 320,
+      "train_pass_count": 1,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 7,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 7,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 5,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 6,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 384,
+      "train_pass_count": 1,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 4,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 6,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 448,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 512,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 576,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 640,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 704,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 768,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 832,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 896,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 960,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    },
+    {
+      "step": 1024,
+      "train_pass_count": 2,
+      "train_total": 5,
+      "heldout_pass_count": 0,
+      "heldout_total": 3,
+      "train_rows": [
+        {
+          "id": "train_s00",
+          "state_val": 0,
+          "action": 0,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s02",
+          "state_val": 2,
+          "action": 3,
+          "reward": 1.0
+        },
+        {
+          "id": "train_s05",
+          "state_val": 5,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s06",
+          "state_val": 6,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "train_s07",
+          "state_val": 7,
+          "action": 0,
+          "reward": 1.0
+        }
+      ],
+      "heldout_rows": [
+        {
+          "id": "held_s01",
+          "state_val": 1,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s03",
+          "state_val": 3,
+          "action": 3,
+          "reward": 0.0
+        },
+        {
+          "id": "held_s04",
+          "state_val": 4,
+          "action": 3,
+          "reward": 0.0
+        }
+      ]
+    }
+  ]
+}

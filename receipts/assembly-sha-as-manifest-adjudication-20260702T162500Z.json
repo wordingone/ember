@@ -1,0 +1,9 @@
+{
+ "schema": "adjudication/v1",
+ "ts": "20260702T162500Z",
+ "kind": "field_semantics",
+ "verdict": "ASSEMBLY_SHA_AS_MANIFEST_HISTORICAL",
+ "finding": "pre-2026-07-02 training-run receipts (e.g. sp-checkpoint-probe-step-25000/-50000, 2026-06-12) populate corpus_manifest_sha256 with a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2 = the eng36 ASSEMBLY receipt-file sha (raw-corpus namespace), regex-parsed from config prose data.source; no tokenized-corpus combined-sha existed before manifest_sha.py (2026-07-02)",
+ "disposition": "UNBOUND-LEGACY per data-engineering-v1 sec1.5: historical, never silently-missing, never retroactive falsification; forward receipts carry both assembly_receipt_sha256 and corpus_manifest_sha256 (leg-2 combined sha aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a)",
+ "pattern_precedent": "receipts/stale-figure-adjudication-20260702T151929Z.json (append-only field-semantics disposition)"
+}

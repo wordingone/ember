@@ -1,0 +1,63 @@
+{
+  "ticket": "EMBER-COMPLETENESS-TALLY",
+  "ts": "20260708T065530Z",
+  "issue": 337,
+  "total": 56,
+  "implemented": 16,
+  "part": 14,
+  "gated": 25,
+  "open": 1,
+  "pct_implemented": 28.6,
+  "missing": [
+    {
+      "id": "C0",
+      "reason": "open"
+    }
+  ],
+  "per_subgoal": {
+    "S1": {
+      "implemented": 3,
+      "part": 6,
+      "gated": 4,
+      "open": 0
+    },
+    "S2": {
+      "implemented": 6,
+      "part": 2,
+      "gated": 9,
+      "open": 0
+    },
+    "S3": {
+      "implemented": 3,
+      "part": 1,
+      "gated": 3,
+      "open": 0
+    },
+    "S4": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 1,
+      "open": 0
+    },
+    "S5": {
+      "implemented": 1,
+      "part": 2,
+      "gated": 3,
+      "open": 0
+    },
+    "S6": {
+      "implemented": 3,
+      "part": 1,
+      "gated": 3,
+      "open": 1
+    },
+    "S7": {
+      "implemented": 0,
+      "part": 1,
+      "gated": 2,
+      "open": 0
+    }
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "no_gpu": true
+}

@@ -1,0 +1,77 @@
+{
+  "ticket": "PROOF-FRONTIER-PROJECTION",
+  "ts": "20260702T065351Z",
+  "kind": "job",
+  "verdict": "PASS",
+  "verdict_detail": "SYNTHETIC_INPUTS_PROTOCOL_DEMO",
+  "chk_name": "projected_dense_flops_to_capability",
+  "spec_ref": "docs/spec/math-core-v1.md \u00a77 (W1), \u00a711 proof-obligations table",
+  "inputs_synthetic": true,
+  "generator": {
+    "path": "scripts/proofs/frontier_projection.py",
+    "sha256": "70aaca231f6e0f7767064baf12d08917714e5d2d37c7db6e275c97ae084ca820"
+  },
+  "execution": {
+    "pid": 32388,
+    "host": "DESKTOPHH",
+    "start_ts": "2026-07-02T06:53:48Z",
+    "total_secs": 2.3599870204925537,
+    "model_load_secs": null,
+    "overhead_secs": null,
+    "overhead_pct": null
+  },
+  "inputs_sha": {
+    "args_fingerprint": "8933fbde146db8e4"
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "result": {
+    "chinchilla_ratio": 20.0,
+    "target_loss": 2.2,
+    "capability_note": "target_loss=2.2 is a PLACEHOLDER loss threshold standing in for a target capability level (math-core-v1.md \u00a77 W1). No cap_M-to-loss mapping is built yet (evaluation-v1.md \u00a72 lists cap_M as a 5-vector of task scores, not a loss). This value is chosen only to exercise the inversion arithmetic below the synthetic points' loss range, and carries no scientific claim.",
+    "n_points": 3,
+    "points": [
+      {
+        "N": 10000000.0,
+        "chinchilla_C": 1.2e+16,
+        "measured_C": 1.2e+16,
+        "D_match_used": 200000000.0,
+        "loss": 3.74,
+        "synthetic": true
+      },
+      {
+        "N": 50000000.0,
+        "chinchilla_C": 3e+17,
+        "measured_C": 3e+17,
+        "D_match_used": 1000000000.0,
+        "loss": 3.0,
+        "synthetic": true
+      },
+      {
+        "N": 200000000.0,
+        "chinchilla_C": 4.8e+18,
+        "measured_C": 4.8e+18,
+        "D_match_used": 4000000000.0,
+        "loss": 2.59,
+        "synthetic": true
+      }
+    ],
+    "fit": {
+      "a": 417.41983393268066,
+      "b": 0.14436974789915966,
+      "c": 1.7490117647058823,
+      "sse": 6.303258086914731e-06
+    },
+    "degenerate_point_fit": true,
+    "projected_dense_flops_to_capability": 3.526106927505197e+20,
+    "ci": {
+      "method": "nonparametric_bootstrap_resample_points_refit",
+      "n_boot": 200,
+      "n_feasible_draws": 87,
+      "infeasible_draws": 113,
+      "failed_fits": 0,
+      "p05": 3.526106927505197e+20,
+      "p50_median": 3.526106927505197e+20,
+      "p95": 3.9960168878576316e+27
+    }
+  }
+}

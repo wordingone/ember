@@ -1,0 +1,155 @@
+{
+  "claim": "math-core-v1.md #5 BOOTSTRAP_PASS thresholds are non-degenerate: a pass region exists, adjacent regions fail (on the binding axes), and the package's negative controls fail everywhere in the swept region.",
+  "vendored_package": "ember_engineering_contract_impl_v4 (scripts/proofs/_vendor/ember_impl/, unmodified)",
+  "n_episodes": 64,
+  "m_updates": 10,
+  "seed": 811,
+  "model_config": {
+    "dim": 16,
+    "num_rules": 4,
+    "seq": 4
+  },
+  "package_default_thresholds": {
+    "eps": 0.0005,
+    "tau": 0.01,
+    "rho": 1e-12,
+    "omega": 1.0,
+    "alpha": 0.05
+  },
+  "package_default_reconstruction_check": {
+    "BOOTSTRAP_PASS_from_raw_cache": true,
+    "BOOTSTRAP_PASS_from_vendored_package_direct": true,
+    "match": true
+  },
+  "grid": {
+    "eps": [
+      0.0001,
+      0.0005,
+      0.001,
+      0.02,
+      0.03,
+      0.045,
+      0.06
+    ],
+    "tau": [
+      0.001,
+      0.005,
+      0.01,
+      0.05,
+      0.1
+    ],
+    "rho": [
+      1e-13,
+      1e-12,
+      1e-11,
+      1e-10,
+      1e-09
+    ],
+    "omega": [
+      0.5,
+      0.75,
+      1.0,
+      1.25,
+      1.5
+    ],
+    "alpha": [
+      0.005,
+      0.01,
+      0.02,
+      0.05,
+      0.1
+    ]
+  },
+  "total_grid_cells": 4375,
+  "arm_pass_counts": {
+    "honest": 675,
+    "control_wrong_rule": 0,
+    "control_surface_memorizer": 0,
+    "control_label_shuffled": 0
+  },
+  "pass_region_frac": 0.15428571428571428,
+  "controls_never_pass": true,
+  "control_arms_evaluated": [
+    "control_wrong_rule (package-native control-artifact arm, make_controls()[1])",
+    "control_surface_memorizer (package-native surface-only arm, make_controls()[2])",
+    "control_label_shuffled (constructed: mismatched (x, y_rule) supervision, rotate-by-1 derangement)"
+  ],
+  "binding_axes": [
+    "eps",
+    "omega",
+    "alpha"
+  ],
+  "nonbinding_axes_at_B0": [
+    "tau",
+    "rho"
+  ],
+  "nonbinding_axes_reason": "T_s and P_b are EXACTLY 0.0 for the honest arm at B0 because assimilate_episode() only ever writes rule_adapters (never W_S, never encoder/W_R), so norm_nonrule is EXACTLY 0.0 too \u2014 tau and rho cannot fail the honest arm anywhere in their swept range, at ANY value >=0. This matches bootstrap-v1.md #3a's own documented caveat for rho ('attainable only because the witness has exact rule-indexed adapters') and generalizes it to tau; it is a B0 witness-architecture property, not a script defect, and is expected to stop holding at B1 (real gradient training) per bootstrap-v1.md #3b.",
+  "honest_axis_marginal_pass_rate": {
+    "eps": {
+      "0.0001": 0.36,
+      "0.0005": 0.36,
+      "0.001": 0.36,
+      "0.02": 0.0,
+      "0.03": 0.0,
+      "0.045": 0.0,
+      "0.06": 0.0
+    },
+    "tau": {
+      "0.001": 0.15428571428571428,
+      "0.005": 0.15428571428571428,
+      "0.01": 0.15428571428571428,
+      "0.05": 0.15428571428571428,
+      "0.1": 0.15428571428571428
+    },
+    "rho": {
+      "1e-13": 0.15428571428571428,
+      "1e-12": 0.15428571428571428,
+      "1e-11": 0.15428571428571428,
+      "1e-10": 0.15428571428571428,
+      "1e-09": 0.15428571428571428
+    },
+    "omega": {
+      "0.5": 0.2571428571428571,
+      "0.75": 0.2571428571428571,
+      "1.0": 0.2571428571428571,
+      "1.25": 0.0,
+      "1.5": 0.0
+    },
+    "alpha": {
+      "0.005": 0.0,
+      "0.01": 0.0,
+      "0.02": 0.2571428571428571,
+      "0.05": 0.2571428571428571,
+      "0.1": 0.2571428571428571
+    }
+  },
+  "control_arm_deterministic_reason": "control_wrong_rule and control_surface_memorizer have G_r EXACTLY 0.0 for every episode (architecturally: neither arm ever writes rule_adapters[episode.rule_id], and rule_score() reads only that entry), so G_r>eps fails for every eps>0 in the grid unconditionally, regardless of tau/rho/omega/alpha. control_label_shuffled has G_r STRICTLY NEGATIVE for every episode (measured range [-0.0541, -0.0050], mean -0.0314) because mismatched supervision actively degrades the transfer score. All three therefore fail A_n>=A_min at every grid eps>0, hence BOOTSTRAP_PASS is False in all total_grid_cells for all three control arms \u2014 a mathematical certainty confirmed by execution, not sampled.",
+  "honest_default_outer_metrics": {
+    "A_n": 1.0,
+    "A_n_plus_m": 0.984375,
+    "p_G": 1.0,
+    "bar_G_n": 0.043559386549186556,
+    "bar_G_n_plus_m": 0.03046271422347932,
+    "bar_T_n": 0.0,
+    "bar_R_n": -0.003459079610874896,
+    "BOOTSTRAP_PASS": true
+  },
+  "control_arm_raw_ranges": {
+    "control_wrong_rule": {
+      "G_r_min": 0.0,
+      "G_r_max": 0.0
+    },
+    "control_surface_memorizer": {
+      "G_r_min": 0.0,
+      "G_r_max": 0.0
+    },
+    "control_label_shuffled": {
+      "G_r_min": -0.05407409646567729,
+      "G_r_max": -0.0049619607138121635
+    }
+  },
+  "elapsed_s": 1.3676788806915283,
+  "device": "cpu",
+  "utc_timestamp": "20260702T065226Z",
+  "pass": true
+}
