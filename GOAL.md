@@ -18,7 +18,7 @@ living system that keeps growing through its own receipted cycles). Absence of a
 
 ## 2. Completion
 
-The goal clears when ALL FOUR hold, receipted per docs/goal-clear-protocol.md:
+The goal clears when ALL FIVE hold, receipted per docs/goal-clear-protocol.md:
 
 - C1 SCALE PARITY: a locally-created model in the scale-class of the largest locally-inferable
   models (>27B-class), matching or beating the open-weights models of that class on frozen
@@ -30,8 +30,18 @@ The goal clears when ALL FOUR hold, receipted per docs/goal-clear-protocol.md:
 - C3 FRONTIER BEND: the capability-per-local-resource frontier (P1 energy law) provably bent
   an order of magnitude past the standard stack at matched budget.
 - C4 NATIVE STACK: the creation path runs on ember-owned substrate (section 5).
+- C5 EFFECTIVE-CAPACITY MECHANISM (operator-added 2026-07-08): a named mechanism — not an
+  engineering aggregate — receipted on this machine, whereby local compute produces
+  frontier-like effective capacity without dense frontier-scale cost. Falsifiability floor:
+  (a) the mechanism is identified and ablatable — deleting it collapses the effect (L9
+  deletion-ablation); (b) on frozen external evals the model reaches capability that no
+  matched-budget dense control reaches (L9 equal-budget); (c) a receipted scaling trend shows
+  the gap to the dense control WIDENING with scale — a shrinking gap is the toy-model failure
+  state, named. "Frontier-like" pins to the frontier band at claim time (as C1 pins to the
+  locally-inferable class); the reference set freezes with the claim. C5 does not weaken C1:
+  the >27B parity floor stands unchanged.
 
-One completion event; after it the organism continues living. Anything less than all four is
+One completion event; after it the organism continues living. Anything less than all five is
 progress, never completion.
 
 ## 3. Laws (permanent; violating any voids the violating claim)
