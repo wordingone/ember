@@ -196,6 +196,15 @@ the standing goal. Neither is duplicated by commit messages or by `receipts/`.
 
 ## 5. Verify one claim yourself (no GPU required)
 
+**Start with the battery, not the board.** `docs/spec/credibility-battery-v1.md` is the 15
+questions any external reviewer should ask about a project like this one, each graded
+ABSENT/WEAK/STRONG with the repo-relative receipt paths a stranger can open to check the grade
+themselves — it is deliberately the centerpiece of "verify a claim yourself," not a side document.
+The fastest way to verify one claim: open the battery, pick any question, open the path(s) it
+cites, and check the artifact's fields against the grade given. Where the battery discloses that a
+cited artifact is not yet in this repository, that is the honest answer for that row today — not
+something to paper over by trusting the prose instead.
+
 Everything below runs with only Python 3.11+, no external packages, no model weights, no
 credentials, no GPU (`docs/REPRODUCIBILITY.md`, "Checks that require no model weights and no
 GPU"):
@@ -209,7 +218,7 @@ python scripts/receipt_check.py --selftest
 ```
 
 Both print a `*_SELFTEST_PASS` sentinel or a per-file findings table on success, and exit
-non-zero on failure. From there, pick any condition in `docs/spec/conditions-v1.md`, find the
-receipt path(s) its CHK cites, open that JSON file, and check its fields against the condition's
-own "R:" (requirement) and "Does NOT count:" text — the same read this page just walked through
-for the b3 receipt above.
+non-zero on failure. Beyond the battery, pick any condition in `docs/spec/conditions-v1.md`, find
+the receipt path(s) its CHK cites, open that JSON file, and check its fields against the
+condition's own "R:" (requirement) and "Does NOT count:" text — the same read this page just
+walked through for the b3 receipt above.

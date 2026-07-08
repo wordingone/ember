@@ -4,7 +4,8 @@ A substrate that runs, trains, and improves on one local machine — and has to
 prove every improvement with receipts. **New here?** Start at
 [`docs/START-HERE.md`](docs/START-HERE.md) — the glossary, the A/B/C loop
 frame, and one receipt walked field-by-field, before anything else on this
-page.
+page. The 15 questions any reviewer should ask, with graded, receipt-backed
+answers: [`docs/spec/credibility-battery-v1.md`](docs/spec/credibility-battery-v1.md).
 
 ember improves by **verified experience only**: it acts in worlds it can
 inspect, verifies its own outputs against ground truth the world itself
