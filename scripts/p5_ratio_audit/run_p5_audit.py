@@ -1207,7 +1207,25 @@ def compute_d_comm(theta_k, U_k_apply, U_kplus1_apply, G_apply) -> dict:
     U_kplus1_apply(theta) -> U_{k+1}(theta) at post-grow width (one
       in-copy step using the PRODUCTION pushforward optimizer state, i.e.
       whatever the runtime-read reset/carry flag says -- pre-registered as
-      production-as-found, stamped by the caller)."""
+      production-as-found, stamped by the caller).
+
+    #327 residual-decomposition fields (ADDITIVE; issue #327's Monte-Carlo
+    comment defines the algebra, mirrored verbatim here): write
+    v = U_{k+1}(G(theta_k)) - G(theta_k)          -- the post-grow step,
+    Pu = G(U_k(theta_k)) - G(theta_k)             -- the pushforward of the
+                                                       pre-grow step under G
+                                                       (G is linear on the
+                                                       production widen, so
+                                                       this equals G(u) for
+                                                       u = U_k(theta_k)-theta_k).
+    Then num = ||v - Pu||_RMS exactly (same tensor identity as the existing
+    numerator above), and with r = step_rms_post/denom, q =
+    pushforward_step_rms/denom, c = cos_alignment:
+      d_comm^2 = r^2 + q^2 - 2*c*r*q
+    (RMS-ratio identity: ||v-Pu||_RMS^2 = rms(v)^2 + rms(Pu)^2 -
+    2*rms(v)*rms(Pu)*cos(v,Pu), divided through by denom^2). Emitted
+    alongside d_comm/numerator_rms/denominator_rms; existing consumers are
+    unaffected (dict is only ever grown, never restructured)."""
     import torch
     Uk_theta = U_k_apply(theta_k)
     denom = rms(Uk_theta - theta_k)
@@ -1216,7 +1234,24 @@ def compute_d_comm(theta_k, U_k_apply, U_kplus1_apply, G_apply) -> dict:
     Ukp1_G_theta = U_kplus1_apply(G_theta)
     num = rms(Ukp1_G_theta - G_Uk_theta)
     value = num / denom if denom > 0 else float("nan")
-    return {"d_comm": value, "numerator_rms": num, "denominator_rms": denom}
+
+    v = (Ukp1_G_theta - G_theta).to(torch.float32).flatten()
+    Pu = (G_Uk_theta - G_theta).to(torch.float32).flatten()
+    step_rms_post = rms(v)
+    pushforward_step_rms = rms(Pu)
+    v_norm = torch.linalg.norm(v)
+    Pu_norm = torch.linalg.norm(Pu)
+    if v_norm > 0 and Pu_norm > 0:
+        cos_alignment = float(torch.dot(v, Pu) / (v_norm * Pu_norm))
+    else:
+        cos_alignment = float("nan")
+
+    return {
+        "d_comm": value, "numerator_rms": num, "denominator_rms": denom,
+        "step_rms_post": step_rms_post,
+        "pushforward_step_rms": pushforward_step_rms,
+        "cos_alignment": cos_alignment,
+    }
 
 
 def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_opt_state,
@@ -1837,6 +1872,68 @@ def selftest() -> None:
     except AssertionError as e:
         assert "hardcode" in str(e) and "layer_index" in str(e), f"wrong error: {e}"
     print("  TDD: layer_index!=0 guard raises AssertionError (fail-closed)  PASS")
+
+    # 16. TDD (#327): residual-decomposition fields (step_rms_post,
+    #     pushforward_step_rms, cos_alignment) recover PLANTED r, q, c by
+    #     construction, and the emitted d_comm matches
+    #     sqrt(r^2 + q^2 - 2*c*r*q) built from those SAME emitted fields.
+    #     G is a linear scalar map (theta -> q_planted*theta) so the
+    #     pushforward Pu = G(u) is exactly q_planted*u -- lets every planted
+    #     quantity be fixed by construction rather than fit after the fact.
+    torch.manual_seed(327)
+    n_rows, n_cols = 5, 8
+    N = n_rows * n_cols
+    theta327 = torch.randn(n_rows, n_cols)
+    u327 = torch.randn(n_rows, n_cols)  # pre-grow update delta
+
+    q_planted, r_planted, c_planted = 0.8, 0.6, 0.5
+
+    def G327(t):
+        return q_planted * t
+
+    def Uk327(t):
+        return t + u327
+
+    u_flat = u327.flatten()
+    u_unit = u_flat / u_flat.norm()
+    raw = torch.randn(N)
+    orth = raw - torch.dot(raw, u_unit) * u_unit
+    orth_unit = orth / orth.norm()
+    target_v_norm = r_planted * u_flat.norm()  # rms ratio == r_planted (same N as u)
+    v_flat = (c_planted * target_v_norm * u_unit +
+              (1 - c_planted ** 2) ** 0.5 * target_v_norm * orth_unit)
+    v327 = v_flat.reshape(n_rows, n_cols)
+
+    def Ukp1_327(t):
+        # t == G327(theta327); U_{k+1}(t) - t must equal v327 exactly.
+        return t + v327
+
+    r327 = compute_d_comm(theta327, Uk327, Ukp1_327, G327)
+    emitted_r = r327["step_rms_post"] / r327["denominator_rms"]
+    emitted_q = r327["pushforward_step_rms"] / r327["denominator_rms"]
+    emitted_c = r327["cos_alignment"]
+    assert abs(emitted_r - r_planted) < 1e-4, (emitted_r, r_planted)
+    assert abs(emitted_q - q_planted) < 1e-4, (emitted_q, q_planted)
+    assert abs(emitted_c - c_planted) < 1e-4, (emitted_c, c_planted)
+    reconstructed = (emitted_r ** 2 + emitted_q ** 2 - 2 * emitted_c * emitted_r * emitted_q) ** 0.5
+    assert abs(reconstructed - r327["d_comm"]) < 1e-4, (reconstructed, r327["d_comm"])
+    print(f"  TDD(#327): planted r={r_planted} q={q_planted} c={c_planted} recovered "
+          f"r={emitted_r:.4f} q={emitted_q:.4f} c={emitted_c:.4f}; "
+          f"sqrt(r^2+q^2-2crq)={reconstructed:.4f} == d_comm={r327['d_comm']:.4f}  PASS")
+
+    # 16b. Deliberately-wrong fixture: prove the recovery check has power to
+    #      FAIL (not a tautology that would pass against any target). Compare
+    #      the emitted cos_alignment against an intentionally wrong planted
+    #      value and assert the mismatch is what gets caught.
+    wrong_c = c_planted + 0.3
+    try:
+        assert abs(emitted_c - wrong_c) < 1e-4, (
+            f"expected mismatch: emitted={emitted_c} wrong_planted={wrong_c}")
+        assert False, "the deliberately-wrong comparison should have failed tolerance"
+    except AssertionError as e:
+        assert "expected mismatch" in str(e), f"wrong error path: {e}"
+    print("  TDD(#327): deliberately-wrong planted c is correctly rejected "
+          "(check has discriminating power, not a tautology)  PASS")
 
     print("P5_AUDIT_SELFTEST_PASS")
 
