@@ -1,18 +1,36 @@
 #!/usr/bin/env python3
 """gen_readme_status.py — regenerate README.md's board-status block from the newest totality receipt.
 
-Reads the newest scripts/ember_totality/receipts-totality/ember-totality-*.json (lexicographic
-sort of the ts-stamped filename == chronological order) and rewrites everything between the
+Reads the newest ember-totality-*.json under a receipts-totality directory (lexicographic sort of
+the ts-stamped filename == chronological order) and rewrites everything between the
 <!-- BOARD-STATUS-BEGIN --> / <!-- BOARD-STATUS-END --> markers in README.md with: the receipt
 id, its ts, counts by status, and a one-line legend. This makes a stale README count structurally
-impossible -- the block can only ever say what the newest receipt on disk says.
+impossible for whatever receipt tree the script was pointed at -- the block can only ever say
+what the newest receipt in THAT tree says.
 
-Board-run playbook: run this script (python scripts/gen_readme_status.py) as the last step of
-every totality board run, so README never drifts from the board.
+**"Newest" is scoped to --data-root, not to the world.** By default this reads
+scripts/ember_totality/receipts-totality/ under this repo -- the newest receipt COMMITTED to this
+checkout. A board-run lane's live data tree (uncommitted local receipts, or a different working
+copy) can genuinely hold a newer receipt than what's tracked here; that receipt is invisible to
+this script until it (or a copy of it) lands under --data-root. The generated block's stamped
+receipt id is the honest disclosure either way -- it never claims to be "current," only to match
+the newest receipt the script could see.
+
+Board-run playbook:
+  - A board-run lane with a live data tree runs this against that tree BEFORE committing anything:
+    `python scripts/gen_readme_status.py --data-root /path/to/live/receipts-totality --check`
+    to see whether README would change, then without --check to render it, then reviews the diff.
+  - Run this script as the last step of every totality board run against the tree that will
+    actually be committed, so README never drifts from what ships in the same commit.
+  - If README changes as a result, land it as its own docs PR through the normal stop-at-open
+    review flow -- this script never commits or pushes on its own.
 
 CLI:
-  python scripts/gen_readme_status.py            # regenerate README.md in place
+  python scripts/gen_readme_status.py            # regenerate README.md from the in-repo tree
   python scripts/gen_readme_status.py --check     # exit 1 if README.md would change (CI use)
+  python scripts/gen_readme_status.py --data-root /path/to/receipts-totality
+                                                  # point at a different (e.g. live/uncommitted)
+                                                  # receipts-totality directory instead
 
 Stdlib only. No network.
 """
@@ -24,18 +42,18 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RECEIPTS_GLOB = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality", "ember-totality-*.json")
+DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")
 BEGIN_MARKER = "<!-- BOARD-STATUS-BEGIN -->"
 END_MARKER = "<!-- BOARD-STATUS-END -->"
 
 
-def newest_receipt_path():
-    paths = sorted(glob.glob(RECEIPTS_GLOB))
+def newest_receipt_path(data_root):
+    receipts_glob = os.path.join(data_root, "ember-totality-*.json")
+    paths = sorted(glob.glob(receipts_glob))
     if not paths:
         raise SystemExit(
-            "gen_readme_status: no ember-totality-*.json receipts found under "
-            "scripts/ember_totality/receipts-totality/"
+            f"gen_readme_status: no ember-totality-*.json receipts found under {data_root}"
         )
     return paths[-1]
 
@@ -83,9 +101,18 @@ def main():
         action="store_true",
         help="exit 1 if README.md's board-status block is not already current (no write)",
     )
+    parser.add_argument(
+        "--data-root",
+        default=DEFAULT_DATA_ROOT,
+        help=(
+            "directory to scan for ember-totality-*.json (default: this repo's "
+            "scripts/ember_totality/receipts-totality/). Point this at a board-run lane's live "
+            "data tree to render against a receipt not yet committed here."
+        ),
+    )
     args = parser.parse_args()
 
-    receipt_path = newest_receipt_path()
+    receipt_path = newest_receipt_path(args.data_root)
     block = render_block(receipt_path)
 
     with open(README_PATH, "r", encoding="utf-8") as f:

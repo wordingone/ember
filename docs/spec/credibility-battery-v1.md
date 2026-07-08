@@ -23,6 +23,9 @@ is unfamiliar.
 2. A claim whose battery row is not STRONG is not publishable-class, whatever its board color.
 3. The stranger-audit protocol (issue #481) re-grades this battery on its cadence — external-review
    cleanliness is graded by a reader with no context, never by the team that wrote the claim.
+4. **Any answer without an openable, repo-relative artifact path grades ABSENT**, regardless of
+   what any prose (including this document's own source issue) asserts. A grade of WEAK or STRONG
+   requires a path a stranger with only this repository can open and check today.
 
 **Enforcement-gap disclosure (per issue #487 comment, 2026-07-08):** rule 1 is currently text with
 no mechanical check. The proposed cure is a `tools/repo-guard.sh` heuristic (a diff adding
@@ -39,7 +42,7 @@ per-question below) was written the same day against a live engineering session;
 cited artifacts (most visibly a newer totality-board receipt, `ember-totality-20260708T215158Z`,
 and a newer D3 loop receipt, `d3-native-loop-20260708T221708Z`) are not yet present in this public
 repository's tree as of this PR. That is disclosed per-row below, not silently smoothed over — per
-this document's own rule 2, an artifact a stranger cannot open does not support a STRONG or WEAK
+this document's own rule 4, an artifact a stranger cannot open does not support a STRONG or WEAK
 grade; where this repo cannot yet show the cited artifact, the closest artifact this repo **can**
 show is cited instead, and the gap is named.
 
@@ -260,11 +263,13 @@ consolidated closure row exists yet — this is exactly what board condition `C-
 contamination-audited eval suite.
 
 **Grade: WEAK** (issue #487) — **this is the battery's single most claim-blocking gap.** The
-frozen external eval suite does not exist in this repository yet. A follow-up spec,
-`docs/spec/eval-suite-freeze-v1.md`, was authored in issue #487's own follow-up comment
-(MMLU-Pro / GSM8K+MATH-500 / ARC-Challenge / HumanEval+ / MBPP / HellaSwag / GPQA-diamond, a
-pinned open eval harness, reference scores locally reproduced never paper-quoted) — it is a
-separate lane's landing, not part of this PR, and is not yet present in this checkout.
+frozen external eval suite does not exist in this repository yet.
+
+**Related spec (pointer, not duplicated here):** issue #487's follow-up comment authors
+`docs/spec/eval-suite-freeze-v1.md` (suite composition, harness pin, contamination-audit
+interlock, local-reproduction-not-paper-quoted rule) as a separate lane's landing — read the
+issue comment or that spec doc directly for its content; it is not yet present in this checkout
+as of this PR.
 
 **Check it yourself:**
 - `receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset8-len12-20260620T230700Z.json` (and
