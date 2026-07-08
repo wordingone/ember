@@ -1,0 +1,274 @@
+{
+  "ticket": "CEFF-COMPOSITION-AB",
+  "ts": "20260703T111351Z",
+  "mode": "live",
+  "issue": "#24",
+  "protocol_version": 2,
+  "ladder_ref": "docs/spec/ceff-lever-ladder.md \u00a7(c) C4 / \u00a7(d) interaction risk #5 / 'Composition A/B protocol v2'",
+  "scope": "fused-NS5-kernel-compile x bf16-NS5 dtype-swap composition A/B/C/D, isolating the interaction term the ladder names as never-tested",
+  "harness_sha": "a7e1986cc36c289dc8d7dd334e3011e29e57d0efa8703c0a9608651695701d6f",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "flags": [
+    "ONE GPU job at a time \u2014 do not dispatch concurrently with another train job",
+    "governor rails HOLD \u2014 never loosened",
+    "no git commits, no downloads, no founder/user names",
+    "protocol v2: bf16 cell gated on (a) max-abs<=7.8e-3 AND (b) NEW orthogonality-residual rel-diff<=5% AND (c) quality_guard (loss-trajectory) \u2014 ANY failing forces COMPOSITION_PARK_NUMERICS_FAIL; fp32 cell UNCHANGED (max-abs<=1e-3 alone)"
+  ],
+  "status": "OK",
+  "governor": {
+    "vram_fraction_applied": 0.8,
+    "fp19_fraction_floor": 0.8,
+    "free_gib": 22.45,
+    "total_gib": 23.99,
+    "margin_gib_floor": 4.0
+  },
+  "g_budget": {
+    "status": "GREEN",
+    "detail": "requested_run[ember_ceff_composition_ab--live]: total_steps=100, cost=3.621e+15 FLOPs (6*params*tokens estimate) vs micro-fit ceiling 2.431e+16 FLOPs (0.5% of the certified full-ladder FLOPs budget) -> FIT"
+  },
+  "requested_run": {
+    "source": "ember_ceff_composition_ab--live",
+    "total_steps": 100,
+    "params": 368354304,
+    "batch": 16,
+    "seq": 1024
+  },
+  "recipe": {
+    "source": "timeshare_pretrain production builders (build_v0_model/build_split_optimizer/resolve_ce_impl)",
+    "batch": 16,
+    "seq": 1024,
+    "ce_chunk_tokens": 256,
+    "warmup": 5,
+    "timed": 20,
+    "pace_s": 0.05,
+    "model_seed": 42,
+    "batch_gen_seed": 20260703,
+    "data": "synthetic (torch.randint, dedicated fixed-seed Generator, IDENTICAL sequence across all 4 arms) \u2014 see module docstring 'RECIPE HONESTY NOTE' for why real corpus shards are not threaded here",
+    "corpus_shards_note": "synthetic batches, not real PackedShardLoader shards \u2014 matches every other bench-shape harness in this family (c04_eager_bf16_throughput.py, c04_chunk_tf32_lever.py, c04_bf16ns5_qat_throughput.py); real-shard confirmation is the ladder's own \u00a7(e) next step if this cell keeps"
+  },
+  "ns5_equiv": {
+    "fp32_fused_vs_baseline": {
+      "label": "fp32_fused_vs_baseline",
+      "device": "cuda",
+      "max_abs_delta": 1.9e-07,
+      "tolerance": 0.001,
+      "skipped": false,
+      "pass": true
+    },
+    "bf16_fused_vs_baseline": {
+      "label": "bf16_fused_vs_baseline",
+      "device": "cuda",
+      "max_abs_delta": 0.0043641366,
+      "tolerance": 0.0078,
+      "skipped": false,
+      "orthogonality": {
+        "residual_baseline": 9.4154815674,
+        "residual_fused": 9.3471193314,
+        "rel_diff": 0.007261,
+        "rel_tol": 0.05,
+        "pass": true
+      },
+      "pass": true
+    },
+    "pass": true
+  },
+  "arms": {
+    "A_baseline": {
+      "arm": "A_baseline",
+      "status": "OK",
+      "tok_s_paced": 15934.32,
+      "tok_s_raw": 16748.78,
+      "median_tok_s": 16929.17,
+      "mean_step_ms": 969.831,
+      "loss_trajectory": [
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.875,
+        13.875,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.875,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875
+      ],
+      "mean_loss": 13.909375,
+      "first_loss": 13.9375,
+      "last_loss": 13.875,
+      "n_muon": 140,
+      "n_adamw": 44,
+      "ce_impl": "cut_ce_chunked",
+      "routing_mode": "muon_split",
+      "vram_used_gib": 6.449
+    },
+    "B_fused_alone": {
+      "arm": "B_fused_alone",
+      "status": "OK",
+      "tok_s_paced": 16467.29,
+      "tok_s_raw": 17338.63,
+      "median_tok_s": 17571.53,
+      "mean_step_ms": 938.301,
+      "loss_trajectory": [
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.875,
+        13.875,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.875,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875
+      ],
+      "mean_loss": 13.909375,
+      "first_loss": 13.9375,
+      "last_loss": 13.875,
+      "n_muon": 140,
+      "n_adamw": 44,
+      "ce_impl": "cut_ce_chunked",
+      "routing_mode": "muon_split",
+      "vram_used_gib": 6.35
+    },
+    "C_bf16ns5_alone": {
+      "arm": "C_bf16ns5_alone",
+      "status": "OK",
+      "tok_s_paced": 17844.71,
+      "tok_s_raw": 18872.46,
+      "median_tok_s": 19201.5,
+      "mean_step_ms": 860.268,
+      "loss_trajectory": [
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.875,
+        13.875,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.875,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875
+      ],
+      "mean_loss": 13.909375,
+      "first_loss": 13.9375,
+      "last_loss": 13.875,
+      "n_muon": 140,
+      "n_adamw": 44,
+      "ce_impl": "cut_ce_chunked",
+      "routing_mode": "muon_split",
+      "vram_used_gib": 6.262
+    },
+    "D_both_composed": {
+      "arm": "D_both_composed",
+      "status": "OK",
+      "tok_s_paced": 19094.38,
+      "tok_s_raw": 20275.88,
+      "median_tok_s": 20531.29,
+      "mean_step_ms": 799.733,
+      "loss_trajectory": [
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875,
+        13.9375,
+        13.875,
+        13.875,
+        13.9375,
+        13.875,
+        13.9375,
+        13.9375,
+        13.875,
+        13.875,
+        13.875,
+        13.9375,
+        13.9375,
+        13.9375,
+        13.875
+      ],
+      "mean_loss": 13.909375,
+      "first_loss": 13.9375,
+      "last_loss": 13.875,
+      "n_muon": 140,
+      "n_adamw": 44,
+      "ce_impl": "cut_ce_chunked",
+      "routing_mode": "muon_split",
+      "vram_used_gib": 6.256
+    }
+  },
+  "analysis": {
+    "tok_s": {
+      "A_baseline": 15934.32,
+      "B_fused_alone": 16467.29,
+      "C_bf16ns5_alone": 17844.71,
+      "D_both_composed": 19094.38
+    },
+    "MM_B_fused_alone": 1.03345,
+    "MM_C_bf16ns5_alone": 1.11989,
+    "MM_D_both_composed": 1.19832,
+    "predicted_independent_MM": 1.15735,
+    "interaction_ratio": 1.0354,
+    "incremental_over_bf16ns5_alone": 1.07003,
+    "quality_guard": {
+      "envelope": 0.02,
+      "per_arm": {
+        "B_fused_alone": {
+          "max_abs_rel_loss_delta": 0.0,
+          "envelope": 0.02,
+          "pass": true
+        },
+        "C_bf16ns5_alone": {
+          "max_abs_rel_loss_delta": 0.0,
+          "envelope": 0.02,
+          "pass": true
+        },
+        "D_both_composed": {
+          "max_abs_rel_loss_delta": 0.0,
+          "envelope": 0.02,
+          "pass": true
+        }
+      },
+      "pass": true
+    }
+  },
+  "kill_criteria": {
+    "ns5_equiv_pass": true,
+    "quality_guard_pass": true,
+    "viable_bar": 1.02,
+    "MM_D_clears_viable_bar": true,
+    "interaction_keep_bar": 1.044,
+    "residual_needed": 1.7838,
+    "closes_residual_gap": true
+  },
+  "verdict": "COMPOSITION_CLOSES_RESIDUAL_GAP"
+}

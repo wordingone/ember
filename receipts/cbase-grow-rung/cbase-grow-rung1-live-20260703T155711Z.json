@@ -1,0 +1,170 @@
+{
+  "ticket": "CBASE-GROW-RUNG",
+  "ts": "2026-07-03T15:57:11Z",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": "#29",
+  "spec_ref": "docs/spec/c-scale-s1-growth-chain-DRAFT.md \u00a79 (D1/D2/D3/D4/D5/D6 pre-registration)",
+  "scope": "S1 growth-chain rung: net2net FF-doubling warm-start from the certified parent lineage checkpoint, D1-sized stabilization segment, dual parameter convention (D4), G-budget micro-fit pre-flight, issue-29 kill criterion",
+  "mode": "live",
+  "rung": 1,
+  "grow_method": "net2net FF-widening (function-preserving, warm-start), the identical grow_operator surgery cbase_grow_dryrun.py proved, applied here from the PARENT rung's own already-stabilized checkpoint (no fresh pre-grow continuation segment \u2014 the parent's last stabilization segment IS the pre-grow loss-envelope reference, per this rung's own docstring)",
+  "parent_lineage_receipt": "receipts\\cbase-grow-live\\cbase-grow-live-live-20260703T053225Z.json",
+  "parent_lineage_receipt_sha256": "9542dc0d29364ef9f9538b41503062aa21121c11e0d836099d1edb53917cfbd9",
+  "growth_lineage": [
+    {
+      "rung": "seed",
+      "checkpoint": "B:\\M\\ember\\models\\cbase-smoke-run\\checkpoints\\step-00000610",
+      "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+      "step": 610,
+      "note": "original cbase-v0 from-scratch pretrain seed"
+    },
+    {
+      "rung": 0,
+      "ff": 8192,
+      "params_state_dict_sum": 718316544,
+      "receipt": "receipts\\cbase-grow-live\\cbase-grow-live-live-20260703T053225Z.json",
+      "receipt_sha256": "9542dc0d29364ef9f9538b41503062aa21121c11e0d836099d1edb53917cfbd9",
+      "checkpoint": "B:\\M\\ember\\models\\cbase-grow-live\\live-20260703T053225Z\\post\\checkpoints\\step-00000730"
+    }
+  ],
+  "growth_lineage_from_cbase_seed": true,
+  "no_borrowed_weights_load_bearing": true,
+  "ff_seed": 8192,
+  "ff_grown": 16384,
+  "param_count_before": 718316544,
+  "param_count_after": 1221633024,
+  "params_state_dict_sum_before": 718316544,
+  "params_state_dict_sum_after": 1221633024,
+  "params_dedup": {
+    "measured_duplicate_numel": 32768000,
+    "tied_pairs_detected": [
+      "backbone_model.embed_tokens.weight==head.weight"
+    ],
+    "method": "data_ptr() equality on the parent checkpoint's raw (pre-cast) bf16 state dict \u2014 torch.save/load preserves shared storage for tied parameters (empirically verified); the net2net operator never touches embed/head/mtp_heads (spec \u00a72.1), so this dedup amount, measured once pre-surgery, applies unchanged post-surgery",
+    "note": "spec \u00a79 D4's own prose states the duplicate as '+32,772,096'; the MEASURED value here (via data_ptr aliasing, matching spec \u00a73.2's independently-derived 32,768,000 = vocab*hidden) differs by 4,096 elements from D4's prose figure \u2014 an internal spec inconsistency, flagged rather than propagated; D4's RULING (dual reporting, params_unique authoritative) is honored exactly, using the measured number"
+  },
+  "params_unique_before": 685548544,
+  "params_unique_after": 1188865024,
+  "operating_capability_point_convention": "params_unique (D4: authoritative for the >3e9 floor and S2's 20N math); params_state_dict_sum carried alongside for continuity with the two existing receipted points",
+  "function_preservation_check": {
+    "mechanism": "same fixed recorded token batch through pre-grow vs freshly-grown (pre-training) models; net2net FF-widening is function-preserving by construction (duplicated gate/up rows produce duplicated SwiGLU activations; the halved, duplicated down columns sum them back to the exact seed output)",
+    "input_batch": {
+      "batch": 2,
+      "seqlen": 128,
+      "token_ids_sha256": "f7fe16148dd1d133e738691ec0634d88978ff38023c672aa413d3b7c3996baf5",
+      "generator_seed": 42
+    },
+    "logit_max_abs_diff": 2.384185791015625e-06,
+    "pass_tolerance": 0.0001,
+    "function_preserving": true
+  },
+  "d1_sizing": {
+    "rule": "steps(rung) = max(ceil(D1_ANCHOR_FLOPS / (6*N_grown*batch*seq)), 30)",
+    "d1_anchor_flops": 4236803372482560.0,
+    "d1_anchor_flops_derivation": "6 * 718316544 * 16 * 1024 * 60 (the ONE precedent post-grow segment ever run, receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json) \u2014 spec \u00a79 D1 rounds this '~=4.2375e15'; this figure is the exact value, not the rounded prose copy",
+    "step_floor": 30,
+    "steps_computed": 36
+  },
+  "g_budget_preflight": {
+    "status": "GREEN",
+    "detail": "requested_run[cbase_grow_rung:rung1-stabilization]: total_steps=36, cost=4.323e+15 FLOPs (6*params*tokens estimate) vs micro-fit ceiling 2.431e+16 FLOPs (0.5% of the certified full-ladder FLOPs budget) -> FIT",
+    "requested_run": {
+      "source": "cbase_grow_rung:rung1-stabilization",
+      "total_steps": 36,
+      "params": 1221633024,
+      "batch": 16,
+      "seq": 1024
+    }
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "device": "cuda",
+  "measured_on_train_daemon": true,
+  "script": "scripts/cbase_grow_rung.py",
+  "pass": true,
+  "verdict": "GROW_RUNG_PASS",
+  "grow_step": {
+    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\checkpoints\\step-00000730",
+    "mechanism": "ff_widening_net2net (grow_operator, imported from cbase_grow_dryrun.widen_state_dict)"
+  },
+  "loss_continuity": {
+    "loss_pre_grow_last_step": 7.5625,
+    "loss_post_grow_first_step": 6.1875,
+    "grow_step_delta": 1.375,
+    "pre_grow_step_to_step_jumps": {
+      "n_jumps": 59,
+      "max": 1.5,
+      "mean": 0.549788,
+      "stdev": 0.40049
+    },
+    "training_loss_continuity_within_pre_grow_variance_envelope": true,
+    "note": "noisy check \u2014 consecutive SGD steps train on DIFFERENT minibatches, so this is a statistical continuity signal, not a deterministic one; see function_preservation_check for the deterministic same-batch forward-logit-diff proof"
+  },
+  "stabilization_segment": {
+    "segment_id": "cbase-grow-rung1-stabilize",
+    "resume_step": 730,
+    "global_step_end": 766,
+    "steps": 36,
+    "loss_first": 6.1875,
+    "loss_last": 0.320312,
+    "losses": [
+      6.1875,
+      5.4375,
+      3.4375,
+      2.5,
+      2.0,
+      2.59375,
+      1.3203125,
+      1.09375,
+      1.078125,
+      1.90625,
+      0.96875,
+      0.765625,
+      0.78125,
+      1.484375,
+      0.71875,
+      0.61328125,
+      0.625,
+      1.1875,
+      0.578125,
+      0.51171875,
+      0.5078125,
+      0.9921875,
+      0.494140625,
+      0.44921875,
+      0.43359375,
+      0.8671875,
+      0.43359375,
+      0.40234375,
+      0.4375,
+      0.72265625,
+      0.3671875,
+      0.35546875,
+      0.6953125,
+      0.361328125,
+      0.33203125,
+      0.3203125
+    ],
+    "wall_s": 88.487,
+    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "governor": {
+      "vram_fraction_applied": 0.8,
+      "fp19_fraction_floor": 0.8,
+      "free_gib": 22.45,
+      "total_gib": 23.99,
+      "margin_gib_floor": 4.0
+    },
+    "optimizer_reset_on_resume": true,
+    "tok_s_paced": 6665.66,
+    "compile_status": "SKIP",
+    "compile_status_note": "SKIP = torch.compile never attempted anywhere in timeshare_pretrain's training loop (eager only) \u2014 NOT the same as BREAK (attempted, failed). Per S2 \u00a73.2, an eager/SKIP number must not be used to PROJECT wall-clock cost at other widths; per D1, banking it here still 'arms Option C as a future re-registration'"
+  },
+  "issue_29_kill_criterion": {
+    "function_preservation_pass": true,
+    "function_preservation_tolerance": 0.0001,
+    "post_grow_within_pre_grow_envelope": true,
+    "overall_pass": true,
+    "rule": "Kill: function-preservation fp_diff>1e-4 (tightened from issue #29's own >1e-3, matching the operator's own PASS_TOL) OR post-grow divergence (loss outside the pre-grow step-to-step jump envelope). A violation writes this KILL receipt and exits nonzero \u2014 never a retry-in-place."
+  }
+}
