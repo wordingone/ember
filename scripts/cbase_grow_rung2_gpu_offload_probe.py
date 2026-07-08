@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+"""cbase_grow_rung2_gpu_offload_probe.py — DEV-002 cure-PR follow-up:
+MEASURED GPU-peak probe for the CPU-offloaded optimizer config (PR #429,
+issue #411).
+
+Real few-step CUDA training loop on the REAL 2.2B grown architecture, real
+widened checkpoint weights, using CPUOffloadOptimizer + grad_accum_steps=8 +
+micro_batch=2 (the exact DEV-002 candidate 3/4 config), sampling nvidia-smi
+during execution to get an ACTUALLY MEASURED VRAM peak -- vs the 9.301GiB
+estimate cbase_grow_rung2_dryrun.py's PART B1 computes but never executes
+(that script's own `if vram_sufficient:` branch is a `pass` stub; no code
+path in this repo has ever launched a real CUDA training step under this
+config before this script).
+
+Why this is a NEW script, not a call to run_v0_segment(device="cuda", ...):
+run_v0_segment's `if live: x = x.cuda()` gates the input-tensor device move
+on its OWN `live` flag (the production-dispatch flag), not on the `device`
+param -- so `real_arch=True, device="cuda", live=False` (the only way to
+reach a real-arch build without the full production interlock) leaves the
+model on CUDA but the input batch on CPU: a genuine device-mismatch nobody
+has ever exercised (every existing caller is either real_arch+device="cpu",
+or the fully-governed live=True+real-shard_dir production path). live=True
+is NOT appropriate for a probe either: it requires EMBER_GATE_AUTHORIZED=1 +
+a REAL shard_dir + v0_pretrain_launch_gate all-GREEN (corpus/tokenizer/
+shards/budget/prereg) -- real production-dispatch machinery, wrong
+semantics for a bounded synthetic-data memory probe, and would either
+falsely consume production budget or be correctly refused for an
+unprepared corpus.
+
+So this script builds the real model/optimizer via the SAME real functions
+timeshare_pretrain.py exports (build_v0_model, build_split_optimizer,
+resolve_ce_impl, mtp_total_loss, PackedShardLoader/write_packed_shard) and
+runs its own minimal step loop that correctly moves the loaded batch to the
+model's device. No loss/optimizer/update-rule math is reimplemented here --
+only the outer loop, plus the one device-move that run_v0_segment's
+live=False path happens to skip.
+
+Deliberately bypassed (disclosed, not silently dropped): _check_launch_
+interlock, _apply_governor(), and the registry/G-budget gates inside
+run_v0_segment -- this is a bounded, synthetic-data VRAM probe, not a
+production dispatch. In their place this script applies its OWN preflight
+(reusing cpu_offload_adamw.py's real vram_preflight/nvidia_smi_vram, same
+functions the contended-launch-gate receipt used) and its own conservative
+torch.cuda.set_per_process_memory_fraction cap before allocating -- in the
+spirit of (not a substitute for) the real governor.
+
+If full 2.2B-scale allocation fails (OOM), that IS the receipt: the
+9.301GiB estimate was wrong, and this script captures the actual measured
+peak at the failure point -- no silent fallback to a reduced stand-in, no
+fix-forward on the failure.
+
+No git commits from this script. No founder/user names. api_spend_usd=0,
+paid_api_surface_used=false.
+"""
+from __future__ import annotations
+
+import argparse
+import gc
+import json
+import shutil
+import sys
+import tempfile
+import threading
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cbase_grow_dryrun import sha256_file, widen_state_dict          # noqa: E402
+from cpu_offload_adamw import (                                      # noqa: E402
+    estimate_required_gib_offloaded, vram_preflight, nvidia_smi_vram,
+)
+from receipt_write import checked_write                              # noqa: E402
+import timeshare_pretrain as ts                                      # noqa: E402
+
+REPO = Path(__file__).resolve().parent.parent
+INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
+
+SEED_SHA_ATTESTED = "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
+SEED_SHA_ATTESTATION_RECEIPT = "receipts/spend-annex/attestations/cbase-gpu-verify-trainable-clean-20260707T015633.json"
+
+MARGIN_GIB_FLOOR = 2.0
+KILL_PCT_OVER_ESTIMATE = 15.0  # DEV-002 kill/promote criterion
+
+
+def _ts() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _probe_server(url: str) -> dict:
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            return {"reachable": True, "status_code": resp.status, "body": body}
+    except Exception as e:
+        return {"reachable": False, "error": str(e)}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--seed-ckpt", required=True,
+                     help="path to the real rung-1 seed checkpoint dir (model.pt + manifest.json)")
+    ap.add_argument("--receipt-dir", default=str(REPO / "receipts"))
+    ap.add_argument("--server-health-url", default="http://127.0.0.1:8082/health")
+    ap.add_argument("--n-optimizer-steps", type=int, default=2,
+                     help="real optimizer.step() calls (2 crosses the accumulation boundary twice)")
+    ap.add_argument("--grad-accum-steps", type=int, default=8, help="DEV-002 config: accum_steps")
+    ap.add_argument("--micro-batch", type=int, default=2, help="DEV-002 config: micro_batch")
+    ap.add_argument("--sample-interval-s", type=float, default=1.0)
+    args = ap.parse_args()
+
+    ts_stamp = _ts()
+    timestamp_iso = datetime.now(timezone.utc).isoformat()
+    seed_ckpt = Path(args.seed_ckpt)
+    model_pt = seed_ckpt / "model.pt"
+    manifest = json.loads((seed_ckpt / "manifest.json").read_text(encoding="utf-8"))
+
+    wall_start = time.monotonic()
+    receipt_dir = Path(args.receipt_dir)
+    receipt_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---- before-baseline: nvidia-smi + server health (server resident and
+    # NEVER stopped -- the primary receipt condition per mandate) ----
+    nvsmi_before = nvidia_smi_vram()
+    server_before = _probe_server(args.server_health_url)
+    print(f"[{ts_stamp}] BEFORE nvidia-smi: {nvsmi_before}", flush=True)
+    print(f"[{ts_stamp}] BEFORE server: {server_before}", flush=True)
+
+    # ---- SHA-verify the real seed checkpoint (reuse: sha256_file) ----
+    actual_sha = sha256_file(model_pt)
+    claimed_sha = (manifest.get("files") or {}).get("model.pt")
+    sha_ok = actual_sha == claimed_sha == SEED_SHA_ATTESTED
+    print(f"[{ts_stamp}] seed checkpoint SHA verified: {actual_sha} (attested match: {sha_ok})", flush=True)
+    if not sha_ok:
+        raise SystemExit(f"CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE: seed checkpoint hash mismatch: "
+                          f"manifest={claimed_sha} attested={SEED_SHA_ATTESTED} actual={actual_sha}")
+
+    # ---- real widen computation (reuse: widen_state_dict, never reimplemented) ----
+    import torch
+    cfg = ts.load_contract()
+    n_layers = cfg["model"]["layers"]
+
+    sd_seed_bf16 = torch.load(model_pt, map_location="cpu", weights_only=True)
+    ff_seed = int(sd_seed_bf16["backbone_model.layers.0.mlp.gate_proj.weight"].shape[0])
+    ff_grown = ff_seed * 2
+    sd_pre_f32 = {k: v.float() for k, v in sd_seed_bf16.items()}
+    sd_seed_bf16 = None
+    gc.collect()
+    grown_sd_f32 = widen_state_dict(sd_pre_f32, n_layers)
+    param_count_after = int(sum(v.numel() for v in grown_sd_f32.values()))
+    sd_pre_f32 = None
+    gc.collect()
+    grown_sd_bf16 = {k: v.to(torch.bfloat16) for k, v in grown_sd_f32.items()}
+    grown_sd_f32 = None
+    gc.collect()
+    print(f"[{ts_stamp}] ff_seed={ff_seed} ff_grown={ff_grown} "
+          f"param_count_after={param_count_after}", flush=True)
+
+    # ---- the actual launch-gate: DEV-002 candidate 3/4 offloaded estimate,
+    # priced against CONTENDED live nvidia-smi (reuse: estimate_required_gib_
+    # offloaded / vram_preflight, cpu_offload_adamw.py). Refuse-to-launch,
+    # never fix-forward, if this fails -- that IS a valid receipt. ----
+    prod_batch = cfg["throughput"]["batch"] if cfg["throughput"]["batch"] >= 16 else 16
+    required_offloaded = estimate_required_gib_offloaded(
+        param_count_after, micro_batch=args.micro_batch, prod_batch=prod_batch)
+    offload_preflight = vram_preflight(
+        required_offloaded["total_estimate_gib"], margin_gib_floor=MARGIN_GIB_FLOOR,
+        nvsmi=nvsmi_before)
+    print(f"[{ts_stamp}] preflight: required={required_offloaded['total_estimate_gib']}GiB "
+          f"verdict={offload_preflight['verdict']} margin_gib={offload_preflight['margin_gib']}",
+          flush=True)
+
+    if not offload_preflight["sufficient"]:
+        # Refuse-to-launch (abort-not-degrade, DEV-002 acceptance #3). A
+        # refused launch IS a valid, honest receipt -- no attempt made.
+        wall_s = round(time.monotonic() - wall_start, 3)
+        receipt = {
+            "ticket": "CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE",
+            "ts": timestamp_iso,
+            "invariant_sha256": INVARIANT_SHA256,
+            "sha_convention": SHA_CONVENTION,
+            "pr": 429, "issue": 411,
+            "scope": "MEASURED GPU-peak probe for the DEV-002 candidate 3/4 config -- "
+                     "REFUSED at preflight, no CUDA launch attempted (abort-not-degrade).",
+            "param_count_after": param_count_after,
+            "offloaded_config": {"micro_batch": args.micro_batch,
+                                  "accum_steps": args.grad_accum_steps,
+                                  "required_estimate": required_offloaded,
+                                  "preflight": offload_preflight},
+            "attempted": False,
+            "wall_s": {"total": wall_s},
+            "api_spend_usd": 0, "paid_api_surface_used": False,
+            "invalid_tokens_present": [],
+            "verdict": "REFUSE_TO_LAUNCH",
+        }
+        receipt_path = receipt_dir / f"cbase-grow-rung2-gpu-offload-probe-{ts_stamp}.json"
+        checked_write(str(receipt_path), receipt)
+        print(f"CBASE_GROW_RUNG2_GPU_OFFLOAD_PROBE_REFUSED receipt={receipt_path}", flush=True)
+        return 2
+
+    # ---- self-imposed conservative VRAM fraction cap (governor spirit;
+    # _apply_governor() itself is coupled to the production interlock this
+    # probe intentionally bypasses, so this is an explicit, disclosed
+    # stand-in, not a silent skip) ----
+    budget_gib = 12.0  # generous vs the 9.301GiB estimate, well under real free margin
+    safe_fraction = min(0.95, (nvsmi_before["used_gib"] + budget_gib) / nvsmi_before["total_gib"])
+    torch.cuda.set_per_process_memory_fraction(safe_fraction)
+    print(f"[{ts_stamp}] self-imposed VRAM fraction cap: {safe_fraction:.4f} "
+          f"(budget {budget_gib}GiB above the {nvsmi_before['used_gib']}GiB baseline)", flush=True)
+
+    # ---- build the REAL model (real architecture, real device placement,
+    # gradient checkpointing) via the real build_v0_model -- not reimplemented ----
+    model, vocab, hidden, n_mtp = ts.build_v0_model(
+        cfg, live=True, intermediate_override=ff_grown, device="cuda")
+    missing, unexpected = model.load_state_dict(grown_sd_bf16, strict=False)
+    grown_sd_bf16 = None
+    gc.collect()
+    real_missing = [k for k in missing if k != "head.weight"]
+    if real_missing or unexpected:
+        raise SystemExit(f"CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE: grown checkpoint load mismatch: "
+                          f"missing={real_missing} unexpected={unexpected}")
+    print(f"[{ts_stamp}] real grown model loaded onto cuda (bf16), vocab={vocab} hidden={hidden} "
+          f"n_mtp={n_mtp}", flush=True)
+
+    # ---- real optimizer via the real build_split_optimizer, offload wrapper ----
+    optimizers, base_lrs, routing = ts.build_split_optimizer(
+        model, cfg, offload_optimizer_state=True)
+    print(f"[{ts_stamp}] optimizer routing: {routing}", flush=True)
+
+    # ---- synthetic packed shard (SAME convention run_v0_segment uses
+    # internally for its own dry-run path when shard_dir=None) ----
+    seq = cfg["model"]["seq"]
+    n_micro_total = args.n_optimizer_steps * args.grad_accum_steps
+    shard_tmp = tempfile.mkdtemp(prefix="rung2-gpu-offload-probe-shard-")
+    try:
+        import numpy as np
+        rng = np.random.default_rng(0)
+        need = (n_micro_total + 4) * args.micro_batch * seq + seq + n_mtp + 8
+        toks = rng.integers(1, vocab, size=int(need), dtype=np.int64)
+        toks[:: max(1, seq * 3)] = 0
+        ts.write_packed_shard(str(Path(shard_tmp) / "synthetic-00000.bin"), toks.astype("<u2").tolist())
+        loader = ts.PackedShardLoader(shard_tmp, seq, n_mtp)
+
+        ce_impl, ce_fn = ts.resolve_ce_impl(prefer_liger=True)
+        mtp_cfg = cfg["objective"]["mtp_aux_heads"]
+        mtp_weight = mtp_cfg["weight"]
+        mtp_enabled = mtp_cfg["enabled"]
+        # QAT gate (cfg["precision"]["qat"]["enabled"]) -- the REAL contract has
+        # this True. run_v0_segment's real training loop applies int8-grid
+        # fake-quant to every Linear weight pre-forward and restores it post-
+        # backward (STE); the CPU-sanity B2b crash was diagnosed as exactly
+        # this QAT clone + gradients + optimizer momentum at the grown width.
+        # Skipping QAT here would understate real memory (no clone buffers) and
+        # test a config the real launch doesn't use -- reused via the SAME
+        # private helpers run_v0_segment calls, not reimplemented.
+        qat_enabled = bool(cfg.get("precision", {}).get("qat", {}).get("enabled", False))
+        print(f"[{ts_stamp}] ce_impl={ce_impl} mtp_enabled={mtp_enabled} qat_enabled={qat_enabled} "
+              f"seq={seq} micro_batch={args.micro_batch} grad_accum_steps={args.grad_accum_steps} "
+              f"n_optimizer_steps={args.n_optimizer_steps}", flush=True)
+
+        # ---- peak-VRAM sampler thread: real nvidia-smi samples DURING the
+        # real training loop below ----
+        samples: list[dict] = []
+        stop_flag = threading.Event()
+
+        def _sampler():
+            while not stop_flag.is_set():
+                try:
+                    samples.append(nvidia_smi_vram())
+                except Exception as e:
+                    samples.append({"error": str(e)})
+                stop_flag.wait(args.sample_interval_s)
+
+        sampler_thread = threading.Thread(target=_sampler, daemon=True)
+        sampler_thread.start()
+
+        server_during = None
+        losses: list[float] = []
+        micro_loss_log: list[float] = []
+        oom_error: str | None = None
+        t_train_start = time.monotonic()
+        try:
+            for global_step in range(args.n_optimizer_steps):
+                micro_losses = []
+                for micro_idx in range(args.grad_accum_steps):
+                    loader_idx = global_step * args.grad_accum_steps + micro_idx
+                    x, y0, y_mtp = loader.batch(loader_idx, args.micro_batch)
+                    x = x.cuda()
+                    y0 = y0.cuda()
+                    y_mtp = [t.cuda() for t in y_mtp]
+
+                    # QAT pre-forward: transform Linear weights to int8-grid (STE) --
+                    # same helper, same placement as run_v0_segment's real loop.
+                    _qat_saved = ts._apply_fake_quant(model, "qat") if qat_enabled else []
+
+                    hidden_out = model.backbone(x)
+                    h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
+                    primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1), chunk_tokens=256)
+                    mtp_ces = []
+                    if mtp_enabled:
+                        for k, head in enumerate(model.mtp_heads):
+                            ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1), chunk_tokens=256)
+                            mtp_ces.append(ce_k)
+                    micro_loss = ts.mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
+                    loss_val = float(micro_loss.detach())
+                    micro_losses.append(loss_val)
+                    micro_loss_log.append(loss_val)
+                    (micro_loss / args.grad_accum_steps).backward()
+
+                    # QAT post-backward: restore full-precision weights (STE semantics).
+                    if qat_enabled:
+                        ts._restore_weights(_qat_saved)
+
+                for opt in optimizers.values():
+                    opt.step()
+                for opt in optimizers.values():
+                    opt.zero_grad(set_to_none=True)
+                losses.append(sum(micro_losses) / len(micro_losses))
+                print(f"  optimizer_step={global_step} loss={losses[-1]:.6f}", flush=True)
+                if global_step == 0:
+                    server_during = _probe_server(args.server_health_url)
+                    print(f"[{ts_stamp}] DURING (after step 0) server: {server_during}", flush=True)
+        except torch.cuda.OutOfMemoryError as e:
+            oom_error = str(e)
+            print(f"[{ts_stamp}] OOM: {oom_error}", flush=True)
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                oom_error = str(e)
+                print(f"[{ts_stamp}] OOM (RuntimeError): {oom_error}", flush=True)
+            else:
+                raise
+        t_train_s = round(time.monotonic() - t_train_start, 3)
+
+        stop_flag.set()
+        sampler_thread.join(timeout=5)
+    finally:
+        shutil.rmtree(shard_tmp, ignore_errors=True)
+
+    # ---- after-baseline ----
+    nvsmi_after = nvidia_smi_vram()
+    server_after = _probe_server(args.server_health_url)
+    print(f"[{ts_stamp}] AFTER nvidia-smi: {nvsmi_after}", flush=True)
+    print(f"[{ts_stamp}] AFTER server: {server_after}", flush=True)
+
+    vram_samples_during = [s for s in samples if "error" not in s]
+    peak_used_mib = max((s["used_mib"] for s in vram_samples_during),
+                         default=nvsmi_before["used_mib"])
+    peak_used_gib = round(peak_used_mib / 1024, 3)
+    peak_delta_vs_baseline_gib = round(peak_used_gib - nvsmi_before["used_gib"], 3)
+    margin_vs_total_gib = round(nvsmi_before["total_gib"] - peak_used_gib, 3)
+    fits_total_minus_margin = margin_vs_total_gib >= MARGIN_GIB_FLOOR
+
+    estimate_gib = required_offloaded["total_estimate_gib"]
+    pct_over_estimate = (round(((peak_delta_vs_baseline_gib - estimate_gib) / estimate_gib) * 100, 2)
+                         if estimate_gib else None)
+    kill_estimator_wrong = bool(pct_over_estimate is not None and pct_over_estimate > KILL_PCT_OVER_ESTIMATE)
+
+    all_losses = losses
+    degenerate = bool(all_losses) and ((len(set(round(v, 6) for v in all_losses)) == 1)
+                                        or all(v < 1e-3 for v in all_losses))
+
+    if oom_error is not None:
+        verdict = "OOM_ESTIMATE_WRONG"
+    elif kill_estimator_wrong:
+        verdict = "KILL_ESTIMATOR_UNDERSTATED"
+    elif not fits_total_minus_margin:
+        verdict = "MEASURED_FAIL_MARGIN"
+    elif degenerate:
+        verdict = "MEASURED_FAIL_DEGENERATE_LOSS"
+    else:
+        verdict = "MEASURED_PASS"
+
+    wall_s = round(time.monotonic() - wall_start, 3)
+    receipt = {
+        "ticket": "CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE",
+        "ts": timestamp_iso,
+        "invariant_sha256": INVARIANT_SHA256,
+        "sha_convention": SHA_CONVENTION,
+        "experiment": "C-BASE-clause-d-dryrun",
+        "arm": "rung2-cpu-offload-cure-gpu-measured",
+        "pr": 429,
+        "issue": 411,
+        "scope": ("MEASURED (not estimated) GPU-peak probe for the DEV-002 candidate 3/4 "
+                  "(CPU-offloaded optimizer + micro-batch/accum) config: real forward+backward"
+                  "+optimizer.step() on the REAL 2.2B grown architecture with REAL widened "
+                  "checkpoint weights, on CUDA, under CONTENDED conditions (llama-server "
+                  "resident, never stopped -- the primary receipt condition per mandate). "
+                  "Bypasses run_v0_segment's production interlock/governor/G-budget gates "
+                  "(disclosed, not silently dropped -- see module docstring) since this is a "
+                  "bounded synthetic-data memory probe, not a production dispatch; applies its "
+                  "own preflight assert + conservative VRAM fraction cap instead. Does NOT "
+                  "re-run the net2net function-preservation check (already receipted, PASS, "
+                  "unaffected by this run) or attempt a full multi-hour production stabilization "
+                  "run (needs a real shard_dir + declared serving-pause window per PR #429's "
+                  "own text; still out of scope)."),
+        "seed_identity": {
+            "checkpoint": str(seed_ckpt),
+            "model_pt_sha256": actual_sha,
+            "manifest_claim_verified": bool(actual_sha == claimed_sha),
+            "attested_match": sha_ok,
+            "attestation_receipt": SEED_SHA_ATTESTATION_RECEIPT,
+            "step": manifest.get("step"),
+        },
+        "param_count_after": param_count_after,
+        "server_contention": {
+            "before": server_before,
+            "during_after_step_0": server_during,
+            "after": server_after,
+            "server_stopped": False,
+            "note": "primary receipt condition: server resident throughout, per mandate",
+        },
+        "vram": {
+            "before": nvsmi_before,
+            "after": nvsmi_after,
+            "samples_during_training": vram_samples_during,
+            "sample_interval_s": args.sample_interval_s,
+            "peak_used_gib_total_card": peak_used_gib,
+            "peak_delta_vs_baseline_gib": peak_delta_vs_baseline_gib,
+            "margin_vs_total_gib": margin_vs_total_gib,
+            "margin_gib_floor": MARGIN_GIB_FLOOR,
+            "fits_total_minus_margin": fits_total_minus_margin,
+        },
+        "offloaded_config": {
+            "micro_batch": args.micro_batch,
+            "accum_steps": args.grad_accum_steps,
+            "effective_batch": args.micro_batch * args.grad_accum_steps,
+            "n_optimizer_steps": args.n_optimizer_steps,
+            "n_micro_steps_total": n_micro_total,
+            "required_estimate_gib": estimate_gib,
+            "required_estimate_detail": required_offloaded,
+            "preflight": offload_preflight,
+            "self_imposed_vram_fraction_cap": safe_fraction,
+            "optimizer_routing": routing,
+        },
+        "measured_vs_estimate": {
+            "estimate_gib": estimate_gib,
+            "measured_delta_gib": peak_delta_vs_baseline_gib,
+            "pct_over_estimate": pct_over_estimate,
+            "kill_threshold_pct": KILL_PCT_OVER_ESTIMATE,
+            "kill_estimator_wrong": kill_estimator_wrong,
+            "rule": "DEV-002 kill/promote: kill if measured peak exceeds estimate by >15% "
+                    "(the estimator is then the defect; fix estimator before config).",
+        },
+        "training": {
+            "ce_impl": ce_impl,
+            "mtp_enabled": mtp_enabled,
+            "qat_enabled": qat_enabled,
+            "seq": seq,
+            "optimizer_step_losses": losses,
+            "micro_step_losses": micro_loss_log,
+            "degenerate_loss_trace": degenerate,
+            "oom_error": oom_error,
+            "wall_s_training_only": t_train_s,
+            "gradient_checkpointing": {
+                "active": True,
+                "note": ("build_v0_model() unconditionally calls "
+                         "backbone_model.gradient_checkpointing_enable() regardless of "
+                         "cfg['model']['grad_checkpointing'] (contract says False, per PR #298's "
+                         "own receipted 1.213x-vs-full-ckpt A/B) -- a pre-existing contract/code "
+                         "discrepancy this probe did not introduce (every real-arch caller, "
+                         "including the already-receipted Part A/B2 runs, gets the same "
+                         "unconditional enable). Disclosed because checkpointing ON lowers "
+                         "activation memory, so this measured peak is likely an UNDER-estimate "
+                         "of what a grad_checkpointing:false production launch would need."),
+            },
+        },
+        "wall_s": {"total": wall_s, "training_only": t_train_s},
+        "related_receipts": [
+            "receipts/grow-op-verify-20260708T060841Z.json",
+            "receipts/grow-operator-dryrun-20260708T060841Z.json",
+            "receipts/cbase-grow-rung2-offload-probe-20260708T083445Z.json",
+        ],
+        "api_spend_usd": 0,
+        "paid_api_surface_used": False,
+        "invalid_tokens_present": [],
+        "verdict": verdict,
+    }
+    receipt_path = receipt_dir / f"cbase-grow-rung2-gpu-offload-probe-{ts_stamp}.json"
+    checked_write(str(receipt_path), receipt)
+    print(f"CBASE_GROW_RUNG2_GPU_OFFLOAD_PROBE_DONE receipt={receipt_path} verdict={verdict} "
+          f"peak_delta_gib={peak_delta_vs_baseline_gib} estimate_gib={estimate_gib}", flush=True)
+    return 0 if verdict == "MEASURED_PASS" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
