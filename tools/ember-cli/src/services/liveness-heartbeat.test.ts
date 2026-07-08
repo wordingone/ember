@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   createLivenessHeartbeatWriter,
   heartbeatAge,
+  readHeartbeatRow,
 } from "./liveness-heartbeat.ts";
 
 let scratchDir: string;
@@ -96,5 +97,43 @@ describe("heartbeatAge", () => {
     const filePath = path.join(scratchDir, "heartbeat.json");
     fs.writeFileSync(filePath, JSON.stringify({ ts: "not-a-date", pid: 1, version: "x" }));
     expect(heartbeatAge(filePath)).toBeNull();
+  });
+});
+
+describe("readHeartbeatRow", () => {
+  test("returns the parsed row when ts and pid are both valid", () => {
+    const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 777, version: "v1" });
+    writer.write(Date.UTC(2026, 6, 7, 12, 0, 0));
+
+    const row = readHeartbeatRow(writer.filePath);
+    expect(row).toEqual({
+      ts: new Date(Date.UTC(2026, 6, 7, 12, 0, 0)).toISOString(),
+      pid: 777,
+      version: "v1",
+    });
+  });
+
+  test("returns null when the file does not exist", () => {
+    expect(readHeartbeatRow(path.join(scratchDir, "does-not-exist.json"))).toBeNull();
+  });
+
+  test("returns null when the file is not valid JSON", () => {
+    const filePath = path.join(scratchDir, "heartbeat.json");
+    fs.writeFileSync(filePath, "{not valid json");
+    expect(readHeartbeatRow(filePath)).toBeNull();
+  });
+
+  test("returns null when pid is missing (stricter than heartbeatAge's ts-only check)", () => {
+    const filePath = path.join(scratchDir, "heartbeat.json");
+    fs.writeFileSync(filePath, JSON.stringify({ ts: new Date().toISOString(), version: "x" }));
+    expect(readHeartbeatRow(filePath)).toBeNull();
+    // heartbeatAge itself is untouched -- still ts-only, still returns a real age here.
+    expect(heartbeatAge(filePath)).not.toBeNull();
+  });
+
+  test("returns null when pid is not a number", () => {
+    const filePath = path.join(scratchDir, "heartbeat.json");
+    fs.writeFileSync(filePath, JSON.stringify({ ts: new Date().toISOString(), pid: "777", version: "x" }));
+    expect(readHeartbeatRow(filePath)).toBeNull();
   });
 });

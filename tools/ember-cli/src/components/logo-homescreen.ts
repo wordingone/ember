@@ -96,6 +96,23 @@ export interface BoardSummary {
    * green)"), newest first, from services/board-ts-poller.ts's live poll. Optional so existing
    * callers without any detected transitions yet still render, just without this section. */
   recentTransitions?: Array<{ text: string; color?: string }>;
+  /** #447: one-shot cockpit self-restart event ("cockpit: relaunched after 26m gap (pid P1 ->
+   * P2)"), computed once at mount from the previous session's liveness-heartbeat row (see
+   * screens/repl.ts). Absent on a normal boot (no prior heartbeat, or no meaningful gap) -- an
+   * "an hour of real organism work rendered as idleness" incident is exactly what this answers:
+   * the pane's own downtime is now a visible fact, not silence. */
+  cockpitRestartEvent?: { text: string; color?: string };
+  /** #447: live-state strip -- GPU state (VRAM + compute classification), the newest active
+   * training/inference run's phase, and the last-receipt-landing age. Each line is pre-formatted
+   * upstream by its own poller (services/gpu-state-poller.ts, services/run-progress-scanner.ts,
+   * services/receipt-landing-poller.ts) -- this component only ever renders strings, never
+   * re-derives the formatting. Any absent field renders nothing, same never-fabricate discipline
+   * as boardTs/topAttention below. */
+  liveTelemetry?: {
+    gpu?: { text: string; color?: string };
+    activeRun?: { text: string; color?: string };
+    lastReceipt?: { text: string; color?: string };
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -287,6 +304,10 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
   // yet (liveness must be visible from the very first frame, never gated on board data arriving).
   // Same style token as the line below it: plain text, no color -- "no new colors" per spec.
   const entries: FeedEntry[] = [{ text: `clock: ${formatWallClock(nowMs)}` }];
+  // #447: cockpit self-restart -- "was this pane just resurrected" is the most orienting fact a
+  // fresh session can show, so it renders right after the clock and BEFORE the board-data early
+  // return below (it doesn't depend on board data at all -- it's a fact about the pane itself).
+  if (boardSummary?.cockpitRestartEvent) entries.push(boardSummary.cockpitRestartEvent);
   if (!boardSummary) {
     entries.push({ text: "No recent activity" });
     return entries;
@@ -300,6 +321,15 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
     entries.push(
       stale ? { text: `STALE: ${age}`, color: "red" } : { text: `board: ${age}` },
     );
+  }
+  // #447: live-state strip -- GPU/active-run/last-receipt-age, grouped with the board-state
+  // lines above (all "what's true right now") and ahead of the discrete event/attention lines
+  // below (all "what just happened" / "what needs looking at"). Any absent field renders nothing.
+  if (boardSummary.liveTelemetry) {
+    const { gpu, activeRun, lastReceipt } = boardSummary.liveTelemetry;
+    if (gpu) entries.push(gpu);
+    if (activeRun) entries.push(activeRun);
+    if (lastReceipt) entries.push(lastReceipt);
   }
   // #433: condition-transition events ("board: C(-1) GREEN->RED (...)") -- what just CHANGED --
   // ahead of topAttention's static "what's currently not-GREEN" snapshot below.
