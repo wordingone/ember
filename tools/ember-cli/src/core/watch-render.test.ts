@@ -261,4 +261,51 @@ describe("runWatchCycle", () => {
     expect(lines[1]).toContain("refresh failed");
     expect(lines[1]).toContain("retrying in 7s");
   });
+
+  it("boot-path badge (fresh receipt): shows 'board: <age>' when receipt is recent", async () => {
+    root = await makeFixtureRoot();
+    // Receipt is from 20260703T120000Z; current time is 5 minutes later
+    const lines = await runWatchCycle({
+      intervalSec: 5,
+      isTTY: false,
+      colorEnabled: false,
+      goalforgeRoot: root,
+      now: new Date("2026-07-03T12:05:00Z"),
+    });
+    const joined = lines.join("\n");
+    // Boot monitor panel should include the badge line with receipt age
+    expect(joined).toContain("board:");
+    expect(joined).toMatch(/board:\s+[\d]+[smhd]\s+ago/);
+  });
+
+  it("boot-path badge (stale receipt): shows red 'STALE' when receipt is >24h old", async () => {
+    root = await makeFixtureRoot();
+    // Receipt is from 20260703T120000Z; current time is 36 hours later (stale)
+    const lines = await runWatchCycle({
+      intervalSec: 5,
+      isTTY: false,
+      colorEnabled: false,
+      goalforgeRoot: root,
+      now: new Date("2026-07-04T00:00:00Z"), // 36 hours later
+    });
+    const joined = lines.join("\n");
+    // Stale receipt should show "STALE" badge (no ANSI in this case since colorEnabled=false)
+    expect(joined).toContain("STALE");
+  });
+
+  it("boot-path badge with color: stale receipt renders red ANSI code", async () => {
+    root = await makeFixtureRoot();
+    // Receipt is from 20260703T120000Z; current time is 36 hours later (stale)
+    const lines = await runWatchCycle({
+      intervalSec: 5,
+      isTTY: false,
+      colorEnabled: true,
+      goalforgeRoot: root,
+      now: new Date("2026-07-04T00:00:00Z"), // 36 hours later
+    });
+    const joined = lines.join("\n");
+    // With color enabled, stale receipt should show ANSI red code before STALE
+    expect(joined).toContain("\x1b[31m"); // ANSI red
+    expect(joined).toContain("STALE");
+  });
 });

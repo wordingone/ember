@@ -10,7 +10,7 @@
 import { readdir, stat } from "fs/promises";
 import path from "path";
 import { buildEmberWorldState, GOALFORGE_ROOT } from "./ember-world-state.ts";
-import { renderMonitor } from "./monitor-render.ts";
+import { renderMonitorPanel, colorEnabledFor } from "./monitor-render.ts";
 
 // ---------------------------------------------------------------------------
 // --watch / --interval arg parsing
@@ -141,7 +141,14 @@ export async function runWatchCycle(opts: WatchCycleOptions): Promise<string[]> 
     const state = await buildEmberWorldState({ goalforgeRoot: root });
     const receipts = await findNewestReceipts(root, 3);
     lines.push(renderWatchHeader(now, opts.intervalSec));
-    lines.push(...renderMonitor(state, { colorEnabled: opts.colorEnabled }));
+    // Use renderMonitorPanel with boardTs to show the staleness badge on boot, same as /world-state
+    const width = 100; // default width for watch cycles (matches terminal standard)
+    lines.push(...renderMonitorPanel(state, {
+      colorEnabled: opts.colorEnabled,
+      width,
+      boardTs: state.monitor.boardTs,
+      nowMs: now.getTime()
+    }));
     lines.push(...renderReceiptsTail(receipts, now.getTime()));
   } catch (err) {
     lines.push(renderRefreshError((err as Error).message, opts.intervalSec));
