@@ -203,7 +203,14 @@ def _extract_citations(obj, citations=None, documented_absent_refs=None):
             return citations, documented_absent_refs
 
         for k, v in obj.items():
-            # Look for fields that might cite receipt paths
+            # Look for fields that might cite receipt paths -- KEYS as well as
+            # values (issue #437: a per-path map keyed by the receipt path
+            # itself, e.g. {"receipts/x.json": true}, hid its citation from a
+            # value-only scan for three days before it surfaced by accident).
+            if isinstance(k, str) and "receipts/" in k:
+                m = re.search(r"(receipts/[^\s\"']+)", k)
+                if m:
+                    citations.add(_clean_citation(m.group(1)))
             if isinstance(v, str) and "receipts/" in v:
                 # Extract path starting from receipts/
                 m = re.search(r"(receipts/[^\s\"']+)", v)
