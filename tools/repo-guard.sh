@@ -88,6 +88,8 @@ PATHPAT_EXCLUDE=(
   ':(exclude)tools/ember-cli/src/core/monitor-render.test.ts'
   ':(exclude)tools/ember-cli/src/components/homescreen-mock1-parity.test.ts'
   ':(exclude)tools/ember-cli/src/components/logo-homescreen.test.ts'
+  ':(exclude)receipts/ember-resident-training-gate/resident-training-gate-*.json'
+  ':(exclude)receipts/ember-resident-training-gate/resident-gate-conflation-audit-*.json'
 )
 if git grep -nIE "$PATHPAT" -- . "${PATHPAT_EXCLUDE[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
   fail "paths" "absolute local filesystem paths in tracked files"
