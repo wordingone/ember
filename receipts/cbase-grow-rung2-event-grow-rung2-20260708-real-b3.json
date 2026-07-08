@@ -1,0 +1,63 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EVENT-B3",
+  "ts": "2026-07-08T21:13:23.246064+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 466,
+  "refs": [
+    449,
+    448,
+    327,
+    452
+  ],
+  "run_id": "grow-rung2-20260708-real",
+  "scope": "B3: first post-grow update on the pinned batch, forked copy of B1 -- RESET arm (band-(i) primary) + TRANSPLANT arm (second, disclosed). Production resumes from the untouched B1 snapshot, never this fork.",
+  "fork_dir": "models\\cbase-grow-rung\\rung2-event-grow-rung2-20260708-real\\b3-fork",
+  "batch_pin_check": {
+    "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+    "b3_recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+    "match": true
+  },
+  "arms": {
+    "reset": {
+      "momentum_rule": "explicit zero, asserted (never a silent fallback)",
+      "momentum_zero_assertion_passed": true,
+      "d_comm_fields": {
+        "d_comm": 0.15609026446655125,
+        "numerator_rms": 5.806223634863272e-05,
+        "denominator_rms": 0.0003719785891007632,
+        "step_rms_post": 0.0003768490569200367,
+        "pushforward_step_rms": 0.0003719785891007632,
+        "cos_alignment": 0.988059937953949
+      }
+    },
+    "transplant": {
+      "momentum_rule": "row-duplication pushforward widen (eps_sigma=0) of the pre-grow gate_proj momentum buffer",
+      "d_comm_fields": {
+        "d_comm": 0.15609026446655125,
+        "numerator_rms": 5.806223634863272e-05,
+        "denominator_rms": 0.0003719785891007632,
+        "step_rms_post": 0.0003768490569200367,
+        "pushforward_step_rms": 0.0003719785891007632,
+        "cos_alignment": 0.988059937953949
+      }
+    }
+  },
+  "momentum_pushforward_rule_declared_in_writing": "gate_proj/up_proj momentum buffers: row-duplication pushforward (same G as weights; eps-invariant, since only down_proj receives the #280 antisymmetric perturbation). down_proj momentum buffers: half-split-duplication pushforward at eps_sigma=0 (a momentum buffer is not itself perturbed by the #280 operator; only weights are \u2014 this rule is declared for completeness, not exercised by this script's gate-only measurement). AdamW-routed params (embeddings/norms/head/mtp_heads): shape-invariant across the grow, no pushforward needed (net2net widening only touches Muon-routed FF tensors).",
+  "band_adjudication": {
+    "null_sqrt2": 1.4142135623730951,
+    "c_reset_cos_alignment": 0.988059937953949,
+    "band_i_range": [
+      0.25,
+      0.45
+    ],
+    "band_ii_abs_max": 0.05,
+    "band": "iii",
+    "rule": "read off #449's frozen bands verbatim, never re-derived"
+  },
+  "d448_fields_present": true,
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "B3_CAPTURED"
+}
