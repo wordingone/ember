@@ -822,10 +822,21 @@ def split_param_groups(model):
 
 
 def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
-                          deviation_dir: str | None = None):
+                          deviation_dir: str | None = None,
+                          offload_optimizer_state: bool = False):
     """Build the Muon/AdamW split optimizer from the contract lrs. On
     force_fallback (Muon impl failed its selftest) build AdamW-everything and
-    RECEIPT the deviation. Returns (optimizers_dict, base_lrs, routing)."""
+    RECEIPT the deviation. Returns (optimizers_dict, base_lrs, routing).
+
+    offload_optimizer_state (DEV-002 cure candidate 3/4, additive -- False
+    preserves byte-identical existing behavior for every caller): when True,
+    each optimizer is wrapped in cpu_offload_adamw.CPUOffloadOptimizer, which
+    moves its per-parameter state (Muon's momentum buffer / AdamW's exp_avg,
+    exp_avg_sq -- the 8N-byte-per-param term the DEV-002 wall receipt prices
+    as VRAM-resident by convention) to host RAM and steps on CPU tensors. The
+    wrapper constructs the SAME optimizer class with the SAME hyperparameters
+    on a shadow copy -- it never reimplements Muon's or AdamW's math, so
+    optimizer semantics are unchanged (DEV-002: "same optimizer math")."""
     import torch
     opt_cfg = cfg["optimizer"]
     lr_muon = opt_cfg["lr_muon"]
@@ -837,10 +848,19 @@ def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
         "adamw_params": [n for n, _ in adamw_named],
         "n_muon": len(muon_named),
         "n_adamw": len(adamw_named),
+        "offload_optimizer_state": offload_optimizer_state,
     }
+    if offload_optimizer_state:
+        from cpu_offload_adamw import CPUOffloadOptimizer
+
     if force_fallback:
-        all_params = [p for _, p in muon_named] + [p for _, p in adamw_named]
-        opt = torch.optim.AdamW(all_params, lr=lr_adamw, weight_decay=wd)
+        all_named = muon_named + adamw_named
+        if offload_optimizer_state:
+            opt = CPUOffloadOptimizer(
+                all_named, lambda ps: torch.optim.AdamW(ps, lr=lr_adamw, weight_decay=wd))
+        else:
+            all_params = [p for _, p in all_named]
+            opt = torch.optim.AdamW(all_params, lr=lr_adamw, weight_decay=wd)
         routing["mode"] = "adamw_everything_fallback"
         if deviation_dir is not None:
             routing["deviation_receipt"] = emit_deviation_receipt(
@@ -854,12 +874,20 @@ def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
     opts: dict[str, Any] = {}
     base_lrs: dict[str, float] = {}
     if muon_named:
-        opts["muon"] = Muon([p for _, p in muon_named], lr=lr_muon,
-                            weight_decay=wd)
+        if offload_optimizer_state:
+            opts["muon"] = CPUOffloadOptimizer(
+                muon_named, lambda ps: Muon(ps, lr=lr_muon, weight_decay=wd))
+        else:
+            opts["muon"] = Muon([p for _, p in muon_named], lr=lr_muon,
+                                weight_decay=wd)
         base_lrs["muon"] = lr_muon
     if adamw_named:
-        opts["adamw"] = torch.optim.AdamW([p for _, p in adamw_named],
-                                          lr=lr_adamw, weight_decay=wd)
+        if offload_optimizer_state:
+            opts["adamw"] = CPUOffloadOptimizer(
+                adamw_named, lambda ps: torch.optim.AdamW(ps, lr=lr_adamw, weight_decay=wd))
+        else:
+            opts["adamw"] = torch.optim.AdamW([p for _, p in adamw_named],
+                                              lr=lr_adamw, weight_decay=wd)
         base_lrs["adamw"] = lr_adamw
     routing["mode"] = "muon_split"
     return opts, base_lrs, routing
@@ -1231,6 +1259,8 @@ def run_v0_segment(
     real_arch: bool | None = None,
     device: str | None = None,
     requested_run: dict | None = None,
+    grad_accum_steps: int = 1,
+    offload_optimizer_state: bool = False,
 ) -> dict:
     """Run a v0 pretrain segment with the full survivor stack against the
     frozen contract. CPU dry-run by default; the real c03 path is gated by the
@@ -1261,6 +1291,18 @@ def run_v0_segment(
         dispatch (e.g. cbase_grow_live.py's minutes-long micro-run) instead
         of always pricing the full v0 ladder. Ignored when live=False (the
         interlock is never consulted off the live path).
+      grad_accum_steps — 1 (default; unchanged behavior for every existing
+        caller). DEV-002 cure candidate 2 (micro-batch + grad accumulation):
+        N>1 splits each "step" into N micro-forward/backward passes at
+        `batch_size` each (loss scaled by 1/N before backward, so the
+        accumulated gradient matches a single monolithic batch of
+        `batch_size * N`), then ONE optimizer.step()/zero_grad() per N
+        micro-batches. Effective batch size is batch_size * grad_accum_steps
+        -- callers that want the production effective batch unchanged pass
+        batch_size=<production_batch/N>, grad_accum_steps=N.
+      offload_optimizer_state — False (default; unchanged behavior).
+        DEV-002 cure candidate 3/4: threaded to build_split_optimizer's
+        offload_optimizer_state (see that function's docstring).
     """
     import torch
 
@@ -1317,7 +1359,10 @@ def run_v0_segment(
     # --- optimizer (Muon split, or AdamW-everything fallback RECEIPTED) ---
     optimizers, base_lrs, routing = build_split_optimizer(
         model, cfg, force_fallback=opt_force_fallback,
-        deviation_dir=deviation_dir)
+        deviation_dir=deviation_dir,
+        offload_optimizer_state=offload_optimizer_state)
+
+    assert grad_accum_steps >= 1, "grad_accum_steps must be >= 1"
 
     # --- chunked/fused CE impl ---
     ce_impl, ce_fn = resolve_ce_impl(prefer_liger=live)
@@ -1365,45 +1410,62 @@ def run_v0_segment(
 
     for local_step in range(n_steps):
         global_step = resume_step + local_step
-        x, y0, y_mtp = loader.batch(global_step, batch_size)
-        if live:
-            x = x.cuda()
-            y0 = y0.cuda()
-            y_mtp = [t.cuda() for t in y_mtp]
+        micro_losses: list[float] = []
 
-        # QAT pre-forward: transform Linear weights to int8-grid (STE).
-        _qat_saved = _apply_fake_quant(model, "qat") if _qat_enabled else []
+        for micro_idx in range(grad_accum_steps):
+            # DEV-002 candidate 2 (micro-batch + grad accumulation): each
+            # micro-batch draws its OWN loader slice (grad_accum_steps=1 keeps
+            # the token index identical to pre-existing behavior: global_step
+            # * 1 + 0 == global_step) so accumulated micro-batches cover
+            # distinct tokens, matching a monolithic batch of
+            # batch_size * grad_accum_steps drawn at the same effective offset.
+            loader_idx = global_step * grad_accum_steps + micro_idx
+            x, y0, y_mtp = loader.batch(loader_idx, batch_size)
+            if live:
+                x = x.cuda()
+                y0 = y0.cuda()
+                y_mtp = [t.cuda() for t in y_mtp]
 
-        hidden_out = model.backbone(x)                       # [B, T, H]
-        h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
-        primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
-                              chunk_tokens=ce_chunk_tokens)
-        mtp_ces = []
-        if mtp_enabled:
-            for k, head in enumerate(model.mtp_heads):
-                ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
-                                chunk_tokens=ce_chunk_tokens)
-                mtp_ces.append(ce_k)
-        loss = mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
+            # QAT pre-forward: transform Linear weights to int8-grid (STE).
+            _qat_saved = _apply_fake_quant(model, "qat") if _qat_enabled else []
 
-        mult = apply_wsd(optimizers, base_lrs, global_step, total_steps,
-                         cfg["schedule"])
-        lr_mults.append(round(mult, 6))
+            hidden_out = model.backbone(x)                       # [B, T, H]
+            h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
+            primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
+                                  chunk_tokens=ce_chunk_tokens)
+            mtp_ces = []
+            if mtp_enabled:
+                for k, head in enumerate(model.mtp_heads):
+                    ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
+                                    chunk_tokens=ce_chunk_tokens)
+                    mtp_ces.append(ce_k)
+            micro_loss = mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
+            micro_losses.append(float(micro_loss.detach()))
 
-        loss.backward()
+            if micro_idx == 0:
+                mult = apply_wsd(optimizers, base_lrs, global_step, total_steps,
+                                 cfg["schedule"])
+                lr_mults.append(round(mult, 6))
 
-        # QAT post-backward: restore full-precision weights AFTER backward.
-        # Gradients accumulated on the int8-rounded weights are applied to the
-        # full-precision originals (STE semantics — identical to fp19_bench and
-        # c04_bf16ns5_qat_throughput pattern).
-        if _qat_enabled:
-            _restore_weights(_qat_saved)
+            # Scale by 1/grad_accum_steps before backward so the SUMMED
+            # gradient across grad_accum_steps micro-batches matches a single
+            # monolithic backward on batch_size * grad_accum_steps samples
+            # (mean-reduction CE over equal-sized chunks — same identity the
+            # cure PR's accumulation-equivalence probe checks in isolation).
+            (micro_loss / grad_accum_steps).backward()
+
+            # QAT post-backward: restore full-precision weights AFTER backward.
+            # Gradients accumulated on the int8-rounded weights are applied to
+            # the full-precision originals (STE semantics — identical to
+            # fp19_bench and c04_bf16ns5_qat_throughput pattern).
+            if _qat_enabled:
+                _restore_weights(_qat_saved)
 
         for opt in optimizers.values():
             opt.step()
         for opt in optimizers.values():
             opt.zero_grad(set_to_none=True)
-        losses.append(float(loss.detach()))
+        losses.append(sum(micro_losses) / len(micro_losses))
 
         time.sleep(pace_s)
         _pace_record("pace", pace_s)
@@ -1419,7 +1481,7 @@ def run_v0_segment(
                        "total_steps": total_steps})
 
     wall_s = time.perf_counter() - t_start
-    tokens_this_seg = n_steps * batch_size * seq
+    tokens_this_seg = n_steps * batch_size * grad_accum_steps * seq
 
     deviations = [d for d in (routing.get("deviation_receipt"), mtp_deviation)
                   if d]
@@ -1447,7 +1509,8 @@ def run_v0_segment(
             "optimizer": {"mode": routing["mode"], "n_muon": routing["n_muon"],
                           "n_adamw": routing["n_adamw"],
                           "lr_muon": cfg["optimizer"]["lr_muon"],
-                          "lr_adamw": cfg["optimizer"]["lr_adamw"]},
+                          "lr_adamw": cfg["optimizer"]["lr_adamw"],
+                          "offload_optimizer_state": offload_optimizer_state},
             "schedule": {"type": cfg["schedule"]["type"],
                          "warmup_frac": cfg["schedule"]["warmup_frac"],
                          "stable_until_frac": cfg["schedule"]["stable_until_frac"],
@@ -1465,6 +1528,8 @@ def run_v0_segment(
                        "block_len": loader.block_len,
                        "n_windows": loader.n_windows,
                        "batch_size": batch_size,
+                       "grad_accum_steps": grad_accum_steps,
+                       "effective_batch_size": batch_size * grad_accum_steps,
                        "packing": "no-pad sequence packing, stride=seq"},
             "arch": {"real_arch": use_real_arch, "device": use_device,
                      "intermediate_override": intermediate_override,
