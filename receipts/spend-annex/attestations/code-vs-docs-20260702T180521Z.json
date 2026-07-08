@@ -1,6 +1,6 @@
 {
     "attested_by":  "team-lead build lane, issue #378 C9 witness restoration",
-    "evidence":  "C9 cadence audit receipt: executed audit script ember_c9_cadence_audit.py (pid 6304, host DESKTOPHH) performed line-count analysis of post-epoch window (defcc562..HEAD). Declares process_evidence: cmd=\u0027python.exe B:\\M\\ember-goalforge\\scripts\\ember_c9_cadence_audit.py\u0027, cwd=\u0027B:\\M\\ember-goalforge\u0027. Metric: code_fraction=0.3113, docs_fraction=0.6887, verdict=\u0027mixed_code_and_docs\u0027. Receipt contains deterministic computation (line totals, lifecycle categorization) from local git/file reads. No external service dependency.",
+    "evidence":  "C9 cadence audit receipt: executed audit script ember_c9_cadence_audit.py (pid 6304, host DESKTOPHH) performed line-count analysis of post-epoch window (defcc562..HEAD). Declares process_evidence: cmd=\u0027python.exe <TEMP_WORKSPACE>/ember-goalforge/scripts/ember_c9_cadence_audit.py\u0027, cwd=\u0027<TEMP_WORKSPACE>/ember-goalforge\u0027. Metric: code_fraction=0.3113, docs_fraction=0.6887, verdict=\u0027mixed_code_and_docs\u0027. Receipt contains deterministic computation (line totals, lifecycle categorization) from local git/file reads. No external service dependency.",
     "evidence_class":  "script_scanned_clean",
     "target_sha256":  "97136ace6049c91abf3d3e07848f9c0a87c25cd88ce81fd9ff27b9f134f08b99",
     "attested_ts":  "2026-07-07T15:23:00Z",

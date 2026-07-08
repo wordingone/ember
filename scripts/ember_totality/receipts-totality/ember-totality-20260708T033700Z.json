@@ -33,7 +33,7 @@
       "condition": "C-BASE",
       "status": "GREEN",
       "is_process_invariant": false,
-      "reason": "GREEN C-BASE: owned from-scratch checkpoint B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766 exists with hash-verified weights (receipt cbase-gpu-verify-trainable-clean-20260707T015633.json), no borrowed/frozen base and not the 12c050e7 lineage, and grow-operator dry-run receipt grow-operator-dryrun-20260707T220138Z.json produces a valid larger-shape checkpoint that replays; no invalid-token present (CHK all four clauses pass) (elapsed 245.0s)"
+      "reason": "GREEN C-BASE: owned from-scratch checkpoint <TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766 exists with hash-verified weights (receipt cbase-gpu-verify-trainable-clean-20260707T015633.json), no borrowed/frozen base and not the 12c050e7 lineage, and grow-operator dry-run receipt grow-operator-dryrun-20260707T220138Z.json produces a valid larger-shape checkpoint that replays; no invalid-token present (CHK all four clauses pass) (elapsed 245.0s)"
     },
     {
       "condition": "C-PORT",
@@ -57,7 +57,7 @@
       "condition": "C-ORGANISM",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under B:\\M\\ember\\receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 1597 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT). (elapsed 0.7s)"
+      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under <TEMP_WORKSPACE>/ember/receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 1597 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT). (elapsed 0.7s)"
     },
     {
       "condition": "C(-1)",
@@ -75,7 +75,7 @@
       "condition": "C1",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\ember, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\ember, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\ember, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"] (elapsed 0.1s)"
+      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"] (elapsed 0.1s)"
     },
     {
       "condition": "C2",
@@ -93,13 +93,13 @@
       "condition": "C4",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=B:\\M\\ember -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o' (elapsed 0.1s)"
+      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o' (elapsed 0.1s)"
     },
     {
       "condition": "C5",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=B:\\M\\ember -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A<local-mount-point>/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2 (elapsed 0.0s)"
+      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A<local-mount-point>/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2 (elapsed 0.0s)"
     },
     {
       "condition": "C6",
@@ -171,7 +171,7 @@
       "condition": "C-ANAT",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under B:\\M\\ember; CHK 'all 16 present and consistent with receipts' unmet (elapsed 1.5s)"
+      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under <TEMP_WORKSPACE>/ember; CHK 'all 16 present and consistent with receipts' unmet (elapsed 1.5s)"
     },
     {
       "condition": "C-SCALE",
@@ -189,7 +189,7 @@
       "condition": "C-IND",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=B:\\M\\ember (elapsed 1.7s)"
+      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=<TEMP_WORKSPACE>/ember (elapsed 1.7s)"
     },
     {
       "condition": "C-PROC",

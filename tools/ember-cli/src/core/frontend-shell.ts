@@ -244,8 +244,13 @@ export function createRoot(_options?: RenderOptions): { render: (node: ReactElem
   // M9-DIAG-LIVE: capture stdout dimensions at createRoot() time
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const diagPath = (require("path") as typeof import("path")).join(
+      (require("os") as typeof import("os")).tmpdir(),
+      "ember-m9-diag.jsonl",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     (require("fs") as typeof import("fs")).appendFileSync(
-      "C:/WINDOWS/TEMP/ember-m9-diag.jsonl",
+      diagPath,
       JSON.stringify({
         ts: Date.now(),
         event: "createRoot",

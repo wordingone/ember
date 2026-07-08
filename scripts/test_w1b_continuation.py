@@ -92,10 +92,11 @@ def _assert_no_repo_guard_path_hits(text: str) -> None:
 # ---------------------------------------------------------------------------
 
 def test_corpus_identity_for_receipt_is_name_safe_and_content_pinned():
-    # Deliberately founder-named + repo-guard-PATHFRAG-shaped, exactly the
-    # class of path PR #356's landing had to hand-sanitize. Never touches
-    # disk -- corpus_identity_for_receipt only inspects the path string.
-    founder_named_shard_dir = "B:\\M\\avir\\vault\\external-corpus\\shards-v0"
+    # Synthetic but shaped exactly like a real leak (issue #456): fake drive,
+    # fake org token, fake project -- same PATHFRAG/PATHPAT shape PR #356's
+    # landing had to hand-sanitize, none of it a real machine value. Never
+    # touches disk -- corpus_identity_for_receipt only inspects the path string.
+    founder_named_shard_dir = "Z:\\M\\acmewidgets\\widgets\\external-corpus\\shards-v0"
     manifest = {"combined_sha256": "ab" * 32}
 
     result = corpus_identity_for_receipt(founder_named_shard_dir, manifest)
@@ -104,12 +105,12 @@ def test_corpus_identity_for_receipt_is_name_safe_and_content_pinned():
                        "corpus_manifest_sha256": manifest["combined_sha256"]}
     assert "shard_dir" not in result
     dumped = json.dumps(result)
-    assert "avir" not in dumped
+    assert "acmewidgets" not in dumped
     _assert_no_repo_guard_path_hits(dumped)
 
 
 def test_build_shard_corpus_verification_block_never_embeds_raw_shard_dir():
-    founder_named_shard_dir = "B:\\M\\avir\\vault\\external-corpus\\shards-v0"
+    founder_named_shard_dir = "Z:\\M\\acmewidgets\\widgets\\external-corpus\\shards-v0"
     shard_manifest = {"n_files": 3, "total_tokens": 900,
                        "combined_sha256": "cd" * 32}
 
@@ -133,10 +134,10 @@ def test_repo_relative_path_strips_absolute_repo_prefix():
 
 def test_repo_relative_path_fails_closed_on_relpath_valueerror_hermetic(monkeypatch):
     """issue #361 fix-forward: os.path.relpath raises ValueError on Windows
-    when the two paths are on different drives (REPO on B:, tempfile's
-    default on C:). Before this fix, repo_relative_path's except-branch
-    returned the RAW absolute path -- a real launch-lane run on the B: drive
-    caught exactly this leak (2/7 tests failed with a raw
+    when the two paths are on different drives (REPO on one drive letter,
+    tempfile's default on another). Before this fix, repo_relative_path's
+    except-branch returned the RAW absolute path -- a real launch-lane run on
+    a cross-drive layout caught exactly this leak (2/7 tests failed with a raw
     C:\\WINDOWS\\TEMP\\... path embedded in a receipt field), while this
     same suite passed 7/7 in a same-drive dev worktree where the fallback
     never fired. Drive-independent: forces the ValueError branch via

@@ -9,7 +9,7 @@
   "issue": 411,
   "scope": "MEASURED (not estimated) GPU-peak probe for the DEV-002 candidate 3/4 (CPU-offloaded optimizer + micro-batch/accum) config: real forward+backward+optimizer.step() on the REAL 2.2B grown architecture with REAL widened checkpoint weights, on CUDA, under CONTENDED conditions (llama-server resident, never stopped -- the primary receipt condition per mandate). Bypasses run_v0_segment's production interlock/governor/G-budget gates (disclosed, not silently dropped -- see module docstring) since this is a bounded synthetic-data memory probe, not a production dispatch; applies its own preflight assert + conservative VRAM fraction cap instead. Does NOT re-run the net2net function-preservation check (already receipted, PASS, unaffected by this run) or attempt a full multi-hour production stabilization run (needs a real shard_dir + declared serving-pause window per PR #429's own text; still out of scope).",
   "seed_identity": {
-    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "checkpoint": "<TEMP_WORKSPACE>\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
     "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
     "manifest_claim_verified": true,
     "attested_match": true,
@@ -19,7 +19,7 @@
   "widen_state_dict_provenance": {
     "issue": 446,
     "cache_hit": true,
-    "cache_path": "B:\\M\\ember\\.claude\\worktrees\\rung2-offload-cure-411\\models\\cbase-grow-rung\\rung2-grown-cache\\grown-58e8e98916823941.pt",
+    "cache_path": "<TEMP_WORKSPACE>\\.claude\\worktrees\\rung2-offload-cure-411\\models\\cbase-grow-rung\\rung2-grown-cache\\grown-58e8e98916823941.pt",
     "method": "build-once: widen_state_dict() runs at most once per seed SHA, in a fresh subprocess, with the grown bf16 state dict persisted to cache_path; every subsequent run (this one included, on a cache hit) loads it directly and never calls widen_state_dict() again for this seed.",
     "prior_crash_history": "Before this cure: the identical widen_state_dict() call succeeded cleanly once (2026-07-08T12:59:47Z, commit 1ff844e, cbase_grow_rung2_contended_launch_gate.py), then crashed natively 3/3 consecutive times ~30min later with no code change: (1) inline in this probe's main process, exit 139 SIGSEGV; (2) inside a FRESH subprocess with a clean heap (this repo's own established Part-A-style mitigation for this crash class), exit 3221225477 / ACCESS_VIOLATION; (3) a minimal isolated 3-line repro (torch.load -> .float() -> widen_state_dict(), no probe code, no CUDA) pinpointing the crash to inside widen_state_dict() itself, exit 139. All 3 crashes: ~28-29GiB free RAM, GPU flat at server-only baseline, server 200 OK, nothing left wedged. Timing correlates with a concurrent lane (P1) finishing a ~13.96GiB corpus-cache disk write ~13:29Z, just before the crashes started -- filed as issue #446 with the full timeline; not yet confirmed as causal."
   },

@@ -10,11 +10,11 @@
   "device": "cuda",
   "rung": 1,
   "rung_receipt_citation": {
-    "path": "B:\\M\\ember\\receipts\\cbase-grow-rung\\cbase-grow-rung1-live-20260703T155711Z.json",
+    "path": "<TEMP_WORKSPACE>/ember/receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json",
     "sha256": "b7a37964d3cd101d09c3db025be6efbbfed89e6a29e41b413618e1bcc507b7b1"
   },
   "checkpoint": {
-    "dir": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "dir": "<TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
     "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
   },
   "operating_point": {

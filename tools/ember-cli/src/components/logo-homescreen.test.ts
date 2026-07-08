@@ -482,11 +482,11 @@ describe("clipToWidth — word-boundary-aware truncation (issue #44 / §8g item 
 // full path already fits.
 describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () => {
   it("returns a short path unchanged when the full 'Data: <path>' label already fits the budget", () => {
-    expect(shortenDataRootForDisplay("B:\\M\\ember", 40)).toBe("B:\\M\\ember");
+    expect(shortenDataRootForDisplay("Z:\\M\\ember", 40)).toBe("Z:\\M\\ember");
   });
 
   it("shortens a long worktree path to its last two segments with a leading ellipsis", () => {
-    const long = "B:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
+    const long = "Z:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
     expect(shortenDataRootForDisplay(long, 40)).toBe("…\\worktrees\\cockpit-telemetry-447");
   });
 
@@ -498,12 +498,12 @@ describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () =
   it("a path with two or fewer segments is returned unchanged even if it doesn't fit (nothing meaningful to trim)", () => {
     // Pathological: a single very long segment. Falls through to clipToWidth's own safety net at
     // the call site, not this function's job to fix.
-    const oneLongSegment = "B:\\" + "x".repeat(60);
+    const oneLongSegment = "Z:\\" + "x".repeat(60);
     expect(shortenDataRootForDisplay(oneLongSegment, 40)).toBe(oneLongSegment);
   });
 
   it("never produces the bare-label collapse: the shortened form always carries real path content", () => {
-    const long = "B:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
+    const long = "Z:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
     const result = shortenDataRootForDisplay(long, 40);
     expect(result.length).toBeGreaterThan(1);
     expect(clipToWidth(`Data: ${result}`, 40)).not.toBe("Data:…");
@@ -512,16 +512,16 @@ describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () =
 
 describe("Homescreen renders the Data: line without collapsing on a long worktree path (#303)", () => {
   it("shows the shortened path, not a bare 'Data:…', for a real long worktree cwd", () => {
-    const state = { dataRoot: "B:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447" };
+    const state = { dataRoot: "Z:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447" };
     const rendered = Homescreen({ state, viewportWidth: 190 });
     expect(findTextChild(rendered, "Data: …\\worktrees\\cockpit-telemetry-447")).toBe(true);
     expect(findTextChild(rendered, "Data:…")).toBe(false);
   });
 
   it("shows the full path untouched for a short dataRoot (no information lost when there's room)", () => {
-    const state = { dataRoot: "B:\\M\\ember" };
+    const state = { dataRoot: "Z:\\M\\ember" };
     const rendered = Homescreen({ state, viewportWidth: 190 });
-    expect(findTextChild(rendered, "Data: B:\\M\\ember")).toBe(true);
+    expect(findTextChild(rendered, "Data: Z:\\M\\ember")).toBe(true);
   });
 });
 

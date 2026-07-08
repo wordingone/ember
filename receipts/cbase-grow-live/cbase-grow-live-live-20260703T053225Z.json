@@ -6,7 +6,7 @@
   "mode": "live",
   "grow_method": "net2net FF-widening (function-preserving, warm-start) \u2014 the identical grow_operator surgery cbase_grow_dryrun.py proved on the real cbase-v0 step-610 seed, applied here mid-training",
   "seed_identity": {
-    "checkpoint": "B:\\M\\ember\\models\\cbase-smoke-run\\checkpoints\\step-00000610",
+    "checkpoint": "<TEMP_WORKSPACE>/ember/models/cbase-smoke-run/checkpoints/step-00000610",
     "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
     "manifest_claim_verified": true,
     "step": 610,
@@ -126,7 +126,7 @@
       8.125
     ],
     "wall_s": 64.433,
-    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-live\\live-20260703T053225Z\\pre\\checkpoints\\step-00000670",
+    "checkpoint": "<TEMP_WORKSPACE>/ember/models/cbase-grow-live/live-20260703T053225Z/pre/checkpoints/step-00000670",
     "governor": {
       "vram_fraction_applied": 0.8,
       "fp19_fraction_floor": 0.8,
@@ -137,7 +137,7 @@
   },
   "grow_step": {
     "grown_from_step": 670,
-    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-live\\live-20260703T053225Z\\post\\checkpoints\\step-00000670",
+    "checkpoint": "<TEMP_WORKSPACE>/ember/models/cbase-grow-live/live-20260703T053225Z/post/checkpoints/step-00000670",
     "mechanism": "ff_widening_net2net (grow_operator, imported from cbase_grow_dryrun.widen_state_dict)"
   },
   "post_grow_segment": {
@@ -210,7 +210,7 @@
       7.5625
     ],
     "wall_s": 88.095,
-    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-live\\live-20260703T053225Z\\post\\checkpoints\\step-00000730",
+    "checkpoint": "<TEMP_WORKSPACE>/ember/models/cbase-grow-live/live-20260703T053225Z/post/checkpoints/step-00000730",
     "governor": {
       "vram_fraction_applied": 0.8,
       "fp19_fraction_floor": 0.8,

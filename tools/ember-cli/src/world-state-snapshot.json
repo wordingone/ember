@@ -19,7 +19,7 @@
    {
     "id": "board.C-BASE",
     "label": "[1] C-BASE",
-    "detail": "GREEN: GREEN C-BASE: owned from-scratch checkpoint B:\\M\\ember\\models\\cbase-smoke-run\\checkpoints\\step-00000610 exists with hash-verified weights (receipt v0-live-import-edition-20260702T190633Z.json), no borrowed/frozen base and not the 12c050e7 lineage, and grow-operator dry-run receipt cbase-grow-dryrun-20260702T190532Z.json produces a valid larger-shape checkpoint that replays; no invalid-token present (CHK all four clauses pass)",
+    "detail": "GREEN: GREEN C-BASE: owned from-scratch checkpoint <TEMP_WORKSPACE>/ember/models/cbase-smoke-run/checkpoints/step-00000610 exists with hash-verified weights (receipt v0-live-import-edition-20260702T190633Z.json), no borrowed/frozen base and not the 12c050e7 lineage, and grow-operator dry-run receipt cbase-grow-dryrun-20260702T190532Z.json produces a valid larger-shape checkpoint that replays; no invalid-token present (CHK all four clauses pass)",
     "evidence": {
      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T140249Z.json",
      "sha256": "617ca1663bfaa28dbed955f669ef4ddea9285ea59303cd4ca3ec7982696afead"
@@ -208,7 +208,7 @@
    {
     "id": "board.C15",
     "label": "[22] C15",
-    "detail": "AUDIT-OK: AUDIT-OK no tiny_bitnet_comparison_receipt.json under B:\\M\\ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window",
+    "detail": "AUDIT-OK: AUDIT-OK no tiny_bitnet_comparison_receipt.json under <TEMP_WORKSPACE>/ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window",
     "evidence": {
      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T140249Z.json",
      "sha256": "617ca1663bfaa28dbed955f669ef4ddea9285ea59303cd4ca3ec7982696afead"

@@ -80,9 +80,9 @@
   ],
   "lifecycle_heuristic": "docs/spec/+*plan*+*prereg* = before_project; receipts/+*.json = during_project; other .md/docs = after_project",
   "process_evidence": {
-    "cmd": "C:\\Program Files\\Python310\\python.exe B:\\M\\ember-goalforge\\scripts\\ember_c9_cadence_audit.py",
+    "cmd": "C:\\Program Files\\Python310\\python.exe <TEMP_WORKSPACE>/ember-goalforge/scripts/ember_c9_cadence_audit.py",
     "pid": 6304,
     "host": "DESKTOPHH",
-    "cwd": "B:\\M\\ember-goalforge"
+    "cwd": "<TEMP_WORKSPACE>/ember-goalforge"
   }
 }

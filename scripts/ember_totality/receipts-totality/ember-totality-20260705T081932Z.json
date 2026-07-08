@@ -3,7 +3,7 @@
   "ticket": "EMBER-TOTALITY-BOARD",
   "ts": "20260705T081932Z",
   "sha_convention": "bytes on disk as-is",
-  "root": "B:\\M\\ember-goalforge",
+  "root": "<TEMP_WORKSPACE>/ember-goalforge",
   "registry_spec": "docs\\spec\\conditions-v1.md",
   "registry_sync": {
     "runner_ids": 38,
@@ -21,7 +21,7 @@
       "condition": "C-BASE",
       "status": "GREEN",
       "is_process_invariant": false,
-      "reason": "GREEN C-BASE: owned from-scratch checkpoint B:\\M\\ember\\models\\cbase-smoke-run\\checkpoints\\step-00000610 exists with hash-verified weights (receipt v0-live-import-edition-20260702T190633Z.json), no borrowed/frozen base and not the 12c050e7 lineage, and grow-operator dry-run receipt cbase-grow-dryrun-20260702T190532Z.json produces a valid larger-shape checkpoint that replays; no invalid-token present (CHK all four clauses pass)"
+      "reason": "GREEN C-BASE: owned from-scratch checkpoint <TEMP_WORKSPACE>/ember/models/cbase-smoke-run/checkpoints/step-00000610 exists with hash-verified weights (receipt v0-live-import-edition-20260702T190633Z.json), no borrowed/frozen base and not the 12c050e7 lineage, and grow-operator dry-run receipt cbase-grow-dryrun-20260702T190532Z.json produces a valid larger-shape checkpoint that replays; no invalid-token present (CHK all four clauses pass)"
     },
     {
       "condition": "C-PORT",
@@ -147,7 +147,7 @@
       "condition": "C15",
       "status": "AUDIT-OK",
       "is_process_invariant": true,
-      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under B:\\M\\ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window"
+      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under <TEMP_WORKSPACE>/ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window"
     },
     {
       "condition": "C-OBS",
@@ -254,7 +254,7 @@
     {
       "condition": "C15",
       "status": "AUDIT-OK",
-      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under B:\\M\\ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window"
+      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under <TEMP_WORKSPACE>/ember-goalforge/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window"
     }
   ],
   "summary": {

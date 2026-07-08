@@ -2,8 +2,8 @@
   "tool": "check_goal_citations",
   "version": 4,
   "timestamp": "20260702T174352Z",
-  "repo_root": "B:\\M\\ember-goalforge",
-  "cross_tree_root": "B:\\M\\ember",
+  "repo_root": "<TEMP_WORKSPACE>/ember-goalforge",
+  "cross_tree_root": "<TEMP_WORKSPACE>/ember",
   "sources_scanned": [
     "GOAL.md",
     "docs/PROBLEMS.md",
@@ -400,25 +400,25 @@
     {
       "doc": "docs/spec/architecture-organism-v1.md",
       "ref": "receipts/cgrow-run-20260628T062609Z/",
-      "cross_tree_path": "B:\\M\\ember\\receipts\\cgrow-run-20260628T062609Z",
+      "cross_tree_path": "<TEMP_WORKSPACE>/ember/receipts/cgrow-run-20260628T062609Z",
       "line": 173
     },
     {
       "doc": "docs/spec/growth-v1.md",
       "ref": "receipts/cgrow-run-20260628T062609Z/",
-      "cross_tree_path": "B:\\M\\ember\\receipts\\cgrow-run-20260628T062609Z",
+      "cross_tree_path": "<TEMP_WORKSPACE>/ember/receipts/cgrow-run-20260628T062609Z",
       "line": 53
     },
     {
       "doc": "docs/spec/growth-v1.md",
       "ref": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
-      "cross_tree_path": "B:\\M\\ember\\receipts\\cgrow-superseded\\cgrow-receipt-20260628T061735Z.json",
+      "cross_tree_path": "<TEMP_WORKSPACE>/ember/receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
       "line": 46
     },
     {
       "doc": "docs/spec/inference-serving-v1.md",
       "ref": "receipts/ember-cockpit-live-surface1/",
-      "cross_tree_path": "B:\\M\\ember\\receipts\\ember-cockpit-live-surface1",
+      "cross_tree_path": "<TEMP_WORKSPACE>/ember/receipts/ember-cockpit-live-surface1",
       "line": 238
     }
   ],

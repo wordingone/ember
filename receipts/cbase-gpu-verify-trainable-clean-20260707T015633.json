@@ -4,7 +4,7 @@
   "mode": "gpu_verify_trainable",
   "issue": "#155",
   "spec_ref": "docs/goal.md — C-BASE CHK clause (a)+(c): owned-from-scratch checkpoint with hashes",
-  "last_checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+  "last_checkpoint": "<TEMP_WORKSPACE>/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
   "checkpoint": {
     "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
     "optimizer_pt_sha256": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1"
