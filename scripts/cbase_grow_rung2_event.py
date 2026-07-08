@@ -740,11 +740,36 @@ def phase_b1m(args) -> dict:
     theta_gate_pre = gate_param.detach().clone().to(torch.float32)
 
     pre_lr = cfg["optimizer"]["lr_muon"]
+
+    # Load seed optimizer and resolve gate_key to numeric param ID (issue #466 fix)
     seed_optimizer_state = torch.load(snapshot_dir / "optimizer.pt", map_location="cpu", weights_only=True)
-    pre_momentum = seed_optimizer_state.get("muon", {}).get(
-        "state", {}).get(gate_key, {}).get("momentum_buffer")
+    seed_model_state = torch.load(snapshot_dir / "model.pt", map_location="cpu", weights_only=True)
+    seed_param_names = list(seed_model_state.keys())
+
+    # Optimizer state is indexed by numeric param ID, not string name (critical fix)
+    gate_param_id = seed_param_names.index(gate_key) if gate_key in seed_param_names else None
+    if gate_param_id is not None:
+        pre_momentum = seed_optimizer_state.get("muon", {}).get("state", {}).get(
+            gate_param_id, {}).get("momentum_buffer")
+    else:
+        pre_momentum = None
+
     if pre_momentum is None:
         pre_momentum = torch.zeros_like(theta_gate_pre)
+
+    # Fail-closed validation: issue #466 (#449 addendum) requires explicit
+    # nonzero momentum or explicit refusal, never a silent fallback to zeros
+    pre_momentum_rms = float(rms(pre_momentum))
+    if pre_momentum_rms < 1e-10:
+        raise SystemExit(
+            f"CBASE-GROW-RUNG2-EVENT-B1M: fail-closed refusal on zero pre_momentum "
+            f"(RMS < 1e-10). The seed checkpoint had no pre-grow momentum (likely "
+            f"initial training without prior optimizer state), so there is nothing "
+            f"nonzero to carry forward. B1M refuses loudly rather than silently "
+            f"defaulting to zero momentum (which would make transplant-arm identical "
+            f"to reset-arm, violating #449 addendum: explicit different measurements). "
+            f"For initial-training runs (no prior momentum), transplant arm is N/A "
+            f"(structural impossibility, not a defect). See issue #466 / #449 / #452.")
     new_weight, new_buf, upd = _muon_step_in_copy(theta_gate_pre, grad_pre_gate, pre_momentum, lr=pre_lr)
     u_pre_rms = float(rms(new_weight - theta_gate_pre))
 
@@ -1045,9 +1070,28 @@ def phase_b3(args) -> dict:
     pre_gate_momentum = torch.load(
         _make_path_absolute_from_receipt(b1m["cache_paths"]["pre_momentum"], data_root=data_root),
         weights_only=True)
+
     transplanted_momentum = _pushforward_gate_momentum(
         pre_gate_momentum, pre_model_state[up_key], pre_model_state[down_key],
         gate_key, up_key, down_key)
+
+    # FAIL-CLOSED validation: issue #466 (#449 addendum) requires explicit
+    # transplant momentum or explicit refusal, never a silent fallback to reset.
+    # If transplanted_momentum is zero or near-zero (norm < 1e-10), the source
+    # checkpoint had no momentum (initial training), and we REFUSE LOUDLY rather
+    # than silently degrade to reset behavior (both arms would then be identical).
+    transplant_mom_rms = rms(transplanted_momentum)  # rms() returns float
+    if transplant_mom_rms < 1e-10:
+        raise SystemExit(
+            f"CBASE-GROW-RUNG2-EVENT-B3: transplant-arm refusal (fail-closed): "
+            f"transplanted_momentum RMS is {transplant_mom_rms:.2e} (< 1e-10 threshold). "
+            f"The seed checkpoint had no pre-grow momentum buffer (normal for initial "
+            f"training), so there is nothing nonzero to transplant. The B1M phase "
+            f"loaded/defaulted pre_momentum to zeros (line 747 of this script), and "
+            f"transplanting zeros produces a transplant arm identical to reset arm "
+            f"(violates #449 addendum: explicit different measurements). "
+            f"For initial-training runs (no prior momentum), transplant arm is N/A "
+            f"(structural impossibility, not a defect). See issue #466 / #449 / #452.")
 
     def U_kplus1_transplant(theta_gate_grown):
         new_w, _, _ = _muon_step_in_copy(theta_gate_grown, grad_post_gate,
@@ -1058,6 +1102,19 @@ def phase_b3(args) -> dict:
         return {"d_comm": d["d_comm"], "numerator_rms": d["numerator_rms"],
                 "denominator_rms": d["denominator_rms"], "step_rms_post": d["step_rms_post"],
                 "pushforward_step_rms": d["pushforward_step_rms"], "cos_alignment": d["cos_alignment"]}
+
+    # DIAGNOSTICS: Verify momentum buffers are different (issue #466 defect trace)
+    # If zero_buf and transplanted_momentum are identical or nearly identical,
+    # then the two arms will produce identical results.
+    zero_buf_sample = torch.zeros_like(G(theta_gate))
+    transplant_sample = transplanted_momentum if transplanted_momentum.shape == zero_buf_sample.shape else G(transplanted_momentum) if transplanted_momentum.shape[0] < G(theta_gate).shape[0] else None
+
+    if transplant_sample is not None:
+        zero_rms = (zero_buf_sample.abs().sum()).item()
+        transplant_rms = (transplant_sample.abs().sum()).item()
+        momentum_diff = (zero_buf_sample - transplant_sample).abs().max().item()
+        print(f"[B3 DIAGNOSTICS] Zero momentum RMS: {zero_rms}, "
+              f"Transplant momentum RMS: {transplant_rms}, Max diff: {momentum_diff}", flush=True)
 
     reset_result = compute_d_comm(theta_gate, U_k, U_kplus1_reset, G)
     transplant_result = compute_d_comm(theta_gate, U_k, U_kplus1_transplant, G)
