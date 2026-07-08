@@ -1,0 +1,55 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-OFFLOAD-PROBE",
+  "ts": "2026-07-08T08:34:58.773724+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "experiment": "C-BASE-clause-d-cure",
+  "arm": "cpu-offload-probe",
+  "spec_ref": "state/rung2-cure-pr-spec-20260708.md; docs/deviations.md DEV-002",
+  "scope": "CPU-only equivalence probes for the DEV-002 cure (CPU-offloaded optimizer states + micro-batch/grad accumulation). Does NOT run the measured production-scale dry-run (real 2.2B, nvidia-smi sampling) -- that needs the coordinated serving-pause GPU window and lands in a follow-up push before merge-gate, per the cure PR spec.",
+  "update_rule_equivalence": {
+    "mechanism": "reference = torch.optim.AdamW stepping directly on a CPU fp32 parameter (standing in for the current in-VRAM optimizer code path executed on CPU tensors, per the cure PR spec's disclosed no-GPU-access fallback); cure = cpu_offload_adamw.CPUOffloadOptimizer wrapping the SAME torch.optim.AdamW class around a shadow copy of the identical initial parameter, fed the identical grad tensor -- the wrapper never reimplements AdamW's math, it only relocates where the real class's state lives and steps",
+    "param_shape": [
+      8,
+      8
+    ],
+    "lr_adamw": 0.0003,
+    "weight_decay": 0.1,
+    "seed": 1234,
+    "max_abs_diff": 0.0,
+    "tolerance": 1e-07,
+    "gpu_side_disclosure": "no GPU access available in this lane; the reference leg runs on CPU tensors per the cure PR spec's own fallback clause. The GPU-side leg (bf16 CUDA-resident param, real grad from a real forward/backward) runs as part of the MEASURED dry-run in a follow-up push, coordinated with the serving-pause window -- explicitly out of this lane's scope.",
+    "passed": true
+  },
+  "accumulation_loss_equivalence": {
+    "mechanism": "mean-of-equal-size-chunk-means == overall mean identity for a reduction='mean' CE loss: 8 micro-batches of 2 (contiguous slices of the SAME 16-sample fixed batch) averaged, vs one monolithic forward+backward over all 16; gradients are compared on the model's head weight (accumulated grad = sum of 8 micro-grads each scaled by 1/8, matching run_v0_segment's new grad_accum_steps wiring)",
+    "model_config": {
+      "vocab": 64,
+      "hidden": 16,
+      "layers": 2,
+      "heads": 2,
+      "seq": 32,
+      "tied_embeddings": false
+    },
+    "intermediate": 32,
+    "batch_monolithic": 16,
+    "micro_batch": 2,
+    "accum_steps": 8,
+    "effective_batch": 16,
+    "seed": 42,
+    "loss_monolithic": 4.313323974609375,
+    "loss_accumulated": 4.3133238554000854,
+    "delta_loss": 1.1920928955078125e-07,
+    "max_abs_grad_diff_head_weight": 5.587935447692871e-09,
+    "note": "delta_loss is expected at fp-noise scale, not exactly 0.0 -- summation order differs between one CE reduction over 16 rows and eight CE reductions over 2 rows each, then averaged"
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "device": "cpu",
+  "measured_on_train_daemon": false,
+  "script": "scripts/cbase_grow_rung2_offload_probe.py",
+  "pass": true,
+  "verdict": "PASS",
+  "kill_criterion": null
+}
