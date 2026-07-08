@@ -97,3 +97,16 @@ never asked — the operator caught the omission on 2026-07-06 ("that was always
 Cure: C1 now names the requirement explicitly — the created model is a unified multimodal FM;
 a text-only result does not satisfy C1; modality scope is operator-owned (L8). This row records
 an implicit-to-explicit promotion. No v1 condition was weakened; conservation table unchanged.
+
+## F. Addendum 2026-07-08 — completion set expanded four→five (C5 effective-capacity mechanism)
+
+The operator added a fifth completion condition, C5 EFFECTIVE-CAPACITY MECHANISM (`GOAL.md` §2),
+broadening the set this protocol answers for from C1–C4 to C1–C5 (operator-directed 2026-07-08,
+PR #484). C5 requires a named, ablatable mechanism — not an engineering aggregate — receipted on
+this machine: deletion collapses the effect (L9 deletion-ablation), the model reaches capability
+on frozen external evals that no matched-budget dense control reaches (L9 equal-budget), and the
+gap to the dense control widens with scale (a shrinking gap is the named toy-model failure state).
+This is an addition, not a substitution: C1–C4 above stand unweakened and this document's
+sections A–E still describe the four-condition protocol as it read before this addition; C5's own
+completion-test derivation (parallel to section A) is carried forward as a follow-up to this
+protocol, not executed in this addendum. No v1 mechanism is weakened by this row.

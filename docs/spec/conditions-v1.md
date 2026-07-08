@@ -1,11 +1,28 @@
 # Ember — condition registry v1 (board conditions, invariants, fixed contracts)
 
+**C-namespace disambiguation — read this first.** Three UNRELATED numbering schemes use the
+letter C in this repository: **(1)** `GOAL.md`'s completion set, C1–C5 (SCALE PARITY / RATIO /
+FRONTIER BEND / NATIVE STACK / EFFECTIVE-CAPACITY MECHANISM — GOAL.md §2, the goal-clearing bar);
+**(2)** this file's own §4.2 anti-fraud protocol, *also* numbered C1–C5 (benchmark-discovery /
+held-out task / equal-budget / before-after / positive-delta — checks a claim must pass, not a
+completion bar), which the totality board runs directly as its plain-numbered rows `C1` through `C15`;
+**(3)** the totality board's separately-named `C-<NAME>` rows (`C-BASE`, `C-SCALE`, `C-CUSTODY`,
+and the rest below). A board row literally labeled `C1` or `C5` is always namespace (2) —
+`GOAL.md`'s own C1–C5 (namespace 1) never appear as board rows under those labels; they map
+loosely onto NAMED rows instead (e.g. GOAL C1 SCALE PARITY reads against the board's `C-SCALE`
+and `C8` rows). Renaming this file's protocol codes to an F-prefix (F1–F5) to remove the
+collision permanently is a follow-up decision, filed operator-visible, and is explicitly OUT of
+scope for this pass.
+
 *2026-07-01. Status: GOVERNING — the canonical registry of machine-checkable goal conditions,
 extracted VERBATIM from the pre-goalforge GOAL.md §4–§6 (archived at
 docs/goal-archive/GOAL-20260630-pre-goalforge.md) so the condition text lives in a governing file,
-not an archive. The binding amendments in GOAL.md §4.0 (8 live + 1 tombstone as of 2026-07-02)
-apply ON TOP of this text; where they conflict, §4.0 wins.
-Where this file and GOAL.md §4.0 conflict, §4.0 wins. Section numbers below are original.*
+not an archive. The binding amendments cited throughout this file (dated 2026-07-02 and earlier)
+were made against the PRE-REFOUND GOAL.md's own §4.0. `GOAL.md` was completely re-founded on
+2026-07-06 (history: `docs/goal-archive.md`) and no longer has a §4.0 section — current
+precedence between this file and `GOAL.md` runs through the constitution's own **GOAL.md §9**
+("INVARIANT.md > this constitution > protocol/spec docs > ledgers > history"), which resolves
+any conflict in `GOAL.md`'s favor. Section numbers below are original.*
 
 ---
 
