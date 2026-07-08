@@ -181,24 +181,67 @@ export interface BoardReceipt {
   };
 }
 
+/** Lists the board-receipts directory's *.json filenames, lexicographically sorted (the board's
+ * own <ts> naming sorts chronologically) -- the shared cheap-discovery step behind
+ * findNewestBoardReceipt and the #420 live-badge poll below. Returns [] (never throws) when the
+ * directory doesn't exist yet, matching this module's existing fail-open board reads. */
+async function listBoardReceiptFilenamesSorted(goalforgeRoot: string): Promise<string[]> {
+  const dir = path.join(goalforgeRoot, BOARD_DIR);
+  try {
+    const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
+    files.sort();
+    return files;
+  } catch {
+    return [];
+  }
+}
+
+/** Picks the newest receipt filename lexicographically WITHOUT reading or parsing it -- the cheap
+ * half of #420's live-badge poll (directory listing + name sort only, no JSON.parse). */
+export async function peekNewestBoardReceiptFilename(goalforgeRoot: string): Promise<string | null> {
+  const files = await listBoardReceiptFilenamesSorted(goalforgeRoot);
+  return files.length > 0 ? files[files.length - 1]! : null;
+}
+
 /** Picks the newest receipt filename lexicographically (the board's own <ts> naming sorts
  * chronologically) and parses it. */
 export async function findNewestBoardReceipt(
   goalforgeRoot: string,
 ): Promise<{ filename: string; parsed: BoardReceipt } | null> {
-  const dir = path.join(goalforgeRoot, BOARD_DIR);
-  let files: string[];
-  try {
-    files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
-  } catch {
-    return null;
-  }
+  const files = await listBoardReceiptFilenamesSorted(goalforgeRoot);
   if (files.length === 0) return null;
-  files.sort();
   const newest = files[files.length - 1]!;
-  const raw = await readFile(path.join(dir, newest), "utf-8");
+  const raw = await readFile(path.join(goalforgeRoot, BOARD_DIR, newest), "utf-8");
   const parsed = JSON.parse(raw) as BoardReceipt;
   return { filename: newest, parsed };
+}
+
+export interface BoardTsPollResult {
+  filename: string;
+  boardTs: string;
+}
+
+/**
+ * #420 cockpit live-badge poll: returns the newest receipt's `ts` field ONLY when the newest
+ * filename differs from `lastKnownFilename` -- the cheap directory-listing discovery above runs
+ * every call, but the receipt file itself is read and JSON.parse'd only when that comparison
+ * finds an actual change. Returns null both when nothing is newer AND when the board dir is
+ * empty/missing -- callers (screens/repl.ts's useBoardTsPoller) treat both the same way: keep the
+ * last known boardTs, try again next tick. A genuine parse failure on a CHANGED file (a receipt
+ * caught mid-write) is left to throw -- the caller wraps this call in its own try/catch, the same
+ * fail-open contract every other poller in services/ uses (model-metrics-poller.ts,
+ * circuit-breaker-banner-poller.ts).
+ */
+export async function pollForNewerBoardTs(
+  goalforgeRoot: string,
+  lastKnownFilename: string | undefined,
+): Promise<BoardTsPollResult | null> {
+  const filename = await peekNewestBoardReceiptFilename(goalforgeRoot);
+  if (!filename || filename === lastKnownFilename) return null;
+
+  const raw = await readFile(path.join(goalforgeRoot, BOARD_DIR, filename), "utf-8");
+  const parsed = JSON.parse(raw) as BoardReceipt;
+  return { filename, boardTs: parsed.ts };
 }
 
 // ---------------------------------------------------------------------------

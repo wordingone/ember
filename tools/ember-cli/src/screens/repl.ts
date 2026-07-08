@@ -95,6 +95,7 @@ import {
 } from "../core/goal-continuation-wiring.ts";
 import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../commands/goal.ts";
 import { buildEmberWorldState } from "../core/ember-world-state.ts";
+import { useBoardTsPoller } from "../services/board-ts-poller.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -709,6 +710,20 @@ export function ReplScreen({
     };
     void loadBoardData();
   }, [cwd]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // #420: live boardTs refresh -- the mount-time load above reads the board receipt exactly
+  // once, so a NEW receipt landing while the cockpit keeps running was never picked up (badge
+  // aged against a receipt that was no longer newest). Polls the same receipts-totality dir on a
+  // slow cadence and merges a fresh boardTs into boardSummary the moment one lands; the existing
+  // #413 per-second liveness tick then carries it into the rendered welcome message on its own
+  // next tick -- no new render timer, no remount.
+  const polledBoardTs = useBoardTsPoller(process.env.EMBER_GOALFORGE_ROOT || cwd);
+  useEffect(() => {
+    if (!polledBoardTs) return;
+    setBoardSummary((prev) =>
+      prev && prev.boardTs !== polledBoardTs ? { ...prev, boardTs: polledBoardTs } : prev,
+    );
+  }, [polledBoardTs]);
 
   // Dialog state
   const dialogState: DialogState = {
