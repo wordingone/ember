@@ -326,7 +326,7 @@ def check_c(section_d_rows, floor_contract_components):
 # ---------------------------------------------------------------------------
 
 def _emit(receipt, ts):
-    receipts_dir = os.path.join(ROOT, "receipts")
+    receipts_dir = os.path.join(ROOT, "scripts", "ember_totality", "receipts-milestone")
     os.makedirs(receipts_dir, exist_ok=True)
     out_path = os.path.join(receipts_dir, f"milestone-reconciliation-{ts}.json")
     try:
@@ -391,6 +391,8 @@ def run():
         "lattice_diff": lattice_diff,
         "floor_contract_gaps": floor_contract_gaps,
         "exit": exit_status,
+        "api_spend_usd": 0,
+        "paid_api_surface_used": False,
     }
     _emit(receipt, ts)
     print(
