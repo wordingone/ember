@@ -165,6 +165,19 @@ MAINTAINER_WINDOW_ENV = "EMBER_W1_MAINTAINER_WINDOW_CONFIRMED"
 CONTAMINATION_WINDOW_TOKENS = 13
 CONTAMINATION_ROLL_BASE = 1000000007
 
+# Issue #445: contamination_recheck's own per-shard rolling-hash buffer used
+# to materialize the WHOLE shard as one uint64 array (arr64 = arr.astype(
+# uint64); h = np.zeros(n_out, uint64)) -- for a 268M-token shard that is a
+# ~2.14GB contiguous allocation, exactly the "268M-element uint64" /
+# "2GiB contiguous" ArrayMemoryError that killed the P1 point-3 final
+# recheck (issue #445 instance 2). Same bound + retry floor as
+# w2_heldout/build_decontam_batch_mp.py's DEFAULT_SCAN_CHUNK_TOKENS /
+# MIN_SCAN_SUBCHUNK_TOKENS (defined locally here, not imported, to avoid a
+# circular import -- that module imports contamination_recheck FROM this one).
+DEFAULT_SCAN_CHUNK_TOKENS = 33_554_432  # 32M tokens per chunk (memory-safe slicing)
+MIN_SCAN_SUBCHUNK_TOKENS = 1 << 20  # 1,048,576 tokens -- retry floor; below this
+# a further halving cannot help and the box is genuinely exhausted.
+
 # ---------------------------------------------------------------------------
 # W1b (#355) -- unwidened-continuation control. The grow arm's MARGINAL
 # (post-seed) token bill: 156 steps @ batch16 seq1024 = 156*16*1024, cited
@@ -1104,9 +1117,121 @@ def build_shard_corpus_verification_block(shard_dir: str, shard_manifest: dict,
     return block
 
 
+def _hash_chunk_for_hits(arr_u16, n_keep: int, window: int, roll_base: int,
+                          needle_arr) -> "list[int]":
+    """Single-attempt (no retry) rolling-hash + isin() over one in-memory
+    span. Module-level (not a closure) so it is independently monkeypatchable
+    by tests simulating a MemoryError. Raises MemoryError /
+    np._core._exceptions._ArrayMemoryError on allocation failure -- callers
+    (_hash_chunk_with_retry) catch and adaptively halve; this function never
+    catches anything itself."""
+    import numpy as np
+
+    n = arr_u16.shape[0]
+    if n < window or n_keep <= 0:
+        return []
+    arr64 = arr_u16.astype(np.uint64)
+    n_out = n - window + 1
+    h = np.zeros(n_out, dtype=np.uint64)
+    power = np.uint64(1)
+    rb = np.uint64(roll_base)
+    # uint64 wraparound IS the mod-2**64 reduction (same convention as
+    # scratch/corpus-wire/contamination_check.py) -- expected, not an error.
+    with np.errstate(over="ignore"):
+        for k in range(window):
+            h += arr64[k:k + n_out] * power
+            power = power * rb
+    keep = min(n_keep, n_out)
+    if needle_arr.size == 0 or keep <= 0:
+        return []
+    return [int(i) for i in np.where(np.isin(h[:keep], needle_arr))[0]]
+
+
+def _hash_chunk_with_retry(arr_u16, n_keep: int, window: int, roll_base: int,
+                            needle_arr, chunk_tokens: int,
+                            min_chunk_tokens: int = MIN_SCAN_SUBCHUNK_TOKENS) -> "list[int]":
+    """Issue #445: folds build_decontam_batch_mp.py's adaptive chunk-halving
+    guard directly into the serial scan (same halving logic + min-chunk-floor
+    semantics as that module's _hash_and_hit_offsets) so no unguarded entry
+    point to contamination_recheck exists. Tries _hash_chunk_for_hits at
+    `chunk_tokens`; on MemoryError/ArrayMemoryError, halves chunk_tokens and
+    re-processes in overlap-safe sub-chunks (window-1 overlap so each
+    sub-chunk still hashes its own last few positions correctly), bottoming
+    out at min_chunk_tokens with a NAMED MemoryError instead of letting
+    numpy's bare internal trace propagate. Returns hit offsets LOCAL to
+    arr_u16 (relative to its own start)."""
+    import numpy as np
+
+    n = arr_u16.shape[0]
+    try:
+        return _hash_chunk_for_hits(arr_u16, n_keep, window, roll_base, needle_arr)
+    except (MemoryError, np._core._exceptions._ArrayMemoryError) as exc:
+        if chunk_tokens <= min_chunk_tokens or n <= min_chunk_tokens:
+            raise MemoryError(
+                f"W1_LIVE_CONTAMINATION_SCAN_OOM: exhausted memory hashing a "
+                f"{n}-token span even at the {min_chunk_tokens}-token retry "
+                f"floor (window={window})."
+            ) from exc
+        half = max(chunk_tokens // 2, min_chunk_tokens)
+        hits: list[int] = []
+        pos = 0
+        n_keep_local = min(n_keep, n)
+        while pos < n_keep_local:
+            sub_end_keep = min(pos + half, n_keep_local)
+            # extend by (window-1) overlap tokens so this sub-chunk can still
+            # hash its own last few positions correctly
+            sub_data_end = min(sub_end_keep + (window - 1), n)
+            sub_data = arr_u16[pos:sub_data_end]
+            sub_keep = sub_end_keep - pos
+            sub_hits = _hash_chunk_with_retry(sub_data, sub_keep, window, roll_base,
+                                               needle_arr, half, min_chunk_tokens)
+            hits.extend(pos + hh for hh in sub_hits)
+            pos = sub_end_keep
+        return hits
+
+
+def _scan_shard_for_hits(arr_u16, window: int, roll_base: int, needle_arr,
+                          chunk_tokens: int,
+                          min_chunk_tokens: int = MIN_SCAN_SUBCHUNK_TOKENS) -> "tuple[int, list[int]]":
+    """Chunks arr_u16 into <=chunk_tokens spans (with window-1 overlap for
+    boundary safety between chunks), hash+hit-tests each chunk via
+    _hash_chunk_with_retry and discards it before moving to the next --
+    bounds peak allocation to chunk_tokens instead of the whole span (issue
+    #445: this is what keeps the per-shard scan from ever materializing a
+    268M-element/~2GiB uint64 buffer in one shot). Per-chunk isin() checks
+    are elementwise-equivalent to one pass over the concatenated array
+    (verified unchanged against the chunked-path equivalence receipts: 16,472
+    exact reproduction, PR #443's regression). Returns (n_out_total,
+    absolute_hit_offsets) -- same shape contamination_recheck's caller loop
+    already expects from the pre-#445 unchunked path."""
+    n = arr_u16.shape[0]
+    if n < window:
+        return 0, []
+    n_chunks = (n + chunk_tokens - 1) // chunk_tokens
+    total = 0
+    hits: list[int] = []
+    for chunk_i in range(n_chunks):
+        chunk_start = chunk_i * chunk_tokens
+        next_start = (chunk_i + 1) * chunk_tokens
+        is_last = next_start >= n
+        chunk_end = n if is_last else min(next_start + (window - 1), n)
+        chunk_data = arr_u16[chunk_start:chunk_end]
+        chunk_len = chunk_data.shape[0]
+        if chunk_len >= window:
+            n_out = chunk_len - window + 1
+            n_keep = n_out if is_last else min(chunk_tokens, n_out)
+            total += n_keep
+            local_hits = _hash_chunk_with_retry(chunk_data, n_keep, window, roll_base,
+                                                 needle_arr, chunk_tokens, min_chunk_tokens)
+            hits.extend(chunk_start + h for h in local_hits)
+    return total, hits
+
+
 def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
                            window: int = CONTAMINATION_WINDOW_TOKENS,
-                           roll_base: int = CONTAMINATION_ROLL_BASE) -> dict:
+                           roll_base: int = CONTAMINATION_ROLL_BASE,
+                           scan_chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS,
+                           min_scan_subchunk_tokens: int = MIN_SCAN_SUBCHUNK_TOKENS) -> dict:
     """Exhaustive exact-match contamination check of the REAL eval batch
     against the shard corpus -- the 'contamination re-check hook' issue #82
     point 1 requires, per receipts/corpus-verification-20260704T095213Z.json's
@@ -1118,7 +1243,16 @@ def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
     reusable function (that script is a scratch one-off hardcoded to the
     dry-run batch) rather than imported. CPU-only, one shard resident in RAM
     at a time -- eval_rows is small (batch rows of length seq+1), never the
-    corpus itself."""
+    corpus itself.
+
+    Issue #445: the per-shard scan is chunked (scan_chunk_tokens) with an
+    adaptive MemoryError/ArrayMemoryError halving guard down to a
+    min_scan_subchunk_tokens floor (see _hash_chunk_with_retry /
+    _scan_shard_for_hits) -- folded in here, not layered on top, so this
+    function is the ONLY entry point and every caller inherits the guard
+    with zero signature changes (new params are keyword-only with
+    production-safe defaults matching w2_heldout/build_decontam_batch_mp.py's
+    DEFAULT_SCAN_CHUNK_TOKENS / MIN_SCAN_SUBCHUNK_TOKENS)."""
     import numpy as np
 
     mod = 1 << 64
@@ -1147,23 +1281,6 @@ def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
     if not shard_paths:
         raise SystemExit(f"W1_LIVE_CONTAMINATION_NO_SHARDS: {shard_dir!r}")
 
-    def _rolling_hashes(arr_u16):
-        n = arr_u16.shape[0]
-        if n < window:
-            return np.array([], dtype=np.uint64), 0
-        arr64 = arr_u16.astype(np.uint64)
-        n_out = n - window + 1
-        h = np.zeros(n_out, dtype=np.uint64)
-        power = np.uint64(1)
-        rb = np.uint64(roll_base)
-        # uint64 wraparound IS the mod-2**64 reduction (same convention as
-        # scratch/corpus-wire/contamination_check.py) -- expected, not an error.
-        with np.errstate(over="ignore"):
-            for k in range(window):
-                h += arr64[k:k + n_out] * power
-                power = power * rb
-        return h, n_out
-
     confirmed_matches: list[dict] = []
     candidate_collisions = 0
     total_windows_hashed = 0
@@ -1176,34 +1293,30 @@ def contamination_recheck(eval_rows: "list[list[int]]", shard_dir: str, *,
         arr = np.fromfile(os.path.join(shard_dir, name), dtype="<u2")
         n = arr.shape[0]
 
-        hashes, n_out = _rolling_hashes(arr)
+        n_out, hit_offsets = _scan_shard_for_hits(arr, window, roll_base, needle_arr,
+                                                   scan_chunk_tokens, min_scan_subchunk_tokens)
         total_windows_hashed += n_out
-        if n_out and needle_hash_set:
-            hit_idx = np.where(np.isin(hashes, needle_arr))[0]
-            for i in hit_idx:
-                i = int(i)
-                candidate = tuple(int(x) for x in arr[i:i + window])
-                hh = _needle_hash(candidate)
-                if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
-                    confirmed_matches.append({"shard": name, "offset": i,
-                                               "window": list(candidate)})
-                else:
-                    candidate_collisions += 1
+        for i in hit_offsets:
+            candidate = tuple(int(x) for x in arr[i:i + window])
+            hh = _needle_hash(candidate)
+            if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
+                confirmed_matches.append({"shard": name, "offset": i,
+                                           "window": list(candidate)})
+            else:
+                candidate_collisions += 1
 
         if prev_tail is not None and n >= (window - 1) and needle_hash_set:
             join = np.concatenate([prev_tail, arr[:window - 1]])
-            join_hashes, join_n = _rolling_hashes(join)
+            join_n, join_hit_offsets = _scan_shard_for_hits(join, window, roll_base, needle_arr,
+                                                             scan_chunk_tokens, min_scan_subchunk_tokens)
             total_windows_hashed += join_n
-            if join_n:
-                jhit = np.where(np.isin(join_hashes, needle_arr))[0]
-                for i in jhit:
-                    i = int(i)
-                    candidate = tuple(int(x) for x in join[i:i + window])
-                    hh = _needle_hash(candidate)
-                    if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
-                        confirmed_matches.append({
-                            "boundary": f"{prev_name}|{name}",
-                            "offset_in_join": i, "window": list(candidate)})
+            for i in join_hit_offsets:
+                candidate = tuple(int(x) for x in join[i:i + window])
+                hh = _needle_hash(candidate)
+                if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
+                    confirmed_matches.append({
+                        "boundary": f"{prev_name}|{name}",
+                        "offset_in_join": i, "window": list(candidate)})
 
         prev_tail = arr[-(window - 1):].copy() if n >= (window - 1) else prev_tail
         prev_name = name
