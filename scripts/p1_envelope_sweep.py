@@ -34,7 +34,11 @@ key, per timeshare_pretrain.py's own docstring) AND absence of --dry-run.
 DISCLOSED DESIGN DECISIONS / CONFLICTS (reported to the coordinator, never
 silently resolved -- prereg-vs-spec conflicts are supposed to be reported;
 these are prereg-internal gaps/inconsistencies this lane hit while making
-section 2 executable):
+section 2 executable). Items 1 and 3 below were RULED on by the coordinator
+2026-07-08 and are recorded as docs/deviations.md DEV-003 (a pre-first-
+-launch, clerical+operational, non-threshold-relaxing amendment to the
+frozen prereg); this docstring keeps the original finding for context and
+notes each ruling inline.
 
 1. POINT-NUMBERING (prereg section 1 table vs section 4 H-MLI assignment).
    Section 1's inventory table lists six sweep values, in order, for points
@@ -45,11 +49,13 @@ section 2 executable):
    Section 4, however, states "points 4 (1.0x) and 6 (1.0x replicate) ARE
    the two control replicates" for the H-MLI lever-arm design -- which
    requires TWO 1.0x-valued points (4 and 6), impossible under the six-value
-   list above (only one 1.0x entry exists for six points). This is a
-   genuine prereg-internal inconsistency. It does NOT affect point 3 (both
-   readings agree point3=0.1x), so it does not block this lane's gate
-   probe, but it DOES need resolving before the H-MLI lever-arm run (part
-   of the full sweep, points 4-8) can be correctly assigned.
+   list above (only one 1.0x entry exists for six points).
+   RULED (DEV-003): section 4's indices are clerical errors; the
+   authoritative intent is the section 1 table's "1.0x(replicate)" label.
+   The H-MLI trio is {row 1 W1 control (1.0x), the sweep's own 1.0x
+   replicate = point 6 (fresh seed), one lever-arm 1.0x run WITH L1} --
+   "points 4 and 6" is void as numbering. POINT_MULTIPLIERS below already
+   matched this reading (point6=1.0x replicate); no code change needed.
 
 2. E0-TO-TOKEN-BUDGET CONVERSION. The prereg states E0 in gpu-hours only
    ("the W1 control's measured e_gpu_hours (0.067478 gpu-h)"), with no
@@ -73,16 +79,20 @@ section 2 executable):
    recipe's absolute warmup)". Grepped the whole repo (scripts/docs/
    receipts, excluding worktrees/fixtures) for "warmup_steps" -- ZERO hits.
    No "c03 recipe's absolute warmup" step-count constant exists anywhere.
-   This script computes and DISCLOSES the prereg-intended figure (using the
-   only concrete number on record -- the banked W1 control's own warmup
-   fraction, 10% of its 1533-step ceiling = 153 steps -- as the absolute
-   cap: intended_warmup = min(round(2%*budget), 153)) but CANNOT apply it:
-   run_phase2_live's own apply_cosine_warmup call hardcodes warmup_frac=0.1
-   with no override parameter plumbed through its signature, and forking
-   that call would violate "reuse, never reimplement/fork". The receipt
-   discloses BOTH the prereg-intended warmup and the actually-applied one
-   (10% of this point's own ceiling_steps) side by side. Flagged for the
-   coordinator before the full sweep.
+   This script computes intended_warmup = min(round(2%*budget), 153) (153 =
+   the only concrete number on record -- the banked W1 control's own 10%-
+   of-1533-step warmup, expressed as an absolute step count).
+   RULED (DEV-003): implement the prereg's rule properly rather than
+   disclose-and-diverge. scripts/w1_collapse_control_run.py's
+   cosine_warmup_frac/apply_cosine_warmup/run_phase2_live now accept an
+   OPTIONAL warmup_steps override (default None, byte-identical prior
+   behavior for every other caller -- additive reuse, not a fork; see their
+   docstrings). This script passes warmup_steps=intended_warmup, so the
+   prereg-intended figure and the actually-applied one are now IDENTICAL
+   by construction -- both still quoted side by side in the receipt
+   (lr_schedule.prereg_intended_warmup_steps vs
+   lr_schedule.effective_warmup_steps) so the equality is verifiable from
+   the receipt alone, never asserted without evidence.
 
 4. FF WIDTH. w1_collapse_control_run.py's real_arch["ff_grown"] normally
    means the W1 GROW-ARM's widened target FF (16384) -- irrelevant here,
@@ -470,7 +480,7 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             seed=args.seed, device="cuda", out_dir=os.path.join(out_dir, "phase2-live"),
             shard_dir=args.shard_dir, eval_x=eval_x, eval_y=eval_y, loader=loader,
             rung_receipt=None, progress_path=os.path.join(out_dir, f"progress-{ts}.jsonl"),
-            continue_from=None)
+            continue_from=None, warmup_steps=intended_warmup)
         wall_s_measured = time.perf_counter() - t0
         stop_evt.set()
         sampler_thread.join(timeout=3.0)
@@ -530,13 +540,14 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
                 **phase2["lr_schedule"],
                 "prereg_intended_warmup_steps": intended_warmup,
                 "prereg_intended_warmup_rule": "min(2% of budget, c03 recipe absolute warmup cap)",
-                "warmup_conflict_disclosed": (
-                    "run_phase2_live's apply_cosine_warmup call is reused verbatim "
-                    "(never forked) and hardcodes warmup_frac=0.1 (10% of THIS "
-                    "point's ceiling_steps) with no override parameter plumbed "
-                    "through -- the ACTUALLY-APPLIED warmup this run used is 10% "
-                    "of budget_steps, not the prereg-intended figure above. See "
-                    "module docstring item 3."),
+                "warmup_resolution": (
+                    "RESOLVED (docs/deviations.md DEV-003, ruling d): run_phase2_live "
+                    "now accepts an additive warmup_steps override (default None, "
+                    "unchanged for every other caller); this run passes "
+                    "warmup_steps=intended_warmup explicitly, so the prereg-intended "
+                    "figure above and phase2.lr_schedule.effective_warmup_steps must "
+                    "be IDENTICAL -- no longer a disclosed conflict, previously "
+                    "10% of budget_steps before this fix."),
             },
             "optimizer": phase2["optimizer"],
             "steps_run": phase2["steps_run"],

@@ -70,19 +70,12 @@ def test_intended_warmup_steps_capped_and_floored():
 
 
 def test_lr_curve_endpoints_match_actually_applied_schedule():
-    """The schedule ACTUALLY applied by run_phase2_live (reused, not
-    reimplemented) is cosine_warmup_frac/apply_cosine_warmup at its
-    hardcoded defaults (warmup_frac=0.1, min_lr_frac=0.1) -- verify the
-    curve's endpoints match a standard cosine-with-warmup decay to 10% of
-    peak.
-
-    Point 3's own computed budget (~10 steps) collapses warmup_steps=
-    max(1, int(budget*0.1)) to exactly 1 step, so step 0 already reaches
-    the full multiplier ((0+1)/1==1.0) -- correct behavior of the reused
-    function at this tiny scale, not a ramp. The "warmup actually ramps"
-    assertion therefore uses a larger synthetic budget where warmup spans
-    multiple steps; the "decays to min_lr_frac at the final step" assertion
-    uses point 3's own real computed budget (what this lane's gate probe
+    """cosine_warmup_frac's curve shape (min_lr_frac=0.1 default, unchanged
+    by the warmup_steps override -- see the dedicated override tests below
+    for that surface) must match a standard cosine-with-warmup decay to 10%
+    of peak. Uses a synthetic budget with several warmup steps to check the
+    ramp, and point 3's own real computed budget for the "decays to
+    min_lr_frac at the final step" endpoint (what this lane's gate probe
     actually runs)."""
     large_budget = 200  # warmup_steps = int(200*0.1) = 20, several steps
     first_mult = w1c.cosine_warmup_frac(0, large_budget)
@@ -101,6 +94,97 @@ def test_lr_curve_endpoints_match_actually_applied_schedule():
     # after warmup ends).
     mid_mult = w1c.cosine_warmup_frac(budget_steps // 2, budget_steps)
     assert last_mult <= mid_mult
+
+
+# ---------------------------------------------------------------------------
+# warmup_steps override (docs/deviations.md DEV-003, ruling d): additive
+# reuse on scripts/w1_collapse_control_run.py's cosine_warmup_frac /
+# apply_cosine_warmup / run_phase2_live -- default None must be BYTE-
+# IDENTICAL to pre-DEV-003 behavior (regression), and an explicit override
+# must take effect exactly (no fraction round-trip).
+# ---------------------------------------------------------------------------
+
+def test_warmup_steps_override_default_none_matches_prior_frac_behavior():
+    """Regression: warmup_steps=None (the default for every OTHER existing
+    caller of these shared functions, e.g. main_live) must reproduce the
+    exact pre-DEV-003 formula -- max(1, int(total_steps * warmup_frac))."""
+    total_steps = 137
+    for step in (0, 1, 13, 68, 136, 137):
+        with_default = w1c.cosine_warmup_frac(step, total_steps)
+        explicit_none = w1c.cosine_warmup_frac(step, total_steps, warmup_steps=None)
+        assert with_default == explicit_none
+        # cross-check against the formula directly (never trust one path alone)
+        ws = max(1, int(total_steps * 0.1))
+        if step < ws:
+            expected = (step + 1) / ws
+        else:
+            import math
+            progress = min(1.0, (step - ws) / max(1, total_steps - ws))
+            expected = 0.1 + 0.9 * (0.5 * (1.0 + math.cos(math.pi * progress)))
+        assert with_default == pytest.approx(expected, abs=1e-12)
+
+
+def test_warmup_steps_override_takes_effect_exactly():
+    """An explicit warmup_steps must be used VERBATIM (never re-derived from
+    warmup_frac*total_steps) -- pick a budget/override pair where the two
+    formulas clearly disagree and confirm the override wins."""
+    total_steps = 1000
+    frac_derived_warmup = max(1, int(total_steps * 0.1))  # == 100
+    override_warmup = 20  # deliberately far from the frac-derived value
+
+    # at step 50: under frac-derived warmup (100), step 50 is STILL in
+    # warmup (ramping, < 1.0); under the override (20), step 50 is PAST
+    # warmup and already decaying via cosine.
+    default_mult = w1c.cosine_warmup_frac(50, total_steps)
+    override_mult = w1c.cosine_warmup_frac(50, total_steps, warmup_steps=override_warmup)
+    assert 50 < frac_derived_warmup  # sanity: step 50 is inside the default warmup window
+    assert 50 >= override_warmup     # sanity: step 50 is past the override's warmup window
+    assert default_mult < 1.0
+    assert override_mult != default_mult
+
+    # the override's own warmup boundary must behave correctly: the step
+    # immediately before it still ramps, matching (step+1)/warmup_steps.
+    just_inside = w1c.cosine_warmup_frac(override_warmup - 1, total_steps,
+                                          warmup_steps=override_warmup)
+    assert just_inside == pytest.approx(
+        override_warmup / override_warmup, abs=1e-12)  # == 1.0, last warmup step
+
+
+def test_apply_cosine_warmup_warmup_steps_default_unchanged(monkeypatch):
+    """apply_cosine_warmup (the function run_phase2_live actually calls
+    every step) must ALSO preserve default behavior with warmup_steps
+    omitted -- exercised on a tiny fake optimizer/base_lrs pair (no torch
+    model needed, matching this function's own pure-dict contract)."""
+    class _FakeParamGroup(dict):
+        pass
+
+    class _FakeOptimizer:
+        def __init__(self):
+            self.param_groups = [{"lr": 0.0}]
+
+    optimizers = {"muon": _FakeOptimizer(), "adamw": _FakeOptimizer()}
+    base_lrs = {"muon": 0.02, "adamw": 0.0003}
+
+    mult_default = w1c.apply_cosine_warmup(optimizers, base_lrs, 5, 137)
+    mult_explicit_none = w1c.apply_cosine_warmup(optimizers, base_lrs, 5, 137,
+                                                  warmup_steps=None)
+    assert mult_default == mult_explicit_none
+    assert optimizers["muon"].param_groups[0]["lr"] == pytest.approx(
+        base_lrs["muon"] * mult_explicit_none)
+
+
+def test_intended_warmup_steps_matches_what_the_live_runner_passes():
+    """Integration check on the SPEC-side of the fix: intended_warmup_steps
+    (this script's prereg-rule computation) is exactly what run_point_live
+    now threads through as run_phase2_live's warmup_steps= kwarg (see the
+    source -- grepped rather than re-executed, since the live path needs a
+    real GPU/corpus)."""
+    import inspect
+    src = inspect.getsource(sweep.run_point_live)
+    assert "warmup_steps=intended_warmup" in src, (
+        "run_point_live must pass warmup_steps=intended_warmup to "
+        "w1c.run_phase2_live -- DEV-003 ruling d requires the prereg-"
+        "intended figure to be the ACTUALLY-APPLIED one, not merely disclosed")
 
 
 # ---------------------------------------------------------------------------
