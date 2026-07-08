@@ -51,8 +51,19 @@ def _memmap_zeros(path: Path, shape: tuple, dtype=None):
     """A fresh, zero-initialized, file-backed CPU tensor. File-backed pages
     charge no Windows commit (vs the pagefile-backed regular heap allocations
     this replaces) -- root cause of 2026-07-08's crash sites, see module
-    docstring. mode='w+' always creates/truncates fresh; explicit zero-fill,
-    not relied on filesystem behavior."""
+    docstring. mode='w+' always creates/truncates fresh.
+
+    arr[:] = 0 is an INFORMED CHOICE, not a defensive habit: NTFS already
+    guarantees zeros for unwritten extents of a fresh file, so this line buys
+    nothing for correctness. What it buys is reliability ordering -- writing
+    the full ~shape*4 bytes now forces the OS to actually allocate those disk
+    blocks at construction time, so a disk-full condition surfaces HERE
+    (upfront, at optimizer-init, cheap to recover from) instead of mid-step
+    deep inside an optimizer update (expensive, opaque, potentially mid-
+    training-run). The cost is a full write pass over ~25GiB of buffers at
+    construction -- traded deliberately for turning a potential mid-run
+    failure into a pre-flight one, same abort-not-degrade discipline as the
+    rest of this module."""
     import numpy as np
     import torch
 
