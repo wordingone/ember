@@ -190,6 +190,63 @@ describe("Homescreen — recent-activity feed carries board condition-transition
   });
 });
 
+describe("Homescreen — recent-activity feed carries live telemetry + cockpit-restart events (issue #447)", () => {
+  it("renders the cockpit-restart event even when boardSummary itself carries no other data", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 0, total: 0, pctComplete: 0, topAttention: [],
+        cockpitRestartEvent: { text: "cockpit: relaunched after 26m gap (pid 1234 -> 5678)" },
+      },
+    }));
+    expect(findTextChild(rendered, "cockpit: relaunched after 26m gap (pid 1234 -> 5678)")).toBe(true);
+  });
+
+  it("carries no restart event when boardSummary itself is absent (mount-time race, never fabricated)", () => {
+    const rendered = renderedRecentFeed(Homescreen({ state: {} }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("cockpit: relaunched"))).toBe(false);
+  });
+
+  it("renders GPU/active-run/last-receipt lines from liveTelemetry, each independently optional", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 23, total: 30, pctComplete: 76.7, topAttention: [],
+        liveTelemetry: {
+          gpu: { text: "GPU: 18.0/24.0 GiB \xB7 training-active" },
+          activeRun: { text: "run: ember-c-scale/w1-live-progress step 1800, eval_loss 4.9375 \xB7 12s ago" },
+          lastReceipt: { text: "receipts: STALE 3h ago", color: "red" },
+        },
+      },
+    }));
+    expect(findTextChild(rendered, "GPU: 18.0/24.0 GiB \xB7 training-active")).toBe(true);
+    expect(findTextChild(rendered, "run: ember-c-scale/w1-live-progress step 1800, eval_loss 4.9375 \xB7 12s ago")).toBe(true);
+    expect(findTextChild(rendered, "receipts: STALE 3h ago")).toBe(true);
+    expect(colorForText(rendered, "receipts: STALE 3h ago")).toBe("red");
+  });
+
+  it("renders only the fields present in liveTelemetry, never fabricating the absent ones", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 23, total: 30, pctComplete: 76.7, topAttention: [],
+        liveTelemetry: { gpu: { text: "GPU: 1.0/8.0 GiB \xB7 idle" } },
+      },
+    }));
+    expect(findTextChild(rendered, "GPU: 1.0/8.0 GiB \xB7 idle")).toBe(true);
+    expect(findTextWhere(rendered, (s) => s.startsWith("run:"))).toBe(false);
+    expect(findTextWhere(rendered, (s) => s.startsWith("receipts:"))).toBe(false);
+  });
+
+  it("carries no live-telemetry lines when the field is absent entirely (never fabricates)", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
+    }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("GPU:") || s.startsWith("run:") || s.startsWith("receipts:"))).toBe(false);
+  });
+});
+
 describe("formatWallClock — HH:MM:SS local (issue #413: cockpit liveness clock)", () => {
   it("zero-pads hours, minutes, and seconds", () => {
     const nowMs = new Date(2026, 6, 7, 9, 5, 3).getTime(); // local 09:05:03
