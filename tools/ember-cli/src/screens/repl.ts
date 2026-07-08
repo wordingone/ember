@@ -674,6 +674,7 @@ export function ReplScreen({
             total:        worldState.monitor.total,
             pctComplete:  worldState.monitor.pctComplete,
             topAttention,
+            boardTs:      worldState.monitor.boardTs,
           };
           setBoardSummary(summary);
         }

@@ -22,10 +22,17 @@ describe("formatReceiptAge", () => {
     expect(formatReceiptAge(boardTs, now)).toBe("2h15m ago");
   });
 
-  it("should return true for stale receipts (>30min)", () => {
+  it("should return false for a receipt inside the 2h cadence window (not a wolf-cry)", () => {
     const now = Date.now();
     const oneHourAgo = now - 60 * 60 * 1000;
     const boardTs = new Date(oneHourAgo).toISOString();
+    expect(isReceiptStale(boardTs, now)).toBe(false);
+  });
+
+  it("should return true for stale receipts (>2h)", () => {
+    const now = Date.now();
+    const threeHoursAgo = now - 3 * 60 * 60 * 1000;
+    const boardTs = new Date(threeHoursAgo).toISOString();
     expect(isReceiptStale(boardTs, now)).toBe(true);
   });
 });
