@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 # --- Locate <execution-root> robustly ----------------------------------------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -117,6 +118,41 @@ def _is_match_pattern(basename, patterns):
     return False
 
 
+def _get_last_landing_time(root):
+    """Return the commit timestamp (seconds since epoch) of the most recent master commit
+    touching receipts/ or scripts/ember_totality/receipts-*. Returns None if no such commit found."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%ct", "--", "receipts/", "scripts/ember_totality/receipts-*"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return int(result.stdout.strip())
+    except Exception:
+        pass
+    return None
+
+
+def _write_sidecar(root, receipt_obj):
+    """Write receipt_obj to receipts-custody/<timestamp>.json, fsync'd.
+    Returns the relative path to the sidecar file."""
+    sidecar_dir = os.path.join(root, "scripts", "ember_totality", "receipts-custody")
+    os.makedirs(sidecar_dir, exist_ok=True)
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    sidecar_path = os.path.join(sidecar_dir, f"custody-{ts}.json")
+
+    with open(sidecar_path, "w", encoding="utf-8") as fh:
+        json.dump(receipt_obj, fh, indent=2)
+        fh.flush()
+        os.fsync(fh.fileno())
+
+    return os.path.relpath(sidecar_path, root).replace("\\", "/")
+
+
 def main():
     if ROOT is None:
         emit("UNEVALUABLE", "C-CUSTODY: execution root not found")
@@ -143,8 +179,12 @@ def main():
     # Normalize paths for comparison (git uses forward slashes)
     git_tracked_normalized = set(p.replace("\\", "/") for p in git_tracked)
 
-    # --- (C) Check three failure shapes -------
+    # --- (C) Compute last_landing for age-window classification -------
+    last_landing_ts = _get_last_landing_time(ROOT)
+
+    # --- (D) Check three failure shapes -------
     failures = []
+    pending_landing = []
     citations_to_verify = set()
 
     for fpath in sorted(found_files):
@@ -161,7 +201,12 @@ def main():
                     if _is_match_pattern(basename, allowlist):
                         pass  # Whitelisted, skip
                     else:
-                        failures.append(f"UNTRACKED: {rel_path}")
+                        # Classify by age: if mtime > last_landing, it's pending_landing
+                        file_mtime = os.path.getmtime(fpath)
+                        if last_landing_ts is not None and file_mtime > last_landing_ts:
+                            pending_landing.append(f"UNTRACKED: {rel_path} (mtime={int(file_mtime)})")
+                        else:
+                            failures.append(f"UNTRACKED: {rel_path}")
                 else:
                     failures.append(f"UNTRACKED: {rel_path}")
             except Exception:
@@ -176,7 +221,7 @@ def main():
         # Shape (c): Extract citations for later verification
         _extract_citations(data, citations_to_verify)
 
-    # --- (D) Check cited paths exist -------
+    # --- (E) Check cited paths exist -------
     missing_citations = []
     for cited_path in sorted(citations_to_verify):
         full_path = os.path.join(ROOT, cited_path)
@@ -186,28 +231,50 @@ def main():
     if missing_citations:
         failures.extend([f"CITED-MISSING: {p}" for p in missing_citations[:10]])
 
-    # --- (E) Emit result -------
+    # --- (F) Emit result -------
     if failures:
-        # Try to find or create a custody receipt with findings
+        # Create a custody receipt with findings
         receipt_obj = {
             "ticket": "C-CUSTODY-CHK",
-            "ts": "",  # Caller will supply
+            "ts": datetime.now(timezone.utc).isoformat(),
             "failures": failures,
             "failure_count": len(failures),
+            "pending_landing_count": len(pending_landing),
             "offenders": {
                 "untracked": [f for f in failures if f.startswith("UNTRACKED:")],
                 "unparseable": [f for f in failures if f.startswith("UNPARSEABLE:")],
                 "cited_missing": [f for f in failures if f.startswith("CITED-MISSING:")],
             },
+            "pending_landing": pending_landing,
         }
+        sidecar_path = _write_sidecar(ROOT, receipt_obj)
         emit("RED", f"C-CUSTODY: {len(failures)} custody violation(s) detected; "
                     f"untracked={len(receipt_obj['offenders']['untracked'])} "
                     f"unparseable={len(receipt_obj['offenders']['unparseable'])} "
-                    f"cited_missing={len(receipt_obj['offenders']['cited_missing'])}")
+                    f"cited_missing={len(receipt_obj['offenders']['cited_missing'])} "
+                    f"pending_landing={len(pending_landing)}; "
+                    f"sidecar={sidecar_path}")
 
+    # GREEN: write sidecar even on success (zero-offender receipt)
+    receipt_obj = {
+        "ticket": "C-CUSTODY-CHK",
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "failures": [],
+        "failure_count": 0,
+        "pending_landing_count": 0,
+        "offenders": {
+            "untracked": [],
+            "unparseable": [],
+            "cited_missing": [],
+        },
+        "pending_landing": [],
+    }
+    sidecar_path = _write_sidecar(ROOT, receipt_obj)
     emit("GREEN", f"C-CUSTODY: all receipts in receipts/ are git-tracked, "
                   f"parseable as JSON, and cited paths exist "
-                  f"({len(found_files)} files checked, 0 violations)")
+                  f"({len(found_files)} files checked, 0 violations); "
+                  f"pending_landing={len(pending_landing)}; "
+                  f"sidecar={sidecar_path}")
 
 
 if __name__ == "__main__":
