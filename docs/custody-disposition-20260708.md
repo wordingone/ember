@@ -1,11 +1,14 @@
 # Custody disposition record — permanently-absent cited receipts (#415 ruling item 8)
 
-This file is the permanent, dated record for every currently-cited receipt path this repo will
-**never restore to disk**. It exists per the #415 DESIGN RULING's item 8 ("Honest residue... STAY
-`cited_missing`; they get a dated disposition note in docs — not receipt edits — receipts are
-append-only") and per PR #432's Disclosure 1, which deferred exactly this note for its 3 withheld
-files. Nothing in this file edits, deletes, or backdates any receipt. It is a citation registry:
-read it before treating any path below as a fresh custody violation to chase.
+This file is the dated record for every path in the current `test_c_custody.py` `cited_missing`
+emit. 14 of the 15 rows are **permanent dispositions** — this repo will never restore them to
+disk, for the reasons given per row. The 15th (Class 5) is explicitly **not** permanent: it has an
+active, in-flight regeneration cure (#435) and is tracked here only for reconciliation against the
+emit line, distinct from the 14 permanent classes. It exists per the #415 DESIGN RULING's item 8
+("Honest residue... STAY `cited_missing`; they get a dated disposition note in docs — not receipt
+edits — receipts are append-only") and per PR #432's Disclosure 1, which deferred exactly this note
+for its 3 withheld files. Nothing in this file edits, deletes, or backdates any receipt. It is a
+citation registry: read it before treating any path below as a fresh custody violation to chase.
 
 - Governing issue: [#415](https://github.com/wordingone/ember/issues/415) — 4-bucket enumeration
   (a=relocation, b=genuinely-lost, c=never-existed, d=extraction-artifact) + DESIGN RULING.
@@ -164,47 +167,59 @@ the identical mechanism (issue #349 / PR #348 precedent) rather than treated as 
 
 ---
 
-## Class 5 — UNCONFIRMED CLI TARGET (1 row)
+## Class 5 — REGENERABLE, CURE IN FLIGHT (#435) — NOT a permanent disposition (1 row)
 
 | # | Cited path |
 |---|---|
 | 15 | `receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json` |
 
-Appears only as a `--decontam-receipt` command-line argument value inside 4 real receipts
+Appears as a `--decontam-receipt` command-line argument value inside 4 real receipts
 (`receipts/ember-c-scale/w1-certification-check-20260707T114707Z.json`,
 `receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json`,
 `receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json`,
 `receipts/ember-c-scale/w1-launch-receipt-20260707T110231Z.json`). Zero git history, zero
-spend-annex row, not on disk. The value is a recorded launch parameter, not a file any run is
-independently confirmed to have produced.
+spend-annex row, not on disk. Independently rediscovered by the P1 sweep-runner lane (PR #434
+arc) the same day, filed as
+[**issue #435**](https://github.com/wordingone/ember/issues/435): the banked W1 control receipt
+(`w1-collapse-control-20260707T110256Z.json`) cites this decontam receipt as its held-out
+decontamination evidence for point 1 of the P1 envelope sweep, and the file never landed.
 
-**Ruling:** stays `cited_missing`. Not a citation-extraction defect (the string is exactly what
-the citing receipts recorded) — the open question is whether the W2 held-out decontam run that
-would produce this file ever completed. That is a W2-track question, not a custody question; this
-note records the citation's disposition (permanently absent pending that run), not the run itself.
+**This row is unlike Classes 1-4: it is NOT being disposed as permanently absent.** #435's cure is
+assigned and in flight — regenerate the held-out decontaminated batch via the #115-cured
+sha-pinned builder as an executed run that emits the receipt properly, with an honesty clause: if
+the regenerated batch cannot honestly claim identity with the batch the W1 control actually used,
+the closing PR discloses a lineage break on point 1 instead of faking continuity.
+
+**Ruling:** do not treat this row as disposed. It is listed here solely so this note's row count
+reconciles against the current `cited_missing=15` emit; its actual disposition lives in #435 and
+whatever PR closes it. Once #435 lands (receipt restored, or a disclosed lineage-break instead),
+this row drops out of `cited_missing` and this section becomes historical — check #435's status
+before citing this row's "absent" state as still current.
 
 ---
 
 ## Reconciliation with the current probe emit
 
 `untracked=0 unparseable=0 cited_missing=15 pattern=45 relocated=4 documented_absent=0
-annex_attested=10 pending_landing=0` — all 15 `cited_missing` rows are accounted for above (3 + 2
-+ 2 + 7 + 1 = 15). `relocated=4` and `annex_attested=10` correspond to PR #432's bucket (a)
+annex_attested=10 pending_landing=0` — all 15 `cited_missing` rows are accounted for above: 3 + 2
++ 2 + 7 = 14 **permanent** dispositions (Classes 1-4) + 1 **regenerable, cure-in-flight** row
+(Class 5, #435) = 15. `relocated=4` and `annex_attested=10` correspond to PR #432's bucket (a)
 relocations and the annex-attested subset of bucket (b); neither bucket is re-litigated here since
 neither is `cited_missing`. No row in this note's enumeration is unexplained.
 
 ## What a future reader must do before citing any path in this note
 
 1. **Check this note first.** If a path you are about to cite (or investigate as a "new" custody
-   violation) appears in one of the 5 classes above, it is disposed — read the ruling before
-   opening a new investigation.
-2. **A citation of a disposed path in a NEW receipt is a defect in the citing document**, not a
-   reopening of this disposition. File it against the citer, not against this note or against
-   `test_c_custody.py`.
-3. **This note never overrides a later VOID/supersession receipt.** If a path here is
-   subsequently voided by its own dated receipt (as rows 8-13 already were, one day before this
-   note), the VOID receipt is authoritative for that path; this note's job is to point to it, not
-   to duplicate or freeze its reasoning.
+   violation) appears in one of the 5 classes above, check its status before treating it as a
+   fresh finding — Classes 1-4 are disposed (read the ruling); Class 5 is open and tracked at
+   #435, not disposed here.
+2. **A citation of a disposed path (Classes 1-4) in a NEW receipt is a defect in the citing
+   document**, not a reopening of this disposition. File it against the citer, not against this
+   note or against `test_c_custody.py`.
+3. **This note never overrides a later VOID/supersession receipt, or #435's resolution.** If a
+   path here is subsequently voided by its own dated receipt (as rows 8-13 already were, one day
+   before this note) or restored/dispositioned by #435 (row 15), that later artifact is
+   authoritative; this note's job is to point to it, not to duplicate or freeze its reasoning.
 4. **Nothing here is edited if a class turns out to be wrong.** A correction to this note's
    classification is a new dated note (or a dated amendment section appended here), never a
    silent edit — matching the append-only discipline every receipt in this repo already follows.
