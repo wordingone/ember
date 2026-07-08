@@ -16,8 +16,20 @@ import { join } from "path";
 import { pathToFileURL } from "url";
 import { mkdir, writeFile, rm } from "fs/promises";
 import { createWorldStateCommand } from "./world-state.ts";
+import { DEFAULT_STALE_THRESHOLD_MS } from "../core/receipt-age.ts";
 
 const SRC_DIR = join(import.meta.dir, ".."); // tools/ember-cli/src (parent of commands/)
+
+// #412: the fixture receipt's "ts" is a fixed calendar timestamp, so any test that lets the
+// /cockpit turn call the REAL Date.now() drifts further stale every day this suite runs (it had
+// already crossed the staleness threshold twice -- once at 30min, again at 2h -- each time
+// silently shifting renderMonitorPanel's line count by inserting a badge line the affected test
+// didn't account for). Fixed here for good: "now" is mocked to a point derived from
+// DEFAULT_STALE_THRESHOLD_MS (never a raw literal) that is comfortably fresh relative to the
+// fixture, so the test's behavior can never again depend on which day it happens to run.
+const FIXTURE_RECEIPT_MS = Date.UTC(2026, 6, 3, 12, 0, 0); // matches FIXTURE receipt's ts below
+const FRESH_OFFSET_MS = Math.floor(DEFAULT_STALE_THRESHOLD_MS / 24); // a small, threshold-scaled margin -- comfortably inside the cadence window at any threshold value
+const FIXTURE_NOW_MS = FIXTURE_RECEIPT_MS + FRESH_OFFSET_MS;
 
 const FIXTURE_GOAL = "# Fixture Goal\n\n## Topology Heading One\n\nbody\n";
 const FIXTURE_LEDGER = [
@@ -61,9 +73,14 @@ async function makeFixtureRoot(): Promise<string> {
  * other test file's imports). */
 async function runCockpitTurns(
   goalforgeRoot: string,
+  nowMs: number = FIXTURE_NOW_MS,
 ): Promise<{ monitor: string; evidence0: string; evidenceOOB: string }> {
   const specifier = pathToFileURL(join(SRC_DIR, "commands", "world-state.ts")).href;
   const driverScript = [
+    // Mocked now, injected before world-state.ts is even imported -- never the subprocess's real
+    // Date.now() (#412). world-state.ts reads Date.now() fresh at call time, so this global
+    // override is picked up by every runWorldStateTurn() call below.
+    `Date.now = () => ${nowMs};`,
     `const { runWorldStateTurn } = await import(${JSON.stringify(specifier)});`,
     `const monitor = await runWorldStateTurn("monitor");`,
     `const evidence0 = await runWorldStateTurn("evidence monitor 0");`,
@@ -107,13 +124,19 @@ describe("/cockpit monitor turn shares core/monitor-render.ts with the REPL", ()
       const { monitor } = await runCockpitTurns(root);
       expect(monitor).toContain("73.3%");
       const lines = monitor.split("\n");
-      // Panel border (top line), then header x2, then rows: not-green group (C2 RED, C3
-      // AUDIT-OK, original relative order), then the GREEN group (C1) last -- same rule as the
-      // standalone REPL, now inside renderMonitorPanel()'s bordered container (B2 cockpit wire).
+      // Panel border is always first -- that's a real structural invariant, not a fragile index.
       expect(lines[0]).toContain("╭");
-      expect(lines[3]).toContain("C2");
-      expect(lines[4]).toContain("C3");
-      expect(lines[5]).toContain("C1");
+      // Row ORDER, asserted by CONTENT rather than a fixed index (#412): any line the panel
+      // inserts above the rows (the receipt-age badge line added by #392, or any future header)
+      // must never break this test again the way it broke twice already. not-green group (C2
+      // RED, C3 AUDIT-OK, original relative order) renders before the GREEN group (C1) -- same
+      // rule as the standalone REPL, now inside renderMonitorPanel()'s bordered container.
+      const c2Idx = lines.findIndex((l) => l.includes("C2"));
+      const c3Idx = lines.findIndex((l) => l.includes("C3"));
+      const c1Idx = lines.findIndex((l) => l.includes("C1"));
+      expect(c2Idx).toBeGreaterThan(-1);
+      expect(c3Idx).toBeGreaterThan(c2Idx);
+      expect(c1Idx).toBeGreaterThan(c3Idx);
     },
     20000,
   );
@@ -167,13 +190,20 @@ describe("/cockpit monitor turn shares core/monitor-render.ts with the REPL", ()
       // A lexicographically-later filename than the fixture's own 20260703T120000Z receipt --
       // findNewestBoardReceipt() picks the newest by filename sort, so this becomes "current"
       // the moment it exists on disk, with no cache invalidation needed on the reader's side.
+      const secondReceiptMs = FIXTURE_RECEIPT_MS + 60 * 60 * 1000; // matches ts "20260703T130000Z" below
       const secondReceipt = {
         ts: "20260703T130000Z",
         rows: [{ condition: "C9", status: "GREEN", reason: "fixed after monitor #1" }],
         summary: { total: 1, green: 1, red: 0, completion_math: { pct_complete: 100 } },
       };
+      // One fixed mocked now for the whole subprocess (#412): comfortably after the SECOND
+      // receipt, by the same threshold-scaled margin -- at that point the first receipt (~65min
+      // old) and the second (~5min old) are both fresh under DEFAULT_STALE_THRESHOLD_MS, so
+      // neither `monitor` call in this test depends on real wall-clock time.
+      const mockedNowMs = secondReceiptMs + FRESH_OFFSET_MS;
       const driverScript = [
         `import { writeFile } from "fs/promises";`,
+        `Date.now = () => ${mockedNowMs};`,
         `const { runWorldStateTurn } = await import(${JSON.stringify(specifier)});`,
         `const first = await runWorldStateTurn("monitor");`,
         `await writeFile(${JSON.stringify(join(boardDir, "ember-totality-20260703T130000Z.json"))}, ${JSON.stringify(JSON.stringify(secondReceipt))});`,
