@@ -83,6 +83,10 @@ import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
 } from "../services/operator-receipts.ts";
+import {
+  createLivenessHeartbeatWriter,
+  type LivenessHeartbeatWriter,
+} from "../services/liveness-heartbeat.ts";
 import { createGoalContinuationEngine, type GoalContinuationEngine } from "../core/goal-continuation.ts";
 import { getGoalStore, getGoalReceiptWriter } from "../core/goal-runtime.ts";
 import {
@@ -570,6 +574,14 @@ export function ReplScreen({
     operatorReceiptsRef.current = createOperatorReceiptWriter();
   }
 
+  // #413: cockpit liveness heartbeat -- written every second by the unconditional tick below.
+  const livenessHeartbeatRef = useRef<LivenessHeartbeatWriter | null>(null);
+  if (!livenessHeartbeatRef.current) {
+    livenessHeartbeatRef.current = createLivenessHeartbeatWriter({
+      version: process.env["EMBER_VERSION"] ?? "0.0.0",
+    });
+  }
+
   const [busy,           setBusy]           = useState(false);
   const busyRef                             = useRef(false);
   const [spinnerElapsed, setSpinnerElapsed] = useState(0);
@@ -594,6 +606,18 @@ export function ReplScreen({
       setSpinnerElapsed(Date.now() - spinnerStartRef.current);
     }
   }, ANIMATION_LOOP_MS);
+
+  // #413: cockpit liveness -- an UNCONDITIONAL per-second re-render, never gated on busy state
+  // (unlike the spinner above) or on a change comparison (unlike the telemetry poll below). This
+  // is what makes the welcome screen's wall-clock badge (logo-homescreen.ts's recentFeedEntries)
+  // and the heartbeat file both advance every second the process is genuinely alive -- a dead
+  // process (only the terminal pane surviving on a frozen last frame) freezes both, which is
+  // exactly the detector this issue asked for.
+  const [, setLivenessTick] = useState(0);
+  useInterval(() => {
+    setLivenessTick((t) => t + 1);
+    livenessHeartbeatRef.current?.write();
+  }, 1000);
 
   // Telemetry state (polled every 500ms; deduped by memo key)
   const [telemetry, setTelemetry] = useState<TelemetryState>(() => getState());

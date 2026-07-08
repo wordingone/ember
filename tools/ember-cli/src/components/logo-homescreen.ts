@@ -102,6 +102,17 @@ export function condensedLogoWidth(viewportWidth: number): number {
   return Math.max(CONDENSED_LOGO_MIN, viewportWidth - 15);
 }
 
+/** #413 (cockpit liveness): HH:MM:SS local time, formatted fresh at call time -- `nowMs` defaults
+ *  to Date.now() (never memoized), so every genuine re-render shows the real current second. A
+ *  dead process (a terminal pane surviving on a frozen last frame after the binary exited) freezes
+ *  this exact text forever -- that is the entire detection mechanism: the clock only advances
+ *  because screens/repl.ts's unconditional per-second tick keeps forcing real render cycles. */
+export function formatWallClock(nowMs: number = Date.now()): string {
+  const d = new Date(nowMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export function shouldShowFullLogo(state: LogoState): boolean {
   return !!(state.releaseNotesVisible || state.onboardingActive || state.forceFullLogo);
 }
@@ -268,10 +279,17 @@ export function ChannelsNotice({ state, flags }: ChannelsNoticeProps): React.Rea
  * between the two surfaces. Silent (no badge line) when boardSummary carries no boardTs, matching
  * this function's existing never-fabricate posture. */
 function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now()): FeedEntry[] {
-  if (!boardSummary) return [{ text: "No recent activity" }];
-  const entries: FeedEntry[] = [
+  // #413: liveness clock -- always the first line, regardless of whether board data has loaded
+  // yet (liveness must be visible from the very first frame, never gated on board data arriving).
+  // Same style token as the line below it: plain text, no color -- "no new colors" per spec.
+  const entries: FeedEntry[] = [{ text: `clock: ${formatWallClock(nowMs)}` }];
+  if (!boardSummary) {
+    entries.push({ text: "No recent activity" });
+    return entries;
+  }
+  entries.push(
     { text: `${boardSummary.green}/${boardSummary.total} GREEN (${boardSummary.pctComplete}%)` },
-  ];
+  );
   if (boardSummary.boardTs) {
     const stale = isReceiptStale(boardSummary.boardTs, nowMs);
     const age = formatReceiptAge(boardSummary.boardTs, nowMs);
@@ -298,6 +316,9 @@ export interface HomescreenProps {
   fireballTick?:  number;
   /** Real board substance for the recent-activity feed; omitted -> the honest placeholder. */
   boardSummary?:  BoardSummary;
+  /** #413: liveness-clock input, current wall-clock ms. Defaults to Date.now() at call time
+   *  (never memoized) -- tests pass a fixed value for determinism; real callers never need to. */
+  nowMs?:         number;
 }
 
 /** D4: the fireball's raster lines interleaved 1:1 with the identity block's own text lines
@@ -361,6 +382,7 @@ export function Homescreen({
   viewportWidth = 80,
   fireballTick  = FIREBALL_IDLE_POSE_FRAME,
   boardSummary,
+  nowMs         = Date.now(),
 }: HomescreenProps): React.ReactElement {
   const leftCol = React.createElement(
     Box, { key: "left", flexDirection: "column", width: LEFT_COL_WIDTH },
@@ -382,7 +404,7 @@ export function Homescreen({
   };
   const recentFeed: Feed = {
     title:   "Recent activity",
-    entries: recentFeedEntries(boardSummary),
+    entries: recentFeedEntries(boardSummary, nowMs),
     footer:  "/resume for more",
   };
 

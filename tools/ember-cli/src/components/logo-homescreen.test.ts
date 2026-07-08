@@ -3,7 +3,7 @@
 // Spec: state/field-ux-map.md §8b/§9; step-A mockups (state/design-mockups/welcome-homescreen...).
 
 import { describe, it, expect } from "bun:test";
-import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth } from "./logo-homescreen.ts";
+import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock } from "./logo-homescreen.ts";
 import { color } from "./design-system.ts";
 
 // React.createElement returns a plain {type, props} tree -- inspectable without a renderer.
@@ -150,6 +150,62 @@ describe("Homescreen — recent-activity feed carries the receipt-age badge (#40
       boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
     }));
     expect(findTextWhere(rendered, (s) => s.startsWith("board:") || s.startsWith("STALE:"))).toBe(false);
+  });
+});
+
+describe("formatWallClock — HH:MM:SS local (issue #413: cockpit liveness clock)", () => {
+  it("zero-pads hours, minutes, and seconds", () => {
+    const nowMs = new Date(2026, 6, 7, 9, 5, 3).getTime(); // local 09:05:03
+    expect(formatWallClock(nowMs)).toBe("09:05:03");
+  });
+
+  it("renders a full 24h hour without leading-zero truncation", () => {
+    const nowMs = new Date(2026, 6, 7, 23, 59, 9).getTime(); // local 23:59:09
+    expect(formatWallClock(nowMs)).toBe("23:59:09");
+  });
+
+  it("defaults to the real current time when nowMs is omitted", () => {
+    const before = Date.now();
+    const clock = formatWallClock();
+    const after = Date.now();
+    expect(clock).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    // The formatted string must be consistent with SOME instant between before/after.
+    expect(clock).toBe(formatWallClock(before));
+    void after;
+  });
+});
+
+describe("Homescreen — liveness clock in the recent-activity feed (issue #413)", () => {
+  it("shows 'clock: HH:MM:SS' even when no boardSummary has loaded yet (liveness is never gated on board data)", () => {
+    const nowMs = new Date(2026, 6, 7, 14, 30, 45).getTime();
+    const rendered = renderedRecentFeed(Homescreen({ state: {}, nowMs }));
+    expect(findTextChild(rendered, "clock: 14:30:45")).toBe(true);
+    expect(findTextChild(rendered, "No recent activity")).toBe(true);
+  });
+
+  it("shows the clock line alongside a real board summary, without disturbing the existing badge", () => {
+    const nowMs = new Date(2026, 6, 7, 8, 1, 2).getTime();
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      nowMs,
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
+    }));
+    expect(findTextChild(rendered, "clock: 08:01:02")).toBe(true);
+    expect(findTextWhere(rendered, (s) => s.includes("23/30 GREEN"))).toBe(true);
+  });
+
+  it("two renders one second apart produce different clock text (a live re-render actually ticks)", () => {
+    const t0 = new Date(2026, 6, 7, 10, 0, 0).getTime();
+    const t1 = t0 + 1000;
+    const renderedAt0 = renderedRecentFeed(Homescreen({ state: {}, nowMs: t0 }));
+    const renderedAt1 = renderedRecentFeed(Homescreen({ state: {}, nowMs: t1 }));
+    expect(findTextChild(renderedAt0, "clock: 10:00:00")).toBe(true);
+    expect(findTextChild(renderedAt1, "clock: 10:00:01")).toBe(true);
+  });
+
+  it("defaults nowMs to the real current time when the caller passes none (matches every other call site's Date.now() default)", () => {
+    const rendered = renderedRecentFeed(Homescreen({ state: {} }));
+    expect(findTextWhere(rendered, (s) => /^clock: \d{2}:\d{2}:\d{2}$/.test(s))).toBe(true);
   });
 });
 
