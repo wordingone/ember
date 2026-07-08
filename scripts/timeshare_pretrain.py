@@ -1645,7 +1645,7 @@ def run_v0_segment(
             # batch_size * grad_accum_steps drawn at the same effective offset.
             loader_idx = global_step * grad_accum_steps + micro_idx
             x, y0, y_mtp = loader.batch(loader_idx, batch_size)
-            if live:
+            if use_device == "cuda":
                 x = x.cuda()
                 y0 = y0.cuda()
                 y_mtp = [t.cuda() for t in y_mtp]
