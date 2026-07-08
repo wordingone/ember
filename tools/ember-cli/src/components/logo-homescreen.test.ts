@@ -48,6 +48,22 @@ function findTextWhere(el: any, pred: (s: string) => boolean): boolean {
   return false;
 }
 
+/** Finds the `color` prop on the descendant Text element whose children exactly equal `target`. */
+function colorForText(el: any, target: string): string | undefined {
+  if (!el || typeof el !== "object") return undefined;
+  const c = el.props?.children;
+  if (c === target) return el.props?.color;
+  if (Array.isArray(c)) {
+    for (const k of c) {
+      const found = colorForText(k, target);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (c && typeof c === "object") return colorForText(c, target);
+  return undefined;
+}
+
 /** Extracts rightCol's SECOND FeedComponent element (the "recent activity" feed) and actually
  * CALLS it to get its rendered Text tree -- Homescreen only creates a <FeedComponent feed=.../>
  * element (props carry the feed data), it never invokes FeedComponent itself, so entry text is
@@ -94,6 +110,36 @@ describe("Homescreen — recent-activity feed carries real board substance (B7 i
       boardSummary: { green: 30, total: 30, pctComplete: 100, topAttention: [] },
     }));
     expect(findTextChild(rendered, "/resume for more")).toBe(true);
+  });
+});
+
+describe("Homescreen — recent-activity feed carries the receipt-age badge (#404/#405: boot surface parity with /cockpit)", () => {
+  it("shows 'board: <age>' (no color) when the board receipt is fresh", () => {
+    const boardTs = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 minutes ago
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [], boardTs },
+    }));
+    expect(findTextWhere(rendered, (s) => /^board: \d+m ago$/.test(s))).toBe(true);
+    expect(findTextWhere(rendered, (s) => s.includes("STALE"))).toBe(false);
+  });
+
+  it("shows red 'STALE: <age>' when the board receipt is older than the staleness threshold", () => {
+    const boardTs = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // 2 hours ago
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [], boardTs },
+    }));
+    expect(findTextWhere(rendered, (s) => /^STALE: \d+h ago$/.test(s))).toBe(true);
+    expect(colorForText(rendered, "STALE: 2h ago")).toBe("red");
+  });
+
+  it("carries no badge line when boardSummary has no boardTs (older callers / partial data, never fabricates)", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
+    }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("board:") || s.startsWith("STALE:"))).toBe(false);
   });
 });
 
