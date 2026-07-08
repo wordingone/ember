@@ -2,18 +2,18 @@
 // C-OBS).
 //
 // Wires the real adapter (core/ember-world-state.ts) and the confirm-only encounter membrane
-// (core/encounter-membrane.ts) into the ember-cli command surface, so the SAME logic the
-// standalone core/ember-world-state-repl.ts proof-pack exercises is also reachable as a slash
-// command inline in the TUI's chat scroll -- this file makes no attempt to duplicate that logic;
-// it renders exactly one MONITOR/UNDERSTAND/INTERACT turn per invocation (a REPL turn, not a
-// persistent session) and keeps state (outstanding offers, the last-rendered board) in module
-// scope across invocations within one running cockpit process.
+// (core/encounter-membrane.ts) into the ember-cli command surface. This command IS the current
+// home of that logic -- the original standalone `node core/ember-world-state-repl.ts` proof-pack
+// this was split out of no longer exists (its rendering rules live on in core/monitor-render.ts
+// and core/repl-render.ts, extracted for unit-testability); this is the only way to exercise the
+// adapter today. It renders exactly one MONITOR/UNDERSTAND/INTERACT turn per invocation (a REPL
+// turn, not a persistent session) and keeps state (outstanding offers, the last-rendered board) in
+// module scope across invocations within one running cockpit process.
 //
 // Registered in command-registry.ts's builtins list. Reaching a running compiled cockpit requires
 // whatever binary is currently launched to have been built AFTER this file last changed -- run
 // `bun build ./entrypoints/main.ts --compile --outfile ember.exe` from tools/ember-cli/src/ to
-// pick up the current source. core/ember-world-state-repl.ts's standalone `node
-// core/ember-world-state-repl.ts` proof-pack remains available too (same adapter, same renderer).
+// pick up the current source.
 
 import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
 import { buildEmberWorldState, GOALFORGE_ROOT } from "../core/ember-world-state.ts";
@@ -35,8 +35,8 @@ function nowIso(): string {
 
 function surfaceClaims(state: EmberWorldState, surface: string): Claim[] | undefined {
   // "monitor" resolves against the SAME not-green-first order the `monitor` turn renders below
-  // (core/monitor-render.ts, shared with core/ember-world-state-repl.ts), so a printed [n] here
-  // always resolves to the row the operator just saw -- understand/interact untouched.
+  // (core/monitor-render.ts's sortMonitorConditions), so a printed [n] here always resolves to
+  // the row the operator just saw -- understand/interact untouched.
   if (surface === "monitor") return sortMonitorConditions(state.monitor.conditions);
   if (surface === "understand") return state.understand.topology;
   if (surface === "interact") return state.interact.ledgerRows;
