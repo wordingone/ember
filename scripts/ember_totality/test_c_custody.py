@@ -19,6 +19,55 @@ Three failure shapes (issue #381):
 Disclosed allowlist mechanism: receipts may carry an "__allowlist_untracked"
 field (array of basename patterns) to exempt specific files from tracking
 requirement (staging files for future operations).
+
+Issue #415 cure (72/72 cited_missing enumeration + four-bucket addendum +
+DESIGN RULING, gh issue #415): the naive citation extractor over-reported
+cited_missing on several distinct, evidence-backed false-positive shapes.
+Five probe-side cures, each fixture-verified:
+
+  1. Extraction fixes -- a trailing markdown-fence backtick or a `::field.path`
+     compound-reference suffix swallowed into the greedy extraction regex is
+     stripped before the existence check (_clean_citation); a citation-check
+     receipt's own wrap_joined record ({"doc","ref","joined","line"} --
+     scripts/check_goal_citations.py) is consumed by its RECONSTRUCTED
+     `joined` value instead of re-truncating the raw `ref` fragment; a bare,
+     no-extension citation that resolves as a real, git-tracked-populated
+     DIRECTORY (isdir() + >=1 tracked file inside) is a directory reference,
+     not a missing file.
+  2. Relocation resolution -- a unique-basename index over the git-tracked
+     receipts/ tree: a cited path that doesn't exist, but whose basename
+     matches EXACTLY ONE tracked file elsewhere, classifies `relocated`
+     (sidecar records old->new). A non-unique basename match is never
+     guessed at -- it stays cited_missing.
+  3. Schema-constant exemption -- an explicit, evidence-backed table of
+     literal path STRINGS that are hardcoded schema-example constants baked
+     into every cycle-*/statecommit-* receipt's `receipts`/`evidence` blocks
+     (sandbox/gpu_governor/benchmark/wheel/observation/verifier fields, plus
+     the replay/rollback/state_substrate fields whose real value is doubly
+     mis-rooted under a state-substrate/ prefix that doesn't exist in this
+     tree at all) -- conventional documentation, never a real per-run
+     citation. Folds into the existing pattern_citation bucket (issue #415
+     DESIGN RULING: "pattern already exists").
+  4. documented_absent honor -- a citation-check receipt's own
+     documented_absent record ({"doc","ref","marker","line"}) discloses a
+     `ref` as verified-absent; the SAME probe re-flagging that exact ref as
+     a fresh custody violation fights the corpus's own honest disclosure.
+     Classifies `documented_absent`, non-fatal.
+  5. Non-path citations -- a `{ts}`-style curly-brace placeholder (added to
+     the pattern-metachar set) and one evidence-backed prose fragment that
+     happens to parse as a path ("the existing receipts/ledger/view
+     mechanism", every segment starting with a letter) join pattern_citation.
+  7. Annex attestation (DESIGN RULING item 7) -- for a genuinely-missing
+     citation whose sha256 was recorded, at some point, by ANY historical
+     receipts/spend-annex/spend-annex-*.json scan (not just the newest --
+     a file deleted since an OLDER scan only ever appears in that older
+     snapshot), classifies `annex_attested`: weaker-but-honest evidence the
+     file was once real, distinct from an unverified cited_missing claim.
+
+Evidence-side cures (git-history file restoration for genuinely-lost
+receipts; a dated disposition note for the honest residue) are DELIBERATELY
+OUT OF SCOPE for this probe -- separate follow-up lanes per the DESIGN
+RULING (items 6 and 8).
 """
 
 import glob
@@ -76,33 +125,141 @@ def _load_json_with_fallback(path):
     return None, "Failed both utf-8 and utf-8-sig"
 
 
-def _extract_citations(obj, citations=None):
+def _clean_citation(raw):
+    """Strip a trailing `::field.path` compound-reference suffix (the base
+    file is the real citation; the suffix names a field inside it) and any
+    trailing markdown-fence backtick / prose punctuation the greedy
+    extraction regex swallows (issue #415 cure 1, extraction artifacts)."""
+    if "::" in raw:
+        raw = raw.split("::", 1)[0]
+    return raw.rstrip("`,;.")
+
+
+def _is_wrap_joined_record(obj):
+    """True iff obj is exactly the record shape scripts/check_goal_citations.py
+    appends to its `wrap_joined` list: {"doc":str, "ref":str, "joined":str,
+    "line":int}. When a citation-check receipt (receipts/citation-check-*.json)
+    carrying one of these is scanned by THIS probe's generic recursive
+    extractor, the truncated `ref` fragment used to be re-ingested as its own
+    (bogus) missing citation -- issue #415 cure 1. All four keys/types are
+    required so this can't collide with an unrelated receipt shape."""
+    return (
+        isinstance(obj, dict)
+        and isinstance(obj.get("doc"), str)
+        and isinstance(obj.get("ref"), str)
+        and isinstance(obj.get("joined"), str)
+        and isinstance(obj.get("line"), int)
+    )
+
+
+def _is_documented_absent_record(obj):
+    """True iff obj is exactly the record shape check_goal_citations.py
+    appends to its `documented_absent` list: {"doc":str, "ref":str,
+    "marker":str, "line":int}. Issue #415 cure 4: a citation the corpus's own
+    citation-check already discloses as verified-absent is an honest
+    disclosure, not a fresh custody violation."""
+    return (
+        isinstance(obj, dict)
+        and isinstance(obj.get("doc"), str)
+        and isinstance(obj.get("ref"), str)
+        and isinstance(obj.get("marker"), str)
+        and isinstance(obj.get("line"), int)
+    )
+
+
+def _extract_citations(obj, citations=None, documented_absent_refs=None):
     """Recursively extract all receipts/ paths cited in obj (dict/list).
-    Returns set of normalized receipt paths."""
+    Returns (citations, documented_absent_refs) -- two normalized path sets.
+    wrap_joined / documented_absent record shapes (see above) are consumed
+    specially rather than falling through the generic per-key regex sweep."""
     if citations is None:
         citations = set()
+    if documented_absent_refs is None:
+        documented_absent_refs = set()
 
     if isinstance(obj, dict):
+        if _is_wrap_joined_record(obj):
+            joined = obj["joined"]
+            if "receipts/" in joined:
+                m = re.search(r"(receipts/[^\s\"']+)", joined)
+                if m:
+                    citations.add(_clean_citation(m.group(1)))
+            for k, v in obj.items():
+                if k in ("ref", "joined"):
+                    continue  # never re-ingest the truncated fragment itself
+                _extract_citations(v, citations, documented_absent_refs)
+            return citations, documented_absent_refs
+
+        if _is_documented_absent_record(obj):
+            ref = obj["ref"]
+            if "receipts/" in ref:
+                m = re.search(r"(receipts/[^\s\"']+)", ref)
+                if m:
+                    documented_absent_refs.add(_clean_citation(m.group(1)))
+            for k, v in obj.items():
+                if k == "ref":
+                    continue
+                _extract_citations(v, citations, documented_absent_refs)
+            return citations, documented_absent_refs
+
         for k, v in obj.items():
             # Look for fields that might cite receipt paths
             if isinstance(v, str) and "receipts/" in v:
                 # Extract path starting from receipts/
                 m = re.search(r"(receipts/[^\s\"']+)", v)
                 if m:
-                    citations.add(m.group(1).rstrip(",;."))
-            _extract_citations(v, citations)
+                    citations.add(_clean_citation(m.group(1)))
+            _extract_citations(v, citations, documented_absent_refs)
     elif isinstance(obj, list):
         for item in obj:
-            _extract_citations(item, citations)
+            _extract_citations(item, citations, documented_absent_refs)
 
-    return citations
+    return citations, documented_absent_refs
 
 
 # Characters that mark a cited string as a regex/glob literal rather than a
 # concrete file path (issue #410): `*` and `?` (glob), `[` `]` (char class),
 # `(` `)` (grouping / prose parenthetical), `<` `>` (placeholder), `\` (regex
-# escape), `+` (quantifier / glob-alt).
-_CITATION_METACHARS = frozenset("*?[]()<>\\+")
+# escape), `+` (quantifier / glob-alt). `{` `}` added (issue #415 cure 5): a
+# `{ts}`-style curly-brace template placeholder is the identical shape as
+# `<named>`, just a different bracket style.
+_CITATION_METACHARS = frozenset("*?[]()<>\\+{}")
+
+# Evidence-backed allowlist of prose fragments that parse as a path (every
+# segment starts with a letter, so the punctuation heuristic below can't
+# catch them) but are not citations at all (issue #415 cure 5). Explicit and
+# narrow on purpose -- never a broad heuristic that could hide a genuine miss.
+_KNOWN_PROSE_FRAGMENTS = frozenset({
+    # "Specify ground truth source: ... (b) the existing receipts/ledger/view
+    # mechanism (already local)." -- receipts/c52-adversarial-pass-20260612T175700Z.json:63.
+    # Names a mechanism, not a file; issue #415 enumeration bucket (c) row 15.
+    "receipts/ledger/view",
+})
+
+# Literal path strings that are hardcoded schema-example constants baked
+# into every receipts/ember-mvp/*/cycle-20260617T000000Z-0001.json fixture's
+# `receipts` / `evidence` blocks (confirmed identical across the 3 sibling
+# receipts under receipts/ember-mvp/{kaggle-external-heldout-script-wheel,
+# cycle-official-runner-bound, core-loop-attempt-1}-20260618/) -- conventional
+# documentation of a naming convention, never a real per-run artifact path.
+# The replay/rollback/state_substrate entries are the SAME convention for a
+# theoretical "state-substrate/" companion tree that was never built in this
+# repo at all (no state-substrate/ directory exists anywhere) -- the greedy
+# extractor's mis-rooting (matching "receipts/" as a substring inside
+# "state-substrate/receipts/...") produces exactly these truncated strings,
+# which is why they're listed in their post-extraction (mis-rooted) form,
+# not their real, doubly-nonexistent full value. Issue #415 cure 3.
+SCHEMA_CONSTANT_VALUES = frozenset({
+    "receipts/observations/obs-20260617T000000Z-0001.json",   # "observation" field
+    "receipts/sandbox/cycle-20260617T000000Z-0001.json",      # "sandbox" field
+    "receipts/governor/cycle-20260617T000000Z-0001.json",     # "gpu_governor" / "governor" field
+    "receipts/benchmark/cycle-20260617T000000Z-0001.json",    # "benchmark" field
+    "receipts/wheel/cycle-20260617T000000Z-0001.json",        # "wheel" field
+    "receipts/verifier/cycle-20260617T000000Z-0001.json",     # "verifier" field
+    "receipts/replay/statecommit-20260617T000000Z-0001.json",     # "replay" field, mis-rooted
+    "receipts/rollback/statecommit-20260617T000000Z-0001.json",   # "rollback" field, mis-rooted
+    "receipts/commits/statecommit-20260617T000000Z-0001.json",    # "state_substrate" field, mis-rooted
+})
 
 
 def _classify_citation(path):
@@ -110,6 +267,8 @@ def _classify_citation(path):
     file path) or "pattern" (a regex/glob literal or a prose fragment swept
     in by the citation-extraction regex). Only "concrete" citations are
     checked for existence / counted toward cited_missing."""
+    if path in _KNOWN_PROSE_FRAGMENTS:
+        return "pattern"
     if any(ch in _CITATION_METACHARS for ch in path):
         return "pattern"
     if path.endswith("/"):
@@ -122,6 +281,71 @@ def _classify_citation(path):
             # not a cited path
             return "pattern"
     return "concrete"
+
+
+def _is_tracked_populated_dir(root, git_tracked_normalized, rel_path):
+    """True iff rel_path is a real directory on disk under root AND at least
+    one git-tracked file lives under it (issue #415 cure 1: a bare,
+    no-extension citation that names a real, populated directory is a
+    directory reference, not a missing file -- checked with isdir(), not
+    isfile())."""
+    full = os.path.join(root, rel_path)
+    if not os.path.isdir(full):
+        return False
+    prefix = rel_path.rstrip("/") + "/"
+    return any(p.startswith(prefix) for p in git_tracked_normalized)
+
+
+def _build_basename_index(git_tracked_normalized):
+    """basename -> sorted list of distinct git-tracked receipts/ paths
+    carrying that basename (issue #415 cure 2). Scoped to receipts/ so a
+    same-named script or doc elsewhere in the tree can never be mistaken for
+    a relocated receipt."""
+    index = {}
+    for p in git_tracked_normalized:
+        if not p.startswith("receipts/"):
+            continue
+        base = p.rsplit("/", 1)[-1]
+        index.setdefault(base, set()).add(p)
+    return {base: sorted(paths) for base, paths in index.items()}
+
+
+def _resolve_relocation(cited_path, basename_index):
+    """Return the new path if cited_path's basename matches EXACTLY ONE
+    tracked receipts/ file elsewhere in the tree, else None. A non-unique
+    basename match is never guessed at (issue #415 cure 2)."""
+    base = os.path.basename(cited_path)
+    candidates = basename_index.get(base, [])
+    if len(candidates) == 1 and candidates[0] != cited_path:
+        return candidates[0]
+    return None
+
+
+def _load_all_spend_annex_rows(root):
+    """path -> {"sha256":..., "annex_source":...}, merged across EVERY
+    receipts/spend-annex/spend-annex-*.json snapshot (not just the newest --
+    a file deleted since an OLDER scan only ever appears in that older
+    snapshot; test_c_neg1.py's newest-only lookup serves a different,
+    anti-staleness purpose and would miss exactly the historical rows this
+    cure exists to surface). Sorted ascending so a later snapshot's row for
+    the same path wins on conflict -- deterministic, no wall-clock read.
+    Issue #415 cure 7 (annex attestation)."""
+    by_path = {}
+    pattern = os.path.join(root, "receipts", "spend-annex", "spend-annex-*.json")
+    for annex_path in sorted(glob.glob(pattern)):
+        try:
+            with open(annex_path, "r", encoding="utf-8-sig") as fh:
+                annex = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(annex, dict) or not isinstance(annex.get("rows"), list):
+            continue
+        rel_source = os.path.relpath(annex_path, root).replace("\\", "/")
+        for row in annex["rows"]:
+            if (isinstance(row, dict) and isinstance(row.get("path"), str)
+                    and isinstance(row.get("sha256"), str)):
+                by_path[row["path"]] = {"sha256": row["sha256"], "annex_source": rel_source}
+    return by_path
 
 
 def _get_allowlist_for_receipt(receipt_data):
@@ -212,6 +436,7 @@ def main():
     failures = []
     pending_landing = []
     citations_to_verify = set()
+    documented_absent_refs = set()
 
     for fpath in sorted(found_files):
         rel_path = os.path.relpath(fpath, ROOT).replace("\\", "/")
@@ -245,21 +470,72 @@ def main():
             continue
 
         # Shape (c): Extract citations for later verification
-        _extract_citations(data, citations_to_verify)
+        _extract_citations(data, citations_to_verify, documented_absent_refs)
 
-    # --- (E) Check cited paths exist -------
+    # --- (E) Check cited paths exist -- issue #415 cure ladder -------
+    basename_index = _build_basename_index(git_tracked_normalized)
+    annex_rows_by_path = _load_all_spend_annex_rows(ROOT)
+
     missing_citations = []
     pattern_citations = []
+    relocated_citations = []
+    documented_absent_citations = []
+    annex_attested_citations = []
+
     for cited_path in sorted(citations_to_verify):
         if _classify_citation(cited_path) == "pattern":
-            pattern_citations.append(cited_path)
+            pattern_citations.append(f"PATTERN: {cited_path}")
             continue
-        full_path = os.path.join(ROOT, cited_path)
-        if not os.path.isfile(full_path):
-            missing_citations.append(cited_path)
 
+        full_path = os.path.join(ROOT, cited_path)
+        if os.path.isfile(full_path):
+            # Resolves outright -- covers backtick/::-suffix-stripped and
+            # wrap_joined-consumed citations, which now check out cleanly.
+            continue
+
+        # Cure 1 tail: bare, no-extension citation naming a real, populated
+        # tracked directory (not a missing file).
+        if _is_tracked_populated_dir(ROOT, git_tracked_normalized, cited_path):
+            pattern_citations.append(
+                f"PATTERN (bare-directory, tracked-populated): {cited_path}")
+            continue
+
+        # Cure 3: hardcoded schema-example constant -- conventional
+        # documentation, never a real per-run citation.
+        if cited_path in SCHEMA_CONSTANT_VALUES:
+            pattern_citations.append(f"PATTERN (schema-constant): {cited_path}")
+            continue
+
+        # Cure 4: the corpus's own citation-check already discloses this ref
+        # as verified-absent -- honor the honest disclosure.
+        if cited_path in documented_absent_refs:
+            documented_absent_citations.append(cited_path)
+            continue
+
+        # Cure 2: unique-basename relocation match.
+        relocated_to = _resolve_relocation(cited_path, basename_index)
+        if relocated_to:
+            relocated_citations.append({"old": cited_path, "new": relocated_to})
+            continue
+
+        # Cure 7: a historical spend-annex snapshot recorded this exact
+        # path's sha256 at some earlier scan time -- weaker-but-honest
+        # evidence it was once real.
+        annex_row = annex_rows_by_path.get(cited_path)
+        if annex_row:
+            annex_attested_citations.append({
+                "path": cited_path,
+                "sha256": annex_row["sha256"],
+                "annex_source": annex_row["annex_source"],
+            })
+            continue
+
+        missing_citations.append(cited_path)
+
+    # cited_missing is the TRUE, uncapped total -- never truncated in either
+    # the count or the listed offenders (issue #415 acceptance).
     if missing_citations:
-        failures.extend([f"CITED-MISSING: {p}" for p in missing_citations[:10]])
+        failures.extend([f"CITED-MISSING: {p}" for p in missing_citations])
 
     # --- (F) Emit result -------
     if failures:
@@ -274,7 +550,10 @@ def main():
                 "untracked": [f for f in failures if f.startswith("UNTRACKED:")],
                 "unparseable": [f for f in failures if f.startswith("UNPARSEABLE:")],
                 "cited_missing": [f for f in failures if f.startswith("CITED-MISSING:")],
-                "pattern_citation": [f"PATTERN: {p}" for p in pattern_citations],
+                "pattern_citation": pattern_citations,
+                "relocated": relocated_citations,
+                "documented_absent": documented_absent_citations,
+                "annex_attested": annex_attested_citations,
             },
             "pending_landing": pending_landing,
         }
@@ -284,6 +563,9 @@ def main():
                     f"unparseable={len(receipt_obj['offenders']['unparseable'])} "
                     f"cited_missing={len(receipt_obj['offenders']['cited_missing'])} "
                     f"pattern={len(pattern_citations)} "
+                    f"relocated={len(relocated_citations)} "
+                    f"documented_absent={len(documented_absent_citations)} "
+                    f"annex_attested={len(annex_attested_citations)} "
                     f"pending_landing={len(pending_landing)}; "
                     f"sidecar={sidecar_path}")
 
@@ -298,7 +580,10 @@ def main():
             "untracked": [],
             "unparseable": [],
             "cited_missing": [],
-            "pattern_citation": [f"PATTERN: {p}" for p in pattern_citations],
+            "pattern_citation": pattern_citations,
+            "relocated": relocated_citations,
+            "documented_absent": documented_absent_citations,
+            "annex_attested": annex_attested_citations,
         },
         "pending_landing": [],
     }
@@ -307,6 +592,9 @@ def main():
                   f"parseable as JSON, and cited paths exist "
                   f"({len(found_files)} files checked, 0 violations); "
                   f"pattern={len(pattern_citations)} "
+                  f"relocated={len(relocated_citations)} "
+                  f"documented_absent={len(documented_absent_citations)} "
+                  f"annex_attested={len(annex_attested_citations)} "
                   f"pending_landing={len(pending_landing)}; "
                   f"sidecar={sidecar_path}")
 
