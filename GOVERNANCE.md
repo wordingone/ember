@@ -83,6 +83,37 @@ Meaningful milestones are marked with annotated tags (`vMAJOR.MINOR`). Tags are
 the durable, human-readable record of "what state was real when" — distinct from
 the moving branch tip.
 
+## 9. Repo hygiene
+
+Repo size and growth are not progress and not quality. Every tracked file must
+earn its place; nothing accumulates by default.
+
+- **Docs supersede-and-delete.** Every doc under `docs/` states what supersedes
+  or invalidates it. The PR that lands a superseding doc deletes the doc it
+  replaces in the same PR — never leaves both side by side. Version-suffixed
+  specs (`v1`, `v2`, ...) keep at most the live version plus the frozen prereg
+  editions that live claims still cite.
+- **Receipts retention.** A receipt cited by the board, the credibility
+  battery, an open claim, or a frozen prereg is protected. Uncited receipts
+  older than 30 days move to the annex (the existing `annex_attested` custody
+  pattern) in one quarterly sweep PR. The working `receipts/` set stays
+  readable end-to-end by a stranger.
+- **Dead scripts are deleted.** A script referenced by no playbook, board
+  probe, test, or doc is dead. Each hygiene pass proposes its deletion with
+  the reference-scan as the evidence, rather than leaving it in place on the
+  chance it matters later.
+- **Issue consolidation cadence.** An issue silent for more than 14 days gets
+  one disposition comment: folded into a carrier issue (pointer), parked with
+  a path in the floor contract, or surfaced for owner kill. Consolidation
+  with a pointer is not a kill — kill decisions stay with the repo owner.
+- **Working-set metric, not vibes.** Each totality board run appends a
+  working-set line to its receipt (tracked files, docs count, scripts count,
+  tracked receipts, open issues). Working-set growth across a window where
+  no battery grade improved is a named regression, not a neutral fact.
+- **Extend, don't multiply.** A new issue is opened only when the work does
+  not already share a track with an open issue; otherwise it extends that
+  issue. Issue creation itself is subject to hygiene-pass audit.
+
 ---
 
 *Deviations from this document are themselves defects. The point of the repo is

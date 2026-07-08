@@ -871,6 +871,71 @@ def run_probe(path, env):
     }
 
 
+def compute_working_set(repo_root=None):
+    """Repo hygiene working-set metric (GOVERNANCE.md §9 / issue #488).
+
+    Cheap git/glob-only counts appended to each board receipt's summary so
+    the SIM/review can watch working-set size trend against battery-grade
+    movement: working-set growth across a window where no battery grade
+    improved is a named regression, not a neutral fact. Never raises — any
+    count that can't be computed cheaply comes back as None rather than
+    failing the whole board run.
+    """
+    root = repo_root or REPO_ROOT
+    working_set = {
+        "tracked_files": None,
+        "docs_files": None,
+        "scripts_files": None,
+        "tracked_receipts": None,
+        "untracked_receipts_on_disk": None,
+        "open_issues_count": None,
+    }
+
+    tracked = None
+    try:
+        proc = subprocess.run(
+            ["git", "-C", root, "ls-files"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if proc.returncode == 0:
+            tracked = [line for line in proc.stdout.splitlines() if line]
+    except (OSError, subprocess.SubprocessError):
+        tracked = None
+
+    if tracked is not None:
+        working_set["tracked_files"] = len(tracked)
+        working_set["docs_files"] = sum(1 for f in tracked if f.startswith("docs/"))
+        working_set["scripts_files"] = sum(1 for f in tracked if f.startswith("scripts/"))
+        tracked_receipts = {f for f in tracked if f.startswith("receipts/")}
+        working_set["tracked_receipts"] = len(tracked_receipts)
+
+        receipts_dir = os.path.join(root, "receipts")
+        if os.path.isdir(receipts_dir):
+            untracked = 0
+            for dirpath, _dirnames, filenames in os.walk(receipts_dir):
+                for fn in filenames:
+                    rel = os.path.relpath(os.path.join(dirpath, fn), root)
+                    rel = rel.replace(os.sep, "/")
+                    if rel not in tracked_receipts:
+                        untracked += 1
+            working_set["untracked_receipts_on_disk"] = untracked
+
+    try:
+        proc = subprocess.run(
+            ["gh", "issue", "list", "--state", "open", "--limit", "1000",
+             "--json", "number"],
+            capture_output=True, text=True, timeout=10, cwd=root,
+        )
+        if proc.returncode == 0:
+            working_set["open_issues_count"] = len(json.loads(proc.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        # gh not installed, no network, not a repo gh recognizes, or
+        # unparseable output: fall back to None (issue #488 accepts this).
+        working_set["open_issues_count"] = None
+
+    return working_set
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Ember totality board runner (see module docstring)."
@@ -1113,6 +1178,7 @@ def main():
                     "never completion conjuncts and never a GREEN."
                 ),
             },
+            "working_set": compute_working_set(REPO_ROOT),
         },
         "invariant_checksum": invariant_checksum,
         "prev_totality_receipt_sha256": prev_totality_receipt_sha256,
