@@ -1,0 +1,32 @@
+{
+  "api_spend_usd": 0.0,
+  "blocked_reasons": [],
+  "conflation_guard": {
+    "blocked_full_parity_harness_revokes_gate_clearance_inference": true,
+    "d3_benchmark_or_readiness_work_cannot_use_this_pass_label_as_precondition_clearance": true,
+    "neural_update_claim_is_not_sufficient_without_full_resident_harness_parity": true
+  },
+  "full_parity_blocked": false,
+  "full_parity_blocked_reasons": [],
+  "full_parity_classification": "FULL_PARITY_GATE_PASS",
+  "full_parity_receipt_path": "<REDACTED_GOALFORGE_PATH>\\receipts\\ember-preloop-resident-gate\\avir-cli-full-parity-harness-gate-20260704T055811Z.json",
+  "full_parity_receipt_sha256": "7302e7f3ef819a49713ada49de695c38f29b2a541dd1ba4e1db7c90d3c729184",
+  "full_parity_verdict": "AVIR_CLI_FULL_PARITY_HARNESS_GATE_PASS",
+  "goal_path": "<REDACTED_GOALFORGE_PATH>\\GOAL.md",
+  "goal_source_sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332",
+  "next_executable_command": "Continue from the reconciled resident-training gate cursor.",
+  "paid_api_surface_used": false,
+  "repo": "<REDACTED_GOALFORGE_PATH>",
+  "resident_candidate_class": "VERIFIER_CONDITIONED_RESIDENT_PASS",
+  "resident_claims_clean_room_action_channel": true,
+  "resident_pass_interpretation": "RESIDENT_GATE_CLEARANCE_RECONCILED",
+  "resident_training_gate_status": "PASS",
+  "resident_training_receipt_path": "<REDACTED_GOALFORGE_PATH>\\receipts\\ember-resident-training-gate\\resident-training-gate-20260704T062951Z-issue69-cured.json",
+  "resident_training_receipt_sha256": "e68f9c4f741d28b49e9d64802e67aca26882a93a40446505d078525282149492",
+  "resident_training_verdict": "RESIDENT_TRAINING_GATE_PASS",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "EMBER-RESIDENT-GATE-CONFLATION-AUDIT",
+  "ts": "20260704T063019Z",
+  "verdict": "RESIDENT_GATE_CONFLATION_GUARD_PASS"
+}
+
