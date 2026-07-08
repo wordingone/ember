@@ -1,0 +1,128 @@
+{
+  "script": "scripts/proofs/feasibility_bill.py",
+  "purpose": "independent recomputation of every number in math-core-v1.md sec7 / feasibility-envelope-v1.md",
+  "generated_at_utc": "2026-07-02T06:44:30Z",
+  "constants": {
+    "BF16_PEAK_FLOPS_S": 165200000000000.0,
+    "MEASURED_MFU": 0.2388,
+    "ALT_MFU": 0.4,
+    "CHINCHILLA_RATIO": 20,
+    "FLOPS_PER_TOKEN_PARAM": 6,
+    "SECONDS_PER_DAY": 86400,
+    "DUTY_FACTOR": 1.0,
+    "GOVERNED_DAY_SECONDS": 86400.0,
+    "VRAM_BUDGET_GB": 24.0,
+    "COLLAPSE_TARGET_DAYS": 30,
+    "ASSIM_BURST_TOKENS": 1000000,
+    "LORA_RANK": 64,
+    "ASSUMED_3B_ARCH": {
+      "d_model": 2560,
+      "n_layers": 32,
+      "n_heads": 20,
+      "vocab": 32008,
+      "lora_target_matrices_per_layer": 7
+    },
+    "N_TARGETS": {
+      "368.4M_seed_c03": 368400000,
+      "0.8B_rung1": 800000000.0,
+      "1.6B_rung2": 1600000000.0,
+      "3B_target": 3000000000.0
+    }
+  },
+  "w1_scratch_train_table": {
+    "368.4M_seed_c03": {
+      "N_params": 368400000,
+      "D_match_tokens": 7368000000,
+      "FLOPs": 16286227200000000000,
+      "days_at_measured_mfu_0.2388": 4.778178625167809,
+      "days_at_alt_mfu_0.40": 2.8525726392251816
+    },
+    "0.8B_rung1": {
+      "N_params": 800000000.0,
+      "D_match_tokens": 16000000000.0,
+      "FLOPs": 7.68e+19,
+      "days_at_measured_mfu_0.2388": 22.53217481903284,
+      "days_at_alt_mfu_0.40": 13.451708366962604
+    },
+    "1.6B_rung2": {
+      "N_params": 1600000000.0,
+      "D_match_tokens": 32000000000.0,
+      "FLOPs": 3.072e+20,
+      "days_at_measured_mfu_0.2388": 90.12869927613136,
+      "days_at_alt_mfu_0.40": 53.80683346785042
+    },
+    "3B_target": {
+      "N_params": 3000000000.0,
+      "D_match_tokens": 60000000000.0,
+      "FLOPs": 1.08e+21,
+      "days_at_measured_mfu_0.2388": 316.8587083926493,
+      "days_at_alt_mfu_0.40": 189.16464891041161
+    }
+  },
+  "w1_collapse_factor_at_3B_for_30_days": {
+    "N_params": 3000000000.0,
+    "FLOPs_3B_scratch": 1.08e+21,
+    "target_days": 30,
+    "required_effective_flops_per_sec": 416666666666666.7,
+    "current_effective_flops_per_sec_at_measured_mfu": 39449760000000.0,
+    "collapse_factor_required": 10.561956946421644
+  },
+  "w2_memory_bill_at_3B": {
+    "textbook_mixed_precision_16B_per_param": {
+      "weights_bf16_GB": 6.0,
+      "grads_bf16_GB": 6.0,
+      "master_weights_fp32_GB": 12.0,
+      "adamw_m_fp32_GB": 12.0,
+      "adamw_v_fp32_GB": 12.0,
+      "total_GB_excl_activations": 48.0
+    },
+    "spec_literal_math_core_sec7_6_6_12": {
+      "weights_bf16_GB": 6.0,
+      "grads_bf16_GB": 6.0,
+      "adamw_m_bf16_GB": 6.0,
+      "adamw_v_bf16_GB": 6.0,
+      "total_GB_excl_activations": 24.0
+    },
+    "envelope_table_bf16_work_plus_fp32_master_m_v": {
+      "work_weights_bf16_GB": 6.0,
+      "master_weights_fp32_GB": 12.0,
+      "adamw_m_fp32_GB": 12.0,
+      "adamw_v_fp32_GB": 12.0,
+      "total_GB_excl_grads_and_activations": 42.0,
+      "plus_grads_bf16_GB": 6.0,
+      "grand_total_GB_excl_activations": 48.0
+    },
+    "reconciliation_note": "math-core-v1.md sec7 states weights(6GB)+grads(6GB)+optimizer(12GB)=24GB (before activations); feasibility-envelope-v1.md sec1 table states 'bf16 work + fp32 master/m/v =~ 42 GB' + grads + activations separately. These two spec prose figures are NOT the same memory-layout assumption: 24GB implies an all-bf16 optimizer (no fp32 master copy), 42GB implies a full fp32 master+m+v triple. Both are >=24GB is the operative claim in both cases (24GB alone already equals the full card with zero activation headroom; 42GB is ~1.75x the card) so 'full-param AdamW at 3B is infeasible in-VRAM' holds under EITHER reading -- the qualitative W2 claim survives the discrepancy, but the two spec documents should be reconciled to one canonical component breakdown (flagged here, not silently normalized)."
+  },
+  "w2_adapter_route_at_3B": {
+    "assumed_arch": {
+      "d_model": 2560,
+      "n_layers": 32,
+      "n_heads": 20,
+      "vocab": 32008,
+      "lora_target_matrices_per_layer": 7
+    },
+    "lora_rank": 64,
+    "lora_trainable_params": 73400320,
+    "spec_stated_bound_10e7_to_10e8": [
+      10000000.0,
+      100000000.0
+    ],
+    "trainable_within_spec_bound": true,
+    "base_frozen_weights_bf16_GB": 6.0,
+    "adapter_weights_bf16_GB": 0.14680064,
+    "adapter_grads_bf16_GB": 0.14680064,
+    "adapter_adamw_m_fp32_GB": 0.29360128,
+    "adapter_adamw_v_fp32_GB": 0.29360128,
+    "adapter_states_total_GB": 0.88080384,
+    "route_total_GB_excl_activations": 6.8808038400000004,
+    "fits_24GB_budget_excl_activations": true
+  },
+  "w2_assimilation_burst_at_3B": {
+    "flops_per_token": 18000000000.0,
+    "total_flops": 1.8e+16,
+    "effective_flops_per_sec": 39449760000000.0,
+    "wallclock_seconds": 456.276540085415,
+    "wallclock_minutes": 7.604609001423583
+  }
+}
