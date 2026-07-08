@@ -1,0 +1,77 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EVENT-PREFLIGHT",
+  "ts": "2026-07-08T23:06:18.119762+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 466,
+  "refs": [
+    449,
+    429,
+    452,
+    448,
+    464,
+    411
+  ],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "scope": "PREFLIGHT phase of the combined rung-2 grow-event + stabilization runner: commit-aware assert (floor 10.0GiB), GPU headroom assert (DEV-002 offloaded estimator, micro_batch=1), disk headroom assert (floor 40.0GiB). No launch attempted, no checkpoint touched.",
+  "param_count_after": 2228265984,
+  "commit_preflight": {
+    "avail_pagefile_gib": 41.961,
+    "floor_gib": 10.0,
+    "sufficient": true,
+    "va_report": {
+      "mem_load_pct": 28,
+      "avail_phys_gib": 45.404,
+      "avail_pagefile_gib": 41.961,
+      "avail_virtual_gib": 131063.011,
+      "largest_free_va_region_gib": 129817.39,
+      "largest_free_va_region_addr_hex": "0x12dfdaa0000",
+      "n_free_va_regions": 184,
+      "total_free_va_gib": 131063.011
+    }
+  },
+  "gpu_preflight": {
+    "attempted": true,
+    "required_estimate": {
+      "weights_gib": 4.15,
+      "grad_gib": 4.15,
+      "optimizer_state_gib_vram_resident": 0.0,
+      "optimizer_state_host_ram_gib": 16.602,
+      "qat_clone_gib": 4.2125,
+      "activation_estimate_gib": 5.4898,
+      "staging_overhead_gib": 0.25,
+      "total_estimate_gib": 18.253,
+      "calibration_receipt": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json",
+      "method": "bf16 weights (2B/param) + bf16 grad (2B/param) VRAM-resident, UNCHANGED from the VRAM-resident-AdamW estimate (validated against measurement); the 8B/param conservative AdamW-equivalent optimizer-state term moves OFF VRAM entirely (host RAM, disclosed separately) per DEV-002 candidate 3; qat_clone_gib and activation_estimate_gib are BOTH now anchored to one real measured calibration point (micro_batch=2, see calibration_receipt) instead of an unverified borrowed constant (issue #459 follow-up -- the prior estimate was 9.301GiB vs a measured 20.605GiB delta, an OOM). qat_clone_gib treated as constant across micro_batch (function of param count, confirmed by reading _apply_fake_quant); activation_estimate_gib scales LINEARLY with micro_batch/2 (same assumption structure as before, now anchored to real data) -- this linear-scaling assumption is UNVERIFIED for any micro_batch other than the calibration point until a probe at that micro_batch confirms it. An ESTIMATE (labeled), not a measured peak."
+    },
+    "preflight": {
+      "nvidia_smi_vram": {
+        "total_mib": 24564,
+        "used_mib": 875,
+        "free_mib": 23264,
+        "total_gib": 23.988,
+        "used_gib": 0.854,
+        "free_gib": 22.719
+      },
+      "required_gib": 18.253,
+      "margin_gib_floor": 2.0,
+      "margin_gib": 4.466,
+      "sufficient": true,
+      "verdict": "LAUNCH_PERMITTED",
+      "rule": "abort-not-degrade: VRAM margin assert fails -> hold, report numbers, no launch into contention; no fix-forward on a failed assert (DEV-002 acceptance #3)"
+    },
+    "sufficient": true
+  },
+  "disk_preflight": {
+    "free_gib": 337.032,
+    "floor_gib": 40.0,
+    "sufficient": true,
+    "path_checked": ".claude\\worktrees\\remeasure-466"
+  },
+  "gpu_check_attempted": true,
+  "all_sufficient": true,
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "PREFLIGHT_PASS"
+}
