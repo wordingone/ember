@@ -26,6 +26,38 @@ citation registry: read it before treating any path below as a fresh custody vio
   below are read directly from that sidecar's `failures.cited_missing` array — this note accounts
   for all 15, not a sample.
 
+## Which tree this note binds to, and why an earlier pre-merge scan saw a different 20
+
+This note's 15 rows are bound to **`public/master` @ `5077a06`** (the #432 merge commit) — the
+exact tree scanned in this session. A separate lane's earlier scan, on a clean checkout of
+**`3a32358`** (the commit immediately BEFORE #432 merged), reported `cited_missing=20` with a
+**different row composition** (sidecar `scripts/ember_totality/receipts-custody/custody-20260708T090209Z.json`).
+Reconciled in full below — every one of the 20 baseline rows and both new rows is individually
+accounted for; nothing is asserted without a re-run or a code citation.
+
+**20 (baseline) -> 15 (current) breaks down as 6 resolved + 1 resolved + 3 persist + 10 persist,
+then +2 new = 15:**
+
+- **6 resolved by direct restoration** (files #432 landed at their historical path): `receipts/acceptance/goalforge-clear-2026-07-02.json`, `receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json`, `receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json`, `receipts/citation-check-20260702T174352Z.json`, `receipts/ember-c14-owned-run/live-20260703T215130Z.json`, `receipts/ember-c14-owned-run/resident-adapter-20260703T215130Z.pt`. Verified present on disk in this worktree.
+- **1 resolved by directory-population**: the baseline's bare `receipts/cbase-grow-live` (no extension) citation flips from `cited_missing` to `pattern_citation` once `cbase-grow-live-live-...json` lands inside it — `_is_tracked_populated_dir()` (the #415 cure item 1 "bare-directory, tracked-populated" rule) now finds >=1 tracked file where baseline found zero. Confirmed in this run's `pattern_citation` array: `"PATTERN (bare-directory, tracked-populated): receipts/cbase-grow-live"`.
+- **3 persist unchanged**: Class 1 (barred-at-HEAD) — none of the 3 withheld files were landed, so they stay exactly as they were at baseline.
+- **10 persist unchanged**: the 2 Class 3 rows (`receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json`, `receipts/wheel/wheel-real-20260618T143007Z.json`) + the 7 Class 4 rows (5 sidecars + main json + `reference-cli-full-parity-harness-gate-20260622T141500Z.json`) + the 1 Class 5 row (`w2-heldout-decontam-...json`) were ALL already present, byte-identical in citation form, in the baseline-20 list. #432 touched none of their citers or targets.
+- **+2 newly visible, each independently explained (not papered over):**
+  - `receipts/stale-figure-adjudication-20260702T151929Z.json` — its ONLY citer in the current tree, `receipts/assembly-sha-as-manifest-adjudication-20260702T162500Z.json`, is itself one of #432's 13 restorations: it did not exist in the baseline tree at all (`ls` on the 3a32358 checkout: no such file). No citer existed pre-#432, so the citation could not have appeared in a pre-#432 scan. Simple case: the citing document is new, not the checker.
+  - `receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json` — this one is NOT simple, and is the case worth flagging to the cure lane. The path **was already referenced at baseline**, inside 3 pre-existing files (`receipts/publication-gate-20260705T{071930,072134,081939}Z.json`, all confirmed present in the 3a32358 checkout, landed via commit `c51d4ae` on 2026-07-05 — well before the baseline scan). But in all 3, the path appears **only as a JSON object KEY**: `"receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json": true` (e.g. `publication-gate-20260705T071930Z.json:156`). `_extract_citations()` (`scripts/ember_totality/test_c_custody.py:205-212`) iterates `obj.items()` and tests **only the value** (`isinstance(v, str) and "receipts/" in v`) — it never inspects the key `k`. A citation that exists solely as a dict key is therefore structurally invisible to the extractor, at baseline or now. What changed is that #432 also restored `receipts/citation-check-20260702T174352Z.json`, which cites the *same* missing path as a proper string **value** (`"ref": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json"`, line 414) — a form the extractor does catch. The path was real and missing the whole time; it only became *detectable* once a value-form citation of it existed anywhere in the tracked tree.
+
+**Verdict: fully reconciled, not a nondeterminism/ordering bug** — every row on both sides of the
+6/1/3/10/2 split has a named, re-checked cause. **One genuine, narrow checker coverage gap is
+surfaced and flagged, not fixed here**: `_extract_citations` only scans dict **values** for
+`receipts/` substrings, never dict **keys**. Any future receipt that encodes a citation as
+`{"<path>": true}` (or similar key-shaped citation) rather than a `"field": "<path>"` value will
+be invisible to custody until some *other*, value-form citation of the same path happens to exist.
+This is a real extractor blind spot — distinct from, and narrower than, the extractor being
+order-sensitive in a scary nondeterministic sense — worth a fixture + a key-scanning pass in a
+future `test_c_custody.py` cure lane, not silently absorbed into this note's counts.
+
+---
+
 ## How to read this note
 
 Each row is one cited-but-absent path. Every row carries: the disposition **class**, the
