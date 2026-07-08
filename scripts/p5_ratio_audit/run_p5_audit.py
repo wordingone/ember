@@ -1582,8 +1582,9 @@ def selftest() -> None:
     print("  net2net_widen_linear: shapes + function-preserving identity  PASS")
 
     # 4. rho_rank/rho_grow N/A path.
-    na = rho_rank_rho_grow_na()
-    assert na["rho_rank"] is None and na["rho_grow"] is None and na["na_reason"]
+    na_rank, na_grow = rho_rank_rho_grow_na()
+    assert isinstance(na_rank, str) and na_rank.startswith("N/A")
+    assert isinstance(na_grow, str) and na_grow.startswith("N/A")
     print("  rho_rank/rho_grow: N/A-by-construction, reason stamped  PASS")
 
     # 5. rho_spec / P_dup projector: exact symmetrization identity.
@@ -2072,7 +2073,7 @@ def run_and_emit_dry() -> Path:
         eps_meas = measure_net2net_epsilon(gate.weight.detach())
         r_noise = rho_noise(eps_meas["epsilon_max"], delta_gate)
 
-        na_rank_grow = rho_rank_rho_grow_na()
+        na_rank_val, na_grow_val = rho_rank_rho_grow_na()
 
         role = DRY_ROLE_LABELS[key]["role"]
         # Dry-run stands in reset_on_resume=True only for the grow-event
@@ -2103,8 +2104,8 @@ def run_and_emit_dry() -> Path:
         ratio_values = {
             "rho_sr": {"value": r_sr, "na_reason": None},
             "rho_noise": {"value": r_noise, "na_reason": None},
-            "rho_rank": {"value": None, "na_reason": na_rank_grow["na_reason"]},
-            "rho_grow": {"value": None, "na_reason": na_rank_grow["na_reason"]},
+            "rho_rank": {"value": None, "na_reason": na_rank_val},
+            "rho_grow": {"value": None, "na_reason": na_grow_val},
             "rho_spec": {"value": spec_dispatch["rho_spec"] if spec_dispatch["rho_spec"] != "COMPUTE" else None,
                         "na_reason": spec_dispatch["na_reason"]},
             "rho_batch": {"value": rb["rho_batch"], "na_reason": None},
