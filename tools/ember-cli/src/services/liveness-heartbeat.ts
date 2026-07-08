@@ -110,3 +110,37 @@ export function heartbeatAge(filePath: string, nowMs: number = Date.now()): numb
 
   return nowMs - ts;
 }
+
+/**
+ * Reads and validates the heartbeat file's row (both `ts` AND `pid` present/well-typed), or
+ * `null` otherwise. Deliberately separate from heartbeatAge above (never refactored to share
+ * heartbeatAge's parse path) so #413's existing ts-only validation contract is untouched --
+ * this is a NEW, stricter reader for issue #447's cockpit-restart-event detection
+ * (core/monitor-render.ts's formatCockpitRestartEvent), which needs the row's actual `pid` to
+ * report "pid P1 -> P2", not just an age number.
+ */
+export function readHeartbeatRow(filePath: string): LivenessHeartbeatRow | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+
+  let row: unknown;
+  try {
+    row = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (
+    typeof row !== "object" ||
+    row === null ||
+    typeof (row as { ts?: unknown }).ts !== "string" ||
+    typeof (row as { pid?: unknown }).pid !== "number"
+  ) {
+    return null;
+  }
+  return row as LivenessHeartbeatRow;
+}

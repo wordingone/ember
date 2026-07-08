@@ -16,6 +16,8 @@ import {
   conditionName,
   buildTopAttentionLines,
   formatBoardTransitionEvent,
+  formatCockpitRestartEvent,
+  COCKPIT_RESTART_GAP_THRESHOLD_MS,
   renderMonitor,
   renderMonitorPanel,
   visiblePanelWidth,
@@ -362,6 +364,57 @@ describe("formatBoardTransitionEvent (issue #433: board condition transitions as
     );
     expect(entry).toEqual({ text: "board: C0 RED->AUDIT-INCIDENT (10 red / 20 green)" });
     expect(entry.color).toBeUndefined();
+  });
+});
+
+describe("formatCockpitRestartEvent (issue #447: cockpit self-restart as an activity event)", () => {
+  it("formats a genuine restart with a minute-scale gap", () => {
+    const previous = { previousTs: "2026-07-07T12:00:00.000Z", previousPid: 1234 };
+    const nowMs = Date.parse("2026-07-07T12:26:00.000Z"); // 26 minutes later
+    const entry = formatCockpitRestartEvent(previous, 5678, nowMs);
+    expect(entry).toEqual({ text: "cockpit: relaunched after 26m gap (pid 1234 -> 5678)" });
+  });
+
+  it("formats a multi-hour gap", () => {
+    const previous = { previousTs: "2026-07-07T00:00:00.000Z", previousPid: 111 };
+    const nowMs = Date.parse("2026-07-07T03:15:00.000Z");
+    const entry = formatCockpitRestartEvent(previous, 222, nowMs);
+    expect(entry).toEqual({ text: "cockpit: relaunched after 3h15m gap (pid 111 -> 222)" });
+  });
+
+  it("returns null on first-ever boot (no prior heartbeat -- boot-suppression, same discipline as diffBoardConditions)", () => {
+    expect(formatCockpitRestartEvent(null, 5678, Date.now())).toBeNull();
+  });
+
+  it("returns null when the previous pid equals the current pid (not actually a restart)", () => {
+    const previous = { previousTs: "2026-07-07T12:00:00.000Z", previousPid: 1234 };
+    const nowMs = Date.parse("2026-07-07T12:26:00.000Z");
+    expect(formatCockpitRestartEvent(previous, 1234, nowMs)).toBeNull();
+  });
+
+  it("returns null when the gap is unparseable", () => {
+    const previous = { previousTs: "not-a-date", previousPid: 1234 };
+    expect(formatCockpitRestartEvent(previous, 5678, Date.now())).toBeNull();
+  });
+
+  it("returns null when the gap is below the reportable threshold (normal process handoff, not a reportable event)", () => {
+    const previous = { previousTs: "2026-07-07T12:00:00.000Z", previousPid: 1234 };
+    const nowMs = Date.parse("2026-07-07T12:00:00.000Z") + (COCKPIT_RESTART_GAP_THRESHOLD_MS - 1);
+    expect(formatCockpitRestartEvent(previous, 5678, nowMs)).toBeNull();
+  });
+
+  it("reports right at the threshold boundary", () => {
+    const previous = { previousTs: "2026-07-07T12:00:00.000Z", previousPid: 1234 };
+    const nowMs = Date.parse("2026-07-07T12:00:00.000Z") + COCKPIT_RESTART_GAP_THRESHOLD_MS;
+    const entry = formatCockpitRestartEvent(previous, 5678, nowMs);
+    expect(entry).not.toBeNull();
+  });
+
+  it("carries no color (plain event, matching the issue's own framing -- a fact, not a warning)", () => {
+    const previous = { previousTs: "2026-07-07T12:00:00.000Z", previousPid: 1234 };
+    const nowMs = Date.parse("2026-07-07T12:26:00.000Z");
+    const entry = formatCockpitRestartEvent(previous, 5678, nowMs);
+    expect(entry?.color).toBeUndefined();
   });
 });
 

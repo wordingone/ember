@@ -252,6 +252,69 @@ export function formatBoardTransitionEvent(
 }
 
 // ---------------------------------------------------------------------------
+// Cockpit self-restart events (issue #447: "its own restart/relaunch shows in the feed")
+// ---------------------------------------------------------------------------
+
+/** A live process overwrites services/liveness-heartbeat.ts's file at least once/second, so any
+ *  gap past a few seconds already means the prior process was NOT running -- this is
+ *  deliberately much tighter than receipt-age.ts's 2h board-staleness threshold (a different
+ *  signal on a different cadence). Below this, a restart is treated as normal process handoff
+ *  noise, not a reportable event. */
+export const COCKPIT_RESTART_GAP_THRESHOLD_MS = 5_000;
+
+/** Bare facts read from the PREVIOUS heartbeat row, before this process's own first write
+ *  overwrites it -- primitives, not the LivenessHeartbeatRow type itself, so this module (core/)
+ *  never imports from services/ (services depend on core/ here, never the reverse). */
+export interface PreviousCockpitHeartbeat {
+  previousTs: string;
+  previousPid: number;
+}
+
+/** ms -> "26m", "1h4m", "3d2h", "12s" -- a gap-duration label, distinct from receipt-age.ts's
+ *  "X ago" phrasing (this reads "relaunched after X gap", not "X ago"). */
+function formatGapDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return hours > 0 ? `${days}d${hours}h` : `${days}d`;
+  if (hours > 0) return minutes > 0 ? `${hours}h${minutes}m` : `${hours}h`;
+  if (minutes > 0) return seconds > 0 ? `${minutes}m${seconds}s` : `${minutes}m`;
+  return `${seconds}s`;
+}
+
+/**
+ * Detects and formats a cockpit self-restart as one activity-feed event, e.g. "cockpit:
+ * relaunched after 26m gap (pid 1234 -> 5678)". Boot-suppressed the same way
+ * diffBoardConditions suppresses a fake "everything changed" storm on first boot: `previous ===
+ * null` (no prior heartbeat this machine has ever seen, or the file was unreadable/malformed)
+ * yields no event, never a fabricated one. Also suppressed when the "previous" pid equals the
+ * current pid (not actually a restart) or the gap is unparseable/too small to be meaningful.
+ */
+export function formatCockpitRestartEvent(
+  previous: PreviousCockpitHeartbeat | null,
+  currentPid: number,
+  nowMs: number,
+  gapThresholdMs: number = COCKPIT_RESTART_GAP_THRESHOLD_MS,
+): { text: string; color?: string } | null {
+  if (!previous) return null;
+  if (previous.previousPid === currentPid) return null;
+
+  const prevMs = Date.parse(previous.previousTs);
+  if (Number.isNaN(prevMs)) return null;
+
+  const gapMs = nowMs - prevMs;
+  if (gapMs < gapThresholdMs) return null;
+
+  const gapLabel = formatGapDuration(gapMs);
+  return {
+    text: `cockpit: relaunched after ${gapLabel} gap (pid ${previous.previousPid} -> ${currentPid})`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Full monitor render
 // ---------------------------------------------------------------------------
 

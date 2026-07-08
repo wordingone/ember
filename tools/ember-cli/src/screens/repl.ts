@@ -85,6 +85,7 @@ import {
 } from "../services/operator-receipts.ts";
 import {
   createLivenessHeartbeatWriter,
+  readHeartbeatRow,
   type LivenessHeartbeatWriter,
 } from "../services/liveness-heartbeat.ts";
 import { createGoalContinuationEngine, type GoalContinuationEngine } from "../core/goal-continuation.ts";
@@ -96,6 +97,15 @@ import {
 import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../commands/goal.ts";
 import { buildEmberWorldState } from "../core/ember-world-state.ts";
 import { useBoardTsPoller } from "../services/board-ts-poller.ts";
+import { formatCockpitRestartEvent } from "../core/monitor-render.ts";
+import { useGpuStatePoller, formatGpuStateLine } from "../services/gpu-state-poller.ts";
+import {
+  useActiveRunPoller,
+  isActiveRunFresh,
+  formatActiveRunLine,
+} from "../services/run-progress-scanner.ts";
+import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
+import path from "node:path";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -583,6 +593,20 @@ export function ReplScreen({
     });
   }
 
+  // #447: cockpit self-restart event -- read the PREVIOUS session's heartbeat row (if any)
+  // exactly once, before this session's own first write (the per-second tick below) overwrites
+  // it. A lazy useState initializer runs on mount only, and runs AFTER the ref assignment above
+  // in the same render pass, so livenessHeartbeatRef.current is already populated here.
+  const [cockpitRestartEvent] = useState<{ text: string; color?: string } | null>(() => {
+    const filePath = livenessHeartbeatRef.current?.filePath;
+    if (!filePath) return null;
+    const previousRow = readHeartbeatRow(filePath);
+    const previous = previousRow
+      ? { previousTs: previousRow.ts, previousPid: previousRow.pid }
+      : null;
+    return formatCockpitRestartEvent(previous, process.pid, Date.now());
+  });
+
   const [busy,           setBusy]           = useState(false);
   const busyRef                             = useRef(false);
   const [spinnerElapsed, setSpinnerElapsed] = useState(0);
@@ -700,6 +724,10 @@ export function ReplScreen({
             pctComplete:  worldState.monitor.pctComplete,
             topAttention,
             boardTs:      worldState.monitor.boardTs,
+            // #447: folded in at construction (not a separate merge-effect) so the event is
+            // present the FIRST time boardSummary becomes defined, regardless of this async
+            // load's timing relative to the mount-time cockpitRestartEvent computation above.
+            cockpitRestartEvent: cockpitRestartEvent ?? undefined,
           };
           setBoardSummary(summary);
         }
@@ -735,6 +763,27 @@ export function ReplScreen({
       prev ? { ...prev, recentTransitions: boardTransitionEvents } : prev,
     );
   }, [boardTransitionEvents]);
+
+  // #447: live-state strip -- GPU state (nvidia-smi), the newest active-run's progress-file
+  // phase, and the last-receipt-landing age. Each poller is independent (its own cadence, its
+  // own fail-open contract); merged into boardSummary.liveTelemetry on whichever poller's OWN
+  // state actually changed (each hook only calls its setState on a genuine poll tick, so this
+  // effect fires on that same cadence, never on every render -- same discipline as the
+  // boardTs/events merges above).
+  const receiptsRoot = path.join(process.env.EMBER_GOALFORGE_ROOT || cwd, "receipts");
+  const gpuState   = useGpuStatePoller();
+  const activeRun  = useActiveRunPoller(receiptsRoot);
+  const receiptLanding = useReceiptLandingPoller(receiptsRoot);
+  useEffect(() => {
+    const gpuLine         = formatGpuStateLine(gpuState, isActiveRunFresh(activeRun)) ?? undefined;
+    const activeRunLine    = formatActiveRunLine(activeRun) ?? undefined;
+    const lastReceiptLine  = formatLastReceiptLine(receiptLanding) ?? undefined;
+    setBoardSummary((prev) =>
+      prev
+        ? { ...prev, liveTelemetry: { gpu: gpuLine, activeRun: activeRunLine, lastReceipt: lastReceiptLine } }
+        : prev,
+    );
+  }, [gpuState, activeRun, receiptLanding]);
 
   // Dialog state
   const dialogState: DialogState = {
