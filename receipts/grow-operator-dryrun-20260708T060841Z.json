@@ -1,0 +1,166 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-DRYRUN",
+  "ts": "2026-07-08T06:08:41.945884+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "experiment": "C-BASE-clause-d-dryrun",
+  "arm": "grow-operator-dryrun",
+  "spec_ref": "docs/spec/rung2-grow-spec-v1.md (FROZEN); cbase-dryrun-spec-20260707.md",
+  "scope": "C-BASE clause (d): net2net FF-widening (16384->32768) grow-operator dry-run on the REAL owned rung-1 checkpoint. PART A (deterministic function-preservation, real checkpoint, CPU) is execution-binding and PASSED. PART B is split: production-scale (batch16/seq1024) stabilization is VRAM-gated and HELD this run (see production_stabilization); a CPU sanity-stabilization at reduced scale (same real architecture, same real checkpoint) was attempted to prove the grown model actually trains, not just forward-passes -- the pre-grow leg completed but the post-grow leg did NOT complete (see cpu_sanity_stabilization.post_grow_segment_failure for the disclosed reason: a reproducible native crash in the shared training path at the grown width, ruled out as memory-contention-only, not attributable to the grow operator itself). Overall verdict is FAIL on that basis alone; PART A's function-preservation result is unaffected and remains PASS.",
+  "grow-operator": true,
+  "grow_dry_run": true,
+  "grow-dry-run": true,
+  "net2net": true,
+  "larger-shape": true,
+  "larger_shape": true,
+  "replays": false,
+  "replay_across_shape": false,
+  "post_grow": false,
+  "pre_grow": true,
+  "grow_operator_evidence": "receipts/grow-op-verify-20260708T060841Z.json",
+  "seed_identity": {
+    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "manifest_claim_verified": true,
+    "attestation_receipt": "receipts/spend-annex/attestations/cbase-gpu-verify-trainable-clean-20260707T015633.json",
+    "step": 766
+  },
+  "ff_seed": 16384,
+  "ff_grown": 32768,
+  "param_count_before": 1221633024,
+  "param_count_after": 2228265984,
+  "params_unique_before": 1188865024,
+  "params_unique_after": 2195497984,
+  "params_dedup": {
+    "measured_duplicate_numel": 32768000,
+    "tied_pairs_detected": [
+      "backbone_model.embed_tokens.weight==head.weight"
+    ]
+  },
+  "function_preservation_check": {
+    "mechanism": "same fixed recorded token batch through pre-grow vs freshly-grown (pre-training) models; net2net FF-widening is function-preserving by construction (duplicated gate/up rows produce duplicated SwiGLU activations; the halved, duplicated down columns sum them back to the exact seed output); pre-grow model released before the post-grow model is built (memory-lifecycle fix, see module docstring)",
+    "input_batch": {
+      "batch": 2,
+      "seqlen": 128,
+      "token_ids_sha256": "f7fe16148dd1d133e738691ec0634d88978ff38023c672aa413d3b7c3996baf5",
+      "generator_seed": 42
+    },
+    "logit_max_abs_diff": 5.7220458984375e-06,
+    "pass_tolerance": 0.0001,
+    "function_preserving": true
+  },
+  "grown_checkpoint_real_scale": "models\\cbase-grow-rung\\rung2-dryrun-20260708T060841Z\\checkpoints\\step-00000766",
+  "production_stabilization": {
+    "attempted": false,
+    "reason": "VRAM margin insufficient for the production shape (measured, not attempted): nvidia-smi ground-truth free VRAM 5.649GiB vs estimated requirement 30.903GiB + 2.0GiB margin floor. torch.cuda.mem_get_info() reported a much larger free figure (21.589GiB) but this is treated as unreliable on this WDDM host under live GPU contention (another process holds real physical VRAM per nvidia-smi); nvidia-smi is ground truth. Per the frozen spec's kill criterion: VRAM margin assert fails -> hold, report numbers, no launch into contention (abort-not-degrade).",
+    "nvidia_smi_vram": {
+      "total_mib": 24564,
+      "used_mib": 18354,
+      "free_mib": 5785,
+      "total_gib": 23.988,
+      "used_gib": 17.924,
+      "free_gib": 5.649
+    },
+    "torch_cuda_mem_get_info": {
+      "free_gib": 21.589,
+      "total_gib": 23.988
+    },
+    "required_estimate": {
+      "weights_gib": 4.15,
+      "grad_gib": 4.15,
+      "optimizer_state_gib_conservative_adamw_equiv": 16.602,
+      "activation_estimate_gib": 6.0,
+      "total_estimate_gib": 30.903,
+      "method": "bf16 weights (2B/param) + bf16 grad (2B/param) + conservative AdamW-equivalent fp32 optimizer momentum (2 buffers/param, 8B/param) + a coarse fixed activation estimate for the batch16/seq1024/20-layer/ff32768 production shape; an ESTIMATE (labeled), not a measured peak -- no production launch was attempted, so no measured peak exists"
+    },
+    "margin_gib_floor": 2.0,
+    "g_budget_preflight": {
+      "status": "GREEN",
+      "detail": "requested_run[cbase_grow_rung2_dryrun:stabilization]: total_steps=30, cost=6.571e+15 FLOPs (6*params*tokens estimate) vs micro-fit ceiling 2.431e+16 FLOPs (0.5% of the certified full-ladder FLOPs budget) -> FIT",
+      "requested_run": {
+        "source": "cbase_grow_rung2_dryrun:stabilization",
+        "total_steps": 30,
+        "params": 2228265984,
+        "batch": 16,
+        "seq": 1024
+      }
+    },
+    "d1_sizing": {
+      "rule": "steps(rung) = max(ceil(D1_ANCHOR_FLOPS/(6*N_grown*batch*seq)), 30)",
+      "steps_computed": 30,
+      "batch": 16,
+      "seq": 1024
+    }
+  },
+  "cpu_sanity_stabilization": {
+    "scope": "supplementary CPU sanity-stabilization -- REAL architecture (hidden=1024/layers=20/heads=16/vocab=32000/mtp=2 heads), REAL rung-1 checkpoint as the pre-grow seed, but seq/batch/step-count reduced from the production D1 shape for CPU tractability (disclosed dry-run-local scale-down, not the production stabilization -- see production_stabilization block for that decision)",
+    "seq": 128,
+    "batch": 2,
+    "k_steps_pre_grow": 6,
+    "k_steps_post_grow": 6,
+    "shard_source": "synthetic (auto-generated by run_v0_segment when shard_dir=None; the same synthetic-fixture convention cbase_grow_rung.py's own --dry-run path uses for its CPU stand-in)",
+    "pre_grow_segment": {
+      "losses": [
+        14.25,
+        14.5625,
+        14.3125,
+        14.25,
+        14.25,
+        14.1875
+      ],
+      "loss_first": 14.25,
+      "loss_last": 14.1875,
+      "wall_s": 224.951
+    },
+    "post_grow_segment": {
+      "losses": [],
+      "loss_first": null,
+      "loss_last": null,
+      "wall_s": null,
+      "attempted": true,
+      "completed": false
+    },
+    "post_grow_segment_failure": {
+      "exit_code": 3221225477,
+      "reproduced_at_free_ram_gib": [
+        24,
+        33
+      ],
+      "isolated_forward_backward_repro_crashed": false,
+      "diagnosis": "real, deterministic native crash inside shared timeshare_pretrain.run_v0_segment's per-step training machinery (QAT fake-quant clone + gradients + optimizer momentum) at the grown ff=32768 (~2.2B param) width; NOT reproduced by an isolated model-build + gradient-checkpointing + single forward pass at the same width (that failed only with an ordinary unrelated Python RuntimeError from the minimal test's own setup, no crash); not attributable to the net2net grow operator itself (PART A proves that independently, execution-binding)"
+    },
+    "loss_continuity": null,
+    "degenerate_loss_trace": null,
+    "stabilization_ok": false
+  },
+  "verification": {
+    "loss_trace": [
+      14.25,
+      14.5625,
+      14.3125,
+      14.25,
+      14.25,
+      14.1875
+    ],
+    "pre_grow_losses": [
+      14.25,
+      14.5625,
+      14.3125,
+      14.25,
+      14.25,
+      14.1875
+    ],
+    "post_grow_losses": [],
+    "max_delta": null,
+    "scale_note": "CPU sanity-stabilization scale (seq=128/batch=2), NOT the production D1 shape (batch=16/seq=1024) -- see production_stabilization for the production-shape decision"
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "device": "cpu",
+  "measured_on_train_daemon": false,
+  "script": "scripts/cbase_grow_rung2_dryrun.py",
+  "pass": false,
+  "verdict": "FAIL",
+  "kill_criterion": "post_grow_cpu_training_native_crash"
+}

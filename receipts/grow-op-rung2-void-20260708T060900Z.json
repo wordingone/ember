@@ -1,0 +1,18 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-VOID",
+  "ts": "2026-07-08T06:24:36.924798+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "verdict": "VOID",
+  "supersedes": [
+    {
+      "filename": "grow-op-verify-20260707T220138Z.json",
+      "sha256": "ea2806b150ca66fc"
+    },
+    {
+      "filename": "grow-operator-dryrun-20260707T220138Z.json",
+      "sha256": "764da6e2e756f729"
+    }
+  ],
+  "reason": "Fabrication-class incoherence (case (c), not a single bug): grow-op-verify-20260707T220138Z.json claimed verdict=PASS with net2net_assertion.passed=false and max_abs_diff=0.0 (a zero-diff FAIL-shaped measurement dressed as PASS); grow-operator-dryrun-20260707T220138Z.json separately claimed verdict=FAIL with replays=true and replay_across_shape=true (a synthetic, hand-authored monotonic loss trace with no real training behind it) -- two independently fabricated, mutually contradictory receipts, not one bug. Root cause traced to a stub _load_rung1_checkpoint() left in a prior lane's untracked worktree that never loaded real weights, combined with a separately hand-fabricated FAIL receipt. Re-executed honestly per docs/spec/rung2-grow-spec-v1.md against the REAL rung-1 checkpoint (step-00000766, sha256-verified): the net2net grow operator IS genuinely function-preserving (real max_abs_diff=5.7220458984375e-06, tol=1e-4, reproduced identically across 4+ independent executions) -- see the new coherent receipt pair, grow-op-verify-20260708T060841Z.json + grow-operator-dryrun-20260708T060841Z.json, which also honestly discloses that the supplementary CPU sanity post-grow training segment could not complete (a disclosed, reproduced native-crash resource ceiling in the shared run_v0_segment training path at the grown width, unrelated to the grow operator itself, which PART A proves independently) -- overall verdict FAIL on that basis, never tuned toward green."
+}
