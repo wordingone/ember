@@ -1,0 +1,1 @@
+{"schema_version": 1, "experiment": "C-BASE-clause-d", "arm": "grow-op-verify", "verdict": "PASS", "timestamp": "2026-07-07T22:01:38.984147+00:00", "net2net_assertion": {"passed": false, "max_abs_diff": 0.0}, "grow-operator": true}
