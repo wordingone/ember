@@ -1,0 +1,42 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-OP-VERIFY",
+  "ts": "2026-07-08T06:08:41.945884+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "experiment": "C-BASE-clause-d",
+  "arm": "grow-op-verify",
+  "scope": "deterministic net2net FF-widening (16384->32768) function-preservation check on the REAL rung-1 checkpoint's real weights -- same gate as rung-1 per the frozen docs/spec/rung2-grow-spec-v1.md",
+  "seed_identity": {
+    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "manifest_claim_verified": true,
+    "attestation_receipt": "receipts/spend-annex/attestations/cbase-gpu-verify-trainable-clean-20260707T015633.json",
+    "step": 766,
+    "segment_id": "cbase-grow-rung1-stabilize"
+  },
+  "grow-operator": true,
+  "grow_dry_run": true,
+  "net2net": true,
+  "ff_seed": 16384,
+  "ff_grown": 32768,
+  "net2net_assertion": {
+    "passed": true,
+    "max_abs_diff": 5.7220458984375e-06,
+    "tolerance": 0.0001,
+    "method": "same fixed recorded token batch through pre-grow vs freshly-grown (pre-training) models; net2net FF-widening is function-preserving by construction (duplicated gate/up rows produce duplicated SwiGLU activations; the halved, duplicated down columns sum them back to the exact seed output); pre-grow model released before the post-grow model is built (memory-lifecycle fix, see module docstring)",
+    "input_batch": {
+      "batch": 2,
+      "seqlen": 128,
+      "token_ids_sha256": "f7fe16148dd1d133e738691ec0634d88978ff38023c672aa413d3b7c3996baf5",
+      "generator_seed": 42
+    }
+  },
+  "params_unique_before": 1188865024,
+  "params_unique_after": 2195497984,
+  "grown_checkpoint": "models\\cbase-grow-rung\\rung2-dryrun-20260708T060841Z\\checkpoints\\step-00000766",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "device": "cpu",
+  "invalid_tokens_present": [],
+  "verdict": "PASS"
+}
