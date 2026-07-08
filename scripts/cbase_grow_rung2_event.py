@@ -157,64 +157,64 @@ def _timestamp_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _make_path_repo_relative(path_obj, repo_root=None) -> str:
+def _make_path_repo_relative(path_obj, data_root=None) -> str:
     """Convert an absolute path to repo-relative, or keep absolute for out-of-repo paths.
 
-    Converts paths within the repo to repo-relative to avoid leaking implementation
-    details in receipts (issue #466 path-leak fix). Paths outside the repo are kept
+    Converts paths within the data root to repo-relative to avoid leaking implementation
+    details in receipts (issue #466 path-leak fix). Paths outside the data root are kept
     absolute (as they're inherently non-portable anyway).
 
     Args:
         path_obj: Path object or str to convert
-        repo_root: Path to the repo root; defaults to REPO global constant
+        data_root: Path to the data root (where models/receipts/caches live); defaults to REPO
 
     Returns:
-        Repo-relative path string for in-repo paths, absolute path for out-of-repo
+        Repo-relative path string for in-data-root paths, absolute path for out-of-data-root
     """
-    if repo_root is None:
-        repo_root = REPO
+    if data_root is None:
+        data_root = REPO
 
     path_obj = Path(path_obj).resolve()
-    repo_root = Path(repo_root).resolve()
+    data_root = Path(data_root).resolve()
 
     try:
-        # Check if path is within the repo by computing relpath
-        rel = os.path.relpath(path_obj, repo_root)
-        # If the relative path doesn't start with .., it's within the repo
+        # Check if path is within the data root by computing relpath
+        rel = os.path.relpath(path_obj, data_root)
+        # If the relative path doesn't start with .., it's within the data root
         if not rel.startswith(".."):
             return rel
         else:
-            # Path is outside repo; keep as absolute string
+            # Path is outside data root; keep as absolute string
             return str(path_obj)
     except ValueError:
         # Cross-drive on Windows: keep absolute
         return str(path_obj)
 
 
-def _make_path_absolute_from_receipt(path_str, repo_root=None) -> Path:
-    """Convert a receipt path (repo-relative or absolute) back to absolute.
+def _make_path_absolute_from_receipt(path_str, data_root=None) -> Path:
+    """Convert a receipt path (data-relative or absolute) back to absolute.
 
     Inverse of _make_path_repo_relative: reconstructs absolute paths for
     file operations when reading from receipts (issue #466 path-leak fix).
 
-    For repo-relative paths (no drive letter or leading /), join with repo root.
+    For data-relative paths (no drive letter or leading /), join with data root.
     For absolute paths (already absolute), return as-is.
 
     Args:
-        path_str: Path string from a receipt (repo-relative or absolute)
-        repo_root: Path to the repo root; defaults to REPO global constant
+        path_str: Path string from a receipt (data-relative or absolute)
+        data_root: Path to the data root (where models/receipts/caches live); defaults to REPO
 
     Returns:
         Absolute Path object
     """
-    if repo_root is None:
-        repo_root = REPO
+    if data_root is None:
+        data_root = REPO
 
     if not path_str:
         return None
 
     path_str = str(path_str)
-    repo_root = Path(repo_root)
+    data_root = Path(data_root)
 
     # Check if path is already absolute (Windows drive letter or POSIX /)
     if len(path_str) >= 2 and path_str[1] == ":":
@@ -224,8 +224,8 @@ def _make_path_absolute_from_receipt(path_str, repo_root=None) -> Path:
         # POSIX absolute path
         return Path(path_str)
     else:
-        # Repo-relative path; join with repo root
-        return repo_root / path_str
+        # Data-relative path; join with data root
+        return data_root / path_str
 
 
 # ---------------------------------------------------------------------------
@@ -519,6 +519,7 @@ def phase_preflight(args) -> dict:
     receipt_dir = Path(args.receipt_dir)
     receipt_dir.mkdir(parents=True, exist_ok=True)
     run_id = args.run_id or _ts()
+    data_root = Path(args.data_root) if hasattr(args, 'data_root') else REPO
 
     va = _va_report()
     commit_sufficient = va["avail_pagefile_gib"] > args.commit_margin_gib_floor
@@ -555,7 +556,7 @@ def phase_preflight(args) -> dict:
     disk_free_gib = round(disk.free / (1 << 30), 3)
     disk_sufficient = disk_free_gib >= args.disk_headroom_gib_floor
     disk_preflight = {"free_gib": disk_free_gib, "floor_gib": args.disk_headroom_gib_floor,
-                       "sufficient": disk_sufficient, "path_checked": _make_path_repo_relative(REPO)}
+                       "sufficient": disk_sufficient, "path_checked": _make_path_repo_relative(REPO, data_root=data_root)}
 
     all_sufficient = bool(commit_sufficient and gpu_preflight["sufficient"] and disk_sufficient)
     verdict = "PREFLIGHT_PASS" if all_sufficient else "PREFLIGHT_REFUSE"
@@ -592,6 +593,7 @@ def phase_preflight(args) -> dict:
 def phase_b1(args) -> dict:
     receipt_dir = Path(args.receipt_dir)
     run_id = args.run_id
+    data_root = Path(args.data_root) if hasattr(args, 'data_root') else REPO
     _require_prior_phase(receipt_dir, run_id, "b1")
 
     import torch
@@ -644,7 +646,7 @@ def phase_b1(args) -> dict:
                  "block, RNG disclosure, verified copy to the B1 snapshot dir production "
                  "stabilization resumes from untouched.",
         "seed_identity": {
-            "checkpoint": _make_path_repo_relative(seed_ckpt), "model_pt_sha256": actual_sha,
+            "checkpoint": _make_path_repo_relative(seed_ckpt, data_root=data_root), "model_pt_sha256": actual_sha,
             "manifest_claim_verified": manifest_claim_verified,
             "attested_match": bool(actual_sha == SEED_SHA_ATTESTED),
             "attestation_receipt": SEED_SHA_ATTESTATION_RECEIPT, "step": manifest.get("step"),
@@ -655,7 +657,7 @@ def phase_b1(args) -> dict:
         "quiesce_proven": quiesce_proven,
         "provenance": provenance, "provenance_ok": provenance_ok,
         "rng_provenance": rng_prov,
-        "snapshot_dir": _make_path_repo_relative(snapshot_dir) if snapshot_dir else None,
+        "snapshot_dir": _make_path_repo_relative(snapshot_dir, data_root=data_root) if snapshot_dir else None,
         "snapshot_copy_verified": snapshot_copy_verified,
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": verdict,
@@ -673,13 +675,14 @@ def phase_b1(args) -> dict:
 def phase_b1m(args) -> dict:
     receipt_dir = Path(args.receipt_dir)
     run_id = args.run_id
+    data_root = Path(args.data_root) if hasattr(args, 'data_root') else REPO
     b1 = _require_prior_phase(receipt_dir, run_id, "b1m")
 
     import torch
     torch.manual_seed(42)
     cache_dir = Path(args.cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"])
+    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"], data_root=data_root)
     model_pt = snapshot_dir / "model.pt"
     manifest = json.loads((snapshot_dir / "manifest.json").read_text(encoding="utf-8"))
 
@@ -773,7 +776,7 @@ def phase_b1m(args) -> dict:
                        "simplification for the commutation-defect measurement leg only "
                        "(the STABILIZE phase applies the real WSD schedule via apply_wsd).",
         },
-        "cache_paths": {k: _make_path_repo_relative(v) for k, v in cache_paths.items()},
+        "cache_paths": {k: _make_path_repo_relative(v, data_root=data_root) for k, v in cache_paths.items()},
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": "B1M_CAPTURED",
     }
@@ -811,6 +814,7 @@ def _eps_widen_worker(model_pt_str: str, out_path: str, n_layers: int,
 def phase_b2(args) -> dict:
     receipt_dir = Path(args.receipt_dir)
     run_id = args.run_id
+    data_root = Path(args.data_root) if hasattr(args, 'data_root') else REPO
     _require_prior_phase(receipt_dir, run_id, "b2")  # b1m must have PASSED
     b1 = json.loads(_receipt_path(receipt_dir, run_id, "b1").read_text(encoding="utf-8"))
 
@@ -821,7 +825,7 @@ def phase_b2(args) -> dict:
             f"requirement); got eps_sigma={args.eps_sigma}")
 
     import torch
-    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"])
+    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"], data_root=data_root)
     model_pt = snapshot_dir / "model.pt"
     manifest = json.loads((snapshot_dir / "manifest.json").read_text(encoding="utf-8"))
     seed_sha = manifest["files"]["model.pt"]
@@ -905,9 +909,9 @@ def phase_b2(args) -> dict:
         "eps": {"eps_sigma": args.eps_sigma, "eps_seed": args.eps_seed,
                 "banned_zero_assertion_passed": True},
         "operator_sha256": operator_sha256, "operator_file": "scripts/cbase_grow_dryrun.py",
-        "cache": {"cache_path": _make_path_repo_relative(cache_path), "cache_hit": cache_hit,
-                  "eps0_banned_cache_path": _make_path_repo_relative(eps0_banned_cache_path),
-                  "distinct_from_eps0_cache": _make_path_repo_relative(cache_path) != _make_path_repo_relative(eps0_banned_cache_path)},
+        "cache": {"cache_path": _make_path_repo_relative(cache_path, data_root=data_root), "cache_hit": cache_hit,
+                  "eps0_banned_cache_path": _make_path_repo_relative(eps0_banned_cache_path, data_root=data_root),
+                  "distinct_from_eps0_cache": _make_path_repo_relative(cache_path, data_root=data_root) != _make_path_repo_relative(eps0_banned_cache_path, data_root=data_root)},
         "realized_proof": {
             "n_pairs_checked": n_pairs_checked,
             "eta_rms_over_tau_ratio_mean": ratio_mean, "eta_rms_over_tau_ratio_std": ratio_std,
@@ -937,13 +941,14 @@ def phase_b2(args) -> dict:
 def phase_b3(args) -> dict:
     receipt_dir = Path(args.receipt_dir)
     run_id = args.run_id
+    data_root = Path(args.data_root) if hasattr(args, 'data_root') else REPO
     b2 = _require_prior_phase(receipt_dir, run_id, "b3")
     b1 = json.loads(_receipt_path(receipt_dir, run_id, "b1").read_text(encoding="utf-8"))
     b1m = json.loads(_receipt_path(receipt_dir, run_id, "b1m").read_text(encoding="utf-8"))
 
     import torch
     torch.manual_seed(42)
-    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"])
+    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"], data_root=data_root)
     fork_dir = Path(args.out_dir) / f"rung2-event-{run_id}" / "b3-fork"
     if fork_dir.exists():
         raise SystemExit(f"CBASE-GROW-RUNG2-EVENT-B3: refusing to reuse an existing fork dir {fork_dir}")
@@ -961,7 +966,7 @@ def phase_b3(args) -> dict:
     pre_opt_state = torch.load(fork_dir / "optimizer.pt", map_location="cpu", weights_only=True)
 
     grown_bf16 = torch.load(
-        _make_path_absolute_from_receipt(b2["cache"]["cache_path"]),
+        _make_path_absolute_from_receipt(b2["cache"]["cache_path"], data_root=data_root),
         map_location="cpu", weights_only=True)
     ff_grown = int(grown_bf16[gate_key].shape[0])
 
@@ -1012,7 +1017,7 @@ def phase_b3(args) -> dict:
     U_k, _gate_only_ukp1_unused, G = build_real_d_comm_closures(
         pre_model_state, pre_opt_state, None, gate_key, up_key, down_key,
         pre_lr, post_lr, torch.load(
-            _make_path_absolute_from_receipt(b1m["cache_paths"]["grad_pre_gate"]),
+            _make_path_absolute_from_receipt(b1m["cache_paths"]["grad_pre_gate"], data_root=data_root),
             weights_only=True),
         grad_post_gate)
 
@@ -1038,7 +1043,7 @@ def phase_b3(args) -> dict:
     # TRANSPLANT arm (second, disclosed measurement; does not gate band(i)):
     # pushforward the pre-grow momentum buffer for gate_proj through G.
     pre_gate_momentum = torch.load(
-        _make_path_absolute_from_receipt(b1m["cache_paths"]["pre_momentum"]),
+        _make_path_absolute_from_receipt(b1m["cache_paths"]["pre_momentum"], data_root=data_root),
         weights_only=True)
     transplanted_momentum = _pushforward_gate_momentum(
         pre_gate_momentum, pre_model_state[up_key], pre_model_state[down_key],
@@ -1073,7 +1078,7 @@ def phase_b3(args) -> dict:
         "scope": "B3: first post-grow update on the pinned batch, forked copy of B1 -- "
                  "RESET arm (band-(i) primary) + TRANSPLANT arm (second, disclosed). "
                  "Production resumes from the untouched B1 snapshot, never this fork.",
-        "fork_dir": _make_path_repo_relative(fork_dir),
+        "fork_dir": _make_path_repo_relative(fork_dir, data_root=data_root),
         "batch_pin_check": {"b1m_sha256": b1m["batch"]["overall_sha256"],
                             "b3_recomputed_sha256": batch["overall_sha256"], "match": batch_pin_match},
         "arms": {
@@ -1134,6 +1139,7 @@ def _write_planned_outage_marker(receipt_dir: Path, run_id: str) -> Path:
 def phase_stabilize(args) -> dict:
     receipt_dir = Path(args.receipt_dir)
     run_id = args.run_id
+    data_root = Path(args.data_root) if hasattr(args, 'data_root') else REPO
     b3 = _require_prior_phase(receipt_dir, run_id, "stabilize")
     b1 = json.loads(_receipt_path(receipt_dir, run_id, "b1").read_text(encoding="utf-8"))
     b2 = json.loads(_receipt_path(receipt_dir, run_id, "b2").read_text(encoding="utf-8"))
@@ -1150,7 +1156,7 @@ def phase_stabilize(args) -> dict:
     tokens_match = bool(total_tokens == D1_TOTAL_TOKENS) if args.n_optimizer_steps is None else None
 
     grown_bf16 = torch.load(
-        _make_path_absolute_from_receipt(b2["cache"]["cache_path"]),
+        _make_path_absolute_from_receipt(b2["cache"]["cache_path"], data_root=data_root),
         map_location="cpu", weights_only=True)
     gate_key = _gate_up_down_keys(0)[0]
     ff_grown = int(grown_bf16[gate_key].shape[0])
@@ -1304,9 +1310,9 @@ def phase_stabilize(args) -> dict:
         "training": {"optimizer_step_losses": losses, "degenerate_loss_trace": degenerate,
                     "oom_error": oom_error, "n_params_after": n_params_after},
         "vram": vram_report,
-        "checkpoint": {"dir": _make_path_repo_relative(checkpoint_dir) if checkpoint_dir else None,
+        "checkpoint": {"dir": _make_path_repo_relative(checkpoint_dir, data_root=data_root) if checkpoint_dir else None,
                       "becomes_rung3_pregrow_candidate": bool(checkpoint_dir is not None)},
-        "planned_outage_marker": {"path": _make_path_repo_relative(marker_path), "written": True},
+        "planned_outage_marker": {"path": _make_path_repo_relative(marker_path, data_root=data_root), "written": True},
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": verdict,
     }
@@ -1369,6 +1375,99 @@ def _build_tiny_seed_checkpoint(tmp_dir: Path, contract_path: Path) -> Path:
     ckpt_dir = ts.save_checkpoint(str(run_dir), 766, model.state_dict(), optimizer_state, rng_state,
                                   extra={"segment_id": "selftest-tiny-seed"})
     return Path(ckpt_dir)
+
+
+def test_data_root_decoupling() -> int:
+    """Test --data-root decoupling: code location independent of data location.
+
+    Per issue #466 frozen spec: test with two temp dirs (fake code root + fake
+    data root). Verify:
+    (a) resolver with data_root finds a file placed under the data root
+    (b) resolver without data_root preserves current behavior
+    (c) writer with data_root emits a path relative to data root (no leak)
+    """
+    import tempfile
+    failures = []
+    print("=== cbase_grow_rung2_event.py --test-data-root-decoupling ===", flush=True)
+
+    with tempfile.TemporaryDirectory(prefix="rung2-dataroot-test-") as td:
+        tmp = Path(td)
+        fake_code_root = tmp / "code-root"
+        fake_data_root = tmp / "data-root"
+        fake_code_root.mkdir()
+        fake_data_root.mkdir()
+
+        # Test (b): resolver without data_root preserves current behavior
+        # (uses REPO as fallback)
+        code_relative_path = "models/test-model.pt"
+        result_b = _make_path_absolute_from_receipt(code_relative_path)
+        if result_b != REPO / code_relative_path:
+            failures.append(
+                f"TEST (b) FAIL: resolver without data_root did not preserve REPO fallback: "
+                f"got {result_b}, expected {REPO / code_relative_path}")
+        else:
+            print(
+                f"PASS (b): resolver without data_root uses REPO fallback: "
+                f"{code_relative_path} -> {result_b}", flush=True)
+
+        # Test (a): resolver with data_root finds a file placed under data root
+        test_file = fake_data_root / "models" / "test-model.pt"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("test content")
+
+        resolved_path = _make_path_absolute_from_receipt("models/test-model.pt", data_root=fake_data_root)
+        if resolved_path != test_file or not resolved_path.exists():
+            failures.append(
+                f"TEST (a) FAIL: resolver with data_root did not find file in data root: "
+                f"got {resolved_path}, expected {test_file}, exists={resolved_path.exists()}")
+        else:
+            print(
+                f"PASS (a): resolver with data_root finds file in data root: "
+                f"models/test-model.pt -> {resolved_path}", flush=True)
+
+        # Test (c): writer with data_root emits relative path, no code-root contamination
+        absolute_data_path = fake_data_root / "receipts" / "test-receipt.json"
+        absolute_data_path.parent.mkdir(parents=True, exist_ok=True)
+        absolute_data_path.write_text("{}")
+
+        relative_from_data = _make_path_repo_relative(absolute_data_path, data_root=fake_data_root)
+        relative_from_code = _make_path_repo_relative(absolute_data_path, data_root=fake_code_root)
+
+        # On Windows, paths use backslashes; normalize for the test
+        expected_relative = os.path.join("receipts", "test-receipt.json")
+        if relative_from_data != expected_relative:
+            failures.append(
+                f"TEST (c) FAIL: writer with data_root did not emit relative path: "
+                f"got {relative_from_data}, expected {expected_relative}")
+        else:
+            print(
+                f"PASS (c): writer with data_root emits data-relative path: "
+                f"{absolute_data_path} -> {relative_from_data}", flush=True)
+
+        # Verify code-root does NOT contaminate the result
+        if relative_from_code == relative_from_data:
+            # When path is outside the code-root, it should fall back to absolute
+            if not relative_from_code.startswith(str(fake_data_root)):
+                print(
+                    f"PASS (c): code-root does not contaminate result "
+                    f"(path outside code-root kept as absolute)", flush=True)
+            else:
+                failures.append(
+                    f"TEST (c) FAIL: relative path leaked code-root context: "
+                    f"same result {relative_from_code} for both code/data roots")
+        else:
+            print(
+                f"PASS (c): code-root isolation verified (different results for code vs data): "
+                f"code={relative_from_code} data={relative_from_data}", flush=True)
+
+    print("=== data-root decoupling test summary ===", flush=True)
+    if failures:
+        for f in failures:
+            print(f"DATA_ROOT_DECOUPLING_FAIL: {f}", flush=True)
+        print(f"DATA_ROOT_DECOUPLING_TEST_FAIL ({len(failures)} failure(s))", flush=True)
+        return 1
+    print("DATA_ROOT_DECOUPLING_TEST_PASS", flush=True)
+    return 0
 
 
 def run_selftest() -> int:
@@ -1523,6 +1622,9 @@ def main() -> int:
     ap.add_argument("--run-id")
     ap.add_argument("--seed-ckpt", default=str(SEED_CKPT_DEFAULT))
     ap.add_argument("--contract-path", default=None)
+    ap.add_argument("--data-root", default=None,
+                     help="root directory for data (models/receipts/caches); defaults to the repository root; "
+                          "use when code executes from an isolated worktree while data resides in the primary tree")
     ap.add_argument("--receipt-dir", default=str(REPO / "receipts"))
     ap.add_argument("--cache-dir", default=str(REPO / "receipts" / ".rung2-event-cache"))
     ap.add_argument("--out-dir", default=str(REPO / "models" / "cbase-grow-rung"))
@@ -1541,6 +1643,8 @@ def main() -> int:
     ap.add_argument("--n-optimizer-steps", type=int, default=None,
                      help="default: derived from the D1 fixed-FLOPs token floor")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--test-data-root-decoupling", action="store_true",
+                     help="run tests for --data-root decoupling (issue #466)")
     # internal re-exec entry point (eps-widen fresh-subprocess worker)
     ap.add_argument("--eps-widen-worker", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--model-pt", help=argparse.SUPPRESS)
@@ -1548,8 +1652,17 @@ def main() -> int:
     ap.add_argument("--n-layers", type=int, help=argparse.SUPPRESS)
     args = ap.parse_args()
 
+    # Resolve data_root: default to REPO if not specified
+    if args.data_root is None:
+        args.data_root = REPO
+    else:
+        args.data_root = Path(args.data_root).resolve()
+
     if args.eps_widen_worker:
         return _eps_widen_worker(args.model_pt, args.out_path, args.n_layers, args.eps_sigma, args.eps_seed)
+
+    if args.test_data_root_decoupling:
+        return test_data_root_decoupling()
 
     if args.selftest:
         return run_selftest()
