@@ -92,6 +92,10 @@ export interface BoardSummary {
    * so existing callers (and older serialized messages, see screens/repl.ts's Homescreen
    * boardSummary handoff) without it still render, just without the age badge below. */
   boardTs?:     string;
+  /** #433: formatted board condition-transition events ("board: C(-1) GREEN->RED (27 red / 8
+   * green)"), newest first, from services/board-ts-poller.ts's live poll. Optional so existing
+   * callers without any detected transitions yet still render, just without this section. */
+  recentTransitions?: Array<{ text: string; color?: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,6 +300,11 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
     entries.push(
       stale ? { text: `STALE: ${age}`, color: "red" } : { text: `board: ${age}` },
     );
+  }
+  // #433: condition-transition events ("board: C(-1) GREEN->RED (...)") -- what just CHANGED --
+  // ahead of topAttention's static "what's currently not-GREEN" snapshot below.
+  if (boardSummary.recentTransitions) {
+    for (const entry of boardSummary.recentTransitions) entries.push(entry);
   }
   for (const line of boardSummary.topAttention) entries.push({ text: line });
   return entries;

@@ -12,6 +12,8 @@ import {
   buildEmberWorldState,
   peekNewestBoardReceiptFilename,
   pollForNewerBoardTs,
+  diffBoardConditions,
+  type BoardRow,
 } from "./ember-world-state.ts";
 
 const FIXTURE_GOAL = "# Fixture Goal\n\n## Topology Heading One\n\nbody text\n";
@@ -160,7 +162,15 @@ describe("pollForNewerBoardTs", () => {
     await writeReceipt(root, "ember-totality-20260703T120000Z.json", "20260703T120000Z");
 
     const result = await pollForNewerBoardTs(root, undefined);
-    expect(result).toEqual({ filename: "ember-totality-20260703T120000Z.json", boardTs: "20260703T120000Z" });
+    expect(result).toEqual({
+      filename: "ember-totality-20260703T120000Z.json",
+      boardTs: "20260703T120000Z",
+      // #433: rows + green/red totals now ride along so a caller can diff conditions without a
+      // second file read -- writeReceipt's fixture shape (one GREEN row, summary {total:1,green:1,red:0}).
+      rows: [{ condition: "C1", status: "GREEN", reason: "fine" }],
+      green: 1,
+      red: 0,
+    });
   });
 
   it("returns null (no update) when the newest filename matches lastKnownFilename, WITHOUT parsing it", async () => {
@@ -190,6 +200,81 @@ describe("pollForNewerBoardTs", () => {
     await writeReceipt(root, "ember-totality-20260703T130000Z.json", "20260703T130000Z");
 
     const result = await pollForNewerBoardTs(root, seedFilename ?? undefined);
-    expect(result).toEqual({ filename: "ember-totality-20260703T130000Z.json", boardTs: "20260703T130000Z" });
+    expect(result).toEqual({
+      filename: "ember-totality-20260703T130000Z.json",
+      boardTs: "20260703T130000Z",
+      rows: [{ condition: "C1", status: "GREEN", reason: "fine" }],
+      green: 1,
+      red: 0,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #433: board condition transitions -- diffBoardConditions
+// ---------------------------------------------------------------------------
+
+describe("diffBoardConditions", () => {
+  it("returns one transition per condition whose status changed, ignoring unchanged conditions", () => {
+    const prevRows: BoardRow[] = [
+      { condition: "C-GROW", status: "RED", reason: "was broken" },
+      { condition: "C(-1)", status: "GREEN", reason: "was fine" },
+      { condition: "C-STABLE", status: "GREEN", reason: "never moves" },
+    ];
+    const nextRows: BoardRow[] = [
+      { condition: "C-GROW", status: "GREEN", reason: "now fine" },
+      { condition: "C(-1)", status: "RED", reason: "now broken" },
+      { condition: "C-STABLE", status: "GREEN", reason: "never moves" },
+    ];
+
+    const transitions = diffBoardConditions(prevRows, nextRows);
+
+    expect(transitions).toEqual([
+      { condition: "C-GROW", from: "RED", to: "GREEN" },
+      { condition: "C(-1)", from: "GREEN", to: "RED" },
+    ]);
+  });
+
+  it("emits no transitions when nothing changed", () => {
+    const rows: BoardRow[] = [{ condition: "C1", status: "GREEN", reason: "fine" }];
+    expect(diffBoardConditions(rows, rows)).toEqual([]);
+  });
+
+  it("boot suppression: an undefined prevRows baseline (no prior receipt this session) emits zero transitions, never a fake all-changed storm", () => {
+    const nextRows: BoardRow[] = [
+      { condition: "C1", status: "GREEN", reason: "fine" },
+      { condition: "C2", status: "RED", reason: "broken" },
+    ];
+    expect(diffBoardConditions(undefined, nextRows)).toEqual([]);
+  });
+
+  it("boot suppression: an empty prevRows array likewise emits zero transitions", () => {
+    const nextRows: BoardRow[] = [{ condition: "C1", status: "RED", reason: "broken" }];
+    expect(diffBoardConditions([], nextRows)).toEqual([]);
+  });
+
+  it("a condition present in nextRows but absent from prevRows (newly added condition) is not a transition", () => {
+    const prevRows: BoardRow[] = [{ condition: "C1", status: "GREEN", reason: "fine" }];
+    const nextRows: BoardRow[] = [
+      { condition: "C1", status: "GREEN", reason: "fine" },
+      { condition: "C-NEW", status: "RED", reason: "brand new condition" },
+    ];
+    expect(diffBoardConditions(prevRows, nextRows)).toEqual([]);
+  });
+
+  it("fails open on malformed rows (missing condition/status) instead of throwing", () => {
+    const prevRows = [
+      { condition: "C1", status: "GREEN", reason: "fine" },
+      { reason: "malformed, no condition or status" },
+      null,
+    ] as unknown as BoardRow[];
+    const nextRows = [
+      { condition: "C1", status: "RED", reason: "now broken" },
+      { condition: "C2" } as unknown as BoardRow, // missing status
+    ];
+    expect(() => diffBoardConditions(prevRows, nextRows)).not.toThrow();
+    expect(diffBoardConditions(prevRows, nextRows)).toEqual([
+      { condition: "C1", from: "GREEN", to: "RED" },
+    ]);
   });
 });

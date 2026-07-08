@@ -717,13 +717,24 @@ export function ReplScreen({
   // slow cadence and merges a fresh boardTs into boardSummary the moment one lands; the existing
   // #413 per-second liveness tick then carries it into the rendered welcome message on its own
   // next tick -- no new render timer, no remount.
-  const polledBoardTs = useBoardTsPoller(process.env.EMBER_GOALFORGE_ROOT || cwd);
+  // #433 rides the SAME poll: `events` carries one formatted line per board condition transition
+  // (GREEN<->RED) detected since the previous poll -- merged into boardSummary.recentTransitions
+  // below, rendered by logo-homescreen.ts's recentFeedEntries.
+  const { boardTs: polledBoardTs, events: boardTransitionEvents } = useBoardTsPoller(
+    process.env.EMBER_GOALFORGE_ROOT || cwd,
+  );
   useEffect(() => {
     if (!polledBoardTs) return;
     setBoardSummary((prev) =>
       prev && prev.boardTs !== polledBoardTs ? { ...prev, boardTs: polledBoardTs } : prev,
     );
   }, [polledBoardTs]);
+  useEffect(() => {
+    if (boardTransitionEvents.length === 0) return;
+    setBoardSummary((prev) =>
+      prev ? { ...prev, recentTransitions: boardTransitionEvents } : prev,
+    );
+  }, [boardTransitionEvents]);
 
   // Dialog state
   const dialogState: DialogState = {

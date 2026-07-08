@@ -15,6 +15,7 @@ import {
   sortMonitorConditions,
   conditionName,
   buildTopAttentionLines,
+  formatBoardTransitionEvent,
   renderMonitor,
   renderMonitorPanel,
   visiblePanelWidth,
@@ -334,6 +335,33 @@ describe("buildTopAttentionLines (B7 item 2: welcome-screen ambient board snapsh
     expect(reason.startsWith(beforeEllipsis)).toBe(true);
     const nextChar = reason[beforeEllipsis.length];
     expect(nextChar === " " || nextChar === undefined).toBe(true);
+  });
+});
+
+describe("formatBoardTransitionEvent (issue #433: board condition transitions as activity events)", () => {
+  it("matches the issue's literal example format for a GREEN->RED transition, colored red", () => {
+    const entry = formatBoardTransitionEvent(
+      { condition: "C(-1)", from: "GREEN", to: "RED" },
+      { red: 27, green: 8 },
+    );
+    expect(entry).toEqual({ text: "board: C(-1) GREEN->RED (27 red / 8 green)", color: "red" });
+  });
+
+  it("colors a RED->GREEN transition green", () => {
+    const entry = formatBoardTransitionEvent(
+      { condition: "C-GROW", from: "RED", to: "GREEN" },
+      { red: 5, green: 30 },
+    );
+    expect(entry).toEqual({ text: "board: C-GROW RED->GREEN (5 red / 30 green)", color: "green" });
+  });
+
+  it("carries no color for a transition into a non-GREEN/RED status (e.g. an AUDIT-* variant)", () => {
+    const entry = formatBoardTransitionEvent(
+      { condition: "C0", from: "RED", to: "AUDIT-INCIDENT" },
+      { red: 10, green: 20 },
+    );
+    expect(entry).toEqual({ text: "board: C0 RED->AUDIT-INCIDENT (10 red / 20 green)" });
+    expect(entry.color).toBeUndefined();
   });
 });
 
