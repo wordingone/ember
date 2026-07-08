@@ -82,14 +82,54 @@ def build_model(cfg_model: dict, n_mtp: int, intermediate: int):
     return _V0()
 
 
-def widen_state_dict(sd: dict, n_layers: int) -> dict:
+def widen_state_dict(sd: dict, n_layers: int, eps_sigma: float = 0.0, eps_seed: int = 0) -> dict:
+    """
+    net2net FF-widening surgery (see module docstring for the base math).
+
+    eps_sigma / eps_seed: #280 K1 respec (docs/spec/ -- see
+    scripts/grow_respec_280.py for the full derivation and citation).
+    default eps_sigma=0.0 preserves this function's ORIGINAL behaviour
+    bit-for-bit (exact duplication: down_proj column pair -> (a/2, a/2)) --
+    every existing caller that has not opted in is UNCHANGED. This is the
+    operator #280 (K1, R1 twin-divergence audit) proved CAPACITY-NULL:
+    exact duplication never breaks Newton-Schulz/Muon's twin-permutation
+    symmetry, so a widened net trained no more effective capacity than its
+    pre-grow shell.
+
+    eps_sigma > 0 applies #280's frozen cure (antisymmetric out-proj
+    perturbation): each down_proj column pair becomes (a/2 + eta, a/2 - eta)
+    instead of (a/2, a/2), where eta is drawn per-column from
+    N(0, tau^2 I_h), tau = eps_sigma * ||a||_2 / sqrt(h) (h = hidden dim).
+    Because the pair still sums to a EXACTLY (eta cancels: (a/2+eta) +
+    (a/2-eta) = a) while gate_proj/up_proj rows stay untouched (still exact
+    duplicates at construction), function preservation remains EXACT in
+    real arithmetic at t=0 -- verified numerically in
+    scripts/test_grow_respec_280.py. What breaks is the twin-swap
+    permutation symmetry Newton-Schulz/Muon otherwise preserves losslessly
+    (down_proj columns k and k+n_new are no longer identical vectors), so
+    twin in-proj gradients diverge from training step 1 onward. eps_seed
+    seeds a dedicated torch.Generator (deterministic, disclosed) --
+    registered noise parameters per #280 item 2, never ad hoc.
+    """
     grown = dict(sd)
+    gen = torch.Generator().manual_seed(eps_seed) if eps_sigma > 0 else None
     for i in range(n_layers):
         p = f"backbone_model.layers.{i}.mlp."
         g, u, d = sd[p + "gate_proj.weight"], sd[p + "up_proj.weight"], sd[p + "down_proj.weight"]
         grown[p + "gate_proj.weight"] = torch.cat([g, g], dim=0)
         grown[p + "up_proj.weight"] = torch.cat([u, u], dim=0)
-        grown[p + "down_proj.weight"] = torch.cat([d * 0.5, d * 0.5], dim=1)
+        if eps_sigma > 0:
+            hidden, interm = d.shape
+            col_norms = d.norm(dim=0)  # (interm,) -- L2 norm per down_proj column
+            z = torch.randn(hidden, interm, generator=gen, dtype=d.dtype)
+            tau = eps_sigma * col_norms / (hidden ** 0.5)  # (interm,)
+            eta = z * tau.unsqueeze(0)  # (hidden, interm), column j scaled by tau_j
+            d_a = d * 0.5 + eta
+            d_b = d * 0.5 - eta
+        else:
+            d_a = d * 0.5
+            d_b = d * 0.5
+        grown[p + "down_proj.weight"] = torch.cat([d_a, d_b], dim=1)
     return grown
 
 
