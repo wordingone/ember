@@ -1,0 +1,12 @@
+{
+  "target_path": "receipts/grow-operator-dryrun-20260707T220138Z.json",
+  "target_sha256": "764da6e2e756f729a71114868d91a3f83403db182c4e6576464a8a37d463eb2d",
+  "evidence_class": "generator_absent_content_clean",
+  "evidence": "evidence (b) git-archaeology confirmed gone: this receipt was added by the same commit as its paired grow-op-verify-20260707T220138Z.json, commit 9062e073573a1bb8276fd977419af22906391f04 ('C-BASE clause (d): grow-operator DRY-RUN receipts'), whose full diff touches ONLY the two receipt JSON files -- zero .py files. No script under scripts/ or tools/ constructs this basename anywhere in this branch's HEAD-reachable history; the receipt's own content carries a grow_operator_evidence cross-reference field (pointing at the paired grow-op-verify receipt) but no script/cmd/generator field naming its own generator. This receipt's CURRENT on-disk content (verdict=FAIL, a synthetic hand-authored monotonic loss_trace [4.5..3.6], replays=true, replay_across_shape=true with no real training behind it) is the ORIGINAL fabricated measurement later superseded by grow-op-rung2-void-20260708T060900Z.json's VOID disposition; that VOID receipt's own supersedes entry records only a 16-hex-char TRUNCATED prefix of this file's sha256 (764da6e2e756f729, vs the full 64-char 764da6e2e756f729a71114868d91a3f83403db182c4e6576464a8a37d463eb2d), so it does not satisfy void_supersession.py's exact (basename, full-sha256) match -- this receipt is NOT excluded from the decisive-claim corpus by the VOID-supersession mechanism and needs its own annex coverage independent of the VOID receipt. Content re-scan: zero paid-client-pattern or paid-API-key-env-name hits in this receipt's own raw JSON text (schema_version/experiment/arm/timestamp/grow_operator_evidence/verification/grow_dry_run/larger_shape/replays/replay_across_shape/post_grow/net2net/grow_operator/grow_metrics/verdict fields only).",
+  "cites": [
+    "receipts/grow-op-rung2-void-20260708T060900Z.json",
+    "receipts/grow-operator-dryrun-20260708T060841Z.json"
+  ],
+  "attested_by": "builder lane, chore/annex-cover-3 (spend-annex coverage for the 3 grow-op decisive receipts C(-1) reports uncovered, per totality receipt 070546Z)",
+  "attested_ts": "2026-07-08T06:09:00Z"
+}
