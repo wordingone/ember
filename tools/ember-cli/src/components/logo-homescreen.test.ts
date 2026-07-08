@@ -124,14 +124,24 @@ describe("Homescreen — recent-activity feed carries the receipt-age badge (#40
     expect(findTextWhere(rendered, (s) => s.includes("STALE"))).toBe(false);
   });
 
-  it("shows red 'STALE: <age>' when the board receipt is older than the staleness threshold", () => {
-    const boardTs = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // 2 hours ago
+  it("shows red 'STALE: <age>' when the board receipt is older than the staleness threshold (2h)", () => {
+    const boardTs = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(); // 3 hours ago -- safely past the 2h threshold
     const rendered = renderedRecentFeed(Homescreen({
       state: {},
       boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [], boardTs },
     }));
     expect(findTextWhere(rendered, (s) => /^STALE: \d+h ago$/.test(s))).toBe(true);
-    expect(colorForText(rendered, "STALE: 2h ago")).toBe("red");
+    expect(colorForText(rendered, "STALE: 3h ago")).toBe("red");
+  });
+
+  it("shows plain 'board: <age>' (not stale) at 1h old -- inside the 2h cadence window, no wolf-cry", () => {
+    const boardTs = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [], boardTs },
+    }));
+    expect(findTextWhere(rendered, (s) => /^board: 1h ago$/.test(s))).toBe(true);
+    expect(findTextWhere(rendered, (s) => s.includes("STALE"))).toBe(false);
   });
 
   it("carries no badge line when boardSummary has no boardTs (older callers / partial data, never fabricates)", () => {

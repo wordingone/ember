@@ -1,5 +1,6 @@
 // core/receipt-age.ts — utilities for formatting board receipt age and detecting staleness.
-// Converts ISO8601 timestamp to relative age ("2h14m ago") and determines if stale (>30min).
+// Converts ISO8601 timestamp to relative age ("2h14m ago") and determines if stale (>2h, see
+// isReceiptStale's own comment for why 2h and not the tighter value this started at).
 
 export function formatReceiptAge(boardTs: string, nowMs: number = Date.now()): string {
   const receiptTime = parseIso8601(boardTs);
@@ -26,7 +27,13 @@ export function formatReceiptAge(boardTs: string, nowMs: number = Date.now()): s
   return "just now";
 }
 
-export function isReceiptStale(boardTs: string, nowMs: number = Date.now(), staleThresholdMs: number = 30 * 60 * 1000): boolean {
+// #405 review: default was 30min, which cried wolf on the boot screen -- board runs are
+// landing-driven (mandated within 45min of a merge, plus multi-hour natural gaps between landings),
+// so a fresh receipt routinely read stale a refresh or two later (observed live in the same session:
+// "board: 25m ago" then "STALE: 30m ago" for the same underlying receipt, one refresh apart). Red
+// should mean "outside expected cadence", not "no one has merged in the last half hour" -- 2h
+// matches the audit-loop's own cadence and is the signal actually worth a red badge.
+export function isReceiptStale(boardTs: string, nowMs: number = Date.now(), staleThresholdMs: number = 2 * 60 * 60 * 1000): boolean {
   const receiptTime = parseIso8601(boardTs);
   if (!receiptTime) return false;
 
