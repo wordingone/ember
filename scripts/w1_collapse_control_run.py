@@ -481,7 +481,8 @@ LR_SCHEDULE_SOURCE = (
 
 def cosine_warmup_frac(step: int, total_steps: int, *,
                         warmup_frac: float = 0.1,
-                        min_lr_frac: float = 0.1) -> float:
+                        min_lr_frac: float = 0.1,
+                        warmup_steps: "int | None" = None) -> float:
     """Pure lr-multiplier form of cosine_warmup_lr (base_lr factored out) --
     SAME mechanical contract shape as timeshare_pretrain.wsd_lr_frac, so it
     slots into a split-optimizer apply function the same way apply_wsd does.
@@ -489,25 +490,40 @@ def cosine_warmup_frac(step: int, total_steps: int, *,
     2's matched-recipe control still uses the spec sec.2 anti-poison
     cosine+warmup schedule, only now applied across muon+adamw base_lrs
     instead of one AdamW lr -- cosine_warmup_lr itself is left untouched,
-    still used verbatim by the dry-run leg)."""
-    warmup_steps = max(1, int(total_steps * warmup_frac))
-    if step < warmup_steps:
-        return (step + 1) / warmup_steps
-    progress = min(1.0, (step - warmup_steps) / max(1, total_steps - warmup_steps))
+    still used verbatim by the dry-run leg).
+
+    warmup_steps (optional, additive -- issue #118 P1 envelope sweep,
+    2026-07-08, docs/deviations.md DEV-003): when given, OVERRIDES
+    warmup_frac*total_steps as the EXACT number of warmup steps, never
+    re-derived from a fraction (avoids an int()-truncation round-trip for a
+    caller that already computed an absolute step count, e.g. prereg
+    section 2's "min(2% of budget, absolute cap)" rule). Default None
+    preserves prior behavior byte-for-byte for every existing caller."""
+    if warmup_steps is not None:
+        ws = max(1, int(warmup_steps))
+    else:
+        ws = max(1, int(total_steps * warmup_frac))
+    if step < ws:
+        return (step + 1) / ws
+    progress = min(1.0, (step - ws) / max(1, total_steps - ws))
     cos = 0.5 * (1.0 + math.cos(math.pi * progress))
     return min_lr_frac + (1.0 - min_lr_frac) * cos
 
 
 def apply_cosine_warmup(optimizers: dict, base_lrs: dict, step: int,
                          total_steps: int, *, warmup_frac: float = 0.1,
-                         min_lr_frac: float = 0.1) -> float:
+                         min_lr_frac: float = 0.1,
+                         warmup_steps: "int | None" = None) -> float:
     """Set every split-optimizer group's lr = base_lr * cosine_warmup_frac
     (step) -- SAME mechanical application shape as timeshare_pretrain.
     apply_wsd (never edited; this is the anti-poison schedule swap-in for
     the matched-recipe control, issue #82 live-fire finding 2). Returns the
-    multiplier so the receipt can quote the realized schedule."""
+    multiplier so the receipt can quote the realized schedule.
+
+    warmup_steps: see cosine_warmup_frac -- additive override, default None
+    (unchanged behavior)."""
     mult = cosine_warmup_frac(step, total_steps, warmup_frac=warmup_frac,
-                              min_lr_frac=min_lr_frac)
+                              min_lr_frac=min_lr_frac, warmup_steps=warmup_steps)
     for key, opt in optimizers.items():
         for g in opt.param_groups:
             g["lr"] = base_lrs[key] * mult
@@ -1889,7 +1905,8 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
                      out_dir: str, shard_dir: str, eval_x, eval_y,
                      loader=None, rung_receipt: dict | None = None,
                      progress_path: str | None = None,
-                     continue_from: str | None = None) -> dict:
+                     continue_from: str | None = None,
+                     warmup_steps: int | None = None) -> dict:
     """Real control leg, REWORKED to the full matched-recipe control (issue
     #82 live-fire finding 2, 2026-07-04): the prior plain-AdamW single-
     optimizer design OOM'd at 17.32GiB allocated + 1.61GiB fragmentation-
@@ -1966,7 +1983,16 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
     one JSON line (step, tokens_so_far, eval_loss, ts) per evaluation,
     flushed immediately, so a monitor can confirm the run is alive without
     waiting for the terminal receipt. Never affects training/eval math or
-    any gate decision -- purely a side-channel write."""
+    any gate decision -- purely a side-channel write.
+
+    warmup_steps: optional, additive (issue #118 P1 envelope sweep,
+    2026-07-08, docs/deviations.md DEV-003) -- passed straight through to
+    apply_cosine_warmup's own warmup_steps override (see its docstring).
+    Default None preserves this function's EXACT prior schedule (10% of
+    ceiling_steps) for every pre-existing caller (main_live never passes
+    it). Lets a caller with its own pre-computed absolute warmup-step count
+    (e.g. prereg section 2's "min(2% of budget, absolute cap)" rule) apply
+    it exactly, without a fraction round-trip."""
     if device == "cuda":
         from timeshare_pretrain import _apply_governor
         gov_receipt = _apply_governor()
@@ -2059,7 +2085,8 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
         x = x.to(device)
         y0 = y0.to(device)
         y_mtp = [t.to(device) for t in y_mtp]
-        mult = apply_cosine_warmup(optimizers, base_lrs, step, ceiling_steps)
+        mult = apply_cosine_warmup(optimizers, base_lrs, step, ceiling_steps,
+                                    warmup_steps=warmup_steps)
         lr_trace.append(round(mult, 8))
         train_step_matched_recipe(
             model, optimizers, ce_fn, x=x, y0=y0, y_mtp=y_mtp,
@@ -2128,6 +2155,10 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
         "continuation_source_manifest": continuation_source_manifest,  # added for issue #375
         "lr_schedule": {"source": MATCHED_RECIPE_SCHEDULE_SOURCE,
                         "base_lrs": base_lrs, "warmup_frac": 0.1,
+                        "warmup_steps_override": warmup_steps,
+                        "effective_warmup_steps": (
+                            max(1, int(warmup_steps)) if warmup_steps is not None
+                            else max(1, int(ceiling_steps * 0.1))),
                         "min_lr_frac": 0.1,
                         "total_steps_for_schedule": ceiling_steps,
                         "lr_mult_trace_first": lr_trace[0] if lr_trace else None,
