@@ -88,6 +88,7 @@ import gc
 import hashlib
 import io
 import json
+import os
 import pickle
 import shutil
 import subprocess
@@ -154,6 +155,77 @@ def _ts() -> str:
 
 def _timestamp_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _make_path_repo_relative(path_obj, repo_root=None) -> str:
+    """Convert an absolute path to repo-relative, or keep absolute for out-of-repo paths.
+
+    Converts paths within the repo to repo-relative to avoid leaking implementation
+    details in receipts (issue #466 path-leak fix). Paths outside the repo are kept
+    absolute (as they're inherently non-portable anyway).
+
+    Args:
+        path_obj: Path object or str to convert
+        repo_root: Path to the repo root; defaults to REPO global constant
+
+    Returns:
+        Repo-relative path string for in-repo paths, absolute path for out-of-repo
+    """
+    if repo_root is None:
+        repo_root = REPO
+
+    path_obj = Path(path_obj).resolve()
+    repo_root = Path(repo_root).resolve()
+
+    try:
+        # Check if path is within the repo by computing relpath
+        rel = os.path.relpath(path_obj, repo_root)
+        # If the relative path doesn't start with .., it's within the repo
+        if not rel.startswith(".."):
+            return rel
+        else:
+            # Path is outside repo; keep as absolute string
+            return str(path_obj)
+    except ValueError:
+        # Cross-drive on Windows: keep absolute
+        return str(path_obj)
+
+
+def _make_path_absolute_from_receipt(path_str, repo_root=None) -> Path:
+    """Convert a receipt path (repo-relative or absolute) back to absolute.
+
+    Inverse of _make_path_repo_relative: reconstructs absolute paths for
+    file operations when reading from receipts (issue #466 path-leak fix).
+
+    For repo-relative paths (no drive letter or leading /), join with repo root.
+    For absolute paths (already absolute), return as-is.
+
+    Args:
+        path_str: Path string from a receipt (repo-relative or absolute)
+        repo_root: Path to the repo root; defaults to REPO global constant
+
+    Returns:
+        Absolute Path object
+    """
+    if repo_root is None:
+        repo_root = REPO
+
+    if not path_str:
+        return None
+
+    path_str = str(path_str)
+    repo_root = Path(repo_root)
+
+    # Check if path is already absolute (Windows drive letter or POSIX /)
+    if len(path_str) >= 2 and path_str[1] == ":":
+        # Windows absolute path (e.g., C:\...)
+        return Path(path_str)
+    elif path_str.startswith("/"):
+        # POSIX absolute path
+        return Path(path_str)
+    else:
+        # Repo-relative path; join with repo root
+        return repo_root / path_str
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +555,7 @@ def phase_preflight(args) -> dict:
     disk_free_gib = round(disk.free / (1 << 30), 3)
     disk_sufficient = disk_free_gib >= args.disk_headroom_gib_floor
     disk_preflight = {"free_gib": disk_free_gib, "floor_gib": args.disk_headroom_gib_floor,
-                       "sufficient": disk_sufficient, "path_checked": str(REPO)}
+                       "sufficient": disk_sufficient, "path_checked": _make_path_repo_relative(REPO)}
 
     all_sufficient = bool(commit_sufficient and gpu_preflight["sufficient"] and disk_sufficient)
     verdict = "PREFLIGHT_PASS" if all_sufficient else "PREFLIGHT_REFUSE"
@@ -572,7 +644,7 @@ def phase_b1(args) -> dict:
                  "block, RNG disclosure, verified copy to the B1 snapshot dir production "
                  "stabilization resumes from untouched.",
         "seed_identity": {
-            "checkpoint": str(seed_ckpt), "model_pt_sha256": actual_sha,
+            "checkpoint": _make_path_repo_relative(seed_ckpt), "model_pt_sha256": actual_sha,
             "manifest_claim_verified": manifest_claim_verified,
             "attested_match": bool(actual_sha == SEED_SHA_ATTESTED),
             "attestation_receipt": SEED_SHA_ATTESTATION_RECEIPT, "step": manifest.get("step"),
@@ -583,7 +655,7 @@ def phase_b1(args) -> dict:
         "quiesce_proven": quiesce_proven,
         "provenance": provenance, "provenance_ok": provenance_ok,
         "rng_provenance": rng_prov,
-        "snapshot_dir": str(snapshot_dir) if snapshot_dir else None,
+        "snapshot_dir": _make_path_repo_relative(snapshot_dir) if snapshot_dir else None,
         "snapshot_copy_verified": snapshot_copy_verified,
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": verdict,
@@ -607,7 +679,7 @@ def phase_b1m(args) -> dict:
     torch.manual_seed(42)
     cache_dir = Path(args.cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    snapshot_dir = Path(b1["snapshot_dir"])
+    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"])
     model_pt = snapshot_dir / "model.pt"
     manifest = json.loads((snapshot_dir / "manifest.json").read_text(encoding="utf-8"))
 
@@ -701,7 +773,7 @@ def phase_b1m(args) -> dict:
                        "simplification for the commutation-defect measurement leg only "
                        "(the STABILIZE phase applies the real WSD schedule via apply_wsd).",
         },
-        "cache_paths": {k: str(v) for k, v in cache_paths.items()},
+        "cache_paths": {k: _make_path_repo_relative(v) for k, v in cache_paths.items()},
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": "B1M_CAPTURED",
     }
@@ -749,7 +821,7 @@ def phase_b2(args) -> dict:
             f"requirement); got eps_sigma={args.eps_sigma}")
 
     import torch
-    snapshot_dir = Path(b1["snapshot_dir"])
+    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"])
     model_pt = snapshot_dir / "model.pt"
     manifest = json.loads((snapshot_dir / "manifest.json").read_text(encoding="utf-8"))
     seed_sha = manifest["files"]["model.pt"]
@@ -833,9 +905,9 @@ def phase_b2(args) -> dict:
         "eps": {"eps_sigma": args.eps_sigma, "eps_seed": args.eps_seed,
                 "banned_zero_assertion_passed": True},
         "operator_sha256": operator_sha256, "operator_file": "scripts/cbase_grow_dryrun.py",
-        "cache": {"cache_path": str(cache_path), "cache_hit": cache_hit,
-                  "eps0_banned_cache_path": str(eps0_banned_cache_path),
-                  "distinct_from_eps0_cache": str(cache_path) != str(eps0_banned_cache_path)},
+        "cache": {"cache_path": _make_path_repo_relative(cache_path), "cache_hit": cache_hit,
+                  "eps0_banned_cache_path": _make_path_repo_relative(eps0_banned_cache_path),
+                  "distinct_from_eps0_cache": _make_path_repo_relative(cache_path) != _make_path_repo_relative(eps0_banned_cache_path)},
         "realized_proof": {
             "n_pairs_checked": n_pairs_checked,
             "eta_rms_over_tau_ratio_mean": ratio_mean, "eta_rms_over_tau_ratio_std": ratio_std,
@@ -871,7 +943,7 @@ def phase_b3(args) -> dict:
 
     import torch
     torch.manual_seed(42)
-    snapshot_dir = Path(b1["snapshot_dir"])
+    snapshot_dir = _make_path_absolute_from_receipt(b1["snapshot_dir"])
     fork_dir = Path(args.out_dir) / f"rung2-event-{run_id}" / "b3-fork"
     if fork_dir.exists():
         raise SystemExit(f"CBASE-GROW-RUNG2-EVENT-B3: refusing to reuse an existing fork dir {fork_dir}")
@@ -885,10 +957,12 @@ def phase_b3(args) -> dict:
     gate_key, up_key, down_key = _gate_up_down_keys(0)
 
     pre_model_state = torch.load(fork_dir / "model.pt", map_location="cpu", weights_only=True)
-    pre_model_state = {k: v.float() for k, v in pre_model_state.items()}
+    pre_model_state = {k: v.float().to(args.device) for k, v in pre_model_state.items()}
     pre_opt_state = torch.load(fork_dir / "optimizer.pt", map_location="cpu", weights_only=True)
 
-    grown_bf16 = torch.load(b2["cache"]["cache_path"], map_location="cpu", weights_only=True)
+    grown_bf16 = torch.load(
+        _make_path_absolute_from_receipt(b2["cache"]["cache_path"]),
+        map_location="cpu", weights_only=True)
     ff_grown = int(grown_bf16[gate_key].shape[0])
 
     model, vocab, hidden, n_mtp = ts.build_v0_model(
@@ -937,7 +1011,9 @@ def phase_b3(args) -> dict:
 
     U_k, _gate_only_ukp1_unused, G = build_real_d_comm_closures(
         pre_model_state, pre_opt_state, None, gate_key, up_key, down_key,
-        pre_lr, post_lr, torch.load(b1m["cache_paths"]["grad_pre_gate"], weights_only=True),
+        pre_lr, post_lr, torch.load(
+            _make_path_absolute_from_receipt(b1m["cache_paths"]["grad_pre_gate"]),
+            weights_only=True),
         grad_post_gate)
 
     theta_gate = pre_model_state[gate_key].to(torch.float32)
@@ -961,7 +1037,9 @@ def phase_b3(args) -> dict:
 
     # TRANSPLANT arm (second, disclosed measurement; does not gate band(i)):
     # pushforward the pre-grow momentum buffer for gate_proj through G.
-    pre_gate_momentum = torch.load(b1m["cache_paths"]["pre_momentum"], weights_only=True)
+    pre_gate_momentum = torch.load(
+        _make_path_absolute_from_receipt(b1m["cache_paths"]["pre_momentum"]),
+        weights_only=True)
     transplanted_momentum = _pushforward_gate_momentum(
         pre_gate_momentum, pre_model_state[up_key], pre_model_state[down_key],
         gate_key, up_key, down_key)
@@ -995,7 +1073,7 @@ def phase_b3(args) -> dict:
         "scope": "B3: first post-grow update on the pinned batch, forked copy of B1 -- "
                  "RESET arm (band-(i) primary) + TRANSPLANT arm (second, disclosed). "
                  "Production resumes from the untouched B1 snapshot, never this fork.",
-        "fork_dir": str(fork_dir),
+        "fork_dir": _make_path_repo_relative(fork_dir),
         "batch_pin_check": {"b1m_sha256": b1m["batch"]["overall_sha256"],
                             "b3_recomputed_sha256": batch["overall_sha256"], "match": batch_pin_match},
         "arms": {
@@ -1071,7 +1149,9 @@ def phase_stabilize(args) -> dict:
     total_tokens = n_optimizer_steps * tokens_per_step
     tokens_match = bool(total_tokens == D1_TOTAL_TOKENS) if args.n_optimizer_steps is None else None
 
-    grown_bf16 = torch.load(b2["cache"]["cache_path"], map_location="cpu", weights_only=True)
+    grown_bf16 = torch.load(
+        _make_path_absolute_from_receipt(b2["cache"]["cache_path"]),
+        map_location="cpu", weights_only=True)
     gate_key = _gate_up_down_keys(0)[0]
     ff_grown = int(grown_bf16[gate_key].shape[0])
 
@@ -1224,9 +1304,9 @@ def phase_stabilize(args) -> dict:
         "training": {"optimizer_step_losses": losses, "degenerate_loss_trace": degenerate,
                     "oom_error": oom_error, "n_params_after": n_params_after},
         "vram": vram_report,
-        "checkpoint": {"dir": str(checkpoint_dir) if checkpoint_dir else None,
+        "checkpoint": {"dir": _make_path_repo_relative(checkpoint_dir) if checkpoint_dir else None,
                       "becomes_rung3_pregrow_candidate": bool(checkpoint_dir is not None)},
-        "planned_outage_marker": {"path": str(marker_path), "written": True},
+        "planned_outage_marker": {"path": _make_path_repo_relative(marker_path), "written": True},
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": verdict,
     }
