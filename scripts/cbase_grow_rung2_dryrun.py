@@ -85,6 +85,7 @@ from cbase_grow_live import _loss_continuity_block                 # noqa: E402
 from cbase_grow_rung import measure_tied_duplicate_numel, d1_stabilization_steps  # noqa: E402
 from receipt_write import checked_write                            # noqa: E402
 import v0_pretrain_launch_gate as gate_mod                          # noqa: E402
+from cpu_offload_adamw import estimate_required_gib_offloaded, vram_preflight  # noqa: E402 (DEV-002 cure)
 
 
 REPO = Path(__file__).resolve().parent.parent
@@ -733,9 +734,34 @@ def main() -> int:
     vram_sufficient = (nvsmi["free_gib"] - required["total_estimate_gib"]) >= margin_gib_floor
     print(f"  nvidia-smi (ground truth): free={nvsmi['free_gib']}GiB total={nvsmi['total_gib']}GiB")
     print(f"  torch.cuda.mem_get_info (unreliable on this WDDM host under contention): {torch_vram}")
-    print(f"  required (estimate): {required['total_estimate_gib']}GiB, margin floor={margin_gib_floor}GiB")
+    print(f"  required (estimate, VRAM-resident-AdamW convention): {required['total_estimate_gib']}GiB, "
+          f"margin floor={margin_gib_floor}GiB")
     print(f"  d1_steps_prod={d1_steps_prod} (batch={prod_batch} seq={prod_seq})")
     print(f"  VRAM_SUFFICIENT={vram_sufficient}")
+
+    # ---- DEV-002 cure: CPU-offloaded optimizer state + micro-batch/accum ----
+    # candidate 3/4 estimate, priced against the SAME measured nvidia-smi
+    # numbers above. Additive to (never replaces) the VRAM-resident-AdamW
+    # estimate above -- that estimate stays the historical record; this one
+    # is the config the cure PR wires in. Does NOT flip `attempted` or launch
+    # anything: an actual production launch still needs a real shard_dir and
+    # the declared serving-pause window, out of this lane's scope (see the
+    # cure PR spec's MEASURED-dry-run exclusion).
+    micro_batch_offload = 2
+    accum_steps_offload = (prod_batch // micro_batch_offload
+                            if prod_batch % micro_batch_offload == 0 else 8)
+    required_offloaded = estimate_required_gib_offloaded(
+        param_count_after, micro_batch=micro_batch_offload, prod_batch=prod_batch,
+        activation_estimate_gib_at_prod_shape=required["activation_estimate_gib"])
+    offload_preflight = vram_preflight(
+        required_offloaded["total_estimate_gib"], margin_gib_floor=margin_gib_floor, nvsmi=nvsmi)
+    print(f"  [DEV-002 cure] offloaded-config required (estimate): "
+          f"{required_offloaded['total_estimate_gib']}GiB VRAM (+ "
+          f"{required_offloaded['optimizer_state_host_ram_gib']}GiB host RAM) "
+          f"micro_batch={micro_batch_offload} accum_steps={accum_steps_offload} "
+          f"effective_batch={micro_batch_offload * accum_steps_offload}")
+    print(f"  [DEV-002 cure] OFFLOADED_VRAM_SUFFICIENT={offload_preflight['sufficient']} "
+          f"margin_gib={offload_preflight['margin_gib']} verdict={offload_preflight['verdict']}")
 
     production_stabilization = {
         "attempted": False,
@@ -758,6 +784,25 @@ def main() -> int:
         "d1_sizing": {
             "rule": "steps(rung) = max(ceil(D1_ANCHOR_FLOPS/(6*N_grown*batch*seq)), 30)",
             "steps_computed": d1_steps_prod, "batch": prod_batch, "seq": prod_seq,
+        },
+        "offloaded_config": {
+            "scope": ("DEV-002 cure candidate 3/4 (CPU-offloaded optimizer states + "
+                      "micro-batch/grad accumulation), priced against the SAME measured "
+                      "nvidia-smi numbers above. Wiring: timeshare_pretrain.run_v0_segment("
+                      "..., batch_size=micro_batch, grad_accum_steps=accum_steps, "
+                      "offload_optimizer_state=True) -- both params added this PR, default "
+                      "False/1 so every existing caller is byte-identical. Function/"
+                      "loss/gradient equivalence for this wiring is CPU-verified in "
+                      "receipts/cbase-grow-rung2-offload-probe-*.json (companion probe "
+                      "script, this PR); the MEASURED real-2.2B/nvidia-smi-sampled dry-run "
+                      "under this config is EXPLICITLY NOT this run -- it needs the "
+                      "declared serving-pause window and lands in a follow-up push before "
+                      "merge-gate."),
+            "micro_batch": micro_batch_offload,
+            "accum_steps": accum_steps_offload,
+            "effective_batch": micro_batch_offload * accum_steps_offload,
+            "required_estimate": required_offloaded,
+            "preflight": offload_preflight,
         },
     }
 

@@ -1,0 +1,110 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-CONTENDED-LAUNCH-GATE",
+  "ts": "2026-07-08T12:57:24.819220+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "experiment": "C-BASE-clause-d-dryrun",
+  "arm": "rung2-cpu-offload-cure-contended-dryrun",
+  "pr": 429,
+  "issue": 411,
+  "scope": "MEASURED CONTENDED-FIRST launch-gate check for the DEV-002 candidate 3/4 (CPU-offloaded optimizer + micro-batch/accum) config, per PR #429's own 'MEASURED RECEIPTS PENDING' follow-up-push note. Narrower than the full cbase_grow_rung2_dryrun.py harness: computes the REAL param_count_after (via widen_state_dict on the real seed checkpoint, reused not reimplemented) and prices it against the REAL, live nvidia-smi numbers under CONTENDED conditions (llama-server resident, never stopped -- the primary receipt condition per mandate). Does NOT re-run the net2net function-preservation check or the CPU sanity-training segments (both already receipted, see related_receipts) or attempt a real GPU training launch (needs a real shard_dir + the declared serving-pause window per PR #429's own disclosed exclusion; explicitly not this run).",
+  "seed_identity": {
+    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "manifest_claim_verified": true,
+    "attested_match": true,
+    "attestation_receipt": "receipts/spend-annex/attestations/cbase-gpu-verify-trainable-clean-20260707T015633.json",
+    "step": 766
+  },
+  "param_count_before": 1221633024,
+  "param_count_after": 2228265984,
+  "server_contention": {
+    "before": {
+      "reachable": true,
+      "status_code": 200,
+      "body": "{\"status\":\"ok\"}"
+    },
+    "after": {
+      "reachable": true,
+      "status_code": 200,
+      "body": "{\"status\":\"ok\"}"
+    },
+    "server_stopped": false,
+    "note": "primary receipt condition: server resident throughout, per mandate"
+  },
+  "vram": {
+    "before": {
+      "total_mib": 24564,
+      "used_mib": 6548,
+      "free_mib": 17590,
+      "total_gib": 23.988,
+      "used_gib": 6.395,
+      "free_gib": 17.178
+    },
+    "after": {
+      "total_mib": 24564,
+      "used_mib": 6548,
+      "free_mib": 17591,
+      "total_gib": 23.988,
+      "used_gib": 6.395,
+      "free_gib": 17.179
+    },
+    "samples_during_widen": [
+      {
+        "total_mib": 24564,
+        "used_mib": 6548,
+        "free_mib": 17590,
+        "total_gib": 23.988,
+        "used_gib": 6.395,
+        "free_gib": 17.178
+      }
+    ],
+    "peak_used_gib_during_attempt": 6.395,
+    "peak_vs_baseline_delta_gib": 0.0
+  },
+  "offloaded_config": {
+    "micro_batch": 2,
+    "accum_steps": 8,
+    "effective_batch": 16,
+    "required_estimate": {
+      "weights_gib": 4.15,
+      "grad_gib": 4.15,
+      "optimizer_state_gib_vram_resident": 0.0,
+      "optimizer_state_host_ram_gib": 16.602,
+      "activation_estimate_gib": 0.75,
+      "staging_overhead_gib": 0.25,
+      "total_estimate_gib": 9.301,
+      "method": "bf16 weights (2B/param) + bf16 grad (2B/param) VRAM-resident, UNCHANGED from the VRAM-resident-AdamW estimate; the 8B/param conservative AdamW-equivalent optimizer-state term moves OFF VRAM entirely (host RAM, disclosed separately) per DEV-002 candidate 3; activation estimate scaled linearly by micro_batch/prod_batch (2/16) per DEV-002 candidate 2 (micro-batch + grad accumulation, effective batch unchanged); a fixed staging-buffer overhead covers the transient grad/param copies this module's host<->device shuttling allocates. An ESTIMATE (labeled), not a measured peak."
+    },
+    "preflight": {
+      "nvidia_smi_vram": {
+        "total_mib": 24564,
+        "used_mib": 6548,
+        "free_mib": 17590,
+        "total_gib": 23.988,
+        "used_gib": 6.395,
+        "free_gib": 17.178
+      },
+      "required_gib": 9.301,
+      "margin_gib_floor": 2.0,
+      "margin_gib": 7.877,
+      "sufficient": true,
+      "verdict": "LAUNCH_PERMITTED",
+      "rule": "abort-not-degrade: VRAM margin assert fails -> hold, report numbers, no launch into contention; no fix-forward on a failed assert (DEV-002 acceptance #3)"
+    }
+  },
+  "launch_gate_decision_line": "[DEV-002 cure, CONTENDED] offloaded-config required (estimate): 9.301GiB VRAM (+ 16.602GiB host RAM) micro_batch=2 accum_steps=8 effective_batch=16 | OFFLOADED_VRAM_SUFFICIENT=True margin_gib=7.877 verdict=LAUNCH_PERMITTED",
+  "wall_s": {
+    "total": 2.75,
+    "widen_computation": 1.36
+  },
+  "related_receipts": [
+    "receipts/grow-op-verify-20260708T060841Z.json",
+    "receipts/grow-operator-dryrun-20260708T060841Z.json",
+    "receipts/cbase-grow-rung2-offload-probe-20260708T083445Z.json"
+  ],
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "LAUNCH_PERMITTED"
+}

@@ -1,0 +1,1622 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-GPU-OFFLOAD-PROBE",
+  "ts": "2026-07-08T16:08:54.832285+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "experiment": "C-BASE-clause-d-dryrun",
+  "arm": "rung2-cpu-offload-cure-gpu-measured",
+  "pr": 429,
+  "issue": 411,
+  "scope": "MEASURED (not estimated) GPU-peak probe for the DEV-002 candidate 3/4 (CPU-offloaded optimizer + micro-batch/accum) config: real forward+backward+optimizer.step() on the REAL 2.2B grown architecture with REAL widened checkpoint weights, on CUDA, under CONTENDED conditions (llama-server resident, never stopped -- the primary receipt condition per mandate). Bypasses run_v0_segment's production interlock/governor/G-budget gates (disclosed, not silently dropped -- see module docstring) since this is a bounded synthetic-data memory probe, not a production dispatch; applies its own preflight assert + conservative VRAM fraction cap instead. Does NOT re-run the net2net function-preservation check (already receipted, PASS, unaffected by this run) or attempt a full multi-hour production stabilization run (needs a real shard_dir + declared serving-pause window per PR #429's own text; still out of scope).",
+  "seed_identity": {
+    "checkpoint": "B:\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "manifest_claim_verified": true,
+    "attested_match": true,
+    "attestation_receipt": "receipts/spend-annex/attestations/cbase-gpu-verify-trainable-clean-20260707T015633.json",
+    "step": 766
+  },
+  "widen_state_dict_provenance": {
+    "issue": 446,
+    "cache_hit": true,
+    "cache_path": "B:\\M\\ember\\.claude\\worktrees\\rung2-offload-cure-411\\models\\cbase-grow-rung\\rung2-grown-cache\\grown-58e8e98916823941.pt",
+    "method": "build-once: widen_state_dict() runs at most once per seed SHA, in a fresh subprocess, with the grown bf16 state dict persisted to cache_path; every subsequent run (this one included, on a cache hit) loads it directly and never calls widen_state_dict() again for this seed.",
+    "prior_crash_history": "Before this cure: the identical widen_state_dict() call succeeded cleanly once (2026-07-08T12:59:47Z, commit 1ff844e, cbase_grow_rung2_contended_launch_gate.py), then crashed natively 3/3 consecutive times ~30min later with no code change: (1) inline in this probe's main process, exit 139 SIGSEGV; (2) inside a FRESH subprocess with a clean heap (this repo's own established Part-A-style mitigation for this crash class), exit 3221225477 / ACCESS_VIOLATION; (3) a minimal isolated 3-line repro (torch.load -> .float() -> widen_state_dict(), no probe code, no CUDA) pinpointing the crash to inside widen_state_dict() itself, exit 139. All 3 crashes: ~28-29GiB free RAM, GPU flat at server-only baseline, server 200 OK, nothing left wedged. Timing correlates with a concurrent lane (P1) finishing a ~13.96GiB corpus-cache disk write ~13:29Z, just before the crashes started -- filed as issue #446 with the full timeline; not yet confirmed as causal."
+  },
+  "param_count_after": 2228265984,
+  "commit_preflight": {
+    "commit_available_gib": 21.969,
+    "planned_new_commit_gib": 2.0,
+    "margin_floor_gib": 8.0,
+    "sufficient": true,
+    "free_physical_gib_not_the_gate": 25.023,
+    "note": "free-physical RAM is BANNED as a launch gate (2026-07-08): the day's 4 crash sites unified under Windows COMMIT exhaustion (fixed 16GiB pagefile), which reads completely differently from free-physical at the same moment."
+  },
+  "server_contention": {
+    "before": {
+      "reachable": true,
+      "status_code": 200,
+      "body": "{\"status\":\"ok\"}"
+    },
+    "during_after_step_0": {
+      "reachable": true,
+      "status_code": 200,
+      "body": "{\"status\":\"ok\"}"
+    },
+    "after": {
+      "reachable": true,
+      "status_code": 200,
+      "body": "{\"status\":\"ok\"}"
+    },
+    "server_stopped": false,
+    "note": "primary receipt condition: server resident throughout, per mandate"
+  },
+  "vram": {
+    "before": {
+      "total_mib": 24564,
+      "used_mib": 6027,
+      "free_mib": 18112,
+      "total_gib": 23.988,
+      "used_gib": 5.886,
+      "free_gib": 17.688
+    },
+    "after": {
+      "total_mib": 24564,
+      "used_mib": 23773,
+      "free_mib": 366,
+      "total_gib": 23.988,
+      "used_gib": 23.216,
+      "free_gib": 0.357
+    },
+    "samples_during_training": [
+      {
+        "total_mib": 24564,
+        "used_mib": 14917,
+        "free_mib": 9222,
+        "total_gib": 23.988,
+        "used_gib": 14.567,
+        "free_gib": 9.006
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 20509,
+        "free_mib": 3630,
+        "total_gib": 23.988,
+        "used_gib": 20.028,
+        "free_gib": 3.545
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23777,
+        "free_mib": 362,
+        "total_gib": 23.988,
+        "used_gib": 23.22,
+        "free_gib": 0.354
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23777,
+        "free_mib": 362,
+        "total_gib": 23.988,
+        "used_gib": 23.22,
+        "free_gib": 0.354
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23777,
+        "free_mib": 362,
+        "total_gib": 23.988,
+        "used_gib": 23.22,
+        "free_gib": 0.354
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23777,
+        "free_mib": 362,
+        "total_gib": 23.988,
+        "used_gib": 23.22,
+        "free_gib": 0.354
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23777,
+        "free_mib": 362,
+        "total_gib": 23.988,
+        "used_gib": 23.22,
+        "free_gib": 0.354
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23777,
+        "free_mib": 362,
+        "total_gib": 23.988,
+        "used_gib": 23.22,
+        "free_gib": 0.354
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23777,
+        "free_mib": 362,
+        "total_gib": 23.988,
+        "used_gib": 23.22,
+        "free_gib": 0.354
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      },
+      {
+        "total_mib": 24564,
+        "used_mib": 23773,
+        "free_mib": 366,
+        "total_gib": 23.988,
+        "used_gib": 23.216,
+        "free_gib": 0.357
+      }
+    ],
+    "sample_interval_s": 1.0,
+    "peak_used_gib_total_card": 23.22,
+    "peak_delta_vs_baseline_gib": 17.334,
+    "margin_vs_total_gib": 0.768,
+    "margin_gib_floor": 2.0,
+    "fits_total_minus_margin": false
+  },
+  "offloaded_config": {
+    "micro_batch": 2,
+    "accum_steps": 8,
+    "effective_batch": 16,
+    "n_optimizer_steps": 2,
+    "n_micro_steps_total": 16,
+    "required_estimate_gib": 9.301,
+    "required_estimate_detail": {
+      "weights_gib": 4.15,
+      "grad_gib": 4.15,
+      "optimizer_state_gib_vram_resident": 0.0,
+      "optimizer_state_host_ram_gib": 16.602,
+      "activation_estimate_gib": 0.75,
+      "staging_overhead_gib": 0.25,
+      "total_estimate_gib": 9.301,
+      "method": "bf16 weights (2B/param) + bf16 grad (2B/param) VRAM-resident, UNCHANGED from the VRAM-resident-AdamW estimate; the 8B/param conservative AdamW-equivalent optimizer-state term moves OFF VRAM entirely (host RAM, disclosed separately) per DEV-002 candidate 3; activation estimate scaled linearly by micro_batch/prod_batch (2/16) per DEV-002 candidate 2 (micro-batch + grad accumulation, effective batch unchanged); a fixed staging-buffer overhead covers the transient grad/param copies this module's host<->device shuttling allocates. An ESTIMATE (labeled), not a measured peak."
+    },
+    "preflight": {
+      "nvidia_smi_vram": {
+        "total_mib": 24564,
+        "used_mib": 6027,
+        "free_mib": 18112,
+        "total_gib": 23.988,
+        "used_gib": 5.886,
+        "free_gib": 17.688
+      },
+      "required_gib": 9.301,
+      "margin_gib_floor": 2.0,
+      "margin_gib": 8.387,
+      "sufficient": true,
+      "verdict": "LAUNCH_PERMITTED",
+      "rule": "abort-not-degrade: VRAM margin assert fails -> hold, report numbers, no launch into contention; no fix-forward on a failed assert (DEV-002 acceptance #3)"
+    },
+    "self_imposed_vram_fraction_cap": 0.9166249791562447,
+    "optimizer_routing": {
+      "muon_params": [
+        "backbone_model.layers.0.self_attn.q_proj.weight",
+        "backbone_model.layers.0.self_attn.k_proj.weight",
+        "backbone_model.layers.0.self_attn.v_proj.weight",
+        "backbone_model.layers.0.self_attn.o_proj.weight",
+        "backbone_model.layers.0.mlp.gate_proj.weight",
+        "backbone_model.layers.0.mlp.up_proj.weight",
+        "backbone_model.layers.0.mlp.down_proj.weight",
+        "backbone_model.layers.1.self_attn.q_proj.weight",
+        "backbone_model.layers.1.self_attn.k_proj.weight",
+        "backbone_model.layers.1.self_attn.v_proj.weight",
+        "backbone_model.layers.1.self_attn.o_proj.weight",
+        "backbone_model.layers.1.mlp.gate_proj.weight",
+        "backbone_model.layers.1.mlp.up_proj.weight",
+        "backbone_model.layers.1.mlp.down_proj.weight",
+        "backbone_model.layers.2.self_attn.q_proj.weight",
+        "backbone_model.layers.2.self_attn.k_proj.weight",
+        "backbone_model.layers.2.self_attn.v_proj.weight",
+        "backbone_model.layers.2.self_attn.o_proj.weight",
+        "backbone_model.layers.2.mlp.gate_proj.weight",
+        "backbone_model.layers.2.mlp.up_proj.weight",
+        "backbone_model.layers.2.mlp.down_proj.weight",
+        "backbone_model.layers.3.self_attn.q_proj.weight",
+        "backbone_model.layers.3.self_attn.k_proj.weight",
+        "backbone_model.layers.3.self_attn.v_proj.weight",
+        "backbone_model.layers.3.self_attn.o_proj.weight",
+        "backbone_model.layers.3.mlp.gate_proj.weight",
+        "backbone_model.layers.3.mlp.up_proj.weight",
+        "backbone_model.layers.3.mlp.down_proj.weight",
+        "backbone_model.layers.4.self_attn.q_proj.weight",
+        "backbone_model.layers.4.self_attn.k_proj.weight",
+        "backbone_model.layers.4.self_attn.v_proj.weight",
+        "backbone_model.layers.4.self_attn.o_proj.weight",
+        "backbone_model.layers.4.mlp.gate_proj.weight",
+        "backbone_model.layers.4.mlp.up_proj.weight",
+        "backbone_model.layers.4.mlp.down_proj.weight",
+        "backbone_model.layers.5.self_attn.q_proj.weight",
+        "backbone_model.layers.5.self_attn.k_proj.weight",
+        "backbone_model.layers.5.self_attn.v_proj.weight",
+        "backbone_model.layers.5.self_attn.o_proj.weight",
+        "backbone_model.layers.5.mlp.gate_proj.weight",
+        "backbone_model.layers.5.mlp.up_proj.weight",
+        "backbone_model.layers.5.mlp.down_proj.weight",
+        "backbone_model.layers.6.self_attn.q_proj.weight",
+        "backbone_model.layers.6.self_attn.k_proj.weight",
+        "backbone_model.layers.6.self_attn.v_proj.weight",
+        "backbone_model.layers.6.self_attn.o_proj.weight",
+        "backbone_model.layers.6.mlp.gate_proj.weight",
+        "backbone_model.layers.6.mlp.up_proj.weight",
+        "backbone_model.layers.6.mlp.down_proj.weight",
+        "backbone_model.layers.7.self_attn.q_proj.weight",
+        "backbone_model.layers.7.self_attn.k_proj.weight",
+        "backbone_model.layers.7.self_attn.v_proj.weight",
+        "backbone_model.layers.7.self_attn.o_proj.weight",
+        "backbone_model.layers.7.mlp.gate_proj.weight",
+        "backbone_model.layers.7.mlp.up_proj.weight",
+        "backbone_model.layers.7.mlp.down_proj.weight",
+        "backbone_model.layers.8.self_attn.q_proj.weight",
+        "backbone_model.layers.8.self_attn.k_proj.weight",
+        "backbone_model.layers.8.self_attn.v_proj.weight",
+        "backbone_model.layers.8.self_attn.o_proj.weight",
+        "backbone_model.layers.8.mlp.gate_proj.weight",
+        "backbone_model.layers.8.mlp.up_proj.weight",
+        "backbone_model.layers.8.mlp.down_proj.weight",
+        "backbone_model.layers.9.self_attn.q_proj.weight",
+        "backbone_model.layers.9.self_attn.k_proj.weight",
+        "backbone_model.layers.9.self_attn.v_proj.weight",
+        "backbone_model.layers.9.self_attn.o_proj.weight",
+        "backbone_model.layers.9.mlp.gate_proj.weight",
+        "backbone_model.layers.9.mlp.up_proj.weight",
+        "backbone_model.layers.9.mlp.down_proj.weight",
+        "backbone_model.layers.10.self_attn.q_proj.weight",
+        "backbone_model.layers.10.self_attn.k_proj.weight",
+        "backbone_model.layers.10.self_attn.v_proj.weight",
+        "backbone_model.layers.10.self_attn.o_proj.weight",
+        "backbone_model.layers.10.mlp.gate_proj.weight",
+        "backbone_model.layers.10.mlp.up_proj.weight",
+        "backbone_model.layers.10.mlp.down_proj.weight",
+        "backbone_model.layers.11.self_attn.q_proj.weight",
+        "backbone_model.layers.11.self_attn.k_proj.weight",
+        "backbone_model.layers.11.self_attn.v_proj.weight",
+        "backbone_model.layers.11.self_attn.o_proj.weight",
+        "backbone_model.layers.11.mlp.gate_proj.weight",
+        "backbone_model.layers.11.mlp.up_proj.weight",
+        "backbone_model.layers.11.mlp.down_proj.weight",
+        "backbone_model.layers.12.self_attn.q_proj.weight",
+        "backbone_model.layers.12.self_attn.k_proj.weight",
+        "backbone_model.layers.12.self_attn.v_proj.weight",
+        "backbone_model.layers.12.self_attn.o_proj.weight",
+        "backbone_model.layers.12.mlp.gate_proj.weight",
+        "backbone_model.layers.12.mlp.up_proj.weight",
+        "backbone_model.layers.12.mlp.down_proj.weight",
+        "backbone_model.layers.13.self_attn.q_proj.weight",
+        "backbone_model.layers.13.self_attn.k_proj.weight",
+        "backbone_model.layers.13.self_attn.v_proj.weight",
+        "backbone_model.layers.13.self_attn.o_proj.weight",
+        "backbone_model.layers.13.mlp.gate_proj.weight",
+        "backbone_model.layers.13.mlp.up_proj.weight",
+        "backbone_model.layers.13.mlp.down_proj.weight",
+        "backbone_model.layers.14.self_attn.q_proj.weight",
+        "backbone_model.layers.14.self_attn.k_proj.weight",
+        "backbone_model.layers.14.self_attn.v_proj.weight",
+        "backbone_model.layers.14.self_attn.o_proj.weight",
+        "backbone_model.layers.14.mlp.gate_proj.weight",
+        "backbone_model.layers.14.mlp.up_proj.weight",
+        "backbone_model.layers.14.mlp.down_proj.weight",
+        "backbone_model.layers.15.self_attn.q_proj.weight",
+        "backbone_model.layers.15.self_attn.k_proj.weight",
+        "backbone_model.layers.15.self_attn.v_proj.weight",
+        "backbone_model.layers.15.self_attn.o_proj.weight",
+        "backbone_model.layers.15.mlp.gate_proj.weight",
+        "backbone_model.layers.15.mlp.up_proj.weight",
+        "backbone_model.layers.15.mlp.down_proj.weight",
+        "backbone_model.layers.16.self_attn.q_proj.weight",
+        "backbone_model.layers.16.self_attn.k_proj.weight",
+        "backbone_model.layers.16.self_attn.v_proj.weight",
+        "backbone_model.layers.16.self_attn.o_proj.weight",
+        "backbone_model.layers.16.mlp.gate_proj.weight",
+        "backbone_model.layers.16.mlp.up_proj.weight",
+        "backbone_model.layers.16.mlp.down_proj.weight",
+        "backbone_model.layers.17.self_attn.q_proj.weight",
+        "backbone_model.layers.17.self_attn.k_proj.weight",
+        "backbone_model.layers.17.self_attn.v_proj.weight",
+        "backbone_model.layers.17.self_attn.o_proj.weight",
+        "backbone_model.layers.17.mlp.gate_proj.weight",
+        "backbone_model.layers.17.mlp.up_proj.weight",
+        "backbone_model.layers.17.mlp.down_proj.weight",
+        "backbone_model.layers.18.self_attn.q_proj.weight",
+        "backbone_model.layers.18.self_attn.k_proj.weight",
+        "backbone_model.layers.18.self_attn.v_proj.weight",
+        "backbone_model.layers.18.self_attn.o_proj.weight",
+        "backbone_model.layers.18.mlp.gate_proj.weight",
+        "backbone_model.layers.18.mlp.up_proj.weight",
+        "backbone_model.layers.18.mlp.down_proj.weight",
+        "backbone_model.layers.19.self_attn.q_proj.weight",
+        "backbone_model.layers.19.self_attn.k_proj.weight",
+        "backbone_model.layers.19.self_attn.v_proj.weight",
+        "backbone_model.layers.19.self_attn.o_proj.weight",
+        "backbone_model.layers.19.mlp.gate_proj.weight",
+        "backbone_model.layers.19.mlp.up_proj.weight",
+        "backbone_model.layers.19.mlp.down_proj.weight"
+      ],
+      "adamw_params": [
+        "backbone_model.embed_tokens.weight",
+        "backbone_model.layers.0.input_layernorm.weight",
+        "backbone_model.layers.0.post_attention_layernorm.weight",
+        "backbone_model.layers.1.input_layernorm.weight",
+        "backbone_model.layers.1.post_attention_layernorm.weight",
+        "backbone_model.layers.2.input_layernorm.weight",
+        "backbone_model.layers.2.post_attention_layernorm.weight",
+        "backbone_model.layers.3.input_layernorm.weight",
+        "backbone_model.layers.3.post_attention_layernorm.weight",
+        "backbone_model.layers.4.input_layernorm.weight",
+        "backbone_model.layers.4.post_attention_layernorm.weight",
+        "backbone_model.layers.5.input_layernorm.weight",
+        "backbone_model.layers.5.post_attention_layernorm.weight",
+        "backbone_model.layers.6.input_layernorm.weight",
+        "backbone_model.layers.6.post_attention_layernorm.weight",
+        "backbone_model.layers.7.input_layernorm.weight",
+        "backbone_model.layers.7.post_attention_layernorm.weight",
+        "backbone_model.layers.8.input_layernorm.weight",
+        "backbone_model.layers.8.post_attention_layernorm.weight",
+        "backbone_model.layers.9.input_layernorm.weight",
+        "backbone_model.layers.9.post_attention_layernorm.weight",
+        "backbone_model.layers.10.input_layernorm.weight",
+        "backbone_model.layers.10.post_attention_layernorm.weight",
+        "backbone_model.layers.11.input_layernorm.weight",
+        "backbone_model.layers.11.post_attention_layernorm.weight",
+        "backbone_model.layers.12.input_layernorm.weight",
+        "backbone_model.layers.12.post_attention_layernorm.weight",
+        "backbone_model.layers.13.input_layernorm.weight",
+        "backbone_model.layers.13.post_attention_layernorm.weight",
+        "backbone_model.layers.14.input_layernorm.weight",
+        "backbone_model.layers.14.post_attention_layernorm.weight",
+        "backbone_model.layers.15.input_layernorm.weight",
+        "backbone_model.layers.15.post_attention_layernorm.weight",
+        "backbone_model.layers.16.input_layernorm.weight",
+        "backbone_model.layers.16.post_attention_layernorm.weight",
+        "backbone_model.layers.17.input_layernorm.weight",
+        "backbone_model.layers.17.post_attention_layernorm.weight",
+        "backbone_model.layers.18.input_layernorm.weight",
+        "backbone_model.layers.18.post_attention_layernorm.weight",
+        "backbone_model.layers.19.input_layernorm.weight",
+        "backbone_model.layers.19.post_attention_layernorm.weight",
+        "backbone_model.norm.weight",
+        "mtp_heads.0.weight",
+        "mtp_heads.1.weight"
+      ],
+      "n_muon": 140,
+      "n_adamw": 44,
+      "offload_optimizer_state": true,
+      "mode": "muon_split"
+    }
+  },
+  "measured_vs_estimate": {
+    "estimate_gib": 9.301,
+    "measured_delta_gib": 17.334,
+    "pct_over_estimate": 86.37,
+    "kill_threshold_pct": 15.0,
+    "kill_estimator_wrong": true,
+    "rule": "DEV-002 kill/promote: kill if measured peak exceeds estimate by >15% (the estimator is then the defect; fix estimator before config)."
+  },
+  "training": {
+    "ce_impl": "cut_ce_chunked",
+    "mtp_enabled": true,
+    "qat_enabled": true,
+    "seq": 1024,
+    "optimizer_step_losses": [
+      14.375,
+      13.8203125
+    ],
+    "micro_step_losses": [
+      14.4375,
+      14.375,
+      14.3125,
+      14.3125,
+      14.375,
+      14.4375,
+      14.375,
+      14.375,
+      13.8125,
+      13.8125,
+      13.8125,
+      13.8125,
+      13.8125,
+      13.875,
+      13.875,
+      13.75
+    ],
+    "degenerate_loss_trace": false,
+    "oom_error": null,
+    "wall_s_training_only": 200.672,
+    "gradient_checkpointing": {
+      "active": true,
+      "note": "build_v0_model() unconditionally calls backbone_model.gradient_checkpointing_enable() regardless of cfg['model']['grad_checkpointing'] (contract says False, per PR #298's own receipted 1.213x-vs-full-ckpt A/B) -- a pre-existing contract/code discrepancy this probe did not introduce (every real-arch caller, including the already-receipted Part A/B2 runs, gets the same unconditional enable). Disclosed because checkpointing ON lowers activation memory, so this measured peak is likely an UNDER-estimate of what a grad_checkpointing:false production launch would need.",
+      "estimate_function_assumption": "cpu_offload_adamw.estimate_required_gib_offloaded's activation term (ACTIVATION_ESTIMATE_GIB_AT_PROD_SHAPE=6.0GiB @ batch16/seq1024/20-layers/ff32768, scaled linearly by micro_batch/prod_batch) documents NO gradient-checkpointing assumption at all -- it is a bare 'coarse' constant, silent on checkpointing state. So this receipt's measured-vs-estimate comparison has a real confound: measured=checkpointing-ON (forced by build_v0_model), estimate=checkpointing-state-UNSPECIFIED, intended production=checkpointing-OFF per the contract. A measured peak that PASSES close to the estimate/margin floor should NOT be read as proof the checkpointing-OFF production config also fits -- that direction is untested here and the bias runs toward UNDER-measuring true production VRAM need."
+    }
+  },
+  "wall_s": {
+    "total": 250.547,
+    "training_only": 200.672
+  },
+  "related_receipts": [
+    "receipts/grow-op-verify-20260708T060841Z.json",
+    "receipts/grow-operator-dryrun-20260708T060841Z.json",
+    "receipts/cbase-grow-rung2-offload-probe-20260708T083445Z.json"
+  ],
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "KILL_ESTIMATOR_UNDERSTATED"
+}
