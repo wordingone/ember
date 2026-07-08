@@ -91,6 +91,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, REPO_ROOT)
 from scripts.lib.invariant import stamp, INVARIANT_SHA256
+from scripts.ember_totality import receipt_chain_verify
 
 try:  # pragma: no cover - best-effort console hardening, never fatal
     sys.stdout.reconfigure(encoding="utf-8")
@@ -1122,6 +1123,12 @@ def main():
     receipt = stamp(receipt, repo_root=REPO_ROOT)
 
     receipt_path = os.path.join(RECEIPTS_DIR, f"ember-totality-{ts}.json")
+    with open(receipt_path, "w", encoding="utf-8") as fh:
+        json.dump(receipt, fh, indent=2)
+        fh.write("\n")
+
+    # Add chain verification after receipt is written to disk (issue #467)
+    receipt = receipt_chain_verify.add_chain_verification_to_receipt(receipt, RECEIPTS_DIR)
     with open(receipt_path, "w", encoding="utf-8") as fh:
         json.dump(receipt, fh, indent=2)
         fh.write("\n")
