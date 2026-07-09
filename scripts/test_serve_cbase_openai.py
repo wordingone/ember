@@ -93,6 +93,106 @@ class TestConfigInference:
         print(f"✓ Model building passed: {config_dict}")
 
 
+class TestRemap:
+    """Test remap_ember_state_dict: ember training-wrapper naming -> HF LlamaForCausalLM
+    naming (refs #508 shim fix). No real checkpoint required — a tiny synthetic 2-layer
+    state_dict stands in for the wrapper's backbone_model.*/head.weight/mtp_heads.N.weight."""
+
+    @staticmethod
+    def _toy_wrapper_state_dict(tied: bool):
+        """Build a synthetic state_dict under the ember wrapper's key names, matching a
+        toy 2-layer LlamaForCausalLM, so remap + strict-load can be exercised without a
+        real checkpoint. `tied` controls whether head.weight is constructed equal to
+        embed_tokens.weight (the checkpoint's actual tied case) or independently (untied)."""
+        config = LlamaConfig(
+            vocab_size=64,
+            hidden_size=32,
+            intermediate_size=128,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            num_key_value_heads=4,
+            max_position_embeddings=64,
+            tie_word_embeddings=tied,
+        )
+        toy_model = LlamaForCausalLM(config)
+        hf_sd = toy_model.state_dict()
+
+        wrapper_sd = {}
+        for k, v in hf_sd.items():
+            if k.startswith("model."):
+                wrapper_sd["backbone_model." + k[len("model."):]] = v.clone()
+        wrapper_sd["head.weight"] = hf_sd["lm_head.weight"].clone()
+        # training-only MTP auxiliary heads — must be dropped, never served
+        wrapper_sd["mtp_heads.0.weight"] = torch.randn(config.vocab_size, config.hidden_size)
+        wrapper_sd["mtp_heads.1.weight"] = torch.randn(config.vocab_size, config.hidden_size)
+
+        return wrapper_sd
+
+    def test_remap_tied_strict_load_succeeds(self):
+        """Tied checkpoint (head.weight == embed_tokens.weight, the real checkpoint's
+        actual case): remap detects the tie and a strict load into a matching HF model
+        succeeds with allclose-identical weights."""
+        serve = lazy_import()
+        wrapper_sd = self._toy_wrapper_state_dict(tied=True)
+
+        remapped, mtp_dropped = serve.remap_ember_state_dict(wrapper_sd)
+
+        assert sorted(mtp_dropped) == ["mtp_heads.0.weight", "mtp_heads.1.weight"]
+        assert "lm_head.weight" in remapped and "model.embed_tokens.weight" in remapped
+        assert not any(
+            k.startswith("backbone_model.") or k.startswith("mtp_heads.") or k == "head.weight"
+            for k in remapped
+        )
+
+        tied_detected = torch.equal(remapped["lm_head.weight"], remapped["model.embed_tokens.weight"])
+        assert tied_detected is True
+
+        config = LlamaConfig(
+            vocab_size=64, hidden_size=32, intermediate_size=128, num_hidden_layers=2,
+            num_attention_heads=4, num_key_value_heads=4, max_position_embeddings=64,
+            tie_word_embeddings=tied_detected,
+        )
+        model = LlamaForCausalLM(config)
+        model.load_state_dict(remapped)  # strict=True default; must not raise
+        assert torch.allclose(model.lm_head.weight, remapped["lm_head.weight"])
+        assert torch.allclose(model.model.embed_tokens.weight, remapped["model.embed_tokens.weight"])
+        print("✓ remap tied strict-load passed")
+
+    def test_remap_untied_strict_load_succeeds(self):
+        """Untied checkpoint (head.weight independent of embed_tokens.weight): remap
+        detects no tie and a strict load still succeeds, preserving distinct weights."""
+        serve = lazy_import()
+        wrapper_sd = self._toy_wrapper_state_dict(tied=False)
+
+        remapped, mtp_dropped = serve.remap_ember_state_dict(wrapper_sd)
+        assert len(mtp_dropped) == 2
+
+        tied_detected = torch.equal(remapped["lm_head.weight"], remapped["model.embed_tokens.weight"])
+        assert tied_detected is False
+
+        config = LlamaConfig(
+            vocab_size=64, hidden_size=32, intermediate_size=128, num_hidden_layers=2,
+            num_attention_heads=4, num_key_value_heads=4, max_position_embeddings=64,
+            tie_word_embeddings=tied_detected,
+        )
+        model = LlamaForCausalLM(config)
+        model.load_state_dict(remapped)  # strict=True default; must not raise
+        assert torch.allclose(model.lm_head.weight, remapped["lm_head.weight"])
+        assert not torch.allclose(model.lm_head.weight, remapped["model.embed_tokens.weight"])
+        print("✓ remap untied strict-load passed")
+
+    def test_remap_leftover_key_hard_fails(self):
+        """A key matching none of the three known patterns must hard-fail, never be
+        silently dropped or silently passed through."""
+        serve = lazy_import()
+        wrapper_sd = self._toy_wrapper_state_dict(tied=True)
+        wrapper_sd["some_unrecognized_module.weight"] = torch.randn(4, 4)
+
+        with pytest.raises(ValueError, match="unmapped leftover key"):
+            serve.remap_ember_state_dict(wrapper_sd)
+        print("✓ remap leftover-key hard-fail passed")
+
+
 class TestSmoke:
     """Test 1-token CPU generate to verify model loading works."""
 

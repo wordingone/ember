@@ -8,10 +8,17 @@ Usage:
   python serve_cbase_openai.py [--device cuda|cpu] [--port 8083] [--checkpoint PATH]
 
 Startup requirements:
+  - Checkpoint keys are ember's training-wrapper naming (backbone_model.*/head.weight/
+    mtp_heads.N.weight, per scripts/timeshare_pretrain.py's _V0Real) and are remapped to
+    standard HF LlamaForCausalLM names (model.*/lm_head.weight) before loading; the MTP
+    auxiliary heads are training-only and are dropped, not served.
   - Config is INFERRED from checkpoint tensor shapes (post-grow; intermediate_size differs from seed).
+  - Weight tying is DETECTED from the checkpoint (head.weight vs embed_tokens.weight), not assumed.
   - One-model-at-a-time guard: refuses --device cuda if :8082/health (27B reference) answers.
-  - Frozen training tokenizer loaded from scripts/tokenizer/tokenizer.json.
-  - Startup log + /health endpoint report inferred dims.
+  - Frozen training tokenizer loaded from <repo-root>/tokenizer/tokenizer.json.
+  - Startup log + /health endpoint report inferred dims. A load receipt (checkpoint sha256,
+    remap counts, tie detection, param count) is printed at startup and optionally written to
+    --receipt-path.
 
 Test suite: CPU-only (no GPU in CI), schema validation via TestClient.
 """
@@ -50,7 +57,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHECKPOINT_PATH_DEFAULT = (
     REPO_ROOT / "models" / "cbase-grow-rung" / "rung2-event-grow-rung2-20260708-real" / "b1-snapshot" / "model.pt"
 )
-TOKENIZER_PATH_DEFAULT = REPO_ROOT / "scripts" / "tokenizer" / "tokenizer.json"
+TOKENIZER_PATH_DEFAULT = REPO_ROOT / "tokenizer" / "tokenizer.json"
 MANIFEST_PATH_DEFAULT = CHECKPOINT_PATH_DEFAULT.parent / "manifest.json"
 
 PORT_DEFAULT = 8083
@@ -149,6 +156,61 @@ def infer_model_config(state_dict: dict[str, torch.Tensor]) -> dict[str, Any]:
 
 
 # ============================================================================
+# State Dict Remap: ember training-wrapper naming -> standard HF LlamaForCausalLM
+# ============================================================================
+
+REMAP_BACKBONE_PREFIX = "backbone_model."
+REMAP_HEAD_KEY = "head.weight"
+REMAP_MTP_PREFIX = "mtp_heads."
+
+
+def remap_ember_state_dict(
+    state_dict: dict[str, "torch.Tensor"],
+) -> tuple[dict[str, "torch.Tensor"], list[str]]:
+    """Remap ember's training-wrapper state_dict keys to standard HF LlamaForCausalLM names.
+
+    The training wrapper (scripts/timeshare_pretrain.py's _V0Real) saves checkpoints under
+    its own module names: self.backbone_model = LlamaModel(conf), self.head (output
+    projection, tied to backbone_model.embed_tokens.weight when the contract's
+    tied_embeddings is set), and self.mtp_heads (ModuleList of auxiliary multi-token-
+    prediction heads, training-only). Standard HF LlamaForCausalLM expects model.*/
+    lm_head.weight and has no mtp_heads.
+
+    Mapping:
+      "backbone_model.<rest>" -> "model.<rest>"
+      "head.weight"           -> "lm_head.weight"
+      "mtp_heads.<n>.weight"  -> DROPPED (not part of the serving forward pass)
+
+    Any key matching none of the three patterns is a leftover this function refuses to
+    guess about: raises ValueError with the full list rather than silently passing it
+    through or dropping it.
+
+    Returns (remapped_state_dict, mtp_keys_dropped).
+    """
+    remapped: dict[str, "torch.Tensor"] = {}
+    mtp_dropped: list[str] = []
+    leftover: list[str] = []
+
+    for key, tensor in state_dict.items():
+        if key.startswith(REMAP_BACKBONE_PREFIX):
+            remapped["model." + key[len(REMAP_BACKBONE_PREFIX):]] = tensor
+        elif key == REMAP_HEAD_KEY:
+            remapped["lm_head.weight"] = tensor
+        elif key.startswith(REMAP_MTP_PREFIX):
+            mtp_dropped.append(key)
+        else:
+            leftover.append(key)
+
+    if leftover:
+        raise ValueError(
+            f"remap_ember_state_dict: {len(leftover)} unmapped leftover key(s), "
+            f"refusing to guess how to serve them: {leftover}"
+        )
+
+    return remapped, mtp_dropped
+
+
+# ============================================================================
 # VRAM Guard: One-model-at-a-time enforcement
 # ============================================================================
 
@@ -192,8 +254,13 @@ class ModelServer:
         self.infer_lock = threading.Lock()  # Serialize GPU inference
         self.startup_log = []
 
-    def load(self, checkpoint_path: Path, device: str = "cpu", tokenizer_path: Path | None = None) -> None:
-        """Load model and tokenizer. Device='cuda' blocked if reference server is running."""
+    def load(self, checkpoint_path: Path, device: str = "cpu", tokenizer_path: Path | None = None,
+              receipt_path: Path | None = None) -> None:
+        """Load model and tokenizer. Device='cuda' blocked if reference server is running.
+
+        receipt_path: optional file to also write the load receipt JSON to (always printed
+        to stdout regardless).
+        """
 
         self.device = device
         msg = f"[{datetime.now(timezone.utc).isoformat()}] Loading model..."
@@ -240,14 +307,39 @@ class ModelServer:
 
         state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
 
+        # Remap ember training-wrapper key names to standard HF LlamaForCausalLM names
+        # BEFORE anything else touches the keys (config inference, tie detection, load).
+        msg = f"[{datetime.now(timezone.utc).isoformat()}] Remapping ember wrapper state_dict keys..."
+        print(msg, flush=True)
+        self.startup_log.append(msg)
+
+        state_dict, mtp_keys_dropped = remap_ember_state_dict(state_dict)
+        keys_remapped_count = len(state_dict)
+
+        msg = (
+            f"[{datetime.now(timezone.utc).isoformat()}] Remap done: "
+            f"{keys_remapped_count} keys remapped, {len(mtp_keys_dropped)} MTP head key(s) "
+            f"dropped ({mtp_keys_dropped})"
+        )
+        print(msg, flush=True)
+        self.startup_log.append(msg)
+
+        # Tie detection from the checkpoint itself (frozen contract): whether the output
+        # head shares weights with the input embedding, not assumed from a config default.
+        tie_word_embeddings = torch.equal(
+            state_dict["lm_head.weight"], state_dict["model.embed_tokens.weight"]
+        )
+
         # Infer config from shapes
         config_dict = infer_model_config(state_dict)
+        config_dict["tie_word_embeddings"] = tie_word_embeddings
         self.config = LlamaConfig(**config_dict)
 
         msg = (
             f"[{datetime.now(timezone.utc).isoformat()}] Config inferred: "
             f"vocab={self.config.vocab_size}, hidden={self.config.hidden_size}, "
-            f"intermediate={self.config.intermediate_size}, layers={self.config.num_hidden_layers}"
+            f"intermediate={self.config.intermediate_size}, layers={self.config.num_hidden_layers}, "
+            f"tie_word_embeddings={tie_word_embeddings}"
         )
         print(msg, flush=True)
         self.startup_log.append(msg)
@@ -258,7 +350,19 @@ class ModelServer:
         self.startup_log.append(msg)
 
         self.model = LlamaForCausalLM(self.config)
-        self.model.load_state_dict(state_dict)
+        self.model.load_state_dict(state_dict)  # strict=True default: raises on any mismatch
+
+        # Post-load identity assert: the loaded parameters must literally be the
+        # checkpoint's tensors, not silently mismatched or reinitialized.
+        assert torch.allclose(
+            self.model.lm_head.weight.float(), state_dict["lm_head.weight"].float()
+        ), "post-load assert failed: lm_head.weight does not match checkpoint"
+        assert torch.allclose(
+            self.model.model.embed_tokens.weight.float(), state_dict["model.embed_tokens.weight"].float()
+        ), "post-load assert failed: model.embed_tokens.weight does not match checkpoint"
+
+        param_count = sum(p.numel() for p in self.model.parameters())
+
         self.model = self.model.to(device)
         if device == "cuda":
             self.model = self.model.to(torch.bfloat16)
@@ -267,6 +371,23 @@ class ModelServer:
         msg = f"[{datetime.now(timezone.utc).isoformat()}] Model loaded on device={device}"
         print(msg, flush=True)
         self.startup_log.append(msg)
+
+        # Load receipt (frozen contract point 4): printed always, written to
+        # --receipt-path when the caller supplies one.
+        load_receipt = {
+            "ckpt_sha256": checkpoint_sha,
+            "keys_remapped_count": keys_remapped_count,
+            "mtp_keys_dropped": mtp_keys_dropped,
+            "tie_word_embeddings": tie_word_embeddings,
+            "param_count": param_count,
+            "strict_load": "ok",
+        }
+        msg = f"LOAD_RECEIPT {json.dumps(load_receipt)}"
+        print(msg, flush=True)
+        self.startup_log.append(msg)
+        if receipt_path is not None:
+            Path(receipt_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(receipt_path).write_text(json.dumps(load_receipt, indent=2), encoding="utf-8")
 
         # Load tokenizer
         if tokenizer_path is None:
@@ -288,6 +409,19 @@ class ModelServer:
         self.tokenizer = tk
 
         msg = f"[{datetime.now(timezone.utc).isoformat()}] Tokenizer loaded (vocab_size inferred from checkpoint)"
+        print(msg, flush=True)
+        self.startup_log.append(msg)
+
+        # CPU smoke (frozen contract point 5): greedy-generate a few tokens to prove the
+        # loaded model actually produces output before serving any requests. Any output is
+        # fine here — this is a load-sanity receipt, not a quality claim.
+        smoke_prompt = "The"
+        smoke_text, smoke_usage = self.generate(smoke_prompt, max_tokens=3, do_sample=False)
+        msg = (
+            f"[{datetime.now(timezone.utc).isoformat()}] CPU smoke generate: "
+            f"prompt={smoke_prompt!r} -> completion={smoke_text!r} "
+            f"({smoke_usage['completion_tokens']} tokens)"
+        )
         print(msg, flush=True)
         self.startup_log.append(msg)
 
@@ -371,6 +505,7 @@ async def startup():
         checkpoint_path=args.checkpoint,
         device=args.device,
         tokenizer_path=args.tokenizer if args.tokenizer else None,
+        receipt_path=args.receipt_path if getattr(args, "receipt_path", None) else None,
     )
 
 
@@ -512,6 +647,12 @@ def main():
         "--host",
         default="0.0.0.0",
         help="Host to bind to (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--receipt-path",
+        type=Path,
+        default=None,
+        help="Optional file to also write the load receipt JSON to (always printed to stdout).",
     )
 
     args = parser.parse_args()
