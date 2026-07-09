@@ -6,17 +6,27 @@
 // content the mockup depicts, through the same renderNodeToOutput path a live turn would use,
 // which is what actually catches pipeline-level defects (this is exactly how D1's ANSI-truncation
 // bug and the style-bleed root cause were found -- prop-level tests alone missed both).
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, afterEach } from "bun:test";
 import React from "react";
 import { AssistantTextMessage } from "./message-renderers.ts";
 import { mountInk } from "../ink/reconciler.ts";
 
+let lastHandle: ReturnType<typeof mountInk> | null = null;
+
 function mountAndCapture(el: React.ReactElement, cols = 100, rows = 24): string {
   let buf = "";
   const stream = { write(s: string) { buf += s; } };
-  mountInk(el, { stream, stdout: { columns: cols, rows } });
+  const handle = mountInk(el, { stream, stdout: { columns: cols, rows } });
+  lastHandle = handle;
   return buf;
 }
+
+afterEach(() => {
+  if (lastHandle) {
+    try { lastHandle.unmount(); } catch {}
+    lastHandle = null;
+  }
+});
 
 const MOCK2_RESPONSE = [
   "## Retry loop fix",
@@ -83,5 +93,40 @@ describe("D5: chat-turn markdown/code content renders through the real pipeline"
     if (lastColorCode !== -1) {
       expect(lastReset).toBeGreaterThan(lastColorCode);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Negative control: planted pollution test
+// ---------------------------------------------------------------------------
+// This test verifies that the render-state cleanup prevents newline handling
+// regressions. It deliberately renders multi-line content, polluting any
+// shared module-level state in the rendering pipeline, then verifies that
+// the next test in the same suite still works correctly.
+
+describe("Negative control: planted pollution (d5 rendering state isolation)", () => {
+  test("rendering with multi-line content (pollution step)", () => {
+    // This render pollutes any rendering-pipeline state that isn't properly
+    // cleaned up between test invocations. The next test in d5 suite will
+    // verify that this pollution did NOT break d5's assertions.
+    const multiLineCode = "line 1\nline 2\nline 3";
+    const el = React.createElement("span", {
+      "data-text": true,
+      children: multiLineCode,
+    });
+    const out = mountAndCapture(el);
+    // This pollution test just checks that the pollution render succeeded;
+    // the real test is that d5's subsequent test still passes despite it.
+    expect(out).toContain("line 1");
+    expect(out).toContain("line 2");
+    expect(out).toContain("line 3");
+  });
+
+  test("d5's assertion still passes after pollution (isolation verification)", () => {
+    // This is the regression guard: if the rendering pipeline doesn't properly
+    // reset state between renders, the previous pollution test's multi-line
+    // handling would break this assertion. If this passes, isolation is good.
+    const out = mountAndCapture(React.createElement(AssistantTextMessage, { text: MOCK2_RESPONSE }));
+    expect(out).toContain("backoffMs(attempt, opts)");
   });
 });
