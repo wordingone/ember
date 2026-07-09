@@ -244,7 +244,10 @@ export function cycleReplPermissionMode(current: ReplPermissionMode): ReplPermis
  * moment a real turn lands, and is one-way for the session: no scenario removes a landed entry.
  */
 export function transcriptJustifyContent(messages: SessionMessage[]): "flex-start" | "flex-end" {
-  const isWelcomeOnly = messages.length > 0 && messages.every((m) => m.type === "welcome");
+  // #561/#565: the welcome/board banner is no longer a `messages[0]` entry (it's now an
+  // always-mounted top-locked region, see ReplScreen's render below) -- "welcome-only" is simply
+  // "no turns have landed yet".
+  const isWelcomeOnly = messages.length === 0;
   return isWelcomeOnly ? "flex-start" : "flex-end";
 }
 
@@ -578,17 +581,12 @@ export function ReplScreen({
   const [costThreshold,    setCostThreshold]    = useState(false);
   const [promptDialog,     _setPromptDialog]    = useState(false);
 
-  const [messages, setMessages] = useState<SessionMessage[]>([{
-    id:      "welcome",
-    type:    "welcome",
-    content: `ember · ${config.model} · type a message and press Enter`,
-    model:   config.model,
-    cwd,
-    version: process.env["EMBER_VERSION"] ?? "0.0.0",
-    // #303: Pass board summary and data root to the welcome screen.
-    boardSummary: undefined, // Will be populated after the async load completes
-    dataRoot: undefined,
-  }]);
+  // #561/#565: the welcome/board banner is no longer a `messages[0]` entry -- it lives inside
+  // the same scrolling/flex-end-anchored transcript as every other message, so once enough
+  // turns or activity events landed it silently scrolled away (the operator's "banner scrolled
+  // away" report). It is now an always-mounted, top-locked region (see the render tree below),
+  // rendered directly from `config`/`cwd`/`boardSummary`/`dataRoot` -- `messages` starts empty.
+  const [messages, setMessages] = useState<SessionMessage[]>([]);
 
   const mountRef  = useRef(Date.now());
   const engineRef = useRef<QueryEngine | null>(null);
@@ -731,16 +729,8 @@ export function ReplScreen({
   // Keep messagesRef in sync with React state for use inside async callbacks.
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // #303: Update the welcome message with board summary and data root once they load.
-  useEffect(() => {
-    setMessages((prev) => {
-      const [welcome, ...rest] = prev;
-      if (welcome?.type === "welcome") {
-        return [{ ...welcome, boardSummary, dataRoot }, ...rest];
-      }
-      return prev;
-    });
-  }, [boardSummary, dataRoot]);
+  // #561/#565: boardSummary/dataRoot no longer need syncing INTO a messages[0] welcome entry --
+  // the banner region (render tree below) reads this component-scope state directly.
 
   // as any: SessionMessage[] is a local type; buildMessageLookups expects
   // Message[] from the not-yet-built types/message-types.ts — genuine interop cast.
@@ -1392,7 +1382,28 @@ export function ReplScreen({
     Box,
     { flexDirection: "column", height: terminalRows },
 
-    // Transcript
+    // #561/#565: banner — always mounted, top-locked (flexShrink:0, same protection as the
+    // bottom chrome below). Previously this was `messages[0]` inside the scrolling/flex-end
+    // transcript, so once enough turns or activity events landed it scrolled away entirely
+    // (the operator's "top banner also scrolled away" report). It now renders directly from
+    // this component's own state, independent of transcript volume, restart, or resize.
+    React.createElement(
+      Box,
+      { key: "banner", flexShrink: 0 },
+      React.createElement(Homescreen, {
+        state: {
+          model:   config.model,
+          cwd,
+          version: process.env["EMBER_VERSION"] ?? "0.0.0",
+          dataRoot: dataRoot ?? "",
+        },
+        viewportWidth: terminalCols,
+        boardSummary,
+      }),
+    ),
+
+    // Transcript — real conversation turns + activity events only now; the banner above never
+    // scrolls with it.
     React.createElement(
       Box,
       { key: "transcript", flexDirection: "column", flexGrow: transcriptFlexGrow(messages), overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },

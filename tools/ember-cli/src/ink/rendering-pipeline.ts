@@ -491,7 +491,12 @@ export function renderNodeToOutput(
 
   if (node.kind === "text" && node.text !== undefined) {
     const style = node.style ?? {};
-    // Write each character, handling newlines to advance to the next row
+    // Write each character, handling newlines to advance to the next row.
+    // #561: a right-edge overflow used to `break` out of the WHOLE loop -- correct for a
+    // single-line node, but for multi-line text (node.text containing '\n') that silently
+    // dropped every subsequent line the moment the FIRST line ran past the clip width. Skipping
+    // just the out-of-bounds char (instead of aborting the loop) lets a later '\n' still reset
+    // col and resume painting on the next row.
     let col = lx;
     let row = ly;
     for (const ch of node.text) {
@@ -500,8 +505,10 @@ export function renderNodeToOutput(
         col = lx;
         continue;
       }
-      if (col >= clipRect.x + clipRect.width) break;
-      if (col >= clipRect.x && row >= clipRect.y && row < clipRect.y + clipRect.height) {
+      const inBounds =
+        col >= clipRect.x && col < clipRect.x + clipRect.width &&
+        row >= clipRect.y && row < clipRect.y + clipRect.height;
+      if (inBounds) {
         stylePool.intern(style);
         output.write(cursorPosition(row + 1, col + 1));
         output.writeSGR(style, prevStyleTracker.current);
@@ -521,10 +528,35 @@ export function renderNodeToOutput(
     paintBorder(node, output, lx, ly, lw, lh, clipRect, prevStyleTracker);
   }
 
+  // #561 P0-A / W4: overflow:"hidden" has always been a declared layout property
+  // (layout-engine.ts's LayoutNode.overflow) but was never enforced here -- the SAME clipRect
+  // flowed unchanged into every descendant regardless of an ancestor's own overflow:"hidden",
+  // so oversized content painted straight through a box's own boundary into whatever sat below
+  // or beside it (the operator's corrupted-banner report: "left column blank, content offset to
+  // mid-right"; confirmed with a minimal two-column repro where a wide overflow:"hidden" child's
+  // text overwrote its sibling's text mid-line). Intersecting clipRect with this node's own
+  // painted rect -- only when it declares overflow:"hidden", and only for what gets passed to
+  // its OWN children -- makes overflow:"hidden" actually clip, without touching the default
+  // ("visible") behavior any other node relies on.
+  const childClipRect: ClipRect = node.layout.overflow === "hidden"
+    ? intersectClipRect(clipRect, { x: lx, y: ly, width: lw, height: lh })
+    : clipRect;
+
   // Recurse into children
   for (const child of node.children) {
-    renderNodeToOutput(child, output, lx, ly, clipRect, stylePool, hyperlinkPool, prevStyleTracker);
+    renderNodeToOutput(child, output, lx, ly, childClipRect, stylePool, hyperlinkPool, prevStyleTracker);
   }
+}
+
+/** Intersects two clip rectangles; an empty (non-overlapping) result has width/height clamped
+ *  to 0 rather than going negative, so downstream `>=`/`<` bounds checks correctly exclude
+ *  everything instead of wrapping into a bogus positive range. */
+export function intersectClipRect(a: ClipRect, b: ClipRect): ClipRect {
+  const x0 = Math.max(a.x, b.x);
+  const y0 = Math.max(a.y, b.y);
+  const x1 = Math.min(a.x + a.width, b.x + b.width);
+  const y1 = Math.min(a.y + a.height, b.y + b.height);
+  return { x: x0, y: y0, width: Math.max(0, x1 - x0), height: Math.max(0, y1 - y0) };
 }
 
 // ---------------------------------------------------------------------------
