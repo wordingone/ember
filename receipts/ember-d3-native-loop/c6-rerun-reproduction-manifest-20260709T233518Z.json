@@ -1,0 +1,72 @@
+[
+  {
+    "classification": "deterministic_mismatch",
+    "companion": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": false,
+    "original": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T150246Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "deterministic_mismatch",
+    "companion": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T012626Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": false,
+    "original": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T012626Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "deterministic_mismatch",
+    "companion": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013548Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": false,
+    "original": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013548Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "deterministic_mismatch",
+    "companion": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013711Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": false,
+    "original": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013711Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "artifact_match_score_gated",
+    "companion": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-leg2-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": true,
+    "original": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-leg2/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "deterministic_mismatch",
+    "companion": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260621T133823Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": false,
+    "original": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260621T133823Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "deterministic_mismatch",
+    "companion": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260622T012000Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": false,
+    "original": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260622T012000Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "deterministic_mismatch",
+    "companion": "receipts/ember-d3-native-loop/d3-transfer-task21-24-repair-20260622T014300Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": false,
+    "original": "receipts/ember-d3-native-loop/d3-transfer-task21-24-repair-20260622T014300Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "artifact_match_score_gated",
+    "companion": "receipts/ember-d3-native-loop/native-link-task57-62-20260622T221000Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": true,
+    "original": "receipts/ember-d3-native-loop/native-link-task57-62-20260622T221000Z/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  },
+  {
+    "classification": "artifact_match_score_gated",
+    "companion": "receipts/ember-post-resident-discovery/field-level-contribution-protocol-20260622T223500Z/deleted-method-native-link-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
+    "full_match_vs_original": true,
+    "original": "receipts/ember-post-resident-discovery/field-level-contribution-protocol-20260622T223500Z/deleted-method-native-link/d3-generalized-candidate-receipt.json",
+    "self_agree": true
+  }
+]
