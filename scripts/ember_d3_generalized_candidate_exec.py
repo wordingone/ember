@@ -117,7 +117,7 @@ def instruction_stub_source(rows: list[dict[str, Any]]) -> str:
         # B sees the instruction only, not the evaluator script.
         for item in extract_required_outputs("", row.get("task_instruction", "")):
             outputs.add(item.path)
-    return """from pathlib import Path\n\nfor name in %<local-path>    path = Path(name)\n    path.parent.mkdir(parents=True, exist_ok=True)\n    path.write_text('instruction-only placeholder\\n', encoding='utf-8')\n""" % json.dumps(sorted(outputs), indent=4)
+    return """from pathlib import Path\n\nfor name in %s:\n    path = Path(name)\n    path.parent.mkdir(parents=True, exist_ok=True)\n    path.write_text('instruction-only placeholder\\n', encoding='utf-8')\n""" % json.dumps(sorted(outputs), indent=4)
 
 
 def parse_official_result(stdout: str) -> tuple[bool, bool, str]:
