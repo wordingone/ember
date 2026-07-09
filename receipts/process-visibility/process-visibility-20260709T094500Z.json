@@ -1,0 +1,30 @@
+{
+  "ticket": "EMBER-PROCESS-VISIBILITY",
+  "ts": "20260709T094500Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue_urls": [
+    "https://github.com/wordingone/ember/issues/538",
+    "https://github.com/wordingone/ember/issues/537",
+    "https://github.com/wordingone/ember/issues/535",
+    "https://github.com/wordingone/ember/issues/534",
+    "https://github.com/wordingone/ember/issues/533",
+    "https://github.com/wordingone/ember/issues/482",
+    "https://github.com/wordingone/ember/issues/508",
+    "https://github.com/wordingone/ember/issues/524"
+  ],
+  "open_prs": [
+    {"number": 374, "state": "verdict-pending", "pending_h": 42.7, "note": "REVIVE + RE-PREDICATE ruling posted on the PR (v2.1 two-part predicate); lane rework in flight; breaches 48h grace ~15:00Z today without a verdict"}
+  ],
+  "covered_commits": {
+    ".": "6ee41673ec7880073a1db2e61d5ef9326509ba2e"
+  },
+  "delegation": {
+    "#532/#524": {"built_by": "stab524b (sonnet lane: M2 memmap residency receipt + M4 transplant wiring, 4/4 tests)", "verified_by": "coordinator (receipts re-read, refs-0 gate, merged 2026-07-09T08:48Z)"},
+    "#536/#533": {"built_by": "surf533 (sonnet lane: exec-root re-root, AC1-AC5 evidence)", "verified_by": "coordinator (diff read, probe UNEVALUABLE->RED transition output gated, merged 2026-07-09T09:10Z)"},
+    "#508": {"built_by": "serve508b (lane: cbase-2.2b CPU serving :8084 + identity receipt) + tokfix508 (byte-exact tokenizer reconstruction sha 2c557e7f)", "verified_by": "coordinator (independent re-hash of tokenizer; identity receipt gated, verdict posted #508)"},
+    "#482": {"built_by": "gradpost482 (sonnet rider, in flight in the 09:14Z planned outage window)", "verified_by": "coordinator (adjudication map frozen pre-measurement, #482 comment 4922985175)"}
+  },
+  "window_note": "2026-07-09 06:00-09:45Z window: PRs #532 #536 merged; issues #533 #534 #535 #537 #538 filed; planned GPU outage window opened 09:14Z (marker per #464 contract) carrying stab524 M1+M3 and #482 grad_post riders; cockpit swap to build 6ee41673 pixel-verified; board 8G/27R/2U at 081147Z receipt (landing via chore/audit-20260709 lane in flight).",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
