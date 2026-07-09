@@ -1,0 +1,89 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-SPECTRAL-B3S-PARTIAL",
+  "ts": "2026-07-08T22:45:00Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 482,
+  "refs": [449, 466],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "scope": "B3s (partial): spectral fork resolution — pre-widen Muon update spectral norm measurement. BLOCKED: post-widen measurement requires GPU forward pass, conflicts with CPU-only constraint.",
+  "status": "BLOCKED_CONSTRAINT_CONFLICT",
+  "constraint_conflict": {
+    "issue_requirement": "Compute grad_post_gate via B3 fork forward pass (GPU-required)",
+    "team_constraint": "CPU-ONLY work — do NOT touch the GPU",
+    "resolution_needed": true,
+    "awaiting": "team-lead decision on constraint precedence"
+  },
+  "completed_work": {
+    "unit_tests": {
+      "total": 8,
+      "passed": 8,
+      "verdict": "PASS",
+      "tests": [
+        "test_identity_matrix_spectral_norm",
+        "test_diagonal_matrix_spectral_norm",
+        "test_scaled_identity_spectral_norm",
+        "test_rank_one_matrix_spectral_norm",
+        "test_ratio_of_scaled_matrices",
+        "test_rms_crosscheck",
+        "test_rms_zero_detection",
+        "test_svdvals_shape"
+      ]
+    },
+    "pre_widen_measurement": {
+      "u_pre_spectral_norm": 0.07214187,
+      "u_pre_rms": 0.00030966889,
+      "cache_source": ".rung2-event-cache/grow-rung2-20260709-remeasure-*.pt",
+      "theta_gate_pre_shape": [16384, 9216],
+      "computation_method": "torch.linalg.svdvals (top singular value)"
+    }
+  },
+  "blocked_work": {
+    "post_widen_measurement": {
+      "status": "BLOCKED",
+      "reason": "GPU forward pass required",
+      "details": "grad_post_gate not cached; must recompute via B3 fork forward+backward on 2.2B model",
+      "theta_gate_post_shape_after_widen": [32768, 18432],
+      "gpu_requirement": "single forward+backward on pinned 8-microstep batch (acceptable per issue #482 protocol, conflicts with CPU-only constraint)"
+    },
+    "spectral_ratio": "Cannot compute without u_post_spectral",
+    "rms_crosscheck": "Cannot validate without re-running forward pass"
+  },
+  "predictions_frozen": {
+    "zheng_2603_00541": {
+      "ratio_prediction": 0.707,
+      "interpretation": "Muon under width-doubling needs explicit LR correction; post-widen update norm shrinks without correction"
+    },
+    "gupta_2602_20937": {
+      "ratio_prediction": 1.0,
+      "interpretation": "Muon's NS-orthogonalization inherently width-independent; aspect-ratio factor already inside"
+    }
+  },
+  "resolution_options": [
+    {
+      "option": 1,
+      "title": "Lift CPU-only constraint",
+      "action": "Allow GPU forward+backward for grad_post_gate computation",
+      "effort": "~2 min on GPU",
+      "blocker": "None if constraint lifted"
+    },
+    {
+      "option": 2,
+      "title": "Full spectral with separate task",
+      "action": "Cache grad_post_gate in separate B3-phase task, then run spectral as CPU reuse",
+      "effort": "Requires separate GPU task submission",
+      "blocker": "Still needs GPU authorization somewhere"
+    },
+    {
+      "option": 3,
+      "title": "Report partial finding",
+      "action": "Publish u_pre spectral only, note post-widen blocked",
+      "effort": "Minimal",
+      "blocker": "Loses discriminative power between Zheng/Gupta"
+    }
+  ],
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "B3S_PARTIAL_AWAIT_RESOLUTION"
+}
