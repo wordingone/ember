@@ -23,6 +23,8 @@ artifacts under `receipts/` — never by prose.
 
 ## Current status
 
+<!-- state-as-of: 2026-07-09 | board-receipt: ember-totality-20260709T101919Z -->
+
 Position ledger: `CONTINUITY.md`. Standing goal: `GOAL.md`.
 
 <!-- BOARD-STATUS-BEGIN -->
