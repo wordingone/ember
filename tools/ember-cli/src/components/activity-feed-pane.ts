@@ -27,7 +27,7 @@ import { formatReceiptAge } from "../core/receipt-age.ts";
 // producing service imports the type).
 // ---------------------------------------------------------------------------
 
-export type ActivityFeedSource = "receipt" | "outage" | "watchdog" | "board";
+export type ActivityFeedSource = "receipt" | "outage" | "watchdog" | "board" | "goal";
 
 export interface ActivityFeedLine {
   ts: string; // ISO8601Z — when the CLI actually rendered this event
@@ -167,13 +167,18 @@ export interface ActivitySourceDisplay {
 export const ACTIVITY_GLYPH = "✻";
 
 /** Per-source class tag (label + color) — the exemplar's "class tag where applicable (model
- *  tier, lane name, run id)" requirement, applied to the activity engine's four real event
- *  sources. Glyph is shared (ACTIVITY_GLYPH); only color + label vary by source. */
+ *  tier, lane name, run id)" requirement, applied to the activity engine's real event
+ *  sources. Glyph is shared (ACTIVITY_GLYPH); only color + label vary by source.
+ *  `goal` (ember issue #211 §7 delta 4, "goal receipts feed the board"): a goal-organ
+ *  transition or autonomous continuation fire, tailed from receipts/goal-sessions/*.jsonl —
+ *  distinct color from the other four so an autonomous goal turn is visually distinguishable
+ *  from an ordinary receipt/board/watchdog/outage event at a glance. */
 export const ACTIVITY_SOURCE_DISPLAY: Record<ActivityFeedSource, ActivitySourceDisplay> = {
   receipt:  { label: "Receipt landed", color: "green" },
   board:    { label: "Board run",      color: "cyan" },
   watchdog: { label: "Watchdog",       color: "yellow" },
   outage:   { label: "Outage window",  color: "red" },
+  goal:     { label: "Goal",           color: "magenta" },
 };
 
 export interface ActivityTranscriptBlockProps {

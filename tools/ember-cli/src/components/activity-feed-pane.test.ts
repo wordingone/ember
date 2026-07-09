@@ -148,12 +148,19 @@ describe("formatActivityBlockTimestamp", () => {
 
 describe("ACTIVITY_SOURCE_DISPLAY", () => {
   it("defines a label and color for every ActivityFeedSource", () => {
-    const sources: ActivityFeedLine["source"][] = ["receipt", "outage", "watchdog", "board"];
+    const sources: ActivityFeedLine["source"][] = ["receipt", "outage", "watchdog", "board", "goal"];
     for (const source of sources) {
       const display = ACTIVITY_SOURCE_DISPLAY[source];
       expect(display.label.length).toBeGreaterThan(0);
       expect(display.color.length).toBeGreaterThan(0);
     }
+  });
+
+  it("gives the goal source its own color, distinct from the other four (ember #211 §7 delta 4)", () => {
+    const otherColors = new Set(
+      (["receipt", "outage", "watchdog", "board"] as const).map((s) => ACTIVITY_SOURCE_DISPLAY[s].color),
+    );
+    expect(otherColors.has(ACTIVITY_SOURCE_DISPLAY.goal.color)).toBe(false);
   });
 
   it("shares one glyph across every source (field-ux-map §9: no per-category emoji salad)", () => {
