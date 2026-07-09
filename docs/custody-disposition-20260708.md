@@ -320,3 +320,125 @@ line exactly. `pattern` grew from 45 to 46 in the same run
 (`PATTERN: receipts/bootstrap-falsifier-*.json`, a glob-form key-citation correctly classified by
 the pre-existing `_CITATION_METACHARS` guard — not `cited_missing`, out of scope for this note).
 No row in this addendum is unexplained; no discrepancy from the Class 2 pattern was found.
+
+---
+
+## 2026-07-09 addendum — twin-resolution cure (#535) + 8 rows newly visible, reconciled to 23
+
+Live probe, this session, `fix/custody-violations` worktree off a fresh `origin/master` fetch
+(pre-existing merges through PR #590):
+
+```
+RED C-CUSTODY: 23 custody violation(s) detected; untracked=0 unparseable=0 cited_missing=23
+pattern=55 relocated=4 documented_absent=0 annex_attested=7 resolved_redacted=5 pending_landing=0
+```
+
+This addendum reconciles `cited_missing=23` against this doc's prior 20-row account in full —
+every row on both sides is explained, not sampled.
+
+### 4 prior rows RESOLVED — now tracked plain, no longer cited_missing
+
+Landed sometime between this doc's 2026-07-08 writing and this session, at their plain
+(non-`-import-edition`-suffixed-as-missing) path, verified `git ls-files`:
+
+| Path | Was |
+|---|---|
+| `receipts/cbase-grow-dryrun-20260702T190532Z.json` | Class 2 addendum row 16 |
+| `receipts/ember-c14-owned-run/live-20260703T141139Z-import-edition.json` | Class 2 addendum row 18 |
+| `receipts/ember-c8-execution-binding/field-level-contribution-proof-20260703T081125Z.json` | Class 2 addendum row 19 |
+| `receipts/v0-live-import-edition-20260702T190633Z.json` | Class 2 addendum row 20 |
+
+### 1 prior row RESOLVED — via the new twin-resolution cure (#535, landed this session)
+
+`receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json` (Class 2 addendum row 17) is still
+absent under that exact name, but `receipts/ceff-RESOLVED-20260703T124623Z-import-edition-redacted-edition.json`
+now exists, tracked at HEAD — a redaction-rename twin. `test_c_custody.py`'s new
+`_resolve_redaction_twin()` (this session, refs #535) resolves it `resolved_redacted`, not
+`cited_missing`. Content note: the redacted twin's own `original_receipt_path` field records the
+PRE-import-edition name as `receipts/ceff-RESOLVED-20260703T124623Z.json` — a DIFFERENT, still-
+missing path, see the new Class 2 row below.
+
+### 15 prior rows UNCHANGED — Classes 1–5 stand exactly as ruled
+
+All 3 Class 1 rows, both remaining Class 2 rows (`cgrow-superseded/cgrow-receipt-...`,
+`stale-figure-adjudication-...`), both Class 3 rows, all 7 Class 4 rows, and the 1 Class 5 row
+(`w2-heldout-decontam-...`, still open at #435) are present, byte-identical in citation form, in
+the current 23-row sidecar. No re-litigation; read the sections above.
+
+### 1 NEW row RESOLVED on first sight — via the same twin-resolution cure
+
+`receipts/corpus-verification-20260704T095213Z.json` was never in this doc (its citer, the
+`corpus-verification-20260704T095213Z-redacted-edition.json` receipt itself, is new since this
+doc's writing). It resolves `resolved_redacted` the same way as the row above — its own tracked
+`-redacted-edition` twin exists in the same directory. Not a fresh finding requiring
+investigation; the twin-resolution cure covers it on the same mechanism.
+
+### 8 NEW rows — Class 2 (cross-tree lineage) extended with 7, plus 1 new mis-rooted subclass
+
+All 8 were previously invisible to this doc because their sole citer is
+`receipts/corpus-verification-20260704T095213Z-redacted-edition.json` (a receipt that did not
+exist when this doc was written) or two other receipts landed since. Verified independently this
+session — `git log --all -- <path>` to find the historical commit, then
+`git merge-base --is-ancestor <sha> HEAD` against this session's `origin/master` fetch — for the
+first 7, using the identical evidence shape as the existing Class 2 rows (a real git blob exists,
+reachable only via a `goalforge/*` ref, never an ancestor of `public/master`):
+
+| # | Cited path | Citer(s) | Source commit(s) | `--is-ancestor HEAD` | goalforge ref(s) |
+|---|---|---|---|---|---|
+| 21 | `receipts/ceff-RESOLVED-20260703T124623Z.json` | `ceff-RESOLVED-20260703T124623Z-import-edition-redacted-edition.json` (`import_provenance.original_receipt_path`) | `9d79cb864fc8b8fa62080019f4121951a4b965a4` | exit=1 | `goalforge/codex/ember-baseline-repaired-goal-20260629`, `goalforge/lane/a20-substrate-override`, `goalforge/lane/c14-persist` |
+| 22 | `receipts/cgrow-prereq/ff-widen-preservation-20260628T053513Z.json` | `cbase-grow-dryrun-20260702T190532Z.json` + its `-redacted-edition` twin (`surgery_math` field) | `fa49af42c9541a064980e68421acb28db2550a1e` | exit=1 | `goalforge/codex/ember-baseline-repaired-goal-20260629`, `goalforge/lane/a20-substrate-override`, `goalforge/lane/attempt15` — same commit already cited for row 4 (`cgrow-superseded`) above |
+| 23 | `receipts/corpus-manifest-20260702T162110Z.json` | `check-energy-law-theory-all-20260705T030730Z.json`; `corpus-verification-20260704T095213Z-redacted-edition.json` (`reverify_method_1`) | `c63d31b5e470c4fba6a8d3d96063a3b2fa7de101` | exit=1 | `goalforge/goalforge/definitive-goal-20260701`, `goalforge/lane/board-cobs`, `goalforge/lane/board-md-refresh` |
+| 24 | `receipts/corpus-materiality-adjudication-20260702T162033Z.json` | `corpus-verification-20260704T095213Z-redacted-edition.json` (`corpus_bin_dir_real_path_receipt`) | `c63d31b5e470c4fba6a8d3d96063a3b2fa7de101` (same commit as row 23) | exit=1 | same as row 23 |
+| 25 | `receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T084922Z.json` | `corpus-verification-20260704T095213Z-redacted-edition.json` (`loader_path_map.currently_broken_default`) | `b96bbd6464ca47397b45ce013d2706fd75c6cee7` | exit=1 | `goalforge/goalforge/definitive-goal-20260701` |
+| 26 | `receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json` | `corpus-verification-20260704T095213Z-redacted-edition.json` (`contamination_check.w1_capability_eval_batch.source_receipt`) | `1aba370711f7a77e8ba4e299fa53069352bb271a` | exit=1 | `goalforge/goalforge/definitive-goal-20260701` |
+| 27 | `receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json` | `ember-c8-execution-binding/field-level-contribution-proof-20260703T081125Z.json` (3 `receipt_ref`/`in_tree_ablation_receipt` fields) | `69fb2b41a0c958ab1c17f506ba5a982ab9561626` (also reachable via `5fc881b`) | exit=1 | `goalforge/goalforge/definitive-goal-20260701`, `goalforge/lane/board-md-refresh`, `goalforge/lane/board-rerender`, `goalforge/lane/c8-green` |
+
+**Ruling for rows 21-27:** identical to the existing Class 2 ruling — restoration from a
+non-canonical, cross-tree lineage is out of scope for #415/#432's single-tree custody discipline;
+these stay `cited_missing` on `public/master` by design. Row 22 sharing a commit with the existing
+row 4 (`cgrow-superseded`) is the same "one goalforge commit, multiple citers" shape already
+disclosed for rows 16/20 in the prior addendum, not a duplicate-row artifact.
+
+### 1 NEW row — mis-rooted citation, non-canonical location (new subclass of Class 3)
+
+| # | Cited path (as extracted) | Citer field | True on-disk location |
+|---|---|---|---|
+| 28 | `receipts/stab524-gpu-window-done-20260709.json` | `cbase-grow-rung2-event-grow-rung2-20260709-remeasure-b3-gradpost.json:86` `sentinel_path` | `tools/ember-cli/state/serve-receipts/stab524-gpu-window-done-20260709.json` |
+
+Unlike Class 3's original 2 rows (mis-rooted AND zero-trace — the correctly-rooted path never
+existed either), the true path here **is real** — verified present on disk in the live working
+tree at the exact full path the citer's own field spells out (`"receipts/"` matched here as a
+substring inside `"...serve-receipts/..."`, the identical extraction defect as the original Class
+3 rows, just with a real file at the far end this time). It is not a `receipts/` custody artifact
+at all: it lives under `tools/ember-cli/state/`, which the repo's own `.gitignore` excludes
+wholesale (`state/` pattern, confirmed via `git check-ignore -v`), and it is machine-local runtime
+sentinel state (a serve-readiness marker), not evidence a receipt should cite by a `receipts/`-
+rooted path in the first place.
+
+**Ruling:** stays `cited_missing`, same disposition class as the original Class 3 rows — a
+citer-side field-naming defect (the `sentinel_path` value is real but was never meant to resolve
+under `receipts/`), not a checker defect and not a custody artifact requiring restoration. Flag
+for whoever next touches the `cbase-grow-rung2-event-*` generator: name runtime sentinel paths
+under a field key that doesn't read as a receipts citation (e.g. `runtime_sentinel_path`), or the
+mis-rooting will keep recurring for every future sentinel-path receipt.
+
+### Reconciliation, 2026-07-09
+
+`cited_missing=23` = **15 rows carried unchanged from Classes 1–5** + **7 new Class 2 rows
+(21–27)** + **1 new mis-rooted row (28)** = **23**, matching the live emit line exactly. 2 rows
+resolved via the new twin-resolution cure (#535) do not appear in either count — they moved to
+`resolved_redacted` (`5` in this run's emit line; the other 3 are the pre-existing
+`ember-d3-native-loop` rows that previously carried a weaker `annex_attested` record and now
+resolve via the stronger tracked-twin evidence instead, per that cure's own commit message).
+4 rows resolved by direct landing (now tracked plain) also do not appear in either count. No row
+in this addendum is unexplained.
+
+### `documented_absent` convention status (per #535 AC item 2)
+
+Stated plainly, per the frozen AC's either/or: `test_c_custody.py` does **not** consume this
+prose disposition doc programmatically. `documented_absent` in the sidecar remains wired only to
+the pre-existing `check_goal_citations.py` wrap-record convention (issue #415 cure 4) — a
+structurally different, machine-readable mechanism. This doc's rows stay honestly `cited_missing`
+in the emit line unless independently resolved by a twin, a relocation, or an annex attestation;
+reading this doc before treating any of its rows as a fresh finding remains the operative
+convention (see "What a future reader must do," above), not a checker-level exemption.
