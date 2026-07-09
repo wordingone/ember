@@ -9,7 +9,7 @@ The external eval suite is selected under these constraints:
 - **Revision-pinned**: each dataset frozen by commit/revision SHA for reproducibility
 - **Locally runnable**: executable on one-GPU budget within hours
 - **Zero-cost**: no paid APIs in any scoring path (L5 classification)
-- **Contamination-auditable**: each test split hashed deterministically; predicate #440 (corpus leakage scan) must verify training data against these hashes BEFORE any capability claim cites this suite (battery Q5 interlock)
+- **Contamination-auditable**: each test split hashed deterministically; predicate #440 (corpus leakage scan) must verify training data against these hashes BEFORE any capability claim cites this suite (battery Q5 interlock). Counting convention for the predicate: the adopted #193-v2 convention below ("Contamination counting convention", adopted 2026-07-09 via the #593 coordinator ruling).
 
 ## v1 Composition
 
@@ -23,6 +23,41 @@ The external eval suite is selected under these constraints:
 ## Harness
 
 Standard open eval harness, pinned by commit SHA. The harness is external **code** evaluating the model — not an external model touching training tokens, so L3 is not implicated. The commit SHA freezes with the suite. Prompt templates and scoring configs freeze in the receipt; no post-hoc template tuning is permitted after freeze.
+
+## Contamination counting convention (adopted 2026-07-09 — #193 v2 as spec)
+
+Adopted as SPEC via the #593 coordinator ruling (issue #593, comment 4930531475,
+dated 2026-07-09) after the first-ever predicate execution (PR #603); this section
+supersedes the previously unstated counting convention for external suites. The
+issue-#193 pre-registered v2 convention, exactly as applied by the executed scan:
+
+- **Unit**: the ITEM (one eval row). Matching runs at **W = 13-token windows**
+  over the item's tokenized text (every string leaf of the row's JSON, joined by
+  newlines), encoded with the frozen tokenizer (`tokenizer/tokenizer.json`,
+  sha256 `6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d`,
+  added-token-matching-disabled-v1 semantics; the 21/31,755 vocab-absent-merge
+  in-memory workaround is disclosed in the scan receipt).
+- **An item is CONTAMINATED iff** (a) its longest contiguous matched run is
+  **>= 50 tokens** (measured as the longest consecutive matched-window run
+  + W-1 — the upper-bound proxy defined in the scan receipt; it cannot miss a
+  true >=50-token shared substring), **OR** (b) **> 10%** of its 13-gram windows
+  match training text.
+- **Applied per-dataset**; both statistics are computed and PUBLISHED for every
+  item (per-item JSONL beside the scan receipt), never only the verdict.
+- **Gate**: suite (b) passes iff contaminated items = **0** after any ruled
+  exclusion amendment. Cure for a nonzero finding = **exclusion with
+  disclosure** (dated amendment receipt chained by sha256 to the freeze
+  declaration; the declaration is never retro-edited; frozen suite definition =
+  declaration + amendment). Raw any-13-gram match totals are recorded as
+  transparency figures, not gated.
+- **Suite (a)** (the corpus-drawn held-out batch) keeps its own stricter
+  RESOLVED convention: strict any-match non-self at W=13 must be 0
+  (w2-scale-preregistration-v1 §4).
+
+First application (2026-07-09, PR #603): suite (b) pre-exclusion = 147
+contaminated items (HumanEval+ 58/164, MMLU-Pro 69, MBPP 12, HellaSwag 8,
+GSM8K/MATH-500/ARC-Challenge 0); post-exclusion = 0. Amendment receipt:
+`receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-*.json`.
 
 ## Binding Clauses
 

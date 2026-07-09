@@ -1,0 +1,154 @@
+{
+  "ticket": "A1-EVAL-FREEZE-DECLARATION",
+  "ts": "2026-07-09T23:30:50.418135+00:00",
+  "schema": "a1-eval-freeze-declaration/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#593",
+    "#123",
+    "#591",
+    "#440",
+    "#582",
+    "#585"
+  ],
+  "freeze_ts": "2026-07-09T23:30:50.418135+00:00",
+  "freeze_ts_rule": "every governed C8 arm's launch_ts MUST be strictly greater than freeze_ts; a receipt violating this is inadmissible (refs #123 sec.1)",
+  "eval_freeze_hash": null,
+  "eval_freeze_hash_rule": "eval_freeze_hash = the sha of the PR head commit carrying this declaration. A commit cannot contain its own sha, so the value is null HERE and recorded in the companion pointer file receipts/eval-suite-freeze/EVAL-FREEZE-HASH (one 40-hex line) added by the PR's final commit. Consumers MUST verify: (1) the pointed commit contains this declaration file byte-identical, (2) freeze_ts here predates their launch_ts, (3) the pointer commit is an ancestor of the ref they build from.",
+  "suite_a": {
+    "definition": "the decontaminated held-out batch per docs/spec/w2-scale-preregistration-v1.md sec.4",
+    "batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+    "pin_receipt": "receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json",
+    "pin_receipt_sha256": "40dfd9ecdd65cb74fb83d02b82c81c01aff1dd4586720847101cfb434452ec1a",
+    "seq": 1024,
+    "n_mtp": 2,
+    "n_rows": 16,
+    "selected_window_indices": [
+      4194305,
+      4194308,
+      4194310,
+      4194311,
+      4194312,
+      4194320,
+      4194323,
+      4194325,
+      4194326,
+      4194327,
+      4194329,
+      4194331,
+      4194335,
+      4194349,
+      4194350,
+      4194351
+    ],
+    "decontam_verdict": "CLEAN"
+  },
+  "suite_b": {
+    "definition": "eval-suite-v1's seven pinned datasets (docs/spec/eval-suite-freeze-v1.md, Status: Frozen, effective 2026-07-08)",
+    "pin_receipt": "receipts/eval-suite-freeze/eval-suite-freeze-v1.json",
+    "pin_receipt_sha256": "d4d690f9ce161ba8edbb9fb54a25a7ced0d3681478b0e40e019f56c9f84a2ae8",
+    "n_datasets": 7,
+    "datasets": [
+      {
+        "name": "MMLU-Pro",
+        "source": "huggingface",
+        "canonical_url": "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro",
+        "revision": "main",
+        "test_split_name": "test",
+        "test_split_sha256": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
+        "row_count": 12032,
+        "size_bytes": 9604506
+      },
+      {
+        "name": "GSM8K",
+        "source": "huggingface",
+        "canonical_url": "https://huggingface.co/datasets/openai/gsm8k",
+        "revision": "main",
+        "test_split_name": "test",
+        "test_split_sha256": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+        "row_count": 1319,
+        "size_bytes": 748022
+      },
+      {
+        "name": "MATH-500",
+        "source": "huggingface",
+        "canonical_url": "https://huggingface.co/datasets/HuggingFaceH4/MATH-500",
+        "revision": "main",
+        "test_split_name": "test",
+        "test_split_sha256": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+        "row_count": 500,
+        "size_bytes": 442443
+      },
+      {
+        "name": "ARC-Challenge",
+        "source": "huggingface",
+        "canonical_url": "https://huggingface.co/datasets/allenai/ai2_arc",
+        "revision": "main",
+        "test_split_name": "test",
+        "test_split_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+        "row_count": 1172,
+        "size_bytes": 425043
+      },
+      {
+        "name": "HumanEval+",
+        "source": "huggingface",
+        "canonical_url": "https://huggingface.co/datasets/evalplus/humanevalplus",
+        "revision": "main",
+        "test_split_name": "test",
+        "test_split_sha256": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+        "row_count": 164,
+        "size_bytes": 11320600
+      },
+      {
+        "name": "MBPP",
+        "source": "huggingface",
+        "canonical_url": "https://huggingface.co/datasets/google-research-datasets/mbpp",
+        "revision": "main",
+        "test_split_name": "test",
+        "test_split_sha256": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
+        "row_count": 500,
+        "size_bytes": 287032
+      },
+      {
+        "name": "HellaSwag",
+        "source": "huggingface",
+        "canonical_url": "https://huggingface.co/datasets/Rowan/hellaswag",
+        "revision": "main",
+        "test_split_name": "test",
+        "test_split_sha256": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f",
+        "row_count": 10003,
+        "size_bytes": 11663748
+      }
+    ],
+    "gpqa_diamond_exclusion": {
+      "status": "EXCLUDED from v1",
+      "mechanism": "docs/deviations.md DEV-004 (battery-14 section) -- the freeze doc's own amendment mechanism",
+      "rule": "a dataset pinned later joins a future suite VERSION; it is never appended to a frozen one"
+    }
+  },
+  "prefreeze_quarantine": {
+    "receipt": "receipts/eval-suite-freeze/a1-prefreeze-quarantine-20260709T231802Z.json",
+    "receipt_sha256": "294431d4df63dc6d4fa8224e085589253bceca0c497ed16750e6417920a67d56",
+    "n_quarantined": 8,
+    "rule": "every receipt in the quarantine list is development-only (pre_freeze: true) and may never be cited by a capability claim"
+  },
+  "predicate_scan": {
+    "receipt": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json",
+    "receipt_sha256": "99686792b79c783b9c557dcf913ac67d59e8b9d232a3a995f4b237bcf7f0c569",
+    "scan_ts": "2026-07-09T23:29:16.293328+00:00",
+    "suite_a_contamination_recheck": {
+      "status": "RESOLVED",
+      "convention": "strict any-match non-self, W=13 (docs/spec/w2-scale-preregistration-v1.md sec.4: 'contamination_recheck must report 0 matches or the launch gate refuses')",
+      "value": 0,
+      "verdict": "CLEAN"
+    },
+    "suite_b_status": "UNRESOLVED-PENDING-CONVENTION-RULING",
+    "first_ever": true,
+    "note": "the freeze-spec predicate (refs #440) interlock executed for the first time; suite (b)'s counting-convention ruling is the coordinator's (see the scan receipt's convention_stats)"
+  },
+  "postfreeze_heldout_selection": {
+    "rule_doc": "docs/spec/a1-postfreeze-heldout-selection-v1.md",
+    "rule": "index = int(eval_freeze_hash[:8], 16) mod 8 over the frozen 8-candidate public pool; resolved alongside the pointer file once the freeze hash exists"
+  }
+}
