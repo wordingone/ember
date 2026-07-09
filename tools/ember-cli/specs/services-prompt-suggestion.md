@@ -1,7 +1,6 @@
 # Spec — prompt-suggestion service (task #48)
 
-Status: OPEN. Neither `services/prompt-suggestion.ts` nor `services/speculation.ts` exist
-in src. The original avir-cli had 29 features across these two files (promptSuggestion.ts:
+Status: SHIPPED — implemented as src/services/prompt-suggestion.ts (+ prompt-suggestion.test.ts), landed via PR #199. Spec retained as the component's spec node per issue #567. The original avir-cli had 29 features across these two files (promptSuggestion.ts:
 11, speculation.ts: 18). This spec derives behavior from the behavioral mapping only —
 never from the predecessor source tree.
 
