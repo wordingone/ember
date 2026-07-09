@@ -645,6 +645,18 @@ GENERATOR_ABSENT_HISTORICAL_PATH_PREFIXES = [
      "founder's external working tree) or C:/tmp/ember-clean-post-473-lf-20260618/... (a "
      "disposable clean-room checkout); no script under this repo's scripts/ or tools/ "
      "constructs this filename (confirmed by exhaustive fixed-string search)."),
+    # --- gh issue #586 (annex round-4, 2026-07-09) ---
+    ("receipts/ember-cockpit-live-surface1/", "external_tree_import",
+     "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field "
+     "(a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based "
+     "resolver never sees it) names a local one-off capture helper "
+     "(scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- "
+     "confirmed absent (no such file on disk anywhere under this repo, zero grep hits for "
+     "its name in scripts/, tools/, or docs/). This whole directory was restored wholesale "
+     "via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, "
+     "source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at "
+     "commit d3dff30): a live local UI-capture session against a local qwen model server, "
+     "never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above."),
 ]
 
 GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
@@ -776,6 +788,22 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "reachable only from goalforge/definitive-goal-20260701 and derived lane/* branches, never "
      "master. The real script's own source was re-scanned with this file's own paid-client/key-env "
      "detectors: zero hits (32064 bytes scanned)."),
+    # --- gh issue #586 (annex round-4, 2026-07-09): two more manually-authored analysis/curation
+    # receipts, no cmd/script/generator field of any kind, same evidence (c) shape as
+    # eng107-head-coverage-*/c48-gate-stats-review-*/eng38-b-multi-1-* above.
+    (re.compile(r"^cbase-grow-rung2-stabilize-transplant-wall-diagnostic-.*\.json$"), "manually_authored",
+     "evidence (c) manually-authored: a prose root-cause diagnostic (muon-routing-code citation + "
+     "checkpoint-forensics reasoning, disposition per team-lead ruling), no measured-data shape and "
+     "no cmd/script/generator field -- the `code_cited.file` field names "
+     "scripts/timeshare_pretrain.py as the CODE BEING ANALYZED (an investigation subject), not this "
+     "receipt's own generator; that script has no receipt-writing call anywhere in it constructing "
+     "this filename (confirmed by exhaustive fixed-string search) -- same citation-vs-generator "
+     "distinction already drawn for eng38-b-multi-1-* above."),
+    (re.compile(r"^custody-curation-.*\.json$"), "manually_authored",
+     "evidence (c) manually-authored: a hand-written custody-cure consolidation (8 restored "
+     "artifacts + 15 cross-referenced dispositions, prose disposal_verdict) -- no measured-data "
+     "shape, no cmd/script/generator field anywhere in it; same class as c48-gate-stats-review-* "
+     "and eng107-head-coverage-* above."),
 ]
 
 # resident-training-gate-*.json is resolved via CONVENTION_MAP (scripts/ember_resident_training_gate.py,
