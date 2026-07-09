@@ -1,0 +1,96 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EPS0-FINGERPRINT",
+  "ts": "2026-07-09T11:24:04.657053+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 449,
+  "refs": [
+    482,
+    466,
+    513
+  ],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "preregistered": "Backprop through the +/-eta down columns splits the gate/up gradient twin rows as G/2+/-Delta; NS5 amplifies the antisymmetric Delta. Therefore the gate-class RMS(u_post)/RMS(u_pre) ratio at eps=0 returns to 1.0 within 0.2%, and the ratio is monotone increasing in eps. Measured anchor at eps=0.05: 1.0143604 (receipts/cbase-grow-rung2-event-grow-rung2-20260709-remeasure-b3-gradpost.json).",
+  "scope": "eps-counterfactual gate-fingerprint rider: reconstructs eps=0 and eps=0.025 down_proj variants from the eps=0.05 grown checkpoint by block-mean/eta decomposition, measures RMS(u_post)/RMS(u_pre) at each under the RESET-arm Muon convention (zero momentum both sides, lr=0.015), and reproduces the eps=0.05 anchor in-run as a control on this script's own Muon/measurement math. NUMBERS ONLY -- no verdict on the preregistered prediction; the coordinator adjudicates.",
+  "method": {
+    "eps_construction": "down_proj [1024, 32768] block-twin d_a=W[:,:16384], d_b=W[:,16384:]; d_mean=(d_a+d_b)/2, eta=(d_a-d_b)/2; variant halves = d_mean +/- scale*eta for scale in {0.0, 0.5, 1.0}; gate_proj/up_proj untouched in every variant (unscaled row-dups, eps-invariant per cbase_grow_rung2_event.py MOMENTUM_PUSHFORWARD_RULE_DECLARED).",
+    "capture": "reproduces cbase_grow_rung2_gradpost_capture.py's capture_grad_post_gate exactly (same manual_seed(42) position, same build_v0_model + load_state_dict, same _build_pinned_batch, same QAT/CE/MTP per-microstep loop) with the grown checkpoint's state dict replaced by each variant's rewritten down_proj.",
+    "muon_step_closure": "p5_ratio_audit.run_p5_audit._muon_step_in_copy (faithful reuse)",
+    "spectral_norm_method": "torch.linalg.svdvals (top singular value)"
+  },
+  "sanity_pre_gpu": {
+    "twin_cosine_eps0": 0.9999995827674866,
+    "eta_rms_eps005": 0.00025676595396362245,
+    "ff_grown": 32768,
+    "interm_seed": 16384,
+    "gate_key": "backbone_model.layers.0.mlp.gate_proj.weight",
+    "up_key": "backbone_model.layers.0.mlp.up_proj.weight",
+    "down_key": "backbone_model.layers.0.mlp.down_proj.weight",
+    "grown_dtype": "torch.bfloat16",
+    "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e"
+  },
+  "u_pre_reset_lr015": {
+    "lr": 0.015,
+    "momentum": "zero buffer (RESET arm)",
+    "spectral": 0.0721418634057045,
+    "rms": 0.00027922826120629907
+  },
+  "variants": {
+    "eps0.0": {
+      "eps_scale_of_full_eta": 0.0,
+      "construction": "both down_proj halves set to d_mean (exact eta removal)",
+      "u_post_rms": 0.0002800252696033567,
+      "u_post_spectral": 0.10202186554670334,
+      "rms_ratio_post_over_pre": 1.0028543256818436,
+      "R_spectral_ratio_post_over_pre": 1.4141839527066629,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 2.6122705936431885
+    },
+    "eps0.025": {
+      "eps_scale_of_full_eta": 0.5,
+      "construction": "halves = d_mean +/- 0.5*eta (midpoint)",
+      "u_post_rms": 0.000281998363789171,
+      "u_post_spectral": 0.10202065855264664,
+      "rms_ratio_post_over_pre": 1.0099205666751092,
+      "R_spectral_ratio_post_over_pre": 1.4141672218655157,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 1.7069952487945557
+    },
+    "eps0.05_control": {
+      "eps_scale_of_full_eta": 1.0,
+      "construction": "halves = d_mean +/- 1.0*eta (reproduces the eps=0.05 anchor in-run)",
+      "u_post_rms": 0.00028323809965513647,
+      "u_post_spectral": 0.10202421247959137,
+      "rms_ratio_post_over_pre": 1.0143604319688646,
+      "R_spectral_ratio_post_over_pre": 1.4142164848977823,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 1.6808593273162842
+    }
+  },
+  "anchor_control": {
+    "anchor_source": "receipts/cbase-grow-rung2-event-grow-rung2-20260709-remeasure-b3-gradpost.json",
+    "anchor_rms_ratio_post_over_pre": 1.0143604319688646,
+    "in_run_recomputed_rms_ratio": 1.0143604319688646,
+    "delta": 0.0,
+    "delta_pct": 0.0
+  },
+  "gpu_seconds": 6.000125169754028,
+  "wall_seconds": 80.7452461719513,
+  "device": "cuda",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "MEASUREMENT_COMPLETE_NO_ADJUDICATION"
+}
