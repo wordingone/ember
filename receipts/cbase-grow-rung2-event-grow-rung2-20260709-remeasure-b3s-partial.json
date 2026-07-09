@@ -1,0 +1,73 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-SPECTRAL-B3S-PARTIAL",
+  "ts": "2026-07-08T22:45:00Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 482,
+  "refs": [449, 466],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "scope": "B3s (partial): spectral fork resolution — pre-widen Muon update spectral norm measurement on cached tensors. Post-widen measurement deferred to queued GPU rider on next planned outage window.",
+  "status": "PARTIAL_INCOMPLETE",
+  "completion_path": {
+    "missing_ingredient": "grad_post_gate (not cached; only available via B3 fork forward pass)",
+    "blocked_computation": "spectral_ratio = u_post_spectral / u_pre_spectral",
+    "completion_strategy": "~2-minute grad_post capture rider queued on NEXT planned GPU outage window; ratio computes CPU-side from caches after capture",
+    "timeline": "Pending next scheduled outage window",
+    "note": "This landing completes the CPU-feasible leg (8 unit tests pass, u_pre=0.0721 measured, runner scaffolded). Post-widen measurement deferred but not abandoned."
+  },
+  "completed_work": {
+    "unit_tests": {
+      "total": 8,
+      "passed": 8,
+      "verdict": "PASS",
+      "tests": [
+        "test_identity_matrix_spectral_norm",
+        "test_diagonal_matrix_spectral_norm",
+        "test_scaled_identity_spectral_norm",
+        "test_rank_one_matrix_spectral_norm",
+        "test_ratio_of_scaled_matrices",
+        "test_rms_crosscheck",
+        "test_rms_zero_detection",
+        "test_svdvals_shape"
+      ]
+    },
+    "pre_widen_measurement": {
+      "u_pre_spectral_norm": 0.07214187,
+      "u_pre_rms": 0.00030966889,
+      "cache_source": ".rung2-event-cache/grow-rung2-20260709-remeasure-*.pt",
+      "theta_gate_pre_shape": [16384, 9216],
+      "computation_method": "torch.linalg.svdvals (top singular value)"
+    }
+  },
+  "blocked_work": {
+    "post_widen_measurement": {
+      "status": "BLOCKED",
+      "reason": "GPU forward pass required",
+      "details": "grad_post_gate not cached; must recompute via B3 fork forward+backward on 2.2B model",
+      "theta_gate_post_shape_after_widen": [32768, 18432],
+      "gpu_requirement": "single forward+backward on pinned 8-microstep batch (acceptable per issue #482 protocol, conflicts with CPU-only constraint)"
+    },
+    "spectral_ratio": "Cannot compute without u_post_spectral",
+    "rms_crosscheck": "Cannot validate without re-running forward pass"
+  },
+  "predictions_frozen": {
+    "zheng_2603_00541": {
+      "ratio_prediction": 0.707,
+      "interpretation": "Muon under width-doubling needs explicit LR correction; post-widen update norm shrinks without correction"
+    },
+    "gupta_2602_20937": {
+      "ratio_prediction": 1.0,
+      "interpretation": "Muon's NS-orthogonalization inherently width-independent; aspect-ratio factor already inside"
+    }
+  },
+  "resolution_executed": {
+    "team_lead_ruling": "Option 2 with immediate landing",
+    "rationale": "CPU-only constraint was dispatch-time resource rail (outage window live at task time). Server now resident (17.7GB); B3-class forward+backward needs ~18GB (doesn't fit VRAM regardless). Land partial now; grad_post rider queued for next planned outage window.",
+    "landing_scope": "Unit tests (8/8 PASS) + u_pre spectral (0.0721) + runner scaffold + this PARTIAL receipt",
+    "frozen_preregistration": "Zheng 0.707 vs Gupta 1.0 — unconsumed; no ratio number exists yet, no adjudication"
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "B3S_PARTIAL_LANDED"
+}
