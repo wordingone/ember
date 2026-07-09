@@ -98,11 +98,26 @@ PATHPAT_EXCLUDE=(
   ':(exclude)receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json'
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
 )
-if git grep -nIE "$PATHPAT" -- . "${PATHPAT_EXCLUDE[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
-  fail "paths" "absolute local filesystem paths in tracked files"
-  sed 's/^/      /' /tmp/rg_paths | head -20
+# Commit-time invocation (REPO_GUARD_SCOPE=staged, set by .githooks/pre-commit)
+# scans only the ADDED lines of the staged diff, so a branch carrying
+# pre-existing tracked residue with this shape does not block every commit
+# regardless of what the commit actually introduces. The tree-wide scan
+# (default, no env var) is unchanged and is what CI / the freshness monitor
+# run. Same PATHPAT, same PATHPAT_EXCLUDE pathspecs, applied to the diff.
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  if git diff --cached -U0 --no-color -- . "${PATHPAT_EXCLUDE[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+    fail "paths" "absolute local filesystem paths in staged changes"
+    sed 's/^/      /' /tmp/rg_paths | head -20
+  else
+    ok "paths" "no absolute local paths (staged scope)"
+  fi
 else
-  ok "paths" "no absolute local paths"
+  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_EXCLUDE[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+    fail "paths" "absolute local filesystem paths in tracked files"
+    sed 's/^/      /' /tmp/rg_paths | head -20
+  else
+    ok "paths" "no absolute local paths"
+  fi
 fi
 
 # ---- 2b. no local path fragments in tracked text (avir/, /mnt refs) -------
