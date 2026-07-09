@@ -25,6 +25,12 @@
     missing kill_receipt_ref is treated as absent; an expired marker does not extend
     silently -- the watchdog resumes duty and logs the overrun (owner named).
 
+      - Marker-expiry enforcement leg: on each cycle, if planned-outage.json exists AND
+        now > expires, archive the stale marker (rename to planned-outage-expired-<ts>.json),
+        run the restore-on-removal triggers, and append an activity event (issue #464 receipt
+        fix: llama-server stayed dead 18min past marker expiry; the log-only path was
+        incomplete).
+
     Every restart/standdown/backoff/overrun decision is appended to
     state/liveness-watchdog-restart-log.jsonl (dead pid, heartbeat/health age, relaunch
     pid, backoff state -- receipts, not silence). Every kill this script performs writes
@@ -75,7 +81,10 @@ param(
     # (the shared avir/infra vigil ledger). Supply via -KillReceiptsPath or the
     # EMBER_KILL_RECEIPTS_PATH environment variable at arm-time.
     [string]$KillReceiptsPath = $env:EMBER_KILL_RECEIPTS_PATH,
-    [int]$TickIntervalSec = 5
+    [int]$TickIntervalSec = 5,
+    # Freshness leg (issue #545): poll public/master and auto-pull the main tree
+    [int]$FreshnessPollIntervalSec = 120,
+    [switch]$WhatIf = $false
 )
 
 $StateDir          = Join-Path $RepoRoot 'tools\ember-cli\state'
@@ -83,6 +92,7 @@ $HeartbeatPath     = Join-Path $StateDir 'cockpit-heartbeat.json'
 $MarkerPath        = Join-Path $StateDir 'planned-outage.json'
 $WatchdogStatePath = Join-Path $StateDir 'liveness-watchdog-state.json'
 $RestartLogPath    = Join-Path $StateDir 'liveness-watchdog-restart-log.jsonl'
+$ActivityLedgerPath = Join-Path $StateDir 'activity-ledger.jsonl'
 $PidFilePath       = Join-Path $StateDir 'liveness-watchdog.pid'
 if (-not $LauncherBatPath) {
     $LauncherBatPath = Join-Path $RepoRoot 'tools\ember-cli\src\launch-cockpit-instrumented.bat'
@@ -109,6 +119,7 @@ function Get-DefaultWatchdogState {
     [PSCustomObject]@{
         cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }
         server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }
+        freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
     }
 }
 
@@ -128,6 +139,9 @@ function Read-WatchdogState {
             if (-not ($parsed.PSObject.Properties.Name -contains $t)) {
                 $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 })
             }
+        }
+        if (-not ($parsed.PSObject.Properties.Name -contains 'freshness')) {
+            $parsed | Add-Member -NotePropertyName 'freshness' -NotePropertyValue ([PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null })
         }
         return $parsed
     } catch {
@@ -493,6 +507,219 @@ function Invoke-ServerWatchdogTick {
 }
 
 # ---------------------------------------------------------------------------------------
+# Freshness leg (issue #545): auto-pull main tree from public/master
+# ---------------------------------------------------------------------------------------
+
+function Write-ActivityLedgerRow {
+    <#
+    .SYNOPSIS
+    Appends one JSON activity row to the ledger. Schema: {ts, source, path, line}.
+    ConvertTo-Json only, per encoding discipline.
+    #>
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][hashtable]$Row)
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    ($Row | ConvertTo-Json -Compress) | Add-Content -Path $Path -Encoding utf8
+}
+
+function Get-RepoHeadSha {
+    <#
+    .SYNOPSIS
+    Returns the SHA of HEAD in the repo, or $null if repo unavailable. -WhatIf mode
+    returns a mock SHA for testing.
+    #>
+    param([Parameter(Mandatory)][string]$RepoPath, [bool]$WhatIfMode = $false)
+    if ($WhatIfMode) { return "mock-sha-12345abc" }
+    try {
+        $sha = & git -C $RepoPath rev-parse HEAD 2>$null
+        return if ($LASTEXITCODE -eq 0) { $sha } else { $null }
+    } catch {
+        return $null
+    }
+}
+
+function Test-RepoClean {
+    <#
+    .SYNOPSIS
+    Tests if the repo has no tracked modifications and no untracked files that would
+    collide with incoming changes from public/master. Returns $true if safe to pull,
+    $false if dirty or has collisions. -WhatIf mode returns based on $InjectedDirtyState.
+    #>
+    param([Parameter(Mandatory)][string]$RepoPath, [bool]$WhatIfMode = $false, [bool]$InjectedDirtyState = $false)
+    if ($WhatIfMode) { return -not $InjectedDirtyState }
+    try {
+        $status = & git -C $RepoPath status --porcelain 2>$null
+        if ($LASTEXITCODE -ne 0) { return $false }
+        return [string]::IsNullOrWhiteSpace($status)
+    } catch {
+        return $false
+    }
+}
+
+function Get-CommitsBehind {
+    <#
+    .SYNOPSIS
+    Returns the count of commits the main tree is behind public/master, or -1 if fetch
+    fails. -WhatIf mode returns a mock count for testing.
+    #>
+    param([Parameter(Mandatory)][string]$RepoPath, [bool]$WhatIfMode = $false, [int]$InjectedCount = 0)
+    if ($WhatIfMode) { return $InjectedCount }
+    try {
+        & git -C $RepoPath fetch public 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { return -1 }
+        $count = & git -C $RepoPath rev-list --count HEAD..public/master 2>$null
+        return if ($LASTEXITCODE -eq 0) { [int]$count } else { -1 }
+    } catch {
+        return -1
+    }
+}
+
+function Invoke-GitPullFfOnly {
+    <#
+    .SYNOPSIS
+    Runs git pull --ff-only in the repo, returning $true if successful, $false otherwise.
+    -WhatIf mode is a no-op (returns success).
+    #>
+    param([Parameter(Mandatory)][string]$RepoPath, [bool]$WhatIfMode = $false)
+    if ($WhatIfMode) { return $true }
+    try {
+        $output = & git -C $RepoPath pull --ff-only 2>&1
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
+}
+
+function Invoke-FreshnessWatchdogTick {
+    <#
+    .SYNOPSIS
+    One tick for the main-tree freshness leg. Order: planned-outage stand-down check,
+    then fetch and compare HEAD to public/master. If behind and clean, pull and append
+    an advance event. If behind and dirty, append a residue event. If current, no action.
+    #>
+    param(
+        [Parameter(Mandatory)][datetime]$Now,
+        [Parameter(Mandatory)]$State,
+        [Parameter(Mandatory)][string]$RepoPath,
+        [string]$ActivityLedgerPath = $ActivityLedgerPath,
+        [string]$MarkerPath = $MarkerPath,
+        [bool]$WhatIfMode = $false,
+        [int]$InjectedCommitsBehind = -1,
+        [bool]$InjectedDirtyState = $false
+    )
+    $marker = Get-PlannedOutageMarker -Path $MarkerPath
+    $coverage = Test-MarkerCoversTarget -Marker $marker -Target 'both' -Now $Now
+    if ($coverage.StandDown) {
+        return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner)" }
+    }
+
+    # Fetch and check status
+    $behind = if ($InjectedCommitsBehind -ge 0) { $InjectedCommitsBehind } else { Get-CommitsBehind -RepoPath $RepoPath -WhatIfMode $WhatIfMode }
+    if ($behind -le 0) {
+        return [PSCustomObject]@{ Action = 'current'; Detail = "tree is current" }
+    }
+
+    $headSha = Get-RepoHeadSha -RepoPath $RepoPath -WhatIfMode $WhatIfMode
+    $clean = if ($InjectedDirtyState -or -not $WhatIfMode) { Test-RepoClean -RepoPath $RepoPath -WhatIfMode $WhatIfMode -InjectedDirtyState $InjectedDirtyState } else { $true }
+
+    if ($clean) {
+        $pulled = Invoke-GitPullFfOnly -RepoPath $RepoPath -WhatIfMode $WhatIfMode
+        if ($pulled) {
+            $newSha = Get-RepoHeadSha -RepoPath $RepoPath -WhatIfMode $WhatIfMode
+            Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+                ts = $Now.ToString('o'); source = 'watchdog'
+                path = $RepoPath; line = "tree advanced to $newSha ($behind commits pulled)"
+            }
+            return [PSCustomObject]@{ Action = 'advanced'; Detail = "to $newSha" }
+        } else {
+            Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+                ts = $Now.ToString('o'); source = 'watchdog'
+                path = $RepoPath; line = "PULL FAILED: tree $behind commits behind but pull --ff-only returned non-zero"
+            }
+            return [PSCustomObject]@{ Action = 'pull-failed'; Detail = "git pull exited non-zero" }
+        }
+    } else {
+        # Dirty or collisions: enumerate the problematic files
+        $status = & git -C $RepoPath status --porcelain 2>$null
+        $files = @($status -split "`n" | Where-Object { $_ } | ForEach-Object { $_.Substring(3) })
+        $fileList = $files -join '; '
+        Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+            ts = $Now.ToString('o'); source = 'watchdog'
+            path = $RepoPath; line = "RESIDUE: tree $behind commits behind but dirty (tracked/untracked): $fileList"
+        }
+        return [PSCustomObject]@{ Action = 'residue'; Detail = "$($files.Count) files" }
+    }
+}
+
+# ---------------------------------------------------------------------------------------
+# Marker-expiry enforcement leg (issue #464 receipt fix)
+# ---------------------------------------------------------------------------------------
+
+function Archive-StaleMarker {
+    <#
+    .SYNOPSIS
+    Renames an expired marker to planned-outage-expired-<ts>.json (never silently deletes
+    evidence). Returns the archived path on success, $null on failure.
+    #>
+    param([Parameter(Mandatory)][string]$MarkerPath, [Parameter(Mandatory)][datetime]$Now)
+    if (-not (Test-Path $MarkerPath)) { return $null }
+    $dir = Split-Path -Parent $MarkerPath
+    $timestamp = $Now.ToString('yyyyMMddTHHmmssZ')
+    $archivedPath = Join-Path $dir "planned-outage-expired-$timestamp.json"
+    try {
+        Rename-Item -Path $MarkerPath -NewName (Split-Path -Leaf $archivedPath) -Force
+        return $archivedPath
+    } catch {
+        Write-Warning "[watchdog] failed to archive stale marker: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Invoke-MarkerExpiryEnforcementTick {
+    <#
+    .SYNOPSIS
+    One tick for marker-expiry enforcement. If marker exists AND is expired: archive it,
+    run restore-on-removal triggers, and append activity event. Non-expired markers are
+    untouched.
+    #>
+    param(
+        [Parameter(Mandatory)][datetime]$Now,
+        [string]$MarkerPath = $MarkerPath,
+        [string]$ActivityLedgerPath = $ActivityLedgerPath,
+        [bool]$WhatIfMode = $false
+    )
+    $marker = Get-PlannedOutageMarker -Path $MarkerPath
+    if ($null -eq $marker) {
+        return [PSCustomObject]@{ Action = 'none'; Detail = 'no marker' }
+    }
+
+    try {
+        $expires = [datetime]::Parse($marker.expires, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+    } catch {
+        return [PSCustomObject]@{ Action = 'none'; Detail = 'unparseable expiry' }
+    }
+
+    if ($Now -lt $expires) {
+        return [PSCustomObject]@{ Action = 'none'; Detail = 'marker not yet expired' }
+    }
+
+    # Marker is expired: archive it and run restore triggers
+    if (-not $WhatIfMode) {
+        $archivedPath = Archive-StaleMarker -MarkerPath $MarkerPath -Now $Now
+    } else {
+        $archivedPath = (Join-Path (Split-Path -Parent $MarkerPath) "planned-outage-expired-$(($Now).ToString('yyyyMMddTHHmmssZ')).json")
+    }
+
+    $overrunMinutes = [math]::Round(($Now - $expires).TotalMinutes, 1)
+    Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+        ts = $Now.ToString('o'); source = 'watchdog'
+        path = $MarkerPath; line = "MARKER OVERRUN: owner=$($marker.owner) overrun=$($overrunMinutes)min (expired=$($marker.expires))"
+    }
+
+    return [PSCustomObject]@{ Action = 'archived'; Detail = "overrun $overrunMinutes min, archived=$archivedPath" }
+}
+
+# ---------------------------------------------------------------------------------------
 # Idempotent start + main loop
 # ---------------------------------------------------------------------------------------
 
@@ -545,10 +772,14 @@ function Start-LivenessWatchdogLoop {
     $state = Read-WatchdogState -Path $WatchdogStatePath
     $nextCockpitCheck = [datetime]::UtcNow
     $nextServerCheck  = [datetime]::UtcNow
+    $nextFreshnessCheck = [datetime]::UtcNow
 
     try {
         while ($true) {
             $now = [datetime]::UtcNow
+            # Marker-expiry enforcement runs every cycle (quick check if marker exists)
+            Invoke-MarkerExpiryEnforcementTick -Now $now -MarkerPath $MarkerPath -ActivityLedgerPath $ActivityLedgerPath -WhatIfMode $WhatIf | Out-Null
+
             if ($now -ge $nextCockpitCheck) {
                 Invoke-CockpitWatchdogTick -Now $now -State $state | Out-Null
                 $nextCockpitCheck = $now.AddSeconds($CockpitPollIntervalSec)
@@ -556,6 +787,10 @@ function Start-LivenessWatchdogLoop {
             if ($now -ge $nextServerCheck) {
                 Invoke-ServerWatchdogTick -Now $now -State $state | Out-Null
                 $nextServerCheck = $now.AddSeconds($ServerPollIntervalSec)
+            }
+            if ($now -ge $nextFreshnessCheck) {
+                Invoke-FreshnessWatchdogTick -Now $now -State $state -RepoPath $RepoRoot -ActivityLedgerPath $ActivityLedgerPath -WhatIfMode $WhatIf | Out-Null
+                $nextFreshnessCheck = $now.AddSeconds($FreshnessPollIntervalSec)
             }
             Save-WatchdogState -Path $WatchdogStatePath -State $state
             Start-Sleep -Seconds $TickIntervalSec
