@@ -10,6 +10,10 @@ import {
   ActivityFeedPane,
   EMPTY_STATE_TEXT,
   DEFAULT_VISIBLE_LINES,
+  formatActivityBlockTimestamp,
+  ACTIVITY_GLYPH,
+  ACTIVITY_SOURCE_DISPLAY,
+  ActivityTranscriptBlock,
   type ActivityFeedLine,
 } from "./activity-feed-pane.ts";
 
@@ -110,5 +114,93 @@ describe("ActivityFeedPane", () => {
     const el = ActivityFeedPane({ lines, nowMs: Date.parse(line().ts) });
     const children = (el as { props: { children: unknown[] } }).props.children as unknown[];
     expect(children.length).toBe(DEFAULT_VISIBLE_LINES);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #518 — transcript-block rendering (replaces the ticker as the mounted path)
+// ---------------------------------------------------------------------------
+
+describe("formatActivityBlockTimestamp", () => {
+  it("renders time-only for a same-day event, no relative-age wording", () => {
+    const nowMs = Date.parse("2026-07-08T21:05:00.000Z");
+    const result = formatActivityBlockTimestamp("2026-07-08T20:59:00.000Z", nowMs);
+    expect(result).toBe("8:59pm");
+    expect(result).not.toContain("ago");
+  });
+
+  it("prefixes a numeric M/D date for an earlier-day event", () => {
+    const nowMs = Date.parse("2026-07-09T02:00:00.000Z");
+    const result = formatActivityBlockTimestamp("2026-07-08T20:59:00.000Z", nowMs);
+    expect(result).toBe("7/8 8:59pm");
+  });
+
+  it("handles midnight (12am) and noon (12pm) correctly", () => {
+    const nowMs = Date.parse("2026-07-08T12:00:00.000Z");
+    expect(formatActivityBlockTimestamp("2026-07-08T00:00:00.000Z", nowMs)).toBe("12:00am");
+    expect(formatActivityBlockTimestamp("2026-07-08T12:00:00.000Z", nowMs)).toBe("12:00pm");
+  });
+
+  it("falls back to the raw string for an unparsable timestamp", () => {
+    expect(formatActivityBlockTimestamp("not-a-date")).toBe("not-a-date");
+  });
+});
+
+describe("ACTIVITY_SOURCE_DISPLAY", () => {
+  it("defines a label and color for every ActivityFeedSource", () => {
+    const sources: ActivityFeedLine["source"][] = ["receipt", "outage", "watchdog", "board"];
+    for (const source of sources) {
+      const display = ACTIVITY_SOURCE_DISPLAY[source];
+      expect(display.label.length).toBeGreaterThan(0);
+      expect(display.color.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("shares one glyph across every source (field-ux-map §9: no per-category emoji salad)", () => {
+    expect(ACTIVITY_GLYPH.length).toBeGreaterThan(0);
+    // No per-source glyph field exists on the display record -- distinguishing power comes
+    // from color + label text only, never a bespoke icon per category.
+    const receiptKeys = Object.keys(ACTIVITY_SOURCE_DISPLAY.receipt);
+    expect(receiptKeys).not.toContain("glyph");
+  });
+});
+
+describe("ActivityTranscriptBlock", () => {
+  it("renders a header row, a text row, and no path row when path is absent", () => {
+    const el = ActivityTranscriptBlock({
+      line: line({ path: undefined }),
+      nowMs: Date.parse(line().ts),
+    });
+    const children = (el as { props: { children: unknown[] } }).props.children;
+    expect(children.length).toBe(3);
+    expect(children[2]).toBeNull();
+  });
+
+  it("includes a path row when the event carries a path", () => {
+    const el = ActivityTranscriptBlock({
+      line: line({ path: "receipts/acceptance/foo.json" }),
+      nowMs: Date.parse(line().ts),
+    });
+    const children = (el as { props: { children: unknown[] } }).props.children;
+    expect(children[2]).not.toBeNull();
+  });
+
+  it("never emits a relative-age string anywhere in the card (the named defect)", () => {
+    const el = ActivityTranscriptBlock({
+      line: line({ path: "receipts/acceptance/foo.json" }),
+      nowMs: Date.parse("2026-07-08T03:00:00.000Z"),
+    });
+    const serialized = JSON.stringify(el);
+    expect(serialized).not.toContain(" ago");
+  });
+
+  it("uses the source's own label and the shared glyph in the header", () => {
+    const el = ActivityTranscriptBlock({
+      line: line({ source: "board", text: "totality board rendered: 3 GREEN / 1 RED" }),
+      nowMs: Date.parse(line().ts),
+    });
+    const serialized = JSON.stringify(el);
+    expect(serialized).toContain(ACTIVITY_SOURCE_DISPLAY.board.label);
+    expect(serialized).toContain(ACTIVITY_GLYPH);
   });
 });
