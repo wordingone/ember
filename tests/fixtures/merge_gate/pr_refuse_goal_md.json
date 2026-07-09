@@ -1,0 +1,41 @@
+{
+  "number": 20,
+  "title": "docs: update goal",
+  "body": "Fixes #444\n\nUpdates GOAL.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [],
+    "totalCount": 0
+  },
+  "commits_after_check": [
+    {
+      "oid": "xyx567zab890",
+      "message": "docs: update goal"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "tests",
+      "state": "SUCCESS",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "GOAL.md",
+        "changeType": "MODIFIED"
+      },
+      {
+        "path": "docs/README.md",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 2
+  }
+}
