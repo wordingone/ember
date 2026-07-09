@@ -608,6 +608,9 @@ export interface MainOptions {
   argv?:           string[];
   spawnServer?:    (opts: ServerSpawnOptions) => Promise<ServerHandle>;
   waitReady?:      (port: number, timeout: number) => Promise<void>;
+  /** #159 boot matrix, "backend already running": probed BEFORE spawning. Defaults to a
+   *  short real health probe; tests inject a fake to avoid real network I/O. */
+  probeExisting?:  (port: number) => Promise<boolean>;
   initFn?:         (opts: { serverUrl?: string; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
@@ -658,6 +661,11 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   let serverUrl:    string;
   let detectedNCtx: number;
 
+  // #159 boot matrix: shared exit path for every managed-spawn failure cell below, so each
+  // produces one clean operator-facing message and a controlled exit -- never an uncaught
+  // exception surfacing as a raw stack trace via main.ts's last-resort handler.
+  const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
+
   if (externalUrl) {
     process.env["EMBER_MODEL_URL"] ??= externalUrl;
     serverUrl    = externalUrl;
@@ -670,41 +678,108 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       exeDir,
       modelsCfg?.model ?? process.env["EMBER_MODEL_PATH"] ?? "model.gguf",
     );
-    const mmproj     = modelsCfg?.mmproj ? resolve(exeDir, modelsCfg.mmproj) : undefined;
-    const nCtx       = modelsCfg?.nCtx ?? 4096;
-    const logPath    = join(exeDir, "llama_stderr.log");
+    const mmproj      = modelsCfg?.mmproj ? resolve(exeDir, modelsCfg.mmproj) : undefined;
+    const nCtx        = modelsCfg?.nCtx ?? 4096;
+    const logPath     = join(exeDir, "llama_stderr.log");
     const slotSaveDir = join(getEmberConfigHomeDir(), "slots");
 
-    const doSpawn  = opts.spawnServer ?? spawnLlamaServer;
-    const doWait   = opts.waitReady   ?? ((p: number, t: number) => waitForServerReady(p, t));
+    const doSpawn         = opts.spawnServer   ?? spawnLlamaServer;
+    const doWait          = opts.waitReady     ?? ((p: number, t: number) => waitForServerReady(p, t));
+    const doProbeExisting = opts.probeExisting ?? ((p: number) =>
+      waitForServerReady(p, 800).then(() => true).catch(() => false));
 
-    const serverHandle = await doSpawn({
-      binaryPath: binPath,
-      modelPath,
-      port,
-      nCtx,
-      mmproj,
-      maxOutputTokens: modelsCfg?.maxOutputTokens,
-      logPath,
-      slotSaveDir,
-    });
-
-    serverUrl                              = `http://localhost:${port}`;
-    process.env["EMBER_MODEL_URL"]        ??= serverUrl;
+    serverUrl                       = `http://localhost:${port}`;
+    process.env["EMBER_MODEL_URL"] ??= serverUrl;
 
     const debugPort = port + 1;
     await writeDebugPort(process.cwd(), debugPort).catch(() => {});
     await writeDebugPid(process.cwd(), process.pid).catch(() => {});
 
-    try {
-      await doWait(port, 240_000);
-    } catch {
-      process.stderr.write(`[ember] WARNING: managed server did not become ready within 240s\n`);
-    }
+    // #159 boot matrix, "backend already running": probe BEFORE spawning -- a healthy
+    // llama-server already answering on the resolved port is adopted rather than
+    // double-spawned (which would otherwise crash on the port bind or silently shadow it).
+    if (await doProbeExisting(port)) {
+      process.stdout.write(`[ember] model endpoint: adopting already-running server on port ${port}\n`);
+      detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
+    } else {
+      // #159 boot matrix, "bad binary path" / "bad model path": validate BEFORE spawning so
+      // either produces one immediate, specific, operator-facing error instead of an uncaught
+      // spawn exception (bad binary -- the prior defect) or a silent 240s hang (bad model --
+      // llama-server never answers /health, and nothing previously raced that wait against
+      // the child dying).
+      const missing: string[] = [];
+      if (!(await stat(binPath).then(() => true).catch(() => false))) {
+        missing.push(`binary not found: ${binPath}`);
+      }
+      if (!(await stat(modelPath).then(() => true).catch(() => false))) {
+        missing.push(`model not found: ${modelPath}`);
+      }
+      if (missing.length > 0) {
+        process.stderr.write(`[ember] ERROR: cannot start the model server -- ${missing.join("; ")}\n`);
+        doExitMain(1);
+        return;
+      }
 
-    detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
-    registerManagedModel({ pid: serverHandle.process.pid! });
-    void serverHandle; // handle held in closure via cleanup hooks
+      let serverHandle: ServerHandle;
+      try {
+        serverHandle = await doSpawn({
+          binaryPath: binPath,
+          modelPath,
+          port,
+          nCtx,
+          mmproj,
+          maxOutputTokens: modelsCfg?.maxOutputTokens,
+          logPath,
+          slotSaveDir,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[ember] ERROR: could not start the model server (${msg})\n`);
+        doExitMain(1);
+        return;
+      }
+
+      // #159 boot matrix: race the health-wait against the child exiting early (bad model
+      // path, port bind failure, or any other fast crash) so a dead process is surfaced
+      // immediately instead of waiting the full 240s for it. Defensive `typeof` guard: a
+      // test double's `.process` need not be a full EventEmitter -- when it isn't, this
+      // falls back to the plain wait exactly as before (no behavior change for those tests).
+      const proc = serverHandle.process as unknown as {
+        once?: (event: string, listener: (...args: unknown[]) => void) => void;
+      };
+      type ReadyOutcome = { kind: "ready" } | { kind: "exited"; code: number | null } | { kind: "timeout" };
+      const earlyExit: Promise<number | null> | null =
+        typeof proc?.once === "function"
+          ? new Promise<number | null>((resolvePromise) => {
+              proc.once!("exit", (code: unknown) => resolvePromise(typeof code === "number" ? code : null));
+            })
+          : null;
+
+      const readyOutcome: ReadyOutcome = earlyExit
+        ? await Promise.race([
+            doWait(port, 240_000).then((): ReadyOutcome => ({ kind: "ready" })),
+            earlyExit.then((code): ReadyOutcome => ({ kind: "exited", code })),
+          ]).catch((): ReadyOutcome => ({ kind: "timeout" }))
+        : await doWait(port, 240_000)
+            .then((): ReadyOutcome => ({ kind: "ready" }))
+            .catch((): ReadyOutcome => ({ kind: "timeout" }));
+
+      if (readyOutcome.kind === "exited") {
+        const codeText = readyOutcome.code !== null ? ` (exit code ${readyOutcome.code})` : "";
+        process.stderr.write(
+          `[ember] ERROR: the model server exited before becoming ready${codeText}. Check llama_stderr.log at ${logPath}.\n`,
+        );
+        doExitMain(1);
+        return;
+      }
+      if (readyOutcome.kind === "timeout") {
+        process.stderr.write(`[ember] WARNING: managed server did not become ready within 240s\n`);
+      }
+
+      detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
+      registerManagedModel({ pid: serverHandle.process.pid! });
+      void serverHandle; // handle held in closure via cleanup hooks
+    }
   }
 
   // Session init
