@@ -1,0 +1,43 @@
+{
+  "ticket": "M524-M4-BRANCH-A-WIRING",
+  "ts": "2026-07-09T08:12:03.373525+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 524,
+  "cell": "M4",
+  "refs": [
+    "#480",
+    "#513",
+    "#466",
+    "#449"
+  ],
+  "scope": "CPU-side code work (no GPU, no training launch): wires Branch A (transplant-with-verified-buffer) as a reusable, production-callable boundary policy. Branch A is the ADJUDICATED law as of receipts/cbase-grow-rung2-event-b513-b4rerun-b3.json (transplant cos_alignment=0.9536 >= 0.82, reset cos_alignment=0.7397 in [0.70,0.78], per docs/spec/rung2-stabilize-config-respec-v1.md section 5's pre-registered P-2 rule -- decided BEFORE this receipt landed, not fit to it after the fact).",
+  "gap_found": "Neither production grow runner (scripts/cbase_grow_live.py, scripts/cbase_grow_rung.py) had ANY momentum-transplant wiring. cbase_grow_live.py's own docstring discloses reset_optimizer_on_resume=True as the only path -- production defaulted to Branch B (reset) by omission, not by adjudicated law. The only existing transplant + fail-closed code (cbase_grow_rung2_event.py's _pushforward_gate_momentum, p5_ratio_audit/run_p5_audit.py's EngagementFailure) lived in the forensic/measurement path only (single gate_proj, one layer, synthetic-dict trick), not in a form a production launcher could call for all FF tensors across all layers.",
+  "delivered": {
+    "module": "scripts/rung_boundary_momentum_transplant.py",
+    "function": "transplant_muon_ff_momentum(pre_model_state, pre_opt_state, *, n_layers, lr_muon, eps_sigma=0.0, eps_seed=0)",
+    "reuse_discipline": "Imports (never reimplements): cbase_grow_dryrun.widen_state_dict (the exact production net2net surgery, applied here to momentum buffers instead of weights, reproducing cbase_grow_rung2_event.py's own declared MOMENTUM_PUSHFORWARD_RULE_DECLARED verbatim); p5_ratio_audit.run_p5_audit.EngagementFailure + resolve_gate_momentum_buffer + rms (the #513-fixed real on-disk optimizer.pt resolver, int-param-id keyed, already fail-closed at the single-tensor level).",
+    "generalization": "Extends the private single-gate/one-layer helper to all n_layers*3 Muon-routed FF momentum buffers (gate/up/down_proj) in one widen_state_dict call, since that function already iterates n_layers internally.",
+    "fail_closed_assert": "Raises EngagementFailure (imported class, not a new exception type) on ANY missing buffer (resolver returns None) or near-zero buffer (rms < 1e-10, same threshold cbase_grow_rung2_event.py's own gate-only check uses) among the n_layers*3 tensors -- never a silent zeros_like substitution, the exact #513 defect class this boundary policy exists to never repeat. Exception message names the specific offending tensor key.",
+    "mandatory_receipt_fields": "Returns pre_buffer_rms_consumed (aggregate rms over every consumed pre-grow buffer, flattened+concatenated) and resolved_lr_muon (threaded from the caller's real config, never a script constant -- test_d is a dedicated regression guard for this) per docs/spec/rung2-stabilize-config-respec-v1.md section 5's mandatory-field requirement."
+  },
+  "unit_tests": {
+    "file": "scripts/test_524_m4_momentum_transplant.py",
+    "n_tests": 4,
+    "coverage": [
+      "test_a: real nonzero synthetic buffers -- transplant succeeds, widened momentum tensors match widen_state_dict's own row-duplication (gate/up) / half-split-duplication (down) math value-for-value (torch.equal, not just shape), both mandatory fields populated",
+      "test_b: one layer's gate_proj momentum buffer deleted from the optimizer state -- EngagementFailure raised, message names the missing key",
+      "test_c: one layer's down_proj momentum buffer set to exact zero (rms=0 < 1e-10 threshold) -- EngagementFailure raised, message names the near-zero key",
+      "test_d: resolved_lr_muon threads a distinctive caller-supplied value exactly (regression guard against the #513 defect class of a silently-substituted script constant)"
+    ],
+    "stdout": "[test_a] PASS n_tensors=6 pre_buffer_rms_consumed=9.857222e-02 resolved_lr_muon=0.02\n[test_b] PASS: missing buffer raised EngagementFailure, named the key\n[test_c] PASS: near-zero buffer raised EngagementFailure, named the key\n[test_d] PASS resolved_lr_muon=0.014159\nTEST_524_M4_MOMENTUM_TRANSPLANT_PASS\n",
+    "stderr": "",
+    "returncode": 0,
+    "pass": true
+  },
+  "not_in_scope_this_cell": "Wiring transplant_muon_ff_momentum() as a live call site inside cbase_grow_live.py/cbase_grow_rung.py's actual stabilize/grow-event runners (i.e. flipping reset_optimizer_on_resume's default or adding a transplant_momentum= parameter to those scripts' CLI) is NOT done here -- that is a production-launcher change belonging to the stabilize-launch PR itself, which needs the winning VRAM config from M1-M3 decided first. This cell delivers the reusable, tested building block those launchers will call.",
+  "verdict": "PASS",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": []
+}
