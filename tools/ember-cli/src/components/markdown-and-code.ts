@@ -18,8 +18,14 @@ export { LRUCache, HIGHLIGHT_CACHE_MAX, highlightCache, hashPair };
 // Syntax-highlight gate + helpers
 // ---------------------------------------------------------------------------
 
+// Issue #56 / #581: entrypoints/process-entry.ts seeds this env var with the STRING "0"
+// (`??= "0"`, meant to mean "off"). The old gate used `!!process.env[...]`, and `!!"0"` is
+// `true` in JavaScript (any non-empty string is truthy) -- so the module-level default flipped
+// highlighting permanently ON for every process that ever imported the entrypoint, including
+// unrelated test files sharing that process. Comparing against the literal enabled value ("1")
+// makes "0" and unset both correctly read as disabled.
 export function isSyntaxHighlightEnabled(): boolean {
-  return !!process.env["EMBER_SYNTAX_HIGHLIGHT"];
+  return process.env["EMBER_SYNTAX_HIGHLIGHT"] === "1";
 }
 
 // ---------------------------------------------------------------------------

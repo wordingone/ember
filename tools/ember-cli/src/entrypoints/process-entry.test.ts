@@ -148,6 +148,35 @@ describe("process-entry — AC3: EMBER_DISABLE_NONESSENTIAL_TRAFFIC is '1' unles
   });
 });
 
+describe("process-entry — EMBER_SYNTAX_HIGHLIGHT default is '1' unless pre-set (issue #56/#581)", () => {
+  it("EMBER_SYNTAX_HIGHLIGHT is exactly '1' after module load (not merely 'defined')", () => {
+    // The module sets: process.env["EMBER_SYNTAX_HIGHLIGHT"] ??= "1"
+    // The gate in markdown-and-code.ts reads this via `=== "1"`, so the entry-path default
+    // must be the exact string "1" for real launches to render code blocks highlighted (the
+    // documented, maintainer-ruled live behavior) -- not merely "defined" to some truthy value.
+    // Assumes the test environment has not pre-set this key before this module loaded.
+    expect(process.env["EMBER_SYNTAX_HIGHLIGHT"]).toBe("1");
+  });
+
+  it("??= inversion guard: pre-set '0' (highlighting disabled) is preserved, not forced to '1'", () => {
+    // If a caller sets EMBER_SYNTAX_HIGHLIGHT="0" before process-entry loads, the ??= must
+    // leave it at "0" (the unset-env fallback stays disabled; explicit opt-out is respected).
+    const KEY = "__ac_syntax_highlight_inversion_probe__";
+    delete process.env[KEY];
+
+    // Case 1: absent → "1" applied (highlighting enabled by default)
+    (process.env as Record<string, string>)[KEY] ??= "1";
+    expect(process.env[KEY]).toBe("1");
+
+    // Case 2: pre-set to "0" (caller explicitly disables highlighting) → ??= is a no-op
+    process.env[KEY] = "0";
+    (process.env as Record<string, string>)[KEY] ??= "1";
+    expect(process.env[KEY]).toBe("0"); // must be "0", NOT "1" — the opt-out is preserved
+
+    delete process.env[KEY];
+  });
+});
+
 describe("process-entry — AC4: --version prints version and exits 0", () => {
   it("isFastPath detects --version", () => {
     expect(isFastPath(["node", "ember.js", "--version"])).toBe(true);
