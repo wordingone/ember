@@ -6,6 +6,71 @@ artifact + its freeze SHA/date, what changes, why, and who owns the call.
 
 ---
 
+## DEV-005 — eval-suite-freeze-v1 (battery-14): #193-v2 contamination convention ADOPTED AS SPEC + 147-item exclusion amendment
+
+**Date filed:** 2026-07-09 (the A1 eval-freeze execution lane, issue #593, executing
+the coordinator ruling: issue #593 comment 4930531475 — the binding text). **Filed
+before any capability claim cites the suite.** **Frozen artifact:**
+`docs/spec/eval-suite-freeze-v1.md`.
+
+**What changes:** (1) the freeze doc gains a "Contamination counting convention"
+section adopting the issue-#193 pre-registered v2 convention as SPEC for external
+suites (item contaminated iff contiguous matched run >= 50 tokens OR > 10% of
+13-gram windows matched; per-dataset; both statistics published per item; gate =
+0 contaminated items post-exclusion; raw any-match totals recorded, not gated) —
+the counting convention was previously unstated for external suites. (2) The first
+application excludes 147 items from suite (b) (HumanEval+ 58, MMLU-Pro 69, MBPP 12,
+HellaSwag 8) via a dated amendment receipt chained by sha256 to the freeze
+declaration (`receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-*.json`);
+the declaration is NEVER retro-edited — frozen suite = declaration + amendment.
+AC4's held-out selection stays anchored to the v1 declaration hash (no re-roll,
+ruling point 3).
+
+**Who owns the call:** the coordinator (ruling comment, dated); this entry and the
+spec text execute it verbatim. **Receipts:** the amendment receipt above; scan
+receipt `receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json` +
+per-item JSONL. Relates to issues #593, #193, #440, #591.
+
+---
+
+## DEV-004 — eval-suite-freeze-v1 (battery-14): GPQA-diamond EXCLUDED from v1
+
+**Date filed:** 2026-07-09 (the A1 eval-freeze execution lane, issue #593). **Filed
+before any capability claim cites the suite** (no eval-reference leg has run; the A1
+declaration receipt lands in the same PR as this entry). **Frozen artifact:**
+`docs/spec/eval-suite-freeze-v1.md` (Status: Frozen, effective 2026-07-08); this entry
+uses that doc's own amendment mechanism ("Amendments to this frozen specification
+require entries in `docs/deviations.md` under the battery-14 section").
+
+**What changes:** GPQA-diamond's status moves from PIN-PENDING ("queued for when the
+operator is next active") to **EXCLUDED from suite v1**. Suite (b) of the A1 freeze
+declaration is the SEVEN successfully pinned datasets (MMLU-Pro, GSM8K, MATH-500,
+ARC-Challenge, HumanEval+, MBPP, HellaSwag) — exactly the rows the freeze doc's own
+pinning-status table marks "Pinned", with their recorded test-split sha256 values
+unchanged.
+
+**Why:** a frozen suite cannot carry an open-ended pending member — every downstream
+admissibility check ("is this receipt's suite exactly the frozen one?") needs a closed
+set. GPQA-diamond's pin is blocked on a HuggingFace license-consent gate that the
+automated pin process correctly refuses to accept on the operator's behalf; waiting
+converts a license gate into an indefinite freeze-blocker for every governed C8 arm
+(execution queue rows 3, 5, 6, 8, 9 gate on A1 — refs #591). Per the A1 issue's own
+rule: **a dataset pinned later joins a future suite VERSION; it is never appended to a
+frozen one.** GPQA-diamond, once its consent gate clears, is a suite-v2 candidate.
+
+**Who owns the call:** the exclusion rule is stated verbatim in the #593 dispatch
+(coordinator-authored, frozen spec); this entry executes it. Re-inclusion (as part of
+a versioned v2) is a coordinator/operator call when the license consent is granted in
+an operator session.
+
+**Receipts:** `receipts/eval-suite-freeze/a1-freeze-declaration-*.json` (this PR;
+suite (b) = seven datasets, GPQA-diamond absent with this entry cited),
+`receipts/eval-suite-freeze/eval-suite-freeze-v1.json` (the original pin receipt whose
+GPQA row carries the PIN-PENDING blocker text, unchanged). Relates to issues #593,
+#487, #591.
+
+---
+
 ## DEV-003 — p1-envelope-sweep-prereg-v1: point-numbering clarification, E0 operational formula, warmup-rule implementation
 
 **Date filed:** 2026-07-08 (the lead, ruling on findings from the P1 envelope-sweep runner

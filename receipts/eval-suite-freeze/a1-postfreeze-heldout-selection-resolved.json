@@ -1,0 +1,38 @@
+{
+  "ticket": "A1-POSTFREEZE-HELDOUT-SELECTION",
+  "ts": "2026-07-09T23:33:04.743994+00:00",
+  "schema": "a1-postfreeze-heldout-selection/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization); eval_freeze_hash is a git commit sha",
+  "issue_refs": [
+    "#593",
+    "#123",
+    "#591"
+  ],
+  "rule_doc": "docs/spec/a1-postfreeze-heldout-selection-v1.md",
+  "eval_freeze_hash": "ccde4a676085e633b69d8ba1b501b80f49e2e907",
+  "computation": {
+    "first_8_hex": "ccde4a67",
+    "as_int": 3437120103,
+    "pool_size": 8,
+    "index": 7
+  },
+  "selected": {
+    "index": 7,
+    "dataset": "SciQ",
+    "canonical_source": "allenai/sciq",
+    "split": "test"
+  },
+  "pool_frozen_order": [
+    "WinoGrande (winogrande_xl)",
+    "PIQA",
+    "OpenBookQA (main)",
+    "BoolQ",
+    "CommonsenseQA",
+    "LAMBADA (standard)",
+    "TruthfulQA (multiple_choice)",
+    "SciQ"
+  ],
+  "never_before_run_check": "all 8 candidates verified absent from every git-tracked receipt at selection time (git grep -il over receipts/)",
+  "pin_note": "the selected dataset's pin (revision sha + test-split sha256 + row count) joins suite VERSION 2 per the freeze doc's versioning law; development-signal-only until then"
+}

@@ -1,0 +1,2430 @@
+{
+  "ticket": "A1-FREEZE-EXCLUSION-AMENDMENT",
+  "ts": "2026-07-09T23:41:49.301842+00:00",
+  "schema": "a1-freeze-exclusion-amendment/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#593",
+    "#193",
+    "#440",
+    "#591",
+    "#123"
+  ],
+  "ruling": {
+    "source": "issue #593 coordinator ruling comment 4930531475 (dated, binding)",
+    "verdict": "suite (b) pre-exclusion = 147 contaminated items under the refs #193 v2 convention; cure = exclusion with disclosure; post-exclusion suite (b) = 0; A1 gate passes on these receipts once this amendment lands"
+  },
+  "chain": {
+    "declaration": {
+      "path": "receipts/eval-suite-freeze/a1-freeze-declaration-20260709T233050Z.json",
+      "sha256": "e2bd475cce894c84e0a82ae55e828df1eb834233aa3baf7ac56d46e10bf6d816",
+      "note": "NEVER edited (append-only custody, refs #482 shape); the frozen suite definition = declaration + this amendment"
+    },
+    "scan_receipt": {
+      "path": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json",
+      "sha256": "99686792b79c783b9c557dcf913ac67d59e8b9d232a3a995f4b237bcf7f0c569"
+    },
+    "per_item_jsonl": {
+      "path": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+      "sha256": "d4518ccf2368769bca13b3e45924a09beb42811baeafce36b0040a5091626ac0"
+    },
+    "amendment_sha256_note": "a file cannot contain its own hash; this amendment's sha256 is computed over its on-disk bytes post-write and recorded in PR #603 and the lane report"
+  },
+  "adopted_convention": {
+    "name": "refs #193 v2 (ADOPTED AS SPEC via #593 / PR #603)",
+    "window_tokens": 13,
+    "tokenizer": {
+      "path": "tokenizer/tokenizer.json",
+      "sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
+      "encode_semantics": "added-token-matching-disabled-v1; 21/31755 vocab-absent merges dropped in-memory (disclosed in the scan receipt)"
+    },
+    "item_contaminated_iff": "(a) max_run_tokens >= 50 (longest consecutive matched-window run + 12, the upper-bound proxy defined in the scan receipt) OR (b) matched 13-gram window fraction > 0.10",
+    "applied_per_dataset": true
+  },
+  "exclusions": {
+    "n_excluded": 147,
+    "per_dataset": {
+      "MMLU-Pro": 69,
+      "HumanEval+": 58,
+      "MBPP": 12,
+      "HellaSwag": 8
+    },
+    "items": [
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 1997,
+        "native_id": {
+          "question_id": 2097
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.155556,
+        "max_run_tokens": 26,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 2013,
+          "jsonl_line": 2014
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 2077,
+        "native_id": {
+          "question_id": 2177
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.240196,
+        "max_run_tokens": 61,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 2093,
+          "jsonl_line": 2094
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 2424,
+        "native_id": {
+          "question_id": 2527
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.25,
+        "max_run_tokens": 31,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 2440,
+          "jsonl_line": 2441
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 3783,
+        "native_id": {
+          "question_id": 3906
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.134146,
+        "max_run_tokens": 23,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 3799,
+          "jsonl_line": 3800
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4547,
+        "native_id": {
+          "question_id": 4679
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.457407,
+        "max_run_tokens": 259,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4563,
+          "jsonl_line": 4564
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4563,
+        "native_id": {
+          "question_id": 4695
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.47216,
+        "max_run_tokens": 74,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4579,
+          "jsonl_line": 4580
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4582,
+        "native_id": {
+          "question_id": 4714
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.223881,
+        "max_run_tokens": 66,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4598,
+          "jsonl_line": 4599
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4583,
+        "native_id": {
+          "question_id": 4715
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.395577,
+        "max_run_tokens": 56,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4599,
+          "jsonl_line": 4600
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4585,
+        "native_id": {
+          "question_id": 4717
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.244275,
+        "max_run_tokens": 54,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4601,
+          "jsonl_line": 4602
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4586,
+        "native_id": {
+          "question_id": 4718
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.204348,
+        "max_run_tokens": 71,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4602,
+          "jsonl_line": 4603
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4588,
+        "native_id": {
+          "question_id": 4720
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.403509,
+        "max_run_tokens": 56,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4604,
+          "jsonl_line": 4605
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4610,
+        "native_id": {
+          "question_id": 4742
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.11022,
+        "max_run_tokens": 22,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4626,
+          "jsonl_line": 4627
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4611,
+        "native_id": {
+          "question_id": 4743
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.103383,
+        "max_run_tokens": 22,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4627,
+          "jsonl_line": 4628
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4612,
+        "native_id": {
+          "question_id": 4744
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.178571,
+        "max_run_tokens": 52,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4628,
+          "jsonl_line": 4629
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4614,
+        "native_id": {
+          "question_id": 4746
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.203024,
+        "max_run_tokens": 71,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4630,
+          "jsonl_line": 4631
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4653,
+        "native_id": {
+          "question_id": 4789
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.194079,
+        "max_run_tokens": 35,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4669,
+          "jsonl_line": 4670
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4656,
+        "native_id": {
+          "question_id": 4792
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.468619,
+        "max_run_tokens": 236,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4672,
+          "jsonl_line": 4673
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4657,
+        "native_id": {
+          "question_id": 4793
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.493392,
+        "max_run_tokens": 116,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4673,
+          "jsonl_line": 4674
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4662,
+        "native_id": {
+          "question_id": 4798
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.104623,
+        "max_run_tokens": 41,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4678,
+          "jsonl_line": 4679
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4675,
+        "native_id": {
+          "question_id": 4813
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.665753,
+        "max_run_tokens": 255,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4691,
+          "jsonl_line": 4692
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4685,
+        "native_id": {
+          "question_id": 4824
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.303797,
+        "max_run_tokens": 66,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4701,
+          "jsonl_line": 4702
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4688,
+        "native_id": {
+          "question_id": 4827
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.184534,
+        "max_run_tokens": 59,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4704,
+          "jsonl_line": 4705
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4694,
+        "native_id": {
+          "question_id": 4833
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.13522,
+        "max_run_tokens": 40,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4710,
+          "jsonl_line": 4711
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4715,
+        "native_id": {
+          "question_id": 4854
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.104425,
+        "max_run_tokens": 49,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4731,
+          "jsonl_line": 4732
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4719,
+        "native_id": {
+          "question_id": 4858
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.654987,
+        "max_run_tokens": 255,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4735,
+          "jsonl_line": 4736
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4744,
+        "native_id": {
+          "question_id": 4883
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.442387,
+        "max_run_tokens": 187,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4760,
+          "jsonl_line": 4761
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4747,
+        "native_id": {
+          "question_id": 4886
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.390777,
+        "max_run_tokens": 56,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4763,
+          "jsonl_line": 4764
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4751,
+        "native_id": {
+          "question_id": 4890
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.117296,
+        "max_run_tokens": 49,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4767,
+          "jsonl_line": 4768
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4758,
+        "native_id": {
+          "question_id": 4897
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.24493,
+        "max_run_tokens": 59,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4774,
+          "jsonl_line": 4775
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4759,
+        "native_id": {
+          "question_id": 4898
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.337808,
+        "max_run_tokens": 92,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4775,
+          "jsonl_line": 4776
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4761,
+        "native_id": {
+          "question_id": 4900
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.248811,
+        "max_run_tokens": 59,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4777,
+          "jsonl_line": 4778
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4774,
+        "native_id": {
+          "question_id": 4913
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.199005,
+        "max_run_tokens": 52,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4790,
+          "jsonl_line": 4791
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4776,
+        "native_id": {
+          "question_id": 4915
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.32312,
+        "max_run_tokens": 48,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4792,
+          "jsonl_line": 4793
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4777,
+        "native_id": {
+          "question_id": 4916
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.428298,
+        "max_run_tokens": 236,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4793,
+          "jsonl_line": 4794
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4778,
+        "native_id": {
+          "question_id": 4917
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.155096,
+        "max_run_tokens": 59,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4794,
+          "jsonl_line": 4795
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4780,
+        "native_id": {
+          "question_id": 4919
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.45288,
+        "max_run_tokens": 104,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4796,
+          "jsonl_line": 4797
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4799,
+        "native_id": {
+          "question_id": 4938
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.196937,
+        "max_run_tokens": 42,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4815,
+          "jsonl_line": 4816
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4804,
+        "native_id": {
+          "question_id": 4943
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.544304,
+        "max_run_tokens": 187,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4820,
+          "jsonl_line": 4821
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4819,
+        "native_id": {
+          "question_id": 4958
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.146758,
+        "max_run_tokens": 40,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4835,
+          "jsonl_line": 4836
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4842,
+        "native_id": {
+          "question_id": 4981
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.322851,
+        "max_run_tokens": 89,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4858,
+          "jsonl_line": 4859
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4844,
+        "native_id": {
+          "question_id": 4983
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.232068,
+        "max_run_tokens": 35,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4860,
+          "jsonl_line": 4861
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4845,
+        "native_id": {
+          "question_id": 4984
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.360335,
+        "max_run_tokens": 89,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4861,
+          "jsonl_line": 4862
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4849,
+        "native_id": {
+          "question_id": 4988
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.149306,
+        "max_run_tokens": 41,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4865,
+          "jsonl_line": 4866
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4852,
+        "native_id": {
+          "question_id": 4991
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.315399,
+        "max_run_tokens": 97,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4868,
+          "jsonl_line": 4869
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4853,
+        "native_id": {
+          "question_id": 4992
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.548052,
+        "max_run_tokens": 74,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4869,
+          "jsonl_line": 4870
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4874,
+        "native_id": {
+          "question_id": 5014
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.385027,
+        "max_run_tokens": 84,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4890,
+          "jsonl_line": 4891
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4880,
+        "native_id": {
+          "question_id": 5020
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.169369,
+        "max_run_tokens": 71,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4896,
+          "jsonl_line": 4897
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4884,
+        "native_id": {
+          "question_id": 5024
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.283806,
+        "max_run_tokens": 97,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 4900,
+          "jsonl_line": 4901
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 4987,
+        "native_id": {
+          "question_id": 5129
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.155556,
+        "max_run_tokens": 19,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 5003,
+          "jsonl_line": 5004
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 5340,
+        "native_id": {
+          "question_id": 5486
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.155172,
+        "max_run_tokens": 21,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 5356,
+          "jsonl_line": 5357
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 5568,
+        "native_id": {
+          "question_id": 5723
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.137931,
+        "max_run_tokens": 20,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 5584,
+          "jsonl_line": 5585
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 5695,
+        "native_id": {
+          "question_id": 5853
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.244444,
+        "max_run_tokens": 34,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 5711,
+          "jsonl_line": 5712
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 6983,
+        "native_id": {
+          "question_id": 7154
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.11828,
+        "max_run_tokens": 23,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 6999,
+          "jsonl_line": 7000
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 8153,
+        "native_id": {
+          "question_id": 8339
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.381188,
+        "max_run_tokens": 89,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 8169,
+          "jsonl_line": 8170
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 8552,
+        "native_id": {
+          "question_id": 8740
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.367424,
+        "max_run_tokens": 44,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 8568,
+          "jsonl_line": 8569
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 8554,
+        "native_id": {
+          "question_id": 8742
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.142857,
+        "max_run_tokens": 27,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 8570,
+          "jsonl_line": 8571
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 8569,
+        "native_id": {
+          "question_id": 8757
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.2,
+        "max_run_tokens": 23,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 8585,
+          "jsonl_line": 8586
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 8787,
+        "native_id": {
+          "question_id": 8976
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.136691,
+        "max_run_tokens": 22,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 8803,
+          "jsonl_line": 8804
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 9064,
+        "native_id": {
+          "question_id": 9253
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.2,
+        "max_run_tokens": 31,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 9080,
+          "jsonl_line": 9081
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 9139,
+        "native_id": {
+          "question_id": 9328
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.295918,
+        "max_run_tokens": 41,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 9155,
+          "jsonl_line": 9156
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 9398,
+        "native_id": {
+          "question_id": 9587
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.105263,
+        "max_run_tokens": 22,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 9414,
+          "jsonl_line": 9415
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 9625,
+        "native_id": {
+          "question_id": 9816
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.197248,
+        "max_run_tokens": 55,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 9641,
+          "jsonl_line": 9642
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 9859,
+        "native_id": {
+          "question_id": 10053
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.2,
+        "max_run_tokens": 33,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 9875,
+          "jsonl_line": 9876
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 10124,
+        "native_id": {
+          "question_id": 10326
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.198238,
+        "max_run_tokens": 57,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 10140,
+          "jsonl_line": 10141
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 10161,
+        "native_id": {
+          "question_id": 10363
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.189655,
+        "max_run_tokens": 23,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 10177,
+          "jsonl_line": 10178
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 10184,
+        "native_id": {
+          "question_id": 10387
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.447761,
+        "max_run_tokens": 42,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 10200,
+          "jsonl_line": 10201
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 10379,
+        "native_id": {
+          "question_id": 10585
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.109023,
+        "max_run_tokens": 21,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 10395,
+          "jsonl_line": 10396
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 10411,
+        "native_id": {
+          "question_id": 10619
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.113475,
+        "max_run_tokens": 14,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 10427,
+          "jsonl_line": 10428
+        }
+      },
+      {
+        "dataset": "MMLU-Pro",
+        "dataset_line": 11351,
+        "native_id": {
+          "question_id": 11575
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.125,
+        "max_run_tokens": 28,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 11367,
+          "jsonl_line": 11368
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 0,
+        "native_id": {
+          "task_id": "HumanEval/0"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.157471,
+        "max_run_tokens": 83,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15039,
+          "jsonl_line": 15040
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 3,
+        "native_id": {
+          "task_id": "HumanEval/3"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.190668,
+        "max_run_tokens": 56,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15042,
+          "jsonl_line": 15043
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 7,
+        "native_id": {
+          "task_id": "HumanEval/7"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.18467,
+        "max_run_tokens": 58,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15046,
+          "jsonl_line": 15047
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 8,
+        "native_id": {
+          "task_id": "HumanEval/8"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.304983,
+        "max_run_tokens": 129,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15047,
+          "jsonl_line": 15048
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 9,
+        "native_id": {
+          "task_id": "HumanEval/9"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.278195,
+        "max_run_tokens": 89,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15048,
+          "jsonl_line": 15049
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 16,
+        "native_id": {
+          "task_id": "HumanEval/16"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.008364,
+        "max_run_tokens": 114,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15055,
+          "jsonl_line": 15056
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 17,
+        "native_id": {
+          "task_id": "HumanEval/17"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.324139,
+        "max_run_tokens": 216,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15056,
+          "jsonl_line": 15057
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 18,
+        "native_id": {
+          "task_id": "HumanEval/18"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.091799,
+        "max_run_tokens": 463,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15057,
+          "jsonl_line": 15058
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 21,
+        "native_id": {
+          "task_id": "HumanEval/21"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.076513,
+        "max_run_tokens": 80,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15060,
+          "jsonl_line": 15061
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 26,
+        "native_id": {
+          "task_id": "HumanEval/26"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.172439,
+        "max_run_tokens": 60,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15065,
+          "jsonl_line": 15066
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 29,
+        "native_id": {
+          "task_id": "HumanEval/29"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.015985,
+        "max_run_tokens": 81,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15068,
+          "jsonl_line": 15069
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 31,
+        "native_id": {
+          "task_id": "HumanEval/31"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.222306,
+        "max_run_tokens": 99,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15070,
+          "jsonl_line": 15071
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 36,
+        "native_id": {
+          "task_id": "HumanEval/36"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.100155,
+        "max_run_tokens": 84,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15075,
+          "jsonl_line": 15076
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 40,
+        "native_id": {
+          "task_id": "HumanEval/40"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.081996,
+        "max_run_tokens": 70,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15079,
+          "jsonl_line": 15080
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 43,
+        "native_id": {
+          "task_id": "HumanEval/43"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.135768,
+        "max_run_tokens": 78,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15082,
+          "jsonl_line": 15083
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 47,
+        "native_id": {
+          "task_id": "HumanEval/47"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.221028,
+        "max_run_tokens": 111,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15086,
+          "jsonl_line": 15087
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 48,
+        "native_id": {
+          "task_id": "HumanEval/48"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.086641,
+        "max_run_tokens": 761,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15087,
+          "jsonl_line": 15088
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 52,
+        "native_id": {
+          "task_id": "HumanEval/52"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.056573,
+        "max_run_tokens": 52,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15091,
+          "jsonl_line": 15092
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 54,
+        "native_id": {
+          "task_id": "HumanEval/54"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.054364,
+        "max_run_tokens": 81,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15093,
+          "jsonl_line": 15094
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 56,
+        "native_id": {
+          "task_id": "HumanEval/56"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.033085,
+        "max_run_tokens": 1977,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15095,
+          "jsonl_line": 15096
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 57,
+        "native_id": {
+          "task_id": "HumanEval/57"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.136388,
+        "max_run_tokens": 1010,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15096,
+          "jsonl_line": 15097
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 61,
+        "native_id": {
+          "task_id": "HumanEval/61"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.054365,
+        "max_run_tokens": 737,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15100,
+          "jsonl_line": 15101
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 68,
+        "native_id": {
+          "task_id": "HumanEval/68"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.116616,
+        "max_run_tokens": 41,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15107,
+          "jsonl_line": 15108
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 69,
+        "native_id": {
+          "task_id": "HumanEval/69"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.573615,
+        "max_run_tokens": 136,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15108,
+          "jsonl_line": 15109
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 72,
+        "native_id": {
+          "task_id": "HumanEval/72"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.168024,
+        "max_run_tokens": 1087,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15111,
+          "jsonl_line": 15112
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 73,
+        "native_id": {
+          "task_id": "HumanEval/73"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.335203,
+        "max_run_tokens": 127,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15112,
+          "jsonl_line": 15113
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 74,
+        "native_id": {
+          "task_id": "HumanEval/74"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.105289,
+        "max_run_tokens": 40,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15113,
+          "jsonl_line": 15114
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 75,
+        "native_id": {
+          "task_id": "HumanEval/75"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.175159,
+        "max_run_tokens": 79,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15114,
+          "jsonl_line": 15115
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 76,
+        "native_id": {
+          "task_id": "HumanEval/76"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.164962,
+        "max_run_tokens": 340,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15115,
+          "jsonl_line": 15116
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 77,
+        "native_id": {
+          "task_id": "HumanEval/77"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.229243,
+        "max_run_tokens": 195,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15116,
+          "jsonl_line": 15117
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 80,
+        "native_id": {
+          "task_id": "HumanEval/80"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.072705,
+        "max_run_tokens": 715,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15119,
+          "jsonl_line": 15120
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 82,
+        "native_id": {
+          "task_id": "HumanEval/82"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.054253,
+        "max_run_tokens": 61,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15121,
+          "jsonl_line": 15122
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 87,
+        "native_id": {
+          "task_id": "HumanEval/87"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.099785,
+        "max_run_tokens": 79,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15126,
+          "jsonl_line": 15127
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 88,
+        "native_id": {
+          "task_id": "HumanEval/88"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.133165,
+        "max_run_tokens": 55,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15127,
+          "jsonl_line": 15128
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 91,
+        "native_id": {
+          "task_id": "HumanEval/91"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.064682,
+        "max_run_tokens": 133,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15130,
+          "jsonl_line": 15131
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 92,
+        "native_id": {
+          "task_id": "HumanEval/92"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.166554,
+        "max_run_tokens": 576,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15131,
+          "jsonl_line": 15132
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 95,
+        "native_id": {
+          "task_id": "HumanEval/95"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.035531,
+        "max_run_tokens": 310,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15134,
+          "jsonl_line": 15135
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 96,
+        "native_id": {
+          "task_id": "HumanEval/96"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.920539,
+        "max_run_tokens": 3228,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15135,
+          "jsonl_line": 15136
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 106,
+        "native_id": {
+          "task_id": "HumanEval/106"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.454519,
+        "max_run_tokens": 76,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15145,
+          "jsonl_line": 15146
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 109,
+        "native_id": {
+          "task_id": "HumanEval/109"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.12541,
+        "max_run_tokens": 262,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15148,
+          "jsonl_line": 15149
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 114,
+        "native_id": {
+          "task_id": "HumanEval/114"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.171933,
+        "max_run_tokens": 78,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15153,
+          "jsonl_line": 15154
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 115,
+        "native_id": {
+          "task_id": "HumanEval/115"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.534813,
+        "max_run_tokens": 169,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15154,
+          "jsonl_line": 15155
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 124,
+        "native_id": {
+          "task_id": "HumanEval/124"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.065707,
+        "max_run_tokens": 1977,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15163,
+          "jsonl_line": 15164
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 126,
+        "native_id": {
+          "task_id": "HumanEval/126"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.199701,
+        "max_run_tokens": 1057,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15165,
+          "jsonl_line": 15166
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 129,
+        "native_id": {
+          "task_id": "HumanEval/129"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.219116,
+        "max_run_tokens": 51,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15168,
+          "jsonl_line": 15169
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 132,
+        "native_id": {
+          "task_id": "HumanEval/132"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.047551,
+        "max_run_tokens": 794,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15171,
+          "jsonl_line": 15172
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 133,
+        "native_id": {
+          "task_id": "HumanEval/133"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.063451,
+        "max_run_tokens": 71,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15172,
+          "jsonl_line": 15173
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 134,
+        "native_id": {
+          "task_id": "HumanEval/134"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.117258,
+        "max_run_tokens": 1603,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15173,
+          "jsonl_line": 15174
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 138,
+        "native_id": {
+          "task_id": "HumanEval/138"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.214744,
+        "max_run_tokens": 62,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15177,
+          "jsonl_line": 15178
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 142,
+        "native_id": {
+          "task_id": "HumanEval/142"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.25106,
+        "max_run_tokens": 106,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15181,
+          "jsonl_line": 15182
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 144,
+        "native_id": {
+          "task_id": "HumanEval/144"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.131117,
+        "max_run_tokens": 827,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15183,
+          "jsonl_line": 15184
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 146,
+        "native_id": {
+          "task_id": "HumanEval/146"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.020371,
+        "max_run_tokens": 55,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15185,
+          "jsonl_line": 15186
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 151,
+        "native_id": {
+          "task_id": "HumanEval/151"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.012516,
+        "max_run_tokens": 100,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15190,
+          "jsonl_line": 15191
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 152,
+        "native_id": {
+          "task_id": "HumanEval/152"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.308414,
+        "max_run_tokens": 1025,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15191,
+          "jsonl_line": 15192
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 154,
+        "native_id": {
+          "task_id": "HumanEval/154"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.034783,
+        "max_run_tokens": 93,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15193,
+          "jsonl_line": 15194
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 157,
+        "native_id": {
+          "task_id": "HumanEval/157"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.191538,
+        "max_run_tokens": 1029,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15196,
+          "jsonl_line": 15197
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 158,
+        "native_id": {
+          "task_id": "HumanEval/158"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.062699,
+        "max_run_tokens": 80,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15197,
+          "jsonl_line": 15198
+        }
+      },
+      {
+        "dataset": "HumanEval+",
+        "dataset_line": 163,
+        "native_id": {
+          "task_id": "HumanEval/163"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": false,
+        "window_frac": 0.027598,
+        "max_run_tokens": 53,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15202,
+          "jsonl_line": 15203
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 29,
+        "native_id": {
+          "task_id": 40
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.1875,
+        "max_run_tokens": 47,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15232,
+          "jsonl_line": 15233
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 86,
+        "native_id": {
+          "task_id": 97
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.184049,
+        "max_run_tokens": 36,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15289,
+          "jsonl_line": 15290
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 91,
+        "native_id": {
+          "task_id": 102
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.120879,
+        "max_run_tokens": 23,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15294,
+          "jsonl_line": 15295
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 132,
+        "native_id": {
+          "task_id": 143
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.113043,
+        "max_run_tokens": 18,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15335,
+          "jsonl_line": 15336
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 150,
+        "native_id": {
+          "task_id": 161
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.172043,
+        "max_run_tokens": 22,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15353,
+          "jsonl_line": 15354
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 151,
+        "native_id": {
+          "task_id": 162
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.157303,
+        "max_run_tokens": 26,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15354,
+          "jsonl_line": 15355
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 163,
+        "native_id": {
+          "task_id": 174
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.101942,
+        "max_run_tokens": 24,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15366,
+          "jsonl_line": 15367
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 254,
+        "native_id": {
+          "task_id": 265
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.197479,
+        "max_run_tokens": 41,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15457,
+          "jsonl_line": 15458
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 317,
+        "native_id": {
+          "task_id": 328
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.223958,
+        "max_run_tokens": 21,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15520,
+          "jsonl_line": 15521
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 369,
+        "native_id": {
+          "task_id": 380
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.396552,
+        "max_run_tokens": 40,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15572,
+          "jsonl_line": 15573
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 400,
+        "native_id": {
+          "task_id": 411
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.104167,
+        "max_run_tokens": 22,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15603,
+          "jsonl_line": 15604
+        }
+      },
+      {
+        "dataset": "MBPP",
+        "dataset_line": 492,
+        "native_id": {
+          "task_id": 503
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.110465,
+        "max_run_tokens": 22,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 15695,
+          "jsonl_line": 15696
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 5336,
+        "native_id": {
+          "ind": 14054,
+          "source_id": "wikihow~23266"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.196653,
+        "max_run_tokens": 39,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 21039,
+          "jsonl_line": 21040
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 5458,
+        "native_id": {
+          "ind": 14981,
+          "source_id": "wikihow~24780"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.320917,
+        "max_run_tokens": 55,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 21161,
+          "jsonl_line": 21162
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 5558,
+        "native_id": {
+          "ind": 15728,
+          "source_id": "wikihow~26023"
+        },
+        "v2a_run_ge50tok": true,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.281843,
+        "max_run_tokens": 52,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 21261,
+          "jsonl_line": 21262
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 6790,
+        "native_id": {
+          "ind": 25397,
+          "source_id": "wikihow~41862"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.239726,
+        "max_run_tokens": 47,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 22493,
+          "jsonl_line": 22494
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 7567,
+        "native_id": {
+          "ind": 31186,
+          "source_id": "wikihow~51402"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.224719,
+        "max_run_tokens": 40,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 23270,
+          "jsonl_line": 23271
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 8421,
+        "native_id": {
+          "ind": 38160,
+          "source_id": "wikihow~62845"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.164234,
+        "max_run_tokens": 35,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 24124,
+          "jsonl_line": 24125
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 9348,
+        "native_id": {
+          "ind": 45368,
+          "source_id": "wikihow~74673"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.167213,
+        "max_run_tokens": 43,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 25051,
+          "jsonl_line": 25052
+        }
+      },
+      {
+        "dataset": "HellaSwag",
+        "dataset_line": 9884,
+        "native_id": {
+          "ind": 49691,
+          "source_id": "wikihow~81783"
+        },
+        "v2a_run_ge50tok": false,
+        "v2b_frac_gt10pct": true,
+        "window_frac": 0.145763,
+        "max_run_tokens": 35,
+        "evidence": {
+          "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+          "row_idx": 25587,
+          "jsonl_line": 25588
+        }
+      }
+    ]
+  },
+  "post_exclusion_suite_b": {
+    "definition": "the declaration's seven pinned datasets MINUS the items enumerated above; scoring runs must skip these items and cite this amendment",
+    "contaminated_items_remaining": 0
+  },
+  "final_contamination_recheck": {
+    "suite_a": 0,
+    "suite_b_post_exclusion": 0,
+    "suite_b_pre_exclusion_items": 147,
+    "suite_b_raw_any_match_13gram": 848857,
+    "note": "pre-exclusion figure disclosed inline per the ruling; raw any-match total is the transparency figure, not the gate"
+  },
+  "ac4_anchoring": {
+    "statement": "the AC4 held-out selection stays anchored to the v1 declaration hash ccde4a676085e633b69d8ba1b501b80f49e2e907 consumed at first derivation (index 7 -> SciQ); an amendment NEVER re-rolls AC4 -- the selection binds once, at first derivation, dated (ruling point 3)"
+  }
+}
