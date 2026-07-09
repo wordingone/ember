@@ -6,6 +6,33 @@ artifact + its freeze SHA/date, what changes, why, and who owns the call.
 
 ---
 
+## DEV-005 — eval-suite-freeze-v1 (battery-14): #193-v2 contamination convention ADOPTED AS SPEC + 147-item exclusion amendment
+
+**Date filed:** 2026-07-09 (the A1 eval-freeze execution lane, issue #593, executing
+the coordinator ruling: issue #593 comment 4930531475 — the binding text). **Filed
+before any capability claim cites the suite.** **Frozen artifact:**
+`docs/spec/eval-suite-freeze-v1.md`.
+
+**What changes:** (1) the freeze doc gains a "Contamination counting convention"
+section adopting the issue-#193 pre-registered v2 convention as SPEC for external
+suites (item contaminated iff contiguous matched run >= 50 tokens OR > 10% of
+13-gram windows matched; per-dataset; both statistics published per item; gate =
+0 contaminated items post-exclusion; raw any-match totals recorded, not gated) —
+the counting convention was previously unstated for external suites. (2) The first
+application excludes 147 items from suite (b) (HumanEval+ 58, MMLU-Pro 69, MBPP 12,
+HellaSwag 8) via a dated amendment receipt chained by sha256 to the freeze
+declaration (`receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-*.json`);
+the declaration is NEVER retro-edited — frozen suite = declaration + amendment.
+AC4's held-out selection stays anchored to the v1 declaration hash (no re-roll,
+ruling point 3).
+
+**Who owns the call:** the coordinator (ruling comment, dated); this entry and the
+spec text execute it verbatim. **Receipts:** the amendment receipt above; scan
+receipt `receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json` +
+per-item JSONL. Relates to issues #593, #193, #440, #591.
+
+---
+
 ## DEV-004 — eval-suite-freeze-v1 (battery-14): GPQA-diamond EXCLUDED from v1
 
 **Date filed:** 2026-07-09 (the A1 eval-freeze execution lane, issue #593). **Filed
