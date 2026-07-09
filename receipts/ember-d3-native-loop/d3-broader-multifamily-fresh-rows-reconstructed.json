@@ -1,11 +1,11 @@
-{
+﻿{
   "config": "default",
   "dataset": "osunlp/D3-Gym",
   "split": "train",
   "offset": 16,
   "length": 4,
   "num_rows_total": 565,
-  "source_url": "httplocal:D3-Gym",
+  "source_url": "https://huggingface.co/datasets/osunlp/D3-Gym",
   "admission_receipt": "receipts/ember-post-resident-discovery/d3-broader-multifamily-admission-20260622T013000Z.json",
   "rows": [
     {
@@ -56,6 +56,5 @@
       },
       "truncated_cells": []
     }
-  ],
-  "redaction_note": "repo-root absolute paths rewritten repo-relative; other local paths redacted to local:<basename>; semantic content otherwise unchanged (coordinator-ordered redaction at landing, 2026-07-09, refs 523)"
+  ]
 }
