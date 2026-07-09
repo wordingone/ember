@@ -31,6 +31,15 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from timeshare_pretrain import PackedShardLoader  # noqa: E402
 
+# Sentinel distinguishing "caller did not pass mmap_cache_dir at all" from an
+# explicit None (legacy opt-out) or an explicit path (opt-in) -- same
+# convention as timeshare_pretrain.run_v0_segment's
+# _RUN_V0_SEGMENT_MMAP_CACHE_DIR_UNSET (issue #570/#573). _DEFAULT_OUTPUT_DIR
+# is the single source of truth shared by the constructor's own default
+# (below) and main()'s --output-dir CLI default (issue #575).
+_EXPOSURE_LEDGER_MMAP_CACHE_DIR_UNSET = object()
+_DEFAULT_OUTPUT_DIR = "state"
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -76,13 +85,25 @@ class ExposureLedger:
 class ExposureLedgerBuilder:
     """Reconstruct token exposure from deterministic loader replay."""
 
-    def __init__(self, shard_dir: str | None = None, seq: int = 1024, n_mtp: int = 2):
+    def __init__(self, shard_dir: str | None = None, seq: int = 1024, n_mtp: int = 2,
+                 mmap_cache_dir: str | None = _EXPOSURE_LEDGER_MMAP_CACHE_DIR_UNSET):
         """Initialize with optional shard directory.
 
         Args:
             shard_dir: directory containing packed *.bin shard files (or None for synthetic)
             seq: sequence length
             n_mtp: number of MTP auxiliary heads
+            mmap_cache_dir: forwarded to PackedShardLoader (issue #575).
+                Omitted -> sane default `<_DEFAULT_OUTPUT_DIR>/mmap_cache`,
+                so a real shard_dir replay (this class's actual purpose --
+                real-scale exposure-ledger reconstruction, the same
+                ArrayMemoryError/fragmentation class the memmap cache exists
+                to kill) automatically gets the fragmentation-safe
+                streamed-memmap path instead of legacy
+                np.fromfile+np.concatenate. Explicit None preserves the
+                legacy path byte-for-byte. main()'s real-reconstruction call
+                site passes the CLI's actual --output-dir explicitly,
+                overriding this generic default when a caller customizes it.
         """
         self.shard_dir = shard_dir
         self.seq = seq
@@ -90,7 +111,10 @@ class ExposureLedgerBuilder:
         self.loader = None
 
         if shard_dir:
-            self.loader = PackedShardLoader(shard_dir=shard_dir, seq=seq, n_mtp=n_mtp)
+            if mmap_cache_dir is _EXPOSURE_LEDGER_MMAP_CACHE_DIR_UNSET:
+                mmap_cache_dir = os.path.join(_DEFAULT_OUTPUT_DIR, "mmap_cache")
+            self.loader = PackedShardLoader(shard_dir=shard_dir, seq=seq, n_mtp=n_mtp,
+                                            mmap_cache_dir=mmap_cache_dir)
 
     def reconstruct_exposure(
         self,
@@ -374,7 +398,7 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="state",
+        default=_DEFAULT_OUTPUT_DIR,
         help="Output directory for ledger and summary files",
     )
 
@@ -383,11 +407,15 @@ def main() -> int:
     if args.selftest:
         return 0 if run_selftest() else 1
 
-    # Real reconstruction mode
+    # Real reconstruction mode. mmap_cache_dir (issue #575) passed
+    # explicitly under THIS invocation's own --output-dir, so a custom
+    # --output-dir is honored precisely rather than always landing under
+    # the constructor's generic _DEFAULT_OUTPUT_DIR fallback.
     builder = ExposureLedgerBuilder(
         shard_dir=args.shard_dir,
         seq=args.seq,
         n_mtp=args.n_mtp,
+        mmap_cache_dir=os.path.join(args.output_dir, "mmap_cache"),
     )
 
     ledger = builder.reconstruct_exposure(

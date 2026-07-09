@@ -60,16 +60,38 @@ def resolve(repo_root: str, path: str) -> str:
     return path if os.path.isabs(path) else os.path.join(repo_root, path)
 
 
+# Sentinel distinguishing "caller did not pass mmap_cache_dir at all" from an
+# explicit None (legacy opt-out) or an explicit path (opt-in to a specific
+# dir) -- same convention as timeshare_pretrain.run_v0_segment's
+# _RUN_V0_SEGMENT_MMAP_CACHE_DIR_UNSET (issue #570/#573); a plain `= None`
+# default can't express "omitted" separately from "explicit None" (issue
+# #575: this real-external-shard-mount call site rode the legacy
+# np.fromfile+np.concatenate path unconditionally before this fix).
+_W1B_FP32_CHECK_MMAP_CACHE_DIR_UNSET = object()
+
+
 def run_paired_fp32_check(*, repo_root: str, shard_dir: str,
                            decontam_receipt_path: str, rung_manifest: str,
                            seed_checkpoint_dir: str, grown_checkpoint_dir: str,
                            pricing_receipt_path: str, expected_batch_sha: str | None,
-                           device: str, out_dir: str, seed: int = 4242) -> dict:
+                           device: str, out_dir: str, seed: int = 4242,
+                           mmap_cache_dir: str | None = _W1B_FP32_CHECK_MMAP_CACHE_DIR_UNSET,
+                           ) -> dict:
     pricing_receipt = load_json(pricing_receipt_path)
     rung_receipt = derive_rung_receipt_from_manifest(rung_manifest)
     real_arch = derive_real_arch_config(pricing_receipt, rung_receipt)
 
-    eval_loader = PackedShardLoader(shard_dir, real_arch["seq"], n_mtp=real_arch["n_mtp"])
+    # mmap_cache_dir (issue #575): omitted -> sane default under THIS run's
+    # own out_dir (`<out_dir>/mmap_cache`), so the CLI's real invocation
+    # (which never passed the parameter at all) automatically gets the
+    # fragmentation-safe streamed-memmap path over the real external
+    # shard-mount corpus this script reads. Explicit None still preserves
+    # the legacy np.fromfile+np.concatenate path byte-for-byte.
+    if mmap_cache_dir is _W1B_FP32_CHECK_MMAP_CACHE_DIR_UNSET:
+        mmap_cache_dir = os.path.join(out_dir, "mmap_cache")
+    eval_loader = PackedShardLoader(shard_dir, real_arch["seq"],
+                                    n_mtp=real_arch["n_mtp"],
+                                    mmap_cache_dir=mmap_cache_dir)
     decontam_receipt = load_json(decontam_receipt_path)
     eval_x, eval_y, eval_sha = rebuild_batch_from_decontam_receipt(
         eval_loader, decontam_receipt, device)
