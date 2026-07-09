@@ -16,6 +16,11 @@ The deliverable is a trinity, inseparable: the PRIMITIVE (published, reproducibl
 (a true FM born on this machine — natively MULTIMODAL, UNIFIED architecture), the ORGANISM (a
 living system that keeps growing through its own receipted cycles). Absence of any one is failure.
 
+Atop the trinity, ember is also a PLACE: a closed-loop AI lab for local/consumer-scale
+creation — the primitive, the corpus, the tooling, and the receipts are built to be usable
+by creators on consumer hardware beyond this machine. The lab's corpus floor is
+constitutional: docs/ai-lab-corpus-charter.md (operator directive, 2026-07-09).
+
 ## 2. Completion
 
 The goal clears when ALL FIVE hold, receipted per docs/goal-clear-protocol.md:
@@ -118,6 +123,9 @@ self-operates, audited. Operator and ember converse bidirectionally through the 
 - docs/ember-floor-contract.md — REVIVAL QUEUE (not a deferral ledger): parked-with-a-path
   rows mapped to walls; maintainer; a row dying without operator word.
 - docs/nc2-own-technique-contract.md — owned-core component law; operator-granted; silent pivot.
+- docs/ai-lab-corpus-charter.md — the closed-loop-lab corpus floor (11 domains, quality +
+  diversity bars, programmatic source connectors); maintainer via PR; a domain standing at
+  zero receipted acquisitions while the charter holds.
 - docs/ember-owned-substrate-diagnostic.md — nativization map; maintainer; a layer coming home.
 - ember_totality/ + board receipts — evidence surface; code-gated; any self-attesting condition.
 - CONTINUITY.md — volatile state, the ONLY state home; every session; staleness.
