@@ -22,6 +22,7 @@ import {
   startActivityFeed,
   getActivityFeedState,
   RECEIPT_RETRY_DELAY_MS,
+  MAX_TAIL_LINES_PER_TICK,
   type ActivityFeedHandle,
 } from "./activity-feed.ts";
 
@@ -395,6 +396,89 @@ describe("startActivityFeed — engine (real fs)", () => {
       expect(getActivityFeedState().recentLines).toEqual([]);
     },
     5000,
+  );
+
+  // #576: MAX_TAIL_LINES_PER_TICK containment. Seeding the restart-log file BEFORE
+  // startActivityFeed() runs reproduces the real trigger (freshTailState() starts every process
+  // boot at byte offset 0, so the first tick after boot always sees the file's full current
+  // content at once) -- this is the same "boot replay" mechanism the natural experiment in
+  // issue #576 confirmed live.
+  it(
+    "collapses a tail-poll burst over the cap into one summary line instead of N individual ones",
+    async () => {
+      const deps = baseDeps();
+      const lineCount = MAX_TAIL_LINES_PER_TICK + 5;
+      const rows = Array.from({ length: lineCount }, (_, i) =>
+        JSON.stringify({ ts: new Date().toISOString(), target: "cockpit", event: "relaunch", relaunchPid: i }),
+      );
+      fs.writeFileSync(deps.restartLogPath, rows.join("\n") + "\n");
+
+      handle = startActivityFeed(deps);
+      await sleep(1300); // first tail-poll tick fires ~TAIL_POLL_INTERVAL_MS after boot
+
+      const state = getActivityFeedState();
+      const watchdogLines = state.recentLines.filter((l) => l.source === "watchdog");
+      expect(watchdogLines.length).toBe(1);
+      expect(watchdogLines[0]?.text).toContain(`${lineCount} watchdog events collapsed`);
+      expect(watchdogLines[0]?.text).toContain("tail-poll anomaly");
+
+      // never one individual per-row line for this tick — the cap must suppress ALL of them,
+      // not just the ones past the threshold.
+      expect(state.recentLines.some((l) => l.text.includes("relaunchPid"))).toBe(false);
+    },
+    8000,
+  );
+
+  it(
+    "still renders individual lines when a batch lands exactly at the cap (no false-positive collapse)",
+    async () => {
+      const deps = baseDeps();
+      const lineCount = MAX_TAIL_LINES_PER_TICK; // at the threshold, not over it
+      const rows = Array.from({ length: lineCount }, (_, i) =>
+        JSON.stringify({ ts: new Date().toISOString(), target: "cockpit", event: "relaunch", relaunchPid: i }),
+      );
+      fs.writeFileSync(deps.restartLogPath, rows.join("\n") + "\n");
+
+      handle = startActivityFeed(deps);
+      await sleep(1300);
+
+      const state = getActivityFeedState();
+      const watchdogLines = state.recentLines.filter((l) => l.source === "watchdog");
+      expect(watchdogLines.length).toBe(lineCount);
+      expect(watchdogLines.some((l) => l.text.includes("collapsed"))).toBe(false);
+    },
+    8000,
+  );
+
+  it(
+    "writes a tail-poll diagnostic log row per tick, capped or not",
+    async () => {
+      const tailPollDebugLogPath = path.join(scratchDir, "tailpoll-debug.jsonl");
+      const deps = baseDeps({ tailPollDebugLogPath });
+      fs.appendFileSync(
+        deps.restartLogPath,
+        JSON.stringify({ ts: new Date().toISOString(), target: "cockpit", event: "relaunch", relaunchPid: 1 }) + "\n",
+      );
+
+      handle = startActivityFeed(deps);
+      await sleep(1300);
+
+      const raw = fs.readFileSync(tailPollDebugLogPath, "utf-8");
+      const rows = raw
+        .split("\n")
+        .filter((l) => l.trim().length > 0)
+        .map((l) => JSON.parse(l) as Record<string, unknown>);
+
+      expect(rows.some((r) => r["event"] === "startActivityFeed")).toBe(true);
+      expect(rows.some((r) => r["event"] === "freshTailState" && r["file"] === "restart-log")).toBe(true);
+      const tick = rows.find((r) => r["event"] === "pollTail" && r["file"] === "restart-log");
+      expect(tick).toBeDefined();
+      expect(tick).toHaveProperty("lineCount");
+      expect(tick).toHaveProperty("capped", false);
+      expect(tick).toHaveProperty("byteOffsetBefore");
+      expect(tick).toHaveProperty("byteOffsetAfter");
+    },
+    8000,
   );
 });
 
