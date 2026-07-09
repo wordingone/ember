@@ -1,8 +1,21 @@
-// components/activity-feed-pane.ts — issue #485 rung 1: the operator-visible half of the
-// activity feed. Renders the tail of REAL observed events (receipt landings, outage windows,
-// watchdog transitions, board runs) that the services/activity-feed.ts engine has actually
-// rendered — never a fabricated/synthetic tick (GOAL.md P-C). Each line carries its artifact
-// path so the feed doubles as an audit surface, per L2.
+// components/activity-feed-pane.ts — issue #485 rung 1 / #518: the operator-visible half of the
+// activity feed. Renders REAL observed events (receipt landings, outage windows, watchdog
+// transitions, board runs) that the services/activity-feed.ts engine has actually rendered —
+// never a fabricated/synthetic tick (GOAL.md P-C). Each line carries its artifact path so the
+// feed doubles as an audit surface, per L2.
+//
+// #518 (operator category correction, second receipt): the ActivityFeedPane ticker below used
+// to be mounted inside the StatusLine, pinned near the statusline/input box — "literal, activity
+// lines with timestamps at the bottom... which is just... stupid." That is a status feed, not
+// what an operator recognizes as an agentic session's activity. ActivityTranscriptBlock (bottom
+// of this file) is the fix: each event now renders as a card in the conversation SCROLLBACK, at
+// its temporal position, in the same visual language as the tool-run/write cards elsewhere in
+// the transcript (the "└ " convention from tool-result-renderers.ts) — never a dim ticker row.
+// ActivityFeedPane itself is kept only because its pure formatters (truncateMiddle,
+// visibleActivityFeedLines, formatActivityFeedLine) are still genuinely useful and pinned by
+// existing tests; the component is no longer mounted anywhere in the live app (see
+// status-bar.ts / screens/repl.ts, which now route activity events through
+// ActivityTranscriptBlock instead).
 
 import React from "react";
 import { Box, Text } from "../ink/components.ts";
@@ -103,5 +116,117 @@ export function ActivityFeedPane({
         formatActivityFeedLine(line, now),
       ),
     ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ActivityTranscriptBlock — #518: the same event, rendered as a transcript
+// card instead of a ticker row. This is what screens/repl.ts mounts for a
+// `{type: "activity"}` SessionMessage, at the message's position in the
+// scrolling history — never in the status bar.
+// ---------------------------------------------------------------------------
+
+/** Absolute local time for a transcript block header, matching the exemplar's
+ *  scheduled-task-marker style (an absolute anchor, never a relative "Nm ago"
+ *  ticker — transcript position already conveys recency). Same-day events
+ *  show time only ("9:59pm"); anything from an earlier day is prefixed with
+ *  a numeric M/D date ("7/8 9:59pm") to keep the format locale/name-neutral. */
+export function formatActivityBlockTimestamp(ts: string, nowMs: number = Date.now()): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  const now = new Date(nowMs);
+
+  let hours = d.getHours();
+  const ampm = hours >= 12 ? "pm" : "am";
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const timeStr = `${hours}:${minutes}${ampm}`;
+
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return timeStr;
+  return `${d.getMonth() + 1}/${d.getDate()} ${timeStr}`;
+}
+
+export interface ActivitySourceDisplay {
+  label: string;
+  color: string;
+}
+
+/** One glyph for every activity block ("✻", the exemplar's own scheduled/background-marker
+ *  glyph) — deliberately distinct from BLACK_CIRCLE ("●", message-renderers.ts), which marks
+ *  something that happened THIS turn (a tool call, an assistant line). "✻" marks something the
+ *  organism did OUTSIDE the turn (a receipt landing, a board run, a watchdog transition) — the
+ *  reader tells the two apart by glyph, same as the exemplar's tool cards vs its
+ *  "✻ Running scheduled task" marker. Per state/field-ux-map.md §9's field-sourced design rule
+ *  ("one consistent glyph vocabulary... never an emoji salad; pair color with an icon for
+ *  state"), the SOURCE is carried by color + label text, never by a bespoke per-source glyph. */
+export const ACTIVITY_GLYPH = "✻";
+
+/** Per-source class tag (label + color) — the exemplar's "class tag where applicable (model
+ *  tier, lane name, run id)" requirement, applied to the activity engine's four real event
+ *  sources. Glyph is shared (ACTIVITY_GLYPH); only color + label vary by source. */
+export const ACTIVITY_SOURCE_DISPLAY: Record<ActivityFeedSource, ActivitySourceDisplay> = {
+  receipt:  { label: "Receipt landed", color: "green" },
+  board:    { label: "Board run",      color: "cyan" },
+  watchdog: { label: "Watchdog",       color: "yellow" },
+  outage:   { label: "Outage window",  color: "red" },
+};
+
+export interface ActivityTranscriptBlockProps {
+  line: ActivityFeedLine;
+  nowMs?: number;
+  pathMaxLen?: number;
+}
+
+/** One transcript block: a header card ("<glyph> <label> (<time>)"), the event
+ *  text on a "└ " row (same convention UserToolSuccessMessage uses for tool
+ *  output), and — only when the event carries one — a dim path reference row.
+ *  No age ticker, no bracket-source prefix: the card's OWN position in the
+ *  scrollback is the time signal, matching how a tool-run or write card reads. */
+export function ActivityTranscriptBlock({
+  line,
+  nowMs,
+  pathMaxLen = DEFAULT_PATH_MAX_LEN,
+}: ActivityTranscriptBlockProps): React.ReactElement {
+  const display = ACTIVITY_SOURCE_DISPLAY[line.source];
+  const time = formatActivityBlockTimestamp(line.ts, nowMs ?? Date.now());
+
+  const header = React.createElement(
+    Box,
+    { key: "header", flexDirection: "row" },
+    React.createElement(Text, { key: "glyph", color: display.color }, `${ACTIVITY_GLYPH} `),
+    React.createElement(Text, { key: "label", dimColor: true }, `${display.label} (${time})`),
+  );
+
+  const body = React.createElement(
+    Box,
+    { key: "body", flexDirection: "row" },
+    React.createElement(Text, { key: "arrow", dimColor: true }, "└ "),
+    React.createElement(Text, { key: "text" }, line.text),
+  );
+
+  const pathRow = line.path
+    ? React.createElement(
+        Box,
+        { key: "path", flexDirection: "row" },
+        React.createElement(Text, { key: "indent", dimColor: true }, "  "),
+        React.createElement(
+          Text,
+          { key: "value", dimColor: true, italic: true },
+          truncateMiddle(line.path, pathMaxLen),
+        ),
+      )
+    : null;
+
+  return React.createElement(
+    Box,
+    { flexDirection: "column" },
+    header,
+    body,
+    pathRow,
   );
 }
