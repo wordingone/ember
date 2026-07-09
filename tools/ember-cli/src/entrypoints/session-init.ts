@@ -405,6 +405,28 @@ export function buildGuardedProductionCallModel(
 }
 
 /**
+ * GPU-free mode stub: returns an OFFLINE error instead of calling a model.
+ * The UI surfaces this state honestly (no fake tokens; board/receipt surfaces remain live).
+ */
+function buildOfflineCallModel(): GuardedProductionCallModel {
+  const callModel = async (_params: CallModelParams): Promise<ModelResponse> => {
+    // Return an error response that the UI can render as "OFFLINE (GPU leased to training)"
+    const err = new ModelHttpError(
+      "model_offline",
+      "Model server is offline (GPU leased to training). Board and activity display remain available.",
+      503,
+    );
+    throw err;
+  };
+  const handle = wrapModelClientWithCircuitBreaker(callModel, {
+    endpoint: "(offline)",
+    onStateChange: undefined,
+  });
+  const guarded: GuardedProductionCallModel = { callModel: handle.callModel, getCircuitState: handle.getState };
+  return guarded;
+}
+
+/**
  * Returns the live circuit-breaker state for the production model client, or
  * null before init() has wired one up. Polled by the TUI's degraded-state
  * banner (status-bar.ts's DegradedBanner via repl.ts).
@@ -543,7 +565,10 @@ async function _runInit(opts: InitOpts): Promise<void> {
   // issue #239: every production call goes through the circuit breaker, not
   // just buildProductionCallModel's raw fetch -- see buildGuardedProductionCallModel's
   // docstring for why this replaces the bare productionCallModel wiring.
-  _circuitBreakerHandle        = buildGuardedProductionCallModel({ serverUrl, nCtx });
+  // GPU-free mode: serverUrl is null, so use the offline stub instead.
+  _circuitBreakerHandle = !serverUrl
+    ? buildOfflineCallModel()
+    : buildGuardedProductionCallModel({ serverUrl, nCtx });
   const productionMicrocompact = buildProductionMicrocompact();
 
   _loopDeps = createLoopDeps({
