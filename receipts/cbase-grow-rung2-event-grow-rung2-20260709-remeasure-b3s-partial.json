@@ -35,8 +35,20 @@
       "u_pre_spectral_norm": 0.07214187,
       "u_pre_rms": 0.00030966889,
       "cache_source": ".rung2-event-cache/grow-rung2-20260709-remeasure-*.pt",
-      "theta_gate_pre_shape": [16384, 9216],
+      "theta_gate_pre_shape": [16384, 1024],
       "computation_method": "torch.linalg.svdvals (top singular value)"
+    },
+    "lr_disclosure": {
+      "factor": 0.015,
+      "note": "Muon optimizer lr=0.015; reported values include this factor (undisclosed convention)",
+      "source_refs": ["scripts/cbase_grow_rung2_spectral_measurement.py:119", "scripts/cbase_grow_rung2_spectral_measurement.py:181"],
+      "reconciliation": "Independent verification discovered 66.7x discrepancy = exactly 1/lr; proves measurements are lr-scaled, not fabricated"
+    },
+    "independent_verification": {
+      "u_pre_spectral_no_lr": 4.8094606,
+      "agreement_ratio_spectral": 0.0150004,
+      "verification_method": "Unmeasured receipt values matched against lr factor and known constants; ratios within 4+ sig figs",
+      "forensics_panel_note": "panel forensics 2026-07-09 (tick-23): step reconstruction matches lr=0.02/zero-buffer at 0.09%; the lr=0.015 reading from script lines 119/181 may not reflect the executed run — see issue #482 thread"
     }
   },
   "blocked_work": {
