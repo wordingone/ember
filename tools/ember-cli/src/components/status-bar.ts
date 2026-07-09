@@ -249,6 +249,43 @@ export function DegradedBanner({ degraded, now }: DegradedBannerProps): React.Re
 }
 
 // ---------------------------------------------------------------------------
+// OutageBanner — issue #475: cockpit banner for the frozen planned-outage.json
+// marker contract (#464). The liveness watchdogs already honor a planned-outage
+// window server-side (zero failure-counting while it's in effect); this is the
+// SURFACE half -- without it, a planned maintenance window and an actual crash
+// look identical to an operator glancing at the pane. Follows DegradedBanner's
+// hook-free, hidden-when-inactive convention exactly.
+// ---------------------------------------------------------------------------
+
+export interface OutageBannerState {
+  active: boolean;
+  owner?: string;
+  reason?: string;
+  expires?: string;
+}
+
+/**
+ * Pure formatter: "PLANNED OUTAGE (<owner>): <reason> — until <expires>" per issue #475's
+ * spec text. Returns "" when inactive (OutageBanner renders null in that case).
+ */
+export function formatOutageBannerText(banner: OutageBannerState): string {
+  if (!banner.active) return "";
+  const owner = banner.owner ?? "unknown";
+  const reason = banner.reason ?? "no reason given";
+  const expires = banner.expires ?? "unknown";
+  return `PLANNED OUTAGE (${owner}): ${reason} — until ${expires}`;
+}
+
+export interface OutageBannerProps {
+  outage: OutageBannerState;
+}
+
+export function OutageBanner({ outage }: OutageBannerProps): React.ReactElement | null {
+  if (!outage.active) return null;
+  return React.createElement(Text, { color: "yellow" }, formatOutageBannerText(outage));
+}
+
+// ---------------------------------------------------------------------------
 // CoordinatorAgentStatus — multi-agent coordinator indicator (hook-free)
 // ---------------------------------------------------------------------------
 
@@ -332,6 +369,10 @@ export interface StatusLineProps {
   modelMetrics?: ModelMetrics;
   /** issue #239: circuit-breaker degraded state; absent/inactive → banner hidden. */
   degraded?: DegradedBannerState;
+  /** issue #475: planned-outage marker state; absent/inactive → banner hidden. Rendered
+   *  ABOVE the degraded banner — it explains WHY the model may be unreachable, so the
+   *  operator reads the "planned" context before the "degraded" symptom. */
+  outage?: OutageBannerState;
 }
 
 export function StatusLine({
@@ -343,6 +384,7 @@ export function StatusLine({
   cognitiveMode,
   modelMetrics,
   degraded,
+  outage,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
     if (key.shift && key.tab)    { permissionMode.cycle(); return; }
@@ -359,6 +401,9 @@ export function StatusLine({
     // shrinks this box toward 0 rows and it vanishes from the frame.
     Box,
     { flexDirection: "column", flexShrink: 0 },
+    outage != null
+      ? React.createElement(OutageBanner, { key: "outage", outage })
+      : null,
     degraded != null
       ? React.createElement(DegradedBanner, { key: "degraded", degraded })
       : null,

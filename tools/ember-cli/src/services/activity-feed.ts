@@ -19,7 +19,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
-import { appendLineWithDirs } from "../utils/file-operations.ts";
+import { appendLineWithDirs, stripBom } from "../utils/file-operations.ts";
 import type { ActivityFeedLine, ActivityFeedSource } from "../components/activity-feed-pane.ts";
 
 export type { ActivityFeedLine, ActivityFeedSource };
@@ -165,6 +165,16 @@ export function parseOutageMarker(raw: string): OutageMarker | null {
   return obj as unknown as OutageMarker;
 }
 
+/** Pure: a raw (already-validated) marker is "effective" iff it exists and has not expired.
+ *  Shared by classifyOutageTransition (transition detection, activity-feed engine) and issue
+ *  #475's cockpit status banner (services/outage-banner-poller.ts) — both need exactly this
+ *  same expiry check against the same marker shape, and neither should re-derive it. */
+export function computeEffectiveMarker(nextRaw: OutageMarker | null, nowMs: number): OutageMarker | null {
+  if (!nextRaw) return null;
+  const expired = Date.parse(nextRaw.expires) <= nowMs;
+  return expired ? null : nextRaw;
+}
+
 export interface OutageTransitionResult {
   transition: "opened" | "closed" | "none";
   text?: string;
@@ -181,8 +191,7 @@ export function classifyOutageTransition(
   nextRaw: OutageMarker | null,
   nowMs: number,
 ): OutageTransitionResult {
-  const nextExpired = nextRaw ? Date.parse(nextRaw.expires) <= nowMs : true;
-  const nextEffective = nextRaw && !nextExpired ? nextRaw : null;
+  const nextEffective = computeEffectiveMarker(nextRaw, nowMs);
 
   if (!prevEffective && nextEffective) {
     return {
@@ -663,7 +672,10 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       } catch {
         raw = null;
       }
-      const parsed = raw ? parseOutageMarker(raw) : null;
+      // #475: PS-written marker files can carry a UTF-8 BOM (Windows PowerShell 5.1's
+      // `-Encoding utf8` default) -- stripped here so a BOM never silently degrades an
+      // active marker into "unparsable JSON" -> treated as absent.
+      const parsed = raw ? parseOutageMarker(stripBom(raw)) : null;
       const result = classifyOutageTransition(lastEffectiveMarker, parsed, clock());
       if (result.transition !== "none" && result.text) {
         renderEvent({ source: "outage", text: result.text, path: outageMarkerPath });
