@@ -1,0 +1,150 @@
+{
+  "ticket": "C-CUSTODY-23-CURE-LEG",
+  "ts": "2026-07-08T23:50:00Z",
+  "scope": "C-CUSTODY 23 cited_missing reduction: 8 new artifacts restored from git lineage + 15 old artifacts cross-referenced to existing disposition",
+  "search_receipt_command": "Lane forensics + git log/show --all; scope: (a) git commits specified (b) <REDACTED_PATH>/.claude/worktrees/* (c) <REDACTED_PATH>-fix-456 (not present) (d) receipts-local/ (not present) \u2192 found all 8 at source commits, zero hits elsewhere",
+  "artifacts_status": {
+    "new_restored": {
+      "count": 8,
+      "entries": [
+        {
+          "path": "receipts/cbase-grow-dryrun-20260702T190532Z.json",
+          "disposition": "imported",
+          "source_commit": "67a784e",
+          "provenance": "goalforge: C-BASE GREEN keystone receipt"
+        },
+        {
+          "path": "receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json",
+          "disposition": "imported",
+          "source_commit": "b95a265",
+          "provenance": "goalforge: C-EFF GREEN closure receipt"
+        },
+        {
+          "path": "receipts/cgrow-run-20260628T062609Z",
+          "disposition": "imported",
+          "source_commit": "d5d02a3",
+          "provenance": "goalforge: sec-10 import debt discharge"
+        },
+        {
+          "path": "receipts/corpus-verification-20260704T095213Z.json",
+          "disposition": "imported",
+          "source_commit": "f5944aa",
+          "provenance": "public: corpus verification + loader defaults"
+        },
+        {
+          "path": "receipts/ember-c14-owned-run/live-20260703T141139Z-import-edition.json",
+          "disposition": "imported",
+          "source_commit": "a1eed21",
+          "provenance": "public: A19 C14 live receipt import"
+        },
+        {
+          "path": "receipts/ember-c8-execution-binding/field-level-contribution-proof-20260703T081125Z.json",
+          "disposition": "imported",
+          "source_commit": "69fb2b4",
+          "provenance": "goalforge: C8 GREEN field-level contribution"
+        },
+        {
+          "path": "receipts/ember-cockpit-live-surface1",
+          "disposition": "imported",
+          "source_commit": "fa49af4",
+          "provenance": "public: receipt hygiene banking (26 files)"
+        },
+        {
+          "path": "receipts/v0-live-import-edition-20260702T190633Z.json",
+          "disposition": "imported",
+          "source_commit": "67a784e",
+          "provenance": "goalforge: v0 survivor-stack pretrain segment"
+        }
+      ]
+    },
+    "old_disposed": {
+      "count": 15,
+      "disposition_authority": "docs/custody-disposition-20260708.md (PR #432 / commit c499ff6, dated 2026-07-08)",
+      "cross_reference": "All 15 entries below are explicitly enumerated in the disposition document with their class, ruling, and evidence",
+      "entries": [
+        {
+          "path": "receipts/ceff-closure-gate9-shatter-bf16ns5-20260623T132000Z.json",
+          "class": "Class 1 - BARRED-AT-HEAD-BY-CONTENT-RAIL",
+          "ruling": "barred from HEAD by operator-name/local-path rail; recoverable via git history only"
+        },
+        {
+          "path": "receipts/ceff-shatter-REPUDIATED-20260623T170000Z.json",
+          "class": "Class 1 - BARRED-AT-HEAD-BY-CONTENT-RAIL",
+          "ruling": "barred from HEAD by operator-name/local-path rail; recoverable via git history only"
+        },
+        {
+          "path": "receipts/governor-repair-080-20260702T180248Z.json",
+          "class": "Class 1 - BARRED-AT-HEAD-BY-CONTENT-RAIL",
+          "ruling": "barred from HEAD by operator-name/local-path rail; recoverable via git history only"
+        },
+        {
+          "path": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
+          "class": "Class 2 - CROSS-TREE LINEAGE, NON-CANONICAL",
+          "ruling": "exists on non-ancestor commits in goalforge lineage; deliberately not merged per single-tree discipline"
+        },
+        {
+          "path": "receipts/stale-figure-adjudication-20260702T151929Z.json",
+          "class": "Class 2 - CROSS-TREE LINEAGE, NON-CANONICAL",
+          "ruling": "exists on non-ancestor commits in goalforge lineage; deliberately not merged per single-tree discipline"
+        },
+        {
+          "path": "receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json",
+          "class": "Class 3 - MIS-ROOTED CITATION, ZERO-TRACE",
+          "ruling": "extraction defect; correct root never existed; citer-side defect flag"
+        },
+        {
+          "path": "receipts/wheel/wheel-real-20260618T143007Z.json",
+          "class": "Class 3 - MIS-ROOTED CITATION, ZERO-TRACE",
+          "ruling": "extraction defect; official-wheel-runner directory never existed; citer-side defect flag"
+        },
+        {
+          "path": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-adapter-trace.log",
+          "class": "Class 4 - DECLARED-BUT-UNVERIFIED OBSERVATION CHAIN",
+          "ruling": "VOID via supersession (reference-uiux-ax-observation-VOID-20260707T112100Z.json); unprefixed file exists with hash mismatch"
+        },
+        {
+          "path": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-meta.json",
+          "class": "Class 4 - DECLARED-BUT-UNVERIFIED OBSERVATION CHAIN",
+          "ruling": "VOID via supersession; unprefixed file exists with hash mismatch"
+        },
+        {
+          "path": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-process-after.json",
+          "class": "Class 4 - DECLARED-BUT-UNVERIFIED OBSERVATION CHAIN",
+          "ruling": "VOID via supersession; unprefixed file exists with hash mismatch"
+        },
+        {
+          "path": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-stub-server-log.jsonl",
+          "class": "Class 4 - DECLARED-BUT-UNVERIFIED OBSERVATION CHAIN",
+          "ruling": "VOID via supersession; unprefixed file exists with hash mismatch"
+        },
+        {
+          "path": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-terminal-transcript-clean.txt",
+          "class": "Class 4 - DECLARED-BUT-UNVERIFIED OBSERVATION CHAIN",
+          "ruling": "VOID via supersession; unprefixed file exists with hash mismatch"
+        },
+        {
+          "path": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z.json",
+          "class": "Class 4 - DECLARED-BUT-UNVERIFIED OBSERVATION CHAIN",
+          "ruling": "VOID via supersession; disposition receipt dated 2026-07-07; this note cites it"
+        },
+        {
+          "path": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
+          "class": "Class 4 - DECLARED-BUT-UNVERIFIED OBSERVATION CHAIN",
+          "ruling": "same defect signature as rows 8-13; flagged for cure under #349 precedent"
+        },
+        {
+          "path": "receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
+          "class": "Class 5 - REGENERABLE, CURE IN FLIGHT",
+          "ruling": "NOT a permanent disposition; active regeneration cure in flight via #435; P1 sweep-runner lane assigned"
+        }
+      ]
+    }
+  },
+  "disposal_verdict": {
+    "new_artifacts": "8 restored from git lineage, all imported to HEAD and staged",
+    "old_artifacts": "15 previously disposed; 14 permanent (Classes 1-4), 1 regenerable in-flight (Class 5 #435)",
+    "cited_missing_status": "23 to 0 via (8 imports + 15 cross-references)"
+  },
+  "invalid_tokens_present": [],
+  "verdict": "C-CUSTODY-CURATION-COMPLETE"
+}
