@@ -1,0 +1,445 @@
+#!/usr/bin/env python3
+"""
+Static import census runner for nativization measurement.
+
+Parses the substrate diagnostic map and measures borrowed dependencies across layers.
+Pure-local, no GPU, no network.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sys
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+@dataclass
+class LayerMeasurement:
+    name: str
+    borrowed_deps: list[str]
+    borrowed_deps_count: int
+    borrowed_loc: int
+    owned_loc: int
+    borrowed_binaries: list[str]
+
+
+@dataclass
+class NativizationMotionReceipt:
+    ts: str
+    invariant_sha256: str
+    map_source_sha: str
+    layers: list[dict[str, Any]]
+    deltas: dict[str, Any] | None
+    next_home_candidate: str | None
+    method: str
+    limits: list[str]
+
+
+def sha256_file(path: Path) -> str:
+    """Compute SHA256 of file contents (binary)."""
+    h = hashlib.sha256()
+    h.update(path.read_bytes())
+    return "sha256:" + h.hexdigest()
+
+
+def parse_diagnostic_map(diagnostic_path: Path) -> list[str]:
+    """Parse layer list from diagnostic markdown.
+
+    Extracts layer names from the table under the heading
+    "## The inherited stack, bottom → top, with the blocking line"
+
+    Fails loudly if the expected heading structure drifts.
+    """
+    content = diagnostic_path.read_text(encoding="utf-8")
+
+    # Find the expected heading
+    heading = "## The inherited stack, bottom → top, with the blocking line"
+    if heading not in content:
+        raise ValueError(
+            f"Expected heading not found in {diagnostic_path}: {heading}\n"
+            "Diagnostic map structure has drifted. Cannot proceed without the exact heading."
+        )
+
+    # Extract the section after the heading
+    heading_idx = content.find(heading)
+    section = content[heading_idx:]
+
+    # Find the table start (markdown table with |)
+    table_start = section.find("\n|---|")
+    if table_start == -1:
+        raise ValueError(
+            f"Expected table format not found in diagnostic section.\n"
+            "Cannot parse layer names from diagnostic map."
+        )
+
+    # Parse the table rows (skip header and separator rows)
+    layers = []
+    lines = section[table_start:].split("\n")
+
+    for line in lines[2:]:  # Skip header and separator rows
+        line = line.strip()
+        if not line or not line.startswith("|"):
+            break
+
+        # Parse table row: | layer | what it is | relationship |
+        cols = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cols) >= 1 and cols[0]:
+            layer_name = cols[0]
+            # Skip the blocking line marker (contains — or ** or starts with -)
+            if "—" in layer_name or layer_name.startswith("**") or layer_name.startswith("-"):
+                continue
+            layers.append(layer_name)
+
+    if not layers:
+        raise ValueError("No layers parsed from diagnostic table")
+
+    return layers
+
+
+def get_layer_file_globs(layer_name: str) -> list[str]:
+    """Map layer names to file glob patterns.
+
+    This is a v1 heuristic mapping. Refined based on actual codebase structure.
+    """
+    mapping = {
+        "CUDA kernels (cuBLAS matmul, elementwise)": [
+            "tools/**/*.py",
+            "scripts/**/*cuda*.py",
+        ],
+        "Tensor abstraction (storage/strides/dtype)": [
+            "tools/**/*tensor*.py",
+            "scripts/**/*tensor*.py",
+        ],
+        "Autograd (grad_fn graph, backward())": [
+            "tools/**/*autograd*.py",
+            "scripts/**/*autograd*.py",
+            "tools/**/*grad*.py",
+        ],
+        "Optimizer (Adam/Muon: separable state + update)": [
+            "tools/**/*optim*.py",
+            "scripts/**/*optim*.py",
+            "tools/**/*adam*.py",
+        ],
+        "Training loop (fwd → loss → backward → step)": [
+            "tools/**/*train*.py",
+            "scripts/**/*train*.py",
+            "scripts/train*.py",
+            "baseline/**/*.py",
+        ],
+    }
+
+    # Fallback: scan all Python files if no specific mapping
+    return mapping.get(layer_name, ["**/*.py"])
+
+
+def collect_imports(file_path: Path) -> tuple[set[str], int]:
+    """Extract imported packages from a Python file.
+
+    Returns (set of external package names, total line count with imports).
+    Excludes stdlib and ember-owned modules.
+    """
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return set(), 0
+
+    lines = content.split("\n")
+    imported_packages = set()
+    lines_with_imports = 0
+
+    # Python stdlib modules to exclude
+    stdlib_mods = {
+        "sys", "os", "re", "json", "pathlib", "typing", "dataclasses",
+        "hashlib", "subprocess", "argparse", "tempfile", "shutil", "copy",
+        "itertools", "functools", "collections", "abc", "enum", "datetime",
+        "time", "random", "math", "statistics", "decimal", "fractions",
+        "contextlib", "inspect", "warnings", "io", "codecs", "locale",
+        "gettext", "struct", "pickle", "copyreg", "types", "pydoc",
+        "ast", "html", "urllib", "csv", "sqlite3", "unittest", "logging",
+        "traceback", "platform", "queue", "signal", "threading", "multiprocessing",
+        "gc", "runpy", "glob", "fnmatch", "tempfile", "textwrap",
+    }
+
+    # Ember-owned modules (in tools/, scripts/)
+    ember_modules = {"ember", "tools", "scripts"}
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Skip comments and empty lines
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        # Skip if line is inside a string literal (basic heuristic)
+        if stripped.startswith(('"""', "'''", '"', "'")):
+            continue
+
+        # Match import statements
+        import_match = re.match(r"^(?:from|import)\s+([^\s\.]+)", stripped)
+        if import_match:
+            pkg = import_match.group(1).split(".")[0]
+
+            # Validate that it's a real identifier (no trailing punctuation/special chars)
+            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", pkg):
+                continue
+
+            # Exclude stdlib and ember-owned
+            if pkg not in stdlib_mods and pkg not in ember_modules:
+                imported_packages.add(pkg)
+
+            lines_with_imports += 1
+
+    return imported_packages, lines_with_imports
+
+
+def scan_binaries(file_path: Path) -> set[str]:
+    """Extract external binary names from subprocess/exec calls.
+
+    Looks for: subprocess, os.system, os.exec*, Popen, run, check_call, etc.
+    """
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return set()
+
+    binaries = set()
+
+    # Common external binaries we look for
+    known_binaries = {"llama-server", "docker", "git", "bun", "python", "pip", "npm"}
+
+    # Patterns: subprocess.run/Popen/check_call/call with string arguments
+    patterns = [
+        r'subprocess\.(run|Popen|check_call|call)\s*\(\s*["\']([^"\']+)["\']',
+        r'os\.system\s*\(\s*["\']([^"\']+)["\']',
+        r'os\.exec[lv]+\s*\(\s*["\']([^"\']+)["\']',
+    ]
+
+    for pattern in patterns:
+        for match in re.finditer(pattern, content):
+            cmd = match.group(2) if match.lastindex >= 2 else match.group(1)
+            # Extract first token (the binary name)
+            binary = cmd.split()[0] if cmd else ""
+            if binary and any(known in binary for known in known_binaries):
+                binaries.add(binary.strip("./"))
+
+    return binaries
+
+
+def measure_layer(
+    root: Path,
+    layer_name: str,
+    file_globs: list[str],
+) -> LayerMeasurement:
+    """Measure borrowed dependencies for a single layer.
+
+    Scans all matching files and counts:
+    - distinct external packages
+    - lines with external imports
+    - external binaries
+    """
+    all_imports: set[str] = set()
+    total_lines_with_imports = 0
+    all_binaries: set[str] = set()
+
+    # Find all matching files
+    files_to_scan = set()
+    for glob_pattern in file_globs:
+        for file_path in root.glob(glob_pattern):
+            if file_path.is_file() and file_path.suffix == ".py":
+                files_to_scan.add(file_path)
+
+    # Scan each file
+    for file_path in sorted(files_to_scan):
+        imports, lines_count = collect_imports(file_path)
+        all_imports.update(imports)
+        total_lines_with_imports += lines_count
+
+        binaries = scan_binaries(file_path)
+        all_binaries.update(binaries)
+
+    return LayerMeasurement(
+        name=layer_name,
+        borrowed_deps=sorted(all_imports),
+        borrowed_deps_count=len(all_imports),
+        borrowed_loc=total_lines_with_imports,
+        owned_loc=0,  # v1: placeholder; v2 will compute actual owned lines
+        borrowed_binaries=sorted(all_binaries),
+    )
+
+
+def compute_deltas(
+    current_layers: list[LayerMeasurement],
+    prior_receipt: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Compute numeric deltas vs prior receipt.
+
+    First receipt: delta is None (disclosed as null).
+    """
+    if prior_receipt is None:
+        return None
+
+    deltas: dict[str, Any] = {}
+
+    for layer in current_layers:
+        prior_layer = next(
+            (l for l in prior_receipt.get("layers", []) if l["name"] == layer.name),
+            None,
+        )
+
+        if prior_layer:
+            delta_deps = layer.borrowed_deps_count - prior_layer["borrowed_deps_count"]
+            delta_loc = layer.borrowed_loc - prior_layer["borrowed_loc"]
+
+            deltas[layer.name] = {
+                "borrowed_deps_delta": delta_deps,
+                "borrowed_loc_delta": delta_loc,
+            }
+
+    return deltas if deltas else None
+
+
+def identify_next_home_candidate(
+    layers: list[LayerMeasurement],
+    diagnostic_path: Path,
+) -> str | None:
+    """Identify next layer to nativize (highest borrowed_deps not yet marked home).
+
+    v1 proxy: ranked by borrowed_deps count.
+    This is a RANKING HEURISTIC, not a wall-receipt measurement.
+    """
+    # Find layer with highest borrowed_deps
+    if not layers:
+        return None
+
+    # Sort by borrowed_deps_count descending
+    sorted_layers = sorted(layers, key=lambda l: l.borrowed_deps_count, reverse=True)
+
+    if sorted_layers:
+        return sorted_layers[0].name
+
+    return None
+
+
+def load_prior_receipt(receipts_dir: Path) -> dict[str, Any] | None:
+    """Load the most recent prior receipt if it exists.
+
+    Receipts are named nm-<UTCts>.json and sorted by timestamp.
+    """
+    if not receipts_dir.exists():
+        return None
+
+    receipts = sorted(receipts_dir.glob("nm-*.json"))
+    if not receipts:
+        return None
+
+    # Load the most recent receipt
+    try:
+        with open(receipts[-1]) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def get_invariant_sha(root: Path) -> str:
+    """Get the invariant_sha256 from INVARIANT.md.
+
+    This is a fixed value that should be included in every receipt.
+    """
+    invariant_path = root / "INVARIANT.md"
+    if not invariant_path.exists():
+        return "sha256:unknown"
+
+    content = invariant_path.read_text(encoding="utf-8")
+    match = re.search(r"invariant_sha256:\s*([a-f0-9]+)", content)
+    if match:
+        return "sha256:" + match.group(1)
+
+    return "sha256:unknown"
+
+
+def run_nativization_motion(repo_root: Path) -> str:
+    """Main runner: measure nativization status and write receipt.
+
+    Returns path to the written receipt.
+    """
+    # Find diagnostic and receipts paths
+    diagnostic_path = repo_root / "docs" / "ember-owned-substrate-diagnostic.md"
+    receipts_dir = repo_root / "receipts" / "nativization-motion"
+
+    if not diagnostic_path.exists():
+        raise FileNotFoundError(f"Diagnostic map not found: {diagnostic_path}")
+
+    # Parse layers from diagnostic
+    layer_names = parse_diagnostic_map(diagnostic_path)
+
+    # Measure each layer
+    layers: list[LayerMeasurement] = []
+    for layer_name in layer_names:
+        file_globs = get_layer_file_globs(layer_name)
+        measurement = measure_layer(repo_root, layer_name, file_globs)
+        layers.append(measurement)
+
+    # Load prior receipt for delta computation
+    prior_receipt = load_prior_receipt(receipts_dir)
+    deltas = compute_deltas(layers, prior_receipt)
+
+    # Identify next home candidate
+    next_home = identify_next_home_candidate(layers, diagnostic_path)
+
+    # Get timestamps and hashes
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    utc_ts = now.strftime("%Y%m%dT%H%M%SZ")
+
+    invariant_sha = get_invariant_sha(repo_root)
+    map_source_sha = sha256_file(diagnostic_path)
+
+    # Build receipt
+    receipt = NativizationMotionReceipt(
+        ts=ts,
+        invariant_sha256=invariant_sha,
+        map_source_sha=map_source_sha,
+        layers=[asdict(layer) for layer in layers],
+        deltas=deltas,
+        next_home_candidate=next_home,
+        method="static-import-census-v1",
+        limits=[
+            "dynamic imports not detected",
+            "vendored code treated as external",
+            "binary dependencies of dependencies not scanned",
+            "relative imports only partially resolved",
+        ],
+    )
+
+    # Write receipt
+    receipts_dir.mkdir(parents=True, exist_ok=True)
+    receipt_path = receipts_dir / f"nm-{utc_ts}.json"
+
+    with open(receipt_path, "w", encoding="utf-8") as f:
+        json.dump(asdict(receipt), f, indent=2)
+
+    print(f"Receipt written: {receipt_path}")
+    print(f"Layers measured: {len(layers)}")
+    print(f"Next home candidate: {next_home}")
+
+    return str(receipt_path)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        repo_root = Path(sys.argv[1])
+    else:
+        repo_root = Path.cwd()
+
+    try:
+        receipt_path = run_nativization_motion(repo_root)
+        print(f"Success: {receipt_path}")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
