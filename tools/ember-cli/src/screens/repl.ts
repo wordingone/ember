@@ -78,6 +78,7 @@ import {
 }                                        from "../services/activity-feed.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
 import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
+import { useOutageBanner }               from "../services/outage-banner-poller.ts";
 import {
   executePromptSuggestion,
   makeSuggestionExecutor,
@@ -886,6 +887,12 @@ export function ReplScreen({
   // model endpoint is healthy (or no guarded client has been wired yet).
   const degradedBanner = useCircuitBreakerBanner();
 
+  // issue #475: planned-outage status banner — {active:false} whenever
+  // tools/ember-cli/state/planned-outage.json is absent, expired, or malformed. Explains WHY
+  // the model may be unreachable (a planned watchdog-honored maintenance window) so it is
+  // never confused with an actual crash.
+  const outageBanner = useOutageBanner();
+
   // Render dispatch (memoised per lookups + viewport width)
   const renderMessage = useCallback(
     (msg: SessionMessage) =>
@@ -1459,6 +1466,7 @@ export function ReplScreen({
       modelMetrics:   modelMetrics ?? undefined,
       effort:         retryStatus,
       degraded:       degradedBanner,
+      outage:         outageBanner,
     }),
   );
 }
