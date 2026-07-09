@@ -734,6 +734,9 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
       argv: ["node", "ember", "-p", "hello headless"],
       spawnServer: async () => makeFakeHandle(29901),
       waitReady: async () => {},
+      // #159: deterministic in tests -- the real default performs an actual health-probe
+      // fetch, which is flaky/inappropriate in a test process.
+      probeExisting: async () => false,
       initFn: async () => {},
       getLoopDepsFn: makeFakeDeps,
       headlessRunner: async (
@@ -765,6 +768,9 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
       argv: ["node", "ember", "--print=my test prompt"],
       spawnServer: async () => makeFakeHandle(29902),
       waitReady: async () => {},
+      // #159: deterministic in tests -- the real default performs an actual health-probe
+      // fetch, which is flaky/inappropriate in a test process.
+      probeExisting: async () => false,
       initFn: async () => {},
       getLoopDepsFn: makeFakeDeps,
       headlessRunner: async (prompt: string) => {
@@ -784,6 +790,9 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
       argv: ["node", "ember", "-p", "fail prompt"],
       spawnServer: async () => makeFakeHandle(29903),
       waitReady: async () => {},
+      // #159: deterministic in tests -- the real default performs an actual health-probe
+      // fetch, which is flaky/inappropriate in a test process.
+      probeExisting: async () => false,
       initFn: async () => {},
       getLoopDepsFn: makeFakeDeps,
       headlessRunner: async () => ({ events: [], exitCode: 1 }),
@@ -808,6 +817,9 @@ describe("process-entry — G1: headlessRunner receives LoopDeps from getLoopDep
       argv: ["node", "ember", "-p", "deps test"],
       spawnServer: async () => makeFakeHandle(29904),
       waitReady: async () => {},
+      // #159: deterministic in tests -- the real default performs an actual health-probe
+      // fetch, which is flaky/inappropriate in a test process.
+      probeExisting: async () => false,
       initFn: async () => {},
       getLoopDepsFn: () => fakeDeps,
       headlessRunner: async (
@@ -881,6 +893,9 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
       argv: ["node", "ember", "-p", "hello"],
       spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29997); },
       waitReady: async () => {},
+      // #159: deterministic in tests -- the real default performs an actual health-probe
+      // fetch, which is flaky/inappropriate in a test process.
+      probeExisting: async () => false,
       initFn: async (o) => { receivedServerUrl = o.serverUrl ?? "UNSET"; },
       getLoopDepsFn: makeFakeDeps,
       headlessRunner: async () => ({ events: [], exitCode: 0 }),
@@ -892,7 +907,15 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
   });
 
   it("acceptance (2): models.json 'binary' present + EMBER_MODEL_URL unset -> managed spawn still occurs unchanged", async () => {
-    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: "llama-server.exe" }));
+    // #159 preflight validation (binary/model must exist before spawn) resolves a bare
+    // "llama-server.exe" relative to the RUNNING process's exeDir, not tmpDir -- absolute
+    // paths into tmpDir bypass that (path.resolve ignores the base when the 2nd arg is
+    // already absolute), so dummy files here satisfy the preflight without touching exeDir.
+    const fakeBinary = join(tmpDir, "fake-llama-server.exe");
+    const fakeModel  = join(tmpDir, "fake-model.gguf");
+    await writeFile(fakeBinary, "");
+    await writeFile(fakeModel, "");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: fakeBinary, model: fakeModel }));
     delete process.env["EMBER_MODEL_URL"];
 
     let spawnCalls = 0;
@@ -901,6 +924,9 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
       argv: ["node", "ember", "-p", "hello"],
       spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29996); },
       waitReady: async () => {},
+      // #159: deterministic in tests -- the real default performs an actual health-probe
+      // fetch, which is flaky/inappropriate in a test process.
+      probeExisting: async () => false,
       initFn: async () => {},
       getLoopDepsFn: makeFakeDeps,
       headlessRunner: async () => ({ events: [], exitCode: 0 }),
@@ -920,6 +946,9 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
       argv: ["node", "ember", "-p", "hello"],
       spawnServer: async () => makeFakeHandle(29995),
       waitReady: async () => {},
+      // #159: deterministic in tests -- the real default performs an actual health-probe
+      // fetch, which is flaky/inappropriate in a test process.
+      probeExisting: async () => false,
       initFn: async (o) => { receivedServerUrl = o.serverUrl ?? "UNSET"; },
       getLoopDepsFn: makeFakeDeps,
       headlessRunner: async () => ({ events: [], exitCode: 0 }),
@@ -927,6 +956,304 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
     });
 
     expect(receivedServerUrl).toBe("http://localhost:19192");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #159 cell 1 — boot matrix: every managed-spawn failure cell produces a clean
+// operator-facing error and a controlled exit, never an uncaught exception or a
+// silent hang. One receipt row per cell via hardening-receipts.ts.
+// ---------------------------------------------------------------------------
+
+describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
+  let tmpDir: string;
+  let savedEnv: Record<string, string | undefined>;
+
+  beforeEach(async () => {
+    tmpDir = join(tmpdir(), `pe-159-boot-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(tmpDir, { recursive: true });
+    savedEnv = saveEnv(["EMBER_HOME", "EMBER_MODEL_URL", "EMBER_MODEL_NAME", "EMBER_MODEL_PATH"]);
+    delete process.env["EMBER_MODEL_URL"];
+    delete process.env["EMBER_MODEL_NAME"];
+    delete process.env["EMBER_MODEL_PATH"];
+    process.env["EMBER_HOME"] = tmpDir;
+    _resetConfigHomeMemo();
+  });
+
+  afterEach(async () => {
+    restoreEnv(savedEnv);
+    _resetConfigHomeMemo();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function recordCell(cell: string, pass: boolean, detail: string): Promise<void> {
+    const { writeHardeningReceipt } = await import("../hardening/hardening-receipts.ts");
+    await writeHardeningReceipt({ suite: "boot-matrix", cell, outcome: pass ? "pass" : "fail", detail });
+  }
+
+  it("missing models.json + no default binary/model present -> clean error, exit(1), never spawns", async () => {
+    // No models.json written at all -- loadModelsJson() correctly returns null (existing,
+    // unchanged behavior) and falls to the default "llama-server.exe"/"model.gguf" names,
+    // resolved against the running process's own exeDir where neither file exists in a test
+    // environment. The bar here is NOT "boots anyway" -- it's "fails the same clean way as
+    // an explicitly bad path, never an uncaught exception."
+    let spawnCalls = 0;
+    let exitCode: number | null = null;
+    const stderrChunks: string[] = [];
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((s: string) => { stderrChunks.push(s); return true; }) as typeof process.stderr.write;
+
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29980); },
+        waitReady: async () => {},
+        probeExisting: async () => false,
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = origWrite;
+    }
+
+    const stderr = stderrChunks.join("");
+    const pass = spawnCalls === 0 && exitCode === 1 && stderr.includes("[ember] ERROR") && stderr.includes("not found");
+    await recordCell("missing-models-json", pass, stderr.trim());
+
+    expect(spawnCalls).toBe(0);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("[ember] ERROR");
+    expect(stderr).toContain("not found");
+  });
+
+  it("bad binary path -> clean error naming the path, exit(1), never spawns", async () => {
+    const realModel = join(tmpDir, "real-model.gguf");
+    await writeFile(realModel, "");
+    const badBinary = join(tmpDir, "does-not-exist-llama-server.exe");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: badBinary, model: realModel }));
+
+    let spawnCalls = 0;
+    let exitCode: number | null = null;
+    let stderrText = "";
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
+
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29981); },
+        waitReady: async () => {},
+        probeExisting: async () => false,
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = origWrite;
+    }
+
+    const pass = spawnCalls === 0 && exitCode === 1 && stderrText.includes(badBinary);
+    await recordCell("bad-binary-path", pass, stderrText.trim());
+
+    expect(spawnCalls).toBe(0);
+    expect(exitCode).toBe(1);
+    expect(stderrText).toContain("binary not found");
+    expect(stderrText).toContain(badBinary);
+  });
+
+  it("bad model path -> clean error naming the path, exit(1), never spawns (was: silent 240s hang)", async () => {
+    const realBinary = join(tmpDir, "real-llama-server.exe");
+    await writeFile(realBinary, "");
+    const badModel = join(tmpDir, "does-not-exist-model.gguf");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: badModel }));
+
+    let spawnCalls = 0;
+    let exitCode: number | null = null;
+    let stderrText = "";
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
+
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29982); },
+        // Deliberately never resolves -- if the preflight check did NOT catch this cell,
+        // this test would hang until its own timeout instead of failing fast, which is
+        // exactly the defect this cell exists to catch.
+        waitReady: () => new Promise(() => {}),
+        probeExisting: async () => false,
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = origWrite;
+    }
+
+    const pass = spawnCalls === 0 && exitCode === 1 && stderrText.includes(badModel);
+    await recordCell("bad-model-path", pass, stderrText.trim());
+
+    expect(spawnCalls).toBe(0);
+    expect(exitCode).toBe(1);
+    expect(stderrText).toContain("model not found");
+    expect(stderrText).toContain(badModel);
+  }, 15000);
+
+  it("spawn itself rejects (e.g. EACCES/permission denied) -> clean error, exit(1)", async () => {
+    const realBinary = join(tmpDir, "real-llama-server.exe");
+    const realModel  = join(tmpDir, "real-model.gguf");
+    await writeFile(realBinary, "");
+    await writeFile(realModel, "");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
+
+    let exitCode: number | null = null;
+    let stderrText = "";
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
+
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => { throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" }); },
+        waitReady: async () => {},
+        probeExisting: async () => false,
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = origWrite;
+    }
+
+    const pass = exitCode === 1 && stderrText.includes("EACCES");
+    await recordCell("spawn-rejects", pass, stderrText.trim());
+
+    expect(exitCode).toBe(1);
+    expect(stderrText).toContain("[ember] ERROR: could not start the model server");
+    expect(stderrText).toContain("EACCES");
+  });
+
+  it("backend already running -> adopts existing server, never spawns", async () => {
+    const realBinary = join(tmpDir, "real-llama-server.exe");
+    const realModel  = join(tmpDir, "real-model.gguf");
+    await writeFile(realBinary, "");
+    await writeFile(realModel, "");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
+
+    let spawnCalls = 0;
+    let exitCode: number | null = null;
+    let stdoutText = "";
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((s: string) => { stdoutText += s; return true; }) as typeof process.stdout.write;
+
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29983); },
+        waitReady: async () => {},
+        probeExisting: async () => true, // a healthy server already answers on this port
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    // headlessRunner's fake exitCode:0 flows through main()'s OWN headless exit -- exitCode 0
+    // here means "reached the end cleanly", not "never called"; a boot-matrix FAILURE cell
+    // would instead be exitCode 1 raised from the managed-spawn branch itself.
+    const pass = spawnCalls === 0 && exitCode === 0 && stdoutText.includes("adopting already-running server");
+    await recordCell("backend-already-running", pass, stdoutText.trim());
+
+    expect(spawnCalls).toBe(0);
+    expect(exitCode).toBe(0);
+    expect(stdoutText).toContain("adopting already-running server");
+  });
+
+  it("child exits before becoming ready -> clean error with exit code, exit(1), does not wait for the full timeout", async () => {
+    const { EventEmitter } = await import("node:events");
+    const realBinary = join(tmpDir, "real-llama-server.exe");
+    const realModel  = join(tmpDir, "real-model.gguf");
+    await writeFile(realBinary, "");
+    await writeFile(realModel, "");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
+
+    const fakeProc = new EventEmitter();
+    setTimeout(() => fakeProc.emit("exit", 17), 20);
+
+    let exitCode: number | null = null;
+    let stderrText = "";
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
+
+    const start = Date.now();
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => ({ process: fakeProc as unknown as ServerHandle["process"], port: 29984, kill() {} }),
+        // Never resolves on its own -- only the raced child-exit should end this cell.
+        waitReady: () => new Promise(() => {}),
+        probeExisting: async () => false,
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = origWrite;
+    }
+    const elapsedMs = Date.now() - start;
+
+    // Threshold is generous (10s, not a tight ms bound) to stay robust under full-suite
+    // scheduling contention -- the property under test is "doesn't wait for the 240s timeout
+    // at all" (proven simply by completing, since waitReady above never resolves on its own),
+    // not a precise latency number.
+    const pass = exitCode === 1 && stderrText.includes("exit code 17") && elapsedMs < 10_000;
+    await recordCell("child-exits-early", pass, `${stderrText.trim()} (elapsed ${elapsedMs}ms)`);
+
+    expect(exitCode).toBe(1);
+    expect(stderrText).toContain("[ember] ERROR: the model server exited before becoming ready");
+    expect(stderrText).toContain("exit code 17");
+    expect(elapsedMs).toBeLessThan(10_000); // bounded time-to-signal -- nowhere near the 240s timeout
+  }, 15000);
+
+  it("happy path: valid binary + model, spawn succeeds and becomes ready -> clean exit(0), no failure path taken", async () => {
+    const realBinary = join(tmpDir, "real-llama-server.exe");
+    const realModel  = join(tmpDir, "real-model.gguf");
+    await writeFile(realBinary, "");
+    await writeFile(realModel, "");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
+
+    let spawnCalls = 0;
+    let exitCode: number | null = null;
+    let receivedServerUrl = "UNSET";
+
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29985); },
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? "UNSET"; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: (code: number) => { exitCode = code; },
+    });
+
+    // headlessRunner's fake exitCode:0 flows through main()'s own headless exit -- 0 means
+    // "reached the end cleanly", distinct from the exitCode:1 raised by any failure cell above.
+    const pass = spawnCalls === 1 && exitCode === 0 && receivedServerUrl.startsWith("http://localhost:");
+    await recordCell("happy-path", pass, `spawnCalls=${spawnCalls} exitCode=${exitCode} url=${receivedServerUrl}`);
+
+    expect(spawnCalls).toBe(1);
+    expect(exitCode).toBe(0);
+    expect(receivedServerUrl).toMatch(/^http:\/\/localhost:\d+$/);
   });
 });
 
