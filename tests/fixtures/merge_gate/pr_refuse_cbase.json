@@ -1,0 +1,37 @@
+{
+  "number": 22,
+  "title": "feat: update codebase script",
+  "body": "Fixes #666\n\nUpdates cbase.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [],
+    "totalCount": 0
+  },
+  "commits_after_check": [
+    {
+      "oid": "cde123efg456",
+      "message": "feat: update codebase script"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "tests",
+      "state": "SUCCESS",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "scripts/cbase_bootstrap.py",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 1
+  }
+}

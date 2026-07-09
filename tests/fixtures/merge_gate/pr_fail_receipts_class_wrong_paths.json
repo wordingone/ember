@@ -1,0 +1,41 @@
+{
+  "number": 14,
+  "title": "receipts: but with code",
+  "body": "Fixes #333\n\nTouches code but marked receipts.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [],
+    "totalCount": 0
+  },
+  "commits_after_check": [
+    {
+      "oid": "uvw234xyx567",
+      "message": "receipts: but with code"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "tests",
+      "state": "SUCCESS",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "receipts/merge-gate/test.jsonl",
+        "changeType": "MODIFIED"
+      },
+      {
+        "path": "scripts/runner.py",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 2
+  }
+}

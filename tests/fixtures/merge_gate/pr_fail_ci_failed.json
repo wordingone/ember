@@ -1,0 +1,42 @@
+{
+  "number": 11,
+  "title": "fix: attempt 2",
+  "body": "Fixes #111\n\nSecond attempt.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [],
+    "totalCount": 0
+  },
+  "commits_after_check": [
+    {
+      "oid": "mno345pqr678",
+      "message": "fix: attempt 2"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "tests",
+      "state": "FAILURE",
+      "status": "completed"
+    },
+    {
+      "name": "lint",
+      "state": "SUCCESS",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "receipts/merge-gate/test.jsonl",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 1
+  }
+}

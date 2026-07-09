@@ -1,0 +1,46 @@
+{
+  "number": 3,
+  "title": "fix: improve error handling",
+  "body": "Fixes #789\n\nAdds better error messages.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [],
+    "totalCount": 0
+  },
+  "commits_after_check": [
+    {
+      "oid": "ghi789jkl012",
+      "message": "fix: improve error handling"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "tests",
+      "state": "SUCCESS",
+      "status": "completed"
+    },
+    {
+      "name": "lint",
+      "state": "SUCCESS",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "scripts/runner.py",
+        "changeType": "MODIFIED"
+      },
+      {
+        "path": "tests/test_runner.py",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 2
+  }
+}
