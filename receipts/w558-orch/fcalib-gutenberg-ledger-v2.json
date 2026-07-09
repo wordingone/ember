@@ -1,0 +1,205 @@
+{
+  "ticket": "HELDOUT-V21-FCALIB",
+  "ts": "20260709T141254Z",
+  "runner_git_sha": "d1803e3f9f3d5085ce30892ea1b55ec02b80531d",
+  "predicate_version": "v2.1-exact50-droponly",
+  "predicate_source": "https://github.com/wordingone/ember/issues/440#issuecomment-4916781765",
+  "status": "in_progress",
+  "window_tokens": 50,
+  "cap": 256,
+  "sample_rate": 0.001,
+  "f_values": [
+    "1e-05",
+    "1e-04",
+    "1e-03"
+  ],
+  "shard_receipt_path": "receipts/token-shards-v0-20260611T170047Z.json",
+  "commit_preflight": {
+    "commit_available_gib": 15.773,
+    "floor_gib": 10.0,
+    "method": "GlobalMemoryStatusEx.ullAvailPageFile",
+    "pass": true
+  },
+  "source_order": [
+    "code_github_clean",
+    "fineweb_edu",
+    "wikipedia_en",
+    "gutenberg_en",
+    "ledger_mit"
+  ],
+  "boundary_recovery": {
+    "separator_id": 0,
+    "checksum_ok": true,
+    "per_source": [
+      {
+        "source": "code_github_clean",
+        "start": 0,
+        "end": 4055121325,
+        "expected_separator_count": 1867710,
+        "recovered_separator_count": 1867710,
+        "match": true
+      },
+      {
+        "source": "fineweb_edu",
+        "start": 4055121325,
+        "end": 5723508974,
+        "expected_separator_count": 1549860,
+        "recovered_separator_count": 1549860,
+        "match": true
+      },
+      {
+        "source": "wikipedia_en",
+        "start": 5723508974,
+        "end": 6471516829,
+        "expected_separator_count": 813598,
+        "recovered_separator_count": 813598,
+        "match": true
+      },
+      {
+        "source": "gutenberg_en",
+        "start": 6471516829,
+        "end": 6977635400,
+        "expected_separator_count": 4510,
+        "recovered_separator_count": 4510,
+        "match": true
+      },
+      {
+        "source": "ledger_mit",
+        "start": 6977635400,
+        "end": 6977868758,
+        "expected_separator_count": 780,
+        "recovered_separator_count": 780,
+        "match": true
+      }
+    ]
+  },
+  "k_source_table": {
+    "1e-05": {
+      "code_github_clean": 19,
+      "fineweb_edu": 15,
+      "wikipedia_en": 10,
+      "gutenberg_en": 10,
+      "ledger_mit": 10
+    },
+    "1e-04": {
+      "code_github_clean": 187,
+      "fineweb_edu": 155,
+      "wikipedia_en": 81,
+      "gutenberg_en": 10,
+      "ledger_mit": 10
+    },
+    "1e-03": {
+      "code_github_clean": 1868,
+      "fineweb_edu": 1550,
+      "wikipedia_en": 814,
+      "gutenberg_en": 10,
+      "ledger_mit": 10
+    }
+  },
+  "per_source": {
+    "gutenberg_en": {
+      "n_docs": 4510,
+      "total_candidate_windows": 505893071,
+      "n_sampled_windows": 505894,
+      "n_candidate_keys": 495593,
+      "sample_rate": 0.001,
+      "sampling_method": "two-pass exact counting (PR #460 amendment): pass A samples via systematic stride (stride=round(1/sample_rate)) to define the candidate window-hash universe; pass B is a full-rate (stride=1) scan over this ENTIRE source's token range, hash-filtered + exact-byte-verified against the candidates, recording EXACT corpus-wide doc-frequency (capped at `cap`) for every sampled window \u2014 see module docstring TWO-PASS EXACT COUNTING",
+      "pass_b_wall_s": 299.161,
+      "doc_frequency_histogram": {
+        "1": 484997,
+        "2-10": 1805,
+        "11-100": 936,
+        "101-255": 460,
+        ">=256": 17696
+      },
+      "boilerplate_at_f": {
+        "1e-05": {
+          "k_source": 10,
+          "definite_boilerplate": 19092,
+          "ambiguous": 0,
+          "total_sampled_windows": 505894,
+          "boilerplate_fraction_lower_bound": 0.037739,
+          "boilerplate_fraction_upper_bound": 0.037739,
+          "exact": true
+        },
+        "1e-04": {
+          "k_source": 10,
+          "definite_boilerplate": 19092,
+          "ambiguous": 0,
+          "total_sampled_windows": 505894,
+          "boilerplate_fraction_lower_bound": 0.037739,
+          "boilerplate_fraction_upper_bound": 0.037739,
+          "exact": true
+        },
+        "1e-03": {
+          "k_source": 10,
+          "definite_boilerplate": 19092,
+          "ambiguous": 0,
+          "total_sampled_windows": 505894,
+          "boilerplate_fraction_lower_bound": 0.037739,
+          "boilerplate_fraction_upper_bound": 0.037739,
+          "exact": true
+        }
+      },
+      "n_distinct_window_keys": 495593
+    },
+    "ledger_mit": {
+      "n_docs": 780,
+      "total_candidate_windows": 194358,
+      "n_sampled_windows": 195,
+      "n_candidate_keys": 195,
+      "sample_rate": 0.001,
+      "sampling_method": "two-pass exact counting (PR #460 amendment): pass A samples via systematic stride (stride=round(1/sample_rate)) to define the candidate window-hash universe; pass B is a full-rate (stride=1) scan over this ENTIRE source's token range, hash-filtered + exact-byte-verified against the candidates, recording EXACT corpus-wide doc-frequency (capped at `cap`) for every sampled window \u2014 see module docstring TWO-PASS EXACT COUNTING",
+      "pass_b_wall_s": 0.061,
+      "doc_frequency_histogram": {
+        "1": 182,
+        "2-10": 12,
+        "11-100": 1,
+        "101-255": 0,
+        ">=256": 0
+      },
+      "boilerplate_at_f": {
+        "1e-05": {
+          "k_source": 10,
+          "definite_boilerplate": 1,
+          "ambiguous": 0,
+          "total_sampled_windows": 195,
+          "boilerplate_fraction_lower_bound": 0.005128,
+          "boilerplate_fraction_upper_bound": 0.005128,
+          "exact": true
+        },
+        "1e-04": {
+          "k_source": 10,
+          "definite_boilerplate": 1,
+          "ambiguous": 0,
+          "total_sampled_windows": 195,
+          "boilerplate_fraction_lower_bound": 0.005128,
+          "boilerplate_fraction_upper_bound": 0.005128,
+          "exact": true
+        },
+        "1e-03": {
+          "k_source": 10,
+          "definite_boilerplate": 1,
+          "ambiguous": 0,
+          "total_sampled_windows": 195,
+          "boilerplate_fraction_lower_bound": 0.005128,
+          "boilerplate_fraction_upper_bound": 0.005128,
+          "exact": true
+        }
+      },
+      "n_distinct_window_keys": 195
+    }
+  },
+  "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; shard + receipt paths carry the git -text pin",
+  "mmap_cache_report": {
+    "impl": "timeshare_pretrain._build_or_open_memmap_cache (np.memmap, mode='r')",
+    "why": "legacy np.concatenate in-RAM path raised numpy._core._exceptions._ArrayMemoryError requesting a 13.0 GiB contiguous array at BOTH 17.5GB and 30.6GB free RAM (two tracebacks banked, 2026-07-08) -- fragmentation, not capacity",
+    "cache_bin_path": "scratch/corpus-cache/shards-v1-stream.uint16.bin",
+    "cache_manifest_path": "scratch/corpus-cache/shards-v1-stream.manifest.json",
+    "reused_existing_cache": true,
+    "combined_manifest_sha256": "aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a",
+    "expected_manifest_sha256_checked": null,
+    "n_tokens": 6977868758
+  },
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}
