@@ -314,6 +314,11 @@ def main() -> int:
     ap.add_argument("--grad-accum-steps", type=int, default=8, help="DEV-002 config: accum_steps")
     ap.add_argument("--micro-batch", type=int, default=2, help="DEV-002 config: micro_batch")
     ap.add_argument("--sample-interval-s", type=float, default=1.0)
+    ap.add_argument("--measure-every-optimizer-step", action="store_true",
+                     help="#524 M1/M3: phase-measure EVERY optimizer_step (not just gs=0) to "
+                          "reveal whether the CPUOffloadOptimizer.step() copy-back transient "
+                          "(M2 finding: unmeasured, no estimator term) plateaus or grows across "
+                          "a multi-step run. Default False preserves prior gs==0-only behavior.")
     ap.add_argument("--widen-cast-worker", action="store_true",
                      help=argparse.SUPPRESS)  # internal: re-exec entry point, see _widen_cast_worker
     ap.add_argument("--out-path", help=argparse.SUPPRESS)
@@ -677,7 +682,17 @@ def main() -> int:
                 def _do_optimizer_step():
                     for opt in optimizers.values():
                         opt.step()
-                if global_step == 0:
+                # #524 M1/M3 addition: measure EVERY step's optimizer_step phase
+                # when --measure-every-optimizer-step is set (default False,
+                # preserves prior gs==0-only behavior byte-identically for any
+                # other caller) -- gs==0 alone cannot show whether the
+                # CPUOffloadOptimizer.step() copy-back transient (M2 finding:
+                # cpu_offload_adamw.py's real_p.data.copy_(shadow_p.data.to(
+                # real_p.device,...)) has no term in the estimator and no prior
+                # GPU measurement) is a one-time cost the caching allocator
+                # reuses on later steps, or one that keeps growing reserved
+                # memory step over step -- only a multi-step series answers that.
+                if global_step == 0 or args.measure_every_optimizer_step:
                     _phase_measure(f"[gs={global_step}] optimizer_step (all groups)",
                                     _do_optimizer_step, vram_attribution_phases)
                 else:
@@ -739,6 +754,14 @@ def main() -> int:
         verdict = "MEASURED_FAIL_DEGENERATE_LOSS"
     else:
         verdict = "MEASURED_PASS"
+
+    # #524 M1/M3: pull every recorded optimizer_step phase entry into its own
+    # time series -- the direct answer to "does the CPUOffloadOptimizer.step()
+    # copy-back transient (M2 finding) plateau or grow across a multi-step
+    # run", without needing to re-parse the full vram_attribution.phases list.
+    optimizer_step_transient_series = [
+        p for p in vram_attribution_phases if "optimizer_step" in p["phase"]
+    ]
 
     wall_s = round(time.monotonic() - wall_start, 3)
     receipt = {
@@ -843,6 +866,17 @@ def main() -> int:
                       "(a large reserved-vs-allocated gap points at allocator fragmentation/"
                       "caching rather than a genuine tensor-level cost)."),
             "phases": vram_attribution_phases,
+            "measure_every_optimizer_step": args.measure_every_optimizer_step,
+            "optimizer_step_transient_series": optimizer_step_transient_series,
+            "optimizer_step_transient_series_note": (
+                "#524 M1/M3: per-step delta_gib/reserved_peak_gib for every optimizer_step "
+                "phase entry. delta_gib holding roughly steady across steps means the CUDA "
+                "caching allocator is reusing blocks for the CPUOffloadOptimizer.step() "
+                "copy-back transient (M2's best-case bound, ~0.0625 GiB); a rising trend "
+                "means it is NOT being reused and the transient compounds toward M2's "
+                "worst-case bound (~4.089 GiB) -- only present when "
+                "--measure-every-optimizer-step was passed (else only gs=0 is populated)."
+            ),
         },
         "offloaded_config": {
             "micro_batch": args.micro_batch,
