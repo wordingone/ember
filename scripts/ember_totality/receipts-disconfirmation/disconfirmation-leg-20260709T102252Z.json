@@ -13,9 +13,9 @@
       "verdict_line": "hinges=3  fired=0  violations=0  exit=PASS",
       "verdict": "PASS",
       "wall_s": 0.062,
-      "receipt_path": "B:\\M\\wt-boardrun36\\scripts\\ember_totality\\receipts-disconfirmation\\disconfirmation-eval-20260709T102252Z.json",
+      "receipt_path": "<WORKTREE>\\scripts\\ember_totality\\receipts-disconfirmation\\disconfirmation-eval-20260709T102252Z.json",
       "reason": null,
-      "checker_path": "B:\\M\\wt-boardrun36\\scripts\\check_disconfirmation_triggers.py"
+      "checker_path": "<WORKTREE>\\scripts\\check_disconfirmation_triggers.py"
     }
   },
   "overall_verdict": "PASS"

@@ -1,0 +1,188 @@
+{
+  "ticket": "C-CUSTODY-CHK",
+  "ts": "2026-07-09T08:20:38.874929+00:00",
+  "failures": [
+    "CITED-MISSING: receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json",
+    "CITED-MISSING: receipts/ceff-RESOLVED-20260703T124623Z.json",
+    "CITED-MISSING: receipts/ceff-closure-gate9-shatter-bf16ns5-20260623T132000Z.json",
+    "CITED-MISSING: receipts/ceff-shatter-REPUDIATED-20260623T170000Z.json",
+    "CITED-MISSING: receipts/cgrow-prereq/ff-widen-preservation-20260628T053513Z.json",
+    "CITED-MISSING: receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
+    "CITED-MISSING: receipts/corpus-manifest-20260702T162110Z.json",
+    "CITED-MISSING: receipts/corpus-materiality-adjudication-20260702T162033Z.json",
+    "CITED-MISSING: receipts/corpus-verification-20260704T095213Z.json",
+    "CITED-MISSING: receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T084922Z.json",
+    "CITED-MISSING: receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json",
+    "CITED-MISSING: receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
+    "CITED-MISSING: receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json",
+    "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-adapter-trace.log",
+    "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-meta.json",
+    "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-process-after.json",
+    "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-stub-server-log.jsonl",
+    "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-terminal-transcript-clean.txt",
+    "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z.json",
+    "CITED-MISSING: receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
+    "CITED-MISSING: receipts/governor-repair-080-20260702T180248Z.json",
+    "CITED-MISSING: receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json",
+    "CITED-MISSING: receipts/stale-figure-adjudication-20260702T151929Z.json",
+    "CITED-MISSING: receipts/wheel/wheel-real-20260618T143007Z.json"
+  ],
+  "failure_count": 24,
+  "pending_landing_count": 0,
+  "offenders": {
+    "untracked": [],
+    "unparseable": [],
+    "cited_missing": [
+      "CITED-MISSING: receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json",
+      "CITED-MISSING: receipts/ceff-RESOLVED-20260703T124623Z.json",
+      "CITED-MISSING: receipts/ceff-closure-gate9-shatter-bf16ns5-20260623T132000Z.json",
+      "CITED-MISSING: receipts/ceff-shatter-REPUDIATED-20260623T170000Z.json",
+      "CITED-MISSING: receipts/cgrow-prereq/ff-widen-preservation-20260628T053513Z.json",
+      "CITED-MISSING: receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
+      "CITED-MISSING: receipts/corpus-manifest-20260702T162110Z.json",
+      "CITED-MISSING: receipts/corpus-materiality-adjudication-20260702T162033Z.json",
+      "CITED-MISSING: receipts/corpus-verification-20260704T095213Z.json",
+      "CITED-MISSING: receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T084922Z.json",
+      "CITED-MISSING: receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json",
+      "CITED-MISSING: receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
+      "CITED-MISSING: receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json",
+      "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-adapter-trace.log",
+      "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-meta.json",
+      "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-process-after.json",
+      "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-stub-server-log.jsonl",
+      "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-terminal-transcript-clean.txt",
+      "CITED-MISSING: receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z.json",
+      "CITED-MISSING: receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
+      "CITED-MISSING: receipts/governor-repair-080-20260702T180248Z.json",
+      "CITED-MISSING: receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json",
+      "CITED-MISSING: receipts/stale-figure-adjudication-20260702T151929Z.json",
+      "CITED-MISSING: receipts/wheel/wheel-real-20260618T143007Z.json"
+    ],
+    "pattern_citation": [
+      "PATTERN: receipts/",
+      "PATTERN: receipts/**/*e2b*.json",
+      "PATTERN: receipts/*.json",
+      "PATTERN: receipts/+*.json",
+      "PATTERN: receipts/-style",
+      "PATTERN: receipts/.*\\.json",
+      "PATTERN: receipts/.*\\\\.json",
+      "PATTERN: receipts/.rung2-event-cache/grow-rung2-20260708-real-grad-pre-gate.pt",
+      "PATTERN: receipts/.rung2-event-cache/grow-rung2-20260708-real-pre-momentum.pt",
+      "PATTERN: receipts/.rung2-event-cache/grow-rung2-20260708-real-theta-gate-pre.pt",
+      "PATTERN: receipts/.rung2-event-cache/grown-eps-58e8e98916823941-sigma0.05-seed0.pt",
+      "PATTERN: receipts/<named>.json",
+      "PATTERN: receipts/_quarantine/)",
+      "PATTERN: receipts/_sandbox/STATE-test.md)",
+      "PATTERN: receipts/b-run-designation-*.json",
+      "PATTERN: receipts/b-run-designation-{ts}.json",
+      "PATTERN (schema-constant): receipts/benchmark/cycle-20260617T000000Z-0001.json",
+      "PATTERN: receipts/bootstrap-falsifier-*.json",
+      "PATTERN (bare-directory, tracked-populated): receipts/cbase-grow-live",
+      "PATTERN: receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json)",
+      "PATTERN: receipts/cgrow-run-20260628T062609Z/",
+      "PATTERN: receipts/cold-read-reprobe/",
+      "PATTERN (schema-constant): receipts/commits/statecommit-20260617T000000Z-0001.json",
+      "PATTERN: receipts/ember-c-scale/w2-heldout-decontam-*.json",
+      "PATTERN (bare-directory, tracked-populated): receipts/ember-cockpit-live-surface1",
+      "PATTERN: receipts/ember-cockpit-live-surface1/",
+      "PATTERN: receipts/ember-mvp/",
+      "PATTERN (bare-directory, tracked-populated): receipts/ember-preloop-resident-gate",
+      "PATTERN: receipts/ember-preloop-resident-gate/",
+      "PATTERN: receipts/ember-preloop-resident-gate/backend-coordinator-agents-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/cleanroom-legal-boundary-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/communication-mailbox-computer-use-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/function-slash-commands-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/launch-packaging-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/process-supervision-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/receipt-store-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/rollback-rewind-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/state-persistence-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/tool-dispatch-permissions-<timestamp>.json",
+      "PATTERN: receipts/ember-preloop-resident-gate/uiux-repl-components-<timestamp>.json",
+      "PATTERN: receipts/eval-suite-freeze/)",
+      "PATTERN (schema-constant): receipts/governor/cycle-20260617T000000Z-0001.json",
+      "PATTERN: receipts/ledger/view",
+      "PATTERN (schema-constant): receipts/observations/obs-20260617T000000Z-0001.json",
+      "PATTERN (schema-constant): receipts/replay/statecommit-20260617T000000Z-0001.json",
+      "PATTERN (schema-constant): receipts/rollback/statecommit-20260617T000000Z-0001.json",
+      "PATTERN (schema-constant): receipts/sandbox/cycle-20260617T000000Z-0001.json",
+      "PATTERN: receipts/sp6b-b-run-*.json",
+      "PATTERN: receipts/v0ext-selftest-20260611T074545Z.json)",
+      "PATTERN (schema-constant): receipts/verifier/cycle-20260617T000000Z-0001.json",
+      "PATTERN (schema-constant): receipts/wheel/cycle-20260617T000000Z-0001.json"
+    ],
+    "relocated": [
+      {
+        "old": "receipts/ember-c-e2b-paired-20260705T041045Z.json",
+        "new": "receipts/ember-c-e2b-paired/ember-c-e2b-paired-20260705T041045Z.json"
+      },
+      {
+        "old": "receipts/wheel-runner/official-abc-wheel-runner-20260618T143007Z.json",
+        "new": "receipts/ember-mvp/cycle-official-runner-bound-20260618/official-abc-wheel-runner-20260618T143007Z.json"
+      },
+      {
+        "old": "receipts/wheel-runner/official-abc-wheel-runner-20260618T151654Z.json",
+        "new": "receipts/ember-mvp/core-loop-attempt-1-20260618/official-abc-wheel-runner-20260618T151654Z.json"
+      },
+      {
+        "old": "receipts/wheel/wheel-real-20260618T151654Z.json",
+        "new": "receipts/ember-mvp/core-loop-attempt-1-20260618/wheel-real-20260618T151654Z.json"
+      }
+    ],
+    "documented_absent": [],
+    "annex_attested": [
+      {
+        "path": "receipts/ember-d3-native-loop/d3-native-loop-20260704T161315Z-c3-wall-time-rerun.json",
+        "sha256": "3d7f48ba910d9cfcfff4c2a428f7050f00da8f4065a2fc13c736ad99e5052258",
+        "annex_source": "receipts/spend-annex/spend-annex-20260705T103031Z.json"
+      },
+      {
+        "path": "receipts/ember-d3-native-loop/d3-native-loop-20260704T235144Z-c3-wall-time-rerun.json",
+        "sha256": "4f86f7fc51235957ea8c976c103f452ef8d934ba3279a33320f0abeb12c7eddc",
+        "annex_source": "receipts/spend-annex/spend-annex-20260705T103031Z.json"
+      },
+      {
+        "path": "receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T.json",
+        "sha256": "e0ba13083600aee0ceaa10d8b2202f6a1c67260ca9e9ec01b3c48391bf712d01",
+        "annex_source": "receipts/spend-annex/spend-annex-20260705T103031Z.json"
+      },
+      {
+        "path": "receipts/publication-gate-20260707T033816Z.json",
+        "sha256": "837498b06b13c8bf8cfd76a649ee6a371e441b4656444e6660b1acfff17534ed",
+        "annex_source": "receipts/spend-annex/spend-annex-20260707T113500Z.json"
+      },
+      {
+        "path": "receipts/publication-gate-20260707T044246Z.json",
+        "sha256": "d9481ebeae1c34280890c3aaa9a179b637a5d7cb3c7a016ba239c8ce027d4fda",
+        "annex_source": "receipts/spend-annex/spend-annex-20260707T113500Z.json"
+      },
+      {
+        "path": "receipts/publication-gate-20260707T044524Z.json",
+        "sha256": "795fce4900f22bd1a3449150c44544575e0b024dbf16e7edd7f62ec4e59baaca",
+        "annex_source": "receipts/spend-annex/spend-annex-20260707T113500Z.json"
+      },
+      {
+        "path": "receipts/publication-gate-20260707T100103Z.json",
+        "sha256": "0a1caeeb97f2c9454b50377a3341c606f4dc909138ca1ebbfe319e14466ed006",
+        "annex_source": "receipts/spend-annex/spend-annex-20260707T113500Z.json"
+      },
+      {
+        "path": "receipts/publication-gate-20260707T101845Z.json",
+        "sha256": "11f8552fce1d2d66984b1c7507bd12c9119c634289f80e7dc2302cc9c5116790",
+        "annex_source": "receipts/spend-annex/spend-annex-20260707T113500Z.json"
+      },
+      {
+        "path": "receipts/publication-gate-20260707T104111Z.json",
+        "sha256": "6a7e10398341d34761e02e1030ea6d496b54538fa952f75e547dbcda8584cd55",
+        "annex_source": "receipts/spend-annex/spend-annex-20260707T113500Z.json"
+      },
+      {
+        "path": "receipts/publication-gate-20260707T113528Z.json",
+        "sha256": "16b59d20afd562d961e8b465e225785f472da555690d57ca314e28314938150c",
+        "annex_source": "receipts/spend-annex/spend-annex-20260707T113500Z.json"
+      }
+    ]
+  },
+  "pending_landing": []
+}

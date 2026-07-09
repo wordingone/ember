@@ -1,0 +1,40 @@
+{
+  "ticket": "EMBER-TOTALITY-AUDIT",
+  "ts": "2026-07-09T10:25:00Z",
+  "method": "manual gate discipline (workflow detector retired; rebuild tracked as public issue #89) — coordinator receipts-only reads + spot-verification; forensics lens applied",
+  "board_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260709T081147Z.json (fresh re-run in flight on post-merge master: boardrun36, 5 PRs landed since 081147Z: #536 #539 #540 #541 #542)",
+  "board_summary": {"green": 8, "red": 27, "unevaluable": 2, "tally_pct": 21.6, "note": "counts pre-date this window's 5 merges; boardrun36 receipt supersedes on landing"},
+  "honest_green_count": 8,
+  "regressions": [],
+  "per_condition": {
+    "C(-1)": {
+      "probe_faithful": true,
+      "receipt_genuine": true,
+      "evidence": "spend-annex-20260708T072000Z.json (landed PR #539 this window) spot-verified: 262 rows each carry path+sha256+evidence_class (script_scanned_clean / generator_absent — scanned surfaces, NOT bare declaration); 7/7 sampled sha256 pins match on-disk bytes; 5/5 sampled paths exist. Post-hoc annex mechanism is evidence-classed, not self-attestation. Expect C(-1) RED count to drop on boardrun36's receipt."
+    },
+    "C-SURFACE2": {
+      "probe_faithful": true,
+      "receipt_genuine": null,
+      "evidence": "probe REWRITTEN this window (#536, merged 09:10Z): placeholder default deleted, EMBER_EXEC_ROOT -> repo-root resolution; adversarial diff read + clean-env output transition (UNEVALUABLE -> RED receipt-absent) gated at merge. The RED is a real looked-at absence; clauses (a)-(c) byte-untouched."
+    },
+    "C-PROC": {
+      "probe_faithful": true,
+      "receipt_genuine": null,
+      "note": "receipts/process-visibility/ did not exist AT ALL until this window (RED receipt-absent was honest). Coordinator wrote process-visibility-20260709T094500Z.json (schema-complete: issue_urls, open_prs=[#374 verdict-pending 42.7h/48h grace], covered_commits, delegation block). SELF-AUTHORED — flagged for independent verification by boardrun36's C-PROC probe line; publication-state clause not triggered (open_prs not none-open). #374 breaches grace ~15:00Z without a verdict — named to the review loop."
+    },
+    "FROZEN-MAP-DEGENERACY": {
+      "probe_faithful": false,
+      "receipt_genuine": true,
+      "severity": "medium",
+      "gap": "Audit-shaped finding from research tick 27 (panel + 7/7 synthetic receipt): sigma_max-ratio rows in spectral adjudication maps are PLATEAU-DEGENERATE — NS5 saturates sigma_max at the plateau (1.20237) for ppm-to-percent input differences alike, so a spectral-ratio PASS certifies scale handling but carries no twin-exactness information. The #482 gate PASS (R=sqrt(2) at 2ppm) remains valid for what it certifies (scale recompute); the register map class needs RMS rows + twin-subspace-overlap rows wherever twin structure exists.",
+      "cheap_pass": "a deliberately twin-broken fixture would still PASS a sigma-ratio row",
+      "fix": "frozen on #449 comment 4924030713: future map rows = RMS (primary, informative) + degeneracy disclosure on any sigma-ratio row; down-class register frozen accordingly",
+      "ownership": "probe-harden (register-map convention; applied to the frozen #449 register this tick)"
+    }
+  },
+  "defect_class_extracted": "PASS criteria insensitive by construction (plateau-saturated statistics) — a green row whose statistic cannot distinguish healthy from broken inputs is a self-attestation shape even when every number is honestly measured. Cure: every frozen register names its discriminating row; degenerate rows carry the disclosure inline.",
+  "queued_rebuilds": [],
+  "publication_visibility_note": "5 PRs merged this window (#536 #539 #540 #541 #542) + #449/#482 adjudications posted; boardrun36 re-render in flight; c2restore537 + auditland35 landings still owed (worktree path)",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
