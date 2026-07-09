@@ -1,0 +1,30 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-STABILIZE-LEG1-TRANSPLANT-WALL-DIAGNOSTIC",
+  "ts": "2026-07-09T13:05:30.068868+00:00",
+  "issue": 480,
+  "refs": [
+    532,
+    449,
+    513
+  ],
+  "question": "does muon routing BY CONSTRUCTION exclude layers 15-19 FF (routing bug), or did state genuinely never accumulate (true gap)?",
+  "code_cited": {
+    "file": "scripts/timeshare_pretrain.py",
+    "function": "split_param_groups",
+    "lines": "801-821",
+    "quote": "for name, p in model.named_parameters(): ... is_2d = p.ndim == 2; is_embed = 'embed' in low; is_head = 'head' in low; if is_2d and not is_embed and not is_head: muon.append((name, p)) else: adamw.append((name, p))",
+    "finding": "unconditional over ALL named_parameters(), no layer-index special-casing anywhere in this function or its caller build_split_optimizer (lines 824-893). Routing does NOT exclude layers 15-19 -- every layer's FF and attention 2D weights route to muon identically by this code."
+  },
+  "checkpoint_forensics": {
+    "seed_ckpt": "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+    "total_param_tensors": 185,
+    "accounted_ids_muon_or_adamw": "0-139 (140 ids, contiguous)",
+    "unaccounted_ids_neither_muon_nor_adamw": "140-184 (45 ids, contiguous)",
+    "boundary_note": "layer 15's FF tensors are pids 140/141/142 -- exactly the first unaccounted ids; layer 15's own attention tensors (pids 136-139) ARE present. layers 16-19 (all 7 tensors each) are entirely absent. Contiguous global-index truncation, not scattered gaps.",
+    "cross_check": "identical gap present in the earlier checkpoint step-00000730 (pre rung-1-stabilize) -- predates rung-1's own stabilize run",
+    "likely_cause": "commit 2445c4b 'fix: file-backed optimizer state to eliminate commit exhaustion' landed 2026-07-08T08:53:52-07:00 -- AFTER this checkpoint's write (manifest ts 20260703T155708Z). Checkpoint predates the exact fix that would have prevented a commit-exhaustion mid-write truncation."
+  },
+  "verdict": "TRUE_GAP (b)",
+  "reasoning": "Routing code confirmed uniform/unconditional (no construction-time exclusion for any layer). The saved optimizer state cuts off at a contiguous global param-index boundary consistent with a write-time truncation, not a per-layer routing decision. State for global param ids >=140 was never persisted in any checkpoint file that exists.",
+  "disposition": "per team-lead ruling, STEP 2b applies: Branch B full optimizer reset for this leg, disclosed in g2 prereg + PR; file HIGH-priority issue for the accumulation-gap investigation (refs #480 #449)."
+}

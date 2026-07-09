@@ -1,0 +1,76 @@
+{
+ "receipt": "process-visibility",
+ "ts_utc": "2026-07-09T17:08:00Z",
+ "coordinator_window": "2026-07-09T14:39Z-17:08Z",
+ "merges": [
+  {
+   "pr": 569,
+   "what": "drop two superseded debug receipts (#558 chain)",
+   "mergedAt": "2026-07-09T14:59:03Z",
+   "sha": "c5607303"
+  },
+  {
+   "pr": 568,
+   "what": "doc supersession header + shipped-status correction (spec-lattice audit cures)",
+   "mergedAt": "2026-07-09T15:37:03Z",
+   "sha": "86881475"
+  },
+  {
+   "pr": 571,
+   "what": "render integrity: banner/input/status regions locked + overflow:hidden renderer-wide (unsplit; split ruling reversed, dated)",
+   "mergedAt": "2026-07-09T15:45:04Z",
+   "sha": "b1ee1020"
+  },
+  {
+   "pr": 573,
+   "what": "forward mmap_cache_dir through run_v0_segment + regression test (cures #570, found live during #480 launch)",
+   "mergedAt": "2026-07-09T16:36:50Z",
+   "sha": "a6321769"
+  },
+  {
+   "pr": 574,
+   "what": "P0-B activity-feed watermark/exclusion/coalescing - kills the receipts replay-flood source",
+   "mergedAt": "2026-07-09T16:36:48Z",
+   "sha": "33e01642"
+  }
+ ],
+ "prs_closed_unmerged": [
+  {
+   "pr": 566,
+   "why": "boardrun38 landing: renamed '-redacted-edition' duplicates (byte-identical to canonical receipts) + superseded totality; canonical set rides the landing queue"
+  },
+  {
+   "pr": 572,
+   "why": "split-PR2 made redundant by #571 unsplit merge - blob-hash identical to master"
+  }
+ ],
+ "issues_filed": [
+  {
+   "num": 570,
+   "what": "run_v0_segment never forwards mmap_cache_dir (closed same day via #573)"
+  },
+  {
+   "num": 575,
+   "what": "4 remaining real-corpus-scale PackedShardLoader call sites on legacy path"
+  }
+ ],
+ "prs_open_gated": [
+  {
+   "pr": 557,
+   "state": "annex17 lane stopped; fresh verify leg re-derives 6 provenance predicates next hour (ledger row annex17-557-verify-20260709)"
+  }
+ ],
+ "lanes": {
+  "stab480": "sonnet - #480 leg-1: 3 commit-exhaustion deaths receipted (death-3 traceback = torch load_state_dict _cast at 93.66GB), streaming-restore fix compiled, run RELAUNCHED ~16:50Z (PID 36180)",
+  "body485": "sonnet - task-17 watchdog tail-poll mega-burst: diagnosis banked (2-for-2 relaunch correlation, ~2^16 magnitudes), cap+instrumentation PR next",
+  "cliswap72": "sonnet - operator cockpit restart: leak-class 16.32GB build killed (receipt-first), rebuild on post-#574 master, two-point attestation pending",
+  "boardrun40": "haiku - totality re-render on post-#574 master, GPU-tenancy gated",
+  "mmapfwd570": "sonnet - delivered #573, released (worktree removal confirmed pending)"
+ },
+ "coordinator_disclosures": [
+  "watchdog daemon remains down BY DESIGN (#562 retirement path); interim cockpit liveness = hourly coordinator census only",
+  "C-PROC went honestly RED on the 150230Z board (probe hardening working); this receipt is the cure and rides the next landing PR (landing-queue-20260709)",
+  "serve_cbase_openai PID 40152 (12.5GB commit) ruled KEEP - it is the cockpit inference backend (port 8084 embedded in every cockpit binary)"
+ ],
+ "api_spend_usd": "0.00 local; subscription-plan agent spawns only (3 spawns 16:00-17:00: 2 sonnet, 1 haiku)"
+}

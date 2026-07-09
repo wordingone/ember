@@ -1,0 +1,115 @@
+{
+ "receipt": "process-visibility",
+ "ts": "20260709T173000Z",
+ "coordinator_window": "2026-07-09T14:39Z-17:30Z",
+ "issue_urls": [
+  "https://github.com/wordingone/ember/issues/480",
+  "https://github.com/wordingone/ember/issues/449",
+  "https://github.com/wordingone/ember/issues/485",
+  "https://github.com/wordingone/ember/issues/561",
+  "https://github.com/wordingone/ember/issues/562",
+  "https://github.com/wordingone/ember/issues/570",
+  "https://github.com/wordingone/ember/issues/575",
+  "https://github.com/wordingone/ember/issues/576",
+  "https://github.com/wordingone/ember/issues/577",
+  "https://github.com/wordingone/ember/issues/122",
+  "https://github.com/wordingone/ember/issues/125",
+  "https://github.com/wordingone/ember/issues/118",
+  "https://github.com/wordingone/ember/issues/121",
+  "https://github.com/wordingone/ember/issues/123"
+ ],
+ "open_prs": [
+  {
+   "number": 557,
+   "state": "verdict-pending",
+   "pending_h": 4.1
+  }
+ ],
+ "covered_commits": {
+  ".": "5dd0539a05445ac3904cb8279719e3d26760d65a"
+ },
+ "delegation": {
+  "#570": {
+   "built_by": "mmapfwd570 (sonnet lane, PR 573)",
+   "verified_by": "coordinator merge gate (blob/diff/test receipts)"
+  },
+  "#575": {
+   "built_by": "mmapfwd575 (sonnet lane, in flight)",
+   "verified_by": "coordinator merge gate (pending)"
+  },
+  "#576": {
+   "built_by": "body485 (sonnet lane, PR 578)",
+   "verified_by": "coordinator merge gate + natural-experiment receipt"
+  },
+  "#577": {
+   "built_by": "stab480 (sonnet lane, investigation)",
+   "verified_by": "coordinator ruling on F1-F3 receipts (pending)"
+  },
+  "#485": {
+   "built_by": "body485 (sonnet lane, PR 574)",
+   "verified_by": "coordinator merge gate"
+  },
+  "#561": {
+   "built_by": "body485 (sonnet lane, PR 571)",
+   "verified_by": "coordinator merge gate + AC tests"
+  },
+  "#480": {
+   "built_by": "stab480 (sonnet lane, BUILD + leg receipts)",
+   "verified_by": "coordinator gate (g1/g2 prereg, log forensics)"
+  }
+ },
+ "merges": [
+  {
+   "pr": 569,
+   "what": "drop two superseded debug receipts",
+   "mergedAt": "2026-07-09T14:59:03Z",
+   "sha": "c5607303"
+  },
+  {
+   "pr": 568,
+   "what": "doc supersession header + shipped-status correction",
+   "mergedAt": "2026-07-09T15:37:03Z",
+   "sha": "86881475"
+  },
+  {
+   "pr": 571,
+   "what": "render integrity: banner/input/status regions + overflow:hidden renderer-wide",
+   "mergedAt": "2026-07-09T15:45:04Z",
+   "sha": "b1ee1020"
+  },
+  {
+   "pr": 573,
+   "what": "forward mmap_cache_dir through run_v0_segment + regression test",
+   "mergedAt": "2026-07-09T16:36:50Z",
+   "sha": "a6321769"
+  },
+  {
+   "pr": 574,
+   "what": "P0-B activity-feed watermark/exclusion/coalescing",
+   "mergedAt": "2026-07-09T16:36:48Z",
+   "sha": "33e01642"
+  },
+  {
+   "pr": 578,
+   "what": "tailpoll per-tick emission cap + boot-path diagnostics",
+   "mergedAt": "2026-07-09T17:23:06Z",
+   "sha": "5dd0539a"
+  }
+ ],
+ "prs_closed_unmerged": [
+  {
+   "pr": 566,
+   "why": "renamed duplicate receipts, superseded totality; canonical set rides landing queue"
+  },
+  {
+   "pr": 572,
+   "why": "split-PR2 redundant after 571 unsplit merge (blob-identical)"
+  }
+ ],
+ "coordinator_disclosures": [
+  "predecessor receipts 124202Z-170800Z drifted off the probe schema (narrative keys instead of issue_urls/open_prs/covered_commits/delegation) - this receipt restores the probe schema; the narrative blocks are retained as extras",
+  "watchdog daemon down BY DESIGN per issue 562 retirement path; interim cockpit liveness = hourly coordinator census",
+  "serve_cbase_openai (port 8084, 12.5GB) ruled KEEP - cockpit inference backend; supervision spec delta posted to issue 122"
+ ],
+ "api_spend_usd": "0.00 local; subscription-plan agent lanes only"
+}

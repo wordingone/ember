@@ -1,0 +1,58 @@
+{
+ "receipt": "process-visibility",
+ "ts_utc": "2026-07-09T14:39:00Z",
+ "coordinator_window": "2026-07-09T14:15Z-14:39Z",
+ "merges": [
+  {
+   "pr": 563,
+   "what": "probe-fixture rename (PROBE_DIR_DRIFT cure)",
+   "mergedAt": "2026-07-09T14:17:01Z",
+   "sha": "d026e40d"
+  },
+  {
+   "pr": 559,
+   "what": "renderer multi-line newline fix + d5 test isolation",
+   "mergedAt": "2026-07-09T14:18:53Z",
+   "sha": "4826c45e"
+  },
+  {
+   "pr": 564,
+   "what": "#558 W1c K-batch orchestrator rebuild (real-corpus AC1/AC2, seq-length combinatorics finding disclosed)",
+   "mergedAt": "2026-07-09T14:36:21Z",
+   "sha": "8aca8663"
+  }
+ ],
+ "issues_filed": [
+  {
+   "num": 561,
+   "what": "ember-cli render integrity (three-region layout, watermark feed)"
+  },
+  {
+   "num": 562,
+   "what": "body owns its liveness - watchdog retirement ladder"
+  },
+  {
+   "num": 565,
+   "what": "resident-colleague bar: conversational agent surface (operator reframe)"
+  }
+ ],
+ "prs_open_gated": [
+  {
+   "pr": 557,
+   "state": "gated on 6 predicates (annex provenance)"
+  }
+ ],
+ "lanes": {
+  "stab480": "sonnet - #480 stabilize GPU chain, leg receipts ~17:00Z",
+  "w1ready": "sonnet - #121 launch-readiness receipts, CPU-only",
+  "body485": "sonnet - #561 P0 + #565 spine, renderer-wide clip GO",
+  "boardrun38": "haiku - totality rerun on 4826c45e + landing (redact-only ruling)",
+  "spec-audit-workflow": "5 haiku + 1 sonnet - 196-doc spec-lattice audit"
+ },
+ "coordinator_disclosures": [
+  "boardrun38 step-5 blocker was a stale script name (gen_problems.py) in MY dispatch spec - ruled: redact_for_landing.py only",
+  "watchdog daemon fully down; retirement per #562; CLI restart held until #561 P0 merges (one churn, not two)",
+  "operator reframe (resident-colleague bar) intake: #565 filed same turn, callout-ledger row logged"
+ ],
+ "api_spend_usd": 0.0
+}
