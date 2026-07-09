@@ -120,6 +120,30 @@ with paired pass/block fixtures covering single-separator, doubled-separator
 and run against the identical fixture set to confirm it missed exactly the cases this
 fix now catches.
 
+## Hash-pinned frozen artifacts (paths-check exclusions, 2026-07-09, issue #537)
+
+The C2 CHK audit requires byte-exact hash-match of frozen-rows artifacts (the external
+held-out task data pinned BEFORE the candidate runs). Redacting path strings inside
+these artifacts breaks the sha256 pin; re-pinning breaks the frozen-before law. These
+files are restored byte-exact from quarantine, containing absolute Windows project-drive
+paths (`drive-letter, colon, backslash, M, backslash, ember` and backslash-escaped forms)
+that would normally trigger the `PATHPAT` guard. They are excluded from the paths check
+by explicit enumeration in `PATHPAT_EXCLUDE` in `tools/repo-guard.sh`. The operator-name
+check still covers these files in full.
+
+- `receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json`
+  (sha256: `9acd3496991193c93b9b770322805b5b8769e5e1c77ab54e06a1bc1ebcff35a0`)
+  — frozen D3-Gym rows, cited by `d3-native-loop-20260708T221708Z.json`'s
+  `fresh_rows_sha256` field; C2 hardening mandates byte-exact match.
+  Contains: absolute project-drive paths (build-time anchors in execution context).
+
+- `receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json`
+  (sha256: `51734926408c137a912194fb9142b11a3d485ee9987530a4813e4a9bea488111`)
+  — frozen D3-Gym rows reconstructed from prior curation; cited by
+  `receipts/ember-d3-native-loop/d3-broader-multifamily-loop-leg2/d3-generalized-candidate-receipt.json`
+  as a pinned frozen-rows artifact; C2 hardening mandates byte-exact match.
+  Contains: absolute project-drive paths (dataset/benchmark receipt references).
+
 ## History note
 
 Git history retains the pre-redaction blobs (the redacted commits are new commits, not

@@ -82,12 +82,21 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # test input (proving the app's own sanitization/redaction/clipping logic
 # strips exactly this shape) -- these are the fixture, not a leak, and must
 # keep the literal string to stay meaningful. See REDACTIONS.md (issue #456).
+#
+# Class 2 (issue #537, C2-restore ruling 2026-07-09): HASH-PINNED FROZEN
+# ARTIFACTS. Byte-exact sha256 is load-bearing (C2 CHK frozen-rows hash-match
+# + frozen-before law): redaction breaks the pin, re-pinning breaks
+# frozen-before. Enumerated individually -- NEVER directory globs. Each entry
+# has a REDACTIONS.md row. The operator-name checks still cover these files
+# in full (this exclusion applies ONLY to the paths grep).
 PATHPAT_EXCLUDE=(
   ':(exclude)tools/repo-guard.sh'
   ':(exclude)scripts/test_w1b_continuation.py'
   ':(exclude)tools/ember-cli/src/core/monitor-render.test.ts'
   ':(exclude)tools/ember-cli/src/components/homescreen-mock1-parity.test.ts'
   ':(exclude)tools/ember-cli/src/components/logo-homescreen.test.ts'
+  ':(exclude)receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json'
+  ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
 )
 if git grep -nIE "$PATHPAT" -- . "${PATHPAT_EXCLUDE[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
   fail "paths" "absolute local filesystem paths in tracked files"

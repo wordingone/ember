@@ -401,7 +401,7 @@ def main():
 
     emit("RED", "C2: D3 native-loop candidate receipt(s) present but none satisfy "
                 f"CHK (external + frozen-before + hash-match + no-leak) cleanly "
-                f"-> {failures[:3]}")
+                f"-> first 3 of {len(failures)}: {failures[:3]}")
 
 
 if __name__ == "__main__":
