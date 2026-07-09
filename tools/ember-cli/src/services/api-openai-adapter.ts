@@ -354,6 +354,12 @@ export interface SseParserContext {
   // complete, successful turn -- worse than a visible error, since nothing
   // ever signaled the user or the retry logic that anything went wrong.
   sawFinishReason: boolean;
+  // D2 token-counts fix (issue #581): captured from a chunk's top-level `usage` object
+  // (prompt_tokens/completion_tokens) whenever the server sends one -- commonly the final
+  // chunk, which often carries empty `choices` alongside it (checked ahead of the
+  // choices/delta routing below so an empty-choices usage-only chunk still gets captured).
+  // Stays null until a well-formed usage object is actually seen.
+  usage: { inputTokens: number; outputTokens: number } | null;
 }
 
 /**
@@ -369,6 +375,7 @@ export function createSseParserContext(opts: SseParserOptions = {}): SseParserCo
     textBuffer: "",
     toolCallsByIndex: new Map(),
     sawFinishReason: false,
+    usage: null,
   };
 }
 
@@ -417,6 +424,19 @@ export async function processSseLine(
   // so it's captured regardless of that chunk's delta shape.
   if (firstChoice && firstChoice["finish_reason"] != null) {
     ctx.sawFinishReason = true;
+  }
+
+  // D2 token-counts fix (issue #581): usage lives at the top level of the chunk, not inside a
+  // choice, and the final chunk carrying it often has empty `choices` -- so this is checked
+  // ahead of the `!delta` early-return below, and never depends on `firstChoice` at all.
+  // Malformed usage objects (missing/non-numeric token fields) are ignored, never thrown.
+  const usageObj = (data as Record<string, unknown>)?.["usage"];
+  if (usageObj && typeof usageObj === "object") {
+    const promptTokens = (usageObj as Record<string, unknown>)["prompt_tokens"];
+    const completionTokens = (usageObj as Record<string, unknown>)["completion_tokens"];
+    if (typeof promptTokens === "number" && typeof completionTokens === "number") {
+      ctx.usage = { inputTokens: promptTokens, outputTokens: completionTokens };
+    }
   }
 
   const delta = firstChoice?.["delta"];

@@ -39,7 +39,14 @@ for (const _key of Object.keys(process.env)) {
 delete process.env["EMBER_OAUTH_TOKEN"];
 process.env["EMBER_API_KEY"]                     ??= "local";
 process.env["EMBER_DISABLE_NONESSENTIAL_TRAFFIC"] ??= "1";
-process.env["EMBER_SYNTAX_HIGHLIGHT"]             ??= "0";
+// Issue #56 / #581 (maintainer ruling 2026-07-04): the gate in markdown-and-code.ts used to read
+// this via `!!value`, and `!!"0"` is `true` in JS -- so every real launch has always rendered
+// code blocks highlighted regardless of this default. The gate is now the correct `=== "1"`
+// comparison; this default is set to "1" so the LIVE experience is unchanged (code blocks stay
+// highlighted, matching every shipped build to date and the field exemplar this surface is
+// gated against) -- the bug delivered the intended experience through the wrong mechanism, this
+// fix keeps the experience and corrects the mechanism. Locked by entrypoints/process-entry.test.ts.
+process.env["EMBER_SYNTAX_HIGHLIGHT"]             ??= "1";
 process.env["COREPACK_ENABLE_AUTO_PIN"]           ??= "0";
 
 // ---------------------------------------------------------------------------

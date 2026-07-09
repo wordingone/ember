@@ -42,7 +42,12 @@ describe("query loop — #159 cell 2: every registered tool forced to throw stil
       async () => {
         // Spread the REAL tool object so its actual schema/metadata shape is exercised;
         // only .call is overridden to force the failure this cell tests.
-        const throwingTool: Tool = {
+        // Typed Tool<any, any> (not bare Tool = Tool<unknown, unknown>): each registry member
+        // is a Tool<SpecificInput, SpecificOutput>, and its `description(input?: SpecificInput)`
+        // is NOT assignable to `description(input?: unknown)` (parameter contravariance) -- that
+        // was a TS2322 typecheck error at this line (#189). `any` keeps the spread exercising
+        // the real tool's shape without weakening what the test asserts.
+        const throwingTool: Tool<any, any> = {
           ...realTool,
           call: async () => {
             throw new Error(`forced failure: ${realTool.name}`);

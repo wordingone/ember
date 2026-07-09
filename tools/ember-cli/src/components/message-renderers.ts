@@ -2,7 +2,7 @@
 // Turns the session's JSONL stream into terminal output for every message type.
 
 import React from "react";
-import { Text, Box } from "../ink/components.ts";
+import { Text, Box, RawAnsi } from "../ink/components.ts";
 import type { Message, AssistantMessage, UserMessage, SystemMessage } from "../types/message-types.ts";
 import { Markdown } from "./markdown-and-code.ts";
 
@@ -258,9 +258,19 @@ export function AssistantTextMessage(props: AssistantTextMessageProps): React.Re
 
   // Normal text — route through Markdown for bold/code/heading rendering (M9 wiring).
   // BLACK_CIRCLE prefix matches the ● message-block indicator.
+  // Issue #581: text carrying an embedded raw ANSI escape sequence (e.g. renderMonitorPanel()'s
+  // colored /cockpit panel output) must never be walked character-by-character through
+  // Markdown's plain Text leaf -- the rendering pipeline's text branch treats each byte of the
+  // escape sequence as its own printable cell, splitting the ESC byte from its digits and
+  // leaking them as literal garbage. HighlightedCode already solved this exact problem for
+  // highlighted code blocks by routing through RawAnsi (markdown-and-code.ts); apply the same
+  // fix here so any ANSI-bearing message survives the display path intact.
+  const hasRawAnsi = text.includes("\x1b");
   return React.createElement(Box, { flexDirection: "row" },
     React.createElement(Text, { dimColor: true }, BLACK_CIRCLE + " "),
-    React.createElement(Markdown, { content: text }),
+    hasRawAnsi
+      ? React.createElement(RawAnsi, null, text)
+      : React.createElement(Markdown, { content: text }),
   );
 }
 

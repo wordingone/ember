@@ -7,34 +7,44 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { query } from "./query-engine.ts";
 import { type LoopDepsOverrides, type ModelResponse } from "../query/query-loop-support.ts";
-import type { Tool, ToolUseContext } from "./tool-interface.ts";
+import { buildTool, type Tool, type ToolUseContext } from "./tool-interface.ts";
 import type { QueryEvent, ResultEvent } from "./query-engine.ts";
 
+// Stub tools built via the canonical buildTool() factory (fills TOOL_DEFAULTS for the
+// behavioral fields — isEnabled/isReadOnly/checkPermissions/etc.), matching the pattern in
+// query-engine.conversation-budget.test.ts. The previous hand-rolled object literals were
+// missing those required fields AND returned a malformed ToolResultBlockParam (no
+// type/tool_use_id) — both standing typecheck errors on master (#189).
+
 // Stub tool that throws
-const failingTool: Tool = {
+const failingTool: Tool = buildTool<unknown, unknown>({
   name: "failing_tool",
   description: () => "A tool that fails",
   inputJSONSchema: { type: "object", properties: {} },
   call: async () => {
     throw new Error("Tool execution failed: simulated failure");
   },
-  mapToolResultToToolResultBlockParam: (data: any, id: string) => ({
+  mapToolResultToToolResultBlockParam: (data: unknown, id: string) => ({
+    type: "tool_result" as const,
+    tool_use_id: id,
     content: String(data),
     is_error: false,
   }),
-};
+});
 
 // Stub tool that succeeds
-const succeedingTool: Tool = {
+const succeedingTool: Tool = buildTool<unknown, unknown>({
   name: "succeeding_tool",
   description: () => "A tool that succeeds",
   inputJSONSchema: { type: "object", properties: {} },
-  call: async () => ({ data: "success result" }),
-  mapToolResultToToolResultBlockParam: (data: any, id: string) => ({
+  call: async (): Promise<{ data: unknown }> => ({ data: "success result" }),
+  mapToolResultToToolResultBlockParam: (data: unknown, id: string) => ({
+    type: "tool_result" as const,
+    tool_use_id: id,
     content: String(data),
     is_error: false,
   }),
-};
+});
 
 describe("query loop — final message on termination (issue #157)", () => {
   let capturedEvents: QueryEvent[];
@@ -96,7 +106,9 @@ describe("query loop — final message on termination (issue #157)", () => {
 
     // The fix: result event MUST carry a finalMessage
     const finalMsg = (resultEvent as any)?.finalMessage;
-    expect(finalMsg).toBeDefined("finalMessage must exist on result event");
+    // toBeDefined() takes no arguments in bun:test (unlike jest) -- the descriptive text lives
+    // in the comment above, not a matcher argument (that was a TS2554 typecheck error, #189).
+    expect(finalMsg).toBeDefined();
 
     // Message must have non-empty text content
     const textBlock = Array.isArray(finalMsg?.content)
@@ -162,7 +174,8 @@ describe("query loop — final message on termination (issue #157)", () => {
 
     // Even though model returned empty, finalMessage must exist and have content
     const finalMsg = (resultEvent as any)?.finalMessage;
-    expect(finalMsg).toBeDefined("finalMessage must exist even after tool success + empty response");
+    // toBeDefined() takes no arguments in bun:test (unlike jest) -- see comment above.
+    expect(finalMsg).toBeDefined();
     expect(Array.isArray(finalMsg?.content)).toBe(true);
   });
 
