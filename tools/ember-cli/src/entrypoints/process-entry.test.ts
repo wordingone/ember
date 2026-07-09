@@ -581,6 +581,11 @@ describe("process-entry — isFastPath", () => {
     expect(isFastPath(["node", "ember", "ps"])).toBe(true);
   });
 
+  it("detects the gh subcommand (issue #507: ember gh doctor)", () => {
+    expect(isFastPath(["node", "ember", "gh"])).toBe(true);
+    expect(isFastPath(["node", "ember", "gh", "doctor"])).toBe(true);
+  });
+
   it("returns false for unknown args", () => {
     expect(isFastPath(["node", "ember", "--unknown-flag"])).toBe(false);
   });
