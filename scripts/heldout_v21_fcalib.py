@@ -614,6 +614,50 @@ def classify_pass(stream, positions, window_tokens: int, index: dict, cap: int,
     return histogram, boilerplate
 
 
+def extract_boilerplate_keys(stream, positions, window_tokens: int, index: dict,
+                             cap: int, k_by_f: dict,
+                             batch_size: int = BATCH_WINDOWS,
+                             checkpoint_cb=None) -> dict:
+    """RE-SCOPE #374: Extract boilerplate window-key bytes for f-values in k_by_f.
+
+    Similar to classify_pass but returns the actual key bytes (not just counts).
+    For each f in k_by_f, returns a dict mapping f-key -> set of byte keys
+    where doc-frequency >= k_f(source).
+
+    Handles cap-saturation: keys with count == cap are returned separately
+    under "cap_saturated" for conservative drop in the Bloom build.
+
+    Returns: {"1e-05": {keys}, "1e-04": {keys}, ..., "cap_saturated": {keys}}
+    """
+    boilerplate_keys = {fk: set() for fk in k_by_f}
+    boilerplate_keys["cap_saturated"] = set()
+
+    n = positions.shape[0]
+    for b0 in range(0, n, batch_size):
+        b1 = min(b0 + batch_size, n)
+        keys = _extract_window_keys(stream, positions[b0:b1], window_tokens)
+        for key in keys:
+            v = index[key]
+            capped = isinstance(v, int)
+            freq_exact = None if capped else len(v)
+
+            if capped:
+                # Cap-saturated: conservative drop
+                boilerplate_keys["cap_saturated"].add(key)
+            else:
+                # Exact frequency: check against each k_f
+                for fk, k in k_by_f.items():
+                    if freq_exact > k:
+                        boilerplate_keys[fk].add(key)
+
+        if checkpoint_cb is not None:
+            checkpoint_cb(b1, n)
+
+    # Filter out empty sets and cap_saturated if empty
+    result = {fk: keys for fk, keys in boilerplate_keys.items() if keys}
+    return result
+
+
 def _position_chunk_bounds(lo: int, hi: int, window_tokens: int,
                             chunk_index: int, chunk_count: int) -> tuple:
     """Split a source's [lo,hi) full-rate START-POSITION range for pass B
@@ -706,11 +750,16 @@ def run_source_pass_ab_chunk(stream, sep_sub, start: int, end: int,
 def finalize_source(stream, positions, window_tokens: int, index: dict,
                      cap: int, k_by_f: dict, total_candidates: int,
                      n_docs: int, sample_rate: float, n_candidate_keys: int,
-                     pass_b_wall_s: float, checkpoint_cb=None) -> dict:
+                     pass_b_wall_s: float, checkpoint_cb=None,
+                     emit_boilerplate_keys: bool = False) -> tuple:
     """classify_pass over a (possibly chunk-merged) index + assemble the
     final per-source result dict -- the shared tail of run_source (single-
     call) and the chunked --position-chunk-count>1 path (main() merges
-    partial indices across chunks, then calls this once)."""
+    partial indices across chunks, then calls this once).
+
+    Returns: (result_dict, boilerplate_keys_dict) if emit_boilerplate_keys,
+    else (result_dict, None).
+    """
     def _cb_classify(done, total):
         if checkpoint_cb is not None:
             checkpoint_cb("classify_pass", done, total)
@@ -718,6 +767,13 @@ def finalize_source(stream, positions, window_tokens: int, index: dict,
     histogram, boilerplate = classify_pass(
         stream, positions, window_tokens, index, cap, k_by_f,
         checkpoint_cb=_cb_classify)
+
+    # Optional: extract boilerplate keys for --emit-boilerplate-keys
+    boilerplate_keys_dict = None
+    if emit_boilerplate_keys:
+        boilerplate_keys_dict = extract_boilerplate_keys(
+            stream, positions, window_tokens, index, cap, k_by_f,
+            checkpoint_cb=_cb_classify)
 
     boilerplate_out = {}
     for fk, bp in boilerplate.items():
@@ -733,7 +789,7 @@ def finalize_source(stream, positions, window_tokens: int, index: dict,
             "boilerplate_fraction_upper_bound": round(hi, 6),
             "exact": bp["ambiguous"] == 0,
         }
-    return {
+    result = {
         "n_docs": int(n_docs),
         "total_candidate_windows": total_candidates,
         "n_sampled_windows": int(positions.shape[0]),
@@ -752,6 +808,7 @@ def finalize_source(stream, positions, window_tokens: int, index: dict,
         "boilerplate_at_f": boilerplate_out,
         "n_distinct_window_keys": len(index),
     }
+    return (result, boilerplate_keys_dict)
 
 
 def run_source(stream, sep_sub, start: int, end: int, window_tokens: int,
@@ -768,9 +825,10 @@ def run_source(stream, sep_sub, start: int, end: int, window_tokens: int,
      total_candidates) = run_source_pass_ab_chunk(
         stream, sep_sub, start, end, window_tokens, cap, sample_rate, powers,
         checkpoint_cb=checkpoint_cb)
-    return finalize_source(
+    result, _ = finalize_source(
         stream, positions, window_tokens, index, cap, k_by_f, total_candidates,
         sep_sub.shape[0], sample_rate, cand_hash_sorted.shape[0], pass_b_wall_s)
+    return result
 
 
 def recommend_f(per_source_results: dict, f_values) -> dict:
@@ -900,6 +958,13 @@ def main(argv=None):
     ap.add_argument("--cap", type=int, default=DEFAULT_CAP)
     ap.add_argument("--sample-rate", type=float, default=DEFAULT_SAMPLE_RATE)
     ap.add_argument("--f-values", default="1e-05,1e-04,1e-03")
+    ap.add_argument("--emit-boilerplate-keys", action="store_true",
+                     help="(RE-SCOPE #374) emit boilerplate keys (≥k_f per "
+                          "source) during pass-B to a separate output file; "
+                          "keys are written as JSON per-source key sets")
+    ap.add_argument("--boilerplate-keys-out", default=None,
+                     help="output path for boilerplate keys JSON (default: "
+                          "receipts/heldout-v21-boilerplate-keys-<ts>.json)")
     ap.add_argument("--out", default=None)
     ap.add_argument("--commit-floor-gib", type=float,
                      default=DEFAULT_COMMIT_FLOOR_GIB)
@@ -1118,10 +1183,17 @@ def main(argv=None):
                 total_candidates = d["total_candidate_windows"]
             merged_index = _merge_partial_indices(parts, args.cap)
             k_by_f = {f_key(f): k_source(f, sep_sub.shape[0]) for f in args.f_values_parsed}
-            per_source_results[src] = finalize_source(
+            result, boilerplate_keys = finalize_source(
                 stream, positions, args.window_tokens, merged_index, args.cap,
                 k_by_f, total_candidates, sep_sub.shape[0], args.sample_rate,
-                n_candidate_keys, wall_total, checkpoint_cb=_ckpt)
+                n_candidate_keys, wall_total, checkpoint_cb=_ckpt,
+                emit_boilerplate_keys=args.emit_boilerplate_keys)
+            per_source_results[src] = result
+            # Collect boilerplate keys if emitting
+            if args.emit_boilerplate_keys and boilerplate_keys:
+                if not hasattr(args, '_boilerplate_keys_by_source'):
+                    args._boilerplate_keys_by_source = {}
+                args._boilerplate_keys_by_source[src] = boilerplate_keys
             print(f"  [{src}] finalized: pass_b_wall_s(summed)={wall_total:.1f}s")
 
         # per-source checkpoint (the natural "per-shard" unit of this run)
@@ -1156,6 +1228,30 @@ def main(argv=None):
         mmap_cache_report=mmap_cache_report, f_recommendation=f_recommendation)
     _write_checkpoint(final_receipt, out_path)
     print(f"[done] receipt written to {out_path}")
+
+    # RE-SCOPE #374: Write boilerplate keys if flag was set
+    if args.emit_boilerplate_keys and hasattr(args, '_boilerplate_keys_by_source'):
+        boilerplate_keys_out = args.boilerplate_keys_out or os.path.join(
+            REPO, "receipts", f"heldout-v21-boilerplate-keys-{_utc_ts()}.json")
+        # Convert byte keys to hex strings for JSON serialization
+        boilerplate_keys_serializable = {}
+        for source, keys_dict in args._boilerplate_keys_by_source.items():
+            boilerplate_keys_serializable[source] = {}
+            for f_key_str, keys_set in keys_dict.items():
+                # Store the byte keys in base64 encoding so they're JSON-safe
+                boilerplate_keys_serializable[source][f_key_str] = [
+                    key.hex() for key in keys_set
+                ]
+        with open(boilerplate_keys_out, "w", encoding="utf-8") as f:
+            json.dump({
+                "schema": "w2-boilerplate-keys/v1",
+                "ts": _utc_ts(),
+                "f": "1e-03",  # Recommended f value
+                "cap": args.cap,
+                "boilerplate_keys_by_source": boilerplate_keys_serializable,
+            }, f, indent=2)
+        print(f"[done] boilerplate keys written to {boilerplate_keys_out}")
+
     return 0
 
 
