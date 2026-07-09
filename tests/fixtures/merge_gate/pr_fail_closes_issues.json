@@ -1,0 +1,41 @@
+{
+  "number": 10,
+  "title": "fix: bug in runner",
+  "body": "Fixes #100\nCloses #101\nCloses #102\n\nMultiple issues closed.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [
+      {"number": 100, "title": "issue 1"},
+      {"number": 101, "title": "issue 2"},
+      {"number": 102, "title": "issue 3"}
+    ],
+    "totalCount": 3
+  },
+  "commits_after_check": [
+    {
+      "oid": "jkl012mno345",
+      "message": "fix: bug in runner"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "tests",
+      "state": "SUCCESS",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "receipts/merge-gate/test.jsonl",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 1
+  }
+}

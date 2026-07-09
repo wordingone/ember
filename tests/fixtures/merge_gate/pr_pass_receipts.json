@@ -1,0 +1,46 @@
+{
+  "number": 1,
+  "title": "receipts: updated test logs",
+  "body": "Fixes #123\n\nAdds test coverage for receipt parsing.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [],
+    "totalCount": 0
+  },
+  "commits_after_check": [
+    {
+      "oid": "abc123def456",
+      "message": "receipts: add test logs"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "codecov/patch",
+      "state": "SUCCESS",
+      "status": "completed"
+    },
+    {
+      "name": "lint",
+      "state": "SUCCESS",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "receipts/merge-gate/test-receipt.jsonl",
+        "changeType": "ADDED"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-log/entry.json",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 2
+  }
+}

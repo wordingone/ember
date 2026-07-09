@@ -1,0 +1,46 @@
+{
+  "number": 2,
+  "title": "docs: update README",
+  "body": "Closes #456\n\nUpdates README for clarity.",
+  "state": "OPEN",
+  "mergeable": "MERGEABLE",
+  "mergeableState": "MERGEABLE",
+  "commits": {
+    "totalCount": 1
+  },
+  "closingIssuesReferences": {
+    "nodes": [],
+    "totalCount": 0
+  },
+  "commits_after_check": [
+    {
+      "oid": "def456ghi789",
+      "message": "docs: update README"
+    }
+  ],
+  "statusCheckRollup": [
+    {
+      "name": "codecov/patch",
+      "state": "SUCCESS",
+      "status": "completed"
+    },
+    {
+      "name": "lint",
+      "state": "SKIPPED",
+      "status": "completed"
+    }
+  ],
+  "files": {
+    "nodes": [
+      {
+        "path": "README.md",
+        "changeType": "MODIFIED"
+      },
+      {
+        "path": "docs/api/reference.md",
+        "changeType": "MODIFIED"
+      }
+    ],
+    "totalCount": 2
+  }
+}
