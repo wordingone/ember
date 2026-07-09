@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Self-test for scripts/redact_for_landing.py (ember issue #538).
+
+Covers the AC5 corruption-class regression set at minimum:
+  1. pinned-file refusal, pinning receipt named
+  2. enumerated-field rewrite leaves sibling non-enumerated fields byte-identical
+  3. embedded Python-regex backslashes in a non-enumerated field survive byte-exact
+  4. a public URL in a non-enumerated field survives byte-exact
+  5. word-boundary non-match (English-word-noise case)
+  6. idempotence (running twice == running once)
+
+Plus bonus AC1 coverage (directory refusal, glob refusal) and an AC3 .md
+line-ending-preservation check. All fixtures are synthetic and live under
+tempfile.TemporaryDirectory() -- this test never touches a tracked repo file
+(rails, issue #538).
+"""
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, REPO_SCRIPTS_DIR)
+
+import redact_for_landing as rfl  # noqa: E402
+
+
+def run_cli(args):
+    """Invoke main() in-process; return (exit_code, stdout, stderr)."""
+    out, err = io.StringIO(), io.StringIO()
+    code = rfl.main(args, stdout=out, stderr=err)
+    return code, out.getvalue(), err.getvalue()
+
+
+class RedactForLandingTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.repo = self.tmp / "repo"
+        self.work = self.tmp / "work"
+        (self.repo / "receipts").mkdir(parents=True)
+        self.work.mkdir(parents=True)
+        self.terms_file = self.tmp / "terms.txt"
+        self.terms_file.write_bytes(
+            b"fixturename\t<REDACTED_NAME>\n"
+            b"Z:/synthetic/fixture-tree\t<REDACTED_PATH>\n"
+            b"cat\t<REDACTED_ANIMAL>\n"
+        )
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def write_work_file(self, name: str, content: str) -> Path:
+        p = self.work / name
+        p.write_bytes(content.encode("utf-8"))
+        return p
+
+    def cli(self, *file_args):
+        return run_cli([
+            "--terms-file", str(self.terms_file),
+            "--repo-root", str(self.repo),
+            *[str(a) for a in file_args],
+        ])
+
+    # ---- 1. pinned-file refusal, pinning receipt named --------------------
+    def test_pinned_file_refused_with_receipt_named(self):
+        pinned_content = '{"path": "Z:/synthetic/fixture-tree/model.pt"}'
+        pinned_hash = hashlib.sha256(pinned_content.encode("utf-8")).hexdigest()
+        pin_source = self.repo / "receipts" / "pin-source.json"
+        pin_source.write_bytes(json.dumps({"sha256": pinned_hash}).encode("utf-8"))
+
+        target = self.write_work_file("pinned.json", pinned_content)
+        code, out, err = self.cli(target)
+
+        self.assertEqual(code, 3)
+        self.assertIn("receipts/pin-source.json", err)
+        self.assertIn(pinned_hash, err)
+        out_path = target.with_name("pinned-redacted-edition.json")
+        self.assertFalse(out_path.exists(), "refused file must produce no output")
+        self.assertEqual(target.read_bytes(), pinned_content.encode("utf-8"),
+                          "refused file must be left untouched")
+
+    # ---- 2. sibling non-enumerated field stays byte-identical -------------
+    def test_sibling_non_enumerated_field_byte_identical(self):
+        sibling_value = "plain sibling note mentioning fixturename in passing"
+        content = json.dumps({
+            "path": "Z:/synthetic/fixture-tree/out/model.pt",
+            "notes": sibling_value,
+        })
+        target = self.write_work_file("sibling.json", content)
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        result = json.loads(target.with_name("sibling-redacted-edition.json").read_bytes())
+        self.assertEqual(result["notes"], sibling_value,
+                          "non-enumerated field must survive untouched even though it contains a term")
+        self.assertIn("<REDACTED_PATH>", result["path"])
+        self.assertNotIn("Z:/synthetic/fixture-tree", result["path"])
+
+    # ---- 3. embedded Python regex backslashes survive byte-exact ----------
+    def test_python_regex_backslashes_survive_byte_exact(self):
+        regex_value = r"^(\d+)\.(\d+)\.(\d+)-fixturename$"
+        content = json.dumps({
+            "path": "Z:/synthetic/fixture-tree/x",
+            "diagnostic_pattern": regex_value,
+        })
+        target = self.write_work_file("regex.json", content)
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        result = json.loads(target.with_name("regex-redacted-edition.json").read_bytes())
+        self.assertEqual(result["diagnostic_pattern"], regex_value,
+                          "backslash-bearing regex in a non-enumerated field must be byte-exact")
+
+    # ---- 4. public URL in a non-enumerated field survives byte-exact ------
+    def test_public_url_survives_byte_exact(self):
+        url_value = "https://example.com/fixturename/download?item=1&ref=abc"
+        content = json.dumps({
+            "path": "Z:/synthetic/fixture-tree/y",
+            "reference_url": url_value,
+        })
+        target = self.write_work_file("url.json", content)
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        result = json.loads(target.with_name("url-redacted-edition.json").read_bytes())
+        self.assertEqual(result["reference_url"], url_value)
+
+    # ---- 5. word-boundary non-match (English-word-noise case) -------------
+    def test_word_boundary_non_match(self):
+        content = json.dumps({
+            "path": "cat is a standalone term here",
+            "notes": "category and concatenate must not match",
+        })
+        target = self.write_work_file("wordboundary.json", content)
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        result = json.loads(target.with_name("wordboundary-redacted-edition.json").read_bytes())
+        self.assertEqual(result["path"], "<REDACTED_ANIMAL> is a standalone term here")
+        self.assertEqual(result["notes"], "category and concatenate must not match",
+                          "'cat' must not match inside 'category'/'concatenate'")
+
+    # ---- 6. idempotence -----------------------------------------------------
+    def test_idempotence(self):
+        content = json.dumps({
+            "path": "Z:/synthetic/fixture-tree/a/fixturename/b",
+            "cmdline": "run --name fixturename --root Z:/synthetic/fixture-tree",
+        })
+        first = self.write_work_file("idem-run1.json", content)
+        second = self.write_work_file("idem-run2.json", content)
+
+        code1, _, _ = self.cli(first)
+        code2, _, _ = self.cli(second)
+        self.assertEqual(code1, 0)
+        self.assertEqual(code2, 0)
+        out1 = first.with_name("idem-run1-redacted-edition.json").read_bytes()
+        out2 = second.with_name("idem-run2-redacted-edition.json").read_bytes()
+        self.assertEqual(out1, out2, "same input must produce byte-identical output across runs")
+
+        # feeding the already-redacted output back in must not change it further
+        third = self.write_work_file("idem-run3.json", out1.decode("utf-8"))
+        code3, _, _ = self.cli(third)
+        self.assertEqual(code3, 0)
+        out3 = third.with_name("idem-run3-redacted-edition.json").read_bytes()
+        self.assertEqual(out1, out3, "re-redacting an already-redacted file must be a no-op")
+
+    # ---- bonus: AC1 explicit-file-list-only checks -------------------------
+    def test_directory_argument_refused(self):
+        code, _, err = self.cli(self.work)
+        self.assertEqual(code, 2)
+        self.assertIn("directory", err)
+
+    def test_glob_argument_refused(self):
+        code, _, err = self.cli(self.work / "*.json")
+        self.assertEqual(code, 2)
+        self.assertIn("glob", err)
+
+    # ---- bonus: .md line-wise redaction with line-ending preservation -----
+    def test_md_line_wise_preserves_line_endings(self):
+        content = "line one mentions fixturename here\r\nline two is plain\nlast line no newline"
+        target = self.work / "doc.md"
+        target.write_bytes(content.encode("utf-8"))
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        out_bytes = target.with_name("doc-redacted-edition.md").read_bytes()
+        self.assertIn(b"\r\n", out_bytes)
+        self.assertTrue(out_bytes.endswith(b"last line no newline"))
+        self.assertIn(b"<REDACTED_NAME>", out_bytes)
+
+
+if __name__ == "__main__":
+    unittest.main()
