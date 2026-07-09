@@ -1,0 +1,70 @@
+{
+  "ticket": "W1C-CERTIFICATION-E2E",
+  "schema": "w2-w1c-certification-e2e/v1",
+  "ts": "20260709T112735Z",
+  "spec_ref": "https://github.com/wordingone/ember/issues/374#issuecomment-4920277395",
+  "scope": "synthetic/pilot-scale only -- no corpus-scale pass, no GPU",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "window_tokens": 4,
+  "test_cap": 15,
+  "f_key": "1e-03",
+  "f_values": "1e-05,1e-04,1e-03",
+  "cert_source": "code_github_clean",
+  "n_docs_cert_source": 28,
+  "k_source_at_f": 10,
+  "fcalib_run_status": "complete",
+  "fcalib_predicate_version": "v2.1-exact50-droponly",
+  "boilerplate_keys_by_source_buckets": {
+    "code_github_clean": [
+      "1e-03",
+      "1e-04",
+      "1e-05",
+      "cap_saturated"
+    ]
+  },
+  "bloom_index": {
+    "n_boilerplate_keys": 1,
+    "n_cap_saturated_keys": 1,
+    "bloom_m": 19,
+    "bloom_k": 6,
+    "target_fp_rate": 0.01,
+    "n_sources": 1
+  },
+  "certification_batch": {
+    "candidates": 3,
+    "dropped_disjointness": 0,
+    "bloom_hits": 1,
+    "exact_confirmed": 1,
+    "bloom_fp_absorbed": 0,
+    "cap_dropped": 1,
+    "certified_count": 1,
+    "results": [
+      {
+        "source": "code_github_clean",
+        "certified": false,
+        "reason": "bloom_positive_confirmed",
+        "bloom_hit": true
+      },
+      {
+        "source": "code_github_clean",
+        "certified": false,
+        "reason": "cap_saturated",
+        "bloom_hit": true
+      },
+      {
+        "source": "code_github_clean",
+        "certified": true,
+        "reason": "certified",
+        "bloom_hit": false
+      }
+    ]
+  },
+  "verdicts_by_reason": {
+    "bloom_positive_confirmed": false,
+    "cap_saturated": false,
+    "certified": true
+  },
+  "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; shard + receipt paths carry the git -text pin",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}
