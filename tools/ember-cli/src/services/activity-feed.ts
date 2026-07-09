@@ -250,6 +250,10 @@ export interface ActivityFeedDeps {
   /** P0-B: persistent path->mtime watermark, survives a process restart (see loadWatermark /
    *  persistWatermark below). Defaults to state/activity-feed-watermark.json. */
   watermarkPath?: string;
+  /** #576: diagnostic log for the tail-poll path's boot behavior (one row per pollTail() tick +
+   *  one row per startActivityFeed()/freshTailState() call). Defaults to
+   *  state/activity-feed-tailpoll-debug.jsonl. */
+  tailPollDebugLogPath?: string;
   now?: () => number;
 }
 
@@ -332,30 +336,63 @@ function freshTailState(): TailState {
   return { byteOffset: 0, lineBuffer: "" };
 }
 
+/** #576: `restartTail`/`killTail` are process-local (reset to byte offset 0 on every
+ *  `startActivityFeed()` call, i.e. every cockpit process boot), so a fresh boot always replays
+ *  the CURRENT full content of a tail-polled file once -- confirmed live (issue #576's natural
+ *  experiment: an 859-line clean replay of `restart-log` on a manual cockpit restart with zero
+ *  corresponding watchdog-recorded death). Beyond that baseline replay, the historical incident
+ *  additionally saw one `kill-receipts` row explode to ~65,000 duplicate renders in the same
+ *  tick -- root cause not yet pinned. This cap is a containment backstop independent of WHY a
+ *  given tick's line count balloons: if a single tick would emit more than
+ *  MAX_TAIL_LINES_PER_TICK lines, render ONE collapsed summary line instead of N individual
+ *  ones (mirrors the receipts-side burst-coalescing in P0-B/#574). */
+export const MAX_TAIL_LINES_PER_TICK = 20;
+
+export interface PollTailResult {
+  bytesRead: number;
+  byteOffsetBefore: number;
+  byteOffsetAfter: number;
+  lineCount: number;
+  capped: boolean;
+}
+
 async function pollTail(
   filePath: string,
   state: TailState,
   onLine: (line: string) => void,
-): Promise<void> {
+  onOverflow: (count: number) => void,
+): Promise<PollTailResult | null> {
   let buf: Buffer;
   try {
     buf = await readFile(filePath);
   } catch {
-    return;
+    return null;
   }
-  if (buf.length <= state.byteOffset) return;
+  if (buf.length <= state.byteOffset) return null;
 
+  const byteOffsetBefore = state.byteOffset;
   const newBytes = buf.slice(state.byteOffset);
   state.byteOffset = buf.length;
 
   const text = state.lineBuffer + newBytes.toString("utf-8");
-  const lines = text.split("\n");
-  state.lineBuffer = lines.pop() ?? "";
+  const rawLines = text.split("\n");
+  state.lineBuffer = rawLines.pop() ?? "";
+  const trimmedLines = rawLines.map((l) => l.trim()).filter((l) => l.length > 0);
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed) onLine(trimmed);
+  const capped = trimmedLines.length > MAX_TAIL_LINES_PER_TICK;
+  if (capped) {
+    onOverflow(trimmedLines.length);
+  } else {
+    for (const line of trimmedLines) onLine(line);
   }
+
+  return {
+    bytesRead: buf.length,
+    byteOffsetBefore,
+    byteOffsetAfter: state.byteOffset,
+    lineCount: trimmedLines.length,
+    capped,
+  };
 }
 
 /**
@@ -381,7 +418,22 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     deps.watchdogStatePath ?? path.join(cliStateDir, "liveness-watchdog-state.json");
   const ledgerPath = deps.ledgerPath ?? path.join(cliStateDir, "activity-ledger.jsonl");
   const watermarkPath = deps.watermarkPath ?? path.join(cliStateDir, "activity-feed-watermark.json");
+  const tailPollDebugLogPath =
+    deps.tailPollDebugLogPath ?? path.join(cliStateDir, "activity-feed-tailpoll-debug.jsonl");
   const clock = deps.now ?? Date.now.bind(Date);
+
+  // #576: one row per pollTail() tick (not per emitted line) plus one row per
+  // startActivityFeed()/freshTailState() call -- cheap under normal operation, and the only way
+  // to directly observe the byte-offset/line-count pattern live on the next occurrence instead
+  // of inferring it from ledger output after the fact. Best-effort, same discipline as the
+  // ledger itself: a logging failure must never take the feed down.
+  function logTailPollDiagnostic(entry: Record<string, unknown>): void {
+    void appendLineWithDirs(
+      tailPollDebugLogPath,
+      JSON.stringify({ ts: new Date(clock()).toISOString(), pid: process.pid, ...entry }),
+    ).catch(() => {});
+  }
+  logTailPollDiagnostic({ event: "startActivityFeed" });
 
   const seen = new Set<string>();
   const rendered = new Set<string>();
@@ -623,7 +675,9 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
 
   // -- Watchdog: restart-log + kill-receipts (tail-polled JSONL) -----------
   const restartTail = freshTailState();
+  logTailPollDiagnostic({ event: "freshTailState", file: "restart-log" });
   const killTail = freshTailState();
+  logTailPollDiagnostic({ event: "freshTailState", file: "kill-receipts" });
   let resolvedKillReceiptsPath = deps.killReceiptsPath;
 
   const resolveKillReceiptsPath = (async (): Promise<void> => {
@@ -644,26 +698,56 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     }
   })();
 
+  /** #576 containment: a tick whose line count exceeds MAX_TAIL_LINES_PER_TICK renders ONE
+   *  collapsed summary line instead of N individual ones -- independent of root-causing why the
+   *  tick ballooned (see MAX_TAIL_LINES_PER_TICK's comment). The diagnostic log entry ALWAYS
+   *  fires (capped or not), so a below-threshold anomaly is still visible in the debug log even
+   *  when it doesn't trip the visible-pane cap. */
+  function makeTailOverflowHandler(sourcePath: string) {
+    return (count: number): void => {
+      renderEvent({
+        source: "watchdog",
+        text: `${count} watchdog events collapsed (tail-poll anomaly)`,
+        path: sourcePath,
+      });
+    };
+  }
+
   const tailInterval = setInterval(() => {
-    void pollTail(restartLogPath, restartTail, (line) => {
-      try {
-        const row = JSON.parse(line) as WatchdogRow;
-        const text = formatWatchdogLine(row);
-        if (text) renderEvent({ source: "watchdog", text, path: restartLogPath });
-      } catch {
-        // malformed row — skip, never crash the feed
-      }
-    });
-    if (resolvedKillReceiptsPath) {
-      const killPath = resolvedKillReceiptsPath;
-      void pollTail(killPath, killTail, (line) => {
+    void pollTail(
+      restartLogPath,
+      restartTail,
+      (line) => {
         try {
           const row = JSON.parse(line) as WatchdogRow;
           const text = formatWatchdogLine(row);
-          if (text) renderEvent({ source: "watchdog", text, path: killPath });
+          if (text) renderEvent({ source: "watchdog", text, path: restartLogPath });
         } catch {
-          // malformed row — skip
+          // malformed row — skip, never crash the feed
         }
+      },
+      makeTailOverflowHandler(restartLogPath),
+    ).then((result) => {
+      if (result) logTailPollDiagnostic({ event: "pollTail", file: "restart-log", ...result });
+    });
+
+    if (resolvedKillReceiptsPath) {
+      const killPath = resolvedKillReceiptsPath;
+      void pollTail(
+        killPath,
+        killTail,
+        (line) => {
+          try {
+            const row = JSON.parse(line) as WatchdogRow;
+            const text = formatWatchdogLine(row);
+            if (text) renderEvent({ source: "watchdog", text, path: killPath });
+          } catch {
+            // malformed row — skip
+          }
+        },
+        makeTailOverflowHandler(killPath),
+      ).then((result) => {
+        if (result) logTailPollDiagnostic({ event: "pollTail", file: "kill-receipts", ...result });
       });
     }
   }, TAIL_POLL_INTERVAL_MS);
