@@ -118,9 +118,17 @@ class TestBoilerplateBloomIndex:
             for key in keys:
                 assert index.bloom_filter.contains((key,)), f"Key {key} not in bloom"
 
-    def test_cap_saturated_keys_excluded(self):
-        """Keys marked as cap-saturated (count==cap) are excluded from Bloom."""
-        # Fixture: mix of below-cap and cap-saturated keys
+    def test_cap_saturated_keys_folded_into_bloom(self):
+        """Cap-saturated keys (count==cap) are FOLDED INTO the Bloom filter.
+
+        CORRECTION (rework372): the first cut of this module tracked
+        cap-saturated keys as a count only and never added them to the
+        Bloom, so a real cap-saturated window would MISS the filter and
+        silently pass certification -- exactly the "silent-certification
+        failure mode" this re-scope exists to prevent (RE-SCOPE RULING
+        point 3: "any cap-saturated key is treated as boilerplate and
+        dropped" -- a dropped key must be a Bloom HIT to be detectable).
+        """
         boilerplate_keys = {
             "source_a": [b"regular_1", b"regular_2"],
         }
@@ -134,12 +142,17 @@ class TestBoilerplateBloomIndex:
             target_fp_rate=0.01
         )
 
-        # Regular keys should be in Bloom
+        # Regular keys are in Bloom
         assert index.bloom_filter.contains((b"regular_1",))
 
-        # Cap-saturated keys should NOT be in Bloom (conservative drop)
-        # Note: FPs are possible, but unlikely; we can't assert their absence
-        # Instead, verify the count is correct
+        # Cap-saturated keys are ALSO in Bloom (folded in "by construction",
+        # not a side-channel-only count) -- zero false negatives for either
+        # population
+        assert index.bloom_filter.contains((b"capped_1",))
+        assert index.bloom_filter.contains((b"capped_2",))
+
+        # Disclosure counts stay separate (genuine boilerplate vs
+        # cap-saturated), even though both populate the same filter
         assert index.n_boilerplate_keys == 2  # Only the 2 regular keys
         assert index.n_cap_saturated_keys == 2
 
@@ -241,7 +254,11 @@ class TestCertificationPredicate:
             "Boilerplate key should be in Bloom"
 
     def test_cap_saturation_conservative_drop(self):
-        """Cap-saturated keys are conservatively dropped (not checked in Bloom)."""
+        """Cap-saturated keys are conservatively dropped -- they DO hit the
+        Bloom filter (that's what makes the drop enforceable; see
+        test_cap_saturated_keys_folded_into_bloom for the direct property
+        test), while the disclosure counts still separate the two
+        populations."""
         # Fixture: one regular key, one cap-saturated key
         boilerplate_keys = {
             "source_a": [b"regular"],
@@ -256,8 +273,9 @@ class TestCertificationPredicate:
             target_fp_rate=0.01
         )
 
-        # Cap-saturated key should NOT contribute to Bloom filter
-        # (conservative approach: treat as potentially boilerplate)
+        # Cap-saturated key DOES hit the Bloom filter (conservative drop is
+        # enforced via Bloom membership, not merely disclosed as a count)
+        assert index.bloom_filter.contains((b"capped",))
         assert index.n_cap_saturated_keys == 1
         assert index.n_boilerplate_keys == 1  # Only the regular key
 
@@ -317,6 +335,97 @@ class TestPerSourceCapHandling:
 
             assert "sources" in receipt
             assert receipt["sources"]["code_github_clean"]["exceeds_cap"] is True
+
+
+class TestBuildFromFcalibBoilerplateKeys:
+    """rework372: the missing production wiring from heldout_v21_fcalib.py's
+    --emit-boilerplate-keys JSON artifact (schema w2-boilerplate-keys/v1) to
+    a BoilerplateBloomIndex. Before this, the emitted `cap_saturated` key
+    set had no consumer anywhere in the codebase."""
+
+    def _write_fcalib_keys_json(self, tmpdir: str) -> str:
+        # Mirrors the exact shape heldout_v21_fcalib.py's main() writes:
+        # boilerplate_keys_by_source[source][f_key_str] = [hex, ...]
+        payload = {
+            "schema": "w2-boilerplate-keys/v1",
+            "ts": "20260709T000000Z",
+            "f": "1e-03",
+            "cap": 256,
+            "boilerplate_keys_by_source": {
+                "code_github_clean": {
+                    "1e-05": [b"low_f_key".hex()],
+                    "1e-03": [b"boilerplate_a".hex(), b"boilerplate_b".hex()],
+                    "cap_saturated": [b"capped_code_1".hex(), b"capped_code_2".hex()],
+                },
+                "gutenberg_en": {
+                    "1e-03": [b"boilerplate_g".hex()],
+                    # no cap_saturated entry for this small source
+                },
+            },
+        }
+        path = os.path.join(tmpdir, "boilerplate-keys.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+        return path
+
+    def test_loads_genuine_and_cap_saturated_keys(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self._write_fcalib_keys_json(tmpdir)
+            index, cap_saturated_per_source = (
+                BoilerplateBloomIndex.build_from_fcalib_boilerplate_keys(
+                    path, f_key="1e-03", target_fp_rate=0.01))
+
+        # Genuine boilerplate keys (f="1e-03" bucket) are in the Bloom
+        assert index.bloom_filter.contains((b"boilerplate_a",))
+        assert index.bloom_filter.contains((b"boilerplate_b",))
+        assert index.bloom_filter.contains((b"boilerplate_g",))
+
+        # cap_saturated keys are folded in too, regardless of f_key chosen
+        assert index.bloom_filter.contains((b"capped_code_1",))
+        assert index.bloom_filter.contains((b"capped_code_2",))
+
+        # The "1e-05" bucket was NOT requested (f_key="1e-03") -- proves the
+        # loader is selective, not "add every bucket blindly"
+        assert not index.bloom_filter.contains((b"low_f_key",))
+
+        # Disclosure counts: 3 genuine (2 code + 1 gutenberg), 2 cap-saturated
+        assert index.n_boilerplate_keys == 3
+        assert index.n_cap_saturated_keys == 2
+
+        # Side channel returned for diagnostic labeling
+        assert cap_saturated_per_source["code_github_clean"] == {
+            b"capped_code_1", b"capped_code_2"}
+        assert "gutenberg_en" not in cap_saturated_per_source
+
+    def test_loader_output_wires_directly_into_certifier(self):
+        """The loader's two return values plug straight into HeldoutCertifier
+        with no further transformation -- this IS the missing wiring."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self._write_fcalib_keys_json(tmpdir)
+            index, cap_saturated_per_source = (
+                BoilerplateBloomIndex.build_from_fcalib_boilerplate_keys(
+                    path, f_key="1e-03", target_fp_rate=0.01))
+
+        from w2_heldout.certify_heldout_batch import HeldoutCertifier
+        certifier = HeldoutCertifier(
+            index, cap_saturated_per_source=cap_saturated_per_source)
+
+        # A genuine boilerplate key: rejected, generic reason
+        r1 = certifier.certify_window(
+            b"boilerplate_a", "code_github_clean", {"code_github_clean"})
+        assert r1.certified is False
+        assert r1.reason == "bloom_positive"
+
+        # A cap-saturated key: rejected, LABELED reason (side channel present)
+        r2 = certifier.certify_window(
+            b"capped_code_1", "code_github_clean", {"code_github_clean"})
+        assert r2.certified is False
+        assert r2.reason == "cap_saturated"
+
+        # A clean key from either source: certified
+        r3 = certifier.certify_window(
+            b"never_seen_before", "gutenberg_en", {"gutenberg_en"})
+        assert r3.certified is True
 
 
 if __name__ == "__main__":

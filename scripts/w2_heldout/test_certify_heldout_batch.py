@@ -299,5 +299,204 @@ class TestHeldoutCertifier:
         assert receipt2.dropped_disjointness == 2
 
 
+class TestExactRecheckAbsorption:
+    """rework372 (AC2): certified = source_disjoint AND (not bloom.contains
+    OR exact_recheck_negative). Cap-saturated keys are UNCONDITIONAL (no
+    recheck escape hatch, per RE-SCOPE RULING point 3) -- covered
+    separately in TestCertificationTruthTable below."""
+
+    def _make_certifier(self, boilerplate_keys: dict | None = None,
+                        exact_recheck_fn=None):
+        if boilerplate_keys is None:
+            boilerplate_keys = {"source_a": [b"key_1", b"key_2"]}
+        bloom_index = BoilerplateBloomIndex.build_from_keys(
+            boilerplate_keys, target_fp_rate=0.01)
+        return HeldoutCertifier(bloom_index, exact_recheck_fn=exact_recheck_fn)
+
+    def test_bloom_hit_confirmed_by_recheck_is_rejected(self):
+        """Bloom hit + exact_recheck_fn returns True (confirmed) -> rejected."""
+        certifier = self._make_certifier(
+            {"source_a": [b"boilerplate_1"]},
+            exact_recheck_fn=lambda key, source: True)
+
+        result = certifier.certify_window(
+            window_key=b"boilerplate_1", source="source_a",
+            sources_in_batch={"source_a"})
+
+        assert result.certified is False
+        assert result.reason == "bloom_positive_confirmed"
+        assert result.bloom_hit is True
+        assert result.exact_confirmed is True
+
+    def test_bloom_hit_recheck_negative_is_absorbed(self):
+        """Bloom hit + exact_recheck_fn returns False (recheck negative) ->
+        the false positive is ABSORBED and the window IS certified."""
+        certifier = self._make_certifier(
+            {"source_a": [b"boilerplate_1"]},
+            exact_recheck_fn=lambda key, source: False)
+
+        result = certifier.certify_window(
+            window_key=b"boilerplate_1", source="source_a",
+            sources_in_batch={"source_a"})
+
+        assert result.certified is True
+        assert result.reason == "bloom_positive_fp_absorbed"
+        assert result.bloom_hit is True
+        assert result.exact_confirmed is False
+
+    def test_bloom_hit_no_recheck_fn_defaults_conservative(self):
+        """No exact_recheck_fn supplied -> Bloom hit is conservatively
+        treated as confirmed (no silent behavior change from pre-rework372
+        default)."""
+        certifier = self._make_certifier({"source_a": [b"boilerplate_1"]})
+
+        result = certifier.certify_window(
+            window_key=b"boilerplate_1", source="source_a",
+            sources_in_batch={"source_a"})
+
+        assert result.certified is False
+        assert result.reason == "bloom_positive"
+
+    def test_clean_window_never_calls_recheck(self):
+        """A clean (non-Bloom-hit) window is certified without invoking
+        exact_recheck_fn at all -- recheck is only paid on Bloom positives."""
+        calls = []
+
+        def _recheck(key, source):
+            calls.append((key, source))
+            return True
+
+        certifier = self._make_certifier(
+            {"source_a": [b"boilerplate_1"]}, exact_recheck_fn=_recheck)
+
+        result = certifier.certify_window(
+            window_key=b"clean_window", source="source_a",
+            sources_in_batch={"source_a"})
+
+        assert result.certified is True
+        assert calls == []
+
+    def test_batch_aggregates_confirmed_and_absorbed_separately(self):
+        """certify_batch tallies exact_confirmed and bloom_fp_absorbed as
+        distinct counters (both are Bloom hits, but only one is a genuine
+        certification failure)."""
+        def _recheck(key, source):
+            return key == b"true_positive"
+
+        boilerplate_keys = {"source_a": [b"true_positive", b"false_positive"]}
+        bloom_index = BoilerplateBloomIndex.build_from_keys(
+            boilerplate_keys, target_fp_rate=0.01)
+        certifier = HeldoutCertifier(bloom_index, exact_recheck_fn=_recheck)
+
+        candidates = [
+            (b"clean_1", "source_a"),
+            (b"true_positive", "source_a"),
+            (b"false_positive", "source_a"),
+        ]
+        receipt = certifier.certify_batch(candidates, {"source_a"})
+
+        assert receipt.bloom_hits == 2
+        assert receipt.exact_confirmed == 1
+        assert receipt.bloom_fp_absorbed == 1
+        assert receipt.certified_count == 2  # clean_1 + false_positive (absorbed)
+
+
+class TestCertificationTruthTable:
+    """AC4: certification truth table over (disjoint x bloom-hit x recheck
+    outcome). Every combination the predicate can encounter, each asserted
+    independently."""
+
+    def _certifier(self, boilerplate_keys, exact_recheck_fn=None,
+                   cap_saturated_per_source=None):
+        bloom_index = BoilerplateBloomIndex.build_from_keys(
+            boilerplate_keys, target_fp_rate=0.01)
+        return HeldoutCertifier(
+            bloom_index, cap_saturated_per_source=cap_saturated_per_source,
+            exact_recheck_fn=exact_recheck_fn)
+
+    def test_disjoint_false_always_rejects_regardless_of_bloom(self):
+        """disjoint=False short-circuits -- rejected even for a clean key
+        that would otherwise certify."""
+        certifier = self._certifier({"source_a": [b"boilerplate"]})
+        result = certifier.certify_window(
+            window_key=b"totally_clean", source="source_a",
+            sources_in_batch={"source_a", "source_b"})
+        assert result.certified is False
+        assert result.reason == "source_contamination"
+
+    def test_disjoint_true_bloom_miss_certifies(self):
+        """disjoint=True, bloom miss -> certified (the only certifying row
+        of the truth table)."""
+        certifier = self._certifier({"source_a": [b"boilerplate"]})
+        result = certifier.certify_window(
+            window_key=b"clean", source="source_a",
+            sources_in_batch={"source_a"})
+        assert result.certified is True
+        assert result.reason == "certified"
+
+    def test_disjoint_true_bloom_hit_recheck_true_rejects(self):
+        """disjoint=True, bloom hit, recheck CONFIRMS -> rejected."""
+        certifier = self._certifier(
+            {"source_a": [b"boilerplate"]},
+            exact_recheck_fn=lambda k, s: True)
+        result = certifier.certify_window(
+            window_key=b"boilerplate", source="source_a",
+            sources_in_batch={"source_a"})
+        assert result.certified is False
+        assert result.reason == "bloom_positive_confirmed"
+
+    def test_disjoint_true_bloom_hit_recheck_false_certifies(self):
+        """disjoint=True, bloom hit, recheck NEGATIVE -> absorbed, certified."""
+        certifier = self._certifier(
+            {"source_a": [b"boilerplate"]},
+            exact_recheck_fn=lambda k, s: False)
+        result = certifier.certify_window(
+            window_key=b"boilerplate", source="source_a",
+            sources_in_batch={"source_a"})
+        assert result.certified is True
+        assert result.reason == "bloom_positive_fp_absorbed"
+
+    def test_disjoint_true_bloom_hit_no_recheck_rejects(self):
+        """disjoint=True, bloom hit, no recheck oracle -> conservative
+        reject (no absorption possible)."""
+        certifier = self._certifier({"source_a": [b"boilerplate"]})
+        result = certifier.certify_window(
+            window_key=b"boilerplate", source="source_a",
+            sources_in_batch={"source_a"})
+        assert result.certified is False
+        assert result.reason == "bloom_positive"
+
+    def test_cap_saturated_rejects_even_with_recheck_confirming_negative(self):
+        """Cap-saturated is UNCONDITIONAL: even an exact_recheck_fn that
+        would otherwise absorb every Bloom hit as a false positive cannot
+        rescue a cap-saturated key -- no recheck escape hatch."""
+        certifier = self._certifier(
+            {"source_a": [b"regular"]},
+            exact_recheck_fn=lambda k, s: False,  # would absorb everything
+            cap_saturated_per_source={"source_a": {b"capped"}})
+        result = certifier.certify_window(
+            window_key=b"capped", source="source_a",
+            sources_in_batch={"source_a"})
+        assert result.certified is False
+        assert result.reason == "cap_saturated"
+
+    def test_cap_saturated_without_side_channel_still_rejected_via_bloom(self):
+        """Even with NO cap_saturated_per_source side channel wired up, a
+        cap-saturated key folded into the Bloom (via
+        BoilerplateBloomIndex.build_from_keys(cap_saturated_keys=...)) is
+        still rejected -- correctness does not depend on the side channel."""
+        bloom_index = BoilerplateBloomIndex.build_from_keys(
+            {"source_a": [b"regular"]},
+            cap_saturated_keys={"source_a": [b"capped"]},
+            target_fp_rate=0.01)
+        certifier = HeldoutCertifier(bloom_index)  # no side channel at all
+
+        result = certifier.certify_window(
+            window_key=b"capped", source="source_a",
+            sources_in_batch={"source_a"})
+        assert result.certified is False
+        assert result.reason == "bloom_positive"  # generic label, still rejected
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

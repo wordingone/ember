@@ -813,22 +813,36 @@ def finalize_source(stream, positions, window_tokens: int, index: dict,
 
 def run_source(stream, sep_sub, start: int, end: int, window_tokens: int,
                cap: int, sample_rate: float, f_values, powers,
-               checkpoint_cb=None) -> dict:
+               checkpoint_cb=None, emit_boilerplate_keys: bool = False) -> tuple:
     """Full two-pass stage-2 pipeline for one source's document span, in ONE
     call (position_chunk_count=1). checkpoint_cb(stage:str, done:int,
     total:int) is called periodically for the crash-resilience checkpoint
     (see module CLI --checkpoint-every-batches). See run_source_pass_ab_chunk
     + finalize_source for the chunked equivalent used when a single
-    foreground call can't fit a source's pass B under the tool time ceiling."""
+    foreground call can't fit a source's pass B under the tool time ceiling.
+
+    Returns (result, boilerplate_keys) -- boilerplate_keys is None unless
+    emit_boilerplate_keys is True (matches finalize_source's own return
+    convention). CORRECTION (rework372): this function used to always
+    discard finalize_source's second return value and never threaded
+    emit_boilerplate_keys through at all, which meant main()'s single-call
+    (non-chunked) invocation path -- the DEFAULT path for any run that
+    doesn't need --position-chunk-count -- silently produced NO boilerplate-
+    keys output even when --emit-boilerplate-keys was passed and the run
+    completed with status=complete. Only the chunked branch ever worked.
+    Empirically reproduced before this fix: a full 5-source single-call run
+    with --emit-boilerplate-keys set returned rc=0, status="complete", and
+    no boilerplate-keys-out file on disk."""
     k_by_f = {f_key(f): k_source(f, sep_sub.shape[0]) for f in f_values}
     (positions, cand_hash_sorted, _cand_keys_by_hash, index, pass_b_wall_s,
      total_candidates) = run_source_pass_ab_chunk(
         stream, sep_sub, start, end, window_tokens, cap, sample_rate, powers,
         checkpoint_cb=checkpoint_cb)
-    result, _ = finalize_source(
+    result, boilerplate_keys = finalize_source(
         stream, positions, window_tokens, index, cap, k_by_f, total_candidates,
-        sep_sub.shape[0], sample_rate, cand_hash_sorted.shape[0], pass_b_wall_s)
-    return result
+        sep_sub.shape[0], sample_rate, cand_hash_sorted.shape[0], pass_b_wall_s,
+        emit_boilerplate_keys=emit_boilerplate_keys)
+    return result, boilerplate_keys
 
 
 def recommend_f(per_source_results: dict, f_values) -> dict:
@@ -1133,9 +1147,14 @@ def main(argv=None):
                   f"rate {args.sample_rate}, then a full-rate exact pass-B "
                   "scan (single call, no chunking)...")
             t_src = time.perf_counter()
-            per_source_results[src] = run_source(
+            per_source_results[src], src_boilerplate_keys = run_source(
                 stream, sep_sub, lo, hi, args.window_tokens, args.cap,
-                args.sample_rate, args.f_values_parsed, powers, checkpoint_cb=_ckpt)
+                args.sample_rate, args.f_values_parsed, powers, checkpoint_cb=_ckpt,
+                emit_boilerplate_keys=args.emit_boilerplate_keys)
+            if args.emit_boilerplate_keys and src_boilerplate_keys:
+                if not hasattr(args, '_boilerplate_keys_by_source'):
+                    args._boilerplate_keys_by_source = {}
+                args._boilerplate_keys_by_source[src] = src_boilerplate_keys
             print(f"  [{src}] pass_b_wall_s={per_source_results[src]['pass_b_wall_s']} "
                   f"(source total wall {time.perf_counter() - t_src:.1f}s)")
         else:
@@ -1384,9 +1403,9 @@ def _selftest() -> int:
             src = b["source"]
             lo, hi = b["start"], b["end"]
             sep_sub = sep_positions[(sep_positions >= lo) & (sep_positions < hi)]
-            result = run_source(stream, sep_sub, lo, hi, W, cap=10,
-                                 sample_rate=1.0, f_values=(1e-5,),
-                                 powers=powers_orig)
+            result, _ = run_source(stream, sep_sub, lo, hi, W, cap=10,
+                                    sample_rate=1.0, f_values=(1e-5,),
+                                    powers=powers_orig)
             hist = result["doc_frequency_histogram"]
             check(f"{src}: total sampled windows == 4",
                   result["n_sampled_windows"] == 4)
@@ -1462,8 +1481,8 @@ def _selftest() -> int:
               merged.get(key_a) == index_c[key_a]
               and merged.get(key_bprime) == index_c[key_bprime])
 
-        result_c = run_source(stream_c, sep_sub_c, 0, len(toks_c), W2, cap=10,
-                               sample_rate=0.5, f_values=(1e-5,), powers=powers2)
+        result_c, _ = run_source(stream_c, sep_sub_c, 0, len(toks_c), W2, cap=10,
+                                  sample_rate=0.5, f_values=(1e-5,), powers=powers2)
         check("two-pass fixture end-to-end: n_sampled_windows == 3",
               result_c["n_sampled_windows"] == 3)
         check("two-pass fixture end-to-end: n_candidate_keys == 2",
