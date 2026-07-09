@@ -57,6 +57,11 @@ import {
 } from "../components/message-renderers.ts";
 import { UserToolResultMessage }        from "../components/tool-result-renderers.ts";
 import {
+  ActivityTranscriptBlock,
+  DEFAULT_PATH_MAX_LEN,
+  type ActivityFeedLine,
+} from "../components/activity-feed-pane.ts";
+import {
   SpinnerAnimationRow,
   ANIMATION_LOOP_MS,
 }                                        from "../components/spinner.ts";
@@ -70,7 +75,6 @@ import {
 import {
   getActivityFeedState,
   startActivityFeed,
-  type ActivityFeedState,
 }                                        from "../services/activity-feed.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
 import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
@@ -362,18 +366,6 @@ function _telemetryMemoKey(state: TelemetryState): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Internal: activity-feed memo key (issue #485 rung 1) — re-render only when the
-// last line actually changed, same discipline as _telemetryMemoKey above.
-// ---------------------------------------------------------------------------
-
-function _activityFeedMemoKey(state: ActivityFeedState): string | null {
-  const n = state.recentLines.length;
-  if (n === 0) return null;
-  const last = state.recentLines[n - 1];
-  return `${n}:${last.ts}:${last.text}`;
-}
-
-// ---------------------------------------------------------------------------
 // renderMsgDispatch — routes a SessionMessage to the correct renderer
 // ---------------------------------------------------------------------------
 
@@ -461,6 +453,28 @@ export function renderMsgDispatch(
         key:         msg.id,
         isComplete:  msg["isComplete"] === true,
         ...(typeof elapsed === "number" ? { elapsedSecs: elapsed } : {}),
+      });
+    }
+
+    case "activity": {
+      // #518: an organism activity event (receipt landing, board run, watchdog
+      // transition, outage window) renders as a transcript card AT ITS TEMPORAL
+      // POSITION in the scrollback -- never a ticker line pinned near the status
+      // bar. See components/activity-feed-pane.ts's ActivityTranscriptBlock.
+      const activityLine: ActivityFeedLine = {
+        ts:     String(msg["ts"] ?? new Date().toISOString()),
+        source: (msg["source"] as ActivityFeedLine["source"]) ?? "receipt",
+        text:   String(msg["text"] ?? ""),
+        path:   typeof msg["path"] === "string" ? (msg["path"] as string) : undefined,
+      };
+      // Path truncation widens with the viewport (live-resize experience-gate finding: a fixed
+      // 48-char cap left a wide terminal truncating a path that had plenty of room) -- never
+      // narrower than the default, so a small terminal keeps today's behavior exactly.
+      const activityPathMaxLen = Math.max(DEFAULT_PATH_MAX_LEN, viewportWidth - 12);
+      return React.createElement(ActivityTranscriptBlock, {
+        key: msg.id,
+        line: activityLine,
+        pathMaxLen: activityPathMaxLen,
       });
     }
 
@@ -676,11 +690,16 @@ export function ReplScreen({
     );
   }, 500);
 
-  // #485 rung 1: activity feed — real receipts-landing/outage/watchdog/board events, polled
-  // every 500ms and deduped by memo key (same discipline as telemetry above). The engine itself
-  // is event-driven (fs.watch on receipts/**) plus a couple of cheap poll ticks internally; this
-  // is just the render-side pickup.
-  const [activityFeed, setActivityFeed] = useState<ActivityFeedState>(() => getActivityFeedState());
+  // #485 rung 1 / #518: activity feed — real receipts-landing/outage/watchdog/board events,
+  // polled every 500ms. The engine itself is event-driven (fs.watch on receipts/**) plus a
+  // couple of cheap poll ticks internally; this is just the render-side pickup. #518 changed
+  // WHERE these land: each new line is appended to the conversation `messages` array as a
+  // `{type: "activity"}` entry (rendered as ActivityTranscriptBlock, at its temporal position in
+  // the scrollback) instead of being kept in separate ticker state fed to the status bar. Lines
+  // are deduped by a content key (ts+source+text), not by array index, so the engine's own ring
+  // buffer (which shifts old entries once it hits its cap) can never cause a re-render of an
+  // already-seen event or the silent loss of a genuinely new one.
+  const seenActivityKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const handle = startActivityFeed();
@@ -689,9 +708,24 @@ export function ReplScreen({
 
   useInterval(() => {
     const next = getActivityFeedState();
-    setActivityFeed((prev) =>
-      _activityFeedMemoKey(prev) === _activityFeedMemoKey(next) ? prev : { ...next },
-    );
+    const fresh = next.recentLines.filter((line) => {
+      const key = `${line.ts}|${line.source}|${line.text}`;
+      if (seenActivityKeysRef.current.has(key)) return false;
+      seenActivityKeysRef.current.add(key);
+      return true;
+    });
+    if (fresh.length === 0) return;
+    setMessages((prev) => [
+      ...prev,
+      ...fresh.map((line) => ({
+        id:     `activity-${crypto.randomUUID()}`,
+        type:   "activity",
+        ts:     line.ts,
+        source: line.source,
+        text:   line.text,
+        path:   line.path,
+      })),
+    ]);
   }, 500);
 
   // Keep messagesRef in sync with React state for use inside async callbacks.
@@ -1414,7 +1448,6 @@ export function ReplScreen({
       modelMetrics:   modelMetrics ?? undefined,
       effort:         retryStatus,
       degraded:       degradedBanner,
-      activityFeed:   activityFeed.recentLines,
     }),
   );
 }

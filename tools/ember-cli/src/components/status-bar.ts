@@ -1,13 +1,20 @@
 // status-bar — persistent status bar at the bottom of the TUI.
 // Shows permission mode, interrupt hint, task panel toggle, effort callouts,
 // coordinator agent status, and live task list (TaskListV2).
+//
+// #518: this used to also mount ActivityFeedPane -- completed-activity ticker lines pinned
+// here, next to the input box (the operator's exact complaint: "activity lines with timestamps
+// at the bottom of the statusline/input box... which is just... stupid"). That pane is gone from
+// this file entirely; activity events now render as ActivityTranscriptBlock cards in the
+// scrolling conversation history (see components/activity-feed-pane.ts, screens/repl.ts). The
+// status bar keeps ONLY genuinely live, in-flight state (degraded banner, effort callout,
+// coordinator phase, task list) -- never a feed of things that already happened.
 
 import React from "react";
 import { Box, Text } from "../ink/components.ts";
 import { useInput } from "../ink/hooks.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 import { modeGlyph as cognitiveGlyph } from "../cognitive-mode.ts";
-import { ActivityFeedPane, type ActivityFeedLine } from "./activity-feed-pane.ts";
 
 // ---------------------------------------------------------------------------
 // Public constants (preserve exactly)
@@ -325,10 +332,6 @@ export interface StatusLineProps {
   modelMetrics?: ModelMetrics;
   /** issue #239: circuit-breaker degraded state; absent/inactive → banner hidden. */
   degraded?: DegradedBannerState;
-  /** issue #485 rung 1: the real-event activity feed (receipts landing, outage windows,
-   *  watchdog transitions, board runs). Absent → pane omitted entirely (screens that don't
-   *  wire the feed engine see no empty placeholder either). */
-  activityFeed?: ActivityFeedLine[];
 }
 
 export function StatusLine({
@@ -340,7 +343,6 @@ export function StatusLine({
   cognitiveMode,
   modelMetrics,
   degraded,
-  activityFeed,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
     if (key.shift && key.tab)    { permissionMode.cycle(); return; }
@@ -356,9 +358,6 @@ export function StatusLine({
     { flexDirection: "column" },
     degraded != null
       ? React.createElement(DegradedBanner, { key: "degraded", degraded })
-      : null,
-    activityFeed != null
-      ? React.createElement(ActivityFeedPane, { key: "activity", lines: activityFeed })
       : null,
     effort != null
       ? React.createElement(EffortCallout, { key: "effort", effort })
