@@ -491,10 +491,15 @@ export function renderNodeToOutput(
 
   if (node.kind === "text" && node.text !== undefined) {
     const style = node.style ?? {};
-    // Write each character
+    // Write each character, handling newlines to advance to the next row
     let col = lx;
-    const row = ly;
+    let row = ly;
     for (const ch of node.text) {
+      if (ch === "\n") {
+        row++;
+        col = lx;
+        continue;
+      }
       if (col >= clipRect.x + clipRect.width) break;
       if (col >= clipRect.x && row >= clipRect.y && row < clipRect.y + clipRect.height) {
         stylePool.intern(style);
