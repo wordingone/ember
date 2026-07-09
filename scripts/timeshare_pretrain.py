@@ -830,6 +830,100 @@ def split_param_groups(model):
     return muon, adamw
 
 
+def split_param_groups_from_state_dict(model_state: dict) -> tuple[list[str], list[str]]:
+    """split_param_groups's own routing predicate (2D, non-embed, non-head ->
+    Muon; else AdamW), applied directly to a loaded model_state dict's key
+    order instead of a live model's named_parameters(). No model construction
+    needed. state_dict() always walks the module tree in the same order as
+    named_parameters(), so filtering either sequence by an identical predicate
+    yields identical relative order -- build_optimizer_id_maps's own AC1
+    round-trip test proves this against the real model (issue #580).
+
+    Tied parameters (e.g. embed/head weight-tying) are deduped by
+    tensor.data_ptr() rather than split_param_groups' id(p): a state_dict's
+    values are independently-detached tensor objects (a live model's own
+    .state_dict() detaches each parameter; a reloaded checkpoint's tensors
+    are freshly unpickled), so two names aliasing the same tied weight no
+    longer share Python object identity -- but they DO still share the same
+    underlying storage/data_ptr() in both cases (torch.save/load preserves
+    storage sharing across a round trip, which is exactly why tied
+    embeddings survive a checkpoint reload at all). Deduping on that signal
+    reproduces split_param_groups' exact per-name-once count and local-id
+    assignment for AdamW too, not just Muon (a tied pair is always
+    AdamW-routed, since is_embed/is_head match regardless of 2D-ness, so an
+    under-deduped AdamW list would shift every LATER AdamW local id by one
+    -- exactly the class of false-missing this fix exists to eliminate)."""
+    muon_names, adamw_names = [], []
+    seen_storage = set()
+    for name, tensor in model_state.items():
+        ptr = tensor.data_ptr()
+        if ptr in seen_storage:
+            continue
+        seen_storage.add(ptr)
+        low = name.lower()
+        is_2d = tensor.dim() == 2
+        is_embed = "embed" in low
+        is_head = "head" in low
+        if is_2d and not is_embed and not is_head:
+            muon_names.append(name)
+        else:
+            adamw_names.append(name)
+    return muon_names, adamw_names
+
+
+def build_optimizer_id_maps(model=None, model_state: dict | None = None) -> dict:
+    """THE authoritative bidirectional name<->id mapping for optimizer-state
+    indexing (issue #580: optimizer-state param-id conflation -- GLOBAL
+    model-state-dict ordering used as keys into MUON-LOCAL-keyed optimizer
+    state dicts). Exactly one of `model` (a live nn.Module -- the
+    ground-truth path: construct-model -> split_param_groups, per #577 F1's
+    verification method) or `model_state` (a loaded state_dict -- the cheap
+    path every existing resolver/checker caller actually has on hand, no
+    model/cfg required) must be given; both paths are proven identical by
+    the AC1 property test constructing the real model and round-tripping all
+    140 muon entries.
+
+    Returns a dict with:
+      muon_name_to_id / muon_id_to_name   -- LOCAL Muon-optimizer-state index
+          space (0..n_muon-1). THIS is the real on-disk keying of a split
+          optimizer.pt's {'muon': {'state': {int: ...}}} sub-dict (#577 F1:
+          verified 140 keys 0-139 against split_param_groups's own count).
+          No call site may compute a GLOBAL model-state index and use it
+          against this dict again.
+      adamw_name_to_id / adamw_id_to_name -- LOCAL AdamW-optimizer-state
+          index space (0..n_adamw-1), same convention for the 'adamw'
+          sub-dict.
+      global_name_to_id / global_id_to_name -- position in the model's own
+          state_dict() ordering (list(model_state.keys()) order). NEVER a
+          valid key into either optimizer's state dict -- only used to
+          translate an externally supplied model-state key into a name (or
+          a name back into that external convention) before looking it up
+          in the maps above.
+    """
+    if (model is None) == (model_state is None):
+        raise ValueError("build_optimizer_id_maps: pass exactly one of model= or model_state=")
+    if model is not None:
+        muon_named, adamw_named = split_param_groups(model)
+        muon_names = [n for n, _ in muon_named]
+        adamw_names = [n for n, _ in adamw_named]
+        global_names = list(model.state_dict().keys())
+    else:
+        muon_names, adamw_names = split_param_groups_from_state_dict(model_state)
+        global_names = list(model_state.keys())
+
+    muon_name_to_id = {n: i for i, n in enumerate(muon_names)}
+    adamw_name_to_id = {n: i for i, n in enumerate(adamw_names)}
+    global_name_to_id = {n: i for i, n in enumerate(global_names)}
+    return {
+        "muon_name_to_id": muon_name_to_id,
+        "muon_id_to_name": {i: n for n, i in muon_name_to_id.items()},
+        "adamw_name_to_id": adamw_name_to_id,
+        "adamw_id_to_name": {i: n for n, i in adamw_name_to_id.items()},
+        "global_name_to_id": global_name_to_id,
+        "global_id_to_name": {i: n for n, i in global_name_to_id.items()},
+    }
+
+
 def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
                           deviation_dir: str | None = None,
                           offload_optimizer_state: bool = False):
