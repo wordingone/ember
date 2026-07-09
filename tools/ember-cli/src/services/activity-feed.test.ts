@@ -17,6 +17,8 @@ import {
   parseOutageMarker,
   classifyOutageTransition,
   formatWatchdogLine,
+  isExcludedReceiptPath,
+  formatBulkMaterializationLine,
   startActivityFeed,
   getActivityFeedState,
   RECEIPT_RETRY_DELAY_MS,
@@ -68,6 +70,26 @@ describe("formatPlaceholderLine / formatUnparsableLine", () => {
   });
   it("unparsable names the file", () => {
     expect(formatUnparsableLine("/x/foo.json")).toBe("(receipt unparsable) foo.json");
+  });
+});
+
+describe("isExcludedReceiptPath", () => {
+  it("excludes paths under known non-organic trees", () => {
+    expect(isExcludedReceiptPath("/repo/receipts/fixture/acceptance/r1.json")).toBe(true);
+    expect(isExcludedReceiptPath("/repo/.avir/plugins/marketplaces/x.json")).toBe(true);
+    expect(isExcludedReceiptPath("C:\\repo\\.claude-plugin\\y.json")).toBe(true);
+    expect(isExcludedReceiptPath("/repo/node_modules/pkg/z.json")).toBe(true);
+  });
+  it("does not exclude an ordinary organic receipt path", () => {
+    expect(isExcludedReceiptPath("/repo/receipts/acceptance/r1.json")).toBe(false);
+  });
+});
+
+describe("formatBulkMaterializationLine", () => {
+  it("summarizes a count, never lists individual files", () => {
+    const text = formatBulkMaterializationLine(["/a.json", "/b.json", "/c.json"]);
+    expect(text).toContain("3 receipts");
+    expect(text).not.toContain("a.json");
   });
 });
 
@@ -373,5 +395,191 @@ describe("startActivityFeed — engine (real fs)", () => {
       expect(getActivityFeedState().recentLines).toEqual([]);
     },
     5000,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// P0-B — watermark, exclusion, burst-coalescing (issue #561 companion fix: the flood source)
+// ---------------------------------------------------------------------------
+
+describe("startActivityFeed — P0-B watermark/exclusion/coalescing (real fs)", () => {
+  let scratchDir: string;
+  let handle: ActivityFeedHandle | null = null;
+
+  beforeEach(() => {
+    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-activity-feed-p0b-"));
+    fs.mkdirSync(path.join(scratchDir, "receipts"), { recursive: true });
+    fs.mkdirSync(path.join(scratchDir, "totality"), { recursive: true });
+  });
+
+  afterEach(() => {
+    handle?.stop();
+    handle = null;
+    fs.rmSync(scratchDir, { recursive: true, force: true });
+  });
+
+  function baseDeps(overrides: Record<string, string> = {}) {
+    return {
+      receiptsDir: path.join(scratchDir, "receipts"),
+      totalityDir: path.join(scratchDir, "totality"),
+      outageMarkerPath: path.join(scratchDir, "planned-outage.json"),
+      restartLogPath: path.join(scratchDir, "restart-log.jsonl"),
+      watchdogStatePath: path.join(scratchDir, "watchdog-state.json"),
+      ledgerPath: path.join(scratchDir, "ledger.jsonl"),
+      watermarkPath: path.join(scratchDir, "watermark.json"),
+      ...overrides,
+    };
+  }
+
+  it(
+    "excludes receipts under a known non-organic path segment -- never rendered, sibling organic receipt still is",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      const excludedDir = path.join(deps.receiptsDir, "fixture", "acceptance");
+      fs.mkdirSync(excludedDir, { recursive: true });
+      fs.writeFileSync(path.join(excludedDir, "r1.json"), JSON.stringify({ verdict: "GREEN" }));
+
+      const organicDir = path.join(deps.receiptsDir, "acceptance");
+      fs.mkdirSync(organicDir, { recursive: true });
+      fs.writeFileSync(path.join(organicDir, "r2.json"), JSON.stringify({ verdict: "GREEN" }));
+
+      await sleep(1200);
+      const state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.text.includes("r1.json"))).toBe(false);
+      expect(state.recentLines.some((l) => l.text.includes("r2.json"))).toBe(true);
+    },
+    8000,
+  );
+
+  it(
+    "coalesces a burst of simultaneously-materialized files into one summarized line, not N individual lines",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      const dir = path.join(deps.receiptsDir, "bulk");
+      fs.mkdirSync(dir, { recursive: true });
+      const N = 6;
+      for (let i = 0; i < N; i++) {
+        fs.writeFileSync(path.join(dir, `r${i}.json`), JSON.stringify({ verdict: "GREEN" }));
+      }
+
+      await sleep(1200);
+      const state = getActivityFeedState();
+
+      const individualLines = state.recentLines.filter(
+        (l) => l.text.includes("receipt landed") && /r\d\.json/.test(l.text),
+      );
+      expect(individualLines.length).toBe(0);
+
+      const summary = state.recentLines.find((l) => l.text.includes("materialized at once"));
+      expect(summary).toBeDefined();
+      expect(summary?.text).toContain(`${N} receipts`);
+    },
+    8000,
+  );
+
+  it(
+    "never replays a file re-materialized with byte-identical content across a restart (the git-checkout / restart-flood shape)",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      const dir = path.join(deps.receiptsDir, "acceptance");
+      fs.mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "persisted.json");
+      const content = JSON.stringify({ verdict: "GREEN" });
+      fs.writeFileSync(filePath, content);
+
+      await sleep(1200); // let it fully render and settle its watermark entry (mtime + content hash)
+      let state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.text.includes("persisted.json"))).toBe(true);
+
+      const watermarkRaw = fs.readFileSync(deps.watermarkPath, "utf-8");
+      const watermark = JSON.parse(watermarkRaw) as Record<string, { mtimeMs: number; hash: string }>;
+      expect(typeof watermark[filePath]?.hash).toBe("string");
+      expect(watermark[filePath]!.hash.length).toBeGreaterThan(0);
+
+      // Simulate a process restart against the SAME watermark file/receipts dir, THEN a real
+      // re-write of byte-identical content -- exactly what `git checkout` does to an already-
+      // rendered receipt on every landing PR merge (content unchanged, mtime freshly re-stamped
+      // to checkout-time). A fresh engine sharing this watermark must not replay it: mtime alone
+      // would call this "new", so the content-hash fallback is what has to catch it.
+      handle?.stop();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      fs.writeFileSync(filePath, content); // same bytes, genuinely fresh mtime from a real write
+
+      await sleep(1200);
+      state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.text.includes("persisted.json"))).toBe(false);
+
+      // Prove the restarted engine is genuinely alive/watching (not silently dead) -- a fresh,
+      // never-before-seen receipt must still render normally.
+      fs.writeFileSync(path.join(dir, "fresh-after-restart.json"), JSON.stringify({ verdict: "GREEN" }));
+      await sleep(1200);
+      state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.text.includes("fresh-after-restart.json"))).toBe(true);
+    },
+    12000,
+  );
+
+  it(
+    "still re-renders when a previously-settled path's content genuinely changes (the hash fallback never over-suppresses)",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      const dir = path.join(deps.receiptsDir, "acceptance");
+      fs.mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "changed.json");
+      fs.writeFileSync(filePath, JSON.stringify({ verdict: "GREEN" }));
+
+      await sleep(1200);
+      let state = getActivityFeedState();
+      expect(
+        state.recentLines.some((l) => l.text.includes("changed.json") && l.text.includes("GREEN")),
+      ).toBe(true);
+
+      handle?.stop();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      fs.writeFileSync(filePath, JSON.stringify({ verdict: "RED" })); // genuinely different content
+
+      await sleep(1200);
+      state = getActivityFeedState();
+      expect(
+        state.recentLines.some((l) => l.text.includes("changed.json") && l.text.includes("RED")),
+      ).toBe(true);
+    },
+    12000,
+  );
+
+  it(
+    "the seven pre-existing engine behaviors are unaffected by the watermark/exclusion/coalescing layer",
+    async () => {
+      // Narrow smoke check (the full pre-existing suite above is the real regression gate) --
+      // confirms a single well-formed receipt still renders promptly through the new gate.
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      const dir = path.join(deps.receiptsDir, "acceptance");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, "smoke.json"), JSON.stringify({ verdict: "GREEN" }));
+
+      await sleep(1200);
+      const state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.text.includes("smoke.json"))).toBe(true);
+    },
+    8000,
   );
 });
