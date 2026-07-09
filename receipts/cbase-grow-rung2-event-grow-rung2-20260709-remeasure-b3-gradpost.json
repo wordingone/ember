@@ -1,0 +1,99 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-GRADPOST-CAPTURE",
+  "ts": "2026-07-09T09:50:22.781939+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 482,
+  "refs": [
+    466,
+    449,
+    513
+  ],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "scope": "grad_post_gate REAL capture (single forward+backward on the grown rung-2 checkpoint, pinned 8-microstep batch) replacing cbase_grow_rung2_spectral_measurement.py's grad_pre_gate proxy, plus the CPU-side spectral measurement it unblocks. Measurement only -- no verdict on the Zheng/Gupta fork; issue #482's coordinator adjudicates.",
+  "method": {
+    "capture": "reproduces cbase_grow_rung2_event.py phase_b3's capture leg (same manual_seed(42) position, same grown-checkpoint load via ts.build_v0_model+load_state_dict, same _build_pinned_batch, same QAT/CE/MTP per-microstep loop) without re-running phase_b3 itself (its fork_dir + b3.json receipt already exist on disk).",
+    "muon_step_closure": "p5_ratio_audit.run_p5_audit._muon_step_in_copy (faithful reuse)",
+    "spectral_norm_method": "torch.linalg.svdvals (top singular value)"
+  },
+  "batch_pin_check": {
+    "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+    "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+    "match": true
+  },
+  "capture_conventions": {
+    "qat_enabled": true,
+    "mtp_enabled": true,
+    "ce_impl": "cut_ce_chunked",
+    "ff_grown": 32768,
+    "gate_key": "backbone_model.layers.0.mlp.gate_proj.weight"
+  },
+  "shapes": {
+    "theta_gate_pre": [
+      16384,
+      1024
+    ],
+    "theta_gate_post": [
+      32768,
+      1024
+    ]
+  },
+  "grad_post_gate": {
+    "rms": 0.0001723122113617137,
+    "sha256": "990c4db03604d69630d83cdea8cbeac0ef84417fdfe4ee9c5905e50e4667b2f4",
+    "saved_path": ".claude\\worktrees\\remeasure-466\\receipts\\.rung2-event-cache\\grow-rung2-20260709-remeasure-grad-post-gate.pt"
+  },
+  "measurement_reset_arm_lr015": {
+    "lr": 0.015,
+    "momentum": "zero buffer both sides (explicit RESET arm)",
+    "u_pre_spectral": 0.0721418634057045,
+    "u_post_spectral": 0.10202421247959137,
+    "u_pre_rms": 0.00027922826120629907,
+    "u_post_rms": 0.00028323809965513647,
+    "rms_ratio_post_over_pre": 1.0143604319688646,
+    "R_spectral_ratio_post_over_pre": 1.4142164848977823,
+    "pre_scale": 4.0,
+    "post_scale": 5.656854249492381,
+    "pre_normalized_sigma_over_lr_scale": 1.2023643900950751,
+    "post_normalized_sigma_over_lr_scale": 1.202366874825604
+  },
+  "measurement_reset_arm_lr02_disclosed_variant": {
+    "lr": 0.02,
+    "note": "0.02 is the resolved real event lr per b1m receipt's u_pre.lr_used field (forensics panel 2026-07-09 tick-23); 0.015 above is the scaffold's frozen convention. R is lr-invariant in principle (both scale by the same factor); reported for full disclosure.",
+    "momentum": "zero buffer both sides (explicit RESET arm)",
+    "u_pre_spectral": 0.09618902951478958,
+    "u_post_spectral": 0.1360323280096054,
+    "u_pre_rms": 0.00037230431917123497,
+    "u_post_rms": 0.0003776507801376283,
+    "rms_ratio_post_over_pre": 1.014360459148835,
+    "R_spectral_ratio_post_over_pre": 1.4142187388291478
+  },
+  "reproducibility_check_real_momentum_lr015": {
+    "note": "Reproduces cbase_grow_rung2_spectral_measurement.py's ORIGINAL u_pre convention (real non-zero pre_momentum, not zero) to confirm this script's Muon math agrees with the already-banked b3s-partial receipt before trusting the RESET-arm numbers above.",
+    "u_pre_spectral": 0.07214192301034927,
+    "banked_u_pre_spectral": 0.07214187,
+    "delta": 5.3010349276849666e-08,
+    "delta_pct": 7.348069751567248e-05
+  },
+  "cache_provenance": {
+    "theta_gate_pre_sha256": "1415197c486b83dd402b95e885903fba2ddd74189555a79797b7bb63a66aa05a",
+    "grad_pre_gate_sha256": "c25748d7c5c4bbb5bcd17124bd5e311d663da00cad6dd2354a14deee154fc5dc",
+    "pre_momentum_sha256": "823309138b3f62c29ea63c35ae1ccdad6cad1e7b82aa5ba1924ae849317b1be2",
+    "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+    "grad_post_gate_sha256": "990c4db03604d69630d83cdea8cbeac0ef84417fdfe4ee9c5905e50e4667b2f4"
+  },
+  "gpu_precondition": {
+    "sentinel_path": "tools/ember-cli/state/serve-receipts/stab524-gpu-window-done-20260709.json",
+    "sentinel_appeared": false,
+    "note": "Sentinel never appeared through the extended 10:12Z deadline. Original 09:35Z fallback check showed 19875 MiB used (blocked, did not proceed). Deadline was extended once to 10:12Z (sibling lane verified compute-busy, not hung). At 09:49:22Z nvidia-smi showed 763 MiB / 24564 MiB used (below the <2500 MiB fallback threshold), so the capture proceeded on the fallback condition rather than waiting further for the sentinel.",
+    "vram_used_mib_at_proceed": 763,
+    "vram_total_mib": 24564,
+    "proceed_ts_utc": "2026-07-09T09:49:22Z"
+  },
+  "gpu_seconds": 2.1941170692443848,
+  "device": "cuda",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "GRADPOST_CAPTURED_MEASUREMENT_COMPLETE"
+}
