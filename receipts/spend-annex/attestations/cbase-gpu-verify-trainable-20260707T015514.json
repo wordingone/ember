@@ -1,11 +1,16 @@
 {
   "target_path": "receipts/cbase-gpu-verify-trainable-20260707T015514.json",
-  "target_sha256": "d2c2f78030b5ef35c5031abb3cacdef9c8bbc311c0ad5363aad7de0016f524dd",
+  "target_sha256": "3478da584c0f8fbdbecb03f14375da8b3524edcab7819724fb029bc281766e1f",
   "evidence_class": "generator_absent_content_clean",
   "evidence": "evidence (c) manually-authored: no in-tree script constructs this filename (confirmed by exhaustive fixed-string search of scripts/ and tools/) -- these are ad-hoc python invocations from 2026-07-07's live C-BASE checkpoint-verify debugging (typed inline, never saved as a checked-in script), same class as the existing eng421-multimodal-config-*/eng26-replay-* manually_authored convention entries. Independently verified, not self-report: the checkpoint sha256 this receipt cites (58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b) was recomputed directly against the on-disk file at models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt (2,377,797,331 bytes) and matches exactly; the operation described (load a local .pt checkpoint, run forward passes, record loss/VRAM) has no conceivable paid-API surface.",
   "cites": [
     "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt"
   ],
   "attested_by": "boardrun6, issue #353 durable-attestation sidecar (supersedes the throwaway attest_extend.py hand-stamp from the 2026-07-07 annex-refresh mission -- see PR #350's body for the durability finding)",
-  "attested_ts": "2026-07-07T11:32:00Z"
+  "attested_ts": "2026-07-07T11:32:00Z",
+  "re_pin": {
+    "prior_target_sha256": "d2c2f78030b5ef35c5031abb3cacdef9c8bbc311c0ad5363aad7de0016f524dd",
+    "reason": "gh issue #586 (annex round-4): the receipt's `last_checkpoint` field (an absolute local Windows path) was redacted by commit e7e9347 ('repo hygiene: synthesize path-shaped fixtures, redact tracked local paths, harden guard pattern (issue 456 track)') via a blunt tree-wide path-redaction sweep that did NOT add a self-documenting `redaction` block to this receipt (unlike the #428/#431 custody-redaction pass, which did) -- so the existing redaction-chain pin (issue #428) could not recognize the mutation and the row regressed to unresolvable. Sidecar re-pinned to the receipt's current on-disk hash; re-verified the only diff between old and current bytes is that single path-string redaction (`last_checkpoint` value only), nothing touching the cited checkpoint hashes, verification data, or verdict.",
+    "re_pinned_ts": "2026-07-09T23:21:33Z"
+  }
 }
