@@ -33,7 +33,7 @@
       "condition": "C-BASE",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-BASE: no owned from-scratch checkpoint receipt under B:\\M\\wt-boardrun36\\receipts names a checkpoint whose on-disk model.pt bytes hash-match its manifest weight-hash claim (5 owned-pretrain candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause (a)/(c) unmet) (elapsed 205.8s)"
+      "reason": "RED C-BASE: no owned from-scratch checkpoint receipt under <ROOT>\\receipts names a checkpoint whose on-disk model.pt bytes hash-match its manifest weight-hash claim (5 owned-pretrain candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause (a)/(c) unmet) (elapsed 205.8s)"
     },
     {
       "condition": "C-PORT",
@@ -57,7 +57,7 @@
       "condition": "C-ORGANISM",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under B:\\M\\wt-boardrun36\\receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 838 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT). (elapsed 0.3s)"
+      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under <ROOT>\\receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 838 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT). (elapsed 0.3s)"
     },
     {
       "condition": "C(-1)",
@@ -75,7 +75,7 @@
       "condition": "C1",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\wt-boardrun36, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\wt-boardrun36, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=B:\\\\M\\\\wt-boardrun36, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"] (elapsed 0.1s)"
+      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<ROOT>, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<ROOT>, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<ROOT>, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"] (elapsed 0.1s)"
     },
     {
       "condition": "C2",
@@ -93,13 +93,13 @@
       "condition": "C4",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<REDACTED_GOALFORGE_PATH>\\\\receipts\\\\ember-resident-training-adapter\\\\20260622T011305Z\\\\clean_room_harness_interface.json' resolves OFF-TREE/missing under root=B:\\M\\wt-boardrun36 -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o' (elapsed 0.1s)"
+      "reason": "RED resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<REDACTED_GOALFORGE_PATH>\\\\receipts\\\\ember-resident-training-adapter\\\\20260622T011305Z\\\\clean_room_harness_interface.json' resolves OFF-TREE/missing under root=<ROOT> -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o' (elapsed 0.1s)"
     },
     {
       "condition": "C5",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<REDACTED_GOALFORGE_PATH>\\\\receipts\\\\ember-resident-training-adapter\\\\20260622T011305Z\\\\clean_room_harness_interface.json' resolves OFF-TREE/missing under root=B:\\M\\wt-boardrun36 -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A<local-mount-point>/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2 (elapsed 0.1s)"
+      "reason": "RED resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<REDACTED_GOALFORGE_PATH>\\\\receipts\\\\ember-resident-training-adapter\\\\20260622T011305Z\\\\clean_room_harness_interface.json' resolves OFF-TREE/missing under root=<ROOT> -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A<local-mount-point>/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2 (elapsed 0.1s)"
     },
     {
       "condition": "C6",
@@ -159,7 +159,7 @@
       "condition": "C15",
       "status": "AUDIT-OK",
       "is_process_invariant": true,
-      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under B:\\M\\wt-boardrun36/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window (elapsed 0.1s)"
+      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under <ROOT>/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window (elapsed 0.1s)"
     },
     {
       "condition": "C-OBS",
@@ -171,7 +171,7 @@
       "condition": "C-ANAT",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under B:\\M\\wt-boardrun36; CHK 'all 16 present and consistent with receipts' unmet (elapsed 1.0s)"
+      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under <ROOT>; CHK 'all 16 present and consistent with receipts' unmet (elapsed 1.0s)"
     },
     {
       "condition": "C-SCALE",
@@ -189,7 +189,7 @@
       "condition": "C-IND",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=B:\\M\\wt-boardrun36 (elapsed 0.7s)"
+      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=<ROOT> (elapsed 0.7s)"
     },
     {
       "condition": "C-PROC",
@@ -207,7 +207,7 @@
       "condition": "C-SURFACE2",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-SURFACE2: no receipt found under receipts/ember-surface2-telemetry/ on B:\\M\\wt-boardrun36 (invalid_surface2_receipt_absent) -- receipt-absent or tree-absent (elapsed 0.0s)"
+      "reason": "RED C-SURFACE2: no receipt found under receipts/ember-surface2-telemetry/ on <ROOT> (invalid_surface2_receipt_absent) -- receipt-absent or tree-absent (elapsed 0.0s)"
     },
     {
       "condition": "C-ENF",
@@ -266,7 +266,7 @@
     {
       "condition": "C15",
       "status": "AUDIT-OK",
-      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under B:\\M\\wt-boardrun36/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window (elapsed 0.1s)"
+      "reason": "AUDIT-OK no tiny_bitnet_comparison_receipt.json under <ROOT>/receipts/ember-tiny-bitnet-comparison/ in window >= 20260702T174352Z (3 total on disk) -> vacuously no BitNet-comparison incident in the audited window (elapsed 0.1s)"
     }
   ],
   "summary": {

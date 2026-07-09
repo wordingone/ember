@@ -1,0 +1,42 @@
+{
+  "ticket": "EMBER-TOTALITY-AUDIT",
+  "ts": "2026-07-09T08:45:00Z",
+  "method": "manual gate discipline (audit workflow script retired with the old layout; rebuild tracked as public issue #89) — coordinator receipts-only reads, forensics lens applied",
+  "board_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260709T065411Z.json",
+  "board_summary": {"green": 9, "red": 25, "unevaluable": 3, "tally_pct": 24.3},
+  "honest_green_count": 9,
+  "honest_green_delta": 0,
+  "regressions": [],
+  "per_condition": {
+    "C-EFF": {
+      "probe_faithful": true,
+      "receipt_genuine": true,
+      "evidence": "probe globs ceff-RESOLVED-*.json; the file it finds (receipts/ceff-RESOLVED-20260703T124623Z-import-edition-redacted-edition.json) verified tracked AND present on disk this audit; the superficially-alarming custody CITED-MISSING entry for the pre-rename filename is citation drift, not a phantom citation by the probe"
+    },
+    "C2": {
+      "probe_faithful": true,
+      "receipt_genuine": true,
+      "evidence": "all 3 d3-native-loop files (candidate receipt + frozen-rows + reconstructed rows) verified TRACKED at HEAD via git ls-files this audit; the 065411Z run's 'git-anchor UNANCHORED' note and the custody sidecar's untracked=3 are pre-merge-stale; VERIFY on next board receipt that the anchor note clears — if it does not, reopen",
+      "followup": "next board run must show git-anchor ANCHORED for the frozen-rows file"
+    },
+    "C-CUSTODY": {
+      "probe_faithful": true,
+      "receipt_genuine": true,
+      "note": "RED is honest but the bucket composition was adjudicated: untracked=3 STALE-CURED at HEAD; cited_missing=24 = redaction-rename citation drift (cure = checker twin-resolution rule, issue #535); documented_absent=0 vs the prior cure's claimed 15 = checker/cure-model mismatch (folded into #535 AC-2)"
+    },
+    "C-SURFACE2": {
+      "probe_faithful": false,
+      "receipt_genuine": null,
+      "severity": "high",
+      "gap": "DEFAULT_EXEC_ROOT is a redaction placeholder string — probe structurally UNEVALUABLE on every machine since the redaction landed; separate-tree premise also dead post-consolidation (old execution tree verified to hold no surface-2 telemetry dir)",
+      "cheap_pass": "none — placeholder cannot green anything; defect is availability of the check, not a hollow GREEN",
+      "fix": "issue #533 (frozen AC: re-root default to contract repo root; expected honest transition UNEVALUABLE->RED receipt-absent)",
+      "ownership": "probe-harden"
+    }
+  },
+  "defect_class_extracted": "redaction placeholders inside FUNCTIONAL artifacts (code/tokenizer) — two instances 2026-07-09 (test_surface2.py exec-root, tokenizer/tokenizer.json non-loadable per #531); redaction utility hard-fail clause queued on #502/#525; cures #533 #534 #535",
+  "queued_rebuilds": [],
+  "publication_visibility_note": "board re-run lane in flight at audit time (post-landing refresh); its receipt supersedes the 065411Z counts on landing",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
