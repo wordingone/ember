@@ -510,5 +510,10 @@ export function PromptInput({
     );
   }
 
-  return React.createElement(Box, { flexDirection: "column" }, ...children);
+  // #561 P0-A: PromptInput is fixed bottom chrome, never a flex-shrink target — without this,
+  // a transcript content flood (its "auto"-height sibling reporting the full unclipped sum of
+  // every rendered card, see layout-engine.ts's shrink pass) proportionally shrinks this box
+  // down to ~0 rows and it vanishes from the frame entirely (the operator's "input box scrolled
+  // into the scrollback" report, issue #561/#565 AC-A).
+  return React.createElement(Box, { flexDirection: "column", flexShrink: 0 }, ...children);
 }
