@@ -1,0 +1,244 @@
+{
+  "ticket": "P5-RATIO-AUDIT",
+  "ts": "20260709T035824Z",
+  "mode": "dry-run",
+  "issue": "#207",
+  "spec_ref": "state/prereg-p0-probes-p5-p1tier0-v1.md#PROBE-P5",
+  "spec_version": "v1.1+ckpt-inventory-v1.2",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "harness_sha": "edf54eb86fff229a3ac00c7b878315eea2bca627981808325dafd8a36b340d85",
+  "status": "OK",
+  "scope": "CPU plumbing proof ONLY, toy widths ({'368M_QAT': 24, '718M_D6_segment': 32, '1_22B_rung1': 48}) standing in for 368M/718M/1.22B, NO real checkpoints. Reuses PRODUCTION math byte-for-byte (per-channel int8 quantizer, Muon/Newton-Schulz update, net2net cat([w,w]) widen) on a self-contained toy model. NOT research-conclusive -- proves the harness computes and gates every formula and verdict path correctly, nothing more.",
+  "probe_batch": {
+    "path": "receipts\\.p5_dryrun_tmp\\p5-probe-batch-seed20260706.pt",
+    "sha256": "770f377605a240f863fe854c3c9267fd443d82a4583ed8208823ce7ad67b8ab9",
+    "n_microbatches": 4,
+    "seq_len": 16,
+    "seed": 20260706
+  },
+  "pre_registration": {
+    "spec_ref": "state/prereg-p0-probes-p5-p1tier0-v1.md#PROBE-P5",
+    "spec_version": "v1.1+ckpt-inventory-v1.2",
+    "issue": "#207",
+    "prediction": "rho_SR (unit-LR series) is NOT invariant -- it drifts with width under the default per-channel-referenced int8 grid. v1.2 SCOPING: the real inventory gives exactly TWO width points (rung-1 pre-grow ~467M-class, post-grow larger-class), not the originally-envisioned three -- per the frozen spec's own missing-point/non-evidence rule, the formal cross-width verdict is always UNRESOLVED-by-inventory; the 2-point direction is reported supplementarily, never promoted to a verdict.",
+    "verdict_bands": {
+      "kill_per_class": "max/min rho_SR across the three widths <= 1.2 (~+-10%) -> KILL (drift rejected, promote-the-null, GOOD outcome, law simplifies).",
+      "promote_per_class": "max/min >= 1.5, monotone direction, AND the across-width spread exceeds the within-checkpoint noise (95% band per width point, from the 16 per-microbatch replicates, must EXCLUDE the kill band).",
+      "gray_per_class": "1.2-1.5, non-monotone, or noise-band overlap -> UNRESOLVED, extend to per-layer resolution before any claim.",
+      "headline": "majority of per-class verdicts; ANY class PROMOTE while ANY class KILL -> GRAY/UNRESOLVED overall with the per-class table as the artifact.",
+      "missing_point_rule": "any missing width point (OOM/wall-cap kill of one leg) -> UNRESOLVED; two-point 'monotone' is non-evidence, pre-registered.",
+      "provenance_mismatch_rule": "optimizer-state provenance must be identical in kind across checkpoints being compared; on mismatch every cross-width comparison is forced UNRESOLVED, never compared across the discontinuity. NAMED EXCEPTION (v1.2 ruling, real rung-1 pair only): pre-grow's parent-carried state and post-grow's own state are admissible together because both are the SAME KIND (muon_split), caveat stamped -- see real_inventory_provenance().",
+      "two_point_rule": "v1.2: the real inventory has exactly two width points; the frozen spec's own missing-point rule ('two-point monotone is meaningless... pre-registered as non-evidence') applies directly -- formal verdict is always UNRESOLVED-by-inventory, direction reported supplementarily."
+    },
+    "state_lr_pins": {
+      "optimizer_state_provenance": "warm-loaded from the checkpoint's own saved state in all three, OR the probe records PROVENANCE-MISMATCH and affected ratios are UNRESOLVED, never compared cross-width.",
+      "dual_lr_series": "in-copy update computed at the checkpoint's own LR AND at pinned unit LR (lr=1.0); ALL cross-width rho_SR verdicts are taken on the UNIT-LR series; checkpoint-LR series reported alongside."
+    },
+    "budget": {
+      "hard_wall_min_per_checkpoint": 60,
+      "gpu_coresident_gib_max": 2
+    },
+    "no_pass_bar_metrics": [
+      "d_comm"
+    ],
+    "scope_disclosures": [
+      "quantizer granularity is PER-CHANNEL (per-output-row int8), confirmed at scripts/timeshare_pretrain.py::_apply_fake_quant mode='qat' -- NOT per-tensor and NOT genuinely sub-channel per-block; 'block' in this harness means one output-row scale.",
+      "rho_rank/rho_grow are N/A-by-construction for all three checkpoints -- no rank-projection code exists in production (grep-confirmed); scripts/expc1's rank-sweep is a separate, unwired research harness.",
+      "rho_block is N/A (structural) -- production optimizer state is bf16-native end to end, no 8-bit optimizer-state path exists (scripts/ember_d6_bf16_momentum_ab.py measured this directly); the formula is implemented and selftested regardless.",
+      "net2net grow noise (epsilon) is measured, not assumed, every run by diffing the realized duplicate pair post-widen; production's cat([w,w]) operator carries no noise term, so epsilon=0 is expected but never hardcoded.",
+      "checkpoint discovery targets the v1.2 ground-truth registry (RUNG1_LINEAGE): a real, team-lead-verified two-checkpoint lineage (rung-1 pre-grow step-00000730 / post-grow step-00000766). Neither weight file nor its manifest.json is present in THIS git worktree (multi-GB weights are never git-tracked) -- the real run is still expected to self-block (FAILED-ENGAGEMENT) on THIS box even once authorized, until run on a box with EMBER_MODELS_ROOT pointed at the real models/ tree; that is the fail-closed contract working as designed, not a harness defect. The '368M QAT' and 'unexecuted 1.22B rung-1' targets from the original v1.1 grounding pass were dropped: neither is real (see the GROUND-TRUTH RULING docstring section).",
+      "no native QAT-trained checkpoint exists in the real inventory -- rho_sr/rho_noise grid-step reads on the two real checkpoints are INSTRUMENTED (_apply_fake_quant applied transiently, in-copy) rather than resident; tagged measurement_mode='instrumented-not-resident' in the real-run receipt."
+    ]
+  },
+  "checkpoints": {
+    "368M_QAT": {
+      "label": "368M QAT (toy stand-in)",
+      "toy_hidden": 24,
+      "role": "non_grow",
+      "optimizer_reset_on_resume": false,
+      "ratios": {
+        "rho_sr": {
+          "value": 208.50611877441406,
+          "na_reason": null
+        },
+        "rho_noise": {
+          "value": 0.0,
+          "na_reason": null
+        },
+        "rho_rank": {
+          "value": null,
+          "na_reason": "N/A-no-rung2"
+        },
+        "rho_grow": {
+          "value": null,
+          "na_reason": "N/A-no-rung2"
+        },
+        "rho_spec": {
+          "value": null,
+          "na_reason": "N/A-by-construction: not the grow-event checkpoint (rho_spec is defined only at the rung-1 pre-grow state)."
+        },
+        "rho_batch": {
+          "value": 10.0808741037456,
+          "na_reason": null
+        },
+        "rho_block": {
+          "value": null,
+          "na_reason": "N/A (structural): production optimizer state is bf16-native end to end (scripts/ember_d6_bf16_momentum_ab.py measured this directly -- AdamW/_Muon zeros_like(g) inherits the bf16 param/grad dtype, nothing promotes to fp32); no 8-bit optimizer-state path exists to apply this formula to."
+        }
+      },
+      "engagement_assertions_passed": [
+        "checkpoint_sha_recorded",
+        "in_copy_update_source_state_bitwise_unchanged",
+        "probe_batch_sha_matches",
+        "lr_schedule_tokens_stamped",
+        "state_provenance_stamped",
+        "all_seven_ratios_have_value_or_na_reason"
+      ],
+      "net2net_epsilon_measurement": {
+        "epsilon_max": 0.0,
+        "epsilon_mean": 0.0,
+        "epsilon_is_zero": true
+      }
+    },
+    "718M_D6_segment": {
+      "label": "718M D6-segment (toy stand-in)",
+      "toy_hidden": 32,
+      "role": "non_grow",
+      "optimizer_reset_on_resume": false,
+      "ratios": {
+        "rho_sr": {
+          "value": 158.78526306152344,
+          "na_reason": null
+        },
+        "rho_noise": {
+          "value": 0.0,
+          "na_reason": null
+        },
+        "rho_rank": {
+          "value": null,
+          "na_reason": "N/A-no-rung2"
+        },
+        "rho_grow": {
+          "value": null,
+          "na_reason": "N/A-no-rung2"
+        },
+        "rho_spec": {
+          "value": null,
+          "na_reason": "N/A-by-construction: not the grow-event checkpoint (rho_spec is defined only at the rung-1 pre-grow state)."
+        },
+        "rho_batch": {
+          "value": 9.74987127916071,
+          "na_reason": null
+        },
+        "rho_block": {
+          "value": null,
+          "na_reason": "N/A (structural): production optimizer state is bf16-native end to end (scripts/ember_d6_bf16_momentum_ab.py measured this directly -- AdamW/_Muon zeros_like(g) inherits the bf16 param/grad dtype, nothing promotes to fp32); no 8-bit optimizer-state path exists to apply this formula to."
+        }
+      },
+      "engagement_assertions_passed": [
+        "checkpoint_sha_recorded",
+        "in_copy_update_source_state_bitwise_unchanged",
+        "probe_batch_sha_matches",
+        "lr_schedule_tokens_stamped",
+        "state_provenance_stamped",
+        "all_seven_ratios_have_value_or_na_reason"
+      ],
+      "net2net_epsilon_measurement": {
+        "epsilon_max": 0.0,
+        "epsilon_mean": 0.0,
+        "epsilon_is_zero": true
+      }
+    },
+    "1_22B_rung1": {
+      "label": "1.22B rung-1 (toy stand-in)",
+      "toy_hidden": 48,
+      "role": "grow_event",
+      "optimizer_reset_on_resume": true,
+      "ratios": {
+        "rho_sr": {
+          "value": 89.21809387207031,
+          "na_reason": null
+        },
+        "rho_noise": {
+          "value": 0.0,
+          "na_reason": null
+        },
+        "rho_rank": {
+          "value": null,
+          "na_reason": "N/A-no-rung2"
+        },
+        "rho_grow": {
+          "value": null,
+          "na_reason": "N/A-no-rung2"
+        },
+        "rho_spec": {
+          "value": null,
+          "na_reason": "N/A-with-reason=production-reset: optimizer_reset_on_resume=True for this checkpoint (runtime-read from its own receipt) -- the momentum matrix does not carry state across the grow, so there is no M to measure. This N/A is itself a law-relevant finding, per spec."
+        },
+        "rho_batch": {
+          "value": 11.239642509876235,
+          "na_reason": null
+        },
+        "rho_block": {
+          "value": null,
+          "na_reason": "N/A (structural): production optimizer state is bf16-native end to end (scripts/ember_d6_bf16_momentum_ab.py measured this directly -- AdamW/_Muon zeros_like(g) inherits the bf16 param/grad dtype, nothing promotes to fp32); no 8-bit optimizer-state path exists to apply this formula to."
+        }
+      },
+      "engagement_assertions_passed": [
+        "checkpoint_sha_recorded",
+        "in_copy_update_source_state_bitwise_unchanged",
+        "probe_batch_sha_matches",
+        "lr_schedule_tokens_stamped",
+        "state_provenance_stamped",
+        "all_seven_ratios_have_value_or_na_reason"
+      ],
+      "net2net_epsilon_measurement": {
+        "epsilon_max": 0.0,
+        "epsilon_mean": 0.0,
+        "epsilon_is_zero": true
+      }
+    }
+  },
+  "provenance_mismatch": true,
+  "commutation_defect": {
+    "d_comm": 1.440231778698282,
+    "numerator_rms": 0.0014173700474202633,
+    "denominator_rms": 0.0009841263527050614,
+    "step_rms_post": 0.0010005503427237272,
+    "pushforward_step_rms": 0.0009841263527050614,
+    "cos_alignment": -0.019972408190369606
+  },
+  "per_class_verdict": {
+    "attention": {
+      "verdict": "UNRESOLVED",
+      "reason": "structurally absent: toy dry-run model is FF-only (no attention block) -- recorded, not silently omitted."
+    },
+    "ff": {
+      "verdict": "UNRESOLVED",
+      "reason": "provenance-mismatch: optimizer-state provenance differs in kind across the three checkpoints; cross-width comparison is invalid, never compared across the discontinuity."
+    },
+    "embedding": {
+      "verdict": "UNRESOLVED",
+      "reason": "structurally absent: embedding-class rho_SR needs a Muon-routed 2D embedding tensor; this toy model routes embed/head to AdamW per split_param_groups convention (embed/head excluded from Muon) -- consistent with production routing, recorded."
+    }
+  },
+  "headline_verdict": {
+    "verdict": "UNRESOLVED",
+    "per_class": {
+      "attention": {
+        "verdict": "UNRESOLVED",
+        "reason": "structurally absent: toy dry-run model is FF-only (no attention block) -- recorded, not silently omitted."
+      },
+      "ff": {
+        "verdict": "UNRESOLVED",
+        "reason": "provenance-mismatch: optimizer-state provenance differs in kind across the three checkpoints; cross-width comparison is invalid, never compared across the discontinuity."
+      },
+      "embedding": {
+        "verdict": "UNRESOLVED",
+        "reason": "structurally absent: embedding-class rho_SR needs a Muon-routed 2D embedding tensor; this toy model routes embed/head to AdamW per split_param_groups convention (embed/head excluded from Muon) -- consistent with production routing, recorded."
+      }
+    },
+    "reason": "at least one class is UNRESOLVED (missing-point or provenance-mismatch) -- headline cannot be computed."
+  },
+  "note": "dry-run at toy widths over a 4-microbatch frozen batch -- per-checkpoint ratio values are NOT research-conclusive; they demonstrate the harness computes and gates on them correctly, nothing more."
+}
