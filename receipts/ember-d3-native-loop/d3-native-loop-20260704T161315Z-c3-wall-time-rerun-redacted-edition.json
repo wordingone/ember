@@ -50,7 +50,7 @@
     "length": 12,
     "num_rows_total": 565,
     "offset": 8,
-    "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
+    "source_url": "httplocal:rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
     "split": "train"
   },
   "field_level_status": "progress_not_field_breakthrough",
@@ -1434,5 +1434,6 @@
   "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS",
   "derived_from": "d3-native-loop-20260704T161315Z-c3-wall-time-rerun.json",
   "original_sha256": "3d7f48ba910d9cfcfff4c2a428f7050f00da8f4065a2fc13c736ad99e5052258",
-  "redaction_convention": "Absolute local filesystem paths in the original replaced per two rules: (1) any path rooted at the private state tree (contains an operator-name path segment) is replaced with the literal token '<local-state-path>/' followed only by the path's tail relative to that state dir; (2) any path rooted at this repo's own local checkout drive+directory prefix is normalized to a plain repo-relative path (same file, no machine-specific prefix). No field value's substance (scores, hashes, verdicts) is altered -- only these path strings."
+  "redaction_convention": "Absolute local filesystem paths in the original replaced per two rules: (1) any path rooted at the private state tree (contains an operator-name path segment) is replaced with the literal token '<local-state-path>/' followed only by the path's tail relative to that state dir; (2) any path rooted at this repo's own local checkout drive+directory prefix is normalized to a plain repo-relative path (same file, no machine-specific prefix). No field value's substance (scores, hashes, verdicts) is altered -- only these path strings.",
+  "redaction_note": "repo-root absolute paths rewritten repo-relative; other local paths redacted to local:<basename>; semantic content otherwise unchanged (coordinator-ordered redaction at landing, 2026-07-09, refs 523)"
 }

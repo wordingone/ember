@@ -38,7 +38,7 @@
     "length": 12,
     "num_rows_total": 565,
     "offset": 8,
-    "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
+    "source_url": "httplocal:rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
     "split": "train"
   },
   "field_level_status": "progress_not_field_breakthrough",
@@ -1419,5 +1419,6 @@
   "technique_receipt_sha256": "75ef848f06ce6f1d54223ae3a1c602ec6de721da245abaf230f7c7480ed42d25",
   "ticket": "EMBER-D3-NATIVE-PROPOSER-LOOP",
   "ts": "20260622T145023Z",
-  "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS"
+  "verdict": "D3_NATIVE_PROPOSER_LOOP_PROGRESS_PASS",
+  "redaction_note": "repo-root absolute paths rewritten repo-relative; other local paths redacted to local:<basename>; semantic content otherwise unchanged (coordinator-ordered redaction at landing, 2026-07-09, refs 523)"
 }

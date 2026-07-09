@@ -91,5 +91,6 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "ticket": "EMBER-D3-PROSPECTIVE-EXECUTION-PREFLIGHT",
   "ts": "20260622T135824Z",
-  "verdict": "D3_PROSPECTIVE_EXECUTION_BLOCKED"
+  "verdict": "D3_PROSPECTIVE_EXECUTION_BLOCKED",
+  "redaction_note": "repo-root absolute paths rewritten repo-relative; other local paths redacted to local:<basename>; semantic content otherwise unchanged (coordinator-ordered redaction at landing, 2026-07-09, refs 523)"
 }

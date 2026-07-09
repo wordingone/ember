@@ -151,8 +151,9 @@
     }
   ],
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
-  "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
+  "source_url": "httplocal:rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=8&length=12",
   "split": "train",
   "ticket": "EMBER-D3-GYM-FRESH-ROWS",
-  "ts": "20260620T230700Z"
+  "ts": "20260620T230700Z",
+  "redaction_note": "repo-root absolute paths rewritten repo-relative; other local paths redacted to local:<basename>; semantic content otherwise unchanged (coordinator-ordered redaction at landing, 2026-07-09, refs 523)"
 }

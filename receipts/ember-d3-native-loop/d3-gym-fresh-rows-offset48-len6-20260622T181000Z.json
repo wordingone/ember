@@ -93,7 +93,7 @@
   ],
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "source_response_sha256": "db866c8b4aa27af130124985c886883e172bc018e17135e424b817a9c5c9b477",
-  "source_url": "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=48&length=6",
+  "source_url": "httplocal:rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=48&length=6",
   "split": "train",
   "task_id_span": {
     "first": "task_49",
@@ -109,5 +109,6 @@
   ],
   "ticket": "EMBER-D3-HF-MATERIALIZE-ROWS",
   "ts": "20260622T155127Z",
-  "verdict": "D3_HF_ROWS_MATERIALIZED"
+  "verdict": "D3_HF_ROWS_MATERIALIZED",
+  "redaction_note": "repo-root absolute paths rewritten repo-relative; other local paths redacted to local:<basename>; semantic content otherwise unchanged (coordinator-ordered redaction at landing, 2026-07-09, refs 523)"
 }
