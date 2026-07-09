@@ -2025,6 +2025,13 @@ def derive_continuation_arch(checkpoint_dir: str, real_arch: dict) -> dict:
     return arch
 
 
+# Sentinel distinguishing "caller did not pass mmap_cache_dir at all" from an
+# explicit None (legacy opt-out) or an explicit path (opt-in) -- same
+# convention as timeshare_pretrain.run_v0_segment's
+# _RUN_V0_SEGMENT_MMAP_CACHE_DIR_UNSET (issue #570/#573).
+_RUN_PHASE2_LIVE_MMAP_CACHE_DIR_UNSET = object()
+
+
 def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
                      eval_every: int, checkpoint_every: int,
                      target_eval_loss: float, seed: int, device: str,
@@ -2032,7 +2039,9 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
                      loader=None, rung_receipt: dict | None = None,
                      progress_path: str | None = None,
                      continue_from: str | None = None,
-                     warmup_steps: int | None = None) -> dict:
+                     warmup_steps: int | None = None,
+                     mmap_cache_dir: str | None = _RUN_PHASE2_LIVE_MMAP_CACHE_DIR_UNSET,
+                     ) -> dict:
     """Real control leg, REWORKED to the full matched-recipe control (issue
     #82 live-fire finding 2, 2026-07-04): the prior plain-AdamW single-
     optimizer design OOM'd at 17.32GiB allocated + 1.61GiB fragmentation-
@@ -2170,8 +2179,25 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
 
     if loader is None:
         from timeshare_pretrain import PackedShardLoader
+        # mmap_cache_dir (issue #575): omitted -> sane default under THIS
+        # segment's own out_dir (`<out_dir>/mmap_cache`), so any caller that
+        # reaches this fallback construction (never passing a pre-built
+        # loader) automatically gets the fragmentation-safe streamed-memmap
+        # path over a real-corpus shard_dir. Explicit None still preserves
+        # the legacy np.fromfile+np.concatenate path byte-for-byte. Both
+        # current callers (main_live, p1_envelope_sweep.py) always pass an
+        # explicit pre-built `loader=`, so this branch is not live-exercised
+        # today -- fixed defensively so it can never silently regress to the
+        # #570/#575 ArrayMemoryError class if a future caller omits loader.
+        if mmap_cache_dir is _RUN_PHASE2_LIVE_MMAP_CACHE_DIR_UNSET:
+            mmap_cache_dir = os.path.join(out_dir, "mmap_cache")
         loader = PackedShardLoader(shard_dir, real_arch["seq"],
-                                   n_mtp=real_arch["n_mtp"])
+                                   n_mtp=real_arch["n_mtp"],
+                                   mmap_cache_dir=mmap_cache_dir)
+        assert (loader.mmap_cache_report is not None) == (mmap_cache_dir is not None), (
+            f"W1_LIVE_MMAP_CACHE_DIR_FORWARD_BROKEN: mmap_cache_dir={mmap_cache_dir!r} "
+            f"but mmap_cache_report={loader.mmap_cache_report!r} -- forwarding "
+            "invariant violated (issue #575)")
 
     _pace_reset()
     eval_trace: list[dict] = []
@@ -2544,8 +2570,24 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     eval_every = args.live_eval_every or REAL_EVAL_CADENCE_K
     checkpoint_every = args.live_checkpoint_every or eval_every
 
+    # mmap_cache_dir (issue #575): this real live entrypoint (--shard-dir is
+    # a real, potentially large external corpus) never forwarded the
+    # parameter at all -- sane default under THIS run's own out_dir
+    # (`<out_dir>/mmap_cache`, out_dir already resolved above), the same
+    # fragmentation-safe streamed-memmap path timeshare_pretrain.
+    # run_v0_segment's callers get automatically (issue #570/#573). No CLI
+    # opt-out flag exists yet, matching #573/#575's "surgical forwarding
+    # only" scope -- this is the exact ArrayMemoryError class the memmap
+    # cache exists to kill, at real-corpus scale, so the default engages
+    # unconditionally.
+    mmap_cache_dir = os.path.join(out_dir, "mmap_cache")
     eval_loader = PackedShardLoader(args.shard_dir, real_arch["seq"],
-                                    n_mtp=real_arch["n_mtp"])
+                                    n_mtp=real_arch["n_mtp"],
+                                    mmap_cache_dir=mmap_cache_dir)
+    assert (eval_loader.mmap_cache_report is not None) == (mmap_cache_dir is not None), (
+        f"W1_LIVE_MMAP_CACHE_DIR_FORWARD_BROKEN: mmap_cache_dir={mmap_cache_dir!r} "
+        f"but mmap_cache_report={eval_loader.mmap_cache_report!r} -- forwarding "
+        "invariant violated (issue #575)")
 
     decontam_receipt = None
     launch_gate_result = None
