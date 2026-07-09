@@ -1,0 +1,63 @@
+{
+  "receipt_type": "process-visibility",
+  "ts_utc": "2026-07-09T13:37:00Z",
+  "author": "coordinator",
+  "window": "2026-07-09 morning-midday coordination window (continuation of 124202Z receipt)",
+  "covered_master_range": {
+    "from": "e042f6e",
+    "to": "d1803e3f9f3d5085ce30892ea1b55ec02b80531d"
+  },
+  "merges_this_window": [
+    {
+      "pr": 554,
+      "mergedAt": "2026-07-09T13:08:25Z",
+      "subject": "W1c certification re-scope (#372): emit-boilerplate-keys, two-part certification, conservative-drop, unguarded tier-2 e2e"
+    },
+    {
+      "pr": 555,
+      "subject": "paper shields (#552): contamination scan, provenance manifest, compute-ledger emit+backfill"
+    },
+    {
+      "pr": 556,
+      "mergedAt": "2026-07-09T13:31:26Z",
+      "sha": "d1803e3f",
+      "subject": "watchdog freshness (#545) + model-server parent tether (#110) + marker-expiry enforcement (#464)"
+    }
+  ],
+  "prs_open": [
+    {
+      "pr": 557,
+      "state": "GATED",
+      "note": "spend-annex regen; held on generator provenance + consumer check"
+    },
+    {
+      "pr": 551,
+      "state": "OPEN",
+      "note": "board totality re-render in progress; supersedes 121022Z render"
+    }
+  ],
+  "prs_closed_unmerged": [
+    {
+      "pr": 553,
+      "note": "W1c harvest adjudicated file-by-file: dead/superseded/regression content; missing orchestrator re-specced as issue 558"
+    }
+  ],
+  "issues_filed": [
+    552,
+    558
+  ],
+  "delegation_shape": {
+    "lanes_active": [
+      "stab480 (sonnet, GPU stabilize leg + narrow momentum-transplant hybrid, GO 13:30Z)",
+      "ops545 (haiku, watchdog deploy + capability smoke)",
+      "boardrun37 (haiku, board re-render into PR 551)",
+      "annex17 (haiku, spend-annex regen, gated)",
+      "cliiso56 (haiku, issue 56 test isolation)",
+      "rework372 (sonnet-class context, issue 558 assigned)"
+    ],
+    "coordinator_role": "spec authorship, merge gates, rulings (transplant-hybrid GO; 553 close), operator conversation",
+    "operator_correction_intake": "2026-07-09 core-mechanism-over-machinery ratio: work-loop CORE-MECHANISM RATIO clause installed (mechanism-first dispatch, WHY-valve deleted, just-in-time machinery test); audit cron 2h->4h; research default re-set to theory-predicted rung-3 exponent"
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}

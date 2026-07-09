@@ -1,0 +1,39 @@
+{
+  "ticket": "EMBER-PROCESS-VISIBILITY",
+  "ts": "20260709T124202Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue_urls": [
+    "https://github.com/wordingone/ember/issues/123#issuecomment-4925052695",
+    "https://github.com/wordingone/ember/issues/552",
+    "https://github.com/wordingone/ember/issues/56#issuecomment-4925118276",
+    "https://github.com/wordingone/ember/issues/449",
+    "https://github.com/wordingone/ember/issues/480"
+  ],
+  "open_prs": [
+    "#551 (board totality landing; post-#549 re-render being added in-place)"
+  ],
+  "covered_commits": [
+    "31a316d docs: board refresh 20260709 (#543)",
+    "64823a8 chore: audit-trail landing + path redaction (#548)",
+    "539b856 fix(#537): C2 restore byte-exact d3 evidence + gate revision (#549)",
+    "9c225a0 fix(#544): <ROOT> placeholder for run-root in receipts (#547)",
+    "e042f6e feat(#449): eps0 gate-fingerprint rider (#550)"
+  ],
+  "delegation": {
+    "shape": "coordinator judges receipts only; all execution laned",
+    "lanes_this_window": [
+      "boardrun37 (haiku, board render + landing PR #551)",
+      "shields552 (haiku, #552 A/B/C build)",
+      "c2restore537 (landed #549, closed)",
+      "eps0rider (landed #550, closed)",
+      "pathsprobe544 (landed #547; worktree-restoration remediation owed)",
+      "rework372 (work pushed on 2 branches, report-silent; harvest lane dispatched)",
+      "stab480 (sonnet, #480 leg-1 building)",
+      "ops545 (haiku, watchdog legs building)"
+    ],
+    "panel": "research tick 28 workflow wf_96e944fa-4d1 (2 fable-low seats + 1 sonnet verify; RESEARCH-LOOP-FABLE-PANEL)"
+  },
+  "window_note": "Landing chain 543-550 receipt-genuine per audit-20260709T123516Z; C2 restored on master, flip verification pending post-#549 render in #551. Evidence-bar calibration register v1 posted to #123. Publication state: all landed receipts published via PRs; no unpublished landings; #551 open and declared.",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
