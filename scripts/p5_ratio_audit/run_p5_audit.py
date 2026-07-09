@@ -333,6 +333,7 @@ RECEIPTS = os.path.join(REPO_ROOT, "receipts")
 sys.path.insert(0, SCRIPTS_DIR)
 
 from receipt_write import checked_write  # noqa: E402  (light; no torch)
+import timeshare_pretrain as ts  # noqa: E402  (light; no torch at module level -- #580)
 
 # ---------------------------------------------------------------------------
 # Frozen constants (pre-registration v1.1 -- never change without a dated
@@ -1255,29 +1256,86 @@ def compute_d_comm(theta_k, U_k_apply, U_kplus1_apply, G_apply) -> dict:
 
 
 def resolve_gate_momentum_buffer(model_state, opt_state, gate_key: str):
-    """#513 fix: resolves the real Muon momentum buffer for gate_key from a
-    loaded optimizer.pt, keyed by INTEGER param id -- the production
-    on-disk convention (`{'muon': {'state': {int_param_id: {'momentum_'
-    'buffer': ...}}}}`, verified against a real checkpoint's optimizer.pt),
-    tolerant of a flat `{'state': {int_param_id: {...}}}` nesting too. The
-    param id is `list(model_state.keys()).index(gate_key)` -- same
-    convention as the already-fixed B1M path in
-    scripts/cbase_grow_rung2_event.py (issue #466). Returns the tensor, or
-    None if the key/id truly is not present (caller decides fail-closed vs.
-    N/A). Prior code read `opt_state['state'][gate_key]` -- a STRING key at
-    the TOP level -- which never matches the real nesting and silently fell
-    through to a zeros_like substitution (#513: the b3 d_comm arms measured
-    on a silently-zeroed buffer)."""
+    """#580 fix: resolves the real Muon momentum buffer for gate_key from a
+    loaded optimizer.pt, keyed by its MUON-LOCAL split_param_groups position
+    -- the real on-disk convention (`{'muon': {'state': {muon_local_id:
+    {'momentum_buffer': ...}}}}`, verified by constructing the actual model
+    and calling split_param_groups directly: #577 F1 confirmed the on-disk
+    muon state has exactly 140 keys 0-139, matching split_param_groups's
+    muon count exactly), tolerant of a flat `{'state': {muon_local_id:
+    {...}}}` nesting too.
+
+    Uses timeshare_pretrain.build_optimizer_id_maps(model_state=...) -- the
+    ONE authoritative mapping helper (issue #580); no site computes
+    `.index()` against a state-dict key list here anymore.
+
+    Prior code (#513-era, this same function) computed
+    `param_id = list(model_state.keys()).index(gate_key)` -- the GLOBAL
+    model-state position -- and used it as a key into this MUON-LOCAL-keyed
+    dict. The two numberings diverge as soon as any AdamW-routed param
+    (embed/norm/head) interposes ahead of gate_key in the global ordering;
+    ground-truthed by #577's investigation (74 shape mismatches: 60 FF
+    tensors across all 20 layers misfiled + 25 unrelated attention slots
+    clobbered when the same conflated convention was used on the write
+    side). Returns the tensor, or None if the key/id truly is not present
+    (caller decides fail-closed vs. N/A). Still tolerant of the historical
+    top-level string-keyed 'state' shape resolving to None (#513's own
+    regression guard: that shape must never silently resolve to something)."""
     if opt_state is None or model_state is None:
         return None
-    param_names = list(model_state.keys())
-    if gate_key not in param_names:
+    if gate_key not in model_state:
         return None
-    param_id = param_names.index(gate_key)
+    id_maps = ts.build_optimizer_id_maps(model_state=model_state)
+    muon_id = id_maps["muon_name_to_id"].get(gate_key)
+    if muon_id is None:
+        return None
     state_dict = opt_state.get("muon", {}).get("state")
     if not state_dict:
         state_dict = opt_state.get("state", {})
-    return state_dict.get(param_id, {}).get("momentum_buffer")
+    return state_dict.get(muon_id, {}).get("momentum_buffer")
+
+
+def enumerate_missing_optimizer_state_ids(model_state: dict, opt_state: dict) -> set[int]:
+    """#580 fix: the shared, correctly-indexed re-implementation of the
+    truncation checker (formerly a private helper of the same name,
+    underscore-prefixed, duplicated inside
+    scripts/cbase_grow_rung2_stabilize.py's write path -- that duplicate is
+    PR B's concern, refactoring the write side onto this shared function).
+
+    For every parameter, checks presence in ITS OWN routed optimizer
+    sub-dict at ITS OWN correct LOCAL split_param_groups position (via
+    timeshare_pretrain.build_optimizer_id_maps -- the one authoritative
+    mapping helper), then reports any miss translated back to the
+    parameter's GLOBAL model-state id (same externally-visible id
+    convention the prior implementation returned, for caller compatibility).
+
+    The prior implementation compared `set(muon_state.keys()) |
+    set(adamw_state.keys())` -- both LOCAL 0-based id spaces -- against
+    `range(len(model_state))`, a GLOBAL-sized range. Because a healthy
+    split-optimizer checkpoint's muon/adamw LOCAL id spaces always span
+    0..n_muon-1 and 0..n_adamw-1 respectively, their union is just
+    0..max(n_muon, n_adamw)-1 -- so the old checker reported every global id
+    at or beyond that bound as "missing" purely by construction (n_muon and
+    n_adamw, never a real gap), which is exactly the mechanical false
+    positive #577's ruling delta identified (the checker's own artifact
+    generated the "45-tensor truncation" narrative it then disclosed).
+
+    Read-only forensics, no mutation."""
+    if not model_state or not opt_state:
+        return set()
+    id_maps = ts.build_optimizer_id_maps(model_state=model_state)
+    muon_state = opt_state.get("muon", {}).get("state")
+    if not muon_state:
+        muon_state = opt_state.get("state", {})
+    adamw_state = opt_state.get("adamw", {}).get("state") or {}
+    missing_global_ids = set()
+    for name, local_id in id_maps["muon_name_to_id"].items():
+        if local_id not in muon_state:
+            missing_global_ids.add(id_maps["global_name_to_id"][name])
+    for name, local_id in id_maps["adamw_name_to_id"].items():
+        if local_id not in adamw_state:
+            missing_global_ids.add(id_maps["global_name_to_id"][name])
+    return missing_global_ids
 
 
 def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_model_state, post_opt_state,
