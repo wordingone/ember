@@ -10,6 +10,7 @@ import {
   hashPair,
 } from "../services/highlight-cache.ts";
 import { populateHighlight } from "../services/syntax-highlight.ts";
+import { color } from "./design-system.ts";
 
 // Re-export shared cache primitives for backward-compatibility.
 export { LRUCache, HIGHLIGHT_CACHE_MAX, highlightCache, hashPair };
@@ -215,7 +216,12 @@ export function Markdown({ content }: MarkdownProps): React.ReactElement {
     switch (node.type) {
       case "heading": {
         const weight = (node.level ?? 1) <= 2;
-        return React.createElement(Text, { key: idx, bold: weight }, node.content ?? "");
+        // Issue #581: headings carry the identity fg token (was bold-only, no color).
+        return React.createElement(
+          Text,
+          { key: idx, bold: weight, color: color("identity", "fg", "dark") },
+          node.content ?? "",
+        );
       }
       case "code_block": {
         return React.createElement(HighlightedCode, {
