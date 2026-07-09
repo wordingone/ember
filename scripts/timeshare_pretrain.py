@@ -1469,6 +1469,13 @@ def _restore_weights(saved):
 
 # --- assemble + run a v0 segment (full survivor stack) ---------------------
 
+# Sentinel distinguishing "caller did not pass mmap_cache_dir at all" from an
+# explicit None (legacy opt-out) or an explicit path (opt-in to a specific
+# dir) -- run_v0_segment's own default needs a computed run_dir-relative
+# path, which a plain `= None` default cannot express (issue #570).
+_RUN_V0_SEGMENT_MMAP_CACHE_DIR_UNSET = object()
+
+
 def run_v0_segment(
     run_dir: str,
     cfg: dict,
@@ -1494,6 +1501,7 @@ def run_v0_segment(
     requested_run: dict | None = None,
     grad_accum_steps: int = 1,
     offload_optimizer_state: bool = False,
+    mmap_cache_dir: str | None = _RUN_V0_SEGMENT_MMAP_CACHE_DIR_UNSET,
 ) -> dict:
     """Run a v0 pretrain segment with the full survivor stack against the
     frozen contract. CPU dry-run by default; the real c03 path is gated by the
@@ -1536,6 +1544,17 @@ def run_v0_segment(
       offload_optimizer_state — False (default; unchanged behavior).
         DEV-002 cure candidate 3/4: threaded to build_split_optimizer's
         offload_optimizer_state (see that function's docstring).
+      mmap_cache_dir — forwarded to PackedShardLoader (issue #570; the
+        loader-level opt-in feature itself is issue #118 P1 sweep,
+        2026-07-08). Sane default (parameter omitted entirely): a cache dir
+        under THIS run's own output tree (`<run_dir>/mmap_cache`), so every
+        run_v0_segment caller gets the fragmentation-safe streamed-memmap
+        path without having to opt in explicitly -- this is the actual bug
+        #570 fixes (the hardcoded `PackedShardLoader(shard_dir, seq, n_mtp)`
+        construction never gave callers the option at all). Explicit None
+        preserves the legacy np.fromfile+np.concatenate path byte-for-byte
+        (e.g. a caller with its own pinned cache location, or a synthetic
+        single-shard fixture too small to need it).
     """
     import torch
 
@@ -1587,7 +1606,9 @@ def run_v0_segment(
         toks[:: max(1, seq * 3)] = 0
         write_packed_shard(os.path.join(shard_dir, "synthetic-00000.bin"),
                            toks.astype(np.uint16).tolist())
-    loader = PackedShardLoader(shard_dir, seq, n_mtp)
+    if mmap_cache_dir is _RUN_V0_SEGMENT_MMAP_CACHE_DIR_UNSET:
+        mmap_cache_dir = os.path.join(run_dir, "mmap_cache")
+    loader = PackedShardLoader(shard_dir, seq, n_mtp, mmap_cache_dir=mmap_cache_dir)
 
     # --- optimizer (Muon split, or AdamW-everything fallback RECEIPTED) ---
     optimizers, base_lrs, routing = build_split_optimizer(
