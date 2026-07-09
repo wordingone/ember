@@ -1,0 +1,22 @@
+{
+  "ticket": "EMBER-TOTALITY-DISCONFIRMATION-LEG",
+  "ts": "20260709T121406Z",
+  "kind": "gate",
+  "chk_name": "run_disconfirmation_leg",
+  "spec_ref": "gh issue #94 (C-DISC), phase-1 dossier + maintainer rulings R1-R7",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "checkers": {
+    "check_disconfirmation_triggers": {
+      "executed": true,
+      "exit_code": 0,
+      "verdict_line": "hinges=3  fired=0  violations=0  exit=PASS",
+      "verdict": "PASS",
+      "wall_s": 0.422,
+      "receipt_path": "<ROOT>\\scripts\\ember_totality\\receipts-disconfirmation\\disconfirmation-eval-20260709T121406Z.json",
+      "reason": null,
+      "checker_path": "<ROOT>\\scripts\\check_disconfirmation_triggers.py"
+    }
+  },
+  "overall_verdict": "PASS"
+}
