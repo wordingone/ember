@@ -1254,7 +1254,33 @@ def compute_d_comm(theta_k, U_k_apply, U_kplus1_apply, G_apply) -> dict:
     }
 
 
-def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_opt_state,
+def resolve_gate_momentum_buffer(model_state, opt_state, gate_key: str):
+    """#513 fix: resolves the real Muon momentum buffer for gate_key from a
+    loaded optimizer.pt, keyed by INTEGER param id -- the production
+    on-disk convention (`{'muon': {'state': {int_param_id: {'momentum_'
+    'buffer': ...}}}}`, verified against a real checkpoint's optimizer.pt),
+    tolerant of a flat `{'state': {int_param_id: {...}}}` nesting too. The
+    param id is `list(model_state.keys()).index(gate_key)` -- same
+    convention as the already-fixed B1M path in
+    scripts/cbase_grow_rung2_event.py (issue #466). Returns the tensor, or
+    None if the key/id truly is not present (caller decides fail-closed vs.
+    N/A). Prior code read `opt_state['state'][gate_key]` -- a STRING key at
+    the TOP level -- which never matches the real nesting and silently fell
+    through to a zeros_like substitution (#513: the b3 d_comm arms measured
+    on a silently-zeroed buffer)."""
+    if opt_state is None or model_state is None:
+        return None
+    param_names = list(model_state.keys())
+    if gate_key not in param_names:
+        return None
+    param_id = param_names.index(gate_key)
+    state_dict = opt_state.get("muon", {}).get("state")
+    if not state_dict:
+        state_dict = opt_state.get("state", {})
+    return state_dict.get(param_id, {}).get("momentum_buffer")
+
+
+def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_model_state, post_opt_state,
                                gate_key: str, up_key: str, down_key: str,
                                pre_lr: float, post_lr: float,
                                grad_pre_gate, grad_post_gate):
@@ -1269,13 +1295,31 @@ def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_opt_state,
     copy net2net_widen_linear that --selftest/--dry-run use). U_k uses
     pre-grow's own (parent-carried) momentum_buffer + LR; U_{k+1} uses
     post-grow's own (fresh) momentum_buffer + LR -- both admissible per
-    real_inventory_provenance()."""
+    real_inventory_provenance().
+
+    #513 fix: both buffers resolve via resolve_gate_momentum_buffer() (real
+    int-param-id keying, never the old string-keyed top-level lookup) and
+    fail closed (EngagementFailure) on a missing/zero buffer rather than
+    silently substituting zeros_like -- UNLESS the caller passes
+    pre_opt_state/post_opt_state=None explicitly, which is the caller's own
+    disclosed "this arm is N/A / not needed" signal (e.g. a RESET arm built
+    from an explicit zero buffer elsewhere, or a closure whose U_{k+1} is
+    never invoked)."""
     import torch
     widen_state_dict = _import_production_widen()
 
-    pre_momentum = None
+    pre_momentum = resolve_gate_momentum_buffer(pre_model_state, pre_opt_state, gate_key)
     if pre_opt_state is not None:
-        pre_momentum = pre_opt_state.get("state", {}).get(gate_key, {}).get("momentum_buffer")
+        pre_buffer_rms = rms(pre_momentum) if pre_momentum is not None else 0.0
+        if pre_momentum is None or pre_buffer_rms <= 1e-10:
+            raise EngagementFailure(
+                f"#513 fail-closed: pre-grow momentum_buffer for {gate_key!r} is "
+                f"missing or zero (rms={pre_buffer_rms:.3e}) under the correct "
+                f"int-param-id resolver. Refusing to silently substitute "
+                f"zeros_like (the #513 defect). If this checkpoint genuinely has "
+                f"no prior optimizer momentum (initial training), pass "
+                f"pre_opt_state=None explicitly -- that is a disclosed N/A, not "
+                f"this refusal.")
 
     def U_k(theta_gate):
         buf = pre_momentum if pre_momentum is not None else torch.zeros_like(theta_gate)
@@ -1289,9 +1333,16 @@ def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_opt_state,
         return grown[gate_key]
 
     def U_kplus1(theta_gate_grown):
-        buf = None
+        buf = resolve_gate_momentum_buffer(post_model_state, post_opt_state, gate_key)
         if post_opt_state is not None:
-            buf = post_opt_state.get("state", {}).get(gate_key, {}).get("momentum_buffer")
+            buf_rms = rms(buf) if buf is not None else 0.0
+            if buf is None or buf_rms <= 1e-10:
+                raise EngagementFailure(
+                    f"#513 fail-closed: post-grow momentum_buffer for {gate_key!r} "
+                    f"is missing or zero (rms={buf_rms:.3e}) under the correct "
+                    f"int-param-id resolver. Refusing to silently substitute "
+                    f"zeros_like. Pass post_opt_state=None explicitly if this arm "
+                    f"is genuinely reset/zero-momentum by design.")
         if buf is None:
             buf = torch.zeros_like(theta_gate_grown)
         new_w, _, _ = _muon_step_in_copy(theta_gate_grown, grad_post_gate, buf, lr=post_lr)
@@ -1301,7 +1352,7 @@ def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_opt_state,
 
 
 def compute_d_comm_real_run(discovery: dict, grad_pre_gate, grad_post_gate,
-                            pre_model_state, pre_opt_state, post_opt_state,
+                            pre_model_state, pre_opt_state, post_model_state, post_opt_state,
                             pre_ff, post_ff,
                             pre_lr: float, post_lr: float, layer_index: int = 0) -> dict:
     """v1.2-upgraded HEADLINE deliverable: the real commutation defect at
@@ -1358,7 +1409,7 @@ def compute_d_comm_real_run(discovery: dict, grad_pre_gate, grad_post_gate,
     theta_gate = pre_model_state[gate_key].to(torch.float32)
 
     U_k, U_kplus1, G = build_real_d_comm_closures(
-        pre_model_state, pre_opt_state, post_opt_state, gate_key, up_key, down_key,
+        pre_model_state, pre_opt_state, post_model_state, post_opt_state, gate_key, up_key, down_key,
         pre_lr, post_lr, grad_pre_gate, grad_post_gate)
 
     result = compute_d_comm(theta_gate, U_k, U_kplus1, G)
@@ -1366,6 +1417,15 @@ def compute_d_comm_real_run(discovery: dict, grad_pre_gate, grad_post_gate,
     result["measurement_mode"] = "real-checkpoint"
     result["pre_grow_observed_ff"] = pre_ff
     result["post_grow_observed_ff"] = post_ff
+
+    # #513 receipt fields: the real (int-param-id-resolved) pre-side buffer
+    # rms actually consumed by U_k, and the LR actually used (from the
+    # resolved cfg passed in by the caller, never a script constant --
+    # #513's Fix item 4).
+    pre_momentum_for_receipt = resolve_gate_momentum_buffer(pre_model_state, pre_opt_state, gate_key)
+    result["pre_buffer_rms_consumed"] = (
+        rms(pre_momentum_for_receipt) if pre_momentum_for_receipt is not None else 0.0)
+    result["resolved_lr_muon"] = pre_lr
     return result
 
 
@@ -2426,12 +2486,24 @@ def run_and_emit_live() -> Path:
         grad_pre_gate = grad_pre.get(gate_key_full)
         grad_post_gate = grad_post.get(gate_key_full)
         if grad_pre_gate is not None and grad_post_gate is not None:
-            # Pass already-loaded states to avoid second round of checkpoint loading
-            d_comm_result = compute_d_comm_real_run(
-                discovery, grad_pre_gate, grad_post_gate,
-                pre_model_state, pre_opt_state, post_opt_state,
-                pre_ff, post_ff,
-                pre_lr=0.001, post_lr=0.001, layer_index=layer_index)
+            # #513: LR is the resolved cfg's lr_muon, never a script constant
+            # (the pre-registered P-3 forensic checks this is 0.02, not 0.015).
+            resolved_lr_muon = cfg["optimizer"]["lr_muon"]
+            try:
+                # Pass already-loaded states to avoid second round of checkpoint loading
+                d_comm_result = compute_d_comm_real_run(
+                    discovery, grad_pre_gate, grad_post_gate,
+                    pre_model_state, pre_opt_state, post_model_state, post_opt_state,
+                    pre_ff, post_ff,
+                    pre_lr=resolved_lr_muon, post_lr=resolved_lr_muon, layer_index=layer_index)
+            except EngagementFailure as e:
+                # #513 fix-closed: the RUNG1_LINEAGE pre-grow checkpoint is
+                # DERIVED (inverse net2net reconstruction, "no optimizer state
+                # carried" -- see RUNG1_LINEAGE metadata), so a missing/zero
+                # gate momentum here is a disclosed N/A, not a defect -- never
+                # silently computed on a substituted zero (that was #513).
+                d_comm_result = {"d_comm": "N/A-no-real-gate-momentum-buffer",
+                                 "reason": str(e)}
         else:
             d_comm_result = {"d_comm": "N/A-gate_grad_missing"}
 

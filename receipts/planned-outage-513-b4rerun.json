@@ -1,0 +1,29 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EVENT-PLANNED-OUTAGE-MARKER",
+  "ts": "2026-07-09T05:38:22.482170+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 513,
+  "refs": [
+    464,
+    466,
+    482,
+    498
+  ],
+  "run_id": "b513-b4rerun",
+  "reason": "issue #513 b4 re-run: VRAM margin assert (preflight) failed at 5.797GiB free vs 18.253GiB required (margin -12.456GiB); planned outage on the :8082 llama-server (PID 42900, Qwen3.6-27B-Q4_K_M.gguf, local:llama-turboquant) authorized by the team-lead ruling to free VRAM for the b3-phase forward+backward commutation-defect measurement.",
+  "issue_464_shape": true,
+  "owner": "b3fix513",
+  "expiry": "2026-07-09T05:46:18.776107+00:00",
+  "expiry_minutes": 30,
+  "target_pid": 42900,
+  "target_port": 8082,
+  "note": "issue #464 (standing liveness watchdogs) is OPEN/unimplemented as of this build -- this marker is a receipted disclosure + self-enforced time-box, not something a live watchdog currently reads. Never touches the ember body process (PID 44028).",
+  "closed_ts": "2026-07-09T05:38:22.482170+00:00",
+  "verdict": "SUPERSEDED_BY_UNKNOWN_SUPERVISOR_AUTORESTART",
+  "closed_note": "PID 42900 killed 2026-07-09T05:30-31Z (kill-receipt appended to local:kill-receipts.jsonl BEFORE the kill, verified). VRAM did NOT drop (stayed ~18.32GB used / 5.82GB free before and after). Discovered an UNAUTHORIZED-BY-ME, previously-undisclosed process PID 23092 (parent of both the original 42900 and the new replacement) auto-relaunched an identical llama-server.exe instance as PID 15720 on :8082 within ~1-2 minutes of the kill (CreationDate 2026-07-08T22:33:01-07:00 local = 2026-07-09T05:33:01Z), same cmdline, same model. :8082 health + /v1/models identity verified OK against the new PID 15720 -- service integrity preserved, no data loss. But the outage produced ZERO usable VRAM margin: the b4rerun preflight would still REFUSE at the same -12.456GiB margin. Also separately observed: 'ember body' PID 44028 (named in the team-lead ruling as never-touch) is NO LONGER RUNNING (wmic returns no instance) -- unclear if this is expected/planned by another lane or an anomaly; not touched or acted on, reported as an observation only. Neither PID 23092 (supervisor) nor 44028 (ember body) is in my authorized scope (marker target_pid was 42900 only) -- escalating to team-lead rather than guessing at further kills. Marker closed here; no b1/b1m/b2/b3 phases were run.",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "redaction_note": "local filesystem paths redacted to local:<basename> form for repo-guard compliance; semantic content otherwise unchanged (coordinator-ordered redaction at landing, 2026-07-09)"
+}
