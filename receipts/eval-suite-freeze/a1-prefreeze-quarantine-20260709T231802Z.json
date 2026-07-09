@@ -1,0 +1,139 @@
+{
+  "ticket": "A1-PREFREEZE-QUARANTINE",
+  "ts": "2026-07-09T23:18:02.510369+00:00",
+  "schema": "a1-prefreeze-quarantine/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#593",
+    "#123",
+    "#591"
+  ],
+  "enumeration_source": {
+    "file_set": "git ls-files receipts/ (every tracked receipt at the PR base)",
+    "n_files_enumerated": 1005,
+    "n_files_unreadable": 0,
+    "hash_markers": {
+      "suite_a_batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+      "suite_b:MMLU-Pro": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
+      "suite_b:GSM8K": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+      "suite_b:MATH-500": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+      "suite_b:ARC-Challenge": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+      "suite_b:HumanEval+": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+      "suite_b:MBPP": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
+      "suite_b:HellaSwag": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f"
+    },
+    "name_markers": [
+      "eval-suite-v1",
+      "eval_suite_v1"
+    ],
+    "score_field_markers": [
+      "\"eval_loss",
+      "\"final_eval_loss\"",
+      "\"target_eval_loss\"",
+      "\"score\""
+    ],
+    "rule": "a receipt cites a suite iff its raw text contains any marker; every citing receipt is pre_freeze (the declaration lands in this PR, after all of them)"
+  },
+  "freeze_ts_ref": null,
+  "n_quarantined": 8,
+  "n_score_carrying": 6,
+  "n_pin_or_infrastructure": 2,
+  "rows": [
+    {
+      "id": "receipts/ember-c-scale/w1-certification-check-20260707T114707Z.json",
+      "ts": "20260707T114707Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "score-carrying",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "cites suite-(a)/(b) content and predates the A1 freeze declaration (this PR): development-only, quarantined from capability claims"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json",
+      "ts": "20260707T110256Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "score-carrying",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "cites suite-(a)/(b) content and predates the A1 freeze declaration (this PR): development-only, quarantined from capability claims"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json",
+      "ts": "20260707T135344Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "score-carrying",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "cites suite-(a)/(b) content and predates the A1 freeze declaration (this PR): development-only, quarantined from capability claims"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json",
+      "ts": "20260707T114517Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "score-carrying",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "cites suite-(a)/(b) content and predates the A1 freeze declaration (this PR): development-only, quarantined from capability claims"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1b-fp32-check-20260707T144427Z.json",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "score-carrying",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "cites suite-(a)/(b) content and predates the A1 freeze declaration (this PR): development-only, quarantined from capability claims"
+    },
+    {
+      "id": "receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json",
+      "ts": "20260708T121128Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_or_infrastructure",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "references suite-(a)/(b) pins pre-declaration: infrastructure/pin receipt, quarantined from capability claims (carries no eval-score fields)"
+    },
+    {
+      "id": "receipts/eval-suite-freeze/eval-suite-freeze-v1.json",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_or_infrastructure",
+      "markers_found": [
+        "suite_b:MMLU-Pro",
+        "suite_b:GSM8K",
+        "suite_b:MATH-500",
+        "suite_b:ARC-Challenge",
+        "suite_b:HumanEval+",
+        "suite_b:MBPP",
+        "suite_b:HellaSwag",
+        "name:eval-suite-v1"
+      ],
+      "why_quarantined": "references suite-(a)/(b) pins pre-declaration: infrastructure/pin receipt, quarantined from capability claims (carries no eval-score fields)"
+    },
+    {
+      "id": "receipts/p1-envelope-sweep/20260708T144213Z-point3.json",
+      "ts": "20260708T144213Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "score-carrying",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "cites suite-(a)/(b) content and predates the A1 freeze declaration (this PR): development-only, quarantined from capability claims"
+    }
+  ]
+}
