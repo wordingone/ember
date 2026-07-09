@@ -1,0 +1,15 @@
+{
+  "ticket": "C8-PRELAUNCH-O4-F2-GENERATOR-COMMIT",
+  "ts": "2026-07-09T18:51:39.787461Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "issue": 582,
+  "refs": [
+    123,
+    487,
+    449
+  ],
+  "code_sha": "e71077962ca4a2c1156534a0103b003edc57204f3cd184bb1198a7f27a55669a",
+  "convention": "t_1 = phi_star * C_claim; remaining = C_claim - t_1; segment = remaining / k; event_i = t_1 + (i-1)*segment for i=1..k (uniform spacing of the k-1 remainder events across the remaining FLOP interval, strictly before C_claim). k=1 degenerates to events=[t_1]. N is provenance-only metadata, not used in the event-time formula.",
+  "committed_before_gated_launch": true
+}
