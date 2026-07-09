@@ -936,6 +936,68 @@ def compute_working_set(repo_root=None):
     return working_set
 
 
+def sanitize_receipt_paths(receipt, run_root):
+    """Recursively replace all forms of run_root path with <ROOT> in receipt.
+
+    Replaces the run_root path in all string values (including JSON-escaped forms)
+    with the literal placeholder <ROOT>. Handles:
+    - Raw Windows path: B:\...\path
+    - Single-escaped: B:\\...\path (backslashes doubled in JSON strings)
+    - Double-escaped: B:\\\\...\path (backslashes quadrupled, nested JSON)
+    - Forward-slash form: B:/...//path
+
+    Does NOT modify numeric values, keys, or CHK/verdict logic.
+    """
+    if not run_root:
+        return receipt
+
+    # Normalize the run_root to handle both backslash and forward slash variants
+    run_root_norm = os.path.normpath(run_root)
+
+    # Build replacement set: all escaped forms of the path
+    replacements = []
+
+    # Raw path with backslashes (Windows native)
+    replacements.append(run_root_norm)
+
+    # Single-escaped (JSON repr adds one level of escaping)
+    replacements.append(run_root_norm.replace("\\", "\\\\"))
+
+    # Double-escaped (nested JSON in reason strings)
+    replacements.append(run_root_norm.replace("\\", "\\\\\\\\"))
+
+    # Forward-slash variant
+    replacements.append(run_root_norm.replace("\\", "/"))
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_replacements = []
+    for r in replacements:
+        if r not in seen:
+            seen.add(r)
+            unique_replacements.append(r)
+    replacements = unique_replacements
+
+    def sanitize_value(value):
+        """Recursively sanitize a single value."""
+        if isinstance(value, str):
+            # Replace all forms of the root path
+            result = value
+            for replacement in replacements:
+                result = result.replace(replacement, "<ROOT>")
+            return result
+        elif isinstance(value, dict):
+            return {k: sanitize_value(v) for k, v in value.items()}
+        elif isinstance(value, (list, tuple)):
+            sanitized = [sanitize_value(v) for v in value]
+            return type(value)(sanitized) if isinstance(value, tuple) else sanitized
+        else:
+            # Numeric, None, bool, etc. - leave unchanged
+            return value
+
+    return sanitize_value(receipt)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Ember totality board runner (see module docstring)."
@@ -1187,6 +1249,9 @@ def main():
 
     # Stamp the receipt with the constitutional invariant hash (fail-closed if mismatch)
     receipt = stamp(receipt, repo_root=REPO_ROOT)
+
+    # Sanitize run-root paths in the receipt before writing (issue #544)
+    receipt = sanitize_receipt_paths(receipt, effective_root)
 
     receipt_path = os.path.join(RECEIPTS_DIR, f"ember-totality-{ts}.json")
     with open(receipt_path, "w", encoding="utf-8") as fh:
