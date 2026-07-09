@@ -52,6 +52,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Import compute_ledger for Component C integration
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "paper"))
+try:
+    from compute_ledger import add_compute_ledger_to_receipt
+except ImportError:
+    def add_compute_ledger_to_receipt(receipt):
+        """Fallback if compute_ledger module not available."""
+        return receipt
+
 # ---------------------------------------------------------------------------
 # fp19_bench governing-floor constants (sha-pinned; never relax)
 # ---------------------------------------------------------------------------
@@ -1773,6 +1782,8 @@ def run_v0_segment(
         "pass": True,
         "verdict": "V0_SEGMENT_COMPLETE",
     }
+    # Component C: Add compute_ledger block (#552)
+    receipt = add_compute_ledger_to_receipt(receipt)
     return receipt
 
 
