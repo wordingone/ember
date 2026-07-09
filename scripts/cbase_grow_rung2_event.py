@@ -107,6 +107,7 @@ from receipt_write import checked_write                                 # noqa: 
 import timeshare_pretrain as ts                                         # noqa: E402
 from p5_ratio_audit.run_p5_audit import (                               # noqa: E402
     compute_d_comm, build_real_d_comm_closures, _muon_step_in_copy, rms,
+    resolve_gate_momentum_buffer,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -1059,12 +1060,24 @@ def phase_b3(args) -> dict:
     pre_lr = cfg["optimizer"]["lr_muon"]
     post_lr = cfg["optimizer"]["lr_muon"]
 
+    # #513: build_real_d_comm_closures gained a post_model_state parameter
+    # (4th positional now post_opt_state) so it can int-param-id-resolve the
+    # POST-side buffer too; this call never uses U_kplus1 (RESET/TRANSPLANT
+    # arms below build their own explicit-momentum closures), so both
+    # post_model_state and post_opt_state stay None -- the disclosed
+    # "this arm is not needed" signal, not a silent fallback.
     U_k, _gate_only_ukp1_unused, G = build_real_d_comm_closures(
-        pre_model_state, pre_opt_state, None, gate_key, up_key, down_key,
+        pre_model_state, pre_opt_state, None, None, gate_key, up_key, down_key,
         pre_lr, post_lr, torch.load(
             _make_path_absolute_from_receipt(b1m["cache_paths"]["grad_pre_gate"], data_root=data_root),
             weights_only=True).to(args.device),  # issue #486 device-placement fix
         grad_post_gate)
+
+    # #513 receipt fields: the real (int-param-id-resolved) pre-side gate
+    # momentum rms actually consumed by U_k above (never a script constant),
+    # and the resolved cfg's lr_muon actually used for both arms.
+    pre_buffer_rms_consumed = rms(resolve_gate_momentum_buffer(pre_model_state, pre_opt_state, gate_key))
+    resolved_lr_muon = pre_lr
 
     theta_gate = pre_model_state[gate_key].to(torch.float32)
 
@@ -1155,6 +1168,12 @@ def phase_b3(args) -> dict:
     else:
         band = "iii"
 
+    # #513 item 3: persist grad_post_gate alongside B1m's cached tensors --
+    # it is already computed above (line ~1057) and was the only tensor of
+    # the comparison not on disk; the #482 spectral completion consumes it.
+    b3_cache_paths = {"grad_post_gate": cache_dir / f"{run_id}-grad-post-gate.pt"}
+    torch.save(grad_post_gate, b3_cache_paths["grad_post_gate"])
+
     receipt = {
         "ticket": "CBASE-GROW-RUNG2-EVENT-B3", "ts": _timestamp_iso(),
         "invariant_sha256": INVARIANT_SHA256, "sha_convention": SHA_CONVENTION,
@@ -1181,6 +1200,12 @@ def phase_b3(args) -> dict:
             "band": band, "rule": "read off #449's frozen bands verbatim, never re-derived",
         },
         "d448_fields_present": True,
+        # #513 fix: the real (int-param-id-resolved) U_k pre-side gate
+        # momentum rms actually consumed (shared by both arms via U_k), and
+        # the resolved cfg lr_muon actually used -- never a script constant.
+        "pre_buffer_rms_consumed": pre_buffer_rms_consumed,
+        "resolved_lr_muon": resolved_lr_muon,
+        "cache_paths": {k: _make_path_repo_relative(v, data_root=data_root) for k, v in b3_cache_paths.items()},
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": "B3_CAPTURED",
     }

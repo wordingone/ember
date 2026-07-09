@@ -1,0 +1,51 @@
+{
+  "ticket": "P513-P3-FORENSIC",
+  "ts": "2026-07-09T04:11:08.829633+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 513,
+  "refs": [
+    482,
+    498,
+    449,
+    466
+  ],
+  "scope": "P-3 FORENSIC: CPU-only, no GPU. Records what the OLD (mis-keyed, string-top-level 'state') resolver returns for the gate momentum vs. the NEW (int-param-id, 'muon'.'state') resolver, against the real 2026-07-08 rung2-event remeasure run's b1-snapshot optimizer.pt, plus the resolved cfg lr_muon.",
+  "checkpoint": {
+    "relative_path": "models\\cbase-grow-rung\\rung2-event-grow-rung2-20260708-real\\b1-snapshot",
+    "models_root_env": "EMBER_MODELS_ROOT"
+  },
+  "gate_key": "backbone_model.layers.0.mlp.gate_proj.weight",
+  "old_resolver": {
+    "path": "opt_state['state'][gate_key]['momentum_buffer'] (STRING key, top-level)",
+    "result_present": false,
+    "rms": 0.0,
+    "missing_or_zero": true,
+    "pre_registered_expectation": "zero/missing",
+    "expectation_matched": true
+  },
+  "new_resolver": {
+    "path": "resolve_gate_momentum_buffer: opt_state['muon']['state'][param_id]['momentum_buffer'], param_id = list(model_state.keys()).index(gate_key)",
+    "result_present": true,
+    "rms": 0.00036056945100426674,
+    "pre_registered_cached_reference_rms": 0.00036057,
+    "reference_match_within_3e-7": true
+  },
+  "resolved_lr_muon": {
+    "config_source": "configs/v0-pretrain-config.json:optimizer.lr_muon",
+    "value": 0.02,
+    "pre_registered_expectation": 0.02,
+    "never_executed_script_constant": 0.015,
+    "expectation_matched": true
+  },
+  "pre_registered_kill_conditions_verbatim": "KILL: U_k-consumed buffer rms >= 1e-6 under the old resolver, or lr_muon = 0.015 in the resolved cfg.",
+  "kill_condition_evaluation": {
+    "kill_old_resolver_nonzero (rms>=1e-6)": false,
+    "kill_lr_muon_wrong (==0.015)": false,
+    "killed": false
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "PASS_NOT_KILLED"
+}
