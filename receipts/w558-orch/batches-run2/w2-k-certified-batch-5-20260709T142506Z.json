@@ -1,0 +1,147 @@
+{
+  "schema": "w2-k-certified-batches/v1",
+  "ts": "20260709T142506Z",
+  "spec_ref": "issue #558 (rebuild of #553 skeleton on the frozen two-part predicate, HeldoutCertifier + BoilerplateBloomIndex)",
+  "shard_dir": "<ROOT>",
+  "batch_no": 5,
+  "target_k": 10,
+  "achieved_k": 10,
+  "source": "gutenberg_en",
+  "batch_sha256": "b8b4806294c538cb70df292af2046518ffd377782950e6b7133d5eb4398c15d9",
+  "seq": 128,
+  "n_mtp": 0,
+  "batch_size": 16,
+  "window_tokens": 50,
+  "selected_window_indices": [
+    50558877,
+    50558878,
+    50558879,
+    50558880,
+    50558882,
+    50558887,
+    50558888,
+    50558890,
+    50558895,
+    50558896,
+    50558897,
+    50558899,
+    50558901,
+    50558903,
+    50558904,
+    50558905
+  ],
+  "certification_verdicts": [
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    },
+    {
+      "certified": true,
+      "reason": "certified",
+      "n_sub_windows": 79,
+      "failed_at_sub_window": null
+    }
+  ],
+  "disjoint_check": {
+    "held_out_window_start": 50558727,
+    "max_training_window_index_at_ceiling": 24527,
+    "arithmetic": "50558727 > 1533*16-1=24527",
+    "disjoint": true
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "pool_start": 50558875,
+      "pool_size": 32,
+      "clean_found": 16,
+      "dropped_found": 15
+    }
+  ],
+  "pass": true
+}

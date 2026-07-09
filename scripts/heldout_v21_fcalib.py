@@ -959,6 +959,43 @@ def _parse_f_values(csv: str):
     return tuple(float(x) for x in csv.split(","))
 
 
+def _write_boilerplate_keys_if_any(args, out_path: str) -> str | None:
+    """Write --boilerplate-keys-out for whatever sources are in
+    args._boilerplate_keys_by_source, regardless of whether every SOURCE_ORDER
+    source has completed this invocation or a prior one. Writing keys for a
+    completed SUBSET is the whole point of --only-sources + resumable
+    checkpointing (rework558 fix: this used to be gated on `not remaining`,
+    which meant every --only-sources partial run silently produced zero
+    keys output, even with --emit-boilerplate-keys set).
+
+    Returns the output path written, or None if nothing was collected.
+    """
+    if not (args.emit_boilerplate_keys and hasattr(args, '_boilerplate_keys_by_source')
+            and args._boilerplate_keys_by_source):
+        return None
+    boilerplate_keys_out = args.boilerplate_keys_out or os.path.join(
+        REPO, "receipts", f"heldout-v21-boilerplate-keys-{_utc_ts()}.json")
+    boilerplate_keys_serializable = {}
+    for source, keys_dict in args._boilerplate_keys_by_source.items():
+        boilerplate_keys_serializable[source] = {}
+        for f_key_str, keys_set in keys_dict.items():
+            boilerplate_keys_serializable[source][f_key_str] = [
+                key.hex() for key in keys_set
+            ]
+    with open(boilerplate_keys_out, "w", encoding="utf-8") as f:
+        json.dump({
+            "schema": "w2-boilerplate-keys/v1",
+            "ts": _utc_ts(),
+            "f": "1e-03",  # Recommended f value
+            "cap": args.cap,
+            "sources_included_this_write": sorted(boilerplate_keys_serializable),
+            "boilerplate_keys_by_source": boilerplate_keys_serializable,
+        }, f, indent=2)
+    print(f"[done] boilerplate keys written to {boilerplate_keys_out} "
+          f"(sources: {sorted(boilerplate_keys_serializable)})")
+    return boilerplate_keys_out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--selftest", action="store_true",
@@ -1235,6 +1272,15 @@ def main(argv=None):
               f"--only-sources covering the rest and the SAME --out "
               f"{out_path!r} to continue (this invocation's sources are "
               "preserved, never recomputed).")
+        # rework558 FIX: --emit-boilerplate-keys must not require ALL 5
+        # sources to complete before any keys are written. A resumable
+        # --only-sources run that emits keys for its completed subset (e.g.
+        # the two cheap sources gutenberg_en/ledger_mit) is exactly the
+        # --only-sources contract this flag is meant to support; gating the
+        # write on `not remaining` silently dropped every partial run's
+        # keys on the floor (discovered building #558's real-corpus AC1 --
+        # a 2-source run produced aggregate stats but no keys artifact).
+        _write_boilerplate_keys_if_any(args, out_path)
         return 0
 
     f_recommendation = recommend_f(per_source_results, args.f_values_parsed)
@@ -1248,28 +1294,7 @@ def main(argv=None):
     _write_checkpoint(final_receipt, out_path)
     print(f"[done] receipt written to {out_path}")
 
-    # RE-SCOPE #374: Write boilerplate keys if flag was set
-    if args.emit_boilerplate_keys and hasattr(args, '_boilerplate_keys_by_source'):
-        boilerplate_keys_out = args.boilerplate_keys_out or os.path.join(
-            REPO, "receipts", f"heldout-v21-boilerplate-keys-{_utc_ts()}.json")
-        # Convert byte keys to hex strings for JSON serialization
-        boilerplate_keys_serializable = {}
-        for source, keys_dict in args._boilerplate_keys_by_source.items():
-            boilerplate_keys_serializable[source] = {}
-            for f_key_str, keys_set in keys_dict.items():
-                # Store the byte keys in base64 encoding so they're JSON-safe
-                boilerplate_keys_serializable[source][f_key_str] = [
-                    key.hex() for key in keys_set
-                ]
-        with open(boilerplate_keys_out, "w", encoding="utf-8") as f:
-            json.dump({
-                "schema": "w2-boilerplate-keys/v1",
-                "ts": _utc_ts(),
-                "f": "1e-03",  # Recommended f value
-                "cap": args.cap,
-                "boilerplate_keys_by_source": boilerplate_keys_serializable,
-            }, f, indent=2)
-        print(f"[done] boilerplate keys written to {boilerplate_keys_out}")
+    _write_boilerplate_keys_if_any(args, out_path)
 
     return 0
 
