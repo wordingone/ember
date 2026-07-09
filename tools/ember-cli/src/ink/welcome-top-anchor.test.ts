@@ -1,12 +1,21 @@
-// welcome-top-anchor.test.ts — B7 item 2 regrade ("welcome void dominance", operator regrade
-// 2026-07-03): mounts the SAME building blocks repl.ts composes (transcript wrapper +
-// welcome/Homescreen + input-wrap + status-wrap) via the production frame parser, matching this
-// campaign's isolation-test lesson (an explicit-height/synthetic-Box stand-in hid instance 4's
-// bug entirely -- the wiring test must mount the SAME composition production uses, not a
-// convenient substitute). Covers both halves of transcriptJustifyContent's anchor flip:
-//   - welcome-only (fresh boot): panel top-anchors, so content starts near row 0.
-//   - welcome + a landed turn: transcript still bottom-anchors (hugs the prompt), unchanged from
-//     the existing B7 item 2 "kill the void" behavior.
+// welcome-top-anchor.test.ts — #561/#565: banner extraction (issue #561 P0-A item 3) turned the
+// welcome/board panel from a `messages[0]` transcript entry into an always-mounted, top-locked
+// region, structurally separate from the scrolling transcript below it (see screens/repl.ts's
+// render tree). This file used to mount a synthetic composition where the welcome panel WAS
+// `messages[0]` -- that assumption is now false (repl.ts's `messages` state starts empty and never
+// contains a `{type:"welcome"}` entry for a fresh session), so this rewrite mounts the SAME
+// three-region composition production actually renders: banner (flexShrink:0) + transcript
+// (flexGrow:1 / overflow:hidden / justifyContent) + input-wrap + status-wrap.
+//
+// Covers, updated for the new architecture:
+//   - the banner region top-anchors unconditionally (row 0), regardless of transcript message
+//     count -- the structural guarantee the extraction exists to provide (issue #561 AC-1's
+//     locked-regions contract, at the unit level rather than a 500-event flood).
+//   - transcriptJustifyContent's anchor flip is now purely about REAL messages: zero messages ->
+//     flex-start; one or more -> flex-end (unchanged behavior, re-expressed against the new
+//     "no welcome entry" input shape).
+//   - height-fill: input/status still pin to the true viewport bottom regardless of banner or
+//     transcript content (issue #114 final leg, unaffected by the extraction).
 import { describe, test, expect } from "bun:test";
 import React from "react";
 import { Box } from "./components.ts";
@@ -15,6 +24,7 @@ import { renderMsgDispatch, transcriptJustifyContent, transcriptFlexGrow } from 
 import { buildMessageLookups } from "../components/message-renderers.ts";
 import { StatusLine } from "../components/status-bar.ts";
 import { PromptInput } from "../components/prompt-input.ts";
+import { Homescreen } from "../components/logo-homescreen.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "./rendering-pipeline.ts";
 import type { SessionMessage } from "../components/app-shell.ts";
 
@@ -23,37 +33,42 @@ const ROWS = 71;
 
 function buildScreen(messages: SessionMessage[]) {
   const lookups = buildMessageLookups([]);
-  const rendered = messages.map((m) =>
-    renderMsgDispatch(m, lookups, COLS, {
-      green: 23, total: 30, pctComplete: 76.7, topAttention: [],
-    }),
-  );
+  const rendered = messages.map((m) => renderMsgDispatch(m, lookups, COLS));
 
+  // Mirrors screens/repl.ts's render tree exactly, including its absence of wrapping Boxes
+  // around PromptInput/StatusLine -- both components protect their OWN root with flexShrink:0
+  // now (issue #561 P0-A item 1); an artificial wrapping Box here would mask a regression of
+  // that exact fix instead of catching it.
   return React.createElement(
     Box, { flexDirection: "column", height: ROWS },
+
+    // Banner -- always mounted, top-locked. It is no longer messages[0], so it is never absent
+    // and never keyed off `messages` at all.
+    React.createElement(
+      Box, { key: "banner", flexShrink: 0 },
+      React.createElement(Homescreen, {
+        state: { model: "ember", cwd: "x", version: "0.0.0", dataRoot: "" },
+        viewportWidth: COLS,
+      }),
+    ),
+
     React.createElement(
       Box,
       { key: "transcript", flexDirection: "column", flexGrow: transcriptFlexGrow(messages), overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
       ...rendered,
     ),
-    React.createElement(
-      Box, { key: "input-wrap", flexShrink: 0 },
-      React.createElement(PromptInput, {
-        state: { text: "", mode: "prompt", isStashed: false, permissionMode: "bypass", pastedContents: null, stashNotice: "" },
-        isProcessing: false, showStatusLine: false, width: COLS,
-      }),
-    ),
-    React.createElement(
-      Box, { key: "status-wrap", flexShrink: 0 },
-      React.createElement(StatusLine, {
-        permissionMode: { mode: "bypass", cycle: () => {} },
-        interrupt: { interrupt: () => {} },
-        taskPanel: { visible: false, toggle: () => {}, tasks: [] },
-        modelMetrics: { contextTokens: 0, maxContextTokens: 32000, vramUsedGb: 19.2, vramTotalGb: 24.0, tokensPerSec: 0 },
-        observatory: { board: { green: 23, total: 30 }, activeRun: null },
-        width: COLS,
-      }),
-    ),
+    React.createElement(PromptInput, {
+      key: "input",
+      state: { text: "", mode: "prompt", isStashed: false, permissionMode: "bypass", pastedContents: null, stashNotice: "" },
+      isProcessing: false, showStatusLine: false, width: COLS,
+    }),
+    React.createElement(StatusLine, {
+      key: "status",
+      permissionMode: { mode: "bypass", cycle: () => {} },
+      interrupt: { interrupt: () => {} },
+      taskPanel: { visible: false, toggle: () => {}, tasks: [] },
+      modelMetrics: { contextTokens: 0, maxContextTokens: 32000, vramUsedGb: 19.2, vramTotalGb: 24.0, tokensPerSec: 0 },
+    }),
   );
 }
 
@@ -73,43 +88,38 @@ function firstNonBlankRow(frame: ReturnType<typeof buildFrame>): number {
   return -1;
 }
 
-describe("welcome-only state top-anchors (transcriptJustifyContent regression)", () => {
-  test(`fresh boot at ${COLS}x${ROWS}: panel top row is near the top of the viewport, not the bottom`, () => {
-    const messages: SessionMessage[] = [{ id: "w1", type: "welcome", model: "ember", cwd: "x", content: "hi" }];
-    const frame = captureFrame(messages);
+describe("banner region top-anchors unconditionally (#561/#565 extraction)", () => {
+  test(`zero real messages at ${COLS}x${ROWS}: banner starts within the first couple of rows`, () => {
+    const frame = captureFrame([]);
     const topRow = firstNonBlankRow(frame);
     expect(topRow).toBeGreaterThanOrEqual(0);
-    // The regression this guards: before the fix, justifyContent:"flex-end" pushed the whole
-    // welcome panel down near the input-wrap, leaving 50+ rows of pure black above it. Top-anchor
-    // means content starts within the first couple of rows.
     expect(topRow).toBeLessThanOrEqual(2);
   });
 
-  test("adding one conversation entry flips the anchor back to the bottom (existing kill-the-void behavior preserved)", () => {
-    const messages: SessionMessage[] = [
-      { id: "w1", type: "welcome", model: "ember", cwd: "x", content: "hi" },
-      { id: "u1", type: "user", content: "hello" },
-    ];
+  test("banner still starts at the top with real turns landed (it no longer scrolls away with the transcript)", () => {
+    const messages: SessionMessage[] = [{ id: "u1", type: "user", content: "hello" }];
     const frame = captureFrame(messages);
     const topRow = firstNonBlankRow(frame);
-    // Once a real turn has landed, the anchor is flex-end again -- content should now sit LOW in
-    // the viewport (hugging the input/status chrome), not near row 0.
-    expect(topRow).toBeGreaterThan(10);
+    // The regression this guards: before the extraction, the banner WAS messages[0] inside the
+    // flex-end-anchored transcript -- the moment a real turn landed, flex-end pushed the whole
+    // transcript (banner included) down toward the input/status chrome (the operator's "banner
+    // scrolled away" report). The banner is now a structurally separate top-locked region, so it
+    // stays at row 0 regardless of transcript content.
+    expect(topRow).toBeGreaterThanOrEqual(0);
+    expect(topRow).toBeLessThanOrEqual(2);
   });
 });
 
-// issue #44 item (c) -- "document-flow" (operator's live-pixel verdict, 2026-07-04) -- REVERTED
-// by issue #114's final leg (operator's live DESKTOP-scale verdict, 2026-07-05). The document-flow
-// fix set flexGrow:0 for welcome-only sessions on the theory that the field exemplar "never
-// stretches at session start" -- a real side-by-side desktop capture (half-split 1720x1440, the
-// exemplar visible in the same frame) disproved that: the exemplar pins prompt+status to the
-// WINDOW BOTTOM even when almost no content exists above. flexGrow:0 instead left input+status
-// floating directly under a content-sized panel with ~85% of the terminal below the status bar
-// completely unclaimed -- worse than the "gap between panel and input" the document-flow fix was
-// chasing (that gap sits INSIDE the frame, above the prompt, which is exactly the exemplar's own
-// shape). This block now asserts the CORRECTED behavior: input+status pin to the true bottom rows
-// in every state, welcome-only included. transcriptJustifyContent (unchanged, tested above) still
-// controls where content sits inside that grown box.
+describe("transcriptJustifyContent anchor flip (re-expressed for the no-welcome-entry input shape)", () => {
+  test("zero real messages -> flex-start (nothing to bottom-anchor)", () => {
+    expect(transcriptJustifyContent([])).toBe("flex-start");
+  });
+
+  test("one or more real messages -> flex-end (kill-the-void behavior, unchanged)", () => {
+    expect(transcriptJustifyContent([{ id: "u1", type: "user", content: "hello" }])).toBe("flex-end");
+  });
+});
+
 function findCaretRow(frame: ReturnType<typeof buildFrame>): number {
   for (let r = 0; r < ROWS; r++) {
     const line = frame.cells[r]!.map((c) => c?.char ?? " ").join("");
@@ -118,30 +128,25 @@ function findCaretRow(frame: ReturnType<typeof buildFrame>): number {
   return -1;
 }
 
-describe("height-fill: input pins to the viewport bottom regardless of content (issue #114 final leg)", () => {
-  test(`welcome-only at ${COLS}x${ROWS}: the input row sits at the true bottom, not floating under the panel`, () => {
-    const messages: SessionMessage[] = [{ id: "w1", type: "welcome", model: "ember", cwd: "x", content: "hi" }];
-    const frame = captureFrame(messages);
+describe("height-fill: input pins to the viewport bottom regardless of content (issue #114 final leg, unaffected by the banner extraction)", () => {
+  test(`zero real messages at ${COLS}x${ROWS}: the input row sits at the true bottom, not floating under the banner`, () => {
+    const frame = captureFrame([]);
     const caretRow = findCaretRow(frame);
     expect(caretRow).toBeGreaterThanOrEqual(0);
-    // The regression this guards: under the reverted document-flow fix, caretRow sat well above
-    // the viewport bottom (content-sized box, input followed immediately). Now the transcript
-    // Box's flexGrow:1 pushes input-wrap/status-wrap down to the true bottom rows regardless of
-    // how little content the welcome panel contributes.
+    // The regression this guards: input+status must pin to the true bottom rows regardless of how
+    // little (or how much) content sits above them -- unchanged by the banner extraction, since
+    // transcriptFlexGrow is still always 1 and the banner itself is flexShrink:0.
     expect(caretRow).toBeGreaterThanOrEqual(ROWS - 6);
   });
 
   test("content exceeding the viewport: the input row still sits at the true bottom (existing overflow-clip behavior unaffected)", () => {
-    const messages: SessionMessage[] = [
-      { id: "w1", type: "welcome", model: "ember", cwd: "x", content: "hi" },
-      ...Array.from({ length: 40 }, (_, i) => ({ id: `u${i}`, type: "user" as const, content: `turn number ${i}` })),
-    ];
+    const messages: SessionMessage[] = Array.from(
+      { length: 40 },
+      (_, i) => ({ id: `u${i}`, type: "user" as const, content: `turn number ${i}` }),
+    );
     const frame = captureFrame(messages);
     const caretRow = findCaretRow(frame);
     expect(caretRow).toBeGreaterThanOrEqual(0);
-    // With far more content than the viewport can hold, the transcript's flexGrow must still be 1
-    // (or the input-wrap/status-wrap would be crushed off-screen or overlap the transcript) -- the
-    // input row belongs at the bottom of the viewport here, same as before this fix (unchanged).
     expect(caretRow).toBeGreaterThanOrEqual(ROWS - 6);
   });
 });

@@ -354,8 +354,11 @@ export function StatusLine({
   const modeIndicator = renderModeIndicator(cognitiveMode ?? "observe", false);
 
   return React.createElement(
+    // #561 P0-A: StatusLine is fixed bottom chrome, never a flex-shrink target — see the same
+    // comment in prompt-input.ts. Without flexShrink:0, a transcript content flood proportionally
+    // shrinks this box toward 0 rows and it vanishes from the frame.
     Box,
-    { flexDirection: "column" },
+    { flexDirection: "column", flexShrink: 0 },
     degraded != null
       ? React.createElement(DegradedBanner, { key: "degraded", degraded })
       : null,

@@ -133,6 +133,13 @@ function applyBoxStyle(
   if (style["marginRight"] !== undefined)   layout.marginRight = toNum(style["marginRight"]);
   if (style["marginBottom"] !== undefined)  layout.marginBottom = toNum(style["marginBottom"]);
   if (style["marginLeft"] !== undefined)    layout.marginLeft  = toNum(style["marginLeft"]);
+  // #561 P0-A / W4: overflow was declared on Box's props (components.ts) and on the LayoutNode
+  // interface (layout-engine.ts), but never actually copied across here -- layout.overflow sat
+  // at its default ("visible") forever regardless of what a caller passed, which is WHY
+  // rendering-pipeline.ts's new overflow:"hidden" clip-rect enforcement had nothing to key off
+  // of. This is the missing link between the two.
+  if (style["overflow"] !== undefined)
+    layout.overflow = style["overflow"] as ReturnType<typeof createLayoutNode>["overflow"];
 }
 
 // ---------------------------------------------------------------------------

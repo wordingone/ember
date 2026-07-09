@@ -19,7 +19,19 @@ import { _deliverKeyEvent } from "../ink/hooks.ts";
 import { resetCommandRegistryForTests } from "../command-registry.ts";
 
 const COLS = 80;
-const ROWS = 24;
+// #561 P0-A: was 24. The banner (now an always-mounted, flexShrink:0-protected top-locked region,
+// see screens/repl.ts) takes 16 rows on its own; the full builtin dropdown (6 commands + borders)
+// needs 8 more; input+status chrome (also flexShrink:0-protected) needs 4 more -- 28 rows minimum
+// with zero squeeze. At 24 rows that 4-row deficit used to land wherever the pre-#561 renderer's
+// unenforced `overflow:"hidden"` happened to let it bleed (this test was passing only because the
+// bled-through text for /model and /cockpit was still readable underneath a genuinely corrupted,
+// overlapping-border banner -- a real repro of the operator's exact complaint, not a working
+// layout). Now that overflow:"hidden" and flexShrink:0 are both enforced, the deficit correctly
+// lands on the one region with no fixed-size guarantee (the dropdown itself), which is honest but
+// means this WIRING test (not a viewport-truncation test) needs a fixture tall enough that nothing
+// has to give. 34 rows clears the 28-row floor with headroom for one more builtin before this
+// needs revisiting.
+const ROWS = 34;
 
 resetCommandRegistryForTests();
 
