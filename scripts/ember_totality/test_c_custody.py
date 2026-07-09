@@ -68,6 +68,24 @@ Evidence-side cures (git-history file restoration for genuinely-lost
 receipts; a dated disposition note for the honest residue) are DELIBERATELY
 OUT OF SCOPE for this probe -- separate follow-up lanes per the DESIGN
 RULING (items 6 and 8).
+
+Issue #535 cure (twin-resolution) -- a cited path renamed with a
+`-redacted-edition` suffix at landing time (repo-guard's local-path/name
+scrub applied post-hoc to a file whose downstream citers were never
+updated) is citation drift, not missing evidence: if
+`<same-dir>/<stem>-redacted-edition<ext>` exists and is tracked at HEAD,
+the citation resolves `resolved_redacted` (own sidecar bucket, disclosed,
+never silently dropped) instead of `cited_missing`. Distinct from cure 2
+(relocation) because the basename itself changes via a fixed suffix in the
+SAME directory, not a move to a different directory -- a basename-
+uniqueness index can never catch it. A cited path with no such twin still
+counts `cited_missing` unchanged (negative control,
+c_custody_twin_resolution_test.py). The `documented_absent` convention
+(docs/custody-disposition-20260708.md) remains a prose disposition record
+this probe does NOT consume programmatically -- its rows stay honestly
+`cited_missing` unless resolved by a twin, a relocation, or an annex
+attestation; see that doc's dated addendum for the current tree's
+per-row disposition.
 """
 
 import glob
@@ -328,6 +346,34 @@ def _resolve_relocation(cited_path, basename_index):
     return None
 
 
+def _resolve_redaction_twin(cited_path, git_tracked_normalized):
+    """Return the redacted-edition twin path if cited_path is absent but a
+    `<same-dir>/<stem>-redacted-edition<ext>` file exists AND is tracked at
+    HEAD, else None (issue #535 twin-resolution rule).
+
+    Evidence: at first landing, several receipts were renamed with the
+    `-redacted-edition` suffix (repo-guard's local-path/name scrub applied
+    post-hoc), e.g. `receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json`
+    -> `...-import-edition-redacted-edition.json`. Downstream citers still
+    cite the pre-rename filename, so the checker resolves every renamed
+    target as missing even though the (redacted) content is present and
+    tracked. This is citation drift from a rename, not lost evidence --
+    distinct from `relocated` (issue #415 cure 2, a basename move to a new
+    DIRECTORY) because here the basename itself changes via a fixed,
+    convention-bound suffix in the SAME directory, so a basename-uniqueness
+    index can never catch it.
+
+    Only ever matches same-directory, same-stem + exactly the
+    `-redacted-edition` suffix -- never a fuzzy/near-name guess."""
+    stem, ext = os.path.splitext(cited_path)
+    if not ext:
+        return None
+    twin = f"{stem}-redacted-edition{ext}"
+    if twin in git_tracked_normalized:
+        return twin
+    return None
+
+
 def _load_all_spend_annex_rows(root):
     """path -> {"sha256":..., "annex_source":...}, merged across EVERY
     receipts/spend-annex/spend-annex-*.json snapshot (not just the newest --
@@ -488,6 +534,7 @@ def main():
     relocated_citations = []
     documented_absent_citations = []
     annex_attested_citations = []
+    redacted_twin_citations = []
 
     for cited_path in sorted(citations_to_verify):
         if _classify_citation(cited_path) == "pattern":
@@ -498,6 +545,17 @@ def main():
         if os.path.isfile(full_path):
             # Resolves outright -- covers backtick/::-suffix-stripped and
             # wrap_joined-consumed citations, which now check out cleanly.
+            continue
+
+        # Issue #535 twin-resolution: the cited file was renamed with a
+        # `-redacted-edition` suffix at landing time; the renamed twin is
+        # present and tracked, so this is citation drift, not missing
+        # evidence. Checked before the relocation/annex cures below since
+        # it is a more specific, higher-confidence match (exact same-dir,
+        # same-stem, fixed-suffix rule) than a basename-uniqueness guess.
+        redacted_twin = _resolve_redaction_twin(cited_path, git_tracked_normalized)
+        if redacted_twin:
+            redacted_twin_citations.append({"old": cited_path, "new": redacted_twin})
             continue
 
         # Cure 1 tail: bare, no-extension citation naming a real, populated
@@ -561,6 +619,7 @@ def main():
                 "relocated": relocated_citations,
                 "documented_absent": documented_absent_citations,
                 "annex_attested": annex_attested_citations,
+                "resolved_redacted": redacted_twin_citations,
             },
             "pending_landing": pending_landing,
         }
@@ -573,6 +632,7 @@ def main():
                     f"relocated={len(relocated_citations)} "
                     f"documented_absent={len(documented_absent_citations)} "
                     f"annex_attested={len(annex_attested_citations)} "
+                    f"resolved_redacted={len(redacted_twin_citations)} "
                     f"pending_landing={len(pending_landing)}; "
                     f"sidecar={sidecar_path}")
 
@@ -591,6 +651,7 @@ def main():
             "relocated": relocated_citations,
             "documented_absent": documented_absent_citations,
             "annex_attested": annex_attested_citations,
+            "resolved_redacted": redacted_twin_citations,
         },
         "pending_landing": [],
     }
@@ -602,6 +663,7 @@ def main():
                   f"relocated={len(relocated_citations)} "
                   f"documented_absent={len(documented_absent_citations)} "
                   f"annex_attested={len(annex_attested_citations)} "
+                  f"resolved_redacted={len(redacted_twin_citations)} "
                   f"pending_landing={len(pending_landing)}; "
                   f"sidecar={sidecar_path}")
 

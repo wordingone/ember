@@ -1,0 +1,44 @@
+{
+ "ticket": "board-integrity-audit-tick",
+ "ts": "2026-07-09T17:15:00Z",
+ "auditor": "coordinator manual diff-mode (wf_board_integrity_audit.js absent in-tree; #89 rebuild pending; prompt's own 2026-07-04 note governs)",
+ "board_ref": "ember-totality-20260709T150230Z (GREEN 9 / AUDIT-OK 3 / RED 27 / UNEVALUABLE 1 of 40)",
+ "master_at_audit": "a6321769 (post #569 #568 #571 #573 #574; #566 #572 closed unmerged)",
+ "scope_note": "Diff-driven vs prior audit 123516Z (its board 121022Z): status diffs C-PROC GREEN->RED, C2 RED->GREEN across renders. C2's GREEN was already adversarially verified genuine at the 12:35 audit (byte-pins) - carried, not re-litigated. No OTHER condition entered the GREEN set since the last adversarial pass, so no unverified GREEN exists on the operator-facing board.",
+ "per_condition": {
+  "C-PROC": {
+   "probe_faithful": true,
+   "receipt_genuine": false,
+   "severity": "low",
+   "gap": "newest process-visibility receipt 143900Z predated 5 merges (#569 14:59Z through #574 16:36Z) - the probe went honestly RED, which is the 12:35 audit's flagged staleness being DETECTED by the hardened probe (cure working, not regression)",
+   "cheap_pass": "none - probe binds to receipt ts vs merge times",
+   "evidence": "gh mergedAt receipts this session vs receipts/process-visibility/ newest ts",
+   "fix": "process-visibility-20260709T170800Z.json AUTHORED this tick (on disk; flips honest-GREEN at boardrun40's render); recurring-class mechanized as merge-gate clause (g) same tick",
+   "ownership": "goal-loop"
+  },
+  "C2": {
+   "probe_faithful": true,
+   "receipt_genuine": true,
+   "severity": null,
+   "gap": "carried from 123516Z adversarial verification (byte-pins)"
+  },
+  "EPS0-EVIDENCE-CHAIN": {
+   "probe_faithful": true,
+   "receipt_genuine": true,
+   "severity": null,
+   "gap": "carried from 123516Z (byte-identity)"
+  }
+ },
+ "needs_work": [
+  {
+   "slug": "C-PROC",
+   "severity": "low",
+   "gap": "staleness cured this tick; receipt untracked until next landing PR",
+   "ownership": "goal-loop",
+   "queued": "landing-queue-20260709 (tracked add)"
+  }
+ ],
+ "regressions": [],
+ "honest_green_note": "honest_green_count unchanged (9+3) - no GOAL cursor edit owed. C-PROC RED on 150230Z is expected to flip GREEN at the next render now that 170800Z exists.",
+ "synthesis": "Window 12:35->17:15: five merges, two dup-closes, all receipt-genuine at their merge gates (blob-hash discrimination on #572/#566, clean-subject squashes on close-shape headlines). The single drift class remains coordination-lag on the process receipt - now mechanized (work-loop merge-gate clause g) rather than re-queued, per the third-occurrence rule. Watchdog daemon down BY DESIGN (#562); interim liveness = hourly coordinator census. Audit prompt itself carried two stale clauses (WSL/ember-goalforge step-1, gen_problems render) - corrected this tick."
+}
