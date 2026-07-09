@@ -8,6 +8,9 @@
 //   - the planned-outage marker appearing/expiring (tools/ember-cli/state/planned-outage.json)
 //   - a liveness-watchdog restart-log row or kill-receipt row (server/cockpit up/down)
 //   - a new totality board render (scripts/ember_totality/receipts-totality/)
+//   - a goal-organ transition/continuation-fire row, tailed from receipts/goal-sessions/*.jsonl
+//     (ember issue #211 §7 delta 4, "goal receipts feed the board" -- see the goal-session
+//     tail-poll section below; a growing JSONL session log, never a one-shot-parsed file)
 //
 // Fabricated/synthetic events are constitutionally banned — this engine has no "demo" or
 // "sample" event path. Every RENDERED event (including the "(receipt landing…)" placeholder for
@@ -21,6 +24,7 @@ import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 import { appendLineWithDirs, stripBom } from "../utils/file-operations.ts";
 import type { ActivityFeedLine, ActivityFeedSource } from "../components/activity-feed-pane.ts";
+import type { GoalReceiptRow } from "./goal-receipts.ts";
 
 export type { ActivityFeedLine, ActivityFeedSource };
 
@@ -237,6 +241,76 @@ export function formatWatchdogLine(row: WatchdogRow): string | null {
     return `server killed by watchdog (${row["reason"] ?? "reason unavailable"})`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Pure formatters — goal-organ receipt rows (ember issue #211 §7 delta 4:
+// "goal receipts feed the board")
+// ---------------------------------------------------------------------------
+
+/** True when a path handed back by the recursive receipts-dir watch callback (relative to
+ *  receiptsDir) is a goal-organ session log -- services/goal-receipts.ts's
+ *  receipts/goal-sessions/session-<UTC>[-sessionId].jsonl. These are APPENDED to repeatedly for
+ *  the life of a session (every transition + continuation fire/skip), never written once and
+ *  left alone like an ordinary `.json` receipt -- so they need tail-polling (pollTail, same
+ *  mechanism as the watchdog's restart-log/kill-receipts logs below), never the one-shot
+ *  read-whole-file-as-JSON path `queueForRender` uses for `.json` files. Segment-exact match
+ *  (not a substring check) so a coincidentally-similar directory name never misroutes. */
+export function isGoalSessionRelativePath(relPath: string): boolean {
+  if (!relPath.endsWith(".jsonl")) return false;
+  return relPath.split(/[\\/]/).includes("goal-sessions");
+}
+
+/** Truncates goal objective text for a one-line activity card -- the full text is always still
+ *  available in the goal-sessions receipt file itself (path carried on the rendered line). */
+function truncateForActivityLine(value: string, maxLen = 60): string {
+  if (value.length <= maxLen) return value;
+  return `${value.slice(0, Math.max(maxLen - 1, 0))}…`;
+}
+
+/** Maps one goal-organ receipt row (services/goal-receipts.ts's GoalReceiptRow) to an activity
+ *  line, or null to exclude it from the feed entirely.
+ *
+ *  Deliberately excluded:
+ *  - `usage_recorded` -- fires on every token tally the store records; pure background noise,
+ *    never a human-meaningful "activity".
+ *  - `continuation_skipped` -- fires on nearly every ordinary turn once a goal exists (any turn
+ *    ending while the user has already typed something skips with `queued_user_input`); the
+ *    autonomy-visible signal the spec cares about (docs/goal-mode-mechanism.md §7 delta 2,
+ *    "autonomy must be VISIBLE") is a continuation that FIRED, never the routine skip -- surfacing
+ *    skips would flood the feed with exactly the noise issue #485/#576 fought to eliminate.
+ *
+ *  Everything else is exactly a goal-state transition the operator should see without opening
+ *  the receipt file. */
+export function formatGoalReceiptLine(row: GoalReceiptRow): string | null {
+  const detail = row.detail ?? {};
+  switch (row.event) {
+    case "created": {
+      const objective = typeof detail["objective"] === "string" ? (detail["objective"] as string) : "";
+      return `goal created: "${truncateForActivityLine(objective)}"`;
+    }
+    case "status_changed": {
+      const from = typeof detail["from"] === "string" ? (detail["from"] as string) : "?";
+      const to = typeof detail["to"] === "string" ? (detail["to"] as string) : "?";
+      const reason =
+        typeof detail["reason"] === "string" && detail["reason"].length > 0 ? ` (${detail["reason"]})` : "";
+      return `goal status: ${from} -> ${to}${reason}`;
+    }
+    case "objective_edited":
+      return "goal objective edited";
+    case "cleared":
+      return "goal cleared";
+    case "continuation_fired": {
+      const kind = typeof detail["kind"] === "string" ? (detail["kind"] as string) : "continue";
+      return kind === "budget_wrapup"
+        ? "goal continuation fired (budget wrap-up)"
+        : "goal continuation fired — autonomous turn, zero user input";
+    }
+    case "continuation_skipped":
+    case "usage_recorded":
+    default:
+      return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -622,12 +696,25 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       });
   }
 
+  // -- Goal-organ session logs (ember issue #211 §7 delta 4) --------------
+  // Discovered dynamically (one file per session, created lazily on first goal use) via the
+  // SAME recursive receiptsWatcher below -- never a separate directory watcher, which would
+  // have to handle the goal-sessions dir not existing yet at boot (the common case: most
+  // sessions never touch /goal). Each discovered path gets its own TailState and is polled
+  // every tick alongside the watchdog logs (see tailInterval below).
+  const goalTailStates = new Map<string, TailState>();
+
   // -- Receipts watcher (recursive) ----------------------------------------
   let receiptsWatcher: FSWatcher | null = null;
   try {
     receiptsWatcher = watch(receiptsDir, { recursive: true }, (_eventType, filename) => {
       if (!filename) return;
       const name = filename.toString();
+      if (isGoalSessionRelativePath(name)) {
+        const abs = path.join(receiptsDir, name);
+        if (!goalTailStates.has(abs)) goalTailStates.set(abs, freshTailState());
+        return;
+      }
       if (!name.endsWith(".json")) return;
       const abs = path.join(receiptsDir, name);
       queueForRender(abs, "receipt", (parsed) => formatReceiptLine(abs, parsed));
@@ -714,12 +801,15 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
    *  collapsed summary line instead of N individual ones -- independent of root-causing why the
    *  tick ballooned (see MAX_TAIL_LINES_PER_TICK's comment). The diagnostic log entry ALWAYS
    *  fires (capped or not), so a below-threshold anomaly is still visible in the debug log even
-   *  when it doesn't trip the visible-pane cap. */
-  function makeTailOverflowHandler(sourcePath: string) {
+   *  when it doesn't trip the visible-pane cap. `source` defaults to "watchdog" (the original two
+   *  tail-polled logs); goal-session tail-polling below passes "goal" so an overflow on THAT log
+   *  reads as a goal-organ anomaly, not a watchdog one -- text stays `${count} ${source} events
+   *  collapsed...`, so the pre-existing "watchdog events collapsed" wording is unchanged. */
+  function makeTailOverflowHandler(sourcePath: string, source: ActivityFeedSource = "watchdog") {
     return (count: number): void => {
       renderEvent({
-        source: "watchdog",
-        text: `${count} watchdog events collapsed (tail-poll anomaly)`,
+        source,
+        text: `${count} ${source} events collapsed (tail-poll anomaly)`,
         path: sourcePath,
       });
     };
@@ -760,6 +850,31 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
         makeTailOverflowHandler(killPath),
       ).then((result) => {
         if (result) logTailPollDiagnostic({ event: "pollTail", file: "kill-receipts", ...result });
+      });
+    }
+
+    // -- Goal-organ session logs (ember issue #211 §7 delta 4) -------------
+    // One TailState per discovered receipts/goal-sessions/*.jsonl path (registered by the
+    // receiptsWatcher callback above the moment the file is created). A file discovered THIS
+    // tick starts at byte offset 0, so its very first poll already sees whatever was written
+    // between creation and now -- same "boot replay is correct, not a bug" contract the
+    // watchdog logs rely on (see freshTailState's callers).
+    for (const [absPath, state] of goalTailStates) {
+      void pollTail(
+        absPath,
+        state,
+        (line) => {
+          try {
+            const row = JSON.parse(line) as GoalReceiptRow;
+            const text = formatGoalReceiptLine(row);
+            if (text) renderEvent({ source: "goal", text, path: absPath });
+          } catch {
+            // malformed row — skip, never crash the feed
+          }
+        },
+        makeTailOverflowHandler(absPath, "goal"),
+      ).then((result) => {
+        if (result) logTailPollDiagnostic({ event: "pollTail", file: "goal-session", path: absPath, ...result });
       });
     }
   }, TAIL_POLL_INTERVAL_MS);
