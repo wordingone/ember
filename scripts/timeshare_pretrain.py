@@ -1031,8 +1031,8 @@ def write_packed_shard(path: str, token_ids) -> str:
     return path
 
 
-CORPUS_CACHE_BIN_NAME = "shards-v0-stream.uint16.bin"
-CORPUS_CACHE_MANIFEST_NAME = "shards-v0-stream.manifest.json"
+CORPUS_CACHE_BIN_NAME = "shards-v1-stream.uint16.bin"
+CORPUS_CACHE_MANIFEST_NAME = "shards-v1-stream.manifest.json"
 CORPUS_CACHE_BUILD_CHUNK_BYTES = 256 * 1024 * 1024  # 256MB per read/write --
 # bounded so the build never asks for one large contiguous RAM block, unlike
 # the legacy np.concatenate path this cache exists to replace.

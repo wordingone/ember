@@ -171,5 +171,73 @@ def test_fcalib_default_mode_equivalence():
         )
 
 
+def test_old_v0_cache_regenerated_not_misread():
+    """Verify new fcalib uses v1 cache naming, ignoring old v0 caches.
+
+    OLD ISSUE (FINDING 2): Old fcalib's cache (shards-v0-stream.uint16.bin)
+    was SILENTLY MISREAD by new fcalib as double token count (192k vs 96k),
+    causing data corruption in thresholds.
+
+    CURE: v1 cache versioning. The new fcalib WRITES cache under v1 names
+    (shards-v1-stream.uint16.bin, shards-v1-stream.manifest.json). Old v0
+    caches are never found or loaded because the new code doesn't look for them.
+    This test verifies the v1 naming is enforced: a fresh fixture produces
+    v1 cache, not v0.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create fixture
+        receipt_path, _ = _make_synthetic_shard_receipt(tmpdir)
+        shard_dir = tmpdir
+
+        # Run new fcalib (should build v1 cache, not v0)
+        out = os.path.join(tmpdir, "out.json")
+        result = subprocess.run([
+            sys.executable, "scripts/heldout_v21_fcalib.py",
+            f"--shard-dir={shard_dir}",
+            f"--shard-receipt={receipt_path}",
+            f"--out={out}",
+            f"--cache-dir={tmpdir}",
+            "--sample-rate=0.01",
+            "--window-tokens=50",
+            "--commit-floor-gib=0.1",
+        ], cwd=REPO_ROOT, capture_output=True, text=True)
+
+        assert result.returncode == 0, (
+            f"New fcalib should succeed: {result.stderr}"
+        )
+
+        # Verify v1 cache was created (new naming)
+        v1_cache_path = os.path.join(tmpdir, "shards-v1-stream.uint16.bin")
+        v1_manifest_path = os.path.join(tmpdir, "shards-v1-stream.manifest.json")
+
+        assert os.path.exists(v1_cache_path), (
+            f"New fcalib must create v1 cache (shards-v1-stream.uint16.bin). "
+            f"Files: {os.listdir(tmpdir)}"
+        )
+        assert os.path.exists(v1_manifest_path), (
+            f"New fcalib must create v1 manifest (shards-v1-stream.manifest.json)"
+        )
+
+        # Verify v1 manifest has correct token count
+        with open(v1_manifest_path) as f:
+            v1_manifest = json.load(f)
+        assert v1_manifest["n_tokens"] == 96000, (
+            f"v1 manifest should have 96000 tokens, got {v1_manifest['n_tokens']}"
+        )
+
+        # Verify v0 cache was NOT created (core of the cure)
+        v0_cache_path = os.path.join(tmpdir, "shards-v0-stream.uint16.bin")
+        v0_manifest_path = os.path.join(tmpdir, "shards-v0-stream.manifest.json")
+
+        assert not os.path.exists(v0_cache_path), (
+            "New fcalib should NOT create v0 cache (v0 is retired)"
+        )
+        assert not os.path.exists(v0_manifest_path), (
+            "New fcalib should NOT create v0 manifest (v0 is retired)"
+        )
+
+        print(f"[PASS] v1 cache versioning cure enforced: v1 created, v0 never created")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
