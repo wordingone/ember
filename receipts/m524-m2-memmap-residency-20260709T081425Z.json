@@ -1,0 +1,83 @@
+{
+  "ticket": "M524-M2-MEMMAP-RESIDENCY",
+  "ts": "2026-07-09T08:14:25.795484+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 524,
+  "cell": "M2",
+  "refs": [
+    "#480",
+    "#429",
+    "#513",
+    "#459"
+  ],
+  "scope": "Phase 1 of #524 (CPU-only; GPU contended). Verifies scripts/cpu_offload_adamw.py's estimate_required_gib_offloaded() claim optimizer_state_gib_vram_resident=0.0, via (a) a static code-read assertion of the module itself and (b) a real checkpoint + real production-routing measurement of a SEPARATE mechanism (the step()-time copy-back transient) the estimator's term list has no entry for at all. Does NOT run CPUOffloadOptimizer.step() on CUDA -- that is M1/M3 scope, gated on GPU-WINDOW-GO.",
+  "code_read": {
+    "module": "scripts/cpu_offload_adamw.py",
+    "findings": {
+      "state_buffers_are_memmap_backed": true,
+      "step_has_copyback_to_real_device": true,
+      "estimator_terms_present": [
+        "weights_gib",
+        "grad_gib",
+        "optimizer_state_gib_vram_resident",
+        "optimizer_state_host_ram_gib",
+        "qat_clone_gib",
+        "activation_estimate_gib",
+        "staging_overhead_gib",
+        "total_estimate_gib"
+      ],
+      "estimator_has_copyback_transient_term": false
+    },
+    "verdict": "optimizer_state_gib_vram_resident=0.0 is TRUE for the optimizer STATE BUFFERS specifically (exp_avg/exp_avg_sq/momentum_buffer), by construction: __init__ seeds them via _memmap_zeros (file-backed CPU tensors) into self._inner.state[shadow_p], and self._inner.step() (the real torch.optim class) only ever touches self._shadow (CPU) -- no code path in this class moves those three buffers to a CUDA device. This is a code-read verdict, not a GPU measurement."
+  },
+  "unaccounted_copyback_mechanism": {
+    "description": "step()'s final loop does real_p.data.copy_(shadow_p.data.to(real_p.device, dtype=real_p.dtype)) once per real parameter, every optimizer.step() call. This is NOT an optimizer-state cost under the estimator's own taxonomy and has NO term in estimate_required_gib_offloaded()'s returned dict (confirmed by code_read.findings.estimator_terms_present -- absent, not zero).",
+    "checkpoint_measured": ".claude\\worktrees\\rung2-offload-cure-411\\models\\cbase-grow-rung\\rung2-grown-cache\\grown-58e8e98916823941.pt",
+    "checkpoint_provenance": {
+      "cache_key_seed_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+      "ff_seed": 16384,
+      "ff_grown": 32768,
+      "raw_state_dict_param_sum": 2228265984,
+      "matches_receipted_param_count_after": true,
+      "note": "raw_state_dict_param_sum double-counts the tied embed_tokens.weight/head.weight pair (state_dict() does not dedupe tied tensors); this matches param_count_after=2228265984 in the existing GPU receipts, confirming this is the SAME checkpoint those runs used."
+    },
+    "production_routing_used": "timeshare_pretrain.split_param_groups (the exact function build_split_optimizer calls)",
+    "routing_match_check": {
+      "n_muon": 140,
+      "n_adamw": 44,
+      "matches_gpu_receipt_20260708T171259Z": true
+    },
+    "deduped_trainable_param_count": 2195497984,
+    "n_tensors": 184,
+    "total_bf16_gib_all_params": 4.089434,
+    "max_single_param_gib": 0.0625,
+    "max_single_param_name": "backbone_model.layers.0.mlp.gate_proj.weight",
+    "max_single_param_shape": [
+      32768,
+      1024
+    ],
+    "transient_bound": {
+      "best_case_gib": 0.0625,
+      "best_case_assumption": "CUDA caching allocator reuses the same size-class block for every same-sized transient across the 184-iteration loop -- only ever holds the largest single block at a time",
+      "worst_case_gib": 4.089434,
+      "worst_case_assumption": "no block reuse at all -- equivalent to a second full transient copy of every parameter the estimator's weights_gib term already counts as VRAM-resident once",
+      "actual_behavior": "UNMEASURED -- requires a GPU run instrumenting torch.cuda.reset_peak_memory_stats()/max_memory_allocated() bracketing optimizer.step() itself as its own phase; out of Phase-1 (CPU-only) scope"
+    }
+  },
+  "prior_receipt_cross_check": {
+    "receipts_reviewed": [
+      "receipts/cbase-grow-rung2-offload-probe-20260708T083445Z.json",
+      "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json",
+      "receipts/cbase-grow-rung2-contended-launch-gate-20260708T125724Z.json"
+    ],
+    "finding": "Zero receipts have executed CPUOffloadOptimizer.step() on CUDA end-to-end. offload-probe-20260708T083445Z is CPU-only (device: cpu). gpu-offload-probe-20260708T171259Z is the one real GPU attempt with offload_optimizer_state=true; its vram_attribution.phases list ends at qat_restore, training.optimizer_step_losses is empty ([]) while training.micro_step_losses has exactly one entry, and the receipt's own oom_error field shows it OOM'd -- confirming optimizer.step() was never reached before the crash. contended-launch-gate-20260708T125724Z is a preflight-only computation, no training loop at all."
+  },
+  "verdict": "CPU_CODE_READ_PASS_GPU_TRANSIENT_UNMEASURED",
+  "verdict_detail": "The 0.0 GiB claim for optimizer STATE BUFFERS is code-verified true. The step()-time copy-back mechanism is a real, separate, code-confirmed per-step-per-parameter transient the estimator discloses nowhere in its term list; its actual VRAM cost is bounded here at [0.0625, 4.089] GiB from real checkpoint data but not measured, and cannot be measured without a GPU run that specifically instruments optimizer.step() as its own phase (which no existing receipt has done -- the one real attempt OOM'd first). Recommend M1/M3's GPU-window probe adds this phase boundary explicitly.",
+  "missing_keys_on_load": [],
+  "unexpected_keys_on_load": [],
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": []
+}
