@@ -14,8 +14,9 @@
 // a still-writing file) is appended to state/activity-ledger.jsonl, so "nothing happened" is
 // machine-checkable instead of resting on the operator's own eyes.
 
-import { watch, type FSWatcher } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { watch, readFileSync, type FSWatcher } from "node:fs";
+import { readFile, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 import { appendLineWithDirs } from "../utils/file-operations.ts";
@@ -73,6 +74,39 @@ export function formatPlaceholderLine(filePath: string): string {
 
 export function formatUnparsableLine(filePath: string): string {
   return `(receipt unparsable) ${path.basename(filePath)}`;
+}
+
+// ---------------------------------------------------------------------------
+// P0-B: path exclusion + bulk-materialization coalescing
+// ---------------------------------------------------------------------------
+
+/** Path segments that mark a nested fixture/plugin/dependency tree, never an organic receipt
+ *  landing -- e.g. a real receipt walk under `.avir/plugins/marketplaces/**` is tooling noise,
+ *  not something that happened. Rendering these ever (even correctly labeled) is the wrong
+ *  behavior; excluding them is the fix, not relabeling their class name to something friendlier
+ *  ("[.claude-plugin]" must never appear in a rendered line, full stop). */
+const EXCLUDED_PATH_SEGMENTS = new Set([
+  ".avir",
+  ".claude-plugin",
+  "node_modules",
+  "fixture",
+  "fixtures",
+  "marketplaces",
+]);
+
+/** True when any segment of `filePath` matches a known non-organic tree. Checked against the
+ *  raw path (not resolved against a specific root) so it works for both absolute paths and the
+ *  relative fragments a watcher callback hands back. */
+export function isExcludedReceiptPath(filePath: string): boolean {
+  const segments = filePath.split(/[\\/]/);
+  return segments.some((seg) => EXCLUDED_PATH_SEGMENTS.has(seg));
+}
+
+/** One summarized line for a burst of files that all became "new" within the same short window
+ *  (e.g. `git checkout` restoring N tracked receipts at once) -- never N individual "receipt
+ *  landed" lines for a single bulk operation. */
+export function formatBulkMaterializationLine(paths: string[]): string {
+  return `${paths.length} receipts materialized at once (bulk restore)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +247,68 @@ export interface ActivityFeedDeps {
   watchdogStatePath?: string;
   killReceiptsPath?: string;
   ledgerPath?: string;
+  /** P0-B: persistent path->mtime watermark, survives a process restart (see loadWatermark /
+   *  persistWatermark below). Defaults to state/activity-feed-watermark.json. */
+  watermarkPath?: string;
   now?: () => number;
+}
+
+// ---------------------------------------------------------------------------
+// P0-B: persistent watermark (path -> last-rendered mtime, survives a restart)
+// ---------------------------------------------------------------------------
+
+/** How long to hold a burst of newly-materialized files open before deciding whether it's one
+ *  organic landing (render normally) or a bulk operation (render one summarized line). Kept short
+ *  deliberately: files from a single `git checkout`/bulk-restore land across their fs-watch
+ *  callbacks within single-digit ms of each other in practice (verified by the coalescing test
+ *  below, which writes a burst synchronously in a loop), and this window sits underneath the
+ *  existing RECEIPT_RETRY_DELAY_MS-based debounce test's own timing assumptions — it must never
+ *  grow large enough to make a single organic receipt's placeholder line visibly late. */
+export const BURST_COALESCE_MS = 60;
+
+/** Keyed path+mtime (the cheap, default check — no IO beyond the stat already taken to decide
+ *  whether a file is new). `hash` is a sha256 of the file's content, populated at settlement time
+ *  and consulted ONLY as a fallback (queueForRender) when mtime disagrees with a KNOWN prior
+ *  entry — never on a brand-new path, and never proactively. This exists because mtime alone
+ *  misses two real cases: (a) this filesystem's mtimeMs carries sub-millisecond precision that
+ *  utimesSync-class rewrites can't round-trip exactly, and (b) `git checkout` re-stamps a file's
+ *  mtime to checkout-time even when its bytes are byte-identical to what was already rendered —
+ *  both would look like "new" under mtime alone and reflood the pane with content it already
+ *  showed once. */
+export interface WatermarkEntry {
+  mtimeMs: number;
+  hash: string;
+}
+
+export type Watermark = Record<string, WatermarkEntry>;
+
+/** Synchronous and loaded BEFORE any watcher arms -- this closes the exact race that caused the
+ *  operator's replay flood: an async load racing the first watcher callbacks would treat
+ *  already-rendered files as new during the gap. Never throws -- an absent/corrupt watermark file
+ *  is exactly the same as a fresh install: no prior history, so nothing is dropped as "wrongly
+ *  replayed" that was never actually seen. Individual malformed entries are dropped rather than
+ *  invalidating the whole map. */
+export function loadWatermarkSync(watermarkPath: string): Watermark {
+  try {
+    const raw = readFileSync(watermarkPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const result: Watermark = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (
+        value &&
+        typeof value === "object" &&
+        typeof (value as Record<string, unknown>)["mtimeMs"] === "number" &&
+        typeof (value as Record<string, unknown>)["hash"] === "string"
+      ) {
+        result[key] = value as WatermarkEntry;
+      }
+    }
+    return result;
+  } catch {
+    // absent or corrupt -- treated as empty, never a crash.
+  }
+  return {};
 }
 
 export interface ActivityFeedHandle {
@@ -285,10 +380,25 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
   const watchdogStatePath =
     deps.watchdogStatePath ?? path.join(cliStateDir, "liveness-watchdog-state.json");
   const ledgerPath = deps.ledgerPath ?? path.join(cliStateDir, "activity-ledger.jsonl");
+  const watermarkPath = deps.watermarkPath ?? path.join(cliStateDir, "activity-feed-watermark.json");
   const clock = deps.now ?? Date.now.bind(Date);
 
   const seen = new Set<string>();
   const rendered = new Set<string>();
+
+  // P0-B: loaded synchronously BEFORE either watcher arms (see loadWatermarkSync's comment) --
+  // a file whose current mtime already matches this map was rendered in a PRIOR run and must
+  // never replay just because the process restarted.
+  const watermark: Watermark = loadWatermarkSync(watermarkPath);
+  let watermarkDirty = false;
+  function persistWatermark(): void {
+    if (watermarkDirty) return; // a write is already scheduled; it will pick up the latest map
+    watermarkDirty = true;
+    setTimeout(() => {
+      watermarkDirty = false;
+      void writeFile(watermarkPath, JSON.stringify(watermark)).catch(() => {});
+    }, 0).unref?.();
+  }
 
   function renderEvent(event: { source: ActivityFeedSource; text: string; path?: string }): void {
     const line: ActivityFeedLine = {
@@ -309,6 +419,28 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     ).catch(() => {});
   }
 
+  /** P0-B: writes the watermark using a FRESH stat at the moment a file's processing is fully
+   *  settled (success or terminally-unparsable) — never at first sight. A receipt is commonly
+   *  written partial-then-final (temp write, rename, or truncate-then-append); watermarking at
+   *  first sight would freeze on a mid-write mtime, and a later restart would see the file's true
+   *  final mtime as "different" and wrongly replay it. Watermarking at settlement time means the
+   *  stored mtime always reflects the on-disk state we actually finished processing.
+   *  `knownContent`, when the caller already has the bytes in hand (the success path in
+   *  debouncedRenderFromFile), avoids a second read purely for hashing. */
+  function settleWatermark(absPath: string, knownContent?: string): void {
+    void (async () => {
+      try {
+        const info = await stat(absPath);
+        const content = knownContent ?? (await readFile(absPath, "utf-8").catch(() => null));
+        const hash = content != null ? createHash("sha256").update(content).digest("hex") : "";
+        watermark[absPath] = { mtimeMs: info.mtimeMs, hash };
+        persistWatermark();
+      } catch {
+        // file vanished before the re-stat -- nothing durable to persist for it.
+      }
+    })();
+  }
+
   /** Shared "a new JSON file landed" handler for both receipts and board runs: render a
    *  placeholder immediately if the file can't be parsed yet, retry once after
    *  RECEIPT_RETRY_DELAY_MS, then render the final line either way. */
@@ -321,11 +453,13 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     seen.add(absPath);
 
     const attempt = async (isRetry: boolean): Promise<void> => {
+      let raw: string | undefined;
       try {
-        const raw = await readFile(absPath, "utf-8");
+        raw = await readFile(absPath, "utf-8");
         const parsed = JSON.parse(raw);
         renderEvent({ source, text: formatSuccess(parsed), path: absPath });
         rendered.add(absPath);
+        settleWatermark(absPath, raw);
       } catch {
         if (!isRetry) {
           renderEvent({ source, text: formatPlaceholderLine(absPath), path: absPath });
@@ -336,10 +470,95 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
         } else {
           renderEvent({ source, text: formatUnparsableLine(absPath), path: absPath });
           rendered.add(absPath);
+          settleWatermark(absPath, raw);
         }
       }
     };
     void attempt(false);
+  }
+
+  // -- P0-B: watermark gate + burst-coalescing buffer ----------------------
+  // A raw watcher callback firing for a JSON file never renders directly anymore -- it first
+  // passes through here, which (a) drops anything under an excluded/fixture/plugin tree, (b)
+  // drops anything whose mtime already matches the persisted watermark (a restart re-arming the
+  // watcher, or the OS re-firing a recursive watch on startup, must never replay old receipts as
+  // new), then (c) buffers genuinely-new files for BURST_COALESCE_MS before deciding whether this
+  // is one organic landing (render normally, with the existing placeholder/retry path) or a bulk
+  // operation like a `git checkout` of many tracked receipts at once (render ONE summarized line).
+  const pendingBurst = new Map<string, { source: ActivityFeedSource; formatSuccess: (parsed: unknown) => string }>();
+  let burstTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flushBurst(): void {
+    burstTimer = null;
+    const entries = [...pendingBurst.entries()];
+    pendingBurst.clear();
+    if (entries.length === 0) return;
+
+    // Grouped by source: a receipts-flood burst and a (rare) coincident board render in the same
+    // window must never merge into one mislabeled "receipts materialized" line — each source's
+    // entries are flushed independently, single files via the normal placeholder/retry path,
+    // multi-file groups via one coalesced summary per source.
+    const bySource = new Map<ActivityFeedSource, Array<[string, (parsed: unknown) => string]>>();
+    for (const [absPath, { source, formatSuccess }] of entries) {
+      const group = bySource.get(source) ?? [];
+      group.push([absPath, formatSuccess]);
+      bySource.set(source, group);
+    }
+
+    for (const [source, group] of bySource) {
+      if (group.length === 1) {
+        const [absPath, formatSuccess] = group[0]!;
+        debouncedRenderFromFile(absPath, source, formatSuccess);
+        continue;
+      }
+      renderEvent({ source, text: formatBulkMaterializationLine(group.map(([p]) => p)) });
+      for (const [absPath] of group) {
+        rendered.add(absPath); // never individually re-rendered later by a delayed retry path
+        settleWatermark(absPath); // this IS these files' settlement point — watermark now, not before
+      }
+    }
+  }
+
+  function queueForRender(
+    absPath: string,
+    source: ActivityFeedSource,
+    formatSuccess: (parsed: unknown) => string,
+  ): void {
+    if (isExcludedReceiptPath(absPath)) return;
+    if (rendered.has(absPath) || seen.has(absPath) || pendingBurst.has(absPath)) return;
+
+    // The watermark is only ever WRITTEN at settlement time (settleWatermark, above), never here.
+    // Writing it at first sight would let a partial-then-final write freeze the wrong (mid-write)
+    // mtime; see settleWatermark's comment.
+    void stat(absPath)
+      .then(async (info) => {
+        const prior = watermark[absPath];
+        if (prior && prior.mtimeMs === info.mtimeMs) return; // cheap match -- settled in a PRIOR run
+
+        if (prior) {
+          // mtime disagrees with a KNOWN prior settlement -- fall back to a content hash before
+          // treating this as new (the ONLY place this engine pays hashing IO, and only for a path
+          // it has already rendered once before): a mtime-granularity miss or a `git checkout`
+          // re-stamping an unchanged receipt's timestamp must not replay it.
+          const content = await readFile(absPath, "utf-8").catch(() => null);
+          if (content != null) {
+            const hash = createHash("sha256").update(content).digest("hex");
+            if (hash === prior.hash) {
+              watermark[absPath] = { mtimeMs: info.mtimeMs, hash }; // refresh mtime only
+              persistWatermark();
+              return;
+            }
+          }
+        }
+
+        pendingBurst.set(absPath, { source, formatSuccess });
+        if (burstTimer) clearTimeout(burstTimer);
+        burstTimer = setTimeout(flushBurst, BURST_COALESCE_MS);
+        burstTimer.unref?.();
+      })
+      .catch(() => {
+        // stat race (file already gone) -- nothing to render.
+      });
   }
 
   // -- Receipts watcher (recursive) ----------------------------------------
@@ -350,7 +569,7 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       const name = filename.toString();
       if (!name.endsWith(".json")) return;
       const abs = path.join(receiptsDir, name);
-      debouncedRenderFromFile(abs, "receipt", (parsed) => formatReceiptLine(abs, parsed));
+      queueForRender(abs, "receipt", (parsed) => formatReceiptLine(abs, parsed));
     });
   } catch {
     receiptsWatcher = null; // recursive watch unsupported/unavailable here — fail open, no crash
@@ -368,7 +587,7 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       const name = filename.toString();
       if (!name.endsWith(".json")) return;
       const abs = path.join(totalityDir, name);
-      debouncedRenderFromFile(
+      queueForRender(
         abs,
         "board",
         (parsed) => formatBoardLine(abs, parsed) ?? `totality board rendered: ${path.basename(abs)}`,
