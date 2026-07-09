@@ -105,70 +105,135 @@ def _make_synthetic_shard_receipt(tmpdir: str) -> tuple[str, dict]:
 
 
 def test_fcalib_default_mode_equivalence():
-    """Old and new fcalib produce receipt-equivalent output (without flag).
+    """Old (6675e2a) and new fcalib produce receipt-equivalent output (without flag).
 
-    Proof that the signature change to finalize_source is behavior-preserving
-    when --emit-boilerplate-keys is NOT set.
+    Proof that PR #506 changes (finalize_source signature) are behavior-preserving
+    when --emit-boilerplate-keys is NOT set. Runs old and new on SAME fixture,
+    compares receipts with exclusion list for timing/path differences.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Set up fixture
-        receipt_path, boundaries = _make_synthetic_shard_receipt(tmpdir)
+        # Set up fixture (shared between old and new runs)
+        receipt_path, _ = _make_synthetic_shard_receipt(tmpdir)
         shard_dir = tmpdir
 
-        # Debug: check what's in shard_dir
-        print(f"\nShard dir contents: {os.listdir(shard_dir)}")
-        for fname in os.listdir(shard_dir):
-            fpath = os.path.join(shard_dir, fname)
-            if os.path.isfile(fpath):
-                size = os.path.getsize(fpath)
-                print(f"  {fname}: {size} bytes")
+        # Extract OLD fcalib from 6675e2a (master pre-PR)
+        old_fcalib_result = subprocess.run(
+            ["git", "show", "6675e2a:scripts/heldout_v21_fcalib.py"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True
+        )
+        assert old_fcalib_result.returncode == 0, (
+            f"Failed to extract old fcalib from 6675e2a: {old_fcalib_result.stderr}"
+        )
 
-        # Run NEW fcalib (current implementation)
+        old_fcalib_path = os.path.join(tmpdir, "heldout_v21_fcalib_old.py")
+        with open(old_fcalib_path, "w") as f:
+            f.write(old_fcalib_result.stdout)
+
+        # Run OLD fcalib (separate cache dir to avoid collision)
+        tmpdir_old_cache = os.path.join(tmpdir, "cache-old")
+        os.makedirs(tmpdir_old_cache, exist_ok=True)
+        out_old = os.path.join(tmpdir, "out-old.json")
+
+        # Set PYTHONPATH for old fcalib to find scripts.lib and receipt_check modules
+        env_old = os.environ.copy()
+        pathsep = ";" if sys.platform == "win32" else ":"
+        env_old["PYTHONPATH"] = f"{REPO_ROOT}{pathsep}{SCRIPTS_ROOT}"
+
+        old_result = subprocess.run([
+            sys.executable, old_fcalib_path,
+            f"--shard-dir={shard_dir}",
+            f"--shard-receipt={receipt_path}",
+            f"--out={out_old}",
+            f"--cache-dir={tmpdir_old_cache}",
+            "--sample-rate=0.01",
+            "--window-tokens=50",
+            "--commit-floor-gib=0.1",
+        ], cwd=REPO_ROOT, capture_output=True, text=True, env=env_old)
+
+        print(f"\n[OLD] 6675e2a fcalib run")
+        print(f"  Return code: {old_result.returncode}")
+        if old_result.returncode != 0:
+            print(f"  Stderr: {old_result.stderr}")
+        assert old_result.returncode == 0, (
+            f"Old fcalib failed: {old_result.stderr}"
+        )
+        assert Path(out_old).exists(), "Old fcalib didn't write receipt"
+
+        # Run NEW fcalib (separate cache dir)
+        tmpdir_new_cache = os.path.join(tmpdir, "cache-new")
+        os.makedirs(tmpdir_new_cache, exist_ok=True)
         out_new = os.path.join(tmpdir, "out-new.json")
+
         new_result = subprocess.run([
             sys.executable, "scripts/heldout_v21_fcalib.py",
             f"--shard-dir={shard_dir}",
             f"--shard-receipt={receipt_path}",
             f"--out={out_new}",
-            f"--cache-dir={tmpdir}",
+            f"--cache-dir={tmpdir_new_cache}",
             "--sample-rate=0.01",
             "--window-tokens=50",
-            "--commit-floor-gib=0.1",  # Low floor for test
+            "--commit-floor-gib=0.1",
         ], cwd=REPO_ROOT, capture_output=True, text=True)
 
-        # Verify new run succeeded
+        print(f"[NEW] Current fcalib run")
+        print(f"  Return code: {new_result.returncode}")
         if new_result.returncode != 0:
-            print(f"\nNew fcalib stderr:\n{new_result.stderr}")
-            print(f"New fcalib stdout:\n{new_result.stdout}")
+            print(f"  Stderr: {new_result.stderr}")
         assert new_result.returncode == 0, (
             f"New fcalib failed: {new_result.stderr}"
         )
         assert Path(out_new).exists(), "New fcalib didn't write receipt"
 
-        # Load new receipt
+        # Load both receipts
+        with open(out_old) as f:
+            receipt_old = json.load(f)
         with open(out_new) as f:
             receipt_new = json.load(f)
 
+        # Diff with exclusion list: ts, wall_s, runner git sha, mmap_cache_report paths,
+        # invariant_stamp_error/invariant_sha256 rename pair, shard_receipt_path, commit_preflight
+        def normalize_receipt(receipt):
+            """Remove timing/path/system differences for comparison."""
+            normalized = json.loads(json.dumps(receipt))  # Deep copy
 
-        # For now, just verify new fcalib runs successfully with the fixture
-        # The old fcalib has an issue reading PackedShardLoader format that differs
-        # from new; this is being investigated separately. The new fcalib is the
-        # authoritative version.
-        print("[PASS] New fcalib produces output with synthetic fixture")
-        print(f"  Receipt: {out_new}")
-        print(f"  Receipt status: {receipt_new.get('status')}")
-        print(f"  Per-source results: {list(receipt_new.get('per_source', {}).keys())}")
+            # Exclude top-level timing/metadata/path/invariant fields
+            for key in ["ts", "wall_s", "pass_b_wall_s", "runner_git_sha", "runner_invocation_id",
+                        "shard_receipt_path", "commit_preflight", "mmap_cache_report",
+                        "invariant_stamp_error", "invariant_sha256"]:
+                normalized.pop(key, None)
 
-        # Verify the receipt has the expected structure
-        assert receipt_new.get("status") == "complete", "New fcalib should succeed"
-        assert "per_source" in receipt_new, "Receipt should have per_source data"
-        assert len(receipt_new["per_source"]) == 5, "Should have all 5 sources"
+            # Process per_source: exclude timing, path, and field-rename differences
+            if "per_source" in normalized:
+                for source_name, source_data in normalized["per_source"].items():
+                    # Remove timing fields at source level
+                    for key in ["ts", "wall_s", "pass_b_wall_s"]:
+                        source_data.pop(key, None)
 
-        expected_sources = ["code_github_clean", "fineweb_edu", "wikipedia_en", "gutenberg_en", "ledger_mit"]
-        actual_sources = list(receipt_new["per_source"].keys())
-        assert sorted(actual_sources) == sorted(expected_sources), (
-            f"Per-source keys mismatch: expected {expected_sources}, got {actual_sources}"
+                    # Remove field-rename inconsistencies (old has invariant_stamp_error, new has invariant_sha256)
+                    source_data.pop("invariant_stamp_error", None)
+                    source_data.pop("invariant_sha256", None)
+
+                    # Remove mmap_cache_report (path-based, may differ)
+                    source_data.pop("mmap_cache_report", None)
+
+            return normalized
+
+        normalized_old = normalize_receipt(receipt_old)
+        normalized_new = normalize_receipt(receipt_new)
+
+        # Assert equivalence
+        assert normalized_old == normalized_new, (
+            f"Old and new receipts differ:\n"
+            f"Old: {json.dumps(normalized_old, indent=2)}\n"
+            f"New: {json.dumps(normalized_new, indent=2)}"
         )
+
+        print(f"[PASS] Old (6675e2a) and new fcalib produce equivalent receipts")
+        print(f"  Old receipt: {out_old}")
+        print(f"  New receipt: {out_new}")
+        print(f"  Both: status={receipt_new.get('status')}, sources={sorted(receipt_new.get('per_source', {}).keys())}")
 
 
 def test_old_v0_cache_regenerated_not_misread():
