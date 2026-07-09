@@ -9,8 +9,11 @@ import {
   formatModelMetrics,
   formatDegradedBannerText,
   DegradedBanner,
+  formatOutageBannerText,
+  OutageBanner,
   type ModelMetrics,
   type DegradedBannerState,
+  type OutageBannerState,
 } from "./status-bar.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 
@@ -231,5 +234,72 @@ describe("DegradedBanner component — hook-free, follows EffortCallout conventi
     expect((el as { props: { color: string } }).props.color).toBe("red");
     const text = (el as { props: { children: string } }).props.children;
     expect(text).toContain("http://localhost:8081");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issue #475: OutageBanner — cockpit status banner for the frozen
+// planned-outage.json marker contract (#464). "model offline should say WHY"
+// -- a planned maintenance window must be visually distinguishable from an
+// actual crash, which today look identical from the operator's chair.
+// ---------------------------------------------------------------------------
+
+describe("formatOutageBannerText — issue #475 banner content", () => {
+  const inactive: OutageBannerState = { active: false };
+
+  it("inactive banner formats to an empty string", () => {
+    expect(formatOutageBannerText(inactive)).toBe("");
+  });
+
+  const active: OutageBannerState = {
+    active: true,
+    owner: "jun",
+    reason: "grow-event window",
+    expires: "2026-07-09T05:00:00Z",
+  };
+
+  it("matches the spec's exact shape: PLANNED OUTAGE (<owner>): <reason> — until <expires>", () => {
+    expect(formatOutageBannerText(active)).toBe(
+      "PLANNED OUTAGE (jun): grow-event window — until 2026-07-09T05:00:00Z",
+    );
+  });
+
+  it("includes the owner", () => {
+    expect(formatOutageBannerText(active)).toContain("jun");
+  });
+
+  it("includes the reason", () => {
+    expect(formatOutageBannerText(active)).toContain("grow-event window");
+  });
+
+  it("includes the expiry", () => {
+    expect(formatOutageBannerText(active)).toContain("2026-07-09T05:00:00Z");
+  });
+
+  it("falls back to placeholders when fields are missing but active is true", () => {
+    const sparse: OutageBannerState = { active: true };
+    const text = formatOutageBannerText(sparse);
+    expect(text).toContain("unknown");
+    expect(text).toContain("no reason given");
+  });
+});
+
+describe("OutageBanner component — hook-free, follows DegradedBanner conventions", () => {
+  it("renders null when inactive", () => {
+    expect(OutageBanner({ outage: { active: false } })).toBeNull();
+  });
+
+  it("renders a yellow Text element with the formatted banner text when active", () => {
+    const outage: OutageBannerState = {
+      active: true,
+      owner: "jun",
+      reason: "grow-event window",
+      expires: "2026-07-09T05:00:00Z",
+    };
+    const el = OutageBanner({ outage });
+    expect(el).not.toBeNull();
+    expect((el as { props: { color: string } }).props.color).toBe("yellow");
+    const text = (el as { props: { children: string } }).props.children;
+    expect(text).toContain("PLANNED OUTAGE (jun)");
   });
 });

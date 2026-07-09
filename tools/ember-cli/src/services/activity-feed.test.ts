@@ -16,6 +16,7 @@ import {
   formatBoardLine,
   parseOutageMarker,
   classifyOutageTransition,
+  computeEffectiveMarker,
   formatWatchdogLine,
   isExcludedReceiptPath,
   formatBulkMaterializationLine,
@@ -167,6 +168,36 @@ describe("classifyOutageTransition", () => {
     const result = classifyOutageTransition(marker, marker, expiredNow);
     expect(result.transition).toBe("closed");
     expect(result.effective).toBeNull();
+  });
+});
+
+describe("computeEffectiveMarker — issue #475: shared expiry check (banner + transition detection)", () => {
+  const marker = {
+    owner: "jun",
+    reason: "probe",
+    target: "server",
+    started: "2026-07-08T00:00:00Z",
+    expires: "2026-07-08T01:00:00Z",
+    kill_receipt_ref: "ref-1",
+  };
+
+  it("returns null for a null marker", () => {
+    expect(computeEffectiveMarker(null, Date.parse("2026-07-08T00:30:00Z"))).toBeNull();
+  });
+
+  it("returns the marker unchanged while unexpired", () => {
+    const nowMs = Date.parse("2026-07-08T00:30:00Z");
+    expect(computeEffectiveMarker(marker, nowMs)).toEqual(marker);
+  });
+
+  it("returns null once expires has passed", () => {
+    const nowMs = Date.parse("2026-07-08T02:00:00Z");
+    expect(computeEffectiveMarker(marker, nowMs)).toBeNull();
+  });
+
+  it("treats exactly-at-expires as expired (<=, matching classifyOutageTransition)", () => {
+    const atExpiry = Date.parse(marker.expires);
+    expect(computeEffectiveMarker(marker, atExpiry)).toBeNull();
   });
 });
 
@@ -332,6 +363,32 @@ describe("startActivityFeed — engine (real fs)", () => {
 
       state = getActivityFeedState();
       expect(state.recentLines.some((l) => l.source === "outage" && l.text.includes("closed"))).toBe(true);
+    },
+    8000,
+  );
+
+  it(
+    "#475: a BOM-prefixed marker file (PowerShell -Encoding utf8 default) still opens the outage",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+
+      const future = new Date(Date.now() + 60_000).toISOString();
+      const bomPrefixed =
+        "﻿" +
+        JSON.stringify({
+          owner: "tester",
+          reason: "probe",
+          target: "server",
+          started: new Date().toISOString(),
+          expires: future,
+          kill_receipt_ref: "ref-1",
+        });
+      fs.writeFileSync(deps.outageMarkerPath, bomPrefixed, "utf-8");
+
+      await sleep(1300);
+      const state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.source === "outage" && l.text.includes("opened"))).toBe(true);
     },
     8000,
   );

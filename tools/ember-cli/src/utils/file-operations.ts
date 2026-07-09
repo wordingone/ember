@@ -17,6 +17,18 @@ import { dirname, join } from "path";
 // ---------------------------------------------------------------------------
 
 /**
+ * Strips a leading UTF-8 BOM (U+FEFF) if present. Windows PowerShell 5.1's
+ * `-Encoding utf8` (used throughout this repo's .ps1 scripts, e.g. the liveness-watchdog's
+ * planned-outage.json contract, issue #464/#475) writes a byte-order-mark by default;
+ * Node's `fs.readFile(path, "utf-8")` does NOT strip it, so a PS-written JSON state file
+ * fails `JSON.parse` with a leading-character syntax error even though the content is
+ * otherwise valid. Pure, idempotent (no-op on a file with no BOM), never throws.
+ */
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+/**
  * Reads a file as a UTF-8 string.
  * Returns null if the file does not exist.
  */
