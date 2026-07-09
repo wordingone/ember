@@ -15,6 +15,20 @@ Surface-2 telemetry receipts live on the physically separate EXECUTION
 tree. Root resolution: `EMBER_EXEC_ROOT` env var, default `<local-exec-root>`
 (frozen spec v1, verbatim).
 
+Deviation record (issue #533, post-consolidation): the separate-tree
+premise above was a pre-consolidation convenience. Since the single-tree
+consolidation, the contract repo IS the execution home -- the old
+execution tree holds no `receipts/ember-surface2-telemetry/` dir at all
+(verified on disk this session). Root resolution is therefore:
+`EMBER_EXEC_ROOT` env override (retained, unchanged) -> else the contract
+repo root itself (REPO_ROOT, same resolution the sibling probes use, e.g.
+test_c_proc.py's CANDIDATE_ROOTS). The redaction placeholder default
+(`<local-exec-root>`) is deleted -- it made the probe UNEVALUABLE on every
+machine unconditionally. Absent EMBER_EXEC_ROOT, the probe now correctly
+resolves to the repo root, finds no surface-2 telemetry dir there, and
+reports RED (receipt-absent/tree-absent, frozen spec v1 clause (a)) -- a
+real, looked-at absence, not an environment failure.
+
 CHK enforced here (offline, filesystem + one local subprocess — git log,
 no network): GREEN iff ALL THREE hold, checked in this order (first
 failing clause is the reported reason, same short-circuit discipline as
@@ -109,9 +123,14 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-# Environment variable override for execution tree root; default points to external location
-# EMBER_EXEC_ROOT env var can override. Default: <local-exec-root> (frozen spec v1 convention)
-DEFAULT_EXEC_ROOT = os.environ.get("EMBER_EXEC_ROOT", "<local-exec-root>")
+# Contract repo root, same resolution the sibling probes use (e.g.
+# test_c_proc.py's REPO_ROOT): two levels up from this file's directory.
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+# EMBER_EXEC_ROOT env var can override; default resolves to the contract
+# repo root itself (issue #533 -- the separate-execution-tree premise is
+# dead post-consolidation; see docstring root-note deviation record above).
+DEFAULT_EXEC_ROOT = os.environ.get("EMBER_EXEC_ROOT", REPO_ROOT)
 STALE_DAYS = 14
 SURFACE_SUBPATH = os.path.join("receipts", "ember-surface2-telemetry")
 STEER_KILL_VERBS = {"stop", "pause", "resume", "adjust"}  # "start" excluded — neither steer nor kill
