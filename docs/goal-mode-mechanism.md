@@ -72,13 +72,28 @@ Metrics/receipts on every transition: created/completed/blocked/budget-limited/u
 resumed, duration, token count. In ember-cli every transition and continuation fire ALSO
 appends to the receipt store — the organ itself obeys receipts-only law (L2).
 
-## 7. ember-cli port deltas (the "then improve" list, initial)
+## 7. ember-cli port deltas (the "then improve" list)
 
-1. Receipts-first: transitions receipted (above) — the studied implementation only emits
-   telemetry.
-2. The flame: goal state (active/continuing/blocked/budget) is a first-class input to the
-   observatory's real-state flame (constitution P-C) — autonomy must be VISIBLE.
-3. Operator preemption via the operator pipe as well as the TUI (both count as queued user
-   input for eligibility).
-4. Goal receipts feed the board: long-running goal sessions produce evidence rows, so
-   autonomous work lands on the same truth surface as everything else.
+1. **DONE.** Receipts-first: transitions receipted (above) — the studied implementation only
+   emits telemetry. `services/goal-receipts.ts`.
+2. **PARTIAL — disclosed, not further attempted by this pass.** Every continuation-fired turn
+   (autonomous, zero user input) drives the SAME cognitive-mode pipeline as an ordinary turn, so
+   the fireball/flame already animates through its normal busy states (tool/inference) while a
+   goal turn is in flight — autonomy is visible in that generic sense today. A DEDICATED
+   goal-mode-specific flame color/state (distinguishing "autonomous continuation in flight" from
+   an ordinary user-driven turn at the pixel level) is a taste/design call on a component with an
+   extensive, separately-governed visual-design history (`components/fireball.ts`'s own header)
+   and was not attempted here — left as a follow-on if the maintainer wants a dedicated visual,
+   rather than risking an unrequested redesign of a hand-tuned surface.
+3. **DONE.** Operator preemption via the operator pipe as well as the TUI (both count as queued
+   user input for eligibility) — `screens/repl.ts`'s `queuedUserInput` signal reads both the
+   input-buffer text length and `OperatorInjector.queueLength`.
+4. **DONE (this PR).** Goal receipts feed the board: `services/activity-feed.ts` now
+   tail-polls `receipts/goal-sessions/*.jsonl` (discovered dynamically via the same recursive
+   receipts watcher, since the file is a growing per-session JSONL log rather than a one-shot
+   JSON receipt) and renders `created` / `status_changed` / `objective_edited` / `cleared` /
+   `continuation_fired` transitions as `source: "goal"` activity-feed lines (own color/label,
+   `components/activity-feed-pane.ts`) — a long-running goal session's autonomous continuations
+   now land on the same visible truth surface as receipts/board/watchdog/outage events.
+   `usage_recorded` and `continuation_skipped` are deliberately excluded from the visible feed
+   (pure per-turn noise; still fully receipted in the underlying JSONL file for audit).

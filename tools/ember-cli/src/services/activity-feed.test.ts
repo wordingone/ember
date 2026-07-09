@@ -19,12 +19,15 @@ import {
   formatWatchdogLine,
   isExcludedReceiptPath,
   formatBulkMaterializationLine,
+  isGoalSessionRelativePath,
+  formatGoalReceiptLine,
   startActivityFeed,
   getActivityFeedState,
   RECEIPT_RETRY_DELAY_MS,
   MAX_TAIL_LINES_PER_TICK,
   type ActivityFeedHandle,
 } from "./activity-feed.ts";
+import type { GoalReceiptRow } from "./goal-receipts.ts";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -190,6 +193,77 @@ describe("formatWatchdogLine", () => {
   });
   it("returns null for an unrecognized shape", () => {
     expect(formatWatchdogLine({ foo: "bar" })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Goal-organ receipt rows (ember issue #211 §7 delta 4)
+// ---------------------------------------------------------------------------
+
+describe("isGoalSessionRelativePath", () => {
+  it("matches a goal-sessions jsonl path with forward slashes", () => {
+    expect(isGoalSessionRelativePath("goal-sessions/session-20260709T000000Z.jsonl")).toBe(true);
+  });
+  it("matches a goal-sessions jsonl path with backslashes (Windows watch callback)", () => {
+    expect(isGoalSessionRelativePath("goal-sessions\\session-20260709T000000Z.jsonl")).toBe(true);
+  });
+  it("rejects an ordinary receipt path", () => {
+    expect(isGoalSessionRelativePath("acceptance/r1.json")).toBe(false);
+  });
+  it("rejects a non-jsonl file even if it sits in goal-sessions", () => {
+    expect(isGoalSessionRelativePath("goal-sessions/session-x.json")).toBe(false);
+  });
+  it("requires an exact path-segment match, never a substring", () => {
+    expect(isGoalSessionRelativePath("goal-sessions-similar/x.jsonl")).toBe(false);
+  });
+});
+
+describe("formatGoalReceiptLine", () => {
+  function row(overrides: Partial<GoalReceiptRow> = {}): GoalReceiptRow {
+    return { ts: "2026-07-09T00:00:00.000Z", event: "created", ...overrides };
+  }
+
+  it("formats a created row with the truncated objective", () => {
+    const text = formatGoalReceiptLine(row({ event: "created", detail: { objective: "ship the thing" } }));
+    expect(text).toBe('goal created: "ship the thing"');
+  });
+
+  it("truncates a long objective", () => {
+    const long = "x".repeat(120);
+    const text = formatGoalReceiptLine(row({ event: "created", detail: { objective: long } }));
+    expect(text?.length).toBeLessThan(long.length);
+    expect(text).toContain("…");
+  });
+
+  it("formats a status_changed row with from -> to and an optional reason", () => {
+    const text = formatGoalReceiptLine(
+      row({ event: "status_changed", detail: { from: "Active", to: "Blocked", reason: "same blocker x3" } }),
+    );
+    expect(text).toBe("goal status: Active -> Blocked (same blocker x3)");
+  });
+
+  it("omits the reason suffix when absent", () => {
+    const text = formatGoalReceiptLine(row({ event: "status_changed", detail: { from: "Active", to: "Complete" } }));
+    expect(text).toBe("goal status: Active -> Complete");
+  });
+
+  it("formats objective_edited and cleared as fixed one-liners", () => {
+    expect(formatGoalReceiptLine(row({ event: "objective_edited" }))).toBe("goal objective edited");
+    expect(formatGoalReceiptLine(row({ event: "cleared" }))).toBe("goal cleared");
+  });
+
+  it("formats continuation_fired distinctly for continue vs budget_wrapup", () => {
+    const continueText = formatGoalReceiptLine(row({ event: "continuation_fired", detail: { kind: "continue" } }));
+    const wrapupText = formatGoalReceiptLine(
+      row({ event: "continuation_fired", detail: { kind: "budget_wrapup" } }),
+    );
+    expect(continueText).toContain("autonomous turn");
+    expect(wrapupText).toContain("budget wrap-up");
+  });
+
+  it("excludes continuation_skipped and usage_recorded from the visible feed", () => {
+    expect(formatGoalReceiptLine(row({ event: "continuation_skipped" }))).toBeNull();
+    expect(formatGoalReceiptLine(row({ event: "usage_recorded" }))).toBeNull();
   });
 });
 
@@ -479,6 +553,157 @@ describe("startActivityFeed — engine (real fs)", () => {
       expect(tick).toHaveProperty("byteOffsetAfter");
     },
     8000,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Goal-organ session tail-poll — ember issue #211 §7 delta 4 ("goal receipts feed the
+// board"). Unlike every other engine test above, this file is a GROWING JSONL log appended
+// to repeatedly across a session (services/goal-receipts.ts), never a one-shot-parsed `.json`
+// receipt -- these tests exist specifically to prove the tail-poll path (not the
+// queueForRender/watermark path) is what picks it up, and that it keeps picking up FURTHER
+// appends to the SAME file, not just its first line.
+// ---------------------------------------------------------------------------
+
+describe("startActivityFeed — goal-session tail-poll (real fs)", () => {
+  let scratchDir: string;
+  let handle: ActivityFeedHandle | null = null;
+
+  beforeEach(() => {
+    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-activity-feed-goal-"));
+    fs.mkdirSync(path.join(scratchDir, "receipts"), { recursive: true });
+    fs.mkdirSync(path.join(scratchDir, "totality"), { recursive: true });
+  });
+
+  afterEach(() => {
+    handle?.stop();
+    handle = null;
+    fs.rmSync(scratchDir, { recursive: true, force: true });
+  });
+
+  function baseDeps(overrides: Record<string, string> = {}) {
+    return {
+      receiptsDir: path.join(scratchDir, "receipts"),
+      totalityDir: path.join(scratchDir, "totality"),
+      outageMarkerPath: path.join(scratchDir, "planned-outage.json"),
+      restartLogPath: path.join(scratchDir, "restart-log.jsonl"),
+      watchdogStatePath: path.join(scratchDir, "watchdog-state.json"),
+      ledgerPath: path.join(scratchDir, "ledger.jsonl"),
+      ...overrides,
+    };
+  }
+
+  function goalRow(overrides: Partial<GoalReceiptRow> = {}): string {
+    return JSON.stringify({ ts: new Date().toISOString(), goalId: "g1", ...overrides } as GoalReceiptRow);
+  }
+
+  it(
+    "discovers a new goal-sessions file created after boot and renders its first row",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300); // let the recursive watcher arm
+
+      const goalSessionsDir = path.join(deps.receiptsDir, "goal-sessions");
+      fs.mkdirSync(goalSessionsDir, { recursive: true });
+      const sessionFile = path.join(goalSessionsDir, "session-20260709T000000Z.jsonl");
+      fs.writeFileSync(
+        sessionFile,
+        goalRow({ event: "created", detail: { objective: "write progress.txt in three steps" } }) + "\n",
+      );
+
+      await sleep(1300);
+      const state = getActivityFeedState();
+      const found = state.recentLines.find((l) => l.source === "goal");
+      expect(found).toBeDefined();
+      expect(found?.text).toContain("goal created");
+      expect(found?.text).toContain("write progress.txt in three steps");
+      expect(found?.path).toBe(sessionFile);
+
+      const ledgerRaw = fs.readFileSync(deps.ledgerPath, "utf-8");
+      expect(ledgerRaw).toContain("\"source\":\"goal\"");
+    },
+    8000,
+  );
+
+  it(
+    "keeps rendering further appends to the SAME growing session file (not just the first line)",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      const goalSessionsDir = path.join(deps.receiptsDir, "goal-sessions");
+      fs.mkdirSync(goalSessionsDir, { recursive: true });
+      const sessionFile = path.join(goalSessionsDir, "session-20260709T000001Z.jsonl");
+      fs.writeFileSync(sessionFile, goalRow({ event: "created", detail: { objective: "obj" } }) + "\n");
+
+      await sleep(1300);
+      let state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.source === "goal" && l.text.includes("goal created"))).toBe(true);
+
+      fs.appendFileSync(
+        sessionFile,
+        goalRow({ event: "continuation_fired", detail: { kind: "continue" } }) + "\n",
+      );
+
+      await sleep(1300);
+      state = getActivityFeedState();
+      expect(
+        state.recentLines.some((l) => l.source === "goal" && l.text.includes("goal continuation fired")),
+      ).toBe(true);
+
+      fs.appendFileSync(
+        sessionFile,
+        goalRow({ event: "status_changed", detail: { from: "Active", to: "Complete" } }) + "\n",
+      );
+
+      await sleep(1300);
+      state = getActivityFeedState();
+      expect(
+        state.recentLines.some((l) => l.source === "goal" && l.text.includes("Active -> Complete")),
+      ).toBe(true);
+    },
+    12000,
+  );
+
+  it(
+    "never renders a line for usage_recorded or continuation_skipped rows (excluded by design)",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+
+      const goalSessionsDir = path.join(deps.receiptsDir, "goal-sessions");
+      fs.mkdirSync(goalSessionsDir, { recursive: true });
+      const sessionFile = path.join(goalSessionsDir, "session-20260709T000002Z.jsonl");
+      fs.writeFileSync(
+        sessionFile,
+        [
+          goalRow({ event: "usage_recorded", detail: { usage: { tokensUsed: 10 } } }),
+          goalRow({ event: "continuation_skipped", detail: { reason: "queued_user_input" } }),
+        ].join("\n") + "\n",
+      );
+
+      await sleep(1300);
+      const state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.source === "goal")).toBe(false);
+    },
+    8000,
+  );
+
+  it(
+    "never crashes and never renders anything when no goal has ever been created this session",
+    async () => {
+      const deps = baseDeps();
+      expect(() => {
+        handle = startActivityFeed(deps);
+      }).not.toThrow();
+      await sleep(1300);
+      const state = getActivityFeedState();
+      expect(state.recentLines.some((l) => l.source === "goal")).toBe(false);
+    },
+    5000,
   );
 });
 
