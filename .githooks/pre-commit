@@ -17,4 +17,4 @@ case "$top" in
     fi ;;
 esac
 
-exec bash "$(git rev-parse --show-toplevel)/tools/repo-guard.sh"
+exec env REPO_GUARD_SCOPE=staged bash "$(git rev-parse --show-toplevel)/tools/repo-guard.sh"
