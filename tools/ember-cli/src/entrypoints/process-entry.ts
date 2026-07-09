@@ -670,6 +670,12 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     process.env["EMBER_MODEL_URL"] ??= externalUrl;
     serverUrl    = externalUrl;
     detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
+  } else if (process.env["EMBER_GPU_FREE"]) {
+    // GPU-free mode: boot the cockpit without spawning/loading the model server.
+    // The model client stub in session-init.ts surfaces OFFLINE state when called.
+    process.stdout.write(`[ember] model endpoint: GPU-free mode (EMBER_GPU_FREE=1, model unavailable)\n`);
+    serverUrl    = null as unknown as string; // signal to session-init that model is disabled
+    detectedNCtx = modelsCfg?.nCtx ?? 4096;
   } else {
     const exeDir    = resolve(dirname(process.execPath ?? process.argv[0] ?? process.cwd()));
     const port      = await resolveServerPort(exeDir);
