@@ -1,0 +1,63 @@
+{
+  "ts": "2026-06-28T03:07:06.443Z",
+  "finished_at": "2026-06-28T03:07:37.429Z",
+  "ember_exe_sha256": "5f7a219f522b6df7f644f8a7e003117c0481fa74c6d905c17a1c775c847066fe",
+  "model_endpoint": "http://<REDACTED_LOCAL_API>:53338",
+  "model_id": "qwen36-27b",
+  "prompts": [
+    "Use the Bash tool to run: pwd && ls -1 | head -3 then tell me the first filename you saw."
+  ],
+  "server_metrics_before": {
+    "prompt_tokens_total": 20797,
+    "tokens_predicted_total": 422,
+    "requests_processing": 0
+  },
+  "server_metrics_after": {
+    "prompt_tokens_total": 26077,
+    "tokens_predicted_total": 616,
+    "requests_processing": 0
+  },
+  "server_metrics_delta": {
+    "tokens_predicted_delta": 194,
+    "new_completion_requests": 2,
+    "gate_passed": true
+  },
+  "server_log_before": {
+    "line_count": 512,
+    "completion_count": 9
+  },
+  "server_log_after": {
+    "line_count": 565,
+    "completion_count": 11
+  },
+  "observed_markers": {
+    "tui_rendered": {
+      "value": true,
+      "evidence": "Ember CLI v0.0.0                                  Tips for getting started                                              Welcome back!"
+    },
+    "real_model_response": {
+      "value": true,
+      "evidence": "metrics_delta=194_tokens; first_line: Use the Bash tool to run: pwd && ls -1 | head -3 then tell me the first filename you saw.\u00b7"
+    },
+    "bash_tool_turn_executed": {
+      "value": true,
+      "evidence": "l to run: pwd && ls -1 | head -3 then tell me the first filename you saw.You Use the Bash tool to run: pwd && ls -1 | head -3 then tell me the first filename yo | completions_delta=2"
+    },
+    "cockpit_panel_present": {
+      "value": true,
+      "evidence": "\u23f5\u23f5 bypass permissions on (shift+tab to cycle) \u00b7 esc to interrupt \u00b7 ctrl+t to show tasks                                 Use the Bash tool to run: pwd"
+    }
+  },
+  "exact_rerun_command": "EMBER_MODEL_URL=http://<REDACTED_LOCAL_API>:53338 EMBER_MODEL_NAME=qwen36-27b EMBER_API_KEY=local node <REDACTED_PATH>/scripts/ember_cockpit_live_capture.cjs \"<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T03-07-06Z\"",
+  "exit_event": {
+    "exitCode": 0
+  },
+  "verdict": "SURFACE1_LIVE_COCKPIT_PASS",
+  "files": {
+    "terminal_transcript": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T03-07-06Z\\terminal-transcript.txt",
+    "terminal_transcript_clean": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T03-07-06Z\\terminal-transcript-clean.txt",
+    "receipt": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T03-07-06Z\\receipt.json",
+    "driver_log": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T03-07-06Z\\driver.log"
+  },
+  "redaction_note": "Redacted edition: local paths replaced per repo-guard convention"
+}

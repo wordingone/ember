@@ -1,0 +1,46 @@
+{
+  "ts": "2026-06-28T02:53:31.459Z",
+  "finished_at": "2026-06-28T02:53:58.575Z",
+  "ember_exe_sha256": "5f7a219f522b6df7f644f8a7e003117c0481fa74c6d905c17a1c775c847066fe",
+  "model_endpoint": "http://<REDACTED_LOCAL_API>:53338",
+  "model_id": "qwen36-27b",
+  "prompts": [
+    "Use your Bash tool to run: pwd && ls -1 | head -3 then tell me the first filename you saw."
+  ],
+  "observed_markers": {
+    "tui_rendered": {
+      "value": true,
+      "evidence": "Ember CLI v0.0.0                                  Tips for getting started                                              Welcome back!"
+    },
+    "real_model_response": {
+      "value": true,
+      "evidence": "thinking: The user wants me to run a bash command that prints the current working director... | answer: The first filename I saw is \"another-file.txt\".</think>The first filename I saw "
+    },
+    "bash_tool_turn_executed": {
+      "value": true,
+      "evidence": "tool_result\",\"tool_use_id\":\"MV43WEsr91btcWxxDpa4br4f5yElDm7x\",\"content\":\"{\\\"stdout\\\":\\\"/c/tmp/ember-cockpit-\u273d"
+    },
+    "cockpit_panel_present": {
+      "value": true,
+      "evidence": "\u23f5\u23f5 bypass permissions on (shift+tab to cycle) \u00b7 esc to interrupt \u00b7 ctrl+t to show tasks                                 Use your Bash tool to run: pwd"
+    }
+  },
+  "exact_rerun_command": "EMBER_MODEL_URL=http://<REDACTED_LOCAL_API>:53338 EMBER_MODEL_NAME=qwen36-27b EMBER_API_KEY=local node <REDACTED_PATH>/scripts/ember_cockpit_live_capture.cjs \"<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-53-31Z\"",
+  "exit_event": {
+    "exitCode": 0
+  },
+  "verdict": "SURFACE1_LIVE_COCKPIT_PASS",
+  "files": {
+    "terminal_transcript": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-53-31Z\\terminal-transcript.txt",
+    "terminal_transcript_clean": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-53-31Z\\terminal-transcript-clean.txt",
+    "receipt": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-53-31Z\\receipt.json"
+  },
+  "server_slot_confirmed": {
+    "is_processing": true,
+    "id_task": 188,
+    "n_decoded": 35,
+    "checked_at": "2026-06-28T02:53:42Z",
+    "note": "Slot was is_processing=true 2s after Enter was sent \u2014 proves real /v1/chat/completions call to qwen36-27b"
+  },
+  "redaction_note": "Redacted edition: local paths replaced per repo-guard convention"
+}

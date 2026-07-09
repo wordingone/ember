@@ -1,0 +1,39 @@
+{
+  "ts": "2026-06-28T02:44:44.043Z",
+  "finished_at": "2026-06-28T02:47:55.589Z",
+  "ember_exe_sha256": "5f7a219f522b6df7f644f8a7e003117c0481fa74c6d905c17a1c775c847066fe",
+  "model_endpoint": "http://<REDACTED_LOCAL_API>:53338",
+  "model_id": "qwen36-27b",
+  "prompts": [
+    "Use your Bash tool to run the command: pwd && ls -1 | head -3 \u2014 then tell me the first filename it printed."
+  ],
+  "observed_markers": {
+    "tui_rendered": {
+      "value": true,
+      "evidence": "Ember CLI v0.0.0                                  Tips for getting started                                              Welcome back!"
+    },
+    "real_model_response": {
+      "value": false,
+      "evidence": "[no post-prompt assistant lines found]"
+    },
+    "bash_tool_turn_executed": {
+      "value": false,
+      "evidence": "[bash_tool: not found in transcript]"
+    },
+    "cockpit_panel_present": {
+      "value": true,
+      "evidence": "\u23f5\u23f5 bypass permissions on (shift+tab to cycle) \u00b7 esc to interrupt \u00b7 ctrl+t to show tasks                                 Use your Bash tool to run the"
+    }
+  },
+  "exact_rerun_command": "EMBER_MODEL_URL=http://<REDACTED_LOCAL_API>:53338 EMBER_MODEL_NAME=qwen36-27b EMBER_API_KEY=local node <REDACTED_PATH>/scripts/ember_cockpit_live_capture.cjs \"<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-44-43Z\"",
+  "exit_event": {
+    "exitCode": 0
+  },
+  "verdict": "PARTIAL",
+  "files": {
+    "terminal_transcript": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-44-43Z\\terminal-transcript.txt",
+    "terminal_transcript_clean": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-44-43Z\\terminal-transcript-clean.txt",
+    "receipt": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T02-44-43Z\\receipt.json"
+  },
+  "redaction_note": "Redacted edition: local paths replaced per repo-guard convention"
+}

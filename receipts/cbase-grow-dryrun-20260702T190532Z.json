@@ -1,0 +1,63 @@
+{
+  "ticket": "CBASE-GROW-OPERATOR-DRYRUN",
+  "ts": "2026-07-02T19:05:51Z",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "scope": "grow_operator dry-run on the REAL owned from-scratch seed: net2net ff_widening produces a valid larger-shape checkpoint that is function-preserving and replays across the shape_change",
+  "seed_identity": {
+    "checkpoint": "<REDACTED_PATH>\\models\\cbase-smoke-run\\checkpoints\\step-00000610",
+    "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+    "manifest_claim_verified": true,
+    "segment_id": "cbase-v0",
+    "step": 610,
+    "arch": {
+      "hidden": 1024,
+      "layers": 20,
+      "heads": 16,
+      "vocab": 32000,
+      "seq": 1024,
+      "intermediate": 4096
+    },
+    "param_count_total": 466658304,
+    "from_scratch": true,
+    "pretrain_receipt": "receipts/v0-live-20260623T105829Z.json (contract repo import: v0 survivor-stack pretrain segment, loss 13.75->7.25, 610 steps, governed)"
+  },
+  "grow_step": {
+    "mechanism": "ff_widening_net2net (grow_operator)",
+    "surgery_math": "gate_proj/up_proj: cat([w,w],dim=0); down_proj: cat([w*0.5,w*0.5],dim=1) -- per recorded prereq receipt receipts/cgrow-prereq/ff-widen-preservation-20260628T053513Z.json",
+    "seed_ff": 4096,
+    "grown_ff": 8192,
+    "grown_shape": {
+      "intermediate": 8192
+    },
+    "param_count_grown_total": 718316544
+  },
+  "pre_grow_vs_post_grow": {
+    "input_batch": {
+      "batch": 2,
+      "seqlen": 128,
+      "token_ids_sha256": "f7fe16148dd1d133e738691ec0634d88978ff38023c672aa413d3b7c3996baf5",
+      "generator_seed": 42,
+      "note": "fixed recorded token batch; function preservation is input-independent by construction, verified numerically on this batch"
+    },
+    "logit_max_abs_diff": 3.337860107421875e-06,
+    "pass_tolerance": 0.0001,
+    "function_preserving": true
+  },
+  "larger_shape_checkpoint": {
+    "path": "<REDACTED_PATH>\\models\\cbase-grow-dryrun\\grown-ff8192-20260702T190532Z\\model.pt",
+    "model_pt_sha256": "5962c956558e969c7c8c359403175a326427736bd3f798c735d44313ab270bfa",
+    "dtype": "bfloat16 (fp32 surgery, bf16 storage matching seed convention)"
+  },
+  "replay_across_shape_change": {
+    "procedure": "save grown checkpoint -> reload into fresh larger-shape model -> re-forward same recorded batch; the grown-checkpoint replays",
+    "logit_max_abs_diff_vs_post_grow": 0.0,
+    "replay_tolerance_bf16_roundtrip": 0.05,
+    "replays": true
+  },
+  "device": "cpu",
+  "dtype_compute": "float32",
+  "invalid_tokens_present": [],
+  "script": "scripts/cbase_grow_dryrun.py",
+  "verdict": "GROW_DRYRUN_PASS",
+  "redaction_note": "Redacted for repo-guard: local paths replaced with <REDACTED_PATH> per policy"
+}

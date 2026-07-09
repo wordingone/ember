@@ -1,0 +1,62 @@
+{
+  "build_cmd": "bun build ./entrypoints/main.ts --compile --outfile ../scratchpad/fresh-build/ember-fresh.exe",
+  "build_ok": true,
+  "binary_path": "<REDACTED_PATH>\\tools\\ember-cli\\scratchpad\\fresh-build\\ember-fresh.exe",
+  "binary_size_bytes": 117168640,
+  "endpoint": "http://<REDACTED_LOCAL_API>:53338",
+  "ts": "2026-06-28T12:41:46.472Z",
+  "finished_at": "2026-06-28T12:44:01.606Z",
+  "ember_exe_sha256": "3b1514aed05d9d0d4d3243274c126a308b264222b6cdfb330bc34080b5df1ab0",
+  "model_id": "qwen36-27b",
+  "prompt": "say EMBERLIVE then stop",
+  "metrics_before": {
+    "prompt_tokens_total": 0,
+    "tokens_predicted_total": 0,
+    "requests_processing": 0
+  },
+  "metrics_after": {
+    "prompt_tokens_total": 2545,
+    "tokens_predicted_total": 36,
+    "requests_processing": 0
+  },
+  "metrics_delta": {
+    "tokens_predicted_delta": 36,
+    "new_completion_requests": 0,
+    "gate_passed": false
+  },
+  "enter_byte_that_worked": "unknown (no dispatch)",
+  "server_log_before": {
+    "line_count": 2830,
+    "completion_count": 76
+  },
+  "server_log_after": {
+    "line_count": 2830,
+    "completion_count": 76
+  },
+  "raw_window_text_excerpt": "Ember CLI v0.0.0                                  Tips for getting started                                              Welcome back!                                     Run /init to create an EMBER.md file with instructions for Ember      ember                                             Recent activity                                                       qwen36-27b \u00b7 Local                      ",
+  "observed_markers": {
+    "tui_rendered": {
+      "value": true,
+      "evidence": "Ember CLI v0.0.0                                  Tips for getting started                                              Welcome back!"
+    },
+    "real_model_response": {
+      "value": false,
+      "evidence": "BLOCKED: token_delta=36"
+    },
+    "cockpit_panel_present": {
+      "value": false,
+      "evidence": "[cockpit: not found]"
+    }
+  },
+  "exit_event": {
+    "exitCode": 0
+  },
+  "verdict": "PARTIAL",
+  "files": {
+    "terminal_transcript": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T05-41-41Z\\terminal-transcript.txt",
+    "terminal_transcript_clean": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T05-41-41Z\\terminal-transcript-clean.txt",
+    "receipt": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T05-41-41Z\\receipt.json",
+    "driver_log": "<REDACTED_PATH>\\receipts\\ember-cockpit-live-surface1\\2026-06-28T05-41-41Z\\driver.log"
+  },
+  "redaction_note": "Redacted edition: local paths replaced per repo-guard convention"
+}
