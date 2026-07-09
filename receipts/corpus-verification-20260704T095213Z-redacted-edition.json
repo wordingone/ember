@@ -1,0 +1,93 @@
+{
+  "ticket": "CORPUS-VERIFICATION-ISSUE-77",
+  "ts": "20260704T095213Z",
+  "kind": "corpus_verification",
+  "issue": "#77",
+  "schema": "corpus-verification/v1",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "scope": "READ-ONLY against training state. No GPU. No training launch. No config flipped live. New files only (this receipt + scratch/corpus-wire/* + docs/dossier/corpus-wiring-plan-v1.md).",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false,
+  "corpus_manifest_verification": {
+    "corpus_bin_dir_junction": "<REDACTED_PATH>/shards-v0",
+    "corpus_bin_dir_real_path_receipt": "receipts/corpus-materiality-adjudication-20260702T162033Z.json",
+    "n_files": 26,
+    "total_size_bytes": 13955737516,
+    "total_stream_tokens": 6977868758,
+    "content_total_tokens": 6973632300,
+    "separator_tokens": 4236458,
+    "dtype": "<u2",
+    "bytes_per_token": 2,
+    "reverify_method_1": "sha256sum (GNU coreutils, independent of any repo tooling) over all 26 on-disk files -- all 26 hashes matched receipts/corpus-manifest-20260702T162110Z.json per-file sha256 exactly, 0 mismatches. Wall time 45.6s.",
+    "reverify_method_2": "fresh, independent re-execution of scripts/manifest_sha.py --bin-dir <REDACTED_PATH>/shards-v0 --print-only (repo own deterministic generator, re-run now, not read from the prior receipt) -- reproduced n_files=26, total_tokens=6977868758, and combined_sha256 = aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a, matching the prior manifest receipt combined_sha256 field exactly.",
+    "token_count_rederivation": "n_tokens = size_bytes // 2 (dtype <u2), computed directly from ls -la file sizes independent of the manifest JSON: 25 shards x 536,870,912 bytes + 1 x 533,964,716 bytes = 13,955,737,516 bytes total => 6,977,868,758 tokens total -- matches manifest total_tokens exactly, never trusted the receipt own total_tokens field as the source of truth.",
+    "windowing_rederivation": "n_windows = (total_stream_tokens - block_len)//seq + 1 with seq=1024, n_mtp=2, block_len=1027 (PackedShardLoader formula, scripts/timeshare_pretrain.py:1031) = 6,814,324, independently recomputed and matching receipts/token-shards-v0-20260611T170047Z.json loader_windows.n_windows field exactly.",
+    "config_cross_check": "configs/v0-pretrain-config.json data.real_token_total = 6,973,632,300 matches this corpus content_total_tokens exactly -- a THIRD, independent figure (the production config, not a corpus receipt) already assumes this corpus exact token count.",
+    "verdict": "26/26 SHARDS VERIFIED PRESENT AND BYTE-IDENTICAL TO RECEIPT (two independent re-hash methods, zero mismatches); ALL derived figures (total_size_bytes, total_tokens, n_windows) re-derived from raw file sizes and cross-checked against three independent sources (manifest receipt, freeze receipt, production config) -- all reconcile exactly."
+  },
+  "loader_path_map": {
+    "entry_point": "scripts/ember_cbase_launch.py main() line 1107",
+    "call_chain": [
+      "_parse_args() line 1034, --mixture-dir flag line 1045-1049 (current default: str(_REPO/data/cbase_pretrain), an unrelated 63,996-token stub)",
+      "main() line 1114-1126 -> run_floor_gated_loop(mixture_dir=args.mixture_dir)",
+      "run_floor_gated_loop line 775 -> _build_daemon_job_payload(...) line 895 -> wsl_mixture_dir fallback line 641-643 (falls back to state/cbase-mixture, written into EMBER_SHARD_DIR env entry line 690 and train_config.json dataset field line 698)",
+      "run_floor_gated_loop -> _write_segment_wrapper(...) line 910 -> wsl_shard_dir fallback line 540-542 (same state/cbase-mixture fallback), baked as os.environ[EMBER_SHARD_DIR] line 564 into the per-segment wrapper script",
+      "daemon executes the generated wrapper -> imports scripts/cbase_v0_segment_live.py, reads EMBER_SHARD_DIR env (line 63-66), builds --shard-dir arg for timeshare_pretrain.py --live (line 119-127)",
+      "scripts/timeshare_pretrain.py run_v0_segment(shard_dir=...) constructs PackedShardLoader(shard_dir, seq, n_mtp) -- class defined line 999-1043, reads every *.bin in shard_dir sorted, dtype PACK_DTYPE=<u2 (timeshare_pretrain.py:673), concatenates into one flat stream (np.concatenate, line 1026) before windowing"
+    ],
+    "currently_broken_default": "receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T084922Z.json states verbatim: the receipted real shard_dir, state/cbase-mixture, is not present on this machine -- the internal fallback target the loader currently reaches is absent; the CLI own --mixture-dir default is a different, unrelated, smaller stub.",
+    "docstring_mention_flagged_not_blocking": "ember_cbase_launch.py module docstring (lines 13, 23, 278) mentions shards-v0 raw corpus / shards-v0 perplexity twice, contrasting the driver lightweight CPU held-out-ppl proxy with what a full-GPU-path shards-v0 corpus perplexity metric would use. Read in context this describes an aspirational not-yet-built metric, not a formal eval-only reservation -- no code found enforcing shards-v0-as-eval-only. Flagged for maintainer confirmation, not treated as a blocker."
+  },
+  "loader_compatibility_empirical_test": {
+    "method": "PackedShardLoader (scripts/timeshare_pretrain.py:999) instantiated directly, CPU-only, read-only, against two real shards from the big corpus (v0-00000.bin full shard + v0-00025.bin odd-sized final shard) via NTFS hardlinks in a scratch sandbox (mklink /H) -- zero bytes copied, zero bytes modified, no GPU, no training loop invoked.",
+    "n_tokens_2shard_subset_expected": 535417814,
+    "n_tokens_2shard_subset_observed": 535417814,
+    "n_windows_2shard_subset_expected": 522868,
+    "n_windows_2shard_subset_observed": 522868,
+    "window_np_shape_check": "window_np(0) and window_np(n_windows-1) (first and last window, boundary case) both returned (x, y_primary, [y_mtp0, y_mtp1]) int64 arrays of shape (1024,) each; max observed token id 30066 < vocab 32000 (in-range).",
+    "verdict": "FORMAT-COMPATIBLE -- confirmed empirically, not assumed from code reading alone. No loader code change required; the wiring gap is a stale default path only."
+  },
+  "contamination_check": {
+    "script": "scratch/corpus-wire/contamination_check.py",
+    "full_result_file": "scratch/corpus-wire/contamination_check_output.json",
+    "method": "13-token polynomial rolling hash (uint64, mod 2**64 via numpy wraparound) computed shard-by-shard (<=1 shard resident in RAM at a time, peak <=512MB, not the full 13.6GB) -- re-implements the SAME exact-match semantics as scripts/proofs/contamination_verbatim_check.py (GPT-3 decontamination convention, window_tokens=13, Brown et al. arXiv:2005.14165), because that tool own method (materialize every window as a Python tuple in a set) does not scale to ~7e9 windows. Every hash hit is re-verified by an exact elementwise comparison against the actual on-disk token ids -- a hash collision can only cost extra verification work, never a false verdict. Shard-to-shard BOUNDARY windows (25 joins) were also checked, since PackedShardLoader concatenates all 26 shards into one stream before windowing.",
+    "sampling": "NONE -- exhaustive. All 6,977,868,758 corpus tokens scanned exactly once (plus the 25 boundary joins). Wall time 526.2s, CPU-only.",
+    "w1_capability_eval_batch": {
+      "source_receipt": "receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json",
+      "is_real_lineage": false,
+      "note": "ONLY the CPU dry-run eval batch is receipted as of this check (vocab=512, seq=64, batch=2, seed=42, per scripts/w1_collapse_control_run.py). Reproduced deterministically here; reproduced sha256 (aaf3dfb6b5331d3d42e497d8d01407f212112ad1efdf06819be6f92f6953c84d) asserted equal to the receipted eval_batch_sha256 before any check ran (fail-closed on generator drift). The REAL GPU-run capability batch (issue #53) has NOT executed -- no real-lineage W1 eval batch exists yet to check. OPEN ITEM: re-run this script once issue #53 lands a real capability_point receipt.",
+      "needle_windows_checked": 106,
+      "confirmed_matches": 0,
+      "hash_collisions_ruled_out_by_exact_recheck": 0,
+      "verdict": "CLEAN"
+    },
+    "function_preservation_probe_batch": {
+      "source": "scripts/growth_refutation/capacity.py _PROBE_TOKEN_IDS line 52",
+      "token_ids": [
+        1,
+        2,
+        3,
+        5,
+        8,
+        13,
+        21,
+        34,
+        55,
+        89
+      ],
+      "n_tokens": 10,
+      "note": "shorter than the 13-token window convention (10 < 13) -- vacuously CLEAN under that convention alone (0 windows). Ran a SUPPLEMENTARY direct full-length (10-token) exact-subsequence search against the entire corpus instead of relying on the vacuous pass.",
+      "confirmed_matches": 0,
+      "verdict": "CLEAN"
+    },
+    "overall_verdict": "CLEAN on both currently-receipted batches. The real GPU-run W1 batch (issue #53) does not exist yet and is NOT covered by this CLEAN verdict -- explicitly flagged as an open item, not silently assumed clean."
+  },
+  "wiring_diff": {
+    "path": "scratch/corpus-wire/wiring-diff-v1.patch",
+    "applied": false,
+    "summary": "Repoints 3 stale/absent default paths in scripts/ember_cbase_launch.py (the --mixture-dir CLI default, and the internal fallbacks in _write_segment_wrapper and _build_daemon_job_payload) from the absent state/cbase-mixture / unrelated data/cbase_pretrain stub to the verified 26-shard corpus via the pre-existing <REDACTED_PATH>/shards-v0 junction. No loader code change. Diff text only -- not applied, maintainer-gated per issue #77 rails."
+  },
+  "wiring_plan_doc": "docs/dossier/corpus-wiring-plan-v1.md",
+  "overall_note": "Leg (1) verification: PASS, all figures reconciled from independent re-derivation, never receipt self-report alone. Leg (2) loader map: cited to exact file:line; format compatibility confirmed empirically. Leg (2) contamination check: exhaustive CLEAN on both currently-receipted batches, with the real W1 batch flagged honestly as not-yet-existing rather than assumed clean. Leg (3) receipt + wiring plan: this file + docs/dossier/corpus-wiring-plan-v1.md, both new files, nothing applied live.",
+  "redaction_note": "Redacted edition: local filesystem paths replaced with <REDACTED_PATH> per repo-guard convention"
+}
