@@ -17,6 +17,7 @@ import { TodoWriteTool } from "./todo-write.ts";
 import { EnterWorktreeTool, ExitWorktreeTool } from "./worktree-tools.ts";
 import { RemoteTriggerTool } from "./remote-trigger.ts";
 import { GOAL_TOOLS } from "./goal-tools.ts";
+import { GITHUB_TOOLS } from "./github-tools.ts";
 
 // Registry of all built-in tools, in bundle-defined order
 export const BUILTIN_TOOLS = [
@@ -40,4 +41,5 @@ export const BUILTIN_TOOLS = [
   SendUserMessageTool,
   RemoteTriggerTool,
   ...GOAL_TOOLS,
+  ...GITHUB_TOOLS,
 ];

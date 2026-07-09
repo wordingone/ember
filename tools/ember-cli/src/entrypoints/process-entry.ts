@@ -84,6 +84,7 @@ const FAST_PATH_SUBCMDS = new Set<string>([
   "reply",
   "environment-runner",
   "self-hosted-runner",
+  "gh",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -484,7 +485,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
-      `  new, list, reply, environment-runner, self-hosted-runner\n` +
+      `  new, list, reply, environment-runner, self-hosted-runner, gh doctor\n` +
       `\n` +
       `Environment:\n` +
       `  EMBER_MODEL_URL   External model server URL; wins over models.json (skips the managed spawn)\n` +
@@ -533,6 +534,21 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       debug:   args.includes("--debug"),
       verbose: args.includes("--verbose"),
     });
+    return true;
+  }
+
+  // ember issue #507: `ember gh doctor` -- the acceptance surface for the
+  // native GitHub App identity capability. Diagnostic, so runGhDoctorCommand
+  // itself always exits 0 regardless of what it finds.
+  if (first === "gh") {
+    const sub = args[1];
+    if (sub === "doctor") {
+      const { runGhDoctorCommand } = await import("../github-doctor.ts");
+      await runGhDoctorCommand();
+      return true;
+    }
+    process.stderr.write(`gh: unknown subcommand "${sub ?? ""}" (supported: doctor)\n`);
+    process.exit(1);
     return true;
   }
 
