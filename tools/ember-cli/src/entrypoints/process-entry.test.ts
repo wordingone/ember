@@ -148,6 +148,35 @@ describe("process-entry — AC3: EMBER_DISABLE_NONESSENTIAL_TRAFFIC is '1' unles
   });
 });
 
+describe("process-entry — EMBER_SYNTAX_HIGHLIGHT default is '1' unless pre-set (issue #56/#581)", () => {
+  it("EMBER_SYNTAX_HIGHLIGHT is exactly '1' after module load (not merely 'defined')", () => {
+    // The module sets: process.env["EMBER_SYNTAX_HIGHLIGHT"] ??= "1"
+    // The gate in markdown-and-code.ts reads this via `=== "1"`, so the entry-path default
+    // must be the exact string "1" for real launches to render code blocks highlighted (the
+    // documented, maintainer-ruled live behavior) -- not merely "defined" to some truthy value.
+    // Assumes the test environment has not pre-set this key before this module loaded.
+    expect(process.env["EMBER_SYNTAX_HIGHLIGHT"]).toBe("1");
+  });
+
+  it("??= inversion guard: pre-set '0' (highlighting disabled) is preserved, not forced to '1'", () => {
+    // If a caller sets EMBER_SYNTAX_HIGHLIGHT="0" before process-entry loads, the ??= must
+    // leave it at "0" (the unset-env fallback stays disabled; explicit opt-out is respected).
+    const KEY = "__ac_syntax_highlight_inversion_probe__";
+    delete process.env[KEY];
+
+    // Case 1: absent → "1" applied (highlighting enabled by default)
+    (process.env as Record<string, string>)[KEY] ??= "1";
+    expect(process.env[KEY]).toBe("1");
+
+    // Case 2: pre-set to "0" (caller explicitly disables highlighting) → ??= is a no-op
+    process.env[KEY] = "0";
+    (process.env as Record<string, string>)[KEY] ??= "1";
+    expect(process.env[KEY]).toBe("0"); // must be "0", NOT "1" — the opt-out is preserved
+
+    delete process.env[KEY];
+  });
+});
+
 describe("process-entry — AC4: --version prints version and exits 0", () => {
   it("isFastPath detects --version", () => {
     expect(isFastPath(["node", "ember.js", "--version"])).toBe(true);
@@ -998,7 +1027,12 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     // environment. The bar here is NOT "boots anyway" -- it's "fails the same clean way as
     // an explicitly bad path, never an uncaught exception."
     let spawnCalls = 0;
-    let exitCode: number | null = null;
+    // Widened via `as number | null` (not just the type annotation) to work around a real TS
+    // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
+    // exitFn closure passed to main(), plain-annotation-only declarations get narrowed to the
+    // literal `null` type for every read after `await main(...)` -- widening the INITIALIZER
+    // itself keeps every subsequent `expect(exitCode)...` read correctly typed `number | null`.
+    let exitCode: number | null = null as number | null;
     const stderrChunks: string[] = [];
     const origWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((s: string) => { stderrChunks.push(s); return true; }) as typeof process.stderr.write;
@@ -1035,7 +1069,12 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: badBinary, model: realModel }));
 
     let spawnCalls = 0;
-    let exitCode: number | null = null;
+    // Widened via `as number | null` (not just the type annotation) to work around a real TS
+    // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
+    // exitFn closure passed to main(), plain-annotation-only declarations get narrowed to the
+    // literal `null` type for every read after `await main(...)` -- widening the INITIALIZER
+    // itself keeps every subsequent `expect(exitCode)...` read correctly typed `number | null`.
+    let exitCode: number | null = null as number | null;
     let stderrText = "";
     const origWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
@@ -1071,7 +1110,12 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: badModel }));
 
     let spawnCalls = 0;
-    let exitCode: number | null = null;
+    // Widened via `as number | null` (not just the type annotation) to work around a real TS
+    // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
+    // exitFn closure passed to main(), plain-annotation-only declarations get narrowed to the
+    // literal `null` type for every read after `await main(...)` -- widening the INITIALIZER
+    // itself keeps every subsequent `expect(exitCode)...` read correctly typed `number | null`.
+    let exitCode: number | null = null as number | null;
     let stderrText = "";
     const origWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
@@ -1110,7 +1154,12 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     await writeFile(realModel, "");
     await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
 
-    let exitCode: number | null = null;
+    // Widened via `as number | null` (not just the type annotation) to work around a real TS
+    // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
+    // exitFn closure passed to main(), plain-annotation-only declarations get narrowed to the
+    // literal `null` type for every read after `await main(...)` -- widening the INITIALIZER
+    // itself keeps every subsequent `expect(exitCode)...` read correctly typed `number | null`.
+    let exitCode: number | null = null as number | null;
     let stderrText = "";
     const origWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
@@ -1146,7 +1195,12 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
 
     let spawnCalls = 0;
-    let exitCode: number | null = null;
+    // Widened via `as number | null` (not just the type annotation) to work around a real TS
+    // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
+    // exitFn closure passed to main(), plain-annotation-only declarations get narrowed to the
+    // literal `null` type for every read after `await main(...)` -- widening the INITIALIZER
+    // itself keeps every subsequent `expect(exitCode)...` read correctly typed `number | null`.
+    let exitCode: number | null = null as number | null;
     let stdoutText = "";
     const origWrite = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((s: string) => { stdoutText += s; return true; }) as typeof process.stdout.write;
@@ -1188,7 +1242,12 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     const fakeProc = new EventEmitter();
     setTimeout(() => fakeProc.emit("exit", 17), 20);
 
-    let exitCode: number | null = null;
+    // Widened via `as number | null` (not just the type annotation) to work around a real TS
+    // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
+    // exitFn closure passed to main(), plain-annotation-only declarations get narrowed to the
+    // literal `null` type for every read after `await main(...)` -- widening the INITIALIZER
+    // itself keeps every subsequent `expect(exitCode)...` read correctly typed `number | null`.
+    let exitCode: number | null = null as number | null;
     let stderrText = "";
     const origWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((s: string) => { stderrText += s; return true; }) as typeof process.stderr.write;
@@ -1232,7 +1291,12 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
 
     let spawnCalls = 0;
-    let exitCode: number | null = null;
+    // Widened via `as number | null` (not just the type annotation) to work around a real TS
+    // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
+    // exitFn closure passed to main(), plain-annotation-only declarations get narrowed to the
+    // literal `null` type for every read after `await main(...)` -- widening the INITIALIZER
+    // itself keeps every subsequent `expect(exitCode)...` read correctly typed `number | null`.
+    let exitCode: number | null = null as number | null;
     let receivedServerUrl = "UNSET";
 
     await main({
