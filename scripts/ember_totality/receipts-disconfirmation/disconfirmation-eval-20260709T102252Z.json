@@ -1,0 +1,42 @@
+{
+  "receipt_type": "disconfirmation_evaluation",
+  "ticket": "EMBER-TOTALITY-DISCONFIRMATION",
+  "ts": "20260709T102252Z",
+  "hinges": [
+    {
+      "hinge": "H0_CEILING",
+      "lever_ids_found": [],
+      "lever_status_sidecar_present": false,
+      "all_levers_resolved": false,
+      "composed_multiplier": null,
+      "threshold": 3.3,
+      "trigger_fired": false,
+      "firing_receipt_refs": [],
+      "compliant": true,
+      "reason": "unmet"
+    },
+    {
+      "hinge": "EARNED_GROWTH",
+      "attempts_seen": 0,
+      "consecutive_fail_streak": 0,
+      "threshold": 2,
+      "trigger_fired": false,
+      "firing_receipt_refs": [],
+      "compliant": true,
+      "reason": "unmet"
+    },
+    {
+      "hinge": "B2_BOOTSTRAP",
+      "attempts_seen": 0,
+      "consecutive_fail_streak": 0,
+      "threshold": 3,
+      "trigger_fired": false,
+      "firing_receipt_refs": [],
+      "compliant": true,
+      "reason": "unmet"
+    }
+  ],
+  "fired": 0,
+  "violations": [],
+  "exit": "PASS"
+}
