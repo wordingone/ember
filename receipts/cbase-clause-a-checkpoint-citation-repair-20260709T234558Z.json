@@ -1,0 +1,62 @@
+{
+  "ticket": "CBASE-CLAUSE-A-CHECKPOINT-CITATION-REPAIR",
+  "ts": "2026-07-09T23:45:58Z",
+  "issue_refs": ["wordingone/ember#502", "wordingone/ember#537"],
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "scope": "C-BASE CHK clauses (a)+(b)+(c): repairs the checkpoint citation the totality probe (scripts/ember_totality/test_c_base.py) needs to resolve at board runtime. This is NOT a new training run and NOT a new checkpoint -- it re-cites the SAME real, from-scratch v0 pretrain checkpoint already documented, unredacted, in receipts/v0-live-20260623T105829Z.json, using the identical repo-relative path that receipt already uses (models/cbase-smoke-run/checkpoints/step-00000610). Every 'cbase*'-prefixed candidate receipt naming this checkpoint lineage (cbase-grow-dryrun-20260702T190532Z.json and its redacted-edition sibling, v0-live-import-edition-20260702T190633Z.json) has the checkpoint path field replaced by a redaction placeholder (<REDACTED_PATH>, <TEMP_WORKSPACE>, <local-path>) that Path(ckpt) in the probe cannot resolve to a real directory -- that is the citation-drift root cause of the false RED. receipts/v0-live-20260623T105829Z.json itself was never redacted and already carries a probe-resolvable path; this receipt adds a second, current, explicitly-verified citation of the same real artifact so CHK clause (a)/(c) does not depend on a single 2026-06-23 file surviving future redaction/hygiene passes untouched.",
+  "provenance": {
+    "source_of_truth_receipt": "receipts/v0-live-20260623T105829Z.json (TIMESHARE-V0-SEGMENT, wordingone/ember#167, mode=live, verdict V0_SEGMENT_COMPLETE, pass=true; unredacted; NOT modified by this receipt)",
+    "train_config": "configs/v0-pretrain-config.json (V0-PRETRAIN-CONFIG v3, frozen 2026-06-11T07:20Z)",
+    "arch": {
+      "name": "ember-v0",
+      "shape": "c03",
+      "hidden": 1024,
+      "layers": 20,
+      "heads": 16,
+      "vocab": 32000,
+      "seq": 1024,
+      "tied_embeddings": true,
+      "mtp_enabled": true,
+      "mtp_n_heads": 2,
+      "mtp_weight": 0.3,
+      "params_estimate_from_config": 368354304
+    },
+    "optimizer": "Muon (hidden 2D layers, momentum-orthogonalized Newton-Schulz) for hidden matrices; AdamW for embeddings/norms/head",
+    "precision": "bf16 base with int8-grid QAT fake-quant STE applied in-loop on linear weights",
+    "objective": "next-token cross-entropy (chunked/cut-CE) plus MTP auxiliary heads",
+    "segment_id": "cbase-v0",
+    "step": 610,
+    "resume_step": 0,
+    "total_steps_planned": 449651,
+    "tokens_this_segment": 9994240,
+    "real_token_total_corpus": 6973632300,
+    "loss_first": 13.75,
+    "loss_last": 7.25,
+    "weights_origin": "every weight tensor is initialized and trained inside this repo's own training loop starting at step 0 (Muon + AdamW optimizer state built fresh, QAT applied in-loop during training); there is no external checkpoint download, no third-party model hub reference, and no frozen upstream base anywhere in the training config or the source receipt",
+    "note": "this receipt does not repeat the source receipt's full per-step loss/lr-mult arrays -- see receipts/v0-live-20260623T105829Z.json for the complete trace; this receipt only re-establishes a probe-resolvable checkpoint citation for the same on-disk artifact"
+  },
+  "checkpoint": "models/cbase-smoke-run/checkpoints/step-00000610",
+  "checkpoint_hash_verification": {
+    "method": "sha256sum over on-disk raw bytes, computed fresh by this receipt's author (2026-07-09) against the checkpoint directory models/cbase-smoke-run/checkpoints/step-00000610/, cross-checked against the manifest.json committed alongside the checkpoint",
+    "manifest_path": "models/cbase-smoke-run/checkpoints/step-00000610/manifest.json (pre-existing artifact; ticket TIMESHARE-CHECKPOINT, ts 20260623T105821Z, step 610, segment_id cbase-v0)",
+    "files": {
+      "model.pt": {
+        "sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+        "bytes": 867847498,
+        "manifest_claim_matches": true
+      },
+      "optimizer.pt": {
+        "sha256": "4119db777379d1ad92be2dbeacf4d461aaf7ea344032ba1f72f6b339239d5457",
+        "bytes": 1064552442,
+        "manifest_claim_matches": true
+      },
+      "rng.pt": {
+        "sha256": "402513900603b60f90c61ff51854b8fe812912cf8e00b61e4589d190e94d5697",
+        "bytes": 14144,
+        "manifest_claim_matches": true
+      }
+    }
+  },
+  "invalid_tokens_present": [],
+  "verdict": "CBASE_CLAUSE_A_CHECKPOINT_CITATION_RESOLVED"
+}
