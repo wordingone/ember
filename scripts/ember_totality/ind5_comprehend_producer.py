@@ -58,6 +58,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent          # scripts/ember_totality
 REPO_ROOT_DEFAULT = HERE.parent.parent           # ember-goalforge (contract tree)
+sys.path.insert(0, str(REPO_ROOT_DEFAULT))
+from scripts.lib.invariant import stamp as _stamp_invariant, verify as _verify_invariant  # noqa: E402 -- gh #625 point 1
+
+# receipt_check.py's R2 rule requires any *sha256*-named field to carry a
+# disclosed sha_convention; matches exactly what scripts/lib/invariant.py's
+# stamp() does (Path.read_bytes() + sha256, no normalization).
+INVARIANT_SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 # Environment variable override for execution tree root; default points to external location
 # EMBER_EXEC_ROOT env var can override. Default: <local-exec-root> (frozen spec v1 convention)
 _exec_root = os.environ.get("EMBER_EXEC_ROOT")
@@ -430,7 +437,14 @@ def main() -> int:
     root = Path(args.root).resolve()
     exec_root = Path(args.exec_root).resolve()
 
+    # gh #625 point 1, fail-closed: verify BEFORE the receipt is written,
+    # against the CONTRACT tree (root) -- the tree the receipt is written
+    # into, which may differ from this script's own location via --root.
+    _verify_invariant(str(root))
+
     receipt = build_ind5_receipt(root, exec_root)
+    _stamp_invariant(receipt, repo_root=str(root))
+    receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
     out_dir = root / "receipts" / "ember-operator-independence"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"ind5-comprehend-v2-{receipt['ts']}.json"

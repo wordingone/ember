@@ -1,0 +1,21 @@
+{
+  "probe": "c_invariant",
+  "condition": "C-INV",
+  "timestamp": "2026-07-10T17:43:34.938632Z",
+  "status": "RED",
+  "reason": "Stamped receipts: 9/183 post-genesis receipt(s) missing/mismatched invariant_sha256 stamp and not errata-covered (of 956 receipts scanned under receipts/; stamped=73, errata_covered=97, superseded=4, uncovered_pre_cutoff=3, uncovered_post_cutoff=6); first offenders: [\"receipts/ember-totality-audit/audit-20260710T001800Z.json (ts='2026-07-10T00:18:00Z', invariant_sha256=None)\", \"receipts/ember-totality-audit/audit-20260710T145200Z.json (ts='2026-07-10T14:52:00Z', invariant_sha256=None)\", \"receipts/ind3-operate/ind3-interrupted-resume-20260710T004023Z.json (ts='20260710T004023Z', invariant_sha256=None)\"]",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "invariant_file_hash": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "stamp_coverage": {
+    "post_genesis_scanned": 183,
+    "stamped": 73,
+    "errata_covered": 97,
+    "superseded": 4,
+    "uncovered_pre_cutoff": 3,
+    "uncovered_post_cutoff": 6,
+    "errata_rows_skipped": 0,
+    "supersession_rows_skipped": 0
+  },
+  "invariant_breach": true,
+  "complete": false
+}

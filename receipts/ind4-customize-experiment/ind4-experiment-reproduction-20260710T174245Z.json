@@ -1,0 +1,17 @@
+{
+  "receipt_class": "IND-4",
+  "leg": "experiment_reproduction",
+  "producer": "ind4_customize_experiment_producer.py",
+  "banked_receipt_ref": "receipts/loop-econ-gate-selftest-20260705T031933Z.json",
+  "banked_receipt_sha256": "7cd7fa15f6c04a56c0ef4de858ee5f9bcc11c3f1f99a6e3f3a41292a346f2952",
+  "fresh_receipt_ref": "receipts/loop-econ-gate-selftest-20260710T174245Z.json",
+  "fresh_receipt_sha256": "77c21af45d2e2c5d47337009e767be464273f04644635b84547c9118d6cde735",
+  "comparison_method": "field-equality of parsed JSON excluding the 'ts', 'invariant_sha256', and 'sha_convention' fields",
+  "within_tolerance": true,
+  "selftest_command": "python scripts/loop_econ_gate.py --selftest",
+  "selftest_exit_code": 0,
+  "selftest_stdout": "ok   ac1_decision_reject\nok   ac1_ac_label\nok   ac1_reason_mentions_missing\nok   ac2_decision_accept\nok   ac2_ac_label\nok   ac3_decision_reject\nok   ac3_ac_label\nok   ac3_reason_within_floor\nreceipt: ./receipts/loop-econ-gate-selftest-20260710T174245Z.json\nLOOP_ECON_GATE_SELFTEST_PASS cases=3/3\n",
+  "ts": "20260710T174245Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
+}
