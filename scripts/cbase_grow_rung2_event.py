@@ -742,18 +742,21 @@ def phase_b1m(args) -> dict:
 
     pre_lr = cfg["optimizer"]["lr_muon"]
 
-    # Load seed optimizer and resolve gate_key to numeric param ID (issue #466 fix)
+    # Load seed optimizer and resolve gate_key's momentum buffer via the ONE
+    # authoritative muon-local mapping helper (issue #580 fix, site 4:
+    # resolve_gate_momentum_buffer / build_optimizer_id_maps). This function
+    # previously computed its own independent GLOBAL model-state index
+    # (`seed_param_names.index(gate_key)`) and used it as a key into the
+    # MUON-LOCAL-keyed optimizer state dict -- the same conflation #580's
+    # write/read/checker sites had, but never routed through the shared fix
+    # PR #587 landed. On the b1-snapshot checkpoint this aliased gate_proj's
+    # id (4) to global id 5, silently resolving up_proj's momentum buffer
+    # instead (rms 3.6057e-4 vs gate_proj's real 3.815260e-04) -- caught by
+    # the #580 corrected-buffered-re-run lane tracing what B3's TRANSPLANT
+    # arm actually consumes, not just B3's own diagnostic field.
     seed_optimizer_state = torch.load(snapshot_dir / "optimizer.pt", map_location="cpu", weights_only=True)
     seed_model_state = torch.load(snapshot_dir / "model.pt", map_location="cpu", weights_only=True)
-    seed_param_names = list(seed_model_state.keys())
-
-    # Optimizer state is indexed by numeric param ID, not string name (critical fix)
-    gate_param_id = seed_param_names.index(gate_key) if gate_key in seed_param_names else None
-    if gate_param_id is not None:
-        pre_momentum = seed_optimizer_state.get("muon", {}).get("state", {}).get(
-            gate_param_id, {}).get("momentum_buffer")
-    else:
-        pre_momentum = None
+    pre_momentum = resolve_gate_momentum_buffer(seed_model_state, seed_optimizer_state, gate_key)
 
     if pre_momentum is None:
         pre_momentum = torch.zeros_like(theta_gate_pre)
