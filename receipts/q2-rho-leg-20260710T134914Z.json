@@ -1,0 +1,181 @@
+{
+  "ticket": "Q2-RHO-LEG",
+  "ts": "2026-07-10T13:49:14.739247+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 662,
+  "refs": [
+    449,
+    466
+  ],
+  "scope": "Q2 loss-gap bridge CPU leg: rho=cos_F(G_post,U_T-U_R) with an empirical spectrum-preserving rotation null and a scale/rotation decomposition, computed entirely from the b513-b4rerun cached tensors, zero GPU.",
+  "L0_cache_integrity": {
+    "cache_dir": "receipts/.rung2-event-cache/b513-b4rerun",
+    "ts": "2026-07-10T13:46:40.488117+00:00",
+    "verify_report": {
+      "grad_post_gate": {
+        "expected_sha256": "8f096a3e8a952050a4b9b4ea1e8e6cae11a9c16ba53f59181809d7f226254447",
+        "present": true,
+        "bytes": 134219509,
+        "actual_sha256": "8f096a3e8a952050a4b9b4ea1e8e6cae11a9c16ba53f59181809d7f226254447",
+        "sha256_match": true
+      },
+      "grad_pre_gate": {
+        "expected_sha256": "57d26648a655f269ab3b9f75b52ade2f8a76f1a1b1d3a8a63afb0aea872a7ab3",
+        "present": true,
+        "bytes": 67110638,
+        "actual_sha256": "57d26648a655f269ab3b9f75b52ade2f8a76f1a1b1d3a8a63afb0aea872a7ab3",
+        "sha256_match": true
+      },
+      "pre_momentum": {
+        "expected_sha256": "fdd0b8190e909cc96b337cd9b1350a1fb38fb4488442fafd3aef968938121113",
+        "present": true,
+        "bytes": 33556263,
+        "actual_sha256": "fdd0b8190e909cc96b337cd9b1350a1fb38fb4488442fafd3aef968938121113",
+        "sha256_match": true
+      },
+      "theta_gate_pre": {
+        "expected_sha256": "a47d4e5d69dc34b38452bbcffabd362c9258acffda05bfb065249b50e079d9df",
+        "present": true,
+        "bytes": 67110645,
+        "actual_sha256": "a47d4e5d69dc34b38452bbcffabd362c9258acffda05bfb065249b50e079d9df",
+        "sha256_match": true
+      }
+    },
+    "shapes": {
+      "grad_post_gate": {
+        "shape": [
+          32768,
+          1024
+        ],
+        "dtype": "torch.float32",
+        "numel": 33554432
+      },
+      "grad_pre_gate": {
+        "shape": [
+          16384,
+          1024
+        ],
+        "dtype": "torch.float32",
+        "numel": 16777216
+      },
+      "pre_momentum": {
+        "shape": [
+          16384,
+          1024
+        ],
+        "dtype": "torch.bfloat16",
+        "numel": 16777216
+      },
+      "theta_gate_pre": {
+        "shape": [
+          16384,
+          1024
+        ],
+        "dtype": "torch.float32",
+        "numel": 16777216
+      }
+    },
+    "m": 32768,
+    "n": 1024,
+    "mn": 33554432,
+    "integrity_check": {
+      "definition": "e_arm := <G_post, U_arm>_F (unnormalized Frobenius inner product; the per-step train-loss-rate integrand each arm contributes, s-prefactor omitted). e_T - e_R recomputed via a SEPARATE codepath (dot with the already-materialized M=U_T-U_R tensor) and checked against the per-arm-then-subtract path.",
+      "e_reset": -0.34980836510658264,
+      "e_transplant": -0.32511836290359497,
+      "e_diff_direct_path": 0.02469000220298767,
+      "e_diff_independent_path": 0.024689950048923492,
+      "abs_diff": 5.21540641784668e-08,
+      "consistent": true,
+      "never_evidence": true,
+      "note": "linear function of the L2 quantities by construction -- cache/code integrity check only, never an independent observable (prereg #449 sec.4)."
+    }
+  },
+  "L1_dimensional_audit": {
+    "ts": "2026-07-10T13:46:44.102656+00:00",
+    "crossref_receipt": "receipts/cbase-grow-rung2-event-b513-b4rerun-b3.json",
+    "crossref_resolved_lr_muon": 0.02,
+    "crossref_step_rms_post_reset": 0.00037684422568418086,
+    "crossref_step_rms_post_transplant": 0.0004135885392315686,
+    "recomputed_step_rms_post_reset_at_lr_candidate": 0.0003776482190005481,
+    "recomputed_step_rms_post_transplant_at_lr_candidate": 0.00041400789632461965,
+    "rel_err_reset": 0.0021334898124220313,
+    "rel_err_transplant": 0.0010139475668987953,
+    "rel_tol": 0.005,
+    "precision_floor_note": "pre_momentum is cached in bfloat16 (see L0 shapes); any residual mismatch below ~0.5% is attributable to that rounding floor propagated through NS5, not to a WSD schedule fraction -- disclosed, not treated as eta evidence below rel_tol.",
+    "eta_convention": "eta-exclusive",
+    "resolved_lr_per_step": 0.02
+  },
+  "L2_null": {
+    "canonical_analytic": {
+      "test": "two-sided Haar tail bound: p_upper = min(1, 1/(mn * rho_perp^2)); exact Var[cos_F] = 1/mn (mean 0) under the spectrum-preserving rotation null; Chebyshev upper bound, conservative",
+      "alpha": 0.003,
+      "mn": 33554432,
+      "rho_perp": 0.031732749193906784,
+      "p_upper": 2.9596115260577283e-05,
+      "reject_null": true,
+      "authority": "frozen Q2 successor contract (sha256 992463793324f75d90e0d80128efbe980a3cc7ee9171300132b59b536b468f33) + exact-head hostile review; #449 prereg sec.4 as amended, tighten-only"
+    },
+    "empirical_descriptive": {
+      "status": "DESCRIPTIVE-ONLY",
+      "demotion_reason": "N=200 cannot express alpha=0.003: minimum achievable corrected p = 1/(N+1) = 1/201 = 0.004975 > alpha; the 99.7th-percentile order statistic is under-resolved at N=200. The ensemble is retained as descriptive corroboration only; the canonical test is the analytic two-sided Haar tail bound p_upper = min(1, 1/(mn * rho_perp^2)) with exact Var[cos_F] = 1/mn under the spectrum-preserving rotation null.",
+      "phase_a_threshold_ts": "2026-07-10T13:46:44.123424+00:00",
+      "phase_a_done_ts": "2026-07-10T13:49:14.667635+00:00",
+      "phase_b_unblind_ts": "2026-07-10T13:49:14.677995+00:00",
+      "phase_ordering_proven": true,
+      "n_draws": 200,
+      "seed": 449466,
+      "percentile": 99.7,
+      "threshold_abs_cos": 0.00046822376316413283,
+      "null_draws_dispersion": {
+        "min": -0.0006182441138662398,
+        "max": 0.00046822376316413283,
+        "mean": -6.007554530924608e-06
+      },
+      "M_singular_values_top5": [
+        0.1629340499639511,
+        0.16016584634780884,
+        0.15890464186668396,
+        0.15844525396823883,
+        0.1563248187303543
+      ],
+      "M_frobenius_norm": 2.02290678024292,
+      "null_construction": "exact Stiefel/Haar reduction (see sample_rotated_candidate docstring), never a literal m x m Q1 (infeasible at m=32768))"
+    },
+    "rho_raw": 0.012303835712373257
+  },
+  "L3_scale_rotation_decomposition": {
+    "status": "DESCRIPTIVE-ONLY (raw decomposition preserved; no verdict authority)",
+    "common_direction": "D = normalize((U_R + U_T) / 2)",
+    "parallel_fraction": 0.11640088260173798,
+    "rho_perp": 0.031732749193906784
+  },
+  "signed_first_order_gap": {
+    "e_T_minus_e_R": 0.02469000220298767,
+    "sign_convention": "U_arm is the ACTUAL parameter delta (build_arm_update returns -lr*scale*NS5(...) measured from zero), so the first-order loss change along an arm is <G_post, U_arm>_F with s=1 (the lr is already inside U). POSITIVE e_T - e_R means the TRANSPLANT arm's first-order integrand is less negative: TRANSPLANT predicts HIGHER event-local train loss than RESET at first order.",
+    "caveat": "the |rho_perp| orientation statistic is sign-insensitive; any directional bridge claim must carry this signed gap explicitly -- its direction can contradict a naively assumed one. Reported as a caveat/descriptive quantity, not independent evidence (the prereg struck e_T - e_R from the evidence ledger as a linear function of the L2 quantities; the merge-gate amendment binds reporting it SIGNED because the sign qualifies the orientation claim)."
+  },
+  "claim_scope": {
+    "verdict_vocabulary": [
+      "SIBLING_NON_NULL_ORIENTATION",
+      "INCONCLUSIVE",
+      "FAILED-ENGAGEMENT"
+    ],
+    "superseded_vocabulary": "BRIDGE-ALIVE / NULL-PRIMARY / EFFECTIVE-LR-ARTIFACT (#449 sec.4 frozen table) -- removed by tighten-only claim-narrowing supersession; this leg cannot mint a loss-bridge verdict.",
+    "authority": "exact-head hostile review + frozen Q2 successor contract (sha256 992463793324f75d90e0d80128efbe980a3cc7ee9171300132b59b536b468f33)",
+    "rationale": [
+      "the cached tensors are CPU reconstructions from bf16 pre_momentum, NOT the actual decisive GPU U_T/U_R delta bytes (this receipt's own L1 audit tolerates 0.1-0.2% reconstruction mismatch)",
+      "no common batch and no paired L(W+v_T) - L(W+v_R) measurement exists at this event",
+      "a non-null orientation of G_post against the reconstructed sibling difference therefore cannot be called a loss bridge",
+      "actual-bridge verdicts await future-event capture (actual GPU delta bytes + common batch + paired losses) per the successor contract"
+    ]
+  },
+  "verdict_table": {
+    "SIBLING_NON_NULL_ORIENTATION": "p_upper < alpha (0.003), where p_upper = min(1, 1/(mn * rho_perp^2))",
+    "INCONCLUSIVE": "p_upper >= alpha -- failure to reject the Haar null; NEVER a null/bridge-dead claim"
+  },
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "SIBLING_NON_NULL_ORIENTATION"
+}
