@@ -1870,7 +1870,10 @@ def run_v0_segment(
         "mode": "cpu_dryrun" if not live else "live",
         "steps": n_steps,
         "resume_step": resume_step,
-        "global_step_end": resume_step + n_steps,
+        # #637 review A2: the step actually REACHED, never as-if-complete. On a
+        # pace-gate abort len(losses) < n_steps and the receipt must not cite a
+        # step that never ran; on a full run len(losses) == n_steps, identical.
+        "global_step_end": resume_step + len(losses),
         "total_steps": total_steps,
         "tokens_this_segment": tokens_this_seg,
         "wall_s": round(wall_s, 3),

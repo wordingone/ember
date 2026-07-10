@@ -1189,8 +1189,15 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
     watts_vals = [s["power_draw_w"] for s in valid if s.get("power_draw_w") is not None]
     watts_avg = round(sum(watts_vals) / len(watts_vals), 2) if watts_vals else None
     kwh_block = round((watts_avg * wall_s / 3600.0 / 1000.0), 6) if watts_avg is not None else None
-    s_per_step = round(wall_s / STEPS_PER_BLOCK_DEFAULT, 3)
-    loss_mean = round(sum(receipt["losses"]) / len(receipt["losses"]), 6)
+    # #637 review A1: step counts derive from len(losses) -- the number of steps
+    # that ACTUALLY completed -- never the requested STEPS_PER_BLOCK_DEFAULT. A
+    # zero-step pace-gate abort (watchdog fires during the setup phase: model
+    # build + checkpoint load + shard cache, the v7 measured failure mode)
+    # returns losses=[]; the block must still produce its COUNTERS line and
+    # receipts (loss/pace stats None), never a ZeroDivisionError traceback.
+    n_steps_completed = len(receipt["losses"])
+    s_per_step = round(wall_s / n_steps_completed, 3) if n_steps_completed else None
+    loss_mean = round(sum(receipt["losses"]) / n_steps_completed, 6) if n_steps_completed else None
 
     # per-layer-group momentum-norm line (team-lead rail 3: reset tail's
     # warm-up observable in-run) -- read-only, off the block's own checkpoint,
@@ -1221,6 +1228,7 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
         "block_idx": block_idx,
         "global_step_start": global_step_start,
         "global_step_end": receipt["global_step_end"],
+        "n_steps_completed": n_steps_completed,
         "loss_mean": loss_mean,
         "loss_first": receipt["loss_first"],
         "loss_last": receipt["loss_last"],
@@ -1538,7 +1546,10 @@ def main() -> int:
                    "n_layers": N_LAYERS, "lr_muon": LR_MUON},
         "preflight": pf,
         "build": build,
-        "steps_completed": len(block_receipts) * STEPS_PER_BLOCK_DEFAULT,
+        # #637 review A2: an aborted block contributes the steps it ACTUALLY
+        # completed (len(losses), carried as n_steps_completed), never a flat
+        # 10 -- the relaunch decision reads this receipt.
+        "steps_completed": sum(b["n_steps_completed"] for b in block_receipts),
         "steps_requested": args.n_blocks * STEPS_PER_BLOCK_DEFAULT,
         "block_receipts": block_receipts,
         "kwh_total": round(kwh_running, 6),

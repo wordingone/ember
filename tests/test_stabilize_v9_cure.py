@@ -453,5 +453,115 @@ class TestPaceSmokeBanked(_Base):
                 os.environ["EMBER_GATE_AUTHORIZED"] = saved
 
 
+# ---------------------------------------------------------------------------
+# #637 review cure — composed zero-step pace-gate abort (A1 + A2)
+# ---------------------------------------------------------------------------
+class TestZeroStepAbortComposed(_Base):
+    """The review's composed path: watchdog fires during the SETUP phase (the
+    v7 measured failure mode), run_v0_segment returns REAL losses=[] from its
+    own abort branch (not a stubbed dict), and the runner must still emit the
+    COUNTERS line, the block receipt, and the final-leg receipt, exiting via
+    the clean ABORTED/exit-3 path with honest step counts. Drives the REAL
+    stab.main() end to end; only telemetry is neutralized and run_v0_segment's
+    launch args are redirected to the CPU dry-run harness (the segment CODE
+    that produces the empty receipt is the real one). CPU-only."""
+
+    def test_zero_step_abort_receipts_honest_no_crash(self):
+        import contextlib
+        import glob
+        import io
+
+        # -- fabricate the minimal on-disk inputs main() reads --------------
+        seed = os.path.join(self._tmp, "seed-ckpt")
+        override = os.path.join(self._tmp, "override-ckpt")
+        out_dir = os.path.join(self._tmp, "out")
+        rec_dir = os.path.join(self._tmp, "receipts")
+        os.makedirs(seed)
+        os.makedirs(override)
+        with open(os.path.join(seed, "manifest.json"), "w", encoding="utf-8", newline="\n") as f:
+            json.dump({"step": 806, "extra": {"total_steps": 1000}}, f)
+        with open(os.path.join(override, "manifest.json"), "w", encoding="utf-8", newline="\n") as f:
+            json.dump({"step": 806}, f)
+        torch.save({"w": torch.zeros(4, 4)}, os.path.join(override, "model.pt"))
+        shard = _make_tiny_shard(self._tmp)
+        tiny = {"vocab": 64, "hidden": 32, "depth": 2, "seq": 8}
+
+        orig_run_v0 = ts.run_v0_segment
+        orig_pace_gate_s = stab.PACE_GATE_S
+        orig_nvsmi = stab.nvidia_smi_vram
+        orig_power = stab._nvidia_smi_power_watts
+        orig_marker = stab._stage_marker
+        orig_argv = sys.argv
+        saved_env = os.environ.get("EMBER_GATE_AUTHORIZED")
+
+        def _real_cpu_segment(run_dir, cfg, **kwargs):
+            # Redirect the launch args to the CPU dry-run harness, wait until
+            # the watchdog has ALREADY fired (deterministic setup-phase abort),
+            # then run the REAL segment: its own abort branch produces the
+            # genuine losses=[] receipt this test is about.
+            ev = kwargs["abort_event"]
+            self.assertTrue(ev.wait(10), "pace watchdog never fired")
+            return orig_run_v0(
+                run_dir, cfg, n_steps=5, total_steps=7, checkpoint_every=5,
+                pace_s=0.0, shard_dir=shard, tiny_dims=tiny, batch_size=2,
+                ce_chunk_tokens=8, abort_event=ev)
+
+        try:
+            ts.run_v0_segment = _real_cpu_segment
+            stab.PACE_GATE_S = 0.05  # setup phase alone outlasts the deadline
+            stab.nvidia_smi_vram = lambda: {"total_mib": 24564, "used_mib": 0,
+                                            "free_mib": 24467, "total_gib": 23.988,
+                                            "used_gib": 0.0, "free_gib": 23.893}
+            stab._nvidia_smi_power_watts = lambda: None
+            stab._stage_marker = lambda label: None
+            sys.argv = ["cbase_grow_rung2_stabilize.py",
+                        "--seed-ckpt", seed, "--shard-dir", shard,
+                        "--resume-ckpt-dir-override", override,
+                        "--out-dir", out_dir, "--receipt-dir", rec_dir,
+                        "--start-block", "5", "--n-blocks", "5"]
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = stab.main()  # A1 pre-cure: ZeroDivisionError crashes here
+            log = buf.getvalue()
+        finally:
+            ts.run_v0_segment = orig_run_v0
+            stab.PACE_GATE_S = orig_pace_gate_s
+            stab.nvidia_smi_vram = orig_nvsmi
+            stab._nvidia_smi_power_watts = orig_power
+            stab._stage_marker = orig_marker
+            sys.argv = orig_argv
+            if saved_env is None:
+                os.environ.pop("EMBER_GATE_AUTHORIZED", None)
+            else:
+                os.environ["EMBER_GATE_AUTHORIZED"] = saved_env
+
+        # clean ABORTED/exit-3 path, never a traceback
+        self.assertEqual(rc, 3)
+        self.assertIn("PACE_GATE_ABORT block05", log)
+        self.assertIn("COUNTERS block05", log)
+        self.assertIn("pace_gate_aborted=True", log)
+        self.assertIn("CBASE_GROW_RUNG2_STABILIZE_LEG1_ABORTED", log)
+
+        # final-leg receipt written, honest step counts
+        finals = [p for p in glob.glob(os.path.join(rec_dir, "cbase-grow-rung2-stabilize-leg1-*.json"))
+                  if "REFUSED" not in os.path.basename(p)]
+        self.assertEqual(len(finals), 1, finals)
+        with open(finals[0], encoding="utf-8") as f:
+            final = json.load(f)
+        self.assertEqual(final["verdict"], "ABORTED")
+        self.assertIn("r4_pace_gate", final["abort_reason"])
+        self.assertEqual(final["steps_completed"], 0,
+                         "an aborted zero-step block must not count as 10 steps (A2)")
+        br = final["block_receipts"][0]
+        self.assertEqual(br["n_steps_completed"], 0)
+        self.assertIsNone(br["loss_mean"])
+        self.assertIsNone(br["s_per_step"])
+        self.assertTrue(br["pace_gate"]["aborted"])
+        # A2: the segment receipt cites the step actually REACHED (resume_step +
+        # len(losses) == 0 for the fresh zero-step CPU segment), never
+        # resume_step + n_steps (which would read 5 here).
+        self.assertEqual(br["global_step_end"], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
