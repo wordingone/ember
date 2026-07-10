@@ -1,0 +1,91 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-NULLMODEL-PERMUTED-TWIN",
+  "ts": "2026-07-09T22:07:10.581678+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 123,
+  "refs": [
+    482,
+    466,
+    513,
+    591
+  ],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "preregistered": "The NS5 twin-collapse identity requires aligned twins; a permuted gate_proj row-pairing breaks it, so the measured gate-class R_spectral ratio deviates from sqrt(2) by >1%. Kill: permuted R within +/-0.1% of sqrt(2) ([1.4128, 1.4156]) -> constant is generic. Promote: deviation >1% (derivation owed separately). 0.1%-1%: INCONCLUSIVE-BY-RULE, widen with a second seed.",
+  "scope": "null-model permuted-twin rider for the sqrt(2) gate-class R_spectral constant: reproduces the eps0.05_control anchor unmodified as an admissibility control, and separately measures R_spectral with the gate_proj row-duplication pairing PERMUTED (second-half rows shuffled, fixed disclosed seed) before the pushforward. NUMBERS + band classification per the frozen bands only -- no mechanism derivation attempted here; the coordinator adjudicates.",
+  "method": {
+    "permutation_construction": "gate_proj [ff, d_model] row-dup halves ga=W[:half], gb=W[half:]; gb_permuted = gb[perm] for a fixed torch.randperm(half, seed=PERMUTATION_SEED); up_proj/down_proj left at their original grown values in both variants (one-variable change).",
+    "capture": "reproduces cbase_grow_rung2_gradpost_capture.py's capture_grad_post_gate exactly (same manual_seed(42) position, same build_v0_model + load_state_dict, same _build_pinned_batch, same QAT/CE/MTP per-microstep loop) with the grown checkpoint's state dict's gate_proj entry replaced by each variant.",
+    "muon_step_closure": "p5_ratio_audit.run_p5_audit._muon_step_in_copy (faithful reuse)",
+    "spectral_norm_method": "torch.linalg.svdvals (top singular value)"
+  },
+  "permutation_provenance": {
+    "ff_grown": 32768,
+    "half": 16384,
+    "row_dup_exact_pre_permutation": true,
+    "permutation_seed": 20260709,
+    "permutation_sha256": "38e583d5ec9c566ca25d00d2d27733e99bf308b5683a24dc0a2d0028156b1ebc",
+    "fixed_points": 0,
+    "grown_dtype": "torch.bfloat16"
+  },
+  "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+  "u_pre_reset_lr015": {
+    "lr": 0.015,
+    "momentum": "zero buffer (RESET arm)",
+    "spectral": 0.07214184105396271,
+    "rms": 0.00027922826120629907
+  },
+  "variants": {
+    "anchor_control": {
+      "construction": "unmodified grown checkpoint (aligned gate_proj twins) -- reproduces the banked eps0.05_control anchor",
+      "u_post_rms": 0.0002832819882314652,
+      "u_post_spectral": 0.1020241305232048,
+      "rms_ratio_post_over_pre": 1.0145176101002584,
+      "R_spectral_ratio_post_over_pre": 1.4142157870200442,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 2.4359824657440186
+    },
+    "permuted_twin": {
+      "construction": "gate_proj second-half rows permuted per fixed seed, first half + up_proj/down_proj unchanged",
+      "u_post_rms": 0.00028728425968438387,
+      "u_post_spectral": 0.1020241305232048,
+      "rms_ratio_post_over_pre": 1.0288509423912964,
+      "R_spectral_ratio_post_over_pre": 1.4142157870200442,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 1.8340566158294678
+    }
+  },
+  "anchor_control_admissibility": {
+    "anchor_source": "receipts/cbase-grow-rung2-eps0-fingerprint-20260709T112243Z.json (eps0.05_control leg)",
+    "anchor_R_spectral_ratio_post_over_pre": 1.4142164848977823,
+    "in_run_recomputed_R_spectral": 1.4142157870200442,
+    "delta": -6.978777380428625e-07,
+    "delta_pct": 4.934730612288855e-05,
+    "admissible_delta_0": false
+  },
+  "null_model_assessment": {
+    "sqrt2": 1.4142135623730951,
+    "permuted_R_spectral": 1.4142157870200442,
+    "deviation_from_sqrt2": 2.224646949100517e-06,
+    "deviation_pct": 0.00015730629434549398,
+    "kill_band": "deviation_pct <= 0.1",
+    "promote_band": "deviation_pct > 1.0 (derivation owed separately, not attempted here)",
+    "inconclusive_band": "0.1 < deviation_pct <= 1.0 (widen with second seed before interpretation)",
+    "band_verdict": "KILL"
+  },
+  "gpu_seconds": 4.270039081573486,
+  "wall_seconds": 105.90853190422058,
+  "device": "cuda",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "MEASUREMENT_COMPLETE_NO_MECHANISM_ADJUDICATION"
+}
