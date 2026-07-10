@@ -134,6 +134,8 @@ pieces" with the source named:
 | C-LADM | S6 | Ladder administration: autonomy relinquishment tracking | Autonomy-ladder-state.json consistent and versioned | ladder state receipts | planned |
 | C-AUTO | S6 | Autonomy-ladder-state faithfulness | Ladder state file valid with proper provenance | autonomy state verification receipts | planned |
 | C-CUSTODY | S6 | Receipts custody and integrity | Every receipt is git-tracked, parseable JSON, all cited paths exist | custody verification receipts | planned |
+| C-MANIFEST | S6 | Completeness manifest enumerates every planned piece | docs/ember-completeness.md rows cover every §4 goal condition (id+subgoal+AC+receipt+status); an absent piece is a gate violation (does-NOT-count) | scripts/ember_totality/receipts-totality/ember-totality-20260710T150632Z.json (C-MANIFEST row, evaluated by scripts/ember_totality/test_c_manifest.py) | DONE |
+| C-TALLY | S6 | Tally script walks the manifest and emits the completion receipt | scripts/ember_tally.py verifies each row's receipt exists and passes its named check, emits receipts/tally-<ts>.json {total, implemented, pct, missing[]}; the tally receipt is the only completion authority | receipts/tally-20260708T065530Z.json (real scripts/ember_tally.py output) | DONE |
 
 Tally script AC (to be minted as eng issue): parse this table; for each row
 with a receipt pointer, locate + validate (receipt_check pass + named AC
