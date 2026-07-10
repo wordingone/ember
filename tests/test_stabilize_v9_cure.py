@@ -421,6 +421,22 @@ class TestLineagePin(_Base):
         self.assertFalse(r["lineage_pinned"])
         self.assertEqual(r["verdict"], "LINEAGE_OK")
 
+    # -- #665 audit negative controls: malformed/impossible deviation dates
+    # must fail closed, not be silently accepted as a declared deviation.
+    def test_deviation_without_any_date_prefix_fails_closed(self):
+        with self.assertRaises(stab.LineageResumeMismatch):
+            stab.assert_lineage_resume(796, stab.LINEAGE_LEG_START_BLOCK, deviation="x")
+
+    def test_deviation_with_non_date_prefix_fails_closed(self):
+        with self.assertRaises(stab.LineageResumeMismatch):
+            stab.assert_lineage_resume(
+                796, stab.LINEAGE_LEG_START_BLOCK, deviation="not-a-date")
+
+    def test_deviation_with_impossible_calendar_date_fails_closed(self):
+        with self.assertRaises(stab.LineageResumeMismatch):
+            stab.assert_lineage_resume(
+                796, stab.LINEAGE_LEG_START_BLOCK, deviation="2026-99-99 nonsense")
+
 
 # ---------------------------------------------------------------------------
 # Point 6 — AC2 pace-smoke: banked, CPU-precheckable, GPU execution gated
