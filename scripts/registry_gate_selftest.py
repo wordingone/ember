@@ -6,14 +6,17 @@ verdict on PASS / missing-row / invalid-exemption / contradicted fixtures.
 Fail-closed: any mismatch = exit 1 with the case named.
 """
 import datetime as dt
+import re
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from registry_gate import PREDICATES, check, load_registry  # noqa: E402
+from registry_gate import PREDICATES, check, load_registry, normalize_config_path  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TODAY = dt.date(2026, 6, 12)
+DRIVE_LETTER_RE = re.compile(r"[A-Za-z]:[\\/]")
 
 BASE_CONFIG = {
     "optimizer": "muon",
@@ -91,13 +94,33 @@ def main() -> int:
     if v["ok"] or "qat" not in v["invalid_exemptions"]:
         fails.append(f"case5 expected FAIL on expired exemption, got {v}")
 
+    # case 6: config_path normalization never leaks an absolute host path (#710)
+    with tempfile.TemporaryDirectory() as tmp:
+        troot = Path(tmp)
+        cfg_dir = troot / "configs"
+        cfg_dir.mkdir()
+        cfg_path = cfg_dir / "v0-pretrain-config.json"
+        cfg_path.write_text("{}", encoding="utf-8")
+        got = normalize_config_path(str(cfg_path), root=troot)
+        if got != "configs/v0-pretrain-config.json":
+            fails.append(f"case6 expected 'configs/v0-pretrain-config.json', got {got!r}")
+        if DRIVE_LETTER_RE.search(got):
+            fails.append(f"case6 leaked a drive-letter path: {got!r}")
+
+        outside = troot.parent / "outside-config.json"
+        got_ext = normalize_config_path(str(outside), root=troot)
+        if got_ext != f"<EXTERNAL>/{outside.name}":
+            fails.append(f"case6b expected '<EXTERNAL>/{outside.name}', got {got_ext!r}")
+        if DRIVE_LETTER_RE.search(got_ext):
+            fails.append(f"case6b leaked a drive-letter path: {got_ext!r}")
+
     if fails:
         print("REGISTRY_GATE_SELFTEST FAIL:")
         for f in fails:
             print(f"  - {f}")
         return 1
     print(f"REGISTRY_GATE_SELFTEST PASS: registry {len(rows)} rows / "
-          f"{len(adopt)} ADOPT, 6 gate cases green")
+          f"{len(adopt)} ADOPT, 7 gate cases green")
     return 0
 
 
