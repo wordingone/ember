@@ -109,8 +109,72 @@ def test_a_b1m_resolver_matches_shared_helper_not_the_old_alias():
     return True
 
 
+def _b1m_none_handling(model_state, opt_state, gate_key, snapshot_dir):
+    """Mirrors cbase_grow_rung2_event.py's phase_b1m None-handling verbatim
+    (gate-review amendment, 2026-07-10): the fixed block no longer
+    silently substitutes torch.zeros_like on a None resolution -- it fails
+    closed immediately, naming gate_key + snapshot_dir. Synthetic, no
+    real checkpoint needed, so this test never skips."""
+    from p5_ratio_audit.run_p5_audit import resolve_gate_momentum_buffer
+    pre_momentum = resolve_gate_momentum_buffer(model_state, opt_state, gate_key)
+    if pre_momentum is None:
+        raise SystemExit(
+            f"CBASE-GROW-RUNG2-EVENT-B1M: fail-closed refusal -- resolve_gate_momentum_buffer "
+            f"found no momentum buffer for {gate_key!r} in {snapshot_dir}'s optimizer.pt. Never "
+            f"silently substitutes zeros_like for a missing resolution. If this checkpoint "
+            f"genuinely has no prior optimizer momentum (initial training, no prior optimizer "
+            f"state), that IS a real N/A for the transplant arm (structural impossibility, not a "
+            f"defect) -- but it must surface as this explicit refusal, never an implicit "
+            f"fallback. See issue #466 / #449 / #452 / #580.")
+    return pre_momentum
+
+
+def test_b_none_resolution_fails_closed_never_zeros():
+    """A synthetic checkpoint where gate_key's muon entry is missing (the
+    real on-disk shape of 'no prior momentum', e.g. initial training)
+    resolves to None, and phase_b1m's fixed None-handling raises
+    SystemExit naming the gate key -- never silently substitutes
+    torch.zeros_like and lets the caller proceed with a fabricated
+    zero-momentum tensor (the exact landmine the #580 gate review flagged:
+    a silent zero-momentum transplant that looks like a real measurement).
+    """
+    import torch
+
+    gate_key = "backbone_model.layers.0.mlp.gate_proj.weight"
+    up_key = "backbone_model.layers.0.mlp.up_proj.weight"
+    model_state = {
+        gate_key: torch.randn(8, 4),
+        up_key: torch.randn(8, 4),
+    }
+    # opt_state has NO entry for gate_key's muon-local id at all (the
+    # on-disk shape of "this parameter never accumulated momentum" --
+    # resolve_gate_momentum_buffer's own None-returning path).
+    opt_state = {"muon": {"state": {}}}
+
+    from p5_ratio_audit.run_p5_audit import resolve_gate_momentum_buffer
+    pre_check = resolve_gate_momentum_buffer(model_state, opt_state, gate_key)
+    assert pre_check is None, "[test_b] FAIL: fixture does not actually produce a None resolution"
+
+    raised = False
+    try:
+        _b1m_none_handling(model_state, opt_state, gate_key, "models/fake-snapshot")
+    except SystemExit as e:
+        raised = True
+        msg = str(e)
+        assert gate_key in msg, f"[test_b] FAIL: SystemExit message does not name gate_key: {msg}"
+        assert "zeros_like" in msg or "Never silently substitutes" in msg, (
+            f"[test_b] FAIL: SystemExit message does not disclose the never-zeros-fallback "
+            f"guarantee: {msg}")
+    assert raised, "[test_b] FAIL: None resolution did not raise SystemExit -- silent fallback regression"
+    print("[test_b] PASS: None resolution raised SystemExit naming the gate key, no zeros_like fallback")
+    return True
+
+
 if __name__ == "__main__":
-    tests = [test_a_b1m_resolver_matches_shared_helper_not_the_old_alias]
+    tests = [
+        test_a_b1m_resolver_matches_shared_helper_not_the_old_alias,
+        test_b_none_resolution_fails_closed_never_zeros,
+    ]
     failures = []
     for t in tests:
         try:
