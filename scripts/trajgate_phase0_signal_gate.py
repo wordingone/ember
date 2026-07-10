@@ -5,40 +5,71 @@ gate). No treatment run (TRAJGATE-1 arm B/C/D) may launch before this gate's
 verdict. Prereg sha pin (frozen source): `7aa891f03281c56152d643fba761e1c4d4
 9d1f74eeb0d6743153ccf52822e211`.
 
-Authoritative spec: wordingone/ember issue #724 (this file's spec) and issue
-#723 sections 3-4 (score definitions, mechanism, kill-gate framing). Where
+Authoritative spec: wordingone/ember issue #724 (this file's spec, INCLUDING
+its two amendment comments -- BLOCK_724_AS_IMPLEMENTATION_OF_723_PHASE0 and
+BLOCK_726_PHASE0_FAILOPEN) and issue #723 sections 3-4 + AMENDMENT-2 (score
+definitions, mechanism, kill-gate framing, selector-replay repair). Where
 this file and the issues ever disagree, the issues win.
+
+REVISION (this file, refs #724): two dated defects in the #726-landed
+runner were found by independent falsifier audit and are repaired here --
+(1) a selector MISMATCH (the original item-3 band measured |P_ab|<0.05
+prevalence, a band arm B's actual treatment never touches -- superseded by
+a SELECTOR-REPLAY leg, #723 AMENDMENT-2); (2) a FAIL-OPEN definedness bug
+(an undefined per-half partial Spearman silently cleared the increment kill
+instead of forcing PHASE0_INVALID -- #724's second block comment,
+BLOCK_726_PHASE0_FAILOPEN). Both are fixed below; the engagement guards,
+statistics primitives, and CLI/--live interlock are otherwise unchanged.
 
 What this gate measures, given THREE checkpoints of ONE training run (steps
 a < b < c, asserted from checkpoint metadata) and a frozen shard slice:
 
-  1. Reliability of P: P_ab(i) = l_a(i) - l_b(i) per loss-bearing token i.
-     Split-half reliability -- two disjoint random halves of the token
-     sample (seeded) -- plus OPTIONAL lag-consistency (Spearman of P_ab vs
-     P_bd from a nearer pair, when a 4th checkpoint --ckpt-d is supplied).
-     The split-half machinery is the SAME disjoint halves used by item 2's
-     per-half reporting; the frozen spec names one split, used twice (see
-     `_measure_phase0`'s docstring for why there is no second, independent
-     reliability statistic to compute).
-  2. Incremental predictive value (the decisive number): does P_ab predict
-     FUTURE descent (l_b(i) - l_c(i)) beyond instantaneous level l_b(i)?
-     Raw Spearman(P_ab, descent_bc) and the partial Spearman controlling for
-     l_b, on EACH split half separately.
-  3. H->H band prevalence: fraction of loss-bearing tokens (over the FULL
-     sample) with l_b in the top 20% AND |P_ab| < 0.05 nats.
+  1. Split REPLICATION consistency of P (relabeled from "split-half
+     reliability", #723 AMENDMENT-2 -- descriptive, non-binding):
+     P_ab(i) = l_a(i) - l_b(i) per loss-bearing token i, agreement between
+     two disjoint random halves of the token sample (seeded) -- plus
+     OPTIONAL lag-consistency (Spearman of P_ab vs P_bd from a nearer pair,
+     when a 4th checkpoint --ckpt-d is supplied; true same-token
+     reliability lives there, unchanged). The split machinery is the SAME
+     disjoint halves used by item 2's per-half reporting; the frozen spec
+     names one split, used twice (see `_measure_phase0`'s docstring for why
+     there is no second, independent statistic to compute).
+  2. Incremental predictive value (the decisive number, UNCHANGED): does
+     P_ab predict FUTURE descent (l_b(i) - l_c(i)) beyond instantaneous
+     level l_b(i)? Raw Spearman(P_ab, descent_bc) and the partial Spearman
+     controlling for l_b, on EACH split half separately. Any per-half
+     partial Spearman that is undefined (None) or non-finite forces
+     PHASE0_INVALID -- fail-closed, checked BEFORE any threshold
+     application (definedness guard, #724 second block comment).
+  3. Selector-replay target-band composition (REPLACES the original
+     |P_ab|<0.05 band-prevalence leg, #723 AMENDMENT-2): replays arm B's
+     EXACT frozen selector on the (a,b) pair -- H = top 20% of the sample
+     by l_b, M = bottom ceil(0.3*|H|) by SIGNED P_ab within H (arm B's own
+     moved-set construction, #723 sec.3) -- and receipts M's composition:
+     frac(P_ab < 0.05 | M) [stationary-or-ascending, the band the treatment
+     rationale targets], frac(P_ab <= -0.05 | M) [ascending],
+     frac(P_ab >= 0.05 | M) [descending-but-lowest], plus endpoint-rank
+     H->H overlap (fraction of M in the top 20% by BOTH l_a and l_b) as a
+     descriptive.
 
-Frozen verdict floors (coordinator-authored, #724 -- echoed verbatim into
-every receipt):
-  PHASE0_KILL_NO_INCREMENT : partial Spearman(P_ab, descent_bc | l_b) < 0.05
-                             on BOTH split halves.
-  PHASE0_KILL_NO_BAND      : H->H band prevalence < 2% of loss-bearing tokens.
-  PHASE0_SIGNAL_PRESENT    : neither kill fires.
-  PHASE0_INVALID           : any engagement guard breach (fail-closed, no
-                             partial credit) -- checked BEFORE the above
-                             three and short-circuits them.
+Frozen verdict floors (coordinator-authored, #724 as amended -- echoed
+verbatim into every receipt):
+  PHASE0_KILL_NO_INCREMENT  : partial Spearman(P_ab, descent_bc | l_b) < 0.05
+                              on BOTH split halves.
+  PHASE0_KILL_NO_TARGET_BAND: frac(P_ab < 0.05 | M) < 0.5 on the replayed
+                              selector's moved set M (supersedes the
+                              original PHASE0_KILL_NO_BAND product-kill,
+                              which measured a band arm B never selects).
+  PHASE0_SIGNAL_PRESENT     : neither kill fires.
+  PHASE0_INVALID            : (a) any engagement guard breach on --live
+                              (fail-closed, no partial credit), OR (b) the
+                              definedness guard breach inside
+                              `_measure_phase0` itself (item 2) -- both
+                              checked BEFORE the above three and
+                              short-circuit them.
 Verdict-priority note (this file's own resolution of an ordering the spec
 leaves implicit): #724 calls item 2 "the decisive number", so when BOTH
-NO_INCREMENT and NO_BAND would fire, NO_INCREMENT is reported (see
+NO_INCREMENT and NO_TARGET_BAND would fire, NO_INCREMENT is reported (see
 `_measure_phase0`). Disclosed in every receipt via `verdict_priority_note`.
 
 Engagement guards (fail-closed, #724's own list -- ALL evaluated; ANY
@@ -64,11 +95,21 @@ Selftest (--selftest, CPU-only, no GPU, <30s): exercises the frozen verdict
 grammar against a synthetic PLANTED fixture (noise band: high l_b, zero
 descent; learnable band: high l_b, positive descent correlated with P_ab;
 low-loss band) and a shuffled-P variant that destroys only the P_ab<->
-descent_bc pairing within the high-loss pool. Deterministic seeds; the CLI
-invocation is run 3x by the builder for the PR report (this module itself
-is fully deterministic per seed, so repeat runs are byte-identical). Also
-exercises every engagement guard's fail-closed path against synthetic
-manifests (no GPU, no real checkpoints needed for guard logic).
+descent_bc pairing within the high-loss pool. PLUS (this revision, #724
+amendments): a constant-P/no-rank-variation fixture (must yield
+PHASE0_INVALID), a one-half-undefined fixture (a single degenerate token
+forces exactly one split half's partial to be undefined, must yield
+PHASE0_INVALID), a NaN/Inf-propagation fixture (must yield PHASE0_INVALID),
+a tie-heavy-vs-unique-rank sanity check (ties alone must NOT trigger
+PHASE0_INVALID), and the two auditor-supplied selector-mismatch
+counterexamples restated for this gate's H/M framing (ascending-M: target
+band exists at full selector mass, NO_TARGET_BAND must not fire;
+descending-M: M is dominated by strongly-descending tokens, NO_TARGET_BAND
+must fire). Deterministic seeds; the CLI invocation is run 3x by the
+builder for the PR report (this module itself is fully deterministic per
+seed, so repeat runs are byte-identical). Also exercises every engagement
+guard's fail-closed path against synthetic manifests (no GPU, no real
+checkpoints needed for guard logic).
 
 Rails: build-only. --live (real checkpoints, real shard, forward passes)
 requires EMBER_GATE_AUTHORIZED=1 and refuses otherwise -- same interlock
@@ -101,16 +142,18 @@ SHA_CONVENTION = ("sha256 as reported by timeshare_pretrain.save_checkpoint's "
                   "manifest.json / manifest_sha.compute_manifest (binary "
                   "read, no line-ending normalization)")
 
-# ---- frozen verdict floors (#724's own numbers) ----------------------------
-PHASE0_KILL_NO_INCREMENT_FLOOR = 0.05   # partial Spearman(P_ab,descent_bc|l_b), BOTH halves < this to kill
-PHASE0_KILL_NO_BAND_FLOOR = 0.02        # H->H band prevalence, < this to kill
-TOP_LOSS_QUANTILE = 0.20                # "top 20%" by l_b
-BAND_P_AB_ABS_THRESHOLD_NATS = 0.05     # |P_ab| < 0.05 nats -> "no progress"
-MIN_LOSS_BEARING_TOKENS = 2_000_000     # or slice max if smaller
-VRAM_MARGIN_MULTIPLIER = 1.5            # cuda refused unless free >= 1.5x model bytes
+# ---- frozen verdict floors (#724 as amended by #723 AMENDMENT-2 / #724's --
+# -- second block comment) --------------------------------------------------
+PHASE0_KILL_NO_INCREMENT_FLOOR = 0.05    # partial Spearman(P_ab,descent_bc|l_b), BOTH halves < this to kill
+PHASE0_KILL_NO_TARGET_BAND_FLOOR = 0.5   # frac(P_ab<target_band_threshold|M) on the replayed selector, < this to kill
+TOP_LOSS_QUANTILE = 0.20                 # "top 20%" by l_b -- defines H
+SELECTOR_MOVED_FRACTION_OF_H = 0.3       # arm B's own ceil(0.3*|H|) moved-set fraction -- defines M within H
+TARGET_BAND_P_AB_THRESHOLD_NATS = 0.05   # signed P_ab threshold for M's composition fractions (was an abs-value band threshold pre-revision)
+MIN_LOSS_BEARING_TOKENS = 2_000_000      # or slice max if smaller
+VRAM_MARGIN_MULTIPLIER = 1.5             # cuda refused unless free >= 1.5x model bytes
 
 VERDICT_GRAMMAR = (
-    "PHASE0_KILL_NO_INCREMENT", "PHASE0_KILL_NO_BAND",
+    "PHASE0_KILL_NO_INCREMENT", "PHASE0_KILL_NO_TARGET_BAND",
     "PHASE0_SIGNAL_PRESENT", "PHASE0_INVALID",
 )
 
@@ -207,22 +250,50 @@ def _partial_spearman(x, y, z) -> "float | None":
 # feeds with real forward-pass output.
 # ---------------------------------------------------------------------------
 
+def _rank_variation_stats(x) -> dict:
+    """Diagnostic only -- WHY a partial Spearman came back undefined
+    (degenerate/no-rank-variation input), never a substitute for the
+    definedness guard itself. std_of_ranks == 0 means every value in x tied
+    for the same rank (constant or fully-degenerate series)."""
+    from scipy.stats import rankdata
+    import numpy as np
+    r = rankdata(np.asarray(x, dtype=np.float64))
+    return {"std_of_ranks": float(np.std(r)), "has_rank_variation": bool(np.std(r) > 0)}
+
+
 def _measure_phase0(l_a, l_b, l_c, *, seed: int,
                     top_quantile: float = TOP_LOSS_QUANTILE,
-                    band_abs_threshold: float = BAND_P_AB_ABS_THRESHOLD_NATS,
+                    target_band_threshold: float = TARGET_BAND_P_AB_THRESHOLD_NATS,
                     no_increment_floor: float = PHASE0_KILL_NO_INCREMENT_FLOOR,
-                    no_band_floor: float = PHASE0_KILL_NO_BAND_FLOOR) -> dict:
+                    no_target_band_floor: float = PHASE0_KILL_NO_TARGET_BAND_FLOOR,
+                    selector_moved_fraction: float = SELECTOR_MOVED_FRACTION_OF_H) -> dict:
     """l_a, l_b, l_c: 1-D arrays, same length n, ALIGNED per loss-bearing
     token. Splits the n tokens into two disjoint random halves (seeded
     permutation, floor(n/2) each -- an odd leftover token is dropped,
-    disclosed in the receipt as n_dropped_odd_token). Item 1 (reliability of
-    P) and item 2 (incremental predictive value) of #724 both consume this
-    SAME split: item 2 mandates per-half raw + partial Spearman(P_ab,
-    descent_bc); item 1's split-half reliability of P is the agreement
-    between the two halves' RAW Spearman(P_ab, descent_bc) computed here --
-    the frozen spec names one split, used for both reports; there is no
-    second, independently-specified reliability statistic in #724/#723
-    sec.4 to compute instead."""
+    disclosed in the receipt as n_dropped_odd_token). Item 1 (split
+    REPLICATION consistency of P, #723 AMENDMENT-2 relabel) and item 2
+    (incremental predictive value) both consume this SAME split: item 2
+    mandates per-half raw + partial Spearman(P_ab, descent_bc); item 1's
+    consistency check is the agreement between the two halves' RAW Spearman
+    computed here -- the frozen spec names one split, used for both
+    reports; there is no second, independently-specified statistic in
+    #724/#723 sec.4/AMENDMENT-2 to compute instead.
+
+    DEFINEDNESS GUARD (#724 second block comment, BLOCK_726_PHASE0_FAILOPEN
+    repair): if EITHER half's partial Spearman(P_ab, descent_bc | l_b) is
+    undefined (None) or non-finite (NaN/Inf -- possible when an upstream
+    non-finite value or rank-collinear controlling series slips past
+    `_partial_spearman`'s own None-fallback), this function returns
+    PHASE0_INVALID immediately, fail-closed, BEFORE any threshold
+    application (no_increment / selector-replay / no_target_band are never
+    computed on an unmeasurable half). This replaces the prior fail-open
+    shape (`all(p is not None and p < floor ...)`, which let an undefined
+    partial silently clear the kill instead of forcing INVALID -- the exact
+    bug the second block comment's constant-P counterexample demonstrated).
+    Each half's finite-input check runs BEFORE `_spearman`/`_partial_spearman`
+    are even called (NaN/Inf in the raw series is caught directly, since
+    scipy.stats.rankdata does not reliably turn non-finite inputs into a
+    non-finite correlation -- Inf sorts to a well-defined finite rank)."""
     import numpy as np
     l_a = np.asarray(l_a, dtype=np.float64)
     l_b = np.asarray(l_b, dtype=np.float64)
@@ -241,14 +312,39 @@ def _measure_phase0(l_a, l_b, l_c, *, seed: int,
 
     def _half_stats(idx):
         x, y, z = p_ab[idx], descent_bc[idx], l_b[idx]
+        finite = {
+            "P_ab": bool(np.all(np.isfinite(x))),
+            "descent_bc": bool(np.all(np.isfinite(y))),
+            "l_b": bool(np.all(np.isfinite(z))),
+        }
+        all_finite = all(finite.values())
+        raw = _spearman(x, y) if all_finite else None
+        partial = _partial_spearman(x, y, z) if all_finite else None
+        partial_defined = bool(all_finite and partial is not None and np.isfinite(partial))
         return {
-            "raw_spearman_P_ab_descent_bc": _spearman(x, y),
-            "partial_spearman_P_ab_descent_bc_given_l_b": _partial_spearman(x, y, z),
+            "raw_spearman_P_ab_descent_bc": raw,
+            "partial_spearman_P_ab_descent_bc_given_l_b": partial,
             "n_tokens": int(idx.shape[0]),
+            "finite_inputs": finite,
+            "rank_variation": {
+                "P_ab": _rank_variation_stats(x) if finite["P_ab"] else None,
+                "descent_bc": _rank_variation_stats(y) if finite["descent_bc"] else None,
+                "l_b": _rank_variation_stats(z) if finite["l_b"] else None,
+            },
+            "partial_spearman_defined": partial_defined,
         }
 
     half1 = _half_stats(idx_h1)
     half2 = _half_stats(idx_h2)
+
+    definedness_guard = {
+        "half1_partial_defined": half1["partial_spearman_defined"],
+        "half2_partial_defined": half2["partial_spearman_defined"],
+        "note": ("#724 second block comment (BLOCK_726_PHASE0_FAILOPEN): any "
+                "per-half partial Spearman that is None or non-finite forces "
+                "PHASE0_INVALID, fail-closed, BEFORE threshold application -- "
+                "checked here, ahead of the increment/selector-replay logic"),
+    }
 
     raw1, raw2 = half1["raw_spearman_P_ab_descent_bc"], half2["raw_spearman_P_ab_descent_bc"]
     reliability_of_P = {
@@ -256,57 +352,106 @@ def _measure_phase0(l_a, l_b, l_c, *, seed: int,
         "half2_raw_spearman": raw2,
         "same_sign": bool(raw1 is not None and raw2 is not None and (raw1 * raw2) > 0),
         "abs_delta": (abs(raw1 - raw2) if raw1 is not None and raw2 is not None else None),
-        "note": ("split-half reliability of P (#724 item 1) reuses the SAME "
-                "disjoint-halves split as item 2's mandatory per-half "
-                "correlation reporting -- the frozen spec names one split, "
-                "used twice; there is no second reliability statistic to "
-                "compute independently"),
+        "note": ("split REPLICATION consistency (#723 AMENDMENT-2: item (a) "
+                "relabeled from 'split-half reliability', descriptive, "
+                "non-binding) reuses the SAME disjoint-halves split as item "
+                "2's mandatory per-half correlation reporting; true "
+                "same-token reliability is the optional lag-consistency leg "
+                "(4th checkpoint), unchanged"),
     }
 
-    threshold_top = float(np.quantile(l_b, 1.0 - top_quantile))
-    hh_band_mask = (l_b >= threshold_top) & (np.abs(p_ab) < band_abs_threshold)
-    band_prevalence = float(hh_band_mask.mean())
+    if not (definedness_guard["half1_partial_defined"] and definedness_guard["half2_partial_defined"]):
+        return {
+            "verdict": "PHASE0_INVALID",
+            "verdict_reason": ("definedness_guard breach: at least one split "
+                              "half's partial Spearman(P_ab, descent_bc | l_b) "
+                              "is undefined (None) or non-finite -- fail-"
+                              "closed, no threshold application (#724 second "
+                              "block comment / BLOCK_726_PHASE0_FAILOPEN)"),
+            "n_loss_bearing_tokens": n,
+            "n_dropped_odd_token": n - 2 * half,
+            "definedness_guard": definedness_guard,
+            "reliability_of_P": reliability_of_P,
+            "incremental_predictive_value": {"half1": half1, "half2": half2},
+            "split_seed": seed,
+        }
 
-    partials = [half1["partial_spearman_P_ab_descent_bc_given_l_b"],
-               half2["partial_spearman_P_ab_descent_bc_given_l_b"]]
-    # None (undefined partial correlation) counts as clearing the kill floor
-    # ON THAT HALF -- i.e. it does NOT contribute to firing NO_INCREMENT --
-    # since "< 0.05" cannot be asserted true of an undefined quantity
-    # (fail-closed toward NOT killing on unmeasurable data, consistent with
-    # PHASE0_INVALID being the separate, dedicated path for unmeasurable
-    # engagement conditions).
-    no_increment = all(p is not None and p < no_increment_floor for p in partials)
-    no_band = band_prevalence < no_band_floor
+    partial1 = half1["partial_spearman_P_ab_descent_bc_given_l_b"]
+    partial2 = half2["partial_spearman_P_ab_descent_bc_given_l_b"]
+    no_increment = (partial1 < no_increment_floor) and (partial2 < no_increment_floor)
+
+    # ---- selector-replay leg (#723 AMENDMENT-2 / #724 first block comment):
+    # replays arm B's EXACT frozen selector instead of measuring a band the
+    # treatment never touches. H = top top_quantile of the FULL sample by
+    # l_b; M = bottom ceil(selector_moved_fraction*|H|) of H by SIGNED P_ab
+    # (arm B's own moved-set construction, #723 sec.3 -- lowest P_ab first,
+    # so M is dominated by the most-negative/ascending tokens when they
+    # exist, NOT by |P_ab|~0 tokens).
+    threshold_top_b = float(np.quantile(l_b, 1.0 - top_quantile))
+    h_idx = np.nonzero(l_b >= threshold_top_b)[0]
+    n_h = int(h_idx.shape[0])
+    n_m = int(np.ceil(selector_moved_fraction * n_h)) if n_h > 0 else 0
+
+    if n_m > 0:
+        order_within_h = np.argsort(p_ab[h_idx], kind="stable")  # ascending signed P_ab -- "bottom" = lowest/most-negative first
+        m_idx = h_idx[order_within_h[:n_m]]
+        p_ab_m = p_ab[m_idx]
+        frac_lt_target = float(np.mean(p_ab_m < target_band_threshold))
+        frac_le_neg_target = float(np.mean(p_ab_m <= -target_band_threshold))
+        frac_ge_target = float(np.mean(p_ab_m >= target_band_threshold))
+        threshold_top_a = float(np.quantile(l_a, 1.0 - top_quantile))
+        endpoint_overlap = float(np.mean((l_a[m_idx] >= threshold_top_a) & (l_b[m_idx] >= threshold_top_b)))
+    else:
+        frac_lt_target = frac_le_neg_target = frac_ge_target = endpoint_overlap = None
+
+    # empty H (n_m==0) means the selector's own target band cannot exist --
+    # treated as a kill, consistent with "do not spend when the target band
+    # does not exist" (#723 AMENDMENT-2's stated rationale).
+    no_target_band = bool(n_m == 0 or frac_lt_target < no_target_band_floor)
 
     if no_increment:
         verdict = "PHASE0_KILL_NO_INCREMENT"
-    elif no_band:
-        verdict = "PHASE0_KILL_NO_BAND"
+    elif no_target_band:
+        verdict = "PHASE0_KILL_NO_TARGET_BAND"
     else:
         verdict = "PHASE0_SIGNAL_PRESENT"
 
     return {
         "verdict": verdict,
-        "verdict_priority_note": ("NO_INCREMENT is checked before NO_BAND "
-                                  "when both floors would fire -- #724 names "
-                                  "item 2 'the decisive number'; this file's "
-                                  "own resolution of an ordering #724 leaves "
+        "verdict_priority_note": ("NO_INCREMENT is checked before "
+                                  "NO_TARGET_BAND when both floors would "
+                                  "fire -- #724 names item 2 'the decisive "
+                                  "number'; this file's own resolution of an "
+                                  "ordering #724/#723 AMENDMENT-2 leaves "
                                   "implicit"),
         "n_loss_bearing_tokens": n,
         "n_dropped_odd_token": n - 2 * half,
+        "definedness_guard": definedness_guard,
         "reliability_of_P": reliability_of_P,
         "incremental_predictive_value": {
             "half1": half1, "half2": half2,
             "kill_no_increment_fired": no_increment,
             "floor": no_increment_floor,
         },
-        "hh_band_prevalence": {
-            "value": band_prevalence,
+        "selector_replay": {
+            "h_pool_size": n_h,
             "top_quantile": top_quantile,
-            "l_b_threshold_at_top_quantile": threshold_top,
-            "abs_p_ab_threshold_nats": band_abs_threshold,
-            "kill_no_band_fired": no_band,
-            "floor": no_band_floor,
+            "l_b_threshold_at_top_quantile": threshold_top_b,
+            "m_selected_size": n_m,
+            "m_selector_fraction_of_h": selector_moved_fraction,
+            "frac_P_ab_lt_target_given_M": frac_lt_target,
+            "frac_P_ab_le_neg_target_given_M": frac_le_neg_target,
+            "frac_P_ab_ge_target_given_M": frac_ge_target,
+            "target_band_p_ab_threshold_nats": target_band_threshold,
+            "endpoint_rank_HtoH_overlap_descriptive": endpoint_overlap,
+            "kill_no_target_band_fired": no_target_band,
+            "floor": no_target_band_floor,
+            "note": ("supersedes the original |P_ab|<0.05 band-prevalence "
+                    "leg (#723 AMENDMENT-2 / #724 first block comment) -- "
+                    "replays arm B's exact frozen selector (H=top-20% by "
+                    "l_b, M=bottom ceil(0.3*|H|) by signed P_ab within H) "
+                    "instead of measuring a band the treatment never "
+                    "touches"),
         },
         "split_seed": seed,
     }
@@ -601,9 +746,10 @@ def run_live(*, ckpt_a: str, ckpt_b: str, ckpt_c: str, ckpt_d: "str | None",
                        "shard_manifest_sha256": shard_manifest_sha256, "seed": seed},
         "frozen_constants": {
             "PHASE0_KILL_NO_INCREMENT_FLOOR": PHASE0_KILL_NO_INCREMENT_FLOOR,
-            "PHASE0_KILL_NO_BAND_FLOOR": PHASE0_KILL_NO_BAND_FLOOR,
+            "PHASE0_KILL_NO_TARGET_BAND_FLOOR": PHASE0_KILL_NO_TARGET_BAND_FLOOR,
             "TOP_LOSS_QUANTILE": TOP_LOSS_QUANTILE,
-            "BAND_P_AB_ABS_THRESHOLD_NATS": BAND_P_AB_ABS_THRESHOLD_NATS,
+            "SELECTOR_MOVED_FRACTION_OF_H": SELECTOR_MOVED_FRACTION_OF_H,
+            "TARGET_BAND_P_AB_THRESHOLD_NATS": TARGET_BAND_P_AB_THRESHOLD_NATS,
             "MIN_LOSS_BEARING_TOKENS": MIN_LOSS_BEARING_TOKENS,
             "VRAM_MARGIN_MULTIPLIER": VRAM_MARGIN_MULTIPLIER,
         },
@@ -697,6 +843,111 @@ def _planted_phase0_fixture(*, seed: int, n_noise: int = 2000, n_learn: int = 20
     return l_a, l_b, l_c
 
 
+def _planted_constant_p_fixture(*, seed: int, n: int = 20000):
+    """The auditor's exact-blob counterexample (#724 second block comment,
+    BLOCK_726_PHASE0_FAILOPEN): l_b varies (linspace, full rank variation),
+    but l_a=l_b and l_c=l_b IDENTICALLY -- so P_ab and descent_bc are both
+    constant 0 for every token (the strongest possible no-signal fixture:
+    l_b degeneracy alone was wrongly judged practically-unreachable; this
+    fixture instead degenerates the OPERATIVE series, P_ab, directly).
+    `seed` kept for signature symmetry with the other fixtures; unused
+    (fully deterministic construction, no randomness)."""
+    import numpy as np
+    l_b = np.linspace(0.5, 3.0, n)
+    l_a = l_b.copy()
+    l_c = l_b.copy()
+    return l_a, l_b, l_c
+
+
+def _one_half_undefined_fixture(*, seed: int, n: int = 20000):
+    """Exactly ONE token (index 0) carries a non-zero P_ab; every other
+    token has P_ab IDENTICALLY 0. n is even (no odd-token drop, so index 0
+    always lands in exactly one of the two split halves regardless of the
+    split seed): whichever half does NOT draw index 0 has a fully-constant
+    P_ab (std of ranks == 0 -> partial Spearman undefined, None); the other
+    half retains real rank variation (defined). This deterministically
+    forces EXACTLY ONE undefined half for ANY split seed -- tests that the
+    definedness guard fires on a SINGLE undefined half, not only when both
+    are undefined."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    l_b = np.linspace(1.0, 2.0, n)
+    l_c = l_b - rng.uniform(0.0, 0.3, size=n)   # descent_bc has real variation throughout
+    l_a = l_b.copy()
+    l_a[0] += 0.5                                # the single P_ab outlier: p_ab[0]=0.5, else 0
+    return l_a, l_b, l_c
+
+
+def _nan_inf_propagation_fixture(*, seed: int, n: int = 20000):
+    """Injects a single NaN into l_a (index 0) and a single Inf into l_c
+    (index 1). n is even and no token is dropped, so indices 0 and 1 each
+    land in exactly one split half regardless of seed -- that half's
+    finite-input check fails deterministically. This does NOT rely on
+    scipy.stats.rankdata propagating NaN/Inf to a non-finite correlation
+    (verified: rankdata sorts Inf to a well-defined finite rank, so an
+    Inf-only guard would silently pass without the explicit finite-input
+    check inside `_measure_phase0`'s `_half_stats`)."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    l_b = np.linspace(1.0, 2.0, n)
+    l_c = l_b - rng.uniform(0.0, 0.3, size=n)
+    l_a = l_b + rng.normal(0.0, 0.05, size=n)
+    l_a[0] = np.nan
+    l_c[1] = np.inf
+    return l_a, l_b, l_c
+
+
+def _selector_mismatch_fixture(*, seed: int, kind: str, n_h: int = 4000, n_low: int = 16000):
+    """The two auditor-supplied executable counterexamples (#723
+    AMENDMENT-2 / #724 first block comment), restated for this gate's H/M
+    framing: H = top-20% pool by l_b (n_h = 20% of n_h+n_low, by
+    construction, same trick as `_planted_phase0_fixture`), M = bottom
+    ceil(SELECTOR_MOVED_FRACTION_OF_H * |H|) of H by SIGNED P_ab.
+
+    kind='ascending_m': M (H's bottom 30% by P_ab) is entirely P_ab=-0.5
+    (strongly ascending / no-progress) -- the target band arm B's
+    rationale is FOR. frac(P_ab<0.05|M) = 1.0 (signed comparison,
+    -0.5 < 0.05) -> PHASE0_KILL_NO_TARGET_BAND must NOT fire.
+
+    kind='descending_m': M is entirely P_ab in [0.3,0.5] (strongly
+    descending, >>0.05) -- H has no genuine stagnant/ascending tail at
+    all, so the replayed selector's own moved set scoops up learnable
+    tokens instead of a no-progress band. frac(P_ab<0.05|M) = 0.0 ->
+    PHASE0_KILL_NO_TARGET_BAND must fire."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    n_m = int(np.ceil(SELECTOR_MOVED_FRACTION_OF_H * n_h))
+    n_rest = n_h - n_m
+
+    l_b_h = rng.uniform(2.0, 3.0, size=n_h)
+    if kind == "ascending_m":
+        p_ab_m = np.full(n_m, -0.5)
+        p_ab_rest = rng.uniform(0.1, 0.6, size=n_rest)     # strictly above -0.5 -- keeps M == the -0.5 tokens
+    elif kind == "descending_m":
+        p_ab_m = rng.uniform(0.3, 0.5, size=n_m)           # M itself is strongly descending, >>0.05
+        p_ab_rest = rng.uniform(0.5, 0.9, size=n_rest)      # rest of H even higher -- keeps M as H's bottom 30%
+    else:
+        raise ValueError(f"unknown kind {kind!r}")
+    p_ab_h = np.concatenate([p_ab_m, p_ab_rest])
+    l_a_h = l_b_h + p_ab_h
+    # descent tracks P_ab with noise (same shape as the planted fixture's
+    # learnable band) -- gives the increment leg real structure so this
+    # fixture isolates the selector-replay behavior, not the increment kill.
+    descent_h = 0.6 * p_ab_h + rng.normal(0.0, 0.02, size=n_h)
+    l_c_h = l_b_h - descent_h
+
+    l_b_low = rng.uniform(0.1, 0.5, size=n_low)
+    p_ab_low = rng.normal(0.0, 0.02, size=n_low)
+    l_a_low = l_b_low + p_ab_low
+    descent_low = rng.uniform(0.0, 0.05, size=n_low)
+    l_c_low = l_b_low - descent_low
+
+    l_a = np.concatenate([l_a_h, l_a_low])
+    l_b = np.concatenate([l_b_h, l_b_low])
+    l_c = np.concatenate([l_c_h, l_c_low])
+    return l_a, l_b, l_c
+
+
 def _selftest_measurement() -> None:
     signal_present = _measure_phase0(*_planted_phase0_fixture(seed=1001, shuffle_p=False), seed=2002)
     assert signal_present["verdict"] == "PHASE0_SIGNAL_PRESENT", (
@@ -708,30 +959,130 @@ def _selftest_measurement() -> None:
         f"shuffled-P variant must yield PHASE0_KILL_NO_INCREMENT, "
         f"got {signal_killed['verdict']!r}: {json.dumps(signal_killed, default=str)[:2000]}")
 
-    # H->H band prevalence must be UNCHANGED by the shuffle (same pool, same
-    # multiset of |P_ab| values -- only the descent pairing is destroyed).
-    bp1 = signal_present["hh_band_prevalence"]["value"]
-    bp2 = signal_killed["hh_band_prevalence"]["value"]
-    assert abs(bp1 - bp2) < 1e-12, (
-        f"shuffle_p must preserve H->H band prevalence exactly (pool-internal "
-        f"permutation): got {bp1} vs {bp2}")
-    assert bp1 > PHASE0_KILL_NO_BAND_FLOOR, (
-        f"planted fixture's own noise band must clear the 2% band floor "
-        f"(sanity: fixture is testing the increment gate, not the band gate), got {bp1}")
+    # Selector-replay composition must be UNCHANGED by the shuffle: M is
+    # selected purely by the RANK of P_ab values within H, and shuffle_p is
+    # a bijection over that pool's own p_ab values -- same multiset, same
+    # order statistics, only the descent_bc pairing (and therefore which
+    # SPECIFIC token index lands in M) differs.
+    sr1 = signal_present["selector_replay"]
+    sr2 = signal_killed["selector_replay"]
+    assert abs(sr1["frac_P_ab_lt_target_given_M"] - sr2["frac_P_ab_lt_target_given_M"]) < 1e-12, (
+        f"shuffle_p must preserve the selector-replay M composition exactly "
+        f"(pool-internal permutation): got {sr1['frac_P_ab_lt_target_given_M']} "
+        f"vs {sr2['frac_P_ab_lt_target_given_M']}")
+    assert sr1["kill_no_target_band_fired"] is False, (
+        f"planted fixture's own noise band (P_ab~N(0,0.02)) must dominate M "
+        f"and clear the target-band floor (sanity: fixture tests the "
+        f"increment gate, not the target-band gate): {sr1}")
 
-    # Reliability-of-P: both halves must AGREE in sign on the real-signal
-    # fixture (the planted correlation is strong and should survive an
-    # arbitrary 50/50 split), and the split machinery must be present.
+    # Reliability-of-P (split REPLICATION consistency): both halves must
+    # AGREE in sign on the real-signal fixture (the planted correlation is
+    # strong and should survive an arbitrary 50/50 split).
     rel = signal_present["reliability_of_P"]
     assert rel["same_sign"] is True, f"planted-signal fixture halves disagree in sign: {rel}"
 
     print("TRAJGATE_PHASE0_MEASUREMENT_SELFTEST_PASS "
           f"signal_present_verdict={signal_present['verdict']} "
           f"signal_killed_verdict={signal_killed['verdict']} "
-          f"band_prevalence={bp1:.6f} "
+          f"selector_replay_frac_lt_target={sr1['frac_P_ab_lt_target_given_M']:.6f} "
           f"half1_partial={signal_present['incremental_predictive_value']['half1']['partial_spearman_P_ab_descent_bc_given_l_b']:.6f} "
           f"half2_partial={signal_present['incremental_predictive_value']['half2']['partial_spearman_P_ab_descent_bc_given_l_b']:.6f}",
           flush=True)
+
+
+def _selftest_definedness_guard() -> None:
+    """#724 second block comment (BLOCK_726_PHASE0_FAILOPEN): the auditor's
+    exact-blob constant-P counterexample, plus the one-half-undefined and
+    NaN/Inf-propagation cases the comment mandates as selftest fixtures."""
+    constant_p = _measure_phase0(*_planted_constant_p_fixture(seed=4004), seed=2002)
+    assert constant_p["verdict"] == "PHASE0_INVALID", (
+        f"constant-P/no-rank-variation fixture (l_a=l_b=l_c) must yield "
+        f"PHASE0_INVALID via the definedness guard, got "
+        f"{constant_p['verdict']!r}: {json.dumps(constant_p, default=str)[:2000]}")
+    dg = constant_p["definedness_guard"]
+    assert dg["half1_partial_defined"] is False and dg["half2_partial_defined"] is False, (
+        f"constant-P fixture: BOTH halves must show partial_spearman_defined=False, got {dg}")
+
+    one_half = _measure_phase0(*_one_half_undefined_fixture(seed=5005), seed=2002)
+    assert one_half["verdict"] == "PHASE0_INVALID", (
+        f"one-half-undefined fixture must yield PHASE0_INVALID (guard fires "
+        f"on a SINGLE undefined half), got {one_half['verdict']!r}: "
+        f"{json.dumps(one_half, default=str)[:2000]}")
+    dg2 = one_half["definedness_guard"]
+    assert dg2["half1_partial_defined"] != dg2["half2_partial_defined"], (
+        f"one-half-undefined fixture: EXACTLY one half must be defined, got {dg2}")
+
+    nan_inf = _measure_phase0(*_nan_inf_propagation_fixture(seed=6006), seed=2002)
+    assert nan_inf["verdict"] == "PHASE0_INVALID", (
+        f"NaN/Inf-propagation fixture must yield PHASE0_INVALID, got "
+        f"{nan_inf['verdict']!r}: {json.dumps(nan_inf, default=str)[:2000]}")
+
+    print("TRAJGATE_PHASE0_DEFINEDNESS_GUARD_SELFTEST_PASS "
+          f"constant_p_verdict={constant_p['verdict']} "
+          f"one_half_verdict={one_half['verdict']} "
+          f"nan_inf_verdict={nan_inf['verdict']}", flush=True)
+
+
+def _tie_heavy_vs_unique_rank_sanity() -> None:
+    """Sanity check for the definedness guard's rank-variation path: a
+    tie-heavy (but non-constant) series must still be DEFINED -- ties are
+    not the same as no variation -- while the fully-degenerate constant-P
+    fixture above must be INVALID. Guards against the definedness check
+    being accidentally keyed on "has ties" instead of on real rank
+    variation (std of ranks == 0)."""
+    import numpy as np
+    l_a, l_b, l_c = _planted_phase0_fixture(seed=3003, shuffle_p=False)
+    p_ab = l_a - l_b
+    # heavy ties: round P_ab to 1 decimal (collapses most distinct values
+    # into a handful of repeated buckets) -- still has genuine rank
+    # variation (not constant), unlike the constant-P fixture.
+    l_a_tied = l_b + np.round(p_ab, 1)
+
+    tied = _measure_phase0(l_a_tied, l_b, l_c, seed=2002)
+    assert tied["verdict"] != "PHASE0_INVALID", (
+        f"tie-heavy (but non-constant) P_ab must still yield a DEFINED "
+        f"partial Spearman, not PHASE0_INVALID: "
+        f"{json.dumps(tied, default=str)[:1500]}")
+
+    unique = _measure_phase0(l_a, l_b, l_c, seed=2002)
+    assert unique["verdict"] != "PHASE0_INVALID", "unique-rank baseline unexpectedly INVALID"
+
+    print("TRAJGATE_PHASE0_TIE_HEAVY_SANITY_PASS "
+          f"tied_verdict={tied['verdict']} unique_verdict={unique['verdict']}", flush=True)
+
+
+def _selftest_selector_mismatch() -> None:
+    """#723 AMENDMENT-2's two auditor-supplied executable counterexamples,
+    restated for this gate's H/M framing (see `_selector_mismatch_fixture`
+    docstring). These are the fixtures #724's first block comment made
+    mandatory before any --live dispatch of the revised runner."""
+    ascending = _measure_phase0(*_selector_mismatch_fixture(seed=7007, kind="ascending_m"), seed=2002)
+    sr_asc = ascending["selector_replay"]
+    assert abs(sr_asc["frac_P_ab_lt_target_given_M"] - 1.0) < 1e-9, (
+        f"ascending_m fixture: frac(P_ab<0.05|M) must be exactly 1.0 (M is "
+        f"entirely P_ab=-0.5, and -0.5<0.05), got {sr_asc['frac_P_ab_lt_target_given_M']}")
+    assert sr_asc["kill_no_target_band_fired"] is False, (
+        f"ascending_m fixture: the target band exists at full selector mass "
+        f"-- PHASE0_KILL_NO_TARGET_BAND must NOT fire: {sr_asc}")
+    assert ascending["verdict"] != "PHASE0_KILL_NO_TARGET_BAND", (
+        f"ascending_m fixture: verdict must not be the target-band kill "
+        f"(signal path proceeds to increment logic instead), got "
+        f"{ascending['verdict']!r}")
+
+    descending = _measure_phase0(*_selector_mismatch_fixture(seed=8008, kind="descending_m"), seed=2002)
+    sr_desc = descending["selector_replay"]
+    assert sr_desc["frac_P_ab_lt_target_given_M"] == 0.0, (
+        f"descending_m fixture: frac(P_ab<0.05|M) must be exactly 0.0 (M is "
+        f"entirely P_ab in [0.3,0.5], all >=0.05), got {sr_desc['frac_P_ab_lt_target_given_M']}")
+    assert sr_desc["kill_no_target_band_fired"] is True, (
+        f"descending_m fixture: M is dominated by strongly-descending "
+        f"tokens -- PHASE0_KILL_NO_TARGET_BAND must fire: {sr_desc}")
+
+    print("TRAJGATE_PHASE0_SELECTOR_MISMATCH_SELFTEST_PASS "
+          f"ascending_m_verdict={ascending['verdict']} "
+          f"ascending_m_frac={sr_asc['frac_P_ab_lt_target_given_M']:.6f} "
+          f"descending_m_verdict={descending['verdict']} "
+          f"descending_m_frac={sr_desc['frac_P_ab_lt_target_given_M']:.6f}", flush=True)
 
 
 def _selftest_guards() -> None:
@@ -824,6 +1175,9 @@ def _selftest_guards() -> None:
 
 def _selftest() -> int:
     _selftest_measurement()
+    _selftest_definedness_guard()
+    _tie_heavy_vs_unique_rank_sanity()
+    _selftest_selector_mismatch()
     _selftest_guards()
     print("TRAJGATE_PHASE0_SELFTEST_PASS", flush=True)
     return 0
