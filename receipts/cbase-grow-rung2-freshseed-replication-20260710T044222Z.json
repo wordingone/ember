@@ -1,0 +1,87 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-FRESHSEED-REPLICATION",
+  "ts": "2026-07-10T04:42:22.145476+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 123,
+  "refs": [
+    449,
+    482,
+    466,
+    513,
+    591
+  ],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "scope": "Fresh-seed replication of the real null-model rider (seed 20260711, vs the original run's 20260710), same construction and pipeline. Adjudicates all THREE instruments against bands frozen BEFORE this run: R_spectral against the original sqrt(2) bands (unchanged), rms_ratio and min-per-row-cosine against the bands ratified from the disclosure addendum's seen-value-independent proposal. Per team-lead: the ALIGNMENT verdict comes from THIS run, not the original.",
+  "original_run_reference": "receipts/cbase-grow-rung2-real-nullmodel-20260710T004908Z.json (seed 20260710, alignment values reported-not-adjudicated)",
+  "execution_ruling": "CPU, not GPU (unchanged from the original run) -- contended VRAM. No torch.cuda.* calls anywhere in this script.",
+  "construction_provenance": {
+    "random_direction_seed": 20260711,
+    "half": 16384,
+    "ff": 32768,
+    "d": 1024,
+    "row_dup_exact_pre_construction": true
+  },
+  "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+  "u_pre_reset_lr015": {
+    "lr": 0.015,
+    "momentum": "zero buffer (RESET arm)",
+    "spectral": 0.07214184105396271,
+    "rms": 0.00027922826120629907
+  },
+  "freshseed_twin": {
+    "u_post_rms": 0.0002834664483089,
+    "u_post_spectral": 0.10202398151159286,
+    "rms_ratio_post_over_pre": 1.015178216862045,
+    "R_spectral_ratio_post_over_pre": 1.41421372148346,
+    "min_per_row_cosine": -0.12698031961917877,
+    "batch_pin_check": {
+      "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+      "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+      "match": true
+    },
+    "compute_seconds": 114.90852999687195
+  },
+  "ratified_bands": {
+    "rms_ratio": {
+      "anchor_value": 1.0145176101002584,
+      "no_response_pct": 1.0,
+      "material_response_pct": 5.0
+    },
+    "min_per_row_cosine": {
+      "anchor_value": 1.0,
+      "no_response_gt": 0.9,
+      "material_response_lt": 0.3
+    }
+  },
+  "instrument_verdicts": {
+    "R_spectral": {
+      "sqrt2": 1.4142135623730951,
+      "value": 1.41421372148346,
+      "deviation_from_sqrt2": 1.5911036488347463e-07,
+      "deviation_pct": 1.1250801796617082e-05,
+      "band": "kill<=0.1% / promote>1% / else inconclusive (original frozen band, unchanged)",
+      "verdict": "KILL_NS5_PLATEAU_ARTIFACT"
+    },
+    "rms_ratio": {
+      "anchor_value": 1.0145176101002584,
+      "value": 1.015178216862045,
+      "deviation_pct": 0.06511535681684141,
+      "band": "no_response<=1% / material_response>=5% / else inconclusive (ratified 2026-07-10)",
+      "verdict": "NO_RESPONSE"
+    },
+    "min_per_row_cosine": {
+      "anchor_value": 1.0,
+      "value": -0.12698031961917877,
+      "band": "no_response>0.9 / material_response<0.3 / else inconclusive (ratified 2026-07-10)",
+      "verdict": "MATERIAL_RESPONSE"
+    }
+  },
+  "compute_seconds": 114.90852999687195,
+  "wall_seconds": 190.9139108657837,
+  "device": "cpu",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "MEASUREMENT_COMPLETE_ALL_THREE_INSTRUMENTS_ADJUDICATED_AGAINST_PRE_FROZEN_BANDS"
+}
