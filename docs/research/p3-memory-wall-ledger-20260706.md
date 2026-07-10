@@ -101,9 +101,17 @@ Instrument probe only: synthetic random tensors, zero model/training-data risk (
 
 ---
 
-**EXP-A: 8-bit Muon momentum A/B + lifted-NS rank sweep** (next in queue)
+**EXP-C1: Rank-r momentum projection via lifted-NS identity** `[COMPLETED — 2026-07-06]`
 
-On the 718M D6 template with off-subspace rho diagnostic. Kill criteria: convergence grade must match full-precision within 1e−3 loss-trajectory envelope. Pre-registration: micro-scale, synthetic batch diversity, kill on any rank where rho diagnostic flags loss-divergence above noise floor. `[DESIGNED]`
+Swept five arms (full/r8/r32/r128/B0_r32_int8) on the 718M D6 template. Kill criteria: eval loss within 2% of control, rho-sustained fraction ≤ 0.5 (projection-fiction gate).
+
+**Receipt:** `receipts/expc1-rank-sweep-20260706T175635Z.json` `[MEASURED]`
+
+**Results summary:** All arms rejected on rho-sustained criterion (100% of timed steps exceeded rho > 0.5 threshold). Eval-loss tracking passed (all ≤ 0.04% delta), but projection mechanism did not reduce effective dimensionality — projected subspaces are fiction for all tested ranks. `[MEASURED]`
+
+**Verdict:** Lifted-NS polar identity does not enforce low-rank structure in practice at these dims. Pre-registration and kill criteria: see https://github.com/wordingone/ember/issues/207#issuecomment-4930954547 `[RECEIPT-HONEST]`
+
+**Successor:** SR4-MASTER (calibrated full-rank Muon under NF4 quantization; no projection).
 
 ---
 
