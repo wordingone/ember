@@ -1,0 +1,85 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-COMPLETION",
+  "ts": "2026-07-10T17:25:00Z",
+  "issue": 626,
+  "refs": [608, 618],
+  "scope": "Issue #626 completion receipt for board condition C-GROW. Two parts: (1) re-verification, with independently recomputed hashes, that C-GROW is ALREADY GREEN on origin/master via the PR #618 rung-1 receipt -- including a disclosed timing-race explanation for why the board render the issue cites still showed RED; (2) an honest, real-artifact-cited extension attempt to the rung-2 growth event (ff 16384 -> 32768) named in the issue's own cure-spec example, with the genuinely absent datum (post-grow loss) disclosed as absent rather than invented, per the issue's explicit instruction.",
+  "emitter": {
+    "script": "receipts/c-grow-completion-626/ (hand-authored receipt; numeric fields transcribed from the cited source receipts and from independently recomputed sha256 hashes, not from a script)",
+    "git_sha": "50fc7c610d78a227e54d59ff32a95042f2e1ff2e",
+    "note": "restamp ruling possible at the merge gate if #625 (emitter invariant_sha256 stamping) lands first; this receipt does NOT pre-implement any stamping mechanism per DG-W4f's cross-lane disclosure pin."
+  },
+
+  "part_1_rung1_already_green": {
+    "verdict": "C-GROW status on current origin/master, re-run live: GREEN.",
+    "live_probe_rerun_command": "wsl python3 scripts/ember_totality/test_c_grow.py",
+    "live_probe_rerun_output": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured); no invalid-token present",
+    "satisfying_receipt": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
+    "satisfying_receipt_cited_fields": {
+      "grow_method": "net2net FF-widening (function-preserving, warm-start), ff 8192 -> 16384",
+      "param_count_before": 718316544,
+      "param_count_after": 1221633024,
+      "loss_pre_grow_last_step": 7.5625,
+      "loss_post_grow_first_step": 6.1875,
+      "function_preservation_check": {
+        "mechanism": "same fixed recorded token batch through pre-grow vs freshly-grown model; net2net FF-widening is function-preserving by construction",
+        "logit_max_abs_diff": 2.384185791015625e-06,
+        "pass_tolerance": 0.0001,
+        "function_preserving": true
+      },
+      "flop_saving_ratio_fromscratch_over_growpath": 2.4309,
+      "flop_saving_measured": true,
+      "flop_saving_method": "torch.utils.flop_counter.FlopCounterMode, real forward+backward, real hash-verified checkpoints"
+    },
+    "board_render_discrepancy_note": "Issue #626 cites a board render (boardrun 20260710T010438Z, scripts/ember_totality/receipts-totality/ember-totality-20260710T011437Z.json) that shows C-GROW RED with reason text naming only 4 older non-satisfying candidate receipts, NOT the #618 measured-flops receipt. PR #618's own merge commit (0b2940ceae4992e7c3fb01b06cf1d23cbe14db92, git commit Date: Thu Jul 9 18:00:40 2026 -0700 = 2026-07-10T01:00:40Z) landed and, per its own commit message, was 'Verified before/after: RED with the receipt absent, GREEN with it present' -- i.e. the receipt satisfied full CHK at merge time. The cited board render ran at 2026-07-10T01:04:38Z, ~4 minutes after the merge commit's timestamp. `git log --follow` on the satisfying receipt's path shows exactly ONE commit (0b2940c) -- its content has never been modified since. The most likely explanation is a sync race between the totality board-runner's checkout and the merge landing (a known incident class in this repo per DG-W2b item (c): board-header timestamps have previously predated their own cited evidence). This is disclosed, not resolved here -- no probe or board-runner edits are in scope for this PR.",
+    "conclusion": "C-GROW's GREEN status is carried entirely and legitimately by the pre-existing #618 receipt. This PR does not need to (and does not attempt to) flip C-GROW; it re-verifies the existing GREEN honestly and adds real-artifact-cited coverage of the next growth rung."
+  },
+
+  "part_2_rung2_extension_ff16384_to_ff32768": {
+    "grow_method_named": "net2net FF-widening (function-preserving, warm-start) -- the same grow_operator surgery as rung1, applied to the rung1-stabilize final checkpoint (ff 16384 -> 32768)",
+    "seed_checkpoint_identity": {
+      "claim": "The rung-2 grow event's seed checkpoint is byte-identical to rung-1's final stabilize checkpoint (step 766).",
+      "rung1_stabilize_checkpoint_path": "<live-tree>/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/model.pt",
+      "rung1_stabilize_checkpoint_sha256_recomputed_this_session": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+      "rung2_seed_checkpoint_path": "<live-tree>/models/cbase-grow-rung/rung2-event-grow-rung2-20260708-real/b1-snapshot/model.pt",
+      "rung2_seed_checkpoint_sha256_recomputed_this_session": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+      "hashes_match": true,
+      "hash_method": "sha256sum, streamed read, no model load into RAM",
+      "also_matches_580rerun_20260710_snapshot": true
+    },
+    "param_count_before_ff16384": {
+      "value": 1221633024,
+      "source": "receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json: top-level param_count_after=1221633024, carried unchanged through stabilization_segment (resume_step 730 -> global_step_end 766, 36 training steps, NO growth operation) to the exact checkpoint hash-confirmed above as rung2's seed.",
+      "invented": false
+    },
+    "param_count_after_ff32768": {
+      "value": 2228265984,
+      "source": "receipts/cbase-grow-rung2-event-grow-rung2-20260709-remeasure-preflight.json field param_count_after",
+      "caveat": "PREFLIGHT ARCHITECTURAL COMPUTATION ONLY. The source receipt's own scope text: 'PREFLIGHT phase ... No launch attempted, no checkpoint touched.' This is the deterministic target parameter count for the ff=16384->32768 net2net widening operator (a function of architecture config alone, computed identically regardless of run outcome), NOT a value measured from a loaded, completed post-grow checkpoint -- because no such checkpoint exists on this repo (see loss_continuity_across_grow_step below).",
+      "invented": false
+    },
+    "loss_continuity_across_grow_step": {
+      "pre_grow_loss": {
+        "value": 0.320312,
+        "source": "receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json stabilization_segment.loss_last (step 766); cross-confirmed by the byte-identical rung2 seed checkpoint's own manifest.json field extra.last_loss=0.3203125 (both at <live-tree>/models/cbase-grow-rung/rung2-event-grow-rung2-20260708-real/b1-snapshot/manifest.json and the 580rerun-20260710 equivalent)."
+      },
+      "post_grow_loss": null,
+      "status": "GENUINELY ABSENT -- not invented, not estimated, not substituted.",
+      "evidence_of_absence": "Swept every receipts/*rung2* file (30 total: contended-launch-gate, eps0-fingerprint, event-{b513-b4rerun,20260708-real,20260709-remeasure}-{b1,b1m,b2,b3,b3-gradpost,b3s-partial,preflight}, fp32-reconstruction-rider, freshseed-replication, gpu-offload-probe x5, nullmodel-permuted-twin, offload-probe, real-nullmodel, real-nullmodel-disclosure-addendum, real-nullmodel-precheck, spectral-nonequivalence, stabilize-transplant-wall-diagnostic, vacuity-check, grow-op-rung2-void, 580-corrected-rerun-forensic) plus every checkpoint manifest.json under both live-tree rung2 event directories (rung2-event-grow-rung2-20260708-real and rung2-event-580rerun-20260710, b1-snapshot and b3-fork each). Zero contain a post-grow (ff=32768) trained checkpoint or a recorded loss value distinct from the inherited pre-grow last_loss=0.320312/0.3203125 carried forward as unchanged snapshot metadata. No rung-2 stabilize run has completed and landed a checkpoint+loss-trace pair analogous to rung1's stabilization_segment.losses array.",
+      "missing_artifact_cure": "A future rung-2 grow+stabilize run leg (scripts/cbase_grow_rung2_event.py + scripts/cbase_grow_rung2_stabilize.py, both modified in the immediately-preceding commit 50fc7c6 for the #580 optimizer-indexing bug fix) that completes past that failure class and lands a real post-grow (ff=32768) checkpoint with a recorded per-step loss trace."
+    },
+    "flop_saving_vs_fromscratch_rung2": "NOT ATTEMPTED in this receipt. Would require the same FlopCounterMode instrumentation PR #618 built (scripts/cbase_grow_measured_flops.py), extended to a real ff=32768 post-grow checkpoint that does not yet exist. Folded into the same missing-artifact cure named above.",
+    "honest_disclosure": "This Part 2 section does NOT independently satisfy scripts/ember_totality/test_c_grow.py's CHK bundle for a standalone rung-2 growth receipt (loss_continuity is genuinely half-present: pre-grow loss cited, post-grow loss absent). It is not claimed to, and this PR does not present it as a GREEN-carrying artifact -- C-GROW's board-level GREEN status is carried entirely by receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (Part 1 above, PR #618), unaffected by this PR. Part 2 is disclosed real-artifact-traced PROGRESS toward rung-2 coverage, per issue #626's own instruction: 'if a required datum exists in no artifact, the receipt records that absence explicitly ... leaving C-GROW honestly RED rather than cosmetically GREEN.'"
+  },
+
+  "audit_table_pointer": "receipts/cbase-grow-rung/c-grow-candidate-audit-20260710T172304Z.json (scripts/cbase_grow_rung2_completion_audit.py, read-only import of the probe's own regex objects/functions; 76 candidate files scanned, 1 satisfies the full CHK bundle at that snapshot -- receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json, matching Part 1 above).",
+  "self_disclosure_lexical_dual_pass": {
+    "finding": "Re-running scripts/cbase_grow_rung2_completion_audit.py AFTER this receipt was added shows this file's own raw text ALSO lexically satisfies test_c_grow.py's full CHK regex bundle (grow_method, param_counts_before_after, loss_continuity, flop_saving_vs_fromscratch, measured_on_train_daemon all present somewhere in the text), in addition to the pre-existing receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json.",
+    "why_this_is_not_a_new_false-positive_class": "The lexical match is driven entirely by Part 1's citations, which are genuinely complete, real, and independently hash-verified in this same receipt (see part_1_rung1_already_green and the seed_checkpoint_identity re-hash in part_2). It is not driven by Part 2's rung-2 disclosure, which explicitly records post_grow_loss as null/absent -- the regex vocabulary (\"loss_continuity\", \"pre_grow_loss\"/\"post_grow_loss\" as key names) is present as a structural label for that disclosure, not as a claimed measured value. This differs in kind from the smoke-receipt and self-declared-unmeasured-flop-block false-positive classes #608/#608-hardening closed (those claimed measurement that wasn't real; this explicitly labels an absence as absent).",
+    "why_the_board_verdict_is_unaffected": "candidate_files() sorts alphabetically and stops at the first fully-passing file; \"cbase-grow-measured-flops-...\" sorts before \"cbase-grow-rung2-completion-...\" in the same directory, so the live probe (re-run after this file landed) still cites the #618 receipt verbatim, unchanged from before this PR. Verified: BEFORE and AFTER probe output below are identical.",
+    "flagged_for_gate_review": "Naming/structure choice, not a substance correction -- flagged explicitly per this repo's standing rigor on exactly this failure shape, for team-lead/gate judgment rather than silently relying on file ordering to keep it inert."
+  },
+  "probe_edits_in_this_pr": false,
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
