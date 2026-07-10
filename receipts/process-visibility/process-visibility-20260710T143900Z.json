@@ -1,0 +1,499 @@
+{
+ "receipt": "process-visibility",
+ "ts_utc": "2026-07-10T14:39:00Z",
+ "coordinator_window": "2026-07-09T14:39Z-2026-07-10T14:39Z",
+ "window_note": "24h consolidated window - includes the 2026-07-10 ~12:5xZ commit-exhaustion session crash and operator-initiated restart ~13:00Z; overnight merges 601-660 enumerated from gh with titles as summaries (see PR record where the crash cost the judgment note).",
+ "merges": [
+  {
+   "pr": 680,
+   "what": "MTP parameter-accounting errata markers (realized 433,890,304 vs certified n_mtp=0 368,354,304)",
+   "mergedAt": "2026-07-10T14:20:47Z",
+   "sha": "6d4d3c04"
+  },
+  {
+   "pr": 678,
+   "what": "#485 rung-1 reverification: organism activity already shipped+live, no rebuild (three-layer receipt)",
+   "mergedAt": "2026-07-10T14:23:03Z",
+   "sha": "abb37ed2"
+  },
+  {
+   "pr": 673,
+   "what": "DT1 PASS supersession markers - void as learning/GDN evidence (refs #670)",
+   "mergedAt": "2026-07-10T14:22:59Z",
+   "sha": "2f5a2ace"
+  },
+  {
+   "pr": 669,
+   "what": "Q2 bridge CPU leg: rho w/ empirical rotation null; verdict SIBLING_NON_NULL_ORIENTATION",
+   "mergedAt": "2026-07-10T13:55:42Z",
+   "sha": "dcc79f4b"
+  },
+  {
+   "pr": 668,
+   "what": "lineage gate fail-closed on malformed deviation dates (unblocked AC2/v8 resume path)",
+   "mergedAt": "2026-07-10T13:18:42Z",
+   "sha": "bce8fc8f"
+  },
+  {
+   "pr": 664,
+   "what": "corpus connector CLIs (HF/Kaggle/arXiv/OpenReview/HTTP) with L4 receipts",
+   "mergedAt": "2026-07-10T13:12:09Z",
+   "sha": "073adf38"
+  },
+  {
+   "pr": 661,
+   "what": "EXP-C1 executed, all-arms REJECT (negative result banked)",
+   "mergedAt": "2026-07-10T06:13:23Z",
+   "sha": "80458998"
+  },
+  {
+   "pr": 660,
+   "what": "board render post-#639 cure",
+   "mergedAt": "2026-07-10T06:26:41Z",
+   "sha": "0351594b"
+  },
+  {
+   "pr": 647,
+   "what": "receipt emitters: artifact-root token/hash only, never local paths",
+   "mergedAt": "2026-07-10T05:55:16Z",
+   "sha": "7702907a"
+  },
+  {
+   "pr": 646,
+   "what": "C5(c) W-statistic readout grammar fix",
+   "mergedAt": "2026-07-10T05:52:05Z",
+   "sha": "2d4bfc9e"
+  },
+  {
+   "pr": 645,
+   "what": "A1 machinery cure: true-tokenizer rescan + quarantine + consumer",
+   "mergedAt": "2026-07-10T05:51:01Z",
+   "sha": "25c6ffc8"
+  },
+  {
+   "pr": 644,
+   "what": "test_owned_core_widen config path fix",
+   "mergedAt": "2026-07-10T05:42:23Z",
+   "sha": "242f84ac"
+  },
+  {
+   "pr": 643,
+   "what": "rider-A2 fresh-seed replication receipt",
+   "mergedAt": "2026-07-10T05:40:48Z",
+   "sha": "55a356bc"
+  },
+  {
+   "pr": 641,
+   "what": "F2 instance commitment + verifier",
+   "mergedAt": "2026-07-10T05:21:16Z",
+   "sha": "47f39fbe"
+  },
+  {
+   "pr": 640,
+   "what": "O5 run-ledger hardening + launcher binding",
+   "mergedAt": "2026-07-10T05:12:44Z",
+   "sha": "93c78775"
+  },
+  {
+   "pr": 638,
+   "what": "board totality re-render post 619-635",
+   "mergedAt": "2026-07-10T04:50:55Z",
+   "sha": "ea459564"
+  },
+  {
+   "pr": 637,
+   "what": "stabilize v9 cure: R2/R3/R4 + counters + banked AC2 pace-smoke",
+   "mergedAt": "2026-07-10T06:16:30Z",
+   "sha": "564886a8"
+  },
+  {
+   "pr": 636,
+   "what": "board totality re-render post 619-624",
+   "mergedAt": "2026-07-10T04:39:12Z",
+   "sha": "c7c1ce95"
+  },
+  {
+   "pr": 635,
+   "what": "activity-feed summarizer: real actor/target only on kill-receipt rows",
+   "mergedAt": "2026-07-10T04:33:56Z",
+   "sha": "46a29515"
+  },
+  {
+   "pr": 634,
+   "what": "R_spectral null-model legs (vacuity check, real null, spectral non-equivalence)",
+   "mergedAt": "2026-07-10T04:31:47Z",
+   "sha": "838e2252"
+  },
+  {
+   "pr": 633,
+   "what": "C-BASE probe-root artifact visibility per frozen spec",
+   "mergedAt": "2026-07-10T04:30:07Z",
+   "sha": "4f83d5b1"
+  },
+  {
+   "pr": 632,
+   "what": "MDE paired-covariance cure per disposition",
+   "mergedAt": "2026-07-10T04:25:32Z",
+   "sha": "dd4c14fa"
+  },
+  {
+   "pr": 624,
+   "what": "C(-1) spend-declaration annex for uncovered decisive receipts",
+   "mergedAt": "2026-07-10T01:24:35Z",
+   "sha": "c5631315"
+  },
+  {
+   "pr": 623,
+   "what": "C-INV append-only errata path per frozen spec",
+   "mergedAt": "2026-07-10T01:22:49Z",
+   "sha": "12cccecb"
+  },
+  {
+   "pr": 622,
+   "what": "board refresh 20260710c",
+   "mergedAt": "2026-07-10T01:30:36Z",
+   "sha": "45fee551"
+  },
+  {
+   "pr": 621,
+   "what": "response_rendered fires on actual render, not preamble",
+   "mergedAt": "2026-07-10T01:16:36Z",
+   "sha": "aae1579a"
+  },
+  {
+   "pr": 619,
+   "what": "stabilize leg1: commit-margin governor + grad memmap frontload",
+   "mergedAt": "2026-07-10T01:15:55Z",
+   "sha": "ddf71554"
+  },
+  {
+   "pr": 618,
+   "what": "C-GROW measured flop_saving receipt",
+   "mergedAt": "2026-07-10T01:00:40Z",
+   "sha": "0b2940ce"
+  },
+  {
+   "pr": 617,
+   "what": "C-IND legs IND-5/IND-3/IND-4 executed receipts",
+   "mergedAt": "2026-07-10T00:56:18Z",
+   "sha": "5a0f4416"
+  },
+  {
+   "pr": 614,
+   "what": "EMBER_GPU_FREE=1 precedence over persisted endpoint",
+   "mergedAt": "2026-07-10T00:38:56Z",
+   "sha": "d10de3fe"
+  },
+  {
+   "pr": 613,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-10T00:30:39Z",
+   "sha": "b7382b94"
+  },
+  {
+   "pr": 610,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-10T00:38:24Z",
+   "sha": "a17f6ff2"
+  },
+  {
+   "pr": 609,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-10T00:09:02Z",
+   "sha": "d68f869e"
+  },
+  {
+   "pr": 608,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-10T00:08:35Z",
+   "sha": "411d35e5"
+  },
+  {
+   "pr": 607,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-09T23:52:39Z",
+   "sha": "964a997c"
+  },
+  {
+   "pr": 606,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-09T23:56:25Z",
+   "sha": "9b7a2c61"
+  },
+  {
+   "pr": 605,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-10T00:38:40Z",
+   "sha": "4698797f"
+  },
+  {
+   "pr": 604,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-09T23:38:48Z",
+   "sha": "7be0b283"
+  },
+  {
+   "pr": 603,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-09T23:49:45Z",
+   "sha": "9249cec9"
+  },
+  {
+   "pr": 601,
+   "what": "(see PR record)",
+   "mergedAt": "2026-07-09T23:20:54Z",
+   "sha": "782796ce"
+  }
+ ],
+ "prs_closed_unmerged": [
+  {
+   "pr": 671,
+   "what": "DT1 markers first push was a truncation defect (+7/-144); bounced, cured via restore-then-Edit, superseded by #673 (+6/-0)"
+  },
+  {
+   "pr": 620,
+   "what": "board refresh 20260710b superseded by 20260710c (#622)"
+  }
+ ],
+ "issues_filed": [
+  {
+   "num": 567,
+   "what": "Spec lattice full-tree audit receipt (196 docs) + spec-consumer wiring rule"
+  },
+  {
+   "num": 570,
+   "what": "run_v0_segment never forwards mmap_cache_dir (#118 ArrayMemoryError class)"
+  },
+  {
+   "num": 575,
+   "what": "forward mmap_cache_dir at 4 remaining PackedShardLoader call sites"
+  },
+  {
+   "num": 576,
+   "what": "watchdog tail-poll mega-burst on cockpit relaunch"
+  },
+  {
+   "num": 577,
+   "what": "grow boundary: saved optimizer bundle carries pre-grow shapes (momentum-provenance constraint)"
+  },
+  {
+   "num": 580,
+   "what": "optimizer-state param-id conflation (3 sites)"
+  },
+  {
+   "num": 581,
+   "what": "ember-cli: 8 pre-existing suite failures are undisclosed regressions"
+  },
+  {
+   "num": 582,
+   "what": "C8 governed-run pre-launch obligations (executable tracker)"
+  },
+  {
+   "num": 585,
+   "what": "c8 seed-variance runner + 5-seed variance receipts"
+  },
+  {
+   "num": 586,
+   "what": "c(-1) annex round-4: 12 decisive receipts uncovered"
+  },
+  {
+   "num": 588,
+   "what": "GPU-free cockpit boot (EMBER_GPU_FREE=1)"
+  },
+  {
+   "num": 591,
+   "what": "gpu-window execution queue: ordered prereg-gated dispatch"
+  },
+  {
+   "num": 592,
+   "what": "GPU-window execution queue pre-registered plan (sprint)"
+  },
+  {
+   "num": 593,
+   "what": "a1 eval-freeze execution"
+  },
+  {
+   "num": 594,
+   "what": "stab480 v9 respec: optimizer hot-loop pace defect"
+  },
+  {
+   "num": 602,
+   "what": "EMBER_GPU_FREE=1 silently overridden by persisted endpoint"
+  },
+  {
+   "num": 611,
+   "what": "serving contract: watchdog restore target must be named"
+  },
+  {
+   "num": 612,
+   "what": "C-INV errata path for 75/114 unstamped receipts"
+  },
+  {
+   "num": 615,
+   "what": "C-BASE probe-root: worktree renders cannot see untracked artifacts"
+  },
+  {
+   "num": 616,
+   "what": "activity feed NL summarizer fabricates actor/target"
+  },
+  {
+   "num": 625,
+   "what": "C-INV post-cutoff residuals: emitter stamping + supersession"
+  },
+  {
+   "num": 626,
+   "what": "C-GROW post-hardening completion from real artifacts"
+  },
+  {
+   "num": 627,
+   "what": "stabilize v9 cure spec"
+  },
+  {
+   "num": 628,
+   "what": "C5(c) readout grammar: W-statistic joint CI + third-rung trend"
+  },
+  {
+   "num": 629,
+   "what": "F2 schedule precommit binds code only - instance commitment required"
+  },
+  {
+   "num": 630,
+   "what": "C8 O5 run-ledger defects"
+  },
+  {
+   "num": 631,
+   "what": "A1 eval-freeze machinery defects (5)"
+  },
+  {
+   "num": 639,
+   "what": "totality render receipt embeds local artifact-root path"
+  },
+  {
+   "num": 642,
+   "what": "goal organ floor-conformance audit"
+  },
+  {
+   "num": 648,
+   "what": "Corpus program: AI-lab 11-domain floor (charter tracker)"
+  },
+  {
+   "num": 649,
+   "what": "Corpus domain A: Mathematical Foundations"
+  },
+  {
+   "num": 650,
+   "what": "Corpus domain B: Statistics/Measurement/Inference"
+  },
+  {
+   "num": 651,
+   "what": "Corpus domain C: Physics/Dynamical Systems"
+  },
+  {
+   "num": 652,
+   "what": "Corpus domain D: CS/Algorithms/Systems"
+  },
+  {
+   "num": 653,
+   "what": "Corpus domain E: ML/AI/Model Science"
+  },
+  {
+   "num": 654,
+   "what": "Corpus domain F: Training Infra/CUDA/Kernels"
+  },
+  {
+   "num": 655,
+   "what": "Corpus domain G: Formal Logic/Verification"
+  },
+  {
+   "num": 656,
+   "what": "Corpus domain H: Software Engineering"
+  },
+  {
+   "num": 657,
+   "what": "Corpus domain I: Data/Corpus/Eval/Decontamination"
+  },
+  {
+   "num": 658,
+   "what": "Corpus domain J: Scientific Method/Lab Operation"
+  },
+  {
+   "num": 659,
+   "what": "Corpus domain K: Application Worlds"
+  },
+  {
+   "num": 662,
+   "what": "Q2 bridge CPU leg spec (rho + empirical rotation null)"
+  },
+  {
+   "num": 663,
+   "what": "goal organ: update_goal(Complete) completion-proof gap"
+  },
+  {
+   "num": 665,
+   "what": "stabilize lineage gate fail-open defect (cured by PR #668)"
+  },
+  {
+   "num": 666,
+   "what": "ember-cli liveness heartbeat cwd-relative resolution defect"
+  },
+  {
+   "num": 667,
+   "what": "iGRPO rig control wiring: advertised N/M silently ignored"
+  },
+  {
+   "num": 670,
+   "what": "ERRATA: DT1 delta-rule PASS void as learning/GDN evidence"
+  },
+  {
+   "num": 672,
+   "what": "main-tree integrity: 554 tracked receipts deleted from working tree"
+  },
+  {
+   "num": 674,
+   "what": "PREREG canonical public port: BitNet 102M matched-pilot"
+  },
+  {
+   "num": 675,
+   "what": "CONTRACT canonical public port: Q2 actual-update successor"
+  },
+  {
+   "num": 676,
+   "what": "BitNet 102M implementation preflight spec"
+  },
+  {
+   "num": 677,
+   "what": "checkpoint receipt chain broken: momentum_provenance fields never written"
+  },
+  {
+   "num": 679,
+   "what": "MTP parameter-accounting errata: 368,354,304 vs 433,890,304"
+  },
+  {
+   "num": 682,
+   "what": "v0_pretrain_launch_gate g_shards(): ignores --shard-dir, fails in worktrees"
+  }
+ ],
+ "prs_open_gated": [
+  {
+   "pr": 681,
+   "state": "gated on ONE amendment: TwinManifest must track arm + param_count (load-time refusal must cover arm-mislabeled checkpoints); merge on lane's amendment-round-complete signal"
+  }
+ ],
+ "lanes": {
+  "evalswap50": "sonnet - GPU outage window owner: AC2 pace-smoke LIVE from main tree since 14:24:45Z (g_shards worktree defect -> #682), then evals (arc_challenge/hellaswag/mmlu_pro rate-check) + server restore",
+  "dt1errata": "sonnet - board-receipts landing PR (branch board/receipts-20260710T1350: totality 135059Z + custody 135045Z)",
+  "auditCEFF/auditCGROW": "audit legs on C-EFF + C-GROW probe faithfulness (spawned 14:19Z)",
+  "bitnet676": "sonnet - #681 amendment round (manifest arm identity)"
+ },
+ "coordinator_disclosures": [
+  "554 tracked receipt files found deleted (unstaged) in the ember main working tree during boardrun54; render 130907Z produced on the falsified tree was DISCARDED; files restored from HEAD; clean re-render 135059Z is row-identical to trusted 055933Z, proving all 5 apparent flips were dirty-tree artifacts; incident issue #672; TREE-INTEGRITY lens added to the jun-sim tick (every tick reads main-tree deletion count).",
+  "g_shards launch-gate defect (#682): NC-relative shard resolution ignores --shard-dir and fails in every worktree; symlink workaround REFUSED (gate-deadlock protocol: owner-side revision only); cure = main-tree relaunch with worktree-directed outputs; gate-fix lane queued post-window.",
+  "rho662/#662 replay-collision: post-compaction task replay re-dispatched an issue already carrying PR #669; stand-down issued; replay-is-a-dispatch rule mechanized (every replayed assignment gets the full pre-assign PR/lane check).",
+  "operator Fable ratchet applied fleet-side: all Fable spawn channels halved, gate-enforced.",
+  "DT1 errata chain: #670 filed; #671 first push dropped ~140 lines (partial-Read + whole-file Write class); bounced with restore-then-Edit protocol; #673 landed +6/-0.",
+  "MTP accounting errata #679/#680: production MTP = 2 independent Linear(1024,32000) heads; certified 368,354,304 is n_mtp=0; realized 433,890,304 (+17.79%).",
+  "Board render for merges 669-680 owed and HELD on the GPU-first contention rail while the AC2 pace-smoke trains; dispatch trigger banked (fires on smoke completion; consolidated landing carries this receipt + registry-gate append + fresh totality receipt).",
+  "ORGANISM-ACTIVITY standing wince found STALE: rung-1 activity was already shipped 07-08/09 (body485b already-built check caught it); jun-sim lens rewritten to per-tick liveness; standing winces now require fresh receipts to carry."
+ ],
+ "api_spend_usd": 0.0
+}
