@@ -1207,7 +1207,12 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
     # falsifiable by the log rather than vacuously true.
     grad_lazy_creates = _coa.get_counter("grad_lazy_creates")
     governor_reads = get_governor_reads()
-    pace_gate_aborted = bool(pace_gate["fired"]) or bool(receipt.get("aborted_by_pace_gate"))
+    # The receipt is authoritative: run_v0_segment sets aborted_by_pace_gate only
+    # if it actually broke on the abort_event at a step boundary. The watchdog's
+    # `fired` flag is a secondary signal (deadline elapsed) used only if the
+    # receipt omits the field -- this avoids a benign race where a block that
+    # returns cleanly at exactly the deadline is mislabelled aborted.
+    pace_gate_aborted = bool(receipt.get("aborted_by_pace_gate", pace_gate["fired"]))
     print(f"COUNTERS block{block_idx:02d} grad_lazy_creates={grad_lazy_creates} "
           f"governor_reads={governor_reads} pace_gate_aborted={pace_gate_aborted} "
           f"ts={datetime.now(timezone.utc).isoformat()}", flush=True)
