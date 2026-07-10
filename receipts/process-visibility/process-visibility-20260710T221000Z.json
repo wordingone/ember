@@ -1,0 +1,176 @@
+{
+  "ts": "2026-07-10T22:10:00Z",
+  "kind": "process-visibility",
+  "window": {
+    "from": "2026-07-10T14:39:00Z",
+    "to": "2026-07-10T22:10:00Z"
+  },
+  "merges": [
+    {
+      "pr": 721,
+      "mergedAt": "2026-07-10T22:02:58Z",
+      "sha": "7667c6d",
+      "what": "feat: #702 axis-3 attribution profiling runner"
+    },
+    {
+      "pr": 720,
+      "mergedAt": "2026-07-10T21:25:06Z",
+      "sha": "fa7eb0c",
+      "what": "probe-harden: C-BASE clause-(d) verdict binding + C-MANIFEST denominator regex"
+    },
+    {
+      "pr": 719,
+      "mergedAt": "2026-07-10T22:03:01Z",
+      "sha": "ab70b30",
+      "what": "fix: C(-1) api_spend_usd declaration - 4 decisive receipts + emitter"
+    },
+    {
+      "pr": 717,
+      "mergedAt": "2026-07-10T20:51:31Z",
+      "sha": "5845762",
+      "what": "receipts: board-integrity audit 20260710T2038Z"
+    },
+    {
+      "pr": 713,
+      "mergedAt": "2026-07-10T20:30:17Z",
+      "sha": "0c0f664",
+      "what": "chore: corpus census - 11-domain floor coverage receipt"
+    },
+    {
+      "pr": 712,
+      "mergedAt": "2026-07-10T19:52:34Z",
+      "sha": "3d2c681",
+      "what": "fix: registry-gate relpath emitter + receipt row repair (#710 cure)"
+    },
+    {
+      "pr": 709,
+      "mergedAt": "2026-07-10T18:54:57Z",
+      "sha": "36011d0",
+      "what": "docs: barrier map axis-4 errata - FACTOR-1 primary (v2)"
+    },
+    {
+      "pr": 706,
+      "mergedAt": "2026-07-10T18:28:10Z",
+      "sha": "866e634",
+      "what": "docs: barrier program - six-axis attack map + audit receipts"
+    },
+    {
+      "pr": 699,
+      "mergedAt": "2026-07-10T18:02:42Z",
+      "sha": "9bc79a7",
+      "what": "probe-harden: C-EFF execution-binding + C-GROW field-read (refs #683)"
+    },
+    {
+      "pr": 698,
+      "mergedAt": "2026-07-10T18:00:06Z",
+      "sha": "007d53b",
+      "what": "fix: C-INV post-cutoff residuals - emitter stamping + supersession"
+    },
+    {
+      "pr": 695,
+      "mergedAt": "2026-07-10T17:40:50Z",
+      "sha": "d1cce0f",
+      "what": "receipts: eval scoring-window (math500 + AC2 smoke + tokenizer gap)"
+    },
+    {
+      "pr": 694,
+      "mergedAt": "2026-07-10T17:45:33Z",
+      "sha": "76632d8",
+      "what": "exp: C-GROW completion receipt, honest rung-2 gap disclosure"
+    },
+    {
+      "pr": 693,
+      "mergedAt": "2026-07-10T17:40:46Z",
+      "sha": "8a46dec",
+      "what": "feat(ember-cli): supervise the owned cbase brain server"
+    },
+    {
+      "pr": 692,
+      "mergedAt": "2026-07-10T17:40:43Z",
+      "sha": "6f05a29",
+      "what": "receipts: #580 custody cure - forensic erratum + cache commitment"
+    },
+    {
+      "pr": 691,
+      "mergedAt": "2026-07-10T17:17:08Z",
+      "sha": "30e9d34",
+      "what": "receipts: #580 corrected-buffered-re-run, run_id 580rerun-20260710"
+    },
+    {
+      "pr": 690,
+      "mergedAt": "2026-07-10T16:46:37Z",
+      "sha": "50fc7c6",
+      "what": "fix: #580 site 4 - phase_b1m global-indexed lookup + repo sweep"
+    },
+    {
+      "pr": 687,
+      "mergedAt": "2026-07-10T15:44:18Z",
+      "sha": "225d5cf",
+      "what": "board: totality receipts 20260710 + audit + registry"
+    },
+    {
+      "pr": 686,
+      "mergedAt": "2026-07-10T15:43:58Z",
+      "sha": "7f7772c",
+      "what": "fix: v8 per-step trace + governed-abort receipt cures (refs #627)"
+    },
+    {
+      "pr": 684,
+      "mergedAt": "2026-07-10T15:17:00Z",
+      "sha": "5557f6e",
+      "what": "board: totality receipts 20260710 post-#664/#668 render"
+    },
+    {
+      "pr": 681,
+      "mergedAt": "2026-07-10T14:58:00Z",
+      "sha": "02640c9",
+      "what": "BitNet 102M exact-twin implementation preflight (#676)"
+    }
+  ],
+  "prs_closed_unmerged": [],
+  "prs_open_gated": [],
+  "issues_filed": [
+    {
+      "n": 714,
+      "what": "C-BASE clause-(d) laundered-FAIL acceptance (cured by #720)"
+    },
+    {
+      "n": 715,
+      "what": "C-MANIFEST denominator regex drops dotted condition ids (cured by #720)"
+    },
+    {
+      "n": 716,
+      "what": "C-AUTO claim-path stub-forgeability hardening"
+    },
+    {
+      "n": 718,
+      "what": "reusable BF16 update-survival preflight module (third-occurrence mechanization)"
+    },
+    {
+      "n": 722,
+      "what": "H-Q MTP horizon-quality screen prereg, FROZEN (common max-horizon mask, realized-param accounting)"
+    },
+    {
+      "n": 723,
+      "what": "TRAJGATE-1 trajectory-gated self-reweighting screen prereg, FROZEN (axes 2x6, first #705-gated mechanism)"
+    }
+  ],
+  "lanes": {
+    "active": [
+      "boardrender (totality re-render post #719/#720/#721)",
+      "runner702 (worktree cleanup, then released)"
+    ],
+    "released_this_window": [
+      "auditland710 (audit batch A-U)",
+      "probeharden710 (#720 delivered)",
+      "cockswap57 (cockpit 8a46dec swap)"
+    ]
+  },
+  "coordinator_disclosures": [
+    "board is 4+ merges stale pending the re-render lane (expected deltas: C-BASE GREEN->honest RED via #720; C(-1) RED->GREEN candidate via #719)",
+    "#702 --live GPU dispatch remains sequenced behind a planned llama-server outage window; runner (#721) is build-only and CPU-selftested",
+    "research-loop tick 25 ran a 2-Fable+1-sonnet panel workflow (RESEARCH-LOOP-FABLE-PANEL grant) producing #723's frozen design"
+  ],
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
