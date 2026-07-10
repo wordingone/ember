@@ -1,0 +1,21 @@
+{
+  "ticket": "DT6-LOOP-ECON-GATE-SELFTEST",
+  "ts": "20260710T174245Z",
+  "cases_checked": 3,
+  "ac1": {
+    "verdict": "REJECT",
+    "ac": "AC1"
+  },
+  "ac2": {
+    "verdict": "ACCEPT",
+    "ac": "AC2"
+  },
+  "ac3": {
+    "verdict": "REJECT",
+    "ac": "AC3"
+  },
+  "failures": [],
+  "pass": true,
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
+}

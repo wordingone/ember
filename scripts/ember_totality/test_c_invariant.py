@@ -69,6 +69,14 @@ ERRATA_FILE = ROOT / "docs" / "receipt-errata.jsonl"
 # constant -- the annex is a historical record, never an ongoing bypass.
 ERRATA_CUTOFF_TS = "2026-07-10T00:08:35Z"
 
+# [SUPERSESSION cure, gh issue #625, FROZEN SPEC point 2] Append-only tracked
+# file mapping an unstamped post-cutoff receipt to its re-executed, correctly
+# stamped replacement. Stamp-coverage accounting ONLY -- never alters, hides,
+# or re-scores any verdict content anywhere; the superseded receipt's content
+# remains landed history, never edited or deleted (refs #482 append-only
+# convention, same as the errata annex).
+SUPERSESSIONS_FILE = ROOT / "docs" / "receipt-supersessions.jsonl"
+
 # Invalid tokens for this condition
 INVALID_TOKENS = [
     "invariant_breach",  # INVARIANT.md missing or hash wrong
@@ -210,6 +218,106 @@ def _load_errata_coverage(cutoff_epoch: float) -> tuple[Dict[str, Dict[str, Any]
     return coverage, skipped
 
 
+def _leg_class_identity(d: Dict[str, Any]) -> Optional[str]:
+    """[SUPERSESSION cure, gh issue #625, FROZEN SPEC point 2] Stable identity
+    string for "is this a re-execution of the same leg class" -- the probe
+    check a supersession row must satisfy before it counts as coverage.
+
+    Preference order, first available wins:
+      1. receipt_class + leg (IND-3/4/5 producer shape, e.g. "IND-4:customize")
+      2. ticket (e.g. loop_econ_gate.py's "DT6-LOOP-ECON-GATE-SELFTEST")
+      3. None -- no identity field present; caller must NOT treat this as a
+         match (an absent identity on either side fails closed, never a
+         wildcard match).
+    """
+    if "receipt_class" in d:
+        return f"{d.get('receipt_class')}:{d.get('leg', '')}"
+    if "ticket" in d:
+        return f"ticket:{d.get('ticket')}"
+    return None
+
+
+def _load_supersessions() -> tuple[Dict[str, Dict[str, Any]], list[str]]:
+    """[SUPERSESSION cure, gh issue #625, FROZEN SPEC point 2] Load
+    docs/receipt-supersessions.jsonl (if it exists) into a
+    {old_path: row} map. Malformed rows are never silently trusted -- they
+    are skipped and returned in `skipped` for disclosure (same posture as
+    _load_errata_coverage).
+
+    Returns:
+        (supersessions: {old_path: row}, skipped: [description, ...])
+    """
+    supersessions: Dict[str, Dict[str, Any]] = {}
+    skipped: list[str] = []
+    if not SUPERSESSIONS_FILE.exists():
+        return supersessions, skipped
+
+    with SUPERSESSIONS_FILE.open("r", encoding="utf-8", errors="ignore") as fh:
+        for lineno, line in enumerate(fh, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except Exception as exc:
+                skipped.append(f"line {lineno}: malformed JSON ({exc})")
+                continue
+            if not isinstance(row, dict):
+                skipped.append(f"line {lineno}: not a JSON object")
+                continue
+            old_path = row.get("old_path")
+            new_path = row.get("new_path")
+            if not isinstance(old_path, str) or not old_path:
+                skipped.append(f"line {lineno}: missing/empty old_path")
+                continue
+            if not isinstance(new_path, str) or not new_path:
+                skipped.append(f"line {lineno} ({old_path}): missing/empty new_path")
+                continue
+            supersessions[old_path] = row
+
+    return supersessions, skipped
+
+
+def _supersession_covers(old_rel_path: str, old_data: Dict[str, Any],
+                          row: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+    """[SUPERSESSION cure, gh issue #625, FROZEN SPEC point 2, LAUNDERING
+    GUARD] A supersession row counts as coverage iff the row's `new_path`
+    (a) exists, (b) is correctly stamped, and (c) is a re-execution of the
+    SAME leg class as the old receipt. Any failure of (a)/(b)/(c) means the
+    row does NOT count -- a supersession row pointing at a missing,
+    unstamped, or different-class target is exactly the laundering shape
+    this guard exists to reject.
+
+    Returns:
+        (covered: bool, reason_if_not: str | None)
+    """
+    new_rel = row.get("new_path")
+    new_path = ROOT / new_rel
+    if not new_path.is_file():
+        return False, f"new_path {new_rel!r} does not exist"
+
+    try:
+        with new_path.open("r", encoding="utf-8", errors="ignore") as fh:
+            new_data = json.load(fh)
+    except Exception as exc:
+        return False, f"new_path {new_rel!r} is not valid JSON ({exc})"
+    if not isinstance(new_data, dict):
+        return False, f"new_path {new_rel!r} is not a JSON object"
+
+    if new_data.get("invariant_sha256") != INVARIANT_SHA256:
+        return False, f"new_path {new_rel!r} is not correctly stamped"
+
+    old_identity = _leg_class_identity(old_data)
+    new_identity = _leg_class_identity(new_data)
+    if old_identity is None or new_identity is None or old_identity != new_identity:
+        return False, (
+            f"leg/class identity mismatch: old={old_identity!r} "
+            f"({old_rel_path}) vs new={new_identity!r} ({new_rel})"
+        )
+
+    return True, None
+
+
 def check_stamped_receipts() -> tuple[bool, str]:
     """Check that every POST-GENESIS receipt under receipts/ carries the
     correct invariant_sha256 stamp -- OR is covered by the docs/receipt-
@@ -235,6 +343,14 @@ def check_stamped_receipts() -> tuple[bool, str]:
     receipt RED C-INV regardless of errata coverage elsewhere -- the errata
     annex is a historical annex, never an ongoing bypass.
 
+    [SUPERSESSION cure, gh issue #625, FROZEN SPEC point 2] A post-cutoff
+    unstamped receipt (ineligible for errata coverage above) may instead be
+    covered by a docs/receipt-supersessions.jsonl row -- STAMP-COVERAGE
+    ACCOUNTING ONLY, never a verdict-content change, and only when
+    _supersession_covers() confirms the row's new_path exists, is correctly
+    stamped, and is a re-execution of the same leg class (the laundering
+    guard: a row failing any of those three stays uncovered).
+
     Returns:
         (success: bool, reason: str)
     """
@@ -246,11 +362,13 @@ def check_stamped_receipts() -> tuple[bool, str]:
     genesis_epoch = _parse_receipt_ts(GENESIS_TS)
     cutoff_epoch = _parse_receipt_ts(ERRATA_CUTOFF_TS)
     errata_coverage, errata_skipped = _load_errata_coverage(cutoff_epoch)
+    supersessions, supersessions_skipped = _load_supersessions()
 
     scanned = 0
     post_genesis = 0
     stamped = 0
     errata_covered = 0
+    superseded = 0
     uncovered_pre_cutoff: list[str] = []
     uncovered_post_cutoff: list[str] = []
     for path in sorted(RECEIPTS.rglob("*.json")):
@@ -277,8 +395,16 @@ def check_stamped_receipts() -> tuple[bool, str]:
             continue
         offender = f"{rel_path} (ts={d.get('ts')!r}, invariant_sha256={stamp_val!r})"
         if receipt_epoch > cutoff_epoch:
-            # Post-cutoff: errata coverage is CLOSED, this must be a real
-            # stamp regardless of any errata row -- genuine violation.
+            # Post-cutoff: errata coverage is CLOSED. The ONLY other cure is
+            # a laundering-guarded supersession row -- anything else is a
+            # genuine violation regardless of any row naming it.
+            row = supersessions.get(rel_path)
+            if row is not None:
+                covered, reason = _supersession_covers(rel_path, d, row)
+                if covered:
+                    superseded += 1
+                    continue
+                offender = f"{offender} [supersession row present but REJECTED: {reason}]"
             uncovered_post_cutoff.append(offender)
             continue
         if rel_path in errata_coverage:
@@ -292,9 +418,11 @@ def check_stamped_receipts() -> tuple[bool, str]:
         "post_genesis_scanned": post_genesis,
         "stamped": stamped,
         "errata_covered": errata_covered,
+        "superseded": superseded,
         "uncovered_pre_cutoff": len(uncovered_pre_cutoff),
         "uncovered_post_cutoff": len(uncovered_post_cutoff),
         "errata_rows_skipped": len(errata_skipped),
+        "supersession_rows_skipped": len(supersessions_skipped),
     }
 
     if violations:
@@ -302,24 +430,25 @@ def check_stamped_receipts() -> tuple[bool, str]:
             f"{len(violations)}/{post_genesis} post-genesis receipt(s) missing/"
             f"mismatched invariant_sha256 stamp and not errata-covered (of "
             f"{scanned} receipts scanned under receipts/; stamped={stamped}, "
-            f"errata_covered={errata_covered}, uncovered_pre_cutoff="
-            f"{len(uncovered_pre_cutoff)}, uncovered_post_cutoff="
-            f"{len(uncovered_post_cutoff)}); first offenders: {violations[:3]}"
+            f"errata_covered={errata_covered}, superseded={superseded}, "
+            f"uncovered_pre_cutoff={len(uncovered_pre_cutoff)}, "
+            f"uncovered_post_cutoff={len(uncovered_post_cutoff)}); "
+            f"first offenders: {violations[:3]}"
         )
 
     return True, (
         f"{post_genesis} post-genesis receipt(s) checked (of {scanned} receipts "
         f"scanned under receipts/): stamped={stamped}, errata_covered="
-        f"{errata_covered}, all pass (0 uncovered)"
+        f"{errata_covered}, superseded={superseded}, all pass (0 uncovered)"
     )
 
 
 def _errata_append_only_violation(errata_file: Path) -> Optional[str]:
-    """Return a violation description if INVARIANT-ERRATA.md's own git history
-    shows a commit that removed or rewrote a previously-committed line
-    (INVARIANT.md clause 6: "Errata are append-only"). Returns None if the
-    history is clean append-only, or if the file has no commit history yet to
-    judge (a brand-new uncommitted file is not itself a violation).
+    """Return a violation description if `errata_file`'s own git history shows
+    a commit that removed or rewrote a previously-committed line (receipts are
+    append-only, refs #482). Returns None if the history is clean append-only,
+    or if the file has no commit history yet to judge (a brand-new
+    uncommitted file is not itself a violation).
 
     This shells out to `git log -p` on the file's own path -- read-only,
     scoped to this one path, never touching any other repo state. Sandbox-
@@ -349,38 +478,105 @@ def _errata_append_only_violation(errata_file: Path) -> Optional[str]:
     if removed_lines:
         return (
             f"{len(removed_lines)} removed/rewritten line(s) found in "
-            f"INVARIANT-ERRATA.md's git history -> append-only property "
-            f"violated (invariant_errata_chain_broken)"
+            f"{rel}'s git history -> append-only property violated "
+            f"(invariant_errata_chain_broken)"
         )
     return None
 
 
-def check_errata_structure() -> tuple[bool, str]:
-    """Check that INVARIANT-ERRATA.md, if it exists, is genuinely append-only.
+# [ERRATA cure, gh issue #612, FROZEN SPEC] Required non-empty string fields
+# on every docs/receipt-errata.jsonl row.
+ERRATA_ROW_REQUIRED_FIELDS = (
+    "defect", "discovered_ts", "discovery_source", "disposition", "note", "receipt_path",
+)
 
-    [PROBE-HARDEN cure] The prior stub returned True unconditionally even for
-    a non-empty file ("we'd check append-only chaining here"). The absent and
-    empty branches below are still True -- that is the honest state (no
-    errata has ever been filed; verified: the file has never existed in this
-    repo's history) -- but the non-empty branch now performs the real,
-    execution-binding check instead of assuming it.
+
+def _errata_row_schema_violations(cutoff_epoch: float) -> list[str]:
+    """[ERRATA cure, gh issue #625 point 3, FROZEN SPEC] Row-by-row schema
+    validation of ERRATA_FILE (docs/receipt-errata.jsonl): every non-blank
+    line must parse as a JSON object carrying every field in
+    ERRATA_ROW_REQUIRED_FIELDS as a non-empty string, and no row's own
+    `discovered_ts` may be strictly after ERRATA_CUTOFF_TS -- the annex is a
+    historical record of the #608 hardening scan, never a live/ongoing filing
+    surface (same cutoff _load_errata_coverage already enforces for coverage
+    eligibility; this enforces it structurally on the file itself, so an
+    unused-for-coverage post-cutoff row cannot silently sit in the annex).
+
+    Returns a list of violation description strings (empty = clean).
+    """
+    violations: list[str] = []
+    if not ERRATA_FILE.exists():
+        return violations
+    with ERRATA_FILE.open("r", encoding="utf-8", errors="ignore") as fh:
+        for lineno, line in enumerate(fh, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except Exception as exc:
+                violations.append(f"line {lineno}: malformed JSON ({exc})")
+                continue
+            if not isinstance(row, dict):
+                violations.append(f"line {lineno}: not a JSON object")
+                continue
+            missing = [f for f in ERRATA_ROW_REQUIRED_FIELDS
+                       if not isinstance(row.get(f), str) or not row.get(f)]
+            if missing:
+                violations.append(f"line {lineno}: missing/empty field(s) {missing}")
+                continue
+            discovered_epoch = _parse_receipt_ts(row.get("discovered_ts"))
+            if discovered_epoch is None:
+                violations.append(f"line {lineno}: unparseable discovered_ts")
+                continue
+            if discovered_epoch > cutoff_epoch:
+                violations.append(
+                    f"line {lineno} ({row.get('receipt_path')}): discovered_ts "
+                    "is after the hard cutoff -- the annex is historical-only, "
+                    "never an ongoing bypass"
+                )
+    return violations
+
+
+def check_errata_structure() -> tuple[bool, str]:
+    """[ERRATA cure, gh issue #625 point 3, FROZEN SPEC] Check that
+    docs/receipt-errata.jsonl -- the REAL errata file _load_errata_coverage()
+    reads for coverage lookups (gh issue #612) -- is genuinely append-only,
+    schema-conformant per ERRATA_ROW_REQUIRED_FIELDS, and carries no row whose
+    own `discovered_ts` postdates the hard cutoff.
+
+    [PROBE-HARDEN cure, PR #623 finding] This repoints the prior check away
+    from INVARIANT-ERRATA.md -- a filename that was never created anywhere in
+    this repo's history; the check was a structurally-untestable stub against
+    a file that could never exist. docs/receipt-errata.jsonl is the file that
+    actually carries the historical annex.
 
     Returns:
         (success: bool, reason: str)
     """
-    errata_file = ROOT / "INVARIANT-ERRATA.md"
-    if not errata_file.exists():
-        return True, "INVARIANT-ERRATA.md does not exist -- no errata filed yet"
+    if not ERRATA_FILE.exists():
+        return True, f"{ERRATA_FILE.name} does not exist -- no errata filed yet"
 
-    errata_text = errata_file.read_text()
+    errata_text = ERRATA_FILE.read_text(encoding="utf-8", errors="ignore")
     if not errata_text.strip():
-        return True, "INVARIANT-ERRATA.md exists and is empty -- no errata filed yet"
+        return True, f"{ERRATA_FILE.name} exists and is empty -- no errata filed yet"
 
-    violation = _errata_append_only_violation(errata_file)
+    cutoff_epoch = _parse_receipt_ts(ERRATA_CUTOFF_TS)
+    schema_violations = _errata_row_schema_violations(cutoff_epoch)
+    if schema_violations:
+        return False, (
+            f"{len(schema_violations)} schema violation(s) in {ERRATA_FILE.name}: "
+            f"{schema_violations[:3]}"
+        )
+
+    violation = _errata_append_only_violation(ERRATA_FILE)
     if violation:
         return False, violation
 
-    return True, "INVARIANT-ERRATA.md present, non-empty, and append-only per git history"
+    return True, (
+        f"{ERRATA_FILE.name} present, non-empty, schema-conformant, and "
+        "append-only per git history"
+    )
 
 
 def write_receipt(status: str, reason: str, breach: bool = False) -> str:

@@ -43,6 +43,13 @@ RECEIPTS_OUT_DIR = REPO_ROOT / "receipts" / "ind4-customize-experiment"
 SANDBOX_DIR = REPO_ROOT / "scratch" / "ind4-customize"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
+sys.path.insert(0, str(REPO_ROOT))
+from scripts.lib.invariant import stamp as _stamp_invariant, verify as _verify_invariant  # noqa: E402 -- gh #625 point 1
+
+# receipt_check.py's R2 rule requires any *sha256*-named field to carry a
+# disclosed sha_convention; matches exactly what scripts/lib/invariant.py's
+# stamp() does (Path.read_bytes() + sha256, no normalization).
+INVARIANT_SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 
 
 def _sha256(path: Path) -> str:
@@ -153,10 +160,17 @@ def build_experiment_reproduction_receipt(banked_receipt_path: Path) -> dict:
         }
     fresh_path = new_files[0]
 
+    # gh #625: invariant_sha256 + sha_convention are now stamped by
+    # loop_econ_gate.py at write time (point 1). Both are properties of the
+    # repo/schema at execution time, not of the AC-case correctness this
+    # comparison verifies, and the pre-existing banked receipt predates both
+    # fields entirely -- excluded from the byte-for-byte comparison the same
+    # way 'ts' already is.
+    EXCLUDED_COMPARISON_FIELDS = {"ts", "invariant_sha256", "sha_convention"}
     banked_obj = json.loads(banked_receipt_path.read_text(encoding="utf-8"))
     fresh_obj = json.loads(fresh_path.read_text(encoding="utf-8"))
-    banked_no_ts = {k: v for k, v in banked_obj.items() if k != "ts"}
-    fresh_no_ts = {k: v for k, v in fresh_obj.items() if k != "ts"}
+    banked_no_ts = {k: v for k, v in banked_obj.items() if k not in EXCLUDED_COMPARISON_FIELDS}
+    fresh_no_ts = {k: v for k, v in fresh_obj.items() if k not in EXCLUDED_COMPARISON_FIELDS}
     within_tolerance = banked_no_ts == fresh_no_ts
 
     return {
@@ -167,7 +181,7 @@ def build_experiment_reproduction_receipt(banked_receipt_path: Path) -> dict:
         "banked_receipt_sha256": _sha256(banked_receipt_path),
         "fresh_receipt_ref": _relpath(fresh_path),
         "fresh_receipt_sha256": _sha256(fresh_path),
-        "comparison_method": "field-equality of parsed JSON excluding the 'ts' timestamp field",
+        "comparison_method": "field-equality of parsed JSON excluding the 'ts', 'invariant_sha256', and 'sha_convention' fields",
         "within_tolerance": within_tolerance,
         "selftest_command": "python scripts/loop_econ_gate.py --selftest",
         "selftest_exit_code": proc.returncode,
@@ -177,6 +191,9 @@ def build_experiment_reproduction_receipt(banked_receipt_path: Path) -> dict:
 
 
 def main() -> int:
+    # gh #625 point 1, fail-closed: verify BEFORE any receipt is written.
+    _verify_invariant(str(REPO_ROOT))
+
     RECEIPTS_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     banked_receipt_path = REPO_ROOT / "receipts" / "loop-econ-gate-selftest-20260705T031933Z.json"
@@ -185,10 +202,14 @@ def main() -> int:
         return 1
 
     customize_receipt = build_customize_receipt()
+    _stamp_invariant(customize_receipt, repo_root=str(REPO_ROOT))
+    customize_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
     customize_out = RECEIPTS_OUT_DIR / f"ind4-customize-{customize_receipt['ts']}.json"
     customize_out.write_text(json.dumps(customize_receipt, indent=2), encoding="utf-8")
 
     exp_receipt = build_experiment_reproduction_receipt(banked_receipt_path)
+    _stamp_invariant(exp_receipt, repo_root=str(REPO_ROOT))
+    exp_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
     exp_out = RECEIPTS_OUT_DIR / f"ind4-experiment-reproduction-{exp_receipt['ts']}.json"
     exp_out.write_text(json.dumps(exp_receipt, indent=2), encoding="utf-8")
 
