@@ -1,0 +1,948 @@
+{
+  "ticket": "EMBER-C12-COGNITIVE-MODE-ABLATION",
+  "ts": "2026-07-10T00:02:17Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "selector": "cognitive_mode_selector",
+  "selector_script": "scripts/ember_cognitive_mode_policy.py",
+  "description": "Replays REAL ember totality board-run receipts (real repo decision points, not invented inputs) through the live state-dependent cognitive mode selector and two independently-executed degraded arms, recording per-decision state vectors, selected modes, and real MODE_GATE behavioral consequences.",
+  "provenance": {
+    "runner_script": "scripts/ember_cognitive_mode_ablation.py",
+    "git_sha": "7be0b283ad3382a25e5a98137ed55226435341cd",
+    "git_branch": "exp/c12-selector-ablation",
+    "python_version": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+    "command": "python scripts/ember_cognitive_mode_ablation.py",
+    "source_totality_receipts": [
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260624T142553Z.json",
+        "sha256": "sha256:740213b6db3463f81c2e2d247c3292ecfb43a9d522113fdc58ae6cfae0301935",
+        "receipt_ts": "20260624T142553Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T203132Z.json",
+        "sha256": "sha256:605656886313a21bd35c27e4ff667a385bb2c063db96b97f74b4ef457af8c086",
+        "receipt_ts": "20260704T203132Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json",
+        "sha256": "sha256:c663e53f530f005c1aec1d3abb2641f1a59ba41775b71ecbf50398807e6968d6",
+        "receipt_ts": "20260705T081932Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260706T173800Z.json",
+        "sha256": "sha256:2fb63601072a42bbe2fd813523981104f4d1b1958f0b7bed456d4c4dd3af6996",
+        "receipt_ts": "20260706T173800Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json",
+        "sha256": "sha256:734f56ed3fa0be19bb09a29947f5caf24cdd4a86bae8f37c8ede22b324039264",
+        "receipt_ts": "20260708T033700Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json",
+        "sha256": "sha256:82701a740942d4dfc785c2c1b0f162682b01cdf935a1de34f435afaddfb75d9c",
+        "receipt_ts": "20260708T034014Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260709T030007Z.json",
+        "sha256": "sha256:95818ebdce7b375f4d2ede45bce4530f09aa951c96e3892b9bc3412427b83889",
+        "receipt_ts": "20260709T030007Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260709T044844Z.json",
+        "sha256": "sha256:03011f0091a793e256f5a2044235b4d1fb9d0601f4025efb963f593b7c4acbc6",
+        "receipt_ts": "20260709T044844Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260709T065411Z.json",
+        "sha256": "sha256:406764817ea3e5ab84b22424143254ba02dc5f9bd9c2c72543ebef96019072ab",
+        "receipt_ts": "20260709T065411Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260709T081147Z.json",
+        "sha256": "sha256:625528c46564197d25903af1e51e06cda1038790760f84afb5ec700d5ccb86ff",
+        "receipt_ts": "20260709T081147Z"
+      },
+      {
+        "path": "scripts/ember_totality/receipts-totality/ember-totality-20260709T101919Z.json",
+        "sha256": "sha256:a37182ca7caed68cf6566c4ee7d1d5083f994ac05158dcb7f15db22263cb0418",
+        "receipt_ts": "20260709T101919Z"
+      }
+    ],
+    "n_decisions": 11
+  },
+  "decisions": [
+    {
+      "decision_index": 0,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260624T142553Z.json",
+      "source_totality_receipt_ts": "20260624T142553Z",
+      "source_summary_used": {
+        "pct_green": 18.5,
+        "green": 5,
+        "red": 22,
+        "total": 27
+      },
+      "state": {
+        "evidence_strength": 0.185,
+        "uncertainty": 0.0,
+        "verifier_state": "none",
+        "headroom": 0.5,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total; unevaluable field absent on this historical receipt -> defaulted to 0 (disclosed)",
+        "verifier_state": "no audit fields on this historical receipt -> none (disclosed)",
+        "headroom": "working_set.untracked_receipts_on_disk absent on this historical receipt -> defaulted to neutral 0.5 (disclosed)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "observe",
+      "arm_a_selector_active": {
+        "mode": "observe",
+        "reason": "evidence_strength_below_threshold_triggers_observe",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "observe",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 0,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": false,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": false,
+        "a_vs_c_gate_differs": false,
+        "a_vs_c_skip_act_differs": false,
+        "a_vs_c_forced_promotion_differs": false
+      }
+    },
+    {
+      "decision_index": 1,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260704T203132Z.json",
+      "source_totality_receipt_ts": "20260704T203132Z",
+      "source_summary_used": {
+        "pct_green": 82.9,
+        "green": 29,
+        "red": 6,
+        "unevaluable": 0,
+        "state_condition_total": 35,
+        "total": 38,
+        "audit_ok": 3,
+        "audit_incident": 0,
+        "audit_pending_epoch": 0
+      },
+      "state": {
+        "evidence_strength": 0.829,
+        "uncertainty": 0.0,
+        "verifier_state": "pass",
+        "headroom": 0.5,
+        "blocker_present": false,
+        "risk_level": "low"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_ok > 0 -> pass",
+        "headroom": "working_set.untracked_receipts_on_disk absent on this historical receipt -> defaulted to neutral 0.5 (disclosed)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "report",
+      "arm_a_selector_active": {
+        "mode": "report",
+        "reason": "verifier_pass_high_evidence_low_uncertainty_triggers_report",
+        "gate": {
+          "forced_promotion": "accepted",
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "orient",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 1,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": true,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": false,
+        "a_vs_c_forced_promotion_differs": true
+      }
+    },
+    {
+      "decision_index": 2,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json",
+      "source_totality_receipt_ts": "20260705T081932Z",
+      "source_summary_used": {
+        "pct_green": 82.9,
+        "green": 29,
+        "red": 6,
+        "unevaluable": 0,
+        "state_condition_total": 35,
+        "total": 38,
+        "audit_ok": 2,
+        "audit_incident": 1,
+        "audit_pending_epoch": 0
+      },
+      "state": {
+        "evidence_strength": 0.829,
+        "uncertainty": 0.0,
+        "verifier_state": "fail",
+        "headroom": 0.5,
+        "blocker_present": true,
+        "risk_level": "low"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_incident > 0 -> fail",
+        "headroom": "working_set.untracked_receipts_on_disk absent on this historical receipt -> defaulted to neutral 0.5 (disclosed)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "rollback",
+      "arm_a_selector_active": {
+        "mode": "rollback",
+        "reason": "verifier_state_fail_triggers_rollback",
+        "gate": {
+          "forced_promotion": "rejected",
+          "skip_act": true,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "hypothesize",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 2,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": true,
+        "a_vs_b_forced_promotion_differs": true,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": true,
+        "a_vs_c_forced_promotion_differs": true
+      }
+    },
+    {
+      "decision_index": 3,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260706T173800Z.json",
+      "source_totality_receipt_ts": "20260706T173800Z",
+      "source_summary_used": {
+        "pct_green": 2.9,
+        "green": 1,
+        "red": 32,
+        "unevaluable": 2,
+        "state_condition_total": 35,
+        "total": 38,
+        "audit_ok": 0,
+        "audit_incident": 0,
+        "audit_pending_epoch": 3
+      },
+      "state": {
+        "evidence_strength": 0.029,
+        "uncertainty": 0.057143,
+        "verifier_state": "pending",
+        "headroom": 0.5,
+        "blocker_present": false,
+        "risk_level": "high"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_pending_epoch > 0 -> pending",
+        "headroom": "working_set.untracked_receipts_on_disk absent on this historical receipt -> defaulted to neutral 0.5 (disclosed)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "verify",
+      "arm_a_selector_active": {
+        "mode": "verify",
+        "reason": "verifier_state_pending_triggers_verify",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": true,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "simulate",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 3,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": false,
+        "a_vs_c_forced_promotion_differs": false
+      }
+    },
+    {
+      "decision_index": 4,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json",
+      "source_totality_receipt_ts": "20260708T033700Z",
+      "source_summary_used": {
+        "pct_green": 18.9,
+        "green": 7,
+        "red": 28,
+        "unevaluable": 2,
+        "state_condition_total": 37,
+        "total": 40,
+        "audit_ok": 0,
+        "audit_incident": 0,
+        "audit_pending_epoch": 3
+      },
+      "state": {
+        "evidence_strength": 0.189,
+        "uncertainty": 0.054054,
+        "verifier_state": "pending",
+        "headroom": 0.5,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_pending_epoch > 0 -> pending",
+        "headroom": "working_set.untracked_receipts_on_disk absent on this historical receipt -> defaulted to neutral 0.5 (disclosed)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "verify",
+      "arm_a_selector_active": {
+        "mode": "verify",
+        "reason": "verifier_state_pending_triggers_verify",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": true,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 4,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": false,
+        "a_vs_c_forced_promotion_differs": false
+      }
+    },
+    {
+      "decision_index": 5,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json",
+      "source_totality_receipt_ts": "20260708T034014Z",
+      "source_summary_used": {
+        "pct_green": 18.9,
+        "green": 7,
+        "red": 28,
+        "unevaluable": 2,
+        "state_condition_total": 37,
+        "total": 40,
+        "audit_ok": 0,
+        "audit_incident": 0,
+        "audit_pending_epoch": 3
+      },
+      "state": {
+        "evidence_strength": 0.189,
+        "uncertainty": 0.054054,
+        "verifier_state": "pending",
+        "headroom": 0.5,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_pending_epoch > 0 -> pending",
+        "headroom": "working_set.untracked_receipts_on_disk absent on this historical receipt -> defaulted to neutral 0.5 (disclosed)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "verify",
+      "arm_a_selector_active": {
+        "mode": "verify",
+        "reason": "verifier_state_pending_triggers_verify",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": true,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "verify",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": true,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 5,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": false,
+        "a_vs_c_gate_differs": false,
+        "a_vs_c_skip_act_differs": false,
+        "a_vs_c_forced_promotion_differs": false
+      }
+    },
+    {
+      "decision_index": 6,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260709T030007Z.json",
+      "source_totality_receipt_ts": "20260709T030007Z",
+      "source_summary_used": {
+        "pct_green": 24.3,
+        "green": 9,
+        "red": 25,
+        "unevaluable": 3,
+        "state_condition_total": 37,
+        "total": 40,
+        "audit_ok": 3,
+        "audit_incident": 0,
+        "audit_pending_epoch": 0
+      },
+      "state": {
+        "evidence_strength": 0.243,
+        "uncertainty": 0.081081,
+        "verifier_state": "pass",
+        "headroom": 0.275368,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_ok > 0 -> pass",
+        "headroom": "1 / (1 + working_set.untracked_receipts_on_disk / 2000.0)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "consolidate",
+      "arm_a_selector_active": {
+        "mode": "consolidate",
+        "reason": "verifier_pass_and_headroom_below_consolidate_threshold",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 0.5
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "consolidate",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 0.5
+        },
+        "round_robin_position": 6,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": false,
+        "a_vs_c_gate_differs": false,
+        "a_vs_c_skip_act_differs": false,
+        "a_vs_c_forced_promotion_differs": false
+      }
+    },
+    {
+      "decision_index": 7,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260709T044844Z.json",
+      "source_totality_receipt_ts": "20260709T044844Z",
+      "source_summary_used": {
+        "pct_green": 21.6,
+        "green": 8,
+        "red": 27,
+        "unevaluable": 2,
+        "state_condition_total": 37,
+        "total": 40,
+        "audit_ok": 3,
+        "audit_incident": 0,
+        "audit_pending_epoch": 0
+      },
+      "state": {
+        "evidence_strength": 0.216,
+        "uncertainty": 0.054054,
+        "verifier_state": "pass",
+        "headroom": 1.0,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_ok > 0 -> pass",
+        "headroom": "1 / (1 + working_set.untracked_receipts_on_disk / 2000.0)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "observe",
+      "arm_a_selector_active": {
+        "mode": "observe",
+        "reason": "evidence_strength_below_threshold_triggers_observe",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "sleep",
+        "gate": {
+          "forced_promotion": "rejected",
+          "skip_act": true,
+          "retry_verifier": false,
+          "budget_multiplier": 0.25
+        },
+        "round_robin_position": 7,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": false,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": true,
+        "a_vs_c_forced_promotion_differs": true
+      }
+    },
+    {
+      "decision_index": 8,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260709T065411Z.json",
+      "source_totality_receipt_ts": "20260709T065411Z",
+      "source_summary_used": {
+        "pct_green": 24.3,
+        "green": 9,
+        "red": 25,
+        "unevaluable": 3,
+        "state_condition_total": 37,
+        "total": 40,
+        "audit_ok": 3,
+        "audit_incident": 0,
+        "audit_pending_epoch": 0
+      },
+      "state": {
+        "evidence_strength": 0.243,
+        "uncertainty": 0.081081,
+        "verifier_state": "pass",
+        "headroom": 0.313038,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_ok > 0 -> pass",
+        "headroom": "1 / (1 + working_set.untracked_receipts_on_disk / 2000.0)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "consolidate",
+      "arm_a_selector_active": {
+        "mode": "consolidate",
+        "reason": "verifier_pass_and_headroom_below_consolidate_threshold",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 0.5
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "ask",
+        "gate": {
+          "forced_promotion": "rejected",
+          "skip_act": true,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 8,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": true,
+        "a_vs_c_forced_promotion_differs": true
+      }
+    },
+    {
+      "decision_index": 9,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260709T081147Z.json",
+      "source_totality_receipt_ts": "20260709T081147Z",
+      "source_summary_used": {
+        "pct_green": 21.6,
+        "green": 8,
+        "red": 27,
+        "unevaluable": 2,
+        "state_condition_total": 37,
+        "total": 40,
+        "audit_ok": 3,
+        "audit_incident": 0,
+        "audit_pending_epoch": 0
+      },
+      "state": {
+        "evidence_strength": 0.216,
+        "uncertainty": 0.054054,
+        "verifier_state": "pass",
+        "headroom": 0.313185,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_ok > 0 -> pass",
+        "headroom": "1 / (1 + working_set.untracked_receipts_on_disk / 2000.0)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "consolidate",
+      "arm_a_selector_active": {
+        "mode": "consolidate",
+        "reason": "verifier_pass_and_headroom_below_consolidate_threshold",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 0.5
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "refuse",
+        "gate": {
+          "forced_promotion": "rejected",
+          "skip_act": true,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 9,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": true,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": true,
+        "a_vs_c_forced_promotion_differs": true
+      }
+    },
+    {
+      "decision_index": 10,
+      "source_totality_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260709T101919Z.json",
+      "source_totality_receipt_ts": "20260709T101919Z",
+      "source_summary_used": {
+        "pct_green": 24.3,
+        "green": 9,
+        "red": 27,
+        "unevaluable": 1,
+        "state_condition_total": 37,
+        "total": 40,
+        "audit_ok": 3,
+        "audit_incident": 0,
+        "audit_pending_epoch": 0
+      },
+      "state": {
+        "evidence_strength": 0.243,
+        "uncertainty": 0.027027,
+        "verifier_state": "pass",
+        "headroom": 0.9995,
+        "blocker_present": false,
+        "risk_level": "medium"
+      },
+      "state_derivation": {
+        "evidence_strength": "summary.pct_green / 100.0",
+        "uncertainty": "summary.unevaluable / summary.state_condition_total",
+        "verifier_state": "summary.audit_ok > 0 -> pass",
+        "headroom": "1 / (1 + working_set.untracked_receipts_on_disk / 2000.0)",
+        "blocker_present": "summary.audit_incident > 0 OR chain_verification.chain_ok is False",
+        "risk_level": "pct_green < 10 -> high; < 50 -> medium; else low"
+      },
+      "mode": "observe",
+      "arm_a_selector_active": {
+        "mode": "observe",
+        "reason": "evidence_strength_below_threshold_triggers_observe",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        }
+      },
+      "arm_b_deletion_fallback": {
+        "mode": "act",
+        "gate": {
+          "forced_promotion": null,
+          "skip_act": false,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "note": "constant mode -- no state read at all (selector deleted)"
+      },
+      "arm_c_fixed_timer_degraded": {
+        "mode": "rollback",
+        "gate": {
+          "forced_promotion": "rejected",
+          "skip_act": true,
+          "retry_verifier": false,
+          "budget_multiplier": 1.0
+        },
+        "round_robin_position": 10,
+        "note": "advances one step per decision on a fixed round-robin schedule -- no state read at all"
+      },
+      "divergence": {
+        "a_vs_b_mode_differs": true,
+        "a_vs_b_gate_differs": false,
+        "a_vs_b_skip_act_differs": false,
+        "a_vs_b_forced_promotion_differs": false,
+        "a_vs_c_mode_differs": true,
+        "a_vs_c_gate_differs": true,
+        "a_vs_c_skip_act_differs": true,
+        "a_vs_c_forced_promotion_differs": true
+      }
+    }
+  ],
+  "ablation": {
+    "selector": "cognitive_mode_selector",
+    "description": "Two independent ablation legs executed on the SAME 11 real decisions as arm_a_selector_active above: arm B deletes the state-dependent cognitive mode selector (constant fallback mode, no state read); arm C replaces the selector with a fixed_timer round-robin schedule over the 12 registry modes (no state read). Both are compared against the real selector's actual per-decision MODE_GATE behavior.",
+    "arm_b_deletion_ablation": {
+      "ablation_kind": "deletion_ablation",
+      "selector": "cognitive_mode_selector",
+      "description": "state-dependent cognitive mode selector deleted -> consuming cycle falls back to a single constant mode with no state-conditioning at all",
+      "deleted_object": "scripts/ember_cognitive_mode_policy.py:select_mode",
+      "fallback_mode": "act",
+      "n_decisions": 11,
+      "mode_agreement_rate": 0.0,
+      "gate_agreement_rate": 0.272727,
+      "skip_act_divergences": 1,
+      "forced_promotion_divergences": 2,
+      "budget_multiplier_mean_arm_a": 0.863636,
+      "budget_multiplier_mean_arm_b": 1.0,
+      "degrades_cycle": true,
+      "degrades_next_action": true
+    },
+    "arm_c_fixed_timer_ablation": {
+      "ablation_kind": "fixed_timer_ablation",
+      "selector": "cognitive_mode_selector",
+      "description": "state-dependent cognitive mode selector replaced with a fixed_timer round-robin schedule over the 12 registry modes, ignoring state entirely",
+      "round_robin_sequence": [
+        "observe",
+        "orient",
+        "hypothesize",
+        "simulate",
+        "act",
+        "verify",
+        "consolidate",
+        "sleep",
+        "ask",
+        "refuse",
+        "rollback",
+        "report"
+      ],
+      "n_decisions": 11,
+      "mode_agreement_rate": 0.272727,
+      "gate_agreement_rate": 0.272727,
+      "skip_act_divergences": 5,
+      "forced_promotion_divergences": 6,
+      "budget_multiplier_mean_arm_a": 0.863636,
+      "budget_multiplier_mean_arm_c": 0.886364,
+      "degrades_cycle": true,
+      "degrades_next_action": true
+    }
+  },
+  "summary": {
+    "n_decisions": 11,
+    "distinct_modes_selected_by_real_policy": [
+      "consolidate",
+      "observe",
+      "report",
+      "rollback",
+      "verify"
+    ],
+    "arm_b_mode_agreement_rate": 0.0,
+    "arm_c_mode_agreement_rate": 0.272727,
+    "arm_b_gate_agreement_rate": 0.272727,
+    "arm_c_gate_agreement_rate": 0.272727,
+    "verdict": "MEASURED_DIVERGENCE"
+  }
+}
