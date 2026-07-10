@@ -1,55 +1,58 @@
 {
-  "ticket": "A1-BEACON-GRINDABILITY-REPRO",
-  "ts": "2026-07-10T05:12:55.299876+00:00",
-  "schema": "a1-beacon-grindability-repro/v1",
-  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
-  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
-  "issue_refs": [
-    "#631",
-    "#123",
-    "#593",
-    "#582"
-  ],
-  "defect": "the PR #603 held-out selection beacon is the author-controlled commit sha (index = int(eval_freeze_hash[:8],16) mod 8); an author can grind an inert commit-message nonce to land any pool index -> not non-discretionary",
-  "method": "throwaway sandbox git repo (never the live tree); fixed base tree + parent; vary only an inert commit-message nonce; tabulate int(sha[:8],16) mod pool_size",
-  "pool_size": 8,
-  "tries_to_cover_all_indices": 20,
-  "all_indices_reachable": true,
-  "index_7_reachable": true,
-  "index_7_note": "index 7 = SciQ, PR #603's landed selection",
-  "first_nonce_per_index": {
-    "0": {
-      "nonce": 2,
-      "commit_sha": "7cff93985b4ebc27fa8795f8caa5d15c3070f64e"
-    },
-    "1": {
-      "nonce": 14,
-      "commit_sha": "69f4a5a9e65fb6019786bfe8aa1fb773e41fef80"
-    },
-    "2": {
-      "nonce": 16,
-      "commit_sha": "1f7653ba49ace54054f8df36909c7ea7b1b507f9"
-    },
-    "3": {
-      "nonce": 1,
-      "commit_sha": "0b1d9d7377b36b19fadbcdc0d9693c27703c2fdb"
-    },
-    "4": {
-      "nonce": 19,
-      "commit_sha": "997875fc116d053558622cfc2437b40acd67af09"
-    },
-    "5": {
-      "nonce": 10,
-      "commit_sha": "3c337a157378833cdf7d1f479e57bd60b4175b24"
-    },
-    "6": {
-      "nonce": 0,
-      "commit_sha": "b3de87aefdec8fa4e78a646139f642272d16f66b"
-    },
-    "7": {
-      "nonce": 4,
-      "commit_sha": "a7708407e935b2710e1693efd829ee46468f3a83"
-    }
-  },
-  "verdict": "DEFECT REPRODUCED: all pool indices reachable by grinding an inert nonce; the commit-sha beacon cannot prove 'no discretionary pick'"
+    "ticket":  "A1-BEACON-GRINDABILITY-REPRO",
+    "ts":  "2026-07-10T05:12:55.299876+00:00",
+    "schema":  "a1-beacon-grindability-repro/v1",
+    "invariant_sha256":  "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+    "sha_convention":  "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+    "issue_refs":  [
+                       "#631",
+                       "#123",
+                       "#593",
+                       "#582"
+                   ],
+    "defect":  "the PR #603 held-out selection beacon is the author-controlled commit sha (index = int(eval_freeze_hash[:8],16) mod 8); an author can grind an inert commit-message nonce to land any pool index -\u003e not non-discretionary",
+    "method":  "throwaway sandbox git repo (never the live tree); fixed base tree + parent; vary only an inert commit-message nonce; tabulate int(sha[:8],16) mod pool_size",
+    "pool_size":  8,
+    "tries_to_cover_all_indices":  20,
+    "all_indices_reachable":  true,
+    "index_7_reachable":  true,
+    "index_7_note":  "index 7 = SciQ, PR #603\u0027s landed selection",
+    "first_nonce_per_index":  {
+                                  "0":  {
+                                            "nonce":  2,
+                                            "commit_sha":  "7cff93985b4ebc27fa8795f8caa5d15c3070f64e"
+                                        },
+                                  "1":  {
+                                            "nonce":  14,
+                                            "commit_sha":  "69f4a5a9e65fb6019786bfe8aa1fb773e41fef80"
+                                        },
+                                  "2":  {
+                                            "nonce":  16,
+                                            "commit_sha":  "1f7653ba49ace54054f8df36909c7ea7b1b507f9"
+                                        },
+                                  "3":  {
+                                            "nonce":  1,
+                                            "commit_sha":  "0b1d9d7377b36b19fadbcdc0d9693c27703c2fdb"
+                                        },
+                                  "4":  {
+                                            "nonce":  19,
+                                            "commit_sha":  "997875fc116d053558622cfc2437b40acd67af09"
+                                        },
+                                  "5":  {
+                                            "nonce":  10,
+                                            "commit_sha":  "3c337a157378833cdf7d1f479e57bd60b4175b24"
+                                        },
+                                  "6":  {
+                                            "nonce":  0,
+                                            "commit_sha":  "b3de87aefdec8fa4e78a646139f642272d16f66b"
+                                        },
+                                  "7":  {
+                                            "nonce":  4,
+                                            "commit_sha":  "a7708407e935b2710e1693efd829ee46468f3a83"
+                                        }
+                              },
+    "verdict":  "DEFECT REPRODUCED: all pool indices reachable by grinding an inert nonce; the commit-sha beacon cannot prove \u0027no discretionary pick\u0027",
+    "api_spend_usd":  0,
+    "paid_api_surface_used":  false,
+    "api_spend_backfill_note":  "field backfilled 2026-07-10 per C(-1); run was local-only with zero paid-API spend; original receipt otherwise unmodified"
 }
