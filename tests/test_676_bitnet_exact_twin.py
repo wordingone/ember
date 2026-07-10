@@ -83,15 +83,57 @@ def test_realized_head_and_norm_accounting_matches_frozen_identity():
 def test_manifest_mismatch_causes_load_time_refusal():
     """Prereg gate item 7: a deliberate mismatch MUST cause load-time
     refusal, not a warning."""
-    expected = bt.build_manifest(seed=0, token_order_hash="tok-a", eval_manifest_hash="eval-a")
-    candidate = bt.build_manifest(seed=0, token_order_hash="tok-a", eval_manifest_hash="eval-B-WRONG")
+    expected = bt.build_manifest(arm="dense", param_count=bt.FROZEN_PARAM_COUNT, seed=0,
+                                  token_order_hash="tok-a", eval_manifest_hash="eval-a")
+    candidate = bt.build_manifest(arm="dense", param_count=bt.FROZEN_PARAM_COUNT, seed=0,
+                                   token_order_hash="tok-a", eval_manifest_hash="eval-B-WRONG")
     with pytest.raises(bt.ManifestMismatchError):
         bt.verify_manifest(candidate, expected)
 
 
 def test_manifest_verify_passes_on_identical_manifest():
-    m = bt.build_manifest(seed=7, token_order_hash="tok-x", eval_manifest_hash="eval-x")
+    m = bt.build_manifest(arm="dense", param_count=bt.FROZEN_PARAM_COUNT, seed=7,
+                           token_order_hash="tok-x", eval_manifest_hash="eval-x")
     bt.verify_manifest(m, m)  # must not raise
+
+
+def test_manifest_arm_mismatch_alone_causes_refusal():
+    """2026-07-10 gate amendment: every OTHER manifest field (config hash,
+    source hash, seed, token order, eval manifest hash, and even
+    param_count since both arms share the same exact count) is
+    arm-invariant. Before this amendment a ternary checkpoint mislabeled
+    as dense passed verify_manifest silently. 'arm' alone differing must
+    now be sufficient to refuse."""
+    as_dense = bt.build_manifest(arm="dense", param_count=bt.FROZEN_PARAM_COUNT, seed=0,
+                                  token_order_hash="tok-a", eval_manifest_hash="eval-a")
+    as_ternary = bt.build_manifest(arm="ternary", param_count=bt.FROZEN_PARAM_COUNT, seed=0,
+                                    token_order_hash="tok-a", eval_manifest_hash="eval-a")
+    with pytest.raises(bt.ManifestMismatchError):
+        bt.verify_manifest(as_ternary, as_dense)
+
+
+def test_build_manifest_for_model_uses_realized_arm_and_param_count():
+    """build_manifest_for_model must read arm+param_count off the ACTUAL
+    built model (#667 realized-not-advertised), and the resulting
+    dense-vs-ternary manifests for the same config must still refuse."""
+    dense = bt.build_exact_twin(ternary=False)
+    ternary = bt.build_exact_twin(ternary=True)
+    m_dense = bt.build_manifest_for_model(dense, seed=0, token_order_hash="tok-a",
+                                           eval_manifest_hash="eval-a")
+    m_ternary = bt.build_manifest_for_model(ternary, seed=0, token_order_hash="tok-a",
+                                             eval_manifest_hash="eval-a")
+    assert m_dense.arm == "dense"
+    assert m_ternary.arm == "ternary"
+    assert m_dense.param_count == bt.FROZEN_PARAM_COUNT
+    assert m_ternary.param_count == bt.FROZEN_PARAM_COUNT
+    with pytest.raises(bt.ManifestMismatchError):
+        bt.verify_manifest(m_ternary, m_dense)
+
+
+def test_build_manifest_rejects_invalid_arm_label():
+    with pytest.raises(ValueError):
+        bt.build_manifest(arm="bf16", param_count=bt.FROZEN_PARAM_COUNT, seed=0,
+                           token_order_hash="tok-a", eval_manifest_hash="eval-a")
 
 
 def test_no_bias_anywhere_either_arm():

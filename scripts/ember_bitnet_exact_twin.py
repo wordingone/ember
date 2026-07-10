@@ -7,7 +7,11 @@ conventions #667). This module is deliverables A + B + C + D of #676:
   A. exact twin architecture (both arms)
   B. arm difference isolated to quantization
   C. realized-count accounting (per #667: REALIZED, never advertised)
-  D. manifest identity + load-time mismatch refusal
+  D. manifest identity + load-time mismatch refusal — tracks WHICH ARM and
+     its realized parameter count (2026-07-10 gate amendment), so an
+     arm-mislabeled checkpoint is caught even though every other identity
+     field (config/source hash, seed, token order, eval manifest) is
+     arm-invariant and cannot by itself catch that confusion
 
 Deliverable E (the 50M GPU exact-twin preflight pair) is explicitly OUT OF
 SCOPE for this module — CPU-only, no GPU dispatch, no training run.
@@ -591,28 +595,68 @@ def compute_config_hash(cfg: ExactTwinConfig) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+_VALID_ARMS = ("dense", "ternary")
+
+
 @dataclass(frozen=True)
 class TwinManifest:
     config_hash: str
     source_hash: str
+    arm: str
+    param_count: int
     seed: int
     token_order_hash: str
     eval_manifest_hash: str
 
 
 def build_manifest(
+    arm: str,
+    param_count: int,
     seed: int,
     token_order_hash: str,
     eval_manifest_hash: str,
     cfg: ExactTwinConfig = FROZEN_CONFIG,
     source_path: Optional[Path] = None,
 ) -> TwinManifest:
+    """``arm`` and ``param_count`` are REQUIRED (2026-07-10 gate amendment):
+    without them every other field (config/source hash, seed, token order,
+    eval manifest) is arm-invariant, so a ternary checkpoint mislabeled as
+    dense passed ``verify_manifest`` silently — exactly the confusion
+    surface the load-time refusal exists to catch (prereg gate items 1+7).
+    ``verify_manifest`` iterates every declared field, so adding these two
+    here is sufficient for the refusal to be automatic."""
+    if arm not in _VALID_ARMS:
+        raise ValueError(f"arm must be one of {_VALID_ARMS}, got {arm!r}")
     return TwinManifest(
         config_hash=compute_config_hash(cfg),
         source_hash=compute_source_hash(source_path),
+        arm=arm,
+        param_count=param_count,
         seed=seed,
         token_order_hash=token_order_hash,
         eval_manifest_hash=eval_manifest_hash,
+    )
+
+
+def build_manifest_for_model(
+    model: ExactTwinTransformer,
+    seed: int,
+    token_order_hash: str,
+    eval_manifest_hash: str,
+    source_path: Optional[Path] = None,
+) -> TwinManifest:
+    """Convenience wrapper that reads ``arm`` and ``param_count`` off the
+    ACTUAL built model (realized_param_count), never off a caller-supplied
+    literal — keeps the manifest honoring the same #667 realized-not-
+    advertised convention as the rest of deliverable C."""
+    return build_manifest(
+        arm="ternary" if model.ternary else "dense",
+        param_count=realized_param_count(model),
+        seed=seed,
+        token_order_hash=token_order_hash,
+        eval_manifest_hash=eval_manifest_hash,
+        cfg=model.cfg,
+        source_path=source_path,
     )
 
 
@@ -890,8 +934,10 @@ def _run_tests(verbose: bool = True) -> dict:
     # T16: manifest determinism + verify passes on identical manifests
     name = "T16_manifest_determinism_and_verify_pass"
     try:
-        m1 = build_manifest(seed=0, token_order_hash="abc123", eval_manifest_hash="def456")
-        m2 = build_manifest(seed=0, token_order_hash="abc123", eval_manifest_hash="def456")
+        m1 = build_manifest(arm="dense", param_count=FROZEN_PARAM_COUNT, seed=0,
+                             token_order_hash="abc123", eval_manifest_hash="def456")
+        m2 = build_manifest(arm="dense", param_count=FROZEN_PARAM_COUNT, seed=0,
+                             token_order_hash="abc123", eval_manifest_hash="def456")
         if m1 != m2:
             _fail(name, f"non-deterministic manifest: {m1} != {m2}")
         else:
@@ -903,8 +949,10 @@ def _run_tests(verbose: bool = True) -> dict:
     # T17: deliberate mismatch causes load-time refusal (prereg gate item 7)
     name = "T17_manifest_mismatch_refusal"
     try:
-        expected = build_manifest(seed=0, token_order_hash="abc123", eval_manifest_hash="def456")
-        candidate = build_manifest(seed=1, token_order_hash="abc123", eval_manifest_hash="def456")
+        expected = build_manifest(arm="dense", param_count=FROZEN_PARAM_COUNT, seed=0,
+                                   token_order_hash="abc123", eval_manifest_hash="def456")
+        candidate = build_manifest(arm="dense", param_count=FROZEN_PARAM_COUNT, seed=1,
+                                    token_order_hash="abc123", eval_manifest_hash="def456")
         raised = False
         try:
             verify_manifest(candidate, expected)
@@ -912,6 +960,79 @@ def _run_tests(verbose: bool = True) -> dict:
             raised = True
         if not raised:
             _fail(name, "verify_manifest did not raise on a deliberately mismatched seed")
+        else:
+            _pass(name)
+    except Exception as exc:
+        _fail(name, str(exc))
+
+    # T18: arm mismatch alone (all other fields identical, including
+    # param_count which is IDENTICAL across arms by construction) must
+    # still cause refusal (2026-07-10 gate amendment — the exact confusion
+    # a ternary checkpoint mislabeled as dense used to slip past).
+    name = "T18_arm_mismatch_refusal_all_else_identical"
+    try:
+        as_dense = build_manifest(arm="dense", param_count=FROZEN_PARAM_COUNT, seed=0,
+                                   token_order_hash="abc123", eval_manifest_hash="def456")
+        as_ternary = build_manifest(arm="ternary", param_count=FROZEN_PARAM_COUNT, seed=0,
+                                     token_order_hash="abc123", eval_manifest_hash="def456")
+        raised = False
+        try:
+            verify_manifest(as_ternary, as_dense)
+        except ManifestMismatchError:
+            raised = True
+        if not raised:
+            _fail(name, "verify_manifest did not raise when only 'arm' differed")
+        else:
+            _pass(name)
+    except Exception as exc:
+        _fail(name, str(exc))
+
+    # T19: build_manifest_for_model reads arm+param_count off the ACTUAL
+    # built model (realized, per #667), never a caller-supplied literal,
+    # and a dense-vs-ternary manifest built this way for the SAME config
+    # still triggers the T18 refusal end-to-end.
+    name = "T19_build_manifest_for_model_realized_arm_and_count"
+    if build_ok:
+        try:
+            m_dense = build_manifest_for_model(dense, seed=0, token_order_hash="abc123",
+                                                eval_manifest_hash="def456")
+            m_ternary = build_manifest_for_model(ternary, seed=0, token_order_hash="abc123",
+                                                  eval_manifest_hash="def456")
+            bad = []
+            if m_dense.arm != "dense":
+                bad.append(f"dense arm labeled {m_dense.arm!r}")
+            if m_ternary.arm != "ternary":
+                bad.append(f"ternary arm labeled {m_ternary.arm!r}")
+            if m_dense.param_count != FROZEN_PARAM_COUNT or m_ternary.param_count != FROZEN_PARAM_COUNT:
+                bad.append(f"param_count dense={m_dense.param_count} ternary={m_ternary.param_count}")
+            refused = False
+            try:
+                verify_manifest(m_ternary, m_dense)
+            except ManifestMismatchError:
+                refused = True
+            if not refused:
+                bad.append("verify_manifest did not refuse mismatched real-model manifests")
+            if bad:
+                _fail(name, "; ".join(bad))
+            else:
+                _pass(name)
+        except Exception as exc:
+            _fail(name, str(exc))
+    else:
+        _fail(name, "skipped: arms failed to build")
+
+    # T20: build_manifest rejects an invalid arm label outright (fail-closed
+    # at construction time, not merely at verify time).
+    name = "T20_build_manifest_rejects_invalid_arm"
+    try:
+        raised = False
+        try:
+            build_manifest(arm="bf16", param_count=FROZEN_PARAM_COUNT, seed=0,
+                            token_order_hash="abc123", eval_manifest_hash="def456")
+        except ValueError:
+            raised = True
+        if not raised:
+            _fail(name, "build_manifest accepted an invalid arm label")
         else:
             _pass(name)
     except Exception as exc:
