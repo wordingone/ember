@@ -30,6 +30,31 @@ import re
 import subprocess
 
 
+def redact_root(value):
+    """Never let a resolved local absolute filesystem root (or a list of
+    root candidates) reach a printed status line or receipt-bound reason
+    string (issue #639: repo-guard's no-local-paths landing gate blocks any
+    committed receipt containing one -- the #633 artifact-root plumbing
+    introduced exactly this class of leak). Returns a diagnostic that
+    discloses root IDENTITY via a short sha256 hash of the normalized value
+    -- never the literal path -- so two runs against the same root are
+    still comparable without ever naming the local disk layout (frozen
+    spec, issue #639: token-or-hash, never the path).
+    """
+    def _hash_one(v):
+        norm = str(v).strip().replace("\\", "/").rstrip("/").lower()
+        return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:12]
+
+    if value is None:
+        return "root=none"
+    if isinstance(value, (list, tuple, set)):
+        vals = [v for v in value if v]
+        if not vals:
+            return "0 candidate(s)"
+        return f"{len(vals)} candidate(s) [sha12:" + ",".join(_hash_one(v) for v in vals) + "]"
+    return f"sha12:{_hash_one(value)}"
+
+
 def resolve_in_tree(path_str, root):
     """Return the absolute on-disk path if `path_str` resolves to a file that
     both EXISTS and is located under `root` (the execution tree); else None.
@@ -122,9 +147,9 @@ def check_path_sha_pairs(cand, root):
         if on_disk is None:
             return False, len(pairs), (
                 f"{field}: {path_key}={claimed_path!r} resolves OFF-TREE/missing "
-                f"under root={root} -- converges with GOAL.md's Execution-surface "
-                "'Imports owed FROM the live tree' row (anti-gaming S10 import "
-                "debt); cannot verify in-tree"
+                f"under root ({redact_root(root)}) -- converges with GOAL.md's "
+                "Execution-surface 'Imports owed FROM the live tree' row "
+                "(anti-gaming S10 import debt); cannot verify in-tree"
             )
         actual = sha256_file(on_disk)
         if actual.lower() != claimed_sha.lower().replace("sha256:", ""):

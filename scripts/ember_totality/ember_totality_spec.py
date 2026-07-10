@@ -968,17 +968,22 @@ def compute_working_set(repo_root=None):
     return working_set
 
 
-def sanitize_receipt_paths(receipt, run_root):
-    """Recursively replace all forms of run_root path with <ROOT> in receipt.
+def sanitize_receipt_paths(receipt, run_root, placeholder="<ROOT>"):
+    """Recursively replace all forms of run_root path with `placeholder` in receipt.
 
     Replaces the run_root path in all string values (including JSON-escaped forms)
-    with the literal placeholder <ROOT>. Handles:
+    with the literal placeholder (default <ROOT>). Handles:
     - Raw Windows path: B:\...\path
     - Single-escaped: B:\\...\path (backslashes doubled in JSON strings)
     - Double-escaped: B:\\\\...\path (backslashes quadrupled, nested JSON)
     - Forward-slash form: B:/...//path
 
     Does NOT modify numeric values, keys, or CHK/verdict logic.
+
+    [gh #639] `placeholder` lets a caller redact a SECOND, independent root
+    (the #633 artifact-root) with a distinctly-labeled marker in the same
+    pass-style call, so a reader can tell which root a redaction came from
+    without ever seeing either literal path.
     """
     if not run_root:
         return receipt
@@ -1016,7 +1021,7 @@ def sanitize_receipt_paths(receipt, run_root):
             # Replace all forms of the root path
             result = value
             for replacement in replacements:
-                result = result.replace(replacement, "<ROOT>")
+                result = result.replace(replacement, placeholder)
             return result
         elif isinstance(value, dict):
             return {k: sanitize_value(v) for k, v in value.items()}
@@ -1328,8 +1333,20 @@ def main():
     # Stamp the receipt with the constitutional invariant hash (fail-closed if mismatch)
     receipt = stamp(receipt, repo_root=REPO_ROOT)
 
-    # Sanitize run-root paths in the receipt before writing (issue #544)
-    receipt = sanitize_receipt_paths(receipt, effective_root)
+    # Sanitize run-root paths in the receipt before writing (issue #544).
+    receipt = sanitize_receipt_paths(receipt, effective_root, placeholder="<ROOT>")
+    # [gh #639] The #633 artifact-root (EMBER_ARTIFACT_ROOT / --artifact-root)
+    # is a SEPARATE local absolute path from effective_root -- a render from
+    # a worktree passes an OPERATING-tree artifact root that differs from the
+    # worktree's own effective_root, so the #544 sanitize above never touched
+    # it. This was the actual defect: the 2026-07-10 totality render's C-BASE
+    # row embedded the resolved artifact root (via a probe's status line)
+    # and repo-guard blocked the receipt from landing. Redact it the same
+    # way, under its own placeholder so a reader can tell the two apart.
+    if args.artifact_root:
+        receipt = sanitize_receipt_paths(
+            receipt, os.path.abspath(args.artifact_root), placeholder="<ARTIFACT-ROOT>"
+        )
 
     receipt_path = os.path.join(RECEIPTS_DIR, f"ember-totality-{ts}.json")
     with open(receipt_path, "w", encoding="utf-8") as fh:
