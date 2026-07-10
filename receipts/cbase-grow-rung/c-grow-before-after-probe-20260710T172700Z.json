@@ -1,0 +1,18 @@
+{
+  "ticket": "C-GROW-BEFORE-AFTER-PROBE",
+  "ts": "2026-07-10T17:27:00Z",
+  "issue": 626,
+  "command": "wsl python3 scripts/ember_totality/test_c_grow.py",
+  "probe_edited_in_this_pr": false,
+  "before": {
+    "worktree_state": "origin/master HEAD (50fc7c610d78a227e54d59ff32a95042f2e1ff2e), before any file in this PR was added",
+    "output": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured); no invalid-token present"
+  },
+  "after": {
+    "worktree_state": "with all PR files added (audit script + candidate-audit receipt + this rung2-completion receipt)",
+    "output": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured); no invalid-token present"
+  },
+  "verdict_unchanged": true,
+  "cited_evidence_path_unchanged": true,
+  "honest_note": "This PR does not flip C-GROW RED->GREEN. C-GROW was already GREEN on origin/master (via PR #618) before this PR; issue #626 was filed against a stale board render that raced the #618 merge (see part_1_rung1_already_green.board_render_discrepancy_note in the completion receipt). This PR re-verifies that GREEN status honestly (independently recomputed checkpoint hashes, re-run probe) and adds real-artifact-cited progress on the rung-2 extension, with the genuinely missing datum (rung-2 post-grow loss) disclosed as absent rather than invented."
+}
