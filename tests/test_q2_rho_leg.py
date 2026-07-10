@@ -44,17 +44,37 @@ def test_frobenius_cos_basic():
     assert qrl.frobenius_cos(a, zero) != qrl.frobenius_cos(a, zero)  # NaN != NaN
 
 
+def test_analytic_p_upper_values():
+    # Real-run figures: mn=33554432 (32768x1024), rho_perp~0.0317327
+    # -> p_upper ~ 2.96e-5 (the merge-gate amendment's expected value).
+    p = qrl.analytic_p_upper(0.0317327, 33554432)
+    assert p == pytest.approx(2.96e-5, rel=0.02)
+    # cap at 1 for tiny rho
+    assert qrl.analytic_p_upper(1e-9, 100) == 1.0
+    # degenerate inputs never reject
+    assert qrl.analytic_p_upper(float("nan"), 100) == 1.0
+    assert qrl.analytic_p_upper(0.0, 100) == 1.0
+    assert qrl.analytic_p_upper(0.5, 0) == 1.0
+    # two-sided / sign-insensitive (rho enters squared)
+    assert qrl.analytic_p_upper(-0.5, 400) == qrl.analytic_p_upper(0.5, 400)
+    # exact interior value: 1/(400*0.25) = 0.01
+    assert qrl.analytic_p_upper(0.5, 400) == pytest.approx(0.01, abs=1e-12)
+
+
 def test_verdict_from_table():
-    # BRIDGE-ALIVE: orthogonal component alone clears the threshold.
-    assert qrl.verdict_from(rho_raw=0.5, rho_perp=0.9, threshold=0.3) == "BRIDGE-ALIVE"
-    # EFFECTIVE-LR-ARTIFACT: raw clears, orthogonal remainder does not.
-    assert qrl.verdict_from(rho_raw=0.5, rho_perp=0.1, threshold=0.3) == "EFFECTIVE-LR-ARTIFACT"
-    # NULL-PRIMARY: neither clears.
-    assert qrl.verdict_from(rho_raw=0.1, rho_perp=0.05, threshold=0.3) == "NULL-PRIMARY"
-    # sign-insensitive (|.| per the frozen table).
-    assert qrl.verdict_from(rho_raw=-0.5, rho_perp=-0.9, threshold=0.3) == "BRIDGE-ALIVE"
-    # boundary: exactly-at-threshold does NOT count as exceeding it (strict >).
-    assert qrl.verdict_from(rho_raw=0.0, rho_perp=0.3, threshold=0.3) == "NULL-PRIMARY"
+    # Superseded vocabulary (merge-gate amendment on PR #669): success mints
+    # SIBLING_NON_NULL_ORIENTATION; failure-to-reject is INCONCLUSIVE
+    # (never NULL). Canonical test: p_upper < alpha (strict), alpha=0.003.
+    assert qrl.ALPHA_CANONICAL == 0.003
+    assert qrl.verdict_from(2.96e-5) == "SIBLING_NON_NULL_ORIENTATION"
+    assert qrl.verdict_from(0.0029) == "SIBLING_NON_NULL_ORIENTATION"
+    # boundary: exactly-at-alpha does NOT reject (strict <)
+    assert qrl.verdict_from(0.003) == "INCONCLUSIVE"
+    assert qrl.verdict_from(0.5) == "INCONCLUSIVE"
+    assert qrl.verdict_from(1.0) == "INCONCLUSIVE"
+    # the old vocabulary must be gone from the verdict path entirely
+    for p in (1e-9, 0.0029, 0.003, 0.5, 1.0):
+        assert qrl.verdict_from(p) not in ("BRIDGE-ALIVE", "NULL-PRIMARY", "EFFECTIVE-LR-ARTIFACT")
 
 
 def test_decompose_parallel_orthogonal_exact():

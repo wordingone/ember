@@ -60,14 +60,36 @@ fields under its own label):
   L3  scale/rotation decomposition. Splits U_T-U_R into the component
       parallel to the common update direction D = normalize((U_R+U_T)/2)
       and the orthogonal remainder; reports rho_perp = cos_F(G_post,
-      (U_T-U_R)_perp) and the parallel fraction. The bridge earns credit
-      only from rho_perp (the effective-LR null predicts the loss gap from
-      the parallel part alone with zero geometry content).
+      (U_T-U_R)_perp) and the parallel fraction. Any orientation credit
+      comes only from rho_perp (the effective-LR confound predicts the
+      loss gap from the parallel part alone with zero geometry content);
+      the decomposition itself is descriptive.
 
-  Verdict (frozen table, no inconclusive band):
-    BRIDGE-ALIVE          |rho_perp| > threshold
-    EFFECTIVE-LR-ARTIFACT  |rho_perp| <= threshold AND |rho_raw| > threshold
-    NULL-PRIMARY           |rho_perp| <= threshold AND |rho_raw| <= threshold
+  Verdict (SUPERSEDED vocabulary -- claim-narrowing, tighten-only):
+    The #449 sec.4 frozen table (BRIDGE-ALIVE / NULL-PRIMARY /
+    EFFECTIVE-LR-ARTIFACT) is SUPERSEDED for this leg by an exact-head
+    hostile review + the frozen Q2 successor contract
+    (SHA 992463793324f75d90e0d80128efbe980a3cc7ee9171300132b59b536b468f33).
+    This leg's inputs are CPU reconstructions from bf16 pre_momentum, not
+    the actual decisive GPU U_T/U_R delta bytes (L1's own 0.1-0.2% rel_err
+    tolerance is the receipt's evidence of that); there is no common batch
+    and no paired L(W+v_T)-L(W+v_R) at this event -- so a non-null
+    orientation cannot be called a loss bridge. Verdict vocabulary:
+
+      SIBLING_NON_NULL_ORIENTATION   p_upper < alpha (= 0.003)
+      INCONCLUSIVE                   p_upper >= alpha (failure to reject;
+                                     NEVER a null/bridge-dead claim)
+
+    where the CANONICAL test is the analytic two-sided Haar tail bound
+    p_upper = min(1, 1/(mn * rho_perp^2)) (exact Var[cos_F] = 1/mn under
+    the spectrum-preserving rotation null). The empirical N=200 ensemble
+    is DEMOTED to descriptive corroboration: N=200 cannot express
+    alpha=0.003 (minimum achievable corrected p = 1/201 = 0.004975; the
+    99.7th-percentile order statistic is under-resolved). Actual-bridge
+    verdicts await future-event capture (actual GPU delta bytes + common
+    batch + paired losses) per the successor contract. The first-order gap
+    e_T - e_R is additionally reported SIGNED (its direction is a caveat
+    the sign-insensitive |rho_perp| statistic cannot carry).
 
 Rails (binding, issue #662): worktree-first (this script and its receipts
 never touch the repo's master checkout); no --no-verify / hook-skip; a
@@ -80,8 +102,9 @@ failure.
 CLI:
   --selftest         Synthetic small-matrix run (L0 positive+negative sha
                       path, the Haar-null reduction cross-checked against
-                      the literal Q1/Q2 construction, and all three
-                      verdicts reproduced from planted rho). Exits nonzero
+                      the literal Q1/Q2 construction, and both verdict
+                      labels -- plus the parallel-absorbed descriptive
+                      shape -- reproduced from planted rho). Exits nonzero
                       on any check failure. Prints Q2_RHO_LEG_SELFTEST_PASS
                       on success. No real cache touched.
   (no flags)          Real run against receipts/.rung2-event-cache/
@@ -124,7 +147,16 @@ MUON_MOMENTUM = 0.95
 NS5_STEPS = 5
 NS5_COEFFS_A_B_C = (3.4445, -4.7750, 2.0315)  # pinned; must equal _muon_step_in_copy's own constants (asserted at import time below)
 N_NULL_DRAWS_DEFAULT = 200
-NULL_PERCENTILE = 99.7
+NULL_PERCENTILE = 99.7  # DESCRIPTIVE-ONLY after the merge-gate amendment (see ALPHA_CANONICAL)
+ALPHA_CANONICAL = 0.003  # canonical significance level; test = analytic two-sided Haar tail bound
+SUCCESSOR_CONTRACT_SHA256 = "992463793324f75d90e0d80128efbe980a3cc7ee9171300132b59b536b468f33"
+EMPIRICAL_NULL_DEMOTION_REASON = (
+    "N=200 cannot express alpha=0.003: minimum achievable corrected p = 1/(N+1) = "
+    "1/201 = 0.004975 > alpha; the 99.7th-percentile order statistic is "
+    "under-resolved at N=200. The ensemble is retained as descriptive "
+    "corroboration only; the canonical test is the analytic two-sided Haar "
+    "tail bound p_upper = min(1, 1/(mn * rho_perp^2)) with exact "
+    "Var[cos_F] = 1/mn under the spectrum-preserving rotation null.")
 ETA_MATCH_REL_TOL = 5e-3  # eta-exclusive accepted if both arms reproduce the live receipt within
                           # this relative error. Calibrated to the KNOWN precision floor of the
                           # reconstruction pipeline, not tuned for a desired outcome: pre_momentum
@@ -470,15 +502,30 @@ def decompose_parallel_orthogonal(M, U_R, U_T):
 
 
 # ---------------------------------------------------------------------------
-# verdict
+# verdict (superseded vocabulary -- see module docstring; canonical test is
+# the analytic two-sided Haar tail bound, alpha = ALPHA_CANONICAL)
 # ---------------------------------------------------------------------------
 
-def verdict_from(rho_raw: float, rho_perp: float, threshold: float) -> str:
-    if abs(rho_perp) > threshold:
-        return "BRIDGE-ALIVE"
-    if abs(rho_raw) > threshold:
-        return "EFFECTIVE-LR-ARTIFACT"
-    return "NULL-PRIMARY"
+def analytic_p_upper(rho: float, mn: int) -> float:
+    """Canonical test statistic (successor contract): two-sided tail bound
+    on |cos_F| under the spectrum-preserving Haar rotation null, from the
+    exact null variance Var[cos_F] = 1/(mn) (mean 0) via Chebyshev:
+    P(|cos| >= r) <= 1/(mn * r^2). Conservative (an upper bound on the true
+    tail probability, hence 'p_upper'); sign-insensitive by construction
+    (rho enters squared). NaN / zero rho / non-positive mn => 1.0 (never
+    rejects)."""
+    if mn <= 0 or rho != rho or rho == 0.0:
+        return 1.0
+    return min(1.0, 1.0 / (mn * rho * rho))
+
+
+def verdict_from(p_upper: float, alpha: float = ALPHA_CANONICAL) -> str:
+    """SIBLING_NON_NULL_ORIENTATION iff the canonical analytic bound
+    rejects at alpha (strict <); otherwise INCONCLUSIVE -- a failure to
+    reject, NEVER a null/bridge-dead claim. No loss-bridge verdict is
+    mintable from this leg (CPU-reconstructed inputs, no common batch, no
+    paired losses -- see module docstring / receipt claim_scope)."""
+    return "SIBLING_NON_NULL_ORIENTATION" if p_upper < alpha else "INCONCLUSIVE"
 
 
 # ---------------------------------------------------------------------------
@@ -555,7 +602,9 @@ def run_real(args) -> Path:
     M_parallel, M_perp, parallel_fraction, D_hat = decompose_parallel_orthogonal(M, U_R, U_T)
     rho_perp = frobenius_cos(grad_post_gate, M_perp)
 
-    verdict = verdict_from(rho_raw, rho_perp, threshold)
+    # Canonical verdict: analytic two-sided Haar tail bound on rho_perp.
+    p_upper = analytic_p_upper(rho_perp, mn)
+    verdict = verdict_from(p_upper)
 
     receipt = {
         "ticket": "Q2-RHO-LEG", "ts": _timestamp_iso(),
@@ -574,33 +623,90 @@ def run_real(args) -> Path:
             "integrity_check": integrity_check,
         },
         "L1_dimensional_audit": {"ts": l1_ts, **eta},
-        "L2_empirical_null": {
-            "phase_a_threshold_ts": phase_a_ts,
-            "phase_a_done_ts": phase_a_done_ts,
-            "phase_b_unblind_ts": phase_b_ts,
-            "phase_ordering_proven": bool(phase_a_ts <= phase_a_done_ts <= phase_b_ts),
-            "n_draws": args.n_null, "seed": args.null_seed,
-            "percentile": NULL_PERCENTILE,
-            "threshold_abs_cos": threshold,
-            "null_draws_dispersion": {
-                "min": min(draws), "max": max(draws),
-                "mean": sum(draws) / len(draws),
+        "L2_null": {
+            "canonical_analytic": {
+                "test": "two-sided Haar tail bound: p_upper = min(1, 1/(mn * rho_perp^2)); "
+                        "exact Var[cos_F] = 1/mn (mean 0) under the spectrum-preserving "
+                        "rotation null; Chebyshev upper bound, conservative",
+                "alpha": ALPHA_CANONICAL,
+                "mn": mn,
+                "rho_perp": rho_perp,
+                "p_upper": p_upper,
+                "reject_null": bool(p_upper < ALPHA_CANONICAL),
+                "authority": "frozen Q2 successor contract (sha256 "
+                             f"{SUCCESSOR_CONTRACT_SHA256}) + exact-head hostile review; "
+                             "#449 prereg sec.4 as amended, tighten-only",
             },
-            "M_singular_values_top5": [float(x) for x in S_M[:5].tolist()],
-            "M_frobenius_norm": float(torch.linalg.norm(S_M)),
+            "empirical_descriptive": {
+                "status": "DESCRIPTIVE-ONLY",
+                "demotion_reason": EMPIRICAL_NULL_DEMOTION_REASON,
+                "phase_a_threshold_ts": phase_a_ts,
+                "phase_a_done_ts": phase_a_done_ts,
+                "phase_b_unblind_ts": phase_b_ts,
+                "phase_ordering_proven": bool(phase_a_ts <= phase_a_done_ts <= phase_b_ts),
+                "n_draws": args.n_null, "seed": args.null_seed,
+                "percentile": NULL_PERCENTILE,
+                "threshold_abs_cos": threshold,
+                "null_draws_dispersion": {
+                    "min": min(draws), "max": max(draws),
+                    "mean": sum(draws) / len(draws),
+                },
+                "M_singular_values_top5": [float(x) for x in S_M[:5].tolist()],
+                "M_frobenius_norm": float(torch.linalg.norm(S_M)),
+                "null_construction": "exact Stiefel/Haar reduction (see sample_rotated_candidate "
+                                     "docstring), never a literal m x m Q1 (infeasible at m={}))".format(m),
+            },
             "rho_raw": rho_raw,
-            "null_construction": "exact Stiefel/Haar reduction (see sample_rotated_candidate "
-                                 "docstring), never a literal m x m Q1 (infeasible at m={}))".format(m),
         },
         "L3_scale_rotation_decomposition": {
+            "status": "DESCRIPTIVE-ONLY (raw decomposition preserved; no verdict authority)",
             "common_direction": "D = normalize((U_R + U_T) / 2)",
             "parallel_fraction": parallel_fraction,
             "rho_perp": rho_perp,
         },
+        "signed_first_order_gap": {
+            "e_T_minus_e_R": e_diff_direct,
+            "sign_convention": "U_arm is the ACTUAL parameter delta (build_arm_update returns "
+                               "-lr*scale*NS5(...) measured from zero), so the first-order "
+                               "loss change along an arm is <G_post, U_arm>_F with s=1 (the "
+                               "lr is already inside U). POSITIVE e_T - e_R means the "
+                               "TRANSPLANT arm's first-order integrand is less negative: "
+                               "TRANSPLANT predicts HIGHER event-local train loss than RESET "
+                               "at first order.",
+            "caveat": "the |rho_perp| orientation statistic is sign-insensitive; any "
+                      "directional bridge claim must carry this signed gap explicitly -- "
+                      "its direction can contradict a naively assumed one. Reported as a "
+                      "caveat/descriptive quantity, not independent evidence (the prereg "
+                      "struck e_T - e_R from the evidence ledger as a linear function of "
+                      "the L2 quantities; the merge-gate amendment binds reporting it "
+                      "SIGNED because the sign qualifies the orientation claim).",
+        },
+        "claim_scope": {
+            "verdict_vocabulary": ["SIBLING_NON_NULL_ORIENTATION", "INCONCLUSIVE",
+                                    "FAILED-ENGAGEMENT"],
+            "superseded_vocabulary": "BRIDGE-ALIVE / NULL-PRIMARY / EFFECTIVE-LR-ARTIFACT "
+                                     "(#449 sec.4 frozen table) -- removed by tighten-only "
+                                     "claim-narrowing supersession; this leg cannot mint a "
+                                     "loss-bridge verdict.",
+            "authority": "exact-head hostile review + frozen Q2 successor contract (sha256 "
+                         f"{SUCCESSOR_CONTRACT_SHA256})",
+            "rationale": [
+                "the cached tensors are CPU reconstructions from bf16 pre_momentum, NOT the "
+                "actual decisive GPU U_T/U_R delta bytes (this receipt's own L1 audit "
+                "tolerates 0.1-0.2% reconstruction mismatch)",
+                "no common batch and no paired L(W+v_T) - L(W+v_R) measurement exists at "
+                "this event",
+                "a non-null orientation of G_post against the reconstructed sibling "
+                "difference therefore cannot be called a loss bridge",
+                "actual-bridge verdicts await future-event capture (actual GPU delta bytes "
+                "+ common batch + paired losses) per the successor contract",
+            ],
+        },
         "verdict_table": {
-            "BRIDGE-ALIVE": "|rho_perp| > threshold",
-            "EFFECTIVE-LR-ARTIFACT": "|rho_perp| <= threshold and |rho_raw| > threshold",
-            "NULL-PRIMARY": "|rho_perp| <= threshold and |rho_raw| <= threshold",
+            "SIBLING_NON_NULL_ORIENTATION": "p_upper < alpha (0.003), where p_upper = "
+                                            "min(1, 1/(mn * rho_perp^2))",
+            "INCONCLUSIVE": "p_upper >= alpha -- failure to reject the Haar null; NEVER a "
+                            "null/bridge-dead claim",
         },
         "api_spend_usd": 0, "paid_api_surface_used": False, "invalid_tokens_present": [],
         "verdict": verdict,
@@ -608,8 +714,8 @@ def run_real(args) -> Path:
     receipt_dir.mkdir(parents=True, exist_ok=True)
     path = receipt_dir / f"q2-rho-leg-{_ts()}.json"
     checked_write(str(path), receipt)
-    print(f"Q2_RHO_LEG_DONE verdict={verdict} rho_raw={rho_raw:.6f} rho_perp={rho_perp:.6f} "
-          f"threshold={threshold:.6f} receipt={path}", flush=True)
+    print(f"Q2_RHO_LEG_DONE verdict={verdict} p_upper={p_upper:.6e} rho_raw={rho_raw:.6f} "
+          f"rho_perp={rho_perp:.6f} e_T_minus_e_R={e_diff_direct:+.7f} receipt={path}", flush=True)
     return path
 
 
@@ -739,14 +845,23 @@ def _planted_scenario(mn: int, c0: float, c1: float, c2: float, alpha: float, be
 
 
 def selftest_verdicts() -> None:
-    """Three scenarios, each with an m x n reshape (m=20,n=6 so downstream
-    reshape-dependent code paths like SVD/decomposition are exercised at a
-    real 2D shape, not a bare vector), planted so rho_raw / rho_perp sit
-    comfortably on either side of the scenario's own empirically-measured
-    threshold (measured live, not hand-derived) -- and confirms all three
-    frozen verdicts reproduce."""
+    """Three scenarios at m=64, n=16 (mn=1024 -- large enough that the
+    canonical analytic bound p_upper = 1/(mn*rho^2) CAN cross alpha=0.003
+    at a plantable rho < 1; at tiny mn the bound never rejects, correctly),
+    confirming the superseded-vocabulary verdict logic:
+
+      - a strong orthogonal alignment mints SIBLING_NON_NULL_ORIENTATION;
+      - a near-null alignment stays INCONCLUSIVE;
+      - the parallel-absorbed shape (formerly the effective-LR-artifact
+        class, now descriptive-only) stays INCONCLUSIVE even though
+        rho_raw is large -- its descriptive markers (rho_raw > 0.9,
+        parallel_fraction > 0.9, |rho_perp| ~ 0) are asserted so the
+        decomposition's discriminating power is still exercised.
+
+    The empirical null runs alongside at each scenario (descriptive-only,
+    machinery-coverage) but the verdict assertion binds to the analytic p."""
     import torch
-    m, n = 20, 6
+    m, n = 64, 16
     mn = m * n
 
     # Closed-form design (derived, not guessed -- see comments): with
@@ -755,25 +870,33 @@ def selftest_verdicts() -> None:
     # <b0,M_perp> = beta*(c0*beta - c1*alpha). Setting alpha=0 (D=b1,
     # purely orthogonal to G_post) collapses this to c0*beta=c0, i.e.
     # rho_perp tracks rho_raw directly through c0 alone -- clean small-c0
-    # (NULL-PRIMARY) / large-c0 (BRIDGE-ALIVE) scenarios. Setting
+    # (INCONCLUSIVE) / large-c0 (mint) scenarios. Setting
     # c1 = c0*beta/alpha (alpha != 0) makes the numerator EXACTLY zero
     # regardless of c2 -- rho_perp collapses to ~0 while rho_raw stays
-    # controlled by c0/c2 alone: EFFECTIVE-LR-ARTIFACT (D absorbs all of
-    # M's real G_post alignment; nothing new survives orthogonal to it).
-    alpha_artifact = 0.995
-    beta_artifact = (1 - alpha_artifact ** 2) ** 0.5
-    c0_artifact = 2.0
-    c1_artifact = c0_artifact * beta_artifact / alpha_artifact  # exact rho_perp-nulling choice
+    # controlled by c0/c2 alone: the parallel-absorbed shape (D absorbs
+    # all of M's real G_post alignment; nothing survives orthogonal to it).
+    alpha_absorbed = 0.995
+    beta_absorbed = (1 - alpha_absorbed ** 2) ** 0.5
+    c0_absorbed = 2.0
+    c1_absorbed = c0_absorbed * beta_absorbed / alpha_absorbed  # exact rho_perp-nulling choice
 
     scenarios = {
-        "BRIDGE-ALIVE": dict(c0=3.0, c1=0.3, c2=0.1, alpha=0.0, beta=1.0, seed=11),
-        "NULL-PRIMARY": dict(c0=0.01, c1=1.0, c2=1.0, alpha=0.0, beta=1.0, seed=22),
-        "EFFECTIVE-LR-ARTIFACT": dict(c0=c0_artifact, c1=c1_artifact, c2=0.1,
-                                      alpha=alpha_artifact, beta=beta_artifact, seed=33),
+        # rho_perp ~ 3/sqrt(9.01) ~ 0.9994 -> p ~ 1/(1024*0.9989) ~ 9.8e-4 < 0.003 -> mint
+        "mint": dict(c0=3.0, c1=0.3, c2=0.1, alpha=0.0, beta=1.0, seed=11,
+                     expect="SIBLING_NON_NULL_ORIENTATION"),
+        # rho_perp ~ 0.01 -> p = min(1, 1/(1024*1e-4)) = 1 -> INCONCLUSIVE
+        "near-null": dict(c0=0.01, c1=1.0, c2=1.0, alpha=0.0, beta=1.0, seed=22,
+                          expect="INCONCLUSIVE"),
+        # rho_perp exactly ~0 by construction, rho_raw ~ 0.99 -> INCONCLUSIVE
+        # (formerly EFFECTIVE-LR-ARTIFACT; verdict authority removed)
+        "parallel-absorbed": dict(c0=c0_absorbed, c1=c1_absorbed, c2=0.1,
+                                  alpha=alpha_absorbed, beta=beta_absorbed, seed=33,
+                                  expect="INCONCLUSIVE"),
     }
 
-    for expected_verdict, params in scenarios.items():
+    for name, params in scenarios.items():
         seed = params.pop("seed")
+        expected_verdict = params.pop("expect")
         G_post_flat, M_flat, U_R_flat, U_T_flat = _planted_scenario(mn, seed=seed, **params)
         G_post = G_post_flat.reshape(m, n)
         M = M_flat.reshape(m, n)
@@ -781,16 +904,24 @@ def selftest_verdicts() -> None:
         U_T = U_T_flat.reshape(m, n)
 
         rho_raw = frobenius_cos(G_post, M)
-        draws, threshold, _S = empirical_rotation_null(G_post, M, n_draws=300, seed=seed + 100000)
+        # descriptive-only empirical ensemble, machinery coverage
+        draws, threshold, _S = empirical_rotation_null(G_post, M, n_draws=200, seed=seed + 100000)
         M_parallel, M_perp, parallel_fraction, D_hat = decompose_parallel_orthogonal(M, U_R, U_T)
         rho_perp = frobenius_cos(G_post, M_perp)
-        got = verdict_from(rho_raw, rho_perp, threshold)
+        p_upper = analytic_p_upper(rho_perp, mn)
+        got = verdict_from(p_upper)
         assert got == expected_verdict, (
-            f"scenario {expected_verdict}: got {got} "
-            f"(rho_raw={rho_raw:.4f} rho_perp={rho_perp:.4f} threshold={threshold:.4f} "
+            f"scenario {name}: got {got}, expected {expected_verdict} "
+            f"(rho_raw={rho_raw:.4f} rho_perp={rho_perp:.4f} p_upper={p_upper:.6f} "
             f"parallel_fraction={parallel_fraction:.4f})")
-        print(f"selftest_verdicts: {expected_verdict} PASS rho_raw={rho_raw:.4f} "
-              f"rho_perp={rho_perp:.4f} threshold={threshold:.4f}", flush=True)
+        if name == "parallel-absorbed":
+            assert abs(rho_raw) > 0.9, f"absorbed scenario lost its raw alignment (rho_raw={rho_raw:.4f})"
+            assert parallel_fraction > 0.9, (
+                f"absorbed scenario's parallel_fraction={parallel_fraction:.4f} not dominant")
+            assert abs(rho_perp) < 1e-3, f"absorbed scenario's rho_perp={rho_perp:.6f} not nulled"
+        print(f"selftest_verdicts: {name} -> {got} PASS rho_raw={rho_raw:.4f} "
+              f"rho_perp={rho_perp:.4f} p_upper={p_upper:.6f} "
+              f"empirical_threshold(descriptive)={threshold:.4f}", flush=True)
 
 
 def selftest_arm_reconstruction() -> None:
