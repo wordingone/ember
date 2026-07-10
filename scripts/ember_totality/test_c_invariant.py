@@ -55,12 +55,34 @@ INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e
 # import chain for a status probe).
 GENESIS_TS = "2026-07-06T14:13:23-07:00"
 
+# [ERRATA cure, gh issue #612, FROZEN SPEC] Append-only historical-defect annex:
+# docs/receipt-errata.jsonl. One row per pre-hardening post-genesis receipt that
+# lacks (or mismatches) the invariant_sha256 stamp -- discovered by the #608
+# hardening scan, recorded rather than retro-stamped (refs #482, receipts are
+# append-only; landed receipt bytes are never touched).
+ERRATA_FILE = ROOT / "docs" / "receipt-errata.jsonl"
+
+# [ERRATA cure, gh issue #612 point 3, FROZEN SPEC] Hard cutoff: the #608
+# hardening merge's own committer-date timestamp (sha 411d35e5, "fix:
+# probe-harden C-GROW/C-INV vocabulary gaps + totality ts self-stamp (#608)").
+# Errata coverage is CLOSED to any receipt whose OWN `ts` is AFTER this
+# constant -- the annex is a historical record, never an ongoing bypass.
+ERRATA_CUTOFF_TS = "2026-07-10T00:08:35Z"
+
 # Invalid tokens for this condition
 INVALID_TOKENS = [
     "invariant_breach",  # INVARIANT.md missing or hash wrong
     "invariant_unstamped_receipt",  # post-genesis receipt lacks stamp
     "invariant_errata_chain_broken",  # errata sha chain invalid
 ]
+
+# [ERRATA cure, gh issue #612] Coverage counts from the most recent
+# check_stamped_receipts() run, stashed here so write_receipt() can disclose
+# stamped / errata_covered / uncovered counts on the C-INV rerun receipt
+# without changing the uniform (bool, str) contract every check_* function in
+# `main()`'s checks list shares. Set only by check_stamped_receipts(); read
+# only by write_receipt(). None until check_stamped_receipts() has run once.
+_LAST_STAMP_COUNTS: Optional[Dict[str, Any]] = None
 
 
 def read_invariant_bytes() -> Optional[bytes]:
@@ -137,22 +159,81 @@ def _parse_receipt_ts(ts: Any) -> Optional[float]:
         return None
 
 
+def _load_errata_coverage(cutoff_epoch: float) -> tuple[Dict[str, Dict[str, Any]], list[str]]:
+    """[ERRATA cure, gh issue #612] Load docs/receipt-errata.jsonl (if it
+    exists) into a {receipt_path: row} map. A row only counts as coverage if
+    it parses as a JSON object, carries a non-empty `receipt_path`, and its
+    own `discovered_ts` parses and predates-or-equals ERRATA_CUTOFF_TS (issue
+    #612 point 2/3: discovery via the #608 hardening scan is itself bounded
+    by the same cutoff that governs which receipts are eligible at all).
+    Malformed or out-of-bound rows are never silently trusted as coverage --
+    they are skipped and returned in `skipped` for disclosure, same posture
+    as check_errata_structure's honest-absent/honest-empty branches above.
+
+    Returns:
+        (coverage: {receipt_path: row}, skipped: [description, ...])
+    """
+    coverage: Dict[str, Dict[str, Any]] = {}
+    skipped: list[str] = []
+    if not ERRATA_FILE.exists():
+        return coverage, skipped
+
+    with ERRATA_FILE.open("r", encoding="utf-8", errors="ignore") as fh:
+        for lineno, line in enumerate(fh, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except Exception as exc:
+                skipped.append(f"line {lineno}: malformed JSON ({exc})")
+                continue
+            if not isinstance(row, dict):
+                skipped.append(f"line {lineno}: not a JSON object")
+                continue
+            receipt_path = row.get("receipt_path")
+            if not isinstance(receipt_path, str) or not receipt_path:
+                skipped.append(f"line {lineno}: missing/empty receipt_path")
+                continue
+            discovered_epoch = _parse_receipt_ts(row.get("discovered_ts"))
+            if discovered_epoch is None:
+                skipped.append(f"line {lineno} ({receipt_path}): unparseable discovered_ts")
+                continue
+            if discovered_epoch > cutoff_epoch:
+                skipped.append(
+                    f"line {lineno} ({receipt_path}): discovered_ts is after "
+                    "the hardening cutoff -- not admissible coverage"
+                )
+                continue
+            coverage[receipt_path] = row
+
+    return coverage, skipped
+
+
 def check_stamped_receipts() -> tuple[bool, str]:
     """Check that every POST-GENESIS receipt under receipts/ carries the
-    correct invariant_sha256 stamp.
+    correct invariant_sha256 stamp -- OR is covered by the docs/receipt-
+    errata.jsonl annex, bounded by ERRATA_CUTOFF_TS.
 
     [PROBE-HARDEN cure, coordinator code-read audit] This replaces the prior
     unconditional-True genesis stub ("this clause becomes active in later
     board runs" -- it never did; board runs kept passing genesis unmodified).
     Execution-binding per test_c11.py's pattern: every JSON file actually on
     disk under receipts/ (recursive) is opened and its bytes parsed; nothing
-    is asserted from a hardcoded verdict. A receipt whose `ts` resolves to at
-    or after GENESIS_TS and that lacks invariant_sha256, or carries the wrong
-    value, is a genuine invariant_unstamped_receipt violation -> RED. This
-    mirrors scripts/receipt_check.py's R4 rule (same GENESIS_TS/INVARIANT_SHA256
-    constants) but is re-implemented here directly (not imported) so the
-    status probe stays self-contained, matching test_c11.py's no-cross-import
-    convention.
+    is asserted from a hardcoded verdict. This mirrors scripts/receipt_check.py's
+    R4 rule (same GENESIS_TS/INVARIANT_SHA256 constants) but is re-implemented
+    here directly (not imported) so the status probe stays self-contained,
+    matching test_c11.py's no-cross-import convention.
+
+    [ERRATA cure, gh issue #612, FROZEN SPEC point 2] A post-genesis receipt
+    now passes iff (stamped AND stamp matches) OR (covered by an admissible
+    errata row -- see _load_errata_coverage). [FROZEN SPEC point 3] Hard
+    cutoff: a receipt whose own `ts` is AFTER ERRATA_CUTOFF_TS can NEVER be
+    covered by errata -- it must carry a real stamp, or it is a genuine
+    violation regardless of any errata row naming it. [FROZEN SPEC point 5]
+    Wince guard: this is exactly what makes a future post-cutoff unstamped
+    receipt RED C-INV regardless of errata coverage elsewhere -- the errata
+    annex is a historical annex, never an ongoing bypass.
 
     Returns:
         (success: bool, reason: str)
@@ -163,10 +244,15 @@ def check_stamped_receipts() -> tuple[bool, str]:
         return True, "receipts/ does not exist yet -- nothing to scan"
 
     genesis_epoch = _parse_receipt_ts(GENESIS_TS)
+    cutoff_epoch = _parse_receipt_ts(ERRATA_CUTOFF_TS)
+    errata_coverage, errata_skipped = _load_errata_coverage(cutoff_epoch)
 
     scanned = 0
     post_genesis = 0
-    violations: list[str] = []
+    stamped = 0
+    errata_covered = 0
+    uncovered_pre_cutoff: list[str] = []
+    uncovered_post_cutoff: list[str] = []
     for path in sorted(RECEIPTS.rglob("*.json")):
         if not path.is_file():
             continue
@@ -184,23 +270,47 @@ def check_stamped_receipts() -> tuple[bool, str]:
         if receipt_epoch is None or receipt_epoch < genesis_epoch:
             continue
         post_genesis += 1
+        rel_path = path.relative_to(ROOT).as_posix()
         stamp_val = d.get("invariant_sha256")
-        if stamp_val != INVARIANT_SHA256:
-            violations.append(
-                f"{path.relative_to(ROOT).as_posix()} (ts={d.get('ts')!r}, "
-                f"invariant_sha256={stamp_val!r})"
-            )
+        if stamp_val == INVARIANT_SHA256:
+            stamped += 1
+            continue
+        offender = f"{rel_path} (ts={d.get('ts')!r}, invariant_sha256={stamp_val!r})"
+        if receipt_epoch > cutoff_epoch:
+            # Post-cutoff: errata coverage is CLOSED, this must be a real
+            # stamp regardless of any errata row -- genuine violation.
+            uncovered_post_cutoff.append(offender)
+            continue
+        if rel_path in errata_coverage:
+            errata_covered += 1
+            continue
+        uncovered_pre_cutoff.append(offender)
+
+    violations = uncovered_post_cutoff + uncovered_pre_cutoff
+    global _LAST_STAMP_COUNTS
+    _LAST_STAMP_COUNTS = {
+        "post_genesis_scanned": post_genesis,
+        "stamped": stamped,
+        "errata_covered": errata_covered,
+        "uncovered_pre_cutoff": len(uncovered_pre_cutoff),
+        "uncovered_post_cutoff": len(uncovered_post_cutoff),
+        "errata_rows_skipped": len(errata_skipped),
+    }
 
     if violations:
         return False, (
             f"{len(violations)}/{post_genesis} post-genesis receipt(s) missing/"
-            f"mismatched invariant_sha256 stamp (of {scanned} receipts scanned "
-            f"under receipts/); first offenders: {violations[:3]}"
+            f"mismatched invariant_sha256 stamp and not errata-covered (of "
+            f"{scanned} receipts scanned under receipts/; stamped={stamped}, "
+            f"errata_covered={errata_covered}, uncovered_pre_cutoff="
+            f"{len(uncovered_pre_cutoff)}, uncovered_post_cutoff="
+            f"{len(uncovered_post_cutoff)}); first offenders: {violations[:3]}"
         )
 
     return True, (
         f"{post_genesis} post-genesis receipt(s) checked (of {scanned} receipts "
-        f"scanned under receipts/), all correctly stamped invariant_sha256"
+        f"scanned under receipts/): stamped={stamped}, errata_covered="
+        f"{errata_covered}, all pass (0 uncovered)"
     )
 
 
@@ -304,6 +414,14 @@ def write_receipt(status: str, reason: str, breach: bool = False) -> str:
         "invariant_sha256": INVARIANT_SHA256,
         "invariant_file_hash": compute_hash(read_invariant_bytes()) if read_invariant_bytes() else None,
     }
+
+    # [ERRATA cure, gh issue #612 point 4, FROZEN SPEC] Disclose stamp/errata
+    # coverage counts on every receipt this probe writes, whenever
+    # check_stamped_receipts() has run (it always has, by the time main()
+    # calls write_receipt -- see the `checks` list order). Coverage is
+    # visible, never silent.
+    if _LAST_STAMP_COUNTS is not None:
+        receipt["stamp_coverage"] = dict(_LAST_STAMP_COUNTS)
 
     # Add breach marker if this is a missing-file / wrong-hash situation
     if breach:
