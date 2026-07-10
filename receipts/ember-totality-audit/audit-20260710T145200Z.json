@@ -1,0 +1,61 @@
+{
+ "ts": "2026-07-10T14:52:00Z",
+ "auditor": "auditCEFF + auditCGROW (2 sonnet adversaries, rotation legs C-EFF/C-GROW per chunked-rotation cursor) + coordinator spot-verification by direct grep of the load-bearing lines this window",
+ "board_ref": "ember-totality-20260710T135059Z.json",
+ "prior_audit_ref": "state ember-audit-latest.json entry 2026-07-10T00:18:00Z - DISCLOSURE: its named receipt file audit-20260710T001800Z.json is ABSENT from receipts/ember-totality-audit/ (crash window; the state entry is the only record). This receipt does not depend on it.",
+ "rotation": {
+  "this_batch": [
+   "C-EFF",
+   "C-GROW"
+  ],
+  "remaining_queue": [
+   "C-BASE",
+   "C-MANIFEST",
+   "C-AUTO",
+   "C-DISC",
+   "C-ENF",
+   "C-PORT",
+   "C0",
+   "C12",
+   "C15",
+   "C2",
+   "C3",
+   "C6",
+   "C9"
+  ]
+ },
+ "verified_findings": [
+  {
+   "condition": "C-EFF",
+   "severity": "MAJOR",
+   "class": "probe_no_execution_binding",
+   "probe_faithful": "PARTIAL",
+   "receipt_genuine": true,
+   "finding": "test_c_eff.py checks JSON-internal arithmetic self-consistency + required-field vocabulary but has ZERO execution-binding: never checks harness_sha against anything, never inspects dry_run/no_gpu/confirmation_run.synthetic flags (present in schema, uninspected), never verifies import_provenance.source_commit_sha exists in git, no governor plausibility. Auditor demonstrated a ~15-line hand-authored cheap-pass (verdict PRICED_SCALEOUT_RESIDUAL sidesteps the SHATTER magnitude gate, which only fires on verdict==SHATTER).",
+   "spot_verified": "coordinator grep this window: test_c_eff.py contains 0 occurrences of dry_run/no_gpu/synthetic/harness_sha/source_commit_sha verification",
+   "genuineness": "seated receipt ceff-RESOLVED-20260703T124623Z PASSED all auditor forensics: source commit 9d79cb86 exists with matching subject + diff touching the receipt path; field values match the LIVE torch.cuda path of the generator (not the dry stub); FLOPs cross-check 6*368354304*1146880=2.53495e15 matches to 4 sig figs; speedup/effective-days recompute within tolerance; c04 axes complete vs decision table; governor totals plausible for this host",
+   "disposition": "C-EFF GREEN STANDS (receipt genuine); probe-harden REQUIRED (execution-binding per 4-point fix)",
+   "note": "NEW-CLASS vs the June DRAFT-acceptance finding (that hole is closed: RESOLVED-only glob, REPUDIATED rejected, invalid-token blacklist, SHATTER gate, algebra). Hardening closed obviously-fake; never added execution-binding."
+  },
+  {
+   "condition": "C-GROW",
+   "severity": "MAJOR",
+   "class": "probe_unfaithful_self_declaration_blind (THIRD instance of the class in this file)",
+   "probe_faithful": false,
+   "receipt_genuine": true,
+   "finding": "test_c_grow.py:302 CHK key 'measured_on_train_daemon(not_analytical)' is implemented by vocabulary regex MEASURED_MARKER (L108-111) searched over raw text (L295) - it never reads the receipt's own measured_on_train_daemon JSON field. The GREEN-causing receipt self-declares measured_on_train_daemon:false + device:cpu (L158/160) and passes anyway. Same class as the two prior cures in this same file (flop_saving_self_declares_unmeasured, smoke_markers).",
+   "spot_verified": "coordinator grep this window: L295 measured_ok=bool(MEASURED_MARKER.search(raw)); L302 key binding; receipt L158 device:cpu, L160 measured_on_train_daemon:false - all byte-confirmed",
+   "genuineness": "receipt cbase-grow-measured-flops-20260710T005231Z PASSED all auditor forensics: 3 checkpoint sha256 matches (step-610 ff4096, rung0 step-730 ff8192, rung1 step-730 ff16384); both lineage receipt sha256 match; FLOP arithmetic reproduced to the EXACT integer (36825308097150976 grow-path, 89519402858315776 from-scratch, ratio 2.4309); function-preservation logit diff = exactly 20x float32 eps (authentic residual); git_sha d10de3fe real",
+   "coordinator_ruling": "R's 'measured on the train daemon (not analytical)' - the clause's purpose is anti-ANALYTICAL. FLOP counts are device-invariant (the multiply-add count of a forward/backward pass does not depend on the executing device), and production-binding enters through hash-verified checkpoints + training-history step counts, both of which this receipt carries and the auditor independently verified. RULING: instrumented-execution measurement (FlopCounterMode) against sha-verified production checkpoints with training-history step counts SATISFIES R. The literal train-daemon phrasing over-promises relative to what the condition needs. Disposition: C-GROW GREEN STANDS. The re-spec is disclosed here and lands with the probe fix: CHK key + R-text reworded to 'measured_by_instrumented_execution(not_analytical)' with sha-binding EXPLICIT, and the probe verifies the binding fields instead of vocabulary.",
+   "disposition": "C-GROW GREEN STANDS (receipt genuine + satisfies ruled bar); probe-harden REQUIRED (field-read + binding verification + disclosed rewording)"
+  }
+ ],
+ "cross_cutting": "Both findings are the same family: probes gate on text vocabulary / internal consistency instead of reading self-declaration fields and binding evidence to execution. The test_c11.py execution-binding template is the cure shape. Third-occurrence rule fires for the self-declaration-blind class in test_c_grow.py - the fix must sweep ALL CHK keys in that file for field-read equivalents, not just this one.",
+ "regressions": [],
+ "actions": [
+  "probe-harden issue filed this tick (single frozen spec covering both files + the ruling rewording)",
+  "builder dispatch queued for next tick slot (sonnet budget frees ~14:57Z)",
+  "no board reverts - both GREENs stand on genuine receipts"
+ ],
+ "next_audit_focus": "16:47Z tick pops next 2-3 from rotation queue (C-BASE, C-MANIFEST, C-AUTO); verify the probe-harden PR landed and re-run both probes against their seated receipts post-fix"
+}
