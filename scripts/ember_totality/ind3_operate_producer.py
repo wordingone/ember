@@ -59,6 +59,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent            # scripts/ember_totality
 REPO_ROOT = HERE.parent.parent                     # ember worktree root
+sys.path.insert(0, str(REPO_ROOT))
+from scripts.lib.invariant import stamp as _stamp_invariant, verify as _verify_invariant  # noqa: E402 -- gh #625 point 1
+
+# receipt_check.py's R2 rule requires any *sha256*-named field to carry a
+# disclosed sha_convention; matches exactly what scripts/lib/invariant.py's
+# stamp() does (Path.read_bytes() + sha256, no normalization).
+INVARIANT_SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 WORKER = REPO_ROOT / "scratch" / "ind3-operate-worker" / "telemetry-watch-worker.ts"
 RUNTIME_DIR = REPO_ROOT / "scratch" / "ind3-operate-runtime"
 RECEIPTS_OUT_DIR = REPO_ROOT / "receipts" / "ind3-operate"
@@ -255,20 +262,32 @@ def build_interrupted_resume_receipt() -> dict:
 
 
 def main() -> int:
+    # gh #625 point 1, fail-closed: verify BEFORE any process is launched or
+    # any receipt is written -- verify() raises (FileNotFoundError/ValueError)
+    # if INVARIANT.md is missing or doesn't hash correctly, which must abort
+    # this whole producer, never emit a partial unstamped set.
+    _verify_invariant(str(REPO_ROOT))
+
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     RECEIPTS_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     launch_receipt, proc_a, pid_a, channel_a, heartbeat_a, stopmarker_a = build_launch_receipt()
+    _stamp_invariant(launch_receipt, repo_root=str(REPO_ROOT))
+    launch_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
     launch_out = RECEIPTS_OUT_DIR / f"ind3-launch-{launch_receipt['ts']}.json"
     launch_out.write_text(json.dumps(launch_receipt, indent=2), encoding="utf-8")
     print(f"launch: wrote {_relpath(launch_out)} (pid={launch_receipt['pid']}, verified_alive={launch_receipt['verified_alive']})")
 
     teardown_receipt = build_teardown_receipt(proc_a, pid_a, heartbeat_a, stopmarker_a)
+    _stamp_invariant(teardown_receipt, repo_root=str(REPO_ROOT))
+    teardown_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
     teardown_out = RECEIPTS_OUT_DIR / f"ind3-teardown-{teardown_receipt['ts']}.json"
     teardown_out.write_text(json.dumps(teardown_receipt, indent=2), encoding="utf-8")
     print(f"teardown: wrote {_relpath(teardown_out)} (survivors={teardown_receipt['post_stop_process_table']['survivors']})")
 
     interrupted_receipt = build_interrupted_resume_receipt()
+    _stamp_invariant(interrupted_receipt, repo_root=str(REPO_ROOT))
+    interrupted_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
     interrupted_out = RECEIPTS_OUT_DIR / f"ind3-interrupted-resume-{interrupted_receipt['ts']}.json"
     interrupted_out.write_text(json.dumps(interrupted_receipt, indent=2), encoding="utf-8")
     print(

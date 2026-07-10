@@ -27,6 +27,14 @@ RECEIPTS = ROOT / "receipts"
 SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from scripts.lib.invariant import stamp as _stamp_invariant, verify as _verify_invariant  # noqa: E402 -- gh #625 point 1
+
+# receipt_check.py's R2 rule requires any *sha256*-named field to carry a
+# disclosed sha_convention; matches exactly what scripts/lib/invariant.py's
+# stamp() does (Path.read_bytes() + sha256, no normalization).
+INVARIANT_SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 
 REQUIRED_FIELDS = ("signal_per_gpu_hour", "equal_wallclock_band", "exceeds_band")
 
@@ -133,6 +141,10 @@ def run_selftest() -> bool:
     passed = len(failures) == 0
     cases_checked = 3
 
+    # gh #625 point 1, fail-closed: verify BEFORE the receipt is written --
+    # an unresolvable invariant means this selftest must not write anything.
+    _verify_invariant(str(ROOT))
+
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     RECEIPTS.mkdir(exist_ok=True)
     receipt_path = RECEIPTS / f"loop-econ-gate-selftest-{ts}.json"
@@ -154,6 +166,8 @@ def run_selftest() -> bool:
         "failures": failures,
         "pass": passed,
     }
+    _stamp_invariant(receipt, repo_root=str(ROOT))
+    receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
     write(receipt_path, receipt)
     print(f"receipt: {receipt_path}")
 
