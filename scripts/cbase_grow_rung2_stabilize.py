@@ -64,6 +64,7 @@ paid_api_surface_used=false.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import subprocess
 import sys
@@ -111,28 +112,75 @@ _ORIG_PACKED_SHARD_LOADER_INIT = ts.PackedShardLoader.__init__
 COMMIT_MARGIN_FLOOR_GB = 6.0  # team-lead ruling 2026-07-09 (v8 launch spec, v7 death cure)
 
 
+# ---- R2 (ember #627 point 1): in-process commit read ----------------------
+# The v9 audit's R2 finding: _read_commit_gb launched a powershell/Get-Counter
+# SUBPROCESS, and the governed `.grad.f32` wrapper called it before EVERY lazy
+# grad re-create -- 2.4-2.6 s per spawn x ~140 re-creates/step (#594 M1), the
+# dominant regression term. R3 (cpu_offload_adamw.zero_grad) removes the
+# per-step re-creates; R2 removes the subprocess itself so that ANY remaining
+# governed read (front-load, stage/block boundaries, or a lazy fallback that
+# should now never fire) costs microseconds and NO subprocess exists anywhere
+# in the step path.
+#
+# GlobalMemoryStatusEx is the exact in-process equivalent of the two perf
+# counters this replaces (verified equal on this host: ullTotalPageFile ==
+# `\Memory\Commit Limit`; ullTotalPageFile - ullAvailPageFile ==
+# `\Memory\Committed Bytes`). Windows-native, same platform assumption the
+# powershell call already carried (the whole commit-exhaustion failure class
+# is Windows pagefile/commit physics) -- on any non-Windows interpreter the
+# ctypes.windll attribute simply does not exist and the function returns None,
+# preserving the never-raises-on-read-failure contract unchanged.
+COUNTERS = {"governor_reads": 0}
+
+
+def get_governor_reads() -> int:
+    return int(COUNTERS.get("governor_reads", 0))
+
+
+def reset_governor_reads() -> None:
+    COUNTERS["governor_reads"] = 0
+
+
+class _MEMORYSTATUSEX(ctypes.Structure):
+    _fields_ = [
+        ("dwLength", ctypes.c_ulong),
+        ("dwMemoryLoad", ctypes.c_ulong),
+        ("ullTotalPhys", ctypes.c_ulonglong),
+        ("ullAvailPhys", ctypes.c_ulonglong),
+        ("ullTotalPageFile", ctypes.c_ulonglong),
+        ("ullAvailPageFile", ctypes.c_ulonglong),
+        ("ullTotalVirtual", ctypes.c_ulonglong),
+        ("ullAvailVirtual", ctypes.c_ulonglong),
+        ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+    ]
+
+
+_COMMIT_GB = 1024.0 ** 3  # commit counters are bytes; /2^30 == PowerShell's /1GB
+
+
 def _read_commit_gb() -> dict | None:
-    """Ground-truth Windows commit (committed + limit), ONE powershell call
-    for both counters -- same Get-Counter source _stage_marker already used
-    for its printed committed_gb, now factored out so the printed number and
-    the commit-margin governor's pass/fail decision are the SAME
-    measurement, never two independent reads that could disagree. Returns
-    None (never raises) on any read failure -- a counter read failing must
-    never itself crash the run; see _commit_margin_assert for what a failed
-    read means to the governor."""
-    import subprocess as _sp
+    """Ground-truth Windows commit (committed + limit), ONE in-process
+    GlobalMemoryStatusEx call for both counters -- same measurement source
+    _stage_marker already used for its printed committed_gb, so the printed
+    number and the commit-margin governor's pass/fail decision remain the SAME
+    measurement, never two independent reads that could disagree. NO
+    subprocess (R2 cure, ember #627 point 1). Every call increments the
+    governor_reads counter so the number of governor reads per block is
+    observable in the log (falsifiable against the prereg's prediction).
+    Returns None (never raises) on any read failure -- a counter read failing
+    must never itself crash the run; see _commit_margin_assert for what a
+    failed read means to the governor."""
+    COUNTERS["governor_reads"] += 1
     try:
-        out = _sp.run(
-            ["powershell", "-NoProfile", "-Command",
-             "$c=Get-Counter '\\Memory\\Committed Bytes'; "
-             "$l=Get-Counter '\\Memory\\Commit Limit'; "
-             "'{0},{1}' -f [math]::Round($c.CounterSamples[0].CookedValue/1GB,3),"
-             "[math]::Round($l.CounterSamples[0].CookedValue/1GB,3)"],
-            capture_output=True, text=True, timeout=5, check=True).stdout.strip()
-        committed_s, limit_s = out.split(",")
-        committed_gb, limit_gb = float(committed_s), float(limit_s)
-        return {"committed_gb": committed_gb, "limit_gb": limit_gb,
-                "free_gb": round(limit_gb - committed_gb, 3)}
+        stat = _MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+        ok = ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+        if not ok:
+            return None
+        limit_gb = round(stat.ullTotalPageFile / _COMMIT_GB, 3)
+        free_gb = round(stat.ullAvailPageFile / _COMMIT_GB, 3)
+        committed_gb = round((stat.ullTotalPageFile - stat.ullAvailPageFile) / _COMMIT_GB, 3)
+        return {"committed_gb": committed_gb, "limit_gb": limit_gb, "free_gb": free_gb}
     except Exception:
         return None
 
@@ -457,6 +505,68 @@ K3_S_PER_STEP = 160.0
 
 STEPS_PER_BLOCK_DEFAULT = 10
 N_BLOCKS_DEFAULT = 10
+
+# ---- R4 (ember #627 point 4): in-run 27-min pace gate ----------------------
+# The first governed block must complete in <=27 min or the block cleanly
+# self-aborts (checkpoint + PACE_GATE_ABORT receipt) -- abort-not-degrade, the
+# same contract as the commit-margin governor. The v8 death mode was a block
+# that never returned; _run_block only computed wall_s AFTER run_v0_segment
+# returned, so no in-run gate could ever fire. A watchdog THREAD now arms
+# before the block and, on deadline, sets a cooperative abort_event that
+# run_v0_segment checks each step -- the block checkpoints its completed steps
+# and returns, rather than the process being force-killed mid-step.
+PACE_GATE_S = 27 * 60  # 1620 s
+
+# ---- Lineage pin (ember #627 point 7): block-04 step-806 -------------------
+# The frozen resume point for this leg is block-04's checkpoint at step-806
+# (#480 comment 4929823617: banked blocks 1-4, losses
+# 12.436/12.710/12.695/12.136; seed step 766 + 4 blocks x 10 steps = 806). The
+# withdrawn prereg SILENTLY rolled the resume point back to block-3 (step 796).
+# This leg = blocks 5-10. assert_lineage_resume() below makes the pin
+# structural: a resume whose step is not exactly 806 fails closed (unless a
+# dated deviation entry is supplied), so a silent rollback can never recur.
+LINEAGE_LEG_START_BLOCK = 5
+LINEAGE_LEG_END_BLOCK = 10
+LINEAGE_RESUME_STEP = 806
+LINEAGE_RESUME_BLOCK = 4
+
+
+class LineageResumeMismatch(RuntimeError):
+    """Raised (fail-closed) when a blocks-5-10 resume does not resume from the
+    frozen block-04 step-806 checkpoint and no dated deviation is declared."""
+
+
+def assert_lineage_resume(resume_step: int, start_block: int,
+                          *, deviation: str | None = None) -> dict:
+    """ember #627 point 7 -- structural lineage pin. When the RUN loop starts
+    at the frozen leg boundary (block 5), the resume checkpoint's own manifest
+    step MUST equal LINEAGE_RESUME_STEP (806, the end of block-04). A mismatch
+    is either the silent-rollback defect the audit caught (step 796 = block-3)
+    or a genuine re-plan; the latter is allowed ONLY with an explicit dated
+    `deviation` string (recorded in the receipt), never silently. Returns a
+    provenance dict for the receipt; raises LineageResumeMismatch otherwise.
+
+    A start_block other than the frozen leg boundary (e.g. a fresh blocks-1-N
+    run, or a mid-leg operator resume) is not lineage-pinned by this function
+    -- it only guards the one frozen boundary the audit named."""
+    pinned = (start_block == LINEAGE_LEG_START_BLOCK)
+    ok = (resume_step == LINEAGE_RESUME_STEP)
+    if pinned and not ok and not deviation:
+        raise LineageResumeMismatch(
+            f"blocks-{LINEAGE_LEG_START_BLOCK}-{LINEAGE_LEG_END_BLOCK} resume must "
+            f"start from the frozen block-{LINEAGE_RESUME_BLOCK:02d} step-{LINEAGE_RESUME_STEP} "
+            f"checkpoint, got resume_step={resume_step} (step-796 == block-3, the "
+            f"withdrawn prereg's silent rollback). Supply a dated deviation entry to "
+            f"resume from a different step. Stopping fail-closed.")
+    return {
+        "lineage_pinned": pinned,
+        "expected_resume_step": LINEAGE_RESUME_STEP,
+        "expected_resume_block": LINEAGE_RESUME_BLOCK,
+        "actual_resume_step": resume_step,
+        "leg_blocks": [LINEAGE_LEG_START_BLOCK, LINEAGE_LEG_END_BLOCK],
+        "deviation": deviation,
+        "verdict": "LINEAGE_OK" if (ok or not pinned) else "LINEAGE_DEVIATION_DECLARED",
+    }
 
 
 def _ts() -> str:
@@ -1005,7 +1115,8 @@ def momentum_norm_by_group(ckpt_dir: str) -> dict:
 
 def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_start: int,
                total_steps: int, shard_dir: str, grad_accum_steps: int, block_idx: int,
-               sample_interval_s: float = 2.0) -> tuple[dict, dict]:
+               sample_interval_s: float = 2.0,
+               pace_gate_s: float | None = None) -> tuple[dict, dict]:
     samples: list[dict] = []
     stop_flag = threading.Event()
 
@@ -1021,6 +1132,33 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
 
     th = threading.Thread(target=_sampler, daemon=True)
     th.start()
+
+    # ---- R4 in-run pace gate (ember #627 point 4) ----
+    # A cooperative abort_event checked each step inside run_v0_segment, driven
+    # by a watchdog thread that fires at pace_gate_s. When armed and the block
+    # runs past the deadline, the watchdog sets the event; run_v0_segment
+    # checkpoints its completed steps and returns with aborted_by_pace_gate=True
+    # (abort-not-degrade -- never a force-kill mid-step). The watchdog is
+    # cancelled the instant the block returns on its own (block_done set below),
+    # so a block that finishes inside the window incurs zero gate effect.
+    abort_event = threading.Event()
+    block_done = threading.Event()
+    pace_gate = {"armed": pace_gate_s is not None, "deadline_s": pace_gate_s, "fired": False}
+
+    def _pace_watchdog():
+        if not block_done.wait(pace_gate_s):
+            pace_gate["fired"] = True
+            print(f"PACE_GATE_ABORT block{block_idx:02d} deadline_s={pace_gate_s} "
+                  f"ts={datetime.now(timezone.utc).isoformat()} -- first governed block "
+                  f"exceeded the pace gate; signalling clean self-abort (abort-not-degrade)",
+                  flush=True)
+            abort_event.set()
+
+    pace_th = None
+    if pace_gate["armed"]:
+        pace_th = threading.Thread(target=_pace_watchdog, daemon=True)
+        pace_th.start()
+
     t0 = time.monotonic()
     requested_run = {
         "source": "cbase_grow_rung2_stabilize:block",
@@ -1036,7 +1174,11 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
         intermediate_override=FF_GROWN, batch_size=MICRO_BATCH,
         grad_accum_steps=grad_accum_steps, offload_optimizer_state=True,
         reset_optimizer_on_resume=False, requested_run=requested_run,
+        abort_event=abort_event,
     )
+    block_done.set()  # cancel the pace watchdog -- block returned on its own
+    if pace_th is not None:
+        pace_th.join(timeout=5)
     _stage_marker(f"POST_RUN_V0_SEGMENT_BLOCK_DONE_block{block_idx:02d}")
     wall_s = round(time.monotonic() - t0, 3)
     stop_flag.set()
@@ -1058,6 +1200,18 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
     except Exception as e:
         momentum_split = {"error": str(e)}
 
+    # ember #627 point 3: emit observability counters on the SUCCESS path
+    # (per-block stage marker line). grad_lazy_creates == 0 in the cured steady
+    # state; governor_reads should be small (stage/block boundaries + one-time
+    # front-load), NOT ~140/step. Cumulative, so the prereg's prediction is
+    # falsifiable by the log rather than vacuously true.
+    grad_lazy_creates = _coa.get_counter("grad_lazy_creates")
+    governor_reads = get_governor_reads()
+    pace_gate_aborted = bool(pace_gate["fired"]) or bool(receipt.get("aborted_by_pace_gate"))
+    print(f"COUNTERS block{block_idx:02d} grad_lazy_creates={grad_lazy_creates} "
+          f"governor_reads={governor_reads} pace_gate_aborted={pace_gate_aborted} "
+          f"ts={datetime.now(timezone.utc).isoformat()}", flush=True)
+
     block_receipt = {
         "block_idx": block_idx,
         "global_step_start": global_step_start,
@@ -1073,6 +1227,10 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
         "checkpoint": receipt["last_checkpoint"],
         "n_samples": len(valid),
         "momentum_by_group": momentum_split,
+        "grad_lazy_creates": grad_lazy_creates,
+        "governor_reads": governor_reads,
+        "pace_gate": {"armed": pace_gate["armed"], "deadline_s": pace_gate["deadline_s"],
+                      "aborted": pace_gate_aborted},
     }
     return block_receipt, receipt
 
@@ -1095,6 +1253,11 @@ def main() -> int:
                           "wrongly re-seed the original pre-block1 step, e.g. 766). Always "
                           "combined with --resume-ckpt-dir-override pointed at the checkpoint "
                           "of the block immediately before start_block.")
+    ap.add_argument("--lineage-deviation", default=None,
+                     help="ember #627 point 7: a DATED deviation string authorizing a blocks-5-10 "
+                          "resume from a step other than the frozen block-04 step-806 pin (e.g. the "
+                          "checkpoint failed verification). Recorded in the receipt; without it a "
+                          "non-806 resume at start-block 5 fails closed (never a silent rollback).")
     ap.add_argument("--preflight-only", action="store_true",
                      help="run g1 preflight + BUILD (transplant checkpoint assembly) only, no GPU training")
     ap.add_argument("--verify-checkpoint", metavar="CKPT_DIR",
@@ -1292,16 +1455,41 @@ def main() -> int:
     else:
         global_step = manifest["step"]
 
+    # ---- lineage pin (ember #627 point 7): block-04 step-806 ----
+    # Fail closed if a blocks-5-10 resume does not resume from the frozen
+    # block-04 step-806 checkpoint (the silent-rollback-to-block-3 defect the
+    # audit caught), unless a dated deviation entry is declared.
+    try:
+        lineage = assert_lineage_resume(global_step, args.start_block,
+                                        deviation=args.lineage_deviation)
+    except LineageResumeMismatch as e:
+        refusal = {
+            "ticket": "CBASE-GROW-RUNG2-STABILIZE-LEG1", "ts": datetime.now(timezone.utc).isoformat(),
+            "invariant_sha256": INVARIANT_SHA256, "sha_convention": SHA_CONVENTION,
+            "verdict": "LINEAGE_RESUME_MISMATCH", "error": str(e),
+            "resume_ckpt_dir": resume_ckpt_dir, "resume_step": global_step,
+            "start_block": args.start_block,
+            "note": "resume point is not the frozen block-04 step-806 lineage pin and no dated "
+                    "deviation was declared -- refusing to launch on a silently-rolled-back lineage.",
+        }
+        checked_write(str(receipt_dir / f"cbase-grow-rung2-stabilize-leg1-REFUSED-{ts_stamp}.json"), refusal)
+        print(f"CBASE_GROW_RUNG2_STABILIZE_LINEAGE_RESUME_MISMATCH: {e}")
+        return 2
+    print(f"[{ts_stamp}] lineage pin: {json.dumps(lineage)}")
+
     block_receipts: list[dict] = []
     kwh_running = 0.0
     verdict = "MEASURED_PASS"
     abort_reason = None
     for block_idx in range(args.start_block, args.n_blocks + 1):
         run_dir = str(Path(args.out_dir) / f"block-{block_idx:02d}")
+        # R4: arm the 27-min pace gate on the FIRST governed block of this leg only.
+        pace_gate_s = PACE_GATE_S if block_idx == args.start_block else None
         block_receipt, raw_receipt = _run_block(
             cfg, run_dir, resume_ckpt_dir, global_step_start=global_step,
             total_steps=total_steps, shard_dir=args.shard_dir,
-            grad_accum_steps=grad_accum_steps, block_idx=block_idx)
+            grad_accum_steps=grad_accum_steps, block_idx=block_idx,
+            pace_gate_s=pace_gate_s)
         kwh_running += (block_receipt["kwh_this_block"] or 0.0)
         block_receipt["kwh_running_total"] = round(kwh_running, 6)
         block_receipts.append(block_receipt)
@@ -1309,6 +1497,15 @@ def main() -> int:
               f"loss_mean={block_receipt['loss_mean']} vram_peak_gib={block_receipt['vram_peak_gib']} "
               f"s_per_step={block_receipt['s_per_step']} watts_avg={block_receipt['watts_avg']} "
               f"kwh_running={block_receipt['kwh_running_total']}", flush=True)
+
+        # -- R4 pace gate: a clean self-abort is abort-not-degrade -- stop the
+        # leg, the block's completed-step checkpoint is already on disk.
+        if block_receipt["pace_gate"]["aborted"]:
+            verdict, abort_reason = "ABORTED", (
+                f"r4_pace_gate (first governed block exceeded {PACE_GATE_S}s / "
+                f"{PACE_GATE_S // 60} min -- clean self-abort at "
+                f"step={block_receipt['global_step_end']})")
+            break
 
         # -- kill conditions (checked AFTER a clean block; its own checkpoint
         # already exists via run_v0_segment's checkpoint_every=STEPS_PER_BLOCK --
