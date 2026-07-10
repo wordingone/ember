@@ -468,7 +468,7 @@ async function _loadRemoteSettings():Promise<void> {}
 async function _loadPolicyLimits():  Promise<void> {}
 function       _configureMtls():     void {}
 function       _configureProxyAgents(): void {}
-async function _preconnectApi(_serverUrl: string): Promise<void> {}
+async function _preconnectApi(_serverUrl: string | null): Promise<void> {}
 async function _initUpstreamProxy(): Promise<void> {
   // CCR (remote session) path — no-op for local sessions
   const isCcr = process.env["EMBER_REMOTE_SESSION_ID"] !== undefined;
@@ -498,7 +498,13 @@ async function _lazyLoadOtel(): Promise<void> {}
 // ---------------------------------------------------------------------------
 
 export interface InitOpts {
-  serverUrl?:      string;
+  /** `null` is an EXPLICIT GPU-free signal (issue #602) -- distinct from `undefined`
+   *  ("no opinion, use the env var or default"). Must never be collapsed into a
+   *  fallback: `??` treats `null` and `undefined` identically, which previously let
+   *  a stray EMBER_MODEL_URL or the hardcoded default silently override main()'s
+   *  GPU-free decision here, even after process-entry.ts had already resolved it
+   *  correctly. */
+  serverUrl?:      string | null;
   nCtx?:           number;
   nonInteractive?: boolean;
 }
@@ -510,10 +516,27 @@ export async function init(opts: InitOpts = {}): Promise<void> {
   return _initPromise;
 }
 
+/**
+ * issue #602: resolves _runInit's serverUrl, preserving main()'s EXPLICIT `null` GPU-free
+ * signal instead of collapsing it into the same fallback chain as "not provided"
+ * (`undefined`). `??` cannot express that distinction on its own -- it treats `null` and
+ * `undefined` identically -- so a stray EMBER_MODEL_URL left over in the environment, or
+ * the hardcoded default, used to silently resurrect a "real" serverUrl and defeat the
+ * `!serverUrl` offline-stub check in _runInit even after process-entry.ts had already
+ * decided GPU-free mode. Extracted as a pure function so the precedence is directly
+ * unit-testable without driving init()'s full side-effect graph (config load, git
+ * detection, telemetry, etc.).
+ */
+export function resolveInitServerUrl(
+  optsServerUrl: string | null | undefined,
+  envModelUrl: string | undefined,
+): string | null {
+  if (optsServerUrl === null) return null;
+  return optsServerUrl ?? envModelUrl ?? "http://localhost:8081";
+}
+
 async function _runInit(opts: InitOpts): Promise<void> {
-  const serverUrl = opts.serverUrl
-    ?? process.env["EMBER_MODEL_URL"]
-    ?? "http://localhost:8081";
+  const serverUrl = resolveInitServerUrl(opts.serverUrl, process.env["EMBER_MODEL_URL"]);
   const nCtxFallback = opts.nCtx ?? 4096;
 
   await _loadConfig();
@@ -551,9 +574,11 @@ async function _runInit(opts: InitOpts): Promise<void> {
   // no options at all) get it here instead, via FM_91's fetchNCtx -- built for
   // exactly this, previously never called from anywhere. Best-effort: falls
   // back to the default when the probe fails (server not up yet, offline test
-  // run, etc) -- never blocks init on a broken probe.
+  // run, etc) -- never blocks init on a broken probe. issue #602: GPU-free mode
+  // has no server to probe at all (serverUrl is null) -- skip the doomed fetch
+  // attempt entirely rather than relying on the catch to paper over it.
   let nCtx = nCtxFallback;
-  if (opts.nCtx === undefined) {
+  if (opts.nCtx === undefined && serverUrl) {
     try {
       nCtx = await fetchNCtx(serverUrl);
     } catch {
