@@ -1,0 +1,56 @@
+{
+  "ticket": "A1-BMULTI1-SCAN",
+  "ts": "2026-07-10T05:07:19.775217+00:00",
+  "schema": "a1-bmulti1-scan/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#631",
+    "#123",
+    "#593",
+    "#440"
+  ],
+  "purpose": "scan the previously-DISCLOSED-but-unscanned owned corpus manifests/corpus/b-multi-1 (image-caption multimodal) against frozen suites (a)+(b), closing the corpus universe (refs #123 finding 3)",
+  "corpus": {
+    "artifact": "manifests/corpus/b-multi-1",
+    "manifest": "manifests/corpus/b-multi-1/raw/manifest.jsonl",
+    "consumed_by_completed_training_run": false,
+    "consumed_note": "no completed training run has consumed b-multi-1 (acquire/smoke/scope receipts only, none carry training fields); scanned defensively to close the universe, not because it is in a lineage",
+    "field_scanned": "caption",
+    "n_captions": 500,
+    "n_content_tokens": 6053,
+    "n_stream_tokens_with_separators": 6553,
+    "max_caption_tokens": 32,
+    "n_13gram_windows": 6541,
+    "separator_id": 0
+  },
+  "tokenizer": {
+    "path": "recovered-shard-generation-tokenizer",
+    "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "custody": "recovered shard-generation tokenizer (sha 2c557e7); bytes not committed; same encoding as the #631 corrected main scan so results compose",
+    "n_orphan_merges_dropped_in_memory": 0
+  },
+  "matcher": {
+    "method": "13-token polynomial rolling hash (uint64 mod 2**64), hash hits re-verified by exact elementwise comparison, shard-to-shard boundary windows checked -- same convention as scratch/corpus-wire/contamination_check.py",
+    "n_workers": 1,
+    "reused_from": "scripts/w2_heldout/build_decontam_batch_mp.py:contamination_recheck_mp"
+  },
+  "memory_preflight": {
+    "commit_total_gb": 63.6,
+    "commit_free_gb": 32.3,
+    "min_required_gb": 12
+  },
+  "n_eval_rows": 25706,
+  "n_suite_a_rows": 16,
+  "windows_hashed": 6541,
+  "contamination_recheck": {
+    "suite_a_nonself": 0,
+    "suite_b_matches": 0,
+    "suite_b_per_dataset_matches": {},
+    "self_matches_excluded": 0,
+    "raw_confirmed_matches": 0,
+    "verdict": "CLEAN: b-multi-1 shares no 13-token window with any eval item"
+  },
+  "wall_s": 84.356,
+  "total_wall_s": 102.751
+}

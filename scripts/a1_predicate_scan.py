@@ -535,6 +535,15 @@ def main() -> int:
     ap.add_argument("--freeze-receipt", required=True)
     ap.add_argument("--tokenizer-json", required=True)
     ap.add_argument("--tokenizer-sha", default=None)
+    ap.add_argument("--tokenizer-label", default="tokenizer/tokenizer.json",
+                     help="provenance label recorded as tokenizer.path in the receipt; "
+                          "defaults to the on-disk repo path. Set this when the encoding "
+                          "tokenizer is NOT the on-disk file (e.g. #631 corrected scan uses "
+                          "the recovered shard-generation tokenizer, bytes not committed) so "
+                          "the receipt never records a path whose on-disk bytes differ from "
+                          "the sha256 field.")
+    ap.add_argument("--tokenizer-custody", default=None,
+                     help="optional custody note recorded as tokenizer.custody in the receipt")
     ap.add_argument("--out", required=True)
     ap.add_argument("--n-workers", type=int, default=4,
                      help="hard-capped at 4 by ember #593 DEGATE bound regardless of value passed")
@@ -687,8 +696,9 @@ def main() -> int:
             },
         ],
         "tokenizer": {
-            "path": "tokenizer/tokenizer.json",
+            "path": args.tokenizer_label,
             "sha256": tok_sha,
+            **({"custody": args.tokenizer_custody} if args.tokenizer_custody else {}),
             "encode_semantics": "added-token-matching-disabled-v1 (scripts/token_shards_v0.py)",
             "orphaned_merge_workaround": {
                 "n_merges_total": n_merges_total,

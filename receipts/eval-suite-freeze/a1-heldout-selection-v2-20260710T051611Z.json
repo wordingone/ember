@@ -1,0 +1,68 @@
+{
+  "ticket": "A1-HELDOUT-SELECTION-V2",
+  "ts": "2026-07-10T05:17:48.208879+00:00",
+  "schema": "a1-heldout-selection/v2",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#631",
+    "#123",
+    "#593",
+    "#582"
+  ],
+  "rule_doc": "docs/spec/a1-postfreeze-heldout-selection-v2.md",
+  "status": "PENDING-BEACON",
+  "pending_reason": "the pre-registered NIST pulse T is defined as the first pulse after this spec's MERGE commit; the beacon value cannot exist in-PR (that is the non-grindability property). Resolve post-merge by passing --beacon-value from the pulse at T.",
+  "pool": [
+    {
+      "index": 0,
+      "dataset": "WinoGrande (winogrande_xl)",
+      "canonical_source": "allenai/winogrande",
+      "split": "validation"
+    },
+    {
+      "index": 1,
+      "dataset": "PIQA",
+      "canonical_source": "ybisk/piqa",
+      "split": "validation"
+    },
+    {
+      "index": 2,
+      "dataset": "OpenBookQA (main)",
+      "canonical_source": "allenai/openbookqa",
+      "split": "test"
+    },
+    {
+      "index": 3,
+      "dataset": "BoolQ",
+      "canonical_source": "google/boolq",
+      "split": "validation"
+    },
+    {
+      "index": 4,
+      "dataset": "CommonsenseQA",
+      "canonical_source": "tau/commonsense_qa",
+      "split": "validation"
+    },
+    {
+      "index": 5,
+      "dataset": "LAMBADA (standard)",
+      "canonical_source": "EleutherAI/lambada_openai",
+      "split": "test"
+    },
+    {
+      "index": 6,
+      "dataset": "TruthfulQA (multiple_choice)",
+      "canonical_source": "truthfulqa/truthful_qa",
+      "split": "validation"
+    },
+    {
+      "index": 7,
+      "dataset": "SciQ",
+      "canonical_source": "allenai/sciq",
+      "split": "test"
+    }
+  ],
+  "selection_function": "index = int(beacon_outputValue[:8], 16) mod 8; collision handling (index+1) mod 8 while cited pre-freeze",
+  "supersedes_v1_mechanism": "docs/spec/a1-postfreeze-heldout-selection-v1.md (grindable commit-sha beacon); the v1 ccde4a67->SciQ record is byte-law immutable and not re-rolled here (coordinator ruling pending on grandfather-vs-replace, refs ac4_anchoring)"
+}
