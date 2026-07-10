@@ -1,0 +1,34 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-REAL-NULLMODEL-DISCLOSURE-ADDENDUM",
+  "issue": 123,
+  "refs": [591],
+  "coordinator_instruction": "team-lead resume message 2026-07-10, item 3",
+  "addends_receipt": "scratch/riders591/receipts/cbase-grow-rung2-real-nullmodel-20260710T004908Z.json",
+  "addends_receipt_sha256_at_time_of_addendum": null,
+  "addends_receipt_note": "sha256 intentionally left null -- the original receipt is NOT retro-edited by this addendum (measurement receipts in this project are append-only; a companion file references it by path, never mutates it in place). The addendum author (riders480) computed the original receipt in the same session it now discloses against, so the reference is direct, not inferred.",
+  "disclosure": {
+    "what_happened": "The executed real-null leg (receipt cbase-grow-rung2-real-nullmodel-20260710T004908Z.json) computed and reported rms_ratio (twin) = 0.8719378145777505 and min-per-row-cosine (twin) = -0.12792667746543884 BEFORE any numeric alignment-sensitive bands existed for these two instruments. The two alignment-sensitive instruments were only PROMOTED to registered-instrument status (per the frozen #123 comment 4930377425, phase 3) at the same time this leg ran -- no band was frozen ahead of the measurement for either one.",
+    "why_this_matters": "Any band authored AFTER seeing these two specific numbers would risk being fit to the observation rather than a genuine pre-registration -- the same discipline this whole thread has enforced for R_spectral (bands frozen before every run) is violated for these two instruments in THIS execution, by construction (the promotion and the measurement were simultaneous).",
+    "disposition": "This execution's rms_ratio and min-per-row-cosine values are REPORTED, NOT ADJUDICATED. They stand as raw measurements only -- evidence that the construction genuinely perturbed alignment (a large ~14% relative move on rms_ratio, and a swing from perfect alignment to near-zero/negative correlation on cosine), but not as a verdict against any frozen threshold, because no such threshold existed before the run.",
+    "what_still_stands": "The R_spectral value (1.4139193825202314, deviation 0.0208% from sqrt(2)) is UNAFFECTED by this disclosure -- its band (KILL<=0.1% / PROMOTE>1% / inconclusive between) was frozen in coordinator comment 4930377425 BEFORE this leg ran, and remains a band-governed reading pending the coordinator's ruling on the spectral non-equivalence check (item 1 of the same resume message)."
+  },
+  "proposed_alignment_bands_for_fresh_seed_replication": {
+    "status": "PROPOSED BY RIDER (riders480) -- NOT SELF-RATIFIED. Every other band in this thread (R_spectral's, the vacuity check's row-permutation-equal tolerance) was authored and frozen by the coordinator BEFORE a rider executed against it. These proposals follow that same division of labor: they are a draft for the coordinator to adopt, amend, or reject by dated comment before the replication run, not a binding threshold I am asserting unilaterally.",
+    "derivation_principle": "Both bands below are derived from properties INDEPENDENT of the already-observed twin values (0.8719378145777505 and -0.12792667746543884) specifically to avoid curve-fitting a threshold to numbers already seen -- exactly the failure mode this disclosure exists to flag.",
+    "rms_ratio": {
+      "anchor_value": 1.0145176101002584,
+      "no_response_band": "within +/-1% of the anchor value (comparable order of magnitude to the ~0.01-0.1% cross-process admissibility drift already observed on anchor-reproduction legs elsewhere in this thread -- a 1% floor gives ample margin above that noise)",
+      "material_response_band": ">=5% relative deviation from the anchor value",
+      "inconclusive_band": "1% < |deviation| < 5%",
+      "rationale": "Mirrors the same deviation-from-reference band SHAPE already used for R_spectral (a reference value + a small/large-deviation split), at a threshold set from the OTHER admissibility numbers in this thread rather than from this instrument's own already-seen twin value."
+    },
+    "min_per_row_cosine": {
+      "anchor_value": 1.0,
+      "no_response_band": "cosine > 0.9 (rows remain substantially aligned)",
+      "material_response_band": "cosine < 0.3",
+      "inconclusive_band": "0.3 <= cosine <= 0.9",
+      "rationale": "For two independent random unit vectors in R^1024 (the dimensionality of a gate_proj row here), the expected cosine similarity is 0 with standard deviation ~1/sqrt(1024)~=0.03125. A material-response floor of 0.3 is roughly 9-10 standard deviations from pure randomness -- i.e., 'below 0.3' is a principled statement that genuine decorrelation occurred, derived from the geometry of high-dimensional random vectors, not from the already-observed -0.128 value."
+    }
+  },
+  "note": "This addendum makes no verdict claim of its own. It exists solely to (a) disclose the seen-before-frozen sequencing problem for the two alignment instruments in the already-executed leg, and (b) propose bands for a fresh-seed replication that the coordinator can ratify, amend, or reject before that replication runs."
+}
