@@ -153,6 +153,12 @@ def _parse_manifest_rows(text: str) -> tuple[list[dict], list[str]]:
             malformed.append(f"{cid} (subgoal '{subgoal}' not S1-S7)")
         if not ac:
             malformed.append(f"{cid} (empty AC/test)")
+        # [HARDEN, audit 2026-07-10T20:38:26Z] receipt-cell non-emptiness --
+        # id/subgoal/AC/status were all field-completeness-checked but the
+        # receipt cell itself never was, so a row citing NOTHING as its
+        # evidence pointer still counted as a complete, manifested row.
+        if not receipt:
+            malformed.append(f"{cid} (empty receipt)")
         if not status:
             malformed.append(f"{cid} (empty status)")
         rows.append(row)
@@ -167,7 +173,15 @@ def _parse_manifest_rows(text: str) -> tuple[list[dict], list[str]]:
 # minus sign U+2212 (distinct from ASCII hyphen U+002D), which the live goal
 # file actually uses inside "C(−1)" -- without it that condition's bullet
 # never matched at all and silently vanished from the count.
-_CID_RE = re.compile(r"^\s*-\s*\*\*(C[\w()−\-]+?)\s*(?:--|—|–|:|\*\*| -)")
+#
+# [HARDEN, audit 2026-07-10T20:38:26Z] the alternation had no bare "."
+# separator -- the live goal file's own §4 machinery bullets, "- **C-MANIFEST.**"
+# and "- **C-TALLY.**" (period immediately after the id, before the bold-close),
+# both failed to match and silently vanished from the denominator (38 seen vs
+# the true 40). Widened to accept "." so these two genuinely-planned pieces are
+# counted; the cure is same-PR: docs/ember-completeness.md gains real rows for
+# both (see the "Additional condition rows" table) so GREEN stays honest.
+_CID_RE = re.compile(r"^\s*-\s*\*\*(C[\w()−\-]+?)\s*(?:--|—|–|:|\*\*|\.| -)")
 
 # Denominator floor: the live goal's §4 enumerates dozens of conditions. A
 # parsed count below this means the parser broke or the goal drifted out from
@@ -196,7 +210,6 @@ def _goal_section4_condition_ids(goal_text: str) -> list[str]:
         m = _CID_RE.match(line)
         if m:
             cid = m.group(1).rstrip("-*:")
-            # skip the meta-conditions that ARE the manifest/tally machinery itself
             ids.append(cid)
     # de-dup preserve order
     seen = set()
