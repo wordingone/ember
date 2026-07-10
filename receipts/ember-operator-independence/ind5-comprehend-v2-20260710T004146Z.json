@@ -1,0 +1,83 @@
+{
+  "receipt_class": "IND-5",
+  "leg": "comprehend_v2",
+  "spec_amendment": {
+    "date": "2026-07-04",
+    "issue": "#88",
+    "rationale": "operator directive (verbatim class, 2026-07-04): no board condition may require operator action -- conditions must be properties of the system, not the operator. The OLD [A] leg (operator-attestation object) violated this by construction: unfalsifiable by the system, a fact about a human mind, parking a board RED on a person. Replaced with four machine-checkable comprehensibility legs (entry_point_integrity, completeness, freshness, executability); GREEN iff all four pass.",
+    "supersedes": "the two-leg [S]+[A] shape (ind5-s-checkable / ind5-a-attested receipts)"
+  },
+  "attestation_superseded_by": {
+    "note": "the OLD [A] operator-attestation object (and the OLD [S] organism_component_docs shape) is retained here for audit continuity only; NEITHER is evaluated by this new leg and NEITHER counts toward GREEN. The script-authored-invalid trap for the OLD [A] field (invalid_comprehension_by_script) stays enforced by test_c_ind.py so a legacy claim cannot be faked retroactively.",
+    "old_receipts_found": []
+  },
+  "exec_root": "<worktree-root>",
+  "registry_dump_ok": true,
+  "registry_dump_error": null,
+  "legs": {
+    "entry_point_integrity": {
+      "passed": true,
+      "readme_path": "docs/operator/README.md",
+      "linked_docs": [
+        "commands.md",
+        "operate.md"
+      ],
+      "dead_links": [],
+      "reason": "all linked docs resolve"
+    },
+    "completeness": {
+      "passed": true,
+      "live_command_count": 6,
+      "undocumented_commands": [],
+      "reason": "every live command named somewhere in docs/operator/"
+    },
+    "freshness": {
+      "passed": true,
+      "cited_slash_commands": {
+        "observatory": [
+          "commands.md"
+        ],
+        "obs": [
+          "commands.md"
+        ],
+        "watch": [
+          "commands.md",
+          "operate.md"
+        ],
+        "finetune": [
+          "commands.md"
+        ],
+        "ft": [
+          "commands.md"
+        ],
+        "model": [
+          "commands.md"
+        ],
+        "goal": [
+          "commands.md"
+        ],
+        "cockpit": [
+          "commands.md"
+        ],
+        "world": [
+          "commands.md"
+        ],
+        "cobs": [
+          "commands.md"
+        ],
+        "board": [
+          "commands.md"
+        ]
+      },
+      "stale_citations": {},
+      "reason": "every cited slash-command exists in the live registry"
+    },
+    "executability": {
+      "passed": true,
+      "examples": [],
+      "reason": "every runnable example exited 0; every excluded example disclosed a reason"
+    }
+  },
+  "all_four_legs_passed": true,
+  "ts": "20260710T004146Z"
+}
