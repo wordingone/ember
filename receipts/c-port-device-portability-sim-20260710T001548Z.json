@@ -1,0 +1,56 @@
+{
+  "ticket": "C-PORT-DEVICE-PORTABILITY-SIM",
+  "ts": "20260710T001548Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "kind": "device_portability_probe",
+  "device": "simulated 3090-class (sm_86, non-4090 profile)",
+  "simulated_device": true,
+  "simulation_boundary": "REAL forward pass executed on this process's own CPU (torch.cuda.is_available()=False on the host that ran this script -- no CUDA device was queried or started, no llama-server / model process was launched); the DEVICE IDENTITY used to drive the governor's precision/threshold gating (3090, sm=86) is a NAMED, injected simulation (governor.device_capability(simulate=...)), disclosed here, never claimed as a real GPU query.",
+  "forward_pass": {
+    "no_crash": true,
+    "crashed": false,
+    "error": null,
+    "layer": "torch.nn.Linear(64, 64) via governor.fp8_matmul_with_fallback",
+    "input_shape": [
+      8,
+      64
+    ],
+    "output_shape": [
+      8,
+      64
+    ],
+    "output_abs_mean": 0.479048,
+    "precision_selected": "bf16",
+    "precision_used": "bf16"
+  },
+  "governor": {
+    "total_gib": 24.0,
+    "ember_vram_fraction": 0.85,
+    "margin_gb": 4.0,
+    "throttle_s": 0.3
+  },
+  "throughput_basis": "device-relative roofline-derived threshold",
+  "throughput_threshold": {
+    "basis": "device-relative roofline-derived threshold",
+    "device_tier": "3090",
+    "reference_device": "4090",
+    "relative_flops_fraction": 0.431
+  },
+  "fp8_note": "fp8 path gated on sm>=89 (governor.FP8_MIN_SM); bf16 fallback used for sm<89 or no GPU at all -- this device (sm=86) selected precision='bf16', no bare fp8 RuntimeError (governor.fp8_matmul_with_fallback catches and falls back rather than propagate).",
+  "note": "governor change is tighten only, never loosen the 4090 floor",
+  "provenance": {
+    "script": "scripts/c_port_simulated_device_receipt.py",
+    "args": {
+      "device": "3090:86",
+      "out_dir": "receipts"
+    },
+    "git_sha": "9b7a2c617585e41494aed1486b26905fdad5d0eb",
+    "git_branch": "exp/c-port-sim-device",
+    "host_python": "3.12.3",
+    "host_torch": "2.12.0+cpu",
+    "host_platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "host_cuda_available": false,
+    "rerun_command": "wsl python3 scripts/c_port_simulated_device_receipt.py --device 3090:86"
+  }
+}
