@@ -123,6 +123,9 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _lane14_common import redact_root  # noqa: E402
+
 # Contract repo root, same resolution the sibling probes use (e.g.
 # test_c_proc.py's REPO_ROOT): two levels up from this file's directory.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -323,13 +326,14 @@ def _token_delta_value(data):
 def main():
     exec_root = os.environ.get("EMBER_EXEC_ROOT") or DEFAULT_EXEC_ROOT
     if not os.path.isdir(exec_root):
-        emit("UNEVALUABLE", f"C-SURFACE2: execution root {exec_root} not found -- probe cannot look")
+        emit("UNEVALUABLE", f"C-SURFACE2: execution root ({redact_root(exec_root)}) not found -- probe cannot look")
 
     surface_dir = os.path.join(exec_root, SURFACE_SUBPATH)
     picked = _pick_newest(surface_dir)
     if picked is None:
         emit("RED", f"C-SURFACE2: no receipt found under {SURFACE_SUBPATH.replace(os.sep, '/')}/ on "
-                    f"{exec_root} (invalid_surface2_receipt_absent) -- receipt-absent or tree-absent")
+                    f"execution root ({redact_root(exec_root)}) (invalid_surface2_receipt_absent) -- "
+                    "receipt-absent or tree-absent")
 
     path, _ = picked
     try:
@@ -403,15 +407,15 @@ def main():
 
     ok, commit_ts_or_err = _newest_commit_epoch(exec_root)
     if not ok:
-        emit("UNEVALUABLE", f"C-SURFACE2: could not read newest work commit on {exec_root} "
-                            f"({commit_ts_or_err}) -- env failure")
+        emit("UNEVALUABLE", f"C-SURFACE2: could not read newest work commit on execution root "
+                            f"({redact_root(exec_root)}) ({commit_ts_or_err}) -- env failure")
 
     age_days = (commit_ts_or_err - ts_epoch) / 86400.0
     if age_days > STALE_DAYS:
         emit("RED", f"C-SURFACE2: newest receipt {name} (ts={data.get('ts')}) is {age_days:.1f} days older "
-                    f"than the newest work commit on {exec_root} -- stale telemetry, the surface must be "
-                    f"CURRENTLY alive, not archaeologically alive (invalid_surface2_stale_telemetry, "
-                    f">{STALE_DAYS}d)")
+                    f"than the newest work commit on execution root ({redact_root(exec_root)}) -- stale "
+                    f"telemetry, the surface must be CURRENTLY alive, not archaeologically alive "
+                    f"(invalid_surface2_stale_telemetry, >{STALE_DAYS}d)")
 
     # --- clause (b): steer/kill control-channel event -----------------------
     verb, verb_src = _find_steer_kill_event(path, data)
