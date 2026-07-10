@@ -1,183 +1,186 @@
 {
-  "ticket": "A1-TOKENIZER-MISMATCH-REPRO",
-  "ts": "2026-07-10T04:46:29.108692+00:00",
-  "schema": "a1-tokenizer-mismatch-repro/v1",
-  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
-  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
-  "issue_refs": [
-    "#631",
-    "#123",
-    "#593",
-    "#440"
-  ],
-  "defect": "PR #603 predicate scan re-tokenized eval rows under the scrubbed tokenizer (sha 6923a5...) while shards-v0 was tokenized under the shard-generation tokenizer (sha 2c557e7...); token-id disagreement on a row makes exact 13-id-window matching a possible FALSE NEGATIVE",
-  "tokenizers": {
-    "scrubbed_on_disk": {
-      "path": "tokenizer/tokenizer.json",
-      "sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
-      "n_orphan_merges_dropped_in_memory": 21
-    },
-    "original_shardgen": {
-      "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
-      "n_orphan_merges_dropped_in_memory": 0,
-      "custody": "read from a local pre-consolidation archive; bytes NOT committed (carry pre-scrub proper-noun vocab removed by the 58ddf8d public-root scrub); sha is the public token-shards receipt's provenance_230.old.tokenizer_json.sha256"
-    }
-  },
-  "n_suite_b_rows": 25690,
-  "n_rows_differ": 1128,
-  "frac_differ": 0.04390814,
-  "n_rows_differ_and_retained_by_pr603": 1123,
-  "per_dataset": {
-    "MMLU-Pro": {
-      "n_rows": 12032,
-      "n_differ": 495
-    },
-    "GSM8K": {
-      "n_rows": 1319,
-      "n_differ": 24
-    },
-    "MATH-500": {
-      "n_rows": 500,
-      "n_differ": 8
-    },
-    "ARC-Challenge": {
-      "n_rows": 1172,
-      "n_differ": 15
-    },
-    "HumanEval+": {
-      "n_rows": 164,
-      "n_differ": 6
-    },
-    "MBPP": {
-      "n_rows": 500,
-      "n_differ": 2
-    },
-    "HellaSwag": {
-      "n_rows": 10003,
-      "n_differ": 578
-    }
-  },
-  "differ_first_20": [
-    {
-      "row_idx": 22,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 112,
-      "len_original": 111
-    },
-    {
-      "row_idx": 23,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 86,
-      "len_original": 84
-    },
-    {
-      "row_idx": 35,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 134,
-      "len_original": 132
-    },
-    {
-      "row_idx": 90,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 129,
-      "len_original": 128
-    },
-    {
-      "row_idx": 96,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 273,
-      "len_original": 262
-    },
-    {
-      "row_idx": 173,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 131,
-      "len_original": 130
-    },
-    {
-      "row_idx": 232,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 327,
-      "len_original": 325
-    },
-    {
-      "row_idx": 283,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 137,
-      "len_original": 136
-    },
-    {
-      "row_idx": 341,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 215,
-      "len_original": 214
-    },
-    {
-      "row_idx": 345,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 340,
-      "len_original": 339
-    },
-    {
-      "row_idx": 350,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 159,
-      "len_original": 158
-    },
-    {
-      "row_idx": 407,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 240,
-      "len_original": 240
-    },
-    {
-      "row_idx": 445,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 97,
-      "len_original": 95
-    },
-    {
-      "row_idx": 536,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 194,
-      "len_original": 193
-    },
-    {
-      "row_idx": 540,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 119,
-      "len_original": 118
-    },
-    {
-      "row_idx": 541,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 131,
-      "len_original": 130
-    },
-    {
-      "row_idx": 558,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 130,
-      "len_original": 128
-    },
-    {
-      "row_idx": 603,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 113,
-      "len_original": 112
-    },
-    {
-      "row_idx": 615,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 59,
-      "len_original": 59
-    },
-    {
-      "row_idx": 659,
-      "dataset": "MMLU-Pro",
-      "len_scrubbed": 96,
-      "len_original": 95
-    }
-  ],
-  "verdict": "DEFECT REPRODUCED: eval rows tokenize differently under the shard tokenizer; PR #603's scan is not false-negative-safe"
+    "ticket":  "A1-TOKENIZER-MISMATCH-REPRO",
+    "ts":  "2026-07-10T04:46:29.108692+00:00",
+    "schema":  "a1-tokenizer-mismatch-repro/v1",
+    "invariant_sha256":  "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+    "sha_convention":  "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+    "issue_refs":  [
+                       "#631",
+                       "#123",
+                       "#593",
+                       "#440"
+                   ],
+    "defect":  "PR #603 predicate scan re-tokenized eval rows under the scrubbed tokenizer (sha 6923a5...) while shards-v0 was tokenized under the shard-generation tokenizer (sha 2c557e7...); token-id disagreement on a row makes exact 13-id-window matching a possible FALSE NEGATIVE",
+    "tokenizers":  {
+                       "scrubbed_on_disk":  {
+                                                "path":  "tokenizer/tokenizer.json",
+                                                "sha256":  "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
+                                                "n_orphan_merges_dropped_in_memory":  21
+                                            },
+                       "original_shardgen":  {
+                                                 "sha256":  "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+                                                 "n_orphan_merges_dropped_in_memory":  0,
+                                                 "custody":  "read from a local pre-consolidation archive; bytes NOT committed (carry pre-scrub proper-noun vocab removed by the 58ddf8d public-root scrub); sha is the public token-shards receipt\u0027s provenance_230.old.tokenizer_json.sha256"
+                                             }
+                   },
+    "n_suite_b_rows":  25690,
+    "n_rows_differ":  1128,
+    "frac_differ":  0.04390814,
+    "n_rows_differ_and_retained_by_pr603":  1123,
+    "per_dataset":  {
+                        "MMLU-Pro":  {
+                                         "n_rows":  12032,
+                                         "n_differ":  495
+                                     },
+                        "GSM8K":  {
+                                      "n_rows":  1319,
+                                      "n_differ":  24
+                                  },
+                        "MATH-500":  {
+                                         "n_rows":  500,
+                                         "n_differ":  8
+                                     },
+                        "ARC-Challenge":  {
+                                              "n_rows":  1172,
+                                              "n_differ":  15
+                                          },
+                        "HumanEval+":  {
+                                           "n_rows":  164,
+                                           "n_differ":  6
+                                       },
+                        "MBPP":  {
+                                     "n_rows":  500,
+                                     "n_differ":  2
+                                 },
+                        "HellaSwag":  {
+                                          "n_rows":  10003,
+                                          "n_differ":  578
+                                      }
+                    },
+    "differ_first_20":  [
+                            {
+                                "row_idx":  22,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  112,
+                                "len_original":  111
+                            },
+                            {
+                                "row_idx":  23,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  86,
+                                "len_original":  84
+                            },
+                            {
+                                "row_idx":  35,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  134,
+                                "len_original":  132
+                            },
+                            {
+                                "row_idx":  90,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  129,
+                                "len_original":  128
+                            },
+                            {
+                                "row_idx":  96,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  273,
+                                "len_original":  262
+                            },
+                            {
+                                "row_idx":  173,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  131,
+                                "len_original":  130
+                            },
+                            {
+                                "row_idx":  232,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  327,
+                                "len_original":  325
+                            },
+                            {
+                                "row_idx":  283,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  137,
+                                "len_original":  136
+                            },
+                            {
+                                "row_idx":  341,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  215,
+                                "len_original":  214
+                            },
+                            {
+                                "row_idx":  345,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  340,
+                                "len_original":  339
+                            },
+                            {
+                                "row_idx":  350,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  159,
+                                "len_original":  158
+                            },
+                            {
+                                "row_idx":  407,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  240,
+                                "len_original":  240
+                            },
+                            {
+                                "row_idx":  445,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  97,
+                                "len_original":  95
+                            },
+                            {
+                                "row_idx":  536,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  194,
+                                "len_original":  193
+                            },
+                            {
+                                "row_idx":  540,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  119,
+                                "len_original":  118
+                            },
+                            {
+                                "row_idx":  541,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  131,
+                                "len_original":  130
+                            },
+                            {
+                                "row_idx":  558,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  130,
+                                "len_original":  128
+                            },
+                            {
+                                "row_idx":  603,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  113,
+                                "len_original":  112
+                            },
+                            {
+                                "row_idx":  615,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  59,
+                                "len_original":  59
+                            },
+                            {
+                                "row_idx":  659,
+                                "dataset":  "MMLU-Pro",
+                                "len_scrubbed":  96,
+                                "len_original":  95
+                            }
+                        ],
+    "verdict":  "DEFECT REPRODUCED: eval rows tokenize differently under the shard tokenizer; PR #603\u0027s scan is not false-negative-safe",
+    "api_spend_usd":  0,
+    "paid_api_surface_used":  false,
+    "api_spend_backfill_note":  "field backfilled 2026-07-10 per C(-1); run was local-only with zero paid-API spend; original receipt otherwise unmodified"
 }
