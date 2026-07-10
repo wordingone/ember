@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "<REPO_ROOT>\scratch\evalref\run_one_task_proof.py", line 10, in <module>
+    from direct_llamacpp_lm import DirectLlamaCppLM  # noqa: E402
+  File "<REPO_ROOT>\scratch\evalref\direct_llamacpp_lm.py", line 11, in <module>
+    from llama_cpp import Llama
+  File "<REPO_ROOT>\.claude\worktrees\evalref47\.venv\lib\site-packages\llama_cpp\__init__.py", line 1, in <module>
+    from .llama_cpp import *
+  File "<REPO_ROOT>\.claude\worktrees\evalref47\.venv\lib\site-packages\llama_cpp\llama_cpp.py", line 1253, in <module>
+    def llama_rope_type(model: llama_model_p, /) -> int:
+  File "<REPO_ROOT>\.claude\worktrees\evalref47\.venv\lib\site-packages\llama_cpp\_ctypes_extensions.py", line 113, in decorator
+    func = getattr(lib, name)
+  File "C:\Program Files\Python310\lib\ctypes\__init__.py", line 387, in __getattr__
+    func = self.__getitem__(name)
+  File "C:\Program Files\Python310\lib\ctypes\__init__.py", line 392, in __getitem__
+    func = self._FuncPtr((name_or_ordinal, self))
+AttributeError: function 'llama_rope_type' not found. Did you mean: 'llama_vocab_type'?

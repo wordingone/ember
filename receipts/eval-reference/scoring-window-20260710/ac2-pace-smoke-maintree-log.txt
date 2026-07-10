@@ -1,0 +1,27 @@
+PACE_SMOKE_GPU_GO ts=2026-07-10T14:24:47.383663+00:00 block=5 deadline_s=1620
+[20260710T142448Z] g1 PASS: preflight={'nvidia_smi_vram': {'total_mib': 24564, 'used_mib': 1651, 'free_mib': 22488, 'total_gib': 23.988, 'used_gib': 1.612, 'free_gib': 21.961}, 'required_gib': 18.253, 'margin_gib_floor': 2.0, 'margin_gib': 3.708, 'sufficient': True, 'verdict': 'LAUNCH_PERMITTED', 'rule': 'abort-not-degrade: VRAM margin assert fails -> hold, report numbers, no launch into contention; no fix-forward on a failed assert (DEV-002 acceptance #3)'}
+[20260710T142448Z] BUILD done: transplanted checkpoint=<STAB480_WORKTREE>/models/cbase-grow-rung/rung2-stabilize-leg1/block-04/checkpoints/step-00000806 transplant_meta={'note': 'issue #577 cure -- see manifest.json in this dir for momentum_provenance + per-tensor RMS'}
+[20260710T142448Z] lineage pin: {"lineage_pinned": true, "expected_resume_step": 806, "expected_resume_block": 4, "actual_resume_step": 806, "leg_blocks": [5, 10], "deviation": null, "verdict": "LINEAGE_OK"}
+STAGE_MARKER PRE_RUN_V0_SEGMENT_block05 ts=2026-07-10T14:24:48.984140+00:00 committed_gb=40.237 vram_used_gib=1.612
+STAGE_MARKER PRE_GOVERNOR_EMPTY_CACHE_APPLIED ts=2026-07-10T14:25:09.017559+00:00 committed_gb=40.178 vram_used_gib=1.612
+STAGE_MARKER PRE_MODEL_BUILD ts=2026-07-10T14:25:09.144103+00:00 committed_gb=40.655 vram_used_gib=1.987
+W0710 07:25:14.322000 41588 torch\distributed\elastic\multiprocessing\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+[transformers] use_kernel_func_from_hub is not available in the installed kernels version. Please upgrade kernels to use this feature.
+STAGE_MARKER POST_MODEL_BUILD ts=2026-07-10T14:25:29.214821+00:00 committed_gb=56.508 vram_used_gib=10.294
+STAGE_MARKER PRE_SHARD_LOAD ts=2026-07-10T14:25:29.249975+00:00 committed_gb=56.51 vram_used_gib=10.294
+STAGE_MARKER POST_SHARD_CACHE ts=2026-07-10T14:25:50.366577+00:00 committed_gb=55.669 vram_used_gib=10.294
+STAGE_MARKER PRE_OPTIMIZER_INIT ts=2026-07-10T14:25:50.400763+00:00 committed_gb=55.662 vram_used_gib=10.294
+STAGE_MARKER PRE_CREATED_OPT_MEMMAPS n=140 ts=2026-07-10T14:26:05.101757+00:00 committed_gb=55.028
+STAGE_MARKER PRE_CREATED_OPT_MEMMAPS n=44 ts=2026-07-10T14:26:06.020639+00:00 committed_gb=55.046
+STAGE_MARKER POST_OPTIMIZER_INIT ts=2026-07-10T14:26:06.070385+00:00 committed_gb=55.046 vram_used_gib=10.298
+STAGE_MARKER PRE_CHECKPOINT_LOAD ts=2026-07-10T14:26:06.115403+00:00 committed_gb=55.058 vram_used_gib=10.298
+STAGE_MARKER POST_CHECKPOINT_LOAD ts=2026-07-10T14:26:21.028769+00:00 committed_gb=64.311 vram_used_gib=10.294
+STAGE_MARKER PRE_LOAD_STATE_DICT ts=2026-07-10T14:26:21.056783+00:00 committed_gb=64.215 vram_used_gib=10.294
+STAGE_MARKER POST_LOAD_STATE_DICT ts=2026-07-10T14:26:21.957945+00:00 committed_gb=64.167 vram_used_gib=10.294
+STAGE_MARKER PRE_LOAD_OPTIMIZERS_STATE ts=2026-07-10T14:26:21.989861+00:00 committed_gb=64.172 vram_used_gib=10.294
+STAGE_MARKER POST_LOAD_OPTIMIZERS_STATE ts=2026-07-10T14:26:22.519249+00:00 committed_gb=63.885 vram_used_gib=10.294
+STAGE_MARKER PRE_RESTORE_RNG ts=2026-07-10T14:26:22.565770+00:00 committed_gb=63.899 vram_used_gib=10.294
+STAGE_MARKER POST_RESTORE_RNG ts=2026-07-10T14:26:22.612687+00:00 committed_gb=63.906 vram_used_gib=10.294
+STAGE_MARKER POST_RUN_V0_SEGMENT_BLOCK_DONE_block05 ts=2026-07-10T14:36:22.121266+00:00 committed_gb=74.514 vram_used_gib=20.339
+GOVERNOR_COMMIT_FAIL label=POST_RUN_V0_SEGMENT_BLOCK_DONE_block05 committed_gb=74.514 limit_gb=79.603 free_gb=5.09 floor_gb=6.0
+GOVERNOR_COMMIT_FAIL: free commit 5.09GB < floor 6.0GB at POST_RUN_V0_SEGMENT_BLOCK_DONE_block05 (committed=74.514GB, limit=79.603GB) -- abort-not-degrade, no fix-forward, no widened floor
