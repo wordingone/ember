@@ -18,6 +18,7 @@ import {
   classifyOutageTransition,
   computeEffectiveMarker,
   formatWatchdogLine,
+  formatWatchdogFallbackLine,
   isExcludedReceiptPath,
   formatBulkMaterializationLine,
   isGoalSessionRelativePath,
@@ -27,6 +28,7 @@ import {
   RECEIPT_RETRY_DELAY_MS,
   MAX_TAIL_LINES_PER_TICK,
   type ActivityFeedHandle,
+  type WatchdogRow,
 } from "./activity-feed.ts";
 import type { GoalReceiptRow } from "./goal-receipts.ts";
 
@@ -218,12 +220,100 @@ describe("formatWatchdogLine", () => {
     expect(text).toContain("overran");
     expect(text).toContain("jun");
   });
-  it("formats a kill-receipt row (no 'event' field, has pids/reason)", () => {
-    const text = formatWatchdogLine({ pids: [111], reason: "health-check failed" });
-    expect(text).toBe("server killed by watchdog (health-check failed)");
+
+  // issue #616: a real kill-receipt row whose match_rule verifiably names the serving process
+  // (liveness-watchdog.ps1's own Write-KillReceiptRow call on the server watchdog's kill path) is
+  // the ONLY shape allowed to render as a "server" event -- and the actor comes from the row's
+  // own `script` field, never a hardcoded "watchdog".
+  it("formats a real server kill-receipt row (script + match_rule name llama-server.exe)", () => {
+    const text = formatWatchdogLine({
+      ts: "2026-07-05T03:11:00Z",
+      script: "liveness-watchdog",
+      pids: [9001],
+      match_rule:
+        "cmdline-verified via Get-CimInstance Win32_Process: Name=llama-server.exe, CommandLine contains <path>/llama-server.exe",
+      reason: "consecutive /health failures (3) at http://127.0.0.1:8080/health",
+      survivors_expected: "none",
+    });
+    expect(text).toBe(
+      "server killed by liveness-watchdog (consecutive /health failures (3) at http://127.0.0.1:8080/health)",
+    );
   });
+
+  // issue #616 regression: the exact three rows from the 2026-07-10 cockpit-relaunch incident
+  // (shared vigil kill-receipts ledger, lines 65204-65206; local path prefixes redacted to
+  // <path> per the repo's no-local-paths landing rule). None of these kill the server
+  // -- match_rule names the OLD cockpit binary and the OLD watchdog powershell host -- so none
+  // may ever render as "server killed by watchdog". The pre-fix code fabricated exactly that line
+  // for all three (any row with a `pids` array matched unconditionally).
+  it("never renders 'server killed' for the 2026-07-10 cockpit-relaunch incident rows (regression)", () => {
+    const incidentRows: WatchdogRow[] = [
+      {
+        ts: "2026-07-10T00:26:14Z",
+        script: "cockpitrelaunch",
+        pids: [41244],
+        match_rule:
+          "cmdline ember-cockpit-7fbf4ef.exe verified via Get-Process Path field == <path>/ember-cockpit-7fbf4ef.exe",
+        survivors_expected:
+          "none; hwnd 1968534 tab owner is WindowsTerminal PID 22824 (shared, hosts other founder/CC windows) -- NOT touched by this kill, only the child process 41244 dies",
+      },
+      {
+        ts: "2026-07-10T00:31:02Z",
+        script: "cockpitrelaunch",
+        pids: [36980],
+        match_rule:
+          "watchdog powershell.exe verified via Win32_Process CommandLine liveness-watchdog.ps1 -LauncherBatPath launch-cockpit-gpu-free.bat; stopping to repoint LauncherBatPath to normal-mode instrumented launcher before it fires another GPU-free auto-restart",
+        survivors_expected: "none for this PID; will relaunch same script (liveness-watchdog.ps1)",
+      },
+      {
+        ts: "2026-07-10T00:31:20Z",
+        script: "cockpitrelaunch",
+        pids: [35796],
+        match_rule:
+          "cmdline <path>/ember-cockpit-7fbf4ef.exe verified via Win32_Process CommandLine; this is the watchdog auto-restart resurrection of the stale GPU-free binary",
+        survivors_expected:
+          "none; parent cmd/node shim (PID 40024 and ancestors) is a one-shot launcher wrapper, expected to have already exited or die with no further children",
+      },
+    ];
+    for (const row of incidentRows) {
+      const text = formatWatchdogLine(row);
+      expect(text).toBeNull(); // falls through to the caller's verbatim fallback, never a paraphrase
+      expect(text).not.toBe("server killed by watchdog (reason unavailable)");
+    }
+  });
+
+  it("returns null (unmappable) for a kill-receipt row missing a script actor", () => {
+    // no `script` field at all -- cannot name WHO acted, so no confident attribution is possible.
+    expect(formatWatchdogLine({ pids: [111], reason: "health-check failed" })).toBeNull();
+  });
+
+  it("returns null (unmappable) for a kill-receipt row whose match_rule names a non-server process", () => {
+    const text = formatWatchdogLine({
+      script: "somefounder",
+      pids: [222],
+      match_rule: "cmdline notepad.exe verified via Get-Process",
+      reason: "stray window cleanup",
+    });
+    expect(text).toBeNull();
+  });
+
   it("returns null for an unrecognized shape", () => {
     expect(formatWatchdogLine({ foo: "bar" })).toBeNull();
+  });
+});
+
+describe("formatWatchdogFallbackLine", () => {
+  it("renders the row's raw line verbatim, never a paraphrase", () => {
+    const rawLine = JSON.stringify({
+      ts: "2026-07-10T00:26:14Z",
+      script: "cockpitrelaunch",
+      pids: [41244],
+      match_rule: "cmdline ember-cockpit-7fbf4ef.exe verified via Get-Process",
+    });
+    const text = formatWatchdogFallbackLine(rawLine);
+    expect(text).toContain(rawLine);
+    expect(text).not.toContain("killed by watchdog");
+    expect(text).not.toContain("server");
   });
 });
 
@@ -502,16 +592,59 @@ describe("startActivityFeed — engine (real fs)", () => {
       handle = startActivityFeed(deps);
       await sleep(400); // let the async kill_receipts_path resolution complete
 
+      // #616: the full real row shape liveness-watchdog.ps1's Write-KillReceiptRow emits on the
+      // server kill path -- actor in `script`, serving binary named in `match_rule`.
       fs.appendFileSync(
         killReceiptsPath,
-        JSON.stringify({ ts: new Date().toISOString(), pids: [111], reason: "health-check failed" }) + "\n",
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          script: "liveness-watchdog",
+          pids: [111],
+          match_rule: "cmdline-verified via Get-CimInstance Win32_Process: Name=llama-server.exe",
+          reason: "health-check failed",
+          survivors_expected: "none",
+        }) + "\n",
       );
 
       await sleep(1300);
       const state = getActivityFeedState();
       const found = state.recentLines.find((l) => l.source === "watchdog" && l.text.includes("killed"));
       expect(found).toBeDefined();
-      expect(found?.text).toContain("health-check failed");
+      expect(found?.text).toBe("server killed by liveness-watchdog (health-check failed)");
+    },
+    8000,
+  );
+
+  // issue #616 bar 3/4: an unmappable kill-receipt row (real 2026-07-10 incident row -- names a
+  // cockpit binary, not the server) falls through the ENGINE verbatim, never as a paraphrase.
+  it(
+    "renders an unmappable kill-receipt row verbatim through the tail-poll path (#616)",
+    async () => {
+      const killReceiptsPath = path.join(scratchDir, "kill-receipts.jsonl");
+      const watchdogStatePath = path.join(scratchDir, "watchdog-state.json");
+      fs.writeFileSync(watchdogStatePath, JSON.stringify({ kill_receipts_path: killReceiptsPath }));
+      fs.writeFileSync(killReceiptsPath, "");
+
+      const deps = baseDeps({ watchdogStatePath });
+      handle = startActivityFeed(deps);
+      await sleep(400);
+
+      const incidentRow = JSON.stringify({
+        ts: "2026-07-10T00:26:14Z",
+        script: "cockpitrelaunch",
+        pids: [41244],
+        match_rule: "cmdline ember-cockpit-7fbf4ef.exe verified via Get-Process Path field",
+        survivors_expected: "none; only the child process 41244 dies",
+      });
+      fs.appendFileSync(killReceiptsPath, incidentRow + "\n");
+
+      await sleep(1300);
+      const state = getActivityFeedState();
+      const found = state.recentLines.find((l) => l.source === "watchdog");
+      expect(found).toBeDefined();
+      expect(found?.text).toContain(incidentRow); // verbatim passthrough of the row itself
+      expect(found?.text).not.toContain("killed by watchdog");
+      expect(state.recentLines.some((l) => l.text.includes("server killed"))).toBe(false);
     },
     8000,
   );
