@@ -1,0 +1,27 @@
+{
+  "receipt_class": "IND-4",
+  "leg": "customize",
+  "producer": "ind4_customize_experiment_producer.py",
+  "config_file_edited": "scratch/ind4-customize/v0-pretrain-config-sandbox.json",
+  "live_config_never_touched": "configs/v0-pretrain-config.json",
+  "edit_applied": {
+    "field": "governor.vram_fraction",
+    "from": 0.8,
+    "to": 0.95
+  },
+  "before": {
+    "sha256": "97695bcafb581ed3238b5125986fd6aa837b9ed0bbbd77b1fbdf654e63f5c991",
+    "violations": [],
+    "green": true
+  },
+  "after": {
+    "sha256": "3d5bf93651f94337e71ea8aa0bbe8d60972a6d3915b0ac95cbccbcffc2f4902a",
+    "violations": [
+      "governor.vram_fraction looser than floor 0.80"
+    ],
+    "green": false
+  },
+  "edit_caught_by_checker": true,
+  "checker_module": "scripts/v0_config_check.py",
+  "ts": "20260710T003136Z"
+}
