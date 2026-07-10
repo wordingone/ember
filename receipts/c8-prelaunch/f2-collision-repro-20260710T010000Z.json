@@ -1,0 +1,44 @@
+{
+  "ticket": "ISSUE-629-REPRODUCE-FIRST-COLLISION-REPLAY",
+  "ts": "2026-07-10T04:55:16.950183Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "issue": 629,
+  "refs": [
+    123,
+    584
+  ],
+  "precure_generator_git_blob": "e12494f5dd3eea288677416aa0829a0cc95b36e1",
+  "precure_generator_sha256": "e71077962ca4a2c1156534a0103b003edc57204f3cd184bb1198a7f27a55669a",
+  "precure_generator_source_commit": "dd4c14fac75520ccdc79fa354d263120f2009198",
+  "audit_source": "issue #123 comment thread, Independent audit - falsification lead, Commitment-collision replay",
+  "inputs": {
+    "k": 1,
+    "phi_star_a": 0.1,
+    "phi_star_b": 0.4,
+    "c_claim": 1e+21,
+    "N": 368000000
+  },
+  "result": {
+    "generator_code_sha_a": "e71077962ca4a2c1156534a0103b003edc57204f3cd184bb1198a7f27a55669a",
+    "generator_code_sha_b": "e71077962ca4a2c1156534a0103b003edc57204f3cd184bb1198a7f27a55669a",
+    "generator_code_sha_equal": true,
+    "events_a": [
+      1e+20
+    ],
+    "events_b": [
+      4e+20
+    ],
+    "config_hash_a": "822f48087ffa261a7d9bd41ad335aa2c937f8afbae3fd14d21abb3b186eb695a",
+    "config_hash_b": "12d9302e876a4d9f4e2045148d71a951b0b725dc0e5d5406b3523e54e651feaf",
+    "config_hash_differ": true
+  },
+  "old_commit_receipt_shape_bound_fields": [
+    "code_sha",
+    "committed_before_gated_launch",
+    "convention",
+    "ticket"
+  ],
+  "finding": "Both materially different event schedules (phi=.10 -> events=[1e20]; phi=.40 -> events=[4e20]) share an IDENTICAL generator_code_sha and are therefore BOTH consistent with the SAME pre-cure code-only commitment receipt, which binds only code_sha+convention+committed_before_gated_launch. phi_star can be selected or changed post-hoc while the receipt still reads \"committed before launch\". Reproduces the independent-audit finding on issue #123 byte-for-byte (config_hash values match the audit comment).",
+  "status": "FAIL (pre-cure) -- vulnerability reproduced; cured by the issue #629 instance-closure commitment (see f2-instance-commit-*.json + f2_schedule_generator.verify_instance)"
+}

@@ -3,6 +3,42 @@
 F1-F4 fill amendment on issue #123, comment 4928342201, section 3 "F2 -- criterion
 (gated vs A-schedule, same operator)"). CPU-only, zero deps beyond hashlib/json.
 
+INSTANCE COMMITMENT + VERIFIER (issue #629; frozen cure adopted from the
+independent-audit disposition on issue #123, "Tighten-only clearance"
+section, refs #582 #592):
+
+Independent-audit finding (CONFIRMED, reproduced in
+tests/test_f2_instance_commitment.py): the original `--commit` receipt binds
+only `code_sha` + the convention TEXT -- an algorithm-family commitment, not
+an instance commitment. `generate_schedule(k=1, phi_star=.10, C=1e21,
+N=368000000)` and the same call with `phi_star=.40` both carry the IDENTICAL
+`generator_code_sha`, so a single code-only precommitment receipt is
+consistent with either schedule (config_hash 822f480... vs 12d9302...) --
+`phi_star` could be selected or swapped AFTER the gated arm's output while
+the receipt still reads "committed before launch".
+
+Cure: `instance_closure_body()` / `commit_instance()` / `verify_instance()`
+below bind `generator_code_sha` + `phi_star` + a placement-sweep RECEIPT
+HASH (see f2_placement_sweep.py) + `C_claim` + `N` + `ARITHMETIC_REPRESENTATION`
++ `ROUNDING_CONVENTION` into one `instance_hash`. Only `k` remains unbound --
+plugged in at gated completion per the existing check procedure (issue #123
+comment: read k from the gated-arm receipts, run the committed generator,
+assert the derived config_hash matches the pre-committed per-k fixture).
+`verify_instance()` recomputes `instance_hash` from CLAIMED instantiation
+values and REJECTS any mismatch on any bound field -- this is what closes
+the .10/.40 collision: two different phi_star values now hash to two
+different commitments, so a receipt committed at phi_star=.10 rejects a
+later claim of phi_star=.40 (see tests/test_f2_instance_commitment.py
+::TestVerifierRejectsUncommittedInputs).
+
+`map_events_to_steps()` (issue #629 deliverable 4) converts the continuous
+FLOP event targets this module already produces into exact integer
+optimizer-step boundaries under a frozen ROUNDING_CONVENTION, and receipts
+the realized budget error against the standing <=2% budget-match limit
+(BUDGET_LIMIT_PCT) -- this is the field the audit named unresolved: "a
+config hash does not yet identify the actual executable event schedule or
+prove the standing <=2% budget match."
+
 Pure function (k, phi_star, C_claim, N) -> the complete A-schedule arm growth-
 event config. This is the "placement rule" the amendment closes the v1 gap with:
 schedule event times must be a frozen pure function of PUBLIC quantities only,
@@ -129,6 +165,205 @@ def generate_schedule(k: int, phi_star: float, c_claim: float, N: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Instance commitment + verifier (issue #629)
+# ---------------------------------------------------------------------------
+
+# Bound at instance-commit time (issue #629 deliverable 1) so a hostile
+# reviewer cannot reinterpret the committed numbers under a different
+# numeric representation or rounding scheme to manufacture a second schedule
+# consistent with the same commitment.
+ARITHMETIC_REPRESENTATION = (
+    "IEEE-754 binary64 (Python float); canonical serialization via "
+    "json.dumps(obj, sort_keys=True) using Python's default float repr "
+    "(round-trip shortest-decimal, float.__repr__); no rounding is applied "
+    "to phi_star/c_claim/N before hashing -- rounding only enters via "
+    "ROUNDING_CONVENTION at the integer-step-boundary mapping stage."
+)
+
+# Bound at instance-commit time; governs map_events_to_steps() below.
+ROUNDING_CONVENTION = "round-half-away-from-zero to the nearest integer optimizer step"
+
+# Standing C8 budget-match limit (issue #123 fill amendment, "Preserved
+# verbatim: budget <=2%"), reused here for the realized-vs-claimed check.
+BUDGET_LIMIT_PCT = 2.0
+
+# Instance-commit / instance-verify receipts must carry a sha256 whose
+# digest byte-length matches this (defensive shape check on the
+# sweep-receipt-hash input -- catches truncated/garbage hashes early).
+_SHA256_HEXLEN = 64
+
+
+def _round_half_away_from_zero(x: float) -> int:
+    """The ROUNDING_CONVENTION, implemented explicitly (never Python's
+    built-in round(), which is round-half-to-even/banker's rounding -- a
+    DIFFERENT, unbound convention that would silently change results at the
+    .5 boundary)."""
+    import math
+    if x >= 0:
+        return int(math.floor(x + 0.5))
+    return -int(math.floor(-x + 0.5))
+
+
+def flops_per_step(param_count: int, batch: int, seq: int) -> float:
+    """6*N*tokens/step -- the SAME dense-transformer FLOPs/step convention as
+    scripts/cbase_grow_live.py::_flops_per_step (Kaplan et al. 2020 /
+    Chinchilla fwd+bwd estimate). Reimplemented (not imported) rather than
+    reused by import: cbase_grow_live.py pulls in timeshare_pretrain /
+    cbase_grow_dryrun (the real training stack), which would break this
+    module's standing zero-heavy-deps property (CPU-only, no torch import,
+    no gated-arm reads). The formula itself is a one-line arithmetic
+    identity -- reuse of the CONVENTION, cited, without the dependency."""
+    return 6.0 * param_count * batch * seq
+
+
+def map_events_to_steps(events, c_claim: float, flops_per_step_val: float) -> dict:
+    """Issue #629 deliverable 4: convert continuous FLOP event targets (and
+    the total claimed training budget C_claim) into exact integer
+    optimizer-step boundaries under ROUNDING_CONVENTION, and receipt the
+    realized budget error against BUDGET_LIMIT_PCT.
+
+    Pure function, zero file I/O, deterministic (see
+    tests/test_f2_instance_commitment.py::TestIntegerStepBoundaryBudgetCheck).
+    """
+    if not (flops_per_step_val > 0):
+        raise ValueError(f"map_events_to_steps: flops_per_step_val must be > 0, got {flops_per_step_val!r}")
+    if not (c_claim > 0):
+        raise ValueError(f"map_events_to_steps: c_claim must be > 0, got {c_claim!r}")
+
+    event_steps = [_round_half_away_from_zero(e / flops_per_step_val) for e in events]
+    realized_event_flops = [s * flops_per_step_val for s in event_steps]
+    total_steps = _round_half_away_from_zero(c_claim / flops_per_step_val)
+    realized_c_claim = total_steps * flops_per_step_val
+    budget_error_pct = abs(realized_c_claim - c_claim) / c_claim * 100.0
+
+    return {
+        "flops_per_step": flops_per_step_val,
+        "rounding_convention": ROUNDING_CONVENTION,
+        "event_steps": event_steps,
+        "realized_event_flops": realized_event_flops,
+        "total_steps": total_steps,
+        "c_claim": c_claim,
+        "realized_c_claim": realized_c_claim,
+        "budget_error_pct": budget_error_pct,
+        "budget_limit_pct": BUDGET_LIMIT_PCT,
+        "budget_ok": budget_error_pct <= BUDGET_LIMIT_PCT,
+    }
+
+
+def instance_closure_body(phi_star: float, c_claim: float, N: int, sweep_receipt_sha256: str) -> dict:
+    """The canonical, hashable instance-closure body: everything the frozen
+    cure requires bound EXCEPT k -- generator_code_sha, phi_star,
+    sweep_receipt_sha256, c_claim, N, arithmetic_representation,
+    rounding_convention. Raises ValueError on any uncommitted/malformed
+    input (this IS the "verifier rejects uncommitted inputs" floor: a
+    receipt can only be produced from validated instantiation values)."""
+    if not (0.0 <= phi_star < 1.0):
+        raise ValueError(f"instance_closure_body: phi_star must be in [0, 1), got {phi_star!r}")
+    if not (c_claim > 0):
+        raise ValueError(f"instance_closure_body: c_claim must be > 0, got {c_claim!r}")
+    if not isinstance(sweep_receipt_sha256, str) or len(sweep_receipt_sha256) != _SHA256_HEXLEN:
+        raise ValueError(
+            f"instance_closure_body: sweep_receipt_sha256 must be a {_SHA256_HEXLEN}-hex-char "
+            f"sha256 digest, got {sweep_receipt_sha256!r}"
+        )
+    try:
+        int(sweep_receipt_sha256, 16)
+    except ValueError:
+        raise ValueError(
+            f"instance_closure_body: sweep_receipt_sha256 must be valid hex, got {sweep_receipt_sha256!r}"
+        )
+
+    body = {
+        "generator_code_sha": CODE_SHA256,
+        "phi_star": phi_star,
+        "sweep_receipt_sha256": sweep_receipt_sha256,
+        "c_claim": c_claim,
+        "N": N,
+        "arithmetic_representation": ARITHMETIC_REPRESENTATION,
+        "rounding_convention": ROUNDING_CONVENTION,
+    }
+    canonical = json.dumps(body, sort_keys=True)
+    instance_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    body["instance_hash"] = instance_hash
+    return body
+
+
+def commit_instance(phi_star: float, c_claim: float, N: int, sweep_receipt_sha256: str,
+                     receipt_dir: str = "receipts/c8-prelaunch"):
+    """Write the one-time INSTANCE commitment receipt -- binds code_sha,
+    phi_star, sweep_receipt_sha256, C_claim, N, arithmetic representation,
+    and rounding convention, leaving only k unbound. This is issued BEFORE
+    the gated arm's run launches, same as the pre-existing code-only
+    `--commit`, but additionally closes the .10/.40 collision (see module
+    docstring)."""
+    body = instance_closure_body(phi_star, c_claim, N, sweep_receipt_sha256)
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    receipt = {
+        "ticket": "C8-PRELAUNCH-O4-F2-INSTANCE-COMMIT",
+        "ts": ts,
+        "invariant_sha256": INVARIANT_SHA256,
+        "sha_convention": SHA_CONVENTION,
+        "issue": 629,
+        "refs": [123, 582, 584],
+        "committed_before_gated_launch": True,
+        "unbound_field": "k (plugged in only after the gated run completes; "
+                          "checked against the pre-committed per-k fixture)",
+        **body,
+    }
+    fname = f"f2-instance-commit-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+    os.makedirs(receipt_dir, exist_ok=True)
+    out_path = os.path.join(receipt_dir, fname)
+    checked_write(out_path, receipt)
+    return out_path, receipt
+
+
+def verify_instance(receipt_path_or_obj, claimed_phi_star, claimed_c_claim, claimed_N,
+                     claimed_sweep_receipt_sha256):
+    """Issue #629 deliverable 2: the verifier. Recomputes instance_hash from
+    the CLAIMED instantiation values and requires an EXACT match against the
+    pre-committed receipt. Rejects (returns False, reason) on: any bound
+    field mismatch, a generator_code_sha mismatch (receipt committed under a
+    different generator version), or malformed/uncommitted-shape claimed
+    inputs (phi_star out of [0,1), bad sweep-hash shape, etc -- these raise
+    inside instance_closure_body(), caught and reported as a REJECT here
+    rather than propagating).
+
+    Returns (ok: bool, reason: str).
+    """
+    if isinstance(receipt_path_or_obj, (str, Path)):
+        with open(receipt_path_or_obj, "r", encoding="utf-8") as f:
+            receipt = json.load(f)
+    else:
+        receipt = receipt_path_or_obj
+
+    if receipt.get("generator_code_sha") != CODE_SHA256:
+        return False, (
+            "REJECT: generator_code_sha mismatch -- receipt was committed "
+            "under a different generator version than the one running this verify"
+        )
+
+    try:
+        recomputed = instance_closure_body(
+            claimed_phi_star, claimed_c_claim, claimed_N, claimed_sweep_receipt_sha256,
+        )
+    except ValueError as e:
+        return False, f"REJECT: uncommitted/invalid claimed input: {e}"
+
+    if recomputed["instance_hash"] != receipt.get("instance_hash"):
+        mismatches = [
+            k for k in ("phi_star", "c_claim", "N", "sweep_receipt_sha256",
+                        "arithmetic_representation", "rounding_convention")
+            if recomputed.get(k) != receipt.get(k)
+        ]
+        return False, (
+            f"REJECT: instance_hash mismatch (committed {receipt.get('instance_hash')!r} != "
+            f"claimed {recomputed['instance_hash']!r}); differing bound field(s): {mismatches}"
+        )
+
+    return True, "ACCEPT: claimed instantiation matches the pre-committed instance closure"
+
+
+# ---------------------------------------------------------------------------
 # Selftest
 # ---------------------------------------------------------------------------
 
@@ -195,6 +430,95 @@ def _selftest() -> int:
     if cfg3_diffN_events != expected_events_3:
         failures.append("GREEN FAIL: N must not affect the event-time formula")
 
+    # === Issue #629: instance commitment + verifier ========================
+    FAKE_SWEEP_SHA = "a" * 64
+
+    # --- RED 4: the audit's .10/.40 collision, reproduced against the OLD
+    # code-only commitment shape, still exists at the raw generator level
+    # (this is the vulnerability's ground truth -- the fix lives in the
+    # instance closure, not in generate_schedule itself). ---
+    audit_a = generate_schedule(k=1, phi_star=0.10, c_claim=1.0e21, N=368_000_000)
+    audit_b = generate_schedule(k=1, phi_star=0.40, c_claim=1.0e21, N=368_000_000)
+    if audit_a["generator_code_sha"] != audit_b["generator_code_sha"]:
+        failures.append("RED4 FAIL: generator_code_sha should be IDENTICAL across phi_star "
+                         "(this is the code-only commitment's blind spot, not a bug in generate_schedule)")
+    if audit_a["events"] != [1.0e20] or audit_b["events"] != [4.0e20]:
+        failures.append(f"RED4 FAIL: audit fixture events drifted: a={audit_a['events']} b={audit_b['events']}")
+    if audit_a["config_hash"] == audit_b["config_hash"]:
+        failures.append("RED4 FAIL: materially different schedules must NOT share a config_hash")
+    # NOTE: the literal config_hash values are NOT pinned here (unlike the
+    # audit's own replay) because config_hash embeds generator_code_sha,
+    # which changes with every edit to this file (including this cure) --
+    # pinning the audit's exact hex digests would make this selftest fail on
+    # the very commit that fixes the underlying issue. The audit's exact
+    # digests are preserved as a receipted, byte-frozen artifact instead:
+    # receipts/c8-prelaunch/f2-collision-repro-*.json (pre-cure git blob
+    # e12494f5dd3eea288677416aa0829a0cc95b36e1).
+
+    # --- RED 5: verify_instance REJECTS the .10/.40 collision under one
+    # instance commitment -- the actual cure. ---
+    with tempfile.TemporaryDirectory() as td:
+        out_path, _ = commit_instance(phi_star=0.10, c_claim=1.0e21, N=368_000_000,
+                                       sweep_receipt_sha256=FAKE_SWEEP_SHA, receipt_dir=td)
+        ok_same, _ = verify_instance(out_path, claimed_phi_star=0.10, claimed_c_claim=1.0e21,
+                                      claimed_N=368_000_000, claimed_sweep_receipt_sha256=FAKE_SWEEP_SHA)
+        ok_collision, reason_collision = verify_instance(
+            out_path, claimed_phi_star=0.40, claimed_c_claim=1.0e21,
+            claimed_N=368_000_000, claimed_sweep_receipt_sha256=FAKE_SWEEP_SHA,
+        )
+        if ok_same is not True:
+            failures.append("RED5 FAIL: matching instantiation must be ACCEPTed")
+        if ok_collision is not False:
+            failures.append("RED5 FAIL: the .10/.40 collision must be REJECTed post-cure")
+        if "REJECT" not in reason_collision:
+            failures.append(f"RED5 FAIL: rejection reason malformed: {reason_collision!r}")
+
+    # --- RED 6: verify_instance rejects malformed/uncommitted claimed input ---
+    try:
+        verify_instance({"generator_code_sha": CODE_SHA256, "instance_hash": "0" * 64},
+                         claimed_phi_star=1.5, claimed_c_claim=1.0e21,
+                         claimed_N=1, claimed_sweep_receipt_sha256=FAKE_SWEEP_SHA)
+        ok6, reason6 = verify_instance(
+            {"generator_code_sha": CODE_SHA256, "instance_hash": "0" * 64},
+            claimed_phi_star=1.5, claimed_c_claim=1.0e21, claimed_N=1,
+            claimed_sweep_receipt_sha256=FAKE_SWEEP_SHA,
+        )
+        if ok6 is not False or "REJECT" not in reason6:
+            failures.append("RED6 FAIL: out-of-domain phi_star must be REJECTed, not raise/pass")
+    except Exception as e:
+        failures.append(f"RED6 FAIL: verify_instance must reject, not raise: {e!r}")
+
+    # --- GREEN: instance closure binds all required fields, excludes k ---
+    body = instance_closure_body(phi_star=0.10, c_claim=1.0e21, N=368_000_000,
+                                  sweep_receipt_sha256=FAKE_SWEEP_SHA)
+    for field in ("generator_code_sha", "phi_star", "sweep_receipt_sha256", "c_claim",
+                  "N", "arithmetic_representation", "rounding_convention", "instance_hash"):
+        if field not in body:
+            failures.append(f"GREEN FAIL: instance closure missing bound field {field!r}")
+    if "k" in body:
+        failures.append("GREEN FAIL: k must remain UNBOUND in the instance closure")
+
+    # --- GREEN: integer step-boundary mapping + budget check (hand-computed) ---
+    steps = map_events_to_steps([1.0e20, 4.0e20], c_claim=1.0e21, flops_per_step_val=1.0e18)
+    if steps["event_steps"] != [100, 400]:
+        failures.append(f"GREEN FAIL: event_steps expected [100, 400], got {steps['event_steps']}")
+    if steps["total_steps"] != 1000:
+        failures.append(f"GREEN FAIL: total_steps expected 1000, got {steps['total_steps']}")
+    if abs(steps["budget_error_pct"]) > 1e-9:
+        failures.append(f"GREEN FAIL: exact-division budget_error_pct expected ~0, got {steps['budget_error_pct']}")
+    if steps["budget_ok"] is not True:
+        failures.append("GREEN FAIL: exact-division case should be budget_ok")
+
+    # c_claim/flops_per_step = 10.5 exactly -> rounds to 11 steps (round-half-
+    # away-from-zero), realized = 11/10.5 * c_claim => ~4.76% over budget.
+    coarse_fps = 1.0e21 / 10.5
+    steps_over = map_events_to_steps([1.0e20], c_claim=1.0e21, flops_per_step_val=coarse_fps)
+    if steps_over["total_steps"] != 11:
+        failures.append(f"GREEN FAIL: coarse-step total_steps expected 11, got {steps_over['total_steps']}")
+    if steps_over["budget_ok"] is not False or steps_over["budget_error_pct"] <= 2.0:
+        failures.append(f"GREEN FAIL: coarse-step case should exceed the 2% budget limit, "
+                         f"got budget_error_pct={steps_over['budget_error_pct']}, budget_ok={steps_over['budget_ok']}")
+
     if failures:
         for f in failures:
             print(f"SELFTEST: {f}")
@@ -235,7 +559,19 @@ def main():
     ap.add_argument("--phi-star", type=float)
     ap.add_argument("--c-claim", type=float)
     ap.add_argument("--N", type=int, default=0)
-    ap.add_argument("--commit", action="store_true", help="write the one-time pre-commitment receipt")
+    ap.add_argument("--commit", action="store_true", help="write the one-time pre-commitment receipt (code-only; superseded for instance-level use by --commit-instance, issue #629)")
+    ap.add_argument("--commit-instance", action="store_true",
+                     help="write the instance-closure commitment receipt (issue #629): binds "
+                          "code_sha + phi_star + sweep-receipt hash + C_claim + N + arithmetic "
+                          "representation + rounding convention; only k stays unbound")
+    ap.add_argument("--sweep-receipt-sha256", help="sha256 of the placement-sweep receipt (required with --commit-instance)")
+    ap.add_argument("--verify-instance", metavar="RECEIPT_PATH",
+                     help="verify a claimed (phi_star, C_claim, N, sweep-receipt-sha256) against "
+                          "a pre-committed instance-closure receipt; rejects any mismatch")
+    ap.add_argument("--map-steps", action="store_true",
+                     help="map --k's generated events (or a bare --c-claim) to integer optimizer-step "
+                          "boundaries and receipt the realized budget error; requires --flops-per-step")
+    ap.add_argument("--flops-per-step", type=float, help="FLOPs/optimizer-step for --map-steps")
     ap.add_argument("--receipt-dir", default="receipts/c8-prelaunch")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
@@ -249,8 +585,41 @@ def main():
         print(f"F2_GENERATOR_COMMIT_DONE {out_path}")
         sys.exit(0)
 
+    if args.commit_instance:
+        if args.phi_star is None or args.c_claim is None or args.sweep_receipt_sha256 is None:
+            ap.error("--commit-instance requires --phi-star, --c-claim, --sweep-receipt-sha256")
+        out_path, receipt = commit_instance(
+            phi_star=args.phi_star, c_claim=args.c_claim, N=args.N,
+            sweep_receipt_sha256=args.sweep_receipt_sha256, receipt_dir=args.receipt_dir,
+        )
+        print(json.dumps(receipt, indent=2))
+        print(f"F2_INSTANCE_COMMIT_DONE {out_path}")
+        sys.exit(0)
+
+    if args.verify_instance:
+        if args.phi_star is None or args.c_claim is None or args.sweep_receipt_sha256 is None:
+            ap.error("--verify-instance requires --phi-star, --c-claim, --N, --sweep-receipt-sha256 (the CLAIMED values)")
+        ok, reason = verify_instance(
+            args.verify_instance, claimed_phi_star=args.phi_star, claimed_c_claim=args.c_claim,
+            claimed_N=args.N, claimed_sweep_receipt_sha256=args.sweep_receipt_sha256,
+        )
+        print(reason)
+        print(f"F2_VERIFY_INSTANCE_{'ACCEPT' if ok else 'REJECT'}")
+        sys.exit(0 if ok else 1)
+
+    if args.map_steps:
+        if args.flops_per_step is None or args.c_claim is None:
+            ap.error("--map-steps requires --flops-per-step and --c-claim")
+        if args.k is not None and args.phi_star is not None:
+            events = generate_schedule(args.k, args.phi_star, args.c_claim, args.N)["events"]
+        else:
+            events = []
+        result = map_events_to_steps(events, c_claim=args.c_claim, flops_per_step_val=args.flops_per_step)
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
+
     if args.k is None or args.phi_star is None or args.c_claim is None:
-        ap.error("--k, --phi-star, --c-claim are required unless --commit or --selftest")
+        ap.error("--k, --phi-star, --c-claim are required unless --commit/--commit-instance/--verify-instance/--selftest")
 
     cfg = generate_schedule(args.k, args.phi_star, args.c_claim, args.N)
     print(json.dumps(cfg, indent=2))
