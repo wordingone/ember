@@ -332,6 +332,8 @@ is a FIXED absolute number derived from the certified 368,354,304-param pin — 
 the actual params of whatever run is being priced.** This matters directly for S1: as rungs grow, the
 same step-count stabilization segment consumes a growing fraction of a ceiling that never grows.
 
+> **[ACCOUNTING ERRATA 2026-07-10]** The certified count 368,354,304 is n_mtp=0; realized production count with 2 live MTP heads is 433,890,304 (+65,536,000). The MICRO_FIT_CEILING calculation above uses the certified count; for actual production runs, verify the ceiling against the realized parameter count. See [errata issue #679](https://github.com/wordingone/ember/issues/679).
+
 ### 5.3 Live results for the four candidate rungs (executed 2026-07-03, pure Python, no CUDA)
 
 Calling `g_budget()` with a `requested_run` descriptor (`total_steps=120, batch=16, seq=1024`,
