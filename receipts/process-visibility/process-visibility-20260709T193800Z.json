@@ -1,0 +1,63 @@
+{
+ "ts": "20260709T193800Z",
+ "issue_urls": [
+  "https://github.com/wordingone/ember/issues/159",
+  "https://github.com/wordingone/ember/issues/582",
+  "https://github.com/wordingone/ember/issues/123",
+  "https://github.com/wordingone/ember/issues/575",
+  "https://github.com/wordingone/ember/issues/580",
+  "https://github.com/wordingone/ember/issues/585",
+  "https://github.com/wordingone/ember/issues/586",
+  "https://github.com/wordingone/ember/issues/480",
+  "https://github.com/wordingone/ember/issues/577",
+  "https://github.com/wordingone/ember/issues/485",
+  "https://github.com/wordingone/ember/issues/581",
+  "https://github.com/wordingone/ember/issues/17",
+  "https://github.com/wordingone/ember/issues/207"
+ ],
+ "open_prs": [],
+ "covered_commits": {
+  ".": "6aa1f14971199eb9553a8efe80865874662375b3"
+ },
+ "delegation": {
+  "#583": {
+   "built_by": "body485 lane (boot-matrix preflight + full-registry tool-failure injection, 41 new cases)",
+   "verified_by": "fable-low verdict leg wf_d513c392-273: independent 3x suite re-execution in throwaway worktree (3189 pass, fail-set == #581's 8) + real-entrypoint boot smoke (immediate specific error, exit 1)"
+  },
+  "#584": {
+   "built_by": "prelaunch582 lane (compute_mde / f2_schedule_generator / run_ledger per #582 O2/O4/O5)",
+   "verified_by": "same verdict leg: three self-check markers re-executed PASS + O4 commit receipt keys verified; coordinator deviation ruling comment 4928735489 (run-ledger force-add accepted)"
+  },
+  "#585": {
+   "built_by": "coordinator (issue spec, AUTHOR tick)",
+   "verified_by": "pending builder (deliverable A) + GPU window (deliverable B)"
+  },
+  "#586": {
+   "built_by": "coordinator (issue spec, AUTHOR tick)",
+   "verified_by": "pending lane (consumer-enumerated round-4)"
+  },
+  "#580": {
+   "built_by": "build580 lane in flight (PR A: mapping helper + shared consumers, per sequencing ruling comment 4928687874)",
+   "verified_by": "pending PR gate (AC1 property + AC2 checker-zero-missing)"
+  }
+ },
+ "merges": [
+  {
+   "pr": 583,
+   "sha": "6185f5fb4effcb06747c3b82dd7ff5f876f182eb",
+   "merged_at": "2026-07-09T19:35:25Z",
+   "subject": "hardening: boot matrix preflight + full-registry tool-failure injection (refs #159)"
+  },
+  {
+   "pr": 584,
+   "sha": "6aa1f14971199eb9553a8efe80865874662375b3",
+   "merged_at": "2026-07-09T19:35:48Z",
+   "subject": "c8 pre-launch tools: MDE, F2 schedule generator, run-ledger (refs #582 #123)"
+  }
+ ],
+ "coordinator_disclosures": [
+  "verdict flake note: #583's own new boot-matrix case ('child exits before becoming ready') flaked 1-of-3 independent runs at 15s timeout; disclosed on #159 as a follow-up, verdict rule still met (fail-set exactly #581's 8 on runs 1 and 3)",
+  "GPU window: #480 stabilize leg live (v6, blocks 1-3/10 banked, governor empty-cache fix verified firing); cockpit intentionally DOWN for the training window per GPU-lease; restore + post-restore activity-ledger check queued at window close",
+  "storage operation closed: drive-level +71.7GB on C:, +38.8GB gross on B:, 45GB verified-archived to A:; verification retracted three wrong delete-verdicts (unpushed clone, live shared-browser profile, active fork)"
+ ]
+}

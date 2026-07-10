@@ -1,0 +1,98 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-FP32-RECONSTRUCTION",
+  "ts": "2026-07-09T22:10:25.680233+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 449,
+  "refs": [
+    482,
+    466,
+    513,
+    591
+  ],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "preregistered": "Residual hypothesis: the eps=0 gate-class RMS ratio's +0.285% excess over the predicted 1.0 is bf16 cast-back reconstruction rounding, not a genuine eps-independent term. KILL: residual persists > 0.1% under fp32-through reconstruction. PASS: residual <= 0.1% AND twin_cosine_fp32 strictly closer to 1.0 than 0.9999995827674866. residual<=0.1% with cosine unchanged = INCONCLUSIVE-BY-RULE.",
+  "scope": "fp32-reconstruction rider: admissibility control (unmodified eps0.05_control anchor), a non-gating bf16 cast-back cross-check (reproduces the banked +0.285% eps0 residual), and the actual rider leg (eps=0 down_proj reconstructed and loaded at TRUE float32, matmul executed via forward hooks at fp32, never cast back to bf16). NUMBERS + band classification per the frozen bands only; the coordinator adjudicates.",
+  "method": {
+    "reconstruction": "down_proj [1024,32768] block-twin d_a/d_b (fp32), d_mean=(d_a+d_b)/2; eps0_fp32 variant = cat([d_mean, d_mean], dim=1) kept at float32 (no cast to grown_dtype); loaded into the down_proj PARAMETER directly (bypassing load_state_dict's dtype-preserving copy_, which would have silently re-rounded it to bf16).",
+    "fp32_through_mechanism": "forward_pre_hook upcasts the incoming (bf16) activation to float32 immediately before the down_proj matmul; forward_hook downcasts the float32 output back to bf16 immediately after -- isolates the down_proj computation itself at full fp32 precision, a single-variable change from the all-bf16 baseline pipeline.",
+    "capture": "reproduces cbase_grow_rung2_gradpost_capture.py's capture_grad_post_gate (same manual_seed(42) position, same build_v0_model + load_state_dict, same _build_pinned_batch, same QAT/CE/MTP per-microstep loop).",
+    "muon_step_closure": "p5_ratio_audit.run_p5_audit._muon_step_in_copy (faithful reuse)"
+  },
+  "sanity_pre_gpu": {
+    "twin_cosine_eps0_recomputed": 0.9999995827674866,
+    "eta_rms_eps005": 0.00025676595396362245,
+    "ff_grown": 32768,
+    "interm": 16384,
+    "grown_dtype": "torch.bfloat16"
+  },
+  "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+  "u_pre_reset_lr015": {
+    "lr": 0.015,
+    "momentum": "zero buffer (RESET arm)",
+    "spectral": 0.07214184105396271,
+    "rms": 0.00027922826120629907
+  },
+  "legs": {
+    "anchor_control_eps005": {
+      "fp32_through": false,
+      "rms_ratio_post_over_pre": 1.0144757098291575,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 2.357165575027466
+    },
+    "eps0_bf16_castback_diagnostic": {
+      "fp32_through": false,
+      "rms_ratio_post_over_pre": 1.0027346701812865,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 1.7914175987243652
+    },
+    "eps0_fp32_through_RIDER": {
+      "fp32_through": true,
+      "rms_ratio_post_over_pre": 1.0079744971185747,
+      "batch_pin_check": {
+        "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+        "match": true
+      },
+      "gpu_seconds": 1.7701358795166016
+    }
+  },
+  "admissibility": {
+    "anchor_rms_ratio_banked": 1.0143604319688646,
+    "anchor_rms_ratio_in_run": 1.0144757098291575,
+    "delta": 0.00011527786029286169,
+    "admissible_delta_0": false
+  },
+  "bf16_castback_cross_check": {
+    "banked_eps0_bf16_rms_ratio": 1.0028543256818436,
+    "in_run_eps0_bf16_rms_ratio": 1.0027346701812865,
+    "delta": -0.00011965550055714758,
+    "note": "non-gating cross-check that this script's own math agrees with the banked eps0-fingerprint receipt before trusting the fp32-through leg."
+  },
+  "fp32_reconstruction_assessment": {
+    "eps0_fp32_through_rms_ratio": 1.0079744971185747,
+    "residual_pct_vs_1.0": 0.7974497118574675,
+    "twin_cosine_fp32": 0.9999995827674866,
+    "twin_cosine_bf16_banked": 0.9999995827674866,
+    "cosine_strictly_closer_to_1": false,
+    "kill_band": "residual_pct > 0.1",
+    "pass_band": "residual_pct <= 0.1 AND cosine_strictly_closer_to_1",
+    "inconclusive_band": "residual_pct <= 0.1 AND cosine NOT strictly closer (explicit clause)",
+    "band_verdict": "KILL"
+  },
+  "gpu_seconds": 5.918719053268433,
+  "wall_seconds": 125.21060514450073,
+  "device": "cuda",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "INADMISSIBLE_ANCHOR_MISMATCH"
+}

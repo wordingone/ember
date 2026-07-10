@@ -1,0 +1,28 @@
+{
+  "ts": "2026-07-10T00:18:00Z",
+  "loop": "board-integrity-audit 2-hourly",
+  "board_anchor": "receipts-totality newest predates tonight's merges; boardrun46 render in flight (duplicate-lane rule: not re-dispatched); master at d68f869e (14 PRs merged this window: 587 589 595 596 597 598 600 601 603 604 606 607 608 609)",
+  "prior_audit": "receipts/ember-totality-audit/audit-20260709T225800Z.json",
+  "prior_findings_disposition": {
+    "c_grow_flop_saving_label_blind": "CURED by PR #608 (411d35e5): structural check reads measured/label fields; verified GREEN->RED flip on the offending receipt cbase-grow-live-live-20260703T053225Z (measured:false, label:estimate). Genuine-rebuild queued: task DG-W3a (measured flop_saving receipt) in flight.",
+    "c_inv_genesis_stubs": "CURED by PR #608: check_stamped_receipts + check_errata_structure now execution-binding (test_c11 pattern); scan found 75/114 post-genesis receipts unstamped -> honest RED expected on next render. Cure path spec'd: issue #612 (append-only errata, cutoff at 411d35e5 merge ts, coverage counts disclosed; retro-stamping banned per #482).",
+    "board_ts_integrity": "CURED by PR #608: ember_totality_spec.py header ts now always datetime.now(timezone.utc) captured AFTER probes complete; caller-supplied ts accepted-but-ignored with stderr NOTE."
+  },
+  "new_green_flips_spot_verified": {
+    "C6": "PR #606: 20 executed reruns across 10 receipts; 7 deterministic-mismatch records with named cause (generator postdates receipts, 58ddf8d consolidation + 879e939/#502 fix); 3 byte-identical; rep1==rep2 self-agreement all 10.",
+    "C-BASE": "PR #607: single receipt citing hash-verified on-disk checkpoint models/cbase-smoke-run/checkpoints/step-00000610 (provenance via unmodified v0-live-20260623T105829Z). CAVEAT flagged: checkpoint bytes exist in live tree only (models/ gitignored); whether a worktree board render resolves the path is an OPEN empirical question boardrun46 answers - if RED-missing there, cure is probe-root mechanics, not the receipt.",
+    "C12": "PR #609: executed selector ablation, 11 real board decisions through live select_mode(); deletion arm 0/11 agreement; audit_incident->rollback divergence receipted. Phantom-landing record on #19 (closed citing non-ancestor commit).",
+    "C-LEGIB": "PR #604: 24/25 dirs mapped; the unmappable U+F03A junk dir DELETED coordinator-side 2026-07-10 -> 24/24 next render; clause-(c) citation-checker failure (16 broken doc links) remains, pre-existing."
+  },
+  "regressions": [],
+  "regression_note": "The two expected GREEN->RED flips (C-GROW, C-INV) are hardening working as designed, not regressions (was-hollow, now-honestly-RED).",
+  "honest_green_estimate": "pending boardrun46 render on post-#608 master; prior honest_green 9/10 of prior GREEN set; net expectation: board_green -2 (C-GROW, C-INV) +3 (C6, C12, C-BASE if path resolves) vs prior render",
+  "publication_visibility": "procvis2316 lane idle since 23:30Z; newest process-visibility receipt predates the merge burst - refresh rides boardrun46 landing; not flagged unfaithful (landings ARE published: all 14 merges are public PRs).",
+  "actions_this_tick": [
+    "issue #611 filed: serving contract (watchdog restore target must be named; tonight's 6.395-vs-22.42 GiB config masquerade)",
+    "issue #612 filed: C-INV errata spec (frozen; builder-dispatchable)",
+    "wave-3 queue to leaddegate: C-INV errata (#612), C(-1) spend-declarations revival (stalled branch fix/c-neg1-spend-declarations exists), #191 receipt semantics, #172 repoRoot",
+    "cockpit relaunch lane dispatched (task #23): rebuild on d68f869e, replace stale 7fbf4ef pane, normal mode",
+    "state/ember-audit-latest.json cursor updated"
+  ]
+}

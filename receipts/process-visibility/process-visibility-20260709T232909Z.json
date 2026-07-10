@@ -1,0 +1,110 @@
+{
+  "ts": "20260709T232909Z",
+  "issue_urls": [
+    "https://github.com/wordingone/ember/issues/123",
+    "https://github.com/wordingone/ember/issues/189",
+    "https://github.com/wordingone/ember/issues/412",
+    "https://github.com/wordingone/ember/issues/424",
+    "https://github.com/wordingone/ember/issues/336",
+    "https://github.com/wordingone/ember/issues/368",
+    "https://github.com/wordingone/ember/issues/487",
+    "https://github.com/wordingone/ember/issues/556",
+    "https://github.com/wordingone/ember/issues/568",
+    "https://github.com/wordingone/ember/issues/56",
+    "https://github.com/wordingone/ember/issues/580",
+    "https://github.com/wordingone/ember/issues/581",
+    "https://github.com/wordingone/ember/issues/582",
+    "https://github.com/wordingone/ember/issues/583",
+    "https://github.com/wordingone/ember/issues/584",
+    "https://github.com/wordingone/ember/issues/585",
+    "https://github.com/wordingone/ember/issues/587",
+    "https://github.com/wordingone/ember/issues/595",
+    "https://github.com/wordingone/ember/issues/596",
+    "https://github.com/wordingone/ember/issues/597",
+    "https://github.com/wordingone/ember/issues/598",
+    "https://github.com/wordingone/ember/issues/601"
+  ],
+  "open_prs": "none-open",
+  "covered_commits": {
+    ".": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3"
+  },
+  "delegation": {
+    "#601": {
+      "built_by": "sonnet builder lane (test-debt remediations #189 #56 #581)",
+      "verified_by": "coordinator merge gate + CI typecheck suite"
+    },
+    "#189": {
+      "built_by": "sonnet builder (master test-debt cycle)",
+      "verified_by": "CI typecheck pass + ember-cli suite verification"
+    },
+    "#412": {
+      "built_by": "sonnet builder (typecheck debt)",
+      "verified_by": "CI typecheck verification"
+    },
+    "#56": {
+      "built_by": "sonnet builder (ember-cli suite)",
+      "verified_by": "CI test suite + coordinator verification"
+    },
+    "#581": {
+      "built_by": "coordinator (test-debt tracking issue)",
+      "verified_by": "merged via PR #601; verified tests"
+    },
+    "#368": {
+      "built_by": "sonnet builder (type issues)",
+      "verified_by": "CI typecheck verification"
+    },
+    "#336": {
+      "built_by": "sonnet builder",
+      "verified_by": "CI verification"
+    },
+    "#424": {
+      "built_by": "sonnet builder",
+      "verified_by": "CI verification"
+    },
+    "#587": {
+      "built_by": "builder lane execution",
+      "verified_by": "coordinator landing gate"
+    },
+    "#595": {
+      "built_by": "builder lane execution",
+      "verified_by": "coordinator landing gate"
+    },
+    "#596": {
+      "built_by": "builder lane execution",
+      "verified_by": "coordinator landing gate"
+    },
+    "#597": {
+      "built_by": "builder lane execution",
+      "verified_by": "coordinator landing gate"
+    },
+    "#598": {
+      "built_by": "builder lane execution",
+      "verified_by": "coordinator landing gate"
+    },
+    "#123": {
+      "built_by": "research tick (field-level analysis)",
+      "verified_by": "independent verification + panel review"
+    }
+  },
+  "publication_state": {
+    "public_master_sha": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3",
+    "local_shas": {
+      ".": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3"
+    },
+    "unpublished_landings": 0
+  },
+  "merges": [
+    {
+      "pr": 601,
+      "sha": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3",
+      "mergedAt": "2026-07-09T23:29:09Z",
+      "subject": "master test-debt: typecheck exit-0 + ember-cli suite 3199/0 (refs #189 #56 #581; verifies #412 #368 #424 #336)"
+    }
+  ],
+  "prs_closed_unmerged": [],
+  "coordinator_disclosures": [
+    "Evening landings: PRs #587 #595 #596 #597 #598 merged to origin/master",
+    "Test-debt cycle (#189 #56 #581 tracked; #412 #368 #424 #336 verified by PR #601)",
+    "Master branch: typecheck exit-0 achieved, ember-cli test suite 3199/0 green"
+  ]
+}
