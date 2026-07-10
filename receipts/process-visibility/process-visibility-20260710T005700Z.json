@@ -1,0 +1,175 @@
+{
+ "ts": "20260710T005700Z",
+ "issue_urls": [
+  "https://github.com/wordingone/ember/issues/611",
+  "https://github.com/wordingone/ember/issues/612",
+  "https://github.com/wordingone/ember/issues/615",
+  "https://github.com/wordingone/ember/issues/616",
+  "https://github.com/wordingone/ember/issues/207",
+  "https://github.com/wordingone/ember/issues/241",
+  "https://github.com/wordingone/ember/issues/591",
+  "https://github.com/wordingone/ember/issues/19",
+  "https://github.com/wordingone/ember/issues/123",
+  "https://github.com/wordingone/ember/issues/193",
+  "https://github.com/wordingone/ember/issues/602",
+  "https://github.com/wordingone/ember/issues/21",
+  "https://github.com/wordingone/ember/issues/6",
+  "https://github.com/wordingone/ember/issues/88",
+  "https://github.com/wordingone/ember/issues/172"
+ ],
+ "open_prs": [],
+ "covered_commits": {
+  "from_exclusive": "decdc2f2",
+  "to_inclusive": "5a0f4416ac",
+  "count": 20
+ },
+ "delegation": {
+  "builder_lanes": [
+   "boardrun46 (haiku, board render #610)",
+   "docsfresh (sonnet, #605)",
+   "svcrestore25 (sonnet, services restore via watchdog designed path)",
+   "cockpitrelaunch (sonnet, cockpit swap to d68f869 binary)",
+   "dg-lanes via delegate-coordinator: W2c/#606, W2d/#614, W2e/#609, W2f/#613, W2g/#617, W2b/#608, W2a/#607, quick-flips/#604, custody/#596",
+   "a1-freeze lane (#603)",
+   "stab480v8 (landing chain, push-unblock ruling issued)",
+   "riders480 (rider-A vacuity + A2 real-null, CPU)"
+  ],
+  "coordinator_role": "specs, merge gates (refs==0 AND CI-green two-command shape), receipts forensics, queue amendments"
+ },
+ "merges": [
+  {
+   "pr": 590,
+   "sha": "c56763476d",
+   "mergedAt": "2026-07-09T21:12:18Z",
+   "subject": "docs: AI-lab corpus charter (11-domain floor) + GOAL addenda"
+  },
+  {
+   "pr": 587,
+   "sha": "6639839e91",
+   "mergedAt": "2026-07-09T21:51:40Z",
+   "subject": "optimizer-state index helper: muon_local_id map (refs #580)"
+  },
+  {
+   "pr": 595,
+   "sha": "8eee828cbe",
+   "mergedAt": "2026-07-09T22:11:45Z",
+   "subject": "docs: board status refresh from totality receipt"
+  },
+  {
+   "pr": 596,
+   "sha": "08b2c0f620",
+   "mergedAt": "2026-07-09T22:53:26Z",
+   "subject": "fix: C-CUSTODY violations 34 -> 23 (untracked cleared, twin-resolution)"
+  },
+  {
+   "pr": 597,
+   "sha": "14086d0703",
+   "mergedAt": "2026-07-09T23:03:05Z",
+   "subject": "cockpit: planned-outage status banner (issue #475)"
+  },
+  {
+   "pr": 598,
+   "sha": "abbce01109",
+   "mergedAt": "2026-07-09T23:07:05Z",
+   "subject": "ember-cli /goal: goal receipts feed the activity surface (#211 delta 4)"
+  },
+  {
+   "pr": 600,
+   "sha": "cdad68e2ab",
+   "mergedAt": "2026-07-09T23:19:04Z",
+   "subject": "repo-guard: scope commit-time paths check to staged diff"
+  },
+  {
+   "pr": 589,
+   "sha": "a8ecaa42cb",
+   "mergedAt": "2026-07-09T23:20:43Z",
+   "subject": "feat(#588): GPU-free cockpit boot with EMBER_GPU_FREE=1"
+  },
+  {
+   "pr": 601,
+   "sha": "782796cee1",
+   "mergedAt": "2026-07-09T23:20:54Z",
+   "subject": "master test-debt: typecheck exit-0 + ember-cli suite 3199/0"
+  },
+  {
+   "pr": 604,
+   "sha": "7be0b283ad",
+   "mergedAt": "2026-07-09T23:38:48Z",
+   "subject": "fix: board quick-flips - C-LEGIB dir map, annex round-4, C-SURFACE2/VOID-mirror verify"
+  },
+  {
+   "pr": 603,
+   "sha": "9249cec943",
+   "mergedAt": "2026-07-09T23:49:45Z",
+   "subject": "a1: eval-freeze execution - declaration, quarantine, first-ever predicate scan, held-out selection rule"
+  },
+  {
+   "pr": 607,
+   "sha": "964a997cdc",
+   "mergedAt": "2026-07-09T23:52:39Z",
+   "subject": "ember-cli: repair C-BASE clause (a)/(c) checkpoint citation drift"
+  },
+  {
+   "pr": 606,
+   "sha": "9b7a2c6175",
+   "mergedAt": "2026-07-09T23:56:25Z",
+   "subject": "C6: executed-rerun reproduction records for 10 d3-gym recipes"
+  },
+  {
+   "pr": 608,
+   "sha": "411d35e511",
+   "mergedAt": "2026-07-10T00:08:35Z",
+   "subject": "fix: probe-harden C-GROW/C-INV vocabulary gaps + totality ts self-stamp"
+  },
+  {
+   "pr": 609,
+   "sha": "d68f869e89",
+   "mergedAt": "2026-07-10T00:09:02Z",
+   "subject": "exp: C12 selector ablation + wired per-decision receipts (refs #19)"
+  },
+  {
+   "pr": 613,
+   "sha": "b7382b9412",
+   "mergedAt": "2026-07-10T00:30:39Z",
+   "subject": "exp: C-PORT simulated-device receipt + governor device-relative gaps (refs #21)"
+  },
+  {
+   "pr": 610,
+   "sha": "a17f6ff269",
+   "mergedAt": "2026-07-10T00:38:24Z",
+   "subject": "docs: board refresh 20260710 (GREEN=11 RED=25 UNEVALUABLE=1)"
+  },
+  {
+   "pr": 605,
+   "sha": "4698797f01",
+   "mergedAt": "2026-07-10T00:38:40Z",
+   "subject": "docs: freshness pass 20260709e (refs #591)"
+  },
+  {
+   "pr": 614,
+   "sha": "d10de3fef4",
+   "mergedAt": "2026-07-10T00:38:56Z",
+   "subject": "fix: EMBER_GPU_FREE=1 takes precedence over persisted endpoint (refs #602)"
+  },
+  {
+   "pr": 617,
+   "sha": "5a0f4416ac",
+   "mergedAt": "2026-07-10T00:56:18Z",
+   "subject": "exp: C-IND legs IND-5/IND-3/IND-4 executed receipts (refs #6, #88)"
+  }
+ ],
+ "prs_closed_unmerged": [
+  {
+   "pr": 599,
+   "reason": "superseded by #610 newer totality render"
+  }
+ ],
+ "coordinator_disclosures": [
+  "board render in #610 (receipt 20260710T000016Z) PREDATES the #608/#609/#613/#614/#617 merges - its C-INV/C-GROW GREENs are pre-hardening reads; fresh render dispatched (boardrun47)",
+  "C-BASE rendered RED from the #610 worktree while #607's receipt cites live-tree-verified checkpoint bytes - probe-root visibility gap filed as #615",
+  "A1 eval-freeze exclusion amendment (147 items, #193-v2 convention) landed in #603; held-out selection anchored to v1 declaration hash",
+  "P3 orphaned-after-kill reconciliation executed (found by independent audit lane): #241 B0 int8 REJECT recorded, #207 successor registered, #591 SR4-MASTER row amendment",
+  "eval-suite reference run dispatched per playbook (non-code tasks native first; humaneval-family under WSL2 split ruling)",
+  "api_spend_usd: 0.0 (all work local; no paid service consumed)"
+ ]
+}

@@ -1,0 +1,56 @@
+{
+  "ts": "2026-07-09T22:58:00Z",
+  "auditor": "audit2207 (sonnet adversary, 13 GREEN/AUDIT-OK conditions) + coordinator spot-verification by direct code/receipt reads",
+  "board_ref": "ember-totality-20260709T143435Z.json",
+  "prior_audit_ref": "audit-20260709T171500Z.json",
+  "prior_finding_recheck": {
+    "C-PROC": "CURED - newest process-visibility receipt 20260709T203500Z cites covered_commit decdc2f2 with 16 issue URLs and full delegation block; the 17:15Z staleness finding no longer holds"
+  },
+  "verified_findings": [
+    {
+      "condition": "C-GROW",
+      "severity": "high",
+      "class": "probe_unfaithful",
+      "finding": "test_c_grow.py FLOP_SAVING CHK is regex-vocabulary-only (lines 100-104, applied at line 233 as a raw-text search); it never reads the measured/label fields of the matched block. Cited receipt cbase-grow-live-live-20260703T053225Z self-declares flop_saving_vs_fromscratch label=estimate, measured=false (receipt lines ~48-54) - the R-text's explicitly excluded does-NOT-count case - yet the row is GREEN.",
+      "spot_verified": "coordinator read both files this audit window; both citations confirmed byte-level",
+      "note": "everything else in that receipt IS genuinely measured (param counts, function-preservation logit diff, losses); only the flop-saving figure is analytical",
+      "action": "probe-harden queued (degate W-series): reject/flag RED any candidate whose flop_saving block self-declares measured:false; separately, a MEASURED from-scratch FLOP baseline is a genuine-rebuild task for the GPU-window queue (refs #591)"
+    },
+    {
+      "condition": "C-INV",
+      "severity": "med",
+      "class": "probe_unfaithful",
+      "finding": "test_c_invariant.py check_stamped_receipts (lines 107-120) and check_errata_structure (lines 123-140) are unconditional-True genesis stubs ('This clause becomes active in later board runs' - it never did). The condition text's 'all post-genesis manifests and receipts carry the invariant_sha256 stamp' is never checked against any receipt.",
+      "spot_verified": "coordinator read the function bodies this audit window; every branch returns True",
+      "action": "probe-harden queued (degate W-series): implement the real post-genesis stamp scan across receipts/, execution-binding per the test_c11.py template"
+    },
+    {
+      "condition": "board-ts-integrity",
+      "severity": "med",
+      "class": "runner_defect_cross_cutting",
+      "finding": "Two independent receipts: (a) the audited board file's own header ts (143435Z) predates evidence it cites (the 203500Z C-PROC receipt) by 6+ hours - top-level ts cannot be trusted as evidence-gathering time; (b) boardrun44's receipts are stamped LOCAL time with a Z suffix (143435Z ~= 21:34 real UTC). Board_render_age consumers are broken by both.",
+      "action": "runner fix queued (degate W-series item c): stamp top-level ts at WRITE time in real UTC; boardrun45 dispatched with a mandatory ts-integrity check"
+    }
+  ],
+  "unverified_low_findings": [
+    "C-EFF: probe does not hash-verify cited source receipts (label-membership only) - harden later",
+    "C15: board reason claims 3 receipts on disk; auditor glob found 0 - reconcile file count (GREEN verdict unaffected either way: vacuous pre-epoch)",
+    "C-MANIFEST: auditor grep found 55 M-id rows vs board's 78 - likely grep-pattern artifact; re-run probe's own parser to reconcile",
+    "C-PROC: delegation entries satisfy the non-empty CHK with literal 'pending' - honest now, indistinguishable from placeholder later",
+    "C-DISC: hinges=3 fired=0 is currently vacuous (source dirs unpopulated) - re-audit once attempt receipts accumulate",
+    "C2: arm C score 1.0 rows honestly scoped as expressivity-not-task-solving; standing caution if ever cited toward C8"
+  ],
+  "counts": {
+    "audited": 13,
+    "probe_faithful": 11,
+    "probe_unfaithful": 2,
+    "receipt_genuine_confirmed": 10,
+    "receipt_genuine_unverified": 2,
+    "board_green": 10,
+    "honest_green": 9,
+    "honest_green_note": "C-GROW GREEN is unsupported pending probe harden + re-evaluation (unfaithful probe does not prove the condition false); C-PROC prior deduction restored by cure",
+    "regressions": 0
+  },
+  "strongest_probe": "C0 (fresh sha256 recomputation over on-disk bytes, exact-set disposition matching)",
+  "actions_dispatched": "probe-harden W-series task (3 items) queued via degate lead 22:56Z; boardrun45 dispatched with ts-integrity check; measured-FLOP-baseline rebuild task noted for the refs #591 queue"
+}
