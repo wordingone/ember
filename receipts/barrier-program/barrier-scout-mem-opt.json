@@ -1,0 +1,166 @@
+{
+ "audit_date": "2026-07-10",
+ "scout_model": "haiku-4.5",
+ "barriers": [
+  {
+   "barrier": "MEMORY TRAFFIC (GPU↔Host; GPU↔Disk)",
+   "measured_position": [
+    {
+     "claim": "GPU VRAM peak: 21.536 GiB (delta vs baseline 20.605 GiB)",
+     "evidence_path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json:84,85",
+     "number": "21.536 GiB used / 23.988 GiB total"
+    },
+    {
+     "claim": "Activation memory dominates: 10.9797 GiB peak during backbone_forward phase",
+     "evidence_path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json:122-128",
+     "number": "10.9797 GiB delta (per-phase measurement at micro_batch=2, seq=1024)"
+    },
+    {
+     "claim": "QAT fake-quant clone (transient per-microstep): 4.2125 GiB",
+     "evidence_path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json:113-120 + scripts/cpu_offload_adamw.py:338",
+     "number": "4.2125 GiB measured, treated as constant across micro_batch"
+    },
+    {
+     "claim": "Windows commit footprint at block-05 cold-launch: 74.514 GiB of 79.603 GiB system limit",
+     "evidence_path": "gh issue 627 comment (AC2 pace-smoke run), 2026-07-10 14:36Z",
+     "number": "74.514/79.603 GiB = 93.6% occupancy at block-05 start (post-checkpoint-load)"
+    },
+    {
+     "claim": "Intra-block commit oscillation unobserved: blind window between stage markers",
+     "evidence_path": "gh issue 627 comment 'Live v8 observation', 2026-07-10 live run",
+     "number": "External read at 3.892 GiB free (below 6.0 GiB floor) with NO governor_commit_fail emission"
+    },
+    {
+     "claim": "Measured step time: 67.2 s/step average (block 5, steps 806-815)",
+     "evidence_path": "<LOCAL> rows 1-10",
+     "number": "67.4s (step 806→807) to 68.3s (step 814→815), mean ~67.2s/step"
+    }
+   ],
+   "active_attacks": [
+    "Issue #627 (main): in-process GlobalMemoryStatusEx commit governor (R2 cure removed subprocess); front-load .grad.f32 memmap creation to low-commit optimizer-init phase (R4 cure); per-step JSONL loss trace (R5); blind-window fix via periodic in-loop governor reads proposed",
+    "Issue #446 (supporting): widen_state_dict cache-once (grown weights loaded once per seed SHA, not per-run)",
+    "Issue #459 (prior): activation estimate corrected from 6.0 GiB→10.9797 GiB (found gradient-checkpointing silent override)",
+    "Issue #480 (active leg): rung2-stabilize config C launch (micro_batch=1, CPU-offload, 100 steps over 10 blocks); block-05 executing live with commit margin 5.09 GiB (below 6.0 floor, self-healed via elastic limit expansion)"
+   ],
+   "zero_attack_gaps": [
+    "PCIe/DRAM traffic volume: no measurement of GPU↔CPU copy bandwidth, latency, or contention profile across step phases",
+    "Intra-step peak structure: allocation peaks/valleys within optimizer step() not visible (200-step block interior blind window); per-parameter loop's fresh FP32 grad allocation pattern (line 228 cpu_offload_adamw.py) causes repeating transient peaks",
+    "Step time attribution: 67.2 s/step total includes forward/backward/QAT/optimizer/IO/file-memmap-access but no phase breakdown recorded",
+    "Activation memory scaling law validation: linear micro_batch assumption (ONE data point at batch=2) unverified at batch=1 or other batch sizes",
+    "Commit elastic-limit behavior: expansion latency, contention with disk I/O, and interaction with pagefile page-out under sustained allocation unknown"
+   ],
+   "field_levers": [
+    {
+     "lever": "Micro-batch reduction (1 vs 2)",
+     "why_applicable_at_consumer_scale": "Activation memory scales linearly; batch=1 reduces 10.98 GiB→5.5 GiB (estimate); tested in Config C (current leg uses batch=1)",
+     "cost_class": "LINEAR in activation cost; constant-cost optimizer/weight/grad terms unchanged"
+    },
+    {
+     "lever": "Gradient checkpointing toggle (currently OFF per contract)",
+     "why_applicable_at_consumer_scale": "Trades activation VRAM for recompute; prior probe found estimate 14.6x undercounted with checkpointing silently ON; switchable per config, not currently active",
+     "cost_class": "SAVES activation VRAM (10.98→lower), PAYS compute time (recompute forward pass per backward)"
+    },
+    {
+     "lever": "Optimizer-state quantization (fp32→int8/int4)",
+     "why_applicable_at_consumer_scale": "Conservative 8B/param (AdamW-equivalent) masks actual split: Muon 4B/param (140 params) + AdamW 8B/param (44 params) = weighted ~5B/param. Int8 quant saves 4× more (5B→1.25B); host RAM offload already at 16.6 GiB, further reduction to 4.15 GiB recovers 12.45 GiB host-side reserve",
+     "cost_class": "SAVES host commit (current file-backed, non-committed; quantization gains spare margin for future loads)"
+    },
+    {
+     "lever": "Optimizer split enforcement (Muon for FF, AdamW for embed/norm)",
+     "why_applicable_at_consumer_scale": "Already active (issue #627 code); Muon momentum single-buffer (4B) vs AdamW dual-buffer (8B); current live exploit = momentum transplant (issue #513) reuses Muon history across rung boundary; no further lever, already mechanized",
+     "cost_class": "ALLOCATES optimally across param classes; no new savings, describes existing split"
+    },
+    {
+     "lever": "Front-load file-backed memmap allocation to low-commit phases",
+     "why_applicable_at_consumer_scale": "Issue #627 R4 cure: move .grad.f32 creation from first step (peak commit ~78.93GB) to optimizer-init (~65GB); measured block-05 cold-launch at 74.5 GiB avoids prior crash at 78.9 GiB; same total allocation, different moment",
+     "cost_class": "ORDERING (no size reduction, timing shift to phase with 13GB margin instead of 0.7GB margin)"
+    },
+    {
+     "lever": "Intra-step allocation pattern: direct copy into persistent FP32 grad memmap (vs staged alloc/free per iteration)",
+     "why_applicable_at_consumer_scale": "Current: per-parameter loop allocates fresh FP32 CPU gradient each call (line 228), freed after copy_. Proposed (issue #627 external ruling, comment #5): eliminate allocation via direct copy into already-persistent memmap. Unproven on GPU side (CPU-only probe showed bit-equality; CUDA semantics unvetted)",
+     "cost_class": "ELIMINATES transient intra-step peaks; no change to steady-state resident footprint, only intra-step oscillation"
+    },
+    {
+     "lever": "Layer freezing or sparse param updates",
+     "why_applicable_at_consumer_scale": "Not yet tested; would skip optimizer-state creation/updates for frozen layers; disclosed deviation (issue #480) shows 45 of 185 params (layers 15-19 + tail) had zero state at checkpoint load (reset to fresh init) — a live proof-of-concept that sparse-state handling works, though not a freezing control",
+     "cost_class": "ELIMINATES optimizer state for N frozen params (8B/param saved, file size unchanged but unused)"
+    }
+   ]
+  },
+  {
+   "barrier": "OPTIMIZER-STATE COST (magnitude, persistence, I/O patterns)",
+   "measured_position": [
+    {
+     "claim": "Total optimizer-state host-RAM footprint: 16.602 GiB (2.228B params × 8B conservative estimate)",
+     "evidence_path": "scripts/cpu_offload_adamw.py:40 + receipts cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json:179",
+     "number": "8 bytes/param (2 fp32 moments, conservative AdamW-equivalent bound)"
+    },
+    {
+     "claim": "Actual optimizer routing: 140 Muon (4B/param) + 44 AdamW (8B/param) = weighted 5.08 B/param",
+     "evidence_path": "scripts/cpu_offload_adamw.py:391-392 (n_muon, n_adamw) + cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json:391-395",
+     "number": "(140×4 + 44×8) / 184 = 5.08 bytes/param actual; conservatively reported as 8B"
+    },
+    {
+     "claim": "File-backed persistent state layout: .shadow.f32 (weights), .grad.f32 (lazy→persistent), .exp_avg.f32/.exp_avg_sq.f32 (moments) or .momentum.f32",
+     "evidence_path": "scripts/cpu_offload_adamw.py:179,196-197,207-208 (_memmap_from_tensor, _memmap_zeros calls)",
+     "number": "per-param files: 1 weight + 1 grad + 2 moment buffers = 4 fp32 memmaps/AdamW-param; 3 memmaps/Muon-param (weight + grad + momentum)"
+    },
+    {
+     "claim": "Zero-grad regression (issue #627 R3): prior bug caused per-step re-create of .grad.f32, cost 2.4-2.6s × ~140/step",
+     "evidence_path": "scripts/cpu_offload_adamw.py:254-293 (zero_grad docstring, R3 cure) + scripts/cbase_grow_rung2_stabilize.py:46-59 (grad_lazy_creates counter)",
+     "number": "M1 term: 2.4-2.6 s/re-create × 140 params/step = dominant regression; eliminated by persistent grad memmap"
+    },
+    {
+     "claim": "Lazy-create fallback now unreachable in steady state (counter grad_lazy_creates stays 0 after initial creation)",
+     "evidence_path": "scripts/cpu_offload_adamw.py:236-248 (lazy fallback + M1 counter)",
+     "number": "Counter monitored in receipt; non-zero after step 1 = regression detection (falsifiable claim in prereg)"
+    },
+    {
+     "claim": "Checkpoint load copy-stream pattern (issue #627 point 3): torch.optim.Optimizer.load_state_dict materialized 2× full copy on top of loaded state",
+     "evidence_path": "scripts/cbase_grow_rung2_stabilize.py:376-413 (_streamed_cpu_offload_load_state_dict override)",
+     "number": "Prior: fresh alloc(full_state) in torch.optim's _cast dictcomp, totaling 2 resident copies. Cure: per-param streaming copy_ directly into pre-allocated memmap, bounded to one tensor at a time"
+    }
+   ],
+   "active_attacks": [
+    "Issue #627 main: in-process commit governor (R2), front-load grad memmaps (R1/R4), per-step trace (R5), staged checkpoint-save (BUILD section of cbase_grow_rung2_stabilize.py:910-933), streamed load_state_dict (lines 417-454)",
+    "Issue #619 predecessor: file-backed optimizer state to eliminate Windows commit exhaustion (landed 2026-07-08, predates this scout)",
+    "Issue #637: counters for grad_lazy_creates (pre-/post-state observable, defect detection via non-zero count)",
+    "Issue #580/#587: momentum transplant (branch-A boundary recovery) + P-equivariance validation (orthogonal to state cost, same codebase)"
+   ],
+   "zero_attack_gaps": [
+    "State bytes/param per-optimizer-class: conservative 8B estimate documented but actual live state dict size per Muon vs AdamW never measured per-run (counter infrastructure present, not yet logging state sizes)",
+    "Muon momentum buffer initialization: whether pre-seeded in __init__ (line 206-209) causes fresh allocation or reuses optimizable path unverified",
+    "Commit oscillation per block: front-load happens once at optimizer-init; subsequent blocks 2-10 resume from checkpoint load (commit-expensive per RUN-death #3 diagnosis). Post-checkpoint-load commit peak (blocks 2-10) vs initial build-time commit profile (block 1) not separately traced",
+    "PCIe traffic from memmap reads during step: file-backed memmaps are OS-paged (not pre-resident); access pattern (sequential per-param vs random) and page-fault latency unknown",
+    "Quantized-state training (int8/int4 moments): zero active work; scaling properties untested"
+   ],
+   "field_levers": [
+    {
+     "lever": "Optimizer state precision: fp32 moments (current) → int8 quantization",
+     "why_applicable_at_consumer_scale": "File-backed offset already removes pagefile pressure (commit-zero cost). Quantization saves host storage (16.6 GiB → 4.15 GiB at 4×compression) and disk I/O (smaller memmap files, faster access). Muon's single momentum buffer is a prime target (4B/param → 1B/param saves 6.6 GiB for 140 Muon params).",
+     "cost_class": "SAVES storage + I/O; COSTS gradient scale range (int8 requires dynamic range management, per-layer quant explored in parameter-golf but not here)"
+    },
+    {
+     "lever": "Momentum buffer layout: dense interleaved vs per-param segmented memmaps",
+     "why_applicable_at_consumer_scale": "Current: per-param .momentum.f32 files (184 separate memmaps). Consolidation into one giant file per-optimizer-class + index lookup could improve pagefile access locality (fewer page faults during sparse random-access step patterns).",
+     "cost_class": "SAVES metadata (filesystem inodes) + I/O seek time; COSTS code complexity for indexing"
+    },
+    {
+     "lever": "State dict resume de-fragmentation: pre-allocate + stream (current cure) vs bulk-load (prior bug)",
+     "why_applicable_at_consumer_scale": "Streamed copy_ already active (issue #627 point 3). Further optimization: pre-touch all memmap pages at __init__ to avoid page-fault cascades at first step. Landed probe (2026-07-08) showed checkpoint load is a high-commit peak; pre-resident memmap would smooth it.",
+     "cost_class": "AMORTIZES allocation overhead (full write at init, no surprise allocations at runtime)"
+    },
+    {
+     "lever": "Momentum history retention across rung boundary (issue #513/#587 transplant)",
+     "why_applicable_at_consumer_scale": "Already active (branch-A transplant applies to layers 0-14 FF momentum; layers 15-19 tail reset fresh, disclosed deviation per issue #480). No new lever, describes existing design.",
+     "cost_class": "PRESERVES state continuity; COSTS disclosure/complexity (partial-state transfer, hybrid reset/transplant)"
+    },
+    {
+     "lever": "AdamW vs Muon switch per-layer (currently fixed: Muon FF, AdamW embed/norm)",
+     "why_applicable_at_consumer_scale": "Not switchable per-run; design-time choice. Muon's lower moment count (4B vs 8B) is the sole lever here; already exploited.",
+     "cost_class": "FIXED design choice, no runtime adjustment"
+    }
+   ]
+  }
+ ]
+}

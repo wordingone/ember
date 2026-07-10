@@ -1,0 +1,214 @@
+{
+ "verdicts": [
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Gap: PCIe/DRAM traffic volume measurement",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Step time (67.2 s/step) is measured aggregate; GPU↔CPU bandwidth and latency per phase are not. Cannot determine if PCIe link or contention is a bottleneck. Issue #627 measures commit state and front-load ordering, not GPU-CPU transfer velocity.",
+   "covering_evidence": "None. Issue #627 R2-R5 focus on commit governor, front-load, and loss tracing; PCIe profiling not mentioned.",
+   "decisive_experiment": {
+    "intervention": "Enable torch.profiler with GPU/CPU ops tracing; run single step through forward/backward/QAT/optimizer. Capture copy_() kernel durations.",
+    "measurement": "Extract per-phase GPU↔CPU throughput (bytes/duration) from torch.profiler output; compute fraction of theoretical PCIe 4.0 16x peak (≈32 GB/s).",
+    "kill_condition": "If measured throughput is >20 GB/s (≥62% of peak) and GPU-CPU transfer time is <10% of total step time, PCIe is not a bottleneck; else claim investigation warranted.",
+    "cost_class": "cpu-hours-now: 0.5; gpu-hours-post-run: 0.1; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Gap: Intra-step peak structure (200-step interior unmonitored)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Block governors sample at boundaries only; 200-step interior VRAM transients unknown. Per-parameter loop allocates fresh FP32 grad per call (cpu_offload_adamw.py line 228), creating potential hidden peaks. Issue #627 R5 loss trace ≠ governor reads.",
+   "covering_evidence": "Issue #627 R5 (loss trace) is listed but does not address interior VRAM sampling.",
+   "decisive_experiment": {
+    "intervention": "Add per-step (N=0..199) governor checkpoint at training-loop iteration end; log max VRAM and loss to JSONL.",
+    "measurement": "Extract step-to-step VRAM delta from JSONL; compute histogram of interior peaks vs boundary peaks; identify peak-to-trough patterns.",
+    "kill_condition": "If interior peaks never exceed boundary peaks by >500 MiB, claim transient structure is negligible and front-load suffices; else claim interior structure requires intra-step optimization.",
+    "cost_class": "cpu-hours-now: 1; gpu-hours-post-run: 0.2; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Gap: Step time attribution (no per-phase breakdown)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Measured 67.2 s/step is monolithic. No breakdown of forward/backward/QAT/optimizer/IO phases. Cannot prioritize optimization without phase-level visibility.",
+   "covering_evidence": "None. No active issue tracks per-phase timing; step-trace-cbase-grow-rung2 receipt exists but lacks per-phase aggregation.",
+   "decisive_experiment": {
+    "intervention": "Use torch.profiler kernel-level tracing or nvidia-smi with 10ms polling to segment step into (a) forward, (b) backward, (c) fake-quant, (d) optimizer, (e) save/IO. Instrument per-phase boundary markers in Python.",
+    "measurement": "Log duration per phase (average over 10 consecutive steps); compute fraction of total step time.",
+    "kill_condition": "If no phase exceeds 25% of total, claim phases are balanced; else identify top 2 phases as optimization targets.",
+    "cost_class": "cpu-hours-now: 0.5; gpu-hours-post-run: 0.1; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Gap: Activation memory scaling (batch size assumption)",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Issue #480 is actively running Config C (micro_batch=1) in blocks 5-10. Audit states 'active leg'. Baseline batch=2 logged (10.98 GiB); batch=1 result pending. Two data points sufficient to verify or refute linear assumption.",
+   "covering_evidence": "Issue #480 rung2-stabilize active leg with explicit Config C micro_batch=1 in measured_position."
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Gap: Commit elastic-limit dynamics (expansion latency, page-out contention)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Commit governor measures instantaneous state (74.5 GiB observed at block-05); expansion speed, disk I/O contention, and page-fault cascades are unmeasured. Cannot predict if subsequent blocks are safe or will hit wall.",
+   "covering_evidence": "Issue #627 R2 (in-process commit governor, current-state reading) does not address dynamics of elastic expansion or I/O latency.",
+   "decisive_experiment": {
+    "intervention": "Run existing test block under Windows Performance Toolkit (ETW) with VirtualMemory + disk I/O providers enabled.",
+    "measurement": "Extract page-file growth trace (size vs time per block); compute expansion latency (time to grow 1 GiB); I/O IOPS histogram and read-latency distribution.",
+    "kill_condition": "If page-file expansion latency is <100ms per GiB and I/O IOPS never exceed 1000, claim elastic expansion is not a bottleneck; else claim it limits throughput.",
+    "cost_class": "cpu-hours-now: 1; gpu-hours-post-run: 0.2; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Lever: Micro-batch reduction (1 vs 2)",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Issue #480 Config C explicitly micro_batch=1. Once run completes and VRAM peak is logged, lever is measured. Baseline batch=2 already known (10.98 GiB); batch=1 result will confirm linear scaling and quantify savings.",
+   "covering_evidence": "Issue #480 active leg Config C micro_batch=1."
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Lever: Gradient checkpointing toggle",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Gradient checkpointing is currently OFF per contract. Toggle is switchable. Issue #459 found it was silently ON (14.6x activation undercount). No test of toggling ON to measure activation VRAM savings vs compute-recompute cost tradeoff. High-impact if savings >2 GiB without excessive compute overhead.",
+   "covering_evidence": "Issue #459 corrected activation estimate but did not test toggling; no issue assigned to gradient checkpointing tradeoff exploration.",
+   "decisive_experiment": {
+    "intervention": "Add --gradient-checkpointing {on|off} flag; implement code branch to enable/disable at backbone_forward. Verify default OFF per contract.",
+    "measurement": "Run two matched blocks (one ON, one OFF); log max VRAM during backward pass, total step time.",
+    "kill_condition": "If activation VRAM reduction (ON vs OFF) is <1 GiB, claim savings are marginal; if step time ON is >20% slower than OFF, claim compute overhead is too high; either condition alone blocks adoption.",
+    "cost_class": "cpu-hours-now: 1; gpu-hours-post-run: 0.4; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Lever: Optimizer-state quantization (fp32→int8/int4)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Proposal calculates 4× savings (16.6 GiB host RAM → 4.15 GiB) via int8 quantization on file-backed state. File-backed storage (issue #619) already in place. Quantized training never tested; CUDA correctness, convergence impact, and dequant overhead all unknown.",
+   "covering_evidence": "No issue assigned to optimizer-state quantization.",
+   "decisive_experiment": {
+    "intervention": "Implement int8 quantization layer: (a) at checkpoint save, float32→int8 via symmetric per-group scale+zero_point; (b) during step, stream int8→float32 dequant on-demand. Add --quantized-optimizer flag.",
+    "measurement": "Log host storage size (before/after), disk I/O volume per step, step time, final loss after stabilization.",
+    "kill_condition": "If storage doesn't shrink to <5 GiB (fail ≤4× compression), experiment fails; if step time increases >15% (dequant overhead), claim cost is too high; if final loss deviates >0.5% from baseline, claim quantization hurts convergence.",
+    "cost_class": "cpu-hours-now: 2; gpu-hours-post-run: 0.5; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Lever: Front-load memmap allocation to low-commit phases",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Issue #627 R4 explicitly implements this: move .grad.f32 creation from first step (78.93 GiB, crash point) to optimizer-init (65 GiB). Measured result: block-05 commit now 74.5 GiB (vs prior 78.9 GiB before front-load). Lever is implemented and measured.",
+   "covering_evidence": "Issue #627 R4; measured_position shows block-05 74.514/79.603 GiB (93.6% full) after front-load applied."
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Lever: Intra-step allocation pattern (direct copy into persistent memmap)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Issue #627 external ruling proposes: eliminate per-param fresh FP32 grad allocation by direct-copying into pre-allocated memmap. CPU-only probe passes (bit-equal to baseline). CUDA semantics (async, stream ordering, overlapping writes) never validated. High-risk, high-reward (could eliminate transient peaks).",
+   "covering_evidence": "Issue #627 mentions proposal and CPU-only probe; CUDA validation never attempted.",
+   "decisive_experiment": {
+    "intervention": "Modify cpu_offload_adamw.py: replace fresh alloc + copy_ with direct memmap write. Pre-allocate gradient memmap at optimizer init; reuse same buffer each step. Create CPU-only variant first for validation.",
+    "measurement": "CPU-only: verify bit-equality to baseline via buffer comparison. GPU: run single step, profile memory allocator (e.g., malloc_stats via glibc), measure peak transient VRAM.",
+    "kill_condition": "If CPU-only memmap is NOT bit-equal to fresh-alloc baseline, implementation is incorrect; if GPU peak transient remains >4.5 GiB (unchanged), overhead masking prevents benefit; if step time increases >5%, overhead negates savings.",
+    "cost_class": "cpu-hours-now: 2; gpu-hours-post-run: 0.3; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 1: MEMORY TRAFFIC / Lever: Layer freezing or sparse param updates",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Issue #480 disclosed deviation: 45 of 185 params had zero state at checkpoint (layers 15-19 reset fresh). Proof-of-concept that sparse state is handled. No systematic freezing strategy implemented. Potential savings ~2 GiB optimizer state (45 params × 8B/param).",
+   "covering_evidence": "Issue #480 mentions zero-state at checkpoint; no systematic freezing strategy or planned work.",
+   "decisive_experiment": {
+    "intervention": "Identify 5 early layers (0-4) with low gradient variance (similar updates across timesteps, low per-param divergence). Implement --freeze-layers {0-4} flag; skip optimizer updates for frozen params.",
+    "measurement": "Log optimizer state size (with/without freeze), step time, loss trajectory (50 steps, unfrozen baseline vs frozen config).",
+    "kill_condition": "If optimizer state reduction is <500 MiB (negligible vs 16.6 GiB total), claim savings are marginal; if step time doesn't improve, claim optimizer isn't the bottleneck; if loss diverges >1% after 50 steps, claim freezing hurts convergence.",
+    "cost_class": "cpu-hours-now: 1.5; gpu-hours-post-run: 0.4; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Gap: Live state dict size per optimizer-class logging",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Conservative estimate 8B/param documented; audit calculates actual weighted 5.08B/param (140 Muon @4B + 44 AdamW @8B). Neither per-Muon nor per-AdamW class sizes logged per-run. Cannot validate stability across different model shapes or drift over time.",
+   "covering_evidence": "No issue assigns per-run state-size logging by optimizer class.",
+   "decisive_experiment": {
+    "intervention": "Add logging at checkpoint save: for each optimizer param, emit JSON row with {param_name, optimizer_class, state_dict[param].nbytes}. Aggregate per-class after load.",
+    "measurement": "Extract per-class mean bytes from logs; verify Muon ≈4B, AdamW ≈8B; compute weighted average across all params.",
+    "kill_condition": "If Muon averaged <3.8 B/param or AdamW averaged >8.5 B/param (outside expected range ±5%), claim conservative estimate is stale and needs re-calibration.",
+    "cost_class": "cpu-hours-now: 0.5; gpu-hours-post-run: 0; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Gap: Muon momentum pre-seeding optimization (lines 206-209)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "cpu_offload_adamw.py lines 206-209 pre-seed Muon momentum buffer. Whether fresh allocation or reuse path is faster remains unverified micro-optimization, low impact but measurable.",
+   "covering_evidence": "No issue tracks optimizer initialization micro-tuning.",
+   "decisive_experiment": {
+    "intervention": "Implement two paths: (a) current fresh allocation, (b) pre-allocated reuse from prior checkpoint. Add --muon-momentum-reuse {fresh|reuse} flag. Measure latency for 10 consecutive optimizer inits.",
+    "measurement": "Log time per init path; compute mean and std of initialization latency.",
+    "kill_condition": "If reuse is <20% faster than fresh, claim benefit is marginal; if no measurable difference, claim optimization is not applicable.",
+    "cost_class": "cpu-hours-now: 1; gpu-hours-post-run: 0.05; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Gap: Post-checkpoint-load commit profile (blocks 2-10)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Front-load (issue #627 R4) reduces block-1 cold-launch commit. Blocks 2-10 resumes carry different profile (weights/grads already loaded). Never separately traced. Cannot confirm front-load suffices for all blocks or if blocks 2+ have hidden peaks.",
+   "covering_evidence": "Issue #627 addresses block-1 init; no issue traces block resumptions.",
+   "decisive_experiment": {
+    "intervention": "Add governor checkpoint immediately after block resume (right after checkpoint load, before first step of block N). Log commit level at each block resume.",
+    "measurement": "Collect commit at block-1, block-2, ..., block-10 resume (single run across full 10-block sequence). Compute delta and identify peak block.",
+    "kill_condition": "If any block-2+ resume commit is ≥74 GiB (matching block-05 observed), claim front-load doesn't cover resumptions; else claim all resumes are safe.",
+    "cost_class": "cpu-hours-now: 0.5; gpu-hours-post-run: 0.2; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Gap: Memmap filesystem-paged access patterns (I/O locality, page faults)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "File-backed optimizer state (184 .momentum.f32 files) accessed during each step. Sequential vs random access patterns, page-fault rate, and I/O latency are unmeasured. Could impact step-time variance or commit expansion cost.",
+   "covering_evidence": "No issue tracks I/O access patterns or page-fault profiling.",
+   "decisive_experiment": {
+    "intervention": "Run test block under Windows ETW with kernel VirtualMemory (page-fault) and FileIO (disk read/write) providers enabled.",
+    "measurement": "Extract page-fault rate (major/minor faults per step), I/O latency histogram (read-wait time in ms), I/O pattern (sequential vs random via file offsets).",
+    "kill_condition": "If page-fault rate is <10 per step and I/O latency is <10ms per read, claim I/O is not a bottleneck; if either exceeds threshold, investigate further.",
+    "cost_class": "cpu-hours-now: 1; gpu-hours-post-run: 0.2; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Gap: Quantized-state training (int8/int4)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "File-backed optimizer state (issue #619) enables int8/int4 quantization. Quantized training never tested; CUDA correctness, convergence impact, and dequant overhead unknown. Same lever as BARRIER 1 Lever 3.",
+   "covering_evidence": "No issue assigned to quantization.",
+   "decisive_experiment": {
+    "intervention": "Implement int8 quantization layer: (a) at checkpoint save, float32→int8 via symmetric per-group scale+zero_point; (b) during step, stream int8→float32 dequant on-demand. Add --quantized-optimizer flag.",
+    "measurement": "Log host storage size (before/after), disk I/O volume per step, step time, final loss after stabilization.",
+    "kill_condition": "If storage doesn't shrink to <5 GiB (fail ≤4× compression), experiment fails; if step time increases >15% (dequant overhead), claim cost is too high; if final loss deviates >0.5% from baseline, claim quantization hurts convergence.",
+    "cost_class": "cpu-hours-now: 2; gpu-hours-post-run: 0.5; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Lever: Momentum buffer consolidation (184 files → single giant file)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Proposal: consolidate 184 separate .momentum.f32 memmap files into single giant file with per-param index. Improves filesystem metadata overhead and I/O locality. Unimplemented; impact on step time unknown.",
+   "covering_evidence": "No issue assigns consolidation.",
+   "decisive_experiment": {
+    "intervention": "Implement consolidated file format: single .momenta.f32 (giant buffer) + index JSON ({param_name: {offset, length}}). Rewrite CPU-offload to index into consolidated file.",
+    "measurement": "Log filesystem metadata cost (file handles, inode lookups via ETW), step time, I/O IOPS distribution (consolidation vs per-file).",
+    "kill_condition": "If step time worsens or stays flat (consolidation overhead not amortized), claim refactor not worth doing; if metadata overhead remains >5% of step time, claim benefit is marginal.",
+    "cost_class": "cpu-hours-now: 3; gpu-hours-post-run: 0.3; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Lever: State dict resume pre-touch (anticipatory paging)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Streamed load (issue #627 point 3) active. Checkpoint load is high-commit peak. Proposal: pre-touch memmap pages at __init__ to avoid page-fault cascades at first step. Unimplemented; could smooth expansion latency.",
+   "covering_evidence": "Issue #627 mentions streamed load; no pre-touch strategy mentioned.",
+   "decisive_experiment": {
+    "intervention": "Add pre-touch phase at optimizer init: iterate memmap pages sequentially, touch each (read first byte) to fault into RAM. Measure pre-touch latency and post-init commit level.",
+    "measurement": "Log time for pre-touch phase, commit at optimizer init (with vs without pre-touch), first-step page-fault count.",
+    "kill_condition": "If pre-touch latency exceeds 5 seconds (unacceptable at init), claim cost is too high; if commit doesn't reduce or first-step faults don't decrease, claim benefit is negligible.",
+    "cost_class": "cpu-hours-now: 1; gpu-hours-post-run: 0.1; days: 0"
+   }
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Lever: Momentum history transplant across rung boundary",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Issue #513/#587 implements momentum transplant across rung boundary: layers 0-14 FF transplant, layers 15-19 reset fresh. Issue #480 discloses result: 45 params zero state at checkpoint. Lever is active and measured.",
+   "covering_evidence": "Issue #513/#587; issue #480 shows outcome (45 zero-state params, layers 15-19 reset)."
+  },
+  {
+   "target": "BARRIER 2: OPTIMIZER-STATE COST / Lever: Optimizer routing per-layer (Muon FF vs AdamW embed/norm)",
+   "verdict": "NOT_FEASIBLE_LOCAL",
+   "reason": "Design-time fixed choice (Muon routes to FF layers, AdamW to embed/norm). Routing is hardcoded at model build, not adjustable at runtime. Changing requires model architecture re-spec and retraining from scratch. Not a local runtime lever.",
+   "covering_evidence": "Audit states 'FIXED design; no runtime adjustment' — architectural constraint, not operational lever."
+  }
+ ]
+}
