@@ -1596,6 +1596,7 @@ def run_v0_segment(
     grad_accum_steps: int = 1,
     offload_optimizer_state: bool = False,
     mmap_cache_dir: str | None = _RUN_V0_SEGMENT_MMAP_CACHE_DIR_UNSET,
+    abort_event: "Any | None" = None,
 ) -> dict:
     """Run a v0 pretrain segment with the full survivor stack against the
     frozen contract. CPU dry-run by default; the real c03 path is gated by the
@@ -1755,9 +1756,33 @@ def run_v0_segment(
     last_ckpt_dir: str | None = None
     t_start = time.perf_counter()
     lr_mults: list[float] = []
+    aborted_by_pace_gate = False  # ember #627 R4 (in-run pace gate)
 
     for local_step in range(n_steps):
         global_step = resume_step + local_step
+
+        # ember #627 R4 -- in-run pace gate cooperative check. An external
+        # watchdog (cbase_grow_rung2_stabilize._run_block) sets abort_event when
+        # the block exceeds its deadline. Checked at the step BOUNDARY (never
+        # mid-step), so the abort is clean: the `local_step` steps already
+        # applied get checkpointed here and the loop returns, rather than the
+        # process being force-killed. abort_event=None (every existing caller)
+        # makes this a no-op -- zero behavior change off the stabilize path.
+        if abort_event is not None and abort_event.is_set():
+            if local_step > 0:
+                rng = capture_rng()
+                last_ckpt_dir = save_checkpoint(
+                    run_dir, global_step,
+                    model.state_dict(), save_optimizers_state(optimizers), rng,
+                    extra={"last_loss": losses[-1] if losses else None,
+                           "segment_id": segment_id,
+                           "optimizer_mode": routing["mode"], "ce_impl": ce_impl,
+                           "mtp_enabled": bool(mtp_enabled),
+                           "total_steps": total_steps,
+                           "pace_gate_abort": True})
+            aborted_by_pace_gate = True
+            break
+
         micro_losses: list[float] = []
 
         for micro_idx in range(grad_accum_steps):
@@ -1890,6 +1915,7 @@ def run_v0_segment(
         "pacing": pacing_snapshot(),
         "last_checkpoint": last_ckpt_dir,
         "resume_checkpoint": resume_checkpoint,
+        "aborted_by_pace_gate": aborted_by_pace_gate,
         "deviation_receipts": deviations,
         "sha_convention": (
             "sha256 over on-disk raw bytes (binary read, no line-ending "
