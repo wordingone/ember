@@ -1,0 +1,11 @@
+{
+  "probe": "c_invariant",
+  "condition": "C-INV",
+  "timestamp": "2026-07-10T01:04:08.568619Z",
+  "status": "RED",
+  "reason": "Stamped receipts: 104/152 post-genesis receipt(s) missing/mismatched invariant_sha256 stamp (of 914 receipts scanned under receipts/); first offenders: [\"receipts/c-base-provenance-gap-archaeology-20260707T025647Z.json (ts='2026-07-07T02:56:47Z', invariant_sha256=None)\", \"receipts/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json (ts='2026-07-09T23:45:58Z', invariant_sha256=None)\", \"receipts/cbase-gpu-verify-20260707T014930.json (ts='2026-07-07T01:49:30.546657Z', invariant_sha256=None)\"]",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "invariant_file_hash": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "invariant_breach": true,
+  "complete": false
+}
