@@ -1,0 +1,63 @@
+{
+  "ts": "2026-07-10T20:38:26Z",
+  "kind": "board-integrity-audit",
+  "rotation_batch": ["C-BASE", "C-MANIFEST", "C-AUTO"],
+  "prior_batch_receipt": "receipts/ember-totality-audit/audit-20260710T145200Z.json",
+  "board_anchor": "scripts/ember_totality/receipts-totality/ember-totality-20260710T163504Z.json",
+  "board_fresh": "scripts/ember_totality/receipts-totality/ember-totality-20260710T202628Z.json",
+  "board_commit": "3d2c681",
+  "board_summary": {"green": 12, "red": 24, "unevaluable": 1, "audit_ok": 3, "verdict_changes_vs_anchor": 0},
+  "method": "3 read-only sonnet adversaries (workflow wf_9d5b165c-7cf, schema-forced), coordinator spot-verification of every load-bearing quoted field against raw files before banking",
+  "findings": [
+    {
+      "slug": "C-BASE",
+      "probe_faithful": "FALSE",
+      "receipt_genuine": "TRUE",
+      "severity": "CRITICAL",
+      "spot_verified": [
+        "receipts/grow-operator-dryrun-20260708T060841Z.json lines 163-165: \"pass\": false, \"verdict\": \"FAIL\", \"kill_criterion\": \"post_grow_cpu_training_native_crash\"; line 16 \"replays\": false; line 18 \"post_grow\": false",
+        "scripts/ember_totality/test_c_base.py lines 331-370: clause-(d) loop matches GROW_OP_MARKERS/GROW_REPLAY_MARKERS as substrings of the flattened JSON (key NAMES count regardless of boolean value), validates only the NESTED grow_operator_evidence receipt's verdict, and never reads the candidate's own pass/verdict fields; degeneracy check short-circuits when verification.loss_trace is absent"
+      ],
+      "gap": "Clause (d) accepts a candidate receipt that self-declares FAIL. The live cited receipt (grow-operator-dryrun-20260708T060841Z.json) is a self-disclosed FAIL - post-grow CPU training crashed with a native access violation (exit 3221225477) and the grown checkpoint never demonstrated training replay - yet its key names satisfy the markers and its nested evidence pointer (grow-op-verify-20260708T060841Z.json, PASS scoped to a single fixed-batch function-preservation logit-diff only) satisfies the evidence gate. Board GREEN row cites this receipt by name. The honesty of the 07-08 receipt pair (authored after the voided 07-07 fabrication, 'never tuned toward green') was defeated by the probe's blindness to pass/verdict.",
+      "true_state": "C-BASE clauses (a)/(c) genuine (sha256 of step-00000610/model.pt re-verified by auditor, 867847498 bytes, matches manifest and repair receipt). Clause (d) is genuinely NOT satisfied: no post-grow training replay has ever completed. Probe fix flips C-BASE to honest RED until a successor grow run passes.",
+      "actions": ["probe-harden PR dispatched (candidate pass/verdict rejection + boolean-key-aware marker matching)", "genuine-rebuild queued: successor grow-operator dry-run that completes a post-grow training segment (GPU work, sequenced behind barrier legs)"],
+      "ownership": "both"
+    },
+    {
+      "slug": "C-MANIFEST",
+      "probe_faithful": "FALSE",
+      "receipt_genuine": "TRUE",
+      "severity": "CRITICAL",
+      "spot_verified": [
+        "scripts/ember_totality/test_c_manifest.py:170 _CID_RE separator alternation (?:--|em-dash|en-dash|:|\\*\\*| -) has no '.' - docs/spec/conditions-v1.md:438 and :441 use '- **C-MANIFEST.**' / '- **C-TALLY.**' (period separator), so both bullets fail _CID_RE.match and vanish from the denominator",
+        "test_c_manifest.py:199 comment 'skip the meta-conditions that ARE the manifest/tally machinery itself' sits above an unconditional ids.append(cid) - no skip logic exists; the exclusion is a punctuation accident, not a designed exemption",
+        "grep MANIFEST|TALLY over docs/ember-completeness.md: zero condition rows (only unrelated 'SUB-MANIFESTS' substring at line 96)"
+      ],
+      "gap": "The probe's denominator regex silently excludes exactly the two section-4 conditions that ARE the manifest/tally machinery, and both are genuinely unmanifested today - per the condition's own rule text this is invalid_unmanifested_piece, i.e. the condition is actually FALSE right now while the board shows GREEN. A cosmetic punctuation reformat of two bullets would flip the board row with zero change in completion state.",
+      "true_state": "Receipt is genuine subprocess output (byte-reproducible), but current GREEN is false: 40 section-4 bullets exist, probe sees 38, and the 2 unseen ones are unmanifested. Cure is same-PR: widen the regex AND add the two genuinely-true manifest rows (the machinery exists and runs), so the row stays GREEN honestly.",
+      "actions": ["probe-harden + genuine-rebuild in one PR dispatched: _CID_RE widened to accept '.' separator, C-MANIFEST + C-TALLY rows added to docs/ember-completeness.md with real receipt pointers, receipt-cell non-emptiness check added to _parse_manifest_rows, dead skip comment removed"],
+      "ownership": "both",
+      "regression_note": "C-MANIFEST rendered as AUDIT-OK on the live board; this batch demotes it to hollow-GREEN (never previously deep-audited in rotation - not a was-genuine-now-hollow regression, an inception-hollow discovery)"
+    },
+    {
+      "slug": "C-AUTO",
+      "probe_faithful": "PARTIAL",
+      "receipt_genuine": "TRUE",
+      "severity": "MAJOR",
+      "spot_verified": [
+        "test_c_auto.py:51 RUNG_PROVENANCE_FIELDS R0=None; :161 claim-receipt check is filename-pattern-only (startswith('{rung}-claim-') + endswith('.json')), content never parsed in the primary pass"
+      ],
+      "gap": "Today's GREEN is honestly vacuous (zero rungs claimed, disclosed by the probe's own docstring; autonomy-ladder-state.json rungs:{} clean at commit). But the claim-verification path that becomes load-bearing at first R0 claim is stub-forgeable: 5 trivial ts-stub JSONs + 1 empty pattern-named claim file + a state edit = GREEN R0 with zero autonomous execution.",
+      "true_state": "No fraud live. Hardening must land BEFORE the first rung claim.",
+      "actions": ["probe-harden ticket filed: ISO-8601 ts + cross-reference to independently-timestamped artifacts, claim-receipt content schema validation incl. live git SHA check, structured provenance token replacing 'ember' substring heuristic"],
+      "ownership": "probe-harden"
+    }
+  ],
+  "carried_from_prior_batch": {
+    "c_eff_harden": "CURED via #699 - C-EFF holds GREEN under the hardened execution-binding probe on the 20260710T202628Z render",
+    "process_visibility_schema_gap": "process-visibility receipt lacks publication_state field (clause-f); substantive check passes (all landings via public PRs); fold into next process-receipt refresh"
+  },
+  "honest_green_delta": "-1 pending harden-PR merge: C-BASE GREEN is hollow and flips to honest RED on probe fix (successor grow run required to re-earn). C-MANIFEST stays GREEN via same-PR genuine rows. C-AUTO unchanged (vacuous-honest).",
+  "regression_alarm": "none was-genuine-now-hollow; both CRITICALs are inception-hollow (probe blind spots present since the probes were authored)",
+  "rotation_cursor_next": ["C-DISC", "C-ENF", "C-PORT", "C0"]
+}
