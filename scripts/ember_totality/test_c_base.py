@@ -225,6 +225,79 @@ def _is_degenerate_loss_trace(loss_trace) -> bool:
     return False
 
 
+def _is_pass_class_verdict(verdict) -> bool:
+    """PASS-class bar: verdict is a string containing PASS / VERIFIED /
+    TRAINABLE (case-insensitive). Non-string values never match. Shared
+    between the nested grow_operator_evidence receipt check and the
+    candidate's own top-level pass/verdict self-declaration check (audit
+    2026-07-10T20:38:26Z, C-BASE clause-(d) probe-faithful=FALSE finding)."""
+    if not isinstance(verdict, str):
+        return False
+    v = verdict.upper()
+    return "PASS" in v or "VERIFIED" in v or "TRAINABLE" in v
+
+
+def _candidate_self_declares_pass(obj: dict) -> bool:
+    """Reject a clause-(d) candidate whose own top-level pass/verdict
+    fields do not positively declare a pass.
+
+    HARDENED [audit 2026-07-10T20:38:26Z]: the prior probe validated only
+    the NESTED grow_operator_evidence receipt's verdict and never read
+    the candidate's own pass/verdict fields -- so a self-disclosed FAIL
+    (grow-operator-dryrun-20260708T060841Z.json: pass=false,
+    verdict="FAIL" after a post-grow CPU training native crash) was
+    selectable merely because its key NAMES (replays, post_grow, ...)
+    satisfied the marker lists regardless of their boolean value. A
+    candidate lacking BOTH pass and verdict fields is also rejected -- it
+    must positively declare pass, not merely fail to declare fail.
+    """
+    has_pass = "pass" in obj
+    has_verdict = "verdict" in obj
+    if not has_pass and not has_verdict:
+        return False
+    if has_pass and obj.get("pass") is False:
+        return False
+    if has_verdict and not _is_pass_class_verdict(obj.get("verdict")):
+        return False
+    return True
+
+
+def _collect_kv_pairs(obj, out: list[tuple[str, object]]) -> None:
+    """Walk nested dicts/lists collecting every (key, value) pair, key
+    normalized (lowercased, '-'/' ' -> '_') so a receipt's literal JSON
+    key can be checked against a marker regardless of hyphen/underscore/
+    space spelling."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(k, str):
+                out.append((k.lower().replace("-", "_").replace(" ", "_"), v))
+            _collect_kv_pairs(v, out)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_kv_pairs(item, out)
+
+
+def _marker_satisfied(marker: str, text: str, kv_pairs: list[tuple[str, object]]) -> bool:
+    """A marker counts as satisfied via substring match on the flattened
+    text UNLESS the receipt also uses that marker as a literal JSON
+    boolean key somewhere -- in that case the marker is BOOLEAN-GATED: it
+    is satisfied only if at least one occurrence of that key carries
+    value True.
+
+    HARDENED [audit 2026-07-10T20:38:26Z]: closes the gap where
+    "replays": false / "post_grow": false satisfied GROW_REPLAY_MARKERS
+    by key NAME alone, regardless of the (negative) boolean value.
+    Prose-phrase markers that are never used as a literal JSON boolean
+    key (e.g. "function-preserv", "layer-stacking") keep substring
+    matching on the flattened text, unchanged.
+    """
+    norm_marker = marker.lower().replace("-", "_").replace(" ", "_")
+    bool_occurrences = [v for k, v in kv_pairs if k == norm_marker and isinstance(v, bool)]
+    if bool_occurrences:
+        return any(v is True for v in bool_occurrences)
+    return marker in text
+
+
 def _validate_grow_operator_evidence(evidence_path: str, all_receipts: list[Path]) -> bool:
     """Validate grow_operator_evidence points to a real receipt with PASS verdict.
 
@@ -245,8 +318,7 @@ def _validate_grow_operator_evidence(evidence_path: str, all_receipts: list[Path
             if obj is None:
                 return False
             # Look for a PASS-class verdict (contains "PASS" or "VERIFIED" or similar)
-            verdict = obj.get("verdict", "").upper()
-            if "PASS" in verdict or "VERIFIED" in verdict or "TRAINABLE" in verdict:
+            if _is_pass_class_verdict(obj.get("verdict", "")):
                 return True
             return False
 
@@ -337,10 +409,25 @@ def main() -> int:
         obj = _read_json(rp)
         if obj is None:
             continue
-        text = _flatten_text(obj)
 
-        # Must have grow-operator markers AND replay markers
-        if not (any(g in text for g in GROW_OP_MARKERS) and any(r in text for r in GROW_REPLAY_MARKERS)):
+        # HARDENED [audit 2026-07-10T20:38:26Z]: the candidate's OWN
+        # top-level pass/verdict must positively declare a pass BEFORE
+        # marker matching runs -- a self-disclosed FAIL is never
+        # selectable regardless of which key names its JSON happens to
+        # carry.
+        if not _candidate_self_declares_pass(obj):
+            continue
+
+        text = _flatten_text(obj)
+        kv_pairs: list[tuple[str, object]] = []
+        _collect_kv_pairs(obj, kv_pairs)
+
+        # Must have grow-operator markers AND replay markers. HARDENED:
+        # boolean-key-aware matching -- see _marker_satisfied.
+        if not (
+            any(_marker_satisfied(g, text, kv_pairs) for g in GROW_OP_MARKERS)
+            and any(_marker_satisfied(r, text, kv_pairs) for r in GROW_REPLAY_MARKERS)
+        ):
             continue
 
         # HARDENED: require explicit grow_operator_evidence field
