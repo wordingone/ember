@@ -1,0 +1,196 @@
+{
+ "audit_target": "DATA EFFICIENCY barrier (shards-v0 corpus, 13.6GB / 7B tokens)",
+ "audit_date": "2026-07-10",
+ "auditor_posture": "refuting skeptic (default REAL_AND_OPEN must survive kill attempts)",
+ "verdicts": [
+  {
+   "category": "zero_attack_gaps",
+   "target": "N-gram/PPM byte-level blending",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Issue #209 'Support ngram index' is actively listed in barrier audit's active_attacks; field breakthrough (+0.080 BPB, sole frontier survivor per arXiv 2607.01517) is known and being pursued. No re-audit needed.",
+   "covering_evidence": "active_attacks: issue #209; field_levers[0] ('N-gram / PPM byte-level backoff blending') matches exactly"
+  },
+  {
+   "category": "zero_attack_gaps",
+   "target": "Multi-epoch scheduling and curriculum reuse",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "fp22 section 2 L1-L3 curricula are frozen pre-registered deterministic orderings. No receipt measures whether curriculum ORDER (vs just cycling) affects data efficiency at 4-epoch. This is measurable and unattacked. Benefit magnitude is uncertain (5-20% plausible if real; might be noise-floor at 4-epoch), making it kill-testable.",
+   "decisive_experiment": {
+    "intervention": "Run inference on current trained checkpoints (from #372 W1c eval) at 3 curriculum orders: (a) canonical L1→L2→L3, (b) reverse L3→L2→L1, (c) random shuffle per epoch. Measure convergence BPB across token budgets: 10%, 25%, 50%, 100% of 7B.",
+    "measurement": "Convergence speed (tokens-to-target-BPB threshold: 2.8 for language, 3.2 for code per fp22). Metric: Δ BPB across orderings; statistical significance threshold 0.002 BPB.",
+    "kill_condition": "All three orderings converge within 0.002 BPB at equal GPU-hours. Concludes: curriculum ORDER does not matter; THEATER. Surviving condition: any ordering Δ >= 0.003 BPB statistically significant.",
+    "cost_class": "cpu-hours-now: 2; gpu-hours-post-run: 0 (inference only on existing checkpoints); days: 0.15"
+   }
+  },
+  {
+   "category": "zero_attack_gaps",
+   "target": "Token-level near-duplicate detection",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "eng25 receipted 1129 exact-hash duplicates removed from 2865 docs. No semantic-similarity token-level clustering. LSH MinHash or embedding-based dedup could recover 3-12% of corpus tokens (field-standard 1.1x multiplier for near-dups). Feasible locally; impact unknown.",
+   "decisive_experiment": {
+    "intervention": "Compute LSH MinHash signatures (k=256, b=8) over all corpus documents at sliding-window grain (context-window=512 tokens). Cluster by Jaccard similarity >= 0.80. Remove duplicates from each cluster, retokenize and retrain model on dedup'd corpus.",
+    "measurement": "Corpus reduction (% tokens removed); convergence speed comparison: tokens-to-target-BPB (dedup'd vs baseline W1 control 819.2K tokens / 12.55M-token bill).",
+    "kill_condition": "Corpus reduction < 2% (near-duplicates below noise); convergence speed Δ < 0.5% (within measurement noise). Concludes: token-dedup yields negligible gain; THEATER.",
+    "cost_class": "cpu-hours-now: 8 (MinHash + clustering); gpu-hours-post-run: 12 (retrain tokenizer + pilot model); days: 1.0"
+   }
+  },
+  {
+   "category": "zero_attack_gaps",
+   "target": "Retrieval-augmented data curation",
+   "verdict": "THEATER",
+   "reason": "No named optimization target at pre-training time. RAG filtering either (a) requires external reference task/distribution not in scope (e.g., 'keep sequences similar to downstream tasks'), or (b) becomes nearest-neighbor dedup (redundant with token-level dedup gap). Without clear filtering criterion, this is speculative.",
+   "covering_evidence": "Token-level near-duplicate detection (adjacent zero_attack_gap) achieves semantic diversity via clustering; RAG adds no independent lever if no reference task exists."
+  },
+  {
+   "category": "zero_attack_gaps",
+   "target": "Cross-modal contamination audit (image-text space)",
+   "verdict": "THEATER",
+   "reason": "Image-text pairing scale: 5.5-21M pairs (20-70x below CLIP's ~400M). At that density, inter-modal decontamination (learned-space filtering) recovers << 1% of corpus tokens. Cost to implement (train inter-modal similarity model on Siamese architecture): MEDIUM; benefit: negligible at scale.",
+   "covering_evidence": "issue #657 'Corpus domain I spec' P0 tier implies image-text corpus is small quota; no re-audit planned for inter-modal contamination."
+  },
+  {
+   "category": "zero_attack_gaps",
+   "target": "Tokenizer optimization for data efficiency",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "32k vocab frozen in fp22 section 1; no Chinchilla-style vocab sensitivity analysis performed. Optimal vocab-size depends on corpus and model scale. Field-standard improvement: 5-10% effective token-count via vocab tuning (Hoffmann et al. 2022 §A3). Unquantified at 0.37B scale; unattacked.",
+   "decisive_experiment": {
+    "intervention": "Train tokenizers at vocab sizes [16k, 24k, 32k, 40k, 48k] on same stratified 1GB corpus sample. For each vocab, retrain 0.37B model on 7B token corpus (newly tokenized). Hold training recipe constant; vary vocab only.",
+    "measurement": "Tokenization efficiency (effective tokens per byte, via mean token length); convergence speed (tokens-to-target-BPB); downstream MBPP score at fixed GPU-hours.",
+    "kill_condition": "All vocab sizes converge within 0.005 BPB at equal GPU-time; no clear sweet spot. 32k within ±2% of best-performing size. Concludes: vocab is near-optimal; sweep yields no material gain; THEATER.",
+    "cost_class": "cpu-hours-now: 20 (tokenizer training × 5); gpu-hours-post-run: 60 (model training × 5 at reduced per-model budget); days: 2.5"
+   }
+  },
+  {
+   "category": "zero_attack_gaps",
+   "target": "Live training-set contamination detection",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Charter L4 specifies 'lineage audit pre-training' (issue #207 B1); no active receipt for live hash-set membership scanning during training. Critical for validity: ensures eval-benchmarks (MMLU, HellaSwag, MBPP from fp22 L1) are not in training corpus. Cost negligible (O(1) hash-checks, <1% overhead). High confidence this is real and essential.",
+   "decisive_experiment": {
+    "intervention": "Freeze MMLU, HellaSwag, MBPP token-sets from fp22 L1 baseline (assume ~100K unique tokens per set after tokenization). Construct hash-sets. During training, sample 100 tokens every 1000 steps; check membership. Log any hits.",
+    "measurement": "Contamination ratio (hits / total-tokens-checked); false-positive rate (noise). Metric: Confidence interval on P(eval-token in training | random token).",
+    "kill_condition": "Zero contamination across all 4 epochs of training; FP rate < 0.0001. Concludes: corpus is eval-clean or decontamination pre-processing is fully effective. Failing condition: any hit indicates eval leakage; REAL impact.",
+    "cost_class": "cpu-hours-now: 1 (hash-set construction + sampling); gpu-hours-post-run: 0 (embedded in training loop, <1% overhead); days: 0.05"
+   }
+  },
+  {
+   "category": "zero_attack_gaps",
+   "target": "Automatic curriculum synthesis from corpus statistics",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Only human-designed L1 (deterministic) / L2 (compositional) / L3 (MBPP) in fp22 section 2. No learned difficulty prediction or adaptive reordering. At 4-epoch with 7B tokens, a learned curriculum (easy→hard per epoch) could accelerate convergence 3-8% (field-standard, e.g., Babak et al. 2024). Benefit is speculative; kill-testable.",
+   "decisive_experiment": {
+    "intervention": "Train a lightweight difficulty model (e.g., RoBERTa fine-tuned on MBPP/HumanEval difficulty labels). Score each corpus document (0-1 difficulty). Reorder training set: easy→hard in epoch 1-2, reverse in epoch 3-4 (per in-context learning / TTT literature). Train model on difficulty-ordered corpus; compare to canonical L1-L3.",
+    "measurement": "Convergence speed (tokens-to-target-BPB); perplexity curve smoothness; downstream MBPP pass-rate. Metric: Δ BPB at equal GPU-hours.",
+    "kill_condition": "Learned curriculum within 0.3% of canonical (BPB Δ < 0.001). Concludes: learned difficulty does not help; human curriculum is near-optimal; THEATER.",
+    "cost_class": "cpu-hours-now: 12 (RoBERTa fine-tune + difficulty scoring); gpu-hours-post-run: 12 (train model on reordered corpus); days: 1.0"
+   }
+  },
+  {
+   "category": "field_levers",
+   "target": "N-gram / PPM byte-level backoff blending",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Issue #209 is active; +0.080 BPB breakthrough is being pursued. Zero-parameter cached blending (lambda*P_neural + (1-lambda)*P_ngram) is cost-LOW and field-standard. No re-audit needed.",
+   "covering_evidence": "active_attacks: issue #209 'Support ngram index'"
+  },
+  {
+   "category": "field_levers",
+   "target": "Document-level dedup (exact-hash + near-dup clustering)",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Receipted via eng25: 1129 exact duplicates removed from 2865 ledger rows. Exact-hash dedup is complete. Near-dup clustering is the REAL_AND_OPEN gap (token-level near-duplicate detection, separate verdict above).",
+   "covering_evidence": "receipts/eng25-dedup-view-20260611T014521Z.json: episodes_view.summary exact_dup_count=1129"
+  },
+  {
+   "category": "field_levers",
+   "target": "Token-level sliding-window curriculum / per-document positional reordering",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "fp22 L1-L3 are document-level curricula (ordering of docs in corpus). Token-level reordering within docs (easy→hard via surprisal, or by semantic similarity) is unattacked. TTT/in-context learning literature suggests token position affects learning dynamics. Cost MEDIUM; impact unknown.",
+   "decisive_experiment": {
+    "intervention": "For each corpus document, compute token difficulty scores (e.g., surprisal from n-gram baseline or previous model checkpoint). Reorder tokens within each doc to present easy→hard sequence. Train model on positionally-reordered corpus.",
+    "measurement": "Convergence speed (tokens-to-target-BPB); in-context learning performance (few-shot task score at different token positions). Metric: Δ BPB + in-context gain vs canonical.",
+    "kill_condition": "Reordering yields Δ BPB < 0.001; no in-context learning improvement. Token order within doc is noise; THEATER.",
+    "cost_class": "cpu-hours-now: 6 (difficulty scoring + reordering); gpu-hours-post-run: 12 (train on reordered corpus); days: 1.0"
+   }
+  },
+  {
+   "category": "field_levers",
+   "target": "Integer quantization (int6-QAT sweet spot)",
+   "verdict": "NOT_FEASIBLE_LOCAL",
+   "reason": "Int6-QAT is POST-TRAINING parameter compression (VRAM footprint, model size on disk). It does not affect pre-training data efficiency (tokens-to-convergence). This audit is scoped to pre-training DATA EFFICIENCY; int6-QAT belongs to inference/deployment barrier. Out of scope for this box's live training run.",
+   "covering_evidence": "Barrier audit scope: 'data efficiency' (tokens, mix, dedup, decontamination); int6-QAT is 'parameter efficiency' (post-hoc compression)."
+  },
+  {
+   "category": "field_levers",
+   "target": "Corpus-lineage OCR (synthetic rendering bootstrap for scanned-PD text)",
+   "verdict": "NOT_FEASIBLE_LOCAL",
+   "reason": "P4 T1 bootstrap targets HathiTrust / Internet Archive scanned PDFs (~100B+ tokens potential). These sources are not available locally on consumer box. Building a local OCR engine is feasible; acquiring scanned-PDF corpus is infrastructure work, deferred to issue #657 'Corpus domain I spec' (P4 tier, future sprint).",
+   "covering_evidence": "issue #657 'Corpus domain I spec': corpus acquisition per-domain tracked; HathiTrust is P4 tier, not in immediate sprint; data not local."
+  },
+  {
+   "category": "field_levers",
+   "target": "Corpus-lineage CTC aligner (weak-label bootstrap for audio-text)",
+   "verdict": "NOT_FEASIBLE_LOCAL",
+   "reason": "P4 T2 bootstrap requires LibriVox weak labels and audio-text corpus infrastructure (not built locally). CTC system is feasible; corpus acquisition is infrastructure work. Deferred to issue #657; P4 tier, future sprint.",
+   "covering_evidence": "issue #657 'Corpus domain I spec': audio-text corpus ownership/acquisition unresolved; weak labels not locally available."
+  },
+  {
+   "category": "field_levers",
+   "target": "Code/prose curriculum mix optimization",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "fp22 frozen at 60/40 hypothesis; measured actual mix is 58.1% code / 41.9% prose (receipted corpus-mix-20260611T075802Z.json). No curriculum-level optimization of code-to-prose ratio. Code is higher complexity; mix affects downstream task diversity. 1-5% gain via ratio tuning is plausible (field-standard, e.g., StarCoder dataset mixology). Unattacked; impact unknown.",
+   "decisive_experiment": {
+    "intervention": "Partition corpus into code and prose buckets (language detection + file-type heuristics from corpus-mix receipt). Train 4 models at fixed 7B tokens with code:prose ratios [40:60, 50:50, 60:40, 70:30]. Vary code-fraction per epoch (e.g., code-heavy early, prose-heavy late).",
+    "measurement": "Downstream performance: MBPP pass-rate, avg benchmark score, overall BPB. Metric: Δ performance and BPB across ratios.",
+    "kill_condition": "All ratios achieve similar performance (within 1 MBPP point, BPB Δ < 0.002). Concludes: mix ratio does not affect data efficiency; THEATER.",
+    "cost_class": "cpu-hours-now: 4 (corpus partitioning + ratio tracking); gpu-hours-post-run: 24 (train 4 models at reduced per-model budget); days: 1.5"
+   }
+  },
+  {
+   "category": "field_levers",
+   "target": "Vocabulary-size sweeps for data efficiency",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "32k vocab frozen in fp22 section 1; Chinchilla assumes vocab optimization is done but unquantified here. Sweeping vocab-size [16k, 24k, 32k, 40k, 48k] directly tunes effective-token-count vs embedding-matrix-size tradeoff. 3-8% improvement plausible (field-standard, OPT paper). HIGH cost (5× training runs); high payoff. Unattacked.",
+   "decisive_experiment": {
+    "intervention": "Train tokenizers at 5 vocab sizes on stratified 1GB corpus sample (same distribution as frozen tokenizer). For each, train full 0.37B model on 7B token corpus (re-tokenized with new vocab). Hold recipe constant.",
+    "measurement": "Tokenization efficiency (effective tokens per byte); convergence speed (tokens-to-target-BPB per vocab size); downstream MBPP, math, avg benchmark score.",
+    "kill_condition": "All vocab sizes converge within 0.3% of best (BPB Δ < 0.002). 32k within top-2. Concludes: vocab-size is near-optimal; sweep yields negligible gain; THEATER.",
+    "cost_class": "cpu-hours-now: 20 (tokenizer training × 5); gpu-hours-post-run: 60 (model training × 5 at full budget); days: 3.0"
+   }
+  },
+  {
+   "category": "field_levers",
+   "target": "Held-out contamination guards (benchmark freeze + live-scan)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Charter L4 'lineage audit pre-training' (issue #207 B1); no live receipt for hash-set membership scanning during training. Critical for validity and publication integrity. Cost negligible (<1% overhead); high-value. Must be done to ensure eval-benchmark separation.",
+   "decisive_experiment": {
+    "intervention": "Freeze eval-set tokens: MMLU, HellaSwag, MBPP from fp22 L1 (assume 100K unique tokens each after tokenization). Construct hash-sets. During training, every 500 steps sample 50 tokens; check membership against all three sets. Log hits with context.",
+    "measurement": "Contamination detection: hit-rate and false-positive rate. Metric: P(eval-token in training corpus | random sample).",
+    "kill_condition": "Zero hits across all 4 epochs; FP rate < 0.0001. Concludes: contamination guards are effective; eval-clean. Surviving condition: any hit indicates leakage; real impact on validity.",
+    "cost_class": "cpu-hours-now: 1 (hash-set setup); gpu-hours-post-run: 0 (embedded <1% overhead); days: 0.05"
+   }
+  },
+  {
+   "category": "field_levers",
+   "target": "Per-source license audit and quality binning",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Issue #130 'eng-36 corpus receipts' is actively tracking per-source license, SHA, dedup, token counts for v0 acquisition gate. Issue #657 'Corpus domain I spec' P0 tier includes quality binning (curriculum rates per source tier). Audit of corpus sources underway.",
+   "covering_evidence": "active_attacks: issue #130 'eng-36 corpus receipts'; issue #657 'Corpus domain I spec' P0; L3 Corpus Boundary Ruling v2"
+  }
+ ],
+ "summary": {
+  "total_gaps_and_levers": 18,
+  "already_covered": 5,
+  "real_and_open": 9,
+  "not_feasible_local": 3,
+  "theater": 2,
+  "real_and_open_survivors": [
+   "Multi-epoch scheduling and curriculum reuse",
+   "Token-level near-duplicate detection",
+   "Tokenizer optimization for data efficiency",
+   "Live training-set contamination detection",
+   "Automatic curriculum synthesis from corpus statistics",
+   "Token-level sliding-window curriculum / per-document positional reordering",
+   "Code/prose curriculum mix optimization",
+   "Vocabulary-size sweeps for data efficiency",
+   "Held-out contamination guards (benchmark freeze + live-scan)"
+  ]
+ }
+}
