@@ -1,0 +1,63 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-SPECTRAL-NONEQUIVALENCE-CHECK",
+  "issue": 123,
+  "refs": [
+    591
+  ],
+  "coordinator_instruction": "team-lead resume message 2026-07-10, item 1 (blocking)",
+  "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+  "construction_provenance": {
+    "random_direction_seed": 20260710,
+    "half": 16384,
+    "ff": 32768,
+    "d": 1024,
+    "row_dup_exact_pre_construction": true,
+    "construction_sha256": "70450946407b0be0349daed161970f6a2db83fedf4e8dda614977e85ba91e95e"
+  },
+  "method": "Gram-eigenvalue spectrum (W^T W, d=1024 eigendecomp) as the primary cheap route to squared singular values; direct svdvals(W) computed for both matrices as an independent cross-check on the top values.",
+  "cross_check_gram_vs_svd": {
+    "anchor_max_abs_diff": 1.7642974853515625e-05,
+    "twin_max_abs_diff": 1.7642974853515625e-05,
+    "note": "internal consistency check only -- confirms the Gram-eigenvalue route reproduces direct SVD to numerical precision on BOTH matrices independently; not itself the anchor-vs-twin comparison."
+  },
+  "top_10_singular_values_anchor": [
+    5.999832630157471,
+    5.9700751304626465,
+    5.965089321136475,
+    5.950925350189209,
+    5.924460411071777,
+    5.920040607452393,
+    5.911771297454834,
+    5.899216175079346,
+    5.885336399078369,
+    5.864195823669434
+  ],
+  "top_10_singular_values_twin": [
+    5.14893913269043,
+    5.124361515045166,
+    5.118941307067871,
+    5.108658313751221,
+    5.101741790771484,
+    5.09104061126709,
+    5.078135013580322,
+    5.073660850524902,
+    5.067713260650635,
+    5.06138801574707
+  ],
+  "full_spectrum_comparison": {
+    "n_singular_values": 1024,
+    "max_abs_diff": 0.9276800155639648,
+    "mean_abs_diff": 0.39858198165893555,
+    "max_rel_diff": 0.4683762490749359,
+    "mean_rel_diff": 0.12227393686771393,
+    "top_singular_value_anchor": 5.999832630157471,
+    "top_singular_value_twin": 5.14893913269043,
+    "top_singular_value_rel_diff": 0.1418195389634908
+  },
+  "float32_tolerance_rel_threshold": 0.001,
+  "float32_tolerance_reference": "vacuity_check.py's row-permutation-equal test measured max_rel_diff=2.27e-6 for a CONFIRMED true row-permutation of this same matrix -- that is the empirical float32-noise floor this threshold is set well above.",
+  "spectra_match_to_float32_tolerance": false,
+  "outcome": "SPECTRA_DIFFER_MATERIALLY_R_SPECTRAL_READING_IS_A_REAL_MEASUREMENT",
+  "note_no_adjudication": "This script returns measured numbers only. Whether this outcome changes the standing R_spectral verdict (KILL_NS5_PLATEAU_ARTIFACT, deviation 0.0208%, receipt cbase-grow-rung2-real-nullmodel-20260710T004908Z.json) is the coordinator's ruling, not this script's.",
+  "wall_seconds": 53.50813412666321
+}

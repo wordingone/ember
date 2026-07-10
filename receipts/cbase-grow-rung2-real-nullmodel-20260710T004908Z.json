@@ -1,0 +1,86 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-REAL-NULLMODEL",
+  "ts": "2026-07-10T00:49:08.809478+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 123,
+  "refs": [
+    449,
+    482,
+    466,
+    513,
+    591
+  ],
+  "run_id": "grow-rung2-20260709-remeasure",
+  "preregistered": "If the sqrt(2) signature tracks row-duplication STRUCTURE, R_spectral departs sqrt(2) by >=1% on the random-direction twin (which lies outside the spectral/row-permutation invariance group, per rider_a2_real_nullmodel_precheck.py PASS). If it stays within +/-0.1% of sqrt(2), the constant is an NS5-plateau artifact at these shapes and the flagship-demotion argument loses this instrument; Q1 is then ruled from the alignment-sensitive side only (rms_ratio, min-per-row-cosine, both pinned here from already-executed anchor legs). Between 0.1% and 1%: INCONCLUSIVE_BY_RULE, no interpretation attempted.",
+  "scope": "REAL null-model rider for the sqrt(2) gate-class R_spectral constant, constructed OUTSIDE the spectral/row-permutation invariance group (random-direction replacement at matched per-row norm), per the vacuity-check follow-up on the permuted-twin KILL (outcome b, VACUOUS by spectral invariance). One CPU leg only (the twin); the anchor bands for the two promoted alignment-sensitive instruments are PINNED from already-executed receipts, not recomputed.",
+  "execution_ruling": "CPU, not GPU (team-lead, 2026-07-10) -- llama-server resident at ~22.97/24.5 GiB VRAM, contended-launch gate would refuse any GPU tenant at that margin; this pipeline is CPU-tractable. No torch.cuda.* calls anywhere in this script.",
+  "construction_provenance": {
+    "random_direction_seed": 20260710,
+    "half": 16384,
+    "ff": 32768,
+    "d": 1024,
+    "row_dup_exact_pre_construction": true,
+    "construction_sha256": "70450946407b0be0349daed161970f6a2db83fedf4e8dda614977e85ba91e95e"
+  },
+  "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+  "variant_construction": "gate_proj second-half rows replaced with a random direction at the SAME per-row L2 norm (seed=20260710); first half + up_proj/down_proj unchanged; construction lies OUTSIDE the spectral/row-permutation invariance group (precheck-confirmed: outside_spectral_invariance_group=true)",
+  "u_pre_reset_lr015": {
+    "lr": 0.015,
+    "momentum": "zero buffer (RESET arm)",
+    "spectral": 0.07214184105396271,
+    "rms": 0.00027922826120629907
+  },
+  "real_nullmodel_twin": {
+    "u_post_rms": 0.0002434696798445657,
+    "u_post_spectral": 0.10200274735689163,
+    "rms_ratio_post_over_pre": 0.8719378145777505,
+    "R_spectral_ratio_post_over_pre": 1.4139193825202314,
+    "min_per_row_cosine": -0.12792667746543884,
+    "batch_pin_check": {
+      "b1m_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+      "recomputed_sha256": "2e56e349ebbd680668902a2f6edeb32439528074fe656ec65543b2f3eb4f1f7e",
+      "match": true
+    },
+    "compute_seconds_cpu": 107.98854970932007
+  },
+  "pinned_anchor_bands": {
+    "rms_ratio_post_over_pre": {
+      "value": 1.0145176101002584,
+      "source": "receipts/cbase-grow-rung2-nullmodel-permuted-twin-20260709T220710Z.json :: variants.anchor_control.rms_ratio_post_over_pre (executed anchor leg, unmodified checkpoint)"
+    },
+    "min_per_row_cosine": {
+      "value": 1.0,
+      "measured_value": 0.9999998211860657,
+      "source": "scratch/riders591 rider_a_precheck.py :: min_cos_before_permutation (row_dup_exact_pre_permutation=true was confirmed via torch.equal; 1.0 is the exact theoretical anchor for an unperturbed duplicate pair, 0.9999998... is the as-measured float value carried for full disclosure)"
+    }
+  },
+  "instrument_assessment": {
+    "R_spectral": {
+      "sqrt2": 1.4142135623730951,
+      "twin_value": 1.4139193825202314,
+      "deviation_from_sqrt2": -0.0002941798528637296,
+      "deviation_pct": 0.020801656884840397,
+      "kill_band": "deviation_pct <= 0.1 (NS5-plateau artifact)",
+      "promote_band": "deviation_pct > 1.0 (structure-tracking confirmed)",
+      "inconclusive_band": "0.1 < deviation_pct <= 1.0",
+      "band_verdict": "KILL_NS5_PLATEAU_ARTIFACT"
+    },
+    "rms_ratio": {
+      "anchor_value": 1.0145176101002584,
+      "twin_value": 0.8719378145777505,
+      "abs_pct_diff_vs_anchor": 14.053949788847689
+    },
+    "min_per_row_cosine": {
+      "anchor_value": 1.0,
+      "twin_value": -0.12792667746543884
+    }
+  },
+  "compute_seconds_cpu": 107.98854970932007,
+  "wall_seconds": 188.7450041770935,
+  "device": "cpu",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "MEASUREMENT_COMPLETE_NO_MECHANISM_ADJUDICATION"
+}

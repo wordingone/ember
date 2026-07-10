@@ -1,0 +1,38 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-REAL-NULLMODEL-PRECHECK",
+  "issue": 123,
+  "refs": [
+    449,
+    591
+  ],
+  "coordinator_comment": 4930377425,
+  "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+  "provenance": {
+    "random_direction_seed": 20260710,
+    "half": 16384,
+    "ff": 32768,
+    "d": 1024,
+    "row_dup_exact_pre_construction": true,
+    "construction_sha256": "70450946407b0be0349daed161970f6a2db83fedf4e8dda614977e85ba91e95e"
+  },
+  "checks": {
+    "per_row_norm_max_abs_diff": 1.7881393432617188e-07,
+    "per_row_norm_max_rel_diff": 2.6294125632375653e-07,
+    "frobenius_norm_anchor": 126.05872344970703,
+    "frobenius_norm_new": 126.0563735961914,
+    "frobenius_abs_diff": 0.002349853515625,
+    "frobenius_rel_diff": 1.8640943294674154e-05,
+    "cosine_new_vs_original_row_min": -0.12792667746543884,
+    "cosine_new_vs_original_row_max": 0.11429665982723236,
+    "cosine_new_vs_original_row_mean": 0.00015973254630807787,
+    "min_nearest_neighbour_l2_dist_to_any_anchor_row": 0.8293858766555786,
+    "byte_identical_to_anchor": false
+  },
+  "outside_spectral_invariance_group": true,
+  "precheck_verdict": "PASS",
+  "prediction_registered_pre_run": {
+    "if_signature_tracks_row_duplication_structure": ">=1% R_spectral departure from sqrt(2)",
+    "if_NS5_plateau_artifact": "within +/-0.1% of sqrt(2); Q1 then ruled from alignment-sensitive side only (rms_ratio / min-per-row-cosine)"
+  },
+  "gpu_run_gate": "NOT EXECUTED -- gated on team-lead adding the corresponding #591 row (frozen spec, no adjustment)"
+}

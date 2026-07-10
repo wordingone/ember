@@ -1,0 +1,44 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-VACUITY-CHECK",
+  "issue": 123,
+  "refs": [
+    449,
+    591
+  ],
+  "coordinator_comment": 4930377425,
+  "grown_weights_sha256": "92ccd8ce5933907e3d2c276571043759171156cbc3f19c75cb44ee6078ff224e",
+  "permutation_provenance": {
+    "permutation_sha256": "38e583d5ec9c566ca25d00d2d27733e99bf308b5683a24dc0a2d0028156b1ebc",
+    "fixed_points": 0,
+    "half": 16384,
+    "ff": 32768
+  },
+  "step1_byte_compare": {
+    "anchor_gate_sha256": "dff38a29c3c67a1c15f1a34eb2dbffafbfdaf7921b18875c1d69a43712594a2a",
+    "permuted_gate_sha256": "a26ce5be7e0e828275544eeb15081a192a98f205b3fd80dc37d78fcd785c945a",
+    "byte_identical": false
+  },
+  "step2_row_permutation_equivalence": {
+    "canonical_form_sha256_anchor": "3da849f25320e4f39dbbb0d6b4848a290c3a83360e213b0417cc37163a6ab018",
+    "canonical_form_sha256_permuted": "3da849f25320e4f39dbbb0d6b4848a290c3a83360e213b0417cc37163a6ab018",
+    "canonical_forms_byte_identical": true,
+    "singular_values_max_abs_diff": 7.152557373046875e-06,
+    "singular_values_max_rel_diff": 2.2653821361018345e-06,
+    "singular_values_top5_anchor": [
+      5.999838829040527,
+      5.9700798988342285,
+      5.965100288391113,
+      5.950913429260254,
+      5.924459457397461
+    ],
+    "singular_values_top5_permuted": [
+      5.9998393058776855,
+      5.9700798988342285,
+      5.965100288391113,
+      5.950912952423096,
+      5.924456596374512
+    ]
+  },
+  "outcome": "b",
+  "outcome_meaning": "row-permutation-equal -- VACUOUS by spectral invariance (same multiset of rows, reordered; P*W and W share singular values exactly, up to float32 SVD computation tolerance)"
+}
