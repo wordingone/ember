@@ -43,6 +43,31 @@ _REPO = Path(__file__).resolve().parent.parent
 _DEFAULT_OPTSTATE_DIR = _REPO / "scratch" / "rung2-optstate"
 
 
+# ---- observability counters (ember #627 point 3) --------------------------
+# Process-global counters so a consumer across the run_v0_segment call
+# boundary (cbase_grow_rung2_stabilize._run_block, which does NOT hold the
+# optimizer instance) can read them at a block boundary. grad_lazy_creates is
+# THE falsifier the withdrawn prereg's P2 prediction lacked: it counts every
+# time step() re-creates a `.grad.f32` memmap through the lazy fallback -- the
+# exact M1 term (governed subprocess re-fire per re-create per step) the v9
+# cure eliminates. In the cured steady state it stays 0; a positive-control
+# test (tests/test_stabilize_v9_cure.py) forces one and asserts it fires, so
+# the counter is proven able to detect the failure it guards, never vacuously
+# green. Instance mirrors (self.grad_lazy_creates) exist for single-optimizer
+# unit assertions; the module counter is the cross-boundary observability
+# surface.
+_COUNTERS = {"grad_lazy_creates": 0}
+
+
+def get_counter(name: str) -> int:
+    return int(_COUNTERS.get(name, 0))
+
+
+def reset_counters() -> None:
+    for k in list(_COUNTERS):
+        _COUNTERS[k] = 0
+
+
 def _sanitize_name(name: str) -> str:
     return name.replace(".", "_")
 
@@ -140,6 +165,7 @@ class CPUOffloadOptimizer:
 
         self._names: list[str] = []
         self._real_params: list[Any] = []
+        self.grad_lazy_creates = 0  # instance mirror of the module counter (#627)
         for name, p in named_params:
             self._names.append(name)
             self._real_params.append(p)
@@ -203,11 +229,20 @@ class CPUOffloadOptimizer:
                 if shadow_p.grad is None:
                     # File-backed, not a regular clone() (2026-07-08 redesign):
                     # this buffer PERSISTS for the optimizer's lifetime once
-                    # created (reused via copy_ below on every later call, only
-                    # torn down to None by zero_grad(set_to_none=True)) -- a
-                    # full-parameter-sized regular allocation here was a third
-                    # of the day's ~26GiB commit-exhaustion total, not a
-                    # rounding error.
+                    # created (reused via copy_ below on every later call).
+                    #
+                    # ember #627 R3: with the zero_grad fix below this branch is
+                    # structurally UNREACHABLE in steady state -- zero_grad no
+                    # longer tears the shadow `.grad` down to None, so once a
+                    # param's grad memmap exists (front-loaded at construction,
+                    # or created here on the very first step) it is reused via
+                    # copy_ forever. Reaching this branch AFTER step 1 means the
+                    # M1 regression (per-step re-create + its governed
+                    # subprocess) has returned -- so it is COUNTED (module +
+                    # instance), making the prereg's "zero re-creates" claim
+                    # falsifiable by the log instead of vacuously true.
+                    _COUNTERS["grad_lazy_creates"] += 1
+                    self.grad_lazy_creates += 1
                     stem = self._optstate_dir / _sanitize_name(name)
                     shadow_p.grad = _memmap_zeros(Path(str(stem) + ".grad.f32"), tuple(g.shape))
                 shadow_p.grad.copy_(g)
@@ -217,12 +252,45 @@ class CPUOffloadOptimizer:
                 real_p.data.copy_(shadow_p.data.to(real_p.device, dtype=real_p.dtype))
 
     def zero_grad(self, set_to_none: bool = True) -> None:
+        """ember #627 R3 -- shadow-grad persistence.
+
+        Two grad populations, two policies:
+
+          * REAL (GPU) params -- keep set_to_none semantics unchanged. Nulling
+            p.grad here frees the GPU-resident gradient every step, which the
+            VRAM budget depends on; that behavior is preserved exactly.
+
+          * SHADOW (file-backed) params -- NEVER torn down. The previous
+            implementation forwarded to self._inner.zero_grad(set_to_none=True),
+            which set every shadow_p.grad to None (the inner optimizer's params
+            ARE the shadow params). The next step() then hit the lazy-create
+            branch and re-created all ~184 `.grad.f32` memmaps through the
+            governed wrapper -- one governor subprocess per re-create per step,
+            the M1 term the component benchmark (#594) measured as dominant
+            (2.4-2.6 s x140/step). #619's front-load created the memmaps once at
+            construction but this teardown re-emptied them every step, so the
+            cure never actually held (the audit's finding).
+
+        DESIGN CHOICE (documented in-file per the spec): SKIP the shadow side
+        entirely rather than zero-in-place. step()'s `shadow_p.grad.copy_(g)`
+        fully overwrites each grad memmap every step, so its prior contents are
+        never read -- zeroing them would be a redundant full pass over ~8 GB of
+        fp32 state (a self-inflicted mapped-dirty-write cost, the M3 term)
+        purchasing nothing. Skipping keeps the memmap objects alive and their
+        identity stable, which is exactly what makes the lazy-create branch
+        unreachable in steady state. We therefore deliberately do NOT call
+        self._inner.zero_grad(): its only effect on this wrapper's state is to
+        null the shadow grads (the inner optimizer's momentum / exp_avg buffers
+        are untouched by zero_grad), which is the precise behavior R3 removes.
+        """
         for p in self._real_params:
             if set_to_none:
                 p.grad = None
             elif p.grad is not None:
                 p.grad.detach_().zero_()
-        self._inner.zero_grad(set_to_none=set_to_none)
+        # Shadow grads intentionally persist -- see docstring. (No call to
+        # self._inner.zero_grad(); that would re-null shadow_p.grad and
+        # re-arm the per-step lazy-create / governor-spawn regression.)
 
     def state_dict(self) -> dict:
         return self._inner.state_dict()
