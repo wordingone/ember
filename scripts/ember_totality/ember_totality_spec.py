@@ -82,6 +82,13 @@ Run:  python ember_totality_spec.py [ts] [--root PATH]
   --root  override the state root every probe resolves against (propagated
           via EMBER_TOTALITY_ROOT). Default: this script's own repo root
           (two levels up from scripts/ember_totality/).
+  --artifact-root  OPERATING tree root where untracked on-disk artifact
+          bytes (gitignored models/, checkpoints, large caches) physically
+          live (propagated via EMBER_ARTIFACT_ROOT). Passed EXPLICITLY by
+          the render lane when a board render executes from a worktree --
+          never guessed by this runner (gh #615). When unset, probes fall
+          back to their own repo root, and a probe whose named artifact is
+          absent must report a visibility failure, not an absence failure.
 
 PYTHONIOENCODING=utf-8 is required on every invocation (cp1252 console).
 """
@@ -198,6 +205,14 @@ AUDIT_STATUSES = {"AUDIT-OK", "AUDIT-INCIDENT", "AUDIT-PENDING-EPOCH"}
 # Match a leading condition-id token in a probe output line:
 #   C(-1)  C(−1)  C-EFF  C-TALLY  C0  C15  ...
 ID_RE = re.compile(r"^(C\([−-]?1\)|C-[A-Z0-9]+|C[0-9]+)")
+
+# [gh #615] A probe that consulted EMBER_ARTIFACT_ROOT to resolve untracked
+# on-disk artifact bytes discloses which root it used by appending
+# "[artifact_root_source=env]" or "[artifact_root_source=repo-root]" to its
+# status line. The runner lifts that marker into a structured
+# `artifact_root_source` field on the rendered row, so a GREEN earned via an
+# env-provided root is auditable from the receipt alone.
+ARTIFACT_ROOT_SOURCE_RE = re.compile(r"\[artifact_root_source=(env|repo-root)\]")
 
 # --- Invariant-integrity gate (GOAL.md §8/§5 item 9/§12) --------------------
 # I-members per GOAL.md §5 item 9's PINNED I-manifest (pinned 2026-07-02,
@@ -872,13 +887,20 @@ def run_probe(path, env):
                   f"stderr[:300]={stderr[:300]!r} (elapsed {elapsed:.1f}s)")
     else:
         reason = f"{chosen} (elapsed {elapsed:.1f}s)"
-    return {
+    row = {
         "condition": condition,
         "status": status,
         "reason": reason,
         "test_file": fname,
         "exit_code": proc.returncode,
     }
+    # [gh #615] lift the probe's artifact-root disclosure marker (if any)
+    # into a structured field on the row -- only rows whose probe consulted
+    # EMBER_ARTIFACT_ROOT carry it.
+    m = ARTIFACT_ROOT_SOURCE_RE.search(reason)
+    if m:
+        row["artifact_root_source"] = m.group(1)
+    return row
 
 
 def compute_working_set(repo_root=None):
@@ -1026,6 +1048,17 @@ def main():
               "EMBER_TOTALITY_ROOT). Default: this repo's own root "
               f"({REPO_ROOT}).")
     )
+    ap.add_argument(
+        "--artifact-root", default=None,
+        help=("OPERATING tree root where untracked on-disk artifact bytes "
+              "(gitignored models/, checkpoints, large caches) physically "
+              "live (env EMBER_ARTIFACT_ROOT). Passed EXPLICITLY by the "
+              "render lane when this board render executes from a worktree "
+              "-- never guessed by this runner (gh #615). Default: unset; "
+              "probes fall back to their own repo root and must report an "
+              "absent artifact as a visibility failure, not an absence "
+              "failure.")
+    )
     args = ap.parse_args()
     if args.ts:
         print(f"NOTE: positional ts argument {args.ts!r} is DEPRECATED and "
@@ -1043,6 +1076,10 @@ def main():
     probe_env = dict(os.environ)
     probe_env["EMBER_TOTALITY_ROOT"] = effective_root
     probe_env["PYTHONIOENCODING"] = "utf-8"
+    # [gh #615] artifact-root plumbing: set EMBER_ARTIFACT_ROOT for probes
+    # ONLY when the render lane passed it explicitly -- never guessed here.
+    if args.artifact_root:
+        probe_env["EMBER_ARTIFACT_ROOT"] = os.path.abspath(args.artifact_root)
 
     rows = [run_probe(p, probe_env) for p in discover_tests()]
 
@@ -1234,7 +1271,12 @@ def main():
         "rows": [
             {"condition": r["condition"], "status": r["status"],
              "is_process_invariant": r["condition"] in PROCESS_INVARIANTS,
-             "reason": r["reason"]}
+             "reason": r["reason"],
+             # [gh #615] only rows whose probe consulted EMBER_ARTIFACT_ROOT
+             # carry artifact_root_source ("env" | "repo-root") -- a GREEN
+             # earned via an env-provided artifact root is auditable here.
+             **({"artifact_root_source": r["artifact_root_source"]}
+                if "artifact_root_source" in r else {})}
             for r in rows
         ],
         # Separate block for the 3 STANDING PROCESS-INVARIANT rows (GOAL.md
