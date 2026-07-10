@@ -31,6 +31,8 @@ single point.
 
 - **Trigger:** DT-1 PASS (either arm). DT-3 does NOT run on a DT-1 FAIL (owned
   update is already shelved for round-1 in that case). `GATED: DT-1 diagnostic PASS`.
+
+> **[SUPERSEDED 2026-07-10]** This trigger is gated closed per errata issue #670: the DT-1 PASS receipt is void as learning/GDN evidence (chance-level, out-of-band, missing DT-6 gate fields). DT-3 must not run from this receipt. The owned-substrate diagnostic may restart with a valid DT-1 receipt under the DT-6 gate.
 - **Scale ladder (frozen):** S = {**10M, 50M, ~150M, 0.37B**} params — spanning
   the DT-1 regime through the launch core size (the §IV multimodal config is
   0.37B; the owned-substrate replacement, if it earns it, targets that size).

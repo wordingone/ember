@@ -410,6 +410,7 @@ verdict(s): DENSITY_CONFIRMED; NO_VERDICT
 
 ### DT1-DELTA-RULE-DIAGNOSTIC
 - `receipts/dt1-delta-rule-20260616T165810Z.json`
+  - **[AUTHORITY VOID per issue #670]** Authority of this receipt as learning/GDN evidence is marked void 2026-07-10 (chance-level, out-of-band, missing DT-6 gate fields).
 
 ### DT6-LOOP-ECON-GATE-SELFTEST
 - `receipts/loop-econ-gate-selftest-20260616T043326Z.json`

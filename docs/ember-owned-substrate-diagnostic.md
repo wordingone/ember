@@ -9,6 +9,8 @@ the method Ember actually needs.* PyTorch, AdamW, Muon, ordinary autograd =
 baselines/components, not the assumed ground. The c04/PyTorch receipts are KEPT
 — they become the baseline the owned substrate must beat.
 
+> **[DT-1 PROCEED EVIDENCE VOID 2026-07-10]** The DT-1 delta-rule PASS receipt (dt1-delta-rule-20260616T165810Z) is void as learning/GDN evidence per errata issue #670 (chance-level, out-of-band, missing DT-6 gate fields). The PyTorch baseline remains valid; a fresh DT-1 run under the DT-6 gate establishes new proceed evidence.
+
 ## The inherited stack, bottom → top, with the blocking line
 
 | layer | what it is | ember's relationship |
