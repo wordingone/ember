@@ -9,7 +9,7 @@ fix this file.
 **Maintenance contract:** every landing that changes a lane's state updates the Lanes table the
 same turn (work-loop rail). A citation in this file that no longer resolves is a defect.
 
-Last verified: 2026-07-07T05:04Z (UTC).
+Last verified: 2026-07-09T23:15Z (UTC).
 
 **Ported 2026-07-05 from the private lineage** (last private touch 33df343) so the succession map
 lives on the public workbench; update same-turn with every lane-state change.
@@ -76,7 +76,7 @@ Similarly, condition counts other than `conditions-v1.md §4.3`'s are stale.
 
 ## 4. Lanes — exact in-flight state (UPDATE ON EVERY LANDING)
 
-| Lane | State (2026-07-07T04:42Z) | Next action (exact) |
+| Lane | State (2026-07-09T23:15Z) | Next action (exact) |
 |---|---|---|
 | **constitution** | GOAL.md re-founded as the constitution (PR #212, merge 98093ae): C1-C4 completion, L1-L10 laws, co-equal pillars, nativization, /goal organ. docs/goal-clear-protocol.md (17 v1 conditions conserved) + docs/goal-mode-mechanism.md landed beside it. #206 corrective + #207 bottleneck ledger subordinated to it (earned-compute L6 wording). | Constitution is live; all lanes dispatch under it. |
 | **W2 decontam** | Relaunch-6 crashed OOM (launch-config gap, not wrap coverage); 8.18M-match catalog proved shard-0-14 dense with duplication (cliff at shard 15). Relaunch-7 LIVE: pool_start relocated to shard-16 stratum start (window 4,194,304), match density down ~3 orders of magnitude. Merged: #311 (C-BASE void degenerate receipts), #312 (C-ENF checker restored), #313 (totality prev-selection by filename-timestamp parsing, not mtime). Open: #302 (worker-streaming JSONL dump). | Relaunch-7 execute to completion; harvest decontam receipt. |
@@ -86,7 +86,7 @@ Similarly, condition counts other than `conditions-v1.md §4.3`'s are stale.
 | **research queue #155** | Fused-Muon 1.3459x receipted (PR #188); full-scale sweep rides a GPU-residency window per #53 runbook, AFTER the W-arm chain (earned order, #207 rule 4). | Queue behind decontam -> #121 -> #113 GPU leg. |
 | **P5 ratio audit** | EXECUTED OK per receipts/p5-ratio-audit-OK-20260707T034951Z.json: d_comm=1.1352 (measurement, no pass bar—first receipted baseline of composition-law central observable), rho_sr=40.83 (first width-pair, UNRESOLVED-BY-INVENTORY per two-point rule), rho_noise=355.5, 5 ratios honestly N/A. PR #314 (mmap mitigation + separate model instances) merged. | Complete 4-arm C1b-R re-run for full-inventory collection. |
 | **tree health** | #199 merged (f545129); typecheck 43 baseline (#189 open). Receipts carry machine-local absolute paths (issue #317 OPEN: forward-only emitter cure). | Triage #210 (land-now / lane / obsolete-archive tiers); dispatch #315 (P4 ratification + obtainability probes + >100GB disk escalation). |
-| **board** | 6 GREEN / 27 RED / 3 UNEVALUABLE per ember-totality-20260707T044219Z.json. Night's movers: C-BASE GREEN→UNEVALUABLE (GPU-verify receipts voided as degenerate—bit-identical losses; hardened probe rejects voided receipts; PR #311), C-ENF RED→GREEN (checker restored, PR #312). Receipt CHAIN BREAK found/fixed: mtime-ordered prev-selection broke under checkout mtime refresh; fixed by filename-timestamp parsing (PR #313); live-proven by chained receipts 043942Z/044219Z. New docs: #316 (P4 L3 corpus-boundary-v2 + clean-corpus-map-v1, PROPOSED). | Board gates open; all 2026-07-07 PRs (#311-314, #316) landed. |
+| **board** | Merged tonight: #595 (board docs), #596 (custody violations 34→23), #597 (live-activity + BOM fix), #598 (/goal receipts feed activity), #600 (repo-guard staged-scope, REPO_GUARD_SCOPE=staged), #601 (master test debt: typecheck 20→0, suite 0 failures), #604 (C-LEGIB dir map, #586 annex round-4: c_neg1 328/328 covered). Merge-gate: #603 (A1 eval-suite freeze; suite a contamination 0 CLEAN; suite b 147 contaminated items under #193 v2 → exclusion-with-disclosure required; ruling #593 comment 2026-07-09). Board honesty audit 2026-07-09T2258Z: board_green 10, honest_green 9 (C-GROW flop_saving CHK label-blind; C-INV genesis stubs) — probe hardening lane in flight. Cockpit live on operator screen (refs #589, GPU-free boot, liveness watchdog, planned-outage marker to 2026-07-10T23:00Z). | v9 relaunch gated on #594 AC1-AC2 receipts; services restore in flight (#591 queue 2.5). |
 
 
 ## 5. Pre-registrations and standing rulings that BIND future claims
