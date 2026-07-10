@@ -113,6 +113,37 @@ _ORIG_PACKED_SHARD_LOADER_INIT = ts.PackedShardLoader.__init__
 COMMIT_MARGIN_FLOOR_GB = 6.0  # team-lead ruling 2026-07-09 (v8 launch spec, v7 death cure)
 
 
+# ---- v8 governed-abort receipt (ember #627 comment 4936627594, point 1) ---
+# "Governed abort writes NO receipt file." Pre-cure, a GOVERNOR_COMMIT_FAIL
+# left only the tee'd stdout log and the last checkpoint -- a clean abort with
+# no receipt forces log archaeology and checkpoint-guessing (the AC2 pace-
+# smoke run's completion was misread as success from the checkpoint alone
+# before the log surfaced). Fail-closed fix: _commit_margin_assert's refusal
+# branch below writes a structured receipt to the run's receipt dir BEFORE
+# SystemExit propagates. Two tiny module-level trackers (both own-script,
+# set by main()/_run_block, never by the shared timeshare_pretrain.py) give
+# the assert -- a low-level helper with no run-context args -- somewhere to
+# write and something to cite as the last known-good checkpoint without
+# threading extra parameters through every one of its many call sites
+# (front-load memmap creation, every stage marker).
+_RECEIPT_DIR_STATE: dict[str, str | None] = {"path": None}
+_LAST_KNOWN_CHECKPOINT: dict[str, str | None] = {"path": None}
+
+
+def _set_abort_receipt_dir(path: str) -> None:
+    _RECEIPT_DIR_STATE["path"] = str(path)
+
+
+def _note_last_checkpoint(path: str | None) -> None:
+    """Record the most recently known-good checkpoint dir, if any. Called at
+    every point one becomes known (BUILD output, a block's incoming resume
+    checkpoint, a block's own freshly-written checkpoint) so a governed abort
+    firing ANYWHERE in this process can cite the true last checkpoint. A None/
+    falsy path is a no-op -- never overwrites a real path with unknown."""
+    if path:
+        _LAST_KNOWN_CHECKPOINT["path"] = str(path)
+
+
 # ---- R2 (ember #627 point 1): in-process commit read ----------------------
 # The v9 audit's R2 finding: _read_commit_gb launched a powershell/Get-Counter
 # SUBPROCESS, and the governed `.grad.f32` wrapper called it before EVERY lazy
@@ -220,11 +251,40 @@ def _commit_margin_assert(label: str, *, floor_gb: float = COMMIT_MARGIN_FLOOR_G
         print(f"GOVERNOR_COMMIT_FAIL label={label} committed_gb={r['committed_gb']} "
               f"limit_gb={r['limit_gb']} free_gb={r['free_gb']} floor_gb={floor_gb}",
               flush=True)
+        _write_governed_abort_receipt(label, r, floor_gb)
         raise SystemExit(
             f"GOVERNOR_COMMIT_FAIL: free commit {r['free_gb']}GB < floor {floor_gb}GB "
             f"at {label} (committed={r['committed_gb']}GB, limit={r['limit_gb']}GB) -- "
             f"abort-not-degrade, no fix-forward, no widened floor")
     return r
+
+
+def _write_governed_abort_receipt(label: str, r: dict, floor_gb: float) -> None:
+    """Fail-closed receipt for a MEASURED commit-margin violation (ember #627
+    comment 4936627594, point 1) -- written BEFORE the caller's SystemExit
+    propagates, so a governed abort is never receipt-less. Never raises: a
+    receipt-write failure must not mask the real abort it is documenting
+    (the SystemExit above still fires unconditionally either way)."""
+    receipt = {
+        "ticket": "CBASE-GROW-RUNG2-STABILIZE-LEG1-GOVERNED-ABORT",
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "invariant_sha256": INVARIANT_SHA256, "sha_convention": SHA_CONVENTION,
+        "label": label,
+        "committed_gb": r["committed_gb"], "limit_gb": r["limit_gb"],
+        "free_gb": r["free_gb"], "floor_gb": floor_gb,
+        "phase": label,
+        "last_checkpoint": _LAST_KNOWN_CHECKPOINT["path"],
+        "verdict": "GOVERNOR_COMMIT_FAIL",
+        "api_spend_usd": 0, "paid_api_surface_used": False,
+    }
+    receipt_dir = _RECEIPT_DIR_STATE["path"] or str(REPO / "receipts")
+    try:
+        Path(receipt_dir).mkdir(parents=True, exist_ok=True)
+        out_path = Path(receipt_dir) / f"governed-abort-{_ts()}.json"
+        checked_write(str(out_path), receipt)
+        print(f"GOVERNED_ABORT_RECEIPT_WRITTEN path={out_path}", flush=True)
+    except Exception as e:
+        print(f"GOVERNED_ABORT_RECEIPT_WRITE_FAILED {type(e).__name__}: {e}", flush=True)
 
 
 def _stage_marker(label: str) -> None:
@@ -484,6 +544,87 @@ def _governor_with_honest_vram(*args, **kwargs):
 
 
 ts._apply_governor = _governor_with_honest_vram
+
+# ---- v8 per-step trace file (ember #627 comment 4936662156, point 2, root-
+# cause amendment) -------------------------------------------------------
+# The run log itself carries the tell: "torch.distributed.elastic.
+# multiprocessing.redirects ... NOTE: Redirects are currently not supported
+# in Windows or MacOs" -- the worker's stdout (where any per-step print would
+# originate) never reliably reaches the parent-process tee on this platform,
+# so ANY stdout-based loss trace is structurally unreliable here regardless
+# of what the training loop prints. Requirement (b) is upgraded: write a
+# structured per-step trace (step, loss, ts) to a JSONL file in the run's
+# receipt directory FROM THIS WORKER PROCESS, as each optimizer step's loss
+# is finalized -- never relying on stdout, and never waiting for the whole
+# block (or the whole run_v0_segment call) to return before anything is
+# banked, so even a mid-block crash leaves the steps that DID complete on
+# disk.
+#
+# No duplicated math: run_v0_segment (timeshare_pretrain.py, out of scope --
+# shared module, same discipline as every other patch in this file) computes
+# the accumulated step loss as sum(micro_losses)/len(micro_losses), one
+# mtp_total_loss(...) call per micro-batch, exactly grad_accum_steps calls
+# per optimizer step, in order, with NO other call to that name on the RUN
+# path (verified: its only other call sites are inside a selftest, never
+# reached by run_v0_segment). Wrapping mtp_total_loss and replaying that same
+# sum/len arithmetic over its own return values reconstructs the identical
+# per-step loss run_v0_segment itself will append to `losses` -- without
+# reading run_v0_segment's local variables or editing the shared module.
+# _run_block arms the trace (path + grad_accum_steps + starting global step)
+# immediately before each ts.run_v0_segment call; when unarmed (path is None,
+# e.g. the OTHER call site of _pace_record's sibling functions, or any
+# caller that never armed it) this is a pure passthrough, zero behavior
+# change.
+_ORIG_MTP_TOTAL_LOSS = ts.mtp_total_loss
+
+_STEP_TRACE_STATE: dict = {
+    "path": None,              # Path | None -- None means untraced (passthrough)
+    "grad_accum_steps": 1,
+    "global_step_start": 0,
+    "micro_buf": [],           # this in-flight step's micro-batch losses, call order
+    "n_steps_written": 0,
+}
+
+
+def _reset_step_trace(path, *, grad_accum_steps: int, global_step_start: int) -> None:
+    """Arm (or re-arm, e.g. for the next block) the per-step trace. Truncates
+    any pre-existing file at `path` -- each block owns its own trace file
+    (segment_id-suffixed), so this only ever starts a fresh file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.unlink()
+    _STEP_TRACE_STATE["path"] = path
+    _STEP_TRACE_STATE["grad_accum_steps"] = max(1, int(grad_accum_steps))
+    _STEP_TRACE_STATE["global_step_start"] = int(global_step_start)
+    _STEP_TRACE_STATE["micro_buf"] = []
+    _STEP_TRACE_STATE["n_steps_written"] = 0
+
+
+def _disarm_step_trace() -> None:
+    _STEP_TRACE_STATE["path"] = None
+    _STEP_TRACE_STATE["micro_buf"] = []
+
+
+def _mtp_total_loss_traced(primary_ce, mtp_ces, weight):
+    micro_loss = _ORIG_MTP_TOTAL_LOSS(primary_ce, mtp_ces, weight)
+    path = _STEP_TRACE_STATE["path"]
+    if path is not None:
+        buf = _STEP_TRACE_STATE["micro_buf"]
+        buf.append(float(micro_loss.detach()))
+        if len(buf) >= _STEP_TRACE_STATE["grad_accum_steps"]:
+            step = _STEP_TRACE_STATE["global_step_start"] + _STEP_TRACE_STATE["n_steps_written"]
+            row = {"step": step, "loss": round(sum(buf) / len(buf), 6),
+                   "ts": datetime.now(timezone.utc).isoformat()}
+            with open(path, "a", encoding="utf-8", newline="\n") as f:
+                f.write(json.dumps(row) + "\n")
+                f.flush()
+            _STEP_TRACE_STATE["n_steps_written"] += 1
+            _STEP_TRACE_STATE["micro_buf"] = []
+    return micro_loss
+
+
+ts.mtp_total_loss = _mtp_total_loss_traced
 
 # ---- Config C (frozen table, issue #480 LAUNCH SPEC) -----------------------
 MICRO_BATCH = 1
@@ -1144,7 +1285,20 @@ def momentum_norm_by_group(ckpt_dir: str) -> dict:
 def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_start: int,
                total_steps: int, shard_dir: str, grad_accum_steps: int, block_idx: int,
                sample_interval_s: float = 2.0,
-               pace_gate_s: float | None = None) -> tuple[dict, dict]:
+               pace_gate_s: float | None = None,
+               receipt_dir: str | None = None) -> tuple[dict, dict]:
+    # v8 (ember #627 point 1): the incoming checkpoint is the last known-good
+    # one until this block writes its own -- note it now so a governed abort
+    # anywhere before run_v0_segment returns (front-load memmap creation, any
+    # PRE_* stage marker) can still cite a real checkpoint, not null.
+    _note_last_checkpoint(resume_ckpt_dir)
+
+    segment_id = f"cbase-grow-rung2-stabilize-leg1-block{block_idx:02d}"
+    if receipt_dir is not None:
+        _reset_step_trace(
+            Path(receipt_dir) / f"step-trace-{segment_id}.jsonl",
+            grad_accum_steps=grad_accum_steps, global_step_start=global_step_start)
+
     samples: list[dict] = []
     stop_flag = threading.Event()
 
@@ -1194,20 +1348,32 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
         "flops_per_step": 6.0 * 2228265984 * grad_accum_steps * MICRO_BATCH * cfg["model"]["seq"],
     }
     _stage_marker(f"PRE_RUN_V0_SEGMENT_block{block_idx:02d}")
-    receipt = ts.run_v0_segment(
-        run_dir, cfg, n_steps=STEPS_PER_BLOCK_DEFAULT, total_steps=total_steps, live=True,
-        real_arch=True, device="cuda", resume_ckpt_dir=resume_ckpt_dir,
-        shard_dir=shard_dir, checkpoint_every=STEPS_PER_BLOCK_DEFAULT,
-        segment_id=f"cbase-grow-rung2-stabilize-leg1-block{block_idx:02d}",
-        intermediate_override=FF_GROWN, batch_size=MICRO_BATCH,
-        grad_accum_steps=grad_accum_steps, offload_optimizer_state=True,
-        reset_optimizer_on_resume=False, requested_run=requested_run,
-        abort_event=abort_event,
-    )
+    try:
+        receipt = ts.run_v0_segment(
+            run_dir, cfg, n_steps=STEPS_PER_BLOCK_DEFAULT, total_steps=total_steps, live=True,
+            real_arch=True, device="cuda", resume_ckpt_dir=resume_ckpt_dir,
+            shard_dir=shard_dir, checkpoint_every=STEPS_PER_BLOCK_DEFAULT,
+            segment_id=segment_id,
+            intermediate_override=FF_GROWN, batch_size=MICRO_BATCH,
+            grad_accum_steps=grad_accum_steps, offload_optimizer_state=True,
+            reset_optimizer_on_resume=False, requested_run=requested_run,
+            abort_event=abort_event,
+        )
+    finally:
+        # v8: disarm regardless of outcome -- on a mid-block governed abort
+        # (SystemExit) the rows written so far stay on disk exactly as they
+        # are; disarming only prevents a stale armed trace from leaking into
+        # whatever runs next in this process (matters for a test harness that
+        # catches the exception and continues; irrelevant to a real process
+        # exit, where nothing runs next).
+        _disarm_step_trace()
     block_done.set()  # cancel the pace watchdog -- block returned on its own
     if pace_th is not None:
         pace_th.join(timeout=5)
     _stage_marker(f"POST_RUN_V0_SEGMENT_BLOCK_DONE_block{block_idx:02d}")
+    # v8 (ember #627 point 1): this block's own checkpoint is now the last
+    # known-good one for any LATER governed abort to cite.
+    _note_last_checkpoint(receipt.get("last_checkpoint"))
     wall_s = round(time.monotonic() - t0, 3)
     stop_flag.set()
     th.join(timeout=5)
@@ -1366,6 +1532,7 @@ def main() -> int:
     ts_stamp = _ts()
     receipt_dir = Path(args.receipt_dir)
     receipt_dir.mkdir(parents=True, exist_ok=True)
+    _set_abort_receipt_dir(str(receipt_dir))  # v8: governed-abort receipts land here
     cfg = ts.load_contract()
     prod_batch = cfg["throughput"]["batch"] if cfg["throughput"]["batch"] >= 16 else 16
     grad_accum_steps = prod_batch // MICRO_BATCH if prod_batch % MICRO_BATCH == 0 else prod_batch
@@ -1464,6 +1631,7 @@ def main() -> int:
     print(f"[{ts_stamp}] g1 PASS: preflight={pf['preflight']}")
     print(f"[{ts_stamp}] BUILD done: transplanted checkpoint={build['checkpoint_dir']} "
           f"transplant_meta={build['transplant_meta']}")
+    _note_last_checkpoint(build["checkpoint_dir"])  # v8: earliest known-good for a pre-RUN abort
 
     if args.preflight_only:
         out = {
@@ -1530,7 +1698,7 @@ def main() -> int:
             cfg, run_dir, resume_ckpt_dir, global_step_start=global_step,
             total_steps=total_steps, shard_dir=args.shard_dir,
             grad_accum_steps=grad_accum_steps, block_idx=block_idx,
-            pace_gate_s=pace_gate_s)
+            pace_gate_s=pace_gate_s, receipt_dir=receipt_dir)
         kwh_running += (block_receipt["kwh_this_block"] or 0.0)
         block_receipt["kwh_running_total"] = round(kwh_running, 6)
         block_receipts.append(block_receipt)
