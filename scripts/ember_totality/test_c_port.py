@@ -56,6 +56,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 import sys
 
 # --- Locate <external-state> robustly across WSL mount conventions ----------------
@@ -198,6 +199,89 @@ def absolute_tps_gate_used(parsed, raw):
     return None
 
 
+def verify_execution_binding(parsed, root):
+    """Re-execute the generator script with --verify-only and verify the output.
+
+    Returns (passed: bool, finding: str or None).
+    If verification passes, returns (True, None).
+    If verification fails, returns (False, reason_string).
+    If the execution cannot be performed, returns (False, reason_string).
+    """
+    try:
+        provenance = parsed.get("provenance")
+        if not isinstance(provenance, dict):
+            return False, "no provenance block in receipt"
+
+        # (a) Verify script exists
+        script_path = provenance.get("script")
+        if not script_path:
+            return False, "provenance.script missing"
+
+        full_script_path = os.path.join(root, script_path)
+        if not os.path.isfile(full_script_path):
+            return False, f"unverifiable provenance: {script_path} not found in repo"
+
+        # (b) Extract device arg from provenance.args
+        prov_args = provenance.get("args")
+        if not isinstance(prov_args, dict):
+            return False, "provenance.args missing or not a dict"
+
+        device_arg = prov_args.get("device", "3090:86")
+
+        # Re-execute generator with --verify-only
+        try:
+            result = subprocess.run(
+                [sys.executable, script_path, "--device", device_arg, "--verify-only"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+        except subprocess.TimeoutExpired:
+            return False, "verify-only execution timed out (>120s)"
+        except Exception as e:
+            return False, f"verify-only execution failed: {e}"
+
+        # Parse output
+        output = result.stdout.strip()
+        if result.returncode != 0:
+            # Non-zero exit = FAIL
+            if output.startswith("VERIFY FAIL"):
+                reason = output.replace("VERIFY FAIL", "").strip()
+                return False, f"re-execution failed: {reason}"
+            else:
+                return False, f"re-execution failed with exit code {result.returncode}: {output}"
+
+        # Parse VERIFY PASS line
+        if not output.startswith("VERIFY PASS"):
+            return False, f"unexpected verify output: {output}"
+
+        # Extract precision_selected from the VERIFY PASS line
+        # Expected format: VERIFY PASS precision=<p> device_tier=<t>
+        parts = output.split()
+        verify_precision = None
+        for part in parts[2:]:  # Skip "VERIFY PASS"
+            if part.startswith("precision="):
+                verify_precision = part.split("=", 1)[1]
+                break
+
+        # (c) Compare precision_selected with receipt's value
+        receipt_precision = parsed.get("forward_pass", {}).get("precision_selected")
+        if verify_precision is None:
+            return False, f"could not parse precision from verify output: {output}"
+
+        if str(verify_precision) != str(receipt_precision):
+            return False, (
+                f"precision mismatch: fresh run selected {verify_precision}, "
+                f"but receipt claimed {receipt_precision}"
+            )
+
+        return True, None
+
+    except Exception as e:
+        return False, f"unexpected error during verification: {e}"
+
+
 def main():
     if ROOT is None:
         emit("UNEVALUABLE", "C-PORT: state root not found under any known layout "
@@ -326,6 +410,12 @@ def main():
         if not re.search(r"never\s+loosen|tighten[\s_-]*only|does\s+not\s+loosen", low):
             findings.append("governor change appears to loosen the 4090 floor "
                             "(must TIGHTEN only)")
+
+    # (6) EXECUTION-BINDING: re-execute the generator script with --verify-only
+    # and verify that the fresh run produces the same precision_selected.
+    exec_pass, exec_reason = verify_execution_binding(parsed, ROOT)
+    if not exec_pass:
+        findings.append(f"execution-binding verify leg failed: {exec_reason}")
 
     if findings:
         emit("RED",

@@ -91,6 +91,9 @@ def main() -> int:
                           "'unavailable'). Falls back to internal `git rev-parse HEAD` "
                           "when omitted.")
     ap.add_argument("--git-branch", default=None, help="override git branch name (see --git-sha)")
+    ap.add_argument("--verify-only", action="store_true",
+                     help="run the identical governor + forward-pass path, write NO receipt, "
+                          "print one verdict line (VERIFY PASS or VERIFY FAIL), exit 0 on PASS, 1 on FAIL")
     args = ap.parse_args()
 
     import torch  # imported here, not at module load, matching governor.py's own convention
@@ -139,6 +142,16 @@ def main() -> int:
     )
 
     no_crash = (not crashed) and forward_ok
+
+    # --- Verify-only mode: run identical logic, print verdict line, NO receipt ---
+    if args.verify_only:
+        if not no_crash:
+            print(f"VERIFY FAIL forward_pass_crashed_or_failed")
+            return 1
+        # Success: print the verdict line with precision and device tier
+        device_tier = capability.get("name", "cpu").lower()
+        print(f"VERIFY PASS precision={precision_selected} device_tier={device_tier}")
+        return 0
 
     receipt = {
         "ticket": "C-PORT-DEVICE-PORTABILITY-SIM",
