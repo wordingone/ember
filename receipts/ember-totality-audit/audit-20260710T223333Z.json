@@ -1,0 +1,83 @@
+{
+  "ts": "2026-07-10T22:33:33Z",
+  "kind": "board-integrity-audit",
+  "rotation_batch": [
+    "C-DISC",
+    "C-ENF",
+    "C-PORT",
+    "C(-1)"
+  ],
+  "prior_batch_receipt": "receipts/ember-totality-audit/audit-20260710T203826Z.json",
+  "board_anchor": "scripts/ember_totality/receipts-totality/ember-totality-20260710T220944Z.json",
+  "board_fresh": true,
+  "board_commit": "3f0abdc",
+  "board_summary": {
+    "total": 40,
+    "green": 12,
+    "red": 24,
+    "unevaluable": 1
+  },
+  "method": "manual gate discipline (wf_board_integrity_audit.js still lost, rebuild tracked as issue #89): coordinator adversarial read of each batch probe + its cited receipt + one-level-down checkers, receipts-only spot-verify of every load-bearing claim (dirs enumerated, in-tree scripts/functions grepped, cited receipt fields re-read)",
+  "findings": [
+    {
+      "slug": "C-DISC",
+      "probe_faithful": "TRUE",
+      "receipt_genuine": "TRUE",
+      "severity": "MAJOR",
+      "gap": "Probe + checker are execution-binding and real, but 2 of 3 hinges have NO FEED: EARNED_GROWTH watches receipts/growth-rung-attempts/ (dir absent) for receipt_type growth_rung_attempt (no writer anywhere in-tree); B2_BOOTSTRAP watches receipts/bootstrap-rung/ (dir absent) for b2_bootstrap_attempt (no writer). Real grow attempts land in receipts/cbase-grow-rung/ invisible to the tally. fired=0 matches reality today (rung1+rung2 both succeeded; zero bootstrap attempts), so GREEN stands - but the disconfirmation trigger can never fire forward. H0_CEILING feed is live (real docs).",
+      "cheap_pass": "none today; forward-blindness class",
+      "evidence": "ls receipts/growth-rung-attempts/ + receipts/bootstrap-rung/ -> empty/absent; grep growth_rung_attempt -> checker+custody tests+spec only; receipts/cbase-grow-rung/ holds rung1-live 20260703 + rung2-completion 20260710",
+      "fix": "emitter-side contract: runners emit hinge-tally receipts per attempt; custody fixture proves end-to-end fire; doc repoint (GOAL sec8 -> archive + registry)",
+      "ownership": "genuine-rebuild (emitter contract, CPU-only)",
+      "issue": 729
+    },
+    {
+      "slug": "C-ENF",
+      "probe_faithful": "TRUE",
+      "receipt_genuine": "TRUE",
+      "severity": "NONE",
+      "gap": "honest GREEN. Execution-binding (subprocess + dual-source verdict, fail-closed on missing leg), hard-coded expected-checker set (registry cannot silently shrink), scope honestly disclosed as execution-integrity (publication gate direction explicitly out of scope). check_energy_law_theory is a real 11-clause evaluator with selftest.",
+      "cheap_pass": "none found",
+      "evidence": "test_c_enf.py expected set {check_energy_law_theory, check_publication_gate}; problems loop covers ALL results",
+      "fix": "none",
+      "ownership": "none"
+    },
+    {
+      "slug": "C-PORT",
+      "probe_faithful": "PARTIAL",
+      "receipt_genuine": "TRUE",
+      "severity": "MAJOR",
+      "gap": "Probe is content-scan only: candidacy + every CHK clause are string/field reads on a self-reported JSON; no SHA-binding, no provenance verification, no re-execution. A hand-authored JSON with the right markers would flip C-PORT GREEN with zero code running - pre-#699 C-EFF class.",
+      "cheap_pass": "hand-authored receipt with forward_pass/no_crash + portability marker + governor block + non-4090 device string + roofline sentence",
+      "evidence": "current GREEN is genuine: c-port-device-portability-sim-20260710T001548Z.json has disclosed sim boundary, measured output_abs_mean=0.479048, provenance verified in-tree (scripts/c_port_simulated_device_receipt.py on master; governor.py has device_capability/fp8_matmul_with_fallback/FP8_MIN_SM x15; rerun_command recorded)",
+      "fix": "execution-binding verify leg per #699 template (--verify-only re-execution + provenance existence + fail-closed)",
+      "ownership": "probe-harden",
+      "issue": 728,
+      "action": "builder lane dispatched this tick (haiku, worktree wt-cportharden, PR pending)"
+    },
+    {
+      "slug": "C(-1)",
+      "probe_faithful": "TRUE",
+      "receipt_genuine": "TRUE",
+      "severity": "NONE",
+      "gap": "honest GREEN (new flip this render, audited on arrival). Probe carries the full hardening stack: verdict-linkage (PASS-class required), ALL-decisive-claims coverage (undeclared blocks GREEN), sha-pinned spend-annex with narrowed evidence classes, VOID-supersession disclosed, fail-closed on cited-but-missing (#394), BOM-tolerant annex walk.",
+      "cheap_pass": "none found",
+      "evidence": "clear packet p513-p3-forensic-20260710T170210Z.json re-read: verdict=PASS_NOT_KILLED, api_spend_usd=0, paid_api_surface_used=False, pre-registered kill conditions verbatim in receipt; #719 backfills were additive + disclosed (api_spend_backfill_note), key-level diffs verified at gate",
+      "fix": "none",
+      "ownership": "none"
+    }
+  ],
+  "carried_from_prior_batch": {
+    "c_base_harden": "LANDED via #720 (fa7eb0c) - C-BASE flipped honestly RED on the 220944Z render exactly as the prior audit's honest_green_delta predicted; cure = successor grow run (goal-loop queue)",
+    "c_manifest_denominator": "LANDED via same PR #720 - C-MANIFEST GREEN at 220944Z is post-cure",
+    "process_visibility_schema_gap": "PERSISTS: newest process receipt (20260710T221000Z, landing in flight) has no publication_state field. Substantive clause-f check passes (all 21 landings since 14:39Z via public PRs; open PR = the landing lane's own). Next process-receipt refresh MUST add the field."
+  },
+  "honest_green_delta": "0 from this batch: all four audited GREENs stand (C-DISC/C-ENF/C(-1) faithful+genuine; C-PORT genuine today with an open probe channel, harden dispatched)",
+  "regression_alarm": "none was-genuine-now-hollow. C-BASE GREEN->RED is the prior finding's cure landing, not a regression.",
+  "rotation_cursor_next": [
+    "C-GROW",
+    "C12",
+    "C2",
+    "C3"
+  ]
+}
