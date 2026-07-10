@@ -1,0 +1,35 @@
+{
+  "ticket": "P513-P3-FORENSIC-ERRATUM",
+  "ts": "2026-07-10T17:31:00.000000+00:00",
+  "corrects": "receipts/p513-p3-forensic-20260710T170210Z.json",
+  "corrects_sha256_at_time_of_erratum": "b19aee314bcce3e93b2191d74520d574b346ee3520672d9389cc14d3944a38ed",
+  "policy": "The corrected receipt is NEVER mutated. This is a dated sibling, not an edit -- the landed artifact stays byte-identical to what PR #691 shipped and what the independent post-merge audit hash-matched.",
+  "defect": {
+    "field": "new_resolver.path",
+    "false_text_as_landed": "resolve_gate_momentum_buffer: opt_state['muon']['state'][param_id]['momentum_buffer'], param_id = list(model_state.keys()).index(gate_key)",
+    "why_false": "'param_id = list(model_state.keys()).index(gate_key)' is the OBSOLETE #513-era GLOBAL model-state-dict-position defect -- the exact conflation issue #580 exists to describe and #587 fixed. That description string is a hardcoded literal in scripts/p513_p3_forensic.py (lines 133-134) that was never updated when the resolver's actual internals changed under #587/#580. It describes the disease, not the cure.",
+    "scope_of_defect": "Description-only. The COMPUTED value (new_resolver.rms = 0.0003815260133706033) is correct and independently re-verified below -- this erratum touches no numeric field, no verdict, no kill-condition evaluation."
+  },
+  "correction": {
+    "actual_resolver_mechanism": "resolve_gate_momentum_buffer(model_state, opt_state, gate_key) in scripts/p5_ratio_audit/run_p5_audit.py (lines 1258-1295) calls timeshare_pretrain.build_optimizer_id_maps(model_state=model_state) -- the ONE authoritative bidirectional name<->id mapping helper (issue #580) -- and looks up muon_id = id_maps['muon_name_to_id'][gate_key]. This is the param's position within split_param_groups' MUON-LOCAL numbering (0-139 for this checkpoint's 140 muon-routed tensors), NOT its position in the global model.state_dict() ordering. The buffer is then read from opt_state['muon']['state'][muon_id]['momentum_buffer'].",
+    "corrected_new_resolver_path_text": "resolve_gate_momentum_buffer: opt_state['muon']['state'][muon_id]['momentum_buffer'], muon_id = build_optimizer_id_maps(model_state=model_state)['muon_name_to_id'][gate_key]",
+    "muon_local_id_for_this_gate_key": {
+      "gate_key": "backbone_model.layers.0.mlp.gate_proj.weight",
+      "muon_local_id": 4,
+      "reverified_20260710T1728Z": "re-derived independently against the same b1-snapshot checkpoint used by the landed receipt: id_maps['muon_name_to_id']['backbone_model.layers.0.mlp.gate_proj.weight'] == 4, matching the value cited in this custody-cure mission."
+    },
+    "old_global_id_would_have_been": "list(model_state.keys()).index(gate_key) computes a DIFFERENT integer (the global state-dict position, which is offset by however many AdamW-routed params -- embeddings/norms/head/mtp_heads -- interpose ahead of this key). Using that integer as a key into the muon-local-keyed dict is precisely the #580 aliasing defect: it silently reads a DIFFERENT parameter's momentum buffer whenever the two numberings diverge. This checkpoint's old_resolver field (a separate, correctly-described code path in the same receipt) demonstrates the STRING-keyed top-level shape returning nothing -- a distinct, also-real defect variant from the global/local id-conflation variant this erratum addresses."
+  },
+  "independent_reverification_20260710T173xZ": {
+    "method": "Re-ran the ACTUAL landed resolve_gate_momentum_buffer against the same checkpoint (models/cbase-grow-rung/rung2-event-grow-rung2-20260708-real/b1-snapshot) used by the corrected receipt.",
+    "recomputed_rms": 0.0003815260133706033,
+    "matches_landed_receipt_new_resolver_rms": true,
+    "note": "This confirms the corrected receipt's NUMBER was always right; only its prose description of the mechanism that produced the number was wrong. Same-family defect as the fifth stabilize-script site found by the coordinator's independent audit during PR #690 review -- a description/comment lagging a code change, not a computation error."
+  },
+  "no_repeat_bug_confirmation": "scripts/p513_p3_forensic.py itself is NOT edited by this erratum (receipts-only custody cure, per the follow-up mission scope). If/when that script is next touched for any reason, lines 133-134's literal string should be updated to match this erratum's corrected text -- flagged here so the fix travels with the record even though it is out of scope for this PR.",
+  "refs": [580, 513, 587, 691],
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "ERRATUM_FILED_CORRECTED_RECEIPT_UNCHANGED"
+}

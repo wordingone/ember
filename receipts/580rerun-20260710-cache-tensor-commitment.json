@@ -1,0 +1,65 @@
+{
+  "ticket": "580RERUN-CACHE-TENSOR-COMMITMENT",
+  "ts": "2026-07-10T17:32:00.000000+00:00",
+  "issue": 580,
+  "sibling_to": [
+    "receipts/cbase-grow-rung2-event-580rerun-20260710-b1m.json",
+    "receipts/cbase-grow-rung2-event-580rerun-20260710-b3.json"
+  ],
+  "scope": "Custody cure: the b1m and b3 receipts name 4 private cache-tensor paths (cache_paths fields) but do not carry SHA256/dtype/shape/byte-length for the objects those paths point to. This sibling commits to each tensor's exact identity WITHOUT publishing the tensor itself, so the record is auditable (anyone can verify a re-derived tensor hashes to these values) even though full external replay is not possible from the public repo alone.",
+  "sha_convention": "sha256 over the on-disk raw bytes of the torch.save()-serialized .pt file (binary read, no line-ending normalization) -- same convention as every other receipt in this repo.",
+  "nonpublic_disclosure": "These 4 files live under receipts/.rung2-event-cache/, which is gitignored by repo convention (private binary optimizer/activation caches are never committed -- only their provenance is). They exist ONLY on the box that ran run_id 580rerun-20260710 and are NOT part of this PR's diff, NOT part of any commit, and NOT recoverable from a clone of this repository. Full external replay of the exact b1m/b3 numbers from a fresh checkout is therefore UNAVAILABLE -- this is disclosed as a bounded-replay limitation, not papered over. What IS reproducible from the public repo: re-running the full preflight->b1->b1m->b2->b3 chain from the same seed checkpoint and config regenerates functionally-equivalent caches (the pipeline is deterministic per the b1m receipt's deterministic_forward.deterministic=true and the b3 receipt's batch_pin_check), but will not reproduce these exact SHA256 values unless run against the identical byte-for-byte seed checkpoint this box holds locally.",
+  "cache_tensors": {
+    "grad_pre_gate": {
+      "source_receipt": "cbase-grow-rung2-event-580rerun-20260710-b1m.json",
+      "cache_path_as_recorded": "receipts\\.rung2-event-cache\\580rerun-20260710-grad-pre-gate.pt",
+      "sha256": "c214d7b6e2772811e5a8302a054509588c09249af6b6789aadc424fd3dd049b4",
+      "byte_length": 67110737,
+      "tensor_dtype": "torch.float32",
+      "tensor_shape": [16384, 1024]
+    },
+    "theta_gate_pre": {
+      "source_receipt": "cbase-grow-rung2-event-580rerun-20260710-b1m.json",
+      "cache_path_as_recorded": "receipts\\.rung2-event-cache\\580rerun-20260710-theta-gate-pre.pt",
+      "sha256": "edc316f72796e0158103a3f4f23a9aee58fb767f742cf6d941b31baf36fd57b3",
+      "byte_length": 67110744,
+      "tensor_dtype": "torch.float32",
+      "tensor_shape": [16384, 1024]
+    },
+    "pre_momentum": {
+      "source_receipt": "cbase-grow-rung2-event-580rerun-20260710-b1m.json",
+      "cache_path_as_recorded": "receipts\\.rung2-event-cache\\580rerun-20260710-pre-momentum.pt",
+      "sha256": "b95259382af80fff2d8b180d487e6b94f70cc20595d44745ab50d121b1e2727f",
+      "byte_length": 33556298,
+      "tensor_dtype": "torch.bfloat16",
+      "tensor_shape": [16384, 1024],
+      "cross_check_against_public_scalar": {
+        "public_field": "cbase-grow-rung2-event-580rerun-20260710-b3.json:pre_buffer_rms_consumed",
+        "public_value": 0.0003815260133706033,
+        "recomputed_rms_from_this_exact_cache_tensor": 0.0003815260133706033,
+        "match": true,
+        "note": "This is the same value the two-point engagement guard (b1m fresh-resolve + b3 downstream-consumed) already bound bit-identically in the #691 PR body. Recording it here too ties the cache tensor's own hash directly to the public scalar, closing the gap between 'a hash exists' and 'the hash is of the tensor that produced the number.'"
+      }
+    },
+    "grad_post_gate": {
+      "source_receipt": "cbase-grow-rung2-event-580rerun-20260710-b3.json",
+      "cache_path_as_recorded": "receipts\\.rung2-event-cache\\580rerun-20260710-grad-post-gate.pt",
+      "sha256": "558b3f79ac28ae50b15c473451b282a82f56844be174f6a186ea9cac9f21f492",
+      "byte_length": 134219608,
+      "tensor_dtype": "torch.float32",
+      "tensor_shape": [32768, 1024],
+      "note": "Shape [32768, 1024] (double the 16384 row count of the other three) reflects the post-grow widened gate_proj dimension for this rung-2 grow event -- expected, not anomalous."
+    }
+  },
+  "audit_cross_reference": {
+    "independent_post_merge_audit_sha256": "B81A75B4ECFB9C5B0DC50ACDE3AF1A29E4D82A77947ECD9498A62CA6E2CB1ABC",
+    "independent_replay_json_sha256": "227553E225766D8F34E5705AFB0CF64B4D9CAC6240711DCE4F15C277BFA1967A",
+    "independent_audit_disposition": "CLEAR_LOCAL_EXACT_BYTE_REPLAY (all 6 receipts hash-match the run-worktree bytes; dtype-preserving recomputation matched every P-2 scalar exactly)"
+  },
+  "generation_method": "sha256 computed via binary read + hashlib.sha256 over each on-disk .pt file; dtype/shape read via torch.load(map_location='cpu', weights_only=True) on the loaded tensor object; pre_momentum's rms cross-check computed as sqrt(mean(tensor.float()**2)) over the same loaded tensor.",
+  "refs": [580, 691],
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "COMMITMENT_RECORDED_REPLAY_BOUNDED_NONPUBLIC"
+}
