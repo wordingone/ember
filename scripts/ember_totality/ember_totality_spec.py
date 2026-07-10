@@ -65,10 +65,20 @@ unfired, freeze-onset per GOAL.md §12) — the receipt records the computed
 hashes with `pinned: null, status: "pre-freeze-baseline"`; this run BECOMES
 the baseline record rather than comparing against one.
 
-Run:  python ember_totality_spec.py <ts> [--root PATH]
-  <ts>    fixed timestamp string (e.g. 20260702T120000Z) used in the receipt
-          filename + body. We do NOT call date() in Python — the caller
-          passes it.
+Run:  python ember_totality_spec.py [ts] [--root PATH]
+  [ts]    DEPRECATED / IGNORED positional, kept only so an old invocation
+          with a value here does not hard-error. [PROBE-HARDEN cure,
+          coordinator code-read audit] This module used to instruct exactly
+          the opposite of what is safe ("We do NOT call date() in Python --
+          the caller passes it") -- a caller computing that timestamp via a
+          non-UTC-aware shell/date call (or simply local time with a Z
+          appended out of habit) is the concrete, disclosed way a non-UTC
+          stamp polluted the chronology once. The receipt's own top-level
+          `ts` is now ALWAYS self-stamped in Python, timezone-aware real UTC
+          (datetime.now(timezone.utc)), captured AFTER every probe has run
+          (as close to actual disk-write time as this function gets) --
+          never a caller-supplied string, never naive local time with a Z
+          suffix appended.
   --root  override the state root every probe resolves against (propagated
           via EMBER_TOTALITY_ROOT). Default: this script's own repo root
           (two levels up from scripts/ember_totality/).
@@ -1003,9 +1013,13 @@ def main():
         description="Ember totality board runner (see module docstring)."
     )
     ap.add_argument("ts", nargs="?", default=None,
-                    help="timestamp for the receipt name/body; OMIT to self-stamp "
-                         "true UTC (callers passing hand-computed values is how a "
-                         "non-UTC stamp polluted the chronology once)")
+                    help="DEPRECATED / IGNORED. The receipt's ts is ALWAYS "
+                         "self-stamped in Python, timezone-aware real UTC, "
+                         "at write time -- never a caller-supplied value "
+                         "(callers passing hand-computed values is how a "
+                         "non-UTC stamp polluted the chronology once). Kept "
+                         "as an accepted-but-unused positional so an old "
+                         "invocation supplying one does not hard-error.")
     ap.add_argument(
         "--root", default=None,
         help=("state root every probe resolves against (env "
@@ -1013,7 +1027,12 @@ def main():
               f"({REPO_ROOT}).")
     )
     args = ap.parse_args()
-    ts = args.ts or _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if args.ts:
+        print(f"NOTE: positional ts argument {args.ts!r} is DEPRECATED and "
+              f"IGNORED -- the receipt's own ts self-stamps real UTC at "
+              f"write time regardless of any caller-supplied value "
+              f"(see module docstring / PROBE-HARDEN cure).",
+              file=sys.stderr)
     effective_root = os.path.abspath(args.root) if args.root else REPO_ROOT
 
     # --- Registry sync (self-enforcing close condition) -----------------------
@@ -1026,6 +1045,23 @@ def main():
     probe_env["PYTHONIOENCODING"] = "utf-8"
 
     rows = [run_probe(p, probe_env) for p in discover_tests()]
+
+    # [PROBE-HARDEN cure, coordinator code-read audit] `ts` -- the token that
+    # names this receipt's file, feeds compute_invariant_checksum()'s
+    # PENDING_AUTHORIZATION.consumed-<ts>.json companion rename, and becomes
+    # the receipt body's own top-level "ts" field -- is stamped HERE, AFTER
+    # every probe above has actually run, in real timezone-aware UTC. This is
+    # the fix for two known-defect symptoms in a prior board receipt: (1) a
+    # naive-local-time value with a Z suffix falsely implying UTC (root cause:
+    # this module's own docstring used to instruct the CALLER to hand-compute
+    # this timestamp -- "We do NOT call date() in Python" -- which is exactly
+    # how a non-UTC-aware shell/date call could leak in), and (2) a header ts
+    # that predated its own cited evidence by 6+ hours (root cause: the prior
+    # code captured this timestamp BEFORE the probe loop above ran, so a run
+    # with slow/near-timeout probes left the header stamped hours earlier
+    # than the moment the receipt was actually assembled and written). Never
+    # a caller-supplied string (see the deprecated `ts` positional above).
+    ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     # --- Registry ids with no discovered probe: synthesize an UNEVALUABLE row
     # so the board still enumerates all 30 conditions rather than silently

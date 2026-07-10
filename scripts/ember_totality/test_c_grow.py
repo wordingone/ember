@@ -163,6 +163,50 @@ def candidate_files():
     return sorted(out)
 
 
+def flop_saving_self_declares_unmeasured(node):
+    """Recursively search a parsed receipt structure for a flop_saving-shaped
+    sub-object (its own serialized form matches the FLOP_SAVING vocabulary)
+    that itself declares measured:false or a label containing "estimate".
+
+    [PROBE-HARDEN cure, coordinator code-read audit] The prior CHK matched
+    FLOP_SAVING against the whole receipt's raw text -- vocabulary-only, so a
+    receipt whose flop_saving block truthfully documents itself as an
+    ESTIMATE (not measured) still lit every keyword and passed. R-text
+    explicitly excludes this case: "an analytical growth argument with NO
+    measured FLOP-reduction receipt (a design doc / prose is not a receipt)"
+    -- a nested self-declared estimate block is the same excluded case, one
+    level deeper than a standalone prose doc. Structural check, not lexical:
+    only a sub-object that BOTH matches the FLOP_SAVING vocabulary AND
+    explicitly self-declares measured:false / label:estimate is rejected; a
+    receipt that merely mentions "estimate" in unrelated prose is untouched.
+
+    Returns a short description string (e.g. "measured=False label='estimate'")
+    if such a self-declared-unmeasured block is found, else None.
+    """
+    if isinstance(node, dict):
+        try:
+            node_text = json.dumps(node)
+        except Exception:
+            node_text = str(node)
+        if FLOP_SAVING.search(node_text):
+            measured_flag = node.get("measured")
+            label_flag = node.get("label")
+            if measured_flag is False or (
+                isinstance(label_flag, str) and "estimate" in label_flag.lower()
+            ):
+                return f"measured={measured_flag!r} label={label_flag!r}"
+        for v in node.values():
+            found = flop_saving_self_declares_unmeasured(v)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for item in node:
+            found = flop_saving_self_declares_unmeasured(item)
+            if found:
+                return found
+    return None
+
+
 def main():
     if ROOT is None:
         emit("UNEVALUABLE", "C-GROW: state root not found under any known layout -- input-missing, dead branch under the flat-layout resolver (paper-consistency flip, 2026-07-02)")
@@ -224,6 +268,23 @@ def main():
                 f"{os.path.relpath(p, ROOT)}: self-declared smoke receipt "
                 f"({', '.join(smoke_markers)}) - plumbing check, not a "
                 f"measured growth claim")
+            continue
+
+        # [PROBE-HARDEN cure] A flop_saving block that self-declares
+        # measured:false or label:estimate is the R-text's explicitly
+        # excluded "analytical growth argument with NO measured FLOP-
+        # reduction receipt" case -- reject structurally, not just lexically
+        # (see flop_saving_self_declares_unmeasured docstring above).
+        unmeasured_flop = None
+        if isinstance(obj, dict):
+            unmeasured_flop = flop_saving_self_declares_unmeasured(obj)
+        if unmeasured_flop:
+            near_miss.append(
+                f"{os.path.relpath(p, ROOT)}: flop_saving block self-declares "
+                f"unmeasured/estimate ({unmeasured_flop}) - R-text explicitly "
+                f"excludes an analytical estimate with no measured FLOP-"
+                f"reduction receipt; does NOT satisfy "
+                f"flop_saving_vs_fromscratch CHK")
             continue
 
         # --- (1) Positive CHK against this REAL receipt ----------------------
