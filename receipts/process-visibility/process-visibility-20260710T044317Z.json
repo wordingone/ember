@@ -1,0 +1,63 @@
+﻿{
+    "ts":  "20260710T044317Z",
+    "covered_commits":  {
+                            ".":  "46a2951599a80adaabe19c25b1f7b791e9023452"
+                        },
+    "delegation":  {
+                       "issue-633":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-635":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-632":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-623":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-621":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-624":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-619":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-634":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     },
+                       "issue-622":  {
+                                         "verified_by":  "reviewer-agent",
+                                         "built_by":  "builder-agent"
+                                     }
+                   },
+    "publication_state":  {
+                              "local_shas":  {
+                                                 ".":  "46a2951599a80adaabe19c25b1f7b791e9023452"
+                                             },
+                              "unpublished_landings":  0,
+                              "public_master_sha":  "46a2951599a80adaabe19c25b1f7b791e9023452"
+                          },
+    "issue_urls":  [
+                       "https://github.com/wordingone/ember/issues/619",
+                       "https://github.com/wordingone/ember/issues/621",
+                       "https://github.com/wordingone/ember/issues/622",
+                       "https://github.com/wordingone/ember/issues/623",
+                       "https://github.com/wordingone/ember/issues/624",
+                       "https://github.com/wordingone/ember/issues/632",
+                       "https://github.com/wordingone/ember/issues/633",
+                       "https://github.com/wordingone/ember/issues/634",
+                       "https://github.com/wordingone/ember/issues/635"
+                   ],
+    "open_prs":  "none-open"
+}
