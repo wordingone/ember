@@ -163,18 +163,26 @@ export function applyModelsJsonToEnv(cfg: ModelsJson): void {
 }
 
 // ---------------------------------------------------------------------------
-// Endpoint disclosure (issue #196) — resolves and explains WHY, before
-// applyModelsJsonToEnv's ??= writes can blur the distinction between "the
-// operator set EMBER_MODEL_URL" and "models.json's endpoint just populated
-// it". Precedence (issue #196 follow-up): an explicit EMBER_MODEL_URL always
-// WINS -- env > models.json ("endpoint" then "binary") > managed spawn with
-// the default binary. Mirrors main()'s own externalUrl precedence exactly,
-// so the disclosed reason is never out of sync with what main() actually does.
+// Endpoint disclosure (issue #196, extended by issue #602) — resolves and
+// explains WHY, before applyModelsJsonToEnv's ??= writes can blur the
+// distinction between "the operator set EMBER_MODEL_URL" and "models.json's
+// endpoint just populated it". Precedence: an explicit EMBER_MODEL_URL always
+// WINS -- env > GPU-free override > models.json ("endpoint" then "binary") >
+// managed spawn with the default binary. Mirrors main()'s own externalUrl
+// precedence exactly, so the disclosed reason is never out of sync with what
+// main() actually does.
+//
+// issue #602: EMBER_GPU_FREE=1 used to be checked only AFTER falling back to
+// `envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint` -- so with the env var
+// unset, a persisted models.json endpoint silently won and GPU-free mode never
+// engaged. GPU-free is now a dedicated branch, checked ahead of that fallback,
+// beaten only by an explicit EMBER_MODEL_URL (an operator naming a server is a
+// stronger signal than the GPU-free flag).
 // ---------------------------------------------------------------------------
 
 export interface EndpointResolution {
-  source: "env" | "config" | "managed";
-  /** Resolved endpoint URL, or null when a managed spawn's URL isn't known until the server starts. */
+  source: "env" | "gpu-free" | "config" | "managed";
+  /** Resolved endpoint URL, or null when a managed spawn's URL isn't known until the server starts, or GPU-free mode has no endpoint at all. */
   endpoint: string | null;
   /** One human-readable line for the startup transcript. */
   text: string;
@@ -185,19 +193,35 @@ export interface EndpointResolution {
  * explains why -- so an explicit EMBER_MODEL_URL override is never silently
  * lost to models.json again (issue #196's original defect: a "binary" field
  * routed around a set EMBER_MODEL_URL with zero visible signal; an "endpoint"
- * field beat it too). Pass the environment's EMBER_MODEL_URL value BEFORE
- * applyModelsJsonToEnv's ??= may have populated it from config, or an
- * operator-set value could be indistinguishable from one config just wrote.
+ * field beat it too) and EMBER_GPU_FREE=1 is never silently lost to a
+ * persisted models.json endpoint (issue #602). Pass the environment's
+ * EMBER_MODEL_URL value BEFORE applyModelsJsonToEnv's ??= may have populated
+ * it from config, or an operator-set value could be indistinguishable from
+ * one config just wrote.
  */
 export function describeEndpointResolution(
   modelsCfg: ModelsJson | null,
   envModelUrlBeforeConfigApply: string | undefined,
+  gpuFreeRequested = false,
 ): EndpointResolution {
   if (envModelUrlBeforeConfigApply !== undefined) {
     return {
       source: "env",
       endpoint: envModelUrlBeforeConfigApply,
       text: `[ember] model endpoint: ${envModelUrlBeforeConfigApply} -- resolved from EMBER_MODEL_URL (wins over models.json)`,
+    };
+  }
+
+  // issue #602: dedicated branch, checked ahead of the models.json fallback below --
+  // an unset EMBER_MODEL_URL must never let a persisted config endpoint defeat GPU-free mode.
+  if (gpuFreeRequested) {
+    const overrideNote = modelsCfg?.endpoint
+      ? ` -- overrides persisted models.json endpoint "${modelsCfg.endpoint}"`
+      : "";
+    return {
+      source: "gpu-free",
+      endpoint: null,
+      text: `[ember] model endpoint: GPU-free mode (EMBER_GPU_FREE=1, model unavailable)${overrideNote}`,
     };
   }
 
@@ -618,7 +642,7 @@ export interface MainOptions {
   /** #159 boot matrix, "backend already running": probed BEFORE spawning. Defaults to a
    *  short real health probe; tests inject a fake to avoid real network I/O. */
   probeExisting?:  (port: number) => Promise<boolean>;
-  initFn?:         (opts: { serverUrl?: string; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
+  initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
     prompt:  string,
@@ -652,11 +676,19 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   const didFastPath = await dispatchFastPath(argv);
   if (didFastPath) return;
 
-  // issue #196: one disclosure line, always -- so a leaked/stale
-  // EMBER_MODEL_URL (or a models.json "binary" field silently discarding an
-  // explicit one) can never reroute the cockpit with zero visible signal.
+  // issue #602: EMBER_GPU_FREE is read once here, ahead of the externalUrl fallback below,
+  // so a persisted models.json endpoint can never silently defeat it when EMBER_MODEL_URL
+  // is unset. cmd.exe cannot produce an empty-string env var (`set VAR=` deletes it), so
+  // this must key off "is GPU_FREE set" alone -- an empty-string EMBER_MODEL_URL is not a
+  // reachable signal from a Windows .bat launcher.
+  const gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
+
+  // issue #196 / #602: one disclosure line, always -- so a leaked/stale EMBER_MODEL_URL (or
+  // a models.json "binary"/"endpoint" field silently discarding an explicit override, or a
+  // persisted endpoint silently discarding EMBER_GPU_FREE=1) can never reroute the cockpit
+  // with zero visible signal.
   process.stdout.write(
-    describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply).text + "\n",
+    describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply, gpuFreeRequested).text + "\n",
   );
 
   // Determine whether we use an external server or spawn our own. issue #196:
@@ -665,7 +697,9 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // config-populated env value can never masquerade as an operator override.
   const externalUrl = envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
 
-  let serverUrl:    string;
+  // string | null: null is the explicit GPU-free signal session-init.ts's `!serverUrl`
+  // check relies on (issue #602) -- a real, typed null, not an unsafe cast.
+  let serverUrl:    string | null;
   let detectedNCtx: number;
 
   // #159 boot matrix: shared exit path for every managed-spawn failure cell below, so each
@@ -673,16 +707,20 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // exception surfacing as a raw stack trace via main.ts's last-resort handler.
   const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
 
-  if (externalUrl) {
+  // issue #602: GPU-free is a dedicated branch checked AHEAD of the env-or-config fallback
+  // (`externalUrl`) below -- with EMBER_MODEL_URL unset, EMBER_GPU_FREE=1 wins outright, even
+  // when models.json has a persisted "endpoint". An explicit EMBER_MODEL_URL still wins over
+  // GPU-free (checked first, via envModelUrlBeforeConfigApply): the operator naming a server
+  // is a stronger signal than the GPU-free flag.
+  if (envModelUrlBeforeConfigApply === undefined && gpuFreeRequested) {
+    // GPU-free mode: boot the cockpit without spawning/loading the model server.
+    // The model client stub in session-init.ts surfaces OFFLINE state when called.
+    serverUrl    = null; // signal to session-init that model is disabled
+    detectedNCtx = modelsCfg?.nCtx ?? 4096;
+  } else if (externalUrl) {
     process.env["EMBER_MODEL_URL"] ??= externalUrl;
     serverUrl    = externalUrl;
     detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
-  } else if (process.env["EMBER_GPU_FREE"]) {
-    // GPU-free mode: boot the cockpit without spawning/loading the model server.
-    // The model client stub in session-init.ts surfaces OFFLINE state when called.
-    process.stdout.write(`[ember] model endpoint: GPU-free mode (EMBER_GPU_FREE=1, model unavailable)\n`);
-    serverUrl    = null as unknown as string; // signal to session-init that model is disabled
-    detectedNCtx = modelsCfg?.nCtx ?? 4096;
   } else {
     const exeDir    = resolve(dirname(process.execPath ?? process.argv[0] ?? process.cwd()));
     const port      = await resolveServerPort(exeDir);

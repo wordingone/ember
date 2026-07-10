@@ -14,6 +14,7 @@ import {
   getResolvedNCtx,
   getToolResultBudget,
   getCircuitBreakerState,
+  resolveInitServerUrl,
 } from "./session-init.ts";
 import { ModelHttpError } from "../services/api-openai-adapter.ts";
 import { CircuitOpenError } from "../services/model-circuit-breaker-client.ts";
@@ -338,5 +339,37 @@ describe("buildGuardedProductionCallModel — issue #239 circuit breaker on the 
     // getResolvedNCtx()'s pre-init contract above.
     const state = getCircuitBreakerState();
     expect(state === null || typeof state.state === "string").toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issue #602: resolveInitServerUrl -- _runInit's GPU-free null signal must never
+// collapse into the same fallback chain as "not provided" (undefined). Even after
+// process-entry.ts's own precedence fix, this SECOND unguarded `?? env ?? default`
+// chain (right here in _runInit) silently resurrected a "real" serverUrl from a
+// stray EMBER_MODEL_URL or the hardcoded "http://localhost:8081" default whenever
+// main() passed serverUrl: null -- defeating the `!serverUrl` offline-stub check
+// a few lines below it and reaching a real (or fake) model server in GPU-free mode.
+// ---------------------------------------------------------------------------
+
+describe("session-init — resolveInitServerUrl: EMBER_GPU_FREE null signal must not collapse into env/default fallback (issue #602)", () => {
+  it("returns null when opts.serverUrl is explicitly null and EMBER_MODEL_URL is unset (issue #602 regression -- the reachable case: no .bat launcher can produce an empty-string env var, only unset)", () => {
+    expect(resolveInitServerUrl(null, undefined)).toBeNull();
+  });
+
+  it("returns null when opts.serverUrl is explicitly null, even if a stray EMBER_MODEL_URL is set in the environment", () => {
+    expect(resolveInitServerUrl(null, "http://localhost:9999")).toBeNull();
+  });
+
+  it("falls back to EMBER_MODEL_URL when opts.serverUrl is undefined (not provided at all -- distinct from explicit null)", () => {
+    expect(resolveInitServerUrl(undefined, "http://localhost:9999")).toBe("http://localhost:9999");
+  });
+
+  it("falls back to the hardcoded default when both opts.serverUrl and EMBER_MODEL_URL are unset", () => {
+    expect(resolveInitServerUrl(undefined, undefined)).toBe("http://localhost:8081");
+  });
+
+  it("an explicit opts.serverUrl string wins over EMBER_MODEL_URL", () => {
+    expect(resolveInitServerUrl("http://localhost:1111", "http://localhost:9999")).toBe("http://localhost:1111");
   });
 });

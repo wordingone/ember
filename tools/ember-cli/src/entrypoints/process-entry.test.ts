@@ -366,6 +366,50 @@ describe("process-entry — describeEndpointResolution (issue #196 precedence: e
   });
 });
 
+describe("process-entry — describeEndpointResolution: EMBER_GPU_FREE precedence over persisted config (issue #602)", () => {
+  it("EMBER_GPU_FREE=1 wins over models.json 'endpoint' when EMBER_MODEL_URL is unset (issue #602 regression)", () => {
+    const r = describeEndpointResolution({ endpoint: "http://localhost:9999" }, undefined, true);
+    expect(r.source).toBe("gpu-free");
+    expect(r.endpoint).toBeNull(); // GPU-free wins -- never routed to the persisted config endpoint
+    expect(r.text).toContain("GPU-free");
+    // The overridden config endpoint is named in the disclosure line (diagnostic transparency:
+    // confirms GPU-free actually saw and beat the persisted endpoint), it just never WINS.
+    expect(r.text).toContain("overrides");
+    expect(r.text).toContain("http://localhost:9999");
+  });
+
+  it("EMBER_GPU_FREE=1 wins over models.json 'binary' (managed spawn) when EMBER_MODEL_URL is unset", () => {
+    const r = describeEndpointResolution({ binary: "llama-server.exe" }, undefined, true);
+    expect(r.source).toBe("gpu-free");
+    expect(r.endpoint).toBeNull();
+    expect(r.text).toContain("GPU-free");
+  });
+
+  it("EMBER_GPU_FREE=1 with no models.json at all still resolves to the dedicated gpu-free source", () => {
+    const r = describeEndpointResolution(null, undefined, true);
+    expect(r.source).toBe("gpu-free");
+    expect(r.endpoint).toBeNull();
+    expect(r.text).toContain("GPU-free");
+  });
+
+  it("an explicit EMBER_MODEL_URL still wins over EMBER_GPU_FREE=1 (env stays the strongest signal)", () => {
+    const r = describeEndpointResolution(
+      { endpoint: "http://localhost:9999" },
+      "http://localhost:1111",
+      true,
+    );
+    expect(r.source).toBe("env");
+    expect(r.endpoint).toBe("http://localhost:1111");
+    expect(r.text).toContain("http://localhost:1111");
+  });
+
+  it("gpuFreeRequested omitted/false preserves the pre-#602 behavior exactly (backward compatible 2-arg call)", () => {
+    const r = describeEndpointResolution({ endpoint: "http://localhost:9999" }, undefined, false);
+    expect(r.source).toBe("config");
+    expect(r.endpoint).toBe("http://localhost:9999");
+  });
+});
+
 describe("process-entry — AC7: EMBER_ABLATION_BASELINE sets all ablation vars", () => {
   it("sets all six vars when EMBER_ABLATION_BASELINE is set", () => {
     const saved = saveEnv([
@@ -985,6 +1029,119 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
     });
 
     expect(receivedServerUrl).toBe("http://localhost:19192");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #602 acceptance: EMBER_GPU_FREE=1 must not be silently overridden by a
+// persisted models.json endpoint when EMBER_MODEL_URL is unset. Prior behavior:
+// externalUrl = envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint -- so an
+// unset env var let the persisted config endpoint win the `if (externalUrl)`
+// branch even with EMBER_GPU_FREE=1 set, and the cockpit booted against the
+// stale endpoint instead of engaging GPU-free mode. Only an EMPTY-STRING
+// EMBER_MODEL_URL used to force the GPU-free branch, which cmd.exe cannot
+// produce (`set VAR=` deletes the var), so no Windows .bat launcher could ever
+// engage GPU-free mode. Fix: a dedicated GPU-free branch, checked AHEAD of the
+// env-or-config fallback, wins whenever EMBER_MODEL_URL is unset -- an explicit
+// EMBER_MODEL_URL (the operator naming a server) still wins over GPU-free.
+// ---------------------------------------------------------------------------
+
+describe("process-entry — main() end-to-end: EMBER_GPU_FREE precedence over persisted models.json endpoint (issue #602 acceptance)", () => {
+  let tmpDir: string;
+  let savedEnv: Record<string, string | undefined>;
+
+  beforeEach(async () => {
+    tmpDir = join(tmpdir(), `pe-602-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(tmpDir, { recursive: true });
+    savedEnv = saveEnv(["EMBER_HOME", "EMBER_MODEL_URL", "EMBER_MODEL_NAME", "EMBER_GPU_FREE"]);
+    delete process.env["EMBER_MODEL_NAME"];
+    process.env["EMBER_HOME"] = tmpDir;
+    _resetConfigHomeMemo();
+  });
+
+  afterEach(async () => {
+    restoreEnv(savedEnv);
+    _resetConfigHomeMemo();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("EMBER_GPU_FREE=1 alone engages GPU-free mode with a persisted endpoint present and EMBER_MODEL_URL unset (issue #602 regression)", async () => {
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ endpoint: "http://localhost:9999" }));
+    delete process.env["EMBER_MODEL_URL"];
+    process.env["EMBER_GPU_FREE"] = "1";
+
+    let spawnCalls = 0;
+    // Captured RAW (never defaulted via `??`) -- GPU-free mode signals via serverUrl === null,
+    // which `?? "UNSET"` would otherwise collapse into the same sentinel as "never called".
+    let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
+
+    const stdoutCap = captureStdout();
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29994); },
+        waitReady: async () => {},
+        probeExisting: async () => false,
+        initFn: async (o) => { receivedServerUrl = o.serverUrl ?? null; },
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: () => {},
+      });
+    } finally {
+      stdoutCap.restore();
+    }
+
+    expect(spawnCalls).toBe(0);              // GPU-free mode never spawns a managed server
+    expect(receivedServerUrl).toBeNull();     // never routed to the persisted models.json endpoint
+    expect(stdoutCap.output()).toContain("GPU-free");
+    // Disclosed for diagnostic transparency (confirms GPU-free saw and beat the persisted
+    // config), it just never determines serverUrl -- receivedServerUrl above proves that.
+    expect(stdoutCap.output()).toContain("http://localhost:9999");
+  });
+
+  it("an explicit EMBER_MODEL_URL still wins over EMBER_GPU_FREE=1 even with a persisted endpoint present", async () => {
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ endpoint: "http://localhost:9999" }));
+    process.env["EMBER_MODEL_URL"] = "http://localhost:19193";
+    process.env["EMBER_GPU_FREE"]  = "1";
+
+    let spawnCalls = 0;
+    let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
+
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29993); },
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? null; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(spawnCalls).toBe(0);
+    expect(receivedServerUrl).toBe("http://localhost:19193"); // explicit env wins over GPU-free
+  });
+
+  it("no models.json + no EMBER_MODEL_URL + EMBER_GPU_FREE=1 -> GPU-free mode, unchanged from before #602 (no regression on the already-working case)", async () => {
+    delete process.env["EMBER_MODEL_URL"];
+    process.env["EMBER_GPU_FREE"] = "1";
+
+    let spawnCalls = 0;
+    let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
+
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29992); },
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? null; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(spawnCalls).toBe(0);
+    expect(receivedServerUrl).toBeNull();
   });
 });
 
