@@ -1,0 +1,97 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EVENT-B1",
+  "ts": "2026-07-10T16:54:36.128873+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 466,
+  "refs": [
+    449,
+    429
+  ],
+  "run_id": "580rerun-20260710",
+  "scope": "B1: quiesce-PROVEN snapshot of the pre-grow seed checkpoint, full provenance block, RNG disclosure, verified copy to the B1 snapshot dir production stabilization resumes from untouched.",
+  "seed_identity": {
+    "checkpoint": "models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "model_pt_sha256": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+    "manifest_claim_verified": true,
+    "attested_match": true,
+    "attestation_receipt": "receipts/spend-annex/attestations/cbase-gpu-verify-trainable-clean-20260707T015633.json",
+    "step": 766
+  },
+  "quiesce": {
+    "manifest_t0_sha256": "b6e940750bc893b715c7bf3017da3d0b47ed310b19c70f7630490c4a59d49588",
+    "manifest_t1_sha256": "b6e940750bc893b715c7bf3017da3d0b47ed310b19c70f7630490c4a59d49588",
+    "identical": true,
+    "wait_s": 5.0,
+    "n_files": 4
+  },
+  "quiesce_n_files": 4,
+  "exclusive_open_probe": [
+    {
+      "file": "manifest.json",
+      "exclusive_open_ok": true,
+      "error": null
+    },
+    {
+      "file": "model.pt",
+      "exclusive_open_ok": true,
+      "error": null
+    },
+    {
+      "file": "optimizer.pt",
+      "exclusive_open_ok": true,
+      "error": null
+    },
+    {
+      "file": "rng.pt",
+      "exclusive_open_ok": true,
+      "error": null
+    }
+  ],
+  "any_file_locked_elsewhere": false,
+  "quiesce_proven": true,
+  "provenance": {
+    "per_class": {
+      "muon": {
+        "n_buffers_inspected": 140,
+        "nonzero_fraction_mean": 0.9999235119138445,
+        "nonzero_fraction_min": 0.9998741149902344,
+        "nonzero_fraction_max": 0.9999771118164062,
+        "all_buffers_exactly_zero": false
+      },
+      "adamw": {
+        "n_buffers_inspected": 88,
+        "nonzero_fraction_mean": 1.0,
+        "nonzero_fraction_min": 1.0,
+        "nonzero_fraction_max": 1.0,
+        "all_buffers_exactly_zero": false
+      }
+    },
+    "any_class_fully_zeroed_or_absent": false
+  },
+  "provenance_ok": true,
+  "rng_provenance": {
+    "torch_cpu": {
+      "present": true,
+      "content_sha256": "bb50c5ce6ca9f2770ed9d84817ba0660b74c39dac6ba9fce9a60cabe19dcc387"
+    },
+    "torch_cuda": {
+      "present": true,
+      "content_sha256": "ccb8d4a96037fd26b1dff0b3e2b06f3f6d8364e117991357ebc0fb87a9d6a24c"
+    },
+    "py_random": {
+      "present": true,
+      "content_sha256": "96ef45ec55a7642eb24f9388dd89d800607588c92db032c5c9ce34472a6fa0ee"
+    },
+    "np_random": {
+      "present": true,
+      "content_sha256": "b7d2e6a83d7798e7ae3973f79f36b32ea81567a2418242dde0167fa098e120a3"
+    }
+  },
+  "snapshot_dir": "models\\cbase-grow-rung\\rung2-event-580rerun-20260710\\b1-snapshot",
+  "snapshot_copy_verified": true,
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "B1_QUIESCE_PROVEN"
+}
