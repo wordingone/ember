@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""hf_fetch.py -- HuggingFace datasets/files connector CLI.
+
+    hf_fetch.py REPO_ID [--revision R] [--include GLOB ...] [--dest DIR]
+                [--dataset|--model] [--allow-unverified-license]
+
+Resolves `--revision` (a branch/tag/ref, default "main") to a pinned commit SHA
+via the HuggingFace Hub API, downloads via `huggingface_hub.snapshot_download`
+(this connector requires huggingface_hub -- confirmed present at build time;
+see README "Dependency posture"), reads the license from the repo card
+metadata, and writes an L4 receipt. Prints `RECEIPT <path>` on success or
+`BLOCKED <reason>` (nonzero exit) on refusal.
+
+No GPU, no model inference, no dedup/decontamination (L3: fetch-only).
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+from typing import List, Optional
+
+from huggingface_hub import HfApi, snapshot_download
+
+import receipt as rcpt
+
+CONNECTOR_NAME = "hf_fetch"
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Fetch a HuggingFace dataset/model repo with an L4 receipt.")
+    p.add_argument("repo_id", help="HuggingFace repo id, e.g. org/name")
+    p.add_argument("--revision", default="main", help="branch/tag/ref to resolve and pin (default: main)")
+    p.add_argument("--include", nargs="*", default=None, metavar="GLOB", help="allow_patterns passed to snapshot_download")
+    p.add_argument("--dest", default=None, help="local destination dir (default: ./corpus-downloads/hf/<safe repo_id>)")
+    repo_type_group = p.add_mutually_exclusive_group()
+    repo_type_group.add_argument("--dataset", action="store_const", dest="repo_type", const="dataset")
+    repo_type_group.add_argument("--model", action="store_const", dest="repo_type", const="model")
+    p.set_defaults(repo_type="dataset")
+    p.add_argument("--allow-unverified-license", action="store_true", help="proceed with license recorded UNVERIFIED")
+    return p
+
+
+def _extract_license(info) -> Optional[str]:
+    card_data = getattr(info, "card_data", None) or getattr(info, "cardData", None)
+    if card_data is None:
+        return None
+    if isinstance(card_data, dict):
+        lic = card_data.get("license")
+    else:
+        lic = getattr(card_data, "license", None)
+    if isinstance(lic, list):
+        return ", ".join(str(x) for x in lic) if lic else None
+    return lic
+
+
+def fetch(args: argparse.Namespace) -> Path:
+    api = HfApi()
+    if args.repo_type == "model":
+        info = api.model_info(args.repo_id, revision=args.revision)
+    else:
+        info = api.dataset_info(args.repo_id, revision=args.revision)
+
+    pinned_sha = getattr(info, "sha", None)
+    license_str = _extract_license(info) or rcpt.UNVERIFIED
+    license_evidence = (
+        "HuggingFace repo card metadata `license` field"
+        if license_str != rcpt.UNVERIFIED
+        else "no `license` field present in repo card metadata"
+    )
+    rcpt.gate_license(license_str, args.allow_unverified_license)
+
+    dest_root = Path(args.dest) if args.dest else Path("corpus-downloads") / "hf" / rcpt.safe_key(args.repo_id)
+    if dest_root.exists() and any(dest_root.iterdir()):
+        raise rcpt.DestCollisionError(f"destination already has content: {dest_root}")
+    dest_root.mkdir(parents=True, exist_ok=True)
+
+    snapshot_download(
+        repo_id=args.repo_id,
+        repo_type=args.repo_type,
+        revision=pinned_sha or args.revision,
+        allow_patterns=args.include,
+        local_dir=str(dest_root),
+    )
+
+    rel_paths = rcpt.relative_files_under(dest_root)
+    if not rel_paths:
+        raise rcpt.BlockedError(f"no files landed under {dest_root} after snapshot_download")
+    files = rcpt.build_file_entries(dest_root, rel_paths)
+    downloaded_paths = [dest_root / p.path for p in files]
+
+    receipt = rcpt.Receipt(
+        source="huggingface",
+        source_id=args.repo_id,
+        canonical_url=f"https://huggingface.co/{'datasets/' if args.repo_type == 'dataset' else ''}{args.repo_id}",
+        license=license_str,
+        license_evidence=license_evidence,
+        revision=pinned_sha,
+        files=files,
+        fetched_at=rcpt.utc_now_iso(),
+        connector=rcpt.ConnectorInfo(name=CONNECTOR_NAME),
+        dest_root=str(dest_root),
+        notes=f"repo_type={args.repo_type}; include={args.include or 'ALL'}",
+    )
+    return rcpt.commit_receipt(receipt, dest_root, downloaded_paths)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
+    return rcpt.run_cli(lambda: fetch(args))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
