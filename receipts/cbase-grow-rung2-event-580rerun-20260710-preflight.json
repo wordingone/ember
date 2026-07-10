@@ -1,0 +1,50 @@
+{
+  "ticket": "CBASE-GROW-RUNG2-EVENT-PREFLIGHT",
+  "ts": "2026-07-10T16:53:56.012891+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue": 466,
+  "refs": [
+    449,
+    429,
+    452,
+    448,
+    464,
+    411
+  ],
+  "run_id": "580rerun-20260710",
+  "scope": "PREFLIGHT phase of the combined rung-2 grow-event + stabilization runner: commit-aware assert (floor 10.0GiB), GPU headroom assert (DEV-002 offloaded estimator, micro_batch=1), disk headroom assert (floor 40.0GiB). No launch attempted, no checkpoint touched.",
+  "param_count_after": 2228265984,
+  "commit_preflight": {
+    "avail_pagefile_gib": 40.503,
+    "floor_gib": 10.0,
+    "sufficient": true,
+    "va_report": {
+      "mem_load_pct": 39,
+      "avail_phys_gib": 38.732,
+      "avail_pagefile_gib": 40.503,
+      "avail_virtual_gib": 131062.996,
+      "largest_free_va_region_gib": 129069.003,
+      "largest_free_va_region_addr_hex": "0x1e97fff0000",
+      "n_free_va_regions": 183,
+      "total_free_va_gib": 131062.996
+    }
+  },
+  "gpu_preflight": {
+    "attempted": false,
+    "sufficient": true,
+    "note": "GPU headroom check explicitly skipped via --skip-gpu-preflight (disclosed -- CPU-only synthetic-model selftest, not a claim about real GPU headroom)."
+  },
+  "disk_preflight": {
+    "free_gib": 263.252,
+    "floor_gib": 40.0,
+    "sufficient": true,
+    "path_checked": ".claude\\worktrees\\p2rerun"
+  },
+  "gpu_check_attempted": false,
+  "all_sufficient": true,
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "verdict": "PREFLIGHT_PASS"
+}
