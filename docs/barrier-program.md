@@ -18,7 +18,7 @@ Position summary (all numbers receipted, 2026-07-10, live 2.2B rung-2 stabilize 
 | 1 | Total compute | 79–81 s/step @ 2.2B; C-GROW 2.4309× is **matched-step only** — fixed-capability INCONCLUSIVE | PARTIAL → #701 |
 | 2 | Data efficiency | fixed shards-v0 corpus; zero curation/curriculum/blending receipts; tokenizer-gap receipt only | **WEAKEST** → #703 |
 | 3 | Memory traffic | GPU ~idle (≈30 W avg, ~4% util) while ~13 CPU cores run the offload path; 79 s/step never decomposed | PARTIAL → #702 |
-| 4 | Optimizer-state cost | fp32 moments, file-backed (184 memmaps); muon-local for matrices; no precision/factorization screens | PARTIAL → #704 |
+| 4 | Optimizer-state cost | fp32 moments, file-backed (184 memmaps); muon-local for matrices; no precision/factorization screens | PARTIAL → #707 |
 | 5 | Instability at scale | strongest axis: rung ladder, kill bands, transplant-carries (P-2 CONFIRMED), boundary base rate banked | ACTIVE |
 | 6 | Capability per token | eval receipts exist (math500 / ARC / MMLU-pro) but no unified capability-per-token metric; MTP thread #688 | PARTIAL → #705 |
 
@@ -90,13 +90,24 @@ cure that ended the crash class); muon-local (momentum-only) for matrix params, 
 re-validated at small scale (+0.127 in the field re-measurement). No state-precision or
 factorization screens exist.
 
-**Next decisive experiment → #704 (int8 optimizer-state screen):** symmetric per-group quantization of
-the file-backed state (quantize at save, dequant on stream-in). Kill: storage shrink < 4×, or
-step time +15%, or final stabilize loss deviates beyond the paired-seed band. Couples to axis 3
-(state bytes ARE the traffic).
+**Next decisive experiment → #707 (FACTOR-1, factored optimizer state):** full Adafactor
+replacing the ENTIRE Muon/AdamW split — persistent state 9.4625 MB vs ~9.4375 GB today
+(~997× hypothesis), plus elimination of the staged-grad copy (~16.6 GiB avoidable host R/W
+per step; axis-3 twin). Two legs, post-#702, each prereg-frozen: **A** = 30-step governed
+systems preflight (kill: no order-of-magnitude optimizer-wall reduction); **B** = matched
+50M-token THREE-ARM quality screen — current split / full fused AdamW (Muon-deletion
+control) / full Adafactor; the B−A contrast prices Muon deletion (the +0.127 receipt bound
+to exact metric/scale/horizon pre-freeze), C−B prices factorization; if the control arm
+cannot fit at the smallest faithful rung: INCONCLUSIVE_MUON_DELETION_CONFOUNDED — no
+end-to-end promotion on a confounded contrast.
 
-**Queued:** factored second moments for non-muon params; state-precision ladder (int6/int4)
-after int8 verdict.
+**Fallback → #704 (int8 optimizer-state screen):** symmetric per-group quantization of the
+file-backed state (quantize at save, dequant on stream-in) — ~4× with weaker quality risk,
+runs only if FACTOR-1 dies on quality. Kill: storage shrink < 4×, or step time +15%, or
+final stabilize loss deviates beyond the paired-seed band. Couples to axis 3 (state bytes
+ARE the traffic).
+
+**Queued:** state-precision ladder (int6/int4) after the int8 verdict.
 
 ## 5. Training instability at scale — strongest axis
 
