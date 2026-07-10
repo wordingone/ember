@@ -220,12 +220,39 @@ export function classifyOutageTransition(
 
 export type WatchdogRow = Record<string, unknown>;
 
-/** Handles both row shapes the watchdog emits: restart-log rows ({target, event, ...}) and
- *  kill-receipt rows ({script, pids, reason, ...}). Returns null for a row it can't map to a
- *  sensible line (never a crash, never a blank/garbled line). */
+/** issue #616 bar 2: a kill-receipt row may render as a SERVER event only when the row's own
+ *  cmdline-bearing field (`match_rule` in the kill-discipline receipt format, or a literal
+ *  `cmdline` field) names the serving binary. liveness-watchdog.ps1's Write-KillReceiptRow always
+ *  writes "Name=llama-server.exe ..." into match_rule on its server kill path, so this is a
+ *  property the row itself carries — never an inference from context. */
+const SERVER_PROCESS_MARKER = "llama-server";
+
+export function killReceiptNamesServer(row: WatchdogRow): boolean {
+  for (const field of ["match_rule", "cmdline"]) {
+    const value = row[field];
+    if (typeof value === "string" && value.toLowerCase().includes(SERVER_PROCESS_MARKER)) return true;
+  }
+  return false;
+}
+
+/** Handles both row shapes the watchdog logs carry: restart-log rows ({target, event, ...}) and
+ *  kill-receipt rows ({ts, script, pids, match_rule, ...}). Returns null for any row it cannot
+ *  map CONFIDENTLY — the tail-poll callers render null rows via formatWatchdogFallbackLine
+ *  (verbatim passthrough), never a paraphrase.
+ *
+ *  issue #616 (2026-07-10 incident: two kill receipts for a cockpit PID and a watchdog PID were
+ *  rendered as "server killed by watchdog (reason unavailable)" — an invented actor, an invented
+ *  target, and an invented admission; none of those words were in the rows). Bars enforced here:
+ *  - actor/target come from row fields only (restart rows: `target`; kill rows: `script`) —
+ *    a row missing them is unmappable, never defaulted;
+ *  - a kill-receipt row renders as a server event ONLY when its own match_rule/cmdline field
+ *    names the serving binary (killReceiptNamesServer);
+ *  - `reason` renders only when the row carries one — absence renders as nothing, never as an
+ *    invented "(reason unavailable)". */
 export function formatWatchdogLine(row: WatchdogRow): string | null {
   if (typeof row["event"] === "string") {
-    const target = typeof row["target"] === "string" ? row["target"] : "target";
+    const target = row["target"];
+    if (typeof target !== "string" || target.length === 0) return null; // no subject in the row
     switch (row["event"]) {
       case "relaunch":
         return `${target} was down, restarted (pid ${row["relaunchPid"] ?? "?"})`;
@@ -237,10 +264,21 @@ export function formatWatchdogLine(row: WatchdogRow): string | null {
         return `${target} watchdog event: ${row["event"]}`;
     }
   }
-  if (Array.isArray(row["pids"]) || typeof row["reason"] === "string") {
-    return `server killed by watchdog (${row["reason"] ?? "reason unavailable"})`;
+  if (Array.isArray(row["pids"])) {
+    const script = row["script"];
+    if (typeof script !== "string" || script.length === 0) return null; // no actor in the row
+    if (!killReceiptNamesServer(row)) return null; // row's own cmdline does not name the server
+    const reason =
+      typeof row["reason"] === "string" && row["reason"].length > 0 ? ` (${row["reason"]})` : "";
+    return `server killed by ${script}${reason}`;
   }
   return null;
+}
+
+/** issue #616 bar 3: honest passthrough for a row the summarizer cannot map confidently — the
+ *  raw ledger line verbatim, behind a prefix that claims nothing about actor or target. */
+export function formatWatchdogFallbackLine(rawLine: string): string {
+  return `unmapped watchdog-log row: ${rawLine}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -815,19 +853,30 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     };
   }
 
+  /** issue #616 bar 3: a watchdog-log line the pure formatter cannot map confidently (null),
+   *  or that isn't parseable JSON at all, renders VERBATIM — honest passthrough beats confident
+   *  paraphrase, and beats silent dropping (a dropped kill receipt is invisible to the operator's
+   *  audit channel). Never crashes the feed. */
+  function renderWatchdogLogLine(line: string, sourcePath: string): void {
+    let text: string | null = null;
+    try {
+      const row = JSON.parse(line) as WatchdogRow;
+      text = formatWatchdogLine(row);
+    } catch {
+      text = null; // unparseable — falls through to the verbatim path below
+    }
+    renderEvent({
+      source: "watchdog",
+      text: text ?? formatWatchdogFallbackLine(line),
+      path: sourcePath,
+    });
+  }
+
   const tailInterval = setInterval(() => {
     void pollTail(
       restartLogPath,
       restartTail,
-      (line) => {
-        try {
-          const row = JSON.parse(line) as WatchdogRow;
-          const text = formatWatchdogLine(row);
-          if (text) renderEvent({ source: "watchdog", text, path: restartLogPath });
-        } catch {
-          // malformed row — skip, never crash the feed
-        }
-      },
+      (line) => renderWatchdogLogLine(line, restartLogPath),
       makeTailOverflowHandler(restartLogPath),
     ).then((result) => {
       if (result) logTailPollDiagnostic({ event: "pollTail", file: "restart-log", ...result });
@@ -838,15 +887,7 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       void pollTail(
         killPath,
         killTail,
-        (line) => {
-          try {
-            const row = JSON.parse(line) as WatchdogRow;
-            const text = formatWatchdogLine(row);
-            if (text) renderEvent({ source: "watchdog", text, path: killPath });
-          } catch {
-            // malformed row — skip
-          }
-        },
+        (line) => renderWatchdogLogLine(line, killPath),
         makeTailOverflowHandler(killPath),
       ).then((result) => {
         if (result) logTailPollDiagnostic({ event: "pollTail", file: "kill-receipts", ...result });
