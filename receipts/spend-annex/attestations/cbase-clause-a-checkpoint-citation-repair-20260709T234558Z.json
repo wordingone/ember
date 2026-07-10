@@ -1,0 +1,12 @@
+{
+  "target_path": "receipts/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json",
+  "target_sha256": "f08c7a8554f7a9252e56ed5f098fa9532f64798cb1d069ff990aa94288016b4e",
+  "evidence_class": "generator_absent_content_clean",
+  "evidence": "evidence (b) git-archaeology confirmed gone + evidence (c) manually-authored: commit 964a997 ('ember-cli: repair C-BASE clause (a)/(c) checkpoint citation drift (#607)') adds ONLY this receipt JSON (62 lines), no .py/.ts/.js/.sh file alongside it (`git show --stat 964a997` confirmed). The receipt's own content is a hand-typed citation-drift repair note (prose 'scope'/'provenance'/'note' fields re-citing an existing, already-documented checkpoint at a probe-resolvable path) -- same manually-authored-governance shape as the existing c48-gate-stats-review-*/raw-corpus-materiality-* GENERATOR_ABSENT_HISTORICAL_BASENAMES entries, never a script output. Content re-scanned with this tree's own PAID_CLIENT_PATTERNS + API_KEY_ENV_NAME_RE detectors: zero hits on both (client_hits=[], key_hits=[]).",
+  "cites": [
+    "git commit 964a997",
+    "PR #607"
+  ],
+  "attested_by": "fix/c-neg1-spend-declarations-r2, gh issue #353 durable-attestation sidecar (issue #586 annex-round-5 recurrence)",
+  "attested_ts": "2026-07-10T01:13:02Z"
+}
