@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""check_disconfirmation_triggers.py -- GOAL sec 8's program-level disconfirmation triggers,
-made machine-evaluable (gh issue #94 C-DISC, phase 2; schema frozen by maintainer rulings
-R1-R7, phase-1 dossier).
+"""check_disconfirmation_triggers.py -- Program-level disconfirmation triggers per
+conditions-v1.md sec 4.2, made machine-evaluable (gh issue #94 C-DISC, phase 2; schema
+frozen by maintainer rulings R1-R7, phase-1 dossier).
 
-Sec 8 (GOAL.md lines 557-585) names three hinges, each carrying a disconfirmation predicate:
-EARNED_GROWTH (2 consecutive NOT-earned growth-rung attempts), B2_BOOTSTRAP (3 consecutive
-BOOTSTRAP_FAIL B-rung attempts), H0_CEILING (the L1-L5 lever ladder fully resolved with the
-composed stack still under the 3.3x shatter bar). "A trigger with no evaluator is prose"
-(GOAL.md's own words) -- this script, run via disconfirmation_leg.py's dual-source verdict
-wrapper and re-invoked on every board run, IS the standing evaluator sec 8 calls for (R1: the
-dangling citation to experimentation-v1.md sec 6, whose own T1/T2/T3 cadence does something
-else entirely -- claim/board-flip/GPU-spend adversarial review, not a disconfirmation tally --
-is a maintainer text amendment, not code owed here).
+Conditions-v1.md sec 4.2 (live authority; archived pre-2026-07-06 at docs/goal-archive.md)
+names three hinges, each carrying a disconfirmation predicate: EARNED_GROWTH (2 consecutive
+NOT-earned growth-rung attempts), B2_BOOTSTRAP (3 consecutive BOOTSTRAP_FAIL B-rung attempts),
+H0_CEILING (the L1-L5 lever ladder fully resolved with the composed stack still under the
+3.3x shatter bar). "A trigger with no evaluator is prose" (conditions-v1.md's own words) --
+this script, run via disconfirmation_leg.py's dual-source verdict wrapper and re-invoked on
+every board run, IS the standing evaluator the conditions call for (R1: the dangling citation
+to experimentation-v1.md sec 6, whose own T1/T2/T3 cadence does something else entirely --
+claim/board-flip/GPU-spend adversarial review, not a disconfirmation tally -- is a maintainer
+text amendment, not code owed here).
 
 Per-hinge tally rule (R3): attempts are ordered chronologically WITHIN the hinge's own receipt
 family (rung number never partitions the streak -- the hinge is program-grain); an attempt is

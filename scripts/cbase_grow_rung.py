@@ -119,6 +119,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -359,6 +360,66 @@ def _assemble_receipt(*, rung: int, mode: str, ts_stamp: str,
     return receipt
 
 
+def _get_git_sha() -> str:
+    """Get the current git HEAD SHA (short form), or 'unknown' if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(REPO),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _emit_tally_receipt(receipt: dict, main_receipt_path: str) -> None:
+    """Emit a C-DISC hinge-tally receipt for growth_rung_attempt.
+
+    Per issue #729: every growth rung attempt MUST emit a tally receipt
+    so the disconfirmation checker can see it. The verdict is derived from
+    the main runner receipt verdict:
+      - GROW_RUNG_PASS → EARNED
+      - GROW_RUNG_DRYRUN_PASS → EARNED (for dry-run mode)
+      - GROW_RUNG_REFUSED_NULL_OPERATOR → UNEVALUABLE
+      - GROW_RUNG_KILL, GROW_RUNG_BLOCKED, etc. → NOT_EARNED
+    """
+    # Derive tally verdict from the run verdict
+    run_verdict = receipt.get("verdict", "UNKNOWN")
+    if run_verdict.endswith("PASS"):
+        tally_verdict = "EARNED"
+    elif run_verdict == "GROW_RUNG_REFUSED_NULL_OPERATOR":
+        tally_verdict = "UNEVALUABLE"
+    else:
+        # GROW_RUNG_KILL, GROW_RUNG_BLOCKED, etc.
+        tally_verdict = "NOT_EARNED"
+
+    # Build tally receipt
+    tally_receipt = {
+        "receipt_type": "growth_rung_attempt",
+        "ticket": "EMBER-TOTALITY-DISCONFIRMATION",
+        "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "verdict": tally_verdict,
+        "evaluable": tally_verdict != "UNEVALUABLE",
+        "refs": [main_receipt_path],
+        "git_anchor": _get_git_sha(),
+        "rung": receipt.get("rung"),
+        "mode": receipt.get("mode"),
+        "run_verdict": run_verdict,
+    }
+
+    # Write to receipts/growth-rung-attempts/
+    tally_dir = REPO / "receipts" / "growth-rung-attempts"
+    tally_dir.mkdir(parents=True, exist_ok=True)
+    ts_fmt = tally_receipt["ts"]
+    tally_path = tally_dir / f"growth-rung-attempt-{ts_fmt}.json"
+    checked_write(str(tally_path), tally_receipt)
+
+
 def _write_and_report(receipt: dict, receipt_dir: Path, mode: str) -> int:
     receipt_dir.mkdir(parents=True, exist_ok=True)
     verdict = receipt["verdict"]
@@ -370,6 +431,10 @@ def _write_and_report(receipt: dict, receipt_dir: Path, mode: str) -> int:
           f"params_unique_after={receipt.get('params_unique_after')} "
           f"d1_steps={receipt.get('d1_sizing', {}).get('steps_computed')} "
           f"receipt={out}")
+
+    # Emit C-DISC tally receipt for disconfirmation checker (issue #729)
+    _emit_tally_receipt(receipt, str(out.relative_to(REPO) if out.is_relative_to(REPO) else out))
+
     return 0 if receipt["pass"] else 2
 
 

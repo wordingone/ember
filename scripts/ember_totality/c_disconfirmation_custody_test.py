@@ -37,6 +37,112 @@ def _run_disconfirmation_probe(repo_root: Path) -> tuple[str, int]:
     return result.stdout, result.returncode
 
 
+def test_earned_growth_hinge_fires():
+    """Fixture proving NOT_EARNED×2 fires EARNED_GROWTH hinge end-to-end (issue #729)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Seed a minimal repo structure
+        repo = Path(tmpdir) / "test_repo_hinge"
+        repo.mkdir()
+
+        # Copy scripts
+        scripts_src = REPO_ROOT / "scripts"
+        scripts_dst = repo / "scripts"
+        shutil.copytree(scripts_src, scripts_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        # Copy docs
+        docs_src = REPO_ROOT / "docs"
+        if docs_src.exists():
+            docs_dst = repo / "docs"
+            shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        # Create spec files for h0_ceiling (needed for checker to run)
+        spec_dir = repo / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
+
+        (spec_dir / "h0-residual-lever-prereg-v1.md").write_text("| L1 |\n| L2 |\n| L3 |\n| L4 |\n| L5 |\n")
+        (spec_dir / "feasibility-envelope-v1.md").write_text("measured **1.5x**\n")
+        (spec_dir / "h0-lever-status.json").write_text(json.dumps({"L1": "PARKED", "L2": "PARKED", "L3": "PARKED", "L4": "PARKED", "L5": "PARKED"}))
+
+        # Create receipts directories
+        receipts_dir = repo / "receipts"
+        receipts_dir.mkdir(exist_ok=True)
+        growth_dir = receipts_dir / "growth-rung-attempts"
+        growth_dir.mkdir(exist_ok=True)
+        bootstrap_dir = receipts_dir / "bootstrap-rung"
+        bootstrap_dir.mkdir(exist_ok=True)
+        escalation_dir = receipts_dir / "escalation"
+        escalation_dir.mkdir(exist_ok=True)
+
+        # Create two NOT_EARNED growth attempt receipts
+        ts1 = "20260710T100000Z"
+        ts2 = "20260710T110000Z"
+
+        attempt1 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts1,
+            "verdict": "NOT_EARNED",
+            "evaluable": True,
+            "refs": ["receipts/cbase-grow-rung/dummy1.json"],
+            "git_anchor": "abc1234",
+            "rung": 1,
+            "mode": "live",
+        }
+        attempt2 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts2,
+            "verdict": "NOT_EARNED",
+            "evaluable": True,
+            "refs": ["receipts/cbase-grow-rung/dummy2.json"],
+            "git_anchor": "abc1235",
+            "rung": 2,
+            "mode": "live",
+        }
+
+        (growth_dir / f"growth-rung-attempt-{ts1}.json").write_text(json.dumps(attempt1))
+        (growth_dir / f"growth-rung-attempt-{ts2}.json").write_text(json.dumps(attempt2))
+
+        print("Fixture setup: NOT_EARNED×2 in growth-rung-attempts/")
+        print(f"  Attempt 1 (ts={ts1}): verdict=NOT_EARNED, evaluable=True")
+        print(f"  Attempt 2 (ts={ts2}): verdict=NOT_EARNED, evaluable=True")
+
+        # Run the disconfirmation checker
+        print("\nRunning check_disconfirmation_triggers.py...")
+        stdout, exit_code = _run_disconfirmation_probe(repo)
+        print(f"  Checker output:")
+        for line in stdout.strip().split('\n'):
+            print(f"    {line}")
+        print(f"  Exit code: {exit_code}")
+
+        # Verify the EARNED_GROWTH hinge fired
+        # Look for disconfirmation-eval receipts (the actual checker output, not the wrapper leg)
+        eval_receipts = sorted(
+            (repo / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"),
+            reverse=True  # Most recent first
+        )
+        if not eval_receipts:
+            print("[FAIL] No evaluation receipt found from checker")
+            return False
+
+        eval_receipt = json.loads(eval_receipts[0].read_text(encoding="utf-8"))
+        hinges = {h["hinge"]: h for h in eval_receipt.get("hinges", [])}
+
+        earned_growth = hinges.get("EARNED_GROWTH", {})
+        if earned_growth.get("trigger_fired"):
+            print(f"[PASS] EARNED_GROWTH hinge fired as expected")
+            print(f"  attempts_seen: {earned_growth.get('attempts_seen')}")
+            print(f"  consecutive_fail_streak: {earned_growth.get('consecutive_fail_streak')}")
+            print(f"  threshold: {earned_growth.get('threshold')}")
+            print(f"  firing_receipt_refs: {earned_growth.get('firing_receipt_refs')}")
+            return True
+        else:
+            print(f"[FAIL] EARNED_GROWTH hinge did NOT fire (expected to fire on NOT_EARNED×2)")
+            print(f"  attempts_seen: {earned_growth.get('attempts_seen')}")
+            print(f"  consecutive_fail_streak: {earned_growth.get('consecutive_fail_streak')}")
+            print(f"  threshold: {earned_growth.get('threshold')}")
+            print(f"  State: {earned_growth}")
+            return False
+
+
 def test_disconfirmation_custody():
     """Two-run TDD proof: no canonical receipts/ contamination, timestamped receipts in new location."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -140,8 +246,23 @@ def test_disconfirmation_custody():
 
 if __name__ == "__main__":
     try:
-        success = test_disconfirmation_custody()
-        sys.exit(0 if success else 1)
+        print("=" * 60)
+        print("TEST 1: EARNED_GROWTH hinge fires on NOT_EARNED×2 (issue #729)")
+        print("=" * 60)
+        test1 = test_earned_growth_hinge_fires()
+
+        print("\n" + "=" * 60)
+        print("TEST 2: Disconfirmation custody (no canonical contamination)")
+        print("=" * 60)
+        test2 = test_disconfirmation_custody()
+
+        print("\n" + "=" * 60)
+        print("SUMMARY")
+        print("=" * 60)
+        print(f"Test 1 (EARNED_GROWTH hinge): {'PASS' if test1 else 'FAIL'}")
+        print(f"Test 2 (Disconfirmation custody): {'PASS' if test2 else 'FAIL'}")
+
+        sys.exit(0 if (test1 and test2) else 1)
     except Exception as e:
         print(f"TEST FAILED [ERROR]: {e}")
         import traceback
