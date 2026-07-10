@@ -65,6 +65,9 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _lane14_common import redact_root  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _env_root = os.environ.get("EMBER_TOTALITY_ROOT")
 ROOT = next(
@@ -101,6 +104,21 @@ def _resolve_artifact_path(raw: str) -> Path:
     if p.is_absolute():
         return p
     return ARTIFACT_ROOT / p
+
+
+def _safe_ckpt_display(raw_ckpt: str, resolved: Path) -> str:
+    """Never surface the artifact-root-RESOLVED absolute checkpoint path in
+    a printed status line (issue #639 -- this is the exact site that leaked
+    the 2026-07-10 totality receipt past repo-guard). The receipt-declared
+    path (normally relative, portable across machines, and already what the
+    citing receipt claims) is shown as authored; only if it was already
+    absolute in the source receipt (against convention) do we fall back to
+    a root-identity hash instead of ever printing the literal resolved
+    path (frozen spec: token-or-hash, never the path)."""
+    if not Path(raw_ckpt).is_absolute():
+        return raw_ckpt
+    return redact_root(str(resolved))
+
 
 # Exact invalid-tokens this condition fails on (negative-assertion targets).
 INVALID_TOKENS = ["invalid_frozen_base_escape", "invalid_calcified_seed"]
@@ -238,7 +256,7 @@ def _validate_grow_operator_evidence(evidence_path: str, all_receipts: list[Path
 def main() -> int:
     # ---- Pre-flight: the artifact root must really exist. --------------------
     if not RECEIPTS.is_dir():
-        print(f"RED C-BASE: receipts dir absent at {RECEIPTS} (nothing to satisfy the CHK)")
+        print(f"RED C-BASE: receipts dir absent ({redact_root(str(RECEIPTS))}) (nothing to satisfy the CHK)")
         return 0
 
     receipt_files = sorted(RECEIPTS.rglob("*.json"))
@@ -250,6 +268,7 @@ def main() -> int:
     #      a fabricated/empty checkpoint cannot pass.
     owned_ckpt_receipt = None
     owned_ckpt_path = None
+    owned_ckpt_raw = None
     owned_ckpt_hash_ok = False
     n_owned_candidates = 0
     # [gh #615] candidates that named a checkpoint whose manifest/model.pt
@@ -301,6 +320,7 @@ def main() -> int:
         if actual is not None and claimed.lower().startswith(actual.lower()):
             owned_ckpt_receipt = rp
             owned_ckpt_path = ckpt_path
+            owned_ckpt_raw = ckpt
             owned_ckpt_hash_ok = True
             break
 
@@ -383,7 +403,8 @@ def main() -> int:
                 "RED C-BASE: artifact root not provided / bytes not visible from "
                 f"this tree ({n_checkpoint_bytes_not_visible} owned-pretrain "
                 f"candidate(s) name a checkpoint but its manifest.json/model.pt "
-                f"were not found under {ARTIFACT_ROOT} -- set EMBER_ARTIFACT_ROOT "
+                f"were not found under the resolved artifact root "
+                f"({redact_root(str(ARTIFACT_ROOT))}) -- set EMBER_ARTIFACT_ROOT "
                 "to the operating tree root where the checkpoint bytes physically "
                 "live (e.g. gitignored models/) to check the real bytes; this is a "
                 "visibility failure, not an absence failure; CHK clause (a)/(c) "
@@ -392,9 +413,10 @@ def main() -> int:
             return 0
         print(
             "RED C-BASE: no owned from-scratch checkpoint receipt under "
-            f"{RECEIPTS} names a checkpoint whose on-disk model.pt bytes hash-match "
-            f"its manifest weight-hash claim ({n_owned_candidates} owned-pretrain "
-            "candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause "
+            f"receipts ({redact_root(str(RECEIPTS))}) names a checkpoint whose "
+            f"on-disk model.pt bytes hash-match its manifest weight-hash claim "
+            f"({n_owned_candidates} owned-pretrain candidate(s) scanned; checkpoint "
+            "missing or hash mismatch; CHK clause "
             f"(a)/(c) unmet) [artifact_root_source={ARTIFACT_ROOT_SOURCE}]"
         )
         return 0
@@ -402,8 +424,9 @@ def main() -> int:
     if grow_op_receipt is None:
         print(
             "RED C-BASE: owned checkpoint "
-            f"{owned_ckpt_path} exists with hashes (model.pt sha256 verified vs "
-            f"manifest in receipt {owned_ckpt_receipt.name}), but CHK clause (d) is "
+            f"{_safe_ckpt_display(owned_ckpt_raw, owned_ckpt_path)} exists with hashes "
+            f"(model.pt sha256 verified vs manifest in receipt "
+            f"{owned_ckpt_receipt.name}), but CHK clause (d) is "
             "UNMET — no grow-operator dry-run receipt produces a valid larger-shape "
             "checkpoint that replays (function-preserving net2net/layer-stacking/"
             "expert-addition); the growth operator exists only as a decision-record "
@@ -414,7 +437,8 @@ def main() -> int:
         return 0
 
     print(
-        f"GREEN C-BASE: owned from-scratch checkpoint {owned_ckpt_path} exists with "
+        f"GREEN C-BASE: owned from-scratch checkpoint "
+        f"{_safe_ckpt_display(owned_ckpt_raw, owned_ckpt_path)} exists with "
         f"hash-verified weights (receipt {owned_ckpt_receipt.name}), no borrowed/"
         f"frozen base and not the {DEAD_LINEAGE} lineage, and grow-operator dry-run "
         f"receipt {grow_op_receipt.name} produces a valid larger-shape checkpoint "
