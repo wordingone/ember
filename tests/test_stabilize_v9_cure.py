@@ -579,5 +579,187 @@ class TestZeroStepAbortComposed(_Base):
         self.assertEqual(br["global_step_end"], 0)
 
 
+# ---------------------------------------------------------------------------
+# v8 cure 1 — per-step trace file (ember #627 comment 4936662156, point 2)
+# ---------------------------------------------------------------------------
+class TestStepTraceFile(_Base):
+    """stdout is not a channel of record on Windows (torch.distributed.elastic
+    redirects unsupported); the training loop must write a structured
+    per-step (step, loss, ts) JSONL trace directly from this worker process.
+    Pre-cure, `stab._reset_step_trace` does not exist at all -- every test in
+    this class fails to collect (AttributeError) against pre-cure source,
+    same reproduce-first shape as the rest of this module."""
+
+    def tearDown(self):
+        stab._disarm_step_trace()
+        super().tearDown()
+
+    def test_first_row_written_before_step_two_begins(self):
+        # Structural proof, not a timing race: after exactly grad_accum_steps
+        # calls (the calls that complete optimizer step 1), the row for step
+        # 1 is already on disk -- and no call belonging to step 2 has even
+        # been MADE yet, so "before step 2 begins" cannot fail to hold.
+        trace_path = Path(self._tmp) / "step-trace-block05.jsonl"
+        stab._reset_step_trace(trace_path, grad_accum_steps=3, global_step_start=806)
+        for i, v in enumerate([2.0, 4.0, 6.0]):  # 3 micro-batches == 1 optimizer step
+            ts.mtp_total_loss(torch.tensor(v), [], 0.0)
+            if i < 2:
+                self.assertFalse(trace_path.exists() and trace_path.read_text(encoding="utf-8").strip(),
+                                  "no row may exist before this step's micro-batches all complete")
+        self.assertTrue(trace_path.exists())
+        rows = [json.loads(ln) for ln in trace_path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["step"], 806, "step must be global_step_start-relative, not 0-based")
+        self.assertAlmostEqual(rows[0]["loss"], 4.0, places=6)  # mean(2, 4, 6)
+        self.assertIn("ts", rows[0])
+
+    def test_multiple_steps_append_in_order_grad_accum_1(self):
+        trace_path = Path(self._tmp) / "step-trace-block06.jsonl"
+        stab._reset_step_trace(trace_path, grad_accum_steps=1, global_step_start=100)
+        for v in (1.0, 2.0, 3.0):
+            ts.mtp_total_loss(torch.tensor(v), [], 0.0)
+        rows = [json.loads(ln) for ln in trace_path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([r["step"] for r in rows], [100, 101, 102])
+        self.assertEqual([r["loss"] for r in rows], [1.0, 2.0, 3.0])
+
+    def test_rearm_truncates_previous_block_file(self):
+        trace_path = Path(self._tmp) / "step-trace-block07.jsonl"
+        stab._reset_step_trace(trace_path, grad_accum_steps=1, global_step_start=0)
+        ts.mtp_total_loss(torch.tensor(9.0), [], 0.0)
+        self.assertEqual(len(trace_path.read_text(encoding="utf-8").splitlines()), 1)
+        stab._reset_step_trace(trace_path, grad_accum_steps=1, global_step_start=0)  # next block, same path
+        self.assertFalse(trace_path.exists(), "re-arm must remove the previous block's rows")
+
+    def test_untraced_call_is_pure_passthrough(self):
+        # Unarmed (default state / after _disarm_step_trace): no file I/O,
+        # and mtp_total_loss's own return value is unchanged -- the wrapper
+        # only observes, it never alters, the loss.
+        stab._disarm_step_trace()
+        got = ts.mtp_total_loss(torch.tensor(5.0), [torch.tensor(1.0)], 0.5)
+        self.assertAlmostEqual(float(got), 5.5, places=6)  # primary_ce + weight*mean(mtp_ces)
+
+    def test_run_v0_segment_end_to_end_trace_matches_receipt_losses(self):
+        # Integration: the REAL training loop (CPU dry-run, tiny dims),
+        # armed exactly as _run_block arms it, produces a trace whose rows
+        # match receipt["losses"] exactly -- the wrapper is wired into the
+        # actual per-step computation, not a parallel simulation of it.
+        shard = _make_tiny_shard(self._tmp)
+        cfg = ts.load_contract()
+        trace_path = Path(self._tmp) / "step-trace-block08.jsonl"
+        stab._reset_step_trace(trace_path, grad_accum_steps=1, global_step_start=0)
+        rec = ts.run_v0_segment(
+            os.path.join(self._tmp, "run_trace"), cfg, n_steps=4, total_steps=4,
+            checkpoint_every=4, pace_s=0.0, shard_dir=shard,
+            tiny_dims={"vocab": 64, "hidden": 32, "depth": 2, "seq": 8},
+            batch_size=2, ce_chunk_tokens=8)
+        rows = [json.loads(ln) for ln in trace_path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(rows), 4)
+        self.assertEqual([r["step"] for r in rows], [0, 1, 2, 3])
+        self.assertEqual(len(rec["losses"]), 4)
+        for row, loss in zip(rows, rec["losses"]):
+            self.assertAlmostEqual(row["loss"], round(loss, 6), places=6)
+
+
+# ---------------------------------------------------------------------------
+# v8 cure 2 — fail-closed governed-abort receipt (ember #627 comment
+# 4936627594, point 1)
+# ---------------------------------------------------------------------------
+class TestGovernedAbortReceipt(_Base):
+    """Pre-cure, a GOVERNOR_COMMIT_FAIL prints and raises with NO receipt file
+    -- log archaeology and checkpoint-guessing only. Pre-cure,
+    `stab._write_governed_abort_receipt` does not exist at all -- every test
+    here fails to collect against pre-cure source (reproduce-first)."""
+
+    def setUp(self):
+        super().setUp()
+        self._orig_receipt_dir_state = dict(stab._RECEIPT_DIR_STATE)
+        self._orig_last_checkpoint_state = dict(stab._LAST_KNOWN_CHECKPOINT)
+        stab._set_abort_receipt_dir(self._tmp)
+        stab._LAST_KNOWN_CHECKPOINT["path"] = None
+
+    def tearDown(self):
+        stab._RECEIPT_DIR_STATE.clear()
+        stab._RECEIPT_DIR_STATE.update(self._orig_receipt_dir_state)
+        stab._LAST_KNOWN_CHECKPOINT.clear()
+        stab._LAST_KNOWN_CHECKPOINT.update(self._orig_last_checkpoint_state)
+        super().tearDown()
+
+    def _abort_files(self):
+        import glob
+        return glob.glob(os.path.join(self._tmp, "governed-abort-*.json"))
+
+    def test_violation_writes_receipt_before_raising(self):
+        ckpt = os.path.join(self._tmp, "ckpt-step-00000816")
+        stab._note_last_checkpoint(ckpt)
+        reading = {"committed_gb": 74.514, "limit_gb": 79.603, "free_gb": 5.09}
+        with self.assertRaises(SystemExit):
+            stab._commit_margin_assert(
+                "POST_RUN_V0_SEGMENT_BLOCK_DONE_block05", floor_gb=6.0, reading=reading)
+        files = self._abort_files()
+        self.assertEqual(len(files), 1, files)
+        with open(files[0], encoding="utf-8") as f:
+            receipt = json.load(f)
+        self.assertEqual(receipt["label"], "POST_RUN_V0_SEGMENT_BLOCK_DONE_block05")
+        self.assertEqual(receipt["phase"], "POST_RUN_V0_SEGMENT_BLOCK_DONE_block05")
+        self.assertEqual(receipt["committed_gb"], 74.514)
+        self.assertEqual(receipt["limit_gb"], 79.603)
+        self.assertEqual(receipt["free_gb"], 5.09)
+        self.assertEqual(receipt["floor_gb"], 6.0)
+        self.assertEqual(receipt["last_checkpoint"], ckpt)
+        self.assertIn("ts", receipt)
+        self.assertEqual(receipt["verdict"], "GOVERNOR_COMMIT_FAIL")
+        # schema floor (receipt_check.REQUIRED_FIELDS = {ticket, ts}) plus the
+        # sha-convention rule triggered by invariant_sha256 being present --
+        # checked_write would have deleted the file and raised had these been
+        # missing/wrong, so their presence is itself part of the proof.
+        self.assertEqual(receipt["ticket"], "CBASE-GROW-RUNG2-STABILIZE-LEG1-GOVERNED-ABORT")
+        self.assertEqual(receipt["invariant_sha256"], stab.INVARIANT_SHA256)
+        self.assertEqual(receipt["sha_convention"], stab.SHA_CONVENTION)
+
+    def test_no_violation_writes_no_receipt(self):
+        before = set(self._abort_files())
+        r = stab._commit_margin_assert(
+            "SOME_LABEL", floor_gb=6.0,
+            reading={"committed_gb": 10.0, "limit_gb": 80.0, "free_gb": 70.0})
+        self.assertIsNotNone(r)
+        self.assertEqual(before, set(self._abort_files()),
+                          "a PASSING margin check must write no abort receipt")
+
+    def test_null_checkpoint_when_none_known(self):
+        reading = {"committed_gb": 78.0, "limit_gb": 80.0, "free_gb": 1.0}
+        with self.assertRaises(SystemExit):
+            stab._commit_margin_assert("EARLY_LABEL", floor_gb=6.0, reading=reading)
+        files = self._abort_files()
+        self.assertEqual(len(files), 1)
+        with open(files[0], encoding="utf-8") as f:
+            receipt = json.load(f)
+        self.assertIsNone(receipt["last_checkpoint"])
+
+    def test_exception_type_and_message_unchanged(self):
+        # No behavior change to the governor's abort semantics -- same
+        # exception type and message shape as pre-cure, receipt write is
+        # purely additive.
+        reading = {"committed_gb": 74.514, "limit_gb": 79.603, "free_gb": 5.09}
+        with self.assertRaises(SystemExit) as ctx:
+            stab._commit_margin_assert("L", floor_gb=6.0, reading=reading)
+        msg = str(ctx.exception)
+        self.assertIn("GOVERNOR_COMMIT_FAIL", msg)
+        self.assertIn("free commit 5.09GB < floor 6.0GB", msg)
+        self.assertIn("abort-not-degrade, no fix-forward, no widened floor", msg)
+
+    def test_receipt_write_failure_never_masks_the_abort(self):
+        # A receipt-write failure must not suppress the SystemExit it is
+        # documenting -- the abort is the load-bearing behavior; the receipt
+        # is best-effort evidence about it. Point the receipt dir at a path
+        # that is already a FILE (mkdir(parents=True) must raise) rather than
+        # patching any shared/global machinery.
+        blocked = Path(self._tmp) / "blocked-not-a-dir"
+        blocked.write_text("occupied", encoding="utf-8")
+        stab._set_abort_receipt_dir(str(blocked))
+        reading = {"committed_gb": 74.514, "limit_gb": 79.603, "free_gb": 5.09}
+        with self.assertRaises(SystemExit):
+            stab._commit_margin_assert("L2", floor_gb=6.0, reading=reading)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
