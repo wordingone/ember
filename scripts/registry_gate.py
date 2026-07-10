@@ -46,6 +46,21 @@ PREDICATES = {
 }
 
 
+def normalize_config_path(raw: str, root: Path = ROOT) -> str:
+    """Repo-relative form for the receipt log — never leak an absolute host
+    path (#710). Under root -> forward-slash relpath; outside root (e.g. a
+    temp workspace) -> `<EXTERNAL>/basename`, matching the manual
+    `<TEMP_WORKSPACE>/...` redaction already used in receipts/registry-gate.jsonl.
+    """
+    p = Path(raw)
+    abs_p = p if p.is_absolute() else (Path.cwd() / p)
+    try:
+        rel = abs_p.resolve().relative_to(root.resolve())
+        return rel.as_posix()
+    except ValueError:
+        return f"<EXTERNAL>/{Path(raw).name}"
+
+
 def flatten(obj, prefix=""):
     out = {}
     if isinstance(obj, dict):
@@ -120,7 +135,7 @@ def main() -> int:
         return 1
     verdict = check(config, rows)
     line = {"ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-            "config_path": args.config, **verdict}
+            "config_path": normalize_config_path(args.config), **verdict}
     if not args.no_receipt:
         RECEIPT_LOG.parent.mkdir(parents=True, exist_ok=True)
         with RECEIPT_LOG.open("a", encoding="utf-8") as fh:
