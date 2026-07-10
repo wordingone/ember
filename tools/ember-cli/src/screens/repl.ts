@@ -1252,8 +1252,13 @@ export function ReplScreen({
 
       // Operator-session receipt (ember #165 acceptance): the response for an
       // operator-injected prompt has finished rendering into the transcript.
+      // Only record when the message is truly complete (stop_reason is set, meaning
+      // streaming/thinking is done), not on first delta (thinking preamble).
       if (origin === "operator" && !abortCtrl.signal.aborted) {
-        operatorReceiptsRef.current?.append("response_rendered", assistantId);
+        const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
+        if (finalMsg && finalMsg["stop_reason"] !== undefined) {
+          operatorReceiptsRef.current?.append("response_rendered", assistantId);
+        }
       }
 
       // Surface compaction feedback: the engine sets a one-shot post-
