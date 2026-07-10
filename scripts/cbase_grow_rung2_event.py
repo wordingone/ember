@@ -742,36 +742,53 @@ def phase_b1m(args) -> dict:
 
     pre_lr = cfg["optimizer"]["lr_muon"]
 
-    # Load seed optimizer and resolve gate_key to numeric param ID (issue #466 fix)
+    # Load seed optimizer and resolve gate_key's momentum buffer via the ONE
+    # authoritative muon-local mapping helper (issue #580 fix, site 4:
+    # resolve_gate_momentum_buffer / build_optimizer_id_maps). This function
+    # previously computed its own independent GLOBAL model-state index
+    # (`seed_param_names.index(gate_key)`) and used it as a key into the
+    # MUON-LOCAL-keyed optimizer state dict -- the same conflation #580's
+    # write/read/checker sites had, but never routed through the shared fix
+    # PR #587 landed. On the b1-snapshot checkpoint this aliased gate_proj's
+    # id (4) to global id 5, silently resolving up_proj's momentum buffer
+    # instead (rms 3.6057e-4 vs gate_proj's real 3.815260e-04) -- caught by
+    # the #580 corrected-buffered-re-run lane tracing what B3's TRANSPLANT
+    # arm actually consumes, not just B3's own diagnostic field.
     seed_optimizer_state = torch.load(snapshot_dir / "optimizer.pt", map_location="cpu", weights_only=True)
     seed_model_state = torch.load(snapshot_dir / "model.pt", map_location="cpu", weights_only=True)
-    seed_param_names = list(seed_model_state.keys())
+    pre_momentum = resolve_gate_momentum_buffer(seed_model_state, seed_optimizer_state, gate_key)
 
-    # Optimizer state is indexed by numeric param ID, not string name (critical fix)
-    gate_param_id = seed_param_names.index(gate_key) if gate_key in seed_param_names else None
-    if gate_param_id is not None:
-        pre_momentum = seed_optimizer_state.get("muon", {}).get("state", {}).get(
-            gate_param_id, {}).get("momentum_buffer")
-    else:
-        pre_momentum = None
-
+    # Fail-closed validation: issue #466 (#449 addendum) requires explicit
+    # nonzero momentum or explicit refusal, never a silent fallback to zeros.
+    # #580 gate amendment (site-4 PR review): a missing resolution used to be
+    # silently rewritten to torch.zeros_like(theta_gate_pre) BEFORE this
+    # check ran -- the exact landmine shape the #580 campaign exists to kill
+    # (a silent zero-momentum substitution that looks like a real
+    # measurement downstream, same class as the original tick-23 defect).
+    # None now fails closed immediately, distinctly from "present but
+    # near-zero" below, so the error names which condition actually fired.
     if pre_momentum is None:
-        pre_momentum = torch.zeros_like(theta_gate_pre)
+        raise SystemExit(
+            f"CBASE-GROW-RUNG2-EVENT-B1M: fail-closed refusal -- resolve_gate_momentum_buffer "
+            f"found no momentum buffer for {gate_key!r} in {snapshot_dir}'s optimizer.pt. Never "
+            f"silently substitutes zeros_like for a missing resolution. If this checkpoint "
+            f"genuinely has no prior optimizer momentum (initial training, no prior optimizer "
+            f"state), that IS a real N/A for the transplant arm (structural impossibility, not a "
+            f"defect) -- but it must surface as this explicit refusal, never an implicit "
+            f"fallback. See issue #466 / #449 / #452 / #580.")
 
     # Move pre_momentum to device (issue #486 device-placement fix)
     pre_momentum = pre_momentum.to(args.device)
 
-    # Fail-closed validation: issue #466 (#449 addendum) requires explicit
-    # nonzero momentum or explicit refusal, never a silent fallback to zeros
     pre_momentum_rms = float(rms(pre_momentum))
     if pre_momentum_rms < 1e-10:
         raise SystemExit(
-            f"CBASE-GROW-RUNG2-EVENT-B1M: fail-closed refusal on zero pre_momentum "
-            f"(RMS < 1e-10). The seed checkpoint had no pre-grow momentum (likely "
-            f"initial training without prior optimizer state), so there is nothing "
-            f"nonzero to carry forward. B1M refuses loudly rather than silently "
-            f"defaulting to zero momentum (which would make transplant-arm identical "
-            f"to reset-arm, violating #449 addendum: explicit different measurements). "
+            f"CBASE-GROW-RUNG2-EVENT-B1M: fail-closed refusal on near-zero pre_momentum for "
+            f"{gate_key!r} (RMS={pre_momentum_rms:.3e} < 1e-10). The buffer resolved (it is not "
+            f"None) but is numerically near-zero -- likely initial training without prior "
+            f"optimizer state, so there is nothing nonzero to carry forward. B1M refuses loudly "
+            f"rather than silently defaulting to zero momentum (which would make transplant-arm "
+            f"identical to reset-arm, violating #449 addendum: explicit different measurements). "
             f"For initial-training runs (no prior momentum), transplant arm is N/A "
             f"(structural impossibility, not a defect). See issue #466 / #449 / #452.")
 
