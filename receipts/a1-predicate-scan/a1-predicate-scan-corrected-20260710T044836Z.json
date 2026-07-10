@@ -1,0 +1,733 @@
+{
+  "ticket": "A1-PREDICATE-SCAN-440",
+  "ts": "2026-07-10T05:02:19.625977+00:00",
+  "schema": "a1-predicate-scan/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#593",
+    "#123",
+    "#591",
+    "#440",
+    "#582",
+    "#585"
+  ],
+  "predicate_ref": "docs/spec/eval-suite-freeze-v1.md#selection-criteria (contamination-auditable clause) + #440",
+  "only_suite": "both",
+  "suite_a": {
+    "n_rows": 16,
+    "batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+    "source_receipt": "receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json"
+  },
+  "suite_b": {
+    "MMLU-Pro": {
+      "status": "scanned",
+      "n_items": 12032,
+      "n_windows_contributed": 2099959,
+      "test_split_sha256": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5"
+    },
+    "GSM8K": {
+      "status": "scanned",
+      "n_items": 1319,
+      "n_windows_contributed": 197734,
+      "test_split_sha256": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff"
+    },
+    "MATH-500": {
+      "status": "scanned",
+      "n_items": 500,
+      "n_windows_contributed": 149628,
+      "test_split_sha256": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f"
+    },
+    "ARC-Challenge": {
+      "status": "scanned",
+      "n_items": 1172,
+      "n_windows_contributed": 75540,
+      "test_split_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3"
+    },
+    "HumanEval+": {
+      "status": "scanned",
+      "n_items": 164,
+      "n_windows_contributed": 5572844,
+      "test_split_sha256": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2"
+    },
+    "MBPP": {
+      "status": "scanned",
+      "n_items": 500,
+      "n_windows_contributed": 80355,
+      "test_split_sha256": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce"
+    },
+    "HellaSwag": {
+      "status": "scanned",
+      "n_items": 10003,
+      "n_windows_contributed": 2498118,
+      "test_split_sha256": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f"
+    },
+    "GPQA-diamond": {
+      "status": "PIN-PENDING",
+      "n_items": 0,
+      "n_windows_contributed": 0,
+      "reason": "excluded from v1 per eval-suite-freeze-v1.md; see docs/deviations.md"
+    }
+  },
+  "n_eval_rows_total": 25706,
+  "shard_dir_label": "../shards-v0",
+  "shards_scanned": 26,
+  "corpus_manifest_receipt": "receipts/token-shards-v0-20260611T170047Z.json",
+  "corpus_manifest_sha256": "aeabd6a84cf762c15ccee367879200a02da98cdbbb54749b004f173742bbde65",
+  "not_independently_scanned": [
+    {
+      "artifact": "manifests/corpus/b-multi-1 (image-caption multimodal)",
+      "reason": "no completed training run has consumed it (v0 is text-only); out of predicate scope until a run does"
+    },
+    {
+      "artifact": "density-ab-{arm-a,arm-b}-100M.bin",
+      "reason": "a 100M-token sample drawn proportionally FROM shards-v0 itself (docs/spec/density-ab-spec-v1.md sec.2), not an independent corpus; scanning shards-v0 already covers any contamination it could carry"
+    }
+  ],
+  "tokenizer": {
+    "path": "recovered-shard-generation-tokenizer",
+    "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "custody": "sha256 2c557e7 == receipts/token-shards-v0-20260611T170047Z.json provenance_230.old.tokenizer_json.sha256 (the tokenizer under which shards-v0 was produced); recovered from a local pre-consolidation archive; bytes intentionally NOT committed to the public tree (pre-scrub proper-noun vocab removed by 58ddf8d)",
+    "encode_semantics": "added-token-matching-disabled-v1 (scripts/token_shards_v0.py)",
+    "orphaned_merge_workaround": {
+      "n_merges_total": 31755,
+      "n_dropped_orphan_merges": 0,
+      "reason": "pre-existing tokenizer.json defect (unrelated to this PR): merge rule target string absent from the frozen vocab table; dropped from an in-memory copy only, on-disk bytes never written to; cannot suppress a genuine contamination match (see function docstring, load_stripped_tokenizer)"
+    }
+  },
+  "matcher": {
+    "reused_from": [
+      "scripts/w1_collapse_control_run.py:contamination_recheck",
+      "scripts/w2_heldout/build_decontam_batch_mp.py:contamination_recheck_mp"
+    ],
+    "method": "13-token polynomial rolling hash (uint64 mod 2**64), parallelized across corpus shards (multiprocessing), hash hits re-verified by exact elementwise comparison",
+    "n_workers_requested": 2,
+    "n_workers_actual": 2,
+    "degate_worker_cap": 4
+  },
+  "memory_preflight": {
+    "commit_total_gb": 63.6,
+    "commit_free_gb": 31.8,
+    "min_required_gb": 12
+  },
+  "windows_hashed": 6977868734,
+  "hash_collisions_ruled_out": 0,
+  "contamination_recheck": {
+    "suite_a": {
+      "status": "RESOLVED",
+      "convention": "strict any-match non-self, W=13 (docs/spec/w2-scale-preregistration-v1.md sec.4: 'contamination_recheck must report 0 matches or the launch gate refuses')",
+      "value": 0,
+      "verdict": "CLEAN"
+    },
+    "suite_b": {
+      "status": "UNRESOLVED-PENDING-CONVENTION-RULING",
+      "why": "docs/spec/eval-suite-freeze-v1.md states no counting convention for the predicate; #440's 'plain binary absence' language addresses held-out certification, and #193's v2 pre-registration covers decontam candidates -- neither names external eval suites. Both framings reported below; ruling deferred to the coordinator, never picked by this lane.",
+      "raw_any_match_13gram": {
+        "value": 848862,
+        "per_dataset_matches": {
+          "HumanEval+": 809124,
+          "MBPP": 202167,
+          "MMLU-Pro": 65660,
+          "MATH-500": 1735,
+          "GSM8K": 13,
+          "HellaSwag": 1329,
+          "ARC-Challenge": 25
+        },
+        "per_dataset_contaminated_items": {
+          "MMLU-Pro": 366,
+          "HellaSwag": 69,
+          "ARC-Challenge": 4,
+          "HumanEval+": 164,
+          "MBPP": 121,
+          "MATH-500": 54,
+          "GSM8K": 1
+        }
+      },
+      "fractional_contiguous_193_framing": "see convention_stats.per_dataset"
+    }
+  },
+  "contamination_recheck_detail": {
+    "raw_confirmed_matches": 865102,
+    "self_matches_excluded": 16240,
+    "suite_a_nonself": 0,
+    "suite_a_nonself_first_20": [],
+    "suite_b_matches": 848862,
+    "suite_b_per_dataset_matches": {
+      "HumanEval+": 809124,
+      "MBPP": 202167,
+      "MMLU-Pro": 65660,
+      "MATH-500": 1735,
+      "GSM8K": 13,
+      "HellaSwag": 1329,
+      "ARC-Challenge": 25
+    },
+    "suite_b_per_dataset_contaminated_items": {
+      "MMLU-Pro": 366,
+      "HellaSwag": 69,
+      "ARC-Challenge": 4,
+      "HumanEval+": 164,
+      "MBPP": 121,
+      "MATH-500": 54,
+      "GSM8K": 1
+    },
+    "n_contaminated_suite_a_rows": 0,
+    "n_contaminated_suite_b_items": 779,
+    "self_match_convention": "positional overlap with the owning suite-(a) row's source range [global_start, global_start+block_len) -- same convention as build_decontam_batch_mp._classify_matches and the w2-heldout receipt",
+    "raw_confirmed_matches_first_20": [
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60857,
+        "window": [
+          29594,
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60858,
+        "window": [
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60859,
+        "window": [
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140,
+          65
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60902,
+        "window": [
+          29594,
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60903,
+        "window": [
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60904,
+        "window": [
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140,
+          65
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60947,
+        "window": [
+          29594,
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60948,
+        "window": [
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60949,
+        "window": [
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140,
+          65
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60991,
+        "window": [
+          29594,
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60992,
+        "window": [
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 60993,
+        "window": [
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140,
+          65
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61035,
+        "window": [
+          29594,
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61036,
+        "window": [
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61037,
+        "window": [
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140,
+          65
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61078,
+        "window": [
+          29594,
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61079,
+        "window": [
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61080,
+        "window": [
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140,
+          65
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61121,
+        "window": [
+          29594,
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62
+        ]
+      },
+      {
+        "shard": "v0-00000.bin",
+        "offset": 61122,
+        "window": [
+          9479,
+          18474,
+          48,
+          49,
+          50,
+          51,
+          28894,
+          2552,
+          56,
+          19254,
+          19711,
+          62,
+          14140
+        ]
+      }
+    ]
+  },
+  "convention_stats": {
+    "definitions": {
+      "matched_window": "row window tuple with >=1 confirmed corpus match; suite (a) positions matched ONLY inside their own source range excluded (self-match convention, w2-heldout receipt)",
+      "max_run_tokens": "longest consecutive matched-window run + window-1 tokens; UPPER-BOUND PROXY for #193 v2(a) same-location contiguous overlap (cannot miss a true >=50-token shared substring)",
+      "v2_framing": "issue #193 pre-registered v2 thresholds: (a) run >= 50 tokens, (b) window_frac > 0.10 -- computed as DATA, not as the ruling"
+    },
+    "per_dataset": {
+      "suite_a": {
+        "n_items": 16,
+        "items_any_match": 0,
+        "items_v2a_run_ge50tok": 0,
+        "items_v2b_frac_gt10pct": 0,
+        "items_v2_contaminated": 0,
+        "run_hist": {
+          "13": 0,
+          "14-19": 0,
+          "20-49": 0,
+          "50-99": 0,
+          "100+": 0
+        },
+        "window_frac_mean": 0.0,
+        "window_frac_median": 0.0,
+        "window_frac_p90": 0.0,
+        "window_frac_max": 0.0,
+        "max_run_tokens_max": 0
+      },
+      "MMLU-Pro": {
+        "n_items": 12032,
+        "items_any_match": 366,
+        "items_v2a_run_ge50tok": 36,
+        "items_v2b_frac_gt10pct": 69,
+        "items_v2_contaminated": 69,
+        "run_hist": {
+          "13": 109,
+          "14-19": 164,
+          "20-49": 57,
+          "50-99": 27,
+          "100+": 9
+        },
+        "window_frac_mean": 0.002064,
+        "window_frac_median": 0.0,
+        "window_frac_p90": 0.0,
+        "window_frac_max": 0.665753,
+        "max_run_tokens_max": 259
+      },
+      "GSM8K": {
+        "n_items": 1319,
+        "items_any_match": 1,
+        "items_v2a_run_ge50tok": 0,
+        "items_v2b_frac_gt10pct": 0,
+        "items_v2_contaminated": 0,
+        "run_hist": {
+          "13": 0,
+          "14-19": 1,
+          "20-49": 0,
+          "50-99": 0,
+          "100+": 0
+        },
+        "window_frac_mean": 6e-06,
+        "window_frac_median": 0.0,
+        "window_frac_p90": 0.0,
+        "window_frac_max": 0.007353,
+        "max_run_tokens_max": 14
+      },
+      "MATH-500": {
+        "n_items": 500,
+        "items_any_match": 54,
+        "items_v2a_run_ge50tok": 0,
+        "items_v2b_frac_gt10pct": 0,
+        "items_v2_contaminated": 0,
+        "run_hist": {
+          "13": 26,
+          "14-19": 27,
+          "20-49": 1,
+          "50-99": 0,
+          "100+": 0
+        },
+        "window_frac_mean": 0.001542,
+        "window_frac_median": 0.0,
+        "window_frac_p90": 0.002062,
+        "window_frac_max": 0.085271,
+        "max_run_tokens_max": 23
+      },
+      "ARC-Challenge": {
+        "n_items": 1172,
+        "items_any_match": 4,
+        "items_v2a_run_ge50tok": 0,
+        "items_v2b_frac_gt10pct": 0,
+        "items_v2_contaminated": 0,
+        "run_hist": {
+          "13": 1,
+          "14-19": 3,
+          "20-49": 0,
+          "50-99": 0,
+          "100+": 0
+        },
+        "window_frac_mean": 0.000162,
+        "window_frac_median": 0.0,
+        "window_frac_p90": 0.0,
+        "window_frac_max": 0.097561,
+        "max_run_tokens_max": 18
+      },
+      "HumanEval+": {
+        "n_items": 164,
+        "items_any_match": 164,
+        "items_v2a_run_ge50tok": 56,
+        "items_v2b_frac_gt10pct": 35,
+        "items_v2_contaminated": 58,
+        "run_hist": {
+          "13": 0,
+          "14-19": 41,
+          "20-49": 67,
+          "50-99": 26,
+          "100+": 30
+        },
+        "window_frac_mean": 0.071987,
+        "window_frac_median": 0.026891,
+        "window_frac_p90": 0.190668,
+        "window_frac_max": 0.920539,
+        "max_run_tokens_max": 3228
+      },
+      "MBPP": {
+        "n_items": 500,
+        "items_any_match": 121,
+        "items_v2a_run_ge50tok": 0,
+        "items_v2b_frac_gt10pct": 12,
+        "items_v2_contaminated": 12,
+        "run_hist": {
+          "13": 30,
+          "14-19": 62,
+          "20-49": 29,
+          "50-99": 0,
+          "100+": 0
+        },
+        "window_frac_mean": 0.010625,
+        "window_frac_median": 0.0,
+        "window_frac_p90": 0.032573,
+        "window_frac_max": 0.396552,
+        "max_run_tokens_max": 47
+      },
+      "HellaSwag": {
+        "n_items": 10003,
+        "items_any_match": 69,
+        "items_v2a_run_ge50tok": 2,
+        "items_v2b_frac_gt10pct": 8,
+        "items_v2_contaminated": 8,
+        "run_hist": {
+          "13": 21,
+          "14-19": 31,
+          "20-49": 15,
+          "50-99": 2,
+          "100+": 0
+        },
+        "window_frac_mean": 0.000304,
+        "window_frac_median": 0.0,
+        "window_frac_p90": 0.0,
+        "window_frac_max": 0.320917,
+        "max_run_tokens_max": 55
+      }
+    },
+    "per_item_stats_file": "receipts/a1-predicate-scan/a1-predicate-scan-corrected-20260710T044836Z-per-item.jsonl"
+  },
+  "wall_s": 798.498,
+  "cpu_minutes_estimate": 26.62,
+  "budget_cpu_minutes": 30.0,
+  "over_budget": false,
+  "scan_code_sha256": {
+    "a1_predicate_scan.py": "2c19aaed56efa3f0cb7e3c1d66eabdf3e6d0059ffd87ef616a3bacca4780797d",
+    "w1_collapse_control_run.py": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
+    "build_decontam_batch_mp.py": "9e1d9823eb69f48009833dd7a3c80693d61ee1d17043f71a683c551709cfcc2a",
+    "decon_scan_worker.py": "1ffa7e691cc8b46de6c7e2c943689c940c0a931bbaddbadabc59f9a749904e17"
+  },
+  "scan_ts": "2026-07-10T05:02:19.627980+00:00",
+  "total_wall_s": 821.645
+}

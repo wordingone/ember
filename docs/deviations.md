@@ -6,6 +6,46 @@ artifact + its freeze SHA/date, what changes, why, and who owns the call.
 
 ---
 
+## DEV-006 — A1 freeze declaration (battery-14): consumer rule (3) amended — ancestry binding → declaration-content-in-master binding
+
+**Date filed:** 2026-07-10 (the A1 machinery-cure lane, issue #631, executing the
+coordinator ruling R3 posted on PR #645). **Filed before any governed launch consumes
+the freeze.** **Frozen artifact:**
+`receipts/eval-suite-freeze/a1-freeze-declaration-20260709T233050Z.json` (byte-law
+immutable; its bytes are NOT edited — this entry amends the consumer-verification
+rule its `eval_freeze_hash_rule` clause (3) states).
+
+**What changes:** the declaration's consumer rule (3) — "the pointer commit is an
+ancestor of the ref they build from" — is amended to **declaration-content-in-master
+binding**: a consumer verifies (1) the pointer file
+`receipts/eval-suite-freeze/EVAL-FREEZE-HASH` names commit `ccde4a67` and that commit
+contains the declaration byte-identical (unchanged), (2) `freeze_ts` predates the
+consumer's `launch_ts` (unchanged), and (3-amended) **the declaration file is present
+byte-identical in the build-ref's tree** (master lineage), failing CLOSED on any
+content mismatch or absence. Ancestry of the pointer commit is recorded and disclosed
+by the consumer, no longer required.
+
+**Why:** PR #603 was squash-merged, so the freeze-content commit `ccde4a67` the
+pointer names is dangling — reachable as an object, byte-identical declaration
+verified at it, but **not an ancestor of master**. Rule (3) as written is therefore
+unsatisfiable from master forever, through no property of any launch. Re-anchoring
+the pointer to a master-reachable commit is NOT done: the pointer value fed AC4's
+held-out derivation, and an amendment never re-rolls AC4 (DEV-005 / the amendment's
+`ac4_anchoring`). Content binding preserves the rule's substance — the launch builds
+from a tree carrying the exact frozen declaration — while removing only the
+squash-merge-broken ancestry mechanics. The binding remains fail-closed on content
+mismatch (`scripts/a1_freeze_consumer.py` REFUSE[DECL_ABSENT_IN_BUILD_REF] /
+REFUSE[DECL_ALTERED_IN_BUILD_REF]; negative-tested).
+
+**Who owns the call:** the coordinator (ruling R3, PR #645, dated 2026-07-10); this
+entry executes it. **Receipts:**
+`receipts/eval-suite-freeze/a1-freeze-admission-example-*.json` (the consumer's
+admission receipt discloses `pointer_is_ancestor_of_build_ref` plus the declaration
+sha256 at pointer / on disk / at build-ref), `scripts/a1_freeze_consumer.py` +
+`tests/test_a1_freeze_consumer.py` (PR #645). Relates to issues #631, #593, #487.
+
+---
+
 ## DEV-005 — eval-suite-freeze-v1 (battery-14): #193-v2 contamination convention ADOPTED AS SPEC + 147-item exclusion amendment
 
 **Date filed:** 2026-07-09 (the A1 eval-freeze execution lane, issue #593, executing

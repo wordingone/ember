@@ -1,0 +1,86 @@
+{
+  "ticket": "A1-CORPUS-LINEAGE-CORRECTION",
+  "ts": "2026-07-10T05:10:02.469918+00:00",
+  "schema": "a1-corpus-lineage/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#631",
+    "#123",
+    "#593",
+    "#440"
+  ],
+  "corrects": {
+    "published_scan": {
+      "path": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json",
+      "sha256": "99686792b79c783b9c557dcf913ac67d59e8b9d232a3a995f4b237bcf7f0c569",
+      "false_premise": "shards-v0 is the only corpus any completed training run has consumed (treated as the whole contamination universe)",
+      "note": "NEVER edited (append-only). This receipt supersedes the premise text only."
+    }
+  },
+  "reproduce_first": {
+    "counterexample_receipt": "receipts/t2-r1w-q3-20260610T211509Z.json",
+    "counterexample_sha256": "716f8e65edca7f04c0953301a0b473a9d6f979000c89cdaf4cb9c01d4bf42e59",
+    "world": "mbpp",
+    "training_steps": 57,
+    "training_n_examples": 294,
+    "premise_falsified": true,
+    "statement": "a COMPLETED training run (world='mbpp', steps=57, n_examples=294) consumed a non-shards-v0 corpus; the universal premise is false"
+  },
+  "enumerated_completed_training_runs": {
+    "n_runs": 13,
+    "by_world": {
+      "mbpp": [
+        "receipts/t2-r1w-q3-20260610T211509Z.json",
+        "receipts/t2-r1w-q3-control-20260610T212812Z.json",
+        "receipts/t2-r1w-q3-mtp-20260610T214222Z.json",
+        "receipts/t2-r2-q3-mtp-20260611T034305Z.json",
+        "receipts/t2-r2-q3-mtp-20260611T044201Z.json"
+      ],
+      "unspecified": [
+        "receipts/t2-r1-20260610T043757Z.json",
+        "receipts/t2-r1-control-20260610T052546Z.json",
+        "receipts/t2-r1-q15-20260610T115819Z.json",
+        "receipts/t2-r1-q15-control-20260610T122005Z.json",
+        "receipts/t2-r1-q3-20260610T151637Z.json",
+        "receipts/t2-r1-q3-control-20260610T154409Z.json",
+        "receipts/t2-r2w-control-20260611T032930Z.json",
+        "receipts/t2-r2w-sft-20260611T032047Z.json"
+      ]
+    },
+    "enumeration_rule": "git ls-files receipts/ | receipts carrying a completed-training signal (train_loss or training.steps)"
+  },
+  "owned_corpora": [
+    {
+      "corpus": "shards-v0",
+      "kind": "text pretraining shards (26 *.bin, 6,973,632,300 content tokens)",
+      "consumed_by": "the ember pretraining lineage (W1 collapse-control, W2 G-arm) -- these are the shards-v0 consumers named in the scan docstring; they do NOT carry a train_loss field in the enumerated shape",
+      "scanned_by_a1": true
+    },
+    {
+      "corpus": "RL/SFT worlds (mbpp + NC0-ladder worlds)",
+      "kind": "eval-derived RL/SFT training inputs (e.g. MBPP tasks)",
+      "consumed_by": "13 completed training run(s) enumerated below (NC0-ladder Qwen2.5-Coder RL runs; a SEPARATE base-model lineage from ember's C8, but completed training runs nonetheless -- the exact objects that falsify 'shards-v0 is the only corpus consumed')",
+      "scanned_by_a1": "N/A -- these are eval-set-derived training inputs; whether they are IN a given C8 lineage depends on that lineage (see gate rule)"
+    },
+    {
+      "corpus": "manifests/corpus/b-multi-1",
+      "kind": "image-caption multimodal (500 rows)",
+      "consumed_by": "NO completed training run (acquire/smoke/scope receipts only)",
+      "scanned_by_a1": "YES (defensively, refs #631 deliverable 3a: receipts/a1-predicate-scan/a1-bmulti1-scan-20260710T045852Z.json)"
+    },
+    {
+      "corpus": "density-ab-{arm-a,arm-b}-100M.bin",
+      "kind": "100M-token proportional SAMPLE of shards-v0 (density-ab-spec-v1 sec.2)",
+      "consumed_by": "density-ab experiments; content is a subset of shards-v0",
+      "scanned_by_a1": "covered transitively by scanning shards-v0"
+    }
+  ],
+  "bmulti1_scan": {
+    "receipt": "receipts/a1-predicate-scan/a1-bmulti1-scan-20260710T045852Z.json",
+    "receipt_sha256": "47b8142e9b0edeba44c02327e7346b24791b4ca38245ca4de5ef230a62f2c00a"
+  },
+  "corrected_premise": "shards-v0 is the ember PRETRAINING corpus, and it is NOT the only corpus any completed training run has consumed: NC0-ladder RL/SFT runs consumed eval-derived worlds (MBPP and others). The A1 predicate universe cannot be a universal 'shards-v0 only' claim.",
+  "lineage_binding_gate_rule": "A governed C8 capability claim MUST declare its EXACT checkpoint lineage -- the ordered chain of training receipts (pretraining + any RL/SFT stages) that produced the exact model making the claim. The A1 predicate scan MUST cover every training input that declared lineage consumed. shards-v0 alone is a sufficient universe ONLY for a lineage that consumed only shards-v0; a lineage that also consumed eval-derived RL/SFT worlds requires those inputs scanned too. A claim whose lineage is not fully declared-and-scanned is INADMISSIBLE. Enforced by scripts/a1_freeze_consumer.py (#631 deliverable 5) via its required --lineage-manifest.",
+  "scope": "this correction does NOT retract the shards-v0 scan (suite-a CLEAN, suite-b 147-exclusion set stands); it removes the false universal framing and installs the lineage-binding requirement."
+}

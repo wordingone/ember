@@ -1,0 +1,85 @@
+{
+  "ticket": "A1-TOKENIZER-ERRATA",
+  "ts": "2026-07-10T05:05:05.758606+00:00",
+  "schema": "a1-tokenizer-errata/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#631",
+    "#123",
+    "#593",
+    "#440",
+    "#482"
+  ],
+  "corrects": {
+    "published_scan": {
+      "path": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json",
+      "sha256": "99686792b79c783b9c557dcf913ac67d59e8b9d232a3a995f4b237bcf7f0c569",
+      "note": "NEVER edited (append-only custody). This errata supersedes its tokenizer premise + raw transparency count only."
+    },
+    "published_amendment": {
+      "path": "receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-20260709T234148Z.json",
+      "sha256": "9f4b11c82cd757429456c0d0a91797227c4aea6f943689852d6070b97249981c"
+    }
+  },
+  "defect_reproduced": {
+    "repro_receipt": "receipts/eval-suite-freeze/a1-tokenizer-mismatch-repro-20260710T044606Z.json",
+    "repro_receipt_sha256": "4e47cfb2744719544385f3f2e10b39836bf93c757726ccfb4512db0d6b4b70e9",
+    "n_suite_b_rows": 25690,
+    "n_rows_differ": 1128,
+    "frac_differ": 0.04390814,
+    "n_rows_differ_and_retained_by_pr603": 1123,
+    "statement": "1,128/25,690 suite-(b) rows tokenize differently under the shard tokenizer vs the scrubbed tokenizer; 1,123 of them were RETAINED (not excluded) by PR #603 -- so its suite-(b) result was not false-negative-safe against the actual shard bytes"
+  },
+  "tokenizer_correction": {
+    "shard_generation_tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "shard_generation_tokenizer_source": "receipts/token-shards-v0-20260611T170047Z.json provenance_230.old.tokenizer_json.sha256 (the tokenizer under which shards-v0 was produced, before the 58ddf8d public-root consolidation re-anchor)",
+    "pr603_scan_used_sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
+    "pr603_orphan_merges_dropped": 21,
+    "corrected_scan_orphan_merges_dropped": 0,
+    "corrected_scan": {
+      "path": "receipts/a1-predicate-scan/a1-predicate-scan-corrected-20260710T044836Z.json",
+      "sha256": "f55e187fd71d792a878834e2a42896c3900d1e440b2b7294d74dc5378ae88386",
+      "per_item_jsonl": "receipts/a1-predicate-scan/a1-predicate-scan-corrected-20260710T044836Z-per-item.jsonl",
+      "per_item_jsonl_sha256": "664b99fa02cd3e696105efc0072a7fc89d4b84f4051c888aa1c72f98c7247b17",
+      "tokenizer_sha256_used": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+      "scan_ts": "2026-07-10T05:02:19.627980+00:00",
+      "wall_s": 798.498,
+      "cpu_minutes_estimate": 26.62,
+      "n_workers": 2
+    }
+  },
+  "raw_transparency_count_correction": {
+    "published": 848857,
+    "corrected": 848862,
+    "delta": 5,
+    "note": "raw any-13-gram match total is a transparency figure, not the gate (freeze doc counting-convention section)"
+  },
+  "exclusion_set_confirmation": {
+    "convention": "refs #193 v2 (max_run_tokens>=50 OR window_frac>0.10), per-dataset",
+    "published_n": 147,
+    "corrected_n": 147,
+    "added_ids": [],
+    "removed_ids": [],
+    "exact_set_equality": true,
+    "per_dataset_corrected": {
+      "MMLU-Pro": 69,
+      "HumanEval+": 58,
+      "MBPP": 12,
+      "HellaSwag": 8
+    },
+    "per_dataset_published": {
+      "MMLU-Pro": 69,
+      "HumanEval+": 58,
+      "MBPP": 12,
+      "HellaSwag": 8
+    },
+    "statement": "the 147-item #193-v2 exclusion set is UNCHANGED under the corrected tokenizer: 0 ids added, 0 removed, per-dataset identical. The BLOCK was on the machinery (wrong tokenizer bytes + 5-low raw count), never on the exclusion ids (refs #123 corrected-tokenizer-replay addendum)."
+  },
+  "names_safe_custody_decision": {
+    "conflict": "the audit's minimum cure asks to 'land a provenance-safe copy of the original tokenizer'. Its pre-scrub vocab is proper-noun content the 58ddf8d public-root consolidation scrub deliberately removed; committing those bytes to the public tree would re-introduce the scrubbed names and violate the repo's public-scrub policy.",
+    "resolution": "the corrected scan RAN under the recovered tokenizer (read from a local pre-consolidation archive) and cites it by sha256 2c557e7 -- a value already public in token-shards provenance_230.old. The tokenizer BYTES are intentionally NOT committed; false-negative-safety is satisfied by the corrected scan's receipt, not by publishing the name-bearing bytes.",
+    "reproducibility": "any holder of the pre-consolidation tokenizer (sha 2c557e7) reproduces this scan; the sha binds the exact bytes without disclosing them."
+  },
+  "errata_sha256_note": "a file cannot contain its own hash; this errata's sha256 is computed over its on-disk bytes post-write and recorded in the PR body and lane report"
+}

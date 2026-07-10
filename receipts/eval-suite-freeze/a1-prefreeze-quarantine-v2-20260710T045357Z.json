@@ -1,0 +1,1118 @@
+{
+  "ticket": "A1-PREFREEZE-QUARANTINE-V2",
+  "ts": "2026-07-10T04:54:17.184265+00:00",
+  "schema": "a1-prefreeze-quarantine/v2",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#631",
+    "#123",
+    "#593",
+    "#591"
+  ],
+  "supersedes": {
+    "receipt": "receipts/eval-suite-freeze/a1-prefreeze-quarantine-20260709T231802Z.json",
+    "receipt_sha256": "294431d4df63dc6d4fa8224e085589253bceca0c497ed16750e6417920a67d56",
+    "note": "append-only cure (refs #482 shape): the v1 receipt is NEVER edited; this v2 receipt re-enumerates with semantic markers and cites it by sha256",
+    "n_v1_rows": 8,
+    "n_v1_rows_missing_from_v2": 0,
+    "v1_rows_missing_from_v2": [],
+    "n_new_rows_added_by_semantic_pass": 80
+  },
+  "freeze_ts_ref": "2026-07-09T23:30:50.418135+00:00",
+  "enumeration_source": {
+    "file_set": "git ls-files receipts/ (every tracked receipt at this branch base)",
+    "n_files_enumerated": 1154,
+    "n_files_unreadable": 0,
+    "hash_markers": {
+      "suite_a_batch_sha256": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+      "suite_b:MMLU-Pro": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
+      "suite_b:GSM8K": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+      "suite_b:MATH-500": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+      "suite_b:ARC-Challenge": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+      "suite_b:HumanEval+": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+      "suite_b:MBPP": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
+      "suite_b:HellaSwag": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f"
+    },
+    "name_markers": [
+      "eval-suite-v1",
+      "eval_suite_v1"
+    ],
+    "semantic_markers": {
+      "derived_from": "freeze receipt: each dataset name + HuggingFace canonical_url slug + on-disk dir name (word-boundary, case-insensitive)",
+      "world_aliases": {
+        "MMLU-Pro": [
+          "mmlu[-_]?pro"
+        ],
+        "GSM8K": [
+          "\\bgsm8k\\b"
+        ],
+        "MATH-500": [
+          "math[-_]?500"
+        ],
+        "ARC-Challenge": [
+          "arc[-_]challenge",
+          "ai2_arc",
+          "\\barc-c\\b"
+        ],
+        "HumanEval+": [
+          "humaneval\\s*\\+?",
+          "humanevalplus"
+        ],
+        "MBPP": [
+          "\\bmbpp\\b"
+        ],
+        "HellaSwag": [
+          "\\bhellaswag\\b"
+        ]
+      },
+      "note": "curative addition over v1; v1 used only hash + literal-name markers"
+    },
+    "score_field_markers": [
+      "\"eval_loss",
+      "\"final_eval_loss\"",
+      "\"target_eval_loss\"",
+      "\"score\"",
+      "\"feed_pct\"",
+      "\"verified_samples\"",
+      "\"admission\"",
+      "\"pass@",
+      "\"pass_at"
+    ],
+    "train_field_markers": [
+      "\"train_loss\"",
+      "\"steps\"",
+      "\"episodes\"",
+      "\"frontier\"",
+      "\"bits_banked\"",
+      "\"n_texts_after_repeat\"",
+      "\"n_examples\""
+    ],
+    "pre_freeze_rule": "ts < declaration.freeze_ts; unparseable ts treated pre_freeze (conservative); ts >= freeze_ts NOT quarantined",
+    "machinery_excluded": "A1 declaration, exclusion amendment, and all a1-prefreeze-quarantine-* receipts"
+  },
+  "n_post_freeze_citing_not_quarantined": 1,
+  "n_quarantined": 88,
+  "n_eval_score": 8,
+  "n_training_consumed": 21,
+  "n_pin_infra": 59,
+  "rows": [
+    {
+      "id": "receipts/ember-c-scale/w1-certification-check-20260707T114707Z.json",
+      "ts": "20260707T114707Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json",
+      "ts": "20260707T110256Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json",
+      "ts": "20260707T135344Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json",
+      "ts": "20260707T114517Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/ember-c-scale/w1b-fp32-check-20260707T144427Z.json",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/fp32-baselines-20260611T142515Z.json",
+      "ts": "20260611T142515Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/p1-envelope-sweep/20260708T144213Z-point3.json",
+      "ts": "20260708T144213Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/w1-humaneval-q3-20260610T234716Z.json",
+      "ts": "20260610T234716Z",
+      "pre_freeze": true,
+      "cites_scores": true,
+      "class": "eval_score",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "carries eval-score/admission fields against a frozen suite dataset and predates the A1 freeze declaration: development-only, may never be cited by a capability claim"
+    },
+    {
+      "id": "receipts/CLAIMS.md",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/INDEX.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T230806Z.json",
+      "ts": "2026-07-09T23:18:21.049659+00:00",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "suite_a_batch_sha256",
+        "suite_b:MMLU-Pro",
+        "suite_b:GSM8K",
+        "suite_b:MATH-500",
+        "suite_b:ARC-Challenge",
+        "suite_b:HumanEval+",
+        "suite_b:MBPP",
+        "suite_b:HellaSwag",
+        "semantic:MMLU-Pro",
+        "semantic:GSM8K",
+        "semantic:MATH-500",
+        "semantic:ARC-Challenge",
+        "semantic:HumanEval+",
+        "semantic:MBPP",
+        "semantic:HellaSwag"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z-per-item.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MMLU-Pro",
+        "semantic:GSM8K",
+        "semantic:MATH-500",
+        "semantic:ARC-Challenge",
+        "semantic:HumanEval+",
+        "semantic:MBPP",
+        "semantic:HellaSwag"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json",
+      "ts": "2026-07-09T23:29:16.286846+00:00",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "suite_a_batch_sha256",
+        "suite_b:MMLU-Pro",
+        "suite_b:GSM8K",
+        "suite_b:MATH-500",
+        "suite_b:ARC-Challenge",
+        "suite_b:HumanEval+",
+        "suite_b:MBPP",
+        "suite_b:HellaSwag",
+        "semantic:MMLU-Pro",
+        "semantic:GSM8K",
+        "semantic:MATH-500",
+        "semantic:ARC-Challenge",
+        "semantic:HumanEval+",
+        "semantic:MBPP",
+        "semantic:HellaSwag"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/c55-surpass-prestage-20260613T042503Z.json",
+      "ts": "20260613T042503Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:GSM8K"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json",
+      "ts": "20260708T121128Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "suite_a_batch_sha256"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-resident-training-adapter/20260622T011305Z/resident_training_candidate_manifest.json",
+      "ts": "20260622T011310Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-resident-training-gate/resident-training-gate-20260622T011305Z.json",
+      "ts": "20260622T011319Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-resident-training-gate/resident-training-gate-20260622T145000Z-full-parity-reconciled.json",
+      "ts": "20260622T144730Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-resident-training-gate/resident-training-gate-20260622T152500Z-final.json",
+      "ts": "20260622T152404Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-resident-training-gate/resident-training-gate-20260622T155000Z-blocked.json",
+      "ts": "20260622T150327Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-resident-training-gate/resident-training-gate-20260704T062951Z-issue69-cured-redacted-edition.json",
+      "ts": "20260704T062951Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ember-resident-training-gate/resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json",
+      "ts": "20260704T065507Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng-sync-20260610T224418Z.json",
+      "ts": "20260610T224418Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng-sync-20260610T234015Z.json",
+      "ts": "20260610T234015Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng-sync-20260612T033921Z.json",
+      "ts": "20260612T033921Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:GSM8K"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng-sync-20260612T043721Z.json",
+      "ts": "20260612T043721Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:GSM8K"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng142-tasklist-selftest-20260611T040136Z.json",
+      "ts": "20260611T040136Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng142-tasklist-selftest-20260611T041515Z.json",
+      "ts": "20260611T041515Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng142-tasklist-selftest-20260628T174141Z.json",
+      "ts": "20260628T174141Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng142-tasklist-selftest-20260628T175123Z.json",
+      "ts": "20260628T175123Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng21-smoke-20260611T003811Z.json",
+      "ts": "20260611T003811Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng21-smoke-20260611T011921Z.json",
+      "ts": "20260611T011921Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng23-zeroflips-20260611T011921Z.json",
+      "ts": "20260611T011921Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng24-w1strict-20260611T013909Z.json",
+      "ts": "20260611T013909Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng24-w1strict-20260611T014609Z.json",
+      "ts": "20260611T014609Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eng27-bytestability-20260611T022233Z.json",
+      "ts": "20260611T022233Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/eval-suite-freeze/eval-suite-freeze-v1.json",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "suite_b:MMLU-Pro",
+        "suite_b:GSM8K",
+        "suite_b:MATH-500",
+        "suite_b:ARC-Challenge",
+        "suite_b:HumanEval+",
+        "suite_b:MBPP",
+        "suite_b:HellaSwag",
+        "name:eval-suite-v1",
+        "semantic:MMLU-Pro",
+        "semantic:GSM8K",
+        "semantic:MATH-500",
+        "semantic:ARC-Challenge",
+        "semantic:HumanEval+",
+        "semantic:MBPP",
+        "semantic:HellaSwag"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/fp21b-scope-132-20260611T124051Z.json",
+      "ts": "20260611T124051Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/fp25-indist-20260611T060416Z.json",
+      "ts": "20260611T060416Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/fp26-prereg-20260611T081213Z.json",
+      "ts": "20260611T081213Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:HumanEval+",
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/fp8-vgate-20260611T001730Z.json",
+      "ts": "20260611T001730Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/fp8-vgate-20260611T003919Z.json",
+      "ts": "20260611T003919Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/genesis/genesis-audit-20260706.md",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/dedup-cluster-control.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/dedup-cluster.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/fp25-recall-task-ids.txt",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/fp25b-heldout-task-ids.txt",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/fp25b-heldout-train-ids.txt",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/fp25b-heldout-val-ids.txt",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/grpo-r2-tasks.json",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/license-class-control.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/ledger/views/license-class.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/r2-grpo-wrapper-20260611T041608Z.json",
+      "ts": "20260611T041608Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/sp-checkpoint-probe-step-25000-20260612T090913Z.json",
+      "ts": "20260612T090913Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/sp-checkpoint-probe-step-50000-20260612T093809Z.json",
+      "ts": "20260612T093809Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1-a-20260610T220325Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1-base-20260610T215814Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1-base-20260611T064501Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1-control-20260610T220712Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1-grpo-20260610T225450Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1-mtp-20260610T221956Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1-mtp-20260611T064151Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-g1r2-base-20260611T040544Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-q15-20260610T202511Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-q3-20260610T203401Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-q3-focus-20260610T210228Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "pin_infra",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "references a frozen suite dataset identity pre-declaration (pin/infrastructure/design): development-only, quarantined"
+    },
+    {
+      "id": "receipts/bits-account-20260610T223429Z.json",
+      "ts": "20260610T223429Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/bits-account-20260611T031459Z.json",
+      "ts": "20260611T031459Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/eng107-head-coverage-20260611T041136Z.json",
+      "ts": "20260611T041136Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/control_pool.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/episodes.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/views/wcode-r1-control.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/views/wcode-r1.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/views/wcode-r1.jsonl.r2-backup",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/views/wcode-r2-control.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/views/wcode-r2-sft.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/ledger/views/wcode-r2.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r1w-q3-20260610T211509Z.json",
+      "ts": "20260610T211509Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r1w-q3-control-20260610T212812Z.json",
+      "ts": "20260610T212812Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r1w-q3-grpo-20260610T223426Z.json",
+      "ts": "20260610T223426Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r1w-q3-mtp-20260610T214222Z.json",
+      "ts": "20260610T214222Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r2-q3-grpo-20260611T034525Z.json",
+      "ts": "20260611T034525Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r2-q3-grpo-20260611T041627Z.json",
+      "ts": "20260611T041627Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r2-q3-mtp-20260611T034305Z.json",
+      "ts": "20260611T034305Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/t2-r2-q3-mtp-20260611T044201Z.json",
+      "ts": "20260611T044201Z",
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/v-ext-flags-20260610T215421Z.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:MBPP"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    },
+    {
+      "id": "receipts/w1-humaneval-q3-20260610T234716Z-samples.jsonl",
+      "ts": null,
+      "pre_freeze": true,
+      "cites_scores": false,
+      "class": "training_consumed",
+      "markers_found": [
+        "semantic:HumanEval+"
+      ],
+      "why_quarantined": "a pre-freeze training/RL/probe receipt that CONSUMED a frozen suite dataset as a world (lineage-relevant, refs #631 deliverable 3): development-only, may never back a claim"
+    }
+  ]
+}
