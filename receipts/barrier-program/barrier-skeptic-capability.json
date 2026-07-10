@@ -1,0 +1,167 @@
+{
+ "audit_session": "2026-07-10T00:00:00Z",
+ "barrier_group": "CAPABILITY PER TOKEN (of the produced model)",
+ "skeptic_role": "refuting-skeptic review",
+ "verdicts": [
+  {
+   "target": "zero_attack_gap: eval-reference baseline receipts",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "No receipted 27B-class locally-reproduced baseline validation exists. External benchmarks (eval-suite-v1) are pinned but unvalidated against served models. This is a genuine gap in capability-per-token measurement infrastructure.",
+   "covering_evidence": "Audit claims eval-reference receipts ABSENT; no issue filed for baseline runs; docs/spec/eval-suite-freeze-v1.md exists but receipts/ directory empty of baseline runs",
+   "decisive_experiment": {
+    "intervention": "Run n-gram/PPM byte-level backoff baseline decoder on frozen eval-suite-v1 (7 datasets, 25k items, parameter-golf guidance)",
+    "measurement": "NLL per dataset, BPB (bits per byte), capability deltas vs ember trained model on matched eval set",
+    "kill_condition": "baseline NLL delta >= -0.05 nats (insufficient floor; frontier baseline must show >=0.06 advantage)",
+    "cost_class": "cpu-hours-now"
+   }
+  },
+  {
+   "target": "zero_attack_gap: Capability-per-token unified measurement",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "NLL deltas are reported but no tokens-to-capability-point crossing metric or tokens-per-eval-point efficiency binding exists. This is a critical missing measurement for the barrier's core claim.",
+   "covering_evidence": "Audit states 'NLL deltas reported but no tokens-to-capability-point crossing metric'; measured_position row 1 gives NLL only, not efficiency-per-token metric",
+   "decisive_experiment": {
+    "intervention": "Track token count to capability plateau across training trajectory (checkpoint eval at steps 50/100/200/500/766/target-loss)",
+    "measurement": "tokens_to_target_loss (loss threshold: eval_loss_fp32 <= 9.5 nats; secondary: accuracy points on MMLU/GSM8K), efficiency ratio vs frontier (tokens-per-capability-point)",
+    "kill_condition": "tokens_per_point >= 10x frontier baseline (proves local hardware too constrained for capability parity)",
+    "cost_class": "gpu-hours-post-run"
+   }
+  },
+  {
+   "target": "zero_attack_gap: Tokenizer efficiency measurement",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Tokenizer is frozen (sha256 6923a52...) but no tokens-per-eval metric exists. Issue #695 notes tokenizer gap but quantification is absent.",
+   "covering_evidence": "Issue #695 commit d1cce0f references 'eval scoring-window (math500 + AC2 smoke + tokenizer gap)' but no measurement receipt found",
+   "decisive_experiment": {
+    "intervention": "Evaluate current frozen tokenizer (sha256 6923a52) vs reference tokenizer (tiktoken/GPT-4 level) on same eval data",
+    "measurement": "avg tokens per eval item, BPB impact, tokens-to-capability crossing vs reference",
+    "kill_condition": "efficiency delta < 0.01 BPB (tokenizer is neutral; no lever)",
+    "cost_class": "cpu-hours-now"
+   }
+  },
+  {
+   "target": "zero_attack_gap: n-gram backoff baseline",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Parameter-golf identified n-gram as sole robust survivor (+0.080 BPB, CI [0.06,0.10]) but zero ember receipt exists. This is a parameter-free floor that should be implemented as a reference.",
+   "covering_evidence": "Audit claims 'zero ember receipt'; field_levers row 1 cites 'parameter-golf sole frontier survivor' but no corresponding issue or PR in ember",
+   "decisive_experiment": {
+    "intervention": "Implement n-gram/PPM backoff decoder on frozen eval-suite-v1, per parameter-golf guidance (byte-level blending, zero learnable parameters)",
+    "measurement": "NLL/BPB vs neural model, capability deltas on eval sets",
+    "kill_condition": "NLL delta < +0.06 nats (lower CI of golf estimate; baseline too weak to be useful)",
+    "cost_class": "cpu-hours-now"
+   }
+  },
+  {
+   "target": "zero_attack_gap: int6-QAT checkpoint validation",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Parameter-golf identified int6 symmetric 6-bit + STE as optimal during search but ember uses only int8/binary. No int6 checkpoint export or validation exists on external suite.",
+   "covering_evidence": "Audit: 'golf identified int6 sweet spot but ember int8-only/binary unverified; no checkpoint export proof on external suite'; no issue filed; no PR for int6 conversion",
+   "decisive_experiment": {
+    "intervention": "Post-training QAT of trained checkpoint with int6 symmetric quantization (STE per golf guidance), on frozen eval-suite-v1",
+    "measurement": "eval_loss_fp32 vs quantized_loss_int6, memory footprint reduction, artifact size vs 16MB target constraint",
+    "kill_condition": "loss delta >= +0.5 nats OR memory footprint > 16MB OR symmetry_error > 1e-3 (quantization too lossy)",
+    "cost_class": "gpu-hours-post-run"
+   }
+  },
+  {
+   "target": "zero_attack_gap: TTT (per-document SLOT) trial",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Parameter-golf phase-3 identified TTT (Test-Time Training) adaptation variant as promising. Issue #400 (opened 2026-06-25) exists but zero ember receipt of TTT on training or eval surface.",
+   "covering_evidence": "Audit: 'golf flagged adaptation variant but zero receipt of TTT on ember training or eval surface'; issue #400 ttt open but no linked PR or receipts",
+   "decisive_experiment": {
+    "intervention": "Implement per-document TTT adaptation (eval-time only; zero-cost training; SLOT-based per golf phase-3 guidance)",
+    "measurement": "capability deltas on eval documents with TTT vs baseline, NLL improvement per document",
+    "kill_condition": "delta < +0.01 nats (adaptation too weak; insufficient for claim)",
+    "cost_class": "gpu-hours-post-run"
+   }
+  },
+  {
+   "target": "zero_attack_gap: Depth-recurrence ablation",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "No ablation isolating real-growth vs depth-recurrence contributions exists at matched FLOPs. This is a critical unattacked ablation for understanding the efficiency barrier.",
+   "covering_evidence": "Audit explicitly lists: 'no ablation isolating real-growth vs depth-recurrence on matched FLOPs per golf guidance'; deferred-ledger row 15 cgrow-v3-followups cites this as needed work",
+   "decisive_experiment": {
+    "intervention": "Train matched-FLOP variants: real-growth (H increase) vs depth-recurrence-only (add layers at fixed width) at iso-FLOP budget, 50K step runs each",
+    "measurement": "eval_loss at matched FLOP compute budget, capability-per-token efficiency (tokens to target loss), H0 component attribution",
+    "kill_condition": "no significant isolation (p > 0.05 on loss delta) OR recurrence uniformly dominates real-growth (disproves the growth lever)",
+    "cost_class": "gpu-hours-post-run"
+   }
+  },
+  {
+   "target": "field_lever: n-gram/PPM byte-level blending (zero-parameter capability floor)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Parameter-golf identified this as sole frontier survivor. No issue filed. Zero-parameter inference-time blending is feasible locally and provides an unmeasured baseline for capability-per-token claims.",
+   "covering_evidence": "Field_levers row 1 cites parameter-golf +0.080 BPB (p<0.0001), described as 'composable with neural output at inference-time cost only'; no corresponding issue or PR",
+   "decisive_experiment": {
+    "intervention": "Implement n-gram/PPM blending at inference time (probability mixing with neural model, no retraining)",
+    "measurement": "ensemble NLL/BPB on frozen eval-suite-v1, inference-time cost, capability deltas",
+    "kill_condition": "blending efficiency gain < +0.03 BPB (below golf's CI lower bound; insufficient lever)",
+    "cost_class": "cpu-hours-now"
+   }
+  },
+  {
+   "target": "field_lever: int6 QAT symmetric 6-bit + STE checkpoint compression",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Parameter-golf identified int6 as optimal for post-training quantization. Direct bearing on 16MB artifact-size constraint in field challenge. No ember implementation or validation exists.",
+   "covering_evidence": "Field_levers row 2 cites 'parameter-golf sweet-spot (int8 ∆=-0.200, int6 robust)' and 'direct bearing on artifact-size constraint (16MB target)'; no issue filed for int6 implementation",
+   "decisive_experiment": {
+    "intervention": "QAT post-training quantization to int6 with STE, on trained checkpoint",
+    "measurement": "loss delta, artifact file size, VRAM footprint reduction, capability-per-token efficiency",
+    "kill_condition": "loss delta >= +0.5 nats OR final artifact > 16MB OR STE_error > 1e-2 (quantization fails constraint)",
+    "cost_class": "gpu-hours-post-run"
+   }
+  },
+  {
+   "target": "field_lever: Muon optimizer (MuonEq-R) small-scale efficiency",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Field_levers row 3 states this is 'already live' in issues #580/#587 (P-equivariance transplant). Git log shows receipts/custody corrections merged to master (commits 50fc7c6, 6f05a29, 9bc79a7 reference #580, #683). Implementation is live.",
+   "covering_evidence": "Field_levers row 3: 'already live in #580/#587 P-equivariance transplant'; git log commit 6f05a29 'receipts: #580 custody cure -- forensic erratum + cache commitment'; commit 50fc7c6 'fix: #580 site 4 - phase_b1m'[s own unfixed global-indexed lookup](http<LOCAL> evidence of live implementation and correction"
+  },
+  {
+   "target": "field_lever: Depth recurrence vs real-growth tradeoff analysis",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "This is the same ablation as zero_attack_gap #7 (Depth-recurrence ablation). Unattacked. Critical for understanding whether real parameter growth or architectural recurrence drives efficiency.",
+   "covering_evidence": "Field_levers row 4 cites 'memory pressure on consumer GPU favors real params; testable ablation on rung-ladder at matched FLOPs'; deferred-ledger row 15 cgrow-v3-followups lists this as needed work",
+   "decisive_experiment": {
+    "intervention": "Matched-FLOP ablation study: real-growth (H increase) vs recurrence-only at iso-FLOP budget",
+    "measurement": "real-param-growth efficiency vs recurrence efficiency (BPB per FLOP), eval_loss at matched compute budget",
+    "kill_condition": "no clear efficiency winner (p < 0.05 separation) OR memory overhead of real-growth dominates gains (recurrence is uniformly preferable)",
+    "cost_class": "gpu-hours-post-run"
+   }
+  },
+  {
+   "target": "field_lever: TTT per-document adaptation (phase global or SLOT-based)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Parameter-golf phase-3 identified this as promising variant. Zero-cost eval-time stitch. No ember implementation or validation exists. Issue #400 ttt open but unexecuted.",
+   "covering_evidence": "Field_levers row 5 cites 'golf phase-3 hybrid identified with legality rule (adapt only on consumed evidence); zero-cost eval-time stitch'; issue #400 ttt opened 2026-06-25 but no receipted trial",
+   "decisive_experiment": {
+    "intervention": "Implement per-document TTT adaptation (SLOT-based, eval-time only, zero training cost per golf guidance)",
+    "measurement": "capability deltas on eval documents with/without TTT, NLL improvement, inference-time overhead",
+    "kill_condition": "delta < +0.01 nats (adaptation too weak) OR inference-time cost > 20% per doc (overhead too high)",
+    "cost_class": "gpu-hours-post-run"
+   }
+  }
+ ],
+ "summary": {
+  "total_gaps_and_levers": 12,
+  "real_and_open": 10,
+  "already_covered": 1,
+  "not_feasible_local": 0,
+  "theater": 0,
+  "critical_path_items": [
+   "eval-reference baseline receipts (enables capability-per-token unification)",
+   "Capability-per-token unified measurement (core barrier claim)",
+   "Depth-recurrence ablation (separates architectural vs parametric growth efficiency)"
+  ],
+  "post_training_leverage": [
+   "int6-QAT checkpoint validation (artifact size constraint binding)",
+   "Tokenizer efficiency measurement (tokens-per-capability baseline)"
+  ],
+  "inference_time_levers": [
+   "n-gram/PPM blending (zero-parameter frontier baseline)",
+   "TTT per-document adaptation (zero-training-cost capability boost)"
+  ]
+ },
+ "skeptic_confidence": "HIGH",
+ "skeptic_note": "All REAL_AND_OPEN verdicts survived attempt-to-kill: each represents a genuine unattacked capability gap or field lever with a feasible preregisterable experiment. Muon optimizer (#580/#587) is the sole ALREADY_COVERED item; all others are open. The zero_attack_gap section (7 items) is more critical than field_levers: the gaps represent missing measurement infrastructure blocking core barrier claims. Field_levers are implementation priorities once measurement is in place."
+}

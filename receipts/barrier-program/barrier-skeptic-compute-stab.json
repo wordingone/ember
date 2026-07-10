@@ -1,0 +1,187 @@
+{
+ "verdicts": [
+  {
+   "target": "TOTAL_COMPUTE zero_gap: MTP (multi-task pretraining) per-step signal amplification",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "MTP is live in stack (0.3 aux weight, 2 heads) but has no isolation receipt. The claim is that MTP bends FLOPs-to-target efficiency. No ablation comparing MTP-on vs MTP-off at same step/FLOPs budget. Even if small effect, it is quantifiable and currently unmeasured.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Run two parallel 100-step rung-1 trainings (ff=16384, ~1.2B params): Treatment A with MTP enabled (aux_weight=0.3, 2 aux heads), Treatment B with MTP disabled (aux_weight=0). Hold all other hyperparams equal.",
+    "measurement": "For each treatment: loss at step 100, FLOPs consumed (via torch.profiler), tokens-to-target-loss ratio. Compare: loss_100_A vs loss_100_B at same FLOPs budget. Check whether MTP reduced loss per FLOPs.",
+    "kill_condition": "Verdict kills if MTP-off achieves lower loss_100 at same FLOPs, or if effect size is <2% loss improvement—indicating MTP is neutral or detrimental at this scale.",
+    "cost_class": "gpu-hours-post-run: 2-4 (2 configs × 100 steps, each ~1-2 GPU hours on RTX 4090)"
+   }
+  },
+  {
+   "target": "TOTAL_COMPUTE zero_gap: WSD schedule + critical-batch-size batch ramp",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Field candidate from arXiv:2505.23971 (OLMo: 43% step savings) and arXiv:2404.06395 (MiniCPM basis). Documented in docs/research/gpu-math-multiplier-table-v2-2026-06-11.json but no measurement receipt at ember scale. Pure schedule change (zero code cost), field-sourced, testable via direct comparison.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Run two 286-step rung-0 or rung-1 trainings: Treatment A with baseline schedule (current), Treatment B with WSD (warmup-stable-decay) + critical-batch-size ramp per field papers. Freeze all other hyperparams.",
+    "measurement": "For each: loss_100, loss_200, FLOPs per step, steps-to-target-loss (if target known). Primary: does Treatment B achieve target-loss in ≤172 steps (43% fewer than 286)? Secondary: is loss trajectory stable under WSD?",
+    "kill_condition": "Verdict kills if Treatment B requires >260 steps to match Treatment A's loss_100 (fails field's 43% savings claim), or if loss shows oscillation/instability under WSD+batch-ramp.",
+    "cost_class": "gpu-hours-post-run: 3-5 (2 configs × 286 steps ≈ 3-4 GPU hours each)"
+   }
+  },
+  {
+   "target": "TOTAL_COMPUTE zero_gap: Kernel-level fusion beyond fused-Muon (liger-fused cross-entropy, FP8 quantized forward)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Fused-Muon measured 1.3459x speedup (PR #188, receipted). Liger-fused cross-entropy and FP8 quantized forward identified as candidates but not receipted at rung-2 scale. Both are real, field-standard implementations. Sequential ablation feasible.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Run 100-step rung-1 trainings (1.2B params) in sequence: Baseline (current fused-Muon), +liger-fused-cross-entropy, +FP8-quantized-forward (with unit-scaling guards from arXiv:2502.05967). Measure each independently and combined.",
+    "measurement": "Wall-clock time per step, FLOPs per step, peak VRAM, loss convergence curve. Calculate speedup: (baseline_time / treatment_time). Check loss matches baseline within 1e-4 (numerical stability).",
+    "kill_condition": "Verdict kills if any fusion kernel: (a) causes NaN/inf in loss, (b) yields <1.05x wall-clock speedup, or (c) shows combined effect <1.10x (fails to justify integration complexity).",
+    "cost_class": "gpu-hours-post-run: 3-5 (1 baseline + 3 treatments × 100 steps ≈ 1-2 GPU hours each)"
+   }
+  },
+  {
+   "target": "TOTAL_COMPUTE zero_gap: No total FLOPs budget pre-computed vs daily delivery",
+   "verdict": "THEATER",
+   "reason": "This is a planning/visibility gap, not a capability gap. The FLOPs ceiling is already measured (4.6e18 FLOPs/day per CONTINUITY.md). Computing a forecast budget adds no new technical capability. Moving the TOTAL_COMPUTE barrier requires the technical levers (net2net, Muon, kernel fusion), not a budget spreadsheet. Verdicts on other levers already address the capability; the budget would be a reporting artifact.",
+   "covering_evidence": "CONTINUITY.md section 4 (FLOPs ceiling already measured)",
+   "decisive_experiment": null
+  },
+  {
+   "target": "TOTAL_COMPUTE field_lever: Critical-batch-size ramp (WSD schedule)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Identified as field candidate, listed as queued behind growth-chain earn-order. Not yet integrated at ember scale. Same as zero_gap #2 above—field evidence exists but local validation pending.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "(See WSD schedule zero_gap experiment above)",
+    "measurement": "(See WSD schedule zero_gap experiment above)",
+    "kill_condition": "(See WSD schedule zero_gap experiment above)",
+    "cost_class": "gpu-hours-post-run: 3-5"
+   }
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE zero_gap: QK-norm tuning at scale",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Documented in docs/research/gemma4-unified-architecture.md but no ablation receipt at rung-2+ scale. It's cited as important (part of the unified architecture) yet its effect size is unmeasured. Could be vestigial or critical—only ablation will tell.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Run 150-step rung-2 training (1.9B params, burn-in + stability window): Treatment A with QK-norm enabled (current), Treatment B with QK-norm disabled (set to 1.0). Same config otherwise.",
+    "measurement": "Loss trajectory, NaN/inf occurrence rate, divergence distance (max_loss - expected_trend). Record every 10 steps.",
+    "kill_condition": "Verdict kills if Treatment B remains stable (no NaN, loss within 5% of Treatment A)—indicating QK-norm is vestigial. Verdict survives if Treatment B diverges, NaNs, or drifts >10% loss—indicating QK-norm is load-bearing.",
+    "cost_class": "gpu-hours-post-run: 2-3 (early divergence likely, 150 steps ≈ 1-1.5 GPU hours per config)"
+   }
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE zero_gap: z-loss tuning at scale",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Formula published (10⁻⁵·log²Z on final softmax) as required at 7B+, but no ablation receipt at rung-1 or rung-2 (1.2B–1.9B). Effect at intermediate scales unknown. Untested at ember's current range.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Run 150-step rung-2 training (1.9B params): Treatment A with z-loss enabled (factor = 10⁻⁵·log²Z), Treatment B with z-loss disabled (factor = 1.0). Match all other hyperparams.",
+    "measurement": "Max logit magnitude per step, loss NaN rate, divergence distance. Record max_logit every 10 steps.",
+    "kill_condition": "Verdict kills if Treatment B stays stable (no NaN, max_logit <100)—indicating z-loss is unnecessary at rung-2. Verdict survives if Treatment B shows runaway logits (>200) or NaN—indicating z-loss is stability-critical.",
+    "cost_class": "gpu-hours-post-run: 2-3 (early NaN likely, ≈1-1.5 GPU hours per config)"
+   }
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE zero_gap: Quantized-state training (B2 memory-wall, from-scratch pretrain unreceipted)",
+   "verdict": "NOT_FEASIBLE_LOCAL",
+   "reason": "The work itself (low-rank or NF4 optimizer states) is feasible. However, it is explicitly queued behind earn-order (GOAL.md L6, issue #207): GPU hours escalate only on receipts that earn them. B2 (memory-wall) research is prioritized below G-arm GPU leg + rung-2+ stability. This is a constitutional constraint, not a technical one. Under receipts-only rules, you do not launch B2 until higher-priority rungs are banked and delivered.",
+   "covering_evidence": "GOAL.md L6 (earned-compute dispatch priority); issue #207 rule 4; active_attacks show G-arm and W1/W2 gates take priority",
+   "decisive_experiment": null
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE zero_gap: FP8 quantized forward in training loop",
+   "verdict": "THEATER",
+   "reason": "This has been measured (fp33-kernel-route yielded 0.9994x end-to-end). The result: SLOWER than baseline. Parking is the correct decision. A closed-negative result is not an open barrier aspect. Moving the barrier requires a better implementation or a different quantization strategy, not re-testing the same route.",
+   "covering_evidence": "Audit: fp33-kernel-route 0.9994x (below 1.02x accept threshold), status PARK",
+   "decisive_experiment": null
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE zero_gap: Per-step loss divergence halt mechanism",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Step traces are now recorded (#686). Automation is missing: v8/v9 rely on manual kill-band thresholds. This is a clear low-cost automation opportunity. Predicates are standard (loss gradient > threshold, divergence distance > N sigma). Integration cost is zero GPU hours.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Retro-fit automated divergence predicate on existing v8/v9 step traces: divergence_distance(t) = max_loss(t-10:t) - predicted_trend(t). Define kill_threshold = 3 * sigma(recent_divergences). Pre-register threshold BEFORE examining v8/v9 data.",
+    "measurement": "On v8/v9 traces, compute F1 score: (True Positives) / (True Positives + False Positives + False Negatives). Ground truth = manual kills actually issued by operator. Check: does predicate catch >95% of manual-kill cases? False positive rate <5%?",
+    "kill_condition": "Verdict kills if F1 <0.85 or false positive rate >10%—indicating predicate is not reliable enough to replace manual review. Verdict survives if F1 ≥0.90 and false-positive rate ≤5%.",
+    "cost_class": "cpu-hours-now: 1-2 (pure analysis on existing traces, no GPU)"
+   }
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE zero_gap: Coupling constants (QK-norm ↔ z-loss ↔ dropout ↔ batch-size)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Recipes are frozen per issue #121 (W1 acceptance), but interaction effects are unquantified. The frozen values may be stable at rung-2 but could require re-tuning at rung-3+. Field evidence (OLMo, others) suggests some coupling (e.g., batch-size ↔ LR). A cheap sensitivity analysis would validate scaling assumptions.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Design a reduced-scope sensitivity sweep on rung-1 (100-step runs): hold baseline (QK-norm=X, z-loss=Y, dropout=Z, batch_size=B), then perturb ONE hyperparameter ±20% (e.g., QK-norm → 0.8X, 1.2X). Run 3 seed replicates per condition.",
+    "measurement": "Loss trajectory and max divergence distance. For each perturbation, compute: mean_loss_delta = mean(loss_perturbation - loss_baseline) and sigma. Focus on: does any single perturbation change mean loss >5%? Do pairs of perturbations interact (non-additive)?",
+    "kill_condition": "Verdict kills if all perturbations ±20% show <1% loss change—indicating frozen recipes are robust. Verdict survives if any perturbation alters loss >3% or pairs show interaction >additive—indicating coupling needs characterization before rung-3.",
+    "cost_class": "gpu-hours-post-run: 4-6 (baseline + 8 perturbations × 3 seeds × 100 steps ≈ ~5 GPU hours)"
+   }
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE field_lever: WSD + critical-batch-size ramp",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "Same as TOTAL_COMPUTE field_lever #5. Field evidence exists; integration + local validation pending.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "(See WSD schedule experiment above)",
+    "measurement": "(See WSD schedule experiment above)",
+    "kill_condition": "(See WSD schedule experiment above)",
+    "cost_class": "gpu-hours-post-run: 3-5"
+   }
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE field_lever: NF4 + stochastic-rounding optimizer states (SR4-MASTER, P3)",
+   "verdict": "REAL_AND_OPEN",
+   "reason": "NF4 is real (Dettmers et al., bitsandbytes). Stochastic rounding is standard ML. Combining them for optimizer states is a plausible but unvalidated hypothesis. The audit's '100x grid-vs-update gap' is speculative (unreceipted in field literature). Cost is low (~368M model footprint). Queued and ready to attempt.",
+   "covering_evidence": null,
+   "decisive_experiment": {
+    "intervention": "Run 100-step rung-1 trainings (1.2B params): Treatment A (baseline, fp32 optimizer states), Treatment B (NF4 weight matrices only, fp32 momentum/variance), Treatment C (NF4 weight matrices + stochastic-rounding on grad aggregation). Hold training loop identical otherwise.",
+    "measurement": "Loss trajectory, parameter sign-flip rate per 10 steps, peak VRAM used. Primary: does loss_100_C ≈ loss_100_A (convergence match)? Secondary: is flip-rate stable in Treatment C? Peak VRAM <baseline + 368MB?",
+    "kill_condition": "Verdict kills if Treatment C shows >5% loss divergence from baseline, flip-rate stalling (slope <-0.01 per 10 steps), or memory overhead >500MB. Verdict survives if C matches baseline loss within 2%, flip-rate smooth, memory overhead ≤368MB.",
+    "cost_class": "gpu-hours-post-run: 2-3 (3 configs × 100 steps ≈ 1 GPU hour per config)"
+   }
+  },
+  {
+   "target": "TOTAL_COMPUTE field_lever: net2net warm-start inheritance (2.43x FLOPs saving)",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Measured 2.43x FLOPs saving (718M→1.2B rung-0→1 lineage, 766 total steps). Evidence: receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (flop_saving_ratio_fromscratch_over_growpath). Lever is live and receipted.",
+   "covering_evidence": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json; audit measured_position claim 3"
+  },
+  {
+   "target": "TOTAL_COMPUTE field_lever: Muon optimizer momentum transplant (0.9576 transplant vs 0.7304 reset)",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Measured transplant cos-alignment 0.9576 vs reset 0.7304 (delta ≈+0.227). PR #587 merged 2026-07-09. Issue #580 P-2 CONFIRMED via receipts 580rerun-20260710-*.json. Lever is active and verified.",
+   "covering_evidence": "Issue #580 (optimizer-state param-id conflation); PR #587 merged; receipts receipts/cbase-grow-rung2-event-580rerun-20260710-*.json"
+  },
+  {
+   "target": "TOTAL_COMPUTE field_lever: Loss continuity gates (P1′ 50-row decay + median envelope)",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Discriminator pre-registered before outcome. Base-rate pattern documented (issue #591 recalibration 2026-07-10T17:30Z). Abort path receipted (k3 kill v7, block-04 resume state banked). Gate is live and measured.",
+   "covering_evidence": "Issue #591 (gpu-window execution queue); audit measured_position claim 1; pre-registration disclosure 2026-07-10T17:30Z"
+  },
+  {
+   "target": "TOTAL_COMPUTE field_lever: In-run commit governor (≥6GB margin, fail-closed abort)",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Implemented and receipted in v8 (COMMIT_MARGIN_FAIL preflight gate). Prevents wt.exe session kills (precedent 2026-07-09). Lever is live.",
+   "covering_evidence": "v8 receipts with COMMIT_MARGIN_FAIL preflight; visible-window-hygiene rule incident log 2026-07-09"
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE field_lever: Muon with P-equivariant momentum transplant",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Same as TOTAL_COMPUTE lever #2. PR #587 merged, re-run verified, P-2 CONFIRMED. Lever is active.",
+   "covering_evidence": "Issue #580; PR #587; receipts receipts/cbase-grow-rung2-event-580rerun-20260710-*.json"
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE field_lever: Loss continuity gates",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Same as TOTAL_COMPUTE lever #3. Issue #591 discriminator pre-registered, base-rate documented, abort path receipted. Gate is live.",
+   "covering_evidence": "Issue #591; measured_position claim 1"
+  },
+  {
+   "target": "TRAINING_INSTABILITY_AT_SCALE field_lever: In-run commit governor",
+   "verdict": "ALREADY_COVERED",
+   "reason": "Same as TOTAL_COMPUTE lever #4. Receipted in v8, live.",
+   "covering_evidence": "v8 receipts with COMMIT_MARGIN_FAIL"
+  }
+ ]
+}

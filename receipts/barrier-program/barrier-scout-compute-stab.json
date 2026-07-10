@@ -1,0 +1,139 @@
+{
+ "scout_ts": "2026-07-10T20:45:00Z",
+ "scout_mode": "read-only-scout-git-queries",
+ "target_repo": "wordingone/ember",
+ "target_barriers": [
+  "TOTAL_COMPUTE",
+  "TRAINING_INSTABILITY_AT_SCALE"
+ ],
+ "barriers": [
+  {
+   "barrier": "TOTAL_COMPUTE",
+   "measured_position": [
+    {
+     "claim": "Governed daily FLOPs ceiling on single RTX 4090: ~4.6e18 FLOPs/day",
+     "evidence_path": "CONTINUITY.md section 4 lanes table (operator-seat row)",
+     "number": "4.6e18 FLOPs/day"
+    },
+    {
+     "claim": "Dense Chinchilla-scaled model creation: ~1B params in 30 days, ~1.9B in 90 days (standard stack)",
+     "evidence_path": "issue #207 (Bottleneck Ledger) B3 section",
+     "number": "1B params/30d, 1.9B params/90d"
+    },
+    {
+     "claim": "FLOPs saving ratio: growth path (net2net) vs from-scratch at same step count (rung-1 lineage)",
+     "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json field flop_saving_ratio_fromscratch_over_growpath",
+     "number": "2.4309x"
+    },
+    {
+     "claim": "Growth FLOPs total measured (rung-0 ff4096 + rung-0 post ff8192 + rung-1 ff16384, 766 steps cumulative)",
+     "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json field flops_grow_path_total_measured",
+     "number": "36.8 exaFLOPs"
+    },
+    {
+     "claim": "From-scratch FLOPs at same 766-step count at rung-1 width (ff=16384)",
+     "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json field flops_fromscratch_at_same_stepcount_measured",
+     "number": "89.5 exaFLOPs"
+    }
+   ],
+   "active_attacks": [
+    "P2 growth law (net2net warm-start inheritance): W1 control terminal (receipted token-ratio collapse), W2 G-arm rung-2 (frozen prereq, GPU-gated), FLOPs-side readout inherits from same terminal receipts (issue #121 W1 acceptance, #113 G-arm GPU leg)",
+    "Measured fused-Muon kernel speedup: 1.3459x (PR #188, receipted), live on 0.4B model, applies to every step",
+    "Earned-compute L6 dispatch priority: GPU-hours escalate only on receipts that earn them, idle capped at 24h default (GOAL.md L6, issue #207 rule 4)"
+   ],
+   "zero_attack_gaps": [
+    "MTP (multi-task pretraining) per-step signal amplification: in stack (0.3 aux weight, 2 heads), unquantified as a bend — no receipt isolating its FLOPs-efficiency gain vs standard recipe",
+    "WSD schedule (warmup-stable-decay) + critical-batch-size batch ramp: candidate (docs/research/gpu-math-multiplier-table-v2-2026-06-11.json), no measurement receipt at ember scale — queued behind growth chain",
+    "Kernel-level fusion: only fused-Muon receipted (1.3459x); no receipt on chunked cross-entropy (liger-fused) or FP8 quantized forward in training loop at this scale",
+    "No total FLOPs budget derived and published for the proof-target model vs daily delivery rate — no wall-clock-to-model-size reconciliation visible in receipts"
+   ],
+   "field_levers": [
+    {
+     "lever": "net2net warm-start inheritance (function-preserving FF-widening + continued training)",
+     "why_applicable_at_consumer_scale": "Measured 2.43x FLOPs saving at 718M→1.2B→1.2B growth chain (rung-0→rung-1) on receipted seed checkpoints; directly applicable, no hardware-class dependency",
+     "cost_class": "Low (weights reinitialized deterministically; no external data, hyperparameter sweep, or inference cost)"
+    },
+    {
+     "lever": "Muon optimizer momentum transplant at growth boundaries (verified P-equivariant, momentum buffer preservation)",
+     "why_applicable_at_consumer_scale": "Transplant cos-alignment 0.9576 measured vs reset 0.7304 (issue #580 P-2 CONFIRMED verdict); momentum buffer fix #587 merged; full-Muon at 0.4B already receipted; applies to rung-3+ designs",
+     "cost_class": "Low (operator change, no retraining cost; #587 fix overhead < 1%)"
+    },
+    {
+     "lever": "Critical-batch-size batch-size ramp (WSD schedule with data-dependent batch growth)",
+     "why_applicable_at_consumer_scale": "Candidate from arXiv:2505.23971 (OLMo 1B: 43% fewer gradient steps at same tokens, step-efficiency only); WSD is pure schedule (runs identically in bf16 on sm89); no received measurement at 0.1-0.4B scale yet",
+     "cost_class": "Very Low (schedule only, no kernel/hardware dependency; <1% overhead)"
+    },
+    {
+     "lever": "Checkpoint intermediates at P1-envelope sweep points (7 runs <= 4xE0 each, E0 = 0.067478 gpu-h measured)",
+     "why_applicable_at_consumer_scale": "Pre-registered (docs/spec/p1-envelope-sweep-prereg-v1.md, frozen); branchable via WSD schedule; enables cheap floor-probe measurements; burn rate forecasted in receipts",
+     "cost_class": "Very Low (measurement overhead, no model-change cost)"
+    }
+   ]
+  },
+  {
+   "barrier": "TRAINING_INSTABILITY_AT_SCALE",
+   "measured_position": [
+    {
+     "claim": "P1′ loss-band discriminator (recalibrated 2026-07-10T17:30Z after base-rate discovery): HEALTHY at 50-row mark requires median(rows 41-50) < median(rows 1-10) AND median ≤ 12.7 AND no NaN/inf",
+     "evidence_path": "issue #591 prereg-addendum comment (dated 2026-07-10T17:30Z, pre-measurement disclosure)",
+     "number": "Median decay band [11.246-13.734] → [11.2-11.8] measured in observed rows 1-10 at v8 relaunch"
+    },
+    {
+     "claim": "Muon momentum transplant vs reset at growth boundary (rung-2 event, b3 corrected run): transplant cos-alignment",
+     "evidence_path": "issue #580 coordinator verdict comment (dated 2026-07-10T20:49Z UTC)",
+     "number": "transplant = 0.9576, reset = 0.7304, delta ≈ +0.227 in favor of transplant"
+    },
+    {
+     "claim": "VRAM peak in v7 stabilize block-05 (cold footprint measurement with governing abort at free<6GB)",
+     "evidence_path": "issue #591 v8 prediction register (commit v8 measured block-05: 74.514GB / 79.603GB limit)",
+     "number": "74.514GB peak with governor at 6GB floor, 79.603GB system limit"
+    },
+    {
+     "claim": "Fused-Muon kernel speedup receipted on 0.4B model (c03-bf16 baseline)",
+     "evidence_path": "issue #155 research queue (PR #188 merged)",
+     "number": "1.3459x fused vs unfused"
+    }
+   ],
+   "active_attacks": [
+    "Issue #591 queue (canonical execution queue per L9 conformance sweep): Row 0 (stab480 v8 blocks 5-10 CLOSED, k3 kill fired; blocks 1-4 banked), rows 1-2 (permuted-twin null-model KILL + fp32-reconstruction KILL with verdicts VACUOUS + CONFIRMED), row 2.5 (services restore EXECUTED), rider-A2 (real-null-model leg with random-direction twin, pre-staged), v9 relaunch gated on #594 AC1-AC2, SR4-MASTER (P3 memory-wall NF4+stochastic-rounding, sub-grid update precision) added 2026-07-10",
+    "Issue #580 muon momentum buffer fix (PR #587 MERGED 2026-07-09T21:51Z): one authoritative bidirectional name<->muon_local_id mapping, re-implemented both consumers (resolve_gate_momentum_buffer + enumerate_missing_optimizer_state_ids), AC1-AC2 tests PASS, corrected re-run verdicts P-2 CONFIRMED transplant-wins, P-3 PASS_NOT_KILLED, rung-3 design input flips to transplant-carries",
+    "Issue #593 (A1 freeze-execution gate): declaration receipt + pre-freeze quarantine + first-ever predicate scan + mechanical held-out addition, dispatch priority first builder lane at next freed budget (blocks rows 3,5,6,8,9 of #591)"
+   ],
+   "zero_attack_gaps": [
+    "QK-norm tuning at scale: documented (docs/research/gemma4-unified-architecture.md lists as Fixes), no receipted ablation isolating its effect at rung-2+ scale vs baseline without it",
+    "z-loss tuning at scale: documented (10⁻⁵·log²Z on final softmax, needed at 7B with dropout), no receipted ablation at 0.4B rung-1 or rung-2 scale",
+    "Quantized-state training: B2 (training-state memory wall) breakthrough class requires low-rank or ternary/quantized states holding at pretraining; no from-scratch pretrain leg receipted yet — queued after W1/G-arm terminals per earned-compute rule",
+    "FP8 quantized forward pass in training loop at scale: unit-scaling-muP candidate (arXiv:2502.05967), no receipt at 0.1-0.4B scale; FP8 custom-kernel road (fp33-kernel-route-v0.md) measured 0.9994x end-to-end at c03 (below 1.02x accept bar), PARK status not ADOPT",
+    "Per-step loss divergence detection mechanism: loss traces now recorded (step-trace-<segment_id>.jsonl per #686), no automated divergence-halt predicate yet — v8/v9 rely on manual kill-band thresholds",
+    "No published coupling constant between QK-norm scale, z-loss weight, dropout rate, and batch size at the current model size — recipes frozen per W1 acceptance, no sweep receipt"
+   ],
+   "field_levers": [
+    {
+     "lever": "Muon optimizer with P-equivariant momentum transplant at growth boundaries",
+     "why_applicable_at_consumer_scale": "Momentum buffer transplant cos-alignment 0.9576 receipted vs reset 0.7304; momentum cache key-mapping fix #587 merged and re-run verified; Muon split (2D AdamW-on-embeddings) already in c03 baseline; applies to every rung-N transition",
+     "cost_class": "Low (operator/config change only; #587 fix overhead <1%; momentum buffer already allocated)"
+    },
+    {
+     "lever": "Loss continuity gates with boundary-artifact discrimination (P1′ 50-row discriminator: decay presence + median in envelope + no NaN)",
+     "why_applicable_at_consumer_scale": "Measured on real blocks 1-4 (elevated start + decay pattern is normal; base rates documented in #591 recalibration); discriminator pre-registered before outcome exists; abort path receipted (k3 kill fired in v7, block-04 banked for resume)",
+     "cost_class": "Very Low (loss trace already captured; discriminator is post-hoc analysis only; abort path uses existing checkpoint logic)"
+    },
+    {
+     "lever": "In-run commit governor at phase boundaries (margin assertion >= 6GB before big allocations, fail-closed governed abort)",
+     "why_applicable_at_consumer_scale": "Receipted in v8 (COMMIT_MARGIN_FAIL pre-launch gate), prevents starvation-induced session kills (2026-07-09 incident: commit starvation killed wt.exe); margin floor scales with model phase (peak at optimizer memmap)",
+     "cost_class": "Very Low (preflight assert + conditional abort, no model cost)"
+    },
+    {
+     "lever": "WSD (warmup-stable-decay) LR schedule with segment-resumable intermediate checkpoints",
+     "why_applicable_at_consumer_scale": "Pure schedule (no hardware dependency, runs identically in bf16 on sm89); enables cheap floor-probe checkpoints; critical-batch-size ramp composes with Muon; candidate from arXiv:2404.06395 (MiniCPM), no measurement at ember scale",
+     "cost_class": "Very Low (schedule-only, <1% overhead; intermediate checkpoints already planned)"
+    },
+    {
+     "lever": "NF4 + stochastic-rounding master vs fp32 optimizer states (P3 memory-wall ledger, 368M params, decay-compressed schedule)",
+     "why_applicable_at_consumer_scale": "Queued (SR4-MASTER row added to #591 2026-07-10); kills on flip-rate stall; 368M cost fits single-GPU budget; targets the sub-grid update precision bottle (100x grid-vs-update gap unreceipted in field)",
+     "cost_class": "Low (one-off experiment, no model-change cost; replaces one optimizer-state layer, not a general quantization)"
+    }
+   ]
+  }
+ ]
+}

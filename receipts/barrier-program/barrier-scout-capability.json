@@ -1,0 +1,79 @@
+{
+ "audit_date": "2026-07-10T00:00:00Z",
+ "audit_scope": "ember repo wordingone/ember: CAPABILITY-PER-TOKEN barrier state",
+ "barriers": [
+  {
+   "barrier": "CAPABILITY PER TOKEN — baseline establishment",
+   "measured_position": [
+    {
+     "claim": "W1 grow-arm (production-recipe MTP) capability at step 766: eval_loss_fp32 = 9.368 NLL",
+     "evidence_path": "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json: grow_arm.eval_loss_fp32 = 9.3680419921875"
+    },
+    {
+     "claim": "W1 from-scratch control at step 50: eval_loss_fp32 = 9.245 NLL (matched-continuation baseline)",
+     "evidence_path": "receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json: control_arm_step50.eval_loss_fp32 = 9.245222091674805"
+    },
+    {
+     "claim": "W1 collapse verdict: L3 (REFUTED) — from-scratch baseline MATCHED grow-arm capability; token-bill ratio ≤ 0.1305 (control reached target with <13% of grow-arm token bill)",
+     "evidence_path": "git log 33df343: 'W1 L3 banked'; receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json: LIVE mode, is_real_lineage=true"
+    },
+    {
+     "claim": "MTP parameter accounting error: model reports 368.35M (base) but actual with 2 MTP heads = 433.89M (+65.54M uncredited, +17.79%)",
+     "evidence_path": "state/deferred-ledger.jsonl mtp-accounting-errata row (2026-07-10); issue #679 + PR #680 merged 14:20:47Z"
+    },
+    {
+     "claim": "Eval suite v1 frozen: 7 of 8 datasets pinned; GPQA-diamond PIN-PENDING; 147 items excluded for contamination under #193 v2 convention, suite post-exclusion = 0 contaminated",
+     "evidence_path": "docs/spec/eval-suite-freeze-v1.md + PR #603 eval-suite-freeze/a1-freeze-exclusion-amendment-*.json; MMLU-Pro 12032 rows, GSM8K 1319, MATH-500 500, ARC-Challenge 1172, HumanEval+ 164, MBPP 500, HellaSwag 10003"
+    },
+    {
+     "claim": "External eval references collected: 0 baseline benchmark receipts exist; reference scores locally reproduced = false; C1 parity claims blocked until multimodal suite v2 + 27B-class reference run",
+     "evidence_path": "receipts/eval-reference/ directory: ABSENT (empty); docs/spec/eval-suite-freeze-v1.md Clause 2; GOAL.md C1 text"
+    }
+   ],
+   "active_attacks": [
+    "issue #207 B1 (Data wall): W1 control matched grow at token_bill_ratio ≤ 0.1305 — both protocol and scale paths TERMINAL at rung-1/batch-16/seq-1024 resolution per W1c gate (issue #372 pre-reg frozen, certification in flight)",
+    "issue #71 W1 capability-collapse control: is_real_lineage=true; fp32 deltas verified; margin_grow_minus_control = 0.1228 nats (fp32); spec_ref docs/spec/w1-token-collapse-control-v1.md §7",
+    "issue #123 C8 pre-registration v1 (earned-to-grow protocol): F1/F2/F3/F4 falsifiers bound; prior-art sweep discharged (dated 2026-07-05); status PRE-REGISTRATION; F2 generator merge state c8-prelaunch/f2-generator-commit-20260709T185139Z.json + collision replay c8-prelaunch/f2-collision-repro-20260710T010000Z.json",
+    "issue #688 (MTP config accounting): machine-readable split fields still conflated; v0_config_check, V0_CERTIFIED_PARAMS, launch gate require re-pointing per 4 close conditions; errata markers landed #680, gate-update in flight",
+    "MTP H-Q screen conversion: UNSCREENED_IMPLEMENTATION_WITH_CONFLATED_MECHANISM_IDENTITY per deferred-ledger mtp-hq-screen-conversion row; contract conflict (nc2 post-hoc drafter vs v0 pretraining mandate) blocks MTP work until reconciled per GOAL §9",
+    "MTP H-Q pre-freeze hostile audit (external exact-head): 3 pre-register gate conditions identified (mtp_force_fallback needing n_heads=0 pre-build; PackedShardLoader label-leakage across EOT boundaries; run receipts missing heldout primary-NLL); control C (equal-total, same-heads, byte-identical init, 0.3 composition) certified; prereq gate blocks any H-Q experiment freeze without answering all 3 conditions + including control C"
+   ],
+   "zero_attack_gaps": [
+    "eval-reference receipts: ABSENT — no locally-reproduced reference baseline exists for any external benchmark; 27B-class validation runs not executed",
+    "tokenizer efficiency measurement: ABSENT — tokenizer freeze pinned (sha256 6923a52...) but no tokens-per-eval-point efficiency metric; tokenizer gap noted in commit d1cce0f but no receipted quantification of encoding efficiency vs alternatives (BPE variants, n-gram floor from parameter golf)",
+    "capability-per-token unified metric: ABSENT — no single canonical measurement binding training choices to eval capability today; losses reported in NLL but no tokens-to-capability-point crossing metric or tokens-per-quality metric on held-out",
+    "n-gram backoff blending implementation: ABSENT — parameter-golf's sole robust frontier survivor (n-gram cache, +0.080 BPB CI [0.06,0.10]) not attempted in ember; zero-parameter lever available but no receipt",
+    "int6-QAT checkpoint export validation: ABSENT — golf identified int6 sweet spot for compression but ember's int8-only/binary state unverified against int6; no checkpoint export proof on external eval suite",
+    "TTT (per-document SLOT) adaptation trial: ABSENT — parameter-golf flagged TTT variants as organism-compatible; zero receipt of TTT on ember's own training loop or eval surface",
+    "Depth-recurrence vs real-growth tradeoff ablation: ABSENT — golf found modest recurrence gains with optimization difficulties; no ablation receipt isolating growth-via-real-params vs growth-via-depth on matched FLOPs"
+   ],
+   "field_levers": [
+    {
+     "lever": "n-gram/PPM byte-level blending as zero-parameter capability floor",
+     "why_applicable_at_consumer_scale": "parameter-golf identified n-gram backoff as sole robust 1.0-scale survivor (NLL on FineWeb via BPB metric, +0.080 vs baseline, p<0.0001); composable with neural predictor at inference cost only; no training-time cost; directly applicable as eval-time reference/cbase floor on frozen external suite",
+     "cost_class": "negligible_inference_cost_only"
+    },
+    {
+     "lever": "int6 QAT precision (symmetric 6-bit quantization with STE)",
+     "why_applicable_at_consumer_scale": "parameter-golf's within-frontier re-measurement (§3) identified int6 as sweet spot (int8-only ∆=-0.200, binary/ternary negative); artifact byte-count constraint at 16MB already prices compression; directly applicable to checkpoint export and VRAM footprint at single-4090 scale",
+     "cost_class": "post_training_one_time"
+    },
+    {
+     "lever": "Muon optimizer (MuonEq-R) for small-scale efficiency",
+     "why_applicable_at_consumer_scale": "parameter-golf (§2, Narang 2021 echo) validated optimizer choice as lever magnitude (∆=+0.127); ember live #580/#587 P-equivariance transplant thread already receipted on Muon; field confirmation the lever is real at sub-1B scale; directly applicable via configuration swap on existing harness",
+     "cost_class": "implementation_cost_only"
+    },
+    {
+     "lever": "Depth recurrence (Stack layer interleaving) vs real-growth tradeoff",
+     "why_applicable_at_consumer_scale": "parameter-golf found recurrence gains modest with optimization difficulties (§2); direct bearing on grow-rung design per golf's own conclusion; consumer GPU memory pressure favors growing real params over virtual depth; testable via ablation on rung-ladder at matched FLOPs",
+     "cost_class": "experiment_cost_per_run"
+    },
+    {
+     "lever": "TTT (Test-Time Training) per-document SLOT / phased adaptation",
+     "why_applicable_at_consumer_scale": "parameter-golf (§2, phase 3) identified TTT variants as hybrid-emergence technique with legality rule: adapt only on evidence already consumed; maps onto ember's self-improvement framing; zero-cost eval-time stitch; applicable to continuous adaptation on ember-cli after deployment",
+     "cost_class": "inference_time_adapt_only"
+    }
+   ]
+  }
+ ]
+}
