@@ -6,10 +6,22 @@ C-GROW — MEASURED function-preserving capacity growth (the 1T lever;
   R: a receipt showing function-preserving growth (net2net width /
      layer-stacking / expert-addition, warm-started from a trained smaller
      seed) that REDUCES FLOPs-to-target vs an equivalent from-scratch larger
-     model, MEASURED on the train daemon (not analytically reasoned), with
-     before/after PARAMETER COUNTS, the preserved-function check (LOSS
+     model, MEASURED BY INSTRUMENTED EXECUTION (not analytically reasoned),
+     with before/after PARAMETER COUNTS, the preserved-function check (LOSS
      CONTINUITY across the grow step within tolerance), and the FLOP-SAVING
      DELTA.
+     [Issue #683 coordinator ruling, disclosed in
+     receipts/ember-totality-audit/audit-20260710T145200Z.json]: the clause's
+     purpose is anti-ANALYTICAL. FLOP counts are device-invariant (the
+     multiply-add count of a forward/backward pass does not depend on the
+     executing device); production-binding enters through hash-verified
+     checkpoints + training-history step counts. Literal execution on the
+     train daemon SATISFIES this (measured_on_train_daemon:true passes
+     outright), but instrumented-execution measurement (e.g.
+     torch.utils.flop_counter.FlopCounterMode) against sha256-verified
+     production checkpoints, with the total-FLOPs arithmetic recomputed from
+     the per-stage figures, ALSO satisfies R -- the literal "train daemon"
+     phrasing over-promised relative to what the condition needs.
   Does NOT count:
     - from-scratch widening (the refuted H=2048 path = a bigger from-scratch
       model, not growth);
@@ -207,6 +219,140 @@ def flop_saving_self_declares_unmeasured(node):
     return None
 
 
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
+_FF_STEPS_KEY_RE = re.compile(r"^ff(\d+)_steps$")
+
+
+def measured_by_instrumented_execution(obj):
+    """[ISSUE #683 cure, Finding 2] Read the receipt's OWN measured_on_train_
+    daemon field instead of the vocabulary regex MEASURED_MARKER (the THIRD
+    instance of the self-declaration-blind class in this file: the
+    GREEN-causing receipt self-declares measured_on_train_daemon:false +
+    device:cpu and used to pass anyway because the vocabulary check never
+    read either field).
+
+    Returns (ok: bool, detail: str). Per the coordinator ruling (audit
+    receipts/ember-totality-audit/audit-20260710T145200Z.json, disclosed in
+    this file's module docstring):
+      - measured_on_train_daemon is True  -> pass outright.
+      - False or absent                   -> pass ONLY when ALL of:
+          (a) instrumented-execution provenance is present and NAMED
+              (flop_saving_vs_fromscratch.measured is True and .counter
+              names a real mechanism, e.g. FlopCounterMode);
+          (b) every checkpoint the FLOP figures derive from
+              (flop_saving_vs_fromscratch.per_width_measurements.*
+              .checkpoint_identity.model_pt_sha256) carries a real-shaped
+              sha256;
+          (c) the probe RECOMPUTES the total-FLOPs arithmetic from the
+              per-stage figures and it matches the receipt's own stated
+              totals exactly (grow-path total AND the from-scratch-at-
+              same-stepcount total, both derived from per_width_
+              measurements x step_provenance, never merely copied).
+      Otherwise: reject with an explicit reason (same shape as the
+      flop_saving_self_declares_unmeasured / smoke_markers cures)."""
+    if not isinstance(obj, dict):
+        return False, "receipt is not a JSON object"
+
+    if obj.get("measured_on_train_daemon") is True:
+        return True, "measured_on_train_daemon=true (literal execution)"
+
+    fs = obj.get("flop_saving_vs_fromscratch")
+    if not isinstance(fs, dict):
+        return False, (
+            "measured_on_train_daemon is false/absent AND "
+            "flop_saving_vs_fromscratch block is missing -- cannot "
+            "satisfy the instrumented-execution alternative")
+
+    # (a) instrumented-execution provenance present and named.
+    counter = fs.get("counter")
+    if fs.get("measured") is not True or not (
+            isinstance(counter, str) and counter.strip()):
+        return False, (
+            "measured_on_train_daemon is false/absent AND "
+            "flop_saving_vs_fromscratch.measured is not True or .counter "
+            f"does not name a real mechanism (measured={fs.get('measured')!r}, "
+            f"counter={counter!r})")
+
+    # (b) checkpoint sha256 present for every checkpoint the FLOP figures
+    # derive from.
+    per_width = fs.get("per_width_measurements")
+    if not isinstance(per_width, dict) or not per_width:
+        return False, (
+            "flop_saving_vs_fromscratch.per_width_measurements missing or "
+            "empty -- no per-stage checkpoints to sha-verify")
+    stage_flops_per_step = {}
+    for stage_key, stage in per_width.items():
+        if not isinstance(stage, dict):
+            return False, f"per_width_measurements.{stage_key} is not an object"
+        ckpt = stage.get("checkpoint_identity")
+        sha = ckpt.get("model_pt_sha256") if isinstance(ckpt, dict) else None
+        if not (isinstance(sha, str) and _SHA256_RE.match(sha)):
+            return False, (
+                f"per_width_measurements.{stage_key}.checkpoint_identity."
+                f"model_pt_sha256 missing or not sha256-shaped: {sha!r}")
+        ff = stage.get("ff")
+        per_step = stage.get("flops_per_step_at_prod_batch")
+        if not (isinstance(ff, (int, float)) and isinstance(per_step, (int, float))):
+            return False, (
+                f"per_width_measurements.{stage_key}.ff/"
+                "flops_per_step_at_prod_batch missing or non-numeric")
+        stage_flops_per_step[int(ff)] = per_step
+
+    # (c) recompute the total-FLOPs arithmetic from the per-stage figures.
+    step_prov = fs.get("step_provenance")
+    if not isinstance(step_prov, dict):
+        return False, "flop_saving_vs_fromscratch.step_provenance missing"
+
+    grow_path_total = 0.0
+    matched_any = False
+    for key, entry in step_prov.items():
+        m = _FF_STEPS_KEY_RE.match(key)
+        if not m:
+            continue
+        ff = int(m.group(1))
+        count = entry.get("count") if isinstance(entry, dict) else None
+        per_step = stage_flops_per_step.get(ff)
+        if per_step is None or not isinstance(count, (int, float)):
+            return False, (
+                f"step_provenance.{key} has no matching per_width_measurements "
+                f"entry with ff={ff}, or count is missing/non-numeric")
+        grow_path_total += per_step * count
+        matched_any = True
+
+    stated_grow_total = fs.get("flops_grow_path_total_measured")
+    if not matched_any or not isinstance(stated_grow_total, (int, float)):
+        return False, (
+            "could not recompute flops_grow_path_total_measured -- no "
+            "matched per-stage step_provenance entries or field missing")
+    if stated_grow_total and abs(grow_path_total - stated_grow_total) / stated_grow_total > 1e-6:
+        return False, (
+            f"recomputed grow-path FLOPs {grow_path_total} != receipt's "
+            f"flops_grow_path_total_measured {stated_grow_total} "
+            "(arithmetic does not reconcile)")
+
+    grown_ff = max(stage_flops_per_step)
+    total_steps_entry = step_prov.get("total_steps_reached")
+    total_steps = total_steps_entry.get("count") if isinstance(total_steps_entry, dict) else None
+    stated_fromscratch = fs.get("flops_fromscratch_at_same_stepcount_measured")
+    if not isinstance(total_steps, (int, float)) or not isinstance(stated_fromscratch, (int, float)):
+        return False, (
+            "step_provenance.total_steps_reached.count or "
+            "flops_fromscratch_at_same_stepcount_measured missing/non-numeric "
+            "-- cannot recompute the from-scratch-at-same-stepcount total")
+    recomputed_fromscratch = stage_flops_per_step[grown_ff] * total_steps
+    if stated_fromscratch and abs(recomputed_fromscratch - stated_fromscratch) / stated_fromscratch > 1e-6:
+        return False, (
+            f"recomputed from-scratch-at-grown-size FLOPs {recomputed_fromscratch} "
+            f"!= receipt's flops_fromscratch_at_same_stepcount_measured "
+            f"{stated_fromscratch} (arithmetic does not reconcile)")
+
+    return True, (
+        f"instrumented-execution measurement verified: counter={counter!r}, "
+        f"{len(per_width)} checkpoint(s) sha256-verified, grow-path total "
+        f"{grow_path_total} and from-scratch total {recomputed_fromscratch} "
+        "both independently recomputed from per-stage figures and matched")
+
+
 def main():
     if ROOT is None:
         emit("UNEVALUABLE", "C-GROW: state root not found under any known layout -- input-missing, dead branch under the flat-layout resolver (paper-consistency flip, 2026-07-02)")
@@ -287,19 +433,75 @@ def main():
                 f"flop_saving_vs_fromscratch CHK")
             continue
 
+        # [ISSUE #683 cure, Finding 2 point 1] measured_by_instrumented_
+        # execution is checked STRUCTURALLY (reads the receipt's own
+        # measured_on_train_daemon field + flop_saving_vs_fromscratch's real
+        # sub-fields), never lexically -- rejected here with an explicit
+        # reason, same shape as the two prior structural cures above, rather
+        # than folded into the generic "CHK missing [...]" vocabulary list.
+        measured_ok, measured_detail = False, ""
+        if isinstance(obj, dict):
+            measured_ok, measured_detail = measured_by_instrumented_execution(obj)
+        if not measured_ok:
+            near_miss.append(
+                f"{os.path.relpath(p, ROOT)}: measured_by_instrumented_"
+                f"execution(not_analytical) FAILS ({measured_detail}) - "
+                f"does NOT satisfy the measured/instrumented-execution CHK")
+            continue
+
         # --- (1) Positive CHK against this REAL receipt ----------------------
-        method_ok = bool(GROW_METHOD.search(raw))
-        params_ok = bool(PARAM_BEFORE.search(raw) and PARAM_AFTER.search(raw))
-        loss_ok = bool(LOSS_CONTINUITY.search(raw))
+        # [ISSUE #683 cure, Finding 2 point 3 sweep] Where the receipt carries
+        # the field the key literally names, read THAT field first (field-
+        # read, same class of fix as measured_by_instrumented_execution
+        # above); fall back to the pre-existing raw-text vocabulary regex
+        # only when the receipt predates the field (backward compatibility).
+        # Disposition of each key is listed in the PR body.
+        grow_method_field = obj.get("grow_method") if isinstance(obj, dict) else None
+        if isinstance(grow_method_field, str) and grow_method_field.strip():
+            method_ok = bool(GROW_METHOD.search(grow_method_field))
+        else:
+            method_ok = bool(GROW_METHOD.search(raw))
+
+        pcb = obj.get("param_count_before") if isinstance(obj, dict) else None
+        pca = obj.get("param_count_after") if isinstance(obj, dict) else None
+        if isinstance(pcb, (int, float)) and isinstance(pca, (int, float)):
+            params_ok = pca > pcb
+        else:
+            params_ok = bool(PARAM_BEFORE.search(raw) and PARAM_AFTER.search(raw))
+
+        lc = obj.get("loss_continuity") if isinstance(obj, dict) else None
+        lc_flag = (lc.get("training_loss_continuity_within_pre_grow_variance_envelope")
+                   if isinstance(lc, dict) else None)
+        if lc_flag is False:
+            # Same self-declaration-blind class: a receipt that explicitly
+            # declares continuity BROKEN must reject here, not be rescued by
+            # unrelated vocabulary elsewhere in the text.
+            near_miss.append(
+                f"{os.path.relpath(p, ROOT)}: loss_continuity."
+                f"training_loss_continuity_within_pre_grow_variance_envelope "
+                f"is explicitly False - grow step broke function-"
+                f"preservation, does NOT satisfy loss_continuity_across_"
+                f"grow_step CHK")
+            continue
+        elif lc_flag is True:
+            loss_ok = True
+        else:
+            loss_ok = bool(LOSS_CONTINUITY.search(raw))
+
+        # flop_saving_vs_fromscratch: the vocabulary presence check stays as
+        # a coarse pre-filter, but it is now backed by two structural checks
+        # that read the SAME block's real fields -- flop_saving_self_
+        # declares_unmeasured() (negative: rejects a self-declared estimate)
+        # and measured_by_instrumented_execution() above (positive: recomputes
+        # the FLOP totals from per_width_measurements/step_provenance and
+        # requires an exact match). See PR body disposition: "already-bound".
         flop_ok = bool(FLOP_SAVING.search(raw))
-        measured_ok = bool(MEASURED_MARKER.search(raw))
 
         checks = {
             "grow_method(net2net/stacking/expert-add/warm-start)": method_ok,
             "param_counts_before_and_after": params_ok,
             "loss_continuity_across_grow_step": loss_ok,
             "flop_saving_vs_fromscratch": flop_ok,
-            "measured_on_train_daemon(not_analytical)": measured_ok,
         }
         missing = [k for k, ok in checks.items() if not ok]
         if missing:
@@ -326,13 +528,15 @@ def main():
              "C-GROW: growth-related receipts exist but NONE satisfies CHK "
              "(needs net2net/stacking/expert-add warm-start receipt with "
              "before/after param counts + loss-continuity across grow step + "
-             "FLOP-saving vs from-scratch, measured on train daemon) -> "
-             f"{near_miss[:4]}")
+             "FLOP-saving vs from-scratch, measured_by_instrumented_execution) "
+             f"-> {near_miss[:4]}")
 
     emit("GREEN",
          f"C-GROW: measured function-preserving growth receipt present in {best} "
          f"(grow method + before/after params + loss-continuity + FLOP-saving vs "
-         f"from-scratch, measured); no invalid-token present")
+         f"from-scratch, measured_by_instrumented_execution: sha256-verified "
+         f"checkpoints + FLOP totals independently recomputed and matched); "
+         f"no invalid-token present")
 
 
 if __name__ == "__main__":
