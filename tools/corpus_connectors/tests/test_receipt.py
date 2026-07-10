@@ -81,6 +81,26 @@ class ReceiptSchemaTests(unittest.TestCase):
             self.assertEqual(r.sha256_manifest, rcpt.sha256_of_manifest(["h1", "h2"]))
 
 
+class RelativeFilesUnderTests(unittest.TestCase):
+    def test_excludes_manifests_and_dotcache_dirs_by_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+            manifests_dir = root / "_manifests"
+            manifests_dir.mkdir()
+            (manifests_dir / "20260709T000000Z-x.json").write_text("{}", encoding="utf-8")
+            # huggingface_hub client bookkeeping under a .cache/ subtree of
+            # the destination -- must never land in files[].
+            hf_cache_dir = root / ".cache" / "huggingface" / "download"
+            hf_cache_dir.mkdir(parents=True)
+            (hf_cache_dir / "some-blob.json").write_text("{}", encoding="utf-8")
+            (root / ".cache" / "CACHEDIR.TAG").write_text("Signature: 8a477f597d28d172789f06886806bc55", encoding="utf-8")
+
+            rel = rcpt.relative_files_under(root)
+            rel_strs = {p.as_posix() for p in rel}
+            self.assertEqual(rel_strs, {"data.csv"})
+
+
 class WriteReceiptTests(unittest.TestCase):
     def test_write_receipt_creates_manifest_json(self):
         with tempfile.TemporaryDirectory() as td:

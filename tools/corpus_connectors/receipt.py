@@ -216,9 +216,15 @@ def check_no_collision(path: Path) -> None:
         raise DestCollisionError(f"destination already exists: {path}")
 
 
-def relative_files_under(root: Path, exclude_dirnames: Iterable[str] = ("_manifests",)) -> List[Path]:
+def relative_files_under(root: Path, exclude_dirnames: Iterable[str] = ("_manifests", ".cache")) -> List[Path]:
     """Enumerate files under root (recursively), excluding named directories and
-    the compatibility manifest.jsonl / temp files, returned relative to root."""
+    the compatibility manifest.jsonl / temp files, returned relative to root.
+
+    `.cache` is excluded by default because HF client libraries (huggingface_hub)
+    write their own local bookkeeping (download metadata, CACHEDIR.TAG, tree
+    cache) under a `.cache/` subtree of the destination -- that is library
+    internals, not fetched corpus content, and must never enter the receipt's
+    files[]."""
     exclude = set(exclude_dirnames)
     out: List[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):

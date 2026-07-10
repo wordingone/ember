@@ -59,8 +59,16 @@ def _fetch_license(dataset_slug: str, dest_root: Path, runner=_run) -> tuple[Opt
         return None, "kaggle datasets metadata produced no dataset-metadata.json"
     try:
         payload = json.loads(meta_file.read_text(encoding="utf-8"))
+        if isinstance(payload, str):
+            # Real Kaggle CLI (v1.7.4.5, confirmed at this connector's build
+            # time) writes dataset-metadata.json double-JSON-encoded: a JSON
+            # string wrapping the object. Re-decode exactly once; a second
+            # str result is malformed, not a crash.
+            payload = json.loads(payload)
     except (OSError, json.JSONDecodeError) as exc:
         return None, f"could not parse dataset-metadata.json: {exc}"
+    if not isinstance(payload, dict):
+        return None, f"dataset-metadata.json did not decode to an object (got {type(payload).__name__})"
     licenses = payload.get("licenses") or []
     names = [lic.get("name") for lic in licenses if isinstance(lic, dict) and lic.get("name")]
     if not names:
@@ -96,7 +104,7 @@ def fetch(args: argparse.Namespace, runner=_run, creds_present=None) -> Path:
             zf.extractall(dest_root)
         z.unlink()
 
-    exclude_dirs = ("_manifests", "_kaggle_metadata_scratch")
+    exclude_dirs = ("_manifests", "_kaggle_metadata_scratch", ".cache")
     rel_paths = rcpt.relative_files_under(dest_root, exclude_dirnames=exclude_dirs)
     if not rel_paths:
         raise rcpt.BlockedError(f"no files landed under {dest_root} after kaggle datasets download")
