@@ -31,6 +31,35 @@ implements; where this file and the thread ever disagree, the thread wins:
      never a raw/theoretical checkpoint param count. Corrected reference
      point (disclosed, cross-checked, not the gate's source of truth):
      N=2,195,497,984 across 184 deduped tensors (140 Muon / 44 AdamW).
+  4. Second pre-run amendment (comment id 4939674864) -- the five verdict
+     labels get EXECUTABLE numeric predicates (an independent consumer
+     audit found the label grammar underdefined: the same profile could be
+     labeled DIRECT_COPY_FIRST, FACTOR1_FIRST, or BOTH_COMPOSE post hoc).
+     Spans are EXCLUSIVE and counterfactual-removable, never summed as
+     overlapping inclusive spans:
+       T_stage            = grad_heap_to_memmap ONLY (the staging copy a
+                             direct-copy implementation deletes; a future
+                             pinned-buffer staging hop would fold in here
+                             too -- none exists in this implementation).
+       T_host_unavoidable = grad_to_cpu_fp32 + updated_param_to_gpu (the
+                             grad D2H and updated-param H2D are UNAVOIDABLE
+                             for offload, never counted as T_stage).
+       T_inner            = inner_optimizer_step.
+       T_gpu              = fwd + loss + bwd.
+     Per-step ratios (over the >=10 active profiled steps) get bootstrap
+     95% CIs (10,000 resamples, percentile method, on the mean). SESOI
+     frozen at 0.10 of step wall, symmetric for both cure families.
+     Predicates: D = lowerCI95(T_stage/T_step) >= 0.10; F =
+     lowerCI95(T_inner/T_step) >= 0.10. D&&!F -> DIRECT_COPY_FIRST;
+     F&&!D -> FACTOR1_FIRST; D&&F -> BOTH_COMPOSE; !D&&!F &&
+     lowerCI95(T_gpu/T_step) >= 0.50 && upperCI95((T_stage+
+     T_host_unavoidable)/T_step) <= 0.15 -> GPU_COMPUTE_BOUND; else
+     INCONCLUSIVE. The receipt records every ratio, both CI bounds per
+     span, the SESOI constants, and which predicate fired. This amendment
+     SUPERSEDES this runner's own prior share-based verdict heuristic
+     (the very ambiguity the first PR revision flagged for review) -- the
+     predicate table below is the frozen spec now, not a formalization
+     of a gap.
 
 Reuse discipline (same as every other runner in this tree touching the
 offload path): this script does NOT reimplement Muon/AdamW/CE/WSD math. It
@@ -56,14 +85,13 @@ runs immediately after with the ORIGINAL uninstalled method and zero added
 instrumentation calls in the outer loop, so its step-wall is the true
 uninstrumented baseline the overhead gate compares against.
 
-Verdict-grammar decision procedure: the frozen spec names the five
-verdicts and the one hard constraint (positive GPU-compute dominance with
-low host movement is the only path to demoting the axis) but does not fix
-exact numeric thresholds for classifying DIRECT_COPY_FIRST vs FACTOR1_FIRST
-vs BOTH_COMPOSE vs INCONCLUSIVE. The thresholds below (DOMINANCE_RATIO,
-SUBSTANTIAL_SHARE, COMPUTE_DOMINANT_SHARE, LOW_HOST_MOVEMENT_SHARE) are
-this runner's own disclosed, named, revisable formalization of that gap --
-flagged for coordinator review in the PR, not asserted as pre-negotiated.
+Verdict-grammar decision procedure: EXECUTABLE per the second pre-run
+amendment (comment id 4939674864) -- see `_bootstrap_ci95`, `_per_step_
+ratios`, and `_classify_verdict_predicates` below. Every threshold (SESOI
+=0.10, GPU_COMPUTE_BOUND's 0.50 lower-CI floor and 0.15 upper-CI ceiling,
+10,000 bootstrap resamples) is the frozen thread's own number, not a
+runner-authored formalization -- there is no remaining ambiguity in this
+grammar.
 
 No git commits from this module. No founder/user names. api_spend_usd=0,
 paid_api_surface_used=false. This module launches NO GPU run by default;
@@ -107,12 +135,15 @@ REFERENCE_N_TENSORS = 184
 REFERENCE_N_MUON = 140
 REFERENCE_N_ADAMW = 44
 
-# ---- verdict-grammar decision procedure (runner-authored formalization of
-# an underspecified gap in the frozen thread -- see module docstring) ------
-COMPUTE_DOMINANT_SHARE = 0.50       # fwd+loss+bwd share of step wall
-LOW_HOST_MOVEMENT_SHARE = 0.25      # host-movement share of step wall
-SUBSTANTIAL_SHARE = 0.25            # "large enough to matter" floor
-DOMINANCE_RATIO = 2.0               # one driver must beat the other by this
+# ---- verdict-grammar decision procedure (second pre-run amendment, comment
+# id 4939674864 -- EXECUTABLE numeric predicates, frozen; every number below
+# is the thread's own, not a runner-authored formalization) ----------------
+SESOI_DIRECT = 0.10                 # T_stage/T_step lower-CI95 floor (D)
+SESOI_FACTOR = 0.10                 # T_inner/T_step lower-CI95 floor (F)
+GPU_COMPUTE_BOUND_GPU_LOWER_CI_FLOOR = 0.50    # T_gpu/T_step lower-CI95 floor
+GPU_COMPUTE_BOUND_HOST_UPPER_CI_CEIL = 0.15    # (T_stage+T_host_unavoidable)/T_step upper-CI95 ceiling
+N_BOOTSTRAP_RESAMPLES = 10_000
+BOOTSTRAP_SEED = 0                  # fixed seed -- verdicts are reproducible, not resample-noise-dependent
 VERDICT_GRAMMAR = (
     "DIRECT_COPY_FIRST", "FACTOR1_FIRST", "BOTH_COMPOSE",
     "GPU_COMPUTE_BOUND", "INCONCLUSIVE",
@@ -457,53 +488,124 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
     return gates
 
 
-def _classify_verdict(totals: dict, sum_wall: float) -> dict:
-    if sum_wall <= 0:
-        return {"verdict": "INCONCLUSIVE", "reason": "zero measured wall time"}
-    compute_share = (totals["fwd"] + totals["loss"] + totals["bwd"]) / sum_wall
-    host_movement_share = (
-        totals["grad_to_cpu_fp32"] + totals["grad_heap_to_memmap"]
-        + totals["updated_param_to_gpu"]) / sum_wall
-    optimizer_math_share = totals["inner_optimizer_step"] / sum_wall
-    shares = {
-        "gpu_compute_share": round(compute_share, 4),
-        "host_movement_share": round(host_movement_share, 4),
-        "optimizer_math_share": round(optimizer_math_share, 4),
+def _bootstrap_ci95(values: list, *, n_resamples: int = N_BOOTSTRAP_RESAMPLES,
+                    rng=None) -> dict:
+    """Bootstrap 95% CI of the MEAN of `values` (percentile method,
+    2.5/97.5 percentiles of the resampled-mean distribution). `rng` is a
+    numpy Generator shared across calls in one verdict classification so
+    every span's CI in a receipt derives from one seeded, reproducible
+    resample stream (never per-call reseeded, which would make different
+    spans' CIs independently noisy for no reason)."""
+    import numpy as np
+    rng = rng if rng is not None else np.random.default_rng(BOOTSTRAP_SEED)
+    arr = np.asarray(values, dtype=np.float64)
+    n = len(arr)
+    if n == 0:
+        return {"lower": None, "upper": None, "mean": None,
+                "n_samples": 0, "n_resamples": n_resamples}
+    idx = rng.integers(0, n, size=(n_resamples, n))
+    resample_means = arr[idx].mean(axis=1)
+    return {
+        "lower": round(float(np.percentile(resample_means, 2.5)), 6),
+        "upper": round(float(np.percentile(resample_means, 97.5)), 6),
+        "mean": round(float(arr.mean()), 6),
+        "n_samples": n, "n_resamples": n_resamples,
     }
 
-    if compute_share >= COMPUTE_DOMINANT_SHARE and host_movement_share < LOW_HOST_MOVEMENT_SHARE:
-        return {"verdict": "GPU_COMPUTE_BOUND", "shares": shares,
-                "reason": (f"gpu_compute_share={compute_share:.3f} >= "
-                           f"{COMPUTE_DOMINANT_SHARE} and host_movement_share="
-                           f"{host_movement_share:.3f} < {LOW_HOST_MOVEMENT_SHARE} "
-                           "(positive GPU-compute dominance, low host movement)")}
 
-    host_dominant = (host_movement_share >= optimizer_math_share * DOMINANCE_RATIO
-                     and host_movement_share >= SUBSTANTIAL_SHARE)
-    opt_dominant = (optimizer_math_share >= host_movement_share * DOMINANCE_RATIO
-                    and optimizer_math_share >= SUBSTANTIAL_SHARE)
-    both_substantial = (host_movement_share >= SUBSTANTIAL_SHARE
-                        and optimizer_math_share >= SUBSTANTIAL_SHARE
-                        and not host_dominant and not opt_dominant)
+def _per_step_ratios(collector: "SubphaseCollector") -> dict:
+    """Per-step EXCLUSIVE, counterfactual-removable span ratios (second
+    pre-run amendment, comment id 4939674864) -- one scalar per active
+    profiled step, never an aggregate-first ratio (aggregating first would
+    silently reweight steps of different wall time and break the per-step
+    bootstrap the amendment specifies)."""
+    stage, inner, gpu, host_unavoidable, stage_plus_host = [], [], [], [], []
+    for rec in collector.step_records:
+        w = rec["_wall"]
+        t_stage = rec["grad_heap_to_memmap"]
+        t_inner = rec["inner_optimizer_step"]
+        t_host = rec["grad_to_cpu_fp32"] + rec["updated_param_to_gpu"]
+        t_gpu = rec["fwd"] + rec["loss"] + rec["bwd"]
+        if w <= 0:
+            stage.append(0.0); inner.append(0.0); gpu.append(0.0)
+            host_unavoidable.append(0.0); stage_plus_host.append(0.0)
+            continue
+        stage.append(t_stage / w)
+        inner.append(t_inner / w)
+        gpu.append(t_gpu / w)
+        host_unavoidable.append(t_host / w)
+        stage_plus_host.append((t_stage + t_host) / w)
+    return {
+        "stage_ratio": stage, "inner_ratio": inner, "gpu_ratio": gpu,
+        "host_unavoidable_ratio": host_unavoidable,
+        "stage_plus_host_unavoidable_ratio": stage_plus_host,
+    }
 
-    if host_dominant:
-        return {"verdict": "DIRECT_COPY_FIRST", "shares": shares,
-                "reason": (f"host_movement_share={host_movement_share:.3f} "
-                           f">= {DOMINANCE_RATIO}x optimizer_math_share="
-                           f"{optimizer_math_share:.3f} and substantial")}
-    if opt_dominant:
-        return {"verdict": "FACTOR1_FIRST", "shares": shares,
-                "reason": (f"optimizer_math_share={optimizer_math_share:.3f} "
-                           f">= {DOMINANCE_RATIO}x host_movement_share="
-                           f"{host_movement_share:.3f} and substantial")}
-    if both_substantial:
-        return {"verdict": "BOTH_COMPOSE", "shares": shares,
-                "reason": (f"host_movement_share={host_movement_share:.3f} and "
-                           f"optimizer_math_share={optimizer_math_share:.3f} both "
-                           f">= {SUBSTANTIAL_SHARE}, neither dominant")}
-    return {"verdict": "INCONCLUSIVE", "shares": shares,
-            "reason": "no phase grouping reaches a decisive share under the "
-                      "configured thresholds"}
+
+def _classify_verdict_predicates(ratios: dict, *, seed: int = BOOTSTRAP_SEED) -> dict:
+    """The frozen, EXECUTABLE decision grammar (second pre-run amendment,
+    comment id 4939674864). Every threshold is the thread's own number.
+    Reached only when every validity gate has already passed (see
+    attribution_run) -- this function has no fail-closed logic of its own,
+    it classifies whatever ratios it is given."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+
+    ci_stage = _bootstrap_ci95(ratios["stage_ratio"], rng=rng)
+    ci_inner = _bootstrap_ci95(ratios["inner_ratio"], rng=rng)
+    ci_gpu = _bootstrap_ci95(ratios["gpu_ratio"], rng=rng)
+    ci_host_unavoidable = _bootstrap_ci95(ratios["host_unavoidable_ratio"], rng=rng)
+    ci_stage_plus_host = _bootstrap_ci95(ratios["stage_plus_host_unavoidable_ratio"], rng=rng)
+
+    D = ci_stage["lower"] is not None and ci_stage["lower"] >= SESOI_DIRECT
+    F = ci_inner["lower"] is not None and ci_inner["lower"] >= SESOI_FACTOR
+
+    if D and not F:
+        verdict, reason = "DIRECT_COPY_FIRST", (
+            f"D=True (lowerCI95(T_stage/T_step)={ci_stage['lower']} >= {SESOI_DIRECT}), "
+            f"F=False (lowerCI95(T_inner/T_step)={ci_inner['lower']} < {SESOI_FACTOR})")
+    elif F and not D:
+        verdict, reason = "FACTOR1_FIRST", (
+            f"F=True (lowerCI95(T_inner/T_step)={ci_inner['lower']} >= {SESOI_FACTOR}), "
+            f"D=False (lowerCI95(T_stage/T_step)={ci_stage['lower']} < {SESOI_DIRECT})")
+    elif D and F:
+        verdict, reason = "BOTH_COMPOSE", (
+            f"D=True and F=True (lowerCI95(T_stage/T_step)={ci_stage['lower']}, "
+            f"lowerCI95(T_inner/T_step)={ci_inner['lower']}, both >= 0.10)")
+    elif (ci_gpu["lower"] is not None and ci_gpu["lower"] >= GPU_COMPUTE_BOUND_GPU_LOWER_CI_FLOOR
+          and ci_stage_plus_host["upper"] is not None
+          and ci_stage_plus_host["upper"] <= GPU_COMPUTE_BOUND_HOST_UPPER_CI_CEIL):
+        verdict, reason = "GPU_COMPUTE_BOUND", (
+            f"D=False, F=False, lowerCI95(T_gpu/T_step)={ci_gpu['lower']} >= "
+            f"{GPU_COMPUTE_BOUND_GPU_LOWER_CI_FLOOR} and "
+            f"upperCI95((T_stage+T_host_unavoidable)/T_step)={ci_stage_plus_host['upper']} "
+            f"<= {GPU_COMPUTE_BOUND_HOST_UPPER_CI_CEIL} (positive GPU-compute dominance, "
+            "low host movement)")
+    else:
+        verdict, reason = "INCONCLUSIVE", (
+            f"D=False, F=False, and the GPU_COMPUTE_BOUND predicate did not fire "
+            f"(lowerCI95(T_gpu/T_step)={ci_gpu['lower']}, "
+            f"upperCI95((T_stage+T_host_unavoidable)/T_step)={ci_stage_plus_host['upper']})")
+
+    return {
+        "verdict": verdict,
+        "reason": reason,
+        "predicates": {"D_direct_copy": D, "F_factor1": F},
+        "sesoi": {
+            "SESOI_direct": SESOI_DIRECT, "SESOI_factor": SESOI_FACTOR,
+            "gpu_compute_bound_gpu_lower_ci_floor": GPU_COMPUTE_BOUND_GPU_LOWER_CI_FLOOR,
+            "gpu_compute_bound_host_upper_ci_ceil": GPU_COMPUTE_BOUND_HOST_UPPER_CI_CEIL,
+        },
+        "ci95": {
+            "T_stage_over_T_step": ci_stage,
+            "T_inner_over_T_step": ci_inner,
+            "T_gpu_over_T_step": ci_gpu,
+            "T_host_unavoidable_over_T_step": ci_host_unavoidable,
+            "T_stage_plus_T_host_unavoidable_over_T_step": ci_stage_plus_host,
+        },
+        "n_bootstrap_resamples": N_BOOTSTRAP_RESAMPLES,
+        "bootstrap_seed": seed,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -594,9 +696,9 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     failing = [name for name, g in gates.items() if not g["passed"]]
 
     totals = collector.phase_totals()
-    sum_wall = sum(collector.step_walls())
+    ratios = _per_step_ratios(collector)
     if all_passed:
-        verdict_result = _classify_verdict(totals, sum_wall)
+        verdict_result = _classify_verdict_predicates(ratios)
     else:
         verdict_result = {"verdict": "INVALID", "reason": "one or more validity "
                           f"gates failed (fail-closed, no partial credit): {failing}"}
@@ -615,7 +717,11 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
         "prereg": {
             "amendment_comment_id": 4938595840,
             "status": "PREREG_FROZEN",
-            "pre_run_amendment": "tied-tensor erratum (realized-numel binding)",
+            "pre_run_amendments": [
+                "4939491354: tied-tensor erratum (realized-numel binding)",
+                "4939674864: executable verdict-grammar predicates (SESOI, "
+                "bootstrap CIs, D/F predicate table)",
+            ],
         },
         "mode": {"live": live, "device": device, "n_warmup": n_warmup, "n_active": n_active},
         "optimizer_routing": routing,
@@ -629,19 +735,13 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
         },
         "subphase_totals_s": totals,
         "subphase_byte_totals": collector.byte_totals(),
+        "per_step_span_ratios": ratios,
         "profiled_step_walls_s": collector.step_walls(),
         "unprofiled_step_walls_s": unprofiled_walls,
         "gates": gates,
         "gates_all_passed": all_passed,
         "failing_gates": failing,
         "verdict_grammar": list(VERDICT_GRAMMAR),
-        "verdict_decision_thresholds": {
-            "COMPUTE_DOMINANT_SHARE": COMPUTE_DOMINANT_SHARE,
-            "LOW_HOST_MOVEMENT_SHARE": LOW_HOST_MOVEMENT_SHARE,
-            "SUBSTANTIAL_SHARE": SUBSTANTIAL_SHARE,
-            "DOMINANCE_RATIO": DOMINANCE_RATIO,
-            "disclosed": "runner-authored formalization; not in the frozen thread text",
-        },
         "calibration_pinned_vs_pageable": calibration,
         "vram_at_end": vram,
         "ce_impl": ce_impl,
@@ -651,6 +751,77 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
         **verdict_result,
     }
     return receipt
+
+
+# ---------------------------------------------------------------------------
+# Verdict-predicate selftest -- one synthetic profile per verdict class.
+# The real attribution_run() CPU selftest below can NEVER exercise
+# _classify_verdict_predicates (gates never all-pass without a CUDA device,
+# so the verdict grammar is unreachable from that path on this box). This
+# is the second pre-run amendment's own requirement (comment id
+# 4939674864: "the runner's selftest must include one synthetic profile
+# per verdict class") -- tests the predicate table directly and
+# independently of the gate pipeline.
+# ---------------------------------------------------------------------------
+
+def _synthetic_ratio_fixture(*, stage: float, inner: float, gpu: float,
+                             host_unavoidable: float, n_steps: int = 10,
+                             jitter: float = 0.01, seed: int = 0) -> dict:
+    """n_steps per-step ratio samples, each target +/- a small seeded
+    jitter (bootstrap CI must see real per-step variance, not a point
+    mass). stage_plus_host is DERIVED per step from the jittered stage/host
+    values, not independently jittered -- the real per-step data has the
+    same relationship (see _per_step_ratios)."""
+    import random
+    rnd = random.Random(seed)
+
+    def _jseries(target: float) -> list:
+        return [max(0.0, target + rnd.uniform(-jitter, jitter)) for _ in range(n_steps)]
+
+    stage_s, inner_s, gpu_s, host_s = (
+        _jseries(stage), _jseries(inner), _jseries(gpu), _jseries(host_unavoidable))
+    return {
+        "stage_ratio": stage_s, "inner_ratio": inner_s, "gpu_ratio": gpu_s,
+        "host_unavoidable_ratio": host_s,
+        "stage_plus_host_unavoidable_ratio": [s + h for s, h in zip(stage_s, host_s)],
+    }
+
+
+# Targets are chosen with generous margin (>=0.07) from every threshold
+# (0.10 SESOI, 0.50 GPU floor, 0.15 host ceiling) so +/-0.01 per-step
+# jitter and bootstrap resample noise can never flip the classification --
+# these fixtures test the PREDICATE LOGIC, not threshold-boundary
+# sensitivity.
+_VERDICT_FIXTURES = {
+    "DIRECT_COPY_FIRST": dict(stage=0.30, inner=0.02, gpu=0.40, host_unavoidable=0.28),
+    "FACTOR1_FIRST": dict(stage=0.02, inner=0.35, gpu=0.40, host_unavoidable=0.23),
+    "BOTH_COMPOSE": dict(stage=0.20, inner=0.20, gpu=0.30, host_unavoidable=0.30),
+    "GPU_COMPUTE_BOUND": dict(stage=0.03, inner=0.03, gpu=0.86, host_unavoidable=0.08),
+    "INCONCLUSIVE": dict(stage=0.05, inner=0.05, gpu=0.40, host_unavoidable=0.50),
+}
+
+
+def _selftest_verdict_predicates() -> None:
+    for i, (expected_verdict, targets) in enumerate(_VERDICT_FIXTURES.items()):
+        ratios = _synthetic_ratio_fixture(seed=100 + i, **targets)
+        result = _classify_verdict_predicates(ratios)
+        assert result["verdict"] == expected_verdict, (
+            f"predicate-table fixture {expected_verdict!r} classified as "
+            f"{result['verdict']!r} instead -- reason: {result['reason']}")
+        # every ratio + both CI bounds per span + SESOI constants + fired
+        # predicate must be present (amendment's own receipt requirement).
+        for span_key in ("T_stage_over_T_step", "T_inner_over_T_step",
+                         "T_gpu_over_T_step", "T_host_unavoidable_over_T_step",
+                         "T_stage_plus_T_host_unavoidable_over_T_step"):
+            ci = result["ci95"][span_key]
+            assert ci["lower"] is not None and ci["upper"] is not None, (expected_verdict, span_key)
+        assert set(result["sesoi"]) == {
+            "SESOI_direct", "SESOI_factor", "gpu_compute_bound_gpu_lower_ci_floor",
+            "gpu_compute_bound_host_upper_ci_ceil"}
+        assert "D_direct_copy" in result["predicates"] and "F_factor1" in result["predicates"]
+    print("ATTRIBUTION_702_VERDICT_PREDICATES_SELFTEST_PASS "
+          f"fixtures={list(_VERDICT_FIXTURES.keys())} "
+          f"n_bootstrap_resamples={N_BOOTSTRAP_RESAMPLES}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -723,12 +894,22 @@ def _selftest() -> int:
     assert _coa.CPUOffloadOptimizer.step is _ORIG_CPU_OFFLOAD_STEP, (
         "instrumented step leaked past the profiled block -- uninstall failed")
 
+    # per_step_span_ratios is populated even on a gates-failed (INVALID) run
+    # -- the amendment's ratios/CI machinery is independent of the gate
+    # pipeline; only the LABEL (verdict) is gated.
+    assert set(receipt["per_step_span_ratios"]) == {
+        "stage_ratio", "inner_ratio", "gpu_ratio", "host_unavoidable_ratio",
+        "stage_plus_host_unavoidable_ratio"}
+    assert len(receipt["per_step_span_ratios"]["stage_ratio"]) == 10
+
     print("ATTRIBUTION_702_SELFTEST_PASS "
           f"verdict={receipt['verdict']} failing_gates={receipt['failing_gates']} "
           f"n_optimizer_subphase_s={sum(totals[p] for p in OPTIMIZER_SUBPHASES):.6f} "
           f"n_fwd_loss_bwd_s={sum(totals[p] for p in FWD_LOSS_BWD_PHASES):.6f} "
           f"realized_numel_per_step={gates['exact_bytes']['realized_numel_per_step']} "
           f"closure_frac={gates['closure']['closure_frac']}", flush=True)
+
+    _selftest_verdict_predicates()
     return 0
 
 
