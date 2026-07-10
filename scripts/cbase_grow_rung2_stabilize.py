@@ -66,6 +66,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -536,6 +537,26 @@ class LineageResumeMismatch(RuntimeError):
     frozen block-04 step-806 checkpoint and no dated deviation is declared."""
 
 
+_DEVIATION_DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
+
+
+def _deviation_dated(deviation: str) -> bool:
+    """ember #665 audit cure -- a deviation entry only counts as "declared" if
+    it starts with a real calendar date (YYYY-MM-DD). `not deviation` alone
+    let any non-empty string (x, not-a-date, 2026-99-99 nonsense) through as
+    LINEAGE_DEVIATION_DECLARED; this parses the leading date prefix and
+    requires it to construct as an actual datetime.date, so an impossible
+    date (e.g. month 99) is rejected the same as a missing one."""
+    m = _DEVIATION_DATE_PREFIX_RE.match(deviation)
+    if not m:
+        return False
+    try:
+        datetime.strptime(m.group(1), "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
 def assert_lineage_resume(resume_step: int, start_block: int,
                           *, deviation: str | None = None) -> dict:
     """ember #627 point 7 -- structural lineage pin. When the RUN loop starts
@@ -551,6 +572,7 @@ def assert_lineage_resume(resume_step: int, start_block: int,
     -- it only guards the one frozen boundary the audit named."""
     pinned = (start_block == LINEAGE_LEG_START_BLOCK)
     ok = (resume_step == LINEAGE_RESUME_STEP)
+    dated = bool(deviation) and _deviation_dated(deviation)
     if pinned and not ok and not deviation:
         raise LineageResumeMismatch(
             f"blocks-{LINEAGE_LEG_START_BLOCK}-{LINEAGE_LEG_END_BLOCK} resume must "
@@ -558,6 +580,12 @@ def assert_lineage_resume(resume_step: int, start_block: int,
             f"checkpoint, got resume_step={resume_step} (step-796 == block-3, the "
             f"withdrawn prereg's silent rollback). Supply a dated deviation entry to "
             f"resume from a different step. Stopping fail-closed.")
+    if pinned and not ok and deviation and not dated:
+        raise LineageResumeMismatch(
+            f"blocks-{LINEAGE_LEG_START_BLOCK}-{LINEAGE_LEG_END_BLOCK} resume deviation "
+            f"entry {deviation!r} does not start with a valid calendar date "
+            f"(YYYY-MM-DD); a malformed or impossible date is not a declared "
+            f"deviation. Stopping fail-closed.")
     return {
         "lineage_pinned": pinned,
         "expected_resume_step": LINEAGE_RESUME_STEP,
