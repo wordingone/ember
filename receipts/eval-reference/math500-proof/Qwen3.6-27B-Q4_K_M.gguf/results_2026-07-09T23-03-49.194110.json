@@ -1,0 +1,124 @@
+{
+  "results": {
+    "hendrycks_math500": {
+      "name": "hendrycks_math500",
+      "alias": "hendrycks_math500",
+      "sample_len": 500,
+      "exact_match,none": 0.138,
+      "exact_match_stderr,none": 0.015439843831953457
+    }
+  },
+  "group_subtasks": {},
+  "configs": {
+    "hendrycks_math500": {
+      "task": "hendrycks_math500",
+      "dataset_path": "HuggingFaceH4/MATH-500",
+      "dataset_name": "default",
+      "test_split": "test",
+      "process_docs": "def process_docs(dataset: datasets.Dataset) -> datasets.Dataset:\n    def _process_doc(doc: dict) -> dict:\n        out_doc = {\n            \"problem\": doc[\"problem\"],\n            \"solution\": doc[\"solution\"],\n            \"answer\": remove_boxed(last_boxed_only_string(doc[\"solution\"])),\n        }\n        return out_doc\n\n    return dataset.map(_process_doc)\n",
+      "doc_to_text": "Problem: {{problem}}\nAnswer:",
+      "doc_to_target": "{{answer}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: List[str]) -> Dict[str, int]:\n    retval = 0\n    indices = [pos for pos, char in enumerate(results[0]) if char == \"$\"]\n    if len(indices) <= 1:\n        answer = results[0]\n    else:\n        answer = results[0][indices[0] + 1 : indices[-1]]\n\n    if is_equiv(answer, remove_boxed(last_boxed_only_string(doc[\"solution\"]))):\n        retval = 1\n\n    results = {\n        \"exact_match\": retval,\n    }\n    return results\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": "<function process_docs at 0x00000232172C9B40>",
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "Problem: {{problem}}\nAnswer:",
+        "doc_to_choice": null,
+        "doc_to_target": "{{answer}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "exact_match",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "Problem:"
+        ],
+        "do_sample": false,
+        "temperature": 0.0
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 1.0,
+        "model": "Qwen3.6-27B-Q4_K_M.gguf",
+        "base_url": "http://127.0.0.1:8082/v1/completions",
+        "num_concurrent": 2,
+        "max_retries": 6,
+        "tokenizer_backend": null,
+        "config_source": "<REPO_ROOT>\\.claude\\worktrees\\evalref47\\.venv\\lib\\site-packages\\lm_eval\\tasks\\hendrycks_math\\hendrycks_math500.yaml"
+      }
+    }
+  },
+  "versions": {
+    "hendrycks_math500": 1.0
+  },
+  "n-shot": {
+    "hendrycks_math500": 0
+  },
+  "higher_is_better": {
+    "hendrycks_math500": {
+      "exact_match": true
+    }
+  },
+  "n-samples": {
+    "hendrycks_math500": {
+      "original": 500,
+      "effective": 500
+    }
+  },
+  "config": {
+    "model": "local-completions",
+    "model_args": {
+      "model": "Qwen3.6-27B-Q4_K_M.gguf",
+      "base_url": "http://127.0.0.1:8082/v1/completions",
+      "num_concurrent": 2,
+      "max_retries": 6,
+      "tokenizer_backend": null
+    },
+    "batch_size": 1,
+    "batch_sizes": [],
+    "device": "cuda:0",
+    "use_cache": null,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": {},
+    "random_seed": 0,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "git_hash": "invariant-genesis-184-g5a0f441",
+  "date": 1783662248.9743302,
+  "pretty_env_info": "N/A (torch not installed)",
+  "transformers_version": "5.13.0",
+  "lm_eval_version": "0.4.12",
+  "upper_git_hash": null,
+  "task_hashes": {
+    "hendrycks_math500": "51446836f67bdd2e36dcbc0c14ce42bce7509b7542e89ae6e8f000c000b09eef"
+  },
+  "model_source": "local-completions",
+  "model_name": "Qwen3.6-27B-Q4_K_M.gguf",
+  "model_name_sanitized": "Qwen3.6-27B-Q4_K_M.gguf",
+  "system_instruction": null,
+  "system_instruction_sha": null,
+  "fewshot_as_multiturn": null,
+  "chat_template": null,
+  "chat_template_sha": null,
+  "total_evaluation_time_seconds": "1254.9914958999943"
+}

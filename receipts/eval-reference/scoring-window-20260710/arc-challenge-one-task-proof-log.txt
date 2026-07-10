@@ -1,0 +1,25 @@
+[07:52:21] arc_challenge one-task proof, model_args={'model': 'Qwen3.6-27B-Q4_K_M.gguf', 'base_url': 'http://127.0.0.1:8082/v1/completions', 'num_concurrent': 8, 'max_retries': 6, 'tokenizer_backend': None}
+<PYTHON_USER_HOME>\AppData\Roaming\Python\Python310\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (1.26.20) or chardet (6.0.0.post1)/charset_normalizer (3.4.3) doesn't match a supported version!
+  warnings.warn(
+
+  0%|          | 0/5 [00:00<?, ?it/s]
+100%|##########| 5/5 [00:00<?, ?it/s]
+
+Tokenizing inputs:   0%|          | 0/20 [00:00<?, ?it/s]
+Tokenizing inputs: 100%|##########| 20/20 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "<REPO_ROOT>\scratch\evalref\run_arc_hellaswag_one_task_proof.py", line 25, in <module>
+    results = lm_eval.simple_evaluate(
+  File "<PYTHON_USER_HOME>\AppData\Roaming\Python\Python310\site-packages\lm_eval\utils.py", line 575, in _wrapper
+    return fn(*args, **kwargs)
+  File "<PYTHON_USER_HOME>\AppData\Roaming\Python\Python310\site-packages\lm_eval\evaluator.py", line 358, in simple_evaluate
+    results = evaluate(
+  File "<PYTHON_USER_HOME>\AppData\Roaming\Python\Python310\site-packages\lm_eval\utils.py", line 575, in _wrapper
+    return fn(*args, **kwargs)
+  File "<PYTHON_USER_HOME>\AppData\Roaming\Python\Python310\site-packages\lm_eval\evaluator.py", line 596, in evaluate
+    resps = getattr(lm, reqtype)(cloned_reqs)
+  File "<PYTHON_USER_HOME>\AppData\Roaming\Python\Python310\site-packages\lm_eval\api\model.py", line 446, in loglikelihood
+    return self._loglikelihood_tokens(new_reqs, disable_tqdm=disable_tqdm)
+  File "<PYTHON_USER_HOME>\AppData\Roaming\Python\Python310\site-packages\lm_eval\models\api_models.py", line 634, in _loglikelihood_tokens
+    assert self.tokenizer is not None, (
+AssertionError: Tokenizer is required for loglikelihood tasks to compute context lengths.
