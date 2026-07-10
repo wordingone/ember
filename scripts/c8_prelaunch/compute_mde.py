@@ -10,6 +10,33 @@ terminal analysis itself -- the terminal verdict still uses the amendment's own
 paired cluster-BCa-bootstrap machinery. The MDE only answers "could an effect of
 this size even be detected at n=5", using variance evidence that already exists.
 
+SCHEMA v2 (issue #585 cure; coordinator disposition comment 4931087645 on #585,
+points 1-3, SIGN-CORRECTED by the coordinator's tighten-only amendment comments
+4931112873 / 4931141583 / 4931147752, same thread, same day) -- BREAKING,
+replaces the raw-only v1 schema
+--------------------------------------------------------------------------------
+Independent audit finding (CONFIRMED): the v1 schema stored a single raw-loss
+array per receipt with no pairing structure, so sigma_seed was computed from
+the ARM'S MARGINAL distribution -- order-invariant, hence blind to how each
+treatment seed paired with its control seed. Two datasets with identical
+marginal distributions but different pairing structure produced IDENTICAL
+MDEs, because SD(delta) = sqrt(SD_A^2 + SD_B^2 - 2*Cov(A,B)) and the covariance
+term is not recoverable from marginals alone. Counterexample (reproduced in
+test_mde_paired_covariance.py): A=[0,1,2,3,4], B+=A+0.1, B-=reverse(B+) --
+identical marginal SD (~1.5811388) for B+ and B-, yet paired-delta SD is
+~0 (aligned pairing) vs ~3.1622777 (reversed pairing). SD/MDE magnitude is
+negation-invariant, so this covariance finding is unaffected by the sign
+amendment below.
+
+Sign-correction amendment (2026-07-10, same-day tighten-only, comment
+4931147752): the #123 falsifier-fill registration (comment 4928342201) fixes
+the terminal paired statistic as delta_i = L_control(i) - L_treatment(i),
+positive = treatment better. The original disposition (4931087645) wrote the
+opposite sign (treatment - control); the amendment corrects it before any
+implementation, adds a mandatory 'delta_convention' field so the sign is a
+checked field, not a comment, and requires the consumer to recompute the
+SIGNED delta (sign included) from the paired arms.
+
 INPUT ENUMERATION (the "receipt-enumeration half")
 ---------------------------------------------------
 Scans --receipts-dir (default: receipts/) for JSON files whose FILENAME contains
@@ -20,19 +47,38 @@ Every one of these receipts is PRE-FREEZE / development-only under A1 (quarantin
 for any CLAIM purpose) -- but computing power (this tool), not a claim, is exactly
 what the amendment authorizes reading them for.
 
-A matched filename is checked against the "usable variance receipt" schema this
-tool defines (no such schema existed in the repo before this issue; it is fixed
-here and any future dev receipt wanting to feed the MDE must conform to it):
+A matched filename is checked against the schema v2 "usable variance receipt"
+shape (replaces the v1 raw-only shape; any future dev receipt wanting to feed
+the MDE must conform to this):
 
     {
-      "comparison_class": <str>,             # e.g. "f1_mechanism", "f2_criterion", "f3_deletion"
-      "per_seed_eval_loss": [<float>, ...]    # >=2 finite values, nats, one per training seed
-      ... (any other fields ignored)
+      "comparison_class": <str>,                 # e.g. "f1_mechanism", "f2_criterion", "f3_deletion"
+      "seed_id": [<str|int>, ...],                # >=2 stable per-seed identifiers
+      "control_eval_loss": [<float>, ...],        # same length as seed_id, nats
+      "treatment_eval_loss": [<float>, ...],       # same length as seed_id, nats, paired to control by index
+      "delta_convention": "control_minus_treatment",  # required literal; the sign is a checked field
+      "per_seed_delta_nats": [<float>, ...]        # = control_eval_loss[i] - treatment_eval_loss[i]; recomputed and checked, sign included
+      ... (any other fields, including a legacy per_seed_eval_loss marginal, ignored)
     }
 
-A file matching a filename marker but failing the schema (missing field, <2 seed
-values, non-finite values, non-numeric values) is recorded as SKIPPED with a
-reason and does NOT count toward the usable total.
+A file matching a filename marker but failing schema v2 is recorded as SKIPPED
+with a reason and does NOT count toward the usable total, in every one of these
+cases (points 2 + 3 of the disposition, sign-corrected):
+
+  - raw-only: carries 'per_seed_eval_loss' but none of the schema v2 pairing
+    fields -- covariance is not recoverable from a marginal alone, so this
+    receipt can NEVER be made usable regardless of how many seeds it has.
+  - missing/invalid 'seed_id' / 'control_eval_loss' / 'treatment_eval_loss' /
+    'per_seed_delta_nats', non-finite values, or unequal array lengths.
+  - missing/invalid 'delta_convention' (must equal the literal string
+    'control_minus_treatment' -- any other value, including the pre-amendment
+    'treatment_minus_control', is rejected).
+  - fewer than 2 seeds.
+  - 'per_seed_delta_nats' does not match the SIGNED value recomputed as
+    control_eval_loss[i] - treatment_eval_loss[i] (within float tolerance,
+    sign included) -- the tool never trusts an emitted delta it cannot itself
+    reproduce from the paired fields, and a sign-flipped delta is exactly as
+    unusable as a magnitude mismatch.
 
 If fewer than 2 usable variance receipts remain, this script prints a specific
 error to stderr, writes NO mde-*.json receipt, and exits 1. The missing-variance
@@ -43,26 +89,45 @@ launch. Never fabricate sigma_seed from fewer than 2 sources.
 MDE FORMULA
 -----------
 Per usable receipt: sigma_seed = sample standard deviation (ddof=1) of its
-per_seed_eval_loss array. sigma_seed_per_class pools receipts sharing the same
-comparison_class using the standard pooled-variance formula:
+per_seed_delta_nats array (the SIGNED PAIRED DELTAS, control - treatment, per
+issue #585's cure -- never the raw marginal arrays). sigma_seed_per_class
+pools receipts sharing the same
+comparison_class using the standard pooled-variance formula, unchanged in form,
+now applied over delta-SDs:
 
     sigma_pooled = sqrt( sum_i[(n_i - 1) * sigma_i^2] / sum_i[n_i - 1] )
 
 The terminal design MDE at n (default 5, the amendment's fixed cheap-rung seed
-count) is the standard closed-form minimum detectable effect for a one-sample /
-paired mean test (the F1/F2 terminal grammar tests the mean of n per-seed paired
-deltas against 0), Student-t based, two-sided alpha (default 0.05, matching the
-amendment's CI95) and power (default 0.80, the field-standard convention),
-df = n - 1:
+count) is the EXACT minimum detectable effect for a one-sample / paired mean
+test (the F1/F2 terminal grammar tests the mean of n per-seed paired deltas
+against 0), two-sided alpha (default 0.05, matching the amendment's CI95) and
+power (default 0.80, the field-standard convention), df = n - 1:
 
-    SE  = sigma_seed / sqrt(n)
-    MDE = SE * ( t.ppf(1 - alpha/2, df) + t.ppf(power, df) )
+    SE        = sigma_seed / sqrt(n)
+    t_crit    = t.ppf(1 - alpha/2, df)
+    ncp_exact = root of  nct.cdf(-t_crit, df, ncp) + nct.sf(t_crit, df, ncp) = power
+    MDE       = SE * ncp_exact
+
+Exact-power addendum (issue #585, independent-audit comment 4931301214): the
+central-t shortcut MDE = SE * (t.ppf(1-alpha/2,df) + t.ppf(power,df)) is
+anti-conservative -- at n=5/alpha=0.05/power=0.80 it achieves only ~0.7913
+power (ncp 3.7174096824423772 vs the exact 3.761059553825027, MDE understated
+by ~1.17%). Exact power of a t-test with estimated variance follows the
+noncentral-t distribution, so the noncentrality is obtained by an exact root
+solve; the tool never labels an anti-conservative approximation as the named
+power.
 
 This is a pre-launch POWER estimate, distinct from -- and never a substitute for
 -- the amendment's frozen terminal CI procedure (cluster-resampled paired BCa
 bootstrap, B=10000, rng_seed=20260709), which is what actually scores F1/F2/F3.
 The formula, and every input that fed it, is receipted so a hostile reviewer can
 recompute sigma_seed_per_class and mde_at_n5 from the receipt alone.
+
+POST-CURE REPLAY (binding, disposition on #585): the MDE obligation, and any
+output of the raw-schema (v1) tool, was BLOCKED as C8 launch/power evidence
+until this cure landed. Post-cure replay by the independent-audit-lane is
+BINDING before MDE output regains evidence status -- this cure PR does not
+itself restore that status.
 
 USAGE
 -----
@@ -116,7 +181,17 @@ def _extract_variance_source(path: Path):
     """Parse one candidate file and return (usable_entry, skip_reason).
 
     Exactly one of the two return values is non-None.
-    usable_entry: {"file", "comparison_class", "n_seeds", "sigma_seed", "seeds"}
+    usable_entry: {"file", "comparison_class", "n_seeds", "sigma_seed",
+                   "seed_id", "per_seed_delta_nats"}
+
+    Schema v2 (issue #585 cure, disposition points 1-3, sign-corrected by
+    the coordinator's 2026-07-10 tighten-only amendment, comment 4931147752):
+    sigma_seed is the sample sd of the SIGNED PAIRED DELTAS (control minus
+    treatment per seed, positive = treatment better -- matching the #123
+    terminal grammar's delta_i = L_control(i) - L_treatment(i)), never a raw
+    marginal array -- SD(delta) = sqrt(SD_A^2 + SD_B^2 - 2*Cov(A,B)) is not
+    recoverable from marginals, so a schema that only stores one marginal
+    array cannot support a paired MDE regardless of how it is consumed.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -131,23 +206,80 @@ def _extract_variance_source(path: Path):
     if not isinstance(cls, str) or not cls:
         return None, "missing/invalid 'comparison_class'"
 
-    seeds = d.get("per_seed_eval_loss")
-    if not isinstance(seeds, list):
-        return None, "missing/invalid 'per_seed_eval_loss' (not a list)"
+    # Point 3: raw-only receipts (v1 shape: a marginal 'per_seed_eval_loss'
+    # array with NO pairing structure) are never usable -- the rejection is
+    # itself the receipted outcome (this reason string lands in `skipped`).
+    _PAIR_FIELDS = ("control_eval_loss", "treatment_eval_loss", "per_seed_delta_nats")
+    if "per_seed_eval_loss" in d and not any(f in d for f in _PAIR_FIELDS):
+        return None, (
+            "schema v2 rejection: raw-only 'per_seed_eval_loss' carries no pairing "
+            "structure (control_eval_loss/treatment_eval_loss/per_seed_delta_nats "
+            "all absent) -- paired covariance is not recoverable from a marginal "
+            "array; this receipt can never be usable for MDE (issue #585, point 3)"
+        )
 
-    if not all(_is_finite_number(v) for v in seeds):
-        return None, "'per_seed_eval_loss' contains non-finite/non-numeric values"
+    seed_ids = d.get("seed_id")
+    if not isinstance(seed_ids, list) or not seed_ids:
+        return None, "missing/invalid 'seed_id' (schema v2 requires a stable seed_id list)"
 
-    if len(seeds) < 2:
-        return None, f"'per_seed_eval_loss' has {len(seeds)} value(s), need >=2 to compute sd"
+    control = d.get("control_eval_loss")
+    if not isinstance(control, list) or not all(_is_finite_number(v) for v in control):
+        return None, "missing/invalid 'control_eval_loss' (schema v2 requires a finite paired array)"
 
-    sigma_seed = statistics.stdev(seeds)  # sample sd, ddof=1
+    treatment = d.get("treatment_eval_loss")
+    if not isinstance(treatment, list) or not all(_is_finite_number(v) for v in treatment):
+        return None, "missing/invalid 'treatment_eval_loss' (schema v2 requires a finite paired array)"
+
+    deltas = d.get("per_seed_delta_nats")
+    if not isinstance(deltas, list) or not all(_is_finite_number(v) for v in deltas):
+        return None, "missing/invalid 'per_seed_delta_nats' (schema v2 requires a finite paired-delta array)"
+
+    # Sign-correction amendment (2026-07-10, comment 4931147752, point 2):
+    # the delta_convention field is required and checked -- the sign is a
+    # field, not a comment. Only the exact literal is accepted; the
+    # pre-amendment 'treatment_minus_control' sign is explicitly rejected.
+    convention = d.get("delta_convention")
+    if convention != "control_minus_treatment":
+        return None, (
+            "missing/invalid 'delta_convention': schema v2 requires the exact "
+            f"literal 'control_minus_treatment' (issue #585 sign-correction "
+            f"amendment, comment 4931147752); got {convention!r}"
+        )
+
+    n = len(seed_ids)
+    if not (len(control) == n and len(treatment) == n and len(deltas) == n):
+        return None, (
+            f"schema v2 length mismatch: seed_id={n} control_eval_loss={len(control)} "
+            f"treatment_eval_loss={len(treatment)} per_seed_delta_nats={len(deltas)} "
+            f"(all four arrays must be equal length)"
+        )
+
+    if n < 2:
+        return None, f"'seed_id' has {n} value(s), need >=2 to compute sd"
+
+    # Point 2 (sign-corrected): recompute the SIGNED delta from the paired
+    # fields as control - treatment (positive = treatment better, matching
+    # #123's registered delta_i = L_control - L_treatment). A mismatch --
+    # sign included -- means the receipt's own delta field cannot be
+    # trusted, so it is SKIPPED rather than silently accepted.
+    recomputed = [c - t for c, t in zip(control, treatment)]
+    for i, (r, e) in enumerate(zip(recomputed, deltas)):
+        if not math.isclose(r, e, rel_tol=1e-9, abs_tol=1e-9):
+            return None, (
+                f"per_seed_delta_nats mismatch at seed index {i}: recomputed "
+                f"control-treatment={r!r} != emitted value={e!r} (issue #585, "
+                f"point 2, sign per #123 terminal grammar / comment 4931147752)"
+            )
+
+    sigma_seed = statistics.stdev(deltas)  # sample sd (ddof=1) of SIGNED PAIRED DELTAS
     return {
         "file": str(path),
         "comparison_class": cls,
-        "n_seeds": len(seeds),
+        "n_seeds": n,
         "sigma_seed": sigma_seed,
-        "seeds": list(seeds),
+        "seed_id": list(seed_ids),
+        "delta_convention": "control_minus_treatment",
+        "per_seed_delta_nats": list(deltas),
     }, None
 
 
@@ -195,27 +327,69 @@ def pooled_sigma_per_class(usable):
     return out
 
 
-def mde_one_sample(sigma_seed: float, n: int, alpha: float, power: float) -> float:
-    """Closed-form MDE for a one-sample/paired t-test at fixed n, alpha, power.
+def two_sided_power_at_ncp(ncp: float, df: int, t_crit: float) -> float:
+    """Exact achieved two-sided power of a t-test at noncentrality ncp:
+    P(T < -t_crit) + P(T > t_crit) where T ~ noncentral-t(df, ncp)."""
+    from scipy.stats import nct
 
-    SE = sigma_seed / sqrt(n); MDE = SE * (t_(1-alpha/2, df) + t_(power, df)),
-    df = n - 1. Requires scipy.stats.t (stdlib has no t-quantile function).
+    return float(nct.cdf(-t_crit, df, ncp) + nct.sf(t_crit, df, ncp))
+
+
+def mde_one_sample(sigma_seed: float, n: int, alpha: float, power: float) -> float:
+    """Exact MDE for a one-sample/paired t-test at fixed n, alpha, power.
+
+    Exact-power addendum (issue #585, independent-audit comment 4931301214):
+    the central-t shortcut ncp ~= t_(1-alpha/2, df) + t_(power, df) is
+    ANTI-CONSERVATIVE -- at n=5/alpha=0.05/power=0.80 it achieves only
+    ~0.7913 power (understating the MDE by ~1.17%), because exact power of
+    a t-test with estimated variance follows the NONCENTRAL-t distribution.
+    The consumer must not label an anti-conservative approximation as exact
+    80% power, so the noncentrality is obtained by an exact root solve of
+
+        power_achieved(ncp) = nct.cdf(-t_crit, df, ncp) + nct.sf(t_crit, df, ncp)
+
+    for power_achieved(ncp) = power (brentq; power_achieved is monotone
+    increasing in ncp >= 0, and power_achieved(0) = alpha < power gives a
+    valid lower bracket). MDE = SE * ncp_exact with SE = sigma_seed / sqrt(n),
+    df = n - 1. Requires scipy (stdlib has no t / noncentral-t machinery).
     """
+    from scipy.optimize import brentq
     from scipy.stats import t as student_t
 
     if n < 2:
         raise ValueError("mde_one_sample: n must be >= 2 (need df = n-1 >= 1)")
+    if not (0.0 < alpha < 1.0 and 0.0 < power < 1.0 and power > alpha):
+        raise ValueError("mde_one_sample: require 0 < alpha < power < 1")
     df = n - 1
     se = sigma_seed / math.sqrt(n)
-    t_alpha2 = student_t.ppf(1 - alpha / 2, df)
-    t_power = student_t.ppf(power, df)
-    return se * (t_alpha2 + t_power)
+    t_crit = student_t.ppf(1 - alpha / 2, df)
+
+    # Bracket: at ncp=0 achieved power = alpha < power (f(lo) < 0). The
+    # central-t shortcut understates ncp, so shortcut + margin is expanded
+    # geometrically until it over-achieves (f(hi) > 0) -- robust for any
+    # (alpha, power, df), never trusting the shortcut as an upper bound.
+    lo = 0.0
+    hi = t_crit + student_t.ppf(power, df) + 1.0
+    while two_sided_power_at_ncp(hi, df, t_crit) < power:
+        hi *= 2.0
+        if hi > 1e6:
+            raise RuntimeError("mde_one_sample: could not bracket the noncentral-t root")
+    ncp_exact = brentq(
+        lambda x: two_sided_power_at_ncp(x, df, t_crit) - power, lo, hi,
+        xtol=1e-12, rtol=8.881784197001252e-16,
+    )
+    return se * float(ncp_exact)
 
 
 FORMULA_TEXT = (
-    "SE = sigma_seed / sqrt(n); "
-    "MDE = SE * (t.ppf(1 - alpha/2, df) + t.ppf(power, df)), df = n - 1; "
-    "sigma_seed pooled across same-class receipts via "
+    "SE = sigma_seed / sqrt(n); t_crit = t.ppf(1 - alpha/2, df), df = n - 1; "
+    "ncp_exact = the root of nct.cdf(-t_crit, df, ncp) + nct.sf(t_crit, df, ncp) = power "
+    "(exact noncentral-t two-sided power, solved by brentq -- never the "
+    "anti-conservative central-t shortcut t.ppf(1-alpha/2,df)+t.ppf(power,df); "
+    "issue #585 exact-power addendum, comment 4931301214); "
+    "MDE = SE * ncp_exact; "
+    "sigma_seed = sample sd (ddof=1) of per_seed_delta_nats (signed paired deltas, "
+    "control - treatment), pooled across same-class receipts via "
     "sqrt(sum((n_i-1)*sigma_i^2) / sum(n_i-1))."
 )
 
@@ -278,6 +452,24 @@ def _write_json(path, obj):
         json.dump(obj, f)
 
 
+def _v2(cls, control, treatment, seed_id=None):
+    """Build a schema-v2 receipt dict with the correctly SIGNED delta
+    (control - treatment, per the 2026-07-10 sign-correction amendment,
+    comment 4931147752) and delta_convention pre-filled -- every fixture in
+    this selftest is arithmetic-consistent by construction, never hand-typed."""
+    if seed_id is None:
+        seed_id = [f"s{i + 1}" for i in range(len(control))]
+    delta = [c - t for c, t in zip(control, treatment)]
+    return {
+        "comparison_class": cls,
+        "seed_id": list(seed_id),
+        "control_eval_loss": list(control),
+        "treatment_eval_loss": list(treatment),
+        "delta_convention": "control_minus_treatment",
+        "per_seed_delta_nats": delta,
+    }
+
+
 def _selftest() -> int:
     failures = []
 
@@ -285,7 +477,7 @@ def _selftest() -> int:
     with tempfile.TemporaryDirectory() as td:
         _write_json(
             os.path.join(td, "cbase-grow-rung2-event-remeasure-b1.json"),
-            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.0, 1.02, 0.99]},
+            _v2("f1_mechanism", [0.0, 0.0, 0.0], [1.0, 1.02, 0.99]),
         )
         code, receipt, msg = run(td, os.path.join(td, "out"), DEFAULT_N, DEFAULT_ALPHA, DEFAULT_POWER)
         if code != 1 or receipt is not None:
@@ -296,40 +488,77 @@ def _selftest() -> int:
 
     # --- RED 2: matched filename but schema-invalid (only 1 seed value) does NOT count ---
     with tempfile.TemporaryDirectory() as td:
-        _write_json(
-            os.path.join(td, "remeasure-good.json"),
-            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.0, 1.02]},
-        )
-        _write_json(
-            os.path.join(td, "remeasure-bad-single-seed.json"),
-            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.0]},  # only 1 value
-        )
+        _write_json(os.path.join(td, "remeasure-good.json"), _v2("f1_mechanism", [0.0, 0.0], [1.0, 1.02]))
+        _write_json(os.path.join(td, "remeasure-bad-single-seed.json"), _v2("f1_mechanism", [0.0], [1.0]))  # only 1 value
         code, receipt, msg = run(td, os.path.join(td, "out"), DEFAULT_N, DEFAULT_ALPHA, DEFAULT_POWER)
         if code != 1 or receipt is not None:
             failures.append(f"RED2 FAIL: expected error (1 good + 1 invalid = 1 usable), got code={code}")
 
     # --- RED 3: non-matching filenames are never enumerated at all ---
     with tempfile.TemporaryDirectory() as td:
-        _write_json(
-            os.path.join(td, "unrelated-receipt.json"),
-            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.0, 1.02, 1.05]},
-        )
+        _write_json(os.path.join(td, "unrelated-receipt.json"), _v2("f1_mechanism", [0.0, 0.0, 0.0], [1.0, 1.02, 1.05]))
         usable, skipped = scan_receipts(td)
         if usable or skipped:
             failures.append(f"RED3 FAIL: non-marker filename should never be enumerated, got usable={usable} skipped={skipped}")
 
-    # --- GREEN: synthetic two-receipt fixture reproduces hand-computed MDE ---
+    # --- RED 4 (issue #585, point 3): raw-only per_seed_eval_loss with NO pairing fields is NEVER usable ---
     with tempfile.TemporaryDirectory() as td:
-        # Receipt A: class f1_mechanism, values [1.0, 3.0] -> mean=2.0, sample var=2.0, sd=sqrt(2)
+        _write_json(
+            os.path.join(td, "remeasure-rawonly.json"),
+            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.0, 1.02, 0.99]},
+        )
+        usable, skipped = scan_receipts(td)
+        if usable:
+            failures.append(f"RED4 FAIL: raw-only per_seed_eval_loss (no pairing) was accepted as usable: {usable}")
+        if len(skipped) != 1 or "raw-only" not in skipped[0]["reason"]:
+            failures.append(f"RED4 FAIL: expected a raw-only skip reason, got {skipped}")
+
+    # --- RED 5 (sign-correction amendment, comment 4931147752 point 2): wrong/missing
+    # delta_convention literal is rejected even when the numeric values are correct ---
+    with tempfile.TemporaryDirectory() as td:
+        bad_conv = _v2("f1_mechanism", [0.0, 0.0], [1.0, 2.0])
+        bad_conv["delta_convention"] = "treatment_minus_control"  # pre-amendment sign label -- rejected
+        _write_json(os.path.join(td, "remeasure-badconv.json"), bad_conv)
+        usable, skipped = scan_receipts(td)
+        if usable:
+            failures.append(f"RED5 FAIL: wrong delta_convention literal was accepted as usable: {usable}")
+        if len(skipped) != 1 or "delta_convention" not in skipped[0]["reason"]:
+            failures.append(f"RED5 FAIL: expected a delta_convention skip reason, got {skipped}")
+
+    # --- RED 6 (sign-correction amendment point 3): a SIGN-FLIPPED per_seed_delta_nats
+    # (treatment - control emitted under a correctly-labeled 'control_minus_treatment'
+    # convention) must be caught by the signed-recompute mismatch check ---
+    with tempfile.TemporaryDirectory() as td:
+        wrong_sign = {
+            "comparison_class": "f1_mechanism",
+            "seed_id": ["s1", "s2"],
+            "control_eval_loss": [0.0, 0.0],
+            "treatment_eval_loss": [1.0, 2.0],
+            "delta_convention": "control_minus_treatment",
+            "per_seed_delta_nats": [1.0, 2.0],  # WRONG: this is treatment-control, not control-treatment
+        }
+        _write_json(os.path.join(td, "remeasure-wrongsign.json"), wrong_sign)
+        usable, skipped = scan_receipts(td)
+        if usable:
+            failures.append(f"RED6 FAIL: sign-flipped per_seed_delta_nats was accepted as usable: {usable}")
+        if len(skipped) != 1 or "mismatch" not in skipped[0]["reason"]:
+            failures.append(f"RED6 FAIL: expected a signed-mismatch skip reason, got {skipped}")
+
+    # --- GREEN: synthetic two-receipt fixture reproduces hand-computed MDE ---
+    # control=0 arrays throughout so delta = -treatment; SD is sign-flip-invariant,
+    # so the hand-computed sd values below match the treatment array directly.
+    with tempfile.TemporaryDirectory() as td:
+        # Receipt A: class f1_mechanism, treatment [1.0, 3.0] (control 0) -> delta
+        # mean=-2.0, sample var=2.0, sd=sqrt(2) (same magnitude as sd([1,3])).
         _write_json(
             os.path.join(td, "cbase-grow-rung2-remeasure-b-series-a.json"),
-            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.0, 3.0]},
+            _v2("f1_mechanism", [0.0, 0.0], [1.0, 3.0]),
         )
-        # Receipt B: class f2_criterion, values [5.0, 5.0, 5.0, 8.0] -> sd hand-computable too,
-        # but distinct class so it must NOT be pooled with A.
+        # Receipt B: class f2_criterion, treatment [5.0, 5.0, 5.0, 8.0] (control 0) --
+        # distinct class so it must NOT be pooled with A.
         _write_json(
             os.path.join(td, "cbase-grow-rung2-stabilize-dev-b.json"),
-            {"comparison_class": "f2_criterion", "per_seed_eval_loss": [5.0, 5.0, 5.0, 8.0]},
+            _v2("f2_criterion", [0.0, 0.0, 0.0, 0.0], [5.0, 5.0, 5.0, 8.0]),
         )
         out_dir = os.path.join(td, "out")
         code, receipt, msg = run(td, out_dir, DEFAULT_N, DEFAULT_ALPHA, DEFAULT_POWER)
@@ -348,16 +577,29 @@ def _selftest() -> int:
             if abs(sigma_b - expected_sigma_b) > 1e-9:
                 failures.append(f"GREEN FAIL: sigma_b expected {expected_sigma_b}, got {sigma_b}")
 
-            # MDE at n=5, alpha=0.05, power=0.80, df=4: standard t-table values
-            # (hand/table lookup, not re-derived from scipy): t_(0.975,4)=2.776445105,
-            # t_(0.80,4)=0.940965. Tolerance is loose (1e-2) since these are widely
-            # published rounded table constants, not the exact scipy float.
-            t_alpha2_df4 = 2.776445105
-            t_power_df4 = 0.940965
-            expected_mde_a = (expected_sigma_a / math.sqrt(5)) * (t_alpha2_df4 + t_power_df4)
+            # MDE at n=5, alpha=0.05, power=0.80, df=4: exact noncentral-t
+            # noncentrality (issue #585 exact-power addendum, comment
+            # 4931301214; independently replayed against scipy nct+brentq):
+            # ncp_exact = 3.761059553825027. NOT the central-t shortcut
+            # 3.7174096824423772, which achieves only ~0.7913 power.
+            ncp_exact_df4 = 3.761059553825027
+            expected_mde_a = (expected_sigma_a / math.sqrt(5)) * ncp_exact_df4
             got_mde_a = receipt["mde_at_n5"]["f1_mechanism"]["mde"]
-            if abs(got_mde_a - expected_mde_a) > 1e-2:
+            if abs(got_mde_a - expected_mde_a) > 1e-6:
                 failures.append(f"GREEN FAIL: mde_a expected ~{expected_mde_a}, got {got_mde_a}")
+
+            # Exact-power addendum regression (comment 4931301214): the
+            # achieved two-sided power at the published MDE must be >= the
+            # labeled target -- never anti-conservative.
+            from scipy.stats import t as _t
+            _tcrit = _t.ppf(1 - DEFAULT_ALPHA / 2, DEFAULT_N - 1)
+            _se_a = expected_sigma_a / math.sqrt(DEFAULT_N)
+            achieved = two_sided_power_at_ncp(got_mde_a / _se_a, DEFAULT_N - 1, _tcrit)
+            if achieved < DEFAULT_POWER - 1e-9:
+                failures.append(
+                    f"GREEN FAIL: achieved power {achieved} at the published MDE is below "
+                    f"the labeled target {DEFAULT_POWER} (anti-conservative)"
+                )
 
             if receipt["mde_at_n5"]["f1_mechanism"]["n_receipts"] != 1:
                 failures.append("GREEN FAIL: f1_mechanism should pool exactly 1 receipt (not merged with f2_criterion)")
@@ -366,11 +608,11 @@ def _selftest() -> int:
     with tempfile.TemporaryDirectory() as td:
         _write_json(
             os.path.join(td, "remeasure-x1.json"),
-            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.0, 1.02, 0.99]},
+            _v2("f1_mechanism", [0.0, 0.0, 0.0], [1.0, 1.02, 0.99]),
         )
         _write_json(
             os.path.join(td, "stabilize-x2.json"),
-            {"comparison_class": "f1_mechanism", "per_seed_eval_loss": [1.01, 0.98, 1.03, 1.0]},
+            _v2("f1_mechanism", [0.0, 0.0, 0.0, 0.0], [1.01, 0.98, 1.03, 1.0]),
         )
         out_dir = os.path.join(td, "out")
         code, receipt, msg = run(td, out_dir, DEFAULT_N, DEFAULT_ALPHA, DEFAULT_POWER)
