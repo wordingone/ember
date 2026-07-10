@@ -1,0 +1,121 @@
+{
+  "ticket": "A1-FREEZE-ADMISSION",
+  "ts": "2026-07-10T05:23:22.562792+00:00",
+  "schema": "a1-freeze-admission/v1",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "issue_refs": [
+    "#631",
+    "#123",
+    "#593",
+    "#440"
+  ],
+  "verdict": "ADMITTED",
+  "launch_ts": "2026-07-10T06:00:00Z",
+  "freeze_binding": {
+    "pointer": "ccde4a676085e633b69d8ba1b501b80f49e2e907",
+    "pointer_is_commit": true,
+    "declaration_sha256_at_pointer": "e2bd475cce894c84e0a82ae55e828df1eb834233aa3baf7ac56d46e10bf6d816",
+    "declaration_sha256_on_disk": "e2bd475cce894c84e0a82ae55e828df1eb834233aa3baf7ac56d46e10bf6d816",
+    "declaration_sha256_at_build_ref": "e2bd475cce894c84e0a82ae55e828df1eb834233aa3baf7ac56d46e10bf6d816",
+    "declaration_byte_identical_in_build_ref": true,
+    "build_ref": "HEAD",
+    "build_ref_commit": "45fee5518a30b5438d88df886701f7f50ec1019a",
+    "freeze_anchor_commit": "45fee5518a30b5438d88df886701f7f50ec1019a",
+    "pointer_is_ancestor_of_build_ref": false,
+    "pointer_ancestry_disclosure": "the EVAL-FREEZE-HASH pointer commit is NOT an ancestor of the build-ref: PR #603 was squash-merged, dangling the freeze-content commit. Binding is by declaration CONTENT verified byte-identical in the build lineage (squash-merge-robust); the declaration's rule (3) 'pointer is an ancestor' is unsatisfiable from master and is a coordinator item (re-anchor EVAL-FREEZE-HASH to a master-reachable commit would re-roll AC4, so it is NOT done here)."
+  },
+  "time_order": {
+    "freeze_ts": "2026-07-09T23:30:50.418135+00:00",
+    "launch_ts": "2026-07-10T06:00:00Z",
+    "launch_after_freeze": true
+  },
+  "lineage_binding": {
+    "checkpoint_lineage": "ember-c8-example/pretrain-shards-v0",
+    "n_training_inputs": 2,
+    "training_inputs": [
+      {
+        "corpus": "shards-v0",
+        "scanned": true,
+        "scan_receipt": "receipts/a1-predicate-scan/a1-predicate-scan-corrected-20260710T044836Z.json",
+        "note": "text pretraining shards; corrected-tokenizer predicate scan (refs #631 deliverable 1)"
+      },
+      {
+        "corpus": "manifests/corpus/b-multi-1",
+        "scanned": true,
+        "scan_receipt": "receipts/a1-predicate-scan/a1-bmulti1-scan-20260710T045852Z.json",
+        "note": "not consumed by this lineage; scanned defensively (refs #631 deliverable 3a)"
+      }
+    ],
+    "all_inputs_scanned": true
+  },
+  "effective_filtered_suite": {
+    "n_excluded_total": 147,
+    "per_dataset": {
+      "MMLU-Pro": {
+        "raw_split_sha256": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
+        "n_raw_rows": 12032,
+        "n_excluded": 69,
+        "n_filtered_rows": 11963,
+        "effective_filtered_sha256": "2ba1c758081f09317c86ad0c3f183596d4519cfef4dfdbaed04280929bef3627",
+        "unfiltered_content_sha256": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
+        "filtering_changes_content": true
+      },
+      "GSM8K": {
+        "raw_split_sha256": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+        "n_raw_rows": 1319,
+        "n_excluded": 0,
+        "n_filtered_rows": 1319,
+        "effective_filtered_sha256": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+        "unfiltered_content_sha256": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+        "filtering_changes_content": false
+      },
+      "MATH-500": {
+        "raw_split_sha256": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+        "n_raw_rows": 500,
+        "n_excluded": 0,
+        "n_filtered_rows": 500,
+        "effective_filtered_sha256": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+        "unfiltered_content_sha256": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+        "filtering_changes_content": false
+      },
+      "ARC-Challenge": {
+        "raw_split_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+        "n_raw_rows": 1172,
+        "n_excluded": 0,
+        "n_filtered_rows": 1172,
+        "effective_filtered_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+        "unfiltered_content_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+        "filtering_changes_content": false
+      },
+      "HumanEval+": {
+        "raw_split_sha256": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+        "n_raw_rows": 164,
+        "n_excluded": 58,
+        "n_filtered_rows": 106,
+        "effective_filtered_sha256": "88cc71369eeb85be5ea07bb6a7a4dc77a3bf32635b81f5510d16a79601d206c1",
+        "unfiltered_content_sha256": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+        "filtering_changes_content": true
+      },
+      "MBPP": {
+        "raw_split_sha256": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
+        "n_raw_rows": 500,
+        "n_excluded": 12,
+        "n_filtered_rows": 488,
+        "effective_filtered_sha256": "64cb8bc4021fab5a91d174796a16803116b2cc8b075fc1f0817e5ac3c712be76",
+        "unfiltered_content_sha256": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
+        "filtering_changes_content": true
+      },
+      "HellaSwag": {
+        "raw_split_sha256": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f",
+        "n_raw_rows": 10003,
+        "n_excluded": 8,
+        "n_filtered_rows": 9995,
+        "effective_filtered_sha256": "dbf77f2b416060172ae23ef26e2fa5237a2049d43301437e133c120a94ab4764",
+        "unfiltered_content_sha256": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f",
+        "filtering_changes_content": true
+      }
+    },
+    "rule": "a governed eval on suite (b) MUST filter the excluded rows and reproduce effective_filtered_sha256 per dataset; the raw split sha is NOT admissible for a contaminated dataset (filtering_changes_content=true)"
+  }
+}
