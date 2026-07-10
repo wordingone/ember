@@ -75,6 +75,33 @@ ROOT = next(
 )
 RECEIPTS = ROOT / "receipts"
 
+# [gh #615] Untracked on-disk artifact bytes (model checkpoints under
+# gitignored models/) are NOT visible from a worktree render even though the
+# receipt naming them is (receipts/ is tracked or copied). EMBER_ARTIFACT_ROOT,
+# when set, is the OPERATING tree root where those bytes physically live --
+# passed explicitly by the render lane, never guessed by this probe. When
+# unset, this falls back to the probe's own repo root, which is the prior
+# (pre-#615) behavior verbatim.
+_artifact_root_env = os.environ.get("EMBER_ARTIFACT_ROOT")
+if _artifact_root_env:
+    ARTIFACT_ROOT = Path(_artifact_root_env)
+    ARTIFACT_ROOT_SOURCE = "env"
+else:
+    ARTIFACT_ROOT = REPO_ROOT
+    ARTIFACT_ROOT_SOURCE = "repo-root"
+
+
+def _resolve_artifact_path(raw: str) -> Path:
+    """Resolve an artifact path named in a receipt (e.g. last_checkpoint)
+    against the artifact root. An absolute path in the receipt is honored
+    as-is. A relative path resolves against ARTIFACT_ROOT: EMBER_ARTIFACT_ROOT
+    when set (env source), else this probe's own repo root (repo-root
+    source, current/legacy behavior) -- see gh #615."""
+    p = Path(raw)
+    if p.is_absolute():
+        return p
+    return ARTIFACT_ROOT / p
+
 # Exact invalid-tokens this condition fails on (negative-assertion targets).
 INVALID_TOKENS = ["invalid_frozen_base_escape", "invalid_calcified_seed"]
 
@@ -225,6 +252,12 @@ def main() -> int:
     owned_ckpt_path = None
     owned_ckpt_hash_ok = False
     n_owned_candidates = 0
+    # [gh #615] candidates that named a checkpoint whose manifest/model.pt
+    # files could not be found under ARTIFACT_ROOT -- distinct from a
+    # hash-mismatch or a genuine absence of any owned-pretrain receipt at
+    # all: this is a VISIBILITY failure (the render tree can't see the
+    # bytes), not an evaluated-false CHK clause.
+    n_checkpoint_bytes_not_visible = 0
 
     for rp in receipt_files:
         # Check for supersession first
@@ -251,10 +284,11 @@ def main() -> int:
             continue
 
         n_owned_candidates += 1
-        ckpt_path = Path(ckpt)
+        ckpt_path = _resolve_artifact_path(ckpt)
         manifest = ckpt_path / "manifest.json"
         model_pt = ckpt_path / "model.pt"
         if not (manifest.is_file() and model_pt.is_file()):
+            n_checkpoint_bytes_not_visible += 1
             continue
         man = _read_json(manifest)
         if not man:
@@ -330,17 +364,38 @@ def main() -> int:
     if invalid_hits:
         print(
             f"RED C-BASE: candidate receipt matches invalid-token(s) {invalid_hits} "
-            "(does-NOT-count: frozen/borrowed base escape or calcified seed)"
+            "(does-NOT-count: frozen/borrowed base escape or calcified seed) "
+            f"[artifact_root_source={ARTIFACT_ROOT_SOURCE}]"
         )
         return 0
 
     if owned_ckpt_receipt is None:
+        # [gh #615] A visibility failure (a candidate NAMED a checkpoint but
+        # its bytes could not be found under ARTIFACT_ROOT, and no explicit
+        # EMBER_ARTIFACT_ROOT was provided) is a different verdict from a
+        # genuine absence failure (no owned-pretrain receipt names a
+        # checkpoint at all, or the checkpoint's hash does not match). Only
+        # the former is a "this tree can't see the bytes" condition; a RED
+        # here must not be read as "no receipt names a checkpoint" when a
+        # receipt in fact did.
+        if n_checkpoint_bytes_not_visible > 0 and ARTIFACT_ROOT_SOURCE == "repo-root":
+            print(
+                "RED C-BASE: artifact root not provided / bytes not visible from "
+                f"this tree ({n_checkpoint_bytes_not_visible} owned-pretrain "
+                f"candidate(s) name a checkpoint but its manifest.json/model.pt "
+                f"were not found under {ARTIFACT_ROOT} -- set EMBER_ARTIFACT_ROOT "
+                "to the operating tree root where the checkpoint bytes physically "
+                "live (e.g. gitignored models/) to check the real bytes; this is a "
+                "visibility failure, not an absence failure; CHK clause (a)/(c) "
+                f"UNDETERMINED) [artifact_root_source={ARTIFACT_ROOT_SOURCE}]"
+            )
+            return 0
         print(
             "RED C-BASE: no owned from-scratch checkpoint receipt under "
             f"{RECEIPTS} names a checkpoint whose on-disk model.pt bytes hash-match "
             f"its manifest weight-hash claim ({n_owned_candidates} owned-pretrain "
             "candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause "
-            "(a)/(c) unmet)"
+            f"(a)/(c) unmet) [artifact_root_source={ARTIFACT_ROOT_SOURCE}]"
         )
         return 0
 
@@ -353,7 +408,8 @@ def main() -> int:
             "checkpoint that replays (function-preserving net2net/layer-stacking/"
             "expert-addition); the growth operator exists only as a decision-record "
             "doc that does NOT authorize a build => invalid_calcified_seed: the seed "
-            "graph cannot be shown growable. Artifact genuinely ABSENT"
+            "graph cannot be shown growable. Artifact genuinely ABSENT "
+            f"[artifact_root_source={ARTIFACT_ROOT_SOURCE}]"
         )
         return 0
 
@@ -362,7 +418,8 @@ def main() -> int:
         f"hash-verified weights (receipt {owned_ckpt_receipt.name}), no borrowed/"
         f"frozen base and not the {DEAD_LINEAGE} lineage, and grow-operator dry-run "
         f"receipt {grow_op_receipt.name} produces a valid larger-shape checkpoint "
-        "that replays; no invalid-token present (CHK all four clauses pass)"
+        "that replays; no invalid-token present (CHK all four clauses pass) "
+        f"[artifact_root_source={ARTIFACT_ROOT_SOURCE}]"
     )
     return 0
 
