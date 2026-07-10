@@ -250,6 +250,25 @@ def _partial_spearman(x, y, z) -> "float | None":
 # feeds with real forward-pass output.
 # ---------------------------------------------------------------------------
 
+def _rank_select_exact_count(values, count: int, *, descending: bool):
+    """Deterministic exact-count rank selector -- NEVER a threshold/quantile
+    comparison. Stable sort (ties broken by ORIGINAL index, ascending,
+    since a stable sort preserves input order among tied values and the
+    input here is index-ordered) then slices exactly `count` positions.
+    A threshold comparison (e.g. l_b >= quantile(l_b, 0.8)) silently
+    balloons past `count` whenever many values tie at the boundary --
+    every tied token clears an inclusive threshold together, inflating the
+    selected set (PR #732 gate block: a 1000-token fixture with 800 tied
+    values at the boundary inflated H from the pinned 200 to 900). Returns
+    an int index array in RANK order (not index-sorted); callers that need
+    a canonical ordering re-sort it themselves."""
+    import numpy as np
+    values = np.asarray(values, dtype=np.float64)
+    key = -values if descending else values
+    order = np.argsort(key, kind="stable")
+    return order[:count]
+
+
 def _rank_variation_stats(x) -> dict:
     """Diagnostic only -- WHY a partial Spearman came back undefined
     (degenerate/no-rank-variation input), never a substitute for the
@@ -387,21 +406,36 @@ def _measure_phase0(l_a, l_b, l_c, *, seed: int,
     # (arm B's own moved-set construction, #723 sec.3 -- lowest P_ab first,
     # so M is dominated by the most-negative/ascending tokens when they
     # exist, NOT by |P_ab|~0 tokens).
-    threshold_top_b = float(np.quantile(l_b, 1.0 - top_quantile))
-    h_idx = np.nonzero(l_b >= threshold_top_b)[0]
-    n_h = int(h_idx.shape[0])
+    #
+    # EXACT-COUNT rank selector (PR #732 gate block, repaired): H and M are
+    # each the pinned COUNT of tokens (floor(top_quantile*n), then
+    # ceil(selector_moved_fraction*|H|)) via a stable sort, NEVER a
+    # threshold/quantile-value comparison. A threshold comparison
+    # (l_b >= quantile(l_b, 0.8)) silently balloons past the pinned count
+    # whenever many tokens tie at the boundary -- every tied value clears
+    # an inclusive threshold together (reviewer-supplied counterexample:
+    # l_b=[2]*100+[1]*800+[0]*100, n=1000 -- a threshold selector gives
+    # H=900/M=270 against the frozen spec's exact H=200/M=60, measuring 27%
+    # of the sample instead of arm B's actual ~6% moved mass). Both
+    # selections are stable sorts, ties broken by ORIGINAL token index
+    # ascending (`_rank_select_exact_count`), fully deterministic
+    # regardless of how many values tie.
+    n_h = int(np.floor(top_quantile * n))
+    h_idx = np.sort(_rank_select_exact_count(l_b, n_h, descending=True)) if n_h > 0 else np.array([], dtype=np.int64)
     n_m = int(np.ceil(selector_moved_fraction * n_h)) if n_h > 0 else 0
 
     if n_m > 0:
-        order_within_h = np.argsort(p_ab[h_idx], kind="stable")  # ascending signed P_ab -- "bottom" = lowest/most-negative first
-        m_idx = h_idx[order_within_h[:n_m]]
+        p_ab_h = p_ab[h_idx]  # h_idx is index-ascending, so a stable sort here ties-breaks by ORIGINAL index
+        m_order_by_rank = _rank_select_exact_count(p_ab_h, n_m, descending=False)  # ascending signed P_ab -- "bottom" = lowest/most-negative first
+        m_idx = h_idx[m_order_by_rank]
         p_ab_m = p_ab[m_idx]
         frac_lt_target = float(np.mean(p_ab_m < target_band_threshold))
         frac_le_neg_target = float(np.mean(p_ab_m <= -target_band_threshold))
         frac_ge_target = float(np.mean(p_ab_m >= target_band_threshold))
-        threshold_top_a = float(np.quantile(l_a, 1.0 - top_quantile))
-        endpoint_overlap = float(np.mean((l_a[m_idx] >= threshold_top_a) & (l_b[m_idx] >= threshold_top_b)))
+        h_idx_by_a = np.sort(_rank_select_exact_count(l_a, n_h, descending=True)) if n_h > 0 else np.array([], dtype=np.int64)
+        endpoint_overlap = float(np.mean(np.isin(m_idx, h_idx_by_a)))
     else:
+        m_idx = np.array([], dtype=np.int64)
         frac_lt_target = frac_le_neg_target = frac_ge_target = endpoint_overlap = None
 
     # empty H (n_m==0) means the selector's own target band cannot exist --
@@ -436,9 +470,10 @@ def _measure_phase0(l_a, l_b, l_c, *, seed: int,
         "selector_replay": {
             "h_pool_size": n_h,
             "top_quantile": top_quantile,
-            "l_b_threshold_at_top_quantile": threshold_top_b,
+            "h_indices": h_idx.tolist(),
             "m_selected_size": n_m,
             "m_selector_fraction_of_h": selector_moved_fraction,
+            "m_indices": m_idx.tolist(),
             "frac_P_ab_lt_target_given_M": frac_lt_target,
             "frac_P_ab_le_neg_target_given_M": frac_le_neg_target,
             "frac_P_ab_ge_target_given_M": frac_ge_target,
@@ -446,6 +481,17 @@ def _measure_phase0(l_a, l_b, l_c, *, seed: int,
             "endpoint_rank_HtoH_overlap_descriptive": endpoint_overlap,
             "kill_no_target_band_fired": no_target_band,
             "floor": no_target_band_floor,
+            "selection_method": ("EXACT-COUNT rank selector (stable sort, "
+                                 "index-ascending tie-break) -- never a "
+                                 "threshold/quantile comparison; see "
+                                 "`_rank_select_exact_count` (PR #732 gate "
+                                 "block repair). h_indices/m_indices are the "
+                                 "full index sets -- at live scale "
+                                 "(MIN_LOSS_BEARING_TOKENS, up to ~2M "
+                                 "tokens) these lists are large (H up to "
+                                 "~400k, M up to ~120k entries); disclosed "
+                                 "here rather than silently truncated, "
+                                 "unchanged from what the mission asked for"),
             "note": ("supersedes the original |P_ab|<0.05 band-prevalence "
                     "leg (#723 AMENDMENT-2 / #724 first block comment) -- "
                     "replays arm B's exact frozen selector (H=top-20% by "
@@ -1051,6 +1097,66 @@ def _tie_heavy_vs_unique_rank_sanity() -> None:
           f"tied_verdict={tied['verdict']} unique_verdict={unique['verdict']}", flush=True)
 
 
+def _boundary_tie_fixture(*, n: int = 1000):
+    """Reviewer-supplied boundary-tie counterexample (PR #732 gate block):
+    l_b = [2]*100 + [1]*800 + [0]*100 -- a quantile-THRESHOLD selector
+    (l_b >= quantile(l_b, 0.8), inclusive) balloons H from the frozen
+    spec's exact pinned count floor(0.2*1000)=200 to 900 (every tied '1'
+    token clears the q80=1.0 threshold together), and M from 60 to 270 --
+    measuring 27% of the sample instead of arm B's actual ~6% moved mass.
+    p_ab and the descent series are given UNIQUE, strictly monotonic-by-
+    original-index values (no ties anywhere except in l_b itself) so this
+    fixture isolates H's tie-boundary behavior with an unambiguous expected
+    H/M index set: H must be exactly {0..199} (the 100 '2' tokens plus the
+    FIRST 100 tied '1' tokens by original index), M must be exactly
+    {0..59} (the 60 lowest-P_ab, i.e. lowest-original-index, tokens of
+    H -- p_ab is strictly increasing by index)."""
+    import numpy as np
+    l_b = np.array([2.0] * 100 + [1.0] * 800 + [0.0] * 100)
+    assert l_b.shape[0] == n
+    p_ab = np.arange(n, dtype=np.float64) / float(n)   # strictly increasing by original index -- no ties
+    l_a = l_b + p_ab
+    l_c = l_b - np.linspace(0.0, 1.0, n)                # strictly varying descent -- no ties
+    return l_a, l_b, l_c
+
+
+def _selftest_boundary_tie_exact_selector() -> None:
+    """PR #732 gate block (BLOCK_732_TIE_INFLATED_SELECTOR / CLEAR_EXACT_
+    COUNT_SELECTOR): H and M must be an EXACT-COUNT rank selector, never a
+    threshold/quantile comparison -- asserts EXACT cardinalities AND
+    index-set identity against the frozen spec's own arithmetic
+    (H=floor(0.2*n), M=bottom ceil(0.3*|H|) of H by signed P_ab), not just
+    non-degenerate output (the prior tie-heavy selftest only asserted
+    non-INVALID, which the ballooned-selector defect passed trivially)."""
+    l_a, l_b, l_c = _boundary_tie_fixture(n=1000)
+    result = _measure_phase0(l_a, l_b, l_c, seed=9009)
+    sr = result["selector_replay"]
+
+    expected_n_h = 200                    # floor(0.2*1000), the pinned count -- NOT the 900 an inclusive q80 threshold gives
+    expected_n_m = 60                     # ceil(0.3*200)
+    expected_h_idx = set(range(0, 200))   # the 100 '2's (idx 0-99) + the FIRST 100 tied '1's by original index (idx 100-199)
+    expected_m_idx = set(range(0, 60))    # bottom 60 of H by strictly-increasing-by-index p_ab
+
+    assert sr["h_pool_size"] == expected_n_h, (
+        f"H must be the EXACT pinned count floor(0.2*n)={expected_n_h}, got "
+        f"{sr['h_pool_size']} (a threshold/quantile comparison gives 900 on "
+        f"this tie-heavy fixture -- the exact defect under repair)")
+    assert sr["m_selected_size"] == expected_n_m, (
+        f"M must be ceil(0.3*|H|)={expected_n_m}, got {sr['m_selected_size']}")
+    assert set(sr["h_indices"]) == expected_h_idx, (
+        f"H index-set mismatch: expected the first 200 tokens by original "
+        f"index (ties broken index-ascending), got "
+        f"{sorted(sr['h_indices'])[:10]}...{sorted(sr['h_indices'])[-5:]}")
+    assert set(sr["m_indices"]) == expected_m_idx, (
+        f"M index-set mismatch: expected the 60 lowest-P_ab (== lowest-"
+        f"original-index, strictly monotonic) tokens within H, got "
+        f"{sorted(sr['m_indices'])[:10]}...{sorted(sr['m_indices'])[-5:]}")
+
+    print("TRAJGATE_PHASE0_BOUNDARY_TIE_SELFTEST_PASS "
+          f"h_pool_size={sr['h_pool_size']} m_selected_size={sr['m_selected_size']} "
+          f"h_indices_match=True m_indices_match=True", flush=True)
+
+
 def _selftest_selector_mismatch() -> None:
     """#723 AMENDMENT-2's two auditor-supplied executable counterexamples,
     restated for this gate's H/M framing (see `_selector_mismatch_fixture`
@@ -1178,6 +1284,7 @@ def _selftest() -> int:
     _selftest_definedness_guard()
     _tie_heavy_vs_unique_rank_sanity()
     _selftest_selector_mismatch()
+    _selftest_boundary_tie_exact_selector()
     _selftest_guards()
     print("TRAJGATE_PHASE0_SELFTEST_PASS", flush=True)
     return 0
