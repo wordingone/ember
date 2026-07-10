@@ -1,0 +1,130 @@
+{
+ "barriers": [
+  {
+   "barrier": "DATA EFFICIENCY",
+   "measured_position": [
+    {
+     "claim": "Shards-v0 corpus: ~13.6GB physical, ~7B tokens target",
+     "number": "13.6GB / 6.97B tokens",
+     "evidence_path": "<LOCAL> (26 files, 512MB each, final 533MB) + receipts/corpus-mix-20260611T075802Z.json real_total_tokens: 6973632296"
+    },
+    {
+     "claim": "Mix composition: 58.1% code (receipted real), 41.9% prose vs 60/40 plan",
+     "number": "0.5812 code fraction",
+     "evidence_path": "receipts/corpus-mix-20260611T075802Z.json mix.code_fraction_real"
+    },
+    {
+     "claim": "Doc-level dedup: 1129 exact duplicates across 2865 rows, 601 total clusters",
+     "number": "1129 exact_dup_count / 2865 total_rows",
+     "evidence_path": "receipts/eng25-dedup-view-20260611T014521Z.json episodes_view.summary"
+    },
+    {
+     "claim": "Packing waste (no sequence packing) baseline: 26.7% across corpus",
+     "number": "0.26718 corpus_waste_fraction_no_packing",
+     "evidence_path": "receipts/corpus-mix-20260611T075802Z.json packing.corpus_waste_fraction_no_packing"
+    },
+    {
+     "claim": "Tokenizer: 32k vocab, trained on ~1GB stratified corpus sample, frozen pre-step-0",
+     "number": "32000 vocab_size, 1GB sample",
+     "evidence_path": "docs/research/fp22-corpus-world.md section 1 (vocab size 32k hypothesis) + receipts/tokenizer-freeze-20260611T060423Z.json"
+    },
+    {
+     "claim": "Clean-corpus target (image-text, caption-grade): 5.5-21M pairs vs CLIP-scale (100s of millions)",
+     "number": "5.5-21M caption-grade pairs (20-70x below CLIP)",
+     "evidence_path": "docs/research/p4-clean-corpus-map-v1.md section 3 Image-Text: pairing density is the wall"
+    },
+    {
+     "claim": "Clean text budget (unreceipted estimate): 10-30B tokens (Gutenberg, Wikisource, legal docs)",
+     "number": "10-30B tokens estimated",
+     "evidence_path": "docs/research/p4-clean-corpus-map-v1.md section 4 feasibility facts"
+    },
+    {
+     "claim": "Bottleneck ledger B1 DATA WALL: 7B usable local tokens vs 20*N Chinchilla demand ceiling",
+     "number": "7B local vs 20*N dense requirement",
+     "evidence_path": "issue #207 BOTTLENECK LEDGER B1 + docs/research/bottleneck-conversion-2026-06-10.md"
+    },
+    {
+     "claim": "W1 growth control terminal: from-scratch control matched lineage at 819.2K tokens vs 12.55M-token lineage bill",
+     "number": "819200 / 12550000 = 0.065 token_bill_collapse_ratio",
+     "evidence_path": "issue #207 B1 section: W1 control TERMINAL, fp32-confirmed receipts referenced #355"
+    },
+    {
+     "claim": "W1b marginal discriminator terminal: unwidened seed evals at bf16 target with ZERO continuation tokens",
+     "number": "0.0 ratio_marginal",
+     "evidence_path": "issue #207 B1: W1b marginal TERMINAL, zero continuation tokens, fp32 margin -0.036 nats"
+    }
+   ],
+   "active_attacks": [
+    "issue #207 BOTTLENECK LEDGER: B1 DATA WALL live, W1 control + G-arm growth TERMINAL per fp32; awaiting W1c paired eval (#372) + M1/M2 certification",
+    "issue #657 Corpus domain I: Data/Curation/Dedup/Decontam acquisition spec, P0 charter floor, target 1-3GB first tranche, 5-10GB post-dedup",
+    "issue #130 eng-36 corpus receipts: per-source license/sha/dedup/token-counts for v0 acquisition",
+    "issue #209 Support ngram index: field breakthrough (+0.080 BPB, parameter golf sole robust survivor); infrastructure for blending",
+    "issue #372 W1c paired eval: binding certification for growth curve; fresh-batch K>=10 CI required before M1/M2 proceed",
+    "L3 Corpus Boundary Ruling v2 (PROPOSED 2026-07-07): awaiting operator ratification; 8-principle custody-scoped anti-distillation governance; P4 grounding on 6-source audit",
+    "ai-lab-corpus-charter (operator directive 2026-07-09): 11-domain minimum floor (A-K); acquisition state tracked per-domain; receipt-gated quality/diversity/anti-distillation bars"
+   ],
+   "zero_attack_gaps": [
+    "N-gram/PPM byte-level blending: sole field breakthrough in parameter golf meta-analysis (arXiv 2607.01517, +0.080 BPB 95% CI [0.06,0.10], survives correction); issue #209 open but ZERO active receipt/consumer binding it to training",
+    "Multi-epoch scheduling and curriculum reuse: charter mentions curricula; NO specialized data-efficiency receipt; #16 'Curriculum creation' has no status/active work; L1/L2/L3 frozen pre-registered in fp22 section 2, not an active experiment",
+    "Token-level near-duplicate detection: only doc-level exact-hash dedup receipted (eng25); NO clustering-based semantic-similarity dedup active; P4 bootstrap T1/T2 assume clean upstream, zero live token-scan",
+    "Retrieval-augmented data curation: NO active issue/receipt for RAG filtering, diversity sampling, or few-shot dedup examples; field-standard but absent from ember dispatch queue",
+    "Cross-modal contamination audit (image-text space): P4 image-text pairing density 20-70x below CLIP, ~5.5-21M caption pairs; NO inter-modal dedup or learned-space contamination detection active",
+    "Tokenizer optimization for data efficiency: 32k vocab frozen in fp22 (class HYPOTHESIS); NO sensitivity analysis or ablation receipt; vocab-size vs loss tradeoff unquantified at 0.37B scale",
+    "Live training-set contamination detection: charter specifies L4 lineage audit pre-training; NO active receipt-backed monitor scanning live tokens against frozen eval/benchmark pools during pretrain",
+    "Automatic curriculum synthesis from corpus statistics: only human-designed L1/L2/L3 deterministic/compositional/MBPP in fp22 section 2; NO learned ordering, difficulty prediction, or adaptive pacing from data statistics active"
+   ],
+   "field_levers": [
+    {
+     "lever": "N-gram / PPM byte-level backoff blending",
+     "why_applicable_at_consumer_scale": "Zero-parameter cached blending (lambda*P_neural + (1-lambda)*P_ngram) appends to any trainer; FineWeb BPB (bits-per-byte) is the fitness; no external model consumed; field-wide sole robust frontier survivor across 1430 competitive submissions",
+     "cost_class": "LOW"
+    },
+    {
+     "lever": "Document-level dedup (exact-hash + near-dup clustering)",
+     "why_applicable_at_consumer_scale": "Removes waste tokens free; ember receipts exact-hash (1129/2865 duplicates); near-dup extends via trigram-bag or local embeddings; no external model; 1.1x multiplier field-standard; eng25 receipts show mechanism working",
+     "cost_class": "LOW"
+    },
+    {
+     "lever": "Token-level sliding-window curriculum / per-document positional reordering",
+     "why_applicable_at_consumer_scale": "Reorders within fixed window (no extra tokens); parameter-golf emergence phase; TTT per-document adaptation on already-consumed evidence satisfies L7 legality constraint",
+     "cost_class": "MEDIUM"
+    },
+    {
+     "lever": "Integer quantization (int6-QAT sweet spot)",
+     "why_applicable_at_consumer_scale": "Parameter golf int6 optimal across 1430 submissions; checkpoint disk 2-3x compression at modest loss; int8 overshot (delta=-0.200); consumer VRAM fits larger models quantized",
+     "cost_class": "LOW"
+    },
+    {
+     "lever": "Corpus-lineage OCR (synthetic rendering bootstrap for scanned-PD text)",
+     "why_applicable_at_consumer_scale": "P4 T1 bootstrap: train OCR on synthetic renderings of Gutenberg + known fonts/degradation locally, zero external model; unlocks 100B+ tokens in HathiTrust/Internet Archive, consumer disk-bound not compute-bound",
+     "cost_class": "MEDIUM"
+    },
+    {
+     "lever": "Corpus-lineage CTC aligner (weak-label bootstrap for audio-text)",
+     "why_applicable_at_consumer_scale": "P4 T2 bootstrap: train local CTC on LibriVox weak labels (energy-splits + proportional-text) to replace LibriSpeech external ASR; unlocks utterance-level segmentation without upstream taint; audio-text is P4 strongest modality",
+     "cost_class": "MEDIUM"
+    },
+    {
+     "lever": "Code/prose curriculum mix optimization",
+     "why_applicable_at_consumer_scale": "fp22 frozen 60/40 hypothesis; measured real 58.1% code; consumer pretraining on mix affects downstream task diversity; small-scale sensitivity unreceipted; curriculum reordering metadata-only",
+     "cost_class": "LOW"
+    },
+    {
+     "lever": "Vocabulary-size sweeps for data efficiency",
+     "why_applicable_at_consumer_scale": "Tokenizer compression directly tunes effective token count vs embedding matrix size; 32k frozen in fp22 unswept; Chinchilla assumes vocab optimization done; requires tokenizer retrain per size",
+     "cost_class": "MEDIUM"
+    },
+    {
+     "lever": "Held-out contamination guards (benchmark freeze + live-scan)",
+     "why_applicable_at_consumer_scale": "Pre-register benchmarks frozen; live token-stream hash-set membership checks during training (O(hash lookup), <1% overhead); prevents accidental leakage; charter specifies L4 but NO live receipt",
+     "cost_class": "LOW"
+    },
+    {
+     "lever": "Per-source license audit and quality binning",
+     "why_applicable_at_consumer_scale": "Receipted-clean source consumption only; per-file license verification fail-closed; binning by quality tier means curriculum rates differ per source quality; early-stage token utility tiers unquantified but field-standard",
+     "cost_class": "LOW"
+    }
+   ]
+  }
+ ]
+}
