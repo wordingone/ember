@@ -1,0 +1,133 @@
+{
+  "ticket": "CORPUS-CENSUS",
+  "ts": "20260710T000000Z",
+  "holdings": [
+    {
+      "name": "code_github_clean",
+      "path_relative": "<EXTERNAL>",
+      "size_bytes": 8400000000,
+      "format": "tokenized-binary",
+      "provenance": "GitHub public repositories (permissive licenses), deduped + cleaned"
+    },
+    {
+      "name": "fineweb_edu",
+      "path_relative": "<EXTERNAL>",
+      "size_bytes": 3400000000,
+      "format": "tokenized-binary",
+      "provenance": "FineWeb educational web text subset"
+    },
+    {
+      "name": "wikipedia_en",
+      "path_relative": "<EXTERNAL>",
+      "size_bytes": 1550000000,
+      "format": "tokenized-binary",
+      "provenance": "Wikipedia English dump"
+    },
+    {
+      "name": "gutenberg_en",
+      "path_relative": "<EXTERNAL>",
+      "size_bytes": 1050000000,
+      "format": "tokenized-binary",
+      "provenance": "Project Gutenberg public-domain books"
+    },
+    {
+      "name": "ledger_mit",
+      "path_relative": "<EXTERNAL>",
+      "size_bytes": 480000,
+      "format": "tokenized-binary",
+      "provenance": "MIT-licensed reference content"
+    }
+  ],
+  "holdings_total_bytes": 14400480000,
+  "holdings_total_tokens": 6973632300,
+  "tokenizer_receipt": "tokenizer-freeze-20260611T154111Z.json",
+  "corpus_manifest_receipt": "token-shards-v0-20260611T170047Z.json",
+  "domains": {
+    "A": {
+      "name": "Mathematical Foundations",
+      "coverage": "NONE",
+      "evidence": "No dedicated math sources (open-web-math, proof-pile-2, OpenStax math, SE math). FineWeb-edu contains incidental web math but insufficient for domain bar.",
+      "spec_issue": 649
+    },
+    "B": {
+      "name": "Statistics / Measurement / Inference",
+      "coverage": "NONE",
+      "evidence": "No statistics sources (Cross Validated, OpenStax stats, NIST handbooks, arXiv stat.*). General web (fineweb) has incidental statistics content only.",
+      "spec_issue": 650
+    },
+    "C": {
+      "name": "Physics / Dynamical Systems / Resource Reality",
+      "coverage": "NONE",
+      "evidence": "No physics sources (OpenStax physics, arXiv physics.*, DOE/EIA reports). Current corpus has no dedicated physics content.",
+      "spec_issue": 651
+    },
+    "D": {
+      "name": "Computer Science / Algorithms / Systems",
+      "coverage": "PARTIAL",
+      "evidence": "code_github_clean provides strong CS code. Wikipedia-en has CS content. Missing: IETF RFC, arXiv cs.*, SE dumps (algorithms/systems tags). Networking underrepresented.",
+      "spec_issue": 652
+    },
+    "E": {
+      "name": "ML / AI / Model Science",
+      "coverage": "NONE",
+      "evidence": "No arXiv cs.LG / cs.CL / cs.CV papers, no NeurIPS/ICML, no Distill.pub. No research literature. General web insufficient for floor.",
+      "spec_issue": 653
+    },
+    "F": {
+      "name": "Training Infrastructure / CUDA / Kernels / Hardware",
+      "coverage": "THIN",
+      "evidence": "code_github_clean may contain PyTorch/CUDA codebases but lacks CUDA docs, CUTLASS, Triton, consumer-GPU guides. No pinned OSS hardware tooling.",
+      "spec_issue": 654
+    },
+    "G": {
+      "name": "Formal Logic / Verification / Proof",
+      "coverage": "NONE",
+      "evidence": "No Lean mathlib, Metamath, Isabelle AFP, Coq stdlib, or formal-proof corpora. Current sources have no formal-logic content.",
+      "spec_issue": 655
+    },
+    "H": {
+      "name": "Software Engineering / Debugging / Testing",
+      "coverage": "PARTIAL",
+      "evidence": "code_github_clean includes test suites + issue/PR discussion. Wikipedia-en has engineering content. Missing: SO debugging/testing tags, postmortems, engineering handbooks, arXiv cs.SE.",
+      "spec_issue": 656
+    },
+    "I": {
+      "name": "Data / Corpus / Evaluation / Decontamination",
+      "coverage": "NONE",
+      "evidence": "No dataset reports (FineWeb docs, Dolma, Pile paper), no contamination papers, no Croissant docs, no HF dataset cards. Charter floor absent.",
+      "spec_issue": 657
+    },
+    "J": {
+      "name": "Scientific Method / Lab Operation / Receipts",
+      "coverage": "NONE",
+      "evidence": "No Turing Way, PLOS papers, protocols.io, OSF guides, or negative-results literature. No reproducibility epistemics in corpus.",
+      "spec_issue": 658
+    },
+    "K": {
+      "name": "Application Worlds",
+      "coverage": "THIN",
+      "evidence": "code_github_clean has general application code. Lacks CAD/BIM (ABC dataset, IFC specs), robotics (ROS, X-Embodiment), building-data integration. Diversity thin.",
+      "spec_issue": 659
+    }
+  },
+  "floor_verdict": [
+    {"domain": "A", "name": "Mathematical Foundations", "gap_class": "NONE", "spec_issue": 649},
+    {"domain": "B", "name": "Statistics / Measurement / Inference", "gap_class": "NONE", "spec_issue": 650},
+    {"domain": "C", "name": "Physics / Dynamical Systems / Resource Reality", "gap_class": "NONE", "spec_issue": 651},
+    {"domain": "E", "name": "ML / AI / Model Science", "gap_class": "NONE", "spec_issue": 653},
+    {"domain": "F", "name": "Training Infrastructure / CUDA / Kernels / Hardware", "gap_class": "THIN", "spec_issue": 654},
+    {"domain": "G", "name": "Formal Logic / Verification / Proof", "gap_class": "NONE", "spec_issue": 655},
+    {"domain": "I", "name": "Data / Corpus / Evaluation / Decontamination", "gap_class": "NONE", "spec_issue": 657},
+    {"domain": "J", "name": "Scientific Method / Lab Operation / Receipts", "gap_class": "NONE", "spec_issue": 658},
+    {"domain": "K", "name": "Application Worlds", "gap_class": "THIN", "spec_issue": 659}
+  ],
+  "census_method": "one-pass inventory classification of v0-pretrain corpus holdings against 11-domain charter floor (issues #649-#659); token counts from token-shards-v0-20260611T170047Z.json",
+  "coverage_summary": {
+    "COVERED": 0,
+    "PARTIAL": 2,
+    "THIN": 2,
+    "NONE": 7,
+    "total_domains": 11
+  },
+  "floor_attestation": "current corpus falls 7 domains short of charter floor (A, B, C, E, G, I, J completely absent; F, K thin). no single source covers diversity bar for any domain except narrow D/code slice. 13GB total corpus with 6.974B tokens; acquisition pipeline must prioritize P0 domains (A, D, E, I) immediately."
+}
