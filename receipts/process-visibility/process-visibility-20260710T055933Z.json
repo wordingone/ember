@@ -1,0 +1,60 @@
+{
+  "receipt_type": "process-visibility",
+  "ts_utc": "2026-07-10T05:59:33Z",
+  "author": "boardrun49",
+  "window": "board re-render post-#639 emitter cure",
+  "covered_pr_range": {
+    "from": 640,
+    "to": 661
+  },
+  "merges_this_window": [
+    {
+      "pr": 640,
+      "mergedAt": "2026-07-10T05:12:44Z",
+      "subject": "fix: O5 run-ledger hardening + launcher binding (refs #630)"
+    },
+    {
+      "pr": 641,
+      "mergedAt": "2026-07-10T05:21:16Z",
+      "subject": "fix: F2 instance commitment + verifier (refs #629)"
+    },
+    {
+      "pr": 643,
+      "mergedAt": "2026-07-10T05:40:48Z",
+      "subject": "exp: rider-A2 fresh-seed replication receipt (refs #123)"
+    },
+    {
+      "pr": 644,
+      "mergedAt": "2026-07-10T05:42:23Z",
+      "subject": "fix: test_owned_core_widen config path (refs #228)"
+    },
+    {
+      "pr": 645,
+      "mergedAt": "2026-07-10T05:51:01Z",
+      "subject": "fix: A1 machinery cure — true-tokenizer rescan + quarantine + consumer (refs #631)"
+    },
+    {
+      "pr": 646,
+      "mergedAt": "2026-07-10T05:52:05Z",
+      "subject": "fix: C5(c) W-statistic readout grammar (refs #628 #123)"
+    },
+    {
+      "pr": 647,
+      "mergedAt": "2026-07-10T05:55:16Z",
+      "subject": "fix: receipt emitters -- artifact-root token/hash only, never local paths (refs #639 #633 #401)"
+    },
+    {
+      "pr": 661,
+      "mergedAt": "2026-07-10T06:13:23Z",
+      "subject": "docs: EXP-C1 executed, all-arms REJECT"
+    }
+  ],
+  "board_render_context": {
+    "totality_receipt": "ember-totality-20260710T055933Z.json",
+    "render_master_sha": "7702907",
+    "cure_verified": true,
+    "cure_verification": "repo-guard PASS; no absolute paths in receipt; custody sidecar 7 rows valid JSON"
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}
