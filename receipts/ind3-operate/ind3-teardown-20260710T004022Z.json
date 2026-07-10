@@ -1,0 +1,22 @@
+{
+  "receipt_class": "IND-3",
+  "leg": "teardown",
+  "producer": "ind3_operate_producer.py",
+  "torn_down_pid": 42508,
+  "stop_method": "graceful marker-file stop (stopmarker written, worker calls handle.stop() and exits 0)",
+  "exit_code": 0,
+  "final_heartbeat": {
+    "pid": 42508,
+    "ts": "2026-07-10T00:40:22.341Z",
+    "status": "stopped"
+  },
+  "post_stop_process_table": {
+    "checked_pid": 42508,
+    "method": "tasklist /FI \"PID eq <pid>\" /FO CSV /NH",
+    "survivors": [],
+    "orphaned_gpu_state": false,
+    "note": "no GPU or model server is touched anywhere in this leg; orphaned_gpu_state is trivially false"
+  },
+  "doc_pointer": "docs/operator/operate.md",
+  "ts": "20260710T004022Z"
+}

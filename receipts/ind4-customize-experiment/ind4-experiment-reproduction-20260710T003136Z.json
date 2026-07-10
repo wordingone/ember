@@ -1,0 +1,15 @@
+{
+  "receipt_class": "IND-4",
+  "leg": "experiment_reproduction",
+  "producer": "ind4_customize_experiment_producer.py",
+  "banked_receipt_ref": "receipts/loop-econ-gate-selftest-20260705T031933Z.json",
+  "banked_receipt_sha256": "7cd7fa15f6c04a56c0ef4de858ee5f9bcc11c3f1f99a6e3f3a41292a346f2952",
+  "fresh_receipt_ref": "receipts/loop-econ-gate-selftest-20260710T003136Z.json",
+  "fresh_receipt_sha256": "3db2840926fa967d0d54220e95078d7a37c10de81557c3b9f8ac08c021989794",
+  "comparison_method": "field-equality of parsed JSON excluding the 'ts' timestamp field",
+  "within_tolerance": true,
+  "selftest_command": "python scripts/loop_econ_gate.py --selftest",
+  "selftest_exit_code": 0,
+  "selftest_stdout": "ok   ac1_decision_reject\nok   ac1_ac_label\nok   ac1_reason_mentions_missing\nok   ac2_decision_accept\nok   ac2_ac_label\nok   ac3_decision_reject\nok   ac3_ac_label\nok   ac3_reason_within_floor\nreceipt: ./receipts/loop-econ-gate-selftest-20260710T003136Z.json\nLOOP_ECON_GATE_SELFTEST_PASS cases=3/3\n",
+  "ts": "20260710T003136Z"
+}

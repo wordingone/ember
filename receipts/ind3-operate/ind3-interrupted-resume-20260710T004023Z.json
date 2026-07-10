@@ -1,0 +1,26 @@
+{
+  "receipt_class": "IND-3",
+  "leg": "interrupted_resume",
+  "producer": "ind3_operate_producer.py",
+  "interrupted_pid": 23124,
+  "interrupted_launcher_pid": 41556,
+  "interrupt_method": "taskkill /F /T /PID <launcher pid> (hard, ungraceful tree-kill -- no stop-marker file, simulating an unplanned crash of the whole process group)",
+  "interrupt_command_exit_code": 0,
+  "verified_dead_via": "tasklist /FI \"PID eq <pid>\" /FO CSV /NH, checked for both the worker pid and the launcher pid",
+  "interrupted_pid_verified_dead": true,
+  "interrupted_launcher_pid_verified_dead": true,
+  "resumed_pid": 624,
+  "resumed_ready_heartbeat": {
+    "pid": 624,
+    "ts": "2026-07-10T00:40:23.269Z",
+    "status": "ready"
+  },
+  "resumed_verified_alive": true,
+  "final_cleanup": {
+    "cleaned_pid": 624,
+    "exit_code": 0,
+    "post_stop_survivors": []
+  },
+  "doc_pointer": "docs/operator/operate.md",
+  "ts": "20260710T004023Z"
+}
