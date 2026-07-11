@@ -135,14 +135,12 @@ _REPO = Path(__file__).resolve().parent.parent
 
 # ---- subphase names (exact order = the frozen decomposition) --------------
 # ember #702 ADDENDUM-5: the per-step body (fwd/loss/bwd) now lives in the
-# SHARED ts._run_production_step (timeshare_pretrain.py) -- called as one
-# opaque unit from _run_block, so the three internal spans are no longer
-# separately observable from this file. _per_step_ratios/the closure gate
-# only ever consumed their SUM as t_gpu, never the individual splits (grep-
-# verified before this change), so this is a measurement-GRANULARITY
-# change, not a measurement loss -- the "compute" bucket carries the exact
-# same wall-clock total the three summed spans used to.
-FWD_LOSS_BWD_PHASES = ("compute",)
+# SHARED ts._run_production_step (timeshare_pretrain.py), but that function
+# exposes an OPTIONAL phase_cb/sync_cb observer (falsifier round 2) that
+# _run_block wires to this SAME collector -- fwd/loss/bwd stay separately
+# and DIRECTLY measured, byte-identical bucket names/boundaries to
+# pre-ADDENDUM-5, never a derived/subtracted quantity.
+FWD_LOSS_BWD_PHASES = ("fwd", "loss", "bwd")
 OPTIMIZER_SUBPHASES = (
     "grad_to_cpu_fp32", "grad_heap_to_memmap", "inner_optimizer_step",
     "updated_param_to_gpu",
@@ -1382,25 +1380,28 @@ def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
     operationalized") -- the SAME function run_v0_segment itself calls, so
     grad_accum_steps/QAT lifecycle/apply_wsd/loss composition are genuine
     production semantics here, never a sibling reimplementation (class rule
-    F, satisfied by construction). profile=True times the WHOLE
-    _run_production_step call as one "compute" span into `collector` (the
-    fine-grained fwd/loss/bwd internal split this file measured pre-
-    ADDENDUM-5 is no longer separately observable now that the step body is
-    an opaque call into timeshare_pretrain.py -- _per_step_ratios/the
-    closure gate only ever consumed their SUM as t_gpu, never the
-    individual splits, so this is a measurement-granularity change, not a
-    measurement loss) AND expects the caller to have already
-    install_span_collector()'d the SAME collector onto `optimizers` (the
-    optimizer's own step()-internal subphases -- grad_to_cpu_fp32/
-    grad_heap_to_memmap/inner_optimizer_step/updated_param_to_gpu -- are
-    UNCHANGED, still instrumented at the CPUOffloadOptimizer level, called
-    from inside _run_production_step's own opt.step() loop; this function
-    does not attach/detach the optimizer-level hooks itself, the caller
-    brackets a whole profiled block with them). profile=False adds ZERO
-    extra instrumentation and expects the caller to have detached any span
-    collector from `optimizers` first -- the matched-unprofiled-block
-    baseline. Returns the list of measured step-wall times (perf_counter,
-    device-synced)."""
+    F, satisfied by construction). profile=True passes `collector.add`/
+    `sync` to _run_production_step's own OPTIONAL phase_cb/sync_cb
+    parameters (ADDENDUM-5 falsifier round 2 -- an internal observer inside
+    the shared step, not a subtraction derived from the outside), so "fwd"/
+    "loss"/"bwd" are measured DIRECTLY and INDEPENDENTLY at the exact same
+    boundaries this file measured pre-ADDENDUM-5 -- loader/H2D/QAT/
+    apply_wsd/opt.step()/zero_grad() stay unmeasured, exactly as before,
+    which is what keeps the closure gate a real residual (measured spans
+    vs measured wall) rather than an identity that can never fail. AND
+    expects the caller to have already install_span_collector()'d the SAME
+    collector onto `optimizers` (the optimizer's own step()-internal
+    subphases -- grad_to_cpu_fp32/grad_heap_to_memmap/inner_optimizer_step/
+    updated_param_to_gpu -- are UNCHANGED, still instrumented at the
+    CPUOffloadOptimizer level, called from inside _run_production_step's
+    own opt.step() loop, strictly AFTER the fwd/loss/bwd spans close --
+    disjoint, never overlapping; this function does not attach/detach the
+    optimizer-level hooks itself, the caller brackets a whole profiled
+    block with them). profile=False passes phase_cb=None/sync_cb=None,
+    adding ZERO extra instrumentation, and expects the caller to have
+    detached any span collector from `optimizers` first -- the matched-
+    unprofiled-block baseline. Returns the list of measured step-wall
+    times (perf_counter, device-synced)."""
     import torch
     sync = (torch.cuda.synchronize if device == "cuda" and torch.cuda.is_available()
             else (lambda: None))
@@ -1411,33 +1412,14 @@ def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
             collector.begin_step()
         sync(); t_step0 = time.perf_counter()
 
-        if profile:
-            sync(); t0 = time.perf_counter()
         ts._run_production_step(
             model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
             cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
             ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
             global_step=global_step, total_steps=total_steps,
-            grad_accum_steps=grad_accum_steps, qat_enabled=qat_enabled)
-        if profile:
-            sync(); t1 = time.perf_counter()
-            # "compute" must be EXCLUSIVE of optimizer-subphase time, the
-            # same closure invariant the pre-ADDENDUM-5 fwd/loss/bwd spans
-            # satisfied (they were timed strictly BEFORE the separate
-            # `for opt in optimizers.values(): opt.step()` loop, never
-            # overlapping it). _run_production_step is opaque and calls
-            # opt.step() INTERNALLY at its tail -- the attached span
-            # collector's hooks fire during that call and write directly
-            # into THIS step's already-open record (collector._cur, reset
-            # by begin_step() above), so t1-t0 as-is would DOUBLE-COUNT
-            # the optimizer subphases (they're a strict subset of the
-            # [t0, t1] interval, not a disjoint one) -- subtracting them
-            # here is what keeps sum(subphases) close to sum(step walls)
-            # for the closure gate (CLOSURE_BOUND_FRAC), exactly as it was
-            # before this function called into an opaque shared step body.
-            optimizer_subphase_s_this_step = sum(
-                collector._cur[p] for p in OPTIMIZER_SUBPHASES)
-            collector.add("compute", (t1 - t0) - optimizer_subphase_s_this_step)
+            grad_accum_steps=grad_accum_steps, qat_enabled=qat_enabled,
+            phase_cb=collector.add if profile else None,
+            sync_cb=sync if profile else None)
 
         sync(); step_wall = time.perf_counter() - t_step0
         step_walls.append(step_wall)
@@ -1745,28 +1727,58 @@ def _sha256_bytes_of_file(path: str) -> str:
     return h.hexdigest()
 
 
-def _hash_state_dict(state: dict) -> str:
-    """sha256 over a model state_dict's tensor bytes, iterated in SORTED key
-    order (never dict-insertion order, which is not guaranteed identical
-    across two independently-constructed models) -- used by the one-step
-    production-step parity fixture to compare post-step weights bit-for-bit
-    between two independently-built model instances. Hashes the tensor's
-    RAW memory via a uint8 view rather than `.numpy()` directly -- numpy has
-    no native bfloat16 dtype (the real_arch model's weights are bf16), and a
-    raw-byte reinterpret is dtype-agnostic and exact for every dtype this
-    file ever hashes, never a numeric cast that could mask a genuine
-    mismatch."""
+def _hash_any(obj) -> str:
+    """Recursive, deterministic sha256 over ANY nested structure of
+    tensors/ndarrays/dicts/lists/tuples/scalars -- used by the one-step
+    production-step parity fixture to compare model weights, optimizer
+    state (exp_avg/exp_avg_sq/momentum_buffer/step, keyed by param index --
+    a plain dict of dicts and ints), and RNG capture bundles (a
+    heterogeneous dict of python-random tuples, a torch ByteTensor, and a
+    numpy random-state tuple) bit-for-bit between two independently-built
+    object graphs. dict keys are visited in SORTED str-key order (never
+    insertion order, which python/numpy RNG state's own get-state tuples
+    don't even guarantee across builds). Tensors/ndarrays are hashed via
+    their RAW memory (a uint8 view for torch -- numpy has no native
+    bfloat16 dtype, and the real_arch model's weights are bf16 -- and
+    .tobytes() for numpy) with shape+dtype folded in, never a numeric cast
+    that could mask a genuine mismatch. A type tag byte prefixes every
+    node so a tensor and a same-bytes non-tensor can never collide."""
     import hashlib
-    import torch
     h = hashlib.sha256()
-    for key in sorted(state.keys()):
-        h.update(key.encode("utf-8"))
-        v = state[key]
-        if hasattr(v, "detach"):
-            t = v.detach().cpu().contiguous()
-            h.update(t.view(torch.uint8).numpy().tobytes())
+
+    def _walk(o) -> None:
+        if hasattr(o, "detach") and hasattr(o, "cpu"):  # torch.Tensor
+            import torch
+            t = o.detach().cpu().contiguous()
+            h.update(b"T")
+            h.update(str(tuple(t.shape)).encode("utf-8"))
+            h.update(str(t.dtype).encode("utf-8"))
+            # 0-dim (scalar) tensors -- e.g. an AdamW "step" counter stored as
+            # a 0-dim tensor in optimizer state -- cannot be dtype-reinterpret
+            # viewed directly ("self.dim() cannot be 0 to view Float as Byte");
+            # reshape to 1-D first. The original shape is already folded into
+            # the hash above, so this is a pure byte-reinterpret convenience,
+            # never a loss of shape information.
+            h.update(t.reshape(-1).view(torch.uint8).numpy().tobytes())
+        elif hasattr(o, "tobytes") and hasattr(o, "shape"):  # numpy.ndarray
+            h.update(b"N")
+            h.update(str(o.shape).encode("utf-8"))
+            h.update(str(o.dtype).encode("utf-8"))
+            h.update(o.tobytes())
+        elif isinstance(o, dict):
+            h.update(b"D")
+            for k in sorted(o.keys(), key=str):
+                h.update(str(k).encode("utf-8"))
+                _walk(o[k])
+        elif isinstance(o, (list, tuple)):
+            h.update(b"L")
+            for item in o:
+                _walk(item)
         else:
-            h.update(str(v).encode("utf-8"))
+            h.update(b"S")
+            h.update(repr(o).encode("utf-8"))
+
+    _walk(obj)
     return h.hexdigest()
 
 
@@ -3892,8 +3904,11 @@ def _selftest_production_step_parity() -> None:
     "pure extraction" claim is only PROVEN here, not merely asserted by the
     git diff being small): ts.run_v0_segment(n_steps=1) end-to-end vs a
     direct ts._run_production_step(...) call against an INDEPENDENTLY
-    built model/optimizers/loader produce bit-identical first-step loss
-    and a bit-identical post-step model-weight hash.
+    built model/optimizers/loader produce bit-identical first-step loss,
+    model weights, OPTIMIZER STATE, and RNG state (falsifier round 2: a
+    model/loss-only compare could pass while the optimizer's own
+    exp_avg/exp_avg_sq/momentum_buffer/step diverged -- exactly what a
+    resume/continuation actually depends on).
 
     A freshly-constructed CPUOffloadOptimizer's state is all-zero/step=0
     regardless of RNG (cpu_offload_adamw.py's _memmap_zeros -- no seed
@@ -3907,9 +3922,20 @@ def _selftest_production_step_parity() -> None:
     grad_accum_steps=3 (>1, so the micro-batch accumulation loop itself is
     covered, not just the grad_accum_steps=1 degenerate case) and
     qat_enabled=True (so the fake-quant/restore STE lifecycle is proven
-    identical too, closing gates 5-7 together)."""
+    identical too, closing gates 5-7 together).
+
+    Path A isolation (falsifier round 2): run_v0_segment does not expose
+    an optstate_dir parameter -- build_split_optimizer's own default
+    (cpu_offload_adamw._DEFAULT_OPTSTATE_DIR, a SHARED, non-unique scratch
+    dir) is what it always uses. This fixture monkeypatches that module
+    global to a fresh per-invocation tempdir for the duration of path A's
+    call only (restored in finally) -- an in-process patch of a THIRD
+    file's (cpu_offload_adamw.py) runtime default, never a change to
+    run_v0_segment's own signature/behavior, so it stays outside the
+    extraction-locked file entirely."""
     import os
     import tempfile
+    from pathlib import Path as _Path
 
     import torch
 
@@ -3928,27 +3954,36 @@ def _selftest_production_step_parity() -> None:
     GRAD_ACCUM = 3
     BATCH = 1
 
-    # ---- Path A: run_v0_segment(n_steps=1) end-to-end ----
+    # ---- Path A: run_v0_segment(n_steps=1) end-to-end, ISOLATED optstate ----
     run_dir_a = tempfile.mkdtemp(prefix="attribution702_parity_a_")
-    torch.manual_seed(SEED)
-    receipt_a = ts.run_v0_segment(
-        run_dir_a, cfg, n_steps=1, total_steps=4, live=False, real_arch=True,
-        device="cpu", intermediate_override=small_intermediate,
-        offload_optimizer_state=True, checkpoint_every=1,
-        segment_id="attrib702-parity-fixture-a", batch_size=BATCH,
-        grad_accum_steps=GRAD_ACCUM)
+    orig_default_optstate_dir = _coa._DEFAULT_OPTSTATE_DIR
+    _coa._DEFAULT_OPTSTATE_DIR = _Path(
+        tempfile.mkdtemp(prefix="attribution702_parity_optstate_a_"))
+    try:
+        torch.manual_seed(SEED)
+        receipt_a = ts.run_v0_segment(
+            run_dir_a, cfg, n_steps=1, total_steps=4, live=False, real_arch=True,
+            device="cpu", intermediate_override=small_intermediate,
+            offload_optimizer_state=True, checkpoint_every=1,
+            segment_id="attrib702-parity-fixture-a", batch_size=BATCH,
+            grad_accum_steps=GRAD_ACCUM)
+    finally:
+        _coa._DEFAULT_OPTSTATE_DIR = orig_default_optstate_dir
     loss_a = receipt_a["loss_first"]
     assert loss_a is not None, receipt_a
     assert receipt_a["components"]["qat"]["enabled"] is True, receipt_a
     ckpt_dir_a = receipt_a["last_checkpoint"]
     assert ckpt_dir_a is not None, receipt_a
-    m_state_a, _, _, _ = ts.load_checkpoint(ckpt_dir_a)
-    hash_a = _hash_state_dict(m_state_a)
+    m_state_a, o_state_a, r_state_a, _ = ts.load_checkpoint(ckpt_dir_a)
+    hash_a_model = _hash_any(m_state_a)
+    hash_a_opt = _hash_any(o_state_a)
+    hash_a_rng = _hash_any(r_state_a)
 
     shard_dir = os.path.join(run_dir_a, "shards")
     assert os.path.isdir(shard_dir), shard_dir
 
-    # ---- Path B: direct _run_production_step call, independently built ----
+    # ---- Path B: direct _run_production_step call, independently built,
+    # ALREADY isolated (explicit optstate_dir passed below) ----
     torch.manual_seed(SEED)
     model_b, vocab_b, hidden_b, n_mtp_b = ts.build_v0_model(
         cfg, live=True, tiny_dims=None, intermediate_override=small_intermediate,
@@ -3970,13 +4005,24 @@ def _selftest_production_step_parity() -> None:
         batch_size=BATCH, global_step=0, total_steps=4,
         grad_accum_steps=GRAD_ACCUM, qat_enabled=True)
     loss_b = round(step_result_b["loss"], 6)
-    hash_b = _hash_state_dict(model_b.state_dict())
+    hash_b_model = _hash_any(model_b.state_dict())
+    hash_b_opt = _hash_any(ts.save_optimizers_state(optimizers_b))
+    hash_b_rng = _hash_any(ts.capture_rng())
 
     assert loss_a == loss_b, (loss_a, loss_b)
-    assert hash_a == hash_b, "post-step model weights diverged between the two call paths"
+    assert hash_a_model == hash_b_model, (
+        "post-step MODEL WEIGHTS diverged between the two call paths")
+    assert hash_a_opt == hash_b_opt, (
+        "post-step OPTIMIZER STATE (exp_avg/exp_avg_sq/momentum_buffer/step) "
+        "diverged between the two call paths")
+    assert hash_a_rng == hash_b_rng, (
+        "post-step RNG STATE diverged between the two call paths")
 
     print("ATTRIB702_PRODUCTION_STEP_PARITY_SELFTEST_PASS "
-          f"loss_a={loss_a} loss_b={loss_b} hash_match={hash_a == hash_b} "
+          f"loss_a={loss_a} loss_b={loss_b} "
+          f"model_hash_match={hash_a_model == hash_b_model} "
+          f"opt_hash_match={hash_a_opt == hash_b_opt} "
+          f"rng_hash_match={hash_a_rng == hash_b_rng} "
           f"grad_accum_steps={GRAD_ACCUM} qat_enabled=True", flush=True)
 
 

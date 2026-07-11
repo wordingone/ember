@@ -1583,7 +1583,8 @@ def _run_production_step(
         *, model, loader, optimizers: dict, base_lrs: dict, cfg: dict, ce_fn,
         mtp_enabled: bool, mtp_weight: float, ce_chunk_tokens: int, device: str,
         batch_size: int, global_step: int, total_steps: int,
-        grad_accum_steps: int = 1, qat_enabled: bool = False) -> dict:
+        grad_accum_steps: int = 1, qat_enabled: bool = False,
+        phase_cb=None, sync_cb=None) -> dict:
     """The shared production per-macro-step body (ember #702 ADDENDUM-5,
     "ADDENDUM-3(F) operationalized"): the grad-accumulated micro-batch
     loop, QAT `_apply_fake_quant`/`_restore_weights` (STE) bracketing each
@@ -1608,8 +1609,27 @@ def _run_production_step(
     identical initial state produce bit-identical loss and post-step
     weight-state hashes.
 
+    phase_cb/sync_cb (ADDENDUM-5 falsifier round 2, additive -- None for
+    every existing caller including run_v0_segment's own call site, zero
+    behavior/numeric change): an OPTIONAL observer restoring the frozen
+    fwd/loss/bwd span decomposition the #702 attribution runner measured
+    pre-extraction. When phase_cb is not None, it is called as
+    phase_cb(name, dt) with dt measured (sync_cb() bracketing each
+    boundary, matching the pre-extraction sync() convention) strictly
+    around the forward pass, the CE/MTP loss composition, and the scaled
+    backward() call -- summed ACROSS every grad_accum_steps micro-batch
+    (phase_cb accumulates additively, so multiple calls per macro-step are
+    expected and correct). loader/H2D/QAT/apply_wsd/opt.step()/zero_grad()
+    are deliberately left UNMEASURED here, exactly as they were before
+    this function existed (they were never part of the frozen t_gpu=
+    fwd+loss+bwd bucket) -- this makes the caller's closure-gate residual
+    an INDEPENDENT measurement again (measured spans vs measured wall),
+    never a subtraction identity derived from the same interval it's
+    checked against.
+
     Returns {"loss": float (mean over the grad_accum_steps micro-batches),
     "lr_mult": float (the WSD multiplier applied at micro_idx==0)}."""
+    import time
     micro_losses: list[float] = []
     lr_mult: float | None = None
 
@@ -1630,8 +1650,17 @@ def _run_production_step(
         # QAT pre-forward: transform Linear weights to int8-grid (STE).
         qat_saved = _apply_fake_quant(model, "qat") if qat_enabled else []
 
+        if phase_cb is not None:
+            if sync_cb is not None:
+                sync_cb()
+            _t0 = time.perf_counter()
         hidden_out = model.backbone(x)                       # [B, T, H]
         h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
+        if phase_cb is not None:
+            if sync_cb is not None:
+                sync_cb()
+            phase_cb("fwd", time.perf_counter() - _t0)
+            _t0 = time.perf_counter()
         primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
                               chunk_tokens=ce_chunk_tokens)
         mtp_ces = []
@@ -1642,6 +1671,10 @@ def _run_production_step(
                 mtp_ces.append(ce_k)
         micro_loss = mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
         micro_losses.append(float(micro_loss.detach()))
+        if phase_cb is not None:
+            if sync_cb is not None:
+                sync_cb()
+            phase_cb("loss", time.perf_counter() - _t0)
 
         if micro_idx == 0:
             mult = apply_wsd(optimizers, base_lrs, global_step, total_steps,
@@ -1653,7 +1686,15 @@ def _run_production_step(
         # monolithic backward on batch_size * grad_accum_steps samples
         # (mean-reduction CE over equal-sized chunks -- same identity the
         # cure PR's accumulation-equivalence probe checks in isolation).
+        if phase_cb is not None:
+            if sync_cb is not None:
+                sync_cb()
+            _t0 = time.perf_counter()
         (micro_loss / grad_accum_steps).backward()
+        if phase_cb is not None:
+            if sync_cb is not None:
+                sync_cb()
+            phase_cb("bwd", time.perf_counter() - _t0)
 
         # QAT post-backward: restore full-precision weights AFTER backward.
         # Gradients accumulated on the int8-rounded weights are applied to
