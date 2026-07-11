@@ -1,0 +1,63 @@
+{
+  "ticket": "EXP711-SENSITIVITY-CALIBRATION",
+  "ts": "2026-07-11T03:13:16.695593+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over the little-endian uint16 bytes of the packed token stream",
+  "refs": [
+    711,
+    739
+  ],
+  "role": "calibration (raw measurement, no floor disposition -- floor is derived FROM this receipt per A8 step 2)",
+  "seed": 90001,
+  "model_seed": 90003,
+  "n_windows": 24,
+  "n_target_windows": 5,
+  "target_fraction_actual": 0.208333,
+  "n_tokens_total": 387,
+  "target_len_tokens": 83,
+  "filler_len_tokens": 304,
+  "n_steps": 12,
+  "total_steps": 48,
+  "batch_size": 2,
+  "seq": 16,
+  "n_mtp": 2,
+  "validity": {
+    "last_target_step": {
+      "EARLY": 2,
+      "LATE": 11
+    },
+    "gap_after_last_exposure": {
+      "EARLY": 9,
+      "LATE": 0
+    },
+    "gap_difference": 9,
+    "ema_used": false,
+    "decay_start_step": 40.8,
+    "decay_started_before_last_exposure": {
+      "EARLY": false,
+      "LATE": false
+    }
+  },
+  "nll_target_early": 3.911953,
+  "nll_target_late": 4.185866,
+  "n_valid_tokens_early": 80,
+  "n_valid_tokens_late": 80,
+  "delta_sens": -0.273912,
+  "direction_correct": false,
+  "measured_delta": -0.2739124298095703,
+  "floor": null,
+  "disposition": null,
+  "early_segment_receipt_summary": {
+    "verdict": "V0_SEGMENT_COMPLETE",
+    "steps": 12,
+    "loss_first": 5.7706,
+    "loss_last": 5.572309
+  },
+  "late_segment_receipt_summary": {
+    "verdict": "V0_SEGMENT_COMPLETE",
+    "steps": 12,
+    "loss_first": 5.77912,
+    "loss_last": 5.56164
+  },
+  "apparatus_note": "memorization-recency control -- evaluated on trained content by construction; never a generalization claim"
+}

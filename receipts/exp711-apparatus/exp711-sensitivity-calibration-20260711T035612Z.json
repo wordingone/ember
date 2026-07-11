@@ -1,0 +1,85 @@
+{
+  "ticket": "EXP711-SENSITIVITY-CALIBRATION",
+  "ts": "2026-07-11T03:56:12.396755+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over the little-endian uint16 bytes of the packed token stream",
+  "refs": [
+    711,
+    739
+  ],
+  "role": "calibration (A8.1 sizing + A8.2 lr_adamw override; raw measurement, no floor disposition unless trained_at_all.passed -- floor is derived FROM this receipt per A8 step 2 / A8.1 / A8.2)",
+  "seed": 90201,
+  "model_seed": 90203,
+  "cfg_overrides": {
+    "amendment": "A8.2",
+    "issue_comment": 4942176352,
+    "lr_adamw": {
+      "frozen_contract_value": 0.0003,
+      "override_value": 0.02,
+      "applied_to": [
+        "EARLY",
+        "LATE"
+      ]
+    }
+  },
+  "n_windows": 320,
+  "n_target_windows": 64,
+  "target_fraction_actual": 0.2,
+  "n_tokens_total": 5123,
+  "target_len_tokens": 1027,
+  "filler_len_tokens": 4096,
+  "n_steps": 80,
+  "total_steps": 320,
+  "batch_size": 4,
+  "seq": 16,
+  "n_mtp": 2,
+  "validity": {
+    "last_target_step": {
+      "EARLY": 15,
+      "LATE": 79
+    },
+    "gap_after_last_exposure": {
+      "EARLY": 64,
+      "LATE": 0
+    },
+    "gap_difference": 64,
+    "ema_used": false,
+    "decay_start_step": 272.0,
+    "decay_started_before_last_exposure": {
+      "EARLY": false,
+      "LATE": false
+    }
+  },
+  "nll_target_early": 4.144677,
+  "nll_target_late": 4.114301,
+  "n_valid_tokens_early": 1024,
+  "n_valid_tokens_late": 1024,
+  "delta_sens": 0.030376,
+  "direction_correct": true,
+  "measured_delta": 0.030376434326171875,
+  "trained_at_all": {
+    "early_loss_drop": 0.35059,
+    "late_loss_drop": 0.265093,
+    "loss_drop_min": 0.265093,
+    "loss_drop_threshold": 0.5,
+    "ln_vocab": 4.158883,
+    "nll_ceiling": 3.658883,
+    "min_nll_target": 4.114301,
+    "passed": false
+  },
+  "floor": null,
+  "disposition": null,
+  "early_segment_receipt_summary": {
+    "verdict": "V0_SEGMENT_COMPLETE",
+    "steps": 80,
+    "loss_first": 5.729478,
+    "loss_last": 5.378888
+  },
+  "late_segment_receipt_summary": {
+    "verdict": "V0_SEGMENT_COMPLETE",
+    "steps": 80,
+    "loss_first": 5.639235,
+    "loss_last": 5.374142
+  },
+  "apparatus_note": "memorization-recency control -- evaluated on trained content by construction; never a generalization claim"
+}
