@@ -101,12 +101,31 @@ HARD TIMING RAIL (builder spawn spec, issue #792): NO EXECUTION on the
 authoring host until the coordinator's explicit window-release GO --
 --selftest and --schema-probe are safe (CPU-only, no live dispatch) and are
 the only legs this build phase runs.
+
+CURE ROUND (external falsifier, head f81728f3, three pre-execution findings,
+all addressed below): (1) MEASURAND-1 orchestration -- run_screen used to
+retain arm A and arm A2's full model+optimizer state while building arm B,
+so the commit-footprint delta included retained-arm + machine-global noise;
+_one_arm now tears down each arm's heavy state (model, optimizer wrapper,
+memmap file handles) before the next arm is built, enforced by an executable
+_assert_no_arm_alive invariant, not just documented as a convention. The
+sign was also inverted (bf16_used - fp32_used instead of fp32_used -
+bf16_used, since bf16 storage is a REDUCTION vs fp32) -- see
+compute_commit_delta_gib. (2) PRODUCTION-PARITY: run_arm_block's per-step
+body now calls the SHARED ts._run_production_step (landed master #762) for
+the QAT/forward/loss/backward/step body -- previously a hand-copied sibling
+with no parity guarantee; only the outer loop (span-collector bracketing,
+step-wall timing) remains this file's own. (3) PROVENANCE BINDING: every
+live receipt now carries executing_git_sha + source/config/shard sha256
+(compute_provenance), the field-name convention pinned by ember #801.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -451,6 +470,71 @@ def realized_matrix_split(model, routing: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Isolated-arm-lifetime invariant (falsifier finding, #792 cure round,
+# ORCHESTRATION). This is what makes "build -> measure -> TEAR DOWN -> next
+# arm" a STRUCTURAL guarantee rather than a promise -- the original defect
+# (arm A and arm A2 both still resident when arm B was built and measured)
+# could not happen with this wired into _one_arm's build/teardown points.
+# ---------------------------------------------------------------------------
+_ALIVE_ARM_SLOTS: set = set()
+_TEARDOWN_SETTLE_S = 2.0  # brief pause after del+gc.collect()+empty_cache()
+                          # for Windows' documented del/GC commit-release lag
+                          # (named in this repo's own cbase_grow_rung2_
+                          # attribution_702.py fork-capacity pricing notes) --
+                          # so the NEXT arm's commit reading is not polluted
+                          # by a release still in flight.
+
+
+def _assert_no_arm_alive(context: str) -> None:
+    """Raises if another arm's heavy state is still tracked as alive when a
+    new arm is about to be built, or when a commit-footprint reading is
+    about to be taken. See module docstring CURE ROUND (1)."""
+    if _ALIVE_ARM_SLOTS:
+        raise RuntimeError(
+            f"isolated-arm-lifetime violation ({context}): arm slot(s) "
+            f"{sorted(_ALIVE_ARM_SLOTS)!r} still alive -- teardown must "
+            f"complete before the next arm is built or measured (falsifier "
+            f"finding, #792 cure round)")
+
+
+def _teardown_arm(model, optimizers: dict, device: str) -> None:
+    """Frees the model + optimizer wrapper objects between arms so each
+    arm's commit_steady_state_gib reading reflects ONLY that arm's build.
+    Momentum-buffer FILES are never deleted (only the in-process Python
+    objects) -- momentum_cosine_diagnostic reopens them fresh from disk
+    after teardown via momentum_file_manifest. Mirrors this codebase's own
+    established del+gc.collect()+empty_cache() pattern (c04_*.py,
+    accumulation_law/run_accumulation.py)."""
+    import gc
+    import torch
+    optimizers.clear()
+    del model
+    gc.collect()
+    if device == "cuda" and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    time.sleep(_TEARDOWN_SETTLE_S)
+
+
+def compute_commit_delta_gib(*, arm_a_commit: dict, arm_b_commit: dict) -> float:
+    """Pins the sign convention (falsifier finding, #792 cure round, SIGN):
+    check_byte_arithmetic's expected_delta_bytes is ALWAYS POSITIVE (fp32
+    4B/param -> bf16 2B/param is a byte REDUCTION --
+    AMENDMENT1_BYTES_PER_MATRIX_PARAM_MOMENTUM_DELTA=2 is a positive
+    per-param count), so the measured delta must be fp32_used - bf16_used
+    (arm A minus arm B), never the reverse. The original code computed
+    arm_b.used_gib - arm_a.used_gib; the falsifier's repro
+    (check_byte_arithmetic(commit_delta_gib=-0.5, realized_p_matrix=
+    268_435_456) -> rel_err=2.0, INVALID_INSTRUMENT_DEFECT) is exactly what
+    that inverted sign produces whenever bf16 genuinely uses less committed
+    memory than fp32 -- the EXPECTED, correct direction of the effect this
+    screen measures."""
+    if not (arm_a_commit.get("applicable") and arm_b_commit.get("applicable")):
+        return 0.0
+    return arm_a_commit["used_gib"] - arm_b_commit["used_gib"]
+
+
+# ---------------------------------------------------------------------------
 # Steady-state commit-footprint governor read (measurand 1).
 # ---------------------------------------------------------------------------
 
@@ -625,45 +709,90 @@ def momentum_buffer_bytes_sidecar(optimizers: dict) -> dict:
 
 # ---------------------------------------------------------------------------
 # Momentum-buffer cosine diagnostic (measurand 4, diagnostic only).
+# Rewritten for isolated arm lifetimes (falsifier finding, #792 cure round,
+# ORCHESTRATION): the original version required BOTH arms' live optimizer
+# objects resident simultaneously, which is exactly the retention defect the
+# teardown cure removes. momentum_file_manifest captures each arm's momentum-
+# buffer FILE PATHS (+ shapes) while the arm is still alive -- small (path
+# strings and shape tuples, no tensor data) -- and momentum_cosine_diagnostic
+# reopens those files fresh, read-only, AFTER both arms have already been
+# torn down. File-backed reopens are zero-commit-charge, the same convention
+# this codebase's CPUOffloadOptimizer memmap tensors already rely on, so this
+# diagnostic-only measurand (#707 Section D: "never a gate") adds no
+# meaningful resident-memory footprint of its own.
 # ---------------------------------------------------------------------------
 
-def momentum_cosine_diagnostic(optimizers_a: dict, optimizers_b: dict) -> dict:
-    """fp32-materialized cosine similarity between arm A's (fp32-native) and
-    arm B's (bf16-stored, upcast for comparison) Muon momentum buffers at
-    the current checkpoint, per-param and pooled (numel-weighted). Reads
-    coa_opt._inner.state[shadow_p]['momentum_buffer'] directly -- same
-    established internal-state-read pattern as install_bf16_momentum and
-    the #702 runner's own _snapshot_fork. Diagnostic only -- #707 Section D:
-    'momentum-buffer cosine vs fp32 twin at fixed checkpoints (diagnostic,
-    not a gate)'."""
+def momentum_file_manifest(optimizers: dict, *, arm: str, optstate_dir: "Path") -> dict:
+    """Captures {name: {"path", "shape", "dtype"}} for each muon-routed
+    param's momentum_buffer file, while the arm is still alive. `arm`
+    ("fp32" or "bf16") selects the on-disk naming convention: fp32 is
+    cpu_offload_adamw.CPUOffloadOptimizer's own untouched default
+    (`<stem>.momentum.f32`, cpu_offload_adamw.py's __init__); bf16 is this
+    file's own install_bf16_momentum convention
+    (`<stem>.momentum.bf16proxy.i16`). No tensor data is read here -- only
+    path strings and shape tuples, so this manifest survives _teardown_arm."""
+    muon = optimizers.get("muon")
+    if muon is None:
+        return {}
+    manifest: dict = {}
+    for name, shadow_p in zip(muon._names, muon._shadow):
+        state = muon._inner.state.get(shadow_p)
+        if state is None or "momentum_buffer" not in state:
+            continue
+        shape = tuple(state["momentum_buffer"].shape)
+        stem = Path(optstate_dir) / _coa._sanitize_name(name)
+        suffix = ".momentum.bf16proxy.i16" if arm == "bf16" else ".momentum.f32"
+        manifest[name] = {"path": str(Path(str(stem) + suffix)),
+                          "shape": shape, "dtype": arm}
+    return manifest
+
+
+def _reopen_momentum_fp32(path: str, shape: tuple, dtype_tag: str):
+    """Reopens a persisted momentum-buffer memmap file FRESH (read-only,
+    zero-commit-charge, same np.memmap(mode='r') pattern
+    test_bf16_view_memmap_roundtrip already uses) and returns it
+    materialized as an fp32 torch tensor. dtype_tag=='bf16' bitcasts the
+    on-disk int16 proxy to bfloat16 first (the SAME reinterpretation
+    bf16_view_memmap uses to write it) before upcasting to fp32."""
+    import numpy as np
     import torch
-    muon_a = optimizers_a.get("muon")
-    muon_b = optimizers_b.get("muon")
-    if muon_a is None or muon_b is None:
-        return {"applicable": False, "reason": "one or both arms lack a muon optimizer"}
-    names_a = list(muon_a._names)
-    names_b = list(muon_b._names)
-    if names_a != names_b:
+    if dtype_tag == "bf16":
+        i16 = np.memmap(path, dtype=np.int16, mode="r", shape=shape)
+        t = torch.from_numpy(np.asarray(i16)).view(torch.bfloat16)
+        return t.to(torch.float32)
+    f32 = np.memmap(path, dtype=np.float32, mode="r", shape=shape)
+    return torch.from_numpy(np.asarray(f32)).to(torch.float32)
+
+
+def momentum_cosine_diagnostic(manifest_a: dict, manifest_b: dict) -> dict:
+    """fp32-materialized cosine similarity between arm A's (fp32-native) and
+    arm B's (bf16-stored, upcast for comparison) Muon momentum buffers,
+    reopened fresh from each arm's momentum_file_manifest -- see the section
+    docstring above for why this no longer needs both arms' live optimizer
+    objects. Diagnostic only -- #707 Section D: 'momentum-buffer cosine vs
+    fp32 twin at fixed checkpoints (diagnostic, not a gate)'."""
+    common = sorted(set(manifest_a) & set(manifest_b))
+    if not common:
         return {"applicable": False,
-                "reason": "muon param name order differs between arms -- "
-                          "cannot pair buffers positionally"}
+                "reason": "no common muon param names between the two arms' manifests"}
     cos_by_name = {}
     dot_sum = 0.0
     norm_a_sum = 0.0
     norm_b_sum = 0.0
-    for name, shadow_a, shadow_b in zip(names_a, muon_a._shadow, muon_b._shadow):
-        sa = muon_a._inner.state.get(shadow_a, {}).get("momentum_buffer")
-        sb = muon_b._inner.state.get(shadow_b, {}).get("momentum_buffer")
-        if sa is None or sb is None:
+    for name in common:
+        info_a = manifest_a[name]
+        info_b = manifest_b[name]
+        if tuple(info_a["shape"]) != tuple(info_b["shape"]):
             continue
-        a32 = sa.detach().to(torch.float32).flatten()
-        b32 = sb.detach().to(torch.float32).flatten()
-        denom = (a32.norm() * b32.norm()).item()
-        cos = float((a32 @ b32).item() / denom) if denom > 0 else None
+        shape = tuple(info_a["shape"])
+        a32 = _reopen_momentum_fp32(info_a["path"], shape, info_a["dtype"]).flatten()
+        b32 = _reopen_momentum_fp32(info_b["path"], shape, info_b["dtype"]).flatten()
+        denom = float(a32.norm() * b32.norm())
+        cos = float((a32 @ b32) / denom) if denom > 0 else None
         cos_by_name[name] = cos
-        dot_sum += float((a32 @ b32).item())
-        norm_a_sum += float((a32.norm() ** 2).item())
-        norm_b_sum += float((b32.norm() ** 2).item())
+        dot_sum += float(a32 @ b32)
+        norm_a_sum += float(a32.norm() ** 2)
+        norm_b_sum += float(b32.norm() ** 2)
     pooled_denom = (norm_a_sum ** 0.5) * (norm_b_sum ** 0.5)
     pooled_cosine = (dot_sum / pooled_denom) if pooled_denom > 0 else None
     return {
@@ -738,71 +867,158 @@ def run_arm_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn,
                    mtp_enabled, mtp_weight, ce_chunk_tokens, n_steps: int,
                    global_step_start: int, total_steps: int, device: str,
                    batch_size: int, collector=None) -> dict:
+    """PRODUCTION-PARITY (team-lead review, #792 cure round, falsifier
+    finding 2): the per-step body is now the SHARED ts._run_production_step
+    (landed master #762, sha 6332494d) -- this function used to be a
+    hand-composed copy of that same body (QAT pre-forward, WSD apply,
+    forward/loss/backward, QAT post-backward restore, opt.step()/
+    zero_grad()) with no parity guarantee, exactly the sibling-
+    reimplementation defect ember #702 ADDENDUM-5 class rule F exists to
+    prevent. Only the OUTER loop -- step_walls timing and collector.
+    begin_step/end_step bracketing -- remains this file's own, per #702's
+    own docstring: "the outer step loop is necessarily its own" (axis-3's
+    attrib._run_block doesn't run QAT, so this composition -- a QAT-enabled
+    outer loop calling the shared per-step body -- is still new; the
+    per-step ARITHMETIC inside it is no longer a sibling copy).
+    phase_cb feeds fwd/loss/bwd spans into `collector` under the SAME names
+    the pre-extraction inline loop used, so measurand (2)'s copies/
+    opt_other bucketing (COPIES_SUBPHASES/OPT_OTHER_SUBPHASES) is
+    unaffected; inner_optimizer_step/grad_to_cpu_fp32/grad_heap_to_memmap/
+    updated_param_to_gpu still come from attrib.install_span_collector's
+    patch on the optimizer objects themselves (unchanged -- _run_production_
+    step calls opt.step() on those SAME already-patched objects)."""
     import torch
     sync = (torch.cuda.synchronize if device == "cuda" and torch.cuda.is_available()
             else (lambda: None))
     qat_enabled = bool(cfg.get("precision", {}).get("qat", {}).get("enabled", False))
     step_walls: list = []
     losses: list = []
+
+    def _phase_cb(name, dt):
+        collector.add(name, dt)
+
     for local_step in range(n_steps):
         global_step = global_step_start + local_step
         if collector is not None:
             collector.begin_step()
         sync(); t_step0 = time.perf_counter()
 
-        x, y0, y_mtp = loader.batch(global_step, batch_size)
-        if device == "cuda":
-            x = x.cuda(); y0 = y0.cuda(); y_mtp = [t.cuda() for t in y_mtp]
-
-        # QAT pre-forward (run_v0_segment's own pattern, reused verbatim).
-        qat_saved = ts._apply_fake_quant(model, "qat") if qat_enabled else []
-
-        if collector is not None:
-            sync(); t0 = time.perf_counter()
-        hidden_out = model.backbone(x)
-        h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
-        if collector is not None:
-            sync(); t1 = time.perf_counter()
-            collector.add("fwd", t1 - t0)
-            t0 = time.perf_counter()
-
-        primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
-                              chunk_tokens=ce_chunk_tokens)
-        mtp_ces = []
-        if mtp_enabled:
-            for k, head in enumerate(model.mtp_heads):
-                ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
-                                chunk_tokens=ce_chunk_tokens)
-                mtp_ces.append(ce_k)
-        loss = ts.mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
-        if collector is not None:
-            sync(); t1 = time.perf_counter()
-            collector.add("loss", t1 - t0)
-
-        ts.apply_wsd(optimizers, base_lrs, global_step, total_steps, cfg["schedule"])
-
-        if collector is not None:
-            sync(); t0 = time.perf_counter()
-        loss.backward()
-        if collector is not None:
-            sync(); t1 = time.perf_counter()
-            collector.add("bwd", t1 - t0)
-
-        # QAT post-backward restore (STE -- run_v0_segment's own pattern).
-        if qat_enabled:
-            ts._restore_weights(qat_saved)
-
-        for opt in optimizers.values():
-            opt.step()
-        for opt in optimizers.values():
-            opt.zero_grad(set_to_none=True)
+        step_result = ts._run_production_step(
+            model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
+            cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
+            ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
+            global_step=global_step, total_steps=total_steps, grad_accum_steps=1,
+            qat_enabled=qat_enabled,
+            phase_cb=(_phase_cb if collector is not None else None),
+            sync_cb=(sync if collector is not None else None))
 
         sync(); step_wall = time.perf_counter() - t_step0
         step_walls.append(step_wall)
-        losses.append(float(loss.detach()))
+        losses.append(float(step_result["loss"]))
         if collector is not None:
             collector.end_step(step_wall)
     return {"step_walls": step_walls, "losses": losses}
+
+
+# ---------------------------------------------------------------------------
+# Code/config/shard identity binding (team-lead review finding 3, #792 cure
+# round, PROVENANCE BINDING). Field-name convention pinned by ember #801
+# ("the receipt gains executing_git_sha [repo HEAD at run time] + sha256 of
+# the runner source file(s) actually imported -- absence is a schema-probe
+# refusal, fail-closed, same class as the identity gates"). Extends #801's
+# narrower runner-file scope to also bind config + shard identity
+# (team-lead's explicit ask: "source/config/shard hashes"), reusing
+# established in-repo hashers rather than reimplementing:
+# manifest_sha.compute_manifest for the shard (the SAME function
+# timeshare_pretrain.py's own corpus-cache trust check calls), plain sha256
+# of the frozen contract config file and this runner's own source + its
+# direct read-only reference imports.
+# ---------------------------------------------------------------------------
+
+def _file_sha256(p: "Path") -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+_PROVENANCE_REFERENCE_MODULES = (
+    "timeshare_pretrain.py", "cpu_offload_adamw.py", "governor.py",
+    "receipt_write.py", "receipt_check.py", "cbase_grow_rung2_attribution_702.py",
+)
+
+
+def compute_provenance(*, shard_dir: str | None, config_path: "Path | None" = None) -> dict:
+    """Returns the provenance dict every live receipt binds (see section
+    docstring above). Never raises on a missing/unavailable input -- each
+    leg discloses its own error string so refuse_on_missing_provenance can
+    make the fail-closed decision explicitly, rather than an opaque
+    exception from deep inside a hash routine."""
+    this_file = Path(__file__).resolve()
+
+    try:
+        executing_git_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=str(_REPO),
+            stderr=subprocess.DEVNULL, text=True).strip()
+        git_sha_error = None
+    except Exception as e:
+        executing_git_sha = None
+        git_sha_error = repr(e)
+
+    source_sha256 = {this_file.name: _file_sha256(this_file)}
+    for mod_name in _PROVENANCE_REFERENCE_MODULES:
+        p = this_file.parent / mod_name
+        if p.exists():
+            source_sha256[mod_name] = _file_sha256(p)
+
+    config_path = Path(config_path) if config_path is not None else (
+        _REPO / "configs" / "v0-pretrain-config.json")
+    config_sha256 = _file_sha256(config_path) if config_path.exists() else None
+
+    shard_manifest_sha256 = None
+    shard_manifest_error = None
+    if shard_dir:
+        try:
+            from manifest_sha import compute_manifest
+            shard_manifest_sha256 = compute_manifest(shard_dir)["combined_sha256"]
+        except Exception as e:
+            shard_manifest_error = repr(e)
+
+    return {
+        "executing_git_sha": executing_git_sha,
+        "executing_git_sha_error": git_sha_error,
+        "source_sha256": source_sha256,
+        "config_path": str(config_path),
+        "config_sha256": config_sha256,
+        "shard_dir": shard_dir,
+        "shard_manifest_sha256": shard_manifest_sha256,
+        "shard_manifest_error": shard_manifest_error,
+    }
+
+
+def refuse_on_missing_provenance(provenance: dict, *, live: bool) -> None:
+    """Fail-closed enforcement of #801's binding requirement -- since
+    receipt_check.py is a READ-ONLY reference (this PR's surface is this
+    file plus its own tests only), the refusal lives here rather than in
+    the shared schema validator. Applies ONLY to --live (a real dispatch
+    with a real shard_dir and a real repo checkout); --schema-probe and
+    --selftest run compute_provenance for real (proving the code path) but
+    never refuse on it, since a schema-probe/selftest environment may
+    legitimately lack a shard_dir."""
+    if not live:
+        return
+    missing = []
+    if not provenance.get("executing_git_sha"):
+        missing.append(f"executing_git_sha ({provenance.get('executing_git_sha_error')})")
+    if not provenance.get("config_sha256"):
+        missing.append("config_sha256 (config file not found)")
+    if provenance.get("shard_dir") and not provenance.get("shard_manifest_sha256"):
+        missing.append(f"shard_manifest_sha256 ({provenance.get('shard_manifest_error')})")
+    if missing:
+        raise RuntimeError(
+            "PROVENANCE_BINDING_REFUSAL (ember #801 convention, fail-closed, "
+            "same class as the identity gates): " + "; ".join(missing))
 
 
 # ---------------------------------------------------------------------------
@@ -818,7 +1034,7 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
                    copies_opt_other_a: dict, copies_opt_other_b: dict,
                    momentum_bytes_a: dict, momentum_bytes_b: dict,
                    momentum_cosine: dict, band: dict, verdict: dict,
-                   run_config: dict) -> dict:
+                   run_config: dict, provenance: dict) -> dict:
     findings_note = (
         "sha_convention: bytes on disk as-is (binary read, no line-ending "
         "normalization) -- matches receipt_check.py's own documented "
@@ -836,6 +1052,7 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
         "paid_api_surface_used": False,
         "scale": "434M c03 (frozen contract native scale)",
         "run_config": run_config,
+        "provenance": provenance,
         "realized_split": realized_split,
         "measurand_1_commit_footprint": {
             "commit_delta_gib": commit_delta_gib,
@@ -873,16 +1090,27 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
 def _selftest() -> int:
     """CPU-only coverage: bf16 memmap round-trip, byte-arithmetic check
     branches, noise-band + verdict-evaluation branches (KILL/INCONCLUSIVE/
-    PROMOTE/INVALID), and the required negative fixture (delegated to
-    tests/test_screen792_bf16_momentum.py so the fixture lives in exactly
-    one place)."""
+    PROMOTE/INVALID), the SIGN and ORCHESTRATION cure-round fixtures
+    (falsifier findings against head f81728f3), the PROVENANCE binding
+    fixture (#801 convention), and the required negative fixture (delegated
+    to tests/test_screen792_bf16_momentum.py so the fixture lives in
+    exactly one place)."""
     import tempfile
     import torch
 
     ok = True
 
     # 1. bf16 memmap round-trip.
-    with tempfile.TemporaryDirectory() as d:
+    # ignore_cleanup_errors=True (first-execution finding, #792 cure round,
+    # unrelated to the falsifier's three findings): np.memmap keeps the
+    # backing file mapped on Windows, so a TemporaryDirectory holding an
+    # OPEN memmap cannot rmtree itself at __exit__ (WinError 32) until the
+    # OS releases the handle -- non-deterministic without an explicit
+    # del+gc.collect() the mapped tensors don't otherwise need. Standard
+    # stdlib escape hatch (Python 3.10+) for exactly this class; the test's
+    # own assertions all run and pass before this cleanup step, so nothing
+    # about correctness depends on it.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         p = Path(d) / "probe.momentum.bf16proxy.i16"
         t = bf16_view_memmap(p, (4, 4))
         if t.dtype != torch.bfloat16:
@@ -949,7 +1177,74 @@ def _selftest() -> int:
         print(f"FAIL momentum_buffer_bytes_sidecar: expected applicable=False for no-muon dict, got {side_empty}")
         ok = False
 
-    # 6. required negative fixture -- delegated to the test module (single
+    # 6. SIGN fixture (falsifier finding, #792 cure round): bf16 arm using
+    #    LESS committed memory than fp32 arm must yield a POSITIVE delta.
+    delta_correct = compute_commit_delta_gib(
+        arm_a_commit={"applicable": True, "used_gib": 10.5},
+        arm_b_commit={"applicable": True, "used_gib": 10.0})
+    if abs(delta_correct - 0.5) > 1e-9:
+        print(f"FAIL compute_commit_delta_gib: expected +0.5 (fp32 - bf16), got {delta_correct!r}")
+        ok = False
+    check_on_correct = check_byte_arithmetic(commit_delta_gib=delta_correct, realized_p_matrix=268_435_456)
+    if check_on_correct["verdict"] != "OK":
+        print(f"FAIL compute_commit_delta_gib downstream: expected OK verdict on correct-sign delta, got {check_on_correct}")
+        ok = False
+    # Falsifier's exact repro (the INVERTED-sign shape this cure fixes) must
+    # still correctly flag INVALID -- proves check_byte_arithmetic itself
+    # was never the bug, only the caller's sign convention.
+    check_on_falsifier_repro = check_byte_arithmetic(commit_delta_gib=-0.5, realized_p_matrix=268_435_456)
+    if (check_on_falsifier_repro["verdict"] != "INVALID_INSTRUMENT_DEFECT"
+            or check_on_falsifier_repro["relative_error"] != 2.0):
+        print(f"FAIL falsifier sign repro: expected INVALID_INSTRUMENT_DEFECT rel_err=2.0, got {check_on_falsifier_repro}")
+        ok = False
+
+    # 7. ORCHESTRATION fixture (falsifier finding, #792 cure round): the
+    #    isolated-arm-lifetime invariant must raise while a slot is alive
+    #    and pass clean once it is cleared -- proves the structural cure's
+    #    own mechanism, not just its intent.
+    _ALIVE_ARM_SLOTS.add("fixture_probe")
+    try:
+        _assert_no_arm_alive("selftest probe")
+        print("FAIL _assert_no_arm_alive: did not raise with a slot alive")
+        ok = False
+    except RuntimeError:
+        pass
+    finally:
+        _ALIVE_ARM_SLOTS.discard("fixture_probe")
+    try:
+        _assert_no_arm_alive("selftest probe, slots clear")
+    except RuntimeError as e:
+        print(f"FAIL _assert_no_arm_alive: raised with slots clear: {e!r}")
+        ok = False
+
+    # 8. PROVENANCE fixture (#801 convention): compute_provenance runs for
+    #    real (proving the code path), refuse_on_missing_provenance must
+    #    pass through live=False unconditionally and must raise for
+    #    live=True when shard_dir is given but unresolvable.
+    prov = compute_provenance(shard_dir=None)
+    if "executing_git_sha" not in prov or "source_sha256" not in prov:
+        print(f"FAIL compute_provenance: missing required keys, got {prov.keys()}")
+        ok = False
+    if not prov.get("source_sha256", {}).get("screen792_bf16_momentum.py"):
+        print("FAIL compute_provenance: this runner's own source_sha256 entry is missing")
+        ok = False
+    try:
+        refuse_on_missing_provenance(prov, live=False)
+    except RuntimeError as e:
+        print(f"FAIL refuse_on_missing_provenance: raised for live=False, got {e!r}")
+        ok = False
+    prov_bad_shard = dict(prov)
+    prov_bad_shard["shard_dir"] = "/does/not/exist/fixture-only"
+    prov_bad_shard["shard_manifest_sha256"] = None
+    prov_bad_shard["shard_manifest_error"] = "fixture: not resolved"
+    try:
+        refuse_on_missing_provenance(prov_bad_shard, live=True)
+        print("FAIL refuse_on_missing_provenance: did not raise for live=True with an unresolved shard_dir")
+        ok = False
+    except RuntimeError:
+        pass
+
+    # 9. required negative fixture -- delegated to the test module (single
     #    source of truth for the fixture itself).
     tests_dir = Path(__file__).resolve().parent / "tests"
     sys.path.insert(0, str(tests_dir))
@@ -996,6 +1291,7 @@ def _schema_probe() -> int:
         band=build_noise_band([0.0], [0.0]),
         verdict={"verdict": "INVALID", "reason": "schema-probe dummy run, not a real verdict"},
         run_config={"schema_probe": True},
+        provenance=compute_provenance(shard_dir=None),
     )
     findings = receipt_check.validate_receipt(dummy)
     if findings:
@@ -1028,7 +1324,16 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
     the #702 runner's AB/BA counterbalancing design does not apply here;
     #702's own primitives -- SubphaseCollector, attach/detach, the model/
     optimizer build functions -- are reused, its AB/BA orchestration is
-    not)."""
+    not).
+
+    ISOLATED ARM LIFETIMES (falsifier finding, #792 cure round,
+    ORCHESTRATION): each arm is built, measured, and TORN DOWN before the
+    next arm is built (_teardown_arm + the _assert_no_arm_alive invariant),
+    so arm A's and arm B's commit_steady_state_gib readings each reflect
+    exactly one arm's resident state, never the union of retained prior
+    arms. Cross-arm diagnostics that used to need both arms' live optimizer
+    objects simultaneously (momentum_cosine_diagnostic) now work off small
+    on-disk file manifests captured before each arm's teardown instead."""
     import torch
 
     total_steps = n_warmup + n_active
@@ -1036,41 +1341,56 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
     mtp_weight = cfg.get("objective", {}).get("mtp_aux_heads", {}).get("weight", 0.0)
 
     def _one_arm(*, arm: str, seed: int, optstate_subdir: str, collector=None):
-        torch.manual_seed(seed)
-        import random
-        random.seed(seed)
-        model, vocab, hidden, n_mtp = ts.build_v0_model(cfg, live=True, device=device)
-        optimizers, base_lrs, routing = build_arm_optimizers(
-            model, cfg, arm=arm, optstate_dir=Path(run_dir) / "optstate" / optstate_subdir)
-        ce_impl, ce_fn = ts.resolve_ce_impl(prefer_liger=True)
-        loader = ts.PackedShardLoader(shard_dir, cfg["model"]["seq"], n_mtp)
-
-        # Warmup (unprofiled) -- construction write-pass already happened
-        # inside build_arm_optimizers (_memmap_zeros' full write pass at
-        # optimizer-init time); warmup steps are what AMENDMENT-1's
-        # steady-state gate is timed relative to.
-        run_arm_block(
-            model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
-            cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
-            ce_chunk_tokens=ce_chunk_tokens, n_steps=n_warmup, global_step_start=0,
-            total_steps=total_steps, device=device, batch_size=batch_size, collector=None)
-
-        if collector is not None:
-            attrib.install_span_collector(optimizers, collector, device=device)
+        _assert_no_arm_alive(f"about to build arm={arm!r} seed={seed}")
+        _ALIVE_ARM_SLOTS.add(optstate_subdir)
         try:
-            active = run_arm_block(
+            torch.manual_seed(seed)
+            import random
+            random.seed(seed)
+            optstate_dir = Path(run_dir) / "optstate" / optstate_subdir
+            model, vocab, hidden, n_mtp = ts.build_v0_model(cfg, live=True, device=device)
+            optimizers, base_lrs, routing = build_arm_optimizers(
+                model, cfg, arm=arm, optstate_dir=optstate_dir)
+            ce_impl, ce_fn = ts.resolve_ce_impl(prefer_liger=True)
+            loader = ts.PackedShardLoader(shard_dir, cfg["model"]["seq"], n_mtp)
+
+            # Warmup (unprofiled) -- construction write-pass already happened
+            # inside build_arm_optimizers (_memmap_zeros' full write pass at
+            # optimizer-init time); warmup steps are what AMENDMENT-1's
+            # steady-state gate is timed relative to.
+            run_arm_block(
                 model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
                 cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
-                ce_chunk_tokens=ce_chunk_tokens, n_steps=n_active,
-                global_step_start=n_warmup, total_steps=total_steps, device=device,
-                batch_size=batch_size, collector=collector)
-        finally:
-            if collector is not None:
-                attrib.uninstall_span_collector(optimizers)
+                ce_chunk_tokens=ce_chunk_tokens, n_steps=n_warmup, global_step_start=0,
+                total_steps=total_steps, device=device, batch_size=batch_size, collector=None)
 
-        commit = commit_steady_state_gib(construction_complete=True)
-        return {"model": model, "optimizers": optimizers, "routing": routing,
-                "losses": active["losses"], "commit": commit}
+            if collector is not None:
+                attrib.install_span_collector(optimizers, collector, device=device)
+            try:
+                active = run_arm_block(
+                    model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
+                    cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
+                    ce_chunk_tokens=ce_chunk_tokens, n_steps=n_active,
+                    global_step_start=n_warmup, total_steps=total_steps, device=device,
+                    batch_size=batch_size, collector=collector)
+            finally:
+                if collector is not None:
+                    attrib.uninstall_span_collector(optimizers)
+
+            # Everything below MUST be captured while the arm is still alive
+            # -- _teardown_arm frees model + optimizers immediately after.
+            commit = commit_steady_state_gib(construction_complete=True)
+            realized_split = realized_matrix_split(model, routing)
+            momentum_bytes = momentum_buffer_bytes_sidecar(optimizers)
+            momentum_manifest = momentum_file_manifest(
+                optimizers, arm=arm, optstate_dir=optstate_dir)
+            result = {"routing": routing, "losses": active["losses"], "commit": commit,
+                     "realized_split": realized_split, "momentum_bytes": momentum_bytes,
+                     "momentum_manifest": momentum_manifest}
+            _teardown_arm(model, optimizers, device)
+            return result
+        finally:
+            _ALIVE_ARM_SLOTS.discard(optstate_subdir)
 
     # --- Arm A, seed_a (fp32) ---
     collector_a = attrib.SubphaseCollector()
@@ -1084,10 +1404,14 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
     collector_b = attrib.SubphaseCollector()
     arm_b = _one_arm(arm="bf16", seed=seed_a, optstate_subdir="bf16", collector=collector_b)
 
-    realized_split = realized_matrix_split(arm_a["model"], arm_a["routing"])
-    commit_delta_gib = (arm_b["commit"]["used_gib"] - arm_a["commit"]["used_gib"]
-                        if arm_a["commit"]["applicable"] and arm_b["commit"]["applicable"]
-                        else 0.0)
+    realized_split = arm_a["realized_split"]
+    # SIGN + ISOLATION fix (falsifier finding, #792 cure round): fp32_used -
+    # bf16_used (never the reverse -- see compute_commit_delta_gib), and
+    # each side of the subtraction was measured with ONLY that one arm
+    # resident (arm_a2 and arm_b did not exist yet when arm_a's commit was
+    # read; arm_a and arm_a2 were already torn down when arm_b's was).
+    commit_delta_gib = compute_commit_delta_gib(
+        arm_a_commit=arm_a["commit"], arm_b_commit=arm_b["commit"])
     byte_check = check_byte_arithmetic(
         commit_delta_gib=commit_delta_gib,
         realized_p_matrix=realized_split["realized_matrix_params"])
@@ -1095,14 +1419,19 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
     copies_b = copies_opt_other_totals(collector_b)
     # Measured-bytes sidecar (team-lead review, #792): the existing
     # attribution instrument's copies_bytes has zero coverage of momentum
-    # traffic (see copies_opt_other_totals docstring) -- this reads each
-    # arm's REALIZED momentum_buffer tensors directly, so arm B's halved
-    # (bf16 vs fp32) momentum footprint is actually visible in the receipt.
-    momentum_bytes_a = momentum_buffer_bytes_sidecar(arm_a["optimizers"])
-    momentum_bytes_b = momentum_buffer_bytes_sidecar(arm_b["optimizers"])
-    cosine = momentum_cosine_diagnostic(arm_a["optimizers"], arm_b["optimizers"])
+    # traffic (see copies_opt_other_totals docstring) -- captured per-arm,
+    # while each arm was still alive, in _one_arm above.
+    momentum_bytes_a = arm_a["momentum_bytes"]
+    momentum_bytes_b = arm_b["momentum_bytes"]
+    # Reopens each arm's momentum-buffer files fresh from disk -- both arms
+    # are already torn down at this point (see momentum_cosine_diagnostic's
+    # section docstring for why that's safe / zero-commit-charge).
+    cosine = momentum_cosine_diagnostic(arm_a["momentum_manifest"], arm_b["momentum_manifest"])
     verdict = evaluate_verdict(losses_arm_b=arm_b["losses"], losses_arm_a=arm_a["losses"],
                                band=band, commit_check=byte_check)
+
+    provenance = compute_provenance(shard_dir=shard_dir)
+    refuse_on_missing_provenance(provenance, live=True)
 
     ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     receipt = build_receipt(
@@ -1113,7 +1442,8 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
         momentum_cosine=cosine, band=band, verdict=verdict,
         run_config={"n_warmup": n_warmup, "n_active": n_active,
                    "batch_size": batch_size, "seed_a": seed_a, "seed_a2": seed_a2,
-                   "shard_dir": shard_dir})
+                   "shard_dir": shard_dir},
+        provenance=provenance)
     return receipt
 
 
