@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Tracked, pin-aware redaction utility for landing lanes (ember issue #538).
 
-The ONLY sanctioned redaction path for landing lanes. Rewrites only enumerated
-path-valued JSON fields (or, for .md, whole lines) using a supplied term list.
-A file whose sha256 is pinned by any receipt under receipts/ or
-scripts/ember_totality/receipts-*/ is refused outright -- no override exists.
+The ONLY sanctioned redaction path for landing lanes. Rewrites path-valued
+JSON fields (or, for .md/.log, whole lines) using a supplied term list, PLUS
+an unconditional value-pattern fallback (see below). A file whose sha256 is
+pinned by any receipt under receipts/ or scripts/ember_totality/receipts-*/
+is refused outright -- no override exists.
 
 Usage:
     redact_for_landing.py --terms-file TERMS FILE [FILE ...]
@@ -15,6 +16,28 @@ the input file itself is never modified (satisfies AC6 by construction).
 Term-file format: one term per line, blank lines and '#' comments ignored.
 "term<TAB>replacement" sets an explicit replacement; a bare term defaults to
 the generic "<REDACTED>" placeholder.
+
+Two independent redaction mechanisms (2026-07-11, issue #538 follow-up --
+a real receipt leaked local paths under 10 of 13 path-bearing fields because
+the key enumeration missed them):
+
+  1. KEY-GATED term substitution (original mechanism): for JSON string
+     values under ENUMERATED_KEYS or a key ending in _path/_dir/_ref/
+     _source/_receipt, every term from --terms-file is substituted
+     (word-boundary matched). Deliberately key-gated so free-text/prose
+     fields that happen to mention a term are left untouched (see
+     test_sibling_non_enumerated_field_byte_identical).
+  2. KEY-AGNOSTIC local-absolute-path-shape fallback (NEW): regardless of
+     key name, any JSON string value containing a standalone Windows
+     drive-letter-absolute-path token (`X:/...` or `X:\\...`, not preceded
+     by a word character -- so "https://" never false-matches on its
+     trailing "s:") has that drive-letter+separator prefix replaced with
+     the neutral LOCAL_PATH_TOKEN, preserving every directory/basename
+     segment that follows. Key enumerations rot as new receipt schemas
+     appear; this pass is what catches the field the enumeration missed.
+
+.log files get the same two mechanisms applied line-by-line (mechanism 1
+applies terms per line the same way .md does; mechanism 2 is new for .log).
 """
 from __future__ import annotations
 
@@ -40,18 +63,36 @@ class RedactionRefusal(Exception):
 # ---- AC3: in-script manifest of path-valued JSON field key names ----------
 ENUMERATED_KEYS = {
     "path", "cache_source", "fork_dir", "receipt", "png",
-    "capture_path", "cmdline", "script",
+    "capture_path", "cmdline", "script", "dir",
 }
+# Suffix families added 2026-07-11 (issue #538 follow-up): a real receipt's
+# "dir"/"shard_dir"/"n_mtp_source"/"terminal_checkpoint_ref"/
+# "terminal_checkpoint_receipt"/"control_step25_dir"/"step50_checkpoint_dir"/
+# "source_dir"/"dest_dir" fields all leaked local paths because only "_path"
+# was covered. Key enumerations rot -- see the value-pattern fallback below
+# for the mechanism that survives the NEXT missed suffix too.
+ENUMERATED_KEY_SUFFIXES = ("_path", "_dir", "_ref", "_source", "_receipt")
 DOC_ALLOWLIST = {".md"}
+LOG_ALLOWLIST = {".log"}
 DEFAULT_REPLACEMENT = "<REDACTED>"
 _GLOB_CHARS = set("*?[")
 _HEX64_RE = re.compile(rb"\b[0-9a-fA-F]{64}\b")
 _JSON_STRING_RE = r'"(?:[^"\\]|\\.)*"'
+LOCAL_PATH_TOKEN = "<LOCAL-ABS-PATH>"
+# Standalone Windows drive-letter-absolute-path prefix: a single letter,
+# colon, one separator (either slash direction), NOT preceded by a word
+# character. The negative lookbehind is load-bearing -- without it this
+# would false-match the "s:" in "https://" or the "o:" in "mailto:".
+_LOCAL_ABS_PATH_PREFIX_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):([\\/])")
 
 
-def _build_kv_regex() -> "re.Pattern[str]":
-    explicit = "|".join(sorted(re.escape(k) for k in ENUMERATED_KEYS))
-    key_pattern = r'(?:' + explicit + r'|[A-Za-z0-9_]*_path)'
+def _build_kv_regex(*, keys: "set[str] | None" = None, any_key: bool = False) -> "re.Pattern[str]":
+    if any_key:
+        key_pattern = r'[A-Za-z0-9_]+'
+    else:
+        explicit = "|".join(sorted(re.escape(k) for k in (keys or ENUMERATED_KEYS)))
+        suffix_alt = "|".join(re.escape(s) for s in ENUMERATED_KEY_SUFFIXES)
+        key_pattern = r'(?:' + explicit + r'|[A-Za-z0-9_]*(?:' + suffix_alt + r'))'
     pattern = (
         r'"(?P<key>' + key_pattern + r')"'
         r'(?P<sep>\s*:\s*)'
@@ -61,6 +102,17 @@ def _build_kv_regex() -> "re.Pattern[str]":
 
 
 _KV_RE = _build_kv_regex()
+_ANY_KV_RE = _build_kv_regex(any_key=True)
+
+
+def redact_local_abs_path_prefix(value: str) -> str:
+    """Key-agnostic fallback (mechanism 2, see module docstring): replace
+    every standalone Windows drive-letter-absolute-path prefix in `value`
+    with LOCAL_PATH_TOKEN, preserving the original separator style and every
+    directory/basename segment that follows. Applied to EVERY JSON string
+    value regardless of key name -- this is what survives a key enumeration
+    that hasn't caught up with a new receipt schema."""
+    return _LOCAL_ABS_PATH_PREFIX_RE.sub(LOCAL_PATH_TOKEN + r"\2", value)
 
 
 def _check_not_glob(raw: str) -> None:
@@ -161,7 +213,7 @@ def redact_json_bytes(data: bytes, terms: List[Tuple[str, str]]) -> bytes:
     except json.JSONDecodeError as exc:
         raise RedactionRefusal(f"not valid JSON: {exc}", 2) from exc
 
-    def _sub(m: "re.Match[str]") -> str:
+    def _term_sub(m: "re.Match[str]") -> str:
         decoded = json.loads(m.group("value"))
         if not isinstance(decoded, str):
             return m.group(0)
@@ -171,7 +223,25 @@ def redact_json_bytes(data: bytes, terms: List[Tuple[str, str]]) -> bytes:
         new_literal = json.dumps(new_decoded, ensure_ascii=False)
         return f'"{m.group("key")}"{m.group("sep")}{new_literal}'
 
-    new_text = _KV_RE.sub(_sub, text)
+    def _pattern_fallback_sub(m: "re.Match[str]") -> str:
+        decoded = json.loads(m.group("value"))
+        if not isinstance(decoded, str):
+            return m.group(0)
+        new_decoded = redact_local_abs_path_prefix(decoded)
+        if new_decoded == decoded:
+            return m.group(0)
+        new_literal = json.dumps(new_decoded, ensure_ascii=False)
+        return f'"{m.group("key")}"{m.group("sep")}{new_literal}'
+
+    # Mechanism 1 (key-gated term substitution) runs first, then mechanism 2
+    # (key-agnostic path-shape fallback) runs over the WHOLE document
+    # regardless of key -- see module docstring. Order is immaterial to
+    # idempotence: mechanism 1 already removes the drive-letter shape from
+    # any value it fully replaces (a matched term normally replaces the
+    # whole path), so mechanism 2 is a no-op on those; mechanism 2 alone
+    # handles every key mechanism 1 doesn't cover.
+    new_text = _KV_RE.sub(_term_sub, text)
+    new_text = _ANY_KV_RE.sub(_pattern_fallback_sub, new_text)
     return new_text.encode("utf-8")
 
 
@@ -192,6 +262,30 @@ def redact_md_bytes(data: bytes, terms: List[Tuple[str, str]]) -> bytes:
         else:
             body, ending = line, ""
         out.append(apply_terms(body, terms) + ending)
+    return "".join(out).encode("utf-8")
+
+
+def redact_log_bytes(data: bytes, terms: List[Tuple[str, str]]) -> bytes:
+    """.log support (2026-07-11, issue #538 follow-up): line-based, same two
+    mechanisms as JSON -- term substitution AND the key-agnostic (here:
+    line-agnostic) local-absolute-path-shape fallback, same LOCAL_PATH_TOKEN.
+    A .log file has no JSON keys to gate on, so mechanism 2 is the primary
+    defense for raw command-line/path leaks in a captured run log."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RedactionRefusal(f"not valid UTF-8: {exc}", 2) from exc
+    lines = text.splitlines(keepends=True)
+    out: List[str] = []
+    for line in lines:
+        m = _LINE_ENDING_RE.search(line)
+        if m:
+            body, ending = line[: m.start()], line[m.start():]
+        else:
+            body, ending = line, ""
+        body = apply_terms(body, terms)
+        body = redact_local_abs_path_prefix(body)
+        out.append(body + ending)
     return "".join(out).encode("utf-8")
 
 
@@ -263,6 +357,8 @@ def main(argv: List[str] = None, stdout=None, stderr=None) -> int:
                 new_bytes = redact_json_bytes(data, terms)
             elif suffix in DOC_ALLOWLIST:
                 new_bytes = redact_md_bytes(data, terms)
+            elif suffix in LOG_ALLOWLIST:
+                new_bytes = redact_log_bytes(data, terms)
             else:
                 raise RedactionRefusal(
                     f"unsupported file type '{suffix}' for '{p}'", 2
