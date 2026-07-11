@@ -166,6 +166,21 @@ class CPUOffloadOptimizer:
         self._names: list[str] = []
         self._real_params: list[Any] = []
         self.grad_lazy_creates = 0  # instance mirror of the module counter (#627)
+        # Optional per-instance span-instrumentation hooks (issue #702 axis-3
+        # attribution profiling; ember #702 comment id ...BLOCK_721... repair
+        # item (a)). None by default -- attach_span_collector()/
+        # detach_span_collector() are the ONLY sanctioned way to observe this
+        # method from outside. When unattached (the default for every caller
+        # except the #702 profiling runner), every `if self._span_add is not
+        # None:` check below is the ONLY difference from the pristine method:
+        # zero extra tensor ops, zero extra syncs, zero extra allocations --
+        # step()'s own arithmetic, control flow, and side effects (grad_lazy_
+        # creates counting, memmap creation, param writeback order) are
+        # byte-identical to before this instrumentation existed.
+        self._span_add = None
+        self._span_add_bytes = None
+        self._span_add_numel = None
+        self._span_sync = None
         for name, p in named_params:
             self._names.append(name)
             self._real_params.append(p)
@@ -208,10 +223,41 @@ class CPUOffloadOptimizer:
                         Path(str(stem) + ".momentum.f32"), tuple(shadow_p.shape)),
                 }
 
+    def attach_span_collector(self, *, add, add_bytes, add_numel, sync) -> None:
+        """Attach optional per-step subphase timing hooks to THIS instance
+        (never a class-level patch -- no other CPUOffloadOptimizer instance,
+        and no later caller of this same instance after detach, is affected).
+        add(phase: str, dt: float), add_bytes(phase: str, n: int), and
+        add_numel(n: int) are called at exactly the four named subphase
+        boundaries (grad_to_cpu_fp32 / grad_heap_to_memmap /
+        inner_optimizer_step / updated_param_to_gpu) inside step(); sync() is
+        called immediately before/after each measured span (device-accurate
+        wall time for async host<->device copies; pass a no-op for CPU).
+        step()'s own tensor operations, their order, and every non-
+        instrumentation side effect are unchanged whether or not a collector
+        is attached -- this is the SAME method, not a reimplementation of it
+        (ember #702 BLOCK_721_PRODUCTION_ATTRIBUTION repair item (a))."""
+        self._span_add = add
+        self._span_add_bytes = add_bytes
+        self._span_add_numel = add_numel
+        self._span_sync = sync
+
+    def detach_span_collector(self) -> None:
+        self._span_add = None
+        self._span_add_bytes = None
+        self._span_add_numel = None
+        self._span_sync = None
+
     def step(self, closure=None) -> None:
+        import time
+
         import torch
 
         assert closure is None, "CPUOffloadOptimizer does not support closures"
+        _add = self._span_add
+        _add_bytes = self._span_add_bytes
+        _add_numel = self._span_add_numel
+        _sync = self._span_sync
         with torch.no_grad():
             for name, real_p, shadow_p in zip(self._names, self._real_params, self._shadow):
                 if real_p.grad is None:
@@ -225,7 +271,13 @@ class CPUOffloadOptimizer:
                 # per-parameter loop's overlapping unsynchronized copies raced
                 # against the caching host allocator. Synchronous transfer is
                 # slower but identical math -- no optimizer semantics change.
+                if _add is not None:
+                    _sync(); _t0 = time.perf_counter()
                 g = real_p.grad.detach().to("cpu", dtype=torch.float32)
+                if _add is not None:
+                    _sync(); _add("grad_to_cpu_fp32", time.perf_counter() - _t0)
+                    _add_bytes("grad_to_cpu_fp32", g.numel() * g.element_size())
+                    _add_numel(g.numel())
                 if shadow_p.grad is None:
                     # File-backed, not a regular clone() (2026-07-08 redesign):
                     # this buffer PERSISTS for the optimizer's lifetime once
@@ -245,11 +297,25 @@ class CPUOffloadOptimizer:
                     self.grad_lazy_creates += 1
                     stem = self._optstate_dir / _sanitize_name(name)
                     shadow_p.grad = _memmap_zeros(Path(str(stem) + ".grad.f32"), tuple(g.shape))
+                if _add is not None:
+                    _sync(); _t0 = time.perf_counter()
                 shadow_p.grad.copy_(g)
+                if _add is not None:
+                    _sync(); _add("grad_heap_to_memmap", time.perf_counter() - _t0)
+                    _add_bytes("grad_heap_to_memmap", g.numel() * g.element_size())
+        if _add is not None:
+            _sync(); _t0 = time.perf_counter()
         self._inner.step()
+        if _add is not None:
+            _sync(); _add("inner_optimizer_step", time.perf_counter() - _t0)
         with torch.no_grad():
             for real_p, shadow_p in zip(self._real_params, self._shadow):
+                if _add is not None:
+                    _sync(); _t0 = time.perf_counter()
                 real_p.data.copy_(shadow_p.data.to(real_p.device, dtype=real_p.dtype))
+                if _add is not None:
+                    _sync(); _add("updated_param_to_gpu", time.perf_counter() - _t0)
+                    _add_bytes("updated_param_to_gpu", shadow_p.data.numel() * real_p.element_size())
 
     def zero_grad(self, set_to_none: bool = True) -> None:
         """ember #627 R3 -- shadow-grad persistence.

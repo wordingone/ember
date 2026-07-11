@@ -926,7 +926,8 @@ def build_optimizer_id_maps(model=None, model_state: dict | None = None) -> dict
 
 def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
                           deviation_dir: str | None = None,
-                          offload_optimizer_state: bool = False):
+                          offload_optimizer_state: bool = False,
+                          optstate_dir: str | None = None):
     """Build the Muon/AdamW split optimizer from the contract lrs. On
     force_fallback (Muon impl failed its selftest) build AdamW-everything and
     RECEIPT the deviation. Returns (optimizers_dict, base_lrs, routing).
@@ -939,7 +940,19 @@ def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
     as VRAM-resident by convention) to host RAM and steps on CPU tensors. The
     wrapper constructs the SAME optimizer class with the SAME hyperparameters
     on a shadow copy -- it never reimplements Muon's or AdamW's math, so
-    optimizer semantics are unchanged (DEV-002: "same optimizer math")."""
+    optimizer semantics are unchanged (DEV-002: "same optimizer math").
+
+    optstate_dir (ember #702 mid-build capacity/isolation repair, additive --
+    None preserves byte-identical existing behavior: every CPUOffloadOptimizer
+    falls back to its own shared _DEFAULT_OPTSTATE_DIR, as before): threaded
+    straight through to every CPUOffloadOptimizer this call constructs. A
+    caller that builds and tears down MULTIPLE optimizer instances in the
+    same process (e.g. a selftest, or any run whose param names could collide
+    with another run's) MUST pass a per-invocation-unique path here -- the
+    shared default directory is keyed by sanitized param name only, so two
+    concurrent or sequential callers using the same names (a small selftest
+    fixture reusing a production-shaped name like "blocks.0.weight", say)
+    can truncate/collide on each other's file-backed state."""
     import torch
     opt_cfg = cfg["optimizer"]
     lr_muon = opt_cfg["lr_muon"]
@@ -960,7 +973,8 @@ def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
         all_named = muon_named + adamw_named
         if offload_optimizer_state:
             opt = CPUOffloadOptimizer(
-                all_named, lambda ps: torch.optim.AdamW(ps, lr=lr_adamw, weight_decay=wd))
+                all_named, lambda ps: torch.optim.AdamW(ps, lr=lr_adamw, weight_decay=wd),
+                optstate_dir=optstate_dir)
         else:
             all_params = [p for _, p in all_named]
             opt = torch.optim.AdamW(all_params, lr=lr_adamw, weight_decay=wd)
@@ -979,7 +993,8 @@ def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
     if muon_named:
         if offload_optimizer_state:
             opts["muon"] = CPUOffloadOptimizer(
-                muon_named, lambda ps: Muon(ps, lr=lr_muon, weight_decay=wd))
+                muon_named, lambda ps: Muon(ps, lr=lr_muon, weight_decay=wd),
+                optstate_dir=optstate_dir)
         else:
             opts["muon"] = Muon([p for _, p in muon_named], lr=lr_muon,
                                 weight_decay=wd)
@@ -987,7 +1002,8 @@ def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
     if adamw_named:
         if offload_optimizer_state:
             opts["adamw"] = CPUOffloadOptimizer(
-                adamw_named, lambda ps: torch.optim.AdamW(ps, lr=lr_adamw, weight_decay=wd))
+                adamw_named, lambda ps: torch.optim.AdamW(ps, lr=lr_adamw, weight_decay=wd),
+                optstate_dir=optstate_dir)
         else:
             opts["adamw"] = torch.optim.AdamW([p for _, p in adamw_named],
                                               lr=lr_adamw, weight_decay=wd)
