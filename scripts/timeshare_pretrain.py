@@ -1579,6 +1579,97 @@ def _restore_weights(saved):
 
 # --- assemble + run a v0 segment (full survivor stack) ---------------------
 
+def _run_production_step(
+        *, model, loader, optimizers: dict, base_lrs: dict, cfg: dict, ce_fn,
+        mtp_enabled: bool, mtp_weight: float, ce_chunk_tokens: int, device: str,
+        batch_size: int, global_step: int, total_steps: int,
+        grad_accum_steps: int = 1, qat_enabled: bool = False) -> dict:
+    """The shared production per-macro-step body (ember #702 ADDENDUM-5,
+    "ADDENDUM-3(F) operationalized"): the grad-accumulated micro-batch
+    loop, QAT `_apply_fake_quant`/`_restore_weights` (STE) bracketing each
+    micro-batch's forward/backward, `apply_wsd` at micro_idx==0, loss
+    scaled by 1/grad_accum_steps before backward, and ONE
+    opt.step()/zero_grad() per macro-step -- extracted verbatim from
+    run_v0_segment's own inline loop (this file, pre-ADDENDUM-5), which now
+    calls this function instead of repeating the body. The #702 attribution
+    runner's AB/BA blocks call the SAME function -- one production step
+    implementation, two callers, zero sibling reimplementation (ember #702
+    class rule F, satisfied by construction rather than by promise).
+
+    Pure function of its arguments: no caller-owned closure state (like
+    run_v0_segment's own `losses`/`lr_mults` lists) is read or mutated --
+    the per-step loss and applied LR multiplier are returned instead of
+    appended to a caller list, which is what makes this callable
+    identically from both sites. Byte-identical arithmetic and control
+    flow to the pre-extraction inline body -- proven, not merely
+    asserted, by the mandatory one-step parity fixture
+    (_selftest_production_step_parity in cbase_grow_rung2_attribution_702.py):
+    run_v0_segment(n_steps=1) vs a direct call to this function from
+    identical initial state produce bit-identical loss and post-step
+    weight-state hashes.
+
+    Returns {"loss": float (mean over the grad_accum_steps micro-batches),
+    "lr_mult": float (the WSD multiplier applied at micro_idx==0)}."""
+    micro_losses: list[float] = []
+    lr_mult: float | None = None
+
+    for micro_idx in range(grad_accum_steps):
+        # DEV-002 candidate 2 (micro-batch + grad accumulation): each
+        # micro-batch draws its OWN loader slice (grad_accum_steps=1 keeps
+        # the token index identical to pre-existing behavior: global_step
+        # * 1 + 0 == global_step) so accumulated micro-batches cover
+        # distinct tokens, matching a monolithic batch of
+        # batch_size * grad_accum_steps drawn at the same effective offset.
+        loader_idx = global_step * grad_accum_steps + micro_idx
+        x, y0, y_mtp = loader.batch(loader_idx, batch_size)
+        if device == "cuda":
+            x = x.cuda()
+            y0 = y0.cuda()
+            y_mtp = [t.cuda() for t in y_mtp]
+
+        # QAT pre-forward: transform Linear weights to int8-grid (STE).
+        qat_saved = _apply_fake_quant(model, "qat") if qat_enabled else []
+
+        hidden_out = model.backbone(x)                       # [B, T, H]
+        h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
+        primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
+                              chunk_tokens=ce_chunk_tokens)
+        mtp_ces = []
+        if mtp_enabled:
+            for k, head in enumerate(model.mtp_heads):
+                ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
+                                chunk_tokens=ce_chunk_tokens)
+                mtp_ces.append(ce_k)
+        micro_loss = mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
+        micro_losses.append(float(micro_loss.detach()))
+
+        if micro_idx == 0:
+            mult = apply_wsd(optimizers, base_lrs, global_step, total_steps,
+                             cfg["schedule"])
+            lr_mult = round(mult, 6)
+
+        # Scale by 1/grad_accum_steps before backward so the SUMMED
+        # gradient across grad_accum_steps micro-batches matches a single
+        # monolithic backward on batch_size * grad_accum_steps samples
+        # (mean-reduction CE over equal-sized chunks -- same identity the
+        # cure PR's accumulation-equivalence probe checks in isolation).
+        (micro_loss / grad_accum_steps).backward()
+
+        # QAT post-backward: restore full-precision weights AFTER backward.
+        # Gradients accumulated on the int8-rounded weights are applied to
+        # the full-precision originals (STE semantics -- identical to
+        # fp19_bench and c04_bf16ns5_qat_throughput pattern).
+        if qat_enabled:
+            _restore_weights(qat_saved)
+
+    for opt in optimizers.values():
+        opt.step()
+    for opt in optimizers.values():
+        opt.zero_grad(set_to_none=True)
+
+    return {"loss": sum(micro_losses) / len(micro_losses), "lr_mult": lr_mult}
+
+
 # Sentinel distinguishing "caller did not pass mmap_cache_dir at all" from an
 # explicit None (legacy opt-out) or an explicit path (opt-in to a specific
 # dir) -- run_v0_segment's own default needs a computed run_dir-relative
@@ -1799,62 +1890,21 @@ def run_v0_segment(
             aborted_by_pace_gate = True
             break
 
-        micro_losses: list[float] = []
-
-        for micro_idx in range(grad_accum_steps):
-            # DEV-002 candidate 2 (micro-batch + grad accumulation): each
-            # micro-batch draws its OWN loader slice (grad_accum_steps=1 keeps
-            # the token index identical to pre-existing behavior: global_step
-            # * 1 + 0 == global_step) so accumulated micro-batches cover
-            # distinct tokens, matching a monolithic batch of
-            # batch_size * grad_accum_steps drawn at the same effective offset.
-            loader_idx = global_step * grad_accum_steps + micro_idx
-            x, y0, y_mtp = loader.batch(loader_idx, batch_size)
-            if use_device == "cuda":
-                x = x.cuda()
-                y0 = y0.cuda()
-                y_mtp = [t.cuda() for t in y_mtp]
-
-            # QAT pre-forward: transform Linear weights to int8-grid (STE).
-            _qat_saved = _apply_fake_quant(model, "qat") if _qat_enabled else []
-
-            hidden_out = model.backbone(x)                       # [B, T, H]
-            h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
-            primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
-                                  chunk_tokens=ce_chunk_tokens)
-            mtp_ces = []
-            if mtp_enabled:
-                for k, head in enumerate(model.mtp_heads):
-                    ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
-                                    chunk_tokens=ce_chunk_tokens)
-                    mtp_ces.append(ce_k)
-            micro_loss = mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
-            micro_losses.append(float(micro_loss.detach()))
-
-            if micro_idx == 0:
-                mult = apply_wsd(optimizers, base_lrs, global_step, total_steps,
-                                 cfg["schedule"])
-                lr_mults.append(round(mult, 6))
-
-            # Scale by 1/grad_accum_steps before backward so the SUMMED
-            # gradient across grad_accum_steps micro-batches matches a single
-            # monolithic backward on batch_size * grad_accum_steps samples
-            # (mean-reduction CE over equal-sized chunks — same identity the
-            # cure PR's accumulation-equivalence probe checks in isolation).
-            (micro_loss / grad_accum_steps).backward()
-
-            # QAT post-backward: restore full-precision weights AFTER backward.
-            # Gradients accumulated on the int8-rounded weights are applied to
-            # the full-precision originals (STE semantics — identical to
-            # fp19_bench and c04_bf16ns5_qat_throughput pattern).
-            if _qat_enabled:
-                _restore_weights(_qat_saved)
-
-        for opt in optimizers.values():
-            opt.step()
-        for opt in optimizers.values():
-            opt.zero_grad(set_to_none=True)
-        losses.append(sum(micro_losses) / len(micro_losses))
+        # ember #702 ADDENDUM-5: the per-macro-step body (grad-accumulated
+        # micro-batch loop, QAT lifecycle, apply_wsd, scaled backward, one
+        # opt.step()/zero_grad()) is now the SHARED _run_production_step,
+        # not reimplemented here -- the #702 attribution runner calls the
+        # SAME function. Byte-identical to the pre-extraction inline body;
+        # see _run_production_step's own docstring and the mandatory
+        # one-step parity fixture that proves it.
+        step_result = _run_production_step(
+            model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
+            cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
+            ce_chunk_tokens=ce_chunk_tokens, device=use_device, batch_size=batch_size,
+            global_step=global_step, total_steps=total_steps,
+            grad_accum_steps=grad_accum_steps, qat_enabled=_qat_enabled)
+        losses.append(step_result["loss"])
+        lr_mults.append(step_result["lr_mult"])
 
         time.sleep(pace_s)
         _pace_record("pace", pace_s)

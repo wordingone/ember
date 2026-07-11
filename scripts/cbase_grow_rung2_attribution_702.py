@@ -134,7 +134,15 @@ from cpu_offload_adamw import nvidia_smi_vram, vram_preflight          # noqa: E
 _REPO = Path(__file__).resolve().parent.parent
 
 # ---- subphase names (exact order = the frozen decomposition) --------------
-FWD_LOSS_BWD_PHASES = ("fwd", "loss", "bwd")
+# ember #702 ADDENDUM-5: the per-step body (fwd/loss/bwd) now lives in the
+# SHARED ts._run_production_step (timeshare_pretrain.py) -- called as one
+# opaque unit from _run_block, so the three internal spans are no longer
+# separately observable from this file. _per_step_ratios/the closure gate
+# only ever consumed their SUM as t_gpu, never the individual splits (grep-
+# verified before this change), so this is a measurement-GRANULARITY
+# change, not a measurement loss -- the "compute" bucket carries the exact
+# same wall-clock total the three summed spans used to.
+FWD_LOSS_BWD_PHASES = ("compute",)
 OPTIMIZER_SUBPHASES = (
     "grad_to_cpu_fp32", "grad_heap_to_memmap", "inner_optimizer_step",
     "updated_param_to_gpu",
@@ -1367,17 +1375,32 @@ def calibrate_pinned_vs_pageable(*, device: str, n_elems: int = 1 << 22,
 def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
                 mtp_weight, ce_chunk_tokens, n_steps: int, global_step_start: int,
                 total_steps: int, device: str, batch_size: int,
+                grad_accum_steps: int, qat_enabled: bool,
                 profile: bool, collector: "SubphaseCollector | None") -> list:
-    """Runs n_steps optimizer steps. profile=True instruments fwd/loss/bwd
-    boundaries into `collector` AND expects the caller to have already
-    install_span_collector()'d the SAME collector onto `optimizers` (so the
-    real, in-place-instrumented CPUOffloadOptimizer.step() calls land in the
-    same open step record) -- this function does not attach/detach the
-    optimizer-level hooks itself, the caller brackets a whole profiled block
-    with them. profile=False adds ZERO extra instrumentation calls and
-    expects the caller to have detached any span collector from
-    `optimizers` first -- the matched-unprofiled-block baseline. Returns the
-    list of measured step-wall times (perf_counter, device-synced)."""
+    """Runs n_steps production macro-steps via the SHARED
+    ts._run_production_step (ember #702 ADDENDUM-5, "ADDENDUM-3(F)
+    operationalized") -- the SAME function run_v0_segment itself calls, so
+    grad_accum_steps/QAT lifecycle/apply_wsd/loss composition are genuine
+    production semantics here, never a sibling reimplementation (class rule
+    F, satisfied by construction). profile=True times the WHOLE
+    _run_production_step call as one "compute" span into `collector` (the
+    fine-grained fwd/loss/bwd internal split this file measured pre-
+    ADDENDUM-5 is no longer separately observable now that the step body is
+    an opaque call into timeshare_pretrain.py -- _per_step_ratios/the
+    closure gate only ever consumed their SUM as t_gpu, never the
+    individual splits, so this is a measurement-granularity change, not a
+    measurement loss) AND expects the caller to have already
+    install_span_collector()'d the SAME collector onto `optimizers` (the
+    optimizer's own step()-internal subphases -- grad_to_cpu_fp32/
+    grad_heap_to_memmap/inner_optimizer_step/updated_param_to_gpu -- are
+    UNCHANGED, still instrumented at the CPUOffloadOptimizer level, called
+    from inside _run_production_step's own opt.step() loop; this function
+    does not attach/detach the optimizer-level hooks itself, the caller
+    brackets a whole profiled block with them). profile=False adds ZERO
+    extra instrumentation and expects the caller to have detached any span
+    collector from `optimizers` first -- the matched-unprofiled-block
+    baseline. Returns the list of measured step-wall times (perf_counter,
+    device-synced)."""
     import torch
     sync = (torch.cuda.synchronize if device == "cuda" and torch.cuda.is_available()
             else (lambda: None))
@@ -1388,45 +1411,33 @@ def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
             collector.begin_step()
         sync(); t_step0 = time.perf_counter()
 
-        x, y0, y_mtp = loader.batch(global_step, batch_size)
-        if device == "cuda":
-            x = x.cuda(); y0 = y0.cuda(); y_mtp = [t.cuda() for t in y_mtp]
-
         if profile:
             sync(); t0 = time.perf_counter()
-        hidden_out = model.backbone(x)
-        h_flat = hidden_out.reshape(-1, hidden_out.shape[-1])
+        ts._run_production_step(
+            model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
+            cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
+            ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
+            global_step=global_step, total_steps=total_steps,
+            grad_accum_steps=grad_accum_steps, qat_enabled=qat_enabled)
         if profile:
             sync(); t1 = time.perf_counter()
-            collector.add("fwd", t1 - t0)
-            t0 = time.perf_counter()
-
-        primary_ce, _ = ce_fn(h_flat, model.head.weight, y0.reshape(-1),
-                              chunk_tokens=ce_chunk_tokens)
-        mtp_ces = []
-        if mtp_enabled:
-            for k, head in enumerate(model.mtp_heads):
-                ce_k, _ = ce_fn(h_flat, head.weight, y_mtp[k].reshape(-1),
-                                chunk_tokens=ce_chunk_tokens)
-                mtp_ces.append(ce_k)
-        loss = ts.mtp_total_loss(primary_ce, mtp_ces, mtp_weight)
-        if profile:
-            sync(); t1 = time.perf_counter()
-            collector.add("loss", t1 - t0)
-
-        ts.apply_wsd(optimizers, base_lrs, global_step, total_steps, cfg["schedule"])
-
-        if profile:
-            sync(); t0 = time.perf_counter()
-        loss.backward()
-        if profile:
-            sync(); t1 = time.perf_counter()
-            collector.add("bwd", t1 - t0)
-
-        for opt in optimizers.values():
-            opt.step()
-        for opt in optimizers.values():
-            opt.zero_grad(set_to_none=True)
+            # "compute" must be EXCLUSIVE of optimizer-subphase time, the
+            # same closure invariant the pre-ADDENDUM-5 fwd/loss/bwd spans
+            # satisfied (they were timed strictly BEFORE the separate
+            # `for opt in optimizers.values(): opt.step()` loop, never
+            # overlapping it). _run_production_step is opaque and calls
+            # opt.step() INTERNALLY at its tail -- the attached span
+            # collector's hooks fire during that call and write directly
+            # into THIS step's already-open record (collector._cur, reset
+            # by begin_step() above), so t1-t0 as-is would DOUBLE-COUNT
+            # the optimizer subphases (they're a strict subset of the
+            # [t0, t1] interval, not a disjoint one) -- subtracting them
+            # here is what keeps sum(subphases) close to sum(step walls)
+            # for the closure gate (CLOSURE_BOUND_FRAC), exactly as it was
+            # before this function called into an opaque shared step body.
+            optimizer_subphase_s_this_step = sum(
+                collector._cur[p] for p in OPTIMIZER_SUBPHASES)
+            collector.add("compute", (t1 - t0) - optimizer_subphase_s_this_step)
 
         sync(); step_wall = time.perf_counter() - t_step0
         step_walls.append(step_wall)
@@ -1438,6 +1449,7 @@ def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
 def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_fn,
                                 mtp_enabled, mtp_weight, ce_chunk_tokens, device,
                                 batch_size, total_steps, n_active: int,
+                                grad_accum_steps: int, qat_enabled: bool,
                                 fork_global_step: int, run_dir: str) -> dict:
     """AB/BA counterbalanced overhead measurement -- ember #702
     BLOCK_721_PRODUCTION_ATTRIBUTION repair item (b). Both arms fork from the
@@ -1465,7 +1477,8 @@ def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_f
     common = dict(model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
                  cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
                  ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
-                 total_steps=total_steps)
+                 total_steps=total_steps, grad_accum_steps=grad_accum_steps,
+                 qat_enabled=qat_enabled)
 
     # ember #702 mid-build repair round 3: the preflight's successful result
     # was previously discarded (call for its side effect only) -- carried
@@ -1622,7 +1635,12 @@ def _per_step_ratios(collector: "SubphaseCollector") -> dict:
         t_stage = rec["grad_heap_to_memmap"]
         t_inner = rec["inner_optimizer_step"]
         t_host = rec["grad_to_cpu_fp32"] + rec["updated_param_to_gpu"]
-        t_gpu = rec["fwd"] + rec["loss"] + rec["bwd"]
+        # ADDENDUM-5: FWD_LOSS_BWD_PHASES collapsed to a single "compute"
+        # span once _run_block calls the opaque shared _run_production_step
+        # (fwd/loss/bwd are no longer separately observable from outside
+        # that call) -- generic over the phase tuple so this sums whatever
+        # it currently contains, never hardcoding the pre-ADDENDUM-5 keys.
+        t_gpu = sum(rec[p] for p in FWD_LOSS_BWD_PHASES)
         if w <= 0:
             stage.append(0.0); inner.append(0.0); gpu.append(0.0)
             host_unavoidable.append(0.0); stage_plus_host.append(0.0)
@@ -1724,6 +1742,31 @@ def _sha256_bytes_of_file(path: str) -> str:
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
+    return h.hexdigest()
+
+
+def _hash_state_dict(state: dict) -> str:
+    """sha256 over a model state_dict's tensor bytes, iterated in SORTED key
+    order (never dict-insertion order, which is not guaranteed identical
+    across two independently-constructed models) -- used by the one-step
+    production-step parity fixture to compare post-step weights bit-for-bit
+    between two independently-built model instances. Hashes the tensor's
+    RAW memory via a uint8 view rather than `.numpy()` directly -- numpy has
+    no native bfloat16 dtype (the real_arch model's weights are bf16), and a
+    raw-byte reinterpret is dtype-agnostic and exact for every dtype this
+    file ever hashes, never a numeric cast that could mask a genuine
+    mismatch."""
+    import hashlib
+    import torch
+    h = hashlib.sha256()
+    for key in sorted(state.keys()):
+        h.update(key.encode("utf-8"))
+        v = state[key]
+        if hasattr(v, "detach"):
+            t = v.detach().cpu().contiguous()
+            h.update(t.view(torch.uint8).numpy().tobytes())
+        else:
+            h.update(str(v).encode("utf-8"))
     return h.hexdigest()
 
 
@@ -2046,6 +2089,66 @@ def _verify_rung2_optimizer_identity(
     return result
 
 
+# Mirrors cbase_grow_rung2_stabilize.py's own module-level MICRO_BATCH
+# constant (that file, line 630) -- production always micro-batches at 1
+# and accumulates via grad_accum_steps; this file never re-derives that
+# number independently, it imports the same fixed value.
+ATTRIB702_PROD_MICRO_BATCH = 1
+
+
+def _production_grad_accum_steps(cfg: dict, *, micro_batch: int) -> int:
+    """Mirrors cbase_grow_rung2_stabilize.py lines 1537-1538 EXACTLY -- the
+    only place in this repo that computes the production grad_accum_steps
+    from cfg["throughput"]["batch"]. This is the single formula both the
+    parity gate below and any live continuation call site use; neither
+    re-derives it independently."""
+    prod_batch = cfg["throughput"]["batch"] if cfg["throughput"]["batch"] >= 16 else 16
+    return prod_batch // micro_batch if prod_batch % micro_batch == 0 else prod_batch
+
+
+def _verify_rung2_production_config_parity(
+        cfg: dict, *, batch_size: int, grad_accum_steps: int, run_dir: str,
+        expected_micro_batch: int = ATTRIB702_PROD_MICRO_BATCH) -> dict:
+    """ember #702 ADDENDUM-3/ADDENDUM-5 gates (5)/(7): the continuation path
+    must exercise IDENTICAL production config to cbase_grow_rung2_stabilize
+    .py's own run_v0_segment call site (batch=1 x accum=16 at the frozen
+    pins, QAT lifecycle executing per cfg["precision"]["qat"]["enabled"]) --
+    never a smaller/unaccumulated substitute that would silently change the
+    measured step's memory-traffic shape. `batch_size`/`grad_accum_steps`
+    are the CALLER's actual, independently-settable runtime values (this
+    runner's own --batch-size/--grad-accum-steps, never re-derived from
+    this gate's own output) -- checked against the cfg-derived production
+    expectation computed via _production_grad_accum_steps, the ONE formula
+    cbase_grow_rung2_stabilize.py itself uses. Fail-closed: any mismatch on
+    either field refuses (SystemExit, structured receipt) before any
+    production step executes. Counter fixture (ADDENDUM-3D): batch_size=4,
+    grad_accum_steps=1 (no accumulation) against a cfg with
+    throughput.batch=16 REFUSES on both fields."""
+    expected_grad_accum_steps = _production_grad_accum_steps(
+        cfg, micro_batch=expected_micro_batch)
+    qat_enabled = bool(((cfg.get("precision") or {}).get("qat") or {}).get("enabled", False))
+    mismatches = []
+    if batch_size != expected_micro_batch:
+        mismatches.append({"field": "batch_size", "got": batch_size,
+                            "expected": expected_micro_batch})
+    if grad_accum_steps != expected_grad_accum_steps:
+        mismatches.append({"field": "grad_accum_steps", "got": grad_accum_steps,
+                            "expected": expected_grad_accum_steps})
+    result = {"ok": not mismatches, "mismatches": mismatches,
+              "batch_size": batch_size, "grad_accum_steps": grad_accum_steps,
+              "expected_micro_batch": expected_micro_batch,
+              "expected_grad_accum_steps": expected_grad_accum_steps,
+              "qat_enabled": qat_enabled}
+    if mismatches:
+        receipt_path = _write_rung2_refusal_receipt(
+            {"gate": "production_config_parity", **result}, run_dir=run_dir,
+            ticket="EMBER-702-PRODUCTION-CONFIG-PARITY-REFUSAL")
+        raise SystemExit(
+            f"ATTRIBUTION_702_PRODUCTION_CONFIG_PARITY_REFUSED: {mismatches} "
+            f"(receipt={receipt_path})")
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Top-level run
 # ---------------------------------------------------------------------------
@@ -2059,7 +2162,8 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                     resume_continuation: bool = False,
                     grow_checkpoint_dir: str | None = None,
                     mmap_cache_dir: str | None = None,
-                    mmap_manifest_path: str | None = None) -> dict:
+                    mmap_manifest_path: str | None = None,
+                    grad_accum_steps: int | None = None) -> dict:
     """Runs warmup -> counterbalanced AB/BA blocks (repair item (b)) ->
     pinned/pageable calibration, evaluates every validity gate FAIL-CLOSED
     over the POOLED AB/BA samples, and returns the receipt dict (not yet
@@ -2078,13 +2182,28 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     checkpoint hash identity (clause 5), shard manifest identity (clause 3),
     or schedule identity (clause 2/6). grow_checkpoint_dir/shard_dir/
     mmap_cache_dir/mmap_manifest_path are ALL REQUIRED when
-    resume_continuation=True -- no synthetic continuation state exists."""
+    resume_continuation=True -- no synthetic continuation state exists.
+
+    grad_accum_steps (ADDENDUM-5, additive -- None preserves byte-identical
+    prior behavior for every non-continuation caller, defaulting to 1: a
+    single micro-batch per macro-step, matching the pre-ADDENDUM-5 _run_
+    block exactly since grad_accum_steps=1 makes _run_production_step's
+    micro-batch loop execute exactly once). On the resume_continuation
+    path, None resolves to the PRODUCTION value computed by
+    _production_grad_accum_steps(cfg, ...) (mirrors cbase_grow_rung2_
+    stabilize.py's own driver, never re-derived independently); an
+    EXPLICIT value (e.g. a caller passing --grad-accum-steps=1 against a
+    --batch-size=4 -- the ADDENDUM-3D counter fixture) is checked against
+    that production expectation by _verify_rung2_production_config_parity
+    and REFUSED on mismatch, before any production step executes."""
     import os
     import torch
 
     os.makedirs(run_dir, exist_ok=True)
     seq = cfg["model"]["seq"] if live else (tiny_dims or {}).get("seq", 16)
-    batch_size = batch_size or (cfg["throughput"]["batch"] if live else 2)
+    batch_size = batch_size or (
+        ATTRIB702_PROD_MICRO_BATCH if resume_continuation else
+        (cfg["throughput"]["batch"] if live else 2))
 
     resume_manifest = None
     checkpoint_arch_identity = None
@@ -2298,10 +2417,35 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     mtp_weight = mtp_cfg["weight"]
     total_steps = total_steps or (n_warmup + 2 * n_active)
 
+    # ---- external-adjudication gates (5)/(7): production config parity ----
+    # (batch=1 x accum=16, QAT lifecycle) -- ONLY meaningful on the
+    # continuation path (a non-continuation synthetic/tiny fixture cfg has
+    # no real throughput.batch/precision.qat contract to parity-check
+    # against, and every pre-existing non-continuation caller keeps its
+    # byte-identical single-micro-batch, no-QAT behavior: grad_accum_steps
+    # defaults to 1, qat_enabled to False). A caller-supplied
+    # grad_accum_steps on the continuation path (e.g. the ADDENDUM-3D
+    # counter fixture's --batch-size=4 --grad-accum-steps=1) is checked,
+    # never silently accepted or silently overridden. ----
+    if resume_continuation:
+        resolved_grad_accum_steps = (
+            grad_accum_steps if grad_accum_steps is not None
+            else _production_grad_accum_steps(cfg, micro_batch=ATTRIB702_PROD_MICRO_BATCH))
+        production_config_parity = _verify_rung2_production_config_parity(
+            cfg, batch_size=batch_size, grad_accum_steps=resolved_grad_accum_steps,
+            run_dir=run_dir, expected_micro_batch=ATTRIB702_PROD_MICRO_BATCH)
+        grad_accum_steps = production_config_parity["grad_accum_steps"]
+        qat_enabled = production_config_parity["qat_enabled"]
+    else:
+        production_config_parity = None
+        grad_accum_steps = grad_accum_steps if grad_accum_steps is not None else 1
+        qat_enabled = False
+
     common = dict(model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
                  cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
                  ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
-                 total_steps=total_steps)
+                 total_steps=total_steps, grad_accum_steps=grad_accum_steps,
+                 qat_enabled=qat_enabled)
 
     # ---- warmup (uninstrumented) -- absolute step range: start_step is 0
     # for every pre-existing (non-continuation) caller, byte-identical to
@@ -2461,6 +2605,13 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
             "optimizer_identity_post_warmup": optimizer_identity_post_warmup,
             "post_run_adamw_internal_step": post_run_adamw_internal_step,
             "commit_telemetry": commit_telemetry,
+            # ADDENDUM-5 gates (5)/(7): production config parity (batch=1 x
+            # accum=16, QAT lifecycle) -- computed/verified BEFORE any
+            # production step ran (see the gate call above common's
+            # construction); disclosed here so a downstream reader can
+            # recheck the exact batch_size/grad_accum_steps/qat_enabled
+            # values every _run_production_step call in this run used.
+            "production_config_parity": production_config_parity,
         } if resume_continuation else {"resume_continuation": False},
         "optimizer_routing": routing,
         "expected_full_numel_from_split_param_groups": expected_full_numel,
@@ -2675,6 +2826,8 @@ def _selftest() -> int:
     _selftest_rung2_identity_gate_units()
     _selftest_continuation_schedule_bind()
     _selftest_optimizer_restore_refusals()
+    _selftest_production_config_parity_refusal()
+    _selftest_production_step_parity()
     _selftest_continuation_resume_wiring()
     return 0
 
@@ -3510,6 +3663,8 @@ def _selftest_continuation_resume_wiring() -> None:
         "RUNG2_EXPECTED_ADAMW_INTERNAL_STEP": module.RUNG2_EXPECTED_ADAMW_INTERNAL_STEP,
         "REFERENCE_N_ADAMW": module.REFERENCE_N_ADAMW,
         "REFERENCE_N_MUON": module.REFERENCE_N_MUON,
+        "_read_commit_gib": module._read_commit_gib,
+        "_read_disk_free_gib": module._read_disk_free_gib,
     }
     module.RUNG2_EXPECTED_DEDUP_NUMEL = fixture_identity["dedup_numel"]
     module.RUNG2_EXPECTED_INTERMEDIATE_SIZE = fixture_identity["intermediate_size"]
@@ -3519,13 +3674,39 @@ def _selftest_continuation_resume_wiring() -> None:
     module.RUNG2_EXPECTED_ADAMW_INTERNAL_STEP = fixture_start_step
     module.REFERENCE_N_ADAMW = fixture_n_adamw
     module.REFERENCE_N_MUON = fixture_n_muon
+    # ADDENDUM-5(B): this positive fixture's verdict must never depend on
+    # ambient host tenancy -- the falsifier's executed counterexample
+    # (PR #762 comment 4943461501) flipped this same selftest fail<->pass
+    # minutes apart because _preflight_checkpoint_load_commit reads the
+    # REAL machine's free commit via _read_commit_gib, and an unrelated
+    # 5.2GiB process transiently starved it below the gate's floor. Both
+    # commit-reading helpers are plain top-level functions (established
+    # "optional injected measurement" pattern already used by their own
+    # unit tests) -- patched here to fixed, deterministic, SUFFICIENT
+    # synthetic dicts for the duration of THIS fixture's attribution_run
+    # call only (restored in finally below). A refusal fixture proving the
+    # INSUFFICIENT branch still fires lives at _selftest_fork_capacity_
+    # preflight (unit-level, injects an insufficient dict directly) --
+    # this patch only removes ambient-machine-state as a variable from the
+    # POSITIVE continuation path.
+    module._read_commit_gib = lambda: {
+        "committed_gib": 40.0, "limit_gib": 96.0, "free_gib": 56.0}
+    module._read_disk_free_gib = lambda path: {
+        "total_gib": 500.0, "used_gib": 100.0, "free_gib": 400.0}
     try:
+        # ADDENDUM-5 gates (5)/(7): batch_size is now REQUIRED to equal
+        # ATTRIB702_PROD_MICRO_BATCH (1) on the continuation path -- the
+        # production-config-parity gate refuses batch_size=2 the way the
+        # pre-ADDENDUM-5 fixture used it. grad_accum_steps is left None
+        # (auto-derived from cfg["throughput"]["batch"]=2, clamped to the
+        # 16-floor -> 16) to exercise the DEFAULT continuation wiring, not
+        # an explicit override.
         receipt = attribution_run(
             live=True, cfg=cfg, shard_dir=shard_dir, run_dir=run_dir,
             device="cpu", tiny_dims=None,
             intermediate_override=small_intermediate,
-            batch_size=2, n_warmup=MIN_WARMUP_STEPS, n_active=MIN_ACTIVE_STEPS,
-            ce_chunk_tokens=32,
+            batch_size=ATTRIB702_PROD_MICRO_BATCH, n_warmup=MIN_WARMUP_STEPS,
+            n_active=MIN_ACTIVE_STEPS, ce_chunk_tokens=32,
             resume_continuation=True, grow_checkpoint_dir=ckpt_dir,
             mmap_cache_dir=mmap_cache_dir, mmap_manifest_path=mmap_manifest_path)
     finally:
@@ -3576,6 +3757,18 @@ def _selftest_continuation_resume_wiring() -> None:
     assert cont["optimizer_identity_post_warmup"]["ok"] is True, cont["optimizer_identity_post_warmup"]
     assert cont["optimizer_identity_post_warmup"]["expected_adamw_step"] == (
         fixture_start_step + MIN_WARMUP_STEPS), cont["optimizer_identity_post_warmup"]
+
+    # ADDENDUM-5 gates (5)/(7): production-config-parity ran, passed, and
+    # threaded the AUTO-DERIVED value (grad_accum_steps was left None at
+    # the call site above) -- this cfg's throughput.batch=2 clamps to the
+    # 16-floor, so 16 is the correct production expectation even at this
+    # tiny scale, never a hand-picked test constant.
+    pcp = cont["production_config_parity"]
+    assert pcp is not None, cont
+    assert pcp["ok"] is True, pcp
+    assert pcp["batch_size"] == ATTRIB702_PROD_MICRO_BATCH, pcp
+    assert pcp["grad_accum_steps"] == 16 == pcp["expected_grad_accum_steps"], pcp
+    assert pcp["qat_enabled"] is False, pcp  # cfg carries no precision.qat block
 
     # addendum-2/step-136-trap sanity, generalized -- NEVER hardcoded to any
     # specific step VALUE like 136: the live AdamW internal step counter
@@ -3637,6 +3830,154 @@ def _selftest_continuation_resume_wiring() -> None:
           f"physical_step_executions={receipt['mode']['physical_step_executions']} "
           f"unique_absolute_schedule_steps="
           f"{receipt['mode']['unique_absolute_schedule_steps']}", flush=True)
+
+
+def _selftest_production_config_parity_refusal() -> None:
+    """ember #702 ADDENDUM-3D counter fixture, standalone unit-level (no
+    checkpoint/model build needed -- _verify_rung2_production_config_parity
+    is a pure function of cfg + the caller's actual batch_size/
+    grad_accum_steps): batch_size=4, grad_accum_steps=1 (no accumulation)
+    against a cfg with throughput.batch=16 REFUSES on both mismatched
+    fields. The matching POSITIVE call (batch_size=1, grad_accum_steps=16
+    -- this cfg's own production value, computed via
+    _production_grad_accum_steps, never hand-picked) PASSES. A third case
+    proves the 16-floor clamp: cfg.throughput.batch=2 (< 16) still expects
+    grad_accum_steps=16, not 2."""
+    import tempfile
+
+    cfg = {"throughput": {"batch": 16}, "precision": {"qat": {"enabled": True}}}
+    run_dir = tempfile.mkdtemp(prefix="attribution702_config_parity_selftest_")
+
+    refused = False
+    try:
+        _verify_rung2_production_config_parity(
+            cfg, batch_size=4, grad_accum_steps=1, run_dir=run_dir,
+            expected_micro_batch=ATTRIB702_PROD_MICRO_BATCH)
+    except SystemExit:
+        refused = True
+    assert refused, "batch4/no-accum must REFUSE (ADDENDUM-3D counter fixture)"
+
+    ok = _verify_rung2_production_config_parity(
+        cfg, batch_size=1, grad_accum_steps=16, run_dir=run_dir,
+        expected_micro_batch=ATTRIB702_PROD_MICRO_BATCH)
+    assert ok["ok"] is True, ok
+    assert ok["qat_enabled"] is True, ok
+    assert ok["expected_grad_accum_steps"] == 16, ok
+
+    cfg_small = {"throughput": {"batch": 2}}
+    clamp_refused = False
+    try:
+        _verify_rung2_production_config_parity(
+            cfg_small, batch_size=1, grad_accum_steps=2, run_dir=run_dir,
+            expected_micro_batch=ATTRIB702_PROD_MICRO_BATCH)
+    except SystemExit:
+        clamp_refused = True
+    assert clamp_refused, "grad_accum_steps=2 must REFUSE against the 16-floor clamp"
+
+    ok_small = _verify_rung2_production_config_parity(
+        cfg_small, batch_size=1, grad_accum_steps=16, run_dir=run_dir,
+        expected_micro_batch=ATTRIB702_PROD_MICRO_BATCH)
+    assert ok_small["ok"] is True, ok_small
+    assert ok_small["qat_enabled"] is False, ok_small  # cfg carries no precision.qat block
+
+    print("ATTRIB702_PRODUCTION_CONFIG_PARITY_REFUSAL_SELFTEST_PASS "
+          f"batch4_no_accum_refused={refused} positive_pass={ok['ok']} "
+          f"floor_clamp_refused={clamp_refused} floor_clamp_pass={ok_small['ok']}",
+          flush=True)
+
+
+def _selftest_production_step_parity() -> None:
+    """ember #702 ADDENDUM-5 condition (2) -- the MANDATORY one-step parity
+    fixture, and the extraction proof itself (ADDENDUM-5 condition (1)'s
+    "pure extraction" claim is only PROVEN here, not merely asserted by the
+    git diff being small): ts.run_v0_segment(n_steps=1) end-to-end vs a
+    direct ts._run_production_step(...) call against an INDEPENDENTLY
+    built model/optimizers/loader produce bit-identical first-step loss
+    and a bit-identical post-step model-weight hash.
+
+    A freshly-constructed CPUOffloadOptimizer's state is all-zero/step=0
+    regardless of RNG (cpu_offload_adamw.py's _memmap_zeros -- no seed
+    dependency there); the ONLY source of cross-build nondeterminism is
+    the model's weight-init RNG stream, pinned identical via
+    torch.manual_seed(SEED) immediately before each independent build.
+    Both paths use real_arch=True (never the CPU stand-in _tiny_v0_model,
+    whose forward signature differs from the real backbone) and the SAME
+    synthetic shard tokens (built once by path A's own run_v0_segment
+    call; path B's loader reopens that identical shard_dir). Exercises
+    grad_accum_steps=3 (>1, so the micro-batch accumulation loop itself is
+    covered, not just the grad_accum_steps=1 degenerate case) and
+    qat_enabled=True (so the fake-quant/restore STE lifecycle is proven
+    identical too, closing gates 5-7 together)."""
+    import os
+    import tempfile
+
+    import torch
+
+    cfg = {
+        "model": {"seq": 16, "vocab": 64, "hidden": 32, "layers": 2, "heads": 2,
+                  "tied_embeddings": False, "grad_checkpointing": False},
+        "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 2, "weight": 0.3}},
+        "optimizer": {"lr_muon": 0.02, "lr_adamw": 3e-4, "weight_decay": 0.1},
+        "schedule": {"type": "wsd", "warmup_frac": 0.1, "stable_until_frac": 0.8,
+                    "decay_to_lr_frac": 0.1},
+        "throughput": {"batch": 16},
+        "precision": {"qat": {"enabled": True}},
+    }
+    small_intermediate = 48
+    SEED = 987654321
+    GRAD_ACCUM = 3
+    BATCH = 1
+
+    # ---- Path A: run_v0_segment(n_steps=1) end-to-end ----
+    run_dir_a = tempfile.mkdtemp(prefix="attribution702_parity_a_")
+    torch.manual_seed(SEED)
+    receipt_a = ts.run_v0_segment(
+        run_dir_a, cfg, n_steps=1, total_steps=4, live=False, real_arch=True,
+        device="cpu", intermediate_override=small_intermediate,
+        offload_optimizer_state=True, checkpoint_every=1,
+        segment_id="attrib702-parity-fixture-a", batch_size=BATCH,
+        grad_accum_steps=GRAD_ACCUM)
+    loss_a = receipt_a["loss_first"]
+    assert loss_a is not None, receipt_a
+    assert receipt_a["components"]["qat"]["enabled"] is True, receipt_a
+    ckpt_dir_a = receipt_a["last_checkpoint"]
+    assert ckpt_dir_a is not None, receipt_a
+    m_state_a, _, _, _ = ts.load_checkpoint(ckpt_dir_a)
+    hash_a = _hash_state_dict(m_state_a)
+
+    shard_dir = os.path.join(run_dir_a, "shards")
+    assert os.path.isdir(shard_dir), shard_dir
+
+    # ---- Path B: direct _run_production_step call, independently built ----
+    torch.manual_seed(SEED)
+    model_b, vocab_b, hidden_b, n_mtp_b = ts.build_v0_model(
+        cfg, live=True, tiny_dims=None, intermediate_override=small_intermediate,
+        device="cpu")
+    loader_b = ts.PackedShardLoader(
+        shard_dir, cfg["model"]["seq"], n_mtp_b,
+        mmap_cache_dir=os.path.join(run_dir_a, "mmap_cache_b"))
+    optimizers_b, base_lrs_b, _ = ts.build_split_optimizer(
+        model_b, cfg, offload_optimizer_state=True,
+        deviation_dir=tempfile.mkdtemp(prefix="attribution702_parity_dev_b_"),
+        optstate_dir=tempfile.mkdtemp(prefix="attribution702_parity_opt_b_"))
+    ce_impl_b, ce_fn_b = ts.resolve_ce_impl(prefer_liger=False)
+    mtp_cfg_b = cfg["objective"]["mtp_aux_heads"]
+
+    step_result_b = ts._run_production_step(
+        model=model_b, loader=loader_b, optimizers=optimizers_b, base_lrs=base_lrs_b,
+        cfg=cfg, ce_fn=ce_fn_b, mtp_enabled=mtp_cfg_b["enabled"],
+        mtp_weight=mtp_cfg_b["weight"], ce_chunk_tokens=32, device="cpu",
+        batch_size=BATCH, global_step=0, total_steps=4,
+        grad_accum_steps=GRAD_ACCUM, qat_enabled=True)
+    loss_b = round(step_result_b["loss"], 6)
+    hash_b = _hash_state_dict(model_b.state_dict())
+
+    assert loss_a == loss_b, (loss_a, loss_b)
+    assert hash_a == hash_b, "post-step model weights diverged between the two call paths"
+
+    print("ATTRIB702_PRODUCTION_STEP_PARITY_SELFTEST_PASS "
+          f"loss_a={loss_a} loss_b={loss_b} hash_match={hash_a == hash_b} "
+          f"grad_accum_steps={GRAD_ACCUM} qat_enabled=True", flush=True)
 
 
 # ---------------------------------------------------------------------------
