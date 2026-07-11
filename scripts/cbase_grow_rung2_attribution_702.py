@@ -2662,6 +2662,15 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
         "calibration_pinned_vs_pageable": calibration,
         "vram_at_end": vram,
         "ce_impl": ce_impl,
+        # ember #702 FIX A (2026-07-11, attempt-2 receipt destroyed by
+        # checked_write's R2 rule): this receipt embeds several sha256
+        # fields (checkpoint 4-hash set, manifest_file_sha256,
+        # combined_source_manifest_sha256) computed by _sha256_bytes_of_file
+        # -- a plain binary whole-file read, no normalization -- so this is
+        # the accurate, not a placeholder, convention string. Matches the
+        # canonical wording used across cbase_grow_rung.py/cbase_grow_live.py
+        # /cbase_grow_measured_flops.py verbatim.
+        "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
         "api_spend_usd": 0,
         "paid_api_surface_used": False,
         "invalid_tokens_present": [],
@@ -3824,6 +3833,25 @@ def _selftest_continuation_resume_wiring() -> None:
     assert receipt["verdict"] == "INVALID"
     assert "pinned_pageable_calibration" in receipt["failing_gates"]
 
+    # ember #702 FIX C (2026-07-11): this fixture already builds a full
+    # receipt through the EXACT SAME construction path attribution_run()
+    # uses for a real --live --resume-continuation launch (the checkpoint/
+    # manifest sha256 fields included) -- so it is the natural home for the
+    # launch-time schema probe. Two receipts were destroyed the same
+    # morning by a field-schema violation (missing sha_convention alongside
+    # sha256 fields, checked_write's R2 rule) that only surfaced AFTER a
+    # 52-minute compute; this makes that class fail HERE, in seconds of
+    # CPU, as a standing regression assertion -- not just a caught-after-
+    # the-fact incident. --schema-probe (main(), below) runs this exact
+    # fixture standalone as a preflight, so the same check gates any
+    # --live launch before it starts.
+    import receipt_check as _receipt_check_probe
+    schema_findings = _receipt_check_probe.validate_receipt(receipt)
+    assert schema_findings == [], (
+        f"{len(schema_findings)} receipt_check schema finding(s) on a receipt "
+        f"built via the real resume_continuation=True path: {schema_findings}"
+    )
+
     print("ATTRIB702_CONTINUATION_RESUME_PASS "
           f"start_step={cont['start_step']} "
           f"fork_global_step={cont['fork_global_step']} "
@@ -4035,6 +4063,21 @@ def main(argv: list | None = None) -> int:
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--selftest", action="store_true",
                     help="Run the CPU-only selftest (tiny fixture dims, < 30s, no GPU)")
+    ap.add_argument("--schema-probe", action="store_true",
+                    help="ember #702 FIX C (2026-07-11): build a receipt "
+                         "through the SAME construction path as a real "
+                         "--live --resume-continuation launch (tiny "
+                         "synthetic checkpoint, seconds of CPU, no GPU/"
+                         "shard-dir/network needed), then validate it via "
+                         "receipt_check.validate_receipt. Prints "
+                         "ATTRIBUTION_702_SCHEMA_PROBE_PASS and exits 0 on "
+                         "no findings; prints "
+                         "ATTRIBUTION_702_SCHEMA_PROBE_REFUSED with the "
+                         "findings and exits 3 otherwise. Run this before "
+                         "every --live --resume-continuation launch -- it "
+                         "is the preflight that would have caught the "
+                         "missing-sha_convention class before a 52-minute "
+                         "compute instead of after it.")
     ap.add_argument("--live", action="store_true",
                     help="Real 2.2B-arch CUDA dispatch. Requires EMBER_GATE_AUTHORIZED=1 "
                          "and --shard-dir. Refused otherwise.")
@@ -4081,6 +4124,28 @@ def main(argv: list | None = None) -> int:
 
     if args.selftest:
         return _selftest()
+
+    if args.schema_probe:
+        # ember #702 FIX C: reuse _selftest_continuation_resume_wiring()
+        # unchanged -- it already builds a receipt through the real
+        # resume_continuation=True construction path and (as of this same
+        # fix) already asserts receipt_check.validate_receipt(receipt) ==
+        # [] internally. Running it standalone as a flag, not only inside
+        # --selftest, is what makes it a wireable PREFLIGHT step: a launch
+        # script can call `python cbase_grow_rung2_attribution_702.py
+        # --schema-probe` and gate on the exit code before ever touching
+        # --live.
+        try:
+            _selftest_continuation_resume_wiring()
+        except AssertionError as e:
+            print(f"ATTRIBUTION_702_SCHEMA_PROBE_REFUSED: {e}", flush=True)
+            return 3
+        except Exception as e:
+            print(f"ATTRIBUTION_702_SCHEMA_PROBE_REFUSED (unexpected "
+                  f"{type(e).__name__}): {e}", flush=True)
+            return 3
+        print("ATTRIBUTION_702_SCHEMA_PROBE_PASS", flush=True)
+        return 0
 
     import os
     import tempfile
