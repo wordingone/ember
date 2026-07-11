@@ -47,6 +47,28 @@ pass, no slice measurement, no Claim A/B number):
       floor is tight enough not to matter) while `value` remains accurate to
       the analytic 0.5.
 
+  PPM703_GLOBAL_MASS_100_BRANCH_COUNTEREXAMPLE_PASS
+  PPM703_BOUND_REFUSAL_MECHANISM_PASS
+      External re-audit block (PR comment 4943538820, executed against the
+      PRE-exposure head 299b3c2 -- moot against this PR's own exposure
+      commit 08d3dc9, since `truncated_mass_bound` is already a `nonlocal`
+      accumulator shared by every branch of the recursion, not reset per
+      pruned node; verified here as a PERMANENT fixture rather than trusted
+      by inspection): a 100-disjoint-root-branch / prob_floor=0.01 fixture
+      (every branch pruned before any EOT, each contributing exactly 0.01)
+      must report `truncated_mass_bound~=1.0` (the SUM across all 100
+      pruned subtrees), not a single node's local 0.01, with `value=0.0`
+      honestly unresolved and the true analytic (0.01) bracketed by
+      [value, value+bound]. `require_bound_within_tolerance` -- a new
+      structural enforcement primitive, `CylinderMassBoundExceeded` raised
+      whenever `truncated_mass_bound` exceeds a caller's declared tolerance
+      -- must REFUSE on this result at EQ_TOL, and a decoupled
+      non-recursive unit fixture proves the raise/pass-through boundary
+      sits exactly at `bound > tolerance` in both directions. This
+      primitive is now wired into every `cylinder_mass_ground_truth` call
+      site across P0/P1/P2 (issue #703 PR #759 external re-audit: "require
+      truncated_mass_upper <= caller_tolerance before equality can pass").
+
   PPM703_P2_BLEND_DEFINITION_PASS
       P_ppm_tok(t|F) := P_ppm(E_k(t) n F_{k-1}) / P_ppm(F_{k-1}), implemented
       definition-first (exp703_marginalization.p_ppm_tok), matches ground
@@ -54,7 +76,32 @@ pass, no slice measurement, no Claim A/B number):
 
   PPM703_STATE_CAP_ASSERT_PASS
       PpmModel refuses (raises PpmStateCapExceeded) once estimated resident
-      state exceeds a configured cap.
+      state exceeds a configured cap. Includes two external-re-audit
+      mandatory-negative legs (PR comment 4943548456, executed against head
+      299b3c2):
+
+        PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS -- the OLD `live_state_bytes`
+        returned `tracemalloc.get_traced_memory()[0]`, the PROCESS-WIDE
+        traced total, mislabeled as PPM state; an unrelated 2MB bytearray
+        allocated before model construction inflated it by >99% of its
+        value and triggered a false-positive refusal at symbol 52 while
+        true PPM state was 5,840 bytes. The cure splits this into
+        `isolated_ppm_state_bytes()` (a tracemalloc snapshot filtered to
+        THIS FILE's own allocation sites, diffed against a per-instance
+        baseline -- the authoritative figure `state_cap_bytes` is enforced
+        against for PPM-state claims) and `process_live_bytes_governor()`
+        (the same process-wide reading, honestly renamed and documented as
+        a conservative SECOND safety rail, never itself a PPM-state claim).
+
+        PPM703_STABLE_CONTEXT_PERIODIC_CHECK_PASS -- `LIVE_CHECK_INTERVAL`
+        is documented as "every N training calls" but the OLD counter only
+        incremented inside the growth-triggered `_check_cap()`, so a
+        stable-context stream (same symbol repeated, no new node/entry
+        after the first call) reached it exactly once regardless of call
+        count -- receipted: 500 training calls, counter stuck at 2,
+        LIVE_CHECK_INTERVAL=100 never reached. The cure moves the counter
+        to a new `_check_cap_periodic()`, called unconditionally at the
+        tail of every `train_symbol` call.
 
   PPM703_UTF8_FOUR_BYTE_BOUNDARY_COUNTEREXAMPLE_PASS
   PPM703_UTF8_DFA_RFC3629_MANDATORY_FIXTURES_PASS
@@ -105,6 +152,9 @@ from exp703_marginalization import (
     p_ppm_tok,
     naive_renormalized_scores,
     l1_error,
+    require_bound_within_tolerance,
+    CylinderMassBoundExceeded,
+    CylinderMassResult,
 )
 from exp703_domain_d import (
     RestrictedPpmModel,
@@ -142,9 +192,24 @@ def run_p1_exhaustive_equality() -> bool:
         gt_masses = {}
         bl_masses = {}
         for cand in sigma_candidates:
-            gt_result = cylinder_mass_ground_truth(
-                case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
-                case.k, cand, case.alphabet_symbols, case.eot_symbol)
+            # require_bound_within_tolerance is a STRUCTURAL enforcement,
+            # not a printed convention: it RAISES CylinderMassBoundExceeded
+            # immediately if the oracle's own truncated_mass_bound exceeds
+            # EQ_TOL, crashing this run loud rather than silently folding a
+            # bound breach into a printed FAIL a caller could ignore (issue
+            # #703 PR #759 external re-audit, PR comment 4943538820: "require
+            # truncated_mass_upper <= caller_tolerance before equality can
+            # pass"). gt_bound is 0.0 whenever every branch resolved via a
+            # real EOT or a proven classification-lock; it is nonzero only
+            # on the horizon=None numerical-floor path (see
+            # run_p1_finite_lock_counterexamples' floor-bites fixture and
+            # run_p1_global_mass_and_refusal's 100-branch counterexample for
+            # cases where it is deliberately exercised).
+            gt_result = require_bound_within_tolerance(
+                cylinder_mass_ground_truth(
+                    case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
+                    case.k, cand, case.alphabet_symbols, case.eot_symbol),
+                EQ_TOL, label=f"{case.name} candidate={cand}")
             gt, gt_bound = gt_result.value, gt_result.truncated_mass_bound
             bl = cylinder_mass_bounded_lookahead(
                 case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
@@ -152,16 +217,13 @@ def run_p1_exhaustive_equality() -> bool:
             gt_masses[cand] = gt
             bl_masses[cand] = bl
             diff = abs(gt - bl)
-            # The ground-truth oracle's OWN error bound is asserted here,
-            # explicitly, not just trusted to never bite (issue #703 PR #759
-            # coordinator gate note on the blocker-1 cure: "an oracle whose
-            # error bound is implicit is one config change away from
-            # silently lying"). gt_bound is 0.0 whenever every branch
-            # resolved via a real EOT or a proven classification-lock; it is
-            # nonzero only on the horizon=None numerical-floor path (see
-            # run_p1_finite_lock_counterexamples' floor-bites fixture for a
-            # case where this is actually nonzero and still passes).
+            # By this point require_bound_within_tolerance already refused
+            # to return a result with gt_bound >= EQ_TOL -- bound_ok is
+            # always True here; it is asserted anyway (never trusted to be
+            # a tautology) and printed so a reader sees the actual measured
+            # value, not just the fact that no exception fired.
             bound_ok = gt_bound < EQ_TOL
+            assert bound_ok, "unreachable: require_bound_within_tolerance should have raised"
             passed = diff < EQ_TOL and bound_ok
             ok = ok and passed
             details.append(
@@ -287,9 +349,11 @@ def run_p1_naive_renorm_negative_control() -> bool:
     correct = {}
     correct_bound_total = 0.0
     for cand in case.candidates:
-        gt_result = cylinder_mass_ground_truth(
-            case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
-            case.k, cand, case.alphabet_symbols, case.eot_symbol)
+        gt_result = require_bound_within_tolerance(
+            cylinder_mass_ground_truth(
+                case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
+                case.k, cand, case.alphabet_symbols, case.eot_symbol),
+            EQ_TOL, label=f"naive-renorm-negative-control candidate={cand}")
         correct[cand] = gt_result.value
         correct_bound_total += gt_result.truncated_mass_bound
     l1 = l1_error(naive, correct)
@@ -490,6 +554,112 @@ def run_p1_finite_lock_counterexamples() -> bool:
     return ok
 
 
+def run_p1_global_mass_and_refusal() -> bool:
+    """Mandatory-negative regression fixtures for the external re-audit's
+    global-mass block (issue #703 PR #759, PR comment 4943538820, executed
+    against the PRE-exposure head `299b3c2`): a ground-truth call whose
+    numerical-floor path prunes MANY DISJOINT subtrees must report the SUM
+    of every pruned subtree's own mass in `truncated_mass_bound` -- a
+    single node's local floor value is not a bound on the whole call.
+    `cylinder_mass_ground_truth`'s accumulator is `nonlocal` and shared by
+    every branch of its internal `rec()`, so this was already structurally
+    correct once `truncated_mass_bound` existed at all (08d3dc9, this PR's
+    own prior repair round) -- verified below with the falsifier's exact
+    adversarial construction as a PERMANENT fixture, not just a one-off
+    scratch check.
+
+    PPM703_GLOBAL_MASS_100_BRANCH_COUNTEREXAMPLE_PASS: 100 disjoint root
+    branches, each reached with probability exactly 0.01 and no further
+    positive-probability path to EOT (a valid but degenerate self-loop, so
+    every branch is genuinely unresolved, not merely deep), prob_floor set
+    to EXACTLY 0.01 so every one of the 100 branches is pruned at the
+    first level past the root. `value` for ANY single-token candidate
+    (here (0,), i.e. "is the realized first token exactly branch 0?") is
+    0.0 -- honestly unresolved, since no branch was ever confirmed --
+    while `truncated_mass_bound` must total ~1.0 (100 * 0.01), not 0.01
+    (one branch's local floor) and not 0.0. The true analytic value for
+    this candidate (0.01, since exactly one of the 100 disjoint branches
+    can ever match token (0,)) is bracketed by [returned,
+    returned+truncated_mass_bound] = [0.0, ~1.0] -- a SOUND but
+    deliberately non-tight bound (the mechanism reports the true
+    worst-case uncertainty across all pruned subtrees, not the tighter
+    single-candidate truth, which is exactly what an upper bound is
+    supposed to do). require_bound_within_tolerance MUST raise
+    CylinderMassBoundExceeded on this result at the module's own EQ_TOL
+    (1e-9) -- returning value=0.0 as if it were trustworthy at that
+    precision would be exactly the silent-lying failure mode the
+    coordinator's gate note named.
+
+    PPM703_BOUND_REFUSAL_MECHANISM_PASS: a decoupled, non-recursive unit
+    fixture for require_bound_within_tolerance itself -- constructs
+    CylinderMassResult values directly (no model, no tokenizer, no
+    recursion) and asserts the raise/pass-through boundary sits exactly
+    at `bound > tolerance` in both directions, so the enforcement
+    primitive's own correctness does not depend on any lattice fixture
+    correctly reaching the numerical floor."""
+    ok = True
+
+    # -- 100-branch global-mass counterexample (falsifier's exact shape) ----
+    N_BRANCHES = 100
+    EOT_G = 100
+    BRANCH_SYMS = list(range(N_BRANCHES))
+    rows = {(): {s: 0.01 for s in BRANCH_SYMS}}
+    for s in BRANCH_SYMS:
+        # Deterministic self-loop past the root: p_eot=0 forever on this
+        # branch (a valid, if degenerate, distribution) -- guarantees every
+        # branch is genuinely UNRESOLVED when pruned, not merely deep.
+        rows[(s,)] = {s: 1.0}
+    model100 = FixedFixtureModel(alphabet_size=N_BRANCHES + 1, table=rows,
+                                  default={EOT_G: 1.0})
+    tok100 = BpeMergeTokenizer(merges=[], eot_symbol=EOT_G)  # safe_lock_horizon()=None always
+    alphabet_symbols100 = list(BRANCH_SYMS)  # EOT excluded, per module convention
+    TARGET_SYM = 0
+    ANALYTIC_100 = 0.01  # P(first token is exactly branch 0) = P(root_sym=0)
+    gt100_result = cylinder_mass_ground_truth(
+        model100, tok100, (), (), 1, (TARGET_SYM,), alphabet_symbols100, EOT_G,
+        max_depth=10, prob_floor=0.01)
+    gt100, gt100_bound = gt100_result.value, gt100_result.truncated_mass_bound
+    bracket_ok = gt100 <= ANALYTIC_100 <= gt100 + gt100_bound
+    value_honest_ok = gt100 == 0.0
+    bound_totals_100_branches_ok = abs(gt100_bound - N_BRANCHES * 0.01) < 1e-6
+    refused = False
+    try:
+        require_bound_within_tolerance(gt100_result, EQ_TOL, label="100-branch global-mass")
+    except CylinderMassBoundExceeded:
+        refused = True
+    global_mass_ok = (value_honest_ok and bound_totals_100_branches_ok and bracket_ok and refused)
+    ok = ok and global_mass_ok
+    print(f"  [global-mass 100-branch] n_branches={N_BRANCHES} prob_floor=0.01 "
+          f"value={_fmt(gt100)} (honest-zero={value_honest_ok}) "
+          f"truncated_mass_bound={gt100_bound:.6f} "
+          f"(sums_100_branches={bound_totals_100_branches_ok}) "
+          f"analytic={ANALYTIC_100} bracketed_in_[value,value+bound]={bracket_ok} "
+          f"require_bound_within_tolerance_refuses={refused} "
+          f"{'PASS' if global_mass_ok else 'FAIL'}")
+    print(f"PPM703_GLOBAL_MASS_100_BRANCH_COUNTEREXAMPLE_PASS={global_mass_ok}")
+
+    # -- bound-refusal mechanism, decoupled unit fixture ---------------------
+    tight = CylinderMassResult(value=0.5, truncated_mass_bound=1e-12)
+    loose = CylinderMassResult(value=0.5, truncated_mass_bound=0.3)
+    tight_passthrough_ok = require_bound_within_tolerance(tight, EQ_TOL) is tight
+    loose_refuses = False
+    try:
+        require_bound_within_tolerance(loose, EQ_TOL)
+    except CylinderMassBoundExceeded:
+        loose_refuses = True
+    # a WIDER tolerance that the loose result's own bound satisfies must NOT refuse
+    loose_passes_wide_tolerance_ok = require_bound_within_tolerance(loose, 0.5) is loose
+    refusal_mech_ok = tight_passthrough_ok and loose_refuses and loose_passes_wide_tolerance_ok
+    ok = ok and refusal_mech_ok
+    print(f"  [bound-refusal mechanism] tight(bound=1e-12)_passthrough={tight_passthrough_ok} "
+          f"loose(bound=0.3)_refuses_at_EQ_TOL={loose_refuses} "
+          f"loose_passes_at_wider_tolerance_0.5={loose_passes_wide_tolerance_ok} "
+          f"{'PASS' if refusal_mech_ok else 'FAIL'}")
+    print(f"PPM703_BOUND_REFUSAL_MECHANISM_PASS={refusal_mech_ok}")
+
+    return ok
+
+
 def run_p2_blend_definition() -> bool:
     ok = True
     details = []
@@ -499,9 +669,11 @@ def run_p2_blend_definition() -> bool:
             blend_val = p_ppm_tok(case.model, case.tokenizer, case.boundary_bytes,
                                    case.boundary_tokens, case.k, cand,
                                    case.alphabet_symbols, case.eot_symbol, case.L_eff)
-            gt_result = cylinder_mass_ground_truth(
-                case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
-                case.k, cand, case.alphabet_symbols, case.eot_symbol)
+            gt_result = require_bound_within_tolerance(
+                cylinder_mass_ground_truth(
+                    case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
+                    case.k, cand, case.alphabet_symbols, case.eot_symbol),
+                EQ_TOL, label=f"P2-blend {case.name} candidate={cand}")
             gt, gt_bound = gt_result.value, gt_result.truncated_mass_bound
             denom = case.model.prefix_probability(case.boundary_bytes) if case.boundary_bytes else 1.0
             gt_conditional = gt / denom if denom > 0 else float("nan")
@@ -552,18 +724,19 @@ def run_state_cap_assert() -> bool:
           f"approx_state_bytes_at_raise={model_tiny.approx_state_bytes()} "
           f"{'PASS' if tier1_raised else 'FAIL'}")
 
-    # -- tier 2: mandatory-negative fixture -- authoritative live governor --
+    # -- tier 2: mandatory-negative fixture -- process-wide governor --------
     # Reproduces the coordinator's exact fail-open counterexample
     # (PPM703_STATE_CAP_HEURISTIC_FAILOPEN_PASS, PR #759 coordinator gate):
     # order_cap=8, alphabet_size=257, bytes from random.Random(42),
     # state_cap_bytes=8,000,000. Measured: the OLD heuristic-only
     # `_check_cap` reported approx=4,496,152 (under cap) while tracemalloc
     # showed live=14,194,992 (well over cap) -- a fail-open on the decisive
-    # statistic. The NEW `_check_live_cap` tier must catch this (raise
-    # BEFORE live memory blows past the cap) while the heuristic reading AT
-    # THE MOMENT OF RAISE is STILL under cap -- proving the fix is the live
-    # measurement, not a heuristic recalibration (a heuristic-only reading
-    # that happened to also cross the cap would not distinguish the two).
+    # statistic. `process_live_bytes_governor()` (honestly renamed from the
+    # prior `live_state_bytes` per external re-audit PR comment 4943548456
+    # -- see PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS below for why the old
+    # name was a defect) must catch this while the heuristic reading AT THE
+    # MOMENT OF RAISE is STILL under cap -- proving the fix is a real
+    # measurement, not a heuristic recalibration.
     cap_bytes = 8_000_000
     model_live = PpmModel(alphabet_size=257, order_cap=8, state_cap_bytes=cap_bytes)
     rng = random.Random(42)
@@ -575,18 +748,91 @@ def run_state_cap_assert() -> bool:
             n_trained_live += 1
     except PpmStateCapExceeded as e:
         tier2_raised = True
-        print(f"  tier2 (live governor, coordinator fixture): "
+        print(f"  tier2 (process-wide governor, coordinator fixture): "
               f"PpmStateCapExceeded raised after {n_trained_live} symbols: {e}")
     heuristic_at_raise = model_live.approx_state_bytes()
-    live_at_raise = model_live.live_state_bytes()
+    live_at_raise = model_live.process_live_bytes_governor()
     heuristic_would_have_passed = heuristic_at_raise < cap_bytes
     live_actually_over_cap = live_at_raise > cap_bytes
     tier2_ok = tier2_raised and heuristic_would_have_passed and live_actually_over_cap
     ok = ok and tier2_ok
     print(f"  tier2 cap_bytes={cap_bytes} heuristic_at_raise={heuristic_at_raise} "
           f"(would_have_passed_alone={heuristic_would_have_passed}) "
-          f"live_at_raise={live_at_raise} (actually_over_cap={live_actually_over_cap}) "
+          f"process_wide_at_raise={live_at_raise} (actually_over_cap={live_actually_over_cap}) "
           f"{'PASS' if tier2_ok else 'FAIL'}")
+
+    # -- tier 3: foreign-allocation isolation (external re-audit, PR comment
+    # 4943548456, executed against head 299b3c2): an unrelated 2MB
+    # bytearray allocated BEFORE model construction must NOT appear in
+    # isolated_ppm_state_bytes() (module-filtered, baseline-diffed), while
+    # process_live_bytes_governor() (deliberately process-wide) DOES see it
+    # -- proving the two are genuinely different quantities, not a rename
+    # of the same number. Receipted old-code-fails: the pre-fix
+    # live_state_bytes() included >99% of the foreign 2,000,000 bytes and
+    # raised a false-positive PpmStateCapExceeded at symbol 52 while true
+    # PPM state was 5,840 bytes.
+    import tracemalloc as _tracemalloc_for_fixture
+    if not _tracemalloc_for_fixture.is_tracing():
+        _tracemalloc_for_fixture.start()
+    foreign_bytearray = bytearray(2_000_000)
+    model_foreign = PpmModel(alphabet_size=257, order_cap=8, state_cap_bytes=1_000_000)
+    rng_foreign = random.Random(42)
+    for i in range(99):
+        model_foreign.train_symbol((i % 5,), rng_foreign.randrange(256))
+    isolated_reading = model_foreign.isolated_ppm_state_bytes()
+    process_wide_reading = model_foreign.process_live_bytes_governor()
+    isolated_excludes_foreign_ok = isolated_reading < len(foreign_bytearray) * 0.1
+    process_wide_includes_foreign_ok = process_wide_reading >= len(foreign_bytearray) * 0.9
+    no_false_refusal_ok = isolated_reading < model_foreign.state_cap_bytes
+    tier3_ok = isolated_excludes_foreign_ok and process_wide_includes_foreign_ok and no_false_refusal_ok
+    ok = ok and tier3_ok
+    print(f"  tier3 (foreign-allocation isolation) foreign_bytearray={len(foreign_bytearray)} "
+          f"isolated_ppm_state_bytes={isolated_reading} "
+          f"(excludes_foreign={isolated_excludes_foreign_ok}, "
+          f"no_false_refusal={no_false_refusal_ok}) "
+          f"process_live_bytes_governor={process_wide_reading} "
+          f"(includes_foreign={process_wide_includes_foreign_ok}) "
+          f"{'PASS' if tier3_ok else 'FAIL'}")
+    print(f"PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS={tier3_ok}")
+    del foreign_bytearray  # release the fixture's own footprint promptly
+
+    # -- tier 4: stable-context periodic-check interval semantics -----------
+    # (external re-audit, PR comment 4943548456: "LIVE_CHECK_INTERVAL
+    # counts _check_cap() calls on new nodes/entries, not training calls as
+    # the docs claim"). order_cap=0 means every train_symbol call touches
+    # exactly ONE node (the order-0 unigram); after the first call creates
+    # it and its first counts entry, every FURTHER call with the SAME
+    # symbol has was_new=False, so the OLD code's growth-triggered
+    # _check_cap() -- the only place the old counter incremented -- was
+    # invoked exactly twice in 500 calls (receipted old-code-fails:
+    # _live_check_counter stuck at 2, LIVE_CHECK_INTERVAL=100 never
+    # reached). _check_cap_periodic() now runs unconditionally at the tail
+    # of every train_symbol call, so the interval fires on TRAINING CALLS
+    # as documented -- proven here by counting invocations of
+    # isolated_ppm_state_bytes() (wrapped) across >LIVE_CHECK_INTERVAL
+    # stable-context calls, with state_cap_bytes set high enough that no
+    # refusal interrupts the count.
+    model_stable = PpmModel(alphabet_size=4, order_cap=0, state_cap_bytes=8_000_000_000)
+    periodic_invocations = [0]
+    _orig_isolated = model_stable.isolated_ppm_state_bytes
+
+    def _counting_isolated():
+        periodic_invocations[0] += 1
+        return _orig_isolated()
+
+    model_stable.isolated_ppm_state_bytes = _counting_isolated
+    N_STABLE_CALLS = 500
+    for i in range(N_STABLE_CALLS):
+        model_stable.train_symbol((), 0)  # same (context, symbol) every call
+    expected_min_invocations = N_STABLE_CALLS // model_stable.LIVE_CHECK_INTERVAL
+    stable_context_ok = periodic_invocations[0] >= expected_min_invocations >= 1
+    ok = ok and stable_context_ok
+    print(f"  tier4 (stable-context periodic check) n_calls={N_STABLE_CALLS} "
+          f"LIVE_CHECK_INTERVAL={model_stable.LIVE_CHECK_INTERVAL} "
+          f"periodic_check_invocations={periodic_invocations[0]} "
+          f"(expected>={expected_min_invocations}) "
+          f"{'PASS' if stable_context_ok else 'FAIL'}")
+    print(f"PPM703_STABLE_CONTEXT_PERIODIC_CHECK_PASS={stable_context_ok}")
 
     print(f"PPM703_STATE_CAP_ASSERT_PASS={ok}")
     return ok
@@ -693,18 +939,24 @@ def run_p0_domain_incidence() -> bool:
     # max_len = 2 (derived automatically, no verify_depth constant needed) ->
     # every branch below resolves via the exact classification-lock path,
     # so truncated_mass_bound must be exactly 0.0 for all three calls.
-    gt_hi_result = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (104, 105),
-                                               alphabet_symbols, EOT, max_depth=20)
+    gt_hi_result = require_bound_within_tolerance(
+        cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (104, 105),
+                                    alphabet_symbols, EOT, max_depth=20),
+        EQ_TOL, label="P0-domain-D candidate=(104,105)")
     gt_hi, gt_hi_bound = gt_hi_result.value, gt_hi_result.truncated_mass_bound
     bl_hi = cylinder_mass_bounded_lookahead(restricted, tokenizer, (), (), 1, (104, 105),
                                              alphabet_symbols, EOT, L_eff=2, max_depth=20)
     diff_hi = abs(gt_hi - bl_hi)
     bound_hi_ok = gt_hi_bound < EQ_TOL
     eq_ok = diff_hi < EQ_TOL and gt_hi > 0.0 and bound_hi_ok
-    gt_nul_result = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (0,),
-                                                alphabet_symbols, EOT, max_depth=20)
-    gt_invalid_result = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (255,),
-                                                    alphabet_symbols, EOT, max_depth=20)
+    gt_nul_result = require_bound_within_tolerance(
+        cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (0,),
+                                    alphabet_symbols, EOT, max_depth=20),
+        EQ_TOL, label="P0-domain-D candidate=(0,)/NUL")
+    gt_invalid_result = require_bound_within_tolerance(
+        cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (255,),
+                                    alphabet_symbols, EOT, max_depth=20),
+        EQ_TOL, label="P0-domain-D candidate=(255,)/invalid-lead-byte")
     gt_nul, gt_invalid = gt_nul_result.value, gt_invalid_result.value
     bound_zero_ok = gt_nul_result.truncated_mass_bound < EQ_TOL and gt_invalid_result.truncated_mass_bound < EQ_TOL
     zero_ok = gt_nul == 0.0 and gt_invalid == 0.0 and bound_zero_ok
@@ -878,6 +1130,9 @@ def main() -> int:
     print()
     print("=== PPM703 P1 finite-lock counterexamples (mandatory negatives) ===")
     results.append(run_p1_finite_lock_counterexamples())
+    print()
+    print("=== PPM703 P1 global-mass counterexample + bound-refusal mechanism ===")
+    results.append(run_p1_global_mass_and_refusal())
     print()
     print("=== PPM703 P2 blend definition (P_ppm_tok) vs ground truth ===")
     results.append(run_p2_blend_definition())

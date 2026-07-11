@@ -58,14 +58,63 @@ class CylinderMassResult(NamedTuple):
     horizon=None, no-proven-lock-bound path's `prob_floor` shortcut -- see
     that function's docstring). `truncated_mass_bound` is EXACTLY 0.0
     whenever every branch resolved via either a real EOT or the exact
-    classification-lock path (horizon is not None); it is the SUM of only
-    the branches that actually took the numerical-floor shortcut, so a
-    caller asserts `truncated_mass_bound < tolerance` explicitly rather than
-    trusting the floor never bites (issue #703 PR #759 coordinator gate note
-    on the blocker-1 cure: 'an oracle whose error bound is implicit is one
-    config change away from silently lying')."""
+    classification-lock path (horizon is not None); it is the SUM, ACROSS
+    THE ENTIRE RECURSION TREE OF THIS CALL, of every disjoint pruned
+    subtree's own `prob_so_far * remaining` (a `nonlocal` accumulator
+    shared by every branch of `rec`, not reset per-branch) -- so a
+    high-branching lattice with many independently-pruned subtrees reports
+    their SUM, never a single node's local floor value alone (issue #703
+    PR #759 external re-audit, PR comment 4943538820: a 100-disjoint-
+    branch/prob_floor=0.01 adversarial fixture must report
+    truncated_mass_bound~=1.0, not 0.01 -- see
+    PPM703_GLOBAL_MASS_100_BRANCH_COUNTEREXAMPLE_PASS). A caller asserts
+    `truncated_mass_bound < tolerance` explicitly (or calls
+    `require_bound_within_tolerance` to enforce it) rather than trusting
+    the floor never bites (issue #703 PR #759 coordinator gate note on the
+    blocker-1 cure: 'an oracle whose error bound is implicit is one config
+    change away from silently lying')."""
     value: float
     truncated_mass_bound: float
+
+
+class CylinderMassBoundExceeded(ValueError):
+    """Raised by `require_bound_within_tolerance` when a
+    `CylinderMassResult.truncated_mass_bound` exceeds the caller's declared
+    tolerance -- i.e. the ground-truth oracle's numerically-truncated floor
+    path consumed enough unresolved probability mass that `value` cannot be
+    trusted to the caller's precision. This is a REFUSAL, not a warning: a
+    caller comparing `value` to a bounded-lookahead cross-check (or to a
+    frozen analytic constant) under an unenforced bound could report a
+    false PASS purely because the untested mass happened not to matter for
+    that particular equality -- exactly the failure class an implicit error
+    bound invites (issue #703 PR #759 coordinator gate note; hardened
+    further per external re-audit PR comment 4943538820: 'require
+    truncated_mass_upper <= caller_tolerance before equality can pass')."""
+
+
+def require_bound_within_tolerance(result: CylinderMassResult, tolerance: float,
+                                    label: str = "") -> CylinderMassResult:
+    """Enforcement gate for `CylinderMassResult`: raises
+    `CylinderMassBoundExceeded` if `result.truncated_mass_bound` exceeds
+    `tolerance`, otherwise returns `result` unchanged (pass-through, so
+    callers can wrap a `cylinder_mass_ground_truth(...)` call site directly:
+    `gt = require_bound_within_tolerance(cylinder_mass_ground_truth(...), EQ_TOL, label)`).
+    This makes 'the bound must be checked before any equality claim' a
+    STRUCTURAL property of the call site, not a convention a caller can
+    forget -- the exact gap the external falsifier's 100-branch
+    counterexample (PR comment 4943538820) named: a printed pass/fail
+    boolean can be silently ignored by downstream code; a raised exception
+    cannot."""
+    if result.truncated_mass_bound > tolerance:
+        prefix = f"[{label}] " if label else ""
+        raise CylinderMassBoundExceeded(
+            f"{prefix}cylinder_mass_ground_truth: truncated_mass_bound "
+            f"{result.truncated_mass_bound:.6e} exceeds tolerance {tolerance:.6e} -- "
+            f"value={result.value!r} cannot be trusted to this precision; the "
+            f"numerical-floor path consumed too much unresolved probability mass "
+            f"(raise prob_floor's inverse -- i.e. lower prob_floor -- or widen "
+            f"tolerance explicitly, never ignore this)")
+    return result
 
 
 def _is_target_regular(boundary_tokens: tuple, k: int, candidate: tuple):
