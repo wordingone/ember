@@ -1554,6 +1554,42 @@ def _selftest_tokenizer_lineage_sidecar() -> None:
             if "conflict" not in str(e).lower():
                 raise AssertionError(f"conflict fixture expected conflict message: {e}")
 
+    # ---- NEW: manifest has NO tokenizer_id; sidecar declared SHA doesn't match computed SHA → FAIL ----
+    # This proves computed SHA is load-bearing when sidecar is the ONLY source of tokenizer identity
+    with tempfile.TemporaryDirectory() as td:
+        ckpt_dir = os.path.join(td, "ckpt_sidecar_only")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        # Manifest WITH NO tokenizer_id (only the sidecar provides it)
+        manifest_data = {"step": 999, "extra": {}, "files": {"model.pt": "placeholder"}}
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"head.weight": torch.zeros(64, 8)}, model_pt_path)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_actual = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_actual = hashlib.sha256(f.read()).hexdigest()
+        # Create sidecar with WRONG model.pt SHA (manifest_sha is correct, but model.pt is wrong)
+        # Since manifest has NO tokenizer_id, sidecar is the ONLY source
+        tok_id = "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+        wrong_model_sha = "b" * 64  # Deliberately wrong, doesn't match actual file
+        sidecar_path = os.path.join(td, "sidecar_only.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({"step": 999, "manifest_sha256": manifest_sha_actual, "model_pt_sha256": wrong_model_sha, "tokenizer_sha": tok_id}) + '\n')
+        with open(sidecar_path, 'rb') as f:
+            sidecar_sha_only = hashlib.sha256(f.read()).hexdigest()
+        sidecar_infos = {l: {"manifest": manifest_data, "manifest_path": manifest_path, "model_pt_sha256_computed": model_pt_sha_actual} for l in ("a", "b", "c")}
+        try:
+            # Manifest SHA matches (both are actual), but model_pt_sha_computed doesn't match sidecar's wrong value
+            # With no manifest tokenizer_id, the sidecar MUST match to provide tokenizer_id
+            # Since model.pt SHA doesn't match, no sidecar record matches, and no manifest tokenizer_id exists
+            # This should breach at line 665-668
+            assert_vocab_tokenizer_identity(sidecar_infos, ok_states, tokenizer_lineage_sidecar=sidecar_path, sidecar_sha256=sidecar_sha_only)
+            raise AssertionError("sidecar-only computed-mismatch fixture should breach but passed")
+        except PhaseZeroGuardBreach:
+            pass
+
     # ---- Item 6: sidecar SHA verification ----
     with tempfile.TemporaryDirectory() as td:
         sidecar_path = os.path.join(td, "sha_verify.jsonl")
