@@ -125,18 +125,21 @@ def _seed_bf16_momentum(shape, magnitude: float):
     return t
 
 
-def _run_n_steps(muon_cls, momentum_buffer, grad_fill: float, n_steps: int) -> float:
+def _run_n_steps(muon_cls, momentum_buffer, grad_fill: float, n_steps: int,
+                  *, momentum: float = _MOM) -> float:
     """Drives muon_cls.step() n_steps times against a single 2D param whose
     grad is held at a constant SUB-ULP fill value every step (the
     small-increment EMA case the fixture spec names), with the SAME
     momentum_buffer object pre-seeded into state before the first step
     (mirroring how CPUOffloadOptimizer pre-seeds state before any step()
-    call in production). Returns one scalar reading of the final momentum
-    buffer (all entries are identical by construction -- uniform grad,
-    uniform seed -- so [0, 0] is representative)."""
+    call in production). `momentum` defaults to the production constant
+    _MOM but is overridable for the mom=1.0 empirical settle below. Returns
+    one scalar reading of the final momentum buffer (all entries are
+    identical by construction -- uniform grad, uniform seed -- so [0, 0] is
+    representative)."""
     import torch
     p = _make_param_and_grad(grad_fill)
-    opt = muon_cls([p], lr=_LR, momentum=_MOM, nesterov=True, ns_steps=5, weight_decay=0.0)
+    opt = muon_cls([p], lr=_LR, momentum=momentum, nesterov=True, ns_steps=5, weight_decay=0.0)
     opt.state[p] = {"momentum_buffer": momentum_buffer}
     for _ in range(n_steps):
         p.grad = torch.full(_SHAPE, grad_fill, dtype=torch.float32)
@@ -273,6 +276,27 @@ def test_bf16_view_memmap_roundtrip():
             "bf16 write did not persist to the file-backed memmap")
 
 
+def settle_mom_one_empirically(*, verbose: bool = True) -> dict:
+    """Empirical settle (team-lead-approved, GO condition) for the shape-(a)
+    disagreement in the module docstring: at mom=1.0, buf.mul_(1.0) is an
+    exact no-op, so my derivation says naive collapses to A1's single
+    add_() -- identical output, zero discrimination. Diagnostic only; does
+    NOT gate the required fixture above (that lives at mom=0.95)."""
+    MuonFixed = s792._muon_bf16_momentum_fixed_class()
+    MuonNaive = s792._muon_bf16_naive_inplace_class()
+    buf_fixed = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
+    buf_naive = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
+    final_fixed = _run_n_steps(MuonFixed, buf_fixed, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS, momentum=1.0)
+    final_naive = _run_n_steps(MuonNaive, buf_naive, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS, momentum=1.0)
+    diff = abs(final_fixed - final_naive)
+    result = {"final_fixed": final_fixed, "final_naive": final_naive,
+              "abs_diff": diff, "identical_within_1ulp": diff < 2.0 ** -6}
+    if verbose:
+        print(f"MOM1_SETTLE: final_fixed={final_fixed!r} final_naive={final_naive!r} "
+              f"abs_diff={diff!r} identical_within_1ulp={result['identical_within_1ulp']}")
+    return result
+
+
 def test_required_negative_fixture_discriminates():
     assert run_negative_fixture(verbose=False), (
         "required negative fixture failed to discriminate the A1-correct "
@@ -292,6 +316,9 @@ def _selftest() -> int:
         except AssertionError as e:
             print(f"FAIL {fn.__name__}: {e}")
             ok = False
+    # Diagnostic only -- settles the shape-(a) mom=1.0 disagreement flagged
+    # in the module docstring; never gates selftest pass/fail.
+    settle_mom_one_empirically(verbose=True)
     if ok:
         print("TEST_SCREEN792_BF16_MOMENTUM_SELFTEST_PASS")
         return 0
