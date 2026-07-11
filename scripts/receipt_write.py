@@ -2,17 +2,29 @@
 
 Wraps the standardized json.dump call from the #103 byte-stability pass with
 an immediate schema-floor check via receipt_check.validate_receipt.  Any
-violation causes the file to be deleted and an exception raised — no invalid
-receipt is ever left on disk.
+violation QUARANTINES the file (renamed to <path>.INVALID.quarantine, bytes
+preserved byte-for-byte) and raises an exception — the ORIGINAL path is left
+absent (an invalid receipt is never left where a reader would treat it as
+valid), but the computed data is never destroyed.
+
+ember #702 (2026-07-11): the prior delete-on-finding behavior destroyed the
+ONLY copy of two separate full-compute runs' results on the same morning — a
+434M-cpu microbench (missing sha_convention for invariant_sha256, commit
+9ab5e5f) and a 52-minute 2.2B GPU continuation rerun (missing sha_convention
+for the checkpoint/manifest sha256 fields). Both runs completed their full
+compute; only the receipt-write step failed; the deletion — not the schema
+defect — is what actually destroyed the results. Quarantine, never delete.
 
 Public API:
     checked_write(path, obj)
-        Write obj to path as JSON (utf-8, LF, indent=2).  Raise ValueError on
-        any schema finding, leaving no file behind.
+        Write obj to path as JSON (utf-8, LF, indent=2).  On a schema
+        finding: rename the written file to <path>.INVALID.quarantine and
+        raise, with the quarantine path named in the exception message.
 
 CLI:
-    --selftest    Two-branch coverage: valid receipt writes byte-identically to a
-                  direct json.dump; malformed receipt raises and leaves no file.
+    --selftest    Coverage: valid receipt writes byte-identically to a
+                  direct json.dump; malformed receipt raises, leaves the
+                  ORIGINAL path absent, and quarantines the bytes.
                   Prints RECEIPT_WRITE_SELFTEST_PASS on success.
 """
 import argparse
@@ -33,8 +45,15 @@ def checked_write(path: str, obj: dict) -> None:
         open(path, "w", encoding="utf-8", newline="\\n")
         json.dump(obj, f, indent=2)
 
-    On any schema finding: deletes the file (if it was written) and raises
-    ValueError listing all findings.  The caller's path is left absent.
+    On any schema finding: QUARANTINE the file -- rename it to
+    <path>.INVALID.quarantine (bytes preserved byte-for-byte, os.replace is
+    an atomic same-volume rename, never a copy+delete) -- then re-raise the
+    same exception type with the quarantine path appended to its message.
+    The caller's ORIGINAL path is left absent (an invalid receipt is never
+    left where a reader would treat it as valid), but nothing is destroyed.
+    If the write itself never completed (`written` is False) or the
+    quarantine rename fails (OSError), the original exception propagates
+    unmodified -- there is nothing to quarantine in either case.
     """
     path = str(path)
     written = False
@@ -48,12 +67,17 @@ def checked_write(path: str, obj: dict) -> None:
                 f"checked_write: {len(findings)} schema finding(s) in {path}:\n"
                 + "\n".join(f"  {fn}" for fn in findings)
             )
-    except Exception:
+    except Exception as exc:
         if written:
+            quarantine_path = path + ".INVALID.quarantine"
             try:
-                os.unlink(path)
+                os.replace(path, quarantine_path)
             except OSError:
-                pass
+                raise
+            raise type(exc)(
+                f"{exc}\n  QUARANTINED (bytes preserved, never deleted): "
+                f"{quarantine_path}"
+            ) from exc
         raise
 
 
@@ -105,7 +129,8 @@ def _selftest() -> int:
         elif not os.path.exists(p_checked):
             failures.append("Branch A FAIL: checked_write did not produce a file")
 
-    # --- Branch B: malformed receipt raises and leaves NO file ---
+    # --- Branch B: malformed receipt raises, original path absent, bytes
+    # QUARANTINED (never deleted) at <path>.INVALID.quarantine ---
     # Case B1: missing required field
     bad_obj_missing = {
         "ts": "20260611T000000Z",
@@ -113,17 +138,27 @@ def _selftest() -> int:
     }
     with tempfile.TemporaryDirectory() as td:
         p_bad = os.path.join(td, "receipt-bad.json")
+        q_bad = p_bad + ".INVALID.quarantine"
         raised = False
+        err_msg = ""
         try:
             checked_write(p_bad, bad_obj_missing)
-        except ValueError:
+        except ValueError as e:
             raised = True
+            err_msg = str(e)
         if not raised:
             failures.append("Branch B1 FAIL: missing 'ticket' should raise ValueError")
         if os.path.exists(p_bad):
-            failures.append("Branch B1 FAIL: file must not exist after failed checked_write")
+            failures.append("Branch B1 FAIL: original path must not exist after checked_write")
+        elif not os.path.exists(q_bad):
+            failures.append("Branch B1 FAIL: quarantine file was not created")
+        elif "QUARANTINED" not in err_msg or q_bad not in err_msg:
+            failures.append("Branch B1 FAIL: exception message must name the quarantine path")
         else:
-            print("Branch B1: missing required field — raised, no file left")
+            with open(q_bad, encoding="utf-8") as f:
+                if json.load(f) != bad_obj_missing:
+                    failures.append("Branch B1 FAIL: quarantined bytes do not match the original object")
+            print("Branch B1: missing required field — raised, quarantined, bytes verified")
 
     # Case B2: sha256 field without sha_convention
     bad_obj_sha = {
@@ -133,17 +168,27 @@ def _selftest() -> int:
     }
     with tempfile.TemporaryDirectory() as td:
         p_bad2 = os.path.join(td, "receipt-bad-sha.json")
+        q_bad2 = p_bad2 + ".INVALID.quarantine"
         raised2 = False
+        err_msg2 = ""
         try:
             checked_write(p_bad2, bad_obj_sha)
-        except ValueError:
+        except ValueError as e:
             raised2 = True
+            err_msg2 = str(e)
         if not raised2:
             failures.append("Branch B2 FAIL: sha256 field without sha_convention should raise ValueError")
         if os.path.exists(p_bad2):
-            failures.append("Branch B2 FAIL: file must not exist after failed checked_write (sha_convention missing)")
+            failures.append("Branch B2 FAIL: original path must not exist after checked_write")
+        elif not os.path.exists(q_bad2):
+            failures.append("Branch B2 FAIL: quarantine file was not created (sha_convention missing)")
+        elif "QUARANTINED" not in err_msg2 or q_bad2 not in err_msg2:
+            failures.append("Branch B2 FAIL: exception message must name the quarantine path")
         else:
-            print("Branch B2: missing sha_convention — raised, no file left")
+            with open(q_bad2, encoding="utf-8") as f:
+                if json.load(f) != bad_obj_sha:
+                    failures.append("Branch B2 FAIL: quarantined bytes do not match the original object")
+            print("Branch B2: missing sha_convention — raised, quarantined, bytes verified")
 
     if failures:
         for f in failures:
