@@ -448,6 +448,28 @@ def main() -> int:
         if evidence and not _validate_grow_operator_evidence(evidence, receipt_files):
             continue
 
+        # HARDENED [falsifier finding (b), PR #799, 2026-07-11]: the candidate
+        # must name the GROWN artifact's own on-disk bytes AND its claimed
+        # hash, and those bytes must actually resolve, exist, and hash-match
+        # under ARTIFACT_ROOT -- the exact clause (a)/(c) hash-verification
+        # pattern above, applied to the grown checkpoint. Without this a
+        # receipt could satisfy clause (d) by naming a path alone, with the
+        # grown artifact never resolved, hashed, or checked to exist at all
+        # -- self-attestation on the one artifact the clause is about.
+        grown_ckpt_raw = obj.get("grown_checkpoint")
+        grown_sha_claimed = obj.get("grown_model_pt_sha256")
+        if not isinstance(grown_ckpt_raw, str) or not grown_ckpt_raw:
+            continue
+        if not isinstance(grown_sha_claimed, str) or not grown_sha_claimed:
+            continue
+        grown_ckpt_path = _resolve_artifact_path(grown_ckpt_raw)
+        grown_model_pt = (grown_ckpt_path / "model.pt") if grown_ckpt_path.is_dir() else grown_ckpt_path
+        if not grown_model_pt.is_file():
+            continue
+        actual_grown_sha = _sha256_first16(grown_model_pt)
+        if actual_grown_sha is None or not grown_sha_claimed.lower().startswith(actual_grown_sha.lower()):
+            continue
+
         # HARDENED: check for degenerate loss traces (indicates broken computation)
         loss_trace = obj.get("verification", {}).get("loss_trace")
         if loss_trace and _is_degenerate_loss_trace(loss_trace):

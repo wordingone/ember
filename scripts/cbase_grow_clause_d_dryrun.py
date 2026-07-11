@@ -131,6 +131,51 @@ def _repo_relative_models_path(p: Path) -> str:
     raise ValueError(f"cannot derive a repo-relative path for {p} (no 'models' segment found)")
 
 
+def check_state_dict_load(label: str, missing: list, unexpected: list) -> None:
+    """[falsifier finding (c), PR #799, 2026-07-11] Shared guard for every
+    strict=False load_state_dict call in this script (seed/grown/replay --
+    previously the replay call's return was discarded entirely, and this
+    function is what makes that structurally impossible to repeat: every
+    load site MUST route its (missing, unexpected) tuple through here).
+    "head.weight" is the one known-benign exclusion (the tied-embedding
+    alias is commonly absent from an on-disk state dict's own key set,
+    see module docstring); any OTHER missing or unexpected key -- an
+    mtp_heads key included -- raises. Pure function, no torch import
+    needed by callers: exercised directly by the negative-fixture harness
+    (scripts/cbase_clause_d_negative_fixtures.py) against the exact
+    production code path, not a re-description of it.
+    """
+    real_missing = [k for k in missing if k != "head.weight"]
+    if real_missing or unexpected:
+        raise SystemExit(f"{label} load mismatch: missing={real_missing} unexpected={unexpected}")
+
+
+def check_mtp_keyset(mtp_keys_seed: list, mtp_keys_grown: list, mtp_keys_replay: list) -> dict:
+    """[falsifier finding (c), PR #799, 2026-07-11] mtp_heads never
+    participates in .logits() (see build_model / _V0.logits), so the
+    function-preservation and replay forward-pass diffs cannot detect a
+    silently-dropped or randomized mtp_heads key at any of the three
+    loads. Independent, forward-pass-blind identity check: the keyset
+    must be present and IDENTICAL (same key names) across seed/grown/
+    replay -- net2net FF-widening never touches mtp_heads. Returns the
+    keyset_summary dict on success; raises SystemExit otherwise. Pure
+    function (sorted key-name lists in, no torch) -- exercised directly
+    by the negative-fixture harness.
+    """
+    if not mtp_keys_seed or mtp_keys_seed != mtp_keys_grown or mtp_keys_seed != mtp_keys_replay:
+        raise SystemExit(
+            "mtp_heads keyset mismatch across seed/grown/replay state dicts "
+            f"(counts: seed={len(mtp_keys_seed)} grown={len(mtp_keys_grown)} "
+            f"replay={len(mtp_keys_replay)}) -- an unused key going missing/"
+            "randomized would otherwise be invisible to the forward-pass-only "
+            "replay check")
+    return {
+        "n_mtp_heads_keys": len(mtp_keys_seed),
+        "identical_across_seed_grown_replay": True,
+        "not_exercised_by_logits_forward_pass": True,
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed-ckpt", default=str(SEED_CKPT_DEFAULT),
@@ -175,9 +220,7 @@ def main() -> int:
 
     seed_model = build_model(m, n_mtp, ff_seed)
     missing, unexpected = seed_model.load_state_dict(sd, strict=False)
-    real_missing = [k for k in missing if k != "head.weight"]
-    if real_missing or unexpected:
-        raise SystemExit(f"seed load mismatch: missing={real_missing} unexpected={unexpected}")
+    check_state_dict_load("seed", missing, unexpected)
     seed_model.eval()
     logits_pre = seed_model.logits(ids)
     pre_grow = True
@@ -186,9 +229,7 @@ def main() -> int:
     grown_sd = widen_state_dict(sd, m["layers"])
     grown_model = build_model(m, n_mtp, ff_grown)
     missing, unexpected = grown_model.load_state_dict(grown_sd, strict=False)
-    real_missing = [k for k in missing if k != "head.weight"]
-    if real_missing or unexpected:
-        raise SystemExit(f"grown load mismatch: missing={real_missing} unexpected={unexpected}")
+    check_state_dict_load("grown", missing, unexpected)
     grown_model.eval()
     logits_post = grown_model.logits(ids)
     post_grow = True
@@ -204,7 +245,8 @@ def main() -> int:
     grown_path = out_dir / "model.pt"
     torch.save({k: v.to(torch.bfloat16) for k, v in grown_sd.items()}, grown_path)
     grown_sha = sha256_file(grown_path)
-    (out_dir / "manifest.json").write_text(json.dumps({
+    grown_manifest_path = out_dir / "manifest.json"
+    grown_manifest_path.write_text(json.dumps({
         "ticket": "CBASE-GROW-CLAUSE-D-DRYRUN-CHECKPOINT",
         "ts": ts_stamp,
         "sha_convention": SHA_CONVENTION,
@@ -215,17 +257,43 @@ def main() -> int:
                         "model_pt_sha256": seed_sha, "intermediate": ff_seed},
         "mechanism": "ff_widening_net2net",
     }, indent=2) + "\n", encoding="utf-8")
+    # [falsifier finding (a), PR #799, 2026-07-11] the manifest FILE's own
+    # bytes are hashed too -- computed AFTER the write above, over the bytes
+    # actually on disk (never the in-memory dict), same convention as every
+    # other hash in this script.
+    grown_manifest_sha = sha256_file(grown_manifest_path)
 
     reload_sd = {k: v.float() for k, v in
                  torch.load(grown_path, map_location="cpu", weights_only=True).items()}
     replay_model = build_model(m, n_mtp, ff_grown)
-    replay_model.load_state_dict(reload_sd, strict=False)
+    # [falsifier finding (c), PR #799, 2026-07-11] this call's return was
+    # previously discarded entirely -- capture and check it exactly like the
+    # seed/grown loads above. Not cosmetic: replay_model loads from the
+    # ON-DISK saved-and-reloaded checkpoint, a distinct load from the
+    # in-memory grown_sd, so a save/reload key-loss (e.g. an alias broken by
+    # the bf16 cast) is only observable at THIS load.
+    missing, unexpected = replay_model.load_state_dict(reload_sd, strict=False)
+    check_state_dict_load("replay", missing, unexpected)
     replay_model.eval()
     logits_replay = replay_model.logits(ids)
     replay_diff = float((logits_replay - logits_post).abs().max())
     replays = bool(replay_diff <= REPLAY_TOL_BF16_ROUNDTRIP)
     print(f"[{ts_stamp}] replay_diff={replay_diff:.3e} tol={REPLAY_TOL_BF16_ROUNDTRIP} "
           f"replays={replays}", flush=True)
+
+    # [falsifier finding (c), PR #799, 2026-07-11] mtp_heads never
+    # participates in .logits() (see build_model / _V0.logits), so the
+    # function-preservation and replay forward-pass diffs above CANNOT
+    # detect a silently-dropped or randomized mtp_heads key at any of the
+    # three loads. This is an independent, forward-pass-blind identity
+    # check: the mtp_heads keyset must be present and IDENTICAL (same key
+    # names) across the seed state dict, the grown state dict, and the
+    # reloaded-from-disk state dict -- net2net FF-widening never touches
+    # mtp_heads, so their keys must survive every stage unchanged.
+    mtp_keys_seed = sorted(k for k in sd.keys() if k.startswith("mtp_heads."))
+    mtp_keys_grown = sorted(k for k in grown_sd.keys() if k.startswith("mtp_heads."))
+    mtp_keys_replay = sorted(k for k in reload_sd.keys() if k.startswith("mtp_heads."))
+    mtp_keyset_check = check_mtp_keyset(mtp_keys_seed, mtp_keys_grown, mtp_keys_replay)
 
     n_seed = int(sum(v.numel() for v in sd.values()))
     n_grown = int(sum(v.numel() for v in grown_sd.values()))
@@ -241,6 +309,26 @@ def main() -> int:
         "segment_id": manifest.get("extra", {}).get("segment_id"),
         "step": manifest.get("step"),
         "pretrain_receipt": PRETRAIN_RECEIPT_REF,
+    }
+
+    # [falsifier finding (a), PR #799, 2026-07-11] the GROWN artifact was
+    # previously referenced by path only -- no model.pt hash, no manifest
+    # hash, no shapes/keyset summary bound into the receipt. This block is
+    # the fix: everything scripts/ember_totality/test_c_base.py's clause-(d)
+    # leg now independently re-derives and checks (grown_model_pt_sha256 at
+    # top level, mirroring seed_identity.model_pt_sha256's "source SHA" role)
+    # plus the fuller evidence trail for human/audit inspection.
+    grown_checkpoint_evidence = {
+        "path": _repo_relative_models_path(grown_path),
+        "model_pt_sha256": grown_sha,
+        "manifest_path": _repo_relative_models_path(grown_manifest_path),
+        "manifest_sha256": grown_manifest_sha,
+        "source_model_pt_sha256": seed_sha,
+        "keyset_summary": {
+            "n_tensors": len(grown_sd),
+            "ff_grown": ff_grown,
+            "mtp_heads_check": mtp_keyset_check,
+        },
     }
 
     # ---- grow-op-verify evidence receipt --------------------------------------
@@ -287,6 +375,8 @@ def main() -> int:
         "params_unique_before": params_unique_before,
         "params_unique_after": params_unique_after,
         "grown_checkpoint": _repo_relative_models_path(grown_path),
+        "grown_model_pt_sha256": grown_sha,
+        "grown_checkpoint_evidence": grown_checkpoint_evidence,
         "api_spend_usd": 0,
         "paid_api_surface_used": False,
         "device": "cpu",
@@ -355,12 +445,19 @@ def main() -> int:
             "replays": replays,
         },
         "grown_checkpoint": _repo_relative_models_path(grown_path),
+        "grown_model_pt_sha256": grown_sha,
+        "grown_checkpoint_evidence": grown_checkpoint_evidence,
+        "mtp_heads_keyset_check": mtp_keyset_check,
         "api_spend_usd": 0,
         "paid_api_surface_used": False,
         "invalid_tokens_present": [],
         "device": "cpu",
         "measured_on_train_daemon": False,
         "script": "scripts/cbase_grow_clause_d_dryrun.py",
+        "scope_line_eps_sigma": (
+            "eps_sigma=0 clears serialization/interface function-preserving "
+            "replay ONLY -- it cannot evidence effective capacity or barrier "
+            "reduction (#280)."),
         "pass": main_pass,
         "verdict": "PASS" if main_pass else "FAIL",
         "kill_criterion": None if main_pass else (
