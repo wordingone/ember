@@ -1,0 +1,27 @@
+{
+ "ticket": "BOARD-INTEGRITY-AUDIT-DELTA",
+ "ts": "2026-07-11T12:28:00Z",
+ "kind": "delta_audit_no_execution",
+ "anchor_audit": "receipts/ember-totality-audit/audit-20260711T104500Z.json",
+ "board_anchor": "ember-totality-20260711T103912Z.json (12G/24R/1U+3AOK, unlanded, rides annex PR)",
+ "regression_alarm": {
+  "verdict": "CLEAN",
+  "evidence": "git rev-list --count e03cf7c..origin/master = 0; zero merges since the 10:45Z audit anchor => GREEN set, probes, and consumed receipts unchanged by construction"
+ },
+ "execution_probe_reruns": "DEFERRED unchanged (dated 10:45Z decision; timing yield lease extended to 14:30Z; re-runs contaminate frozen CPU timing legs both directions)",
+ "new_finding": {
+  "class": "quarantine-blindness (instrument-level, pre-registered before FIX B lands)",
+  "statement": "checked_write's quarantine cure (FIX B, in flight in the #702 repair worktree) converts write-failure from receipt DESTRUCTION to receipt STALENESS: a failed validation leaves the PRIOR receipt bytes at the consumed path plus a sibling *.INVALID.quarantine file. Every board probe reading that path class would render stale-GREEN with no alarm.",
+  "hardening_spec": [
+   "totality render + board audit gain a standing sweep: any *.INVALID.quarantine file under receipts/ or a run's receipt staging dir = automatic audit flag on the consuming condition (stale-receipt alarm), pattern-matched on the .INVALID.quarantine SUFFIX",
+   "suffix-match is load-bearing: the word 'quarantine' alone false-positives on the legitimate A1 eval-suite prefreeze-quarantine registers (2 tracked files verified benign this sweep: a1-prefreeze-quarantine-20260709T231802Z.json, a1-prefreeze-quarantine-v2-20260710T045357Z.json)",
+   "fix702b PR merge gate carries both requirements as explicit criteria before the quarantine path first ships"
+  ]
+ },
+ "needs_work_followthrough": "C(-1): annex lane armed at 434M-receipt wake (imminent, task #19); C-PROC: applied 10:40Z, verify GREEN at post-landing render (unchanged)",
+ "quarantine_file_scan": {
+  "suffix_pattern_hits": 0,
+  "word_pattern_hits": 2,
+  "word_hits_disposition": "benign A1 registers (see hardening_spec)"
+ }
+}
