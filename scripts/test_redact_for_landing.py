@@ -195,6 +195,127 @@ class RedactForLandingTests(unittest.TestCase):
         self.assertTrue(out_bytes.endswith(b"last line no newline"))
         self.assertIn(b"<REDACTED_NAME>", out_bytes)
 
+    # ---- 2026-07-11 follow-up (issue #538): key-miss case -------------------
+    # A real receipt leaked local paths under 10 of 13 path-bearing fields
+    # because the key enumeration only covered "_path". These fixtures use
+    # the EXACT field-name shapes that leaked (dir / _dir / _ref / _source /
+    # _receipt) to prove the fix, and were run against the actual leaked
+    # receipt after the fix landed (see PR body for that raw run).
+    def test_suffix_families_now_key_gated(self):
+        content = json.dumps({
+            "dir": "Z:/synthetic/fixture-tree/checkpoints/step-00000766",
+            "control_step25_dir": "Z:/synthetic/fixture-tree/checkpoints/step-00000025",
+            "source_dir": "Z:/synthetic/fixture-tree/scratch/step-00000050",
+            "dest_dir": "Z:/synthetic/fixture-tree/custody/step-00000050",
+            "terminal_checkpoint_ref": "Z:/synthetic/fixture-tree/checkpoints/step-00000766",
+            "terminal_checkpoint_receipt": "Z:/synthetic/fixture-tree/receipts/x.json",
+            "n_mtp_source": "Z:/synthetic/fixture-tree/configs/v0.json objective.n_heads=2",
+        })
+        target = self.write_work_file("suffix-families.json", content)
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        result = json.loads(target.with_name("suffix-families-redacted-edition.json").read_bytes())
+        for key in ("dir", "control_step25_dir", "source_dir", "dest_dir",
+                    "terminal_checkpoint_ref", "terminal_checkpoint_receipt",
+                    "n_mtp_source"):
+            self.assertIn("<REDACTED_PATH>", result[key], f"key {key!r} not redacted")
+            self.assertNotIn("Z:/synthetic/fixture-tree", result[key], f"key {key!r} leaked")
+
+    # ---- 2026-07-11 follow-up: key-agnostic pattern-fallback case ----------
+    def test_pattern_fallback_redacts_unenumerated_key_not_in_terms_file(self):
+        """A key the enumeration STILL doesn't cover, with a path that is
+        NOT in the terms file either (simulating the 11th miss the fallback
+        exists to survive) -- must still lose its drive-letter prefix while
+        every trailing directory/basename segment survives untouched."""
+        content = json.dumps({
+            "totally_unenumerated_field": "Z:/synthetic/fixture-tree/models/cbase-grow-rung/rung1/step-00000766",
+            "backslash_variant_field": "Z:\\synthetic\\fixture-tree\\scratch\\w1-control\\checkpoints\\step-00000050",
+        })
+        target = self.write_work_file("fallback.json", content)
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        result = json.loads(target.with_name("fallback-redacted-edition.json").read_bytes())
+        self.assertEqual(
+            result["totally_unenumerated_field"],
+            "<LOCAL-ABS-PATH>/synthetic/fixture-tree/models/cbase-grow-rung/rung1/step-00000766",
+            "drive-letter prefix must be replaced, forward-slash segments preserved verbatim")
+        self.assertEqual(
+            result["backslash_variant_field"],
+            "<LOCAL-ABS-PATH>\\synthetic\\fixture-tree\\scratch\\w1-control\\checkpoints\\step-00000050",
+            "backslash separator style must be preserved after the token")
+
+    def test_pattern_fallback_does_not_false_positive_on_url_scheme(self):
+        """The single-letter-before-colon-slash shape inside 'https://' or
+        'mailto:' must never match -- the word-character lookbehind is the
+        guard (the 's' in 'http**s**:' is preceded by 'p', a word char)."""
+        url_value = (
+            "see https://example.com/x and ftp://host/y and "
+            "mailto:a@b.com for details"
+        )
+        content = json.dumps({"totally_unenumerated_field": url_value})
+        target = self.write_work_file("url-fallback.json", content)
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        result = json.loads(target.with_name("url-fallback-redacted-edition.json").read_bytes())
+        self.assertEqual(result["totally_unenumerated_field"], url_value)
+        self.assertNotIn("<LOCAL-ABS-PATH>", result["totally_unenumerated_field"])
+
+    def test_pattern_fallback_idempotent(self):
+        content = json.dumps({
+            "totally_unenumerated_field": "Z:/synthetic/fixture-tree/x/y/z",
+        })
+        first = self.write_work_file("fallback-idem1.json", content)
+        code1, _, _ = self.cli(first)
+        self.assertEqual(code1, 0)
+        out1 = first.with_name("fallback-idem1-redacted-edition.json").read_bytes()
+
+        second = self.write_work_file("fallback-idem2.json", out1.decode("utf-8"))
+        code2, _, _ = self.cli(second)
+        self.assertEqual(code2, 0)
+        out2 = second.with_name("fallback-idem2-redacted-edition.json").read_bytes()
+        self.assertEqual(out1, out2, "re-redacting an already-fallback-redacted value must be a no-op")
+
+    # ---- 2026-07-11 follow-up: .log support ---------------------------------
+    def test_log_file_gets_term_and_pattern_redaction(self):
+        # NOTE: the forward-slash path here deliberately uses a synthetic drive
+        # ("Y:") and tree name DISTINCT from the "Z:/synthetic/fixture-tree"
+        # term registered in setUp() -- if it collided with that literal term,
+        # term substitution would consume the drive-letter prefix before the
+        # pattern fallback ever saw it, and this assertion would silently stop
+        # exercising the fallback mechanism it exists to test.
+        content = (
+            "+ python script.py --shard-dir Y:/synthetic/live-tree/shards-v0 --name fixturename\r\n"
+            "plain progress line, nothing to redact\n"
+            '{"verdict": "REPLAY_TRUSTWORTHY", "dir": "Z:\\\\synthetic\\\\fixture-tree\\\\models\\\\x"}\n'
+            "no newline at end"
+        )
+        target = self.work / "run.log"
+        target.write_bytes(content.encode("utf-8"))
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        out_bytes = target.with_name("run-redacted-edition.log").read_bytes()
+        out_text = out_bytes.decode("utf-8")
+        self.assertIn("<REDACTED_NAME>", out_text, "term substitution must still apply per line")
+        self.assertIn("<LOCAL-ABS-PATH>/synthetic/live-tree/shards-v0", out_text, "forward-slash path must be redacted")
+        self.assertIn("<LOCAL-ABS-PATH>\\\\synthetic\\\\fixture-tree\\\\models\\\\x", out_text,
+                      "backslash path (JSON-escaped in the log line) must be redacted")
+        self.assertIn(b"\r\n", out_bytes, "line endings must be preserved, same as .md")
+        self.assertTrue(out_bytes.endswith(b"no newline at end"))
+
+    def test_log_file_public_url_survives(self):
+        content = "fetching https://example.com/artifact and ftp://host/y\n"
+        target = self.work / "urls.log"
+        target.write_bytes(content.encode("utf-8"))
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        out_text = target.with_name("urls-redacted-edition.log").read_bytes().decode("utf-8")
+        self.assertEqual(out_text, content)
+
 
 if __name__ == "__main__":
     unittest.main()
