@@ -1,0 +1,222 @@
+{
+ "receipt": "process-visibility",
+ "ts": "20260711T102300Z",
+ "ts_utc": "2026-07-11T10:23:00Z",
+ "coordinator_window": "2026-07-11T04:12Z..10:23Z (Tier-2 #210 landing batch families 4-6, W1 replay/resume legs, board render boardrun45)",
+ "merges": [
+  {
+   "pr": 743,
+   "mergedAt": "2026-07-11T05:14:27Z",
+   "what": "exp: 711 ordering-screen CPU apparatus (refs #739)"
+  },
+  {
+   "pr": 755,
+   "mergedAt": "2026-07-11T04:31:30Z",
+   "what": "receipts: W1 baseline replay closure --live leg A (redacted) + tracked adds"
+  },
+  {
+   "pr": 758,
+   "mergedAt": "2026-07-11T06:47:19Z",
+   "what": "add: W1 leg-A fullstate resume verifier (#735 supplement)"
+  },
+  {
+   "pr": 759,
+   "mergedAt": "2026-07-11T10:07:34Z",
+   "what": "exp: 703 PPM apparatus stage 1 (P1/P2 correctness proofs)"
+  },
+  {
+   "pr": 761,
+   "mergedAt": "2026-07-11T06:11:59Z",
+   "what": "feat: land capture-probe-surfaces family (#210 Tier 2)"
+  },
+  {
+   "pr": 765,
+   "mergedAt": "2026-07-11T07:21:30Z",
+   "what": "exp: Leg-B in-process loglikelihood scorer (refs #757, #735)"
+  },
+  {
+   "pr": 766,
+   "mergedAt": "2026-07-11T07:15:28Z",
+   "what": "feat: land experiment-runners family (#210 Tier 2)"
+  },
+  {
+   "pr": 769,
+   "mergedAt": "2026-07-11T07:33:26Z",
+   "what": "feat: land in-run commit governor into scripts/governor.py"
+  },
+  {
+   "pr": 770,
+   "mergedAt": "2026-07-11T07:44:10Z",
+   "what": "docs: GOAL.md L11 EXECUTION FLOOR (operator directive 2026-07-11)"
+  },
+  {
+   "pr": 771,
+   "mergedAt": "2026-07-11T07:56:28Z",
+   "what": "feat: land harness-entry family (#210 Tier 2)"
+  },
+  {
+   "pr": 772,
+   "mergedAt": "2026-07-11T08:32:22Z",
+   "what": "fix: evaluator-run PARTIAL_BLOCKED status, nonzero exit"
+  },
+  {
+   "pr": 773,
+   "mergedAt": "2026-07-11T08:26:07Z",
+   "what": "feat: land ops-tools family (#210 Tier 2)"
+  },
+  {
+   "pr": 775,
+   "mergedAt": "2026-07-11T08:26:04Z",
+   "what": "fix: add api_spend_usd to two #210 Tier-2 landing receipts"
+  },
+  {
+   "pr": 777,
+   "mergedAt": "2026-07-11T08:52:04Z",
+   "what": "feat: land family-3 stragglers + backfill spend fields (#210 Tier 2)"
+  },
+  {
+   "pr": 780,
+   "mergedAt": "2026-07-11T09:22:44Z",
+   "what": "feat: land e2b-pair family (#210 Tier 2)"
+  }
+ ],
+ "prs_closed_unmerged": [],
+ "issues_filed": [
+  {
+   "issue": 756,
+   "what": "liveness watchdog: commit-footprint governor (restart-on-leak) - cockpit hit 8.75GB at boot vs <2GB class"
+  },
+  {
+   "issue": 757,
+   "what": "Leg-B scorer: in-process teacher-forced loglikelihood apparatus (serve_cbase_openai cannot score lm_eval tasks)"
+  },
+  {
+   "issue": 760,
+   "what": "W1/LACK-4 P0: heldout eval harness for the cbase class + receipted disjoint heldout slice"
+  },
+  {
+   "issue": 763,
+   "what": "governor.py reconciliation: land stage C-PORT precision ladder + in-run commit governor (dedicated reviewed PR)"
+  },
+  {
+   "issue": 764,
+   "what": "FACTOR-1 lever micro-bench: inner-optimizer-step floor per cure lever at 434M + 2.2B state shapes"
+  },
+  {
+   "issue": 767,
+   "what": "run_v0_segment resume path: eager 12.6GiB ungated load + heap-rebinding optimizer restore (memmap state silently detached at 2.2B)"
+  },
+  {
+   "issue": 768,
+   "what": "timeshare_pretrain argparse surface diverged from conv_c03/cbase wrapper callers; mixture selftest T1 pre-existing failure"
+  },
+  {
+   "issue": 774,
+   "what": "runbook: coordinated GPU yield window 2026-07-11 (lease tokens, #702 rerun + #764 legs + #449 rider)"
+  },
+  {
+   "issue": 776,
+   "what": "tracked tokenizer.json fails direct from_str load (blocks tokenizer-dependent tests)"
+  },
+  {
+   "issue": 778,
+   "what": "Pre-existing test failures disclosed at #777 landing: v0-pretrain-config drift (batch 4 vs 16, version 3 vs 4) + inf-perplexity defect"
+  },
+  {
+   "issue": 779,
+   "what": "PHASE-0 FIRST SIGNAL RUN (frozen run spec): rung-2 stabilization checkpoint series through the merged #726 runner"
+  },
+  {
+   "issue": 782,
+   "what": "exp703 stage-2 frozen run spec: claim-A standalone byte-PPM floor (document-level BPB) + stage-B lattice route selection"
+  }
+ ],
+ "open_prs": [
+  {
+   "number": 754,
+   "state": "verdict-pending",
+   "pending_h": 6.4
+  },
+  {
+   "number": 762,
+   "state": "verdict-pending",
+   "pending_h": 4.3
+  },
+  {
+   "number": 781,
+   "state": "verdict-pending",
+   "pending_h": 0.2
+  }
+ ],
+ "lanes": {
+  "boardrun45": "this lane -- board re-render + receipts-landing PR (mission from team-lead)",
+  "land210": "issue #210 Tier-2 landing sweep, families 3-6 delivered this window (PRs 761/766/771/773/777/780)",
+  "w1replay735 / w1replay735b / w1smoke735": "W1 baseline replay + resume verifier legs (issue #735, PRs 755/758)",
+  "tlineage724": "issue #748 parent-evidence edges + lineage chain verifier (PR #754, open)",
+  "refuter701": "adversarial pass on #701 crossing prereg draft",
+  "lever764 / legb757": "FACTOR-1 lever micro-bench (issue #764) + Leg-B in-process scorer (issue #757, PR #765) -- live run in progress, PID confirmed active",
+  "gov763": "governor.py reconciliation (issue #763, PR #769 landed)",
+  "phase0build / phase0rev": "PHASE-0 first-signal run staging (issue #779)",
+  "ppm703 / panel703a / panel703b / panel711appB / panel711statA": "issue #703/#711 PPM apparatus + panel review legs (PR #759 landed)",
+  "auditland52 / auditland710 / audit3cond": "board-integrity audit lanes (receipts/ember-totality-audit/)"
+ },
+ "coordinator_disclosures": [
+  "board re-render this window: scripts/ember_totality/receipts-totality/ember-totality-20260711T102112Z.json -- 11 GREEN / 24 RED / 2 UNEVALUABLE + 3 AUDIT-OK (29.7%), zero flips vs prior 081157Z render (same tally).",
+  "C(-1) is RED and the sample WORSENED since 081157Z: 5/387 decisive-claim receipts now missing api_spend_usd/paid_api_surface_used (was 2/384) -- land210g/h/i/j/k receipts in receipts/ember-c-scale/ all lack the field despite PR #775's stated fix ('add api_spend_usd to two #210 Tier-2 landing receipts'); three MORE landings (h/j/k) merged after #775 without the field. Field-contract regression, not yet cured -- flagged for the coordinator, not fixed by this lane (out of mission scope).",
+  "C-BASE remained UNEVALUABLE with the identical 'HARNESS TIMEOUT: test_c_base.py exceeded 600s' error. The box was NOT actually quiet at render time: scripts/factor1_lever_microbench.py --live --scale 434M (issue #764, PID 53188) was live-running at 8.6-17.4GB resident, plus a second python process at 5.5GB (PID 55404) -- both confirmed via tasklist during the render window. Reported as suspected timeout/contention, not fixed; C-BASE's 600s override (PROBE_TIMEOUT_OVERRIDES in ember_totality_spec.py) may need headroom review once the box is genuinely idle, but that is a separate diagnosis this lane did not perform.",
+  "falsifier leg ABSENT (actor unresponsive since 07:37Z); coordinator gate only."
+ ],
+ "api_spend_usd": 0,
+ "paid_api_surface_used": false,
+ "issue_urls": [
+  "https://github.com/wordingone/ember/issues/210",
+  "https://github.com/wordingone/ember/issues/735",
+  "https://github.com/wordingone/ember/issues/737",
+  "https://github.com/wordingone/ember/issues/749",
+  "https://github.com/wordingone/ember/issues/756",
+  "https://github.com/wordingone/ember/issues/757",
+  "https://github.com/wordingone/ember/issues/760",
+  "https://github.com/wordingone/ember/issues/763",
+  "https://github.com/wordingone/ember/issues/764",
+  "https://github.com/wordingone/ember/issues/767",
+  "https://github.com/wordingone/ember/issues/768",
+  "https://github.com/wordingone/ember/issues/774",
+  "https://github.com/wordingone/ember/issues/776",
+  "https://github.com/wordingone/ember/issues/778",
+  "https://github.com/wordingone/ember/issues/779",
+  "https://github.com/wordingone/ember/issues/782"
+ ],
+ "covered_commits": {
+  ".": "b7b5912cecf1abc7569632ffd4e429cb61142d04"
+ },
+ "delegation": {
+  "issue-210": {
+   "built_by": "land210 lane (Tier-2 landing families 3-6: PRs 761/766/771/773/777/780)",
+   "verified_by": "team-lead (CI-green + refs-only diff merge ruling per landing)"
+  },
+  "issue-735": {
+   "built_by": "w1replay735 / w1replay735b / w1smoke735 lanes (PRs 755/758)",
+   "verified_by": "team-lead (merge review)"
+  },
+  "issue-749": {
+   "built_by": "probetrio749 lane (PR #753, prior window)",
+   "verified_by": "team-lead (8/8 selftest markers verified at merge)"
+  },
+  "issue-757": {
+   "built_by": "legb757 / lever764 lane (PRs 765/781)",
+   "verified_by": "team-lead (merge review)"
+  },
+  "issue-763": {
+   "built_by": "gov763 lane (PR #769)",
+   "verified_by": "team-lead (merge review)"
+  },
+  "issue-764": {
+   "built_by": "lever764 lane (in-flight live run, issue #764)",
+   "verified_by": "team-lead (in-progress, not yet closed)"
+  },
+  "issue-774": {
+   "built_by": "coordinator (runbook authored)",
+   "verified_by": "team-lead (self-authored runbook, execution pending)"
+  }
+ }
+}
