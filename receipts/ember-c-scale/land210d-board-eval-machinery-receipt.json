@@ -1,0 +1,41 @@
+{
+  "family": "board-eval-machinery",
+  "ruling": "issue #210 Tier 2 (LAND-WITH-LANE)",
+  "stage_id": "dryrun-20260704T211712Z",
+  "scope_note": "Triage comment enumerated 4 files (ember_tally_checks, receipt_semantic_check, shatter_calc + its test, gen_problems). shatter_calc.py and gen_problems.py both trip the repo-guard staged-scope paths check (PATHPAT matches an absolute drive-letter-rooted path shape) via pre-existing literals that still carry the drive-letter+root-folder prefix even though the reversible content inside them is already token-redacted -- that prefix SHAPE is flagged regardless of what the redacted content says, unlike the standalone redaction token used in already-landed Tier-1 files (e.g. ember_c14_contract_rig.py), which carries no path shape at all. Per standing instruction, both files are EXCLUDED from this PR, left untracked in the worktree, and listed below rather than retried with alterations. test_shatter_calc.py (imports the shatter_calc module) is landed anyway per the same instruction (only the leak-gate-blocked files themselves are excluded) -- it will ImportError until a follow-up redaction-fix PR lands shatter_calc.py, mirroring the timeshare_pretrain.py (#218) / v0_pretrain_launch_gate.py (#220) / ember_tiny_bitnet_comparison.py (#224) prerequisite-fix precedent.",
+  "leak_gate_blocked": [
+    {
+      "path": "scripts/shatter_calc.py",
+      "reason": "4 hits: docstring line 5, run() default loss_dir, output dict frozen_spec, argparse --loss-dir default -- all carry an absolute drive-letter-rooted path prefix wrapping two already-redacted path segments"
+    },
+    {
+      "path": "scripts/gen_problems.py",
+      "reason": "2 hits: a comment illustrating the computed repo-root value, and one BOARD_DIRS fallback candidate carrying an absolute drive-letter-rooted path with two already-redacted segments"
+    }
+  ],
+  "files": [
+    {
+      "path": "scripts/ember_tally_checks.py",
+      "sha256": "a5427f17297722d4d1020e0d060553a1a470474fe8d7cfaa934f4529f36a725c",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/receipt_semantic_check.py",
+      "sha256": "ec1ebd29c6882a583f141acf0d47235169acfe9ecd464db30befccc7982af403",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/test_shatter_calc.py",
+      "sha256": "11a78e48f0cbe7f09898ad58410ad3e52056ec3421700529ef2df049c332ba80",
+      "provenance": "byte-identical, unmodified",
+      "note": "imports shatter_calc.py, which is leak-gate-blocked above -- ImportError until a follow-up fix-PR lands it"
+    }
+  ],
+  "parity_checks": {
+    "ember_tally_checks.py": "python -m py_compile: PASS. Not run standalone (imports json/os/pathlib only, stdlib-only, no entry-point selftest flag inspected in this pass).",
+    "receipt_semantic_check.py": "python -m py_compile: PASS. argparse-based CLI, stdlib-only.",
+    "test_shatter_calc.py": "python -m py_compile: PASS (compile does not resolve imports). NOT run directly -- will ImportError on `from shatter_calc import (...)` since shatter_calc.py is excluded from this PR."
+  },
+  "leak_scan": "tools/repo-guard.sh REPO_GUARD_SCOPE=staged: PASS on the 3 landed files (paths/path-frags/names all clean).",
+  "rails": "STOP at PR -- no merge, no push to master, no --no-verify."
+}
