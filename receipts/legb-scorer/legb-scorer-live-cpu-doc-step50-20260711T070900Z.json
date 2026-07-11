@@ -1,6 +1,6 @@
 {
   "ticket": "LEGB-757-INPROCESS-SCORER-LIVE-CPU-DOC",
-  "ts": "20260711T063316Z",
+  "ts": "20260711T071229Z",
   "issue_refs": [
     "#757",
     "#735"
@@ -67,14 +67,14 @@
       ],
       "logprob_vector_length": 6,
       "per_token_logprobs": [
-        -10.158956527709961,
-        -9.892950057983398,
-        -11.126534461975098,
-        -10.441801071166992,
-        -10.437295913696289,
-        -5.802994728088379
+        -10.383011817932129,
+        -10.5165376663208,
+        -11.564212799072266,
+        -9.366840362548828,
+        -11.21190071105957,
+        -4.2192063331604
       ],
-      "logprob_sum": -57.86053466796875,
+      "logprob_sum": -57.26171112060547,
       "is_greedy": false,
       "request_context_text": "Question: An astronomer observes that a planet rotates faster after a meteorite impact. Which is the most likely effect of this increase in rotation?\nAnswer:",
       "request_continuation_text": " Planetary density will decrease."
@@ -133,15 +133,15 @@
       ],
       "logprob_vector_length": 7,
       "per_token_logprobs": [
-        -10.158956527709961,
-        -9.892950057983398,
-        -10.206612586975098,
-        -10.334234237670898,
-        -10.336848258972168,
-        -11.169488906860352,
-        -6.300321102142334
+        -10.383011817932129,
+        -10.5165376663208,
+        -9.830936431884766,
+        -9.356149673461914,
+        -10.82294750213623,
+        -10.174495697021484,
+        -4.485407829284668
       ],
-      "logprob_sum": -68.3994140625,
+      "logprob_sum": -65.56948852539062,
       "is_greedy": false,
       "request_context_text": "Question: An astronomer observes that a planet rotates faster after a meteorite impact. Which is the most likely effect of this increase in rotation?\nAnswer:",
       "request_continuation_text": " Planetary years will become longer."
@@ -200,15 +200,15 @@
       ],
       "logprob_vector_length": 7,
       "per_token_logprobs": [
-        -10.158956527709961,
-        -9.892950057983398,
-        -10.290596961975098,
-        -10.55411148071289,
-        -10.296661376953125,
-        -11.048203468322754,
-        -5.931779861450195
+        -10.383011817932129,
+        -10.5165376663208,
+        -10.253665924072266,
+        -9.33166790008545,
+        -10.7855224609375,
+        -11.712446212768555,
+        -4.170163631439209
       ],
-      "logprob_sum": -68.17326354980469,
+      "logprob_sum": -67.15301513671875,
       "is_greedy": false,
       "request_context_text": "Question: An astronomer observes that a planet rotates faster after a meteorite impact. Which is the most likely effect of this increase in rotation?\nAnswer:",
       "request_continuation_text": " Planetary days will become shorter."
@@ -267,15 +267,15 @@
       ],
       "logprob_vector_length": 7,
       "per_token_logprobs": [
-        -10.158956527709961,
-        -9.892950057983398,
-        -11.735909461975098,
-        -10.360891342163086,
-        -10.463133811950684,
-        -10.49244213104248,
-        -6.017363548278809
+        -10.383011817932129,
+        -10.5165376663208,
+        -11.462650299072266,
+        -9.376359939575195,
+        -10.732917785644531,
+        -10.60964584350586,
+        -4.653136730194092
       ],
-      "logprob_sum": -69.12165069580078,
+      "logprob_sum": -67.73426055908203,
       "is_greedy": false,
       "request_context_text": "Question: An astronomer observes that a planet rotates faster after a meteorite impact. Which is the most likely effect of this increase in rotation?\nAnswer:",
       "request_continuation_text": " Planetary gravity will become stronger."
@@ -283,18 +283,20 @@
   ],
   "binding": {
     "checkpoint": {
-      "dir": "<external custody, path redacted -- basename='step-00000025'>",
+      "dir": "<external custody, path redacted -- basename='w1-baseline-replay-step50-20260711T025650Z'>",
       "measured_sha256": {
-        "model.pt": "3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac",
-        "optimizer.pt": "d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0",
+        "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+        "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
         "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379"
       },
       "expected_sha256": {
-        "model.pt": "3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac",
-        "optimizer.pt": "d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0",
+        "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+        "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
         "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379"
       },
-      "manifest_step": 25,
+      "measured_manifest_sha256": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504",
+      "expected_manifest_sha256": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504",
+      "manifest_step": 50,
       "key_shape_parity": {
         "n_keys_checked": 185,
         "keys_match": true,
@@ -305,7 +307,11 @@
       "path": "<external custody, path redacted -- basename='tokenizer-2c557.json'>",
       "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
       "n_dropped_orphan_merges": 0,
-      "n_merges_before": 31755
+      "n_merges_before": 31755,
+      "decoder_wiring": {
+        "attached": true,
+        "reason": "on-disk decoder is null; attached decoders.ByteLevel() in-memory as the canonical inverse of the on-disk ByteLevel pre_tokenizer"
+      }
     },
     "real_arch": {
       "vocab": 32000,
