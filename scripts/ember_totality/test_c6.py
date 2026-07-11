@@ -170,20 +170,20 @@ RECIPE_FIELDS = [
     ("rerun command", _has_rerun_command),
 ]
 
-# Keys that, if present and truthy in the reproducibility block (or anywhere in the
-# receipt), would constitute an executed-rerun reproduction record (the CHK's
-# "rerun reproduces the score OR names a deterministic mismatch").
-RERUN_VERIFICATION_KEYS = [
-    "rerun_verified",
-    "rerun_reproduced",
-    "reproduced_score",
-    "reproduction_verdict",
-    "rerun_reproduction",
-    "rerun_match",
-]
-# deterministic_mismatch is NOT in the truthy list: a bare flag/string is an
-# unexecuted claim (panel 2026-07-02). It counts only as a structured record
-# carrying its own evidence -- see _valid_mismatch_record.
+# [ISSUE #740 bypass-closure] No key name is EVER sufficient alone. The prior
+# RERUN_VERIFICATION_KEYS list (rerun_verified / rerun_reproduced /
+# reproduced_score / reproduction_verdict / rerun_reproduction / rerun_match)
+# let a receipt author write `{"reproducibility": {"rerun_verified": true}}`
+# with zero real rerun evidence and pass this CHK -- a single self-attested
+# boolean bypassing every other check, live despite PR #741's hardening of
+# the sibling deterministic_mismatch path. Removed outright (panel
+# 2026-07-02's principle -- "a bare flag/string is an unexecuted claim" --
+# now applies to the truthy-key list itself, not just deterministic_mismatch).
+# An executed-rerun record counts ONLY via a structured, execution-bound
+# record: see _valid_reproduction_record (the "reproduces the score" half of
+# the CHK) and _valid_mismatch_record (the "names a deterministic mismatch"
+# half) below -- both resolve real rerun-receipt files and recompute hashes,
+# never trust a self-reported flag.
 
 
 def status(color, reason):
@@ -332,15 +332,68 @@ def _valid_mismatch_record(v, citing_path=None):
                   f"resolvable commit(s) {resolved_shas}")
 
 
+def _valid_reproduction_record(d, citing_path=None):
+    """The 'rerun command reproduces the score' half of the CHK, structured and
+    execution-bound (issue #740 bypass-closure -- the equivalent-rigor sibling
+    of _valid_mismatch_record's 'names a deterministic mismatch' half). Looks
+    for a rerun_receipts/reruns list directly in the reproducibility block or
+    at top level (NOT nested in deterministic_mismatch -- that is the other
+    half). Satisfies the CHK only as ALL of:
+      (a) every listed entry resolves to an existing file (repo-root-relative
+          or citing-receipt-directory-relative) and parses as JSON;
+      (b) each resolved rerun file carries its OWN arm_solution_sha256 map;
+      (c) that map agrees with the CITING (parent) receipt's OWN
+          arm_solution_sha256 map on every shared arm -- recomputed by
+          cross-file comparison against a document the rerun did not also
+          author, never a same-document boolean/string claim.
+    Returns (True, detail_string) on success, (False, reason_string) on any
+    failure -- absence of a rerun list, an unresolvable entry, or a hash
+    disagreement are all rejects, never a silent pass."""
+    repro = d.get("reproducibility") or {}
+    reruns = (repro.get("rerun_receipts") or repro.get("reruns")
+              or d.get("rerun_receipts") or d.get("reruns"))
+    if not isinstance(reruns, list) or not reruns:
+        return False, "no rerun_receipts/reruns list present (reproduction path)"
+
+    citing_dir = os.path.dirname(citing_path) if citing_path else None
+    records, problems = _load_rerun_receipts(reruns, REPO_ROOT, citing_dir)
+    if problems or not records:
+        return False, f"rerun entries failed to resolve/parse: {problems or 'no records parsed'}"
+
+    parent_hashes = d.get("arm_solution_sha256")
+    if not isinstance(parent_hashes, dict) or not parent_hashes:
+        return False, "citing receipt has no arm_solution_sha256 to reproduce against"
+
+    for rel, parsed in records:
+        h = parsed.get("arm_solution_sha256")
+        if not isinstance(h, dict) or not h:
+            return False, f"{rel!r} has no arm_solution_sha256 map to compare"
+        shared = set(parent_hashes) & set(h)
+        if not shared:
+            return False, f"{rel!r} shares no common arm keys with the citing receipt"
+        for arm in shared:
+            if parent_hashes[arm] != h[arm]:
+                return False, (f"arm {arm!r} solution hash disagrees between citing "
+                                f"receipt ({parent_hashes[arm]!r}) and rerun {rel!r} "
+                                f"({h[arm]!r})")
+
+    return True, (f"recomputed: {len(records)} rerun receipt(s) resolved+parsed, "
+                  f"arm_solution_sha256 agree with citing receipt on all shared arms")
+
+
 def find_rerun_verification(d, citing_path=None):
     """Return the reproduction record value if a real executed-rerun verification
-    exists, else None. Looks in the reproducibility block and at top level."""
+    exists, else None. An executed-rerun record counts ONLY via a structured,
+    execution-bound record -- never a bare boolean/string flag naming itself
+    verified (issue #740 bypass-closure). The CHK's two valid shapes:
+    _valid_reproduction_record ("reproduces the score") or
+    _valid_mismatch_record ("names a deterministic mismatch")."""
     repro = d.get("reproducibility") or {}
-    for k in RERUN_VERIFICATION_KEYS:
-        if k in repro and repro.get(k) not in (None, "", False):
-            return f"reproducibility.{k}={repro.get(k)!r}"
-        if k in d and d.get(k) not in (None, "", False):
-            return f"{k}={d.get(k)!r}"
+
+    ok, detail = _valid_reproduction_record(d, citing_path=citing_path)
+    if ok:
+        return f"reproduction(structured: {detail})"
+
     for src, label in ((repro, "reproducibility."), (d, "")):
         v = src.get("deterministic_mismatch")
         ok, detail = _valid_mismatch_record(v, citing_path=citing_path)
@@ -429,9 +482,11 @@ def main():
         repro_keys = sorted((eligible[-1][1].get("reproducibility") or {}).keys())
         status("RED",
                f"recipe DEFINITION present & reusable in {len(eligible)} PASS receipt(s) "
-               f"(e.g. {example}: reproducibility keys={repro_keys}), but NO executed-rerun "
-               f"reproduction record (none of {RERUN_VERIFICATION_KEYS}) -> C6 CHK 'rerun "
-               f"command reproduces the score or names a deterministic mismatch' UNPROVEN")
+               f"(e.g. {example}: reproducibility keys={repro_keys}), but NO structured, "
+               f"execution-bound reproduction record (neither _valid_reproduction_record "
+               f"nor _valid_mismatch_record; a bare self-reported flag is never sufficient) "
+               f"-> C6 CHK 'rerun command reproduces the score or names a deterministic "
+               f"mismatch' UNPROVEN")
 
     name, d, rv = verified
     rerun_cmd = (d.get("reproducibility") or {}).get("rerun_command", "")

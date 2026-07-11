@@ -36,13 +36,17 @@ Under WSL the execution root is <local-mount-point>/ or /mnt<local-mount-point>/
 # 'root not found' line, which is the correct, non-error outcome.
 
 # [SANDBOX-AMENDMENT 2026-07-03 — issue #28 PART 1, PENDING_AUTHORIZATION]
-# This is a SANDBOX COPY, never the live scripts/ember_totality/test_c8.py.
-# The only change vs the live file is fields 4-5 of the CHK (ablation_method_
-# blocked / ordinary_runner_intact): generalized from one hardcoded verdict-
-# string pair to any pair meeting the four rules in _ablation_fields_4_5()'s
-# docstring below. See PENDING_AUTHORIZATION.ticket.json (sandbox-adjacent)
-# for the authorizing reference and the diff summary. Nothing else in this
-# file differs from the live probe.
+# Historical marker: fields 4-5 of the CHK (ablation_method_blocked /
+# ordinary_runner_intact) were generalized from one hardcoded verdict-string
+# pair to any pair meeting the rules in _ablation_fields_4_5()'s docstring
+# below. See PENDING_AUTHORIZATION.ticket.json (sandbox-adjacent) for the
+# authorizing reference and the diff summary.
+#
+# [ISSUE #740 bypass-closure, 2026-07-11] The generalization above shipped
+# with a 4th rule -- an incumbent-exact-string shortcut bypassing the
+# provenance/naming rules for one candidate line -- which was itself a live
+# self-attestation bypass. That rule is now REMOVED; _ablation_fields_4_5
+# has three rules, none of them a string-equality shortcut.
 
 import glob
 import json
@@ -74,10 +78,17 @@ INVALID_TOKENS = [
 ]
 
 # --- [SANDBOX-AMENDMENT] Fields 4-5 generalization ---------------------------
-# Incumbent exact-string pair from the one existing (still-failing-on-other-
-# fields) candidate line. Kept as a byte-identical shortcut so that receipt
-# evaluates EXACTLY as the pre-amendment probe did -- rule (d), backward
-# compatibility, no new requirement retroactively imposed on it.
+# [ISSUE #740 bypass-closure] The incumbent exact-string pair below USED to be
+# a byte-identical early-return shortcut ("if the receipt uses these exact
+# verdict strings, pass fields 4-5 unconditionally") -- a single self-attested
+# string-equality match that bypassed the (b) executed-run-provenance and (c)
+# named-contribution/delegate checks entirely for that one candidate line.
+# Removed: incumbent receipts now go through the identical suffix + named +
+# provenance checks as every other candidate. Backward compat is compat of
+# FORMAT (these two strings still satisfy the ordinary _BLOCKED/_PASS suffix
+# rule (a) below, so a genuine incumbent receipt is unaffected), never compat
+# of SUFFICIENCY (a string match alone is never enough). The constants are
+# kept only as a comment anchor for what "incumbent" refers to historically.
 INCUMBENT_NATIVE_LINK_BLOCKED = "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_BLOCKED"
 INCUMBENT_EXTERNAL_DELEGATE_PASS = "D3_MULTI_TASK_GENERALIZATION_PASS"
 
@@ -119,19 +130,20 @@ def _ablation_fields_4_5(ablation, root):
       (b) BOTH sides carry executed-run provenance (a command plus a
           receipt_ref that resolves to a real file on disk);
       (c) the receipt names the deleted contribution and the surviving
-          delegate pipeline explicitly (non-empty strings);
-      (d) the incumbent exact-string pair still passes UNCHANGED -- if the
-          receipt uses the incumbent strings, it passes exactly as the
-          pre-amendment probe did; no new requirement is retroactively
-          applied to that one existing candidate line.
+          delegate pipeline explicitly (non-empty strings).
+
+    [ISSUE #740 bypass-closure] There is no (d) anymore. The former
+    incumbent-exact-string shortcut let a receipt bypass (b) and (c) by
+    string-matching INCUMBENT_NATIVE_LINK_BLOCKED/INCUMBENT_EXTERNAL_
+    DELEGATE_PASS alone -- a single self-attested pair of strings sufficient
+    for GREEN with no provenance and no named contribution behind it. An
+    incumbent receipt using those exact strings still satisfies rule (a)
+    (both are genuine _BLOCKED/_PASS suffixes) and is evaluated identically
+    to every other candidate from here on -- no verdict-string pair is ever
+    sufficient by itself.
     """
     deletion_verdict = ablation.get("native_link_verdict")
     delegate_verdict = ablation.get("external_delegate_verdict")
-
-    # (d) backward-compatible incumbent shortcut -- byte-identical behavior.
-    if (deletion_verdict == INCUMBENT_NATIVE_LINK_BLOCKED
-            and delegate_verdict == INCUMBENT_EXTERNAL_DELEGATE_PASS):
-        return True, True
 
     # (a) suffix pattern on BOTH sides.
     suffix_ok = (
