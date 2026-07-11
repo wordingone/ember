@@ -400,6 +400,28 @@ def _restore_fork_(snapshot: dict, *, model, optimizers: dict, device: str) -> i
 
 COMMIT_MARGIN_FLOOR_GIB = 6.0   # same floor value as this tree's other commit governors
 VRAM_MARGIN_FLOOR_GIB = 2.0     # same floor as cpu_offload_adamw.vram_preflight's own default
+DISK_MARGIN_FLOOR_GIB = 4.0     # spare disk headroom required beyond the snapshot's own bytes
+
+# Bounded, fixed (never model/snapshot-size-scaled) allowances for the
+# restore path's genuinely transient overhead -- ember #702 mid-build repair
+# round 2 (independent falsifier re-test of the round-1 preflight): the
+# round-1 preflight priced model_bytes against free VRAM and the FULL
+# model+shadow+state snapshot sum against free host commit, as if the
+# restore path materialized all of that a second time. It does not: model/
+# shadow/state all restore via mmap=True sequential per-component loads,
+# copy_()'d IN-PLACE into already-allocated destination tensors (model
+# params on GPU; shadow/state on CPU), never reallocated -- so the true
+# added VRAM and added (pagefile-backed) commit from restore are both ~0.
+# At the measured real envelope (~19.98-20.04GiB peak VRAM used on a 24GiB
+# card, ~4GiB free) the round-1 math required free_vram >= model_bytes
+# (~4.09GiB) + 2GiB margin = ~6.09GiB -- a bound the real workload can NEVER
+# clear, so the gate was safe-fail but undeliverable, not merely
+# conservative. These two constants are the bounded staging-buffer
+# allowance kept IN PLACE of the phantom charge, sized to cover the small
+# non-mmap .clone() calls in _restore_fork_'s coa inner-state merge and
+# Windows' del/GC commit-release lag -- not to price the snapshot itself.
+VRAM_STAGING_BUFFER_GIB = 0.5
+COMMIT_STAGING_BUFFER_GIB = 1.0
 
 
 def _read_commit_gib() -> dict | None:
@@ -435,14 +457,66 @@ def _read_commit_gib() -> dict | None:
         return None
 
 
+def _read_disk_free_gib(path: str) -> dict | None:
+    """Ground-truth free disk space for the volume holding `path` (run_dir --
+    already created by the time this fires, see attribution_run's
+    os.makedirs). Never raises -- returns None on any read failure
+    (nonexistent path, permissions), same never-raises-on-read-failure
+    contract as _read_commit_gib; a failed read is disclosed, never treated
+    as a violation."""
+    import shutil
+    try:
+        usage = shutil.disk_usage(path)
+        gib = 1024.0 ** 3
+        return {
+            "total_gib": round(usage.total / gib, 3),
+            "used_gib": round(usage.used / gib, 3),
+            "free_gib": round(usage.free / gib, 3),
+        }
+    except Exception:
+        return None
+
+
+def _tensor_bytes_in(obj) -> int:
+    """Recursively sums .numel()*.element_size() over any torch.Tensor found
+    inside obj (dict/list/tuple nesting, the shape torch optimizer
+    state_dict()s use). Non-tensor leaves (step counters, etc.) contribute 0.
+    Sizes exactly what a PLAIN (non-CPUOffloadOptimizer) optimizer's
+    state_dict() would serialize -- mirrors _snapshot_fork's
+    copy.deepcopy(opt.state_dict()) write path for that branch."""
+    import torch
+    if isinstance(obj, torch.Tensor):
+        return obj.numel() * obj.element_size()
+    if isinstance(obj, dict):
+        return sum(_tensor_bytes_in(v) for v in obj.values())
+    if isinstance(obj, (list, tuple)):
+        return sum(_tensor_bytes_in(v) for v in obj)
+    return 0
+
+
 def _realized_fork_bytes(*, model, optimizers: dict) -> dict:
     """Sizes the fork snapshot from REALIZED tensor bytes actually present
     in THIS run (never a config-derived estimate) -- the exact numbers the
-    torch.save calls in _snapshot_fork are about to write."""
+    torch.save calls in _snapshot_fork are about to write. model_bytes/
+    shadow_bytes/state_bytes/plain_bytes together are the DISK-write sizing
+    input (every one of these is written to a file under fork_dir). Only
+    plain_bytes matters for the COMMIT preflight (see _preflight_fork_
+    capacity): model/shadow/state all restore via mmap=True (file-backed,
+    same zero-commit-charge convention this codebase's own CPUOffload
+    Optimizer memmap tensors already rely on -- see _restore_fork_), so they
+    add ~zero real host commit; a PLAIN optimizer's state_dict() restores via
+    an ordinary (non-mmap) torch.load + load_state_dict, which DOES
+    materialize real heap bytes -- currently size-0 in this runner's actual
+    invocation path (build_split_optimizer is always called with
+    offload_optimizer_state=True, so every entry in `optimizers` is a
+    CPUOffloadOptimizer), kept as a real measured input rather than an
+    assumption so a future caller adding a non-offloaded leg is priced
+    correctly instead of silently under-priced."""
     import torch
     model_bytes = sum(v.numel() * v.element_size() for v in model.state_dict().values())
     shadow_bytes = 0
     state_bytes = 0
+    plain_bytes = 0
     for opt in optimizers.values():
         if isinstance(opt, _coa.CPUOffloadOptimizer):
             shadow_bytes += sum(s.numel() * s.element_size() for s in opt._shadow)
@@ -450,7 +524,10 @@ def _realized_fork_bytes(*, model, optimizers: dict) -> dict:
                 for v in opt._inner.state.get(shadow_p, {}).values():
                     if isinstance(v, torch.Tensor):
                         state_bytes += v.numel() * v.element_size()
-    return {"model_bytes": model_bytes, "shadow_bytes": shadow_bytes, "state_bytes": state_bytes}
+        else:
+            plain_bytes += _tensor_bytes_in(opt.state_dict())
+    return {"model_bytes": model_bytes, "shadow_bytes": shadow_bytes,
+            "state_bytes": state_bytes, "plain_bytes": plain_bytes}
 
 
 def _write_capacity_refusal_receipt(result: dict, *, run_dir: str) -> str:
@@ -470,55 +547,106 @@ def _write_capacity_refusal_receipt(result: dict, *, run_dir: str) -> str:
     return path
 
 
-def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: str) -> dict:
+def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: str,
+                             nvsmi: dict | None = None, commit: dict | None = None,
+                             disk: dict | None = None) -> dict:
     """Fail-closed capacity assert BEFORE any fork-snapshot write. Sized from
-    REALIZED tensor bytes (_realized_fork_bytes), not config. The disk-backed
-    design means the fork itself adds ~zero PERSISTENT VRAM/commit -- this
-    checks the TRANSIENT restore-time exposure conservatively: model_bytes
-    against free VRAM (device=='cuda' only -- the disk-backed restore's
-    actual added VRAM is near-zero since it copies CPU-loaded bytes into
-    already-allocated GPU tensors, but this stays conservative rather than
-    trusting that invariant never regresses), and the full
-    model+shadow+state byte sum against free host commit (the sequential
-    per-component load bounds the TRUE peak to the single largest component,
-    but Windows does not guarantee immediate commit release on del+GC, so
-    this checks the worst case). Raises SystemExit with a written refusal
-    receipt on insufficiency -- abort-not-degrade, no fix-forward, no
-    widened floor."""
+    REALIZED tensor bytes (_realized_fork_bytes), not config, and from the
+    ACTUAL restore path's exposure, not the snapshot's own size:
+
+    - VRAM (device=='cuda' only): restore's real added VRAM is ~0 -- the
+      model-state load is map_location=cpu, mmap=True, then copy_()'d
+      IN-PLACE into model.state_dict()'s ALREADY-ALLOCATED GPU tensors
+      (never reallocated). Priced against a bounded, fixed staging-buffer
+      allowance (VRAM_STAGING_BUFFER_GIB), never model_bytes -- charging
+      model_bytes here was a phantom cost the real restore path never
+      incurs, and at the measured real envelope (~4GiB free on a 24GiB
+      card at peak) made the gate permanently unclearable (mid-build repair
+      round 2, independent falsifier re-test).
+    - Host commit: model/shadow/state all restore via mmap=True (file-
+      backed -- the SAME zero-commit-charge convention this codebase's own
+      CPUOffloadOptimizer memmap tensors already rely on), so only a PLAIN
+      (non-CPUOffloadOptimizer) optimizer's state -- which restores via an
+      ordinary non-mmap torch.load -- is real, measured, materializing
+      commit; this is currently always 0 bytes in this runner's actual
+      invocation path (see _realized_fork_bytes). Priced as plain_gib plus
+      a bounded staging-buffer allowance (COMMIT_STAGING_BUFFER_GIB) for
+      _restore_fork_'s small non-mmap .clone() calls and Windows' del/GC
+      commit-release lag -- never the full model+shadow+state snapshot sum
+      (that sum is real DISK bytes, not simultaneous commit; charging it as
+      commit was the second phantom cost).
+    - Disk (new in this repair round): the fork snapshot's files (model +
+      shadow + state + any plain state) ARE written to fork_dir as real,
+      simultaneous bytes on disk before any restore happens -- sized
+      against the FULL realized-bytes sum, never bounded to one component,
+      because unlike restore the write is not sequential-with-drop.
+
+    `nvsmi`/`commit`/`disk` are optional INJECTED measurement dicts (same
+    pure-function-of-a-measured-dict pattern as cpu_offload_adamw.
+    vram_preflight's own `nvsmi` parameter) -- when omitted each is measured
+    for real; production call sites (attribution_run's live path) always
+    omit all three. Only _selftest_fork_capacity_preflight() injects
+    synthetic envelopes, to prove the PRICING LOGIC against known VRAM/
+    disk states rather than depending on today's actual idle GPU/disk on
+    whatever box runs the selftest.
+
+    Raises SystemExit with a written refusal receipt on insufficiency --
+    abort-not-degrade, no fix-forward, no widened floor."""
     sizes = _realized_fork_bytes(model=model, optimizers=optimizers)
     gib = 1024.0 ** 3
-    total_gib = round(sum(sizes.values()) / gib, 3)
-    result = {"sizes_bytes": sizes, "total_required_gib": total_gib,
-             "vram": None, "commit": None, "sufficient": True, "refusal": None}
+    total_write_gib = round(sum(sizes.values()) / gib, 3)
+    plain_gib = round(sizes["plain_bytes"] / gib, 3)
+    result = {"sizes_bytes": sizes, "total_write_gib": total_write_gib,
+             "plain_gib": plain_gib, "vram": None, "commit": None, "disk": None,
+             "sufficient": True, "refusal": None}
 
     if device == "cuda":
         try:
             import torch
             if torch.cuda.is_available():
-                vram_check = vram_preflight(sizes["model_bytes"] / gib,
-                                            margin_gib_floor=VRAM_MARGIN_FLOOR_GIB)
+                vram_check = vram_preflight(VRAM_STAGING_BUFFER_GIB,
+                                            margin_gib_floor=VRAM_MARGIN_FLOOR_GIB,
+                                            nvsmi=nvsmi)
                 result["vram"] = vram_check
                 if not vram_check["sufficient"]:
                     result["sufficient"] = False
                     result["refusal"] = (
-                        f"VRAM margin insufficient for the fork snapshot's transient "
-                        f"restore exposure: {vram_check}")
+                        f"VRAM margin insufficient for the restore path's bounded "
+                        f"staging buffer: {vram_check}")
         except Exception as e:
             result["vram"] = {"error": str(e)}
 
-    commit = _read_commit_gib()
-    result["commit"] = commit
-    if commit is not None:
-        commit_margin_gib = round(commit["free_gib"] - total_gib, 3)
+    commit_stat = commit if commit is not None else _read_commit_gib()
+    result["commit"] = commit_stat
+    if commit_stat is not None:
+        commit_required_gib = round(plain_gib + COMMIT_STAGING_BUFFER_GIB, 3)
+        commit_margin_gib = round(commit_stat["free_gib"] - commit_required_gib, 3)
+        result["commit_required_gib"] = commit_required_gib
         result["commit_margin_gib"] = commit_margin_gib
         if commit_margin_gib < COMMIT_MARGIN_FLOOR_GIB:
             result["sufficient"] = False
             result["refusal"] = (
-                f"host-commit margin insufficient for the fork snapshot: free="
-                f"{commit['free_gib']}GiB, required={total_gib}GiB, margin="
+                f"host-commit margin insufficient for the restore path's plain-"
+                f"optimizer bytes + staging buffer: free={commit_stat['free_gib']}"
+                f"GiB, required={commit_required_gib}GiB, margin="
                 f"{commit_margin_gib}GiB < floor={COMMIT_MARGIN_FLOOR_GIB}GiB")
-    # commit is None (non-Windows / read failure): disclosed, never treated
-    # as a violation -- same contract as every other commit-read helper here.
+    # commit_stat is None (non-Windows / read failure): disclosed, never
+    # treated as a violation -- same contract as every other commit-read
+    # helper here.
+
+    disk_stat = disk if disk is not None else _read_disk_free_gib(run_dir)
+    result["disk"] = disk_stat
+    if disk_stat is not None:
+        disk_margin_gib = round(disk_stat["free_gib"] - total_write_gib, 3)
+        result["disk_margin_gib"] = disk_margin_gib
+        if disk_margin_gib < DISK_MARGIN_FLOOR_GIB:
+            result["sufficient"] = False
+            result["refusal"] = (
+                f"free disk insufficient for the fork snapshot write: free="
+                f"{disk_stat['free_gib']}GiB, required={total_write_gib}GiB, "
+                f"margin={disk_margin_gib}GiB < floor={DISK_MARGIN_FLOOR_GIB}GiB")
+    # disk_stat is None (read failure): disclosed, never treated as a
+    # violation -- same contract as commit/vram reads.
 
     if not result["sufficient"]:
         receipt_path = _write_capacity_refusal_receipt(result, run_dir=run_dir)
@@ -1270,6 +1398,7 @@ def _selftest() -> int:
     _selftest_verdict_predicates()
     _selftest_span_collector_attach_detach()
     _selftest_integration_all_gates_pass()
+    _selftest_fork_capacity_preflight()
     return 0
 
 
@@ -1425,6 +1554,79 @@ def _selftest_integration_all_gates_pass() -> None:
     print("ATTRIBUTION_702_INTEGRATION_ALL_GATES_PASS_SELFTEST_PASS "
           f"verdict={receipt['verdict']} "
           f"gates_all_passed={receipt['gates_all_passed']}", flush=True)
+
+
+def _selftest_fork_capacity_preflight() -> None:
+    """ember #702 mid-build repair round 2 (independent falsifier re-test):
+    proves _preflight_fork_capacity prices the ACTUAL restore-path exposure
+    (bounded staging buffers + any real plain-optimizer bytes), never the
+    phantom full-model/full-snapshot charges the round-1 version used. Two
+    assertions, both explicitly named in the falsifier's cure:
+
+    1. CLEARS at a simulated 20GiB-VRAM-used envelope (24GiB card, ~4GiB
+       free) with ample disk -- the exact real-world peak this repo's own
+       measurements put the live 2.2B dispatch at, which the round-1
+       preflight (pricing model_bytes~=4.09GiB + 2GiB margin against ~4GiB
+       free) could NEVER clear -- safe-fail but undeliverable, not merely
+       conservative.
+    2. REFUSES under genuinely low free disk -- proves the new disk check
+       (absent in round 1) actually fires, not just that it exists.
+
+    nvsmi/disk are INJECTED synthetic measurement dicts (same pure-function-
+    of-a-measured-dict pattern as vram_preflight's own `nvsmi` param) so this
+    proves the PRICING LOGIC against a known envelope, not today's actual
+    idle GPU/disk state on whatever box happens to run this selftest.
+    Skips (disclosed, never a silent pass) if this process has no CUDA
+    device at all -- the VRAM leg of this gate is fundamentally CUDA-only,
+    same disclosed-skip discipline as calibrate_pinned_vs_pageable."""
+    import tempfile
+
+    import torch
+    import torch.nn as nn
+
+    if not torch.cuda.is_available():
+        print("ATTRIBUTION_702_FORK_CAPACITY_PREFLIGHT_SELFTEST_SKIP "
+              "reason=cuda_unavailable_in_this_process -- disclosed skip, "
+              "never a silent pass", flush=True)
+        return
+
+    # Empty optimizers dict: this selftest targets the PRICING ARITHMETIC
+    # itself (already exercised end-to-end against a real CPUOffloadOptimizer
+    # by _selftest_integration_all_gates_pass), so model_bytes is the only
+    # realized size in play -- and, by design, no longer matters to the VRAM
+    # check at all (that's exactly the bug being proven fixed).
+    model = nn.Linear(64, 64)
+    optimizers: dict = {}
+    run_dir = tempfile.mkdtemp(prefix="attribution702_capacity_preflight_")
+
+    simulated_nvsmi_20gib_used = {
+        "total_mib": 24576, "used_mib": 20480, "free_mib": 4096,
+        "total_gib": 24.0, "used_gib": 20.0, "free_gib": 4.0,
+    }
+    ample_disk = {"total_gib": 500.0, "used_gib": 100.0, "free_gib": 400.0}
+
+    result_clear = _preflight_fork_capacity(
+        model=model, optimizers=optimizers, device="cuda", run_dir=run_dir,
+        nvsmi=simulated_nvsmi_20gib_used, disk=ample_disk)
+    assert result_clear["sufficient"] is True, (
+        "gate must CLEAR at the measured real envelope (~4GiB free VRAM on "
+        f"a 24GiB card, ample disk) -- got {result_clear}")
+    assert result_clear["vram"]["sufficient"] is True, result_clear["vram"]
+
+    low_disk = {"total_gib": 500.0, "used_gib": 499.99, "free_gib": 0.01}
+    refused = False
+    try:
+        _preflight_fork_capacity(
+            model=model, optimizers=optimizers, device="cuda", run_dir=run_dir,
+            nvsmi=simulated_nvsmi_20gib_used, disk=low_disk)
+    except SystemExit:
+        refused = True
+    assert refused, "gate must REFUSE (SystemExit) under genuinely low free disk"
+
+    print("ATTRIBUTION_702_FORK_CAPACITY_PREFLIGHT_SELFTEST_PASS "
+          f"clear_vram_margin_gib={result_clear['vram']['margin_gib']} "
+          f"clear_sufficient={result_clear['sufficient']} "
+          f"low_disk_refused={refused}", flush=True)
 
 
 # ---------------------------------------------------------------------------
