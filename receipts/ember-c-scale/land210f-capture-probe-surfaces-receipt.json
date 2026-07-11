@@ -1,0 +1,99 @@
+{
+  "family": "capture/probe surfaces",
+  "ruling": "issue #210 Tier 2 (LAND-WITH-LANE), family 2 of the maintainer's ordered sweep",
+  "stage_id": "dryrun-20260704T211712Z",
+  "scope_note": "Triage comment enumerated: ember_cobs_capture, ember_ind1_context_carry_capture, ember_ind3_operate_capture, ember_surface2_capture, ember_c14 probe/rig/seed/owned set, ember_c_port_device_portability. Of the ember_c14 set, ember_c14_contract_rig.py and ember_c14_owned_run.py are ALREADY TRACKED (landed via #217's import closure) and excluded here. test_ember_c14_real_adapter.py was not named in the triage comment but is ember_c14_real_adapter.py's own test and is landed alongside it (same in-scope-sibling precedent as #221's test files). ember_c_port_device_portability.py is EXCLUDED (not leak-gate-blocked -- see prerequisite_blocker below), leaving 9 files landed.",
+  "prerequisite_blocker": {
+    "path": "scripts/ember_c_port_device_portability.py",
+    "status": "EXCLUDED -- not a leak-gate block, a real runtime defect",
+    "finding": "Running it (no CLI flags, executes main() directly) raises `TypeError: fp8_matmul_with_fallback() got an unexpected keyword argument 'capability_override'` against the currently-tracked scripts/governor.py. Root cause: the STAGE directory's OWN scripts/governor.py (447 lines) is a materially newer/expanded version of the currently-tracked scripts/governor.py (260 lines) -- stage adds commit_env_limit(), estimate_checkpoint_mapped_bytes(), _commit_status(), commit_margin_preflight(), and a full C-PORT device-adaptive precision ladder (select_precision/fp8_matmul_with_fallback/device_relative_threshold, all with a capability_override kwarg the tracked version's equivalents lack). ember_c_port_device_portability.py was written against the STAGE governor.py, not the tracked one.",
+    "why_not_fixed_here": "governor.py is already tracked and is the repo's safety-critical resource governor (VRAM fraction cap, margin assert, commit-margin preflight -- CLAUDE.md 'Safety rails' names it explicitly). Modifying an already-landed safety-critical file is the same class of decision as the timeshare_pretrain.py (#218) / v0_pretrain_launch_gate.py (#220) prerequisite-fix precedent -- it needs its own dedicated PR with its own review, not a fold-in here. Reported to team-lead for a direction call rather than patched unilaterally.",
+    "next_step_needed": "A team-lead ruling on whether/how to reconcile stage governor.py's C-PORT extension into the tracked governor.py (own PR, own diff, own parity legs) before ember_c_port_device_portability.py can land."
+  },
+  "files": [
+    {
+      "path": "scripts/ember_c14_a20_preflight_probe.py",
+      "stage_sha256": "a3579a03be6ab9f92b4816aff28bb850bfd144eba545e0b368cb3bc48701e568",
+      "landed_sha256": "a3579a03be6ab9f92b4816aff28bb850bfd144eba545e0b368cb3bc48701e568",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_c14_owned_core.py",
+      "stage_sha256": "0c7c93019297c587a60f5555775f702a462e61b6ab5b826db1e148d90c48b449",
+      "landed_sha256": "2deb4a935215d1ec2c9c9020bc017e412733360ae30fa3978832003bd14561cb",
+      "provenance": "byte-identical content, CRLF-to-LF git-attribute normalization only (*.py falls under this repo's `* text=auto eol=lf` .gitattributes rule) -- zero content change, confirmed via post-normalization diff against the stage copy with both sides newline-normalized."
+    },
+    {
+      "path": "scripts/ember_c14_real_adapter.py",
+      "stage_sha256": "91f8aec4dcb9c0e0b501a3b5bef98299e00908bc15e0778d4caf9b2150279239",
+      "landed_sha256": "91f8aec4dcb9c0e0b501a3b5bef98299e00908bc15e0778d4caf9b2150279239",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_c14_seed_study.py",
+      "stage_sha256": "2de7d0c6763e754f4eef1124a757b14aabd7a5ec8a2803ca24b273deb4c62b25",
+      "landed_sha256": "2de7d0c6763e754f4eef1124a757b14aabd7a5ec8a2803ca24b273deb4c62b25",
+      "provenance": "byte-identical, unmodified"
+    },
+    {
+      "path": "scripts/ember_cobs_capture.py",
+      "stage_sha256": "a9de62e8ad9e86c932374e4cf3c4d812eed3191fc8639bb9899f99161b4cea2d",
+      "landed_sha256": "63c6b851aeb7665cc511daf889b266f7e7902b86a6ed20325628c190693f5ba2",
+      "provenance": "modified (functional redaction)",
+      "edits": [
+        "EXEC_ROOT changed from an absolute drive-letter-rooted repo-root literal to str(Path(__file__).resolve().parent.parent) -- functionally identical (this file's grandparent directory IS the repo root).",
+        "GOALFORGE_ROOT's fallback default changed from an absolute drive-letter-rooted sibling-tree literal to a computed sibling of EXEC_ROOT's parent, same on-disk convention, still overridable via EMBER_GOALFORGE_ROOT.",
+        "Added 'from pathlib import Path' import and a provenance note in the module docstring.",
+        "NODE_EXE's fallback ('C:/nvm4w/nodejs/node.exe') left unchanged -- does not match the repo-guard PATHPAT (no Users/M/Downloads/Windows-Temp segment)."
+      ]
+    },
+    {
+      "path": "scripts/ember_ind1_context_carry_capture.py",
+      "stage_sha256": "885e158583826bbafca70fa6205b05214cefa62f74bc0e7be5a14f9278a3e607",
+      "landed_sha256": "874cff130cba7fbe00cd8015192585e2e90769eae587f0c64cf52e7aa110a3c8",
+      "provenance": "modified (functional redaction)",
+      "edits": [
+        "Same EXEC_ROOT/GOALFORGE_ROOT fix as ember_cobs_capture.py.",
+        "The import_provenance metadata dict (written into the emitted receipt, describing where the run executed) previously hardcoded the same literal drive-letter strings a second time -- both now interpolate the EXEC_ROOT/GOALFORGE_ROOT variables instead of duplicating the literal, which also makes the emitted metadata accurate for wherever the script actually runs rather than a hardcoded assumption."
+      ]
+    },
+    {
+      "path": "scripts/ember_ind3_operate_capture.py",
+      "stage_sha256": "e47f71e49b3963ab2980dbe8e09f8f0d57f8f1e4b2ca35f21c20648d00da2223",
+      "landed_sha256": "dbcfe659c5f189ddc48d4143085720e92a313e1111eefd9093262d7dd4798590",
+      "provenance": "modified (functional redaction)",
+      "edits": [
+        "Same EXEC_ROOT/GOALFORGE_ROOT fix as ember_cobs_capture.py, plus the same import_provenance metadata-dict variable-interpolation fix as ember_ind1_context_carry_capture.py."
+      ]
+    },
+    {
+      "path": "scripts/ember_surface2_capture.py",
+      "stage_sha256": "a5eaa5de3c9ccdface008fb8740e71bb390d2dd0e8d237a32569577249cc0701",
+      "landed_sha256": "ea66bd3ed45d36beb48ce07da8e00138bab59256e0e3c388484050eb63af7ec9",
+      "provenance": "modified (functional redaction)",
+      "edits": [
+        "EXEC_ROOT changed from an absolute drive-letter-rooted repo-root literal to str(Path(__file__).resolve().parent.parent). This file has no GOALFORGE_ROOT and no duplicated metadata literals -- the single-line fix is the whole diff."
+      ]
+    },
+    {
+      "path": "scripts/test_ember_c14_real_adapter.py",
+      "stage_sha256": "1f43fd60718dfa409e0d67c92157944ced90d95c47d7d74a7098fb2548c99c59",
+      "landed_sha256": "1f43fd60718dfa409e0d67c92157944ced90d95c47d7d74a7098fb2548c99c59",
+      "provenance": "byte-identical, unmodified"
+    }
+  ],
+  "import_closure_note": "ember_c14_a20_preflight_probe.py imports ember_c14_owned_core (in-scope sibling, landed alongside) and receipt_write (already tracked). ember_c14_owned_core.py imports cbase_grow_dryrun, resident_adapter (via its own sys.path injection into scripts/ember_phase3_c14/), receipt_write, ember_c14_contract_rig, and governor -- all five already tracked on master (governor's CURRENT tracked signature suffices for owned_core.py's own calls; the C-PORT-ladder incompatibility is specific to ember_c_port_device_portability.py, excluded above). ember_c14_real_adapter.py imports build_multimodal_v0_model, train_multimodal_v0 (both tracked) and ember_resident_igrpo (tracked via #217). test_ember_c14_real_adapter.py imports ember_c14_real_adapter (landed alongside) and ember_resident_igrpo (tracked). No new prerequisite PR needed for the 9 landed files.",
+  "functional_verification": {
+    "ember_c14_a20_preflight_probe.py": "No CLI/main guard (runs top-level on import, one-shot probe). Executed directly: cleanly raised `OWNED_CORE_SEED_MISSING: .../models/cbase-grow-rung/.../model.pt does not exist` via ember_c14_owned_core.py's own verify_seed_checkpoint() -- the real owned checkpoint is not present in this worktree (models/ is not tracked), same class as #221's cbase_grow_dryrun.py review. Confirms the code path executes correctly up to the missing-artifact point.",
+    "ember_c14_owned_core.py": "python scripts/ember_c14_owned_core.py --help: PASS, prints full argparse usage + docstring, exit 0.",
+    "ember_c14_real_adapter.py": "No CLI/main guard (library module). `import ember_c14_real_adapter` (sys.path-injected): PASS, module imports cleanly, exposes EmberModelShell/adapter_train_resident_fn/igrpo_stage1/igrpo_stage2/make_real_core_factory etc.",
+    "ember_c14_seed_study.py": "python scripts/ember_c14_seed_study.py --help: PASS, prints argparse usage + docstring, exit 0.",
+    "ember_cobs_capture.py": "python scripts/ember_cobs_capture.py --help: PASS (exit 0). --dry-run: PASS -- correctly computed EXEC_ROOT as THIS worktree's own root (not the hardcoded original repo-root literal), then cleanly reported its own precondition gap (tools/ember-cli/src/core/ember-world-state-repl.ts not present in this worktree) rather than crashing. Confirms the portability fix resolves correctly in a different worktree.",
+    "ember_ind1_context_carry_capture.py": "python scripts/ember_ind1_context_carry_capture.py --help: PASS (exit 0). --dry-run: PASS -- EXEC_ROOT correctly resolved to this worktree; cleanly reported the expected precondition gap (ember-cured.exe not built in this worktree, and the harness is forbidden from building it).",
+    "ember_ind3_operate_capture.py": "python scripts/ember_ind3_operate_capture.py --help: PASS (exit 0). --dry-run: PASS -- same correct EXEC_ROOT resolution, same class of clean precondition-gap report (ember-world-state-repl.ts not present).",
+    "ember_surface2_capture.py": "python scripts/ember_surface2_capture.py --help: PASS (exit 0). --dry-run: PASS -- same correct EXEC_ROOT resolution, clean precondition-gap report (ember-cured.exe not built in this worktree).",
+    "test_ember_c14_real_adapter.py": "python scripts/test_ember_c14_real_adapter.py (direct run, CPU, no flags needed): FULL SUITE PASS -- 7/7 (adapter_path_check, a_gradient_flow, b_reward_dependence, c_sample_action_correct, d_logprob_igrpo, e_rig_drop_in, f_not_side_classifier). Strongest evidence in this family: a genuine end-to-end TDD suite ran green standalone, exercising ember_c14_real_adapter.py's real code paths against a real (tiny) model."
+  },
+  "leak_scan": "tools/repo-guard.sh REPO_GUARD_SCOPE=staged: PASS on the 9 landed files (paths/path-frags/names all clean). ember_c14_owned_core.py's ProgramFiles(x86) fallback (os.environ.get('ProgramFiles(x86)', r'C:\\\\Program Files (x86)')) does not match PATHPAT (requires a Users/M/Downloads/Windows-Temp segment after the drive letter) -- confirmed by the gate passing with this line present, same class as the gate's own documented C:\\\\Windows\\\\System32\\\\cmd.exe non-identifying-path exemption.",
+  "rails": "STOP at PR -- no merge, no push to master, no --no-verify."
+}
