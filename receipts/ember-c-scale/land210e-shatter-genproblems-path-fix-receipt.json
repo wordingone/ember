@@ -1,0 +1,43 @@
+{
+  "family": "shatter_calc + gen_problems path-portability fix",
+  "ruling": "issue #210 Tier 2 follow-up (team-lead ruling, ordering constraint before family 2 of the LAND-WITH-LANE sweep)",
+  "stage_id": "dryrun-20260704T211712Z",
+  "scope_note": "PR #747 (board-eval-machinery family) excluded these two files as leak-gate-blocked: both carried absolute drive-letter-rooted path literals wrapping already-token-redacted segments, tripping tools/repo-guard.sh's staged-scope paths check on the path SHAPE regardless of the redacted content. Team-lead ruling: this is a genuine portability defect independent of the gate (an absolute local path is unusable off the export machine either way), not gate evasion -- cure is the same functional-redaction template PR #224 used for ember_tiny_bitnet_comparison.py. Both files edited over the staged original; every other line is byte-identical to stage.",
+  "files": [
+    {
+      "path": "scripts/shatter_calc.py",
+      "stage_sha256": "ed131676510adfe9b2fb1270f0e7ed0e3a06a5635647c7ef041318abc2154e13",
+      "landed_sha256": "ad012f804f87237f0cd0c52ac3634a854ec7c0c6cc08f327473f5a8d138b09c7",
+      "provenance": "modified (functional redaction)",
+      "edits": [
+        "Docstring lines 4-5 (method-frozen citation): the absolute drive-letter path to the operator's state-tree doc replaced with a descriptive citation naming the file and freeze date, no path -- this was purely informational (never opened by the script).",
+        "New DEFAULT_LOSS_DIR module constant (Path(__file__).resolve().parent.parent / 'scratch' / 'shatter-loss-logs') added after the imports, falls under *scratch*/ in .gitignore.",
+        "run()'s loss_dir parameter default changed from the absolute path literal to DEFAULT_LOSS_DIR.",
+        "Output dict's method.frozen_spec value: same descriptive-citation replacement as the docstring (informational only, written into the emitted JSON, never a filesystem access).",
+        "main()'s --loss-dir argparse default changed from the absolute path literal to DEFAULT_LOSS_DIR.",
+        "Added a provenance note in the module docstring pointing at this receipt.",
+        "Added 'from pathlib import Path' import (needed for DEFAULT_LOSS_DIR)."
+      ],
+      "verified_unchanged": "All FROZEN PARAMETERS (K, epsilon, BUDGET_B, BUDGET_TOKENS, TOK_S_PACED), all function bodies (trailing_k_mean, tokens_to_match_ref, effective_days, load_loss_log, compute_variant, run()'s control flow, main()'s dispatch) are byte-identical to stage; diffed line-by-line against the stage copy before commit."
+    },
+    {
+      "path": "scripts/gen_problems.py",
+      "stage_sha256": "24b1a3d5362ca940e014eca62a6f592bd9ef85ffed7a49ebf16484dc1b0fc46e",
+      "landed_sha256": "018e611359e6fbcafbbcd3b27cdcd2e1a8ab9a63c944be81c2b1dbdf23269bb3",
+      "provenance": "modified (functional redaction)",
+      "edits": [
+        "Line-26-area inline comment illustrating the computed REPO value: absolute drive-letter path replaced with 'repo root'.",
+        "BOARD_DIRS list: dropped the two absolute-path fallback candidates (both wrapped already-redacted segments, both non-portable off the export machine and functionally dead -- os.path.isdir() was always False for them on any other machine). Kept EMBER_BOARD_DIR env var as the sole source, which was already first-priority in the original list.",
+        "Added a provenance note in the module docstring pointing at this receipt.",
+        "No repo-relative default applies -- the verdict-layer JSON tree is intentionally outside this repo (existing comment already said so); main()'s existing sys.exit(\"gen_problems: no ember-totality-run-*.json found in %s\" % BOARD_DIRS) already supplies the clear-refusal-if-unset behavior team-lead's ruling asked for, unchanged."
+      ],
+      "verified_unchanged": "All parsing/rendering logic (norm, sha8, find_latest, fold, main()'s board/audit/meta merge and PROBLEMS.md generation) byte-identical to stage; diffed line-by-line against the stage copy before commit."
+    }
+  ],
+  "functional_verification": {
+    "shatter_calc.py": "Ran `python scripts/shatter_calc.py` with no args (default DEFAULT_LOSS_DIR, which does not exist in this worktree): all 3 variants SKIP cleanly with the expected not-found message, valid JSON output emitted with SHATTER=false, ref_loss=null, frozen_spec citation renders as the new descriptive string. No crash. Same graceful-degradation behavior as the staged original.",
+    "gen_problems.py": "Ran `python scripts/gen_problems.py` with no EMBER_BOARD_DIR set: refused cleanly via the existing sys.exit message ('no ember-totality-run-*.json found in ['']'), no traceback. Same refusal behavior as the staged original (whose absolute fallbacks were dead weight, not a working fallback, on any machine but the export box)."
+  },
+  "leak_scan": "tools/repo-guard.sh REPO_GUARD_SCOPE=staged: PASS on both files (paths/path-frags/names all clean). Pre-scan grep for [A-Za-z]:[\\\\/] on both files: zero hits.",
+  "rails": "STOP at PR -- no merge, no push to master, no --no-verify."
+}
