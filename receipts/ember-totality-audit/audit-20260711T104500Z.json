@@ -1,0 +1,41 @@
+{
+  "receipt_type": "board-integrity-audit",
+  "ts": "20260711T104500Z",
+  "falsifier_status": "falsifier leg ABSENT (actor unresponsive since 07:37Z); coordinator gate only",
+  "anchor_receipt": "scripts/ember_totality/receipts-totality/ember-totality-20260711T102112Z.json",
+  "anchor_tally": {"green": 11, "red": 24, "unevaluable": 2, "audit_ok": 3, "pct_green": 29.7},
+  "scope_note": "Read-legs-only tick (dated, disclosed): execution-binding probe RE-RUNS deferred to the post-yield-window quiet slot (~11:15Z) because lever764's 434M-cpu NS5 timing leg and fix702b's 2.2B GPU rerun are live - probe executions would contaminate the physics receipts AND the probes' own timings (both-direction contamination). Prior audit 083809Z found needs_work=[]; this tick audits the delta (renders + merges since).",
+  "workflow_note": "wf_board_integrity_audit.js still rebuild-pending (public issue #89); manual adversarial gate discipline applied per the standing prompt note.",
+  "honest_green": ["C-EFF", "C-GROW (spot-verified 083809Z: measured_by_instrumented_execution, sha256-verified checkpoints, FLOPs independently recomputed)"],
+  "needs_work": [
+    {
+      "slug": "C(-1)",
+      "probe_faithful": true,
+      "receipt_genuine": false,
+      "severity": "high",
+      "gap": "5/387 decisive receipts undeclared, MIXED sub-classes per boardrun45's render read + coordinator spot-read: land210g carries api_spend_usd=0.0 but NOT paid_api_surface_used (declared-class predicate, spend_annex_scan.py lines 31-32, requires BOTH); land210h/j/k landed after the #775 backfill missing api_spend_usd entirely. Trend is WORSENING (2/384 at the prior render -> 5/387). Coordinator merge-gate miss on PRs #773/#777/#780: the field-contract gate leg was executed from memory and incompletely.",
+      "evidence": "land210g-experiment-runners-receipt.json top-level keys verified by direct read 10:33Z: api_spend_usd=0.0 present, paid_api_surface_used ABSENT.",
+      "cheap_pass": "none - the probe is doing its job; the receipts are genuinely under-declared",
+      "fix": "annex coverage (editing landed receipts is banned): re-run scripts/ember_totality/spend_annex_scan.py to regenerate the spend annex covering the 5 rows, land via PR. Dispatch at the 434M-receipt wake (CPU-quiet gap), NOT during timing legs.",
+      "ownership": "genuine-rebuild (annex regeneration lane) + coordinator-gate mechanization (see queued tasks)"
+    },
+    {
+      "slug": "C-PROC",
+      "probe_faithful": true,
+      "receipt_genuine": false,
+      "severity": "high",
+      "gap": "Newest process receipt (041200Z) missing issue_urls, open_prs, covered_commits, delegation, ts (has ts_utc only) - the probe contract (test_c_proc.py) has required these since cutovers 20260702/20260703; coordinator-authored process receipts drifted from the probe schema. There is NO generator script - these are coordinator-authored artifacts.",
+      "evidence": "test_c_proc.py lines 145-252 read 10:36Z (issue_urls/open_prs/covered_commits/delegation predicates); 041200Z receipt keys verified by direct read: none of the four blocks present.",
+      "cheap_pass": "none",
+      "fix": "APPLIED (amended 10:40Z): cure carrier is boardrun45's receipts/process-visibility/process-visibility-20260711T102300Z.json - built from gh data to the full schema and PROBE-EXECUTED GREEN (the lane ran test_c_proc.py against it directly), landed via PR #783 (merged 10:35:23Z). The coordinator-authored duplicate (104000Z, structurally-validated but never probe-executed) was authored in a message race with the lane's own cure and DELETED from the main tree 10:38Z before it could preempt the probe-verified receipt at filename-newest selection. C-PROC expected GREEN at the next render - verify there.",
+      "ownership": "probe-harden not needed (probe is right); receipt-side cure applied via lane",
+      "incident_note": "duplicate-authoring race: coordinator and lane independently authored the same artifact class ~17min apart (lane's mission predated the coordinator's authoring; the scope-change message crossed with the lane's completion). Extraction: for artifacts an IN-FLIGHT lane may already be curing, the coordinator checks the lane's latest state before authoring a parallel cure; filename-newest consumption surfaces make silent duplicates actively dangerous (an unexecuted newer file would have preempted the probe-verified one)."
+    }
+  ],
+  "watch": [
+    {"slug": "C-BASE", "status": "ADJUDICATED 10:39Z", "note": "Contention hypothesis CONFIRMED: the unlanded corrective render ember-totality-20260711T103912Z.json (quieter box, post-microbench window) completed the probe within 600s. C-BASE flipped UNEVALUABLE->RED on SUBSTANCE: clause (d) - no grow-operator dry-run receipt produces a valid larger-shape checkpoint that replays; the growth operator exists as a decision-record doc, not build authorization. Legitimate finding, not a harness defect; genuine-rebuild task queued for the goal loop. 103912Z tally: 12 GREEN / 24 RED / 1 UNEVALUABLE + 3 AOK (32.4%) - C-PROC confirmed GREEN citing the landed 102300Z process receipt."}
+  ],
+  "regressions": [],
+  "per_condition_note": "Full per-condition sweep unchanged from audit-20260711T083809Z (needs_work was empty there); this tick's findings are NEW information surfaced by the 102112Z render (C(-1) cause moved from #766/#771-class missing-field to the land210-family both-fields predicate; C-PROC cause precisely located in receipt-schema drift).",
+  "synthesis": "Board honest: no hollow GREENs found; both high-severity findings are RED conditions whose receipts are genuinely deficient (under-declaration, schema drift) - the probes are correct and stay untouched. Cures: one applied this tick (process receipt authored to contract), one queued for the CPU-quiet gap (spend annex regeneration). C-BASE adjudication deferred to post-window render by design."
+}
