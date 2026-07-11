@@ -105,8 +105,17 @@ def _fp64_reference_ema(seed: float, grad: float, momentum: float, n_steps: int)
 
 
 def _make_param_and_grad(fill_value: float):
+    """First-execution finding (#792 cure round, unrelated to the
+    falsifier's three findings): the installed torch build enforces
+    grad_dtype == tensor dtype by default -- a bf16-dtype `p` cannot accept
+    a float32 `.grad` assignment directly (RuntimeError). `p`'s OWN dtype
+    is not under test here (only opt.state[p]['momentum_buffer']'s dtype
+    is, and _LR=0.0 makes any p.add_() update in Muon.step() a numeric
+    no-op regardless of p's dtype -- see module docstring), so p is created
+    fp32 to match its grad, matching what production actually varies
+    (momentum-buffer storage dtype), never the parameter's own dtype."""
     import torch
-    p = torch.nn.Parameter(torch.zeros(_SHAPE, dtype=torch.bfloat16))
+    p = torch.nn.Parameter(torch.zeros(_SHAPE, dtype=torch.float32))
     p.grad = torch.full(_SHAPE, fill_value, dtype=torch.float32)
     return p
 
@@ -262,7 +271,11 @@ def test_a1_dataflow_retains_grad_term():
 def test_bf16_view_memmap_roundtrip():
     import tempfile
     import torch
-    with tempfile.TemporaryDirectory() as d:
+    # ignore_cleanup_errors=True: see screen792_bf16_momentum.py _selftest's
+    # step-1 comment -- np.memmap keeps its backing file mapped on Windows,
+    # so a TemporaryDirectory holding an open memmap cannot rmtree itself at
+    # __exit__ until the OS releases the handle.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         p = Path(d) / "roundtrip.bf16proxy.i16"
         t = s792.bf16_view_memmap(p, (2, 2))
         assert t.dtype == torch.bfloat16
