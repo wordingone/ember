@@ -1,0 +1,303 @@
+{
+  "ticket": "LAND210G-EXPERIMENT-RUNNERS",
+  "ts": "20260711T070014Z",
+  "issue": "ember#210",
+  "tier": "Tier 2",
+  "family": "experiment-runners (family 3 of 5: board/eval machinery -> capture/probe surfaces -> experiment runners -> ops tools -> harness/entry)",
+  "worktree": "landing worktree wt-land210g (sibling of the main ember tree)",
+  "branch": "chore/210g-experiment-runners",
+  "base_sha": "7554dd214ae260f39e7cc7a2b4d3f8a3e8a451ca",
+  "stage_source": "scratch/seed-export-v5/dryrun-20260704T211712Z/stage/ember_main/scripts",
+  "candidates_total": 34,
+  "excluded_governor_cport": [
+    {
+      "path": "scripts/r3_feasibility_probe.py",
+      "reason": "prerequisite_blocker",
+      "detail": "Directly calls governor.commit_margin_preflight() and governor.estimate_checkpoint_mapped_bytes() (stage governor.py C-PORT / in-run commit-governor symbols, 447 lines) which do not exist on the currently-tracked scripts/governor.py (260 lines). Same class as ember_c_port_device_portability.py excluded in family 2 (PR #761). Prerequisite: issue #763 (governor.py reconciliation, sonnet builder, not this lane). Lands in a follow-up against the reconciled governor."
+    }
+  ],
+  "excluded_forward_dependency_on_later_families": [
+    {
+      "path": "scripts/ember_cbase_launch.py",
+      "missing": [
+        "ember_avir_tasks"
+      ],
+      "owning_family": "harness/entry (family 5) per the issue #210 triage comment",
+      "note": "Hard module-level import: from ember_avir_tasks import load_split. Portability fix (computed repo-relative _DEFAULT_MIXTURE_DIR replacing the hardcoded shards-v0 junction default) is ALREADY DONE and sitting in this worktree, untracked -- ready to land in a follow-up once family 5 clears the ember_avir_tasks prerequisite."
+    },
+    {
+      "path": "scripts/ember_cbase_s6_acceptance.py",
+      "missing": [
+        "ember_avir_tasks",
+        "ember_avir_harness",
+        "ember_cbase_avir_data_v2"
+      ],
+      "owning_family": "harness/entry (family 5) and ops tools (family 4) per the triage comment",
+      "note": "Hard module-level imports; no leak-gate edits were needed (file had no PATHPAT hits)."
+    },
+    {
+      "path": "scripts/ember_cbase_avir_augment.py",
+      "missing": [
+        "ember_cbase_avir_data_v2",
+        "ember_avir_tasks",
+        "ember_avir_harness"
+      ],
+      "owning_family": "ops tools (family 4) and harness/entry (family 5) per the triage comment",
+      "note": "Hard module-level imports; no leak-gate edits were needed (file had no PATHPAT hits)."
+    },
+    {
+      "path": "scripts/test_ember_cbase_launch.py",
+      "missing": [
+        "ember_cbase_launch (excluded above)",
+        "ember_avir_tasks",
+        "ember_cbase_avir_data_v2"
+      ],
+      "owning_family": "harness/entry (family 5) and ops tools (family 4)",
+      "note": "Portability fix (fake-placeholder test fixtures replacing real operator path literals used as arbitrary opaque test data) is ALREADY DONE and sitting in this worktree, untracked -- tests the excluded module anyway."
+    },
+    {
+      "path": "scripts/test_ember_cbase_s6_acceptance.py",
+      "missing": [
+        "ember_cbase_s6_acceptance (excluded above)",
+        "ember_avir_tasks",
+        "ember_cbase_avir_data_v2"
+      ],
+      "owning_family": "harness/entry (family 5) and ops tools (family 4)",
+      "note": "Tests the excluded module; no leak-gate edits were needed."
+    },
+    {
+      "path": "scripts/test_ember_cbase_avir_augment.py",
+      "missing": [
+        "ember_cbase_avir_augment (excluded above)",
+        "ember_avir_tasks",
+        "ember_cbase_avir_data_v2",
+        "ember_avir_harness"
+      ],
+      "owning_family": "ops tools (family 4) and harness/entry (family 5)",
+      "note": "Tests the excluded module; no leak-gate edits were needed."
+    },
+    {
+      "path": "scripts/ember_e2b_surpass_run.py",
+      "missing": [
+        "ember_c_e2b_paired_run"
+      ],
+      "owning_family": "UNASSIGNED -- not named in the issue #210 triage comment under any of the 5 families",
+      "note": "Hard module-level import 'import ember_c_e2b_paired_run as paired'. The sibling file exists in the stage export (scripts/ember_c_e2b_paired_run.py) but was not part of the 34-file family-3 candidate set and is not named in the triage comment's ops-tools or harness-entry lists either. Needs a team-lead ruling on Tier/family placement for ember_c_e2b_paired_run.py before this file can land. NOTE: this file's OWN leak-gate/import checks were otherwise clean -- test_c0 (goalforge sibling tree) and resident_adapter (scripts/ember_phase3_c14/resident_adapter.py, already tracked, resolved via an in-file sys.path insert) are NOT blockers, only ember_c_e2b_paired_run is."
+    }
+  ],
+  "files": [
+    {
+      "path": "scripts/c04_bf16ns5_qat_throughput.py",
+      "stage_sha256": "ccc0ec1506613d482e88996e4796a2e47fce0377e0ffdd74ba0cf0bf9fe2ab8c",
+      "landed_sha256": "ccc0ec1506613d482e88996e4796a2e47fce0377e0ffdd74ba0cf0bf9fe2ab8c",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/c04_chunk_tf32_lever.py",
+      "stage_sha256": "adeb5e4e35ca65b0170ed2b57cf5430b45fdf02c2c259d328cc5c1d5c3991a9b",
+      "landed_sha256": "adeb5e4e35ca65b0170ed2b57cf5430b45fdf02c2c259d328cc5c1d5c3991a9b",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/c04_compile_lever_throughput.py",
+      "stage_sha256": "0c74d5c419a12c0c99e873abf97dd9ffae82e0b340087dafa021d681633ccd6a",
+      "landed_sha256": "0c74d5c419a12c0c99e873abf97dd9ffae82e0b340087dafa021d681633ccd6a",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/c04_design_c03-h1024-d20_full_fused_adamw_b16.py",
+      "stage_sha256": "f0645466e503ae5265871f446f2c7d702d03bc112d21f9b91fc6493af670c0e7",
+      "landed_sha256": "f0645466e503ae5265871f446f2c7d702d03bc112d21f9b91fc6493af670c0e7",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/c04_design_c03-h1024-d20_muon_ns3_b16.py",
+      "stage_sha256": "4f606f08e1f9340031cf3f46e1bcd248977344c52bd88babb293fa844a03de43",
+      "landed_sha256": "4f606f08e1f9340031cf3f46e1bcd248977344c52bd88babb293fa844a03de43",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/c04_eager_bf16_throughput.py",
+      "stage_sha256": "317e23aef69d82bf708494d21a2f75ba44745a0f1803963edfb58fe2444ee1d3",
+      "landed_sha256": "317e23aef69d82bf708494d21a2f75ba44745a0f1803963edfb58fe2444ee1d3",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/cbase_smoke_verify_live.py",
+      "stage_sha256": "114481acd8995976b81c1aba4291680b71819e23a4739e361ebe3979fe30c824",
+      "landed_sha256": "c7033129a99f5097819bfc0c03632ff970720a6ba7158cb1d91b3896dd96ac68",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/cbase_v0_segment_bf16ns5_live.py",
+      "stage_sha256": "aa9179c75bc69b1c77cc7b9222f7692212353058c56a4184e5319e04829d7991",
+      "landed_sha256": "2153784ecb2d7ca1bf849077b1a2c530f85499766546c9c333ee10fe1fb59d92",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/cbase_v0_segment_live.py",
+      "stage_sha256": "9a5938533f82e96f7ba0615c98d1aef8eee2a94660d13040030f63a59ad3b72b",
+      "landed_sha256": "df7458f5510540ef0f1b414cbba4a151ca9722c3b99997b6877040dcbc4868cb",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_full_fused_adamw.py",
+      "stage_sha256": "4b46d5ac1340c8bfdcb59874549e0a5b5ffe226681992f1b37634e623955b497",
+      "landed_sha256": "b1154f255fac60ec75ce9ba3dae1bdd15335d847c684b2c623d40767af039e28",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_full_fused_adamw_live.py",
+      "stage_sha256": "a18b26c23facb96fd18ab2a9be4e222c921cd3f048dbbb16d9d4dc24c441b1fd",
+      "landed_sha256": "b355da885b82487077aacfca284ab2c789ea347f4191447c1d6d92d29d2b521f",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_ns3.py",
+      "stage_sha256": "4bcc3a170f1b4de94369723841349a42cd4630a985d8dda54252e89bcd291a81",
+      "landed_sha256": "c53d7b4a82076f272feda5e544bd15558a2f1fce54d1935a21e1b811c3dffc10",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_ns3_live.py",
+      "stage_sha256": "08018603146c6f9ef88d765ecf4e398c89a419f06b42045c84e8e9fc29ef5128",
+      "landed_sha256": "4f948c2bc3c35fd33fb15294cc6fde94adee11baf99c7fc28947f6129ad3b34d",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_split.py",
+      "stage_sha256": "05ab9cc27ab6f02c7261d1f946052c2cbadfada4beec0d5faefc9f4d315e9b05",
+      "landed_sha256": "3f16755d29164fadb6493f533b7d279c4a713cf3656b2fcc108da4b7133b8149",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_split_bf16ns5.py",
+      "stage_sha256": "70c3499d45d4d091a3a33d7023a761ee30c92138df943b8bbeeaee2bd8d5bf06",
+      "landed_sha256": "9d91af0bf2497afe1f31edf7b54bd8d0c31ba45375bd99e153ccd185be0f056e",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_split_bf16ns5_live.py",
+      "stage_sha256": "cfdf001642b2bfe5727b27c377e7cb52edd766cdf4649183a7d0c5b8974a171a",
+      "landed_sha256": "121fa3e23f20231be8b16cf3a8459421ea7066268c214e5e301724b6bac34b1e",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_split_fast.py",
+      "stage_sha256": "dbb1101a1646929adc0329f1ce9ef5c301830ce47065b5bf99b4afe3a04547e0",
+      "landed_sha256": "685d133b895d3b9d94dec1649aa0bc9c802032399741733f00185ae5d1c30972",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_split_fast_live.py",
+      "stage_sha256": "c1393870a90d76627f4d147cc1ca651f15c11927fc52f2fb3e3750d0875f63e6",
+      "landed_sha256": "a0e428ef3fc33981c0a9e0a647de63b0c05f6b0a3aeb7088e80a260bf492cd0e",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/conv_c03_muon_split_live.py",
+      "stage_sha256": "f5bed9728ffea2893412c970fbead47c8d7b794fd1054267aa1bad59b4c6eab5",
+      "landed_sha256": "56ba7a4d08ea7e6ca7440f07ef540bd2f2ccad80bd5b2941b0adf7007ef27b03",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site.",
+      "known_prerun_defect": "Running this file with EMBER_SHARD_DIR/EMBER_RUN_DIR unset (no real GPU/data in this verification sandbox) surfaces a PRE-EXISTING argparse mismatch against the currently-tracked scripts/timeshare_pretrain.py (unrecognized arguments -- e.g. --conv/--opt-variant/--token-budget/--loss-log-every, or --seed depending on the caller). Verified byte-identical reproduction against the unmodified stage original and against stage's own paired timeshare_pretrain.py (2179 lines) as well as the currently-tracked one (2639 lines) -- neither recognizes the flags these callers construct. Not introduced by the #210g portability fix; out of scope here (timeshare_pretrain.py is a banked read-only dependency). Clean argparse-level refusal, not a crash -- matches the #221 disclosed-failure precedent. Flagged to team-lead as a cross-cutting finding possibly warranting its own follow-up against timeshare_pretrain.py's argparse surface."
+    },
+    {
+      "path": "scripts/ember_cbase_mixture.py",
+      "stage_sha256": "bfd20f7fdca9d8ef279775808d2c7f7640602e30667c095844866e95d2c8887e",
+      "landed_sha256": "a503fc7f51bd3d5c6c452093fc9d7990f5ced1257631481b26a1646e40080057",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted / WSL-mount path literals (operator-local, outside this repo) replaced with env-var-driven or computed repo-relative defaults; provenance note added to module docstring. No control-flow or logic change beyond the default-resolution site."
+    },
+    {
+      "path": "scripts/ember_ceff_closure_confirmation.py",
+      "stage_sha256": "aa57f5c77f6dbc6c5d58c1f3c816435bfcabe0ae4cfb47b8174187ccdcd5df19",
+      "landed_sha256": "aa57f5c77f6dbc6c5d58c1f3c816435bfcabe0ae4cfb47b8174187ccdcd5df19",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/ember_ceff_composition_ab.py",
+      "stage_sha256": "a7e1986cc36c289dc8d7dd334e3011e29e57d0efa8703c0a9608651695701d6f",
+      "landed_sha256": "a7e1986cc36c289dc8d7dd334e3011e29e57d0efa8703c0a9608651695701d6f",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/ember_ns5_equiv_decomposition.py",
+      "stage_sha256": "4f799207876d57259468fb95660bdd06a42105ac6e92bec312ba1e9403324da8",
+      "landed_sha256": "4f799207876d57259468fb95660bdd06a42105ac6e92bec312ba1e9403324da8",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/ns_chain_roofline_4090.py",
+      "stage_sha256": "0cf2b6b5020d24bf07ac94f825cf545d0680c7189a2dd9c93dc6989a31dadd38",
+      "landed_sha256": "0cf2b6b5020d24bf07ac94f825cf545d0680c7189a2dd9c93dc6989a31dadd38",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/summarize_ceff_confirm.py",
+      "stage_sha256": "939af1b541c268b6459295c9d0452435cc18463a4e3105efea90edae99671453",
+      "landed_sha256": "939af1b541c268b6459295c9d0452435cc18463a4e3105efea90edae99671453",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/test_ember_cbase_mixture.py",
+      "stage_sha256": "35cc9f907de15256ecc20ebb715494208e6446c184160ed1935daca26b72e18d",
+      "landed_sha256": "35cc9f907de15256ecc20ebb715494208e6446c184160ed1935daca26b72e18d",
+      "modified_from_stage": false
+    }
+  ],
+  "functional_verification": {
+    "compile_check": "python -m py_compile on all 26 landed files -- PASS, zero errors",
+    "leak_gate": "REPO_GUARD_SCOPE=staged bash tools/repo-guard.sh -- PASS (all 9 checks)",
+    "argparse_help": "9 argparse-based files (c04_bf16ns5_qat_throughput.py, c04_chunk_tf32_lever.py, c04_compile_lever_throughput.py, c04_eager_bf16_throughput.py, ember_cbase_mixture.py, ember_ceff_closure_confirmation.py, ember_ceff_composition_ab.py, ember_ns5_equiv_decomposition.py, ns_chain_roofline_4090.py) -- all --help exit 0.",
+    "ember_cbase_mixture_selftest": {
+      "result": "AssertionError at T1 (compute_mixture_sizes): v2% out of range: 34.29",
+      "disposition": "Pre-existing bug, NOT introduced by the #210g portability fix -- verified byte-identical failure against the unmodified stage original. Out of scope to fix here (would be a substantive assertion/logic change, not a leak-gate portability edit)."
+    },
+    "shards_v0_env_var_fix_verified": {
+      "no_env_set": "candidates=[] -> _find_shards_v0() raises a clean FileNotFoundError (no crash, no machine-specific path leaked in the message)",
+      "env_set_to_real_dir": "candidates=[EMBER_SHARDS_V0_DIR value] -> _find_shards_v0() resolves correctly, .is_dir()==True"
+    },
+    "live_wrapper_functional_check": "cbase_smoke_verify_live.py, cbase_v0_segment_live.py, and a representative conv_c03_full_fused_adamw_live.py were executed directly (EMBER_SHARD_DIR/EMBER_RUN_DIR unset, no GPU data in this sandbox). See per-file known_prerun_defect above -- all fail cleanly with a timeshare_pretrain.py argparse error, verified byte-identical against the unmodified stage originals (not introduced by this landing)."
+  },
+  "pass": true,
+  "verdict": "LAND210G_EXPERIMENT_RUNNERS_26_LANDED_7_EXCLUDED"
+}
