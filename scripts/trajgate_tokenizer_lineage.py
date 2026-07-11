@@ -248,7 +248,7 @@ def _generate_lineage_receipt(step: int, block_label: str, rel_path: str,
             "step": step,
             "total_steps_in_segment": total_steps,
         },
-        "predecessor_edge": predecessor_edge,
+        "parent_evidence": predecessor_edge,
         "corpus_binding": {
             "shards_v0_receipt": "token-shards-v0-20260611T170047Z.json",
         },
@@ -260,16 +260,143 @@ def _generate_lineage_receipt(step: int, block_label: str, rel_path: str,
     return receipt
 
 
+def _selftest_lineage_chain() -> None:
+    """Test chain verifier: intact chain passes, forged edge breaches, missing parent breaches."""
+    # Fixture (a): intact chain passes
+    receipt_0 = {
+        "step": 100,
+        "manifest_sha256": "a" * 64,
+        "model_pt_sha256": "b" * 64,
+        "parent_evidence": None,
+    }
+    receipt_1 = {
+        "step": 200,
+        "manifest_sha256": "c" * 64,
+        "model_pt_sha256": "d" * 64,
+        "parent_evidence": {
+            "prev_step": 100,
+            "prev_manifest_sha256": "a" * 64,
+            "prev_model_pt_sha256": "b" * 64,
+        },
+    }
+    receipt_2 = {
+        "step": 300,
+        "manifest_sha256": "e" * 64,
+        "model_pt_sha256": "f" * 64,
+        "parent_evidence": {
+            "prev_step": 200,
+            "prev_manifest_sha256": "c" * 64,
+            "prev_model_pt_sha256": "d" * 64,
+        },
+    }
+    try:
+        _verify_lineage_chain([receipt_0, receipt_1, receipt_2])
+    except LineageError:
+        raise AssertionError("intact chain fixture should pass but breached")
+
+    # Fixture (b): forged parent edge (declared parent sha != actual parent bytes) breaches
+    forged_receipt = {
+        "step": 200,
+        "manifest_sha256": "c" * 64,
+        "model_pt_sha256": "d" * 64,
+        "parent_evidence": {
+            "prev_step": 100,
+            "prev_manifest_sha256": "f" * 64,  # WRONG: should be "a" * 64
+            "prev_model_pt_sha256": "b" * 64,
+        },
+    }
+    try:
+        _verify_lineage_chain([receipt_0, forged_receipt])
+        raise AssertionError("forged parent edge fixture should breach but passed")
+    except LineageError as e:
+        if "does not match previous receipt" not in str(e).lower():
+            raise AssertionError(f"forged edge expected mismatch error: {e}")
+
+    # Fixture (c): missing parent row breaches
+    orphan_receipt = {
+        "step": 500,
+        "manifest_sha256": "g" * 64,
+        "model_pt_sha256": "h" * 64,
+        "parent_evidence": {
+            "prev_step": 400,  # parent step doesn't exist
+            "prev_manifest_sha256": "i" * 64,
+            "prev_model_pt_sha256": "j" * 64,
+        },
+    }
+    try:
+        _verify_lineage_chain([receipt_0, orphan_receipt])
+        raise AssertionError("missing parent row fixture should breach but passed")
+    except LineageError as e:
+        if "does not match previous receipt" not in str(e).lower():
+            raise AssertionError(f"orphan receipt expected mismatch error: {e}")
+
+    print("TRAJGATE_LINEAGE_CHAIN_SELFTEST_PASS", flush=True)
+
+
+def _verify_lineage_chain(receipts: list[dict]) -> None:
+    """Verify chain integrity: each non-root receipt's parent_evidence must resolve
+    against previous receipt's recorded identity (bytes-level match, conjunctive
+    non-null 64-hex bar). Fail-closed on any dangling/mismatched edge."""
+    if not receipts:
+        return
+
+    for i, receipt in enumerate(receipts):
+        if i == 0:
+            # Root checkpoint must have no parent_evidence
+            if receipt.get("parent_evidence"):
+                raise LineageError(
+                    f"step {receipt['step']}: root checkpoint has parent_evidence (must be null)")
+            continue
+
+        # Non-root: verify parent_evidence against previous receipt
+        parent_evidence = receipt.get("parent_evidence")
+        if not parent_evidence:
+            raise LineageError(
+                f"step {receipt['step']}: non-root checkpoint missing parent_evidence")
+
+        prev_receipt = receipts[i - 1]
+
+        # Verify all three identity fields match (conjunctive AND)
+        prev_step = prev_receipt.get("step")
+        prev_manifest_sha = prev_receipt.get("manifest_sha256")
+        prev_model_pt_sha = prev_receipt.get("model_pt_sha256")
+
+        if not all([prev_step, prev_manifest_sha, prev_model_pt_sha]):
+            raise LineageError(
+                f"step {receipt['step']}: parent (step {prev_step}) has null identity field")
+
+        # Verify 64-hex format
+        for field_name, field_value in [("manifest_sha256", prev_manifest_sha), ("model_pt_sha256", prev_model_pt_sha)]:
+            if len(field_value) != 64 or not all(c in "0123456789abcdef" for c in field_value):
+                raise LineageError(
+                    f"step {receipt['step']}: parent {field_name} {field_value!r} is not valid 64-hex")
+
+        # Conjunctive match: all three fields must match
+        if (parent_evidence.get("prev_step") != prev_step or
+            parent_evidence.get("prev_manifest_sha256") != prev_manifest_sha or
+            parent_evidence.get("prev_model_pt_sha256") != prev_model_pt_sha):
+            raise LineageError(
+                f"step {receipt['step']}: parent_evidence does not match previous receipt's identity "
+                f"(expected step={prev_step}, manifest={prev_manifest_sha}, model={prev_model_pt_sha}; "
+                f"got {parent_evidence})")
+
+
 def main():
     """Generate and emit lineage receipts for all candidate checkpoints."""
     import argparse
     parser = argparse.ArgumentParser(
         description="Generate tokenizer-lineage sidecars for checkpoint candidates (10-item binding)")
+    parser.add_argument("--selftest", action="store_true",
+                       help="run selftest fixtures for chain verifier (no generation)")
     parser.add_argument("--custody-tree", type=Path, default=None,
                        help="custody run tree root (READ-ONLY, required)")
     parser.add_argument("--output-dir", type=Path, required=False,
                        help="output directory for lineage receipts (default: receipts/trajgate-lineage/)")
     args = parser.parse_args()
+
+    if args.selftest:
+        _selftest_lineage_chain()
+        return 0
 
     if not args.custody_tree:
         print("ERROR: --custody-tree is required", file=sys.stderr)
@@ -321,6 +448,9 @@ def main():
         if len(all_embedding_rows) != 1:
             raise LineageError(f"embedding_rows mismatch across checkpoints: {all_embedding_rows}")
 
+        # Verify lineage chain integrity (N6: parent_evidence edges + chain verifier)
+        _verify_lineage_chain(receipts)
+
         # Emit as append-only JSONL
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         output_path = output_dir / f"trajgate-tokenizer-lineage-{timestamp}.jsonl"
@@ -336,6 +466,7 @@ def main():
         print(f"Sidecar SHA256: {sidecar_sha}", file=sys.stderr)
         print(f"Output: {output_path}")
         print(f"SidecarSHA256: {sidecar_sha}")
+        return 0
 
     except LineageError as e:
         print(f"LINEAGE ERROR: {e}", file=sys.stderr)
