@@ -911,7 +911,17 @@ def run_full_evaluator(*, checkpoint_dir: str, tokenizer_path: str,
 
         per_task[task_name] = entry
 
+    # Status label: fail-closed on the receipt's own top-level claim, not
+    # just on the individual refusal messages inside `blocked`. A REQUESTED
+    # task ending up in `blocked` means the run did NOT deliver everything
+    # asked of it -- the top status and exit code must say so, never PASS/0
+    # (the exact fail-open label class an external falsifier caught: this
+    # function's caller used to print a PASS marker and exit 0 regardless
+    # of a nonempty `blocked` dict).
+    status = "PASS" if not blocked else "PARTIAL_BLOCKED"
+
     return {
+        "status": status,
         "tasks_requested": list(tasks),
         "limit": limit,
         "per_task": per_task,
@@ -1536,9 +1546,18 @@ def main() -> int:
         for task_name, entry in result["blocked"].items():
             print(f"LEGB_SCORER_EVALUATOR_RUN_TASK_BLOCKED task={task_name} "
                   f"reason={entry['reason']}")
-        print(f"LEGB_SCORER_EVALUATOR_RUN_PASS "
+        # Fail-closed label: a requested-but-blocked task means this run did
+        # NOT deliver everything asked of it -- PASS/exit-0 is reserved for
+        # zero blocked tasks. PARTIAL_BLOCKED + nonzero exit surfaces that
+        # honestly (external falsifier finding -- the receipt's own
+        # `status` field already carries this; this is the CLI-level echo).
+        if result["status"] == "PASS":
+            print(f"LEGB_SCORER_EVALUATOR_RUN_PASS "
+                  f"n_done={len(result['per_task'])} n_blocked=0")
+            return 0
+        print(f"LEGB_SCORER_EVALUATOR_RUN_PARTIAL_BLOCKED "
               f"n_done={len(result['per_task'])} n_blocked={len(result['blocked'])}")
-        return 0
+        return 1
 
     ap.print_help()
     return 1
