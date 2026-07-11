@@ -1,0 +1,72 @@
+{
+  "ticket": "LAND210I-HARNESS-ENTRY",
+  "ts": "20260711T074053Z",
+  "issue": "ember#210",
+  "tier": "Tier 2",
+  "family": "harness/entry (originally family 5 in the issue #210 triage comment; RESEQUENCED ahead of ops tools per team-lead ruling 2026-07-11 -- import-closure evidence showed this family is a dependency-clean ROOT that families 3 and 4 both import from, so the triage comment's stated order had the last two links backwards)",
+  "worktree": "landing worktree wt-land210i (sibling of the main ember tree)",
+  "branch": "chore/210i-harness-entry",
+  "base_sha": "574b4ac2e4ee2014d7c4e57bd151141d2b10bb29",
+  "stage_source": "scratch/seed-export-v5/dryrun-20260704T211712Z/stage/ember_main/{scripts,data/ember_avir_tasks}",
+  "candidates_total": 4,
+  "companion_data_included": {
+    "reason": "ember_avir_tasks.py's load_split()/self-test hard-depend on data/ember_avir_tasks/{train,heldout}.jsonl, which are NOT tracked on master and were not named in the original 130-.py-file scope (data, not source). Included here as companion data: small (24+20 structured synthetic task definitions, ~41KB total, zero corpus/weights), scoped exactly to this module, zero PATHPAT hits, and required for functional completeness -- without them ember_avir_tasks.py cannot self-test at all.",
+    "files": [
+      "data/ember_avir_tasks/train.jsonl",
+      "data/ember_avir_tasks/heldout.jsonl"
+    ]
+  },
+  "excluded": [],
+  "files": [
+    {
+      "path": "scripts/ember_avir_cli_launch_entry.py",
+      "stage_sha256": "4f2875485b043d3d80f623752cd8d45c7cae14a9a0b43b4f590bf0e3049373a6",
+      "landed_sha256": "4f2875485b043d3d80f623752cd8d45c7cae14a9a0b43b4f590bf0e3049373a6",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/ember_avir_harness.py",
+      "stage_sha256": "60c31d12bd12754164c1a10e53705910754bbcd35adeb93f04054ce3add1bbd1",
+      "landed_sha256": "60c31d12bd12754164c1a10e53705910754bbcd35adeb93f04054ce3add1bbd1",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/ember_avir_observe.py",
+      "stage_sha256": "e4585267d3f9a88fdb0acb6be7df51dbd99228c3853d0df3211b50da7fc12981",
+      "landed_sha256": "10c63a41e9a4f5469cdf37dbf9a96f9e4434bfb0489a7db36c34dfb90de1ad7f",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted literals removed: EMBER_RUN_DIR (module output dir for observation receipts, pointed at an operator-private tree outside this repo entirely, no repo-relative equivalent) switched to an EMBER_OBSERVE_RUN_DIR env var with a repo-relative scratch/ fallback -- distinct name from the training scripts' EMBER_RUN_DIR env var (different concept: checkpoint output, not observation-receipt output). DEFAULT_SANDBOX_CWD (a fixed structural sibling of the repo root, same class as the shards-v0/models junctions in families 3-4) switched to a computed repo-relative default. Two docstring path citations generalized to descriptive text. Provenance note added to module docstring."
+    },
+    {
+      "path": "scripts/ember_avir_tasks.py",
+      "stage_sha256": "d880467d72f7d4611700f9c27640b4f6605d630cb48a7f8dc7c2f89c48ce7459",
+      "landed_sha256": "d880467d72f7d4611700f9c27640b4f6605d630cb48a7f8dc7c2f89c48ce7459",
+      "modified_from_stage": false
+    },
+    {
+      "path": "data/ember_avir_tasks/train.jsonl",
+      "stage_sha256": "3267ee4176a0acfc63690e16442728d1cb61564743b62a3440a3f8ea9b6eb9f2",
+      "landed_sha256": "3267ee4176a0acfc63690e16442728d1cb61564743b62a3440a3f8ea9b6eb9f2",
+      "modified_from_stage": false
+    },
+    {
+      "path": "data/ember_avir_tasks/heldout.jsonl",
+      "stage_sha256": "7903049ca5b5d343a7c3096a0733e8053b3395b86e736108d53587b63f5b5221",
+      "landed_sha256": "22f650f9a9ee94f82304be25a9ece404335bcfb535a1660052d3b9dac536cce3",
+      "modified_from_stage": true,
+      "edit_class": "crlf_normalization_only",
+      "edit_note": ".gitattributes (* text=auto eol=lf) normalized CRLF->LF on commit; zero content change. Same class as ember_c14_owned_core.py in family 2 (PR #761)."
+    }
+  ],
+  "functional_verification": {
+    "compile_check": "python -m py_compile on all 4 scripts -- PASS, zero errors",
+    "leak_gate": "REPO_GUARD_SCOPE=staged bash tools/repo-guard.sh -- PASS (all 9 checks)",
+    "ember_avir_cli_launch_entry_help": "python ember_avir_cli_launch_entry.py --help -- exit 0",
+    "ember_avir_observe_help": "python ember_avir_observe.py --help -- exit 0; --sandbox default line now renders the computed repo-relative sibling path on this machine (portable elsewhere), confirming the fix is functionally identical here",
+    "ember_avir_harness_selftest": "python ember_avir_harness.py --selftest -- 38/38 PASS, byte-identical to stage (no edits needed)",
+    "ember_avir_tasks_selftest": "python ember_avir_tasks.py --test -- ALL PASS (load_split train=24/heldout=20 tasks, anti-echo + positive selftest all 44 tasks), using the companion data files landed alongside it"
+  },
+  "pass": true,
+  "verdict": "LAND210I_HARNESS_ENTRY_4_SCRIPTS_2_DATA_LANDED_0_EXCLUDED"
+}
