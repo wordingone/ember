@@ -165,6 +165,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import math
 import os
 import sys
@@ -735,12 +736,77 @@ def load_verified_tokenizer(tokenizer_path: str, expected_sha256: str) -> tuple:
                 "decoder_wiring": decoder_wiring}
 
 
+# ---------------------------------------------------------------------------
+# Device authorization + serialization -- "no CUDA without my token" (team-
+# lead directive on #757, same discipline as timeshare_handoff.py's launch
+# interlock (#123/eng-33) and #764's 'L3 runs behind the standing server-
+# yield lease' convention). CPU never needs authorization or a lease. A
+# cuda* request without EMBER_GATE_AUTHORIZED=1 REFUSES rather than
+# silently falling back to CPU -- a silent fallback would make the
+# receipt's realized-device field lie about what was actually delivered.
+# ---------------------------------------------------------------------------
+
+GPU_LEASE_ENV_VAR = "EMBER_GATE_AUTHORIZED"
+
+
+def _check_cuda_authorized(requested_device: str) -> None:
+    if not requested_device.startswith("cuda"):
+        return
+    if os.environ.get(GPU_LEASE_ENV_VAR, "") != "1":
+        raise LegBScorerRefusal(
+            f"LEGB_SCORER_CUDA_NOT_AUTHORIZED: requested device="
+            f"{requested_device!r} but {GPU_LEASE_ENV_VAR}=1 is not set in "
+            "this process's environment -- same token discipline as "
+            "timeshare_handoff.py's launch interlock (#123/eng-33) and "
+            "#764's server-yield lease. No CUDA init happens without it.")
+    if not torch.cuda.is_available():
+        raise LegBScorerRefusal(
+            f"LEGB_SCORER_CUDA_UNAVAILABLE: requested device="
+            f"{requested_device!r} but torch.cuda.is_available() is False "
+            "on this host")
+
+
+@contextlib.contextmanager
+def device_lease(requested_device: str):
+    """No-op for CPU. For an AUTHORIZED cuda* request, serializes via
+    gpu_lock_guard.acquire() (#368, reused verbatim -- never reimplemented)
+    so this process cannot collide with the WSL2 train daemon or another
+    Windows-side CUDA user. KNOWN LIMITATION, disclosed rather than routed
+    around: as committed, gpu_lock_guard.LOCK_PATH is a literal
+    '<local-path>' placeholder (verified via `git cat-file -p` against the
+    raw object, not a display artifact) -- acquire() will fail loudly if
+    that has not been pointed at a real shared path by the time this runs;
+    that failure is surfaced here as a named refusal, never a bare
+    traceback and never a silent skip of the lock."""
+    _check_cuda_authorized(requested_device)
+    if not requested_device.startswith("cuda"):
+        yield
+        return
+    try:
+        import gpu_lock_guard
+    except ImportError as e:
+        raise LegBScorerRefusal(
+            f"LEGB_SCORER_GPU_LOCK_GUARD_IMPORT_FAILED: {e}") from e
+    try:
+        with gpu_lock_guard.acquire(script=os.path.basename(__file__)):
+            yield
+    except SystemExit as e:
+        raise LegBScorerRefusal(
+            f"LEGB_SCORER_GPU_LOCK_GUARD_REFUSED: {e}") from e
+
+
 def build_real_scorer(*, checkpoint_dir: str, tokenizer_path: str,
                        device: str = "cpu") -> tuple:
     """Wires the real STEP50 checkpoint + real tokenizer into a LegBLM.
-    Never fires GPU (device is always CPU-safe unless the caller explicitly
-    overrides -- GPU dispatch is a separate coordinator-gated leg per #757's
-    own framing, never invoked by this module)."""
+    `device` is realized here (moved onto by build_real_model's own
+    .to(device) call) -- the receipt binds BOTH the requested device string
+    and the REALIZED device read back off the actual loaded model's
+    parameters, never trusting the request alone. Callers driving a cuda*
+    device are responsible for wrapping their own usage window in
+    device_lease(device) BEFORE calling this (authorization + serialization
+    happen at that outer scope, not inside this constructor, since the
+    lease must stay held for the full lifetime of GPU use, not just
+    construction)."""
     ckpt = load_verified_checkpoint(
         checkpoint_dir, STEP50_EXPECTED_SHA256, STEP50_MANIFEST_EXPECTED_SHA256)
     tk, tk_info = load_verified_tokenizer(tokenizer_path, TOKENIZER_EXPECTED_SHA256)
@@ -750,6 +816,7 @@ def build_real_scorer(*, checkpoint_dir: str, tokenizer_path: str,
         ckpt["model_state"], model)
     model.load_state_dict(ckpt["model_state"], strict=True)
     model.eval()
+    realized_device = str(next(model.parameters()).device)
 
     scorer = LegBLM(
         model, tk, max_position_embeddings=REAL_ARCH_PINNED["seq"], device=device)
@@ -764,6 +831,8 @@ def build_real_scorer(*, checkpoint_dir: str, tokenizer_path: str,
         "tokenizer": {**tk_info, "path": _redact_external_path(tk_info["path"])},
         "real_arch": REAL_ARCH_PINNED, "real_arch_source": REAL_ARCH_SOURCE,
         "sha_convention": SHA_CONVENTION,
+        "requested_device": device,
+        "realized_device": realized_device,
     }
     return scorer, binding
 
@@ -772,25 +841,27 @@ def build_real_scorer(*, checkpoint_dir: str, tokenizer_path: str,
 # --live-cpu-doc: one real arc_challenge doc, scored end-to-end on CPU.
 # ---------------------------------------------------------------------------
 
-def score_one_arc_challenge_doc_cpu(*, checkpoint_dir: str, tokenizer_path: str) -> dict:
+def score_one_arc_challenge_doc_cpu(*, checkpoint_dir: str, tokenizer_path: str,
+                                     device: str = "cpu") -> dict:
     import lm_eval.tasks as lm_tasks
 
-    scorer, binding = build_real_scorer(
-        checkpoint_dir=checkpoint_dir, tokenizer_path=tokenizer_path, device="cpu")
+    with device_lease(device):
+        scorer, binding = build_real_scorer(
+            checkpoint_dir=checkpoint_dir, tokenizer_path=tokenizer_path, device=device)
 
-    tm = lm_tasks.TaskManager()
-    task_dict = lm_tasks.get_task_dict(["arc_challenge"], tm)
-    task = task_dict["arc_challenge"]
-    docs_iter = task.test_docs() if task.has_test_docs() else task.validation_docs()
-    doc = next(iter(docs_iter))
-    doc_id = 0
-    ctx = task.fewshot_context(doc, num_fewshot=0)
-    instances = task.construct_requests(doc=doc, ctx=ctx, doc_id=doc_id)
+        tm = lm_tasks.TaskManager()
+        task_dict = lm_tasks.get_task_dict(["arc_challenge"], tm)
+        task = task_dict["arc_challenge"]
+        docs_iter = task.test_docs() if task.has_test_docs() else task.validation_docs()
+        doc = next(iter(docs_iter))
+        doc_id = 0
+        ctx = task.fewshot_context(doc, num_fewshot=0)
+        instances = task.construct_requests(doc=doc, ctx=ctx, doc_id=doc_id)
 
-    per_request = scorer.loglikelihood_with_receipts(instances)
-    for r in per_request:
-        assert set(REQUIRED_RECEIPT_FIELDS).issubset(r.keys()), (
-            f"LEGB_LIVE_CPU_DOC_RECEIPT_SHAPE_INCOMPLETE: {sorted(r.keys())}")
+        per_request = scorer.loglikelihood_with_receipts(instances)
+        for r in per_request:
+            assert set(REQUIRED_RECEIPT_FIELDS).issubset(r.keys()), (
+                f"LEGB_LIVE_CPU_DOC_RECEIPT_SHAPE_INCOMPLETE: {sorted(r.keys())}")
 
     return {
         "task": "arc_challenge", "doc_id": doc_id,
@@ -824,7 +895,7 @@ def _extract_filtered_resps_by_key(samples: list) -> dict:
 
 def run_full_evaluator(*, checkpoint_dir: str, tokenizer_path: str,
                         tasks: tuple = DEFAULT_EVALUATOR_TASKS,
-                        limit=None) -> dict:
+                        limit=None, device: str = "cpu") -> dict:
     """Wires LegBLM into the INSTALLED lm_eval.evaluator.simple_evaluate
     (never a hand-rolled scoring loop) across the named tasks, producing ONE
     program-level receipt: task versions, sample counts, per-task
@@ -842,6 +913,12 @@ def run_full_evaluator(*, checkpoint_dir: str, tokenizer_path: str,
     limit=None on this CPU path would still hit the SAME structural
     refusal below on mmlu_pro before any meaningful compute is spent.
 
+    `device` is threaded verbatim to build_real_scorer -- CPU needs no
+    authorization; any cuda* request is checked and serialized by
+    device_lease() for the FULL duration of this function's evaluator
+    loop (not just model construction), since that is the entire window
+    the model's parameters are resident on the device.
+
     A LegBScorerRefusal raised inside LegBLM.generate_until (the
     max_gen_toks=2048 vs max_position_embeddings=1024 structural mismatch)
     is caught HERE at the per-task boundary and recorded as a disclosed
@@ -852,71 +929,174 @@ def run_full_evaluator(*, checkpoint_dir: str, tokenizer_path: str,
     from lm_eval import evaluator as lm_evaluator
     import lm_eval.tasks as lm_tasks
 
-    scorer, binding = build_real_scorer(
-        checkpoint_dir=checkpoint_dir, tokenizer_path=tokenizer_path, device="cpu")
-    tm = lm_tasks.TaskManager()
-
     per_task = {}
     blocked = {}
 
-    for task_name in tasks:
-        t0 = time.time()
-        try:
-            res1 = lm_evaluator.simple_evaluate(
-                model=scorer, tasks=[task_name], limit=limit,
-                task_manager=tm, log_samples=True)
-        except LegBScorerRefusal as e:
-            blocked[task_name] = {
-                "reason": str(e),
-                "refusal_class": "LEGB_SCORER_GENERATE_UNTIL_MAX_GEN_TOKS_EXCEEDS_MODEL_CAPACITY"
-                if "MAX_GEN_TOKS_EXCEEDS_MODEL_CAPACITY" in str(e) else "other",
-            }
-            continue
-        wall1 = time.time() - t0
-        if res1 is None:
-            blocked[task_name] = {"reason": "simple_evaluate returned None (rank!=0?)"}
-            continue
+    with device_lease(device):
+        scorer, binding = build_real_scorer(
+            checkpoint_dir=checkpoint_dir, tokenizer_path=tokenizer_path, device=device)
+        tm = lm_tasks.TaskManager()
 
-        task_config = res1.get("configs", {}).get(task_name, {})
-        output_type = task_config.get("output_type")
-        entry = {
-            "version": res1.get("versions", {}).get(task_name),
-            "n_samples": res1.get("n-samples", {}).get(task_name),
-            "n_shot": res1.get("n-shot", {}).get(task_name),
-            "metrics": res1.get("results", {}).get(task_name, {}),
-            "output_type": output_type,
-            "wall_seconds_run1": wall1,
-            "filter_config": task_config.get("filter_list"),
-        }
+        for task_name in tasks:
+            t0 = time.time()
+            try:
+                res1 = lm_evaluator.simple_evaluate(
+                    model=scorer, tasks=[task_name], limit=limit,
+                    task_manager=tm, log_samples=True)
+            except LegBScorerRefusal as e:
+                blocked[task_name] = {
+                    "reason": str(e),
+                    "refusal_class": "LEGB_SCORER_GENERATE_UNTIL_MAX_GEN_TOKS_EXCEEDS_MODEL_CAPACITY"
+                    if "MAX_GEN_TOKS_EXCEEDS_MODEL_CAPACITY" in str(e) else "other",
+                }
+                continue
+            wall1 = time.time() - t0
+            if res1 is None:
+                blocked[task_name] = {"reason": "simple_evaluate returned None (rank!=0?)"}
+                continue
 
-        if output_type == "generate_until":
-            t1 = time.time()
-            res2 = lm_evaluator.simple_evaluate(
-                model=scorer, tasks=[task_name], limit=limit,
-                task_manager=tm, log_samples=True)
-            wall2 = time.time() - t1
-            samples1 = res1.get("samples", {}).get(task_name, [])
-            samples2 = (res2 or {}).get("samples", {}).get(task_name, [])
-            by_key1 = _extract_filtered_resps_by_key(samples1)
-            by_key2 = _extract_filtered_resps_by_key(samples2)
-            common_keys = sorted(set(by_key1) & set(by_key2), key=str)
-            mismatched = [k for k in common_keys if by_key1[k] != by_key2[k]]
-            entry["determinism_proof"] = {
-                "n_compared": len(common_keys),
-                "n_mismatched": len(mismatched),
-                "identical": (len(common_keys) > 0 and not mismatched
-                              and len(by_key1) == len(by_key2)),
-                "wall_seconds_run2": wall2,
+            task_config = res1.get("configs", {}).get(task_name, {})
+            output_type = task_config.get("output_type")
+            entry = {
+                "version": res1.get("versions", {}).get(task_name),
+                "n_samples": res1.get("n-samples", {}).get(task_name),
+                "n_shot": res1.get("n-shot", {}).get(task_name),
+                "metrics": res1.get("results", {}).get(task_name, {}),
+                "output_type": output_type,
+                "wall_seconds_run1": wall1,
+                "filter_config": task_config.get("filter_list"),
             }
 
-        per_task[task_name] = entry
+            if output_type == "generate_until":
+                t1 = time.time()
+                res2 = lm_evaluator.simple_evaluate(
+                    model=scorer, tasks=[task_name], limit=limit,
+                    task_manager=tm, log_samples=True)
+                wall2 = time.time() - t1
+                samples1 = res1.get("samples", {}).get(task_name, [])
+                samples2 = (res2 or {}).get("samples", {}).get(task_name, [])
+                by_key1 = _extract_filtered_resps_by_key(samples1)
+                by_key2 = _extract_filtered_resps_by_key(samples2)
+                common_keys = sorted(set(by_key1) & set(by_key2), key=str)
+                mismatched = [k for k in common_keys if by_key1[k] != by_key2[k]]
+                entry["determinism_proof"] = {
+                    "n_compared": len(common_keys),
+                    "n_mismatched": len(mismatched),
+                    "identical": (len(common_keys) > 0 and not mismatched
+                                  and len(by_key1) == len(by_key2)),
+                    "wall_seconds_run2": wall2,
+                }
+
+            per_task[task_name] = entry
+
+    # Status label: fail-closed on the receipt's own top-level claim, not
+    # just on the individual refusal messages inside `blocked`. A REQUESTED
+    # task ending up in `blocked` means the run did NOT deliver everything
+    # asked of it -- the top status and exit code must say so, never PASS/0
+    # (the exact fail-open label class an external falsifier caught: this
+    # function's caller used to print a PASS marker and exit 0 regardless
+    # of a nonempty `blocked` dict).
+    status = "PASS" if not blocked else "PARTIAL_BLOCKED"
 
     return {
+        "status": status,
         "tasks_requested": list(tasks),
         "limit": limit,
         "per_task": per_task,
         "blocked": blocked,
         "binding": binding,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bounded CPU/GPU score-parity fixture (team-lead directive on #757, device-
+# wiring addendum): proves a GPU-realized receipt is COMPARABLE to a CPU one
+# by scoring the SAME small, fixed set of real arc_challenge docs on both
+# devices and comparing logprob_sum per request within tolerance -- never a
+# speed claim, purely a "the two devices agree on the math" proof. Mirrors
+# #764's own SKIPPED-WITH-REASON convention: when no cuda* device is
+# authorized (EMBER_GATE_AUTHORIZED=1) or CUDA is unavailable on this host,
+# this fixture reports status=SKIPPED with the concrete reason rather than
+# failing or fabricating a comparison -- exactly the state of this session
+# (no lease token granted).
+# ---------------------------------------------------------------------------
+
+def run_cpu_gpu_score_parity_fixture(*, checkpoint_dir: str, tokenizer_path: str,
+                                      n_docs: int = 3, gpu_device: str = "cuda",
+                                      tolerance: float = 1e-4) -> dict:
+    """Scores the first `n_docs` arc_challenge docs (0-shot, identical
+    doc_ids/instances on both sides) through two independent build_real_
+    scorer instances -- one CPU, one `gpu_device` -- and compares each
+    request's logprob_sum within `tolerance`. Both scorers are built from
+    the SAME checkpoint/tokenizer custody so any delta is attributable to
+    device numerics, not a different model. SKIPS (never fails) when the
+    GPU leg cannot be authorized/realized -- see module header."""
+    import lm_eval.tasks as lm_tasks
+
+    if os.environ.get(GPU_LEASE_ENV_VAR, "") != "1":
+        return {
+            "status": "SKIPPED",
+            "reason": f"LEGB_PARITY_SKIPPED_NO_LEASE_TOKEN: {GPU_LEASE_ENV_VAR}=1 "
+                      "not set in this process's environment -- same token "
+                      "discipline as timeshare_handoff.py's launch interlock "
+                      "(#123/eng-33); no CUDA init was attempted.",
+            "n_docs_requested": n_docs, "gpu_device": gpu_device, "tolerance": tolerance,
+        }
+    if not torch.cuda.is_available():
+        return {
+            "status": "SKIPPED",
+            "reason": f"LEGB_PARITY_SKIPPED_CUDA_UNAVAILABLE: torch.cuda.is_available() "
+                      "is False on this host despite an authorized lease token.",
+            "n_docs_requested": n_docs, "gpu_device": gpu_device, "tolerance": tolerance,
+        }
+
+    tm = lm_tasks.TaskManager()
+    task_dict = lm_tasks.get_task_dict(["arc_challenge"], tm)
+    task = task_dict["arc_challenge"]
+    docs_iter = task.test_docs() if task.has_test_docs() else task.validation_docs()
+    docs = []
+    for doc in docs_iter:
+        docs.append(doc)
+        if len(docs) >= n_docs:
+            break
+
+    def _score_all(device: str) -> tuple:
+        with device_lease(device):
+            scorer, binding = build_real_scorer(
+                checkpoint_dir=checkpoint_dir, tokenizer_path=tokenizer_path, device=device)
+            per_doc = []
+            for doc_id, doc in enumerate(docs):
+                ctx = task.fewshot_context(doc, num_fewshot=0)
+                instances = task.construct_requests(doc=doc, ctx=ctx, doc_id=doc_id)
+                per_doc.append(scorer.loglikelihood_with_receipts(instances))
+            return per_doc, binding
+
+    cpu_per_doc, cpu_binding = _score_all("cpu")
+    gpu_per_doc, gpu_binding = _score_all(gpu_device)
+
+    mismatches = []
+    n_compared = 0
+    for doc_id, (cpu_reqs, gpu_reqs) in enumerate(zip(cpu_per_doc, gpu_per_doc)):
+        if len(cpu_reqs) != len(gpu_reqs):
+            mismatches.append({
+                "doc_id": doc_id, "reason": "request_count_mismatch",
+                "n_cpu": len(cpu_reqs), "n_gpu": len(gpu_reqs)})
+            continue
+        for req_idx, (c, g) in enumerate(zip(cpu_reqs, gpu_reqs)):
+            n_compared += 1
+            delta = abs(c["logprob_sum"] - g["logprob_sum"])
+            if delta > tolerance or c["is_greedy"] != g["is_greedy"]:
+                mismatches.append({
+                    "doc_id": doc_id, "request_idx": req_idx,
+                    "cpu_logprob_sum": c["logprob_sum"], "gpu_logprob_sum": g["logprob_sum"],
+                    "delta": delta, "cpu_is_greedy": c["is_greedy"], "gpu_is_greedy": g["is_greedy"]})
+
+    return {
+        "status": "PASS" if not mismatches and n_compared > 0 else "FAIL",
+        "n_docs_requested": n_docs, "n_docs_scored": len(docs),
+        "n_requests_compared": n_compared, "tolerance": tolerance,
+        "mismatches": mismatches,
+        "cpu_binding": cpu_binding, "gpu_binding": gpu_binding,
     }
 
 
@@ -1470,6 +1650,25 @@ def main() -> int:
     ap.add_argument("--tokenizer-path", default=None,
                      help="2c557e7 tokenizer.json path (external custody dir, never committed)")
     ap.add_argument("--out", default=None, help="receipt output path")
+    ap.add_argument("--device", default="cpu",
+                     help="compute device for --live-cpu-doc / --evaluator-run "
+                          "('cpu' or 'cuda*'). Any cuda* value requires "
+                          f"{GPU_LEASE_ENV_VAR}=1 in the environment (device_lease's "
+                          "authorization token) or the run refuses before any CUDA "
+                          "init -- CPU never needs authorization. The receipt's "
+                          "'device' field always records the REALIZED device the "
+                          "model parameters actually landed on, never this request.")
+    ap.add_argument("--gpu-parity-fixture", action="store_true",
+                     help="score N identical real arc_challenge docs on CPU and "
+                          "gpu-device, compare logprob_sum within --tolerance. "
+                          f"SKIPS (never fails) if {GPU_LEASE_ENV_VAR}=1 is not set "
+                          "or CUDA is unavailable.")
+    ap.add_argument("--n-docs", type=int, default=3,
+                     help="doc count for --gpu-parity-fixture (default: 3)")
+    ap.add_argument("--gpu-device", default="cuda",
+                     help="GPU device string for --gpu-parity-fixture (default: cuda)")
+    ap.add_argument("--tolerance", type=float, default=1e-4,
+                     help="logprob_sum abs-delta tolerance for --gpu-parity-fixture")
     args = ap.parse_args()
 
     if args.selftest:
@@ -1479,14 +1678,16 @@ def main() -> int:
         if not args.checkpoint_dir or not args.tokenizer_path:
             ap.error("--live-cpu-doc requires --checkpoint-dir and --tokenizer-path")
         result = score_one_arc_challenge_doc_cpu(
-            checkpoint_dir=args.checkpoint_dir, tokenizer_path=args.tokenizer_path)
+            checkpoint_dir=args.checkpoint_dir, tokenizer_path=args.tokenizer_path,
+            device=args.device)
         receipt = {
             "ticket": "LEGB-757-INPROCESS-SCORER-LIVE-CPU-DOC",
             "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
             "issue_refs": [ISSUE_REF, RELATED_REF],
             "sha_convention": SHA_CONVENTION,
             "mode": "cpu_smoke_one_doc",
-            "device": "cpu",
+            "device": result["binding"]["realized_device"],
+            "requested_device": args.device,
             "api_spend_usd": 0,
             "paid_api_surface_used": False,
             **result,
@@ -1513,14 +1714,15 @@ def main() -> int:
             limit = float(limit) if "." in limit else int(limit)
         result = run_full_evaluator(
             checkpoint_dir=args.checkpoint_dir, tokenizer_path=args.tokenizer_path,
-            tasks=tuple(args.tasks), limit=limit)
+            tasks=tuple(args.tasks), limit=limit, device=args.device)
         receipt = {
             "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN",
             "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
             "issue_refs": [ISSUE_REF, RELATED_REF],
             "sha_convention": SHA_CONVENTION,
             "mode": "evaluator_run_bounded" if limit is not None else "evaluator_run_unbounded",
-            "device": "cpu",
+            "device": result["binding"]["realized_device"],
+            "requested_device": args.device,
             "api_spend_usd": 0,
             "paid_api_surface_used": False,
             **result,
@@ -1536,9 +1738,48 @@ def main() -> int:
         for task_name, entry in result["blocked"].items():
             print(f"LEGB_SCORER_EVALUATOR_RUN_TASK_BLOCKED task={task_name} "
                   f"reason={entry['reason']}")
-        print(f"LEGB_SCORER_EVALUATOR_RUN_PASS "
+        # Fail-closed label: a requested-but-blocked task means this run did
+        # NOT deliver everything asked of it -- PASS/exit-0 is reserved for
+        # zero blocked tasks. PARTIAL_BLOCKED + nonzero exit surfaces that
+        # honestly (external falsifier finding -- the receipt's own
+        # `status` field already carries this; this is the CLI-level echo).
+        if result["status"] == "PASS":
+            print(f"LEGB_SCORER_EVALUATOR_RUN_PASS "
+                  f"n_done={len(result['per_task'])} n_blocked=0")
+            return 0
+        print(f"LEGB_SCORER_EVALUATOR_RUN_PARTIAL_BLOCKED "
               f"n_done={len(result['per_task'])} n_blocked={len(result['blocked'])}")
-        return 0
+        return 1
+
+    if args.gpu_parity_fixture:
+        if not args.checkpoint_dir or not args.tokenizer_path:
+            ap.error("--gpu-parity-fixture requires --checkpoint-dir and --tokenizer-path")
+        result = run_cpu_gpu_score_parity_fixture(
+            checkpoint_dir=args.checkpoint_dir, tokenizer_path=args.tokenizer_path,
+            n_docs=args.n_docs, gpu_device=args.gpu_device, tolerance=args.tolerance)
+        receipt = {
+            "ticket": "LEGB-757-INPROCESS-SCORER-GPU-PARITY-FIXTURE",
+            "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+            "issue_refs": [ISSUE_REF, RELATED_REF],
+            "sha_convention": SHA_CONVENTION,
+            "api_spend_usd": 0,
+            "paid_api_surface_used": False,
+            **result,
+        }
+        if args.out:
+            os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+            checked_write(args.out, receipt)
+            print(f"LEGB_SCORER_GPU_PARITY_FIXTURE_RECEIPT_WRITTEN: {args.out}")
+        if result["status"] == "SKIPPED":
+            print(f"LEGB_SCORER_GPU_PARITY_FIXTURE_SKIPPED: {result['reason']}")
+            return 0
+        if result["status"] == "PASS":
+            print(f"LEGB_SCORER_GPU_PARITY_FIXTURE_PASS "
+                  f"n_requests_compared={result['n_requests_compared']}")
+            return 0
+        print(f"LEGB_SCORER_GPU_PARITY_FIXTURE_FAIL "
+              f"n_mismatches={len(result['mismatches'])}")
+        return 1
 
     ap.print_help()
     return 1
