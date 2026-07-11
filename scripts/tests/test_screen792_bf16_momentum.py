@@ -36,16 +36,47 @@ correct_with_grad(N) -- the grad contribution RETAINED, i.e. A1 should
 show the FULL analytic deviation from pure decay (correct_with_grad(N) -
 pure_decay(N)) that the naive control fails to show.
 
-UNVERIFIED PENDING EXECUTION: this file was authored and py_compile'd but
-never RUN (HARD TIMING RAIL, issue #792 -- no execution before the
-coordinator's window-release GO). The tolerance constants below are
-generous, derived from bf16's known ~2**-8 relative precision compounded
-over _N_SYNTHETIC_STEPS, not from a runtime measurement. If --selftest's
-first real run shows these mis-calibrated, that is a same-day CONSTANT-
-TUNING fix (the underlying mechanism -- compare both implementations
-against two independent analytic references -- is not in question), not a
-redesign; report the actual measured numbers back to the issue thread
-either way.
+CALIBRATED 2026-07-11 (round-2 cure A, external falsifier finding A): the
+original ad-hoc 10%-tolerance design (N=500) was PROVEN unsound --
+N=500 fully decays the buffer to its fp32 steady state, where the
+grad/buffer ratio is fixed at (1-momentum)=0.05, structurally always
+above bf16's ~0.4% ULP, so the naive implementation can NEVER lose the
+grad term entirely at that N (first-principles: the discriminating
+window is the EARLY-DECAY TRANSIENT, not the converged steady state).
+A naive "just pick a smaller N" fix was independently proven unsound
+too: at N=8 the two implementations are BIT-IDENTICAL yet a bare
+%-tolerance check reported PASS (false positive), and no small N was
+auto-licensed without predeclared separation predicates.
+
+Replacement methodology (predeclared BEFORE any calibration run, per
+finding A points 1-5): three predicates checked against the SAME two
+independent fp64 analytic references (_pure_decay, _fp64_reference_ema):
+  p1 SEPARATION: |final_fixed - final_naive| >= 0.25 * full_grad_term
+  p2 FIXED CLOSER TO TRUTH: err(naive, correct) >= 2.0 * err(fixed, correct)
+  p3 NAIVE CLOSER TO NO-GRAD: err(fixed, pure_decay) >= 2.0 * err(naive, pure_decay)
+swept across 3 frozen (seed, grad) configs spanning two ratio regimes
+(1e-4 "typical", 1e-5 "deep sub-ULP stress") at two absolute scales each
+-- satisfying "sweep >1 seed magnitude/grad scale" without claiming
+ratio-universal generalization (see SCOPE below). N was selected by
+scanning N=15..220 at fine (then finer, N=61..79) resolution for the
+smallest N where ALL 3 configs pass ALL 3 predicates simultaneously,
+then choosing the CENTER of the resulting robust 6-wide interior band
+(N=72..77 all pass; N=61..71 and N>=78 flicker/fail) rather than a
+boundary value -- N=75 frozen. Selection rule and full 3-config x
+19-candidate scan are logged in the PR; nothing here was tuned after
+peeking at a single favorable output.
+
+SCOPE (disclosed, not silently narrow): calibration verified only at
+the two frozen ratio regimes above, at power-of-two-friendly scales
+(1.0, 0.5, 0.25, 2.0, 4.0). An extended holdout probe found the design
+does NOT generalize to arbitrary seed values -- a third ratio (3e-4)
+and non-power-of-two seeds (0.73, 0.61) broke the predicates at every
+N in the robust band, most likely because bf16's rounding grid is not
+perfectly scale/value invariant (the analytic references assume an
+UNROUNDED float64 seed, while the real seed is bf16-rounded on
+creation via _seed_bf16_momentum -- exact for power-of-two magnitudes,
+lossy otherwise). This fixture makes NO claim beyond its own frozen
+_SWEEP_CONFIGS; it is not a general-purpose bf16-EMA discriminator.
 
 Pure CPU, no model/GPU/live dispatch.
 
@@ -68,11 +99,19 @@ import screen792_bf16_momentum as s792  # noqa: E402
 # in-place on a bf16 destination tensor.
 _WORKING_MAGNITUDE = 1.0
 _SUB_ULP_GRAD = 1e-4
-_N_SYNTHETIC_STEPS = 500       # long enough for the decay (0.95**500 ~ 1e-11)
-                              # to fully resolve toward the fp32 steady state
-                              # g/(1-mom)=0.002, so the additive-accumulation
-                              # regime is fully exercised, not just the early
-                              # pure-decay phase
+_N_SYNTHETIC_STEPS = 75        # frozen calibration -- band-center of the
+                              # robust N=72..77 interior found by the
+                              # predeclared 3-config x 19-candidate scan;
+                              # see CALIBRATED note in the module docstring
+_SEPARATION_FRAC = 0.25       # predicate 1: separation floor as a fraction
+                              # of the analytic full grad-term deviation
+_CLOSER_MARGIN = 2.0          # predicates 2/3: "closer to X than Y" margin
+_SWEEP_CONFIGS = (            # (label, seed, grad) -- two ratio regimes,
+                              # two absolute scales each; see SCOPE note
+    ("baseline", _WORKING_MAGNITUDE, _SUB_ULP_GRAD),
+    ("half_scale_same_ratio", 0.5, 5e-5),
+    ("deeper_sub_ulp", 1.0, 1e-5),
+)
 _SHAPE = (4, 4)               # 2D -- Muon's split-routing invariant requires ndim==2
 _LR = 0.0                     # zero param-update lr -- isolates the
                               # MOMENTUM-BUFFER persistence question from any
@@ -157,115 +196,63 @@ def _run_n_steps(muon_cls, momentum_buffer, grad_fill: float, n_steps: int,
     return float(final[0, 0])
 
 
-def _relative_error(measured: float, reference: float) -> float:
-    if reference == 0.0:
-        return abs(measured)
-    return abs(measured - reference) / abs(reference)
+def _check_predicates(seed: float, grad: float, n_steps: int,
+                       final_naive: float, final_fixed: float) -> dict:
+    """The three predeclared separation predicates (round-2 cure A, finding
+    A points 1-3), checked against the two independent fp64 analytic
+    references. Ground-truth-source discipline: this function derives its
+    expectation from _pure_decay/_fp64_reference_ema (plain Python floats,
+    zero bf16/torch/memmap), never from either implementation under test."""
+    pd = _pure_decay(seed, _MOM, n_steps)
+    cwg = _fp64_reference_ema(seed, grad, _MOM, n_steps)
+    full_grad_term = cwg - pd
+    err_naive_vs_correct = abs(final_naive - cwg)
+    err_fixed_vs_correct = abs(final_fixed - cwg)
+    err_naive_vs_pure = abs(final_naive - pd)
+    err_fixed_vs_pure = abs(final_fixed - pd)
+    p1_separation = abs(final_fixed - final_naive) >= _SEPARATION_FRAC * abs(full_grad_term)
+    p2_fixed_closer_to_truth = err_naive_vs_correct >= _CLOSER_MARGIN * max(err_fixed_vs_correct, 1e-300)
+    p3_naive_closer_to_no_grad = err_fixed_vs_pure >= _CLOSER_MARGIN * max(err_naive_vs_pure, 1e-300)
+    return dict(
+        pure_decay=pd, correct_with_grad=cwg, full_grad_term=full_grad_term,
+        final_naive=final_naive, final_fixed=final_fixed,
+        p1_separation=p1_separation,
+        p2_fixed_closer_to_truth=p2_fixed_closer_to_truth,
+        p3_naive_closer_to_no_grad=p3_naive_closer_to_no_grad,
+        all_pass=bool(p1_separation and p2_fixed_closer_to_truth and p3_naive_closer_to_no_grad),
+    )
 
 
 def run_negative_fixture(*, verbose: bool = True) -> bool:
-    """The required negative fixture. Returns True iff ALL conditions hold
-    against the two independent analytic references:
-      (a) the naive in-place-bf16 control lands close to pure_decay(N) --
-          the grad contribution LOST to per-op double rounding (FAIL case);
-      (b) the A1-fixed implementation lands close to correct_with_grad(N)
-          -- the grad contribution RETAINED via single fp32-combined
-          rounding (PASS case);
-      (c) A1's deviation from pure_decay(N) is close to the FULL analytic
-          deviation (correct_with_grad(N) - pure_decay(N)) -- i.e. A1
-          genuinely shows the accumulated-grad term, not a partial/
-          attenuated fraction of it.
-    A fixture that cannot produce all three does not discriminate the two
-    implementations and is not evidence of anything -- this function IS the
-    falsifiability check on the fixture itself, run every time via
-    screen792_bf16_momentum.py's --selftest."""
+    """The required negative fixture. Returns True iff ALL three predicates
+    (separation, fixed-closer-to-truth, naive-closer-to-no-grad -- see
+    _check_predicates) hold for EVERY config in _SWEEP_CONFIGS at the
+    frozen _N_SYNTHETIC_STEPS. A fixture that cannot produce this for even
+    one swept config does not discriminate the two implementations and is
+    not evidence of anything -- this function IS the falsifiability check
+    on the fixture itself, run every time via screen792_bf16_momentum.py's
+    --selftest."""
     MuonFixed = s792._muon_bf16_momentum_fixed_class()
     MuonNaive = s792._muon_bf16_naive_inplace_class()
 
-    pure_decay = _pure_decay(_WORKING_MAGNITUDE, _MOM, _N_SYNTHETIC_STEPS)
-    correct_with_grad = _fp64_reference_ema(
-        _WORKING_MAGNITUDE, _SUB_ULP_GRAD, _MOM, _N_SYNTHETIC_STEPS)
-    full_grad_term = correct_with_grad - pure_decay
+    all_pass = True
+    for label, seed, grad in _SWEEP_CONFIGS:
+        buf_fixed = _seed_bf16_momentum(_SHAPE, seed)
+        buf_naive = _seed_bf16_momentum(_SHAPE, seed)
+        final_fixed = _run_n_steps(MuonFixed, buf_fixed, grad, _N_SYNTHETIC_STEPS)
+        final_naive = _run_n_steps(MuonNaive, buf_naive, grad, _N_SYNTHETIC_STEPS)
+        r = _check_predicates(seed, grad, _N_SYNTHETIC_STEPS, final_naive, final_fixed)
+        all_pass = all_pass and r["all_pass"]
+        if verbose:
+            print(f"screen792 negative fixture [{label}] seed={seed} grad={grad} "
+                  f"n_steps={_N_SYNTHETIC_STEPS}: p1_separation={r['p1_separation']} "
+                  f"p2_fixed_closer_to_truth={r['p2_fixed_closer_to_truth']} "
+                  f"p3_naive_closer_to_no_grad={r['p3_naive_closer_to_no_grad']} "
+                  f"all_pass={r['all_pass']} final_naive={r['final_naive']!r} "
+                  f"final_fixed={r['final_fixed']!r} correct_with_grad={r['correct_with_grad']!r} "
+                  f"pure_decay={r['pure_decay']!r}")
 
-    buf_fixed = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
-    buf_naive = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
-
-    final_fixed = _run_n_steps(MuonFixed, buf_fixed, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
-    final_naive = _run_n_steps(MuonNaive, buf_naive, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
-
-    err_naive_vs_pure_decay = _relative_error(final_naive, pure_decay)
-    err_fixed_vs_correct = _relative_error(final_fixed, correct_with_grad)
-    fixed_grad_term = final_fixed - pure_decay
-    grad_term_retained_frac = (
-        (fixed_grad_term / full_grad_term) if full_grad_term != 0 else None)
-
-    # Generous bounds (UNVERIFIED pending execution -- see module docstring):
-    # bf16's per-element relative precision is ~2**-8 (~0.4%); compounded
-    # over _N_SYNTHETIC_STEPS steps of a decaying recurrence, 10% is
-    # deliberately loose to avoid a false FAIL on the correct mechanism.
-    NAIVE_TOL = 0.10          # naive must land within 10% of pure decay
-    A1_TOL = 0.10             # A1 must land within 10% of the true recurrence
-    GRAD_RETAINED_FLOOR = 0.5  # A1 must retain AT LEAST half the analytic
-                               # grad-term deviation from pure decay (a
-                               # partial/attenuated retention still counts
-                               # as evidence of the mechanism; well above
-                               # what the naive control should show)
-
-    naive_lost_grad = err_naive_vs_pure_decay < NAIVE_TOL
-    fixed_tracks_correct = err_fixed_vs_correct < A1_TOL
-    fixed_retained_grad = (grad_term_retained_frac is not None
-                           and grad_term_retained_frac > GRAD_RETAINED_FLOOR)
-
-    if verbose:
-        print(f"screen792 negative fixture: pure_decay={pure_decay!r} "
-              f"correct_with_grad={correct_with_grad!r} full_grad_term={full_grad_term!r}")
-        print(f"  final_naive={final_naive!r} rel_err_vs_pure_decay={err_naive_vs_pure_decay!r} "
-              f"(naive lost the grad term: {naive_lost_grad})")
-        print(f"  final_fixed={final_fixed!r} rel_err_vs_correct={err_fixed_vs_correct!r} "
-              f"grad_term_retained_frac={grad_term_retained_frac!r} "
-              f"(A1 retained the grad term: {fixed_retained_grad})")
-
-    return naive_lost_grad and fixed_tracks_correct and fixed_retained_grad
-
-
-def test_naive_inplace_bf16_loses_grad_term():
-    """Shape (b): the naive control (per-op double rounding) should land
-    close to the NO-GRAD pure-decay analytic value -- the additive grad
-    contribution lost across the decay-dominated trajectory."""
-    pure_decay = _pure_decay(_WORKING_MAGNITUDE, _MOM, _N_SYNTHETIC_STEPS)
-    MuonNaive = s792._muon_bf16_naive_inplace_class()
-    buf = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
-    final = _run_n_steps(MuonNaive, buf, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
-    err = _relative_error(final, pure_decay)
-    assert err < 0.10, (
-        f"naive in-place-bf16 control should land close to the NO-GRAD "
-        f"pure-decay value ({pure_decay!r}) -- the grad contribution lost "
-        f"to per-op double rounding; got final={final!r} rel_err={err!r}")
-
-
-def test_a1_dataflow_retains_grad_term():
-    """Shape (b): the A1-fixed implementation (single fp32-combined
-    rounding) should land close to the TRUE recurrence (grad retained), and
-    should show substantially more deviation from pure decay than the
-    naive control does -- i.e. it actually carries the accumulated-grad
-    term the naive control loses."""
-    pure_decay = _pure_decay(_WORKING_MAGNITUDE, _MOM, _N_SYNTHETIC_STEPS)
-    correct_with_grad = _fp64_reference_ema(
-        _WORKING_MAGNITUDE, _SUB_ULP_GRAD, _MOM, _N_SYNTHETIC_STEPS)
-    full_grad_term = correct_with_grad - pure_decay
-    MuonFixed = s792._muon_bf16_momentum_fixed_class()
-    buf = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
-    final = _run_n_steps(MuonFixed, buf, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
-    err = _relative_error(final, correct_with_grad)
-    assert err < 0.10, (
-        f"A1-fixed implementation should track the TRUE recurrence "
-        f"({correct_with_grad!r}) within 10%; got final={final!r} rel_err={err!r}")
-    retained_frac = (final - pure_decay) / full_grad_term if full_grad_term != 0 else None
-    assert retained_frac is not None and retained_frac > 0.5, (
-        f"A1-fixed implementation should retain more than half of the "
-        f"analytic grad-term deviation from pure decay ({full_grad_term!r}); "
-        f"got retained_frac={retained_frac!r} (final={final!r}, "
-        f"pure_decay={pure_decay!r})")
+    return all_pass
 
 
 def test_bf16_view_memmap_roundtrip():
@@ -320,8 +307,6 @@ def test_required_negative_fixture_discriminates():
 def _selftest() -> int:
     ok = True
     for fn in (test_bf16_view_memmap_roundtrip,
-               test_naive_inplace_bf16_loses_grad_term,
-               test_a1_dataflow_retains_grad_term,
                test_required_negative_fixture_discriminates):
         try:
             fn()

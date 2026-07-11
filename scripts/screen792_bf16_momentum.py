@@ -497,16 +497,26 @@ def _assert_no_arm_alive(context: str) -> None:
             f"finding, #792 cure round)")
 
 
-def _teardown_arm(model, optimizers: dict, device: str) -> None:
-    """Frees the model + optimizer wrapper objects between arms so each
-    arm's commit_steady_state_gib reading reflects ONLY that arm's build.
+def _teardown_arm(model, optimizers: dict, device: str) -> "object":
+    """Frees the optimizer wrapper objects and this function's OWN local
+    `model` binding, then gc.collect()+empty_cache()+settle. Returns a
+    weakref to `model` -- release cannot be proven from inside this
+    function alone (falsifier finding F, #792 cure round): `del model`
+    here only drops THIS function's local binding, while the CALLER
+    (_one_arm) holds its own separate `model` reference for the entire
+    duration of this call, so gc.collect() above runs while the object is
+    still definitely alive. The caller MUST also `del model` immediately
+    after calling this, then pass the returned weakref to
+    _verify_arm_released for the actual proof -- see that function.
     Momentum-buffer FILES are never deleted (only the in-process Python
     objects) -- momentum_cosine_diagnostic reopens them fresh from disk
     after teardown via momentum_file_manifest. Mirrors this codebase's own
     established del+gc.collect()+empty_cache() pattern (c04_*.py,
     accumulation_law/run_accumulation.py)."""
     import gc
+    import weakref
     import torch
+    model_ref = weakref.ref(model)
     optimizers.clear()
     del model
     gc.collect()
@@ -514,6 +524,24 @@ def _teardown_arm(model, optimizers: dict, device: str) -> None:
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
     time.sleep(_TEARDOWN_SETTLE_S)
+    return model_ref
+
+
+def _verify_arm_released(model_ref: "object") -> bool:
+    """The actual release proof (falsifier finding F): call this ONLY
+    after the caller has ALSO dropped every reference of its own to the
+    torn-down arm's model (_one_arm does `del model` immediately after
+    _teardown_arm returns, before calling this). Runs one more
+    gc.collect() and checks the weakref is dead. If this returns False,
+    something besides the expected caller/callee bindings is still
+    holding the object (a stray frame, a reference cycle, a C-level
+    buffer) -- callers must disclose that, never silently claim
+    isolation the mechanism did not actually prove (fail-closed
+    convention, gate-discipline-rules.md: an identified undefined/
+    unproven decisive path gets a guard, not an assumed pass)."""
+    import gc
+    gc.collect()
+    return model_ref() is None
 
 
 def compute_commit_delta_gib(*, arm_a_commit: dict, arm_b_commit: dict) -> float:
@@ -538,29 +566,12 @@ def compute_commit_delta_gib(*, arm_a_commit: dict, arm_b_commit: dict) -> float
 # Steady-state commit-footprint governor read (measurand 1).
 # ---------------------------------------------------------------------------
 
-def commit_steady_state_gib(*, construction_complete: bool) -> dict:
-    """Wraps governor._commit_status() with AMENDMENT-1's pinned timing
-    (finding 4b): a construction-phase reading is INVALID BY DEFINITION,
-    not a finding either way -- refuses to even attempt the read before the
-    caller asserts construction_complete=True. Three distinct outcomes,
-    never conflated (gate-discipline: an unavailable decisive statistic is
-    a refusal, not a disclosed skip -- same discipline as
-    _preflight_fork_capacity in cbase_grow_rung2_attribution_702.py):
-      - construction_complete=False -> raises RuntimeError (caller error,
-        never a silent stale/zero reading).
-      - non-Windows platform -> {"applicable": False, ...} (disclosed,
-        genuinely inapplicable -- commit-charge accounting does not exist
-        on this platform, per governor._commit_status's own docstring).
-      - Windows but the syscall fails -> propagates OSError uncaught (the
-        caller must refuse the run, never proceed on an unmeasured
-        decisive statistic)."""
-    if not construction_complete:
-        raise RuntimeError(
-            "commit_steady_state_gib called before construction_complete="
-            "True -- AMENDMENT-1 finding 4b pins measurand (1) to STEADY "
-            "STATE (post-warmup, post the one-time construction "
-            "write-pass); a construction-phase reading is INVALID BY "
-            "DEFINITION, not a finding either way.")
+def _commit_snapshot_gib() -> dict:
+    """Raw commit-charge governor read, no timing precondition. Backs both
+    commit_steady_state_gib (which adds AMENDMENT-1's steady-state
+    precondition) and the construction-phase peak-commit diagnostic below
+    (which is explicitly NOT steady-state, by design -- see
+    construction_peak_commit_delta_gib)."""
     status = governor._commit_status()
     if status is None:
         return {"applicable": False,
@@ -578,19 +589,79 @@ def commit_steady_state_gib(*, construction_complete: bool) -> dict:
     }
 
 
+def commit_steady_state_gib(*, construction_complete: bool) -> dict:
+    """DIAGNOSTIC ONLY as of round-2 cure B/C (external falsifier finding
+    B): this used to GATE measurand (1) via check_byte_arithmetic, which
+    was WRONG SCOPE -- both arms' momentum buffers are file-backed
+    memmaps, which charge ~ZERO steady commit by contract
+    (cpu_offload_adamw.py's own module docstring; #795's "persistent
+    commit" ledger language is colloquial for memmap-backed FILE BYTES,
+    not literal Windows commit-charge), so requiring a positive
+    steady-commit delta would label a CORRECT bf16-storage implementation
+    INVALID. Measurand (1)'s DECISIVE persistent-footprint check now lives
+    on check_momentum_bytes_arithmetic (measured tensor bytes, both sides
+    of the comparison the same quantity type). This function is retained
+    ONLY as a disclosed, non-gating diagnostic reading -- see also finding
+    C: any GLOBAL commit statistic (this is system-wide, not
+    process-scoped) loses decisive status without the #762 interval-
+    tenancy/ABBA control, which this screen does not run (two DIFFERENT
+    optimizer implementations compared sequentially, not AB/BA profiling
+    overhead of one -- see run_screen's own docstring), so this reading
+    is disclosed-informational only, never fed into evaluate_verdict.
+
+    Wraps _commit_snapshot_gib() with AMENDMENT-1's pinned timing (finding
+    4b): a construction-phase reading is INVALID BY DEFINITION, not a
+    finding either way -- refuses to even attempt the read before the
+    caller asserts construction_complete=True.
+      - construction_complete=False -> raises RuntimeError (caller error,
+        never a silent stale/zero reading).
+      - non-Windows platform -> {"applicable": False, ...} (disclosed,
+        genuinely inapplicable).
+      - Windows but the syscall fails -> propagates OSError uncaught."""
+    if not construction_complete:
+        raise RuntimeError(
+            "commit_steady_state_gib called before construction_complete="
+            "True -- AMENDMENT-1 finding 4b pins this DIAGNOSTIC reading to "
+            "STEADY STATE (post-warmup, post the one-time construction "
+            "write-pass); a construction-phase reading is INVALID BY "
+            "DEFINITION, not a finding either way.")
+    return _commit_snapshot_gib()
+
+
+def construction_peak_commit_delta_gib(*, before: dict, after: dict) -> dict:
+    """DIAGNOSTIC ONLY (round-2 cure B: "construction PEAK commit measured
+    separately if that's the risk"). The one moment file-backed memmaps
+    might show a genuine, if transient, commit spike is during their
+    initial zero-fill write pass (cpu_offload_adamw._memmap_zeros, which
+    runs inside build_arm_optimizers), not at steady state. Never gates
+    the arm comparison -- measurand (1)'s decisive check is
+    check_momentum_bytes_arithmetic."""
+    if not (before.get("applicable") and after.get("applicable")):
+        return {"applicable": False,
+                "reason": "commit accounting inapplicable on this platform"}
+    return {"applicable": True,
+            "before_used_gib": before["used_gib"], "after_used_gib": after["used_gib"],
+            "construction_delta_gib": round(after["used_gib"] - before["used_gib"], 4)}
+
+
 def check_byte_arithmetic(*, commit_delta_gib: float, realized_p_matrix: int,
                            band_frac: float = 0.35) -> dict:
-    """Measurand (1)'s 'must match the byte arithmetic within band, else
-    INVALID (instrument defect, not a kill)' check. Scales AMENDMENT-1's
-    corrected 2.2B-identity commit delta (4.194 GB for p_matrix=
-    2,097,152,000, i.e. AMENDMENT1_BYTES_PER_MATRIX_PARAM_MOMENTUM_DELTA=2
-    bytes/matrix-param) by THIS run's own REALIZED p_matrix -- never a
-    hardcoded 434M-scale number, since the ledger was only ever corrected
-    at the 2.2B identity. band_frac=0.35 is a deliberately loose
-    instrument-defect band (this measurand's own text: 'else INVALID
-    (instrument defect, not a kill)' -- it exists to catch a governor
-    read that is wildly wrong, not to gate the arm comparison itself,
-    which is measurand (3)'s loss-band job)."""
+    """DIAGNOSTIC ONLY as of round-2 cure B (external falsifier finding B):
+    this compares a Windows commit-charge governor delta against the byte-
+    arithmetic model -- WRONG SCOPE as a GATE, since file-backed momentum
+    memmaps charge ~ZERO steady commit by contract (cpu_offload_adamw.py's
+    own module docstring), so a correct implementation would routinely
+    fail this and be mislabeled INVALID. Retained only as a disclosed,
+    non-gating diagnostic (never fed into evaluate_verdict); measurand
+    (1)'s decisive check is check_momentum_bytes_arithmetic below (same
+    quantity type -- measured tensor bytes -- on both sides of the
+    comparison, unlike this commit-vs-byte-arithmetic mismatch). Scales
+    AMENDMENT-1's corrected 2.2B-identity commit delta (4.194 GB for
+    p_matrix=2,097,152,000, i.e.
+    AMENDMENT1_BYTES_PER_MATRIX_PARAM_MOMENTUM_DELTA=2 bytes/matrix-param)
+    by THIS run's own REALIZED p_matrix -- never a hardcoded 434M-scale
+    number, since the ledger was only ever corrected at the 2.2B identity.
+    band_frac=0.35 is a deliberately loose instrument-defect band."""
     gib = 1024.0 ** 3
     expected_delta_bytes = realized_p_matrix * AMENDMENT1_BYTES_PER_MATRIX_PARAM_MOMENTUM_DELTA
     expected_delta_gib = round(expected_delta_bytes / gib, 4)
@@ -606,6 +677,54 @@ def check_byte_arithmetic(*, commit_delta_gib: float, realized_p_matrix: int,
     return {
         "expected_delta_gib": expected_delta_gib,
         "measured_delta_gib": round(commit_delta_gib, 4),
+        "relative_error": round(rel_err, 4),
+        "band_frac": band_frac,
+        "within_band": within,
+        "verdict": "OK" if within else "INVALID_INSTRUMENT_DEFECT",
+    }
+
+
+def check_momentum_bytes_arithmetic(*, arm_a_momentum_bytes: dict, arm_b_momentum_bytes: dict,
+                                     realized_p_matrix: int, band_frac: float = 0.05) -> dict:
+    """Measurand (1)'s CORRECTED, DECISIVE persistent-footprint check
+    (round-2 cure B/C, external falsifier finding B). The original check
+    (check_byte_arithmetic, now diagnostic-only above) compared a Windows
+    commit-charge governor reading against the byte-arithmetic model --
+    wrong scope, since both arms' momentum buffers are file-backed
+    memmaps and charge ~ZERO steady commit by contract (#795's
+    "persistent commit" ledger language is colloquial for memmap-backed
+    FILE BYTES, not literal Windows commit-charge). This function instead
+    compares the ACTUAL MEASURED momentum-buffer FILE/TENSOR BYTES
+    (momentum_buffer_bytes_sidecar's real numel()*element_size() read of
+    each arm's live buffers) against the expected 2-bytes/param delta --
+    both sides of the comparison are the SAME quantity type (tensor
+    bytes), so this is tight and decisive (band_frac=0.05, not the old
+    0.35 instrument-defect slack), and this is the check evaluate_verdict
+    gates on, not the commit-based one."""
+    gib = 1024.0 ** 3
+    a_bytes = arm_a_momentum_bytes.get("momentum_buffer_bytes_resident")
+    b_bytes = arm_b_momentum_bytes.get("momentum_buffer_bytes_resident")
+    if a_bytes is None or b_bytes is None:
+        return {"verdict": "INVALID_INSTRUMENT_DEFECT",
+                "detail": "momentum_buffer_bytes_sidecar unavailable for one or both arms"}
+    # fp32 arm (A) minus bf16 arm (B) -- same sign convention as
+    # compute_commit_delta_gib: positive when bf16 storage uses fewer bytes.
+    measured_delta_bytes = a_bytes - b_bytes
+    expected_delta_bytes = realized_p_matrix * AMENDMENT1_BYTES_PER_MATRIX_PARAM_MOMENTUM_DELTA
+    if expected_delta_bytes <= 0:
+        return {"expected_delta_bytes": expected_delta_bytes,
+                "measured_delta_bytes": measured_delta_bytes,
+                "within_band": False,
+                "verdict": "INVALID_INSTRUMENT_DEFECT",
+                "detail": "expected_delta_bytes <= 0 -- realized_p_matrix "
+                          "measurement is itself broken"}
+    rel_err = abs(measured_delta_bytes - expected_delta_bytes) / expected_delta_bytes
+    within = rel_err <= band_frac
+    return {
+        "expected_delta_bytes": int(expected_delta_bytes),
+        "measured_delta_bytes": int(measured_delta_bytes),
+        "expected_delta_gib": round(expected_delta_bytes / gib, 4),
+        "measured_delta_gib": round(measured_delta_bytes / gib, 4),
         "relative_error": round(rel_err, 4),
         "band_frac": band_frac,
         "within_band": within,
@@ -822,35 +941,91 @@ def build_noise_band(losses_seed1: list, losses_seed2: list) -> dict:
 
 
 def evaluate_verdict(*, losses_arm_b: list, losses_arm_a: list, band: dict,
-                      commit_check: dict, band_tolerance: float = 1.5) -> dict:
+                      capacity_check: dict, band_tolerance: float = 1.5,
+                      n_active: "int | None" = None) -> dict:
     """Applies #707 Section D's pre-registered kill conditions, quoted
     verbatim in REFUSAL_TEXT, plus AMENDMENT-1's INCONCLUSIVE tightening.
-    Never widens the band post-hoc ('No post-hoc band widening')."""
-    n = min(len(losses_arm_b), len(losses_arm_a))
-    deltas = [abs(losses_arm_b[i] - losses_arm_a[i]) for i in range(n)]
-    max_delta = max(deltas) if deltas else 0.0
-    band_val = band["band"]
-    beyond_band = max_delta > band_val
-    near_edge = (not beyond_band) and band_val > 0 and (max_delta >= band_val / band_tolerance)
+    Never widens the band post-hoc ('No post-hoc band widening').
 
-    if commit_check["verdict"] != "OK":
+    Round-2 cure round, external falsifier finding E (all four repros
+    fixed here):
+      1. UNEQUAL LOSS LENGTHS -> REFUSE, never a silent min() truncation
+         (the old code's `n = min(len(a), len(b))` let a [0]-vs-[0,99]
+         pair PROMOTE with the tail simply discarded).
+      2. EMPTY LOSSES -> REFUSE (the old code let n=0 fall through to a
+         vacuous PROMOTE -- zero steps compared is not evidence).
+      3. If n_active is given, n_steps_compared must equal it exactly ->
+         REFUSE otherwise (guards against both arms being truncated
+         identically to some unintended smaller n, which the
+         equal-length check alone cannot catch).
+      4. NEAR-EDGE INCONCLUSIVE BAND, checked BEFORE beyond_band KILL: the
+         old code computed `beyond_band = max_delta > band_val` FIRST, so
+         a delta only slightly beyond the band (e.g. 1.1x) short-circuited
+         straight to KILL -- near_edge required `not beyond_band` and so
+         could never fire for any point above band_val. The corrected
+         grammar defines a single SYMMETRIC zone around band_val,
+         [band_val/band_tolerance, band_val*band_tolerance]: strictly
+         below it is PROMOTE, strictly above it is KILL, and inside it
+         (on EITHER side of band_val) is INCONCLUSIVE -- matching
+         AMENDMENT-1's actual text ("any loss-delta within 1.5x of the
+         band edge = INCONCLUSIVE")."""
+    if len(losses_arm_b) != len(losses_arm_a):
+        return {
+            "verdict": "REFUSE",
+            "reason": f"unequal loss-list lengths (arm_b={len(losses_arm_b)}, "
+                      f"arm_a={len(losses_arm_a)}) -- matched-step comparison "
+                      f"requires equal lengths; never a silent min() truncation "
+                      f"(falsifier finding E)",
+            "max_loss_delta": None, "band": band.get("band"),
+            "n_steps_compared": None, "kill_text": REFUSAL_TEXT,
+        }
+    n = len(losses_arm_b)
+    if n == 0:
+        return {
+            "verdict": "REFUSE",
+            "reason": "empty losses -- zero steps compared is not evidence of "
+                      "anything (falsifier finding E)",
+            "max_loss_delta": None, "band": band.get("band"),
+            "n_steps_compared": 0, "kill_text": REFUSAL_TEXT,
+        }
+    if n_active is not None and n != n_active:
+        return {
+            "verdict": "REFUSE",
+            "reason": f"n_steps_compared={n} != frozen n_active={n_active} -- "
+                      f"a length mismatch against the run's own configured "
+                      f"step count (falsifier finding E, CLI gate)",
+            "max_loss_delta": None, "band": band.get("band"),
+            "n_steps_compared": n, "kill_text": REFUSAL_TEXT,
+        }
+
+    deltas = [abs(losses_arm_b[i] - losses_arm_a[i]) for i in range(n)]
+    max_delta = max(deltas)
+    band_val = band["band"]
+    lower_edge = (band_val / band_tolerance) if band_val > 0 else 0.0
+    upper_edge = band_val * band_tolerance
+    beyond_band = max_delta > upper_edge
+    near_edge = (not beyond_band) and (max_delta >= lower_edge)
+
+    if capacity_check["verdict"] != "OK":
         verdict = "INVALID"
-        reason = "measurand (1) commit-footprint delta failed the byte-arithmetic band check -- instrument defect, not a kill"
+        reason = "measurand (1) momentum-bytes delta failed the byte-arithmetic band check -- instrument defect, not a kill"
     elif beyond_band:
         verdict = "KILL"
-        reason = "loss-delta beyond the pre-registered seed-noise band at matched steps -- bf16-momentum KILLED at this scale under QAT (D4 negative)"
+        reason = "loss-delta beyond 1.5x the pre-registered seed-noise band edge at matched steps -- bf16-momentum KILLED at this scale under QAT (D4 negative)"
     elif near_edge:
         verdict = "INCONCLUSIVE"
         reason = "loss-delta within 1.5x of the band edge (AMENDMENT-1 finding 4a) -- requires a second extra seed, never a clean PROMOTE/KILL"
     else:
         verdict = "PROMOTE"
-        reason = "commit delta inside band + loss delta inside band -- PROMOTE to (a) 2.2B config for the capacity claim and (b) arm-2 int8-blockwise screen"
+        reason = "momentum-bytes delta inside band + loss delta inside band -- PROMOTE to (a) 2.2B config for the capacity claim and (b) arm-2 int8-blockwise screen"
 
     return {
         "verdict": verdict,
         "reason": reason,
         "max_loss_delta": max_delta,
         "band": band_val,
+        "band_lower_edge": lower_edge,
+        "band_upper_edge": upper_edge,
         "n_steps_compared": n,
         "kill_text": REFUSAL_TEXT,
     }
@@ -949,12 +1124,21 @@ _PROVENANCE_REFERENCE_MODULES = (
 )
 
 
-def compute_provenance(*, shard_dir: str | None, config_path: "Path | None" = None) -> dict:
+def compute_provenance(*, shard_dir: str | None, cfg: "dict | None" = None,
+                        config_path: "Path | None" = None) -> dict:
     """Returns the provenance dict every live receipt binds (see section
     docstring above). Never raises on a missing/unavailable input -- each
     leg discloses its own error string so refuse_on_missing_provenance can
     make the fail-closed decision explicitly, rather than an opaque
-    exception from deep inside a hash routine."""
+    exception from deep inside a hash routine.
+
+    Round-2 cure round, external falsifier finding D: `cfg`, when given,
+    is hashed DIRECTLY (canonical json.dumps(cfg, sort_keys=True)) -- the
+    ACTUAL runtime config object a live run is using, never a re-read of
+    a default file path that could silently diverge from it. config_path
+    is retained only as the fallback for callers with no cfg object
+    (--schema-probe/--selftest, which never refuse on this field) and is
+    always recorded for disclosure either way."""
     this_file = Path(__file__).resolve()
 
     try:
@@ -966,15 +1150,36 @@ def compute_provenance(*, shard_dir: str | None, config_path: "Path | None" = No
         executing_git_sha = None
         git_sha_error = repr(e)
 
+    try:
+        dirty_out = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=str(_REPO),
+            stderr=subprocess.DEVNULL, text=True)
+        git_tree_dirty = bool(dirty_out.strip())
+        git_tree_dirty_error = None
+    except Exception as e:
+        git_tree_dirty = None
+        git_tree_dirty_error = repr(e)
+
     source_sha256 = {this_file.name: _file_sha256(this_file)}
+    source_sha256_missing = []
     for mod_name in _PROVENANCE_REFERENCE_MODULES:
         p = this_file.parent / mod_name
         if p.exists():
             source_sha256[mod_name] = _file_sha256(p)
+        else:
+            source_sha256_missing.append(mod_name)
 
-    config_path = Path(config_path) if config_path is not None else (
-        _REPO / "configs" / "v0-pretrain-config.json")
-    config_sha256 = _file_sha256(config_path) if config_path.exists() else None
+    if cfg is not None:
+        config_sha256 = hashlib.sha256(
+            json.dumps(cfg, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        config_source = "actual runtime cfg object (canonical json.dumps, sort_keys=True)"
+        config_path = str(config_path) if config_path is not None else None
+    else:
+        config_path = Path(config_path) if config_path is not None else (
+            _REPO / "configs" / "v0-pretrain-config.json")
+        config_sha256 = _file_sha256(config_path) if config_path.exists() else None
+        config_source = f"fallback: default file path (no cfg object given): {config_path}"
+        config_path = str(config_path)
 
     shard_manifest_sha256 = None
     shard_manifest_error = None
@@ -988,9 +1193,13 @@ def compute_provenance(*, shard_dir: str | None, config_path: "Path | None" = No
     return {
         "executing_git_sha": executing_git_sha,
         "executing_git_sha_error": git_sha_error,
+        "git_tree_dirty": git_tree_dirty,
+        "git_tree_dirty_error": git_tree_dirty_error,
         "source_sha256": source_sha256,
-        "config_path": str(config_path),
+        "source_sha256_missing": source_sha256_missing,
+        "config_path": config_path,
         "config_sha256": config_sha256,
+        "config_source": config_source,
         "shard_dir": shard_dir,
         "shard_manifest_sha256": shard_manifest_sha256,
         "shard_manifest_error": shard_manifest_error,
@@ -1005,14 +1214,32 @@ def refuse_on_missing_provenance(provenance: dict, *, live: bool) -> None:
     with a real shard_dir and a real repo checkout); --schema-probe and
     --selftest run compute_provenance for real (proving the code path) but
     never refuse on it, since a schema-probe/selftest environment may
-    legitimately lack a shard_dir."""
+    legitimately lack a shard_dir.
+
+    Round-2 cure round, external falsifier finding D (all three repro'd
+    gaps closed): (1) source_sha256 for every reference module in
+    _PROVENANCE_REFERENCE_MODULES is now REQUIRED, not just this file's
+    own entry -- the original check only verified executing_git_sha/
+    config_sha256/shard_manifest_sha256 and never noticed if the
+    reference-module hashes were silently sparse (source_sha256_missing
+    non-empty). (2) a dirty working tree refuses live -- executing_git_sha
+    alone does not prove the code actually running matches that commit if
+    uncommitted changes are present. (3) called from run_screen BEFORE any
+    arm executes now (see run_screen), not after all three arms already
+    ran."""
     if not live:
         return
     missing = []
     if not provenance.get("executing_git_sha"):
         missing.append(f"executing_git_sha ({provenance.get('executing_git_sha_error')})")
+    if provenance.get("git_tree_dirty") is not False:
+        missing.append(f"git_tree_dirty={provenance.get('git_tree_dirty')!r} "
+                        f"(must be exactly False for a live run; "
+                        f"error={provenance.get('git_tree_dirty_error')})")
+    if provenance.get("source_sha256_missing"):
+        missing.append(f"source_sha256 missing for: {provenance['source_sha256_missing']!r}")
     if not provenance.get("config_sha256"):
-        missing.append("config_sha256 (config file not found)")
+        missing.append("config_sha256 (config unavailable)")
     if provenance.get("shard_dir") and not provenance.get("shard_manifest_sha256"):
         missing.append(f"shard_manifest_sha256 ({provenance.get('shard_manifest_error')})")
     if missing:
@@ -1034,7 +1261,12 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
                    copies_opt_other_a: dict, copies_opt_other_b: dict,
                    momentum_bytes_a: dict, momentum_bytes_b: dict,
                    momentum_cosine: dict, band: dict, verdict: dict,
-                   run_config: dict, provenance: dict) -> dict:
+                   run_config: dict, provenance: dict,
+                   momentum_bytes_check: "dict | None" = None,
+                   construction_peak_a: "dict | None" = None,
+                   construction_peak_b: "dict | None" = None,
+                   model_released_a: "bool | None" = None,
+                   model_released_b: "bool | None" = None) -> dict:
     findings_note = (
         "sha_convention: bytes on disk as-is (binary read, no line-ending "
         "normalization) -- matches receipt_check.py's own documented "
@@ -1055,8 +1287,20 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
         "provenance": provenance,
         "realized_split": realized_split,
         "measurand_1_commit_footprint": {
-            "commit_delta_gib": commit_delta_gib,
-            "byte_arithmetic_check": byte_check,
+            "decisive_check": "momentum_bytes_arithmetic (round-2 cure B/C -- "
+                              "measured tensor bytes, same quantity type both "
+                              "sides; see momentum_bytes_arithmetic_check below)",
+            "momentum_bytes_arithmetic_check": momentum_bytes_check,
+            "commit_delta_gib_DIAGNOSTIC_ONLY": commit_delta_gib,
+            "byte_arithmetic_check_DIAGNOSTIC_ONLY": byte_check,
+            "diagnostic_scope_note": "commit_delta_gib/byte_arithmetic_check are "
+                                     "Windows-global commit-charge readings -- "
+                                     "NOT process-scoped, NOT tenancy-controlled "
+                                     "(#762 interval-tenancy/ABBA), so per finding "
+                                     "C they carry no decisive status here; "
+                                     "disclosed only.",
+            "construction_peak_commit_DIAGNOSTIC": {
+                "arm_fp32": construction_peak_a, "arm_bf16": construction_peak_b},
         },
         "measurand_2_copies_opt_other": {
             "arm_fp32": copies_opt_other_a,
@@ -1068,6 +1312,14 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
         },
         "measurand_3_loss_band": band,
         "measurand_4_momentum_cosine_diagnostic": momentum_cosine,
+        "arm_teardown_release": {
+            "arm_fp32_model_released": model_released_a,
+            "arm_bf16_model_released": model_released_b,
+            "note": "weakref-verified release (falsifier finding F) -- False "
+                    "or None means isolation could not be proven for that "
+                    "arm and any commit-adjacent diagnostic for it may be "
+                    "polluted by retained state",
+        },
         "verdict": verdict["verdict"],
         "verdict_reason": verdict["reason"],
         "kills": REFUSAL_TEXT,
@@ -1143,24 +1395,55 @@ def _selftest() -> int:
     # 3. noise band + verdict branches.
     band = build_noise_band([1.0, 1.0, 1.0], [1.02, 0.99, 1.01])  # band=0.02
     v_kill = evaluate_verdict(losses_arm_b=[1.5, 1.0, 1.0], losses_arm_a=[1.0, 1.0, 1.0],
-                              band=band, commit_check=c_ok)
+                              band=band, capacity_check=c_ok)
     if v_kill["verdict"] != "KILL":
         print(f"FAIL evaluate_verdict: expected KILL, got {v_kill}")
         ok = False
     v_promote = evaluate_verdict(losses_arm_b=[1.001, 1.0, 1.0], losses_arm_a=[1.0, 1.0, 1.0],
-                                 band=band, commit_check=c_ok)
+                                 band=band, capacity_check=c_ok)
     if v_promote["verdict"] != "PROMOTE":
         print(f"FAIL evaluate_verdict: expected PROMOTE, got {v_promote}")
         ok = False
     v_inconclusive = evaluate_verdict(losses_arm_b=[1.015, 1.0, 1.0], losses_arm_a=[1.0, 1.0, 1.0],
-                                      band=band, commit_check=c_ok)
+                                      band=band, capacity_check=c_ok)
     if v_inconclusive["verdict"] != "INCONCLUSIVE":
         print(f"FAIL evaluate_verdict: expected INCONCLUSIVE, got {v_inconclusive}")
         ok = False
     v_invalid = evaluate_verdict(losses_arm_b=[1.0], losses_arm_a=[1.0], band=band,
-                                 commit_check=c_bad)
+                                 capacity_check=c_bad)
     if v_invalid["verdict"] != "INVALID":
         print(f"FAIL evaluate_verdict: expected INVALID, got {v_invalid}")
+        ok = False
+
+    # 3b. VERDICT GRAMMAR fixtures (falsifier finding E, #792 round-2 cure,
+    #     all four repros). Near-edge boundary: delta=1.1x band (0.022 vs
+    #     band=0.02) is ABOVE band_val but still within the 1.5x tolerance
+    #     zone -- the OLD code's beyond_band=(max_delta>band_val) short-
+    #     circuited this straight to KILL (near_edge required not
+    #     beyond_band, so it could never fire above band_val at all).
+    v_near_edge = evaluate_verdict(losses_arm_b=[1.022, 1.0, 1.0], losses_arm_a=[1.0, 1.0, 1.0],
+                                   band=band, capacity_check=c_ok)
+    if v_near_edge["verdict"] != "INCONCLUSIVE":
+        print(f"FAIL evaluate_verdict near-edge falsifier repro: expected INCONCLUSIVE "
+              f"(delta=1.1x band), got {v_near_edge}")
+        ok = False
+    # Unequal loss-list lengths -> REFUSE (falsifier's exact repro: B=[0]
+    # vs A=[0,99] used to PROMOTE with the tail silently discarded).
+    v_unequal = evaluate_verdict(losses_arm_b=[0.0], losses_arm_a=[0.0, 99.0],
+                                 band=band, capacity_check=c_ok)
+    if v_unequal["verdict"] != "REFUSE":
+        print(f"FAIL evaluate_verdict: expected REFUSE for unequal lengths, got {v_unequal}")
+        ok = False
+    # Empty losses -> REFUSE (used to PROMOTE vacuously at n=0).
+    v_empty = evaluate_verdict(losses_arm_b=[], losses_arm_a=[], band=band, capacity_check=c_ok)
+    if v_empty["verdict"] != "REFUSE":
+        print(f"FAIL evaluate_verdict: expected REFUSE for empty losses, got {v_empty}")
+        ok = False
+    # n_steps_compared != frozen n_active -> REFUSE.
+    v_n_active_mismatch = evaluate_verdict(losses_arm_b=[1.0, 1.0], losses_arm_a=[1.0, 1.0],
+                                           band=band, capacity_check=c_ok, n_active=5)
+    if v_n_active_mismatch["verdict"] != "REFUSE":
+        print(f"FAIL evaluate_verdict: expected REFUSE for n_active mismatch, got {v_n_active_mismatch}")
         ok = False
 
     # 4. steady-state gate refuses on construction_complete=False.
@@ -1198,6 +1481,53 @@ def _selftest() -> int:
         print(f"FAIL falsifier sign repro: expected INVALID_INSTRUMENT_DEFECT rel_err=2.0, got {check_on_falsifier_repro}")
         ok = False
 
+    # 6b. RESCOPED CAPACITY OBSERVABLE fixture (falsifier finding B, #792
+    #     round-2 cure): check_momentum_bytes_arithmetic compares MEASURED
+    #     tensor bytes on both sides -- exact match (0% error) must be OK;
+    #     zero measured delta against a large expected delta (the "both
+    #     arms show ~0 commit, correct implementation" shape finding B
+    #     objects to on the OLD commit-based check) must correctly flag
+    #     INVALID here too, since THIS check compares real bytes, not
+    #     commit-charge -- a genuine 0-byte momentum delta really would be
+    #     an instrument/measurement defect at this check's scope.
+    p_matrix = 268_435_456
+    exact_bytes = p_matrix * AMENDMENT1_BYTES_PER_MATRIX_PARAM_MOMENTUM_DELTA
+    mba_ok = check_momentum_bytes_arithmetic(
+        arm_a_momentum_bytes={"momentum_buffer_bytes_resident": p_matrix * 4},
+        arm_b_momentum_bytes={"momentum_buffer_bytes_resident": p_matrix * 2},
+        realized_p_matrix=p_matrix)
+    if mba_ok["verdict"] != "OK" or mba_ok["measured_delta_bytes"] != exact_bytes:
+        print(f"FAIL check_momentum_bytes_arithmetic: expected OK with exact match, got {mba_ok}")
+        ok = False
+    mba_bad = check_momentum_bytes_arithmetic(
+        arm_a_momentum_bytes={"momentum_buffer_bytes_resident": p_matrix * 4},
+        arm_b_momentum_bytes={"momentum_buffer_bytes_resident": p_matrix * 4},
+        realized_p_matrix=p_matrix)
+    if mba_bad["verdict"] != "INVALID_INSTRUMENT_DEFECT":
+        print(f"FAIL check_momentum_bytes_arithmetic: expected INVALID_INSTRUMENT_DEFECT "
+              f"for zero measured delta, got {mba_bad}")
+        ok = False
+
+    # 6c. TEARDOWN RELEASE fixture (falsifier finding F, #792 round-2
+    #     cure): a weakref to an object that has ALL its references
+    #     dropped (both this function's own del AND the caller's) must
+    #     resolve to None after _verify_arm_released's gc.collect(); one
+    #     still held by a live local must NOT.
+    class _FixtureHeavyObj:
+        pass
+    held_obj = _FixtureHeavyObj()
+    import weakref as _weakref
+    wref_held = _weakref.ref(held_obj)
+    if _verify_arm_released(wref_held):
+        print("FAIL _verify_arm_released: reported released while a live local still holds the object")
+        ok = False
+    dropped_obj = _FixtureHeavyObj()
+    wref_dropped = _weakref.ref(dropped_obj)
+    del dropped_obj
+    if not _verify_arm_released(wref_dropped):
+        print("FAIL _verify_arm_released: reported NOT released after every reference was dropped")
+        ok = False
+
     # 7. ORCHESTRATION fixture (falsifier finding, #792 cure round): the
     #    isolated-arm-lifetime invariant must raise while a slot is alive
     #    and pass clean once it is cleared -- proves the structural cure's
@@ -1220,20 +1550,55 @@ def _selftest() -> int:
     # 8. PROVENANCE fixture (#801 convention): compute_provenance runs for
     #    real (proving the code path), refuse_on_missing_provenance must
     #    pass through live=False unconditionally and must raise for
-    #    live=True when shard_dir is given but unresolvable.
-    prov = compute_provenance(shard_dir=None)
+    #    live=True when shard_dir is given but unresolvable. Round-2 cure
+    #    round (falsifier finding D) adds: an actual cfg object is hashed
+    #    directly (not a re-read default path), dirty-tree refuses live,
+    #    and a non-empty source_sha256_missing list refuses live.
+    prov = compute_provenance(shard_dir=None, cfg={"fixture_probe": True, "n": 1})
     if "executing_git_sha" not in prov or "source_sha256" not in prov:
         print(f"FAIL compute_provenance: missing required keys, got {prov.keys()}")
         ok = False
     if not prov.get("source_sha256", {}).get("screen792_bf16_momentum.py"):
         print("FAIL compute_provenance: this runner's own source_sha256 entry is missing")
         ok = False
+    if "git_tree_dirty" not in prov or "source_sha256_missing" not in prov:
+        print(f"FAIL compute_provenance: missing round-2 D keys, got {prov.keys()}")
+        ok = False
+    if prov.get("config_source", "").startswith("fallback"):
+        print(f"FAIL compute_provenance: cfg object given but config_source shows the "
+              f"fallback file-path path, got {prov.get('config_source')!r}")
+        ok = False
     try:
         refuse_on_missing_provenance(prov, live=False)
     except RuntimeError as e:
         print(f"FAIL refuse_on_missing_provenance: raised for live=False, got {e!r}")
         ok = False
+    # DIRTY-TREE refusal (falsifier finding D): git_tree_dirty=True must
+    # refuse live even when every other field is present and valid.
+    prov_dirty = dict(prov)
+    prov_dirty["git_tree_dirty"] = True
+    prov_dirty["shard_dir"] = None
+    try:
+        refuse_on_missing_provenance(prov_dirty, live=True)
+        print("FAIL refuse_on_missing_provenance: did not raise for live=True with git_tree_dirty=True")
+        ok = False
+    except RuntimeError:
+        pass
+    # MISSING-SOURCE-MODULE refusal (falsifier finding D): a non-empty
+    # source_sha256_missing list must refuse live even with everything
+    # else present -- the original check never looked at this field.
+    prov_missing_src = dict(prov)
+    prov_missing_src["git_tree_dirty"] = False
+    prov_missing_src["shard_dir"] = None
+    prov_missing_src["source_sha256_missing"] = ["governor.py"]
+    try:
+        refuse_on_missing_provenance(prov_missing_src, live=True)
+        print("FAIL refuse_on_missing_provenance: did not raise for live=True with a non-empty source_sha256_missing")
+        ok = False
+    except RuntimeError:
+        pass
     prov_bad_shard = dict(prov)
+    prov_bad_shard["git_tree_dirty"] = False
     prov_bad_shard["shard_dir"] = "/does/not/exist/fixture-only"
     prov_bad_shard["shard_manifest_sha256"] = None
     prov_bad_shard["shard_manifest_error"] = "fixture: not resolved"
@@ -1281,6 +1646,13 @@ def _schema_probe() -> int:
                         "realized_total_params": 0},
         commit_delta_gib=0.0,
         byte_check=check_byte_arithmetic(commit_delta_gib=0.0, realized_p_matrix=1),
+        momentum_bytes_check=check_momentum_bytes_arithmetic(
+            arm_a_momentum_bytes={"momentum_buffer_bytes_resident": 0},
+            arm_b_momentum_bytes={"momentum_buffer_bytes_resident": 0},
+            realized_p_matrix=1),
+        construction_peak_a={"applicable": False, "reason": "schema-probe dummy"},
+        construction_peak_b={"applicable": False, "reason": "schema-probe dummy"},
+        model_released_a=True, model_released_b=True,
         copies_opt_other_a={"copies_wall_s": 0.0, "copies_bytes": 0,
                             "opt_other_wall_s": 0.0, "n_steps": 0},
         copies_opt_other_b={"copies_wall_s": 0.0, "copies_bytes": 0,
@@ -1291,7 +1663,7 @@ def _schema_probe() -> int:
         band=build_noise_band([0.0], [0.0]),
         verdict={"verdict": "INVALID", "reason": "schema-probe dummy run, not a real verdict"},
         run_config={"schema_probe": True},
-        provenance=compute_provenance(shard_dir=None),
+        provenance=compute_provenance(shard_dir=None, cfg={"schema_probe": True}),
     )
     findings = receipt_check.validate_receipt(dummy)
     if findings:
@@ -1336,6 +1708,17 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
     on-disk file manifests captured before each arm's teardown instead."""
     import torch
 
+    # PROVENANCE, COMPUTE+REFUSE BEFORE ANY ARM EXECUTES (round-2 cure
+    # round, external falsifier finding D: the original call sat at the
+    # END of this function, after all three arms had already burned
+    # GPU-hours -- a dirty tree or missing source hash should refuse
+    # BEFORE that cost is spent, not after). Hashes the ACTUAL runtime
+    # `cfg` object (finding D: "config hash = digest of the ACTUAL cfg
+    # object, not a default path" -- re-reading a default config file
+    # path could silently diverge from what this run is really using).
+    provenance = compute_provenance(shard_dir=shard_dir, cfg=cfg)
+    refuse_on_missing_provenance(provenance, live=True)
+
     total_steps = n_warmup + n_active
     mtp_enabled = bool(cfg.get("objective", {}).get("mtp_aux_heads", {}).get("enabled", False))
     mtp_weight = cfg.get("objective", {}).get("mtp_aux_heads", {}).get("weight", 0.0)
@@ -1349,8 +1732,16 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
             random.seed(seed)
             optstate_dir = Path(run_dir) / "optstate" / optstate_subdir
             model, vocab, hidden, n_mtp = ts.build_v0_model(cfg, live=True, device=device)
+            # Construction-phase peak-commit diagnostic bracket (round-2
+            # cure B: "construction PEAK commit measured separately if
+            # that's the risk" -- the one-time momentum-memmap zero-fill
+            # write pass happens inside build_arm_optimizers; never gates
+            # anything, see construction_peak_commit_delta_gib).
+            _commit_before_construction = _commit_snapshot_gib()
             optimizers, base_lrs, routing = build_arm_optimizers(
                 model, cfg, arm=arm, optstate_dir=optstate_dir)
+            construction_peak = construction_peak_commit_delta_gib(
+                before=_commit_before_construction, after=_commit_snapshot_gib())
             ce_impl, ce_fn = ts.resolve_ce_impl(prefer_liger=True)
             loader = ts.PackedShardLoader(shard_dir, cfg["model"]["seq"], n_mtp)
 
@@ -1386,8 +1777,18 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
                 optimizers, arm=arm, optstate_dir=optstate_dir)
             result = {"routing": routing, "losses": active["losses"], "commit": commit,
                      "realized_split": realized_split, "momentum_bytes": momentum_bytes,
-                     "momentum_manifest": momentum_manifest}
-            _teardown_arm(model, optimizers, device)
+                     "momentum_manifest": momentum_manifest, "construction_peak": construction_peak}
+            model_ref = _teardown_arm(model, optimizers, device)
+            del model  # caller-side drop (falsifier finding F) -- _teardown_arm's
+                       # own `del` only clears ITS local binding; release can only
+                       # be verified once every reference, including this one, is gone
+            result["model_released"] = _verify_arm_released(model_ref)
+            if not result["model_released"]:
+                result["model_released_warning"] = (
+                    "weakref still resolves after teardown + gc.collect() -- a "
+                    "reference is held somewhere else; this arm's commit_steady_"
+                    "state_gib reading may be polluted by retained state "
+                    "(falsifier finding F, disclosed rather than silently trusted)")
             return result
         finally:
             _ALIVE_ARM_SLOTS.discard(optstate_subdir)
@@ -1410,6 +1811,10 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
     # each side of the subtraction was measured with ONLY that one arm
     # resident (arm_a2 and arm_b did not exist yet when arm_a's commit was
     # read; arm_a and arm_a2 were already torn down when arm_b's was).
+    # DIAGNOSTIC-ONLY commit-charge delta (round-2 cure B/C: demoted from
+    # gating -- see check_byte_arithmetic/commit_steady_state_gib
+    # docstrings). Retained in the receipt for disclosure, never for
+    # verdict computation.
     commit_delta_gib = compute_commit_delta_gib(
         arm_a_commit=arm_a["commit"], arm_b_commit=arm_b["commit"])
     byte_check = check_byte_arithmetic(
@@ -1423,20 +1828,27 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
     # while each arm was still alive, in _one_arm above.
     momentum_bytes_a = arm_a["momentum_bytes"]
     momentum_bytes_b = arm_b["momentum_bytes"]
+    # DECISIVE measurand-1 check (round-2 cure B/C): same quantity type
+    # (measured tensor bytes) on both sides of the comparison, unlike the
+    # commit-vs-byte-arithmetic mismatch above.
+    momentum_bytes_check = check_momentum_bytes_arithmetic(
+        arm_a_momentum_bytes=momentum_bytes_a, arm_b_momentum_bytes=momentum_bytes_b,
+        realized_p_matrix=realized_split["realized_matrix_params"])
     # Reopens each arm's momentum-buffer files fresh from disk -- both arms
     # are already torn down at this point (see momentum_cosine_diagnostic's
     # section docstring for why that's safe / zero-commit-charge).
     cosine = momentum_cosine_diagnostic(arm_a["momentum_manifest"], arm_b["momentum_manifest"])
     verdict = evaluate_verdict(losses_arm_b=arm_b["losses"], losses_arm_a=arm_a["losses"],
-                               band=band, commit_check=byte_check)
-
-    provenance = compute_provenance(shard_dir=shard_dir)
-    refuse_on_missing_provenance(provenance, live=True)
+                               band=band, capacity_check=momentum_bytes_check,
+                               n_active=n_active)
 
     ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     receipt = build_receipt(
         ts_str=ts_str, live=True, realized_split=realized_split,
         commit_delta_gib=commit_delta_gib, byte_check=byte_check,
+        momentum_bytes_check=momentum_bytes_check,
+        construction_peak_a=arm_a["construction_peak"], construction_peak_b=arm_b["construction_peak"],
+        model_released_a=arm_a.get("model_released"), model_released_b=arm_b.get("model_released"),
         copies_opt_other_a=copies_a, copies_opt_other_b=copies_b,
         momentum_bytes_a=momentum_bytes_a, momentum_bytes_b=momentum_bytes_b,
         momentum_cosine=cosine, band=band, verdict=verdict,
@@ -1497,6 +1909,19 @@ def main(argv: list | None = None) -> int:
     if not args.shard_dir:
         print("REFUSAL: --live requires a real --shard-dir (real packed "
               "uint16 corpus shard dir).")
+        return 1
+    if args.n_active <= 0:
+        print(f"REFUSAL: --n-active must be a positive nonzero step count "
+              f"(falsifier finding E CLI gate) -- got {args.n_active!r}.")
+        return 1
+
+    # Round-2 cure round, external falsifier finding D: "main requires
+    # --schema-probe pass before --live" -- a receipt-schema defect must
+    # surface before any GPU-hours are spent on three arm builds, not after.
+    schema_rc = _schema_probe()
+    if schema_rc != 0:
+        print("REFUSAL: --live requires a passing --schema-probe first "
+              "(finding D CLI gate); schema probe failed, see output above.")
         return 1
 
     cfg = ts.load_contract()
