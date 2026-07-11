@@ -56,6 +56,21 @@ delta_BC) pair whose sum lands in BA's own region -- derived once, in
 UNREACHABLE_TRIPLES below, and cross-checked by _selftest()'s own
 independent numeric construction (never just asserted).
 
+AC EXTENSION (#739, carries #711 AMENDMENT A8, coordinator 2026-07-11):
+sensitivity_preflight() -- a hard-stop leg run BEFORE any GPU dispatch:
+the main screen may launch ONLY if a passing exp711_sensitivity.py receipt
+exists at/above the pre-registered floor (posted to #711 separately, once
+finalized). Missing receipt, wrong direction, or a measured delta below
+floor all return INVALID_SCREEN -- deliberately a DIFFERENT status than
+NONCAUSAL_INVALID (that one is a per-window/run guard breach; this one is
+an apparatus-sensitivity gate: without it, a null main-screen result
+cannot distinguish apparatus insensitivity from a true null). Zero GPU-
+hours are spent reaching this verdict. The sensitivity fixture's actual
+body (exp711_sensitivity.py) is a separate, not-yet-implemented
+component pending floor sign-off; this function's contract (receipt
+shape, floor comparison, INVALID_SCREEN reasons) is frozen now so the
+fixture has a stable target to write its receipt against.
+
 Run:
     python scripts/exp711_verdict.py --selftest
 """
@@ -178,6 +193,47 @@ def cross_layer_label(token_composite: str, compute_composite: str) -> dict:
     label = f"{token_composite}__COMPUTE_{compute_composite}"
     return {"final_label": label, "compute_status": compute_composite,
             "token_composite": token_composite}
+
+
+# ---------------------------------------------------------------------------
+# Sensitivity preflight (AC extension #739, #711 AMENDMENT A8) -- hard-stop
+# leg run BEFORE any GPU dispatch.
+# ---------------------------------------------------------------------------
+
+SENSITIVITY_RECEIPT_REQUIRED_FIELDS = ("direction_correct", "measured_delta")
+
+
+def sensitivity_preflight(receipt, floor: float) -> dict:
+    """receipt: the exp711_sensitivity.py apparatus receipt dict (or None
+    if no such receipt exists yet), floor: the pre-registered sensitivity
+    floor (posted to #711, NLL units). Returns {"status": "PROCEED", ...}
+    only if the receipt is well-formed, reports the predicted KNOWN
+    direction, and its measured delta clears the floor. Every other case
+    returns {"status": "INVALID_SCREEN", "reason": ...} -- the main
+    screen's launch path must treat any non-"PROCEED" status as a hard
+    stop, spending zero GPU-hours. This function never raises; the
+    INVALID_SCREEN status IS the fail-closed signal (a raised exception
+    would let a careless caller silently skip the check inside a bare
+    try/except, which a distinguishable status value in the return
+    cannot)."""
+    if floor <= 0:
+        raise VerdictError(f"sensitivity floor must be > 0, got {floor}")
+    if receipt is None:
+        return {"status": "INVALID_SCREEN", "reason": "SENSITIVITY_RECEIPT_MISSING",
+                "floor": floor}
+    missing = [k for k in SENSITIVITY_RECEIPT_REQUIRED_FIELDS if k not in receipt]
+    if missing:
+        return {"status": "INVALID_SCREEN",
+                "reason": f"SENSITIVITY_RECEIPT_MALFORMED: missing {missing}",
+                "floor": floor}
+    if not receipt["direction_correct"]:
+        return {"status": "INVALID_SCREEN", "reason": "SENSITIVITY_WRONG_DIRECTION",
+                "measured_delta": receipt["measured_delta"], "floor": floor}
+    delta = receipt["measured_delta"]
+    if delta < floor:
+        return {"status": "INVALID_SCREEN", "reason": "SENSITIVITY_BELOW_FLOOR",
+                "measured_delta": delta, "floor": floor}
+    return {"status": "PROCEED", "measured_delta": delta, "floor": floor}
 
 
 # ---------------------------------------------------------------------------
@@ -480,12 +536,50 @@ def _selftest():
     coherence_i = assert_coherence(WIN, "GUARD_BREACH")
     assert coherence_i == "INVALID", "SELFTEST fixture(i): coherence assert must fire"
 
+    # === AC extension (#711 AMENDMENT A8): sensitivity_preflight, all
+    # four dispositions.
+    passing = {"direction_correct": True, "measured_delta": 0.05}
+    r_pass = sensitivity_preflight(passing, floor=0.02)
+    assert r_pass["status"] == "PROCEED", (
+        f"SELFTEST sensitivity: expected PROCEED, got {r_pass}")
+
+    r_missing = sensitivity_preflight(None, floor=0.02)
+    assert r_missing["status"] == "INVALID_SCREEN"
+    assert r_missing["reason"] == "SENSITIVITY_RECEIPT_MISSING"
+
+    r_malformed = sensitivity_preflight({"direction_correct": True}, floor=0.02)
+    assert r_malformed["status"] == "INVALID_SCREEN"
+    assert "SENSITIVITY_RECEIPT_MALFORMED" in r_malformed["reason"]
+
+    wrong_dir = {"direction_correct": False, "measured_delta": 0.05}
+    r_wrong = sensitivity_preflight(wrong_dir, floor=0.02)
+    assert r_wrong["status"] == "INVALID_SCREEN"
+    assert r_wrong["reason"] == "SENSITIVITY_WRONG_DIRECTION"
+
+    below_floor = {"direction_correct": True, "measured_delta": 0.01}
+    r_below = sensitivity_preflight(below_floor, floor=0.02)
+    assert r_below["status"] == "INVALID_SCREEN"
+    assert r_below["reason"] == "SENSITIVITY_BELOW_FLOOR"
+
+    # Exactly-at-floor is a PASS (floor is inclusive, matching classify_
+    # cell's own >= convention for WIN).
+    at_floor = {"direction_correct": True, "measured_delta": 0.02}
+    r_at = sensitivity_preflight(at_floor, floor=0.02)
+    assert r_at["status"] == "PROCEED", (
+        f"SELFTEST sensitivity: exactly-at-floor must PROCEED, got {r_at}")
+
+    try:
+        sensitivity_preflight(passing, floor=0.0)
+        raise AssertionError("SELFTEST sensitivity: floor<=0 must raise")
+    except VerdictError:
+        pass
+
     print("EXP711_VERDICT_SELFTEST_PASS")
     print(json.dumps({
         "n_unreachable_confirmed": n_unreachable_confirmed,
         "n_reachable_confirmed": n_reachable_confirmed,
         "n_invalid_triples_125": n_invalid_triples,
-        "fixtures_passed": list("abcdefghi") + ["a_125"],
+        "fixtures_passed": list("abcdefghi") + ["a_125", "sensitivity_preflight"],
     }, indent=2))
 
 
