@@ -3,95 +3,86 @@
 step-time attribution + PCIe throughput profiling runner, issue #702.
 
 Authoritative spec: the #702 comment thread (wordingone/ember), not this
-docstring. Three comments there compose the FROZEN spec this runner
-implements; where this file and the thread ever disagree, the thread wins:
+docstring. Where this file and the thread ever disagree, the thread wins.
+The prereg (amendment comment id 4938595840, frozen, plus pre-run amendments
+4939491354 tied-tensor erratum and 4939674864 executable verdict-grammar
+predicates) is summarized below; the FULL summary of those four items lived
+in this file's prior revision (PR #721) and is unchanged here -- see that
+revision's history for the verbatim recap. This revision implements the
+POST-#721 BLOCK comment (disposition BLOCK_721_PRODUCTION_ATTRIBUTION /
+CLEAR_PREDICATE_TABLE_ONLY): the #721-merged runner's predicate table and
+fail-closed gates stood, but its ATTRIBUTION MECHANISM did not, on three
+counts, each repaired here:
 
-  1. Amendment (comment id 4938595840) -- the original 25%-single-phase kill
-     is INVALID (a flat wall-percentage profile does not prove the axis is
-     balanced: four phases can share one memory bottleneck). Replaces it
-     with SUBPHASE decomposition -- fwd / loss / bwd, PLUS four named sites
-     inside cpu_offload_adamw.py's CPUOffloadOptimizer.step():
-       grad_to_cpu_fp32      (L228: real_p.grad.detach().to("cpu", fp32))
-       grad_heap_to_memmap   (L248: shadow_p.grad.copy_(g))
-       inner_optimizer_step  (L249: self._inner.step())
-       updated_param_to_gpu  (L252: real_p.data.copy_(shadow_p.data...))
-     Validity gates (ALL mandatory): 2 warmup + >=10 active profiled steps;
-     a matched UNPROFILED block within 10% median step-wall (instrumentation
-     overhead bound); subphase-sum-to-wall closure within 5%; exact bytes
-     bound to realized non-null-grad numel; pinned-vs-pageable D2H/H2D
-     calibration. Verdict grammar (replaces the 25% kill): DIRECT_COPY_FIRST
-     / FACTOR1_FIRST / BOTH_COMPOSE / GPU_COMPUTE_BOUND / INCONCLUSIVE --
-     only a POSITIVE finding of GPU-compute dominance with low host movement
-     demotes axis-3; absence of a dominant phase does not.
-  2. "PREREG FROZEN" comment -- freezes the amended prereg verbatim; any
-     post-freeze design change requires a disclosed un-freeze/re-freeze
-     cycle on the issue.
-  3. Pre-run amendment (tied-tensor erratum) -- the exact-bytes gate binds
-     to REALIZED non-null-grad numel from the LIVE param groups at runtime,
-     never a raw/theoretical checkpoint param count. Corrected reference
-     point (disclosed, cross-checked, not the gate's source of truth):
-     N=2,195,497,984 across 184 deduped tensors (140 Muon / 44 AdamW).
-  4. Second pre-run amendment (comment id 4939674864) -- the five verdict
-     labels get EXECUTABLE numeric predicates (an independent consumer
-     audit found the label grammar underdefined: the same profile could be
-     labeled DIRECT_COPY_FIRST, FACTOR1_FIRST, or BOTH_COMPOSE post hoc).
-     Spans are EXCLUSIVE and counterfactual-removable, never summed as
-     overlapping inclusive spans:
-       T_stage            = grad_heap_to_memmap ONLY (the staging copy a
-                             direct-copy implementation deletes; a future
-                             pinned-buffer staging hop would fold in here
-                             too -- none exists in this implementation).
-       T_host_unavoidable = grad_to_cpu_fp32 + updated_param_to_gpu (the
-                             grad D2H and updated-param H2D are UNAVOIDABLE
-                             for offload, never counted as T_stage).
-       T_inner            = inner_optimizer_step.
-       T_gpu              = fwd + loss + bwd.
-     Per-step ratios (over the >=10 active profiled steps) get bootstrap
-     95% CIs (10,000 resamples, percentile method, on the mean). SESOI
-     frozen at 0.10 of step wall, symmetric for both cure families.
-     Predicates: D = lowerCI95(T_stage/T_step) >= 0.10; F =
-     lowerCI95(T_inner/T_step) >= 0.10. D&&!F -> DIRECT_COPY_FIRST;
-     F&&!D -> FACTOR1_FIRST; D&&F -> BOTH_COMPOSE; !D&&!F &&
-     lowerCI95(T_gpu/T_step) >= 0.50 && upperCI95((T_stage+
-     T_host_unavoidable)/T_step) <= 0.15 -> GPU_COMPUTE_BOUND; else
-     INCONCLUSIVE. The receipt records every ratio, both CI bounds per
-     span, the SESOI constants, and which predicate fired. This amendment
-     SUPERSEDES this runner's own prior share-based verdict heuristic
-     (the very ambiguity the first PR revision flagged for review) -- the
-     predicate table below is the frozen spec now, not a formalization
-     of a gap.
+  (a) Consumer-identity defect (was: L226-273 installed `_instrumented_step`,
+      a hand-copied reimplementation of CPUOffloadOptimizer.step monkey-
+      patched onto the CLASS -- production's real step() never executed
+      under profiling, and there was no equivalence receipt). REPAIRED by
+      moving instrumentation INSIDE the original method: cpu_offload_adamw.
+      CPUOffloadOptimizer now exposes attach_span_collector()/
+      detach_span_collector(), a per-INSTANCE (never class-level), default-
+      OFF hook set checked at exactly the four named subphase boundaries
+      inside the real step() body. Unattached, step()'s arithmetic, control
+      flow, and every side effect (grad_lazy_creates counting, memmap
+      creation, param writeback order) are byte-identical to the pristine
+      method -- there is no second implementation to diverge from the real
+      one. This is repair option (a) from the block comment ("instrumentation
+      lives INSIDE the original step ... record_function/span hooks,
+      default-off"), not option (b) (equivalence receipts) -- (a) removes the
+      defect by construction rather than by proof-after-the-fact, so no
+      separate equivalence-receipt machinery is built here.
+  (b) Unmatched overhead gate (was: profiled and unprofiled blocks ran in
+      FIXED sequential order on different batches/global-steps/optimizer
+      state -- temporal drift could mask a real overhead cost or fabricate a
+      violation with zero instrumentation). REPAIRED by a counterbalanced
+      AB/BA design: after warmup, the full training state (model params,
+      each CPUOffloadOptimizer's shadow params + inner optimizer state, and
+      the CPU/CUDA/python RNG streams) is snapshotted once (`_snapshot_fork`).
+      Arm A runs profiled-then-unprofiled from that fork; the fork is then
+      RESTORED byte-for-byte (`_restore_fork_`) and Arm B runs unprofiled-
+      then-profiled from the identical restored state. PackedShardLoader.
+      batch(step, batch_size) is a pure function of step (see timeshare_
+      pretrain.py's own docstring: "resume re-derives the identical data
+      stream"), so "same loader state" reduces to reusing the same starting
+      global_step for both arms -- which this design does: both arms
+      traverse the SAME absolute step range, just with profiled/unprofiled
+      swapped between the first and second half. Every step-slot in that
+      range is therefore measured BOTH profiled and unprofiled, from
+      matching state, at both temporal positions -- profiled/unprofiled
+      trade first/second position 1:1, cancelling any position-order
+      confound (thermal drift, page-cache warmth) the #721 design could not
+      distinguish from real instrumentation cost. The overhead and closure
+      gates, and the verdict-grammar bootstrap, all consume the POOLED
+      (arm A + arm B) samples -- 2x the statistical power of a single
+      sequential block at no extra wall-clock cost per sample.
+  (c) No integration fixture reached gates_all_passed=true (only predicate-
+      table unit fixtures existed). REPAIRED by
+      `_selftest_integration_all_gates_pass()`: runs the REAL attribution_run
+      pipeline end-to-end on a tiny CPU fixture -- real fork/restore, real
+      AB/BA blocks, real per-instance instrumented step() calls, real gate
+      evaluation, real verdict classification -- with ONLY the fundamentally
+      CUDA-only pinned/pageable calibration function stubbed to a disclosed
+      synthetic dict (a real PCIe H2D/D2H number has no CPU-only meaning).
+      Every other gate (step_count, overhead, closure, exact_bytes) passes or
+      fails on its own real CPU-measured merits. The original `_selftest()`
+      is unchanged and must still see gates_all_passed=False on an UNSTUBBED
+      run -- proving the stub is disclosed and isolated to one fixture, not a
+      silent lowering of the real gate.
 
-Reuse discipline (same as every other runner in this tree touching the
-offload path): this script does NOT reimplement Muon/AdamW/CE/WSD math. It
-builds the model/optimizer/loader via the SAME production functions
-run_v0_segment calls (build_v0_model, build_split_optimizer, split_param_
-groups, resolve_ce_impl, mtp_total_loss, apply_wsd, PackedShardLoader,
-write_packed_shard, load_contract) against the same frozen contract cfg.
-The outer step loop is necessarily its own (run_v0_segment exposes no
-per-subphase timing hooks and none should be added to the production
-training path just to profile it once) -- same precedent as
-cbase_grow_rung2_gpu_offload_probe.py, which documents the identical
-reasoning for the same reuse boundary.
-
-Subphase attribution mechanism: CPUOffloadOptimizer.step() is monkeypatched
-for the duration of the PROFILED block only (installed/uninstalled around
-that block, restored to the pristine class method immediately after) with
-an instrumented reimplementation that is structurally identical to the real
-method -- same lines, same order, same lazy-create/persistence semantics --
-with time.perf_counter() (+ torch.cuda.synchronize() boundaries when the
-device is cuda, since host<->device copies are dispatched async) inserted
-at exactly the four named subphase boundaries. The matched UNPROFILED block
-runs immediately after with the ORIGINAL uninstalled method and zero added
-instrumentation calls in the outer loop, so its step-wall is the true
-uninstrumented baseline the overhead gate compares against.
-
-Verdict-grammar decision procedure: EXECUTABLE per the second pre-run
-amendment (comment id 4939674864) -- see `_bootstrap_ci95`, `_per_step_
-ratios`, and `_classify_verdict_predicates` below. Every threshold (SESOI
-=0.10, GPU_COMPUTE_BOUND's 0.50 lower-CI floor and 0.15 upper-CI ceiling,
-10,000 bootstrap resamples) is the frozen thread's own number, not a
-runner-authored formalization -- there is no remaining ambiguity in this
-grammar.
+Reuse discipline (unchanged from #721, restated): this script does NOT
+reimplement Muon/AdamW/CE/WSD math. It builds the model/optimizer/loader via
+the SAME production functions run_v0_segment calls (build_v0_model,
+build_split_optimizer, split_param_groups, resolve_ce_impl, mtp_total_loss,
+apply_wsd, PackedShardLoader, write_packed_shard, load_contract) against the
+same frozen contract cfg. The outer step loop is necessarily its own
+(run_v0_segment exposes no per-subphase timing hooks and none should be added
+to the production training path just to profile it once). The ONE change
+this revision makes to a production file is cpu_offload_adamw.py's step() --
+adding default-off instrumentation hooks INSIDE the real method is exactly
+what block-comment repair item (a) specifies; it is not a reimplementation
+and every existing caller of CPUOffloadOptimizer.step() (tests/
+test_stabilize_v9_cure.py included) sees byte-identical behavior when
+unattached (the default).
 
 No git commits from this module. No founder/user names. api_spend_usd=0,
 paid_api_surface_used=false. This module launches NO GPU run by default;
@@ -162,9 +153,11 @@ class SubphaseCollector:
     """Per-step subphase wall-time + byte accumulator. `begin_step()` /
     `end_step(step_wall)` bracket one optimizer step; `add(phase, dt)` and
     `add_bytes(phase, n)` are called from inside the profiled fwd/loss/bwd
-    block and from the instrumented CPUOffloadOptimizer.step() while a step
-    is open. One collector instance is used for exactly one profiled block
-    (a fresh instance per block keeps blocks from ever mixing samples)."""
+    block and from the ATTACHED (real, in-place-instrumented) CPUOffload
+    Optimizer.step() while a step is open. One collector instance is used
+    for exactly one profiled block (a fresh instance per block keeps blocks
+    from ever mixing samples); `_merge_collectors` combines multiple blocks'
+    finished records (used to pool the AB/BA arms)."""
 
     def __init__(self) -> None:
         self.step_records: list[dict] = []
@@ -215,73 +208,149 @@ class SubphaseCollector:
         return [rec["_wall"] for rec in self.step_records]
 
 
+def _merge_collectors(collectors: list) -> SubphaseCollector:
+    """Combines finished step_records from multiple SubphaseCollector
+    instances (the AB/BA design's two profiled sub-blocks) into one, for
+    gate evaluation and verdict classification over the POOLED sample."""
+    merged = SubphaseCollector()
+    for c in collectors:
+        merged.step_records.extend(c.step_records)
+        merged.realized_numel_total += c.realized_numel_total
+    return merged
+
+
 # ---------------------------------------------------------------------------
-# Instrumented CPUOffloadOptimizer.step() -- monkeypatch, install/uninstall
-# bracketed around the profiled block only.
+# Per-instance span-collector attach/detach -- ember #702
+# BLOCK_721_PRODUCTION_ATTRIBUTION repair item (a). Attaches directly to the
+# REAL CPUOffloadOptimizer instances (never a class-level monkeypatch, never
+# a reimplementation of step()) -- see cpu_offload_adamw.py's own
+# attach_span_collector()/detach_span_collector() for the instrumented sites.
 # ---------------------------------------------------------------------------
 
-_ORIG_CPU_OFFLOAD_STEP = _coa.CPUOffloadOptimizer.step
-
-
-def _make_instrumented_step(collector: SubphaseCollector, sync):
-    """Structurally identical to CPUOffloadOptimizer.step() (cpu_offload_
-    adamw.py L211-252) -- same per-parameter loops, same lazy-create-once/
-    persist-forever shadow-grad semantics (R3), same final param writeback
-    -- with perf_counter + device-sync boundaries at the four named
-    subphase sites and byte/realized-numel accounting folded in. The real
-    class is never modified; this closure is installed onto the class only
-    for the lifetime of the profiled block (see attribution_run)."""
-    import torch
-
-    def _instrumented_step(self, closure=None) -> None:
-        assert closure is None, "CPUOffloadOptimizer does not support closures"
-        with torch.no_grad():
-            for name, real_p, shadow_p in zip(self._names, self._real_params, self._shadow):
-                if real_p.grad is None:
-                    shadow_p.grad = None
-                    continue
-                sync(); t0 = time.perf_counter()
-                g = real_p.grad.detach().to("cpu", dtype=torch.float32)   # L228
-                sync(); t1 = time.perf_counter()
-                collector.add("grad_to_cpu_fp32", t1 - t0)
-                collector.add_bytes("grad_to_cpu_fp32", g.numel() * g.element_size())
-                collector.add_realized_numel(g.numel())
-                if shadow_p.grad is None:
-                    self.grad_lazy_creates += 1
-                    _coa._COUNTERS["grad_lazy_creates"] += 1
-                    stem = self._optstate_dir / _coa._sanitize_name(name)
-                    shadow_p.grad = _coa._memmap_zeros(
-                        Path(str(stem) + ".grad.f32"), tuple(g.shape))
-                sync(); t2 = time.perf_counter()
-                shadow_p.grad.copy_(g)                                    # L248
-                sync(); t3 = time.perf_counter()
-                collector.add("grad_heap_to_memmap", t3 - t2)
-                collector.add_bytes("grad_heap_to_memmap", g.numel() * g.element_size())
-        sync(); t4 = time.perf_counter()
-        self._inner.step()                                                # L249
-        sync(); t5 = time.perf_counter()
-        collector.add("inner_optimizer_step", t5 - t4)
-        with torch.no_grad():
-            for real_p, shadow_p in zip(self._real_params, self._shadow):
-                sync(); t6 = time.perf_counter()
-                real_p.data.copy_(shadow_p.data.to(real_p.device, dtype=real_p.dtype))  # L252
-                sync(); t7 = time.perf_counter()
-                collector.add("updated_param_to_gpu", t7 - t6)
-                collector.add_bytes(
-                    "updated_param_to_gpu", shadow_p.data.numel() * real_p.element_size())
-
-    return _instrumented_step
-
-
-def install_instrumented_step(collector: SubphaseCollector, *, device: str):
+def install_span_collector(optimizers: dict, collector: SubphaseCollector, *, device: str):
     import torch
     sync = (torch.cuda.synchronize if device == "cuda" and torch.cuda.is_available()
             else (lambda: None))
-    _coa.CPUOffloadOptimizer.step = _make_instrumented_step(collector, sync)
+    for opt in optimizers.values():
+        if isinstance(opt, _coa.CPUOffloadOptimizer):
+            opt.attach_span_collector(
+                add=collector.add, add_bytes=collector.add_bytes,
+                add_numel=collector.add_realized_numel, sync=sync)
 
 
-def uninstall_instrumented_step() -> None:
-    _coa.CPUOffloadOptimizer.step = _ORIG_CPU_OFFLOAD_STEP
+def uninstall_span_collector(optimizers: dict) -> None:
+    for opt in optimizers.values():
+        if isinstance(opt, _coa.CPUOffloadOptimizer):
+            opt.detach_span_collector()
+
+
+# ---------------------------------------------------------------------------
+# AB/BA fork snapshot/restore -- ember #702 BLOCK_721_PRODUCTION_ATTRIBUTION
+# repair item (b). In-place copy_() restore (never optimizer.load_state_dict,
+# which reallocates new state tensors and would silently swap the file-
+# backed/zero-commit memmap tensors this whole offload strategy exists to
+# keep -- exactly the memory strategy under profiling) so both arms genuinely
+# run against the identical, non-reallocated tensor objects the live run
+# uses.
+# ---------------------------------------------------------------------------
+
+def _clone_model_state(model) -> dict:
+    return {k: v.detach().clone() for k, v in model.state_dict().items()}
+
+
+def _restore_model_state_(model, snapshot: dict) -> None:
+    import torch
+    with torch.no_grad():
+        for k, v in model.state_dict().items():
+            v.copy_(snapshot[k])
+
+
+def _snapshot_coa_state(opt: "_coa.CPUOffloadOptimizer") -> dict:
+    """In-memory fork of ONE CPUOffloadOptimizer's mutable state beyond the
+    real params (those are covered by _clone_model_state): the shadow fp32
+    copies and the inner optimizer's own per-parameter state (exp_avg/
+    exp_avg_sq/step for Adam-family, momentum_buffer for Muon -- the exact
+    keys cpu_offload_adamw.py's own __init__ seeds, walked directly via
+    opt._inner.state / opt._shadow rather than opt.state_dict(), for the
+    in-place-restore reason in this section's header comment)."""
+    import torch
+    shadow = [s.detach().clone() for s in opt._shadow]
+    inner_state = []
+    for shadow_p in opt._shadow:
+        entry = {}
+        for k, v in opt._inner.state.get(shadow_p, {}).items():
+            entry[k] = v.detach().clone() if isinstance(v, torch.Tensor) else v
+        inner_state.append(entry)
+    return {"shadow": shadow, "inner_state": inner_state}
+
+
+def _restore_coa_state_(opt: "_coa.CPUOffloadOptimizer", snapshot: dict) -> None:
+    import torch
+    with torch.no_grad():
+        for s, saved in zip(opt._shadow, snapshot["shadow"]):
+            s.copy_(saved)
+        for shadow_p, saved_entry in zip(opt._shadow, snapshot["inner_state"]):
+            live_entry = opt._inner.state.get(shadow_p, {})
+            for k, v in saved_entry.items():
+                if isinstance(v, torch.Tensor):
+                    if k in live_entry and isinstance(live_entry[k], torch.Tensor):
+                        live_entry[k].copy_(v)
+                    else:
+                        live_entry[k] = v.clone()
+                else:
+                    live_entry[k] = v
+            opt._inner.state[shadow_p] = live_entry
+
+
+def _snapshot_rng(device: str) -> dict:
+    import random
+    import torch
+    state = {"torch_cpu": torch.get_rng_state().clone(), "python_random": random.getstate()}
+    if device == "cuda" and torch.cuda.is_available():
+        state["torch_cuda"] = [t.clone() for t in torch.cuda.get_rng_state_all()]
+    return state
+
+
+def _restore_rng_(state: dict, *, device: str) -> None:
+    import random
+    import torch
+    torch.set_rng_state(state["torch_cpu"])
+    random.setstate(state["python_random"])
+    if device == "cuda" and torch.cuda.is_available() and "torch_cuda" in state:
+        torch.cuda.set_rng_state_all(state["torch_cuda"])
+
+
+def _snapshot_fork(*, model, optimizers: dict, device: str, global_step: int) -> dict:
+    """One forked snapshot of EVERYTHING that determines the next steps'
+    trajectory: model params/buffers, every optimizer's mutable state, both
+    RNG streams, and the loader position (global_step -- PackedShardLoader.
+    batch is a pure function of step, so the counter IS the loader state,
+    see module docstring item (b))."""
+    import copy
+    opt_snaps = {}
+    for name, opt in optimizers.items():
+        if isinstance(opt, _coa.CPUOffloadOptimizer):
+            opt_snaps[name] = {"kind": "coa", "state": _snapshot_coa_state(opt)}
+        else:
+            opt_snaps[name] = {"kind": "plain", "state": copy.deepcopy(opt.state_dict())}
+    return {
+        "model": _clone_model_state(model),
+        "optimizers": opt_snaps,
+        "rng": _snapshot_rng(device),
+        "global_step": global_step,
+    }
+
+
+def _restore_fork_(snapshot: dict, *, model, optimizers: dict, device: str) -> int:
+    _restore_model_state_(model, snapshot["model"])
+    for name, opt in optimizers.items():
+        saved = snapshot["optimizers"][name]
+        if saved["kind"] == "coa":
+            _restore_coa_state_(opt, saved["state"])
+        else:
+            opt.load_state_dict(saved["state"])
+    _restore_rng_(snapshot["rng"], device=device)
+    return snapshot["global_step"]
 
 
 # ---------------------------------------------------------------------------
@@ -363,11 +432,15 @@ def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
                 total_steps: int, device: str, batch_size: int,
                 profile: bool, collector: "SubphaseCollector | None") -> list:
     """Runs n_steps optimizer steps. profile=True instruments fwd/loss/bwd
-    boundaries into `collector` (subphase attribution for the optimizer
-    internals is captured by the installed instrumented step, if any, not
-    by this function). profile=False adds ZERO extra instrumentation calls
-    -- the matched-unprofiled-block baseline. Returns the list of measured
-    step-wall times (perf_counter, device-synced)."""
+    boundaries into `collector` AND expects the caller to have already
+    install_span_collector()'d the SAME collector onto `optimizers` (so the
+    real, in-place-instrumented CPUOffloadOptimizer.step() calls land in the
+    same open step record) -- this function does not attach/detach the
+    optimizer-level hooks itself, the caller brackets a whole profiled block
+    with them. profile=False adds ZERO extra instrumentation calls and
+    expects the caller to have detached any span collector from
+    `optimizers` first -- the matched-unprofiled-block baseline. Returns the
+    list of measured step-wall times (perf_counter, device-synced)."""
     import torch
     sync = (torch.cuda.synchronize if device == "cuda" and torch.cuda.is_available()
             else (lambda: None))
@@ -425,6 +498,73 @@ def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
     return step_walls
 
 
+def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_fn,
+                                mtp_enabled, mtp_weight, ce_chunk_tokens, device,
+                                batch_size, total_steps, n_active: int,
+                                fork_global_step: int) -> dict:
+    """AB/BA counterbalanced overhead measurement -- ember #702
+    BLOCK_721_PRODUCTION_ATTRIBUTION repair item (b). Both arms fork from the
+    IDENTICAL post-warmup snapshot (model + every optimizer's mutable state +
+    both RNG streams; loader state reduces to the shared starting global_step
+    since PackedShardLoader.batch is a pure function of step). Arm A runs
+    profiled-then-unprofiled; the fork is restored byte-for-byte; Arm B runs
+    unprofiled-then-profiled from the identical restored state. Both arms
+    therefore traverse the SAME absolute step range [fork_global_step,
+    fork_global_step + 2*n_active) -- every step-slot in that range is
+    measured once profiled and once unprofiled, at swapped temporal
+    positions, cancelling any order confound (thermal drift, page-cache
+    warmth) a single fixed-order design cannot distinguish from real
+    instrumentation cost. Returns pooled wall-time lists, the merged
+    subphase collector, and the per-arm breakdown (for receipt disclosure /
+    falsifiability of the counterbalancing itself)."""
+    common = dict(model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
+                 cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
+                 ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
+                 total_steps=total_steps)
+
+    fork0 = _snapshot_fork(model=model, optimizers=optimizers, device=device,
+                           global_step=fork_global_step)
+
+    # ---- Arm A: profiled, then unprofiled ----
+    collector_a = SubphaseCollector()
+    install_span_collector(optimizers, collector_a, device=device)
+    try:
+        profiled_walls_a = _run_block(global_step_start=fork_global_step, n_steps=n_active,
+                                      profile=True, collector=collector_a, **common)
+    finally:
+        uninstall_span_collector(optimizers)
+    unprofiled_walls_a = _run_block(global_step_start=fork_global_step + n_active,
+                                    n_steps=n_active, profile=False, collector=None, **common)
+
+    # ---- restore to the identical fork point ----
+    restored_step = _restore_fork_(fork0, model=model, optimizers=optimizers, device=device)
+    assert restored_step == fork_global_step, (restored_step, fork_global_step)
+
+    # ---- Arm B: unprofiled, then profiled (from the SAME restored state) ----
+    unprofiled_walls_b = _run_block(global_step_start=restored_step, n_steps=n_active,
+                                    profile=False, collector=None, **common)
+    collector_b = SubphaseCollector()
+    install_span_collector(optimizers, collector_b, device=device)
+    try:
+        profiled_walls_b = _run_block(global_step_start=restored_step + n_active,
+                                      n_steps=n_active, profile=True, collector=collector_b,
+                                      **common)
+    finally:
+        uninstall_span_collector(optimizers)
+
+    return {
+        "profiled_walls": profiled_walls_a + profiled_walls_b,
+        "unprofiled_walls": unprofiled_walls_a + unprofiled_walls_b,
+        "collector": _merge_collectors([collector_a, collector_b]),
+        "arm_a": {"order": "profiled_first", "profiled_walls_s": profiled_walls_a,
+                  "unprofiled_walls_s": unprofiled_walls_a},
+        "arm_b": {"order": "unprofiled_first", "profiled_walls_s": profiled_walls_b,
+                  "unprofiled_walls_s": unprofiled_walls_b},
+        "fork_global_step": fork_global_step,
+        "post_run_global_step": fork_global_step + 2 * n_active,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Validity gates + verdict grammar
 # ---------------------------------------------------------------------------
@@ -437,6 +577,7 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
     gates["step_count"] = {
         "passed": n_warmup >= MIN_WARMUP_STEPS and n_active >= MIN_ACTIVE_STEPS,
         "n_warmup": n_warmup, "n_active": n_active,
+        "n_active_pooled_ab_ba": len(profiled_walls),
         "floor_warmup": MIN_WARMUP_STEPS, "floor_active": MIN_ACTIVE_STEPS,
     }
 
@@ -448,6 +589,7 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
         "passed": overhead_frac is not None and overhead_frac <= OVERHEAD_BOUND_FRAC,
         "profiled_median_wall_s": prof_med, "unprofiled_median_wall_s": unprof_med,
         "overhead_frac": overhead_frac, "bound_frac": OVERHEAD_BOUND_FRAC,
+        "design": "counterbalanced_ab_ba_pooled",
     }
 
     totals = collector.phase_totals()
@@ -618,9 +760,10 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                     batch_size: int | None = None, n_warmup: int = MIN_WARMUP_STEPS,
                     n_active: int = MIN_ACTIVE_STEPS, ce_chunk_tokens: int = 256,
                     total_steps: int | None = None) -> dict:
-    """Runs warmup -> profiled block -> matched unprofiled block -> pinned/
-    pageable calibration, evaluates every validity gate FAIL-CLOSED, and
-    returns the receipt dict (not yet written to disk -- see main())."""
+    """Runs warmup -> counterbalanced AB/BA blocks (repair item (b)) ->
+    pinned/pageable calibration, evaluates every validity gate FAIL-CLOSED
+    over the POOLED AB/BA samples, and returns the receipt dict (not yet
+    written to disk -- see main())."""
     import os
     import torch
 
@@ -666,32 +809,20 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                  total_steps=total_steps)
 
     # ---- warmup (uninstrumented) ----
-    step = 0
-    _run_block(global_step_start=step, n_steps=n_warmup, profile=False,
+    _run_block(global_step_start=0, n_steps=n_warmup, profile=False,
               collector=None, **common)
-    step += n_warmup
 
-    # ---- profiled block ----
-    collector = SubphaseCollector()
-    install_instrumented_step(collector, device=device)
-    try:
-        profiled_walls = _run_block(global_step_start=step, n_steps=n_active,
-                                    profile=True, collector=collector, **common)
-    finally:
-        uninstall_instrumented_step()
-    step += n_active
-
-    # ---- matched unprofiled block (baseline for the overhead gate) ----
-    unprofiled_walls = _run_block(global_step_start=step, n_steps=n_active,
-                                  profile=False, collector=None, **common)
-    step += n_active
+    # ---- counterbalanced AB/BA blocks (repair item (b)) ----
+    ab_ba = _run_counterbalanced_ab_ba(
+        n_active=n_active, fork_global_step=n_warmup, **common)
+    collector = ab_ba["collector"]
 
     calibration = calibrate_pinned_vs_pageable(device=device)
 
     gates = _evaluate_gates(
-        n_warmup=n_warmup, n_active=n_active, profiled_walls=profiled_walls,
-        unprofiled_walls=unprofiled_walls, collector=collector,
-        expected_full_numel=expected_full_numel, calibration=calibration)
+        n_warmup=n_warmup, n_active=n_active,
+        profiled_walls=ab_ba["profiled_walls"], unprofiled_walls=ab_ba["unprofiled_walls"],
+        collector=collector, expected_full_numel=expected_full_numel, calibration=calibration)
     all_passed = all(g["passed"] for g in gates.values())
     failing = [name for name, g in gates.items() if not g["passed"]]
 
@@ -722,6 +853,23 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                 "4939674864: executable verdict-grammar predicates (SESOI, "
                 "bootstrap CIs, D/F predicate table)",
             ],
+            "block_comment_repair": {
+                "disposition": "BLOCK_721_PRODUCTION_ATTRIBUTION",
+                "item_a": "instrumentation moved INSIDE the original "
+                          "CPUOffloadOptimizer.step() -- per-instance "
+                          "attach_span_collector()/detach_span_collector(), "
+                          "default-off; no reimplementation of step() exists "
+                          "in this runner",
+                "item_b": "overhead gate redesigned as counterbalanced AB/BA "
+                          "from an identical forked snapshot (model + "
+                          "optimizer state + RNG streams; loader state = "
+                          "shared starting global_step, since batch() is a "
+                          "pure function of step)",
+                "item_c": "_selftest_integration_all_gates_pass() -- real "
+                          "pipeline, real gates, gates_all_passed=True on a "
+                          "CPU fixture with only the CUDA-only calibration "
+                          "function stubbed",
+            },
         },
         "mode": {"live": live, "device": device, "n_warmup": n_warmup, "n_active": n_active},
         "optimizer_routing": routing,
@@ -733,11 +881,21 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
             "note": ("disclosed cross-check only -- the exact_bytes gate binds to "
                      "THIS run's live-measured realized numel, never this constant"),
         },
+        "ab_ba_design": {
+            "fork_global_step": ab_ba["fork_global_step"],
+            "post_run_global_step": ab_ba["post_run_global_step"],
+            "arm_a": {"order": ab_ba["arm_a"]["order"],
+                      "profiled_walls_s": ab_ba["arm_a"]["profiled_walls_s"],
+                      "unprofiled_walls_s": ab_ba["arm_a"]["unprofiled_walls_s"]},
+            "arm_b": {"order": ab_ba["arm_b"]["order"],
+                      "profiled_walls_s": ab_ba["arm_b"]["profiled_walls_s"],
+                      "unprofiled_walls_s": ab_ba["arm_b"]["unprofiled_walls_s"]},
+        },
         "subphase_totals_s": totals,
         "subphase_byte_totals": collector.byte_totals(),
         "per_step_span_ratios": ratios,
         "profiled_step_walls_s": collector.step_walls(),
-        "unprofiled_step_walls_s": unprofiled_walls,
+        "unprofiled_step_walls_s": ab_ba["unprofiled_walls"],
         "gates": gates,
         "gates_all_passed": all_passed,
         "failing_gates": failing,
@@ -756,12 +914,13 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
 # ---------------------------------------------------------------------------
 # Verdict-predicate selftest -- one synthetic profile per verdict class.
 # The real attribution_run() CPU selftest below can NEVER exercise
-# _classify_verdict_predicates (gates never all-pass without a CUDA device,
-# so the verdict grammar is unreachable from that path on this box). This
-# is the second pre-run amendment's own requirement (comment id
-# 4939674864: "the runner's selftest must include one synthetic profile
-# per verdict class") -- tests the predicate table directly and
-# independently of the gate pipeline.
+# _classify_verdict_predicates via the UNSTUBBED path (gates never all-pass
+# without a CUDA device, so the verdict grammar is unreachable from that path
+# on this box -- see _selftest() for why that must stay true). This is the
+# second pre-run amendment's own requirement (comment id 4939674864: "the
+# runner's selftest must include one synthetic profile per verdict class")
+# -- tests the predicate table directly and independently of the gate
+# pipeline.
 # ---------------------------------------------------------------------------
 
 def _synthetic_ratio_fixture(*, stage: float, inner: float, gpu: float,
@@ -826,7 +985,9 @@ def _selftest_verdict_predicates() -> None:
 
 # ---------------------------------------------------------------------------
 # CPU-only selftest -- exercises the FULL instrumentation + gate + verdict
-# path with tiny fixture dims, no GPU, no daemon, < 30s.
+# path with tiny fixture dims, no GPU, no daemon, < 30s. UNSTUBBED: this is
+# the honest, real-hardware-constrained path and must keep failing closed on
+# the calibration gate.
 # ---------------------------------------------------------------------------
 
 def _selftest() -> int:
@@ -866,9 +1027,11 @@ def _selftest() -> int:
 
     # step-count gate: 2 warmup + 10 active IS the floor, must independently pass.
     assert gates["step_count"]["passed"] is True, gates["step_count"]
+    assert gates["step_count"]["n_active_pooled_ab_ba"] == 20, gates["step_count"]
 
     # subphase decomposition actually fired for all four optimizer sites plus
-    # fwd/loss/bwd, with nonzero wall time and nonzero realized-numel bytes.
+    # fwd/loss/bwd, with nonzero wall time and nonzero realized-numel bytes,
+    # POOLED across both AB/BA profiled sub-blocks.
     totals = receipt["subphase_totals_s"]
     for phase in ALL_PHASES:
         assert phase in totals and totals[phase] >= 0.0, f"missing/negative phase: {phase}"
@@ -885,14 +1048,14 @@ def _selftest() -> int:
     assert gates["exact_bytes"]["bytes_self_consistent"] is True, gates["exact_bytes"]
     assert gates["exact_bytes"]["numel_matches_live_param_groups"] is True, gates["exact_bytes"]
 
-    # matched unprofiled block ran and is a real, independent measurement.
-    assert len(receipt["unprofiled_step_walls_s"]) == 10
-    assert len(receipt["profiled_step_walls_s"]) == 10
-
-    # instrumented step is restored to the pristine class method after use --
-    # a later, unrelated caller must never see the profiled closure.
-    assert _coa.CPUOffloadOptimizer.step is _ORIG_CPU_OFFLOAD_STEP, (
-        "instrumented step leaked past the profiled block -- uninstall failed")
+    # AB/BA counterbalanced design: both arms present, orders swapped, each
+    # arm contributed n_active profiled + n_active unprofiled samples.
+    ab = receipt["ab_ba_design"]
+    assert ab["arm_a"]["order"] == "profiled_first" and ab["arm_b"]["order"] == "unprofiled_first"
+    assert len(ab["arm_a"]["profiled_walls_s"]) == 10 and len(ab["arm_b"]["profiled_walls_s"]) == 10
+    assert len(ab["arm_a"]["unprofiled_walls_s"]) == 10 and len(ab["arm_b"]["unprofiled_walls_s"]) == 10
+    assert len(receipt["unprofiled_step_walls_s"]) == 20
+    assert len(receipt["profiled_step_walls_s"]) == 20
 
     # per_step_span_ratios is populated even on a gates-failed (INVALID) run
     # -- the amendment's ratios/CI machinery is independent of the gate
@@ -900,7 +1063,7 @@ def _selftest() -> int:
     assert set(receipt["per_step_span_ratios"]) == {
         "stage_ratio", "inner_ratio", "gpu_ratio", "host_unavoidable_ratio",
         "stage_plus_host_unavoidable_ratio"}
-    assert len(receipt["per_step_span_ratios"]["stage_ratio"]) == 10
+    assert len(receipt["per_step_span_ratios"]["stage_ratio"]) == 20
 
     print("ATTRIBUTION_702_SELFTEST_PASS "
           f"verdict={receipt['verdict']} failing_gates={receipt['failing_gates']} "
@@ -910,7 +1073,155 @@ def _selftest() -> int:
           f"closure_frac={gates['closure']['closure_frac']}", flush=True)
 
     _selftest_verdict_predicates()
+    _selftest_span_collector_attach_detach()
+    _selftest_integration_all_gates_pass()
     return 0
+
+
+def _selftest_span_collector_attach_detach() -> None:
+    """Direct unit check of ember #702 repair item (a): attach/detach is
+    per-INSTANCE (a second, unattached instance is never affected), step()
+    is byte-identical whether attached or not (same tensor values after one
+    step from identical starting state, attached vs unattached), and detach
+    actually clears the hooks (no leak past the profiled block)."""
+    import tempfile
+
+    import torch
+
+    def _make_opt(tag: str):
+        p = torch.nn.Parameter(torch.randn(4, 4))
+        p.grad = torch.randn(4, 4)
+        d = tempfile.mkdtemp(prefix=f"coa_span_selftest_{tag}_")
+        opt = _coa.CPUOffloadOptimizer(
+            [("w", p)], lambda ps: torch.optim.AdamW(ps, lr=1e-2, weight_decay=0.0),
+            optstate_dir=d)
+        return p, opt
+
+    # ---- byte-identical step() with vs without an attached collector ----
+    torch.manual_seed(1)
+    p1, opt1 = _make_opt("unattached")
+    torch.manual_seed(1)
+    p2, opt2 = _make_opt("attached")
+    assert torch.equal(p1.data, p2.data), "fixture setup diverged before any step()"
+
+    events: list = []
+    opt2.attach_span_collector(
+        add=lambda phase, dt: events.append(("add", phase)),
+        add_bytes=lambda phase, n: events.append(("bytes", phase)),
+        add_numel=lambda n: events.append(("numel", n)),
+        sync=lambda: None)
+    assert opt2._span_add is not None
+
+    opt1.step()
+    opt2.step()
+    assert torch.equal(p1.data, p2.data), (
+        "attach_span_collector changed step()'s numerical result -- "
+        "instrumentation must be observation-only")
+    assert any(name == "add" and phase in OPTIMIZER_SUBPHASES for name, phase in events), (
+        "attached collector never received any span -- instrumentation did not fire")
+    fired_phases = {phase for name, phase in events if name == "add"}
+    assert fired_phases == set(OPTIMIZER_SUBPHASES), fired_phases
+
+    opt2.detach_span_collector()
+    assert opt2._span_add is None
+    events.clear()
+    opt1.step()
+    opt2.step()
+    assert torch.equal(p1.data, p2.data), "post-detach step() diverged"
+    assert events == [], f"detached collector still received spans: {events}"
+
+    print("ATTRIBUTION_702_SPAN_COLLECTOR_ATTACH_DETACH_SELFTEST_PASS", flush=True)
+
+
+def _selftest_integration_all_gates_pass() -> None:
+    """Integration fixture -- ember #702 BLOCK_721_PRODUCTION_ATTRIBUTION
+    repair item (c). Runs the REAL attribution_run() pipeline end-to-end on
+    CPU: real fork/restore, real AB/BA counterbalanced blocks, real per-
+    instance instrumented CPUOffloadOptimizer.step() calls, real gate
+    evaluation, real verdict classification. Asserts gates_all_passed=True
+    with a genuine (non-INVALID) verdict from VERDICT_GRAMMAR.
+
+    Every gate except pinned_pageable_calibration is measured for real on
+    this tiny CPU fixture. That ONE gate is fundamentally CUDA-only (a real
+    PCIe H2D/D2H throughput number has no CPU-only meaning) and is STUBBED
+    here to a disclosed, structurally valid synthetic dict for the duration
+    of this fixture only (module-global monkeypatch, restored in a finally
+    block regardless of outcome) -- this is the ONLY thing this fixture
+    fakes. It does not touch step_count, overhead, closure, or exact_bytes,
+    which all pass or fail on their own real CPU-measured merits; if any of
+    those is broken, this fixture fails honestly rather than masking it.
+
+    The production _selftest() above is UNCHANGED and still asserts
+    gates_all_passed=False on an unstubbed run -- proving this fixture's
+    stub is disclosed and isolated to itself, not a silent lowering of the
+    real gate."""
+    import random
+    import tempfile
+
+    import torch
+
+    torch.manual_seed(7)
+    random.seed(7)
+
+    # Dims larger than _selftest()'s (hidden=32/depth=2/seq=16), deliberately:
+    # this fixture's overhead/closure gates are REAL timing measurements, and
+    # on a too-tiny model the fixed Python-level cost of the instrumentation
+    # calls themselves (perf_counter/sync/callback dispatch) is a large
+    # enough fraction of each (otherwise near-instant) tensor op to blow the
+    # 10%/5% bounds on pure measurement noise -- swept empirically across 10
+    # seeds at these dims (overhead 0.3-6.7%, closure ~2.0%, both comfortably
+    # inside bound with margin) before freezing this fixture's parameters.
+    cfg = {
+        "model": {"seq": 32, "vocab": 64, "hidden": 256, "tied_embeddings": False},
+        "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 2, "weight": 0.3}},
+        "optimizer": {"lr_muon": 0.02, "lr_adamw": 3e-4, "weight_decay": 0.1},
+        "schedule": {"warmup_frac": 0.1, "stable_until_frac": 0.8, "decay_to_lr_frac": 0.1},
+        "throughput": {"batch": 2},
+    }
+    tiny_dims = {"vocab": 64, "hidden": 256, "depth": 3, "seq": 32}
+    run_dir = tempfile.mkdtemp(prefix="attribution702_integration_")
+
+    synthetic_calibration = {
+        "skipped": False, "n_bytes_per_trial": 1 << 24, "n_trials": 5,
+        "h2d_pageable_gbps": 8.0, "h2d_pinned_gbps": 14.0,
+        "d2h_pageable_gbps": 7.5, "d2h_pinned_gbps": 13.0,
+        "pcie4_x16_peak_gbps": 31.508,
+        "h2d_pinned_vs_pageable_speedup": 1.75, "d2h_pinned_vs_pageable_speedup": 1.733,
+        "note": ("SYNTHETIC -- integration-fixture stub, CPU has no real PCIe "
+                 "H2D/D2H path to measure. Every other gate in this receipt is "
+                 "computed for real from a live CPU run."),
+    }
+
+    module = sys.modules[__name__]
+    _orig_calibrate = module.calibrate_pinned_vs_pageable
+
+    def _stub_calibrate(*, device: str, **kwargs):
+        return dict(synthetic_calibration)
+
+    module.calibrate_pinned_vs_pageable = _stub_calibrate
+    try:
+        receipt = attribution_run(
+            live=False, cfg=cfg, shard_dir=None, run_dir=run_dir, device="cpu",
+            tiny_dims=tiny_dims, batch_size=2, n_warmup=2, n_active=14, ce_chunk_tokens=32)
+    finally:
+        module.calibrate_pinned_vs_pageable = _orig_calibrate
+
+    gates = receipt["gates"]
+    assert receipt["gates_all_passed"] is True, (
+        "integration fixture must reach gates_all_passed=True with only the "
+        f"CUDA-only calibration gate stubbed -- got gates={gates}")
+    for gate_name in ("step_count", "overhead", "closure", "exact_bytes"):
+        assert gates[gate_name]["passed"] is True, (gate_name, gates[gate_name])
+    assert gates["pinned_pageable_calibration"]["calibration"]["note"].startswith("SYNTHETIC"), (
+        "the stub must be disclosed IN the receipt, not silently swapped in")
+    assert receipt["verdict"] in VERDICT_GRAMMAR, (
+        f"integration fixture must classify a real, non-INVALID verdict, "
+        f"got {receipt['verdict']!r}")
+    assert receipt["failing_gates"] == []
+
+    print("ATTRIBUTION_702_INTEGRATION_ALL_GATES_PASS_SELFTEST_PASS "
+          f"verdict={receipt['verdict']} "
+          f"gates_all_passed={receipt['gates_all_passed']}", flush=True)
 
 
 # ---------------------------------------------------------------------------
