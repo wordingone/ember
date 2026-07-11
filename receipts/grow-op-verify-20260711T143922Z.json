@@ -1,0 +1,48 @@
+{
+  "ticket": "CBASE-GROW-CLAUSE-D-OP-VERIFY",
+  "ts": "2026-07-11T14:39:22.721987+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "experiment": "C-BASE-clause-d",
+  "arm": "grow-op-verify",
+  "scope": "deterministic net2net FF-widening (4096->8192) function-preservation AND save/reload/re-forward replay-across-shape-change check on the REAL owned from-scratch cbase-v0 seed checkpoint's real weights -- smallest available rung pair (issue #785)",
+  "seed_identity": {
+    "checkpoint": "models/cbase-smoke-run/checkpoints/step-00000610",
+    "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+    "manifest_claim_verified": true,
+    "segment_id": "cbase-v0",
+    "step": 610,
+    "pretrain_receipt": "receipts/v0-live-20260623T105829Z.json (contract repo import: v0 survivor-stack pretrain segment, loss 13.75->7.25, 610 steps, governed)"
+  },
+  "grow-operator": true,
+  "grow_dry_run": true,
+  "net2net": true,
+  "ff_seed": 4096,
+  "ff_grown": 8192,
+  "net2net_assertion": {
+    "passed": true,
+    "max_abs_diff": 3.337860107421875e-06,
+    "tolerance": 0.0001,
+    "method": "same fixed recorded token batch through pre-grow vs freshly-grown (pre-training) models; net2net FF-widening is function-preserving by construction (duplicated gate/up rows produce duplicated SwiGLU activations; the halved, duplicated down columns sum them back to the exact seed output)",
+    "input_batch": {
+      "batch": 2,
+      "seqlen": 128,
+      "token_ids_sha256": "f7fe16148dd1d133e738691ec0634d88978ff38023c672aa413d3b7c3996baf5",
+      "generator_seed": 42
+    }
+  },
+  "replay_assertion": {
+    "passed": true,
+    "procedure": "save grown checkpoint -> reload into fresh larger-shape model -> re-forward same recorded batch; the grown checkpoint replays",
+    "max_abs_diff_vs_post_grow": 0.0,
+    "tolerance_bf16_roundtrip": 0.05
+  },
+  "params_unique_before": 433890304,
+  "params_unique_after": 685548544,
+  "grown_checkpoint": "models/cbase-grow-clause-d-dryrun/grown-ff8192-20260711T143922Z/model.pt",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "device": "cpu",
+  "invalid_tokens_present": [],
+  "verdict": "PASS"
+}

@@ -1,0 +1,69 @@
+{
+  "ticket": "CBASE-GROW-CLAUSE-D-DRYRUN",
+  "ts": "2026-07-11T14:39:22.721987+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "experiment": "C-BASE-clause-d-dryrun",
+  "arm": "grow-operator-dryrun",
+  "spec_ref": "cbase_grow_dryrun.PASS_TOL=1e-4 (function-preservation) + replay_across_shape_change.replay_tolerance_bf16_roundtrip=0.05 (reload replay) -- both frozen, quoted verbatim from the existing contract in receipts/cbase-grow-dryrun-20260702T190532Z.json, never invented (issue #785)",
+  "scope": "C-BASE clause (d): net2net FF-widening (4096->8192) grow-operator dry-run on the REAL owned from-scratch cbase-v0 seed checkpoint, the SMALLEST available rung pair in this repo (466658304 params). Re-runs the exact grow already proven PASS on 2026-07-02 (receipts/cbase-grow-dryrun-20260702T190532Z.json), re-emitted under the hardened receipt schema. Deliberately excludes the rung-2 CPU sanity post-grow TRAINING segment (a separate, still-open, unrelated crash class -- see module docstring) since clause (d)'s own text does not require it.",
+  "grow-operator": true,
+  "grow_dry_run": true,
+  "grow-dry-run": true,
+  "net2net": true,
+  "larger-shape": true,
+  "larger_shape": true,
+  "pre_grow": true,
+  "post_grow": true,
+  "replays": true,
+  "replay_across_shape": true,
+  "grow_operator_evidence": "receipts/grow-op-verify-20260711T143922Z.json",
+  "seed_identity": {
+    "checkpoint": "models/cbase-smoke-run/checkpoints/step-00000610",
+    "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+    "manifest_claim_verified": true,
+    "segment_id": "cbase-v0",
+    "step": 610,
+    "pretrain_receipt": "receipts/v0-live-20260623T105829Z.json (contract repo import: v0 survivor-stack pretrain segment, loss 13.75->7.25, 610 steps, governed)"
+  },
+  "ff_seed": 4096,
+  "ff_grown": 8192,
+  "param_count_before": 466658304,
+  "param_count_after": 718316544,
+  "params_unique_before": 433890304,
+  "params_unique_after": 685548544,
+  "params_dedup": {
+    "measured_duplicate_numel": 32768000,
+    "tied_pairs_detected": [
+      "backbone_model.embed_tokens.weight==head.weight"
+    ]
+  },
+  "function_preservation_check": {
+    "mechanism": "same fixed recorded token batch through pre-grow vs freshly-grown (pre-training) models; net2net FF-widening is function-preserving by construction",
+    "input_batch": {
+      "batch": 2,
+      "seqlen": 128,
+      "token_ids_sha256": "f7fe16148dd1d133e738691ec0634d88978ff38023c672aa413d3b7c3996baf5",
+      "generator_seed": 42
+    },
+    "logit_max_abs_diff": 3.337860107421875e-06,
+    "pass_tolerance": 0.0001,
+    "function_preserving": true
+  },
+  "replay_across_shape_change": {
+    "procedure": "save grown checkpoint -> reload into fresh larger-shape model -> re-forward same recorded batch; the grown checkpoint replays",
+    "logit_max_abs_diff_vs_post_grow": 0.0,
+    "replay_tolerance_bf16_roundtrip": 0.05,
+    "replays": true
+  },
+  "grown_checkpoint": "models/cbase-grow-clause-d-dryrun/grown-ff8192-20260711T143922Z/model.pt",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "invalid_tokens_present": [],
+  "device": "cpu",
+  "measured_on_train_daemon": false,
+  "script": "scripts/cbase_grow_clause_d_dryrun.py",
+  "pass": true,
+  "verdict": "PASS",
+  "kill_criterion": null
+}
