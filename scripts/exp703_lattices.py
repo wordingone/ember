@@ -104,6 +104,23 @@ class GreedyLongestMatchTokenizer:
         self.eot_symbol = eot_symbol
         self.max_len = max((len(v) for v in self.vocab), default=1)
 
+    def safe_lock_horizon(self) -> int:
+        """PROVEN sufficient lookahead depth for classification-locking: a
+        greedy-longest-match decision at any position is made within
+        `max_len` bytes of examination (either a vocab entry of length
+        <= max_len matches, or matching fails at every length down to 1 and
+        falls back to a single byte) and, once made, is NEVER revisited by
+        later bytes (greedy matching is strictly left-to-right, no
+        backtracking). So verifying `is_target` is constant across every
+        continuation up to `max_len` MORE bytes is a complete proof, not a
+        depth-limited sample -- this is what
+        exp703_marginalization.cylinder_mass_ground_truth uses in place of
+        a fixed `verify_depth` constant (issue #703 PR #759 coordinator gate
+        blocker 1, PPM703_FINITE_LOCK_COUNTEREXAMPLE_PASS: a 7-symbol vocab
+        entry needs exactly 7 bytes of lookahead; a fixed default of 6
+        undershoots by one and produces a premature false lock)."""
+        return self.max_len
+
     def segment(self, symbols: tuple) -> list:
         assert symbols and symbols[-1] == self.eot_symbol, \
             "GreedyLongestMatchTokenizer.segment requires an EOT-terminated input"
@@ -149,6 +166,24 @@ class BpeMergeTokenizer:
         self.merges = list(merges)
         self.eot_symbol = eot_symbol
         self.pre_splitter_symbols = pre_splitter_symbols
+
+    def safe_lock_horizon(self):
+        """NO sound static bound in general: merge priority is evaluated
+        over the WHOLE open chunk (everything since the last pre-splitter
+        symbol or document start), and a chunk can grow arbitrarily long
+        before a pre-splitter or EOT closes it -- a merge decision at
+        position 0 can depend on bytes arbitrarily far ahead (issue #703 PR
+        #759 coordinator gate blocker 1,
+        PPM703_OWN_BPE_FINITE_LOCK_COUNTEREXAMPLE_PASS: a 7-base-symbol,
+        6-merge cascade needs exactly 7 bytes of lookahead, and there is no
+        vocab-length-style constant to derive it from ahead of time).
+        Returning None tells the exhaustive oracle to apply NO
+        depth-limited lock shortcut and instead recurse genuinely until
+        each branch reaches a real, materialized token-boundary-closing
+        event (a real pre-splitter emission or a real EOT) -- exactly the
+        module's own documented 'dumb, unpruned, recurse to true EOT'
+        design goal, for the tokenizer class it was always meant for."""
+        return None
 
     def _pre_split(self, body: tuple) -> list[list]:
         chunks: list[list] = [[]]

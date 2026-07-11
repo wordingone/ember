@@ -97,22 +97,49 @@ def _classification_locked(tokenizer, boundary_bytes: tuple, ext: tuple, alphabe
 
 def cylinder_mass_ground_truth(model, tokenizer, boundary_bytes: tuple, boundary_tokens: tuple,
                                 k: int, candidate: tuple, alphabet_symbols: list, eot_symbol: int,
-                                verify_depth: int = 6, max_depth: int = 40) -> float:
+                                max_depth: int = 200, prob_floor: float = 1e-15) -> float:
     """Exhaustive enumeration, independent of any production lookahead
     assumption: at every node, first handle the genuine-EOT-now branch
     exactly (real tokens, real probability), then for the remaining
-    (non-EOT-here) mass, check via `_classification_locked` -- a purely
-    syntactic, adaptively-deep local brute force over `verify_depth`
-    additional bytes -- whether the token-k classification is ALREADY fixed
-    regardless of what happens next. If so, attribute the remaining mass
-    directly (exact, by total-probability: the model's own next-symbol
-    distribution always sums to 1, so an unresolved subtree's mass equals
-    its prefix probability). If not yet locked, recurse one more byte and
-    repeat the check. No vocab/trie structure is consulted anywhere in this
-    function -- only the model's raw probabilities and the tokenizer's own
-    segment() output."""
+    (non-EOT-here) mass, dispatch on `tokenizer.safe_lock_horizon()`:
+
+    - If it returns an int H (a PROVEN, tokenizer-derived bound --
+      GreedyLongestMatchTokenizer returns its own `max_len`, the longest
+      vocab entry, since greedy matching commits within that many bytes and
+      never revisits an earlier decision): check via `_classification_locked`
+      -- a purely syntactic local brute force over EXACTLY H additional
+      bytes, no more, no fewer -- whether the token-k classification is
+      ALREADY fixed regardless of what happens next. If so, attribute the
+      remaining mass directly (exact, by total-probability). This replaces
+      a fixed `verify_depth` magic constant (issue #703 PR #759 coordinator
+      gate blocker 1: a hardcoded default of 6 undershoots a 7-symbol vocab
+      entry by exactly one byte and produces a premature false lock,
+      PPM703_FINITE_LOCK_COUNTEREXAMPLE_PASS) with a per-fixture PROVEN
+      bound -- H is a property of the tokenizer under test, never guessed.
+    - If it returns None (no tokenizer-provided bound exists -- e.g.
+      BpeMergeTokenizer, where a merge decision can depend on the WHOLE
+      open chunk and there is no vocab-length-style constant to derive a
+      bound from): apply NO lock shortcut at all. Recurse genuinely,
+      following every alphabet symbol, until each branch reaches either a
+      real emitted EOT (handled exactly, every step, via the `p_eot`
+      branch above) or its CUMULATIVE probability (`prob_so_far * remaining`)
+      drops below `prob_floor` -- a bounded NUMERICAL truncation (the
+      omitted mass is smaller than `prob_floor`, far below the 1e-9
+      tolerance every caller in this module checks against), never a
+      CLASSIFICATION assumption: this branch makes no claim about what
+      `is_target` would evaluate to, it only stops enumerating a subtree
+      whose total contribution to `total` -- true or false -- is already
+      numerically negligible. This is the module's own documented 'dumb,
+      unpruned, recurse to true EOT' design goal, finally applied only to
+      the tokenizer class that actually needs it
+      (PPM703_OWN_BPE_FINITE_LOCK_COUNTEREXAMPLE_PASS).
+
+    No vocab/trie structure is consulted anywhere in this function -- only
+    the model's raw probabilities and the tokenizer's own segment() output
+    (plus, for the horizon case, the tokenizer's own derived `max_len`)."""
     is_target = make_is_target(boundary_tokens, k, candidate, eot_symbol)
     total = 0.0
+    horizon = getattr(tokenizer, "safe_lock_horizon", lambda: None)()
 
     def rec(ext: tuple, prob_so_far: float, context: tuple, depth: int):
         nonlocal total
@@ -126,17 +153,24 @@ def cylinder_mass_ground_truth(model, tokenizer, boundary_bytes: tuple, boundary
         remaining = 1.0 - p_eot
         if remaining <= 1e-15:
             return
-        locked, cls = _classification_locked(tokenizer, boundary_bytes, ext, alphabet_symbols,
-                                              eot_symbol, is_target, verify_depth)
-        if locked:
-            if cls:
-                total += prob_so_far * remaining
+        if horizon is not None:
+            locked, cls = _classification_locked(tokenizer, boundary_bytes, ext, alphabet_symbols,
+                                                  eot_symbol, is_target, horizon)
+            if locked:
+                if cls:
+                    total += prob_so_far * remaining
+                return
+        elif prob_so_far * remaining <= prob_floor:
+            # No proven horizon (e.g. BpeMergeTokenizer): bounded numerical
+            # truncation only, NOT a classification assumption -- see
+            # docstring. The omitted mass is < prob_floor.
             return
         if depth > max_depth:
             raise AssertionError(
                 f"cylinder_mass_ground_truth: max_depth {max_depth} exceeded without "
-                f"locking (ext={ext}) -- lattice fixture under-specified or "
-                f"verify_depth too small")
+                f"locking or negligible-probability termination (ext={ext}, "
+                f"cumulative_prob={prob_so_far * remaining:.3e}, horizon={horizon}) -- "
+                f"lattice fixture under-specified")
         for sym in alphabet_symbols:
             p_sym = probs.get(sym, 0.0)
             if p_sym <= 0.0:

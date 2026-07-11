@@ -29,14 +29,24 @@ Frozen conventions this module implements (issue #703 coordinator comment
   - Order -1 floor = uniform distribution over the full alphabet (257 for the
     real model; `alphabet_size` for toy instantiations used by the lattice
     correctness proofs in exp703_lattices.py / exp703_marginalization.py).
-  - State budget cap: refusal (raises PpmStateCapExceeded) once the model's
-    ESTIMATED resident state exceeds `state_cap_bytes` (default 8 GiB). The
-    estimate is a disclosed heuristic (fixed per-node + per-count-entry
-    overhead), not a live process-memory measurement -- adequate for a hard
-    refusal gate at apparatus-build stage; tightening to a live measurement
-    (tracemalloc/resource) is a candidate follow-up, not required by this
-    apparatus PR (no training run against the real 100MB slice happens in
-    this PR -- see train_from_file's parameterized, non-hardcoded path).
+  - State budget cap: TWO-TIER refusal (raises PpmStateCapExceeded).
+    `approx_state_bytes()` is a CHEAP, NON-AUTHORITATIVE heuristic (fixed
+    per-node + per-count-entry overhead) checked on every training call for
+    a fast, always-on first line of defense -- but a measured counterexample
+    (order_cap=8, alphabet_size=257, 4000 bytes from `random.Random(42)`,
+    state_cap_bytes=8,000,000) shows it can under-count LIVE (tracemalloc)
+    memory by ~3.16x (approx=4,496,152 vs live=14,194,992), i.e. it can
+    report "under cap" while the process is already well over it -- a
+    fail-open on the decisive statistic. The AUTHORITATIVE check is
+    `live_state_bytes()` (tracemalloc.get_traced_memory()[0]), invoked by
+    `_check_live_cap()` whenever the cheap heuristic crosses
+    `LIVE_CHECK_TRIGGER_FRACTION` of the cap (derived with a >2x safety
+    margin below the measured 3.16x worst-case undercount ratio, so the
+    authoritative check engages well before a heuristic-only pass could
+    mask a real breach) or every `LIVE_CHECK_INTERVAL` training calls,
+    whichever comes first -- this is a MEASURED margin, not a guessed one.
+    `state_cap_bytes` is enforced against the LIVE measurement; the
+    heuristic alone is never sufficient grounds to proceed near the cap.
 
 This module is CPU-only, pure Python, no external dependencies.
 """
@@ -46,6 +56,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+import tracemalloc
 from dataclasses import dataclass, field
 
 
@@ -72,6 +83,18 @@ class PpmModel:
     NODE_OVERHEAD_BYTES = 96     # disclosed heuristic: dict + node object overhead
     ENTRY_OVERHEAD_BYTES = 56    # disclosed heuristic: one (symbol -> count) dict entry
 
+    # Measured worst-case undercount ratio of the heuristic vs tracemalloc-
+    # live memory (order_cap=8, alphabet_size=257, 4000 bytes from
+    # random.Random(42), state_cap_bytes=8,000,000): approx=4,496,152 vs
+    # live=14,194,992 -> ratio 3.1571. LIVE_CHECK_TRIGGER_FRACTION is set to
+    # roughly HALF of 1/ratio (1/3.1571 = 0.3167 -> ~0.15), i.e. a >2x safety
+    # margin below the measured worst case, so the authoritative tracemalloc
+    # check engages well before a heuristic-only pass near the cap could be
+    # masking a real breach -- a measured margin, not a guessed constant.
+    MEASURED_WORST_CASE_UNDERCOUNT_RATIO = 3.1571
+    LIVE_CHECK_TRIGGER_FRACTION = 0.15
+    LIVE_CHECK_INTERVAL = 100    # also force a live check every N training calls
+
     def __init__(self, alphabet_size: int = 257, order_cap: int = 8,
                  state_cap_bytes: int = 8 * 1024 ** 3, eot_symbol: int | None = None):
         if alphabet_size < 2:
@@ -89,19 +112,61 @@ class PpmModel:
         self._approx_bytes = 0
         self.symbols_trained = 0
         self.documents_trained = 0
+        self._live_check_counter = 0
+        # Ensure tracemalloc is tracing so the AUTHORITATIVE governor
+        # (_check_live_cap) has real data; track whether THIS instance
+        # started it so a caller who already had tracemalloc running for
+        # their own purposes is never stopped out from under them.
+        self._owns_tracemalloc = not tracemalloc.is_tracing()
+        if self._owns_tracemalloc:
+            tracemalloc.start()
 
     # ---- state accounting -------------------------------------------------
 
     def approx_state_bytes(self) -> int:
+        """CHEAP, NON-AUTHORITATIVE heuristic estimate (fixed per-node +
+        per-count-entry overhead). Measured to under-count true resident
+        memory by ~3.16x in the worst case tested (see
+        MEASURED_WORST_CASE_UNDERCOUNT_RATIO) -- never sufficient alone to
+        conclude the model is under `state_cap_bytes`; use
+        `live_state_bytes()` for the authoritative figure."""
         return self._approx_bytes
 
+    def live_state_bytes(self) -> int:
+        """AUTHORITATIVE live measurement via tracemalloc.get_traced_memory()
+        -- the current traced allocation size, in bytes. This is what
+        `_check_live_cap` enforces `state_cap_bytes` against."""
+        current, _peak = tracemalloc.get_traced_memory()
+        return current
+
     def _check_cap(self):
+        # Tier 1: cheap heuristic pre-check, on every call (fast, always on).
         if self._approx_bytes > self.state_cap_bytes:
             raise PpmStateCapExceeded(
                 f"PPM state estimate {self._approx_bytes} bytes exceeds cap "
                 f"{self.state_cap_bytes} bytes (order_cap={self.order_cap}, "
                 f"alphabet_size={self.alphabet_size}, "
                 f"symbols_trained={self.symbols_trained})"
+            )
+        # Tier 2: authoritative tracemalloc check, throttled by a measured
+        # trigger fraction of the cap OR a fixed call interval -- whichever
+        # comes first -- so it engages long before the heuristic's known
+        # worst-case undercount could mask a real breach.
+        self._live_check_counter += 1
+        due = (self._live_check_counter >= self.LIVE_CHECK_INTERVAL
+               or self._approx_bytes >= self.state_cap_bytes * self.LIVE_CHECK_TRIGGER_FRACTION)
+        if not due:
+            return
+        self._live_check_counter = 0
+        live_current = self.live_state_bytes()
+        if live_current > self.state_cap_bytes:
+            raise PpmStateCapExceeded(
+                f"PPM LIVE (tracemalloc) memory {live_current} bytes exceeds cap "
+                f"{self.state_cap_bytes} bytes (heuristic estimate was "
+                f"{self._approx_bytes} bytes -- non-authoritative, see "
+                f"approx_state_bytes()/live_state_bytes() docstrings). "
+                f"order_cap={self.order_cap}, alphabet_size={self.alphabet_size}, "
+                f"symbols_trained={self.symbols_trained}"
             )
 
     def _get_node(self, order: int, context: tuple, create: bool) -> _Node | None:

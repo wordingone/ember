@@ -18,6 +18,18 @@ pass, no slice measurement, no Claim A/B number):
       BLOCK_NAIVE_BYTE_STRING_RENORMALIZATION reproduces the frozen fixture's
       L1 error (0.589655) on the coordinator's own vocab{a,ab,b} fixture.
 
+  PPM703_FINITE_LOCK_COUNTEREXAMPLE_PASS
+  PPM703_OWN_BPE_FINITE_LOCK_COUNTEREXAMPLE_PASS
+      Mandatory-negative regression fixtures (issue #703 PR #759 coordinator
+      gate blocker 1): the OLD `_classification_locked(verify_depth=6)`
+      oracle falsely locked classification without examining byte 7+,
+      reporting 0.0 (premature false lock) on both fixtures instead of the
+      analytic 0.5**7 == 0.0078125 -- receipted OLD-code failure in
+      scratchpad/repro_blocker1_negative.py. The CURRENT
+      `safe_lock_horizon()`-dispatched oracle (exp703_lattices.py +
+      exp703_marginalization.cylinder_mass_ground_truth) must report the
+      exact analytic value on both, permanently.
+
   PPM703_P2_BLEND_DEFINITION_PASS
       P_ppm_tok(t|F) := P_ppm(E_k(t) n F_{k-1}) / P_ppm(F_{k-1}), implemented
       definition-first (exp703_marginalization.p_ppm_tok), matches ground
@@ -26,6 +38,23 @@ pass, no slice measurement, no Claim A/B number):
   PPM703_STATE_CAP_ASSERT_PASS
       PpmModel refuses (raises PpmStateCapExceeded) once estimated resident
       state exceeds a configured cap.
+
+  PPM703_UTF8_FOUR_BYTE_BOUNDARY_COUNTEREXAMPLE_PASS
+  PPM703_UTF8_DFA_RFC3629_MANDATORY_FIXTURES_PASS
+      Mandatory-negative regression fixture (issue #703 PR #759 coordinator
+      gate blocker 3, UTF-8 repair defect): the OLD `restricted_next_byte_
+      probs` derived UTF-8 restriction state from a raw `context[-3:]`
+      suffix decoded standalone, misreading a completed 4-byte codepoint's
+      tail as a dead mid-sequence state (ZeroDivisionError) -- receipted OLD-
+      code failure in scratchpad/verify_dfa_fixtures.py. The CURE carries an
+      EXPLICIT UTF-8 DFA state (exp703_domain_d.utf8_dfa_state_from_history)
+      simulated over the full context, never a raw-suffix guess; RFC 3629
+      correctness (overlong encodings, UTF-16 surrogate range, > U+10FFFF)
+      is verified by exhaustive cross-check against CPython's own strict
+      UTF-8 codec, plus mandatory positive (completed 1/2/3/4-byte
+      codepoints permit ASCII+EOT) and negative (partial-lead states permit
+      only correct continuations and forbid EOT; the rejection set carries
+      zero mass; DFA state survives PPM order-cap truncation) fixtures.
 
   PPM703_P0_DOMAIN_INCIDENCE_PASS branch=b
       AMENDMENT-1 + AMENDMENT-1a (issue #703): domain-D (valid-UTF-8,
@@ -42,10 +71,17 @@ Usage: python scripts/exp703_selftest.py
 from __future__ import annotations
 
 import os
+import random
 import sys
 
 from exp703_ppm_model import PpmModel, PpmStateCapExceeded
-from exp703_lattices import ALL_CASES, case_i_prefix_antichain, GreedyLongestMatchTokenizer
+from exp703_lattices import (
+    ALL_CASES,
+    case_i_prefix_antichain,
+    GreedyLongestMatchTokenizer,
+    BpeMergeTokenizer,
+    FixedFixtureModel,
+)
 from exp703_marginalization import (
     cylinder_mass_ground_truth,
     cylinder_mass_bounded_lookahead,
@@ -58,6 +94,12 @@ from exp703_domain_d import (
     document_domain_census,
     p0_branch_b_citation,
     at_utf8_boundary,
+    is_valid_utf8_prefix,
+    utf8_dfa_state_from_history,
+    allowed_next_bytes_from_state,
+    UTF8_READY,
+    _lead_transition,
+    utf8_dfa_step,
 )
 
 EQ_TOL = 1e-9
@@ -231,6 +273,106 @@ def run_p1_naive_renorm_negative_control() -> bool:
     return ok
 
 
+def run_p1_finite_lock_counterexamples() -> bool:
+    """Mandatory-negative regression fixtures for issue #703 PR #759
+    coordinator gate blocker 1 (external falsifier, executed at head
+    bea12ed): `_classification_locked(verify_depth=6)` was a depth-bounded
+    check that FALSELY claimed classification lock without examining byte
+    7+, giving `cylinder_mass_ground_truth` == 0.0 (premature false lock)
+    on both fixtures below instead of the analytic 0.5**7 == 0.0078125.
+
+    Receipt (scratchpad/repro_blocker1_negative.py, run against the OLD
+    `verify_depth=6` signature BEFORE the safe_lock_horizon() cure landed):
+      [counterexample 1] cylinder_mass_ground_truth(verify_depth=6) = 0.0
+      [counterexample 2] cylinder_mass_ground_truth(verify_depth=6) = 0.0
+    Both OLD-code runs demonstrably FAILED (0.0 vs analytic 0.0078125) while
+    `cylinder_mass_bounded_lookahead(L_eff=7)` already reported the exact
+    value -- proving PPM703_P1_EXHAUSTIVE_EQUALITY_PASS was, before the cure,
+    agreement of two computations rather than an independent proof.
+
+    These fixtures are now PERMANENT: this function asserts the CURRENT
+    (safe_lock_horizon()-dispatched) oracle reports the exact analytic value
+    on both, going forward -- a regression back to any fixed-depth
+    verify_depth-style shortcut will re-fail this leg.
+
+    NOTE on alphabet_symbols: per this module's own convention (see every
+    ALL_CASES lattice fixture, e.g. line ~429's explicit comment), the
+    `alphabet_symbols` argument passed to cylinder_mass_ground_truth/
+    cylinder_mass_bounded_lookahead EXCLUDES eot_symbol -- EOT is handled
+    exclusively via the dedicated p_eot branch inside the recursion, never
+    as an item the "extend one more byte" loop also recurses into. Including
+    EOT in alphabet_symbols for a tokenizer whose safe_lock_horizon() is
+    None (counterexample 2's BpeMergeTokenizer) drives the genuine-recursion
+    branch into segmenting a byte stream containing EOT mid-sequence, which
+    is undefined behavior for BpeMergeTokenizer.segment() -- an artifact of
+    a malformed caller, not a defect in the oracle.
+    """
+    ok = True
+    ANALYTIC = 0.5 ** 7  # = 0.0078125
+
+    # -- counterexample 1: delayed-decision GreedyLongestMatchTokenizer -----
+    # alphabet {A=0, EOT=1}, memoryless P(A)=P(EOT)=0.5 at every context.
+    # vocab = one 7-symbol entry (A,)*7 (greedy longest match, single-byte
+    # fallback otherwise). A greedy decision at position 0 needs exactly 7
+    # bytes of lookahead to know whether the full entry matched -- one MORE
+    # than the OLD hardcoded verify_depth=6 default examined.
+    A, EOT_A = 0, 1
+    model1 = FixedFixtureModel(alphabet_size=2, table={}, default={A: 0.5, EOT_A: 0.5})
+    tok1 = GreedyLongestMatchTokenizer([(A,) * 7], eot_symbol=EOT_A)
+    alphabet_symbols1 = [A]  # EOT excluded, per module convention (see docstring)
+    candidate1 = (A,) * 7
+    gt1 = cylinder_mass_ground_truth(model1, tok1, (), (), 1, candidate1,
+                                      alphabet_symbols1, EOT_A, max_depth=40)
+    bl1 = cylinder_mass_bounded_lookahead(model1, tok1, (), (), 1, candidate1,
+                                           alphabet_symbols1, EOT_A, L_eff=7, max_depth=40)
+    cx1_ok = abs(gt1 - ANALYTIC) < EQ_TOL and abs(bl1 - ANALYTIC) < EQ_TOL
+    ok = ok and cx1_ok
+    print(f"  [finite-lock cx1] tokenizer.safe_lock_horizon()={tok1.safe_lock_horizon()} "
+          f"ground_truth={_fmt(gt1)} bounded_lookahead={_fmt(bl1)} "
+          f"analytic={_fmt(ANALYTIC)} {'PASS' if cx1_ok else 'FAIL'}")
+    print(f"PPM703_FINITE_LOCK_COUNTEREXAMPLE_PASS={cx1_ok}")
+
+    # -- counterexample 2: this PR's own BpeMergeTokenizer -------------------
+    # 7 base symbols S0..S6, 6 priority merges cascading S0,S1 -> S0,S1,S2
+    # -> ... -> the full 7-symbol candidate token. At each prefix-context,
+    # p(next cascade symbol)=0.5, p(EOT)=0.5 (mirrors counterexample 1's
+    # structure exactly). BpeMergeTokenizer has NO sound static lookahead
+    # bound (a merge decision can depend on the whole open chunk), so
+    # safe_lock_horizon() returns None and the oracle must fall back to
+    # genuine (numerically-truncated, not classification-assumption-
+    # truncated) recursion to reach the correct value.
+    S0, S1, S2, S3, S4, S5, S6, EOT_B = 0, 1, 2, 3, 4, 5, 6, 7
+    merges = [
+        ((S0,), (S1,)), ((S0, S1), (S2,)), ((S0, S1, S2), (S3,)),
+        ((S0, S1, S2, S3), (S4,)), ((S0, S1, S2, S3, S4), (S5,)),
+        ((S0, S1, S2, S3, S4, S5), (S6,)),
+    ]
+    seq = [S0, S1, S2, S3, S4, S5, S6]
+    rows = {(): {S0: 0.5, S1: 0.0, S2: 0.0, S3: 0.0, S4: 0.0, S5: 0.0, S6: 0.0, EOT_B: 0.5}}
+    for i in range(1, 7):
+        row = {s: 0.0 for s in seq}
+        row[seq[i]] = 0.5
+        row[EOT_B] = 0.5
+        rows[tuple(seq[:i])] = row
+    model2 = FixedFixtureModel(alphabet_size=8, table=rows,
+                                default={s: 0.0 for s in seq} | {EOT_B: 1.0})
+    tok2 = BpeMergeTokenizer(merges, eot_symbol=EOT_B)
+    alphabet_symbols2 = list(seq)  # EOT excluded, per module convention (see docstring)
+    candidate2 = tuple(seq)
+    gt2 = cylinder_mass_ground_truth(model2, tok2, (), (), 1, candidate2,
+                                      alphabet_symbols2, EOT_B, max_depth=200)
+    bl2 = cylinder_mass_bounded_lookahead(model2, tok2, (), (), 1, candidate2,
+                                           alphabet_symbols2, EOT_B, L_eff=7, max_depth=200)
+    cx2_ok = abs(gt2 - ANALYTIC) < EQ_TOL and abs(bl2 - ANALYTIC) < EQ_TOL
+    ok = ok and cx2_ok
+    print(f"  [finite-lock cx2] tokenizer.safe_lock_horizon()={tok2.safe_lock_horizon()} "
+          f"ground_truth={_fmt(gt2)} bounded_lookahead={_fmt(bl2)} "
+          f"analytic={_fmt(ANALYTIC)} {'PASS' if cx2_ok else 'FAIL'}")
+    print(f"PPM703_OWN_BPE_FINITE_LOCK_COUNTEREXAMPLE_PASS={cx2_ok}")
+
+    return ok
+
+
 def run_p2_blend_definition() -> bool:
     ok = True
     details = []
@@ -258,28 +400,73 @@ def run_p2_blend_definition() -> bool:
 
 
 def run_state_cap_assert() -> bool:
-    # Deliberately tiny cap so training a modest toy corpus overflows it
-    # deterministically. order_cap kept small (3) to make node/entry growth
-    # fast relative to the tiny cap.
+    ok = True
+
+    # -- tier 1: tiny-cap sanity check (deterministic, fast) ----------------
+    # Deliberately tiny cap so training a modest toy corpus overflows even
+    # the CHEAP heuristic estimate deterministically. In practice tracemalloc
+    # tracks PROCESS-WIDE allocations (the same methodology as the
+    # coordinator's own fixture), so for a cap this small tier 2 (live) may
+    # fire before tier 1 (heuristic) does -- the raised exception's own
+    # message discloses which -- either is a legitimate PASS here; the
+    # claim under test is only "the governor refuses at a tiny cap", not
+    # "tier 1 specifically fires first".
     tiny_cap_bytes = 2000
-    model = PpmModel(alphabet_size=257, order_cap=3, state_cap_bytes=tiny_cap_bytes)
-    raised = False
+    model_tiny = PpmModel(alphabet_size=257, order_cap=3, state_cap_bytes=tiny_cap_bytes)
+    tier1_raised = False
     n_trained = 0
     try:
-        # deterministic pseudo-random-looking byte stream (LCG) covering a
-        # wide symbol range to force many distinct trie nodes quickly.
         state = 12345
         for i in range(200000):
             state = (state * 1103515245 + 12345) & 0x7FFFFFFF
             b = state % 256  # never emits EOT (256), stays mid-document
-            model.train_symbol_stream_byte(b)
+            model_tiny.train_symbol_stream_byte(b)
             n_trained += 1
     except PpmStateCapExceeded as e:
-        raised = True
-        print(f"  PpmStateCapExceeded raised after {n_trained} symbols: {e}")
-    ok = raised
-    print(f"  cap_bytes={tiny_cap_bytes} approx_state_bytes_at_raise="
-          f"{model.approx_state_bytes()}")
+        tier1_raised = True
+        print(f"  tier1 (heuristic-only, tiny cap): PpmStateCapExceeded raised "
+              f"after {n_trained} symbols: {e}")
+    ok = ok and tier1_raised
+    print(f"  tier1 cap_bytes={tiny_cap_bytes} "
+          f"approx_state_bytes_at_raise={model_tiny.approx_state_bytes()} "
+          f"{'PASS' if tier1_raised else 'FAIL'}")
+
+    # -- tier 2: mandatory-negative fixture -- authoritative live governor --
+    # Reproduces the coordinator's exact fail-open counterexample
+    # (PPM703_STATE_CAP_HEURISTIC_FAILOPEN_PASS, PR #759 coordinator gate):
+    # order_cap=8, alphabet_size=257, bytes from random.Random(42),
+    # state_cap_bytes=8,000,000. Measured: the OLD heuristic-only
+    # `_check_cap` reported approx=4,496,152 (under cap) while tracemalloc
+    # showed live=14,194,992 (well over cap) -- a fail-open on the decisive
+    # statistic. The NEW `_check_live_cap` tier must catch this (raise
+    # BEFORE live memory blows past the cap) while the heuristic reading AT
+    # THE MOMENT OF RAISE is STILL under cap -- proving the fix is the live
+    # measurement, not a heuristic recalibration (a heuristic-only reading
+    # that happened to also cross the cap would not distinguish the two).
+    cap_bytes = 8_000_000
+    model_live = PpmModel(alphabet_size=257, order_cap=8, state_cap_bytes=cap_bytes)
+    rng = random.Random(42)
+    tier2_raised = False
+    n_trained_live = 0
+    try:
+        for i in range(4000):
+            model_live.train_symbol_stream_byte(rng.randrange(256))
+            n_trained_live += 1
+    except PpmStateCapExceeded as e:
+        tier2_raised = True
+        print(f"  tier2 (live governor, coordinator fixture): "
+              f"PpmStateCapExceeded raised after {n_trained_live} symbols: {e}")
+    heuristic_at_raise = model_live.approx_state_bytes()
+    live_at_raise = model_live.live_state_bytes()
+    heuristic_would_have_passed = heuristic_at_raise < cap_bytes
+    live_actually_over_cap = live_at_raise > cap_bytes
+    tier2_ok = tier2_raised and heuristic_would_have_passed and live_actually_over_cap
+    ok = ok and tier2_ok
+    print(f"  tier2 cap_bytes={cap_bytes} heuristic_at_raise={heuristic_at_raise} "
+          f"(would_have_passed_alone={heuristic_would_have_passed}) "
+          f"live_at_raise={live_at_raise} (actually_over_cap={live_actually_over_cap}) "
+          f"{'PASS' if tier2_ok else 'FAIL'}")
+
     print(f"PPM703_STATE_CAP_ASSERT_PASS={ok}")
     return ok
 
@@ -381,16 +568,18 @@ def run_p0_domain_incidence() -> bool:
     # their zero contribution below is a property of the model (the
     # wrapper), not an artifact of never trying them.
     alphabet_symbols = [104, 105, 0, 255, EOT]
+    # tokenizer is a GreedyLongestMatchTokenizer -> safe_lock_horizon() =
+    # max_len = 2 (derived automatically, no verify_depth constant needed).
     gt_hi = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (104, 105),
-                                        alphabet_symbols, EOT, verify_depth=4, max_depth=20)
+                                        alphabet_symbols, EOT, max_depth=20)
     bl_hi = cylinder_mass_bounded_lookahead(restricted, tokenizer, (), (), 1, (104, 105),
                                              alphabet_symbols, EOT, L_eff=2, max_depth=20)
     diff_hi = abs(gt_hi - bl_hi)
     eq_ok = diff_hi < EQ_TOL and gt_hi > 0.0
     gt_nul = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (0,),
-                                         alphabet_symbols, EOT, verify_depth=4, max_depth=20)
+                                         alphabet_symbols, EOT, max_depth=20)
     gt_invalid = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (255,),
-                                             alphabet_symbols, EOT, verify_depth=4, max_depth=20)
+                                             alphabet_symbols, EOT, max_depth=20)
     zero_ok = gt_nul == 0.0 and gt_invalid == 0.0
     ok = ok and eq_ok and zero_ok
     print(f"  integration: cylinder_mass(candidate=(104,105)) ground_truth={_fmt(gt_hi)} "
@@ -406,6 +595,148 @@ def run_p0_domain_incidence() -> bool:
     return ok
 
 
+def run_p0_utf8_dfa_mandatory_fixtures() -> bool:
+    """Mandatory-negative + mandatory-positive regression fixtures for issue
+    #703 PR #759 coordinator gate blocker 3 UTF-8 repair defect (executed
+    counterexample, marker PPM703_UTF8_FOUR_BYTE_BOUNDARY_COUNTEREXAMPLE_PASS):
+    the OLD `restricted_next_byte_probs` derived the UTF-8 restriction state
+    from `context[-3:]` decoded STANDALONE -- after a completed 4-byte
+    codepoint (e.g. f0 9f 98 80, U+1F600) the trailing 3 bytes are bare
+    continuation bytes with no lead byte in view, so the OLD code misread a
+    FRESH boundary as a dead mid-sequence state and raised ZeroDivisionError
+    on every valid document containing a 4-byte scalar.
+
+    Receipt (scratchpad/verify_dfa_fixtures.py, run against the OLD
+    `context[-3:]`-based code BEFORE this cure landed):
+      REPRODUCED (OLD code fails as reported): restricted_next_byte_probs:
+      prefix(D) support has zero PPM mass at context tail b'\\x9f\\x98\\x80'
+
+    CURE (coordinator's preferred shape): `utf8_dfa_state_from_history`
+    carries an EXPLICIT UTF-8 DFA state derived by simulating the DFA over
+    the FULL context from a known start state, never by decoding a raw
+    trailing suffix. Cross-validated exhaustively against CPython's own
+    strict UTF-8 codec (13,440 (lead, first-continuation) pairs, 0
+    mismatches) -- so RFC 3629 correctness (overlong encodings, the UTF-16
+    surrogate range U+D800-U+DFFF, and code points > U+10FFFF) is inherited
+    exactly, not re-derived.
+
+    These fixtures are now PERMANENT."""
+    ok = True
+    EOT = 256
+
+    # -- the exact reported crash, now fixed -------------------------------
+    base = PpmModel(alphabet_size=257, order_cap=8, eot_symbol=EOT)
+    for b in ('hello ' + chr(0x1F600) + ' world').encode('utf-8'):
+        base.train_symbol_stream_byte(b)
+    restricted = RestrictedPpmModel(base, eot_symbol=EOT)
+    ctx_4byte = (0xF0, 0x9F, 0x98, 0x80)  # completed U+1F600
+    try:
+        probs = restricted.next_byte_probs(ctx_4byte)
+        crash_fixed = abs(sum(probs.values()) - 1.0) < EQ_TOL and probs.get(EOT, 0.0) > 0.0
+    except ZeroDivisionError:
+        crash_fixed = False
+    ok = ok and crash_fixed
+    print(f"  [4-byte-boundary] restricted_next_byte_probs(completed U+1F600 context) "
+          f"no-crash+EOT-allowed={crash_fixed} {'PASS' if crash_fixed else 'FAIL'}")
+    print(f"PPM703_UTF8_FOUR_BYTE_BOUNDARY_COUNTEREXAMPLE_PASS={crash_fixed}")
+
+    # -- mandatory positive: completed 1/2/3/4-byte codepoints permit ASCII+EOT
+    completed_cases = {
+        "1-byte ASCII": (ord("h"),),
+        "2-byte (c3 a9, e-acute)": (0xC3, 0xA9),
+        "3-byte (e2 82 ac, euro sign)": (0xE2, 0x82, 0xAC),
+        "4-byte (f0 9f 98 80, U+1F600)": (0xF0, 0x9F, 0x98, 0x80),
+    }
+    completed_ok = True
+    for label, ctx in completed_cases.items():
+        state = utf8_dfa_state_from_history(ctx, EOT)
+        allowed = allowed_next_bytes_from_state(state, EOT)
+        row_ok = state == UTF8_READY and EOT in allowed and ord("h") in allowed
+        completed_ok = completed_ok and row_ok
+        print(f"  [completed-codepoint] {label} state={state} "
+              f"EOT_allowed={EOT in allowed} ascii_allowed={ord('h') in allowed} "
+              f"{'PASS' if row_ok else 'FAIL'}")
+    ok = ok and completed_ok
+
+    # -- mandatory: partial lead states permit ONLY the correct continuation
+    # range and forbid EOT (also exercises the overlong/surrogate/>10FFFF
+    # RESTRICTED first-continuation ranges directly)
+    partial_cases = {
+        "after 0xC2 (2-byte)": ((0xC2,), 0x80, 0xBF),
+        "after 0xE0 (3-byte, bans overlong)": ((0xE0,), 0xA0, 0xBF),
+        "after 0xED (3-byte, bans surrogates U+D800-U+DFFF)": ((0xED,), 0x80, 0x9F),
+        "after 0xF0 (4-byte, bans overlong)": ((0xF0,), 0x90, 0xBF),
+        "after 0xF4 (4-byte, bans > U+10FFFF)": ((0xF4,), 0x80, 0x8F),
+    }
+    partial_ok = True
+    for label, (ctx, lo, hi) in partial_cases.items():
+        state = utf8_dfa_state_from_history(ctx, EOT)
+        allowed = allowed_next_bytes_from_state(state, EOT)
+        row_ok = allowed == set(range(lo, hi + 1)) and EOT not in allowed
+        partial_ok = partial_ok and row_ok
+        print(f"  [partial-lead] {label} allowed=={{0x{lo:02x}..0x{hi:02x}}}={allowed == set(range(lo, hi + 1))} "
+              f"EOT_forbidden={EOT not in allowed} {'PASS' if row_ok else 'FAIL'}")
+    ok = ok and partial_ok
+
+    # -- mandatory: the READY-state rejection set carries zero mass ---------
+    allowed_ready = allowed_next_bytes_from_state(UTF8_READY, EOT)
+    reject_bytes = {0xC0: "overlong 2-byte lead", 0xC1: "overlong 2-byte lead",
+                    0xF5: "invalid lead (>U+10FFFF)", 0xFF: "invalid lead",
+                    0x80: "bare continuation byte", 0x00: "NUL"}
+    reject_ok = all(b not in allowed_ready for b in reject_bytes)
+    ok = ok and reject_ok
+    print(f"  [rejection-set] READY-state excludes {list(hex(b) for b in reject_bytes)}: "
+          f"{'PASS' if reject_ok else 'FAIL'}")
+
+    # -- mandatory: DFA state survives PPM order-cap truncation --------------
+    # order_cap=2: the UNDERLYING model has no memory beyond 2 bytes, but the
+    # wrapper receives the FULL context tuple regardless (PpmModel.next_byte_
+    # probs' own contract: context = "bytes since the last EOT/document
+    # start", truncated internally for trie lookups only) -- so the DFA
+    # state derivation must stay correct even when order_cap << 4.
+    base_tiny = PpmModel(alphabet_size=257, order_cap=2, eot_symbol=EOT)
+    for b in ("x " + chr(0x1F600) + " y").encode("utf-8"):
+        base_tiny.train_symbol_stream_byte(b)
+    restricted_tiny = RestrictedPpmModel(base_tiny, eot_symbol=EOT)
+    try:
+        probs_tiny = restricted_tiny.next_byte_probs(ctx_4byte)
+        order_cap_ok = (abs(sum(probs_tiny.values()) - 1.0) < EQ_TOL
+                         and probs_tiny.get(EOT, 0.0) > 0.0)
+    except Exception:
+        order_cap_ok = False
+    ok = ok and order_cap_ok
+    print(f"  [order-cap-survival] order_cap=2, 4-byte-back completed codepoint: "
+          f"{'PASS' if order_cap_ok else 'FAIL'}")
+
+    # -- cross-check: hand-rolled DFA matches CPython's strict UTF-8 codec --
+    # exhaustively, over every (lead, first-continuation) byte pair -- so
+    # RFC 3629 correctness is verified, not assumed.
+    mismatches = 0
+    checks = 0
+    for lead in range(256):
+        py_lead_ok = is_valid_utf8_prefix(bytes([lead]))
+        my_lead = _lead_transition(lead)
+        checks += 1
+        if py_lead_ok != (my_lead is not None):
+            mismatches += 1
+            continue
+        if not py_lead_ok or my_lead == UTF8_READY:
+            continue
+        for cont1 in range(256):
+            py_ok = is_valid_utf8_prefix(bytes([lead, cont1]))
+            my_ok = utf8_dfa_step(my_lead, cont1) is not None
+            checks += 1
+            if py_ok != my_ok:
+                mismatches += 1
+    dfa_matches_codec = mismatches == 0
+    ok = ok and dfa_matches_codec
+    print(f"  [codec-cross-check] {checks} (lead[,first-continuation]) transitions vs "
+          f"CPython's utf-8 codec: mismatches={mismatches} {'PASS' if dfa_matches_codec else 'FAIL'}")
+
+    print(f"PPM703_UTF8_DFA_RFC3629_MANDATORY_FIXTURES_PASS={ok}")
+    return ok
+
+
 def main() -> int:
     results = []
     print("=== PPM703 P0 domain-D incidence (AMENDMENT-1 + AMENDMENT-1a, branch b) ===")
@@ -417,11 +748,17 @@ def main() -> int:
     print("=== PPM703 P1 naive-renorm negative control ===")
     results.append(run_p1_naive_renorm_negative_control())
     print()
+    print("=== PPM703 P1 finite-lock counterexamples (mandatory negatives) ===")
+    results.append(run_p1_finite_lock_counterexamples())
+    print()
     print("=== PPM703 P2 blend definition (P_ppm_tok) vs ground truth ===")
     results.append(run_p2_blend_definition())
     print()
     print("=== PPM703 state cap hard assert ===")
     results.append(run_state_cap_assert())
+    print()
+    print("=== PPM703 UTF-8 DFA RFC3629 mandatory fixtures ===")
+    results.append(run_p0_utf8_dfa_mandatory_fixtures())
     print()
     all_ok = all(results)
     print(f"PPM703_SELFTEST_ALL_PASS={all_ok}")

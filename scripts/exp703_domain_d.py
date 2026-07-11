@@ -97,33 +97,156 @@ def at_utf8_boundary(b: bytes) -> bool:
 
 
 def allowed_next_bytes(recent_context: bytes, eot_symbol: int) -> set:
-    """The prefix(D) support at this point: every raw byte value 1-255
-    (0x00/NUL always excluded) that keeps `recent_context + [byte]` a
-    valid UTF-8 prefix, plus EOT iff `recent_context` is already at a
-    UTF-8 character boundary. `recent_context` only needs the trailing
-    <=3 raw bytes (UTF-8 sequences are at most 4 bytes, RFC 3629), so
-    callers may safely pass a short suffix rather than the full history."""
-    allowed = {b for b in range(1, 256) if is_valid_utf8_prefix(recent_context + bytes([b]))}
-    if at_utf8_boundary(recent_context):
+    """DEPRECATED (issue #703 PR #759 coordinator gate blocker 3, UTF-8
+    repair defect, marker PPM703_UTF8_FOUR_BYTE_BOUNDARY_COUNTEREXAMPLE_PASS):
+    kept only so any external caller still importing this name gets a loud
+    failure pointer, not silent wrong answers. `recent_context` (a raw
+    trailing-byte SUFFIX of the real history) cannot in general be decoded
+    STANDALONE: after a completed 4-byte codepoint (e.g. f0 9f 98 80), the
+    last 3 bytes are bare continuation bytes with no lead byte in view, so
+    this function misreads a FRESH boundary as a dead mid-sequence state and
+    reports an empty allowed set -- `restricted_next_byte_probs` below no
+    longer calls this; it uses `utf8_dfa_state_from_history`, which walks
+    the ENTIRE context from a known start state instead of guessing from a
+    raw suffix. Retained as an explicit trap, not removed silently."""
+    raise NotImplementedError(
+        "allowed_next_bytes(recent_context, ...) is retired: a raw trailing-byte "
+        "suffix cannot be decoded standalone (see PPM703_UTF8_FOUR_BYTE_BOUNDARY_"
+        "COUNTEREXAMPLE_PASS). Use utf8_dfa_state_from_history(full_context, ...) "
+        "+ allowed_next_bytes_from_state(state, ...) instead.")
+
+
+# ---------------------------------------------------------------------------
+# Explicit UTF-8 DFA (RFC 3629) -- carries state derived from the FULL byte
+# history, never reconstructed by decoding an arbitrary trailing suffix.
+#
+# A state is (bytes_remaining, lo, hi):
+#   bytes_remaining == 0  -> READY: a document may end here (EOT allowed),
+#     and any valid LEAD byte (ASCII or a multi-byte lead) may start next.
+#     lo/hi are unused (canonically 0, 0).
+#   bytes_remaining >= 1  -> mid-sequence: the NEXT byte must lie in
+#     [lo, hi] (a continuation byte, restricted range for exactly the FIRST
+#     continuation after certain lead bytes -- this is what bans overlong
+#     encodings, the UTF-16 surrogate range, and code points > U+10FFFF by
+#     construction, matching CPython's own strict UTF-8 codec exactly).
+#     EOT is never allowed mid-sequence.
+# ---------------------------------------------------------------------------
+UTF8_READY = (0, 0, 0)
+
+# Lead-byte -> (bytes_remaining_after_lead, lo, hi) for the first continuation
+# byte, or None if the lead byte itself is never valid (bare continuation
+# byte 0x80-0xBF with no preceding lead, the two overlong 2-byte lead bytes
+# 0xC0-0xC1, or 0xF5-0xFF which would exceed U+10FFFF or are reserved).
+def _lead_transition(b: int):
+    if 0x00 <= b <= 0x7F:
+        return UTF8_READY  # 1-byte ASCII, immediately complete
+    if 0xC2 <= b <= 0xDF:
+        return (1, 0x80, 0xBF)
+    if b == 0xE0:
+        return (2, 0xA0, 0xBF)  # first continuation restricted: bans overlong 3-byte
+    if 0xE1 <= b <= 0xEC:
+        return (2, 0x80, 0xBF)
+    if b == 0xED:
+        return (2, 0x80, 0x9F)  # first continuation restricted: bans surrogate range
+    if 0xEE <= b <= 0xEF:
+        return (2, 0x80, 0xBF)
+    if b == 0xF0:
+        return (3, 0x90, 0xBF)  # first continuation restricted: bans overlong 4-byte
+    if 0xF1 <= b <= 0xF3:
+        return (3, 0x80, 0xBF)
+    if b == 0xF4:
+        return (3, 0x80, 0x8F)  # first continuation restricted: bans code points > U+10FFFF
+    return None  # 0x80-0xBF (bare continuation), 0xC0-0xC1 (overlong), 0xF5-0xFF (invalid)
+
+
+def utf8_dfa_step(state: tuple, b: int):
+    """One incremental DFA transition: `state` + next byte `b` -> new state,
+    or None if `b` is not a valid continuation of `state` (REJECT). Pure
+    function of (state, byte) -- never looks at any other history, so a
+    caller CAN thread it forward one byte at a time (the mechanism the
+    coordinator's preferred cure names: 'carry an explicit UTF-8 DFA state
+    alongside the PPM context')."""
+    bytes_remaining, lo, hi = state
+    if bytes_remaining == 0:
+        return _lead_transition(b)
+    if not (lo <= b <= hi):
+        return None
+    remaining = bytes_remaining - 1
+    if remaining == 0:
+        return UTF8_READY
+    return (remaining, 0x80, 0xBF)  # only the FIRST continuation byte is range-restricted
+
+
+def utf8_dfa_state_from_history(context: tuple, eot_symbol: int) -> tuple:
+    """Derive the CURRENT DFA state by simulating the DFA over the ENTIRE
+    `context` from a known start state (UTF8_READY), resetting to
+    UTF8_READY on EOT (a document boundary) -- never by decoding a raw
+    trailing suffix standalone (the retired `allowed_next_bytes` defect:
+    the last 3 bytes of a JUST-COMPLETED 4-byte codepoint are bare
+    continuation bytes with no lead byte in view, and cannot be correctly
+    interpreted without the lead byte that came before them). This is a
+    full re-simulation, not a guess -- every byte in `context` was itself
+    only ever accepted because it was in the allowed set THIS module
+    computed for the state before it (domain-D is closed under its own
+    restriction), so the walk can never hit a REJECT transition for a
+    genuine PPM-generated context; a REJECT here means a caller passed a
+    context this module never sanctioned, which is a defect worth an
+    assertion, not a silent wrong answer."""
+    state = UTF8_READY
+    for b in context:
+        if b == eot_symbol:
+            state = UTF8_READY
+            continue
+        new_state = utf8_dfa_step(state, b)
+        assert new_state is not None, (
+            f"utf8_dfa_state_from_history: byte {b:#04x} is not a valid UTF-8 "
+            f"continuation of state {state} -- context {context!r} was never "
+            f"domain-D-valid (defect in the caller, not this DFA)")
+        state = new_state
+    return state
+
+
+def allowed_next_bytes_from_state(state: tuple, eot_symbol: int) -> set:
+    """The prefix(D) support given an EXPLICIT DFA state: every byte value
+    with a defined `utf8_dfa_step(state, b)` transition, restricted further
+    to exclude NUL (0x00) always (domain D bans NUL structurally, on top of
+    plain UTF-8 validity -- U+0000 is otherwise a legal 1-byte code point),
+    plus EOT iff `state == UTF8_READY` (a document may legally end only at
+    a completed code-point boundary)."""
+    bytes_remaining, lo, hi = state
+    if bytes_remaining == 0:
+        allowed = {b for b in range(1, 256) if _lead_transition(b) is not None}
         allowed.add(eot_symbol)
-    return allowed
+        return allowed
+    return {b for b in range(lo, hi + 1)}  # continuation range is always >= 0x80, NUL excluded
 
 
 def restricted_next_byte_probs(model, context: tuple, eot_symbol: int) -> dict:
     """The AMENDMENT-1 section-2 renormalization: raw = model's own
     next_byte_probs(context) (which already folds in the order -1 uniform
     floor, so that floor inherits the restriction automatically); restrict
-    to the prefix(D) support and renormalize to sum to 1."""
+    to the prefix(D) support -- derived via an EXPLICIT UTF-8 DFA state
+    walked from the full `context` (issue #703 PR #759 coordinator gate
+    blocker 3 UTF-8 repair defect, PPM703_UTF8_FOUR_BYTE_BOUNDARY_
+    COUNTEREXAMPLE_PASS: the retired raw-suffix heuristic misread a
+    completed 4-byte codepoint's tail as a dead mid-sequence state) -- and
+    renormalize to sum to 1. `context` here is the model's own full
+    since-EOT/document-start history (see PpmModel.next_byte_probs'
+    docstring); the DFA state derivation is therefore correct regardless of
+    the underlying model's OWN order_cap truncation (the wrapper's history
+    is independent of the base model's internal trie-lookup truncation --
+    'DFA state survives PPM order-cap truncation')."""
     raw = model.next_byte_probs(context)
-    recent = bytes(b for b in context[-3:] if b != eot_symbol)
-    allowed = allowed_next_bytes(recent, eot_symbol)
+    state = utf8_dfa_state_from_history(context, eot_symbol)
+    allowed = allowed_next_bytes_from_state(state, eot_symbol)
+    allowed.discard(0)  # NUL always excluded, even from a READY state's ASCII-lead range
     restricted = {s: p for s, p in raw.items() if s in allowed and p > 0}
     total = sum(restricted.values())
     if total <= 0.0:
         raise ZeroDivisionError(
             f"restricted_next_byte_probs: prefix(D) support has zero PPM mass "
-            f"at context tail {recent!r} -- model assigns zero probability to "
-            f"every D-valid continuation")
+            f"at DFA state {state} (context={context!r}) -- model assigns zero "
+            f"probability to every D-valid continuation")
     return {s: p / total for s, p in restricted.items()}
 
 
