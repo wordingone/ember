@@ -470,6 +470,69 @@ def main() -> int:
         if actual_grown_sha is None or not grown_sha_claimed.lower().startswith(actual_grown_sha.lower()):
             continue
 
+        # HARDENED [falsifier finding (4), round 2, PR #799, 2026-07-11]: the
+        # check above verifies ONE hash (the grown model.pt) in isolation --
+        # it says nothing about whether the receipt's OWN manifest agrees
+        # with that hash, or whether the grow traces back to the SAME owned
+        # seed clause (a)/(c) already accepted. A receipt could claim a
+        # correct grown_model_pt_sha256 while shipping an internally
+        # incoherent manifest (a different claimed hash, or a fabricated
+        # source lineage) and still pass on hash-alone. Require:
+        #   1. grown_checkpoint_evidence.manifest_path resolves under
+        #      ARTIFACT_ROOT, exists, and its on-disk bytes hash-match
+        #      grown_checkpoint_evidence.manifest_sha256;
+        #   2. the manifest's OWN files["model.pt"] claim agrees with the
+        #      top-level grown_model_pt_sha256 already verified above
+        #      (internal coherence -- the receipt cannot disagree with
+        #      itself);
+        #   3. the manifest carries a non-empty arch block with the expected
+        #      shape keys (existence/shape sanity -- this probe has no
+        #      independent architecture ground truth to compare magnitudes
+        #      against, so this is a presence/shape check, not a value
+        #      check);
+        #   4. the manifest's grown_from.model_pt_sha256 (source lineage)
+        #      matches the ALREADY HASH-VERIFIED owned checkpoint from
+        #      clause (a)/(c) -- ties this specific grow back to the SAME
+        #      seed the board already trusts, not merely to SOME seed the
+        #      receipt happens to assert.
+        # Any failure here is a "continue" (never a marker-only pass), same
+        # as the hash check immediately above.
+        evidence_block = obj.get("grown_checkpoint_evidence")
+        if not isinstance(evidence_block, dict):
+            continue
+        manifest_path_raw = evidence_block.get("manifest_path")
+        manifest_sha_claimed = evidence_block.get("manifest_sha256")
+        if not isinstance(manifest_path_raw, str) or not manifest_path_raw:
+            continue
+        if not isinstance(manifest_sha_claimed, str) or not manifest_sha_claimed:
+            continue
+        manifest_resolved = _resolve_artifact_path(manifest_path_raw)
+        if not manifest_resolved.is_file():
+            continue
+        actual_manifest_sha = _sha256_first16(manifest_resolved)
+        if actual_manifest_sha is None or not manifest_sha_claimed.lower().startswith(actual_manifest_sha.lower()):
+            continue
+        manifest_obj = _read_json(manifest_resolved)
+        if not isinstance(manifest_obj, dict):
+            continue
+        manifest_model_claim = (manifest_obj.get("files") or {}).get("model.pt")
+        if not isinstance(manifest_model_claim, str) or manifest_model_claim.lower() != grown_sha_claimed.lower():
+            continue
+        arch_block = manifest_obj.get("arch")
+        if not isinstance(arch_block, dict) or not all(
+                k in arch_block for k in ("hidden", "layers", "heads", "vocab", "intermediate")):
+            continue
+        source_lineage_claim = (manifest_obj.get("grown_from") or {}).get("model_pt_sha256")
+        if owned_ckpt_hash_ok and owned_ckpt_path is not None:
+            owned_actual_sha = _sha256_first16(owned_ckpt_path / "model.pt")
+            if (not isinstance(source_lineage_claim, str) or owned_actual_sha is None
+                    or not source_lineage_claim.lower().startswith(owned_actual_sha.lower())):
+                continue
+        else:
+            # clause (a)/(c) itself is unresolved at this point -- clause (d)
+            # cannot claim a lineage to a seed the probe hasn't verified.
+            continue
+
         # HARDENED: check for degenerate loss traces (indicates broken computation)
         loss_trace = obj.get("verification", {}).get("loss_trace")
         if loss_trace and _is_degenerate_loss_trace(loss_trace):

@@ -91,6 +91,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -174,6 +175,71 @@ def check_mtp_keyset(mtp_keys_seed: list, mtp_keys_grown: list, mtp_keys_replay:
         "identical_across_seed_grown_replay": True,
         "not_exercised_by_logits_forward_pass": True,
     }
+
+
+# [falsifier finding (5), round 2, PR #799, 2026-07-11] DERIVED, not
+# measured/frozen like PASS_TOL/REPLAY_TOL_BF16_ROUNDTRIP (those were
+# quoted verbatim from a prior receipt that actually measured a LOGIT
+# difference; no prior receipt has ever measured a raw WEIGHT-tensor bf16
+# round-trip delta for this repo, so there is nothing to quote). bf16 has a
+# 7-bit mantissa (8 with the implicit leading bit): a single fp32->bf16->
+# fp32 round-trip introduces at most one unit-in-last-place of relative
+# error, ~2^-8 = 0.390625%. 1% is ~2.5x that theoretical single-rounding
+# floor as headroom. Flagged for coordinator/falsifier review -- tighten
+# to a measured value once a real run exists.
+MTP_TENSOR_REL_TOL = 0.01
+
+
+def check_mtp_tensor_values(sd: dict, grown_sd: dict, reload_sd: dict, mtp_keys: list) -> dict:
+    """[falsifier finding (5), round 2, PR #799, 2026-07-11] check_mtp_keyset
+    proves the KEY NAMES survive seed->grown->replay; it says nothing about
+    the TENSOR VALUES -- .logits() never touches mtp_heads (see build_model
+    / _V0.logits), so a replay checkpoint could keep identical key names
+    with zeroed or randomized values and still pass every existing check
+    (keyset identity included). net2net widening never transforms
+    mtp_heads (widen_state_dict's `grown = dict(sd)` copies these tensor
+    objects unchanged -- only backbone_model.layers.*.mlp.{gate,up,down}
+    are touched), so seed vs grown must be numerically EXACT, no
+    tolerance. replay is loaded from an on-disk bf16-saved checkpoint, so
+    replay vs grown is compared with a bf16-appropriate relative tolerance
+    (MTP_TENSOR_REL_TOL), not bit-exact equality. Raises SystemExit on any
+    violation; returns a summary dict on success. Pure function taking
+    already-loaded tensors -- exercised directly by the negative-fixture
+    harness with a deliberately corrupted tensor to prove the guard fires.
+    """
+    for k in mtp_keys:
+        if not torch.equal(sd[k], grown_sd[k]):
+            raise SystemExit(f"mtp tensor value diverged seed->grown (untouched by "
+                              f"net2net) for {k!r} -- widen_state_dict must not alter it")
+        ref = grown_sd[k]
+        diff = float((reload_sd[k].float() - ref).abs().max())
+        floor = float(ref.abs().max()) * MTP_TENSOR_REL_TOL
+        tol = max(floor, 1e-6)
+        if diff > tol:
+            raise SystemExit(f"mtp tensor value diverged grown->replay beyond bf16 "
+                              f"round-trip tolerance for {k!r}: diff={diff} tol={tol}")
+    return {
+        "n_checked": len(mtp_keys),
+        "seed_grown_exact_match": True,
+        "grown_replay_rel_tol": MTP_TENSOR_REL_TOL,
+        "grown_replay_max_abs_diff": max(
+            (float((reload_sd[k].float() - grown_sd[k]).abs().max()) for k in mtp_keys), default=0.0),
+    }
+
+
+def _git_commit_sha() -> str | None:
+    """[falsifier finding (6), round 2, PR #799, 2026-07-11] Best-effort
+    HEAD sha of the executing worktree, binding the receipt to the exact
+    generator code that produced it -- never fatal (absence is disclosed,
+    never silently treated as a pass; same convention as this script's
+    other best-effort probes)."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
+                              capture_output=True, text=True, timeout=10)
+        sha = out.stdout.strip()
+        return sha if out.returncode == 0 and sha else None
+    except Exception:
+        return None
 
 
 def main() -> int:
@@ -294,6 +360,12 @@ def main() -> int:
     mtp_keys_grown = sorted(k for k in grown_sd.keys() if k.startswith("mtp_heads."))
     mtp_keys_replay = sorted(k for k in reload_sd.keys() if k.startswith("mtp_heads."))
     mtp_keyset_check = check_mtp_keyset(mtp_keys_seed, mtp_keys_grown, mtp_keys_replay)
+    # [falsifier finding (5), round 2, PR #799, 2026-07-11] keyset identity
+    # alone doesn't prove the TENSORS weren't corrupted -- see
+    # check_mtp_tensor_values docstring.
+    mtp_tensor_check = check_mtp_tensor_values(sd, grown_sd, reload_sd, mtp_keys_seed)
+
+    executing_git_commit_sha = _git_commit_sha()
 
     n_seed = int(sum(v.numel() for v in sd.values()))
     n_grown = int(sum(v.numel() for v in grown_sd.values()))
@@ -328,6 +400,7 @@ def main() -> int:
             "n_tensors": len(grown_sd),
             "ff_grown": ff_grown,
             "mtp_heads_check": mtp_keyset_check,
+            "mtp_heads_tensor_check": mtp_tensor_check,
         },
     }
 
@@ -377,6 +450,7 @@ def main() -> int:
         "grown_checkpoint": _repo_relative_models_path(grown_path),
         "grown_model_pt_sha256": grown_sha,
         "grown_checkpoint_evidence": grown_checkpoint_evidence,
+        "executing_git_commit_sha": executing_git_commit_sha,
         "api_spend_usd": 0,
         "paid_api_surface_used": False,
         "device": "cpu",
@@ -448,6 +522,8 @@ def main() -> int:
         "grown_model_pt_sha256": grown_sha,
         "grown_checkpoint_evidence": grown_checkpoint_evidence,
         "mtp_heads_keyset_check": mtp_keyset_check,
+        "mtp_heads_tensor_check": mtp_tensor_check,
+        "executing_git_commit_sha": executing_git_commit_sha,
         "api_spend_usd": 0,
         "paid_api_surface_used": False,
         "invalid_tokens_present": [],
