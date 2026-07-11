@@ -161,7 +161,7 @@ def g_tokenizer():
     return "GREEN", f"pin match; {tot:,} real tokens; band {RESERVED_BAND_N} ids"
 
 
-def g_shards():
+def g_shards(shard_dir_override=None):
     # eng-49 (#183): the packed uint16 shards ARE the live-training input. The
     # gate previously had no row for them, so all-7-green printed "dispatch
     # permitted" with zero .bin on disk (fail-open w.r.t. the training input,
@@ -170,6 +170,18 @@ def g_shards():
     # -> BLOCKED (shards not produced; production is HELD pending the
     # shard-production call). token_shards_v0.validate_shards_receipt is
     # fail-closed and re-derives counts from the bytes.
+    #
+    # shard_dir_override (#682): the receipt's declared shard_dir is resolved
+    # NC-relative by validate_shards_receipt, and NC is THIS SCRIPT's own
+    # worktree/repo root -- so the resolved path silently points at a
+    # different (usually nonexistent) location whenever the gate runs from a
+    # worktree instead of the main tree, independent of what --shard-dir the
+    # caller actually passed. When shard_dir_override is supplied it becomes
+    # the authoritative base path for the declared shard files, taking
+    # precedence over that NC-relative math; NC-relative resolution remains
+    # the fallback when no override is given (byte-identical for every
+    # pre-existing caller). A missing/wrong override still fails closed --
+    # see validate_shards_receipt's per-shard os.path.exists checks.
     cands = sorted(glob.glob(f"{NC}/{TOKEN_SHARDS_GLOB}"))
     if not cands:
         return "BLOCKED", ("no token-shards-v0-*.json receipt — packed shards "
@@ -179,7 +191,8 @@ def g_shards():
     ok, d = _receipt_clean(name)
     if not ok:
         return "BLOCKED", d
-    viol = token_shards_v0.validate_shards_receipt(d, NC)
+    viol = token_shards_v0.validate_shards_receipt(
+        d, NC, shard_dir_override=shard_dir_override)
     if viol:
         return "BLOCKED", f"{name} shard contract FAIL: {viol}"
     return "GREEN", f"{name} shards present + byte-matched; --live input ready"
@@ -618,7 +631,8 @@ ROWS = ["G-corpus", "G-tokenizer", "G-shards", "G-config", "G-governor",
 def gate(launch_date, multimodal_config_path=None,
          mm_manifest_path=None, mm_tokenizer_path=None,
          mm_holdout_size=None, mm_holdout_manifest_path=None,
-         efficiency_receipt_path=None, requested_run=None):
+         efficiency_receipt_path=None, requested_run=None,
+         shard_dir_override=None):
     """Returns [(row, status, detail), ...] in table order.
 
     multimodal_config_path: if provided, G-efficiency binds against this config's SHA
@@ -632,6 +646,11 @@ def gate(launch_date, multimodal_config_path=None,
     the fixed micro-fit ceiling instead of the full v0-ladder calendar/SHATTER math (see
     g_budget / _requested_run_compute_fit). Absent (default, every existing caller),
     above-ceiling, or malformed values fall back to today's byte-identical behavior.
+    shard_dir_override: if provided, the (non-mm) G-shards row resolves the receipt's
+    declared shard files against this path instead of NC-relative math (#682 — the
+    NC-relative resolution is wrong whenever this script runs from a worktree). Absent
+    (default, every existing caller) preserves today's byte-identical resolution.
+    Ignored on the G-shards-mm path (mm manifests carry their own paths already).
     """
     out = []
     for name in ROWS:
@@ -648,7 +667,7 @@ def gate(launch_date, multimodal_config_path=None,
                     mm_holdout_manifest_path,
                 )
             else:
-                st, dt = g_shards()
+                st, dt = g_shards(shard_dir_override=shard_dir_override)
         elif name == "G-config":
             st, dt = g_config()
         elif name == "G-governor":
@@ -928,6 +947,12 @@ def main():
                     help="explicit frozen holdout manifest path")
     ap.add_argument("--efficiency-receipt", default=None,
                     help="explicit launch-efficiency receipt path")
+    ap.add_argument("--shard-dir", default=None,
+                    help="real packed uint16 shard dir (#682) — authoritative base "
+                         "path for G-shards' declared shard files, taking precedence "
+                         "over NC-relative resolution (which is wrong when this script "
+                         "runs from a worktree); falls back to EMBER_SHARD_DIR_OVERRIDE "
+                         "env, then to NC-relative resolution when neither is set")
     a = ap.parse_args()
     if a.selftest:
         _selftest()
@@ -936,6 +961,7 @@ def main():
         ld = datetime.date.fromisoformat(a.launch_date)
     else:
         ld = datetime.date.today()
+    shard_dir_override = a.shard_dir or os.environ.get("EMBER_SHARD_DIR_OVERRIDE")
     rows = gate(
         ld,
         multimodal_config_path=a.multimodal_config,
@@ -944,6 +970,7 @@ def main():
         mm_holdout_size=a.mm_holdout_size,
         mm_holdout_manifest_path=a.mm_holdout_manifest,
         efficiency_receipt_path=a.efficiency_receipt,
+        shard_dir_override=shard_dir_override,
     )
     _print(rows)
     blocked = [r[0] for r in rows if r[1] != "GREEN"]

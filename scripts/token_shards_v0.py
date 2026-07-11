@@ -119,12 +119,24 @@ def _scan_uint16_shard(path):
     return odd, reserved, oob
 
 
-def validate_shards_receipt(d, nc=NC):
+def validate_shards_receipt(d, nc=NC, shard_dir_override=None):
     """Return a list of violations (empty = the shard contract holds).
 
     Fail-closed in the fp26_prereg.check_premises grammar: a receipt is valid
     only if the bytes it describes are present and match. Numbers are
     re-derived from the on-disk shard bytes, not trusted as declared.
+
+    shard_dir_override (#682): the manifest's declared `shard_dir` field is
+    interpreted RELATIVE TO `nc` (e.g. "../shards-v0"), which resolves to a
+    different, wrong location when `nc` is a git-worktree root instead of the
+    main tree (the real shard store lives at a fixed depth from the main
+    tree only). When shard_dir_override is a non-empty string, it is used as
+    the AUTHORITATIVE base directory for every declared shard file instead
+    of `f"{nc}/{shard_dir}"` -- the caller's real --shard-dir, worktree-
+    invariant. None/empty (default; every pre-existing caller) preserves
+    today's NC-relative resolution byte-for-byte. An override pointing at a
+    missing/wrong directory still fails closed: the per-shard os.path.exists
+    checks below fail exactly as they would for a bad NC-relative path.
     """
     v = []
     if d.get("ticket") != TICKET:
@@ -159,6 +171,7 @@ def validate_shards_receipt(d, nc=NC):
     if not shards_ok:
         v.append("shard_dir/shards missing or empty")
     else:
+        shard_base = shard_dir_override if shard_dir_override else f"{nc}/{shard_dir}"
         for i, s in enumerate(shards):
             if not isinstance(s, dict):
                 v.append(f"shard[{i}] not a dict")
@@ -172,7 +185,7 @@ def validate_shards_receipt(d, nc=NC):
                 continue
             if not str(name).endswith(".bin"):
                 v.append(f"shard[{i}] {name} is not a .bin shard")
-            fp = f"{nc}/{shard_dir}/{name}"
+            fp = os.path.join(shard_base, name)
             if not os.path.exists(fp):
                 v.append(f"shard[{i}] {name} not on disk")
                 continue
