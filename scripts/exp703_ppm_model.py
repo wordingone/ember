@@ -29,7 +29,10 @@ Frozen conventions this module implements (issue #703 coordinator comment
   - Order -1 floor = uniform distribution over the full alphabet (257 for the
     real model; `alphabet_size` for toy instantiations used by the lattice
     correctness proofs in exp703_lattices.py / exp703_marginalization.py).
-  - State budget cap: THREE-TIER refusal (raises PpmStateCapExceeded).
+  - State budget cap: refusal (raises PpmStateCapExceeded), split into a
+    fast heuristic first line of defense plus an isolated-accounting
+    authoritative tier, with an OPT-IN process-wide safety rail a caller
+    may additionally enable.
     `approx_state_bytes()` is a CHEAP, NON-AUTHORITATIVE heuristic (fixed
     per-node + per-count-entry overhead) checked on every new node/entry
     creation event for a fast, always-on first line of defense -- but a
@@ -39,43 +42,63 @@ Frozen conventions this module implements (issue #703 coordinator comment
     measured=14,194,992), i.e. it can report "under cap" while the process
     is already well over it -- a fail-open on the decisive statistic.
 
-    Two AUTHORITATIVE tiers cover the periodic check, invoked by
-    `_check_cap_periodic()` at the TRAINING-CALL boundary (once per
-    `train_symbol` call, unconditionally -- NOT once per new-node/entry
-    creation event; a prior version tied the periodic counter to the
-    latter, so a STABLE-CONTEXT stream that never creates a new node/entry
-    after its first call never reincremented it and the documented "every
-    LIVE_CHECK_INTERVAL training calls" fallback was unreachable --
-    receipted: 500 training calls of a fixed repeated symbol, counter
-    stuck at 2, LIVE_CHECK_INTERVAL=100 never reached; fixed here, see
-    PPM703_STABLE_CONTEXT_PERIODIC_CHECK_PASS), throttled by
-    `LIVE_CHECK_TRIGGER_FRACTION` of the cap (derived with a >2x safety
+    The periodic check, invoked by `_check_cap_periodic()` at the
+    TRAINING-CALL boundary (once per `train_symbol` call, unconditionally
+    -- NOT once per new-node/entry creation event; a prior version tied the
+    periodic counter to the latter, so a STABLE-CONTEXT stream that never
+    creates a new node/entry after its first call never reincremented it
+    and the documented "every LIVE_CHECK_INTERVAL training calls" fallback
+    was unreachable -- receipted: 500 training calls of a fixed repeated
+    symbol, counter stuck at 2, LIVE_CHECK_INTERVAL=100 never reached;
+    fixed here, see PPM703_STABLE_CONTEXT_PERIODIC_CHECK_PASS), throttled
+    by `LIVE_CHECK_TRIGGER_FRACTION` of the cap (derived with a >2x safety
     margin below the measured 3.16x worst-case undercount ratio) or every
-    `LIVE_CHECK_INTERVAL` training calls, whichever comes first:
+    `LIVE_CHECK_INTERVAL` training calls, whichever comes first -- with an
+    edge-triggered latch (`_live_check_trigger_fired`) so the
+    trigger-fraction condition fires ONCE on crossing rather than forcing
+    a full tracemalloc snapshot on every subsequent call once past the
+    fraction (a prior version was level-triggered and produced a snapshot
+    storm: full selftest runtime went from <1s to >90s; receipted via a
+    20-call stable-context cadence probe showing isolated_checks=20,
+    process_checks=20 -- every call re-snapshotting after threshold
+    crossing) -- covers:
 
       1. `isolated_ppm_state_bytes()` -- a tracemalloc snapshot filtered to
          allocations whose traceback originates in THIS FILE, diffed
          against a per-instance baseline captured at the start of
-         `__init__`. This is the AUTHORITATIVE figure for `state_cap_bytes`
-         PPM-state enforcement, and the one a publishable PPM-memory claim
-         must cite.
+         `__init__`. This is the SOLE AUTHORITATIVE figure for
+         `state_cap_bytes` PPM-state enforcement by default, and the one a
+         publishable PPM-memory claim must cite.
       2. `process_live_bytes_governor()` -- `tracemalloc.get_traced_memory()`,
          the current traced allocation total for the ENTIRE PYTHON PROCESS.
-         A deliberately coarser, conservative SECOND safety rail, never
-         itself a PPM-state claim (issue #703 PR #759 external re-audit,
-         PR comment 4943548456: the prior name `live_state_bytes()` claimed
-         to measure "PPM LIVE memory" while actually returning this
-         process-wide total -- receipted: an unrelated 2MB bytearray
-         allocated before model construction inflated the OLD reading by
-         >99% of its value and triggered a false-positive refusal at
-         symbol 52 while true PPM state was 5,840 bytes; renamed and split
-         here, see PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS).
+         Always READABLE, but only ENFORCED when a caller explicitly opts
+         in via the `process_cap_bytes` constructor parameter (default
+         `None` = disabled). It is deliberately coarser and NEVER itself a
+         PPM-state claim (issue #703 PR #759 external re-audit, PR comment
+         4943548456: the prior name `live_state_bytes()` claimed to measure
+         "PPM LIVE memory" while actually returning this process-wide
+         total -- receipted: an unrelated 2MB bytearray allocated before
+         model construction inflated the OLD reading by >99% of its value
+         and triggered a false-positive refusal at symbol 52 while true
+         PPM state was 5,840 bytes; renamed and split here, see
+         PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS). A SECOND external
+         re-audit (same PR comment thread, follow-up round) caught that an
+         earlier draft of this split still checked tier 2 against the SAME
+         `state_cap_bytes` as tier 1 -- meaning any foreign allocation
+         large enough to breach `state_cap_bytes` would ALWAYS force a
+         false refusal regardless of true isolated PPM-state size,
+         defeating the entire purpose of isolating the accounting. Fixed
+         via `process_cap_bytes`: tier 2 is disabled by default and, when
+         enabled, checked against its OWN caller-supplied ceiling, never
+         `state_cap_bytes` (see `__init__` docstring for detail and
+         `PPM703_PROCESS_CAP_OPTIN_PASS` for the proof it still refuses
+         when genuinely configured and breached).
 
-    `state_cap_bytes` is enforced against BOTH tiers independently; the
-    raised message names which tripped. The heuristic alone is never
-    sufficient grounds to proceed near the cap, and the process-wide
-    reading alone is never sufficient grounds to conclude PPM state itself
-    is over cap.
+    `state_cap_bytes` is enforced by `isolated_ppm_state_bytes()` alone by
+    default. The heuristic alone is never sufficient grounds to proceed
+    near the cap. `process_cap_bytes`, when a caller opts in, is a wholly
+    separate ceiling against a wholly separate (process-wide) statistic --
+    never a substitute for, and never coupled to, `state_cap_bytes`.
 
 This module is CPU-only, pure Python, no external dependencies.
 """
@@ -125,7 +148,27 @@ class PpmModel:
     LIVE_CHECK_INTERVAL = 100    # also force a live check every N training calls
 
     def __init__(self, alphabet_size: int = 257, order_cap: int = 8,
-                 state_cap_bytes: int = 8 * 1024 ** 3, eot_symbol: int | None = None):
+                 state_cap_bytes: int = 8 * 1024 ** 3, eot_symbol: int | None = None,
+                 process_cap_bytes: int | None = None):
+        """`process_cap_bytes` is a SEPARATE, OPTIONAL ceiling for
+        `process_live_bytes_governor()` (issue #703 PR #759 external
+        re-audit, follow-up: an earlier draft of this split checked
+        `process_live_bytes_governor()` against the SAME `state_cap_bytes`
+        as `isolated_ppm_state_bytes()`, which defeated the entire point
+        of isolating PPM-specific accounting -- a foreign allocation made
+        anywhere else in the process could still trigger a false-positive
+        refusal via the process-wide tier, exactly the failure the
+        isolated accounting was built to prevent; receipted:
+        `state_cap_bytes=1_000_000` with an unrelated 2MB bytearray
+        present WOULD still refuse under the coupled design, purely
+        because of the foreign allocation, regardless of true PPM size).
+        Defaults to `None` -- the process-wide tier is DISABLED by
+        default, and `isolated_ppm_state_bytes()` is the sole authority
+        for `state_cap_bytes`. A caller who explicitly wants the coarser,
+        process-wide safety net back (e.g. as a backstop against genuine
+        process-wide exhaustion, independent of PPM attribution) opts in
+        by passing an explicit `process_cap_bytes`, sized for that
+        purpose -- never implicitly reusing `state_cap_bytes`."""
         if alphabet_size < 2:
             raise ValueError("alphabet_size must be >= 2 (at least one byte symbol + EOT)")
         if order_cap < 0:
@@ -133,6 +176,7 @@ class PpmModel:
         self.alphabet_size = alphabet_size
         self.order_cap = order_cap
         self.state_cap_bytes = state_cap_bytes
+        self.process_cap_bytes = process_cap_bytes
         self.eot_symbol = alphabet_size - 1 if eot_symbol is None else eot_symbol
         if not (0 <= self.eot_symbol < alphabet_size):
             raise ValueError("eot_symbol out of alphabet range")
@@ -171,7 +215,7 @@ class PpmModel:
         memory by ~3.16x in the worst case tested (see
         MEASURED_WORST_CASE_UNDERCOUNT_RATIO) -- never sufficient alone to
         conclude the model is under `state_cap_bytes`; use
-        `live_state_bytes()` for the authoritative figure."""
+        `isolated_ppm_state_bytes()` for the authoritative figure."""
         return self._approx_bytes
 
     def _measure_module_bytes_now(self) -> int:
@@ -309,10 +353,13 @@ class PpmModel:
         growth-triggered `_check_cap()` naturally fires less often as the
         trie fills up). After the initial edge-fire, the regular
         `LIVE_CHECK_INTERVAL` cadence alone continues to throttle further
-        checks. Checks `isolated_ppm_state_bytes()` (the authoritative
-        PPM-specific figure) FIRST, then `process_live_bytes_governor()`
-        (the conservative process-wide rail) -- either can independently
-        refuse, and the raised message names which."""
+        checks. Checks `isolated_ppm_state_bytes()` (the SOLE authoritative
+        figure for `state_cap_bytes`) first; `process_live_bytes_governor()`
+        (the conservative process-wide rail) is checked ONLY when a caller
+        opted in via `process_cap_bytes` (default `None` = skipped
+        entirely), and then against `process_cap_bytes`, NEVER
+        `state_cap_bytes` -- either enabled tier can independently refuse,
+        and the raised message names which."""
         self._live_check_counter += 1
         due = self._live_check_counter >= self.LIVE_CHECK_INTERVAL
         if not due and not self._live_check_trigger_fired:
@@ -333,19 +380,28 @@ class PpmModel:
                 f"alphabet_size={self.alphabet_size}, "
                 f"symbols_trained={self.symbols_trained}"
             )
-        process_wide = self.process_live_bytes_governor()
-        if process_wide > self.state_cap_bytes:
-            raise PpmStateCapExceeded(
-                f"Process-wide (tracemalloc, ALL process allocations, NOT "
-                f"isolated to PPM state -- see process_live_bytes_governor() "
-                f"docstring) live memory {process_wide} bytes exceeds cap "
-                f"{self.state_cap_bytes} bytes. This is a conservative SAFETY "
-                f"refusal, not evidence the PPM trie itself is over cap "
-                f"(isolated_ppm_state_bytes()={isolated} bytes, "
-                f"heuristic={self._approx_bytes} bytes). "
-                f"order_cap={self.order_cap}, alphabet_size={self.alphabet_size}, "
-                f"symbols_trained={self.symbols_trained}"
-            )
+        # Process-wide tier is OPT-IN (process_cap_bytes), checked against
+        # its OWN ceiling -- NEVER state_cap_bytes (see __init__'s
+        # process_cap_bytes docstring for why coupling the two ceilings was
+        # itself a defect: a foreign allocation elsewhere in the process
+        # could trip this tier regardless of true PPM size, defeating the
+        # isolated tier's whole purpose). Disabled by default.
+        if self.process_cap_bytes is not None:
+            process_wide = self.process_live_bytes_governor()
+            if process_wide > self.process_cap_bytes:
+                raise PpmStateCapExceeded(
+                    f"Process-wide (tracemalloc, ALL process allocations, NOT "
+                    f"isolated to PPM state -- see process_live_bytes_governor() "
+                    f"docstring) live memory {process_wide} bytes exceeds the "
+                    f"OPT-IN process_cap_bytes ceiling {self.process_cap_bytes} "
+                    f"bytes (a SEPARATE ceiling from state_cap_bytes= "
+                    f"{self.state_cap_bytes}). This is a conservative SAFETY "
+                    f"refusal, not evidence the PPM trie itself is over cap "
+                    f"(isolated_ppm_state_bytes()={isolated} bytes, "
+                    f"heuristic={self._approx_bytes} bytes). "
+                    f"order_cap={self.order_cap}, alphabet_size={self.alphabet_size}, "
+                    f"symbols_trained={self.symbols_trained}"
+                )
 
     def _get_node(self, order: int, context: tuple, create: bool) -> _Node | None:
         d = self.nodes[order]

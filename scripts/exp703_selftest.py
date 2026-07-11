@@ -137,6 +137,7 @@ from __future__ import annotations
 import os
 import random
 import sys
+import time
 
 from exp703_ppm_model import PpmModel, PpmStateCapExceeded
 from exp703_lattices import (
@@ -569,26 +570,36 @@ def run_p1_global_mass_and_refusal() -> bool:
     scratch check.
 
     PPM703_GLOBAL_MASS_100_BRANCH_COUNTEREXAMPLE_PASS: 100 disjoint root
-    branches, each reached with probability exactly 0.01 and no further
-    positive-probability path to EOT (a valid but degenerate self-loop, so
-    every branch is genuinely unresolved, not merely deep), prob_floor set
-    to EXACTLY 0.01 so every one of the 100 branches is pruned at the
-    first level past the root. `value` for ANY single-token candidate
-    (here (0,), i.e. "is the realized first token exactly branch 0?") is
-    0.0 -- honestly unresolved, since no branch was ever confirmed --
-    while `truncated_mass_bound` must total ~1.0 (100 * 0.01), not 0.01
-    (one branch's local floor) and not 0.0. The true analytic value for
-    this candidate (0.01, since exactly one of the 100 disjoint branches
-    can ever match token (0,)) is bracketed by [returned,
+    branches, each reached with probability exactly 0.01, then a
+    DETERMINISTIC continuation byte, then CERTAIN EOT (a genuinely
+    TERMINATING construction -- an earlier draft of this fixture used a
+    permanent p_eot=0 self-loop past the root instead, which a falsifier
+    pass proved wrong: under EOT-completed-event semantics a model that
+    literally never reaches EOT has a TRUE analytic mass of 0 for every
+    candidate, not the claimed 0.01 -- confirmed empirically by running
+    that draft with prob_floor effectively disabled, which hits
+    max_depth without ever terminating. Restored the terminating
+    two-step continuation so the claimed analytic value (0.01, since
+    exactly one of the 100 disjoint branches can ever match token (0,))
+    is genuinely TRUE of the model, not merely unreachable). prob_floor
+    is set to EXACTLY 0.01 so every one of the 100 branches is still
+    pruned at the first level past the root -- BEFORE the deterministic
+    continuation or the real EOT is ever reached -- so `value` for
+    candidate (0,) (i.e. "is the realized first token exactly branch 0?")
+    is 0.0, honestly unresolved, while `truncated_mass_bound` totals
+    ~1.0 (100 * 0.01, the sum across all 100 pruned subtrees), and the
+    now-genuine analytic 0.01 is bracketed by [returned,
     returned+truncated_mass_bound] = [0.0, ~1.0] -- a SOUND but
-    deliberately non-tight bound (the mechanism reports the true
-    worst-case uncertainty across all pruned subtrees, not the tighter
-    single-candidate truth, which is exactly what an upper bound is
-    supposed to do). require_bound_within_tolerance MUST raise
+    deliberately non-tight bound (only branch 0's pruned mass could ever
+    actually match this candidate; the mechanism reports the true
+    worst-case across ALL pruned subtrees, which is what an upper bound
+    is for). require_bound_within_tolerance MUST raise
     CylinderMassBoundExceeded on this result at the module's own EQ_TOL
     (1e-9) -- returning value=0.0 as if it were trustworthy at that
     precision would be exactly the silent-lying failure mode the
-    coordinator's gate note named.
+    coordinator's gate note named. This fixture asserts the REFUSAL is
+    the actual outcome of consuming this result through the enforced
+    predicate -- not merely that the raw API returns without erroring.
 
     PPM703_BOUND_REFUSAL_MECHANISM_PASS: a decoupled, non-recursive unit
     fixture for require_bound_within_tolerance itself -- constructs
@@ -601,20 +612,26 @@ def run_p1_global_mass_and_refusal() -> bool:
 
     # -- 100-branch global-mass counterexample (falsifier's exact shape) ----
     N_BRANCHES = 100
-    EOT_G = 100
+    CONT_G = N_BRANCHES       # 100: shared deterministic continuation symbol
+    EOT_G = N_BRANCHES + 1    # 101
     BRANCH_SYMS = list(range(N_BRANCHES))
     rows = {(): {s: 0.01 for s in BRANCH_SYMS}}
     for s in BRANCH_SYMS:
-        # Deterministic self-loop past the root: p_eot=0 forever on this
-        # branch (a valid, if degenerate, distribution) -- guarantees every
-        # branch is genuinely UNRESOLVED when pruned, not merely deep.
-        rows[(s,)] = {s: 1.0}
-    model100 = FixedFixtureModel(alphabet_size=N_BRANCHES + 1, table=rows,
+        # Deterministic continuation, THEN certain EOT -- a genuinely
+        # TERMINATING two-step tail (see docstring for why a permanent
+        # self-loop here was a real defect, not a harmless simplification).
+        # p_eot=0 at BOTH the root and this depth-1 node, so the floor still
+        # fires at depth 1 (0.01*1.0 <= prob_floor=0.01) before the real EOT
+        # at depth 2 is ever reached -- the pruning behavior under test is
+        # unchanged; only the model's TRUTH changed from vacuous to real.
+        rows[(s,)] = {CONT_G: 1.0}
+        rows[(s, CONT_G)] = {EOT_G: 1.0}
+    model100 = FixedFixtureModel(alphabet_size=N_BRANCHES + 2, table=rows,
                                   default={EOT_G: 1.0})
     tok100 = BpeMergeTokenizer(merges=[], eot_symbol=EOT_G)  # safe_lock_horizon()=None always
-    alphabet_symbols100 = list(BRANCH_SYMS)  # EOT excluded, per module convention
+    alphabet_symbols100 = list(BRANCH_SYMS) + [CONT_G]  # EOT excluded, per module convention
     TARGET_SYM = 0
-    ANALYTIC_100 = 0.01  # P(first token is exactly branch 0) = P(root_sym=0)
+    ANALYTIC_100 = 0.01  # P(first token is exactly branch 0) = P(root_sym=0) -- genuinely TRUE now
     gt100_result = cylinder_mass_ground_truth(
         model100, tok100, (), (), 1, (TARGET_SYM,), alphabet_symbols100, EOT_G,
         max_depth=10, prob_floor=0.01)
@@ -729,14 +746,16 @@ def run_state_cap_assert() -> bool:
     # (PPM703_STATE_CAP_HEURISTIC_FAILOPEN_PASS, PR #759 coordinator gate):
     # order_cap=8, alphabet_size=257, bytes from random.Random(42),
     # state_cap_bytes=8,000,000. Measured: the OLD heuristic-only
-    # `_check_cap` reported approx=4,496,152 (under cap) while tracemalloc
-    # showed live=14,194,992 (well over cap) -- a fail-open on the decisive
-    # statistic. `process_live_bytes_governor()` (honestly renamed from the
-    # prior `live_state_bytes` per external re-audit PR comment 4943548456
-    # -- see PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS below for why the old
-    # name was a defect) must catch this while the heuristic reading AT THE
-    # MOMENT OF RAISE is STILL under cap -- proving the fix is a real
-    # measurement, not a heuristic recalibration.
+    # `_check_cap` reported approx=3,988,928 (under cap) while the
+    # authoritative reading was well over -- a fail-open on the decisive
+    # statistic. `process_cap_bytes` is left UNSET here (defaults to
+    # `None`, disabled) -- this fixture proves `isolated_ppm_state_bytes()`
+    # ALONE, now the sole tier enforcing `state_cap_bytes`, catches the
+    # breach (external re-audit, PR comment 4943548456 follow-up: checking
+    # `process_live_bytes_governor()` against the SAME `state_cap_bytes`
+    # as the isolated tier was itself a defect -- see
+    # PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS below -- so this fixture no
+    # longer relies on that coupled tier at all).
     cap_bytes = 8_000_000
     model_live = PpmModel(alphabet_size=257, order_cap=8, state_cap_bytes=cap_bytes)
     rng = random.Random(42)
@@ -748,53 +767,103 @@ def run_state_cap_assert() -> bool:
             n_trained_live += 1
     except PpmStateCapExceeded as e:
         tier2_raised = True
-        print(f"  tier2 (process-wide governor, coordinator fixture): "
+        print(f"  tier2 (isolated accounting alone, coordinator fixture): "
               f"PpmStateCapExceeded raised after {n_trained_live} symbols: {e}")
     heuristic_at_raise = model_live.approx_state_bytes()
-    live_at_raise = model_live.process_live_bytes_governor()
+    isolated_at_raise = model_live.isolated_ppm_state_bytes()
     heuristic_would_have_passed = heuristic_at_raise < cap_bytes
-    live_actually_over_cap = live_at_raise > cap_bytes
-    tier2_ok = tier2_raised and heuristic_would_have_passed and live_actually_over_cap
+    isolated_actually_over_cap = isolated_at_raise > cap_bytes
+    tier2_ok = tier2_raised and heuristic_would_have_passed and isolated_actually_over_cap
     ok = ok and tier2_ok
     print(f"  tier2 cap_bytes={cap_bytes} heuristic_at_raise={heuristic_at_raise} "
           f"(would_have_passed_alone={heuristic_would_have_passed}) "
-          f"process_wide_at_raise={live_at_raise} (actually_over_cap={live_actually_over_cap}) "
+          f"isolated_at_raise={isolated_at_raise} (actually_over_cap={isolated_actually_over_cap}) "
           f"{'PASS' if tier2_ok else 'FAIL'}")
 
     # -- tier 3: foreign-allocation isolation (external re-audit, PR comment
-    # 4943548456, executed against head 299b3c2): an unrelated 2MB
-    # bytearray allocated BEFORE model construction must NOT appear in
-    # isolated_ppm_state_bytes() (module-filtered, baseline-diffed), while
-    # process_live_bytes_governor() (deliberately process-wide) DOES see it
-    # -- proving the two are genuinely different quantities, not a rename
-    # of the same number. Receipted old-code-fails: the pre-fix
-    # live_state_bytes() included >99% of the foreign 2,000,000 bytes and
-    # raised a false-positive PpmStateCapExceeded at symbol 52 while true
-    # PPM state was 5,840 bytes.
+    # 4943548456, two rounds): an unrelated 2MB bytearray allocated BEFORE
+    # model construction must NOT appear in isolated_ppm_state_bytes()
+    # (module-filtered, baseline-diffed), while process_live_bytes_governor()
+    # (deliberately process-wide) DOES see it -- proving the two are
+    # genuinely different quantities, not a rename of the same number.
+    # Receipted old-code-fails: the pre-fix live_state_bytes() included
+    # >99% of the foreign 2,000,000 bytes and raised a false-positive
+    # PpmStateCapExceeded at symbol 52 while true PPM state was 5,840
+    # bytes. SECOND-ROUND fix (falsifier caught both): (a) the fixture now
+    # trains >=LIVE_CHECK_INTERVAL calls so the periodic check GENUINELY
+    # fires at least once through the real train_symbol path -- a
+    # numeric-comparison-only proof ("isolated reading is numerically
+    # under cap") is not the same claim as "training with this foreign
+    # allocation present does not raise", and only the latter is what
+    # matters to a real caller; (b) `process_cap_bytes` is left UNSET
+    # (disabled) so the SAME state_cap_bytes=1,000,000 that the isolated
+    # tier enforces is NOT also handed to the process-wide tier -- with
+    # the two ceilings coupled, the process-wide tier would ALWAYS refuse
+    # here regardless of true PPM size (2MB foreign > 1MB cap trivially),
+    # which is exactly the defect process_cap_bytes's decoupling exists to
+    # prevent (see PpmModel.__init__ docstring).
     import tracemalloc as _tracemalloc_for_fixture
     if not _tracemalloc_for_fixture.is_tracing():
         _tracemalloc_for_fixture.start()
     foreign_bytearray = bytearray(2_000_000)
     model_foreign = PpmModel(alphabet_size=257, order_cap=8, state_cap_bytes=1_000_000)
     rng_foreign = random.Random(42)
-    for i in range(99):
-        model_foreign.train_symbol((i % 5,), rng_foreign.randrange(256))
+    N_FOREIGN_CALLS = model_foreign.LIVE_CHECK_INTERVAL + 20  # guarantee >=1 real periodic check
+    no_false_refusal_ok = True
+    n_trained_foreign = 0
+    try:
+        for i in range(N_FOREIGN_CALLS):
+            model_foreign.train_symbol((i % 5,), rng_foreign.randrange(256))
+            n_trained_foreign += 1
+    except PpmStateCapExceeded as e:
+        no_false_refusal_ok = False
+        print(f"  tier3 UNEXPECTED false refusal after {n_trained_foreign} calls: {e}")
     isolated_reading = model_foreign.isolated_ppm_state_bytes()
     process_wide_reading = model_foreign.process_live_bytes_governor()
     isolated_excludes_foreign_ok = isolated_reading < len(foreign_bytearray) * 0.1
     process_wide_includes_foreign_ok = process_wide_reading >= len(foreign_bytearray) * 0.9
-    no_false_refusal_ok = isolated_reading < model_foreign.state_cap_bytes
-    tier3_ok = isolated_excludes_foreign_ok and process_wide_includes_foreign_ok and no_false_refusal_ok
+    trained_full_ok = n_trained_foreign == N_FOREIGN_CALLS
+    tier3_ok = (isolated_excludes_foreign_ok and process_wide_includes_foreign_ok
+                and no_false_refusal_ok and trained_full_ok)
     ok = ok and tier3_ok
     print(f"  tier3 (foreign-allocation isolation) foreign_bytearray={len(foreign_bytearray)} "
+          f"n_trained={n_trained_foreign}/{N_FOREIGN_CALLS} (LIVE_CHECK_INTERVAL="
+          f"{model_foreign.LIVE_CHECK_INTERVAL}, periodic check genuinely exercised) "
           f"isolated_ppm_state_bytes={isolated_reading} "
-          f"(excludes_foreign={isolated_excludes_foreign_ok}, "
-          f"no_false_refusal={no_false_refusal_ok}) "
+          f"(excludes_foreign={isolated_excludes_foreign_ok}) "
           f"process_live_bytes_governor={process_wide_reading} "
           f"(includes_foreign={process_wide_includes_foreign_ok}) "
+          f"training_completed_no_false_refusal={no_false_refusal_ok and trained_full_ok} "
           f"{'PASS' if tier3_ok else 'FAIL'}")
     print(f"PPM703_FOREIGN_ALLOCATION_ISOLATION_PASS={tier3_ok}")
     del foreign_bytearray  # release the fixture's own footprint promptly
+
+    # -- tier 3b: process_cap_bytes is OPT-IN, not dead code -----------------
+    # A caller who explicitly wants the process-wide safety net back gets
+    # it: the SAME foreign-allocation shape, but with process_cap_bytes
+    # explicitly set to a value the inflated process-wide reading DOES
+    # breach, proving the opt-in tier still refuses when genuinely asked
+    # for -- this tier is disabled by default (tier3 above), not removed.
+    foreign_bytearray_2 = bytearray(2_000_000)
+    model_optin = PpmModel(alphabet_size=257, order_cap=8, state_cap_bytes=50_000_000,
+                            process_cap_bytes=1_000_000)
+    rng_optin = random.Random(42)
+    optin_raised = False
+    n_trained_optin = 0
+    try:
+        for i in range(model_optin.LIVE_CHECK_INTERVAL + 20):
+            model_optin.train_symbol((i % 5,), rng_optin.randrange(256))
+            n_trained_optin += 1
+    except PpmStateCapExceeded as e:
+        optin_raised = True
+        print(f"  tier3b (opt-in process_cap_bytes) refused after {n_trained_optin} calls "
+              f"(expected, proving the tier is live when configured): {e}")
+    tier3b_ok = optin_raised
+    ok = ok and tier3b_ok
+    print(f"  tier3b (opt-in process_cap_bytes=1,000,000, state_cap_bytes=50,000,000) "
+          f"refused={optin_raised} {'PASS' if tier3b_ok else 'FAIL'}")
+    print(f"PPM703_PROCESS_CAP_OPTIN_PASS={tier3b_ok}")
+    del foreign_bytearray_2
 
     # -- tier 4: stable-context periodic-check interval semantics -----------
     # (external re-audit, PR comment 4943548456: "LIVE_CHECK_INTERVAL
@@ -1118,32 +1187,48 @@ def run_p0_utf8_dfa_mandatory_fixtures() -> bool:
 
 
 def main() -> int:
+    # Wall-clock receipt per section (falsifier requirement, second repair
+    # round: the snapshot-storm defect was a runtime regression -- >90s vs
+    # <1s prior -- invisible from a pass/fail marker alone; the selftest
+    # now receipts its own timing so a future regression of this class is
+    # provable at pin-review without a separate diagnostic run).
+    t0 = time.perf_counter()
     results = []
-    print("=== PPM703 P0 domain-D incidence (AMENDMENT-1 + AMENDMENT-1a, branch b) ===")
-    results.append(run_p0_domain_incidence())
-    print()
-    print("=== PPM703 P1 exhaustive equality (ground truth vs bounded lookahead) ===")
-    results.append(run_p1_exhaustive_equality())
-    print()
-    print("=== PPM703 P1 naive-renorm negative control ===")
-    results.append(run_p1_naive_renorm_negative_control())
-    print()
-    print("=== PPM703 P1 finite-lock counterexamples (mandatory negatives) ===")
-    results.append(run_p1_finite_lock_counterexamples())
-    print()
-    print("=== PPM703 P1 global-mass counterexample + bound-refusal mechanism ===")
-    results.append(run_p1_global_mass_and_refusal())
-    print()
-    print("=== PPM703 P2 blend definition (P_ppm_tok) vs ground truth ===")
-    results.append(run_p2_blend_definition())
-    print()
-    print("=== PPM703 state cap hard assert ===")
-    results.append(run_state_cap_assert())
-    print()
-    print("=== PPM703 UTF-8 DFA RFC3629 mandatory fixtures ===")
-    results.append(run_p0_utf8_dfa_mandatory_fixtures())
-    print()
+    section_times = []
+
+    def _run(label, fn):
+        print(f"=== {label} ===")
+        t_start = time.perf_counter()
+        r = fn()
+        elapsed = time.perf_counter() - t_start
+        section_times.append((label, elapsed))
+        print(f"  ({label} runtime: {elapsed:.3f}s)")
+        print()
+        results.append(r)
+
+    _run("PPM703 P0 domain-D incidence (AMENDMENT-1 + AMENDMENT-1a, branch b)",
+         run_p0_domain_incidence)
+    _run("PPM703 P1 exhaustive equality (ground truth vs bounded lookahead)",
+         run_p1_exhaustive_equality)
+    _run("PPM703 P1 naive-renorm negative control",
+         run_p1_naive_renorm_negative_control)
+    _run("PPM703 P1 finite-lock counterexamples (mandatory negatives)",
+         run_p1_finite_lock_counterexamples)
+    _run("PPM703 P1 global-mass counterexample + bound-refusal mechanism",
+         run_p1_global_mass_and_refusal)
+    _run("PPM703 P2 blend definition (P_ppm_tok) vs ground truth",
+         run_p2_blend_definition)
+    _run("PPM703 state cap hard assert",
+         run_state_cap_assert)
+    _run("PPM703 UTF-8 DFA RFC3629 mandatory fixtures",
+         run_p0_utf8_dfa_mandatory_fixtures)
+
+    total_elapsed = time.perf_counter() - t0
     all_ok = all(results)
+    print("=== PPM703 runtime receipt (per-section, wall-clock) ===")
+    for label, elapsed in section_times:
+        print(f"  {elapsed:7.3f}s  {label}")
+    print(f"PPM703_SELFTEST_TOTAL_RUNTIME_SECONDS={total_elapsed:.3f}")
     print(f"PPM703_SELFTEST_ALL_PASS={all_ok}")
     return 0 if all_ok else 1
 
