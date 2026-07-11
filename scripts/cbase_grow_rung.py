@@ -119,6 +119,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -359,6 +360,84 @@ def _assemble_receipt(*, rung: int, mode: str, ts_stamp: str,
     return receipt
 
 
+def _get_git_sha() -> str:
+    """Get the current git HEAD SHA (short form), or 'unknown' if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(REPO),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _emit_tally_receipt(receipt: dict, main_receipt_path: str, mode: str) -> None:
+    """Emit a C-DISC hinge-tally receipt for growth_rung_attempt (LIVE mode only).
+
+    Per issue #729: every LIVE growth rung attempt emits a tally receipt to the
+    disconfirmation checker's watched family. Dry-run and selftest modes emit nothing.
+
+    Verdict mapping (explicit table, fail-closed):
+      LIVE mode, verdict=GROW_RUNG_PASS → EARNED, evaluable=true
+      LIVE mode, verdict=GROW_RUNG_KILL → NOT_EARNED, evaluable=true
+      LIVE mode, verdict=GROW_RUNG_BLOCKED → evaluable=false (audit row, no verdict)
+      LIVE mode, verdict=GROW_RUNG_REFUSED_NULL_OPERATOR → evaluable=false (audit row)
+      Dry-run (GROW_RUNG_DRYRUN_PASS) → emit nothing (not for live tally)
+      Selftest → emit nothing (not for live tally)
+      Unknown verdict → raise (fail-closed)
+    """
+    # R1: Only emit for live mode
+    if mode != "live":
+        return
+
+    run_verdict = receipt.get("verdict", "UNKNOWN")
+
+    # R1: Frozen explicit verdict table
+    if run_verdict == "GROW_RUNG_PASS":
+        tally_verdict = "EARNED"
+        evaluable = True
+    elif run_verdict == "GROW_RUNG_KILL":
+        tally_verdict = "NOT_EARNED"
+        evaluable = True
+    elif run_verdict in ("GROW_RUNG_BLOCKED", "GROW_RUNG_REFUSED_NULL_OPERATOR"):
+        # R1: Audit rows (evaluable=false) — no verdict field needed for non-evaluable
+        tally_verdict = None
+        evaluable = False
+    else:
+        # R1: Unknown verdict → raise (fail-closed)
+        raise ValueError(f"Unknown run_verdict for tally mapping: {run_verdict}")
+
+    # Build tally receipt
+    tally_receipt = {
+        "receipt_type": "growth_rung_attempt",
+        "ticket": "EMBER-TOTALITY-DISCONFIRMATION",
+        "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "evaluable": evaluable,
+        "refs": [main_receipt_path],
+        "git_anchor": _get_git_sha(),
+        "rung": receipt.get("rung"),
+        "mode": mode,
+        "run_verdict": run_verdict,
+    }
+
+    # Only include verdict if evaluable
+    if evaluable and tally_verdict is not None:
+        tally_receipt["verdict"] = tally_verdict
+
+    # Write to receipts/growth-rung-attempts/
+    tally_dir = REPO / "receipts" / "growth-rung-attempts"
+    tally_dir.mkdir(parents=True, exist_ok=True)
+    ts_fmt = tally_receipt["ts"]
+    tally_path = tally_dir / f"growth-rung-attempt-{ts_fmt}.json"
+    checked_write(str(tally_path), tally_receipt)
+
+
 def _write_and_report(receipt: dict, receipt_dir: Path, mode: str) -> int:
     receipt_dir.mkdir(parents=True, exist_ok=True)
     verdict = receipt["verdict"]
@@ -370,6 +449,10 @@ def _write_and_report(receipt: dict, receipt_dir: Path, mode: str) -> int:
           f"params_unique_after={receipt.get('params_unique_after')} "
           f"d1_steps={receipt.get('d1_sizing', {}).get('steps_computed')} "
           f"receipt={out}")
+
+    # Emit C-DISC tally receipt for disconfirmation checker (issue #729, live mode only)
+    _emit_tally_receipt(receipt, str(out.relative_to(REPO) if out.is_relative_to(REPO) else out), mode)
+
     return 0 if receipt["pass"] else 2
 
 

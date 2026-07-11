@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""disconfirmation_leg.py -- board-wired GOAL sec 8 disconfirmation-trigger leg (gh issue #94
-C-DISC, phase 2; schema frozen by maintainer rulings R1-R7 on the phase-1 dossier).
+"""disconfirmation_leg.py -- board-wired disconfirmation-trigger leg per conditions-v1.md
+sec 4.2 (live authority; archived pre-2026-07-06 at goal-archive.md) (gh issue #94 C-DISC,
+phase 2; schema frozen by maintainer rulings R1-R7 on the phase-1 dossier).
 
 Thin, reuse-only wrapper -- the same C-ENF/C-MILE pattern (issue #38's enforcement_leg.py,
 issue #35's milestone_leg.py), scoped to the new scripts/check_disconfirmation_triggers.py.
