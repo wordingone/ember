@@ -523,6 +523,7 @@ def assert_step_ordering(ckpt_paths: dict) -> dict:
             "step": manifest["step"],
             "model_pt_sha256": manifest["files"].get("model.pt"),
             "manifest": manifest,
+            "manifest_path": str(Path(path) / "manifest.json"),
         }
     if not (info["a"]["step"] < info["b"]["step"] < info["c"]["step"]):
         raise PhaseZeroGuardBreach(
@@ -757,13 +758,19 @@ def _load_checkpoint_model(ckpt_dir: str, cfg: dict, *, device: str):
     the SAME production model-construction function every other runner in
     this tree uses, never a reimplementation), loads+verifies the
     checkpoint's state dict (timeshare_pretrain.load_checkpoint, sha256-
-    verified), and returns (model in eval mode, model_state, manifest)."""
+    verified), and returns (model in eval mode, model_state, manifest,
+    model_pt_sha256_computed)."""
     import torch
+    import hashlib
     model, _vocab, _hidden, _n_mtp = ts.build_v0_model(cfg, live=True, device=device)
     model_state, _optimizer_state, _rng_state, manifest = ts.load_checkpoint(ckpt_dir)
     model.load_state_dict(model_state)
     model.eval()
-    return model, model_state, manifest
+    # B2: Compute SHA256 of model.pt from actual bytes (binary mode, no normalization)
+    model_pt_path = Path(ckpt_dir) / "model.pt"
+    with open(model_pt_path, 'rb') as f:
+        model_pt_sha256_computed = hashlib.sha256(f.read()).hexdigest()
+    return model, model_state, manifest, model_pt_sha256_computed
 
 
 def _per_token_losses_for_windows(model, loader, window_indices, *, device: str,
@@ -792,7 +799,8 @@ def _per_token_losses_for_windows(model, loader, window_indices, *, device: str,
 def run_live(*, ckpt_a: str, ckpt_b: str, ckpt_c: str, ckpt_d: "str | None",
             shard_dir: str, shard_manifest_sha256: str, device: str,
             seed: int, ce_chunk_tokens: int = 1024,
-            tokenizer_lineage_sidecar: "str | None" = None) -> dict:
+            tokenizer_lineage_sidecar: "str | None" = None,
+            tokenizer_lineage_sidecar_sha256: "str | None" = None) -> dict:
     """Top-level live run: every engagement guard evaluated fail-closed
     BEFORE any forward pass. A breach short-circuits to PHASE0_INVALID with
     no partial credit (#724's own rule) -- the failing guard(s) are recorded,
@@ -835,7 +843,7 @@ def run_live(*, ckpt_a: str, ckpt_b: str, ckpt_c: str, ckpt_d: "str | None",
 
     # Build once on CPU to measure real model_bytes before committing to a
     # cuda placement (never guess the byte count from cfg dims).
-    probe_model, _probe_state, _probe_manifest = _load_checkpoint_model(
+    probe_model, _probe_state, _probe_manifest, _probe_model_pt_sha = _load_checkpoint_model(
         ckpt_paths["a"], cfg, device="cpu")
     model_bytes = sum(p.numel() * p.element_size() for p in probe_model.parameters())
     del probe_model
@@ -848,23 +856,43 @@ def run_live(*, ckpt_a: str, ckpt_b: str, ckpt_c: str, ckpt_d: "str | None",
         breaches.append("device")
         return _invalid_receipt(guard_log, breaches, mode="live")
 
-    models, model_states, manifests = {}, {}, {}
+    models, model_states, manifests, model_pt_shas_computed = {}, {}, {}, {}
     for label in ("a", "b", "c"):
-        m, st, mf = _load_checkpoint_model(ckpt_paths[label], cfg, device=device)
+        m, st, mf, computed_sha = _load_checkpoint_model(ckpt_paths[label], cfg, device=device)
         models[label], model_states[label], manifests[label] = m, st, mf
+        model_pt_shas_computed[label] = computed_sha
 
-    ckpt_infos_for_guard = {l: {"manifest": manifests[l]} for l in ("a", "b", "c")}
+    ckpt_infos_for_guard = {l: {
+        "manifest": manifests[l],
+        "manifest_path": ckpt_infos[l].get("manifest_path"),
+        "model_pt_sha256_computed": model_pt_shas_computed[l]
+    } for l in ("a", "b", "c")}
 
     # Compute sidecar SHA if provided (item 6: consume by SHA)
+    # B3: Verify sidecar file against externally-pinned SHA (never compute it live)
     sidecar_sha = None
     if tokenizer_lineage_sidecar:
+        if not tokenizer_lineage_sidecar_sha256:
+            # This should be caught by validation before run_live, but double-check
+            return _invalid_receipt({"tokenizer_sidecar": {"passed": False, "error":
+                "sidecar file provided but --tokenizer-lineage-sidecar-sha256 is missing"}},
+                                   ["tokenizer_sidecar"], mode="live")
         try:
             import hashlib
             with open(tokenizer_lineage_sidecar, 'rb') as f:
-                sidecar_sha = hashlib.sha256(f.read()).hexdigest()
+                computed_sidecar_sha = hashlib.sha256(f.read()).hexdigest()
+            # Verify against external pin (B3: fail-closed on mismatch)
+            if computed_sidecar_sha != tokenizer_lineage_sidecar_sha256:
+                return _invalid_receipt({"tokenizer_sidecar": {"passed": False,
+                    "error": f"sidecar file SHA mismatch: computed={computed_sidecar_sha} "
+                    f"expected={tokenizer_lineage_sidecar_sha256}"}},
+                                       ["tokenizer_sidecar"], mode="live")
+            sidecar_sha = tokenizer_lineage_sidecar_sha256
+        except PhaseZeroGuardBreach:
+            raise
         except Exception as e:
-            return _invalid_receipt({"tokenizer_sidecar_sha": {"passed": False, "error": str(e)}},
-                                   ["tokenizer_sidecar_sha"], mode="live")
+            return _invalid_receipt({"tokenizer_sidecar": {"passed": False, "error": str(e)}},
+                                   ["tokenizer_sidecar"], mode="live")
 
     try:
         vt = assert_vocab_tokenizer_identity(ckpt_infos_for_guard, model_states,
@@ -1540,6 +1568,8 @@ def main(argv: "list | None" = None) -> int:
                     help="provenance-pinned combined sha256 of --shard-dir (manifest_sha.compute_manifest)")
     ap.add_argument("--tokenizer-lineage-sidecar", default=None,
                     help="OPTIONAL tokenizer-lineage sidecar (JSONL) for checkpoint tokenizer identity (refs #724)")
+    ap.add_argument("--tokenizer-lineage-sidecar-sha256", default=None,
+                    help="MANDATORY with --tokenizer-lineage-sidecar: SHA256 of the sidecar file (consumed at external pin, item 3/B3)")
     ap.add_argument("--device", default=None, help="cpu | cuda (explicit, required for --live)")
     ap.add_argument("--seed", type=int, default=0, help="token-sample + split-half seed")
     ap.add_argument("--ce-chunk-tokens", type=int, default=1024)
@@ -1570,12 +1600,23 @@ def main(argv: "list | None" = None) -> int:
               "(explicit, no defaults on the live path).", flush=True)
         return 3
 
+    # B3: Validate that sidecar and sha256 are both provided together
+    if args.tokenizer_lineage_sidecar and not args.tokenizer_lineage_sidecar_sha256:
+        print("TRAJGATE_PHASE0_REFUSED: --tokenizer-lineage-sidecar requires "
+              "--tokenizer-lineage-sidecar-sha256 (item 3/B3, external pin).", flush=True)
+        return 3
+    if args.tokenizer_lineage_sidecar_sha256 and not args.tokenizer_lineage_sidecar:
+        print("TRAJGATE_PHASE0_REFUSED: --tokenizer-lineage-sidecar-sha256 requires "
+              "--tokenizer-lineage-sidecar (item 3/B3, external pin).", flush=True)
+        return 3
+
     Path(args.receipt_dir).mkdir(parents=True, exist_ok=True)
     receipt = run_live(
         ckpt_a=args.ckpt_a, ckpt_b=args.ckpt_b, ckpt_c=args.ckpt_c, ckpt_d=args.ckpt_d,
         shard_dir=args.shard_dir, shard_manifest_sha256=args.shard_manifest_sha256,
         device=args.device, seed=args.seed, ce_chunk_tokens=args.ce_chunk_tokens,
-        tokenizer_lineage_sidecar=args.tokenizer_lineage_sidecar)
+        tokenizer_lineage_sidecar=args.tokenizer_lineage_sidecar,
+        tokenizer_lineage_sidecar_sha256=args.tokenizer_lineage_sidecar_sha256)
 
     from receipt_write import checked_write
     receipt_path = Path(args.receipt_dir) / f"trajgate-phase0-{receipt['ts']}.json"
