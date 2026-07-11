@@ -52,12 +52,26 @@ Pipeline:
   3. SAVE step50 -- the missing artifact -- via the SAME save_checkpoint call
      run_phase2_live itself uses at its own checkpoint boundaries.
 
-  4. Reload step50 FROM BYTES (never the in-memory model) and re-eval FP32 on
-     the frozen, sha-pinned eval batch. TRUSTWORTHY iff the reproduced FP32
-     loss matches the receipted terminal FP32 value
-     (9.245222091674805, receipts/ember-c-scale/w1-fp32-check-
-     20260707T114517Z.json) within --fp32-tolerance; any mismatch is
-     REPLAY_DIVERGED -- an investigation, never a shrug.
+  4. Reload step50 FROM BYTES (never the in-memory model) and re-eval both
+     BF16 and FP32 on the frozen, sha-pinned eval batch, THEN apply the
+     reloaded optimizer + RNG state to a FRESH optimizer/model build and
+     parity-check that too -- proving the closed checkpoint is a genuine
+     RESUME point (model + optimizer + RNG), not merely a model-weights
+     snapshot. TRUSTWORTHY iff ALL SIX conjuncts hold: the step25 load
+     matches its receipted BF16 figure, the step50 post-replay eval matches
+     its receipted BF16 figure, the step50 reload-from-bytes is bit-exact
+     against the pre-save in-memory eval, the reloaded FP32 loss matches the
+     receipted terminal FP32 value (9.245222091674805, receipts/ember-
+     c-scale/w1-fp32-check-20260707T114517Z.json) within --fp32-tolerance,
+     the reloaded optimizer state has shape parity with what was saved
+     (optimizer_state_shape_parity, reused verbatim), and the reloaded RNG
+     state round-trips bit-exact. Any single conjunct failing is
+     REPLAY_DIVERGED -- an investigation, never a shrug. In claim-bearing
+     mode (claim_bearing=True, the default and the only mode --live uses)
+     every receipted expectation is a REQUIRED input: a missing (None)
+     expectation refuses to run rather than trivially passing that conjunct;
+     the None-trivially-passes path is legal only under claim_bearing=False
+     (selftest discovery only).
 
   5. CUSTODY: move (never copy-and-leave) the closed step50 checkpoint out of
      scratch/ into a models/ custody dir, per issue #677's checkpoint-
@@ -65,11 +79,16 @@ Pipeline:
      hardlinked to a custody path outside any worktree ... with the manifest
      recording the custody move"). Per-file sha256 is measured BEFORE and
      AFTER the move and asserted equal -- the move is never trusted to have
-     preserved bytes, it is measured to have.
+     preserved bytes, it is measured to have. --skip-custody-move (diagnostic
+     use only) does NOT silently keep a trustworthy verdict: the CLOSURE
+     verdict (distinct from the replay verdict) is downgraded to the
+     non-promotable REPLAY_TRUSTWORTHY_NO_CUSTODY_NONPROMOTABLE and main()
+     exits nonzero, even when the replay itself checked out clean.
 
   6. One closed receipt chaining 1-5, written via receipt_write.checked_write
      (schema-validated, same convention as every other receipt in this
-     repo). Verdict label (when trustworthy + custodied):
+     repo). Verdict label (when trustworthy + custodied, i.e. closure
+     verdict == exactly "REPLAY_TRUSTWORTHY"):
      W1_FROM_SCRATCH_PILOT_BASELINE (narrow by construction: pilot scale,
      single seed, from-scratch final width -- disclosed, per #735's own
      framing; NOT a claim this closure receipt itself asserts as prose).
@@ -81,14 +100,25 @@ checkpoints:
   (b) save->reload identity plumbing -- a checkpoint saved from one model
       instance and loaded into a FRESH, differently-seeded instance
       reproduces bit-exact eval loss.
-  (c) perturbed-eval REPLAY_DIVERGED -- replay_and_close() run once against
-      its own true reproduced FP32 figure (verdict REPLAY_TRUSTWORTHY) and
-      once against that figure perturbed by +5.0 (verdict REPLAY_DIVERGED),
-      proving the divergence gate actually gates.
+  (c1)-(c5) replay_and_close() verdict-conjunction proof -- a discovery pass
+      (claim_bearing=False) learns the fixture's own true bf16/fp32 figures,
+      then a claim-bearing correct-path pass asserts all six conjuncts True
+      (verdict REPLAY_TRUSTWORTHY), then FOUR independent negative fixtures
+      each flip exactly ONE of the four receipted-comparison conjuncts
+      (wrong step25-BF16 expectation / wrong step50-BF16 expectation /
+      post-save checkpoint-bytes corruption via
+      _corrupt_checkpoint_model_weights_for_test / wrong FP32 expectation)
+      and assert the OTHER conjuncts stay True while verdict becomes
+      REPLAY_DIVERGED -- proving the gate actually gates on every conjunct
+      independently, not a subset.
   (d) API-conformance -- constructs the REAL model/loader/optimizer/CE
       objects via the historical modules against a tiny synthetic config and
       runs one train step + eval, proving the import signatures this script
       depends on have not drifted. No GPU, no real corpus needed.
+  (e) claim-bearing missing-expected refusal -- claim_bearing=True (the
+      --live default) with any receipted expectation left None refuses to
+      run (W1_REPLAY_CLAIM_BEARING_MISSING_EXPECTED) rather than trivially
+      passing that conjunct.
 
 Real GPU replay is gated behind the SAME interlock
 w1_collapse_control_run.refuse_unless_dry_run_safe already enforces
@@ -129,6 +159,7 @@ from w1_collapse_control_run import (  # noqa: E402 -- reused, never edited
     build_real_model, verify_checkpoint_key_shape_parity, eval_loss_fn,
     rebuild_batch_from_decontam_receipt, apply_cosine_warmup,
     train_step_matched_recipe, verify_shard_corpus, refuse_unless_dry_run_safe,
+    optimizer_state_shape_parity,
     DEFAULT_PRICING_RECEIPT, REAL_HARD_CEILING_STEPS,
     CORPUS_MANIFEST_COMBINED_SHA256_EXPECTED, MATCHED_RECIPE_SCHEDULE_SOURCE,
 )
@@ -371,6 +402,74 @@ def preflight_verify(*, repo_root: str, pricing_receipt_path: str,
 
 
 # ---------------------------------------------------------------------------
+# RNG-state structural equality (capture_rng()'s own bundle shape: py_random
+# tuple, torch_cpu tensor, optional np_random tuple, optional torch_cuda
+# tensor list) -- used to prove a restore_rng() round-trip is bit-exact, not
+# merely "didn't raise".
+# ---------------------------------------------------------------------------
+
+def _rng_states_equal(a: dict, b: dict) -> bool:
+    if set(a.keys()) != set(b.keys()):
+        return False
+    if a["py_random"] != b["py_random"]:
+        return False
+    if not torch.equal(a["torch_cpu"], b["torch_cpu"]):
+        return False
+    if "np_random" in a:
+        an, bn = a["np_random"], b["np_random"]
+        if an[0] != bn[0] or an[2] != bn[2] or an[3] != bn[3] or an[4] != bn[4]:
+            return False
+        if not np.array_equal(an[1], bn[1]):
+            return False
+    if "torch_cuda" in a:
+        if len(a["torch_cuda"]) != len(b["torch_cuda"]):
+            return False
+        for ta, tb in zip(a["torch_cuda"], b["torch_cuda"]):
+            if not torch.equal(ta, tb):
+                return False
+    return True
+
+
+def _corrupt_checkpoint_model_weights_for_test(ckpt_dir: str) -> None:
+    """TEST-ONLY (selftest negative fixture, never called from main()'s real
+    path): perturbs EVERY floating-point tensor in the saved model.pt on
+    disk and rewrites manifest.json's model.pt sha to match the perturbed
+    bytes, so load_checkpoint's own sha-integrity check still passes. This
+    isolates 'the saved bytes silently differ from what was in memory at
+    save time' from the ALREADY-tested 'corrupted bytes get refused'
+    scenario (that one is _refuse_unless_manifest_matches's job).
+
+    Perturbs ALL float tensors, not just the first state_dict key: eval_
+    loss_fn (reused verbatim from w1_collapse_control_run.py) computes
+    cross-entropy over model(x)'s PRIMARY logits only -- it never touches
+    the MTP aux heads. state_dict() key order is module-registration order,
+    so a first-key-only perturbation can land on an MTP-head parameter that
+    plays no part in the primary eval path and silently fails to flip
+    reload_bit_exact_vs_pre_save (caught by this fixture's own selftest
+    assertion during development). Perturbing every float tensor guarantees
+    at least one on the primary path is corrupted."""
+    model_pt_path = os.path.join(ckpt_dir, "model.pt")
+    state = torch.load(model_pt_path, map_location="cpu")
+    n_perturbed = 0
+    for key, tensor in state.items():
+        if torch.is_tensor(tensor) and tensor.is_floating_point():
+            state[key] = tensor + 1.0
+            n_perturbed += 1
+    if n_perturbed == 0:
+        raise AssertionError(
+            "W1_REPLAY_TEST_CORRUPT_NO_FLOAT_TENSORS_FOUND: "
+            f"state_dict keys={list(state.keys())!r}")
+    torch.save(state, model_pt_path)
+    new_sha = sha256_file(model_pt_path)
+    manifest_path = os.path.join(ckpt_dir, "manifest.json")
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    manifest["files"]["model.pt"] = new_sha
+    with open(manifest_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(manifest, f, sort_keys=True, separators=(",", ": "), indent=2)
+
+
+# ---------------------------------------------------------------------------
 # Replay -- resume from the certified checkpoint, replay the historical
 # remaining updates, save the missing step, reload-from-bytes and re-eval
 # FP32.
@@ -384,7 +483,39 @@ def replay_and_close(*, real_arch: dict, pretrain_contract: dict,
                       out_dir: str, fp32_tolerance: float,
                       expected_step25_eval_loss_bf16: "float | None",
                       expected_step50_eval_loss_bf16: "float | None",
-                      expected_step50_eval_loss_fp32: "float | None") -> dict:
+                      expected_step50_eval_loss_fp32: "float | None",
+                      claim_bearing: bool = True,
+                      _test_corrupt_after_save: bool = False) -> dict:
+    """claim_bearing (default True): a claim-bearing invocation (main()'s
+    real --live path always uses this default) REQUIRES all three receipted
+    expectations up front -- a None expectation refuses to run rather than
+    trivially passing that conjunct (an unspecified target is not evidence
+    of a match). Only a non-claim-bearing invocation (selftest fixtures
+    exploring a synthetic checkpoint with no receipted historical figure to
+    compare against) may pass claim_bearing=False to permit an omitted
+    expectation, in which case that ONE conjunct trivially passes -- the
+    other three (and the unconditional resumability leg below) still run
+    for real and still gate the verdict.
+
+    _test_corrupt_after_save: TEST-ONLY (selftest negative fixture) --
+    corrupts the saved step50 checkpoint's bytes before the reload-from-
+    bytes leg, to prove reload_bit_exact_vs_pre_save actually gates.
+    """
+    if claim_bearing:
+        missing = [name for name, val in (
+            ("expected_step25_eval_loss_bf16", expected_step25_eval_loss_bf16),
+            ("expected_step50_eval_loss_bf16", expected_step50_eval_loss_bf16),
+            ("expected_step50_eval_loss_fp32", expected_step50_eval_loss_fp32),
+        ) if val is None]
+        if missing:
+            raise SystemExit(
+                f"W1_REPLAY_CLAIM_BEARING_MISSING_EXPECTED: {missing!r} -- "
+                "a claim-bearing replay (claim_bearing=True, the default) "
+                "requires every receipted expectation up front; refusing to "
+                "run with an unspecified target rather than trivially "
+                "passing that conjunct. Pass claim_bearing=False only for "
+                "non-claim-bearing (selftest) invocations.")
+
     # Defense-in-depth: re-verify the eval batch this call was HANDED still
     # matches the pinned sha (preflight already asserted this once at
     # rebuild time; a second, cheap assert here ties replay to preflight
@@ -455,6 +586,9 @@ def replay_and_close(*, real_arch: dict, pretrain_contract: dict,
                "dry_run": False, "optimizer_mode": routing["mode"]})
     del model, optimizers
 
+    if _test_corrupt_after_save:
+        _corrupt_checkpoint_model_weights_for_test(ckpt_dir_50)
+
     # Reload step50 FROM BYTES -- never reuse the in-memory model (mission
     # requirement: prove the SAVED artifact, not the process's own memory).
     model_reload = build_real_model(real_arch, device, seed=seed)
@@ -476,8 +610,32 @@ def replay_and_close(*, real_arch: dict, pretrain_contract: dict,
                   else eval_loss_fp32_reloaded - expected_step50_eval_loss_fp32)
     fp32_within_tolerance = (expected_step50_eval_loss_fp32 is None
                               or abs(fp32_delta) <= fp32_tolerance)
+
+    # Full resumability leg (not just model-reload): apply o_state50/
+    # r_state50 to a FRESH optimizer set + RNG and parity-check both against
+    # what was actually saved -- proves the closed checkpoint is a genuine
+    # resume point, not merely a model-weights snapshot. optimizer_state_
+    # shape_parity is REUSED verbatim from w1_collapse_control_run.py (the
+    # same check run_phase2_live's own resume_proof block uses).
+    model_resume_check = build_real_model(real_arch, device, seed=seed)
+    model_resume_check.load_state_dict(m_state50, strict=True)
+    optimizers_resume_check, _blrs_rc, _routing_rc = build_split_optimizer(
+        model_resume_check, pretrain_contract, force_fallback=False,
+        deviation_dir=deviation_dir)
+    load_optimizers_state(optimizers_resume_check, o_state50)
+    restore_rng(r_state50)
+    optimizer_resume_parity = optimizer_state_shape_parity(
+        save_optimizers_state(optimizers_resume_check), saved_o_state)
+    rng_resume_bit_exact = _rng_states_equal(capture_rng(), r_state50)
+    del model_resume_check, optimizers_resume_check
+    if device == "cuda":
+        torch.cuda.empty_cache()
+
     verdict = ("REPLAY_TRUSTWORTHY"
-               if (reload_bit_exact_vs_pre_save and fp32_within_tolerance)
+               if (load_matches_receipted and replay_matches_receipted_bf16
+                   and reload_bit_exact_vs_pre_save and fp32_within_tolerance
+                   and optimizer_resume_parity["shapes_match"]
+                   and rng_resume_bit_exact)
                else "REPLAY_DIVERGED")
 
     return {
@@ -509,6 +667,9 @@ def replay_and_close(*, real_arch: dict, pretrain_contract: dict,
         "fp32_delta_vs_receipted": fp32_delta,
         "fp32_tolerance": fp32_tolerance,
         "fp32_within_tolerance": fp32_within_tolerance,
+        "optimizer_resume_parity": optimizer_resume_parity,
+        "rng_resume_bit_exact": rng_resume_bit_exact,
+        "claim_bearing": claim_bearing,
         "verdict": verdict,
     }
 
@@ -646,45 +807,186 @@ def _selftest() -> None:
         assert check_ok["pass"], f"W1_REPLAY_SELFTEST_CORRECT_SHA_FALSE_REFUSED: {check_ok}"
         print("[selftest] (a) wrong-sha refusal leg PASS")
 
-        # --- (c) replay_and_close: correct-target leg (REPLAY_TRUSTWORTHY)
-        # then perturbed-target leg (REPLAY_DIVERGED) -- proves the
-        # divergence gate actually gates. No receipted historical figure
-        # exists for a synthetic fixture, so the fixture's OWN true
-        # reproduced FP32 value becomes the correct-path target, and a +5.0
-        # perturbation of that value becomes the divergence-path target. ---
+        # --- (e) claim-bearing upfront refusal gate: claim_bearing=True
+        # (the default -- this is the mode --live uses) must REFUSE to run
+        # rather than trivially pass when any receipted expectation is
+        # missing (repair item 1b: None must never mean "trivially true"
+        # in claim-bearing mode; the None-trivial-pass path is legal ONLY
+        # under claim_bearing=False). ---
+        try:
+            replay_and_close(
+                real_arch=real_arch, pretrain_contract=pretrain_contract,
+                control_step25_dir=step10_dir, loader=loader, eval_x=eval_x, eval_y=eval_y,
+                eval_batch_sha=eval_batch_sha, target_eval_loss=0.0,
+                ceiling_steps=40, replay_start_step=10, replay_end_step=15,
+                seed=1234, device=device,
+                out_dir=os.path.join(tmp, "replay-claimbearing-refusal"),
+                fp32_tolerance=1e-3,
+                expected_step25_eval_loss_bf16=eval_before,
+                expected_step50_eval_loss_bf16=None,
+                expected_step50_eval_loss_fp32=None)
+            raise AssertionError(
+                "W1_REPLAY_SELFTEST_CLAIM_BEARING_DID_NOT_REFUSE_ON_MISSING_EXPECTED")
+        except SystemExit as e:
+            assert "W1_REPLAY_CLAIM_BEARING_MISSING_EXPECTED" in str(e), (
+                f"unexpected refusal message: {e}")
+        print("[selftest] (e) claim-bearing missing-expected refusal leg PASS")
+
+        # --- (f) discovery pass (claim_bearing=False -- the only mode
+        # permitted to leave receipted expectations unspecified) to learn
+        # this synthetic fixture's OWN true bf16-post-replay / fp32-
+        # reloaded values, since no historical receipt exists for it. ---
+        discovery = replay_and_close(
+            real_arch=real_arch, pretrain_contract=pretrain_contract,
+            control_step25_dir=step10_dir, loader=loader, eval_x=eval_x, eval_y=eval_y,
+            eval_batch_sha=eval_batch_sha, target_eval_loss=0.0,
+            ceiling_steps=40, replay_start_step=10, replay_end_step=15,
+            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-discovery"),
+            fp32_tolerance=1e-3,
+            expected_step25_eval_loss_bf16=eval_before,
+            expected_step50_eval_loss_bf16=None,
+            expected_step50_eval_loss_fp32=None,
+            claim_bearing=False)
+        assert discovery["verdict"] == "REPLAY_TRUSTWORTHY", (
+            f"W1_REPLAY_SELFTEST_DISCOVERY_UNEXPECTED_VERDICT: {discovery}")
+        assert discovery["optimizer_resume_parity"]["shapes_match"], (
+            f"W1_REPLAY_SELFTEST_DISCOVERY_OPTIMIZER_RESUME_PARITY_FAILED: "
+            f"{discovery['optimizer_resume_parity']}")
+        assert discovery["rng_resume_bit_exact"], (
+            "W1_REPLAY_SELFTEST_DISCOVERY_RNG_RESUME_NOT_BIT_EXACT")
+        true_bf16 = discovery["eval_loss_bf16_post_replay"]
+        true_fp32 = discovery["eval_loss_fp32_reloaded_from_bytes"]
+        print(f"[selftest] (f) discovery leg PASS -- true_bf16={true_bf16} "
+              f"true_fp32={true_fp32} optimizer_resume_parity=OK rng_resume=OK")
+
+        # --- (c1) claim-bearing correct-path leg: every receipted
+        # expectation supplied and correct -- all six conjuncts True,
+        # verdict REPLAY_TRUSTWORTHY. ---
         replay1 = replay_and_close(
             real_arch=real_arch, pretrain_contract=pretrain_contract,
             control_step25_dir=step10_dir, loader=loader, eval_x=eval_x, eval_y=eval_y,
             eval_batch_sha=eval_batch_sha, target_eval_loss=0.0,
             ceiling_steps=40, replay_start_step=10, replay_end_step=15,
-            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-c1"),
+            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-correct"),
             fp32_tolerance=1e-3,
             expected_step25_eval_loss_bf16=eval_before,
-            expected_step50_eval_loss_bf16=None,
-            expected_step50_eval_loss_fp32=None)
-        assert replay1["reload_bit_exact_vs_pre_save_bf16"], (
-            f"W1_REPLAY_SELFTEST_RELOAD_NOT_BIT_EXACT: {replay1}")
+            expected_step50_eval_loss_bf16=true_bf16,
+            expected_step50_eval_loss_fp32=true_fp32)
         assert replay1["verdict"] == "REPLAY_TRUSTWORTHY", (
             f"W1_REPLAY_SELFTEST_UNEXPECTED_VERDICT: {replay1['verdict']}")
-        true_fp32 = replay1["eval_loss_fp32_reloaded_from_bytes"]
-        print(f"[selftest] (c1) replay_and_close correct-target leg PASS -- "
-              f"verdict={replay1['verdict']} fp32={true_fp32}")
+        for conjunct in ("load_matches_receipted", "replay_matches_receipted_bf16",
+                         "reload_bit_exact_vs_pre_save_bf16", "fp32_within_tolerance",
+                         "rng_resume_bit_exact"):
+            assert replay1[conjunct], (
+                f"W1_REPLAY_SELFTEST_CORRECT_PATH_CONJUNCT_FALSE: {conjunct}")
+        assert replay1["optimizer_resume_parity"]["shapes_match"], (
+            f"W1_REPLAY_SELFTEST_CORRECT_PATH_OPTIMIZER_RESUME_PARITY_FALSE: "
+            f"{replay1['optimizer_resume_parity']}")
+        print(f"[selftest] (c1) replay_and_close correct-path leg PASS -- "
+              f"verdict={replay1['verdict']} all six conjuncts True")
 
-        replay2 = replay_and_close(
+        # --- (c2)-(c5): four negative fixtures, each flipping EXACTLY ONE
+        # of the four receipted-comparison conjuncts independently, proving
+        # the verdict actually gates on each rather than a subset (repair
+        # item 1: "Make all four conjuncts, add negative fixtures flipping
+        # each one independently"). ---
+        replay_neg_load = replay_and_close(
             real_arch=real_arch, pretrain_contract=pretrain_contract,
             control_step25_dir=step10_dir, loader=loader, eval_x=eval_x, eval_y=eval_y,
             eval_batch_sha=eval_batch_sha, target_eval_loss=0.0,
             ceiling_steps=40, replay_start_step=10, replay_end_step=15,
-            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-c2"),
-            fp32_tolerance=1e-6,
+            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-neg-load"),
+            fp32_tolerance=1e-3,
+            expected_step25_eval_loss_bf16=eval_before + 1.0,  # WRONG on purpose
+            expected_step50_eval_loss_bf16=true_bf16,
+            expected_step50_eval_loss_fp32=true_fp32)
+        assert not replay_neg_load["load_matches_receipted"], (
+            "W1_REPLAY_SELFTEST_NEG_LOAD_DID_NOT_FLIP")
+        assert replay_neg_load["verdict"] == "REPLAY_DIVERGED", (
+            f"W1_REPLAY_SELFTEST_NEG_LOAD_VERDICT_NOT_DIVERGED: {replay_neg_load['verdict']}")
+        assert replay_neg_load["replay_matches_receipted_bf16"], (
+            "W1_REPLAY_SELFTEST_NEG_LOAD_COLLATERAL_FLIP_REPLAY")
+        assert replay_neg_load["reload_bit_exact_vs_pre_save_bf16"], (
+            "W1_REPLAY_SELFTEST_NEG_LOAD_COLLATERAL_FLIP_RELOAD")
+        assert replay_neg_load["fp32_within_tolerance"], (
+            "W1_REPLAY_SELFTEST_NEG_LOAD_COLLATERAL_FLIP_FP32")
+        print("[selftest] (c2) negative fixture: load_matches_receipted flipped -- PASS "
+              "(verdict correctly REPLAY_DIVERGED, other three conjuncts unaffected)")
+
+        replay_neg_replay = replay_and_close(
+            real_arch=real_arch, pretrain_contract=pretrain_contract,
+            control_step25_dir=step10_dir, loader=loader, eval_x=eval_x, eval_y=eval_y,
+            eval_batch_sha=eval_batch_sha, target_eval_loss=0.0,
+            ceiling_steps=40, replay_start_step=10, replay_end_step=15,
+            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-neg-replay"),
+            fp32_tolerance=1e-3,
             expected_step25_eval_loss_bf16=eval_before,
-            expected_step50_eval_loss_bf16=None,
-            expected_step50_eval_loss_fp32=true_fp32 + 5.0)
-        assert replay2["verdict"] == "REPLAY_DIVERGED", (
-            f"W1_REPLAY_SELFTEST_PERTURBED_TARGET_DID_NOT_DIVERGE: "
-            f"{replay2['verdict']}")
-        print(f"[selftest] (c2) replay_and_close perturbed-target leg PASS -- "
-              f"verdict={replay2['verdict']} (expected REPLAY_DIVERGED)")
+            expected_step50_eval_loss_bf16=true_bf16 + 1.0,  # WRONG on purpose
+            expected_step50_eval_loss_fp32=true_fp32)
+        assert not replay_neg_replay["replay_matches_receipted_bf16"], (
+            "W1_REPLAY_SELFTEST_NEG_REPLAY_DID_NOT_FLIP")
+        assert replay_neg_replay["verdict"] == "REPLAY_DIVERGED", (
+            f"W1_REPLAY_SELFTEST_NEG_REPLAY_VERDICT_NOT_DIVERGED: {replay_neg_replay['verdict']}")
+        assert replay_neg_replay["load_matches_receipted"], (
+            "W1_REPLAY_SELFTEST_NEG_REPLAY_COLLATERAL_FLIP_LOAD")
+        assert replay_neg_replay["reload_bit_exact_vs_pre_save_bf16"], (
+            "W1_REPLAY_SELFTEST_NEG_REPLAY_COLLATERAL_FLIP_RELOAD")
+        assert replay_neg_replay["fp32_within_tolerance"], (
+            "W1_REPLAY_SELFTEST_NEG_REPLAY_COLLATERAL_FLIP_FP32")
+        print("[selftest] (c3) negative fixture: replay_matches_receipted_bf16 flipped -- PASS "
+              "(verdict correctly REPLAY_DIVERGED, other three conjuncts unaffected)")
+
+        replay_neg_reload = replay_and_close(
+            real_arch=real_arch, pretrain_contract=pretrain_contract,
+            control_step25_dir=step10_dir, loader=loader, eval_x=eval_x, eval_y=eval_y,
+            eval_batch_sha=eval_batch_sha, target_eval_loss=0.0,
+            ceiling_steps=40, replay_start_step=10, replay_end_step=15,
+            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-neg-reload"),
+            fp32_tolerance=1e-3,
+            expected_step25_eval_loss_bf16=eval_before,
+            expected_step50_eval_loss_bf16=true_bf16,
+            expected_step50_eval_loss_fp32=true_fp32,
+            _test_corrupt_after_save=True)  # perturbs the SAVED model.pt bytes
+        assert not replay_neg_reload["reload_bit_exact_vs_pre_save_bf16"], (
+            "W1_REPLAY_SELFTEST_NEG_RELOAD_DID_NOT_FLIP")
+        assert replay_neg_reload["verdict"] == "REPLAY_DIVERGED", (
+            f"W1_REPLAY_SELFTEST_NEG_RELOAD_VERDICT_NOT_DIVERGED: {replay_neg_reload['verdict']}")
+        assert replay_neg_reload["load_matches_receipted"], (
+            "W1_REPLAY_SELFTEST_NEG_RELOAD_COLLATERAL_FLIP_LOAD")
+        # NOTE: fp32_within_tolerance is deliberately NOT asserted True here
+        # -- the corruption is upstream of the fp32 reload-eval too, so a
+        # cascading fp32 flip alongside the bf16 reload flip is CORRECT
+        # behavior (both genuinely detect the same corrupted artifact), not
+        # a leaky fixture.
+        assert replay_neg_reload["optimizer_resume_parity"]["shapes_match"], (
+            "W1_REPLAY_SELFTEST_NEG_RELOAD_COLLATERAL_FLIP_OPTIMIZER_PARITY")
+        assert replay_neg_reload["rng_resume_bit_exact"], (
+            "W1_REPLAY_SELFTEST_NEG_RELOAD_COLLATERAL_FLIP_RNG")
+        print("[selftest] (c4) negative fixture: reload_bit_exact_vs_pre_save_bf16 flipped -- "
+              "PASS (verdict correctly REPLAY_DIVERGED via corrupted saved bytes)")
+
+        replay_neg_fp32 = replay_and_close(
+            real_arch=real_arch, pretrain_contract=pretrain_contract,
+            control_step25_dir=step10_dir, loader=loader, eval_x=eval_x, eval_y=eval_y,
+            eval_batch_sha=eval_batch_sha, target_eval_loss=0.0,
+            ceiling_steps=40, replay_start_step=10, replay_end_step=15,
+            seed=1234, device=device, out_dir=os.path.join(tmp, "replay-neg-fp32"),
+            fp32_tolerance=1e-3,
+            expected_step25_eval_loss_bf16=eval_before,
+            expected_step50_eval_loss_bf16=true_bf16,
+            expected_step50_eval_loss_fp32=true_fp32 + 5.0)  # WRONG on purpose
+        assert not replay_neg_fp32["fp32_within_tolerance"], (
+            "W1_REPLAY_SELFTEST_NEG_FP32_DID_NOT_FLIP")
+        assert replay_neg_fp32["verdict"] == "REPLAY_DIVERGED", (
+            f"W1_REPLAY_SELFTEST_NEG_FP32_VERDICT_NOT_DIVERGED: {replay_neg_fp32['verdict']}")
+        assert replay_neg_fp32["load_matches_receipted"], (
+            "W1_REPLAY_SELFTEST_NEG_FP32_COLLATERAL_FLIP_LOAD")
+        assert replay_neg_fp32["replay_matches_receipted_bf16"], (
+            "W1_REPLAY_SELFTEST_NEG_FP32_COLLATERAL_FLIP_REPLAY")
+        assert replay_neg_fp32["reload_bit_exact_vs_pre_save_bf16"], (
+            "W1_REPLAY_SELFTEST_NEG_FP32_COLLATERAL_FLIP_RELOAD")
+        print("[selftest] (c5) negative fixture: fp32_within_tolerance flipped -- PASS "
+              "(verdict correctly REPLAY_DIVERGED, other three conjuncts unaffected)")
 
     print("[w1-replay-closure-selftest] ALL LEGS PASS")
 
@@ -863,12 +1165,22 @@ def main(argv: "list[str] | None" = None) -> int:
         expected_step50_eval_loss_fp32=EXPECTED_STEP50_EVAL_LOSS_FP32)
 
     custody = None
+    closure_verdict = replay["verdict"]
     if replay["verdict"] != "REPLAY_TRUSTWORTHY":
         print(f"W1_REPLAY_DIVERGED_CUSTODY_SKIPPED: verdict={replay['verdict']} -- "
               f"the step50 checkpoint stays at {replay['step50_checkpoint_dir']!r} "
               "for investigation, never moved to custody on a non-trustworthy replay.")
     elif args.skip_custody_move:
-        print("W1_REPLAY_CUSTODY_MOVE_SKIPPED_BY_FLAG: --skip-custody-move given.")
+        # --skip-custody-move must NEVER silently promote a claim-bearing
+        # trustworthy verdict: a checkpoint left in scratch/ has no custody
+        # guarantee (issue #677), so the CLOSURE verdict (distinct from the
+        # replay verdict) is downgraded to a diagnostic, non-promotable
+        # value and main() exits nonzero even though the replay itself
+        # checked out.
+        closure_verdict = "REPLAY_TRUSTWORTHY_NO_CUSTODY_NONPROMOTABLE"
+        print("W1_REPLAY_CUSTODY_MOVE_SKIPPED_BY_FLAG: --skip-custody-move given -- "
+              "closure verdict downgraded to REPLAY_TRUSTWORTHY_NO_CUSTODY_NONPROMOTABLE "
+              "(diagnostic use only; never cite this receipt as a trustworthy closure).")
     else:
         custody = custody_move(
             replay["step50_checkpoint_dir"], resolve(repo_root, args.custody_dir),
@@ -882,14 +1194,18 @@ def main(argv: "list[str] | None" = None) -> int:
         "preflight": preflight, "replay": replay, "custody": custody,
         "governor": gov_receipt, "commit_margin_probe": commit_margin,
         "skip_custody_move_flag_used": args.skip_custody_move,
-        "verdict": replay["verdict"],
+        "replay_verdict": replay["verdict"],
+        "verdict": closure_verdict,
         "verdict_language": (
             "W1_FROM_SCRATCH_PILOT_BASELINE (issue #735's own narrow-by-"
             "construction label: pilot scale, single seed, from-scratch "
-            "final width) applies only when verdict==REPLAY_TRUSTWORTHY AND "
-            "custody is non-null; this receipt itself reports measured "
-            "chain-verification data only, no capability-claim language is "
-            "asserted here."),
+            "final width) applies ONLY when verdict==REPLAY_TRUSTWORTHY "
+            "(exactly that string) AND custody is non-null; "
+            "REPLAY_TRUSTWORTHY_NO_CUSTODY_NONPROMOTABLE is a diagnostic "
+            "verdict and carries no capability claim regardless of what "
+            "the underlying replay measured. This receipt itself reports "
+            "measured chain-verification data only, no capability-claim "
+            "language is asserted here."),
         "api_spend_usd": 0.0, "paid_api_surface_used": False,
     }
     closure_path = os.path.join(
@@ -900,7 +1216,7 @@ def main(argv: "list[str] | None" = None) -> int:
         "verdict": closure["verdict"],
         "step50_checkpoint_custody_dir": (custody or {}).get("dest_dir"),
     }, indent=2))
-    return 0 if closure["verdict"] == "REPLAY_TRUSTWORTHY" else 1
+    return 0 if closure_verdict == "REPLAY_TRUSTWORTHY" else 1
 
 
 if __name__ == "__main__":
