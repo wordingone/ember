@@ -1,0 +1,95 @@
+{
+  "ticket": "W1-FULLSTATE-RESUME-VERIFY",
+  "ts": "20260711T045424Z",
+  "issue": "#735",
+  "schema": "w1-fullstate-resume-verify/v1",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint files; sha256 over device-normalized (cpu, contiguous, bitcast-to-uint8) tensor bytes prefixed with shape+dtype for every model/optimizer state tensor and RNG buffer hashed below (the tensor_hash convention used throughout this receipt)",
+  "ref": "issue #735 comment 4942417647 (coordinator erratum + scope-narrowing on the landed w1-baseline-replay-closure-20260711T025650Z.json receipt); supplements, never retro-edits, that receipt -- append-only evidence.",
+  "custody_pin_check": {
+    "dir": "<LOCAL-ABS-PATH>/M/ember/models/w1-baseline-replay-custody/w1-baseline-replay-step50-20260711T025650Z",
+    "measured_sha256": {
+      "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+      "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+      "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
+      "manifest.json": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504"
+    },
+    "expected_sha256": {
+      "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+      "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+      "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
+      "manifest.json": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504"
+    },
+    "per_file_match": {
+      "model.pt": true,
+      "optimizer.pt": true,
+      "rng.pt": true,
+      "manifest.json": true
+    },
+    "pass": true
+  },
+  "verification": {
+    "ckpt_dir": "<LOCAL-ABS-PATH>/M/ember/models/w1-baseline-replay-custody/w1-baseline-replay-step50-20260711T025650Z",
+    "manifest_step": 50,
+    "load_path_fidelity": {
+      "model": {
+        "n_tensors_checked": 185,
+        "n_mtp_head_tensors_checked": 2,
+        "mtp_head_keys": [
+          "mtp_heads.0.weight",
+          "mtp_heads.1.weight"
+        ],
+        "key_set_mismatch": [],
+        "tensor_hash_mismatches": [],
+        "exact": true
+      },
+      "optimizer": {
+        "n_optimizer_keys_checked": 2,
+        "n_params_per_key": {
+          "adamw": 44,
+          "muon": 140
+        },
+        "mismatches": [],
+        "exact": true
+      },
+      "rng": {
+        "hash_on_disk": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+        "hash_after_apply": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+        "exact": true
+      }
+    },
+    "load_path_exact": true,
+    "save_fidelity": null,
+    "save_fidelity_checked": false,
+    "save_fidelity_exact": null,
+    "model": {
+      "n_tensors_checked": 185,
+      "n_mtp_head_tensors_checked": 2,
+      "mtp_head_keys": [
+        "mtp_heads.0.weight",
+        "mtp_heads.1.weight"
+      ],
+      "key_set_mismatch": [],
+      "tensor_hash_mismatches": [],
+      "exact": true
+    },
+    "optimizer": {
+      "n_optimizer_keys_checked": 2,
+      "n_params_per_key": {
+        "adamw": 44,
+        "muon": 140
+      },
+      "mismatches": [],
+      "exact": true
+    },
+    "rng": {
+      "hash_on_disk": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+      "hash_after_apply": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+      "exact": true
+    },
+    "verdict": "FULLSTATE_RESUME_EXACT"
+  },
+  "verdict": "FULLSTATE_RESUME_EXACT",
+  "verdict_language": "FULLSTATE_RESUME_EXACT closes both named defects in the landed closure receipt's resumability leg: (a) optimizer state is compared by VALUE (device-normalized tensor hash), never shape alone; (b) EVERY model state_dict tensor including mtp_heads is hashed, never only the primary-logits eval-loss path. This receipt does not re-assert or widen the closure receipt's REPLAY_TRUSTWORTHY language (model BF16/FP32 replay + eval identity) -- it verifies the checkpoint IS a genuine bit-exact resume point, the claim the closure receipt's verdict string implied but its verifier did not check.",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}
