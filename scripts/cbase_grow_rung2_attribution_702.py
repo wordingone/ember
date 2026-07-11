@@ -1652,26 +1652,57 @@ def _other_tenancy_frac(before: dict, after: dict) -> dict:
     }
 
 
+def _tenancy_disposition(other_tenancy: dict | None) -> str:
+    """ember #702 (2026-07-11, external falsifier round-2 BLOCK on 53a84a39,
+    PR #762 static-gate contract c4946411737): classifies the interval
+    other-tenancy signal into exactly three states, never conflated.
+    'unmeasurable' is genuine ABSENCE of evidence -- no other_tenancy at
+    all (caller never computed it) or a computed-but-undefined fraction
+    (other_tenancy_frac is None, zero wall-clock denominator) -- and never
+    silently treated as clean. 'busy' is a DEFINITIVE, measured fact (the
+    interval instrument saw the contention directly); 'clean' is the only
+    state in which the wall-clock ratio itself is trusted to carry the
+    verdict."""
+    if other_tenancy is None or other_tenancy.get("other_tenancy_frac") is None:
+        return "unmeasurable"
+    return "clean" if other_tenancy["quiet"] else "busy"
+
+
 def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
                     unprofiled_walls: list, collector: SubphaseCollector,
                     expected_full_numel: int, calibration: dict,
                     other_tenancy: dict | None = None) -> dict:
     gates: dict = {}
-    # ember #702 (2026-07-11, external falsifier DEFECT 1 cure): the burst-CV
-    # probe is a cheap fast pre-check ONLY -- it is disclosed in both gate
-    # dicts below for visibility but NEVER licenses a claim by itself (it is
-    # blind to a STEADY contender, which slows every burst equally and so
-    # reports "quiet" via CV while real contention inflates overhead/closure
-    # well past bound -- the falsifier's own fixture: cv=0.0383, overhead_
-    # frac=0.118956, under a live attribution run on the same box). The
-    # AUTHORITATIVE signal is other_tenancy (an interval measurement spanning
-    # the timed legs themselves, computed by the caller and passed in here --
-    # never computed inside this pure-evaluation function, since it must
-    # span the ACTUAL AB/BA wall-clock window, not this call's own instant).
-    # No other_tenancy provided at all (None) is treated as NOT quiet --
-    # never silently falls back to the CV-only signal DEFECT 1 disproved.
+    # ember #702 (2026-07-11, external falsifier DEFECT 1 cure, then round-2
+    # BLOCK on the first cure attempt 53a84a39): the burst-CV probe is a
+    # cheap fast pre-check ONLY -- it is disclosed in both gate dicts below
+    # for visibility but NEVER licenses a claim by itself (it is blind to a
+    # STEADY contender, which slows every burst equally and so reports
+    # "quiet" via CV while real contention inflates overhead/closure well
+    # past bound -- the falsifier's own fixture: cv=0.0383, overhead_frac=
+    # 0.118956, under a live attribution run on the same box). The
+    # AUTHORITATIVE signal is other_tenancy (an interval measurement
+    # spanning the timed legs themselves, computed by the caller and passed
+    # in here -- never computed inside this pure-evaluation function, since
+    # it must span the ACTUAL AB/BA wall-clock window, not this call's own
+    # instant).
+    #
+    # Round-2 finding (own selftest receipt, 53a84a39): a 31-contender pool
+    # measured other_tenancy_frac=0.828 (definitively busy) yet BOTH
+    # overhead_frac and closure_frac still landed within bound -- uniform
+    # contention drags profiled/unprofiled (and subphase-sum/wall) by
+    # roughly the same multiplicative factor, so the RATIO survives even
+    # though the box was provably not quiet. Gating tenancy only when the
+    # ratio was ALREADY out of bound (the first cure attempt's design) let
+    # that coincidence pass as a genuine PASS. Corrected contract: tenancy
+    # gates the CLAIM unconditionally, not just the failure path --
+    #   unmeasurable -> passed=None  (ENVIRONMENT_INCONCLUSIVE; no evidence)
+    #   busy         -> passed=False (INVALID; evidence says distrust it,
+    #                    regardless of what the ratio itself reads)
+    #   clean        -> passed=(ratio within bound) (the ratio is trusted
+    #                    only once contention is definitively ruled out)
     quiet_box_probe = _probe_quiet_box()
-    other_tenancy_quiet = other_tenancy is not None and other_tenancy["quiet"]
+    tenancy = _tenancy_disposition(other_tenancy)
 
     gates["step_count"] = {
         "passed": n_warmup >= MIN_WARMUP_STEPS and n_active >= MIN_ACTIVE_STEPS,
@@ -1685,20 +1716,15 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
     overhead_frac = (abs(prof_med - unprof_med) / unprof_med
                      if prof_med is not None and unprof_med else None)
     overhead_within_bound = overhead_frac is not None and overhead_frac <= OVERHEAD_BOUND_FRAC
-    # A measured overhead_frac ABOVE bound on a box other_tenancy reports as
-    # loaded is INCONCLUSIVE, not FAIL -- the wall-clock ratio it's built
-    # from was perturbed by something this process doesn't control. A
-    # measurement WITHIN bound is never downgraded (passing despite noise is
-    # still a pass); only an out-of-bound reading gets the disposition
-    # softened, and only when the AUTHORITATIVE interval signal corroborates
-    # it -- the burst-CV probe alone cannot soften a FAIL into inconclusive.
-    overhead_passed = (True if overhead_within_bound
-                       else (None if not other_tenancy_quiet else False))
+    overhead_passed = (None if tenancy == "unmeasurable"
+                       else False if tenancy == "busy"
+                       else overhead_within_bound)
     gates["overhead"] = {
         "passed": overhead_passed,
         "disposition": ("PASS" if overhead_passed is True
                         else "INCONCLUSIVE_UNDER_LOAD" if overhead_passed is None
                         else "FAIL"),
+        "tenancy": tenancy,
         "profiled_median_wall_s": prof_med, "unprofiled_median_wall_s": unprof_med,
         "overhead_frac": overhead_frac, "bound_frac": OVERHEAD_BOUND_FRAC,
         "design": "counterbalanced_ab_ba_pooled",
@@ -1711,13 +1737,15 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
     sum_wall = sum(collector.step_walls())
     closure_frac = (abs(sum_subphases - sum_wall) / sum_wall) if sum_wall else None
     closure_within_bound = closure_frac is not None and closure_frac <= CLOSURE_BOUND_FRAC
-    closure_passed = (True if closure_within_bound
-                      else (None if not other_tenancy_quiet else False))
+    closure_passed = (None if tenancy == "unmeasurable"
+                      else False if tenancy == "busy"
+                      else closure_within_bound)
     gates["closure"] = {
         "passed": closure_passed,
         "disposition": ("PASS" if closure_passed is True
                         else "INCONCLUSIVE_UNDER_LOAD" if closure_passed is None
                         else "FAIL"),
+        "tenancy": tenancy,
         "sum_subphases_s": sum_subphases, "sum_measured_wall_s": sum_wall,
         "other_tenancy": other_tenancy,
         "closure_frac": closure_frac, "bound_frac": CLOSURE_BOUND_FRAC,
@@ -3049,7 +3077,7 @@ def _selftest() -> int:
     _selftest_verdict_predicates()
     _selftest_span_collector_attach_detach()
     _selftest_integration_all_gates_pass()
-    _selftest_environment_inconclusive_under_steady_load()
+    _selftest_invalid_under_measured_steady_load()
     _selftest_fork_capacity_preflight()
     _selftest_rung2_identity_gate_units()
     _selftest_continuation_schedule_bind()
@@ -3199,24 +3227,35 @@ def _selftest_integration_all_gates_pass() -> None:
     gates = receipt["gates"]
     # ember #702 quiet-box precondition (2026-07-11, external falsifier's
     # independent re-run: overhead_frac 0.452 vs the 0.10 bound while a
-    # concurrent 434M-param leg loaded the box): overhead/closure are the
-    # only wall-clock-ratio gates -- their "passed" can legitimately be
-    # None (INCONCLUSIVE_UNDER_LOAD) when _probe_quiet_box() corroborates
-    # real contention, and this fixture must not treat that as a code
-    # defect. step_count and exact_bytes carry no timing dependency and
-    # are asserted strictly regardless.
+    # concurrent 434M-param leg loaded the box; corrected round-2 after the
+    # first cure attempt's own selftest, 53a84a39, proved the earlier
+    # design let a coincidentally-in-bound ratio pass under measured
+    # tenancy=="busy"): overhead/closure are the only wall-clock-ratio
+    # gates -- their "passed" can legitimately be None (tenancy
+    # "unmeasurable") or False WITH tenancy=="busy" (measured contention,
+    # not a code defect), and this fixture must not treat either as a
+    # defect. A "passed" False with tenancy=="clean" IS a real defect --
+    # the ratio itself was measured, on an independently-confirmed-quiet
+    # box, and still out of bound. step_count and exact_bytes carry no
+    # timing dependency and are asserted strictly regardless.
     for gate_name in ("step_count", "exact_bytes"):
         assert gates[gate_name]["passed"] is True, (gate_name, gates[gate_name])
     timing_gate_names = ("overhead", "closure")
-    inconclusive = []
+    inconclusive = []    # tenancy=="unmeasurable" -> passed=None
+    busy_invalid = []    # tenancy=="busy" (measured contention) -> passed=False, non-defect
     for gate_name in timing_gate_names:
         g = gates[gate_name]
-        assert g["passed"] is not False, (
-            f"{gate_name} gate genuinely FAILED (not merely inconclusive under "
-            f"load) -- this is a real defect, not environment noise: {g}")
         if g["passed"] is None:
             assert g["disposition"] == "INCONCLUSIVE_UNDER_LOAD", g
+            assert g["tenancy"] == "unmeasurable", g
             inconclusive.append(gate_name)
+        elif g["passed"] is False:
+            assert g["tenancy"] == "busy", (
+                f"{gate_name} gate genuinely FAILED on a tenancy-clean box "
+                f"(not measured contention) -- this is a real defect, not "
+                f"environment noise: {g}")
+            busy_invalid.append(gate_name)
+
     if inconclusive:
         probe = gates[inconclusive[0]]["quiet_box_probe"]
         other_tenancy = gates[inconclusive[0]]["other_tenancy"]
@@ -3226,7 +3265,7 @@ def _selftest_integration_all_gates_pass() -> None:
               f"threshold={other_tenancy['threshold']}", flush=True)
         assert receipt["failing_gates"] == inconclusive, (
             "only the disclosed inconclusive timing gates may appear in "
-            f"failing_gates under load -- got {receipt['failing_gates']}")
+            f"failing_gates under unmeasurable tenancy -- got {receipt['failing_gates']}")
         # ember #702 DEFECT 2 cure: unpassed validity (even None-only, no
         # False) never licenses a substantive VERDICT_GRAMMAR claim -- an
         # inconclusive timing gate must land on the explicit non-claim
@@ -3235,6 +3274,24 @@ def _selftest_integration_all_gates_pass() -> None:
             f"unpassed (None) validity gate(s) {inconclusive} must force "
             f"verdict=ENVIRONMENT_INCONCLUSIVE, never a substantive "
             f"classification -- got {receipt['verdict']!r}")
+        assert receipt["verdict"] not in VERDICT_GRAMMAR, receipt["verdict"]
+    elif busy_invalid:
+        other_tenancy = gates[busy_invalid[0]]["other_tenancy"]
+        print(f"ATTRIBUTION_702_INTEGRATION_TIMING_GATES_INVALID_UNDER_MEASURED_CONTENTION "
+              f"gates={busy_invalid} "
+              f"other_tenancy_frac={other_tenancy['other_tenancy_frac']} "
+              f"threshold={other_tenancy['threshold']}", flush=True)
+        assert receipt["failing_gates"] == busy_invalid, (
+            "only the disclosed busy-tenancy timing gates may appear in "
+            f"failing_gates under measured contention -- got {receipt['failing_gates']}")
+        # ember #702 round-2 cure: a DEFINITIVELY measured busy environment
+        # is a hard fail (INVALID), never merely inconclusive -- the ratio
+        # is untrusted regardless of what it reads (round-2's own repro:
+        # both ratios read within-bound under other_tenancy_frac=0.828).
+        assert receipt["verdict"] == "INVALID", (
+            f"measured-busy validity gate(s) {busy_invalid} must force "
+            f"verdict=INVALID, never a substantive classification -- "
+            f"got {receipt['verdict']!r}")
         assert receipt["verdict"] not in VERDICT_GRAMMAR, receipt["verdict"]
     else:
         assert receipt["gates_all_passed"] is True, (
@@ -3252,37 +3309,42 @@ def _selftest_integration_all_gates_pass() -> None:
           f"gates_all_passed={receipt['gates_all_passed']}", flush=True)
 
 
-def _selftest_environment_inconclusive_under_steady_load() -> None:
-    """ember #702 (2026-07-11, external falsifier DEFECT 1/2 cure, PR #762
-    comment 4946137038): negative fixture proving the interval-based
-    other-tenancy measurement -- never the burst-CV pre-check -- is what
-    licenses overhead/closure, and that unpassed validity correctly
-    downgrades the verdict to the explicit non-claim ENVIRONMENT_
-    INCONCLUSIVE rather than a substantive VERDICT_GRAMMAR classification.
+def _selftest_invalid_under_measured_steady_load() -> None:
+    """ember #702 (2026-07-11, external falsifier round-2 BLOCK on the
+    first cure attempt 53a84a39, PR #762 static-gate contract c4946411737):
+    negative fixture proving a DEFINITIVELY-measured busy environment
+    (tenancy=="busy") forces the fail-closed INVALID verdict UNCONDITIONALLY
+    -- regardless of what overhead_frac/closure_frac themselves read --
+    never the softer ENVIRONMENT_INCONCLUSIVE (reserved for tenancy ==
+    "unmeasurable", genuine absence of evidence) and never a silent PASS.
 
-    Spawns a POOL of genuine background OS PROCESSES (subprocess.Popen,
-    never multiprocessing -- a Python thread would contend on the
-    interpreter's own global lock, a different mechanism than a real
-    co-tenant process, and would not test the same thing this fixture must
-    prove), one per free core (n_cores-1,
-    floor 1), so the OS scheduler cannot simply park the fixture's own
-    work on an otherwise-idle core -- a single one-core contender is not a
-    reliable repro on a multi-core box, since the scheduler is free to run
-    the fixture on a different core and see near-zero perturbation. A
-    near-full-box pool is closer to the falsifier's actual reproduction
-    shape too: a live 2.2B attribution tenant saturates many cores via
-    DataLoader workers + torch intra-op threads, not one. Steady, roughly
-    constant-rate contention is exactly the negative case that fools the
-    burst-CV probe: it slows every burst equally (low CV, reads "quiet")
-    while the interval other-tenancy measurement -- which sees the
-    contenders' accumulated CPU-seconds directly, independent of
-    variability -- must correctly flag it. Reference point: the
-    falsifier's own live run measured cv=0.0383 (read as quiet) with
-    overhead_frac=0.118956 > the 0.10 bound, under real contention from a
-    live 2.2B attribution tenant. The pool runs only for the duration of
-    the fixture's own short CPU AB/BA legs and is terminated in `finally`
-    regardless of outcome -- bounded, transient saturation, never a
-    standing load."""
+    First cure attempt's own selftest receipt (head 53a84a39, this exact
+    fixture, n_cores-1=31 contenders on a 32-core box) is the falsifying
+    repro that forced this round: other_tenancy_frac=0.828 (definitively
+    busy) yet BOTH overhead_frac and closure_frac still landed within
+    bound -- uniform contention drags profiled/unprofiled (and subphase-
+    sum/wall) by roughly the same multiplicative factor, so the RATIO
+    survived even though the box was provably not quiet, and the old
+    contract (tenancy only consulted when the ratio was ALREADY out of
+    bound) let that coincidence pass as a genuine PASS. This fixture now
+    asserts the corrected contract directly: busy alone is sufficient.
+
+    Spawns a SMALL, FIXED-size pool of genuine background OS PROCESSES
+    (subprocess.Popen, never multiprocessing -- a Python thread would
+    contend on the interpreter's own global lock, a different mechanism
+    than a real co-tenant process). Deliberately NOT n_cores-1: since the
+    corrected contract makes the ratio irrelevant once tenancy=="busy",
+    only OTHER_TENANCY_FRAC_THRESHOLD (0.03) needs clearing -- a handful of
+    saturating processes clears it with wide margin on any real box
+    (4 cores busy out of 32 is already 12.5%, 4x the threshold) without
+    starving the fixture's own tiny CPU workload the way a near-full-box
+    pool does. The first cure attempt's n_cores-1 pool crushed the
+    fixture's own progress so badly its AB/BA span alone ran ~31 minutes
+    (wall_delta_s=1850.29) versus a few seconds unconteded -- a real
+    runaway-duration risk this fixture must not repeat. The pool runs only
+    for the duration of the fixture's own short CPU AB/BA legs and is
+    terminated in `finally` regardless of outcome -- bounded, transient
+    saturation, never a standing load."""
     import os
     import subprocess
     import tempfile
@@ -3293,7 +3355,7 @@ def _selftest_environment_inconclusive_under_steady_load() -> None:
         "    for i in range(200000):\n"
         "        x += (i * i) % 7919\n"
     )
-    n_contenders = max(1, (os.cpu_count() or 4) - 1)
+    n_contenders = max(1, min(4, (os.cpu_count() or 8) // 8))
     contenders = [
         subprocess.Popen([sys.executable, "-c", contender_code],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -3308,7 +3370,7 @@ def _selftest_environment_inconclusive_under_steady_load() -> None:
             "throughput": {"batch": 2},
         }
         tiny_dims = {"vocab": 64, "hidden": 384, "depth": 3, "seq": 64}
-        run_dir = tempfile.mkdtemp(prefix="attribution702_envinconclusive_")
+        run_dir = tempfile.mkdtemp(prefix="attribution702_invalidunderload_")
 
         synthetic_calibration = {
             "skipped": False, "n_bytes_per_trial": 1 << 24, "n_trials": 5,
@@ -3316,7 +3378,7 @@ def _selftest_environment_inconclusive_under_steady_load() -> None:
             "d2h_pageable_gbps": 7.5, "d2h_pinned_gbps": 13.0,
             "pcie4_x16_peak_gbps": 31.508,
             "h2d_pinned_vs_pageable_speedup": 1.75, "d2h_pinned_vs_pageable_speedup": 1.733,
-            "note": ("SYNTHETIC -- environment-inconclusive negative fixture stub, "
+            "note": ("SYNTHETIC -- invalid-under-measured-load negative fixture stub, "
                      "same shape as the integration fixture's."),
         }
         module = sys.modules[__name__]
@@ -3344,19 +3406,31 @@ def _selftest_environment_inconclusive_under_steady_load() -> None:
 
     gates = receipt["gates"]
     timing_dispositions = {name: gates[name]["disposition"] for name in ("overhead", "closure")}
+    tenancies = {name: gates[name]["tenancy"] for name in ("overhead", "closure")}
     other_tenancy = gates["overhead"]["other_tenancy"]
-    assert receipt["verdict"] == "ENVIRONMENT_INCONCLUSIVE", (
-        f"steady background contention must flip verdict to "
-        f"ENVIRONMENT_INCONCLUSIVE, never a substantive classification -- "
-        f"got verdict={receipt['verdict']!r} "
-        f"timing_dispositions={timing_dispositions} other_tenancy={other_tenancy}")
+    assert other_tenancy is not None and other_tenancy["other_tenancy_frac"] is not None, (
+        "the contention pool must produce a MEASURABLE other_tenancy_frac "
+        f"-- got other_tenancy={other_tenancy} (n_contenders={n_contenders})")
+    assert not other_tenancy["quiet"], (
+        f"the contention pool must push other_tenancy_frac past the "
+        f"{OTHER_TENANCY_FRAC_THRESHOLD} threshold -- got {other_tenancy}")
+    assert tenancies == {"overhead": "busy", "closure": "busy"}, (
+        f"both timing gates must classify tenancy=='busy' under measured "
+        f"contention -- got {tenancies}")
+    assert receipt["verdict"] == "INVALID", (
+        f"a definitively-measured busy environment must force verdict="
+        f"INVALID unconditionally (never a substantive classification, "
+        f"never softened to ENVIRONMENT_INCONCLUSIVE) -- got "
+        f"verdict={receipt['verdict']!r} timing_dispositions={timing_dispositions} "
+        f"tenancies={tenancies} other_tenancy={other_tenancy}")
     assert receipt["verdict"] not in VERDICT_GRAMMAR, receipt["verdict"]
-    assert not any(gates[n]["passed"] is False for n in ("overhead", "closure")), (
-        "steady contention must read as INCONCLUSIVE, not a hard FAIL -- "
-        f"gates={ {n: gates[n]['passed'] for n in ('overhead', 'closure')} }")
+    assert set(receipt["failing_gates"]) >= {"overhead", "closure"}, (
+        f"both timing gates must appear in failing_gates under measured "
+        f"busy tenancy -- got {receipt['failing_gates']}")
 
-    print("ATTRIBUTION_702_ENVIRONMENT_INCONCLUSIVE_UNDER_STEADY_LOAD_SELFTEST_PASS "
+    print("ATTRIBUTION_702_INVALID_UNDER_MEASURED_STEADY_LOAD_SELFTEST_PASS "
           f"verdict={receipt['verdict']} timing_dispositions={timing_dispositions} "
+          f"n_contenders={n_contenders} "
           f"other_tenancy_frac={other_tenancy['other_tenancy_frac']} "
           f"threshold={other_tenancy['threshold']}", flush=True)
 
