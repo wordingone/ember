@@ -1,0 +1,192 @@
+{
+  "ticket": "W1-FULLSTATE-RESUME-VERIFY",
+  "ts": "20260711T054130Z",
+  "issue": "#735",
+  "schema": "w1-fullstate-resume-verify/v2",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint files; sha256 over device-normalized (cpu, contiguous, bitcast-to-uint8) tensor bytes prefixed with shape+dtype for every model/optimizer state tensor and RNG buffer hashed below (the tensor_hash convention used throughout this receipt)",
+  "ref": "issue #735 comment 4942417647 (coordinator erratum + scope-narrowing on the landed w1-baseline-replay-closure-20260711T025650Z.json receipt); supplements, never retro-edits, that receipt -- append-only evidence. v2 repair round: PR #758 review (external falsifier BLOCK, CLEAR on load-path values / BLOCK on the unscoped verdict) -- binds the runtime reconstruction inputs + closure config_sha, and narrows the verdict language accordingly.",
+  "source_commit": {
+    "sha": "8bac592b62bc60e2a2c2e2484ddbb2b685fe0e1f",
+    "working_tree_dirty": true,
+    "available": true
+  },
+  "real_arch": {
+    "vocab": 32000,
+    "seq": 1024,
+    "batch": 16,
+    "hidden": 1024,
+    "n_mtp": 2,
+    "n_mtp_source": "<LOCAL-ABS-PATH>\\M\\wt-735fullstate\\configs\\v0-pretrain-config.json objective.mtp_aux_heads.n_heads=2 -- the SAME contract path production's _V0Real reads (timeshare_pretrain.CONTRACT_PATH), read fresh, never hardcoded",
+    "hidden_derivation": "params_dedup.measured_duplicate_numel=32768000 / vocab=32000 = 1024 (tied embed/head dedup count = vocab*hidden)",
+    "ff_grown": 16384,
+    "params_unique_after": null,
+    "params_state_dict_sum_after": null,
+    "layers_heads_source": "layers=20, heads=16 carried from the v0/c03 config precedent (fp19-envelope.md, quoted in scripts/timeshare_pretrain.py's module docstring) -- NOT independently present in the grow-rung receipt chain; flagged, not silently assumed",
+    "layers_assumed": 20,
+    "heads_assumed": 16,
+    "terminal_checkpoint_ref": "<LOCAL-ABS-PATH>\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+    "terminal_checkpoint_receipt": "<LOCAL-ABS-PATH>\\M\\ember\\receipts\\cbase-grow-rung\\cbase-grow-rung1-live-20260703T155711Z.json"
+  },
+  "runtime_reconstruction_inputs": {
+    "pricing_receipt": {
+      "path": "<LOCAL-ABS-PATH>/M/ember/scratch/w1-control/w1-pricing-20260704T063236Z.json",
+      "sha256": "b3cb6270f51a1ae0052121c3b351faf7af778ba8df194ee6dfa8711dc00673d8",
+      "bound": true
+    },
+    "rung_manifest": {
+      "path": "<LOCAL-ABS-PATH>/M/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/manifest.json",
+      "sha256": "573f615847ec7e2592beec8a059882082c938aafe0151ddfe49fc77259aead88",
+      "bound": true
+    },
+    "pretrain_contract": {
+      "path": "<LOCAL-ABS-PATH>\\M\\wt-735fullstate\\configs\\v0-pretrain-config.json",
+      "sha256": "97695bcafb581ed3238b5125986fd6aa837b9ed0bbbd77b1fbdf654e63f5c991",
+      "bound": true
+    },
+    "all_bound": true
+  },
+  "real_arch_config_sha_check": {
+    "real_config_dict": {
+      "vocab": 32000,
+      "hidden": 1024,
+      "layers": 20,
+      "heads": 16,
+      "ff": 16384,
+      "seq": 1024,
+      "batch": 16,
+      "tied_embeddings": true,
+      "head_bias": false,
+      "n_mtp": 2
+    },
+    "measured_config_sha256": "83bca66bffafe80ed5d2b4b7098c09ff5c562a04bf7ff9d6fb23f2d0a6ce0869",
+    "expected_config_sha256": "83bca66bffafe80ed5d2b4b7098c09ff5c562a04bf7ff9d6fb23f2d0a6ce0869",
+    "source": "scripts/w1_baseline_replay_closure.py EXPECTED_CONFIG_SHA256 -- frozen at the #735/#738 closure landing, independently derived there via the SAME config_sha(real_config_dict(real_arch)) call over that receipt's own real_arch",
+    "pass": true
+  },
+  "custody_pin_check": {
+    "dir": "<LOCAL-ABS-PATH>/M/ember/models/w1-baseline-replay-custody/w1-baseline-replay-step50-20260711T025650Z",
+    "measured_sha256": {
+      "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+      "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+      "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
+      "manifest.json": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504"
+    },
+    "expected_sha256": {
+      "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+      "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+      "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
+      "manifest.json": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504"
+    },
+    "per_file_match": {
+      "model.pt": true,
+      "optimizer.pt": true,
+      "rng.pt": true,
+      "manifest.json": true
+    },
+    "pass": true
+  },
+  "verification": {
+    "ckpt_dir": "<LOCAL-ABS-PATH>/M/ember/models/w1-baseline-replay-custody/w1-baseline-replay-step50-20260711T025650Z",
+    "manifest_step": 50,
+    "load_path_fidelity": {
+      "model": {
+        "n_tensors_checked": 185,
+        "n_mtp_head_tensors_checked": 2,
+        "mtp_head_keys": [
+          "mtp_heads.0.weight",
+          "mtp_heads.1.weight"
+        ],
+        "key_set_mismatch": [],
+        "tensor_hash_mismatches": [],
+        "exact": true
+      },
+      "optimizer": {
+        "n_optimizer_keys_checked": 2,
+        "n_params_per_key": {
+          "adamw": 44,
+          "muon": 140
+        },
+        "mismatches": [],
+        "exact": true
+      },
+      "rng": {
+        "hash_on_disk": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+        "hash_after_apply": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+        "exact": true
+      }
+    },
+    "load_path_exact": true,
+    "save_fidelity": null,
+    "save_fidelity_checked": false,
+    "save_fidelity_exact": null,
+    "save_fidelity_disclosure": "save_fidelity_checked=false: no in-memory pre-save reference exists for this checkpoint -- the process that wrote it has already exited, so the literal 'exact pre-save in-memory state' this gate tests is UNAVAILABLE, not merely skipped. The achievable substitute is verify_custody_pins: an independent re-hash of the 4 on-disk files against EXPECTED_CUSTODY_SHA256 pins recorded in a SEPARATE receipt at save time, which proves this checkpoint's raw bytes are byte-identical to what was pinned then. It does NOT prove those pinned bytes equal the true in-memory state at the instant save_checkpoint was called in the original process -- only a same-process selftest (this script's --selftest legs (a)/(b)/(c)) can check that. A null save_fidelity field means UNAVAILABLE here, never a silent pass.",
+    "runtime_inputs_bound": {
+      "pricing_receipt": {
+        "path": "<LOCAL-ABS-PATH>/M/ember/scratch/w1-control/w1-pricing-20260704T063236Z.json",
+        "sha256": "b3cb6270f51a1ae0052121c3b351faf7af778ba8df194ee6dfa8711dc00673d8",
+        "bound": true
+      },
+      "rung_manifest": {
+        "path": "<LOCAL-ABS-PATH>/M/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/manifest.json",
+        "sha256": "573f615847ec7e2592beec8a059882082c938aafe0151ddfe49fc77259aead88",
+        "bound": true
+      },
+      "pretrain_contract": {
+        "path": "<LOCAL-ABS-PATH>\\M\\wt-735fullstate\\configs\\v0-pretrain-config.json",
+        "sha256": "97695bcafb581ed3238b5125986fd6aa837b9ed0bbbd77b1fbdf654e63f5c991",
+        "bound": true
+      },
+      "all_bound": true
+    },
+    "config_sha_bound": {
+      "real_config_dict": {
+        "vocab": 32000,
+        "hidden": 1024,
+        "layers": 20,
+        "heads": 16,
+        "ff": 16384,
+        "seq": 1024,
+        "batch": 16,
+        "tied_embeddings": true,
+        "head_bias": false,
+        "n_mtp": 2
+      },
+      "measured_config_sha256": "83bca66bffafe80ed5d2b4b7098c09ff5c562a04bf7ff9d6fb23f2d0a6ce0869",
+      "expected_config_sha256": "83bca66bffafe80ed5d2b4b7098c09ff5c562a04bf7ff9d6fb23f2d0a6ce0869",
+      "source": "scripts/w1_baseline_replay_closure.py EXPECTED_CONFIG_SHA256 -- frozen at the #735/#738 closure landing, independently derived there via the SAME config_sha(real_config_dict(real_arch)) call over that receipt's own real_arch",
+      "pass": true
+    },
+    "runtime_binds_applicable": true,
+    "runtime_binds_satisfied": true,
+    "model": {
+      "n_tensors_checked": 185,
+      "n_mtp_head_tensors_checked": 2,
+      "mtp_head_keys": [
+        "mtp_heads.0.weight",
+        "mtp_heads.1.weight"
+      ],
+      "key_set_mismatch": [],
+      "tensor_hash_mismatches": [],
+      "exact": true
+    },
+    "optimizer": {
+      "n_optimizer_keys_checked": 2,
+      "n_params_per_key": {
+        "adamw": 44,
+        "muon": 140
+      },
+      "mismatches": [],
+      "exact": true
+    },
+    "rng": {
+      "hash_on_disk": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+      "hash_after_apply": "c85441dfa5560106ebd1203c4760f72fcf0e770b991b4a0b9c9045f161c3ad44",
+      "exact": true
+    },
+    "verdict": "FULLSTATE_RESUME_EXACT"
+  },
+  "verdict": "FULLSTATE_RESUME_EXACT",
+  "verdict_language": "FULLSTATE_RESUME_EXACT. Both named defects in the landed closure receipt's resumability leg are closed regardless of verdict scope: (a) optimizer state is compared by VALUE (device-normalized tensor hash), never shape alone; (b) EVERY model state_dict tensor including mtp_heads is hashed, never only the primary-logits eval-loss path. FULLSTATE_RESUME_EXACT additionally REQUIRES both runtime-reconstruction-input binds (runtime_reconstruction_inputs.all_bound and real_arch_config_sha_check.pass) -- absent either, the honest scope of this run's evidence is only FULLSTATE_LOAD_PATH_EXACT: the load-path hash-comparison machinery is proven exact, but this run's real_arch was not proven to bind to the checkpoint's own closure receipt. save_fidelity_checked=false: no in-memory pre-save reference exists for this checkpoint -- the process that wrote it has already exited, so the literal 'exact pre-save in-memory state' this gate tests is UNAVAILABLE, not merely skipped. The achievable substitute is verify_custody_pins: an independent re-hash of the 4 on-disk files against EXPECTED_CUSTODY_SHA256 pins recorded in a SEPARATE receipt at save time, which proves this checkpoint's raw bytes are byte-identical to what was pinned then. It does NOT prove those pinned bytes equal the true in-memory state at the instant save_checkpoint was called in the original process -- only a same-process selftest (this script's --selftest legs (a)/(b)/(c)) can check that. A null save_fidelity field means UNAVAILABLE here, never a silent pass. This receipt does not re-assert or widen the closure receipt's REPLAY_TRUSTWORTHY language (model BF16/FP32 replay + eval identity) -- it verifies the checkpoint IS a genuine bit-exact resume point, the claim the closure receipt's verdict string implied but its verifier did not check.",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}
