@@ -52,6 +52,8 @@ the score or names a deterministic mismatch), exactly as the R + CHK state.
 import json
 import os
 import glob
+import re
+import subprocess
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 EXTERNAL_STATE = next(
@@ -61,6 +63,35 @@ EXTERNAL_STATE = next(
     os.path.join(REPO_ROOT, "<external-state>"),
 )
 RECEIPTS = os.path.join(EXTERNAL_STATE, "receipts")
+
+# [ISSUE #683 class extension] execution-binding helpers for the
+# deterministic-mismatch CHK path (see _valid_mismatch_record below).
+GIT_TIMEOUT_SECONDS = 15
+SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+
+
+def _run_git(args, cwd):
+    """Run a git subprocess rooted at cwd. Returns (returncode, stdout, stderr);
+    returncode is None on any exception so callers always get a uniform
+    execution-binding-failure shape -- this is a status probe and must always
+    exit 0 on its own."""
+    try:
+        proc = subprocess.run(
+            ["git", *args], cwd=cwd, capture_output=True, text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+        return proc.returncode, proc.stdout, proc.stderr
+    except Exception as exc:  # noqa: BLE001 -- deliberately broad, see docstring
+        return None, "", str(exc)
+
+
+def _git_object_type(cwd, sha):
+    """git cat-file -t <sha> -> the object type string, or None if the sha
+    does not resolve to a real git object under cwd's repo."""
+    if not isinstance(sha, str) or not sha.strip():
+        return None
+    rc, out, _err = _run_git(["cat-file", "-t", sha], cwd)
+    return out.strip() if rc == 0 else None
 
 # C6's only does-NOT-count invalid token (encoded as a negative assertion below).
 C6_INVALID_TOKENS = ["invalid_not_reusable"]
@@ -186,18 +217,122 @@ def task_specific_flag_hit(d):
     return None
 
 
-def _valid_mismatch_record(v):
-    """A deterministic-mismatch claim satisfies the CHK only as a structured
-    record with a named reproducible cause plus >=2 independent rerun entries
-    that agree with each other (bounding the claimed nondeterminism)."""
+def _cause_cites_resolvable_commit_sha(cause_text, cwd):
+    """True iff cause_text names >=1 commit sha (40-hex or >=7-hex short) that
+    resolves via `git cat-file -t <sha>` == commit under cwd's repo. Returns
+    (bool, [resolved shas])."""
+    if not isinstance(cause_text, str):
+        return False, []
+    resolved = [c for c in SHA_RE.findall(cause_text) if _git_object_type(cwd, c) == "commit"]
+    return bool(resolved), resolved
+
+
+def _resolve_receipt_path(rel_path, repo_root, citing_dir):
+    """Resolve a rerun-receipt path candidate, tried repo-root-relative first,
+    then relative to the citing receipt's own directory. Returns an absolute
+    path if a real file is found on either candidate, else None."""
+    if not isinstance(rel_path, str) or not rel_path.strip():
+        return None
+    norm = rel_path.replace("\\", "/")
+    candidates = [os.path.join(repo_root, norm)]
+    if citing_dir:
+        candidates.append(os.path.join(citing_dir, norm))
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def _load_rerun_receipts(reruns, repo_root, citing_dir):
+    """Resolve + parse every rerun_receipts/reruns entry as real JSON files.
+    Returns (records, problems): records is [(rel_path, parsed_dict), ...]
+    for every entry that resolved and parsed; problems names every entry that
+    did not (missing file on either candidate root, or unparseable JSON)."""
+    records, problems = [], []
+    for rel in reruns:
+        resolved = _resolve_receipt_path(rel, repo_root, citing_dir)
+        if resolved is None:
+            problems.append(f"{rel!r} does not resolve to an existing file "
+                             f"(tried repo-root-relative and citing-receipt-dir-relative)")
+            continue
+        try:
+            with open(resolved, "r", encoding="utf-8") as fh:
+                parsed = json.load(fh)
+        except Exception as exc:
+            problems.append(f"{rel!r} resolved to {resolved!r} but failed to parse as JSON: {exc}")
+            continue
+        records.append((rel, parsed))
+    return records, problems
+
+
+def _arm_hashes_agree_pairwise(records):
+    """Recompute rep1-vs-rep2 (and any further reruns) agreement DIRECTLY from
+    each resolved rerun receipt's OWN arm_solution_sha256 map -- never from
+    the parent receipt's summary of them. Returns (True, None) if every
+    record's map agrees with every other record's on every shared arm key,
+    else (False, reason)."""
+    hash_maps = []
+    for rel, parsed in records:
+        h = parsed.get("arm_solution_sha256")
+        if not isinstance(h, dict) or not h:
+            return False, f"{rel!r} has no arm_solution_sha256 map to compare"
+        hash_maps.append((rel, h))
+    if len(hash_maps) < 2:
+        return False, "fewer than 2 rerun entries carry an arm_solution_sha256 map"
+    base_rel, base_map = hash_maps[0]
+    for rel, h in hash_maps[1:]:
+        shared = set(base_map) & set(h)
+        if not shared:
+            return False, f"{base_rel!r} and {rel!r} share no common arm keys"
+        for arm in shared:
+            if base_map[arm] != h[arm]:
+                return False, (f"arm {arm!r} solution hash disagrees between {base_rel!r} "
+                               f"({base_map[arm]!r}) and {rel!r} ({h[arm]!r})")
+    return True, None
+
+
+def _valid_mismatch_record(v, citing_path=None):
+    """A deterministic-mismatch claim satisfies the CHK only as a FULLY
+    execution-bound structured record -- ALL of:
+      (a) every rerun_receipts/reruns entry resolves to an existing file
+          (repo-root-relative or citing-receipt-directory-relative) and
+          parses as JSON;
+      (b) the resolved rerun files' OWN arm_solution_sha256 maps agree
+          pairwise on every shared arm -- recomputed directly from the
+          parsed files, never trusted from the parent receipt's summary;
+      (c) the cause text names >=1 commit sha (40-hex or >=7-hex short) that
+          resolves via `git cat-file -t <sha>` == commit.
+    Returns (True, detail_string) on success, (False, reason_string) on any
+    failure -- a bare cause-truthiness + reruns-len>=2 check is NOT enough
+    (issue #683 class: an unverified claim must never pass a status probe)."""
     if not isinstance(v, dict):
-        return False
+        return False, "deterministic_mismatch is not a structured record (dict)"
     cause = v.get("cause") or v.get("named_cause")
+    if not cause:
+        return False, "deterministic_mismatch has no cause/named_cause"
     reruns = v.get("rerun_receipts") or v.get("reruns") or []
-    return bool(cause) and isinstance(reruns, list) and len(reruns) >= 2
+    if not isinstance(reruns, list) or len(reruns) < 2:
+        return False, "deterministic_mismatch needs >=2 rerun_receipts/reruns entries"
+
+    citing_dir = os.path.dirname(citing_path) if citing_path else None
+    records, problems = _load_rerun_receipts(reruns, REPO_ROOT, citing_dir)
+    if problems or len(records) < 2:
+        return False, f"rerun entries failed to resolve/parse: {problems or 'fewer than 2 parsed OK'}"
+
+    agree, disagree_reason = _arm_hashes_agree_pairwise(records)
+    if not agree:
+        return False, f"rerun arm_solution_sha256 recomputation disagrees: {disagree_reason}"
+
+    sha_ok, resolved_shas = _cause_cites_resolvable_commit_sha(cause, REPO_ROOT)
+    if not sha_ok:
+        return False, "cause text names no commit sha resolvable via git cat-file -t"
+
+    return True, (f"recomputed: {len(records)} rerun receipts resolved+parsed, "
+                  f"arm_solution_sha256 agree pairwise across all, cause cites "
+                  f"resolvable commit(s) {resolved_shas}")
 
 
-def find_rerun_verification(d):
+def find_rerun_verification(d, citing_path=None):
     """Return the reproduction record value if a real executed-rerun verification
     exists, else None. Looks in the reproducibility block and at top level."""
     repro = d.get("reproducibility") or {}
@@ -208,10 +343,11 @@ def find_rerun_verification(d):
             return f"{k}={d.get(k)!r}"
     for src, label in ((repro, "reproducibility."), (d, "")):
         v = src.get("deterministic_mismatch")
-        if _valid_mismatch_record(v):
+        ok, detail = _valid_mismatch_record(v, citing_path=citing_path)
+        if ok:
             n = len(v.get("rerun_receipts") or v.get("reruns"))
             return (f"{label}deterministic_mismatch(structured: "
-                    f"cause={v.get('cause') or v.get('named_cause')!r}, reruns={n})")
+                    f"cause={v.get('cause') or v.get('named_cause')!r}, reruns={n}, {detail})")
     return None
 
 
@@ -281,7 +417,7 @@ def main():
     #     its reproduction -- the CHK demands an executed-rerun reproduction record.
     verified = None
     for path, d in eligible:
-        rv = find_rerun_verification(d)
+        rv = find_rerun_verification(d, citing_path=path)
         if rv is not None:
             verified = (os.path.relpath(path, EXTERNAL_STATE), d, rv)
             break
