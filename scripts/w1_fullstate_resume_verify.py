@@ -126,6 +126,13 @@ EXPECTED_CUSTODY_SHA256 = {
     "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
     "manifest.json": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504",
 }
+# The landed, git-tracked closure receipt (#755) -- the AUTHORITATIVE prior
+# artifact this run's pricing-receipt/rung-manifest binds are equality-
+# gated against (round-2 repair: round-1's bind was a bare readability
+# check, never a comparison -- this cures that).
+DEFAULT_CLOSURE_RECEIPT = os.path.join(
+    "receipts", "ember-c-scale",
+    "w1-baseline-replay-closure-20260711T025650Z-redacted-edition.json")
 
 
 def resolve(repo_root: str, path: str) -> str:
@@ -152,13 +159,21 @@ def verify_custody_pins(ckpt_dir: str, expected: dict) -> dict:
 # rung manifest, v0-pretrain-config/contract). Without binding this run to
 # their exact content, a silently substituted file could change what
 # "real_arch" means between the checkpoint's own closure receipt and this
-# supplementary receipt while still reporting FULLSTATE_RESUME_EXACT. Two
+# supplementary receipt while still reporting the strongest verdict. Two
 # independent binds, both required for --live (never for --selftest, which
 # has no external reconstruction inputs to bind against -- see
 # runtime_inputs_bound=None / config_sha_bound=None handling below):
 #
 #   1. bind_runtime_reconstruction_inputs -- exact source path + measured
-#      sha256 for each of the three files, never trusted from memory.
+#      sha256 for each of the three files, EQUALITY-GATED against the
+#      landed, git-tracked closure receipt's own preflight.pricing_
+#      receipt_sha256 / preflight.rung_manifest_sha256 (an INDEPENDENT
+#      prior artifact -- round-2 repair: round-1's version only checked
+#      "was the file readable", never compared to anything, so bound=True
+#      for ANY readable file regardless of content). The v0-pretrain-
+#      config/contract has NO corresponding field in the closure receipt
+#      -- disclosed as a NEWLY-ESTABLISHED supplemental pin, never
+#      presented as an original closure pin.
 #   2. bind_real_arch_config_sha -- proves THIS run's reconstructed
 #      real_arch maps to the SAME config_sha the closure script (#738)
 #      already froze and pinned (EXPECTED_CONFIG_SHA256) -- the "original
@@ -170,21 +185,86 @@ def verify_custody_pins(ckpt_dir: str, expected: dict) -> dict:
 #      verifier independently derived and pinned.
 # ---------------------------------------------------------------------------
 
+def _measure_and_pin(path: str, expected_sha256: "str | None",
+                      pin_source: str) -> dict:
+    """Measures path's sha256 and, when an authoritative expected_sha256 is
+    supplied, equality-gates against it. match is None (never silently
+    True) when there is nothing authoritative to compare against -- the
+    round-1 defect this cures was treating "file is readable" as "bound"
+    with no comparison at all."""
+    try:
+        measured = sha256_file(path)
+        bound = True
+        error = None
+    except OSError as exc:
+        measured, bound, error = None, False, str(exc)
+    out = {
+        "path": path, "sha256": measured, "bound": bound,
+        "pin_source": pin_source, "expected_sha256": expected_sha256,
+        "match": ((measured == expected_sha256)
+                  if (bound and expected_sha256 is not None) else None),
+    }
+    if error is not None:
+        out["error"] = error
+    return out
+
+
 def bind_runtime_reconstruction_inputs(pricing_receipt_path: str,
                                         rung_manifest_path: str,
-                                        contract_path: str) -> dict:
-    inputs = {"pricing_receipt": pricing_receipt_path,
-              "rung_manifest": rung_manifest_path,
-              "pretrain_contract": contract_path}
-    out = {}
-    for name, path in inputs.items():
-        try:
-            out[name] = {"path": path, "sha256": sha256_file(path), "bound": True}
-        except OSError as exc:
-            out[name] = {"path": path, "sha256": None, "bound": False,
-                          "error": str(exc)}
-    out["all_bound"] = all(v["bound"] for v in out.values())
+                                        contract_path: str,
+                                        closure_receipt: dict,
+                                        closure_receipt_path: str) -> dict:
+    closure_pf = closure_receipt.get("preflight", {})
+    closure_basename = os.path.basename(closure_receipt_path)
+    out = {
+        "pricing_receipt": _measure_and_pin(
+            pricing_receipt_path, closure_pf.get("pricing_receipt_sha256"),
+            f"closure receipt {closure_basename} "
+            "preflight.pricing_receipt_sha256 (landed, git-tracked, "
+            "authoritative)"),
+        "rung_manifest": _measure_and_pin(
+            rung_manifest_path, closure_pf.get("rung_manifest_sha256"),
+            f"closure receipt {closure_basename} "
+            "preflight.rung_manifest_sha256 (landed, git-tracked, "
+            "authoritative)"),
+        "pretrain_contract": _measure_and_pin(
+            contract_path, None,
+            "NEWLY-ESTABLISHED supplemental pin -- the landed closure "
+            "receipt's preflight never recorded a v0-pretrain-config/"
+            "contract hash; this is the first time this exact file's "
+            "sha256 is pinned by any receipt in this toolchain, disclosed "
+            "as such, never presented as an original closure pin."),
+    }
+    out["closure_receipt_path"] = closure_receipt_path
+    out["all_bound"] = all(v["bound"] for v in out.values() if isinstance(v, dict))
+    out["any_pin_mismatch"] = any(
+        v.get("match") is False for v in out.values() if isinstance(v, dict))
     return out
+
+
+def bind_contract_consumed_fields(pretrain_contract: dict,
+                                   closure_receipt: dict) -> dict:
+    """Structural check on the ONE contract field real_arch actually
+    consumes (objective.mtp_aux_heads.n_heads) -- team-lead's named
+    alternative to a whole-file pin, applied IN ADDITION to the newly-
+    established whole-file pin above (defense in depth, not a
+    substitute). Expected value is read from the closure receipt's own
+    INDEPENDENTLY-LANDED preflight.real_arch.n_mtp, never from this run's
+    own derive_real_arch_config output -- comparing against a value this
+    run itself derived would be self-referential (the verifier deriving
+    its own expectation), the exact class this check exists to avoid."""
+    n_heads = (pretrain_contract.get("objective", {})
+               .get("mtp_aux_heads", {}).get("n_heads"))
+    expected_n_heads = (closure_receipt.get("preflight", {})
+                         .get("real_arch", {}).get("n_mtp"))
+    return {
+        "field": "objective.mtp_aux_heads.n_heads", "measured": n_heads,
+        "expected_source": ("closure receipt preflight.real_arch.n_mtp "
+                             "(independently landed, not derived by this "
+                             "run)"),
+        "expected": expected_n_heads,
+        "pass": expected_n_heads is not None and n_heads == expected_n_heads,
+    }
 
 
 def bind_real_arch_config_sha(real_arch: dict, expected_config_sha256: str) -> dict:
@@ -207,17 +287,35 @@ def _git_source_commit(repo_root: str) -> dict:
     """Captures the git commit this verification ran against, so a reader
     knows exactly which version of derive_real_arch_config/RealW1Model/etc
     produced real_arch. Never raises -- a git failure is disclosed, not
-    fatal to the verification run."""
+    fatal to the verification run.
+
+    Round-2 repair (dirty-tree binding): a claim-bearing run against a
+    dirty working tree does not refuse outright (that would block normal
+    edit-then-verify iteration), but a dirty tree ALSO never qualifies for
+    the strongest verdict (see verify_fullstate_resume's source_top_claim_
+    ok gate) -- and when dirty, the exact `git diff HEAD` bytes are
+    sha256'd and disclosed here, so the receipt is auditable against the
+    precise uncommitted code that produced it rather than only the parent
+    commit."""
     try:
-        sha = subprocess.check_output(
+        sha = subprocess.run(
             ["git", "-C", repo_root, "rev-parse", "HEAD"],
-            stderr=subprocess.STDOUT, text=True).strip()
-        dirty = subprocess.check_output(
+            capture_output=True, check=True, text=True).stdout.strip()
+        status_out = subprocess.run(
             ["git", "-C", repo_root, "status", "--porcelain"],
-            stderr=subprocess.STDOUT, text=True).strip()
-        return {"sha": sha, "working_tree_dirty": bool(dirty), "available": True}
+            capture_output=True, check=True, text=True).stdout.strip()
+        dirty = bool(status_out)
+        dirty_diff_sha256 = None
+        if dirty:
+            diff_bytes = subprocess.run(
+                ["git", "-C", repo_root, "diff", "HEAD"],
+                capture_output=True, check=True).stdout
+            dirty_diff_sha256 = hashlib.sha256(diff_bytes).hexdigest()
+        return {"sha": sha, "working_tree_dirty": dirty,
+                "dirty_diff_sha256": dirty_diff_sha256, "available": True}
     except Exception as exc:  # noqa: BLE001 -- disclosure, never fatal
-        return {"sha": None, "working_tree_dirty": None, "available": False,
+        return {"sha": None, "working_tree_dirty": None,
+                "dirty_diff_sha256": None, "available": False,
                 "error": str(exc)}
 
 
@@ -386,7 +484,8 @@ def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
                              ckpt_dir: str, seed: int, device: str = "cpu",
                              pre_save_hashes: "dict | None" = None,
                              runtime_inputs_bound: "dict | None" = None,
-                             config_sha_bound: "dict | None" = None) -> dict:
+                             config_sha_bound: "dict | None" = None,
+                             source_commit: "dict | None" = None) -> dict:
     m_state, o_state, r_state, manifest = load_checkpoint(ckpt_dir)
 
     model_hashes_saved = _hash_model_state(m_state)
@@ -422,12 +521,9 @@ def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
     # default of True here would be a VACUOUS pass indistinguishable in
     # the receipt from "checked and matched", exactly the kind of silent
     # trivial-pass this whole supplementary verifier exists to eliminate
-    # elsewhere. save_fidelity_gate_satisfied is the internal value used
-    # for the verdict (unchecked = does not block, since its absence is
-    # separately and honestly disclosed via save_fidelity_checked).
+    # elsewhere.
     save_fidelity = None
     save_fidelity_exact = None
-    save_fidelity_gate_satisfied = True
     if pre_save_hashes is not None:
         save_fidelity = {
             "model": _compare_model_hashes(pre_save_hashes["model"], model_hashes_saved),
@@ -438,7 +534,6 @@ def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
         save_fidelity_exact = (save_fidelity["model"]["exact"]
                                 and save_fidelity["optimizer"]["exact"]
                                 and save_fidelity["rng"]["exact"])
-        save_fidelity_gate_satisfied = save_fidelity_exact
         save_fidelity_disclosure = (
             "save_fidelity_checked=true: hashes were captured directly "
             "from the exact in-memory objects immediately before "
@@ -465,28 +560,63 @@ def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
             "(a)/(b)/(c)) can check that. A null save_fidelity field means "
             "UNAVAILABLE here, never a silent pass.")
 
-    # Gate 3 (repair round): runtime-reconstruction-input binding. Only
-    # applicable when the caller supplies real binds (the --live path,
-    # always) -- a --selftest synthetic tiny fixture has no external
-    # pricing-receipt/rung-manifest/contract provenance chain to bind
-    # against at all (inapplicable, not failed). When applicable, BOTH
-    # binds must hold for the widest verdict.
+    # Gate 3: runtime-reconstruction-input binding. Only applicable when
+    # the caller supplies real binds (the --live path, always) -- a
+    # --selftest synthetic tiny fixture has no external pricing-receipt/
+    # rung-manifest/contract provenance chain to bind against at all
+    # (inapplicable, vacuously OK for the top claim -- NOT the same as
+    # "measured and wrong", which is a genuine divergence, see below).
     runtime_binds_applicable = (runtime_inputs_bound is not None
                                  or config_sha_bound is not None)
-    runtime_binds_satisfied = (
-        (runtime_inputs_bound is None or runtime_inputs_bound["all_bound"])
+    runtime_binds_measured_and_failed = bool(
+        (runtime_inputs_bound is not None and runtime_inputs_bound["any_pin_mismatch"])
+        or (config_sha_bound is not None and not config_sha_bound["pass"]))
+    runtime_binds_top_claim_ok = (
+        (runtime_inputs_bound is None or (runtime_inputs_bound["all_bound"]
+                                           and not runtime_inputs_bound["any_pin_mismatch"]))
         and (config_sha_bound is None or config_sha_bound["pass"]))
 
-    if not (load_path_exact and save_fidelity_gate_satisfied):
+    # Gate 4 (round-2 repair, DIRTY SOURCE): a claim-bearing run against a
+    # dirty tree never qualifies for the strongest verdict -- inapplicable
+    # (source_commit=None, e.g. --selftest) is vacuously OK, same
+    # convention as gate 3 above; MEASURED-dirty is not.
+    source_applicable = source_commit is not None
+    source_clean_and_bound = bool(
+        source_applicable and source_commit.get("available")
+        and source_commit.get("working_tree_dirty") is False)
+    source_top_claim_ok = (not source_applicable) or source_clean_and_bound
+
+    # save_fidelity_top_claim_ok is True ONLY when checked AND exact --
+    # unlike round-1 (save_fidelity_gate_satisfied defaulted True when
+    # UNCHECKED, so an unmeasured save-fidelity gate silently satisfied
+    # the strongest claim: the exact vacuous-pass bug an external
+    # falsifier caught live -- exit 0 / FULLSTATE_RESUME_EXACT with
+    # save_fidelity_checked=false). "Unchecked" here means NOT satisfied
+    # for the strongest claim, but never DIVERGED on its own (nothing was
+    # measured wrong) -- it caps the verdict at FULLSTATE_LOAD_PATH_EXACT
+    # instead, REGARDLESS of how the input binds came out (team-lead's
+    # round-2 grammar, encoded here rather than left as prose).
+    save_fidelity_checked = pre_save_hashes is not None
+    save_fidelity_top_claim_ok = bool(save_fidelity_checked and save_fidelity_exact)
+    save_fidelity_measured_and_failed = bool(save_fidelity_checked and not save_fidelity_exact)
+
+    # Verdict grammar (round-2, three tiers, monotonic in evidentiary
+    # strength): DIVERGED = something MEASURED came back wrong (worst).
+    # LOAD_PATH_EXACT = everything measured is exact, but at least one
+    # precondition for the strongest claim is unmet (unmeasured/
+    # inapplicable/dirty -- middle). RESUME_EXACT = load-path exact AND
+    # same-process pre-save hashes exact AND canonical input pins exact
+    # AND clean/bound source (best, and structurally UNREACHABLE for
+    # --live, which never has a same-process pre-save reference to check
+    # -- see save_fidelity's own disclosure text).
+    if not load_path_exact:
         verdict = "FULLSTATE_RESUME_DIVERGED"
-    elif runtime_binds_applicable and not runtime_binds_satisfied:
-        # Load-path (and, where checked, save-fidelity) evidence is exact,
-        # but the runtime reconstruction inputs that shaped real_arch for
-        # THIS run are not bound to the checkpoint's own closure receipt --
-        # the narrower, honestly-scoped claim this repair round names.
-        verdict = "FULLSTATE_LOAD_PATH_EXACT"
-    else:
+    elif save_fidelity_measured_and_failed or runtime_binds_measured_and_failed:
+        verdict = "FULLSTATE_RESUME_DIVERGED"
+    elif save_fidelity_top_claim_ok and runtime_binds_top_claim_ok and source_top_claim_ok:
         verdict = "FULLSTATE_RESUME_EXACT"
+    else:
+        verdict = "FULLSTATE_LOAD_PATH_EXACT"
 
     return {
         "ckpt_dir": ckpt_dir,
@@ -494,14 +624,19 @@ def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
         "load_path_fidelity": load_path_fidelity,
         "load_path_exact": load_path_exact,
         "save_fidelity": save_fidelity,
-        "save_fidelity_checked": pre_save_hashes is not None,
+        "save_fidelity_checked": save_fidelity_checked,
         "save_fidelity_exact": save_fidelity_exact,
         "save_fidelity_disclosure": save_fidelity_disclosure,
+        "save_fidelity_top_claim_ok": save_fidelity_top_claim_ok,
         "runtime_inputs_bound": runtime_inputs_bound,
         "config_sha_bound": config_sha_bound,
         "runtime_binds_applicable": runtime_binds_applicable,
-        "runtime_binds_satisfied": (runtime_binds_satisfied
+        "runtime_binds_satisfied": (runtime_binds_top_claim_ok
                                      if runtime_binds_applicable else None),
+        "runtime_binds_measured_and_failed": runtime_binds_measured_and_failed,
+        "source_commit": source_commit,
+        "source_applicable": source_applicable,
+        "source_top_claim_ok": source_top_claim_ok,
         "model": load_path_fidelity["model"],
         "optimizer": load_path_fidelity["optimizer"],
         "rng": load_path_fidelity["rng"],
@@ -658,6 +793,8 @@ def _selftest() -> None:
             result_pos["save_fidelity"])
         assert result_pos["save_fidelity_disclosure"].startswith(
             "save_fidelity_checked=true"), result_pos["save_fidelity_disclosure"]
+        assert result_pos["save_fidelity_top_claim_ok"] is True
+        assert result_pos["source_top_claim_ok"] is True
         # runtime-input binds are inapplicable for a synthetic tiny
         # fixture (no external reconstruction-input files exist for it) --
         # this must be disclosed as None, never silently treated as pass.
@@ -757,6 +894,63 @@ def _selftest() -> None:
               f"check ALSO UNCHANGED (shapes_match={old_parity['shapes_match']}) "
               "on this exact same-shape corruption")
 
+        # --- (d) REGRESSION: save_fidelity UNCHECKED (pre_save_hashes
+        # omitted -- exactly what --live always does, since no same-
+        # process pre-save reference exists for an already-completed
+        # external process) on an otherwise-clean checkpoint must cap the
+        # verdict at FULLSTATE_LOAD_PATH_EXACT, NEVER FULLSTATE_RESUME_
+        # EXACT. This is the exact defect an external falsifier caught
+        # live in the round-1 candidate (exit 0 / FULLSTATE_RESUME_EXACT
+        # with save_fidelity_checked=false, source dirty) -- locked here
+        # so the vacuous-default class cannot silently reappear. ---
+        result_unchecked = verify_fullstate_resume(
+            real_arch=real_arch, pretrain_contract=pretrain_contract,
+            ckpt_dir=ckpt_dir, seed=seed, device="cpu")
+        assert result_unchecked["load_path_exact"], result_unchecked["load_path_fidelity"]
+        assert not result_unchecked["save_fidelity_checked"]
+        assert result_unchecked["save_fidelity_exact"] is None
+        assert result_unchecked["verdict"] == "FULLSTATE_LOAD_PATH_EXACT", (
+            "W1_FULLSTATE_SELFTEST_UNCHECKED_SAVE_FIDELITY_VACUOUS_PASS_"
+            f"REGRESSION: expected FULLSTATE_LOAD_PATH_EXACT (round-1's "
+            f"bug reached FULLSTATE_RESUME_EXACT here), got {result_unchecked}")
+        print(f"[selftest] (d) REGRESSION unchecked-save-fidelity leg PASS "
+              f"-- verdict={result_unchecked['verdict']} (capped, never "
+              "the top claim, on an otherwise-clean checkpoint with no "
+              "pre-save reference supplied -- reproduces and locks the "
+              "round-1 falsifier finding)")
+
+        # --- (e) REGRESSION: a MEASURED pin mismatch (this run's input
+        # sha256 does not equal an independent closure receipt's
+        # authoritative pin) must DIVERGE the verdict, never merely cap it
+        # at LOAD_PATH_EXACT -- "measured and wrong" is worse evidence
+        # than "not measured", and the two must not collapse together. ---
+        fake_closure_receipt = {"preflight": {
+            "pricing_receipt_sha256": "0" * 64,  # deliberately wrong pin
+            "rung_manifest_sha256": "0" * 64,
+            "real_arch": {"n_mtp": real_arch["n_mtp"]},
+        }}
+        pricing_receipt_stub = os.path.join(tmp, "pricing-stub.json")
+        rung_manifest_stub = os.path.join(tmp, "rung-manifest-stub.json")
+        with open(pricing_receipt_stub, "w", encoding="utf-8") as f:
+            json.dump({"stub": True}, f)
+        with open(rung_manifest_stub, "w", encoding="utf-8") as f:
+            json.dump({"stub": True}, f)
+        mismatched_binds = bind_runtime_reconstruction_inputs(
+            pricing_receipt_stub, rung_manifest_stub, PRETRAIN_CONTRACT_PATH,
+            fake_closure_receipt, "fake-closure.json")
+        assert mismatched_binds["any_pin_mismatch"], mismatched_binds
+        result_pin_mismatch = verify_fullstate_resume(
+            real_arch=real_arch, pretrain_contract=pretrain_contract,
+            ckpt_dir=ckpt_dir, seed=seed, device="cpu",
+            pre_save_hashes=pre_save_hashes,
+            runtime_inputs_bound=mismatched_binds)
+        assert result_pin_mismatch["verdict"] == "FULLSTATE_RESUME_DIVERGED", (
+            f"W1_FULLSTATE_SELFTEST_PIN_MISMATCH_DID_NOT_DIVERGE: {result_pin_mismatch}")
+        print(f"[selftest] (e) REGRESSION pin-mismatch leg PASS -- verdict="
+              f"{result_pin_mismatch['verdict']} (measured-and-wrong input "
+              "pin correctly DIVERGES, distinct from the merely-unmeasured "
+              "case in leg (d))")
+
     print("W1_FULLSTATE_RESUME_VERIFY_SELFTEST_PASS")
 
 
@@ -776,6 +970,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ckpt-dir", default=DEFAULT_CUSTODY_DIR)
     ap.add_argument("--pricing-receipt", default=DEFAULT_PRICING_RECEIPT)
     ap.add_argument("--rung-manifest", default=DEFAULT_RUNG_MANIFEST)
+    ap.add_argument("--closure-receipt", default=DEFAULT_CLOSURE_RECEIPT,
+                    help="landed closure receipt whose preflight.pricing_"
+                         "receipt_sha256/rung_manifest_sha256 are the "
+                         "authoritative pins this run's inputs are "
+                         "equality-gated against.")
     ap.add_argument("--phase2-seed", type=int, default=PHASE2_SEED_HISTORICAL)
     ap.add_argument("--out-dir", default=None,
                     help="defaults to receipts/ember-c-scale/")
@@ -812,35 +1011,55 @@ def main(argv: "list[str] | None" = None) -> int:
     real_arch = derive_real_arch_config(pricing_receipt, rung_receipt)
     pretrain_contract = load_json(PRETRAIN_CONTRACT_PATH)
 
-    # Repair-round binds (issue #758 review): the --live path always
-    # computes both -- runtime evidence here is only ever the narrower
-    # FULLSTATE_LOAD_PATH_EXACT unless both binds hold.
+    # Repair-round binds (issue #758 review, round 2): the --live path
+    # always computes all of these. Note the resulting verdict is
+    # structurally capped at FULLSTATE_LOAD_PATH_EXACT for --live no
+    # matter how these come out (see verify_fullstate_resume's grammar) --
+    # --live never has a same-process pre-save reference to check, which
+    # is the one precondition FULLSTATE_RESUME_EXACT cannot waive.
     source_commit = _git_source_commit(repo_root)
+    closure_receipt_path = resolve(repo_root, args.closure_receipt)
+    closure_receipt = load_json(closure_receipt_path)
     runtime_inputs_bound = bind_runtime_reconstruction_inputs(
-        pricing_receipt_path, rung_manifest_path, PRETRAIN_CONTRACT_PATH)
+        pricing_receipt_path, rung_manifest_path, PRETRAIN_CONTRACT_PATH,
+        closure_receipt, closure_receipt_path)
+    contract_consumed_fields_check = bind_contract_consumed_fields(
+        pretrain_contract, closure_receipt)
     config_sha_bound = bind_real_arch_config_sha(real_arch, EXPECTED_CONFIG_SHA256)
 
     result = verify_fullstate_resume(
         real_arch=real_arch, pretrain_contract=pretrain_contract,
         ckpt_dir=ckpt_dir, seed=args.phase2_seed, device="cpu",
         runtime_inputs_bound=runtime_inputs_bound,
-        config_sha_bound=config_sha_bound)
+        config_sha_bound=config_sha_bound,
+        source_commit=source_commit)
 
     receipt = {
         "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": ts, "issue": ISSUE_REF,
-        "schema": "w1-fullstate-resume-verify/v2",
+        "schema": "w1-fullstate-resume-verify/v3",
         "sha_convention": SHA_CONVENTION,
         "ref": "issue #735 comment 4942417647 (coordinator erratum + "
                "scope-narrowing on the landed w1-baseline-replay-closure-"
                "20260711T025650Z.json receipt); supplements, never "
-               "retro-edits, that receipt -- append-only evidence. v2 "
-               "repair round: PR #758 review (external falsifier BLOCK, "
-               "CLEAR on load-path values / BLOCK on the unscoped verdict) "
-               "-- binds the runtime reconstruction inputs + closure "
-               "config_sha, and narrows the verdict language accordingly.",
+               "retro-edits, that receipt -- append-only evidence. v3 "
+               "repair round 2: PR #758 external falsifier live run BLOCK "
+               "(exit 0 / FULLSTATE_RESUME_EXACT with save_fidelity_"
+               "checked=false, source dirty -- a round-1 vacuous-default "
+               "verdict bug). Fixes: (1) verdict grammar now encodes "
+               "'pre-save state unavailable => max claim is "
+               "FULLSTATE_LOAD_PATH_EXACT, regardless of input binds' in "
+               "code (save_fidelity_top_claim_ok requires CHECKED+exact, "
+               "never defaults true when unchecked); (2) runtime-"
+               "reconstruction-input pins are now equality-gated against "
+               "the landed closure receipt's own preflight.pricing_"
+               "receipt_sha256/rung_manifest_sha256 (round-1 only checked "
+               "file-readability, never compared to anything); (3) a "
+               "dirty source tree is bound via its exact diff sha256 and "
+               "never qualifies for the top verdict.",
         "source_commit": source_commit,
         "real_arch": real_arch,
         "runtime_reconstruction_inputs": runtime_inputs_bound,
+        "contract_consumed_fields_check": contract_consumed_fields_check,
         "real_arch_config_sha_check": config_sha_bound,
         "custody_pin_check": custody_check,
         "verification": result,
@@ -852,13 +1071,17 @@ def main(argv: "list[str] | None" = None) -> int:
             "(device-normalized tensor hash), never shape alone; (b) "
             "EVERY model state_dict tensor including mtp_heads is hashed, "
             "never only the primary-logits eval-loss path. "
-            "FULLSTATE_RESUME_EXACT additionally REQUIRES both runtime-"
-            "reconstruction-input binds (runtime_reconstruction_inputs."
-            "all_bound and real_arch_config_sha_check.pass) -- absent "
-            "either, the honest scope of this run's evidence is only "
-            "FULLSTATE_LOAD_PATH_EXACT: the load-path hash-comparison "
-            "machinery is proven exact, but this run's real_arch was not "
-            "proven to bind to the checkpoint's own closure receipt. "
+            "FULLSTATE_RESUME_EXACT additionally REQUIRES ALL of: "
+            "same-process pre-save hashes checked and exact "
+            "(save_fidelity_top_claim_ok), canonical input pins exact "
+            "(runtime_reconstruction_inputs equality-gated against the "
+            "landed closure receipt's own preflight pins + real_arch_"
+            "config_sha_check.pass), and a clean/bound source tree "
+            "(source_top_claim_ok) -- pre-save state unavailable ALONE "
+            "caps the claim at FULLSTATE_LOAD_PATH_EXACT regardless of "
+            "how the input binds come out; a MEASURED mismatch on any of "
+            "these (not merely an unmeasured one) instead DIVERGES the "
+            "verdict entirely. This run's own evidence: "
             f"{result['save_fidelity_disclosure']} This receipt does not "
             "re-assert or widen the closure receipt's REPLAY_TRUSTWORTHY "
             "language (model BF16/FP32 replay + eval identity) -- it "
@@ -879,9 +1102,18 @@ def main(argv: "list[str] | None" = None) -> int:
         "optimizer_exact": result["optimizer"]["exact"],
         "rng_exact": result["rng"]["exact"],
         "runtime_inputs_all_bound": runtime_inputs_bound["all_bound"],
+        "runtime_inputs_any_pin_mismatch": runtime_inputs_bound["any_pin_mismatch"],
+        "contract_consumed_fields_pass": contract_consumed_fields_check["pass"],
         "config_sha_pass": config_sha_bound["pass"],
+        "source_working_tree_dirty": source_commit.get("working_tree_dirty"),
     }, indent=2))
-    return 0 if result["verdict"] == "FULLSTATE_RESUME_EXACT" else 1
+    # Exit code reflects whether verification found a DEFECT (DIVERGED),
+    # never whether it reached the theoretically-strongest possible claim.
+    # --live is structurally incapable of reaching FULLSTATE_RESUME_EXACT
+    # (no same-process pre-save reference ever exists for it) -- gating
+    # exit 0 on that verdict specifically would make a fully clean --live
+    # run always "fail", which is its own defect-in-disguise.
+    return 0 if result["verdict"] != "FULLSTATE_RESUME_DIVERGED" else 1
 
 
 if __name__ == "__main__":
