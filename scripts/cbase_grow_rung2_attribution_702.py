@@ -3341,17 +3341,30 @@ def _selftest_invalid_under_measured_steady_load() -> None:
     pool does. The first cure attempt's n_cores-1 pool crushed the
     fixture's own progress so badly its AB/BA span alone ran ~31 minutes
     (wall_delta_s=1850.29) versus a few seconds unconteded -- a real
-    runaway-duration risk this fixture must not repeat. The pool runs only
-    for the duration of the fixture's own short CPU AB/BA legs and is
-    terminated in `finally` regardless of outcome -- bounded, transient
-    saturation, never a standing load."""
+    runaway-duration risk this fixture must not repeat. Two independent
+    bounds now enforce this, not one: (1) the NORMAL path -- contenders
+    terminated in `finally` right after attribution_run() returns, same as
+    before; (2) a HARD SELF-DESTRUCT DEADLINE baked into the contender's
+    own loop (CONTENDER_HARD_DEADLINE_S below) -- even if this process
+    crashes or hangs before ever reaching `finally`, the contenders exit on
+    their own and cannot outlive the wrapper's observation window. Also,
+    under the corrected verdict contract the RATIO itself no longer matters
+    once tenancy=="busy" (only other_tenancy_frac clearing the threshold
+    does), so this fixture no longer needs the integration fixture's larger
+    dims tuned for a meaningful ratio measurement -- it uses the same
+    floor-sized dims as the base _selftest()'s CPU baseline (MIN_WARMUP_
+    STEPS/MIN_ACTIVE_STEPS, hidden=32/depth=2/seq=16), which completes in
+    a couple seconds even under contention."""
     import os
     import subprocess
     import tempfile
 
+    CONTENDER_HARD_DEADLINE_S = 90
     contender_code = (
+        "import time\n"
+        f"deadline = time.monotonic() + {CONTENDER_HARD_DEADLINE_S}\n"
         "x = 0\n"
-        "while True:\n"
+        "while time.monotonic() < deadline:\n"
         "    for i in range(200000):\n"
         "        x += (i * i) % 7919\n"
     )
@@ -3363,13 +3376,13 @@ def _selftest_invalid_under_measured_steady_load() -> None:
     ]
     try:
         cfg = {
-            "model": {"seq": 64, "vocab": 64, "hidden": 384, "tied_embeddings": False},
+            "model": {"seq": 16, "vocab": 64, "hidden": 32, "tied_embeddings": False},
             "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 2, "weight": 0.3}},
             "optimizer": {"lr_muon": 0.02, "lr_adamw": 3e-4, "weight_decay": 0.1},
             "schedule": {"warmup_frac": 0.1, "stable_until_frac": 0.8, "decay_to_lr_frac": 0.1},
             "throughput": {"batch": 2},
         }
-        tiny_dims = {"vocab": 64, "hidden": 384, "depth": 3, "seq": 64}
+        tiny_dims = {"vocab": 64, "hidden": 32, "depth": 2, "seq": 16}
         run_dir = tempfile.mkdtemp(prefix="attribution702_invalidunderload_")
 
         synthetic_calibration = {
@@ -3391,7 +3404,8 @@ def _selftest_invalid_under_measured_steady_load() -> None:
         try:
             receipt = attribution_run(
                 live=False, cfg=cfg, shard_dir=None, run_dir=run_dir, device="cpu",
-                tiny_dims=tiny_dims, batch_size=2, n_warmup=2, n_active=24, ce_chunk_tokens=32)
+                tiny_dims=tiny_dims, batch_size=2, n_warmup=MIN_WARMUP_STEPS,
+                n_active=MIN_ACTIVE_STEPS, ce_chunk_tokens=32)
         finally:
             module.calibrate_pinned_vs_pageable = _orig_calibrate
     finally:
