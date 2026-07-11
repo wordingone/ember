@@ -1,0 +1,52 @@
+{
+ "receipt": "process-visibility",
+ "ts_utc": "2026-07-11T02:00:00Z",
+ "coordinator_window": "2026-07-10T19:00Z-02:00Z",
+ "merges": [
+  {
+   "pr": 738,
+   "what": "feat(#735): W1 step25->step50 baseline replay closure runner (Leg A)",
+   "mergedAt": "2026-07-10T19:04:41Z",
+   "sha": "5360d99"
+  },
+  {
+   "pr": 736,
+   "what": "fix: repair #702 attribution runner production-path defects",
+   "mergedAt": "2026-07-10T19:10:27Z",
+   "sha": "99e28fd"
+  },
+  {
+   "pr": 741,
+   "what": "fix: execution-bind C6/C12 probes (#683 class extension)",
+   "mergedAt": "2026-07-10T19:15:56Z",
+   "sha": "3255b70"
+  },
+  {
+   "pr": 742,
+   "what": "fix: #702 capacity gate fail-closed on unavailable measurement",
+   "mergedAt": "2026-07-10T19:39:12Z",
+   "sha": "f629e6f"
+  }
+ ],
+ "prs_closed_unmerged": [],
+ "issues_filed": [],
+ "prs_open_gated": [
+  {
+   "pr": 734,
+   "state": "gated on post-merge audit-delta receipt"
+  },
+  {
+   "pr": 737,
+   "state": "gated on post-merge audit-delta receipt"
+  },
+  {
+   "pr": 743,
+   "state": "gated on post-merge audit-delta receipt"
+  }
+ ],
+ "lanes": {},
+ "coordinator_disclosures": [
+  "audit-delta window covers post-#741 hardening merges; C6 and C12 execution-binding probes re-run and receipted below"
+ ],
+ "api_spend_usd": "0.00 local; audit lane CPU-only"
+}

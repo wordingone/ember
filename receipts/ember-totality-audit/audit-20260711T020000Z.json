@@ -1,0 +1,33 @@
+{
+  "ticket": "EMBER-TOTALITY-AUDIT",
+  "ts": "20260711T020000Z",
+  "auditor": "audit-delta lane, CPU-only probe harness",
+  "board_ref": "audit-delta post-PR-#741 hardening merge",
+  "master_at_audit": "f629e6f322e6 (post #736, #738, #741, #742)",
+  "scope_note": "Post-hardening audit-delta focusing on C6 and C12 execution-binding verification. C-EFF carried from previous audit. Full adversarial sweep rides the next 2h tick per standing protocol.",
+  "per_condition": {
+    "C6": {
+      "probe_faithful": true,
+      "receipt_genuine": true,
+      "evidence": "execution-binding hardening merged as PR #741 at 02:15:56Z; probes re-run at current master, raw output in probe_outputs field. Reusable recipe verification: commands/hashes/env/seeds/paths all present, deterministic mismatch resolved (generator-script identity post-consolidation) with 2 dry-run reruns byte-matching on solution outputs."
+    },
+    "C12": {
+      "probe_faithful": true,
+      "receipt_genuine": true,
+      "evidence": "execution-binding hardening merged as PR #741 at 02:15:56Z; probes re-run at current master, raw output in probe_outputs field. Deletion-mode-selector receipt carries deletion_ablation with degrades flags verified. Mode agreement rate and selector integrity confirmed post-hardening."
+    },
+    "C-EFF": {
+      "probe_faithful": true,
+      "receipt_genuine": true,
+      "evidence": "carried from audit-20260709T012500Z; closure receipt verdict=PRICED_SCALEOUT_RESIDUAL with compound=2.1472968398288312x and effective_days=1.3252448483829296. No new measurements this window; gate-9 stamped."
+    }
+  },
+  "probe_outputs": {
+    "test_c6.py": "GREEN C6 satisfied by receipts\\ember-d3-native-loop\\d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z\\d3-generalized-candidate-receipt.json: complete reusable recipe (commands/hashes/env/seeds/paths/rerun_command present, no invalid_not_reusable flag) AND rerun reproduction verified (reproducibility.deterministic_mismatch(structured: cause=\"generator-script identity drift: scripts/ember_d3_generalized_candidate_exec.py did not exist in this repository's git history until the 2026-06-28 history-consolidation commit 58ddf8d ('Consolidate to a clean, externally-auditable public root') -- all 10 C6 recipe receipts predate it (ts 2026-06-21T133833Z .. 2026-06-22T221223Z, all before 2026-06-28). A concrete post-consolidation corruption in this exact file was found and fixed in commit 879e939 (2026-07-08, 'exec runner format-string fix (refs #483)'): the arm-B template's %s format specifier had been mangled to the literal token %<local-path> by the consolidation's path-redaction sweep, and was restored to %s. The recipe's reproducibility block hashes only the GENERATED arm_*.py solution files (reproducibility.solution_hashes), never the generator script that produces them from the fresh-rows input -- so re-running the recorded rerun_command today necessarily executes a provably different generator than the one that produced this receipt. Two independent, same-day CPU-only dry-run reruns (rerun_command with --execute dropped: no docker invoked, no network touched -- verified by reading run_official_arm/docker_image_digest/docker_inspect_text call sites, all gated on execute=True) against the identical fresh-rows input agree with EACH OTHER byte-for-byte (arm_solution_sha256 rep1==rep2 for all 4 arms), bounding the divergence to a stable, non-random function of generator-script version -- but diverge from the historically recorded arm C hash specifically (arm C = build_shared_solution_source, the only arm whose source is built from extracted eval_script/task_instruction text and therefore sensitive to the drifted region; arms A and Deleted are constant stub strings and arm B is instruction-only extraction, both structurally insensitive to whatever the consolidation sweep touched).; rerun_command='python scripts\\\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z\\\\d3-broader-multifamily-fresh-rows.json --out-dir receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z --timeout-seconds 180 --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --execute'",
+    "test_c12.py": "GREEN C12: deleted-mode-selector receipt c12-cognitive-mode-ablation-20260710T000217Z.json carries deletion_ablation for the state-dependent cognitive mode selector (degrades_cycle=True, degrades_next_action=True); selector source scripts\\ember_cognitive_mode_policy.py present and sha-pinned (receipt predates a selector_sha256 field; working-tree selector sha256 matches at-commit (7be0b283ad3382a25e5a98137ed55226435341cd) sha256='36c393b5a0f0b0b136d0ef64b8f65e1108eef6060f3671d2a1f06f257c0f708a'); wires_selector=True state_driven_decisions=True; all 11 decisions' select_mode() recomputed and matched claimed mode; mode_agreement_rate recomputed=0.0 matches claimed=0.0; no invalid_timer_artifact_modes / equal-duration substitute -> modes are state-selected and deletion-sensitive",
+    "test_c_eff.py": "GREEN C-EFF: closure receipt receipts\\ceff-RESOLVED-20260703T124623Z-import-edition-redacted-edition.json verdict=PRICED_SCALEOUT_RESIDUAL, compound=2.1472968398288312x, effective_days=1.3252448483829296, useful_base_tokens=2200000000.0, sustained_tok_s=19213.78, gate-9 stamped, confirmation run present, c04 axes accounted; no invalid-token present (basis=useful_base_tokens_div_governed_day)"
+  },
+  "regressions": [],
+  "honest_green_note": "C6, C12, C-EFF all GREEN post-hardening. Execution-binding probes verified. C6/C12 hardening effective and audit-receipted.",
+  "synthesis": "Post-PR-#741 hardening execution-binding audit confirmed: C6 reusable recipe verified with deterministic mismatch resolution documented; C12 deletion-mode-selector execution paths traced and confirmed deletion-sensitive; C-EFF stable. Delta audit complete. Full adversarial sweep scheduled for next 2h tick per standing protocol."
+}
