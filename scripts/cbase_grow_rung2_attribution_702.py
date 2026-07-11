@@ -175,6 +175,29 @@ QUIET_BOX_BURST_ITERS = 300_000     # pure-Python arithmetic loop iterations
                                      # -- a few ms each, cheap enough to run
                                      # unconditionally on every gate evaluation.
 
+# ember #702 (2026-07-11, external falsifier DEFECT 1 on the quiet-box commit,
+# PR #762 comment 4946137038): the burst-CV probe above measures VARIABILITY,
+# not OCCUPANCY -- a STEADY contender (a live attribution run itself, e.g.)
+# slows every burst equally, so CV stays low ("quiet") even under real,
+# significant contention. Falsifier's own run proved it: cv=0.0383 (well
+# under the 0.20 threshold) while overhead_frac=0.118956 > the 0.10 bound,
+# measured DURING a live 2.2B attribution run on the same box. The burst-CV
+# probe stays as a cheap fast pre-check but NEVER licenses a claim by
+# itself -- OTHER_TENANCY_FRAC_THRESHOLD gates the authoritative signal: an
+# INTERVAL measurement spanning the timed legs themselves (system-wide busy
+# CPU delta minus this process's own CPU delta, over the SAME wall interval
+# the AB/BA design measures, normalized by n_cores * wall_delta).
+OTHER_TENANCY_FRAC_THRESHOLD = 0.03  # fraction of TOTAL available core-time
+                                     # (not one core) consumed by processes
+                                     # other than this one. Deliberately
+                                     # conservative/low -- a false
+                                     # ENVIRONMENT_INCONCLUSIVE (cheap: rerun)
+                                     # is a far smaller cost than a false
+                                     # substantive claim licensed on a loaded
+                                     # box. Provisional pending an empirical
+                                     # clean-box calibration run; adjust with
+                                     # disclosed reasoning, never silently.
+
 # ---- pre-run amendment reference point (disclosed cross-check only; the
 # gate itself binds to the LIVE realized numel, never this constant) -------
 REFERENCE_REALIZED_N_PARAMS = 2_195_497_984
@@ -1496,6 +1519,12 @@ def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_f
     fork0 = _snapshot_fork(model=model, optimizers=optimizers, device=device,
                            global_step=fork_global_step, fork_dir=fork_dir)
 
+    # ember #702 (2026-07-11, external falsifier DEFECT 1 cure): the
+    # other-tenancy interval measurement must span the TIMED LEGS
+    # THEMSELVES (Arm A + restore + Arm B) -- taken here, after the fork
+    # snapshot write (setup, not a timed leg) and before Arm A begins.
+    cpu_before = _read_cpu_snapshot()
+
     # ---- Arm A: profiled, then unprofiled ----
     collector_a = SubphaseCollector()
     install_span_collector(optimizers, collector_a, device=device)
@@ -1523,6 +1552,9 @@ def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_f
     finally:
         uninstall_span_collector(optimizers)
 
+    cpu_after = _read_cpu_snapshot()
+    other_tenancy = _other_tenancy_frac(cpu_before, cpu_after)
+
     return {
         "profiled_walls": profiled_walls_a + profiled_walls_b,
         "unprofiled_walls": unprofiled_walls_a + unprofiled_walls_b,
@@ -1534,6 +1566,7 @@ def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_f
         "fork_global_step": fork_global_step,
         "post_run_global_step": fork_global_step + 2 * n_active,
         "preflight": preflight_result,
+        "other_tenancy": other_tenancy,
     }
 
 
@@ -1569,11 +1602,76 @@ def _probe_quiet_box(n_bursts: int = QUIET_BOX_N_BURSTS,
     }
 
 
+def _read_cpu_snapshot() -> dict:
+    """ember #702 (2026-07-11, external falsifier DEFECT 1 cure): a
+    point-in-time system-wide + own-process CPU-time snapshot. Two
+    snapshots' deltas (via _other_tenancy_frac) give the INTERVAL
+    occupancy measurement the burst-CV probe cannot: a steady contender
+    holding a constant share of CPU time is invisible to CV (it slows
+    every burst equally) but shows up directly here as accumulated
+    other-process CPU-seconds over the interval."""
+    import psutil
+    ct = psutil.cpu_times()
+    # sum every non-idle field this platform's cpu_times() namedtuple
+    # exposes (user/system/interrupt/dpc/... on Windows) -- "busy" is
+    # everything that isn't idle, never a hardcoded field list that could
+    # silently miss a platform-specific bucket.
+    system_busy_s = sum(v for name, v in ct._asdict().items() if name != "idle")
+    own_times = psutil.Process().cpu_times()
+    own_process_s = own_times.user + own_times.system
+    return {
+        "wall_s": time.perf_counter(),
+        "system_busy_cpu_s": system_busy_s,
+        "own_process_cpu_s": own_process_s,
+        "n_cores": psutil.cpu_count(logical=True) or 1,
+    }
+
+
+def _other_tenancy_frac(before: dict, after: dict) -> dict:
+    """ember #702 (2026-07-11, external falsifier DEFECT 1 cure): the
+    AUTHORITATIVE environment-load signal for overhead/closure -- fraction
+    of TOTAL available core-time, over [before, after], consumed by
+    processes OTHER than this one. Unlike the burst-CV pre-check (which
+    measures variability and is blind to steady contention), this is a
+    direct interval occupancy measurement spanning the timed legs
+    themselves, exactly as the falsifier's cure specifies."""
+    wall_delta = after["wall_s"] - before["wall_s"]
+    system_busy_delta = after["system_busy_cpu_s"] - before["system_busy_cpu_s"]
+    own_delta = after["own_process_cpu_s"] - before["own_process_cpu_s"]
+    n_cores = before["n_cores"]
+    denom = n_cores * wall_delta
+    other_frac = ((system_busy_delta - own_delta) / denom) if denom > 0 else None
+    return {
+        "other_tenancy_frac": other_frac,
+        "system_busy_delta_cpu_s": system_busy_delta,
+        "own_process_delta_cpu_s": own_delta,
+        "wall_delta_s": wall_delta,
+        "n_cores": n_cores,
+        "threshold": OTHER_TENANCY_FRAC_THRESHOLD,
+        "quiet": other_frac is not None and other_frac <= OTHER_TENANCY_FRAC_THRESHOLD,
+    }
+
+
 def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
                     unprofiled_walls: list, collector: SubphaseCollector,
-                    expected_full_numel: int, calibration: dict) -> dict:
+                    expected_full_numel: int, calibration: dict,
+                    other_tenancy: dict | None = None) -> dict:
     gates: dict = {}
+    # ember #702 (2026-07-11, external falsifier DEFECT 1 cure): the burst-CV
+    # probe is a cheap fast pre-check ONLY -- it is disclosed in both gate
+    # dicts below for visibility but NEVER licenses a claim by itself (it is
+    # blind to a STEADY contender, which slows every burst equally and so
+    # reports "quiet" via CV while real contention inflates overhead/closure
+    # well past bound -- the falsifier's own fixture: cv=0.0383, overhead_
+    # frac=0.118956, under a live attribution run on the same box). The
+    # AUTHORITATIVE signal is other_tenancy (an interval measurement spanning
+    # the timed legs themselves, computed by the caller and passed in here --
+    # never computed inside this pure-evaluation function, since it must
+    # span the ACTUAL AB/BA wall-clock window, not this call's own instant).
+    # No other_tenancy provided at all (None) is treated as NOT quiet --
+    # never silently falls back to the CV-only signal DEFECT 1 disproved.
     quiet_box_probe = _probe_quiet_box()
+    other_tenancy_quiet = other_tenancy is not None and other_tenancy["quiet"]
 
     gates["step_count"] = {
         "passed": n_warmup >= MIN_WARMUP_STEPS and n_active >= MIN_ACTIVE_STEPS,
@@ -1587,14 +1685,15 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
     overhead_frac = (abs(prof_med - unprof_med) / unprof_med
                      if prof_med is not None and unprof_med else None)
     overhead_within_bound = overhead_frac is not None and overhead_frac <= OVERHEAD_BOUND_FRAC
-    # ember #702 quiet-box precondition: a measured overhead_frac ABOVE bound
-    # on a box the probe itself reports as loaded is INCONCLUSIVE, not FAIL --
-    # the wall-clock ratio it's built from was perturbed by something this
-    # process doesn't control. A measurement WITHIN bound is never downgraded
-    # (passing despite noise is still a pass); only an out-of-bound reading
-    # gets the disposition softened, and only when the probe corroborates it.
+    # A measured overhead_frac ABOVE bound on a box other_tenancy reports as
+    # loaded is INCONCLUSIVE, not FAIL -- the wall-clock ratio it's built
+    # from was perturbed by something this process doesn't control. A
+    # measurement WITHIN bound is never downgraded (passing despite noise is
+    # still a pass); only an out-of-bound reading gets the disposition
+    # softened, and only when the AUTHORITATIVE interval signal corroborates
+    # it -- the burst-CV probe alone cannot soften a FAIL into inconclusive.
     overhead_passed = (True if overhead_within_bound
-                       else (None if not quiet_box_probe["quiet"] else False))
+                       else (None if not other_tenancy_quiet else False))
     gates["overhead"] = {
         "passed": overhead_passed,
         "disposition": ("PASS" if overhead_passed is True
@@ -1604,6 +1703,7 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
         "overhead_frac": overhead_frac, "bound_frac": OVERHEAD_BOUND_FRAC,
         "design": "counterbalanced_ab_ba_pooled",
         "quiet_box_probe": quiet_box_probe,
+        "other_tenancy": other_tenancy,
     }
 
     totals = collector.phase_totals()
@@ -1612,13 +1712,14 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
     closure_frac = (abs(sum_subphases - sum_wall) / sum_wall) if sum_wall else None
     closure_within_bound = closure_frac is not None and closure_frac <= CLOSURE_BOUND_FRAC
     closure_passed = (True if closure_within_bound
-                      else (None if not quiet_box_probe["quiet"] else False))
+                      else (None if not other_tenancy_quiet else False))
     gates["closure"] = {
         "passed": closure_passed,
         "disposition": ("PASS" if closure_passed is True
                         else "INCONCLUSIVE_UNDER_LOAD" if closure_passed is None
                         else "FAIL"),
         "sum_subphases_s": sum_subphases, "sum_measured_wall_s": sum_wall,
+        "other_tenancy": other_tenancy,
         "closure_frac": closure_frac, "bound_frac": CLOSURE_BOUND_FRAC,
         "quiet_box_probe": quiet_box_probe,
     }
@@ -2583,31 +2684,51 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     gates = _evaluate_gates(
         n_warmup=n_warmup, n_active=n_active,
         profiled_walls=ab_ba["profiled_walls"], unprofiled_walls=ab_ba["unprofiled_walls"],
-        collector=collector, expected_full_numel=expected_full_numel, calibration=calibration)
+        collector=collector, expected_full_numel=expected_full_numel, calibration=calibration,
+        other_tenancy=ab_ba["other_tenancy"])
     all_passed = all(g["passed"] for g in gates.values())
     failing = [name for name, g in gates.items() if not g["passed"]]
     # ember #702 quiet-box precondition (2026-07-11, external falsifier's
     # independent re-run: overhead_frac 0.452 vs bound while a concurrent
     # 434M-param leg loaded the box): a gate's passed=None
     # (INCONCLUSIVE_UNDER_LOAD -- a wall-clock-ratio gate whose fixed bound
-    # was perturbed by real, probe-corroborated host contention, see
-    # _probe_quiet_box) is not a validity FAILURE, it means this run's
-    # environment couldn't establish the gate either way. gates_all_passed/
-    # failing_gates above stay HONEST (None still counts as "not passed" --
-    # a receipt can never silently claim gates_all_passed=True on an
-    # unproven gate) but verdict classification is gated on the strictly
-    # narrower "no gate genuinely FAILED": an inconclusive timing gate must
-    # never force a real, information-bearing verdict down to INVALID --
-    # only an ACTUAL failure (passed is False) does.
+    # was perturbed by real, probe-corroborated host contention) is not a
+    # validity FAILURE, it means this run's environment couldn't establish
+    # the gate either way. gates_all_passed/failing_gates above stay HONEST
+    # (None still counts as "not passed" -- a receipt can never silently
+    # claim gates_all_passed=True on an unproven gate).
+    #
+    # ember #702 DEFECT 2 cure (2026-07-11, external falsifier PR #762
+    # comment 4946137038): a prior version of this fix let ANY None gate
+    # through to a substantive VERDICT_GRAMMAR classification as long as no
+    # gate was hard-False -- wrong. Unpassed validity (None OR False) never
+    # licenses a substantive claim. Three-way split: any gate False -> INVALID
+    # (fail-closed, a real defect). No False but some None -> a distinct,
+    # explicit non-claim verdict, ENVIRONMENT_INCONCLUSIVE (never in
+    # VERDICT_GRAMMAR, never confused with the _classify_verdict_predicates
+    # "INCONCLUSIVE" outcome, which means the SCIENCE was ambiguous on a
+    # clean measurement -- this means the measurement itself was never
+    # clean). Only when every gate is exactly True does a real classification
+    # run at all.
     hard_failing = [name for name, g in gates.items() if g["passed"] is False]
+    unproven = [name for name, g in gates.items() if g["passed"] is None]
 
     totals = collector.phase_totals()
     ratios = _per_step_ratios(collector)
-    if not hard_failing:
-        verdict_result = _classify_verdict_predicates(ratios)
-    else:
+    if hard_failing:
         verdict_result = {"verdict": "INVALID", "reason": "one or more validity "
                           f"gates failed (fail-closed, no partial credit): {hard_failing}"}
+    elif unproven:
+        verdict_result = {
+            "verdict": "ENVIRONMENT_INCONCLUSIVE",
+            "reason": ("validity gate(s) could not be established under measured "
+                       "host contention -- no substantive claim is licensed this "
+                       f"run (never INVALID: the code/methodology is not shown "
+                       f"wrong, the environment did not allow a clean measurement): "
+                       f"{unproven}"),
+        }
+    else:
+        verdict_result = _classify_verdict_predicates(ratios)
 
     vram = None
     if device == "cuda" and torch.cuda.is_available():
@@ -2928,6 +3049,7 @@ def _selftest() -> int:
     _selftest_verdict_predicates()
     _selftest_span_collector_attach_detach()
     _selftest_integration_all_gates_pass()
+    _selftest_environment_inconclusive_under_steady_load()
     _selftest_fork_capacity_preflight()
     _selftest_rung2_identity_gate_units()
     _selftest_continuation_schedule_bind()
@@ -3097,26 +3219,146 @@ def _selftest_integration_all_gates_pass() -> None:
             inconclusive.append(gate_name)
     if inconclusive:
         probe = gates[inconclusive[0]]["quiet_box_probe"]
+        other_tenancy = gates[inconclusive[0]]["other_tenancy"]
         print(f"ATTRIBUTION_702_INTEGRATION_TIMING_GATES_INCONCLUSIVE_UNDER_LOAD "
               f"gates={inconclusive} quiet_box_cv={probe['cv']:.4f} "
-              f"threshold={probe['threshold']}", flush=True)
+              f"other_tenancy_frac={other_tenancy['other_tenancy_frac']} "
+              f"threshold={other_tenancy['threshold']}", flush=True)
         assert receipt["failing_gates"] == inconclusive, (
             "only the disclosed inconclusive timing gates may appear in "
             f"failing_gates under load -- got {receipt['failing_gates']}")
+        # ember #702 DEFECT 2 cure: unpassed validity (even None-only, no
+        # False) never licenses a substantive VERDICT_GRAMMAR claim -- an
+        # inconclusive timing gate must land on the explicit non-claim
+        # verdict, never be silently waved through to a real classification.
+        assert receipt["verdict"] == "ENVIRONMENT_INCONCLUSIVE", (
+            f"unpassed (None) validity gate(s) {inconclusive} must force "
+            f"verdict=ENVIRONMENT_INCONCLUSIVE, never a substantive "
+            f"classification -- got {receipt['verdict']!r}")
+        assert receipt["verdict"] not in VERDICT_GRAMMAR, receipt["verdict"]
     else:
         assert receipt["gates_all_passed"] is True, (
             "integration fixture must reach gates_all_passed=True with only "
             f"the CUDA-only calibration gate stubbed -- got gates={gates}")
         assert receipt["failing_gates"] == []
+        assert receipt["verdict"] in VERDICT_GRAMMAR, (
+            f"integration fixture must classify a real, non-INVALID verdict, "
+            f"got {receipt['verdict']!r}")
     assert gates["pinned_pageable_calibration"]["calibration"]["note"].startswith("SYNTHETIC"), (
         "the stub must be disclosed IN the receipt, not silently swapped in")
-    assert receipt["verdict"] in VERDICT_GRAMMAR, (
-        f"integration fixture must classify a real, non-INVALID verdict, "
-        f"got {receipt['verdict']!r}")
 
     print("ATTRIBUTION_702_INTEGRATION_ALL_GATES_PASS_SELFTEST_PASS "
           f"verdict={receipt['verdict']} "
           f"gates_all_passed={receipt['gates_all_passed']}", flush=True)
+
+
+def _selftest_environment_inconclusive_under_steady_load() -> None:
+    """ember #702 (2026-07-11, external falsifier DEFECT 1/2 cure, PR #762
+    comment 4946137038): negative fixture proving the interval-based
+    other-tenancy measurement -- never the burst-CV pre-check -- is what
+    licenses overhead/closure, and that unpassed validity correctly
+    downgrades the verdict to the explicit non-claim ENVIRONMENT_
+    INCONCLUSIVE rather than a substantive VERDICT_GRAMMAR classification.
+
+    Spawns a POOL of genuine background OS PROCESSES (subprocess.Popen,
+    never multiprocessing -- a Python thread would contend on the
+    interpreter's own global lock, a different mechanism than a real
+    co-tenant process, and would not test the same thing this fixture must
+    prove), one per free core (n_cores-1,
+    floor 1), so the OS scheduler cannot simply park the fixture's own
+    work on an otherwise-idle core -- a single one-core contender is not a
+    reliable repro on a multi-core box, since the scheduler is free to run
+    the fixture on a different core and see near-zero perturbation. A
+    near-full-box pool is closer to the falsifier's actual reproduction
+    shape too: a live 2.2B attribution tenant saturates many cores via
+    DataLoader workers + torch intra-op threads, not one. Steady, roughly
+    constant-rate contention is exactly the negative case that fools the
+    burst-CV probe: it slows every burst equally (low CV, reads "quiet")
+    while the interval other-tenancy measurement -- which sees the
+    contenders' accumulated CPU-seconds directly, independent of
+    variability -- must correctly flag it. Reference point: the
+    falsifier's own live run measured cv=0.0383 (read as quiet) with
+    overhead_frac=0.118956 > the 0.10 bound, under real contention from a
+    live 2.2B attribution tenant. The pool runs only for the duration of
+    the fixture's own short CPU AB/BA legs and is terminated in `finally`
+    regardless of outcome -- bounded, transient saturation, never a
+    standing load."""
+    import os
+    import subprocess
+    import tempfile
+
+    contender_code = (
+        "x = 0\n"
+        "while True:\n"
+        "    for i in range(200000):\n"
+        "        x += (i * i) % 7919\n"
+    )
+    n_contenders = max(1, (os.cpu_count() or 4) - 1)
+    contenders = [
+        subprocess.Popen([sys.executable, "-c", contender_code],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(n_contenders)
+    ]
+    try:
+        cfg = {
+            "model": {"seq": 64, "vocab": 64, "hidden": 384, "tied_embeddings": False},
+            "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 2, "weight": 0.3}},
+            "optimizer": {"lr_muon": 0.02, "lr_adamw": 3e-4, "weight_decay": 0.1},
+            "schedule": {"warmup_frac": 0.1, "stable_until_frac": 0.8, "decay_to_lr_frac": 0.1},
+            "throughput": {"batch": 2},
+        }
+        tiny_dims = {"vocab": 64, "hidden": 384, "depth": 3, "seq": 64}
+        run_dir = tempfile.mkdtemp(prefix="attribution702_envinconclusive_")
+
+        synthetic_calibration = {
+            "skipped": False, "n_bytes_per_trial": 1 << 24, "n_trials": 5,
+            "h2d_pageable_gbps": 8.0, "h2d_pinned_gbps": 14.0,
+            "d2h_pageable_gbps": 7.5, "d2h_pinned_gbps": 13.0,
+            "pcie4_x16_peak_gbps": 31.508,
+            "h2d_pinned_vs_pageable_speedup": 1.75, "d2h_pinned_vs_pageable_speedup": 1.733,
+            "note": ("SYNTHETIC -- environment-inconclusive negative fixture stub, "
+                     "same shape as the integration fixture's."),
+        }
+        module = sys.modules[__name__]
+        _orig_calibrate = module.calibrate_pinned_vs_pageable
+
+        def _stub_calibrate(*, device: str, **kwargs):
+            return dict(synthetic_calibration)
+
+        module.calibrate_pinned_vs_pageable = _stub_calibrate
+        try:
+            receipt = attribution_run(
+                live=False, cfg=cfg, shard_dir=None, run_dir=run_dir, device="cpu",
+                tiny_dims=tiny_dims, batch_size=2, n_warmup=2, n_active=24, ce_chunk_tokens=32)
+        finally:
+            module.calibrate_pinned_vs_pageable = _orig_calibrate
+    finally:
+        for contender in contenders:
+            contender.terminate()
+        for contender in contenders:
+            try:
+                contender.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                contender.kill()
+                contender.wait(timeout=5)
+
+    gates = receipt["gates"]
+    timing_dispositions = {name: gates[name]["disposition"] for name in ("overhead", "closure")}
+    other_tenancy = gates["overhead"]["other_tenancy"]
+    assert receipt["verdict"] == "ENVIRONMENT_INCONCLUSIVE", (
+        f"steady background contention must flip verdict to "
+        f"ENVIRONMENT_INCONCLUSIVE, never a substantive classification -- "
+        f"got verdict={receipt['verdict']!r} "
+        f"timing_dispositions={timing_dispositions} other_tenancy={other_tenancy}")
+    assert receipt["verdict"] not in VERDICT_GRAMMAR, receipt["verdict"]
+    assert not any(gates[n]["passed"] is False for n in ("overhead", "closure")), (
+        "steady contention must read as INCONCLUSIVE, not a hard FAIL -- "
+        f"gates={ {n: gates[n]['passed'] for n in ('overhead', 'closure')} }")
+
+    print("ATTRIBUTION_702_ENVIRONMENT_INCONCLUSIVE_UNDER_STEADY_LOAD_SELFTEST_PASS "
+          f"verdict={receipt['verdict']} timing_dispositions={timing_dispositions} "
+          f"other_tenancy_frac={other_tenancy['other_tenancy_frac']} "
+          f"threshold={other_tenancy['threshold']}", flush=True)
 
 
 def _selftest_fork_capacity_preflight() -> None:
@@ -4327,6 +4569,13 @@ def main(argv: list | None = None) -> int:
     print(f"ATTRIBUTION_702_DONE receipt={receipt_path} verdict={receipt['verdict']} "
           f"gates_all_passed={receipt['gates_all_passed']} "
           f"failing_gates={receipt['failing_gates']}", flush=True)
+    # ember #702 DEFECT 2 cure (2026-07-11, external falsifier): a receipt
+    # that landed as ENVIRONMENT_INCONCLUSIVE (a validity gate could not be
+    # established under measured host contention, but nothing is shown
+    # WRONG) is its own exit-code class -- never conflated with exit 0
+    # (a genuine, licensed claim) or exit 2 (a real gate FAILURE).
+    if receipt["verdict"] == "ENVIRONMENT_INCONCLUSIVE":
+        return 4
     return 0 if receipt["gates_all_passed"] else 2
 
 
