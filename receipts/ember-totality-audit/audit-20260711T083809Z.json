@@ -1,0 +1,22 @@
+{
+  "ticket": "BOARD-INTEGRITY-AUDIT-TICK",
+  "ts": "2026-07-11T08:38:09Z",
+  "api_spend_usd": 0.0,
+  "board_anchor": "scripts/ember_totality/receipts-totality/ember-totality-20260711T081157Z.json (11G/24R/2U +3 AUDIT-OK, chain_ok=true)",
+  "mode": "inline-manual-gate-discipline (wf script still retired per prompt note; spawn gate additionally blocked at ~5GiB free commit during Hella eval - bounded tick)",
+  "honest_green": ["C-EFF","C-PORT","C-GROW","C2","C3","C6","C12","C-ENF","C-DISC","C-AUTO","C-MANIFEST"],
+  "audit_ok": ["C0","C9","C15"],
+  "spot_verified": [
+    {"slug": "C-GROW", "probe_faithful": true, "receipt_genuine": true, "evidence": "cbase-grow-measured-flops-20260710T005231Z.json: target_definition states matched-step scope IN the receipt ('FLOPs to reach the SAME, ALREADY-REALIZED total training-step count (766 steps)'); FlopCounterMode measured, batch-linearity selftest ratio 1.9999; per-width checkpoint identities manifest_claim_verified=true; 2.4309 ratio scoped honestly. Fixed-capability claim correctly NOT made (BLOCK_C_GROW_FIXED_TARGET_CLAIM stands; #701 prereg owns it)."},
+    {"slug": "C-BASE", "probe_faithful": true, "receipt_genuine": null, "evidence": "RED->UNEVALUABLE flip at 081157Z render: 'HARNESS TIMEOUT: test_c_base.py exceeded 600s'. Render executed during Hellaswag eval CPU saturation (PID 52684, 17.1GiB) - tenancy measurement artifact, same class as gpuns5 pass-2 anomaly. Timeout->UNEVALUABLE is fail-closed-honest (does not fake GREEN). WATCH ITEM: if C-BASE stays UNEVALUABLE on the queued quiet-box re-render, the probe has a genuine >600s runtime defect - that becomes a probe-harden task."}
+  ],
+  "needs_work": [],
+  "regressions": [],
+  "queued": [
+    {"task": "process-visibility refresh", "reason": "newest process receipt 041200Z predates 5 merges (#770 07:44Z, #771 07:56Z, #775/#773 08:26Z, #772 08:32Z); C-PROC currently RED so no unfaithful-GREEN, but the refresh rides the next landing lane per standing rule", "ownership": "landing-lane"},
+    {"task": "C-BASE re-evaluation watch", "reason": "post-Hella boardrun45 re-render (Monitor b2yhkai26 armed) must show C-BASE evaluated (RED expected); persistent UNEVALUABLE = probe runtime defect", "ownership": "probe-harden-if-persists"}
+  ],
+  "cursor_note": "GREEN count 12->11 is transient: C(-1) GREEN->RED (cure MERGED 08:26Z, un-rendered) + C-BASE RED->UNEVALUABLE (tenancy artifact). Goal-file reality-note edit DEFERRED to post-Hella render which reflects both - dated acting-operator decision, avoids two churn edits in the public repo for known-cured flips.",
+  "prior_targets_disposition": "764 micro-bench receipt: does not exist yet (awaiting falsifier clear + token - correctly unauditable). fix702b live receipt: awaiting 8-gate clear (same). Both remain next-tick targets.",
+  "synthesis": "Board honest. Zero hollow GREENs found; the two status flips are (a) a real cure in flight and (b) a disclosed tenancy timeout. Adversarial capacity stays pointed at the 702/764 physics chain per mandate."
+}
