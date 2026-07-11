@@ -35,8 +35,10 @@ Under WSL the execution root is <local-mount-point>/ on this host (NOT /mnt<loca
 # 'root not found' line, which is the correct, non-error outcome.
 
 import glob
+import hashlib
 import os
 import re
+import subprocess
 import sys
 
 # --- Locate <external-state> robustly across WSL mount conventions ----------------
@@ -81,6 +83,63 @@ EGRESS_MANIFEST_PHRASE = re.compile(
 APPROVAL_MARKER = re.compile(
     r"per[\s_-]*avenue.*approv|approv.*per[\s_-]*avenue|user[\s_-]*approv",
     re.IGNORECASE)
+
+# [ISSUE #749 cure, docs/probe-authoring-contract.md checklist item 2] Every
+# text/regex keyword check above operates on THIS FILE'S OWN raw bytes -- a
+# candidate could satisfy every keyword clause by simply being a freshly-dropped
+# untracked (or working-tree-only-edited) file that never went through this
+# repo's real commit/review path. Sha-pin the winning candidate to a REAL git
+# commit at HEAD: the working-tree bytes actually keyword-matched above must be
+# byte-identical to what is committed at HEAD for that same path. A candidate
+# that is untracked, or whose working copy has drifted from the committed blob,
+# cannot satisfy CHK -- "correct strings, no resolvable git-provenanced artifact"
+# is exactly the self-attestation shape this cure exists to close.
+GIT_TIMEOUT_SECONDS = 15
+
+
+def _git_blob_sha256_at_head(root, abs_path):
+    """sha256 hexdigest of `abs_path`'s content AS COMMITTED AT HEAD (never the
+    working-tree copy), or (None, note) if it cannot be resolved. note is one
+    of 'untracked' (git ran fine, no HEAD blob for this path) or
+    'git_unavailable' (git missing / not a repo / call failed / timeout)."""
+    try:
+        rel = os.path.relpath(abs_path, root).replace("\\", "/")
+    except ValueError:
+        return None, "git_unavailable"
+    try:
+        proc = subprocess.run(
+            ["git", "show", f"HEAD:{rel}"], cwd=root,
+            capture_output=True, timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        return None, "git_unavailable"
+    if proc.returncode != 0:
+        return None, "untracked"
+    return hashlib.sha256(proc.stdout).hexdigest(), "ok"
+
+
+def _sha_pin_candidate(root, abs_path):
+    """Verify `abs_path` is git-tracked at HEAD AND its on-disk (working-tree)
+    bytes are byte-identical to the committed HEAD blob. Returns (ok: bool,
+    detail: str). This is the execution-binding conjunct: it never trusts that
+    the file's CONTENT satisfies CHK unless that exact content is also the
+    real, reviewed, committed artifact -- an untracked or locally-modified
+    forgery fails here even if every keyword clause above matched."""
+    try:
+        with open(abs_path, "rb") as fh:
+            working_bytes = fh.read()
+    except OSError as e:
+        return False, f"working-tree file unreadable: {e}"
+    working_sha = hashlib.sha256(working_bytes).hexdigest()
+    committed_sha, note = _git_blob_sha256_at_head(root, abs_path)
+    if committed_sha is None:
+        return False, f"no committed HEAD blob for this path ({note}) -- not a real git artifact"
+    if working_sha != committed_sha:
+        return False, (
+            f"working-tree sha256 {working_sha[:12]}.. != committed-at-HEAD sha256 "
+            f"{committed_sha[:12]}.. -- content keyword-matched is NOT the reviewed/"
+            f"committed artifact")
+    return True, f"working-tree bytes == committed-at-HEAD blob (sha256 {working_sha[:12]}..)"
 
 
 def emit(color, reason):
@@ -234,18 +293,28 @@ def main():
                       raw, re.IGNORECASE))
         approval_ok = bool(APPROVAL_MARKER.search(raw)) or zero_transfer_recorded
 
+        # [ISSUE #749 cure] execution-binding conjunct: the candidate's bytes
+        # must be the real, committed-at-HEAD artifact -- never independently
+        # sufficient alone (AND-composed with every keyword clause above), but
+        # decisive: a candidate that satisfies every keyword clause on
+        # untracked/drifted bytes still fails CHK.
+        sha_pin_ok, sha_pin_detail = _sha_pin_candidate(ROOT, p)
+
         checks = {
             "design_mechanisms(checkpoint-portab/work-shard/receipt-merge)": mech_ok,
             "avenues(kaggle/colab/hf)": avenue_ok,
             "egress_manifest_named": manifest_ok,
             "transfer_gate(per-avenue-approval or recorded zero-egress)": approval_ok,
+            "git_provenance(committed at HEAD, working bytes match committed blob)": sha_pin_ok,
         }
         missing = [k for k, ok in checks.items() if not ok]
         if missing:
-            near_miss.append(f"{os.path.relpath(p, ROOT)}: CHK missing {missing}")
+            detail_suffix = f" ({sha_pin_detail})" if not sha_pin_ok else ""
+            near_miss.append(f"{os.path.relpath(p, ROOT)}: CHK missing {missing}{detail_suffix}")
             continue
 
         best = os.path.relpath(p, ROOT)
+        best_sha_pin_detail = sha_pin_detail
         break
 
     # --- Resolve verdict ------------------------------------------------------
@@ -276,7 +345,7 @@ def main():
          f"C-FED: federation design + egress manifest present in {best} "
          f"(checkpoint-portability/work-sharding/receipt-merge for kaggle/colab/hf; "
          f"egress manifest named; per-avenue approval or recorded zero-egress); "
-         f"no invalid-token present")
+         f"git-provenance sha-pinned ({best_sha_pin_detail}); no invalid-token present")
 
 
 if __name__ == "__main__":
