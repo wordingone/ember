@@ -72,6 +72,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -88,6 +89,7 @@ from w1_collapse_control_run import (  # noqa: E402 -- reused, never edited
     eval_loss_fn, optimizer_state_shape_parity, derive_real_arch_config,
     derive_rung_receipt_from_manifest, apply_cosine_warmup,
     train_step_matched_recipe, resolve_ce_impl, DEFAULT_PRICING_RECEIPT,
+    config_sha, real_config_dict,
 )
 from timeshare_pretrain import (  # noqa: E402 -- reused, never edited
     load_checkpoint, save_checkpoint, capture_rng, restore_rng,
@@ -100,7 +102,7 @@ from receipt_write import checked_write  # noqa: E402
 # sizing + path/seed defaults the closure script already established.
 from w1_baseline_replay_closure import (  # noqa: E402
     _tiny_real_arch, _build_tiny_shard_dir, resolve as closure_resolve,
-    PHASE2_SEED_HISTORICAL, DEFAULT_RUNG_MANIFEST,
+    PHASE2_SEED_HISTORICAL, DEFAULT_RUNG_MANIFEST, EXPECTED_CONFIG_SHA256,
 )
 
 ISSUE_REF = "#735"
@@ -141,6 +143,94 @@ def verify_custody_pins(ckpt_dir: str, expected: dict) -> dict:
     per_file_match = {fname: measured[fname] == expected[fname] for fname in expected}
     return {"dir": ckpt_dir, "measured_sha256": measured, "expected_sha256": expected,
             "per_file_match": per_file_match, "pass": all(per_file_match.values())}
+
+
+# ---------------------------------------------------------------------------
+# Runtime-reconstruction-input binding (coordinator repair round, issue #758
+# review comment on this file's PR) -- the --live path reconstructs
+# real_arch/pretrain_contract from THREE external files (pricing receipt,
+# rung manifest, v0-pretrain-config/contract). Without binding this run to
+# their exact content, a silently substituted file could change what
+# "real_arch" means between the checkpoint's own closure receipt and this
+# supplementary receipt while still reporting FULLSTATE_RESUME_EXACT. Two
+# independent binds, both required for --live (never for --selftest, which
+# has no external reconstruction inputs to bind against -- see
+# runtime_inputs_bound=None / config_sha_bound=None handling below):
+#
+#   1. bind_runtime_reconstruction_inputs -- exact source path + measured
+#      sha256 for each of the three files, never trusted from memory.
+#   2. bind_real_arch_config_sha -- proves THIS run's reconstructed
+#      real_arch maps to the SAME config_sha the closure script (#738)
+#      already froze and pinned (EXPECTED_CONFIG_SHA256) -- the "original
+#      closure config SHA plus a proved mapping" bind: even though
+#      layers=20/heads=16 are ASSUMED (real_arch["layers_heads_source"]
+#      discloses this -- not independently present in the grow-rung
+#      receipt chain), this equality check proves the assumption is
+#      IDENTICAL to the one the already-landed closure receipt's own
+#      verifier independently derived and pinned.
+# ---------------------------------------------------------------------------
+
+def bind_runtime_reconstruction_inputs(pricing_receipt_path: str,
+                                        rung_manifest_path: str,
+                                        contract_path: str) -> dict:
+    inputs = {"pricing_receipt": pricing_receipt_path,
+              "rung_manifest": rung_manifest_path,
+              "pretrain_contract": contract_path}
+    out = {}
+    for name, path in inputs.items():
+        try:
+            out[name] = {"path": path, "sha256": sha256_file(path), "bound": True}
+        except OSError as exc:
+            out[name] = {"path": path, "sha256": None, "bound": False,
+                          "error": str(exc)}
+    out["all_bound"] = all(v["bound"] for v in out.values())
+    return out
+
+
+def bind_real_arch_config_sha(real_arch: dict, expected_config_sha256: str) -> dict:
+    cfg = real_config_dict(real_arch)
+    measured = config_sha(cfg)
+    return {
+        "real_config_dict": cfg,
+        "measured_config_sha256": measured,
+        "expected_config_sha256": expected_config_sha256,
+        "source": (
+            "scripts/w1_baseline_replay_closure.py EXPECTED_CONFIG_SHA256 "
+            "-- frozen at the #735/#738 closure landing, independently "
+            "derived there via the SAME config_sha(real_config_dict("
+            "real_arch)) call over that receipt's own real_arch"),
+        "pass": measured == expected_config_sha256,
+    }
+
+
+def _git_source_commit(repo_root: str) -> dict:
+    """Captures the git commit this verification ran against, so a reader
+    knows exactly which version of derive_real_arch_config/RealW1Model/etc
+    produced real_arch. Never raises -- a git failure is disclosed, not
+    fatal to the verification run."""
+    try:
+        sha = subprocess.check_output(
+            ["git", "-C", repo_root, "rev-parse", "HEAD"],
+            stderr=subprocess.STDOUT, text=True).strip()
+        dirty = subprocess.check_output(
+            ["git", "-C", repo_root, "status", "--porcelain"],
+            stderr=subprocess.STDOUT, text=True).strip()
+        return {"sha": sha, "working_tree_dirty": bool(dirty), "available": True}
+    except Exception as exc:  # noqa: BLE001 -- disclosure, never fatal
+        return {"sha": None, "working_tree_dirty": None, "available": False,
+                "error": str(exc)}
+
+
+def _relpath_or_abs(path: str, start: str) -> str:
+    """os.path.relpath has no defined answer across Windows drive letters
+    and raises ValueError rather than guessing (the --out-dir cross-drive
+    crash this repair fixes -- e.g. receipt on C: relative to a repo_root
+    on B:). Falls back to the absolute path for display only; never
+    changes what gets written to disk."""
+    try:
+        return os.path.relpath(path, start)
+    except ValueError:
+        return path
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +384,9 @@ def _compare_optimizer_hashes(hashes_a: dict, hashes_b: dict) -> dict:
 
 def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
                              ckpt_dir: str, seed: int, device: str = "cpu",
-                             pre_save_hashes: "dict | None" = None) -> dict:
+                             pre_save_hashes: "dict | None" = None,
+                             runtime_inputs_bound: "dict | None" = None,
+                             config_sha_bound: "dict | None" = None) -> dict:
     m_state, o_state, r_state, manifest = load_checkpoint(ckpt_dir)
 
     model_hashes_saved = _hash_model_state(m_state)
@@ -347,9 +439,54 @@ def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
                                 and save_fidelity["optimizer"]["exact"]
                                 and save_fidelity["rng"]["exact"])
         save_fidelity_gate_satisfied = save_fidelity_exact
+        save_fidelity_disclosure = (
+            "save_fidelity_checked=true: hashes were captured directly "
+            "from the exact in-memory objects immediately before "
+            "save_checkpoint wrote them (same process, no gap) and "
+            f"compared bit-exact against the on-disk file (exact="
+            f"{save_fidelity_exact}) -- the strongest fidelity claim this "
+            "verifier can make, only achievable when the process that "
+            "wrote the checkpoint is the same process running "
+            "verification.")
+    else:
+        save_fidelity_disclosure = (
+            "save_fidelity_checked=false: no in-memory pre-save reference "
+            "exists for this checkpoint -- the process that wrote it has "
+            "already exited, so the literal 'exact pre-save in-memory "
+            "state' this gate tests is UNAVAILABLE, not merely skipped. "
+            "The achievable substitute is verify_custody_pins: an "
+            "independent re-hash of the 4 on-disk files against "
+            "EXPECTED_CUSTODY_SHA256 pins recorded in a SEPARATE receipt "
+            "at save time, which proves this checkpoint's raw bytes are "
+            "byte-identical to what was pinned then. It does NOT prove "
+            "those pinned bytes equal the true in-memory state at the "
+            "instant save_checkpoint was called in the original process -- "
+            "only a same-process selftest (this script's --selftest legs "
+            "(a)/(b)/(c)) can check that. A null save_fidelity field means "
+            "UNAVAILABLE here, never a silent pass.")
 
-    verdict = ("FULLSTATE_RESUME_EXACT" if load_path_exact and save_fidelity_gate_satisfied
-               else "FULLSTATE_RESUME_DIVERGED")
+    # Gate 3 (repair round): runtime-reconstruction-input binding. Only
+    # applicable when the caller supplies real binds (the --live path,
+    # always) -- a --selftest synthetic tiny fixture has no external
+    # pricing-receipt/rung-manifest/contract provenance chain to bind
+    # against at all (inapplicable, not failed). When applicable, BOTH
+    # binds must hold for the widest verdict.
+    runtime_binds_applicable = (runtime_inputs_bound is not None
+                                 or config_sha_bound is not None)
+    runtime_binds_satisfied = (
+        (runtime_inputs_bound is None or runtime_inputs_bound["all_bound"])
+        and (config_sha_bound is None or config_sha_bound["pass"]))
+
+    if not (load_path_exact and save_fidelity_gate_satisfied):
+        verdict = "FULLSTATE_RESUME_DIVERGED"
+    elif runtime_binds_applicable and not runtime_binds_satisfied:
+        # Load-path (and, where checked, save-fidelity) evidence is exact,
+        # but the runtime reconstruction inputs that shaped real_arch for
+        # THIS run are not bound to the checkpoint's own closure receipt --
+        # the narrower, honestly-scoped claim this repair round names.
+        verdict = "FULLSTATE_LOAD_PATH_EXACT"
+    else:
+        verdict = "FULLSTATE_RESUME_EXACT"
 
     return {
         "ckpt_dir": ckpt_dir,
@@ -359,6 +496,12 @@ def verify_fullstate_resume(*, real_arch: dict, pretrain_contract: dict,
         "save_fidelity": save_fidelity,
         "save_fidelity_checked": pre_save_hashes is not None,
         "save_fidelity_exact": save_fidelity_exact,
+        "save_fidelity_disclosure": save_fidelity_disclosure,
+        "runtime_inputs_bound": runtime_inputs_bound,
+        "config_sha_bound": config_sha_bound,
+        "runtime_binds_applicable": runtime_binds_applicable,
+        "runtime_binds_satisfied": (runtime_binds_satisfied
+                                     if runtime_binds_applicable else None),
         "model": load_path_fidelity["model"],
         "optimizer": load_path_fidelity["optimizer"],
         "rng": load_path_fidelity["rng"],
@@ -513,6 +656,13 @@ def _selftest() -> None:
         assert result_pos["load_path_exact"], result_pos["load_path_fidelity"]
         assert result_pos["save_fidelity_checked"] and result_pos["save_fidelity_exact"], (
             result_pos["save_fidelity"])
+        assert result_pos["save_fidelity_disclosure"].startswith(
+            "save_fidelity_checked=true"), result_pos["save_fidelity_disclosure"]
+        # runtime-input binds are inapplicable for a synthetic tiny
+        # fixture (no external reconstruction-input files exist for it) --
+        # this must be disclosed as None, never silently treated as pass.
+        assert result_pos["runtime_binds_applicable"] is False
+        assert result_pos["runtime_binds_satisfied"] is None
         assert result_pos["model"]["n_mtp_head_tensors_checked"] == real_arch["n_mtp"], (
             f"W1_FULLSTATE_SELFTEST_MTP_KEY_COUNT_MISMATCH: "
             f"expected {real_arch['n_mtp']} got {result_pos['model']}")
@@ -662,33 +812,59 @@ def main(argv: "list[str] | None" = None) -> int:
     real_arch = derive_real_arch_config(pricing_receipt, rung_receipt)
     pretrain_contract = load_json(PRETRAIN_CONTRACT_PATH)
 
+    # Repair-round binds (issue #758 review): the --live path always
+    # computes both -- runtime evidence here is only ever the narrower
+    # FULLSTATE_LOAD_PATH_EXACT unless both binds hold.
+    source_commit = _git_source_commit(repo_root)
+    runtime_inputs_bound = bind_runtime_reconstruction_inputs(
+        pricing_receipt_path, rung_manifest_path, PRETRAIN_CONTRACT_PATH)
+    config_sha_bound = bind_real_arch_config_sha(real_arch, EXPECTED_CONFIG_SHA256)
+
     result = verify_fullstate_resume(
         real_arch=real_arch, pretrain_contract=pretrain_contract,
-        ckpt_dir=ckpt_dir, seed=args.phase2_seed, device="cpu")
+        ckpt_dir=ckpt_dir, seed=args.phase2_seed, device="cpu",
+        runtime_inputs_bound=runtime_inputs_bound,
+        config_sha_bound=config_sha_bound)
 
     receipt = {
         "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": ts, "issue": ISSUE_REF,
-        "schema": "w1-fullstate-resume-verify/v1",
+        "schema": "w1-fullstate-resume-verify/v2",
         "sha_convention": SHA_CONVENTION,
         "ref": "issue #735 comment 4942417647 (coordinator erratum + "
                "scope-narrowing on the landed w1-baseline-replay-closure-"
                "20260711T025650Z.json receipt); supplements, never "
-               "retro-edits, that receipt -- append-only evidence.",
+               "retro-edits, that receipt -- append-only evidence. v2 "
+               "repair round: PR #758 review (external falsifier BLOCK, "
+               "CLEAR on load-path values / BLOCK on the unscoped verdict) "
+               "-- binds the runtime reconstruction inputs + closure "
+               "config_sha, and narrows the verdict language accordingly.",
+        "source_commit": source_commit,
+        "real_arch": real_arch,
+        "runtime_reconstruction_inputs": runtime_inputs_bound,
+        "real_arch_config_sha_check": config_sha_bound,
         "custody_pin_check": custody_check,
         "verification": result,
         "verdict": result["verdict"],
         "verdict_language": (
-            "FULLSTATE_RESUME_EXACT closes both named defects in the "
-            "landed closure receipt's resumability leg: (a) optimizer "
-            "state is compared by VALUE (device-normalized tensor hash), "
-            "never shape alone; (b) EVERY model state_dict tensor "
-            "including mtp_heads is hashed, never only the primary-logits "
-            "eval-loss path. This receipt does not re-assert or widen the "
-            "closure receipt's REPLAY_TRUSTWORTHY language (model BF16/"
-            "FP32 replay + eval identity) -- it verifies the checkpoint IS "
-            "a genuine bit-exact resume point, the claim the closure "
-            "receipt's verdict string implied but its verifier did not "
-            "check."),
+            f"{result['verdict']}. Both named defects in the landed "
+            "closure receipt's resumability leg are closed regardless of "
+            "verdict scope: (a) optimizer state is compared by VALUE "
+            "(device-normalized tensor hash), never shape alone; (b) "
+            "EVERY model state_dict tensor including mtp_heads is hashed, "
+            "never only the primary-logits eval-loss path. "
+            "FULLSTATE_RESUME_EXACT additionally REQUIRES both runtime-"
+            "reconstruction-input binds (runtime_reconstruction_inputs."
+            "all_bound and real_arch_config_sha_check.pass) -- absent "
+            "either, the honest scope of this run's evidence is only "
+            "FULLSTATE_LOAD_PATH_EXACT: the load-path hash-comparison "
+            "machinery is proven exact, but this run's real_arch was not "
+            "proven to bind to the checkpoint's own closure receipt. "
+            f"{result['save_fidelity_disclosure']} This receipt does not "
+            "re-assert or widen the closure receipt's REPLAY_TRUSTWORTHY "
+            "language (model BF16/FP32 replay + eval identity) -- it "
+            "verifies the checkpoint IS a genuine bit-exact resume point, "
+            "the claim the closure receipt's verdict string implied but "
+            "its verifier did not check."),
         "api_spend_usd": 0.0, "paid_api_surface_used": False,
     }
     out_dir = (resolve(repo_root, args.out_dir) if args.out_dir else
@@ -697,11 +873,13 @@ def main(argv: "list[str] | None" = None) -> int:
     receipt_path = os.path.join(out_dir, f"w1-fullstate-resume-verify-{ts}.json")
     checked_write(receipt_path, receipt)
     print(json.dumps({
-        "receipt": os.path.relpath(receipt_path, repo_root),
+        "receipt": _relpath_or_abs(receipt_path, repo_root),
         "verdict": receipt["verdict"],
         "model_exact": result["model"]["exact"],
         "optimizer_exact": result["optimizer"]["exact"],
         "rng_exact": result["rng"]["exact"],
+        "runtime_inputs_all_bound": runtime_inputs_bound["all_bound"],
+        "config_sha_pass": config_sha_bound["pass"],
     }, indent=2))
     return 0 if result["verdict"] == "FULLSTATE_RESUME_EXACT" else 1
 
