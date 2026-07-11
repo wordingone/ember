@@ -12,7 +12,10 @@ pass, no slice measurement, no Claim A/B number):
       on every candidate of every P2 lattice (i)-(v), AND each lattice's
       Sigma_t P_ppm_tok(t|F) = 1 to 1e-9 under BOTH computations, AND the
       telescoping identity (token-sequence product == independently
-      enumerated byte measure of the full document) holds to 1e-9.
+      enumerated byte measure of the full document) holds to 1e-9, AND the
+      ground-truth oracle's own EXPOSED `truncated_mass_bound` (see
+      PPM703_FLOOR_BITES_BOUND_EXPOSURE_PASS below) is asserted < 1e-9
+      explicitly on every candidate -- not merely trusted never to bite.
 
   PPM703_P1_NAIVE_RENORM_NEGATIVE_CONTROL_PASS
       BLOCK_NAIVE_BYTE_STRING_RENORMALIZATION reproduces the frozen fixture's
@@ -29,6 +32,20 @@ pass, no slice measurement, no Claim A/B number):
       `safe_lock_horizon()`-dispatched oracle (exp703_lattices.py +
       exp703_marginalization.cylinder_mass_ground_truth) must report the
       exact analytic value on both, permanently.
+
+  PPM703_FLOOR_BITES_BOUND_EXPOSURE_PASS
+      Gate note follow-up on the blocker-1 cure: `cylinder_mass_ground_truth`
+      now returns a `CylinderMassResult(value, truncated_mass_bound)` -- the
+      horizon=None numerical-floor shortcut (`prob_floor`) EXPOSES an exact
+      upper bound on the error it could introduce, rather than an implicit
+      "trust the floor never bites" assumption ("an oracle whose error bound
+      is implicit is one config change away from silently lying"). This leg
+      constructs a fixture (memoryless {A,EOT} model + an EMPTY-merges
+      BpeMergeTokenizer, no natural termination, no lock shortcut) where the
+      floor GENUINELY fires around depth ~49, and asserts the reported bound
+      is both nonzero (the mechanism actually engaged) and still < 1e-9 (the
+      floor is tight enough not to matter) while `value` remains accurate to
+      the analytic 0.5.
 
   PPM703_P2_BLEND_DEFINITION_PASS
       P_ppm_tok(t|F) := P_ppm(E_k(t) n F_{k-1}) / P_ppm(F_{k-1}), implemented
@@ -125,20 +142,33 @@ def run_p1_exhaustive_equality() -> bool:
         gt_masses = {}
         bl_masses = {}
         for cand in sigma_candidates:
-            gt = cylinder_mass_ground_truth(
+            gt_result = cylinder_mass_ground_truth(
                 case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
                 case.k, cand, case.alphabet_symbols, case.eot_symbol)
+            gt, gt_bound = gt_result.value, gt_result.truncated_mass_bound
             bl = cylinder_mass_bounded_lookahead(
                 case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
                 case.k, cand, case.alphabet_symbols, case.eot_symbol, case.L_eff)
             gt_masses[cand] = gt
             bl_masses[cand] = bl
             diff = abs(gt - bl)
-            passed = diff < EQ_TOL
+            # The ground-truth oracle's OWN error bound is asserted here,
+            # explicitly, not just trusted to never bite (issue #703 PR #759
+            # coordinator gate note on the blocker-1 cure: "an oracle whose
+            # error bound is implicit is one config change away from
+            # silently lying"). gt_bound is 0.0 whenever every branch
+            # resolved via a real EOT or a proven classification-lock; it is
+            # nonzero only on the horizon=None numerical-floor path (see
+            # run_p1_finite_lock_counterexamples' floor-bites fixture for a
+            # case where this is actually nonzero and still passes).
+            bound_ok = gt_bound < EQ_TOL
+            passed = diff < EQ_TOL and bound_ok
             ok = ok and passed
             details.append(
                 f"  [{case.name}] candidate={cand} ground_truth={_fmt(gt)} "
                 f"bounded_lookahead={_fmt(bl)} diff={diff:.3e} "
+                f"truncated_mass_bound={gt_bound:.3e} "
+                f"({'PASS' if bound_ok else 'FAIL'} < {EQ_TOL:.0e}) "
                 f"{'PASS' if passed else 'FAIL'}")
             if case.expected is not None and cand in case.expected:
                 exp = case.expected[cand]
@@ -255,20 +285,26 @@ def run_p1_naive_renorm_negative_control() -> bool:
     naive = naive_renormalized_scores(case.model, case.boundary_bytes, case.candidates)
     naive_sum = sum(naive.values())
     correct = {}
+    correct_bound_total = 0.0
     for cand in case.candidates:
-        correct[cand] = cylinder_mass_ground_truth(
+        gt_result = cylinder_mass_ground_truth(
             case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
             case.k, cand, case.alphabet_symbols, case.eot_symbol)
+        correct[cand] = gt_result.value
+        correct_bound_total += gt_result.truncated_mass_bound
     l1 = l1_error(naive, correct)
     naive_sums_to_one = abs(naive_sum - 1.0) < 1e-9
     l1_matches_known = abs(l1 - 0.589655) < 1e-6
-    ok = naive_sums_to_one and l1_matches_known
+    bound_ok = correct_bound_total < EQ_TOL
+    ok = naive_sums_to_one and l1_matches_known and bound_ok
     print(f"  naive scores: { {k: _fmt(v) for k, v in naive.items()} }")
     print(f"  naive sum-to-1: {_fmt(naive_sum)} ({'PASS' if naive_sums_to_one else 'FAIL'} "
           f"-- summing to 1 is NOT correctness, see below)")
     print(f"  correct (event-partition) scores: { {k: _fmt(v) for k, v in correct.items()} }")
     print(f"  L1 error = {_fmt(l1)} (known frozen value 0.589655) "
           f"{'PASS' if l1_matches_known else 'FAIL'}")
+    print(f"  ground_truth truncated_mass_bound total={correct_bound_total:.3e} "
+          f"({'PASS' if bound_ok else 'FAIL'} < {EQ_TOL:.0e})")
     print(f"PPM703_P1_NAIVE_RENORM_NEGATIVE_CONTROL_PASS={ok}")
     return ok
 
@@ -294,6 +330,28 @@ def run_p1_finite_lock_counterexamples() -> bool:
     (safe_lock_horizon()-dispatched) oracle reports the exact analytic value
     on both, going forward -- a regression back to any fixed-depth
     verify_depth-style shortcut will re-fail this leg.
+
+    Counterexample 3 (added per a follow-up coordinator gate note on this
+    same cure) is a MANDATORY fixture where the numerical-floor truncation
+    (the horizon=None `prob_floor` shortcut) genuinely fires, so that
+    `truncated_mass_bound`'s exposure mechanism is exercised, not merely
+    present in code: a memoryless {A, EOT} model paired with an
+    EMPTY-merges `BpeMergeTokenizer` (safe_lock_horizon()=None, always) has
+    no natural termination at any finite depth (`p_eot` is always exactly
+    0.5, never 0 or 1) and no classification-lock shortcut either, so the
+    recursion is bounded ONLY by `prob_floor`.
+
+    Counterexample 2 ALSO hits the floor, for a reason its own author
+    (this fixture) initially mischaracterized -- see the inline comment
+    at its assertion for the root-caused explanation (`FixedFixtureModel`
+    resolves context by longest-SUFFIX match, not full-context match: once
+    past the 7-symbol candidate, no suffix of the growing context matches
+    a `rows` key except the trailing shorter cascades and eventually the
+    empty suffix, which is always live at p_eot=0.5 -- the `default`
+    row's p_eot=1.0 is never actually reached, and the recursion cycles
+    through a vanishing infinite tail exactly like counterexample 3,
+    just at a scale (first floor hit at depth 49) that a bound-exposure
+    reader will not confuse for a real error source).
 
     NOTE on alphabet_symbols: per this module's own convention (see every
     ALL_CASES lattice fixture, e.g. line ~429's explicit comment), the
@@ -321,15 +379,20 @@ def run_p1_finite_lock_counterexamples() -> bool:
     tok1 = GreedyLongestMatchTokenizer([(A,) * 7], eot_symbol=EOT_A)
     alphabet_symbols1 = [A]  # EOT excluded, per module convention (see docstring)
     candidate1 = (A,) * 7
-    gt1 = cylinder_mass_ground_truth(model1, tok1, (), (), 1, candidate1,
-                                      alphabet_symbols1, EOT_A, max_depth=40)
+    gt1_result = cylinder_mass_ground_truth(model1, tok1, (), (), 1, candidate1,
+                                             alphabet_symbols1, EOT_A, max_depth=40)
+    gt1, gt1_bound = gt1_result.value, gt1_result.truncated_mass_bound
     bl1 = cylinder_mass_bounded_lookahead(model1, tok1, (), (), 1, candidate1,
                                            alphabet_symbols1, EOT_A, L_eff=7, max_depth=40)
-    cx1_ok = abs(gt1 - ANALYTIC) < EQ_TOL and abs(bl1 - ANALYTIC) < EQ_TOL
+    # horizon=7 (not None) for this tokenizer -> every branch resolves via
+    # the exact classification-lock path, so the bound must be EXACTLY 0.0.
+    cx1_ok = (abs(gt1 - ANALYTIC) < EQ_TOL and abs(bl1 - ANALYTIC) < EQ_TOL
+              and gt1_bound == 0.0)
     ok = ok and cx1_ok
     print(f"  [finite-lock cx1] tokenizer.safe_lock_horizon()={tok1.safe_lock_horizon()} "
           f"ground_truth={_fmt(gt1)} bounded_lookahead={_fmt(bl1)} "
-          f"analytic={_fmt(ANALYTIC)} {'PASS' if cx1_ok else 'FAIL'}")
+          f"analytic={_fmt(ANALYTIC)} truncated_mass_bound={gt1_bound:.3e} "
+          f"{'PASS' if cx1_ok else 'FAIL'}")
     print(f"PPM703_FINITE_LOCK_COUNTEREXAMPLE_PASS={cx1_ok}")
 
     # -- counterexample 2: this PR's own BpeMergeTokenizer -------------------
@@ -359,16 +422,70 @@ def run_p1_finite_lock_counterexamples() -> bool:
     tok2 = BpeMergeTokenizer(merges, eot_symbol=EOT_B)
     alphabet_symbols2 = list(seq)  # EOT excluded, per module convention (see docstring)
     candidate2 = tuple(seq)
-    gt2 = cylinder_mass_ground_truth(model2, tok2, (), (), 1, candidate2,
-                                      alphabet_symbols2, EOT_B, max_depth=200)
+    gt2_result = cylinder_mass_ground_truth(model2, tok2, (), (), 1, candidate2,
+                                             alphabet_symbols2, EOT_B, max_depth=200)
+    gt2, gt2_bound = gt2_result.value, gt2_result.truncated_mass_bound
     bl2 = cylinder_mass_bounded_lookahead(model2, tok2, (), (), 1, candidate2,
                                            alphabet_symbols2, EOT_B, L_eff=7, max_depth=200)
-    cx2_ok = abs(gt2 - ANALYTIC) < EQ_TOL and abs(bl2 - ANALYTIC) < EQ_TOL
+    # horizon=None here too. ROOT-CAUSED (this fixture's own assertion was
+    # originally wrong, not the oracle): `FixedFixtureModel.next_byte_probs`
+    # resolves a context by LONGEST-SUFFIX match against `rows`, not full-
+    # context match. Every `rows` key is a PREFIX starting with S0
+    # ((), (S0,), (S0,S1), ... (S0..S5)) -- once the context passes length
+    # 7 (the full candidate), no suffix of it matches any `rows` key except
+    # occasionally a short trailing cascade, and eventually the EMPTY
+    # suffix, which always matches `rows[()]` = {S0:0.5, EOT_B:0.5, ...}.
+    # `default` (EOT_B:1.0) is therefore UNREACHABLE for this fixture: the
+    # recursion never dies cleanly at depth 7, it re-enters the same
+    # S0->S1->...->S6 cycle indefinitely (each further lap contributing
+    # exactly 0 extra mass to `total`, since only the first lap's 7-token
+    # sequence equals `candidate2`), and the numerical floor legitimately
+    # catches the vanishing tail at depth 49 (measured
+    # truncated_mass_bound=8.882e-16, i.e. ~0.5**50). This IS a genuine
+    # floor-bite, structurally identical to counterexample 3's -- the
+    # bound must be asserted < EQ_TOL (the honest contract), never an
+    # exact-zero this fixture never actually guaranteed.
+    cx2_ok = (abs(gt2 - ANALYTIC) < EQ_TOL and abs(bl2 - ANALYTIC) < EQ_TOL
+              and gt2_bound < EQ_TOL)
     ok = ok and cx2_ok
     print(f"  [finite-lock cx2] tokenizer.safe_lock_horizon()={tok2.safe_lock_horizon()} "
           f"ground_truth={_fmt(gt2)} bounded_lookahead={_fmt(bl2)} "
-          f"analytic={_fmt(ANALYTIC)} {'PASS' if cx2_ok else 'FAIL'}")
+          f"analytic={_fmt(ANALYTIC)} truncated_mass_bound={gt2_bound:.3e} "
+          f"{'PASS' if cx2_ok else 'FAIL'}")
     print(f"PPM703_OWN_BPE_FINITE_LOCK_COUNTEREXAMPLE_PASS={cx2_ok}")
+
+    # -- counterexample 3: the numerical-floor truncation genuinely FIRES ---
+    # (issue #703 PR #759 coordinator gate note on the blocker-1 cure: "add
+    # one fixture where the floor DOES bite (assert the bound reports it)").
+    # Same memoryless {A, EOT} model as counterexample 1, but paired with an
+    # EMPTY-merges BpeMergeTokenizer (safe_lock_horizon()=None ALWAYS,
+    # regardless of the merges list -- see that method's docstring) instead
+    # of a GreedyLongestMatchTokenizer. With no merges, segment() makes
+    # every byte its own token, so token1 is deterministically (A,) whenever
+    # the first document byte is A -- but with horizon=None there is NO
+    # classification-lock shortcut at all (unlike counterexample 2's model,
+    # this one's p_eot is exactly 0.5 at EVERY context, forever: it never
+    # reaches a dead p_eot=1.0 state), so the recursion is bounded ONLY by
+    # `prob_floor` -- it genuinely fires around depth ~49
+    # (0.5**50 < 1e-15 < 0.5**49). Analytic P(token1 == (A,)) = 0.5 exactly
+    # (derived: sum_{n=1}^inf 0.5**n * 0.5 = 0.5, i.e. P(first byte is A)).
+    tok3 = BpeMergeTokenizer(merges=[], eot_symbol=EOT_A)
+    candidate3 = (A,)
+    gt3_result = cylinder_mass_ground_truth(model1, tok3, (), (), 1, candidate3,
+                                             alphabet_symbols1, EOT_A, max_depth=200)
+    gt3, gt3_bound = gt3_result.value, gt3_result.truncated_mass_bound
+    ANALYTIC_3 = 0.5
+    floor_bit = gt3_bound > 0.0  # the mechanism must report a genuinely NONZERO bound here
+    bound_still_below_tol = gt3_bound < EQ_TOL  # yet the floor is tight enough not to matter
+    value_still_accurate = abs(gt3 - ANALYTIC_3) < EQ_TOL
+    cx3_ok = floor_bit and bound_still_below_tol and value_still_accurate
+    ok = ok and cx3_ok
+    print(f"  [finite-lock cx3, floor-bites] tokenizer.safe_lock_horizon()={tok3.safe_lock_horizon()} "
+          f"ground_truth={_fmt(gt3)} analytic={_fmt(ANALYTIC_3)} "
+          f"truncated_mass_bound={gt3_bound:.3e} "
+          f"(floor_bit={floor_bit}, bound<{EQ_TOL:.0e}={bound_still_below_tol}, "
+          f"value_accurate={value_still_accurate}) {'PASS' if cx3_ok else 'FAIL'}")
+    print(f"PPM703_FLOOR_BITES_BOUND_EXPOSURE_PASS={cx3_ok}")
 
     return ok
 
@@ -382,17 +499,21 @@ def run_p2_blend_definition() -> bool:
             blend_val = p_ppm_tok(case.model, case.tokenizer, case.boundary_bytes,
                                    case.boundary_tokens, case.k, cand,
                                    case.alphabet_symbols, case.eot_symbol, case.L_eff)
-            gt = cylinder_mass_ground_truth(
+            gt_result = cylinder_mass_ground_truth(
                 case.model, case.tokenizer, case.boundary_bytes, case.boundary_tokens,
                 case.k, cand, case.alphabet_symbols, case.eot_symbol)
+            gt, gt_bound = gt_result.value, gt_result.truncated_mass_bound
             denom = case.model.prefix_probability(case.boundary_bytes) if case.boundary_bytes else 1.0
             gt_conditional = gt / denom if denom > 0 else float("nan")
             diff = abs(blend_val - gt_conditional)
-            passed = diff < EQ_TOL
+            bound_ok = gt_bound < EQ_TOL
+            passed = diff < EQ_TOL and bound_ok
             ok = ok and passed
             details.append(
                 f"  [{case.name}] candidate={cand} p_ppm_tok={_fmt(blend_val)} "
                 f"ground_truth_conditional={_fmt(gt_conditional)} diff={diff:.3e} "
+                f"truncated_mass_bound={gt_bound:.3e} "
+                f"({'PASS' if bound_ok else 'FAIL'} < {EQ_TOL:.0e}) "
                 f"{'PASS' if passed else 'FAIL'}")
     print("\n".join(details))
     print(f"PPM703_P2_BLEND_DEFINITION_PASS={ok}")
@@ -569,21 +690,28 @@ def run_p0_domain_incidence() -> bool:
     # wrapper), not an artifact of never trying them.
     alphabet_symbols = [104, 105, 0, 255, EOT]
     # tokenizer is a GreedyLongestMatchTokenizer -> safe_lock_horizon() =
-    # max_len = 2 (derived automatically, no verify_depth constant needed).
-    gt_hi = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (104, 105),
-                                        alphabet_symbols, EOT, max_depth=20)
+    # max_len = 2 (derived automatically, no verify_depth constant needed) ->
+    # every branch below resolves via the exact classification-lock path,
+    # so truncated_mass_bound must be exactly 0.0 for all three calls.
+    gt_hi_result = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (104, 105),
+                                               alphabet_symbols, EOT, max_depth=20)
+    gt_hi, gt_hi_bound = gt_hi_result.value, gt_hi_result.truncated_mass_bound
     bl_hi = cylinder_mass_bounded_lookahead(restricted, tokenizer, (), (), 1, (104, 105),
                                              alphabet_symbols, EOT, L_eff=2, max_depth=20)
     diff_hi = abs(gt_hi - bl_hi)
-    eq_ok = diff_hi < EQ_TOL and gt_hi > 0.0
-    gt_nul = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (0,),
-                                         alphabet_symbols, EOT, max_depth=20)
-    gt_invalid = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (255,),
-                                             alphabet_symbols, EOT, max_depth=20)
-    zero_ok = gt_nul == 0.0 and gt_invalid == 0.0
+    bound_hi_ok = gt_hi_bound < EQ_TOL
+    eq_ok = diff_hi < EQ_TOL and gt_hi > 0.0 and bound_hi_ok
+    gt_nul_result = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (0,),
+                                                alphabet_symbols, EOT, max_depth=20)
+    gt_invalid_result = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (255,),
+                                                    alphabet_symbols, EOT, max_depth=20)
+    gt_nul, gt_invalid = gt_nul_result.value, gt_invalid_result.value
+    bound_zero_ok = gt_nul_result.truncated_mass_bound < EQ_TOL and gt_invalid_result.truncated_mass_bound < EQ_TOL
+    zero_ok = gt_nul == 0.0 and gt_invalid == 0.0 and bound_zero_ok
     ok = ok and eq_ok and zero_ok
     print(f"  integration: cylinder_mass(candidate=(104,105)) ground_truth={_fmt(gt_hi)} "
           f"bounded_lookahead={_fmt(bl_hi)} diff={diff_hi:.3e} "
+          f"truncated_mass_bound={gt_hi_bound:.3e} "
           f"{'PASS' if eq_ok else 'FAIL'}")
     print(f"  integration: cylinder_mass(candidate=(0,)/NUL)={_fmt(gt_nul)} "
           f"cylinder_mass(candidate=(255,)/invalid-lead-byte)={_fmt(gt_invalid)} "

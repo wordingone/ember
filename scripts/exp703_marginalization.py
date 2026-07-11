@@ -36,9 +36,36 @@ PPM component (exp703_ppm_model.PpmModel implements next_byte_probs) and the
 real tokenizer classes (exp703_lattices.GreedyLongestMatchTokenizer /
 BpeMergeTokenizer implement segment()), so the toy lattices exercise actual
 production code, not a parallel reimplementation.
+
+`cylinder_mass_ground_truth` returns a `CylinderMassResult(value,
+truncated_mass_bound)` (issue #703 PR #759 coordinator gate note): whenever
+no proven `safe_lock_horizon()` bound exists (e.g. BpeMergeTokenizer), the
+recursion is capped only by a bounded NUMERICAL truncation on cumulative
+probability, and `truncated_mass_bound` is the EXPOSED, EXACT upper bound
+on the resulting error in `value` -- callers assert it below their own
+tolerance explicitly rather than trusting the floor never bites.
 """
 
 from __future__ import annotations
+
+from typing import NamedTuple
+
+
+class CylinderMassResult(NamedTuple):
+    """Return type of `cylinder_mass_ground_truth`: `value` is the computed
+    cylinder mass; `truncated_mass_bound` is a PROVEN upper bound on how much
+    error `value` could carry from every numerically-truncated branch (the
+    horizon=None, no-proven-lock-bound path's `prob_floor` shortcut -- see
+    that function's docstring). `truncated_mass_bound` is EXACTLY 0.0
+    whenever every branch resolved via either a real EOT or the exact
+    classification-lock path (horizon is not None); it is the SUM of only
+    the branches that actually took the numerical-floor shortcut, so a
+    caller asserts `truncated_mass_bound < tolerance` explicitly rather than
+    trusting the floor never bites (issue #703 PR #759 coordinator gate note
+    on the blocker-1 cure: 'an oracle whose error bound is implicit is one
+    config change away from silently lying')."""
+    value: float
+    truncated_mass_bound: float
 
 
 def _is_target_regular(boundary_tokens: tuple, k: int, candidate: tuple):
@@ -97,7 +124,7 @@ def _classification_locked(tokenizer, boundary_bytes: tuple, ext: tuple, alphabe
 
 def cylinder_mass_ground_truth(model, tokenizer, boundary_bytes: tuple, boundary_tokens: tuple,
                                 k: int, candidate: tuple, alphabet_symbols: list, eot_symbol: int,
-                                max_depth: int = 200, prob_floor: float = 1e-15) -> float:
+                                max_depth: int = 200, prob_floor: float = 1e-15) -> CylinderMassResult:
     """Exhaustive enumeration, independent of any production lookahead
     assumption: at every node, first handle the genuine-EOT-now branch
     exactly (real tokens, real probability), then for the remaining
@@ -134,15 +161,28 @@ def cylinder_mass_ground_truth(model, tokenizer, boundary_bytes: tuple, boundary
       the tokenizer class that actually needs it
       (PPM703_OWN_BPE_FINITE_LOCK_COUNTEREXAMPLE_PASS).
 
+    Returns a `CylinderMassResult(value, truncated_mass_bound)` (issue #703
+    PR #759 coordinator gate note on the blocker-1 cure): every branch that
+    takes the numerical-floor shortcut contributes its own cumulative
+    probability `prob_so_far * remaining` to `truncated_mass_bound` -- an
+    EXACT upper bound on the error `value` could carry from that branch,
+    since its true (unexplored) contribution lies in [0, prob_so_far *
+    remaining] and could be true or false. The horizon-locked path is EXACT
+    (a proven classification, not an approximation) and contributes nothing
+    to the bound. A caller MUST check `truncated_mass_bound` against its own
+    tolerance explicitly -- the bound is not a blanket disclaimer, it is the
+    literal sum of only the branches that actually went through the floor.
+
     No vocab/trie structure is consulted anywhere in this function -- only
     the model's raw probabilities and the tokenizer's own segment() output
     (plus, for the horizon case, the tokenizer's own derived `max_len`)."""
     is_target = make_is_target(boundary_tokens, k, candidate, eot_symbol)
     total = 0.0
+    truncated_mass_bound = 0.0
     horizon = getattr(tokenizer, "safe_lock_horizon", lambda: None)()
 
     def rec(ext: tuple, prob_so_far: float, context: tuple, depth: int):
-        nonlocal total
+        nonlocal total, truncated_mass_bound
         probs = model.next_byte_probs(context)
         p_eot = probs.get(eot_symbol, 0.0)
         if p_eot > 0.0:
@@ -163,7 +203,9 @@ def cylinder_mass_ground_truth(model, tokenizer, boundary_bytes: tuple, boundary
         elif prob_so_far * remaining <= prob_floor:
             # No proven horizon (e.g. BpeMergeTokenizer): bounded numerical
             # truncation only, NOT a classification assumption -- see
-            # docstring. The omitted mass is < prob_floor.
+            # docstring. The omitted mass is < prob_floor -- EXPOSED here,
+            # not just asserted, so a caller can verify the claim.
+            truncated_mass_bound += prob_so_far * remaining
             return
         if depth > max_depth:
             raise AssertionError(
@@ -186,7 +228,7 @@ def cylinder_mass_ground_truth(model, tokenizer, boundary_bytes: tuple, boundary
     # inside p_ppm_tok(). See PR description for the receipt.
     boundary_mass = model.prefix_probability(boundary_bytes) if boundary_bytes else 1.0
     rec((), boundary_mass, boundary_bytes, 0)
-    return total
+    return CylinderMassResult(total, truncated_mass_bound)
 
 
 def cylinder_mass_bounded_lookahead(model, tokenizer, boundary_bytes: tuple, boundary_tokens: tuple,
