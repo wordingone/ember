@@ -1,0 +1,62 @@
+{
+  "api_spend_usd": 0.0,
+  "ticket": "LAND210K-E2B-PAIR",
+  "ts": "20260711T091500Z",
+  "issue": "ember#210",
+  "tier": "Tier 2",
+  "family": "family 6: c-e2b paired-legs runner + its surpass-scoring companion + a discovered hard runtime prerequisite (ember_c_e2b_e2b_arm.py) that neither of the other two families claims",
+  "worktree": "landing worktree wt-land210k (sibling of the main ember tree); fresh cut from origin/master post-#777",
+  "branch": "chore/210k-e2b-pair",
+  "base_sha": "70aefaa",
+  "stage_source": "scratch/seed-export-v5/dryrun-20260704T211712Z/stage/ember_main/scripts",
+  "candidates_total": 3,
+  "import_closure_check": "ember_c_e2b_paired_run.py: top-level imports are all stdlib + torch + in-batch (ember_c_e2b_e2b_arm as e2b_arm). Lazy/function-scoped imports re-verified against current master: test_c0 (scripts/ember_totality/test_c0.py), ember_c14_owned_run._sha256_file, ember_c14_owned_core, receipt_write.checked_write, v0_pretrain_launch_gate, resident_adapter (scripts/ember_phase3_c14/resident_adapter.py, both build_toy_adapter and build_fp16_adapter). ember_e2b_surpass_run.py: top-level import ember_c_e2b_paired_run as paired (in-batch). ember_c_e2b_e2b_arm.py: zero repo-internal imports (copy, itertools, sys, pathlib, typing, torch only). One safe circular reference: ember_c_e2b_paired_run.py lazily imports load_owned_core_from_c14_checkpoint from ember_e2b_surpass_run (function-scoped, at point of use only) while ember_e2b_surpass_run imports paired at module level -- safe because the reverse import never fires at module-load time.",
+  "excluded": [
+    {
+      "path": "scripts/ember_c_e2b_e2b_arm_selftest.py",
+      "reason": "unexamined; pair does not import it. Neither ember_c_e2b_paired_run.py nor ember_e2b_surpass_run.py imports from this file at any level (module or lazy). Flagged for judgment at the mandate close-out sweep, not landed here."
+    }
+  ],
+  "files": [
+    {
+      "path": "scripts/ember_e2b_surpass_run.py",
+      "stage_sha256": "055821d5fd2a07251b1f1c75d24721b123826922dd23e29ed971715e4eea6d5b",
+      "landed_sha256": "055821d5fd2a07251b1f1c75d24721b123826922dd23e29ed971715e4eea6d5b",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/ember_c_e2b_paired_run.py",
+      "stage_sha256": "09f81c49b756f277157c24f6a3f51fd2910236e56fbedb7ba5df9616f3ca3183",
+      "landed_sha256": "939509a2eb4555be71f305138985b2cb2a45c967c5726fe9f00f1414fae3ac96",
+      "modified_from_stage": true,
+      "edit_class": "docstring_generalization",
+      "edit_note": "Comment-only change, zero code touched. The actual code (E2B_LOCAL_CANDIDATES, line ~127) already used a computed repo-relative path (REPO.parent / 'the-search' / 'models' / 'gemma-4-E2B-it') -- the docstring above it separately spelled out that same path as a literal drive-letter-rooted citation, which is what the leak-gate caught. Rephrased to point at the code constant below it (\"a sibling repo's models/gemma-4-E2B-it directory -- see E2B_LOCAL_CANDIDATES below\") instead of re-stating the literal path. No behavior change."
+    },
+    {
+      "path": "scripts/ember_c_e2b_e2b_arm.py",
+      "stage_sha256": "e25aa0cc8278ba0d72e1775843a73fcf94be37fe37411e2dc548529213acf635",
+      "landed_sha256": "e25aa0cc8278ba0d72e1775843a73fcf94be37fe37411e2dc548529213acf635",
+      "modified_from_stage": false,
+      "scope_note": "Not in the original 2-file family-6 scope. Added after verification proved it is a hard runtime prerequisite for ember_c_e2b_paired_run.py's primary --dry-run functional path (score_ember_work_leg_v1 imports it directly, unconditionally, on leg 1 -- the very first computation the dry-run performs). Landing the pair without it means the pair's own primary self-check cannot run at all, which is the scope reduction, not the inclusion. Team-lead ruling: same class as the family-4/5 harness-entry resequencing, applied within a single PR rather than across families since this file belongs to no other named family."
+    }
+  ],
+  "pre_existing_defects_disclosed": [
+    {
+      "summary": "ember_c_e2b_paired_run.py --dry-run leg 1 (ember_work) completes fully with real computed scores: owned(cited)=0.40, e2b(trained)=1.20. Leg 2 (founder_likeness) then raises the SAME tokenizer/tokenizer.json defect already tracked against issue #776 (Exception: token out-of-vocabulary at a fixed line/column in the merge table) -- not #778, which tracks a separate config-drift/inf-perplexity cluster found in family j. Not introduced by this landing; recurrence only, no re-disclosure needed per team-lead's prior ruling on this defect class."
+    },
+    {
+      "summary": "ember_e2b_surpass_run.py --selftest: 4 of its checks report SELFTEST FAIL (surpass-fixture round-trip, distance-fixture round-trip, invalid-fixture round-trip, vet_c14_receipt positive control). All 4 trace to the external goalforge sibling worktree's own broken state (resolved via EMBER_GOALFORGE_ROOT, see below), not to anything landed here: a ModuleNotFoundError for a module that genuinely does not exist in that tree (confirmed via directory listing), and separately a UnicodeDecodeError inside that tree's own test_c0.py. The resolution path (EMBER_GOALFORGE_ROOT env var, computed default) is already correctly portable in the landed file; the failures are the external tree's live state, out of scope for this landing. Other selftest sections in the same run pass cleanly: --live refusal proofs (2 PASS), write_or_diagnose invalid-token test (1 PASS), adapter-file checkpoint-contract coverage (6 PASS: round-trip, sha-mismatch refusal, zero-delta refusal, resolve_c14_checkpoint shapes x2, build_fp16_adapter measurement), and the vet_c14_receipt BLOCKED-fixture negative control (1 PASS)."
+    }
+  ],
+  "functional_verification": {
+    "compile_check": "python -m py_compile on all 3 scripts -- PASS, zero errors",
+    "leak_gate": "REPO_GUARD_SCOPE=staged bash tools/repo-guard.sh -- PASS (all 9 checks)",
+    "paired_run_help": "python ember_c_e2b_paired_run.py --help -- exit 0, shows --dry-run|--smoke|--live mutually-exclusive required group",
+    "paired_run_dry_run": "python ember_c_e2b_paired_run.py --dry-run -- leg 1 (ember_work) completes in full: builds CPU stub E2B model, trains 4 reduced steps (frozen protocol value is 1024), scores owned(cited)=0.40 vs e2b(trained)=1.20. Leg 2 (founder_likeness) then hits the tracked tokenizer defect (#776) at the ember tokenizer load call -- disclosed above, not fixed here. With ember_c_e2b_e2b_arm.py absent, the SAME command instead crashes immediately at leg 1's first import (ModuleNotFoundError), before any score is ever computed -- confirming the third file is a hard prerequisite for this file's primary self-check, not an optional convenience.",
+    "surpass_run_selftest": "python ember_e2b_surpass_run.py --selftest -- 10 of 14 checks PASS; the 4 failures are the disclosed external ember-goalforge tree defect above, not a defect in the landed files.",
+    "checkpoint_artifact_note": "Leg 2 functional verification required one gitignored model checkpoint (models/cbase-grow-rung/.../step-00000766/) that a fresh worktree does not carry; copied locally from the main tree purely to exercise the runtime path, confirmed untracked and covered by .gitignore:19 (models/) -- never staged, never committed."
+  },
+  "external_dependency_disclosure": "ember_e2b_surpass_run.py's --selftest reads scripts/ember_totality/test_c_e2b.py and test_c0.py from a sibling worktree, resolved via the EMBER_GOALFORGE_ROOT environment variable with a computed default (os.path.join(dirname(REPO), 'ember-goalforge')) -- already portable, no leak. That external tree's current state has its own defects (see pre_existing_defects_disclosed above), independent of this landing.",
+  "pass": true,
+  "verdict": "LAND210K_E2B_PAIR_3_LANDED_1_EXCLUDED_2_PREEXISTING_DEFECT_CLASSES_DISCLOSED"
+}
