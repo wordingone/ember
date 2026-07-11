@@ -1,0 +1,96 @@
+{
+ "receipt": "process-visibility",
+ "ts_utc": "2026-07-11T04:12:00Z",
+ "coordinator_window": "2026-07-11T02:00Z..04:12Z (REVIEW ticks + research tick + final lane batch)",
+ "merges": [
+  {
+   "pr": 734,
+   "sha": "10221b82 (head) squash-merged",
+   "mergedAt": "2026-07-11T03:02:36Z",
+   "what": "C-DISC hinge-tally feed: local emitter defs removed, cbase_grow_rung imported, REPO monkeypatch finally-restored at 5 sites (refs #729)"
+  },
+  {
+   "pr": 745,
+   "sha": "post-#741 master f629e6f audit landing",
+   "mergedAt": "2026-07-11T03:10:27Z",
+   "what": "totality-audit receipt audit-20260711T020000Z.json (delta re-run)"
+  },
+  {
+   "pr": 746,
+   "sha": "squash",
+   "mergedAt": "2026-07-11T03:10:31Z",
+   "what": "docs/probe-authoring-contract.md - #740 sweep: 40 probes, 322 predicates, 245 self-attested"
+  },
+  {
+   "pr": 747,
+   "sha": "squash 851e3c0",
+   "mergedAt": "2026-07-11T03:21:13Z",
+   "what": "board-eval-machinery family (#210 Tier 2), 2 files excluded on leak-gate -> #751"
+  },
+  {
+   "pr": 750,
+   "sha": "squash c1b7ef3",
+   "mergedAt": "2026-07-11T03:45:42Z",
+   "what": "three single-field GREEN-forcing bypasses closed: C6 truthy-keys OR-branch deleted, C8 incumbent exact-string shortcut removed, C_GROW daemon-flag demoted (refs #740)"
+  },
+  {
+   "pr": 737,
+   "sha": "squash 9bf384d",
+   "mergedAt": "2026-07-11T03:47:42Z",
+   "what": "trajgate tokenizer-lineage sidecar (#724 AMENDMENT): all 8 selftest markers verified at 2e4c19c incl. #723 selector-replay + #726 definedness"
+  },
+  {
+   "pr": 751,
+   "sha": "squash",
+   "mergedAt": "2026-07-11T04:04:08Z",
+   "what": "portable-path editions of shatter_calc.py + gen_problems.py (the #747 leak-gate exclusions)"
+  },
+  {
+   "pr": 752,
+   "sha": "squash",
+   "mergedAt": "2026-07-11T04:04:13Z",
+   "what": "redact_for_landing: key-suffix coverage (_path/_dir/_ref/_source/_receipt), value-pattern fallback, .log support + tests (refs #538)"
+  },
+  {
+   "pr": 753,
+   "sha": "squash",
+   "mergedAt": "2026-07-11T04:04:18Z",
+   "what": "execution-binding for test_c_fed (HEAD-blob sha-pin conjunct) / test_c_mile (on-disk leg-receipt resolution + independent verdict recompute) / test_c_obs (structured-receipt worldstate+proof-pack conjuncts) (refs #749)"
+  }
+ ],
+ "prs_closed_unmerged": [],
+ "issues_filed": [
+  {
+   "issue": 748,
+   "what": "trajgate parent-evidence edges + chain verifier (N6 scope from #737)"
+  },
+  {
+   "issue": 749,
+   "what": "probe-debt: c_fed/c_mile/c_obs execution-binding (delivered same window via PR #753)"
+  }
+ ],
+ "prs_open_gated": [
+  {
+   "pr": 743,
+   "state": "in progress under AMENDMENT A8.2 (issue #711 comment 4942176352): apparatus-scoped lr_adamw=0.02 override, calibration 3 seed 90201; two failed calibration receipts to be committed with it (no file-drawer)"
+  }
+ ],
+ "lanes": {
+  "boardrun42": "board re-render dispatched (master 5de2572 target)",
+  "cockswap57": "cockpit rebuild+relaunch per runbook (drift 51 commits, 1 ember-cli PR since build 93c7877)",
+  "builder711": "A8.2 calibration 3",
+  "tlineage724": "issue #748 (wt-748-parent-edges created)",
+  "attrib702": "status-demanded 04:0xZ (llama-server restored+healthy; legs c/d receipts not yet on disk)",
+  "w1replay735b": "released to receipt-landing PR 2 using merged #752 tool",
+  "land210": "Tier-2 family 2 next",
+  "refuter701": "adversarial pass on #701 crossing prereg draft",
+  "probetrio749": "mission complete (PR #753 merged)"
+ },
+ "coordinator_disclosures": [
+  "audit-latest needs_work cleared to [] after PR #750 own-read verification at head 49caebd6 (OR-branch enumeration rule applied)",
+  "main-tree stray trajgate WIP (blob 9ac432b, predecessor of merged #737 work) restored to master after origin confirmation",
+  "untracked-collision on pull: ember-totality-20260710T230837Z.json local CRLF vs landed LF - newline-only, resolved local->pulled per byte-copy playbook (local copy retained in session scratchpad)",
+  "cockpit relaunch dispatched per dated acting-operator ledger row (down since 2026-07-10 restart; restore-standing-state, not an unprompted new surface)"
+ ],
+ "api_spend_usd": "session-plan usage; no metered API spend this window"
+}

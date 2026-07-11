@@ -1,0 +1,202 @@
+{
+  "ticket": "W1-BASELINE-REPLAY-CLOSURE",
+  "ts": "20260711T025650Z",
+  "issue": "#735",
+  "schema": "w1-baseline-replay-closure/v1",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/corpus/receipt files; sha256 over the raw int64 token bytes of concat([x, y], dim=1) (sha256_tokens convention, same as the rest of the W1 chain) for the eval batch",
+  "historical_run_ref": "w1-live-20260707T110231Z",
+  "preflight": {
+    "grow_checkpoint_manifest_check": {
+      "dir": "<LOCAL-ABS-PATH>/M/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766",
+      "manifest_step": 766,
+      "measured_sha256": {
+        "model.pt": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+        "optimizer.pt": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1",
+        "rng.pt": "2e30b6c87ed2e1edb9d4077e569da2115c2377d952bf256071ad93e990c8e6c7"
+      },
+      "expected_sha256": {
+        "model.pt": "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b",
+        "optimizer.pt": "a7f8ec8420ab4eebb0782218172ff3e36a6142c0fdf3affaf973f28973ad7ad1",
+        "rng.pt": "2e30b6c87ed2e1edb9d4077e569da2115c2377d952bf256071ad93e990c8e6c7"
+      },
+      "per_file_match": {
+        "model.pt": true,
+        "optimizer.pt": true,
+        "rng.pt": true
+      },
+      "pass": true
+    },
+    "control_step25_checkpoint_manifest_check": {
+      "dir": "<LOCAL-ABS-PATH>/M/ember/scratch/w1-control/live/w1-live-20260707T110231Z/phase2-live/checkpoints/step-00000025",
+      "manifest_step": 25,
+      "measured_sha256": {
+        "model.pt": "3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac",
+        "optimizer.pt": "d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0",
+        "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379"
+      },
+      "expected_sha256": {
+        "model.pt": "3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac",
+        "optimizer.pt": "d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0",
+        "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379"
+      },
+      "per_file_match": {
+        "model.pt": true,
+        "optimizer.pt": true,
+        "rng.pt": true
+      },
+      "pass": true
+    },
+    "config_sha_check": {
+      "measured": "83bca66bffafe80ed5d2b4b7098c09ff5c562a04bf7ff9d6fb23f2d0a6ce0869",
+      "expected": "83bca66bffafe80ed5d2b4b7098c09ff5c562a04bf7ff9d6fb23f2d0a6ce0869",
+      "pass": true
+    },
+    "decontam_receipt_sha_check": {
+      "path": "<LOCAL-ABS-PATH>\\M\\wt-w1replay735b-live\\receipts\\ember-c-scale\\w2-heldout-decontam-20260708T121128Z.json",
+      "measured": "40dfd9ecdd65cb74fb83d02b82c81c01aff1dd4586720847101cfb434452ec1a",
+      "expected": "40dfd9ecdd65cb74fb83d02b82c81c01aff1dd4586720847101cfb434452ec1a",
+      "pass": true
+    },
+    "corpus_check": {
+      "mode": "live_recompute",
+      "shard_dir": "<LOCAL-ABS-PATH>/M/shards-v0",
+      "measured_combined_sha256": "aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a",
+      "expected": "aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a",
+      "pass": true
+    },
+    "eval_batch_check": {
+      "mode": "live_rebuild",
+      "measured": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+      "expected": "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+      "pass": true
+    },
+    "real_arch": {
+      "vocab": 32000,
+      "seq": 1024,
+      "batch": 16,
+      "hidden": 1024,
+      "n_mtp": 2,
+      "n_mtp_source": "<LOCAL-ABS-PATH>\\M\\wt-w1replay735b-live\\configs\\v0-pretrain-config.json objective.mtp_aux_heads.n_heads=2 -- the SAME contract path production's _V0Real reads (timeshare_pretrain.CONTRACT_PATH), read fresh, never hardcoded",
+      "hidden_derivation": "params_dedup.measured_duplicate_numel=32768000 / vocab=32000 = 1024 (tied embed/head dedup count = vocab*hidden)",
+      "ff_grown": 16384,
+      "params_unique_after": null,
+      "params_state_dict_sum_after": null,
+      "layers_heads_source": "layers=20, heads=16 carried from the v0/c03 config precedent (fp19-envelope.md, quoted in scripts/timeshare_pretrain.py's module docstring) -- NOT independently present in the grow-rung receipt chain; flagged, not silently assumed",
+      "layers_assumed": 20,
+      "heads_assumed": 16,
+      "terminal_checkpoint_ref": "<LOCAL-ABS-PATH>\\M\\ember\\models\\cbase-grow-rung\\rung1-20260703T155447Z\\stabilize\\checkpoints\\step-00000766",
+      "terminal_checkpoint_receipt": "<LOCAL-ABS-PATH>\\M\\ember\\receipts\\cbase-grow-rung\\cbase-grow-rung1-live-20260703T155711Z.json"
+    },
+    "pricing_receipt_path": "<LOCAL-ABS-PATH>/M/ember/scratch/w1-control/w1-pricing-20260704T063236Z.json",
+    "pricing_receipt_sha256": "b3cb6270f51a1ae0052121c3b351faf7af778ba8df194ee6dfa8711dc00673d8",
+    "rung_manifest_path": "<LOCAL-ABS-PATH>/M/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/manifest.json",
+    "rung_manifest_sha256": "573f615847ec7e2592beec8a059882082c938aafe0151ddfe49fc77259aead88",
+    "legs_checked": [
+      "grow_checkpoint_manifest_check",
+      "control_step25_checkpoint_manifest_check",
+      "config_sha_check",
+      "decontam_receipt_sha_check",
+      "corpus_check",
+      "eval_batch_check"
+    ],
+    "overall_pass": true
+  },
+  "replay": {
+    "control_step25_dir": "<LOCAL-ABS-PATH>/M/ember/scratch/w1-control/live/w1-live-20260707T110231Z/phase2-live/checkpoints/step-00000025",
+    "control_step25_manifest_step": 25,
+    "key_shape_parity": {
+      "n_keys_checked": 185,
+      "keys_match": true,
+      "shapes_match": true
+    },
+    "eval_loss_bf16_at_load": 10.0,
+    "expected_step25_eval_loss_bf16": 10.0,
+    "load_matches_receipted": true,
+    "replayed_update_indices": {
+      "start_inclusive": 25,
+      "end_exclusive": 50,
+      "n_updates": 25
+    },
+    "lr_schedule": {
+      "source": "cosine_warmup_frac/apply_cosine_warmup -- the SAME formula as cosine_warmup_lr (spec sec.2 anti-poison clause: an intentionally-hobbled control inflates the ratio and poisons the result, so the control arm never reuses timeshare_pretrain.apply_wsd, which is tuned for the grow-path's CONTINUATION training), restructured as a pure multiplier + apply pair (mirroring apply_wsd's own mechanical shape) so it can drive the muon+adamw split optimizer's two base_lrs the way apply_wsd drives production's. This is the ONE deliberate delta from an otherwise full matched-recipe reuse (issue #82 live-fire finding 2: production optimizer mix + production MTP aux objective, since the production optimizer mix demonstrably fits the governed card while plain AdamW-everything at this shape does not).",
+      "total_steps_for_schedule": 1533,
+      "lr_mult_trace_first": 0.16993464,
+      "lr_mult_trace_last": 0.32679739
+    },
+    "optimizer": {
+      "mode": "muon_split",
+      "n_muon": 140,
+      "n_adamw": 44,
+      "ce_impl": "cut_ce_chunked",
+      "mtp_enabled": true,
+      "mtp_weight": 0.3
+    },
+    "eval_loss_bf16_post_replay": 9.25,
+    "expected_step50_eval_loss_bf16": 9.25,
+    "replay_matches_receipted_bf16": true,
+    "step50_checkpoint_dir": "<LOCAL-ABS-PATH>\\M\\wt-w1replay735b-live\\scratch\\w1-control\\live\\w1-replay-closure-20260711T025650Z\\checkpoints\\step-00000050",
+    "step50_checkpoint_manifest_step": 50,
+    "eval_loss_bf16_reloaded_from_bytes": 9.25,
+    "reload_bit_exact_vs_pre_save_bf16": true,
+    "eval_loss_fp32_reloaded_from_bytes": 9.244897842407227,
+    "expected_step50_eval_loss_fp32": 9.245222091674805,
+    "fp32_delta_vs_receipted": -0.000324249267578125,
+    "fp32_tolerance": 0.001,
+    "fp32_within_tolerance": true,
+    "optimizer_resume_parity": {
+      "n_optimizer_keys_checked": 2,
+      "mismatches": [],
+      "shapes_match": true
+    },
+    "rng_resume_bit_exact": true,
+    "claim_bearing": true,
+    "verdict": "REPLAY_TRUSTWORTHY"
+  },
+  "custody": {
+    "ticket": "W1-REPLAY-CUSTODY-MOVE",
+    "ts": "20260711T025650Z",
+    "ref": "issue #677 checkpoint-custody addendum",
+    "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/corpus/receipt files; sha256 over the raw int64 token bytes of concat([x, y], dim=1) (sha256_tokens convention, same as the rest of the W1 chain) for the eval batch",
+    "source_dir": "<LOCAL-ABS-PATH>\\M\\wt-w1replay735b-live\\scratch\\w1-control\\live\\w1-replay-closure-20260711T025650Z\\checkpoints\\step-00000050",
+    "dest_dir": "<LOCAL-ABS-PATH>/M/ember/models/w1-baseline-replay-custody\\w1-baseline-replay-step50-20260711T025650Z",
+    "files_sha256_pre_move": {
+      "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+      "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+      "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
+      "manifest.json": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504"
+    },
+    "files_sha256_post_move": {
+      "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+      "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+      "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
+      "manifest.json": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504"
+    },
+    "per_file_bytes_preserved": {
+      "model.pt": true,
+      "optimizer.pt": true,
+      "rng.pt": true,
+      "manifest.json": true
+    }
+  },
+  "governor": {
+    "vram_fraction_applied": 0.8,
+    "fp19_fraction_floor": 0.8,
+    "free_gib": 22.45,
+    "total_gib": 23.99,
+    "margin_gib_floor": 4.0
+  },
+  "commit_margin_probe": {
+    "mode": "psutil_virtual_memory",
+    "available_gib": 39.43,
+    "swap_used_gib": 0.95,
+    "min_free_gib_floor": 6.0,
+    "pass": true
+  },
+  "skip_custody_move_flag_used": false,
+  "provenance_note": "decontam receipt substitution (disclosed, coordinator-ruled): the original receipt cited by the launch/certification chain (w2-heldout-decontam-20260707T055843Z.json) never landed in git history -- only a CRASHED-20260707T034418Z sibling survives, uncommitted, in one worktree. The substitute used here (w2-heldout-decontam-20260708T121128Z.json, landed in commit 5abbc54975f3e4c8efe6eaf77d9595a59201a3c5, 'w2 decontam-batch regen', #118/#455) is verified identical in the identity that matters: its batch_sha256 field is byte-equal to the launch-pinned eval-batch sha (91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929). This is a disclosed substitution, not a silent swap.",
+  "replay_verdict": "REPLAY_TRUSTWORTHY",
+  "verdict": "REPLAY_TRUSTWORTHY",
+  "verdict_language": "W1_FROM_SCRATCH_PILOT_BASELINE (issue #735's own narrow-by-construction label: pilot scale, single seed, from-scratch final width) applies ONLY when verdict==REPLAY_TRUSTWORTHY (exactly that string) AND custody is non-null; REPLAY_TRUSTWORTHY_NO_CUSTODY_NONPROMOTABLE is a diagnostic verdict and carries no capability claim regardless of what the underlying replay measured. This receipt itself reports measured chain-verification data only, no capability-claim language is asserted here.",
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}
