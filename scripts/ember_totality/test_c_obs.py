@@ -17,6 +17,23 @@ Condition (authoritative, <spec> §4.2 / §4.4):
   CHK: adapters bind real receipts; membrane has no silent-steer path; the
        proof-pack commands run and emit live state.
 
+[ISSUE #749 cure, docs/probe-authoring-contract.md] Execution-binding hardening.
+The pre-cure (a) worldstate-binding and (d) proof-pack conjuncts were pure
+keyword/prose scans over any evidence-subdir file -- a hand-authored .md or
+.json containing the right words satisfied CHK with zero recompute. Both are
+now decisive, structured-receipt-only checks: (a) requires a real
+`emberworldstate_adapter` block naming GOAL/ledger/receipt sources that
+RESOLVE in-tree (spanning >=2 of the three categories) and sha-pins its own
+adapter source file via the proven `_lane14_common.check_path_sha_pairs`
+pattern (test_c4.py/test_c5.py's template); (d) requires an
+`observatory_proof_pack` block whose commands cover monitor+understand+interact
+each with an EXPLICIT `exit_code == 0` (a missing/absent exit_code REJECTS,
+never defaults to a pass) and sha-pins its own runner script the same way. A
+receipt carrying only self-attested keywords/booleans with no resolvable
+in-tree pointer now fails both checks. (b) click-to-evidence and (c)
+confirm-only-membrane remain lighter keyword checks but are ANDed with, never
+a substitute for, (a)/(d) (checklist item 5).
+
 TDD discipline: this is a STATUS PROBE. It ALWAYS exits 0; it prints exactly one
 line "RED <reason>" or "GREEN <reason>" so the totality board can aggregate.
 It determines RED/GREEN by REALLY inspecting state under <external-state> — it never
@@ -42,6 +59,9 @@ import json
 import os
 import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _lane14_common import check_path_sha_pairs, resolve_in_tree  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +149,107 @@ def _iter_evidence_files(root: Path):
                     continue
 
 
+def _iter_evidence_json(root: Path):
+    """Yield (path, parsed_dict) for .json files under evidence-surface subtrees
+    (receipts/, ledger/, baseline/) that parse as a JSON object. [ISSUE #749
+    cure, docs/probe-authoring-contract.md] The decisive (a) worldstate-binding
+    and (d) proof-pack conjuncts require a REAL structured receipt whose claimed
+    pointers (source paths, runner path, sha256, exit codes) can be resolved and
+    recomputed -- never a keyword match against prose (.md is excluded here on
+    purpose; it stays eligible for the lighter (b)/(c) auxiliary checks and the
+    tree-wide negative scan)."""
+    for sub in EVIDENCE_SUBDIRS:
+        sub_root = root / sub
+        if not sub_root.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(sub_root):
+            if ".git" in dirpath.split(os.sep):
+                continue
+            for name in filenames:
+                if not name.endswith(".json"):
+                    continue
+                p = Path(dirpath) / name
+                try:
+                    with open(p, "r", encoding="utf-8") as fh:
+                        obj = json.load(fh)
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(obj, dict):
+                    yield p, obj
+
+
+_STUB_MARKERS = (
+    "synthetic", "p0 stub", "p0-stub", "stub_only", "stubbed",
+    "_not_executable", "not_executable", "placeholder", "no adapter receipts",
+)
+
+
+def _check_worldstate_binding(obj, root):
+    """(a) execution-binding recompute: the receipt's `emberworldstate_adapter`
+    block must name real GOAL/ledger/receipt sources that RESOLVE in-tree
+    (never existence-only trust of the claim), span at least two of those three
+    categories, name no stub marker, and sha-pin its own adapter source code
+    via the proven `<field>_path`/`<field>_sha256` pattern. Returns
+    (ok: bool, detail_or_None)."""
+    block = obj.get("emberworldstate_adapter")
+    if not isinstance(block, dict):
+        return False, None
+    if block.get("binds") is not True:
+        return False, None
+    if any(m in json.dumps(block).lower() for m in _STUB_MARKERS):
+        return False, None
+
+    sources = block.get("sources")
+    if not isinstance(sources, list) or not sources:
+        return False, None
+    resolved_categories = set()
+    for s in sources:
+        if not isinstance(s, str) or resolve_in_tree(s, root) is None:
+            continue  # off-tree/missing claimed source -- not real evidence
+        low_s = s.lower()
+        for cat in ("goal", "ledger", "receipt"):
+            if cat in low_s:
+                resolved_categories.add(cat)
+    if len(resolved_categories) < 2:
+        return False, None  # must span >=2 of GOAL/ledger/receipts, in-tree, not a single unverified claim
+
+    ok, _n, detail = check_path_sha_pairs(block, root)
+    if not ok:
+        return False, f"adapter source-code binding failed: {detail}"
+    return True, f"sources resolved in-tree ({sorted(resolved_categories)}); {detail}"
+
+
+def _check_proofpack(obj, root):
+    """(d) execution-binding recompute: the receipt's `observatory_proof_pack`
+    block must name commands whose `verb` covers monitor+understand+interact
+    each with an EXPLICIT `exit_code == 0` (a missing/absent exit_code is a
+    REJECT, never a silent pass -- checklist item 7), and sha-pin its own
+    runner script in-tree. Returns (ok: bool, detail_or_None)."""
+    block = obj.get("observatory_proof_pack")
+    if not isinstance(block, dict):
+        return False, None
+    commands = block.get("commands")
+    if not isinstance(commands, list) or not commands:
+        return False, None
+    verbs_seen = set()
+    for c in commands:
+        if not isinstance(c, dict):
+            continue
+        verb = c.get("verb")
+        if verb not in ("monitor", "understand", "interact"):
+            continue
+        if c.get("exit_code") != 0:  # missing/non-zero -- reject, never default-pass
+            continue
+        verbs_seen.add(verb)
+    if not {"monitor", "understand", "interact"} <= verbs_seen:
+        return False, None
+
+    ok, _n, detail = check_path_sha_pairs(block, root)
+    if not ok:
+        return False, f"proof-pack runner binding failed: {detail}"
+    return True, f"commands cover monitor+understand+interact, each exit_code=0; {detail}"
+
+
 def _inspect(root: Path):
     """Inspect real state. Return (verdict, reason, invalid_hits).
 
@@ -158,31 +279,33 @@ def _inspect(root: Path):
             if tok in text:
                 invalid_hits.append(f"{tok}@{rel}")
 
+    # [ISSUE #749 cure] (a) and (d) execution-binding scan: structured JSON
+    # receipts only, resolved+recomputed via _check_worldstate_binding /
+    # _check_proofpack (never a keyword match against prose). Decisive --
+    # ANDed with, never substitutable by, the lighter (b)/(c) keyword checks
+    # below.
+    for p, obj in _iter_evidence_json(root):
+        rel = str(p.relative_to(root))
+
+        if not has_worldstate_binding:
+            ok, detail = _check_worldstate_binding(obj, root)
+            if ok:
+                has_worldstate_binding = True
+                worldstate_evidence = f"{rel} ({detail})"
+
+        if not has_user_proofpack:
+            ok, detail = _check_proofpack(obj, root)
+            if ok:
+                has_user_proofpack = True
+                proofpack_evidence = f"{rel} ({detail})"
+
     # Positive scan: evidence surfaces only (receipts/, ledger/, baseline/),
     # never governing-text descriptions or .py sources -- see EVIDENCE_SUBDIRS.
+    # (b)/(c) remain lighter structural/keyword checks (checklist item 5:
+    # auxiliary, ANDed with the execution-bound (a)/(d) checks above, never
+    # independently sufficient for GREEN on their own).
     for p, text in _iter_evidence_files(root):
-        rel = str(p.relative_to(root))
         low = text.lower()
-
-        # (a) real EmberWorldState binding adapter — receipt/artifact that binds
-        #     GOAL/ledger/receipts into the world state, and is NOT a synthetic stub.
-        if "emberworldstate" in low:
-            mentions_sources = any(
-                s in low for s in ("goal", "ledger", "receipt")
-            )
-            looks_binding = any(
-                s in low for s in ("adapter", "bind", "world_state", "worldstate")
-            )
-            is_stub = any(
-                s in low for s in (
-                    "synthetic", "p0 stub", "p0-stub", "stub_only",
-                    "stubbed", "_not_executable", "not_executable",
-                    "placeholder", "no adapter receipts",
-                )
-            )
-            if mentions_sources and looks_binding and not is_stub:
-                has_worldstate_binding = True
-                worldstate_evidence = rel
 
         # (b) click-to-evidence surface, evidenced in an actual receipt/artifact
         if "click-to-evidence" in low or "click_to_evidence" in low or "click to evidence" in low:
@@ -196,12 +319,6 @@ def _inspect(root: Path):
             if "silent" in low and ("no silent" in low or "never silent" in low
                                     or "no_silent_steer" in low):
                 has_membrane_confirm_only = True
-
-        # (d) user-runnable observatory proof-pack
-        if ("observatory" in low or "observe" in low) and "proof" in low and "pack" in low:
-            if any(s in low for s in ("monitor", "understand", "interact")):
-                has_user_proofpack = True
-                proofpack_evidence = rel
 
     # Decide verdict purely from inspection.
     if invalid_hits:
