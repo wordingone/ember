@@ -523,6 +523,7 @@ def assert_step_ordering(ckpt_paths: dict) -> dict:
             "step": manifest["step"],
             "model_pt_sha256": manifest["files"].get("model.pt"),
             "manifest": manifest,
+            "manifest_path": str(Path(path) / "manifest.json"),
         }
     if not (info["a"]["step"] < info["b"]["step"] < info["c"]["step"]):
         raise PhaseZeroGuardBreach(
@@ -540,31 +541,149 @@ def assert_step_ordering(ckpt_paths: dict) -> dict:
     return info
 
 
-def assert_vocab_tokenizer_identity(ckpt_infos: dict, model_states: dict) -> dict:
+def assert_vocab_tokenizer_identity(ckpt_infos: dict, model_states: dict,
+                                   tokenizer_lineage_sidecar: "str | None" = None,
+                                   sidecar_sha256: "str | None" = None) -> dict:
     """ckpt_infos: {label: {'manifest': {...}}}. model_states: {label:
     state_dict}. Vocab size is read from each state_dict's 'head.weight' row
-    count (never assumed from a shared cfg -- a checkpoint could in
-    principle disagree with the cfg it's read against). Tokenizer identity
-    is read from manifest['extra']['tokenizer_id']; a MISSING tokenizer_id
-    on any checkpoint is itself a breach (never assumed identical)."""
+    count (never assumed from a shared cfg). Tokenizer identity is read from
+    manifest['extra']['tokenizer_id'] OR from the optional --tokenizer-lineage-sidecar
+    (JSONL, per #724 AMENDMENT items 6, 8-10). Enforces:
+      - Item 6: sidecar consumed by exact file SHA (sidecar_sha256)
+      - Item 8: conjunctive matching (AND not OR) for sidecar records
+      - Item 9: duplicate steps in sidecar breach
+      - Item 10: if manifest has tokenizer_id and sidecar provided, must agree"""
+
+    # Load and validate sidecar if provided (item 6: consume by SHA)
+    sidecar_data = {}
+    sidecar_used = False
+    if tokenizer_lineage_sidecar:
+        try:
+            import hashlib
+            sidecar_path = Path(tokenizer_lineage_sidecar)
+            if not sidecar_path.exists():
+                raise PhaseZeroGuardBreach(
+                    f"tokenizer-lineage-sidecar path does not exist: {tokenizer_lineage_sidecar}")
+
+            # Verify sidecar SHA if provided (item 6)
+            if sidecar_sha256:
+                actual_sidecar_sha = hashlib.sha256(open(sidecar_path, 'rb').read()).hexdigest()
+                if actual_sidecar_sha != sidecar_sha256:
+                    raise PhaseZeroGuardBreach(
+                        f"tokenizer-lineage-sidecar SHA mismatch: "
+                        f"actual={actual_sidecar_sha} expected={sidecar_sha256}")
+
+            # Read JSONL sidecar file
+            seen_steps = set()
+            with open(sidecar_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        record = json.loads(line)
+                        step = record.get("step")
+                        if step:
+                            # Item 9: reject duplicate steps
+                            if step in seen_steps:
+                                raise PhaseZeroGuardBreach(
+                                    f"tokenizer-lineage-sidecar has duplicate step {step}")
+                            seen_steps.add(step)
+                            sidecar_data[step] = record
+
+            if not sidecar_data:
+                raise PhaseZeroGuardBreach(
+                    f"tokenizer-lineage-sidecar {tokenizer_lineage_sidecar} is empty or malformed")
+            sidecar_used = True
+        except json.JSONDecodeError as e:
+            raise PhaseZeroGuardBreach(
+                f"tokenizer-lineage-sidecar {tokenizer_lineage_sidecar} is not valid JSONL: {e}")
+        except PhaseZeroGuardBreach:
+            raise
+        except Exception as e:
+            raise PhaseZeroGuardBreach(
+                f"failed to read tokenizer-lineage-sidecar: {e}")
+
     vocabs, tokenizer_ids = {}, {}
+
     for label, state in model_states.items():
         if "head.weight" not in state:
             raise PhaseZeroGuardBreach(
                 f"checkpoint {label!r} model_state has no 'head.weight' key "
                 f"-- cannot assert vocab size (keys seen: {sorted(state.keys())[:10]}...)")
         vocabs[label] = int(state["head.weight"].shape[0])
-        tok_id = ckpt_infos[label].get("manifest", {}).get("extra", {}).get("tokenizer_id")
-        if tok_id is None:
-            raise PhaseZeroGuardBreach(
-                f"checkpoint {label!r} manifest has no extra.tokenizer_id -- "
-                "tokenizer identity cannot be asserted, fail-closed (never assumed)")
+
+        manifest = ckpt_infos[label].get("manifest", {})
+        manifest_tokenizer_id = manifest.get("extra", {}).get("tokenizer_id")
+
+        tok_id = manifest_tokenizer_id
+
+        # If sidecar is used, must compute actual hashes and match conjunctively (item 8)
+        if sidecar_used:
+            # Compute manifest SHA to match against sidecar (computed at consumption time)
+            manifest_path_key = ckpt_infos[label].get("manifest_path")
+            computed_manifest_sha = None
+            if manifest_path_key:
+                try:
+                    import hashlib
+                    with open(manifest_path_key, 'rb') as f:
+                        computed_manifest_sha = hashlib.sha256(f.read()).hexdigest()
+                except Exception as e:
+                    raise PhaseZeroGuardBreach(
+                        f"checkpoint {label!r}: failed to compute manifest sha: {e}")
+
+            # Get model.pt SHA computed from actual checkpoint file (not manifest-declared)
+            model_pt_sha_computed = ckpt_infos[label].get("model_pt_sha256_computed")
+
+            # Find matching sidecar record: CONJUNCTIVE (item 8)
+            # Both manifest_sha AND model_pt_sha must match the record's independently-computed hashes
+            # N5: Ensure neither computed SHA is None before matching (fail-closed on incomplete evidence)
+            matched_sidecar = None
+            if computed_manifest_sha is not None and model_pt_sha_computed is not None:
+                for step, record in sidecar_data.items():
+                    record_manifest_sha = record.get("manifest_sha256")
+                    record_model_pt_sha = record.get("model_pt_sha256")
+
+                    # Item 8: AND not OR -- BOTH must match independently-computed values
+                    if (computed_manifest_sha == record_manifest_sha and
+                        model_pt_sha_computed == record_model_pt_sha):
+                        matched_sidecar = record
+                        break
+
+            if matched_sidecar:
+                sidecar_tokenizer_id = matched_sidecar.get("tokenizer_sha")
+                if not sidecar_tokenizer_id:
+                    raise PhaseZeroGuardBreach(
+                        f"checkpoint {label!r}: sidecar record found but tokenizer_sha is missing")
+
+                # Item 10: conflict detection -- if manifest has tokenizer_id, must agree
+                if manifest_tokenizer_id and manifest_tokenizer_id != sidecar_tokenizer_id:
+                    raise PhaseZeroGuardBreach(
+                        f"checkpoint {label!r}: tokenizer_id conflict -- "
+                        f"manifest={manifest_tokenizer_id} sidecar={sidecar_tokenizer_id}")
+
+                tok_id = sidecar_tokenizer_id
+            elif not manifest_tokenizer_id:
+                # No manifest tokenizer_id AND no matching sidecar record
+                raise PhaseZeroGuardBreach(
+                    f"checkpoint {label!r}: manifest has no extra.tokenizer_id "
+                    f"AND no matching sidecar record found (conjunctive match required) -- "
+                    f"tokenizer identity cannot be asserted (fail-closed)")
+        else:
+            # No sidecar: must have manifest tokenizer_id
+            if tok_id is None:
+                raise PhaseZeroGuardBreach(
+                    f"checkpoint {label!r} manifest has no extra.tokenizer_id -- "
+                    "tokenizer identity cannot be asserted, fail-closed (never assumed)")
+
         tokenizer_ids[label] = tok_id
+
     if len(set(vocabs.values())) != 1:
         raise PhaseZeroGuardBreach(f"vocab size mismatch across checkpoints: {vocabs}")
     if len(set(tokenizer_ids.values())) != 1:
         raise PhaseZeroGuardBreach(f"tokenizer_id mismatch across checkpoints: {tokenizer_ids}")
-    return {"vocabs": vocabs, "tokenizer_ids": tokenizer_ids}
+
+    result = {"vocabs": vocabs, "tokenizer_ids": tokenizer_ids}
+    if sidecar_used:
+        result["sidecar_used"] = True
+    return result
 
 
 def assert_shard_provenance(shard_dir: str, expected_manifest_sha256: str) -> dict:
@@ -641,13 +760,19 @@ def _load_checkpoint_model(ckpt_dir: str, cfg: dict, *, device: str):
     the SAME production model-construction function every other runner in
     this tree uses, never a reimplementation), loads+verifies the
     checkpoint's state dict (timeshare_pretrain.load_checkpoint, sha256-
-    verified), and returns (model in eval mode, model_state, manifest)."""
+    verified), and returns (model in eval mode, model_state, manifest,
+    model_pt_sha256_computed)."""
     import torch
+    import hashlib
     model, _vocab, _hidden, _n_mtp = ts.build_v0_model(cfg, live=True, device=device)
     model_state, _optimizer_state, _rng_state, manifest = ts.load_checkpoint(ckpt_dir)
     model.load_state_dict(model_state)
     model.eval()
-    return model, model_state, manifest
+    # B2: Compute SHA256 of model.pt from actual bytes (binary mode, no normalization)
+    model_pt_path = Path(ckpt_dir) / "model.pt"
+    with open(model_pt_path, 'rb') as f:
+        model_pt_sha256_computed = hashlib.sha256(f.read()).hexdigest()
+    return model, model_state, manifest, model_pt_sha256_computed
 
 
 def _per_token_losses_for_windows(model, loader, window_indices, *, device: str,
@@ -675,7 +800,9 @@ def _per_token_losses_for_windows(model, loader, window_indices, *, device: str,
 
 def run_live(*, ckpt_a: str, ckpt_b: str, ckpt_c: str, ckpt_d: "str | None",
             shard_dir: str, shard_manifest_sha256: str, device: str,
-            seed: int, ce_chunk_tokens: int = 1024) -> dict:
+            seed: int, ce_chunk_tokens: int = 1024,
+            tokenizer_lineage_sidecar: "str | None" = None,
+            tokenizer_lineage_sidecar_sha256: "str | None" = None) -> dict:
     """Top-level live run: every engagement guard evaluated fail-closed
     BEFORE any forward pass. A breach short-circuits to PHASE0_INVALID with
     no partial credit (#724's own rule) -- the failing guard(s) are recorded,
@@ -718,7 +845,7 @@ def run_live(*, ckpt_a: str, ckpt_b: str, ckpt_c: str, ckpt_d: "str | None",
 
     # Build once on CPU to measure real model_bytes before committing to a
     # cuda placement (never guess the byte count from cfg dims).
-    probe_model, _probe_state, _probe_manifest = _load_checkpoint_model(
+    probe_model, _probe_state, _probe_manifest, _probe_model_pt_sha = _load_checkpoint_model(
         ckpt_paths["a"], cfg, device="cpu")
     model_bytes = sum(p.numel() * p.element_size() for p in probe_model.parameters())
     del probe_model
@@ -731,14 +858,48 @@ def run_live(*, ckpt_a: str, ckpt_b: str, ckpt_c: str, ckpt_d: "str | None",
         breaches.append("device")
         return _invalid_receipt(guard_log, breaches, mode="live")
 
-    models, model_states, manifests = {}, {}, {}
+    models, model_states, manifests, model_pt_shas_computed = {}, {}, {}, {}
     for label in ("a", "b", "c"):
-        m, st, mf = _load_checkpoint_model(ckpt_paths[label], cfg, device=device)
+        m, st, mf, computed_sha = _load_checkpoint_model(ckpt_paths[label], cfg, device=device)
         models[label], model_states[label], manifests[label] = m, st, mf
+        model_pt_shas_computed[label] = computed_sha
 
-    ckpt_infos_for_guard = {l: {"manifest": manifests[l]} for l in ("a", "b", "c")}
+    ckpt_infos_for_guard = {l: {
+        "manifest": manifests[l],
+        "manifest_path": ckpt_infos[l].get("manifest_path"),
+        "model_pt_sha256_computed": model_pt_shas_computed[l]
+    } for l in ("a", "b", "c")}
+
+    # Compute sidecar SHA if provided (item 6: consume by SHA)
+    # B3: Verify sidecar file against externally-pinned SHA (never compute it live)
+    sidecar_sha = None
+    if tokenizer_lineage_sidecar:
+        if not tokenizer_lineage_sidecar_sha256:
+            # This should be caught by validation before run_live, but double-check
+            return _invalid_receipt({"tokenizer_sidecar": {"passed": False, "error":
+                "sidecar file provided but --tokenizer-lineage-sidecar-sha256 is missing"}},
+                                   ["tokenizer_sidecar"], mode="live")
+        try:
+            import hashlib
+            with open(tokenizer_lineage_sidecar, 'rb') as f:
+                computed_sidecar_sha = hashlib.sha256(f.read()).hexdigest()
+            # Verify against external pin (B3: fail-closed on mismatch)
+            if computed_sidecar_sha != tokenizer_lineage_sidecar_sha256:
+                return _invalid_receipt({"tokenizer_sidecar": {"passed": False,
+                    "error": f"sidecar file SHA mismatch: computed={computed_sidecar_sha} "
+                    f"expected={tokenizer_lineage_sidecar_sha256}"}},
+                                       ["tokenizer_sidecar"], mode="live")
+            sidecar_sha = tokenizer_lineage_sidecar_sha256
+        except PhaseZeroGuardBreach:
+            raise
+        except Exception as e:
+            return _invalid_receipt({"tokenizer_sidecar": {"passed": False, "error": str(e)}},
+                                   ["tokenizer_sidecar"], mode="live")
+
     try:
-        vt = assert_vocab_tokenizer_identity(ckpt_infos_for_guard, model_states)
+        vt = assert_vocab_tokenizer_identity(ckpt_infos_for_guard, model_states,
+                                            tokenizer_lineage_sidecar=tokenizer_lineage_sidecar,
+                                            sidecar_sha256=sidecar_sha)
         guard_log["vocab_tokenizer_identity"] = {"passed": True, "info": vt}
     except PhaseZeroGuardBreach as e:
         guard_log["vocab_tokenizer_identity"] = {"passed": False, "error": str(e)}
@@ -1279,6 +1440,214 @@ def _selftest_guards() -> None:
     print("TRAJGATE_PHASE0_GUARD_SELFTEST_PASS", flush=True)
 
 
+def _selftest_tokenizer_lineage_sidecar() -> None:
+    """Test sidecar acceptance and validation (#724 AMENDMENT items 6-10)."""
+    import hashlib
+    import tempfile
+    import torch
+
+    ok_states = {l: {"head.weight": torch.zeros(64, 8)} for l in ("a", "b", "c")}
+    ok_infos = {l: {"manifest": {"extra": {"tokenizer_id": "tok-v1"}}} for l in ("a", "b", "c")}
+
+    # ---- Item 7: missing-both (no sidecar, no manifest field) → breach ----
+    bad_infos = {l: {"manifest": {"extra": {}}} for l in ("a", "b", "c")}
+    try:
+        assert_vocab_tokenizer_identity(bad_infos, ok_states)
+        raise AssertionError("missing-both guard did not fire")
+    except PhaseZeroGuardBreach:
+        pass
+
+    # ---- B4a: Real-file integration fixture (positive path) ----
+    with tempfile.TemporaryDirectory() as td:
+        ckpt_dir = os.path.join(td, "ckpt_0")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        tok_id = "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+        manifest_data = {"step": 776, "extra": {"tokenizer_id": tok_id}, "files": {"model.pt": "will_be_filled"}}
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"head.weight": torch.zeros(64, 8)}, model_pt_path)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_computed = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_computed = hashlib.sha256(f.read()).hexdigest()
+        sidecar_path = os.path.join(td, "lineage.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({"step": 776, "manifest_sha256": manifest_sha_computed, "model_pt_sha256": model_pt_sha_computed, "tokenizer_sha": tok_id}) + '\n')
+        with open(sidecar_path, 'rb') as f:
+            sidecar_sha_computed = hashlib.sha256(f.read()).hexdigest()
+        integration_infos = {l: {"manifest": manifest_data, "manifest_path": manifest_path, "model_pt_sha256_computed": model_pt_sha_computed} for l in ("a", "b", "c")}
+        result = assert_vocab_tokenizer_identity(integration_infos, ok_states, tokenizer_lineage_sidecar=sidecar_path, sidecar_sha256=sidecar_sha_computed)
+        if result.get("tokenizer_ids") != {l: tok_id for l in ("a", "b", "c")}:
+            raise AssertionError(f"real-file integration: wrong tokenizer_ids: {result}")
+
+    # ---- B4c: Item 8 exploit fixture rebuilt on real files ----
+    with tempfile.TemporaryDirectory() as td:
+        ckpt_dir = os.path.join(td, "ckpt_exploit")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        manifest_data = {"step": 776, "extra": {}, "files": {"model.pt": "placeholder"}}
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"head.weight": torch.zeros(64, 8)}, model_pt_path)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_e = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_e = hashlib.sha256(f.read()).hexdigest()
+        sidecar_path = os.path.join(td, "exploit.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({"step": 776, "manifest_sha256": "f"*64, "model_pt_sha256": model_pt_sha_e, "tokenizer_sha": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"}) + '\n')
+        exploit_infos = {l: {"manifest": manifest_data, "manifest_path": manifest_path, "model_pt_sha256_computed": model_pt_sha_e} for l in ("a", "b", "c")}
+        try:
+            assert_vocab_tokenizer_identity(exploit_infos, ok_states, tokenizer_lineage_sidecar=sidecar_path, sidecar_sha256=None)
+            raise AssertionError("auditor exploit (forged manifest hash) did not breach")
+        except PhaseZeroGuardBreach:
+            pass
+
+    # ---- Item 9: duplicate steps in sidecar → breach ----
+    with tempfile.TemporaryDirectory() as td:
+        sidecar_path = os.path.join(td, "dup_steps.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            for _ in range(2):
+                record = {
+                    "step": 776,
+                    "manifest_sha256": "a" * 64,
+                    "model_pt_sha256": "b" * 64,
+                    "tokenizer_sha": "c" * 64
+                }
+                f.write(json.dumps(record) + '\n')
+
+        try:
+            assert_vocab_tokenizer_identity(ok_infos, ok_states,
+                                          tokenizer_lineage_sidecar=sidecar_path)
+            raise AssertionError("duplicate step guard did not fire")
+        except PhaseZeroGuardBreach as e:
+            if "duplicate step" not in str(e).lower():
+                raise AssertionError(f"wrong breach message: {e}")
+
+    # ---- B4b: Item 10 conflict fixture (manifest tokenizer_id != sidecar tokenizer_sha) → breach ----
+    with tempfile.TemporaryDirectory() as td:
+        ckpt_dir = os.path.join(td, "ckpt_conflict")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        manifest_data = {"step": 888, "extra": {"tokenizer_id": "tok-v2"}, "files": {"model.pt": "will_be_filled"}}
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"head.weight": torch.zeros(64, 8)}, model_pt_path)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_c = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_c = hashlib.sha256(f.read()).hexdigest()
+        sidecar_path = os.path.join(td, "conflict.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({"step": 888, "manifest_sha256": manifest_sha_c, "model_pt_sha256": model_pt_sha_c, "tokenizer_sha": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"}) + '\n')
+        with open(sidecar_path, 'rb') as f:
+            sidecar_sha_c = hashlib.sha256(f.read()).hexdigest()
+        conflict_infos = {l: {"manifest": manifest_data, "manifest_path": manifest_path, "model_pt_sha256_computed": model_pt_sha_c} for l in ("a", "b", "c")}
+        try:
+            assert_vocab_tokenizer_identity(conflict_infos, ok_states, tokenizer_lineage_sidecar=sidecar_path, sidecar_sha256=sidecar_sha_c)
+            raise AssertionError("conflict fixture should breach but passed")
+        except PhaseZeroGuardBreach as e:
+            if "conflict" not in str(e).lower():
+                raise AssertionError(f"conflict fixture expected conflict message: {e}")
+
+    # ---- NEW: manifest-declared & sidecar-agreed SHA, but actual bytes differ → FAIL ----
+    # Fixture: manifest.files['model.pt'] and sidecar.model_pt_sha256 AGREE (same value),
+    # but actual model.pt file bytes have a DIFFERENT SHA. Proves we compute from actual bytes,
+    # not trust declarations (falsifier item 2: self-attestation hole).
+    with tempfile.TemporaryDirectory() as td:
+        ckpt_dir = os.path.join(td, "ckpt_declared_vs_actual")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        # Create a reference tensor and compute its SHA (we'll use this as the "declared" value)
+        ref_model = {"head.weight": torch.zeros(64, 8)}
+        import tempfile as tmpf
+        ref_file_path = os.path.join(td, "ref_model.pt")
+        torch.save(ref_model, ref_file_path)
+        with open(ref_file_path, 'rb') as f:
+            ref_model_sha = hashlib.sha256(f.read()).hexdigest()
+        os.unlink(ref_file_path)
+        # Now create ACTUAL model.pt with different tensor shape (different bytes, different SHA)
+        actual_model = {"head.weight": torch.zeros(128, 16)}  # Different size
+        manifest_data = {
+            "step": 999,
+            "extra": {},
+            "files": {"model.pt": ref_model_sha}  # Manifest declares the REF SHA
+        }
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save(actual_model, model_pt_path)  # Save ACTUAL model (different bytes)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_actual = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_actual = hashlib.sha256(f.read()).hexdigest()
+        # Create sidecar that declares the SAME (ref) SHA as manifest
+        tok_id = "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+        sidecar_path = os.path.join(td, "declared_agree.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({
+                "step": 999,
+                "manifest_sha256": manifest_sha_actual,
+                "model_pt_sha256": ref_model_sha,  # SAME as manifest declaration
+                "tokenizer_sha": tok_id
+            }) + '\n')
+        with open(sidecar_path, 'rb') as f:
+            sidecar_sha_agree = hashlib.sha256(f.read()).hexdigest()
+        # Build ckpt_infos with the ACTUAL computed SHA
+        declared_infos = {
+            l: {
+                "manifest": manifest_data,
+                "manifest_path": manifest_path,
+                "model_pt_sha256_computed": model_pt_sha_actual  # ACTUAL SHA (different from declared)
+            }
+            for l in ("a", "b", "c")
+        }
+        try:
+            # manifest_sha_actual matches sidecar's manifest_sha256 (both actual manifest)
+            # But model_pt_sha_computed (actual file bytes) != ref_model_sha (declared by both)
+            # Predicate: (actual manifest matches) AND (actual model.pt matches) = (True AND False) = False
+            # No sidecar record matches. No manifest tokenizer_id. Should breach at line 665-668.
+            assert_vocab_tokenizer_identity(
+                declared_infos, ok_states,
+                tokenizer_lineage_sidecar=sidecar_path,
+                sidecar_sha256=sidecar_sha_agree
+            )
+            raise AssertionError("declared-agree-actual-disagree fixture should breach but passed")
+        except PhaseZeroGuardBreach:
+            pass
+
+    # ---- Item 6: sidecar SHA verification ----
+    with tempfile.TemporaryDirectory() as td:
+        sidecar_path = os.path.join(td, "sha_verify.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            record = {
+                "step": 776,
+                "manifest_sha256": "a" * 64,
+                "model_pt_sha256": "b" * 64,
+                "tokenizer_sha": "c" * 64
+            }
+            f.write(json.dumps(record) + '\n')
+
+        actual_sha = hashlib.sha256(open(sidecar_path, 'rb').read()).hexdigest()
+        wrong_sha = "f" * 64
+
+        # Should breach on SHA mismatch
+        try:
+            assert_vocab_tokenizer_identity(ok_infos, ok_states,
+                                          tokenizer_lineage_sidecar=sidecar_path,
+                                          sidecar_sha256=wrong_sha)
+            raise AssertionError("sidecar SHA verification did not breach")
+        except PhaseZeroGuardBreach as e:
+            if "sha mismatch" not in str(e).lower():
+                raise AssertionError(f"wrong breach message: {e}")
+
+    print("TRAJGATE_PHASE0_SIDECAR_SELFTEST_PASS", flush=True)
+
+
 def _selftest() -> int:
     _selftest_measurement()
     _selftest_definedness_guard()
@@ -1286,6 +1655,7 @@ def _selftest() -> int:
     _selftest_selector_mismatch()
     _selftest_boundary_tie_exact_selector()
     _selftest_guards()
+    _selftest_tokenizer_lineage_sidecar()
     print("TRAJGATE_PHASE0_SELFTEST_PASS", flush=True)
     return 0
 
@@ -1309,6 +1679,10 @@ def main(argv: "list | None" = None) -> int:
     ap.add_argument("--shard-dir", default=None, help="frozen shard-slice directory (*.bin)")
     ap.add_argument("--shard-manifest-sha256", default=None,
                     help="provenance-pinned combined sha256 of --shard-dir (manifest_sha.compute_manifest)")
+    ap.add_argument("--tokenizer-lineage-sidecar", default=None,
+                    help="OPTIONAL tokenizer-lineage sidecar (JSONL) for checkpoint tokenizer identity (refs #724)")
+    ap.add_argument("--tokenizer-lineage-sidecar-sha256", default=None,
+                    help="MANDATORY with --tokenizer-lineage-sidecar: SHA256 of the sidecar file (consumed at external pin, item 3/B3)")
     ap.add_argument("--device", default=None, help="cpu | cuda (explicit, required for --live)")
     ap.add_argument("--seed", type=int, default=0, help="token-sample + split-half seed")
     ap.add_argument("--ce-chunk-tokens", type=int, default=1024)
@@ -1339,11 +1713,23 @@ def main(argv: "list | None" = None) -> int:
               "(explicit, no defaults on the live path).", flush=True)
         return 3
 
+    # B3: Validate that sidecar and sha256 are both provided together
+    if args.tokenizer_lineage_sidecar and not args.tokenizer_lineage_sidecar_sha256:
+        print("TRAJGATE_PHASE0_REFUSED: --tokenizer-lineage-sidecar requires "
+              "--tokenizer-lineage-sidecar-sha256 (item 3/B3, external pin).", flush=True)
+        return 3
+    if args.tokenizer_lineage_sidecar_sha256 and not args.tokenizer_lineage_sidecar:
+        print("TRAJGATE_PHASE0_REFUSED: --tokenizer-lineage-sidecar-sha256 requires "
+              "--tokenizer-lineage-sidecar (item 3/B3, external pin).", flush=True)
+        return 3
+
     Path(args.receipt_dir).mkdir(parents=True, exist_ok=True)
     receipt = run_live(
         ckpt_a=args.ckpt_a, ckpt_b=args.ckpt_b, ckpt_c=args.ckpt_c, ckpt_d=args.ckpt_d,
         shard_dir=args.shard_dir, shard_manifest_sha256=args.shard_manifest_sha256,
-        device=args.device, seed=args.seed, ce_chunk_tokens=args.ce_chunk_tokens)
+        device=args.device, seed=args.seed, ce_chunk_tokens=args.ce_chunk_tokens,
+        tokenizer_lineage_sidecar=args.tokenizer_lineage_sidecar,
+        tokenizer_lineage_sidecar_sha256=args.tokenizer_lineage_sidecar_sha256)
 
     from receipt_write import checked_write
     receipt_path = Path(args.receipt_dir) / f"trajgate-phase0-{receipt['ts']}.json"
