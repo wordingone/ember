@@ -5,6 +5,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { Box, Text } from "../ink/components.ts";
 import { useInput } from "../ink/hooks.ts";
 import type { KeyboardKey } from "../ink/hooks.ts";
+import { color, PANEL_BORDER_STYLE } from "./design-system.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -425,14 +426,15 @@ export interface PromptInputProps {
   width?:                number;
 }
 
-/** B7 item 5 ("input affordance", operator regrade 2026-07-03): a full-width dim "─" repeat,
- * matching mock1's thinRule() (state/design-mockups/gen-mockups.mjs) exactly -- the prompt was a
- * bare '❯' with no structural presence, vs the field-standard TUI bordered input region. mock1
- * frames the input between two of these, before the status bar; this gives PromptInput the same
- * presence. */
-function inputRule(width: number): React.ReactElement {
-  return React.createElement(Text, { dimColor: true }, "─".repeat(Math.max(0, width)));
-}
+/** #243 ("bare '>' with no visual container"): the B7-item-5 dim-rule-above/below treatment
+ * (a plain "─" repeat) still left the input with no closed border, background, or container --
+ * the operator could not tell where to type or where the region ended. Replaced with a real
+ * rounded box (PANEL_BORDER_STYLE, the one border token every panel in this codebase shares)
+ * on the cyan "primary" interaction accent -- the field bar's rule that the one interactive
+ * accent color marks every interactive element (state/field-ux-map.md §9 "ADOPT"). The glyph,
+ * input text, queue preview, and status/mode line all render INSIDE this box so the mode line is
+ * literally anchored to the input region, not a separate floating row (issue #243 acceptance). */
+const INPUT_BOX_BORDER_COLOR = color("primary", "fg");
 
 export function PromptInput({
   state,
@@ -449,20 +451,25 @@ export function PromptInput({
   const statusLine  = permissionModeStatusLine(state.permissionMode);
   const glyph       = modeGlyph(state.mode);
 
-  const children: (React.ReactElement | null)[] = [];
-
+  // Toasts stay OUTSIDE the bordered container -- they're transient overlays, not part of the
+  // persistent input chrome the box frames.
+  const above: React.ReactElement[] = [];
   for (const n of notifications) {
-    children.push(
+    above.push(
       React.createElement(Text, { key: n.id, color: n.kind === "error" ? "red" : "cyan" }, n.message),
     );
   }
-
   if (showShimmer) {
-    children.push(React.createElement(Text, { key: "shimmer", dimColor: true }, "…"));
+    above.push(React.createElement(Text, { key: "shimmer", dimColor: true }, "…"));
   }
 
+  // Everything that describes THIS input (the text itself, the queue preview, the mode/status
+  // line) renders inside the box, so the status line is anchored to it (issue #243 acceptance)
+  // rather than floating as a separate row underneath.
+  const boxChildren: (React.ReactElement | null)[] = [];
+
   if (state.isStashed) {
-    children.push(React.createElement(Text, { key: "stash", dimColor: true }, state.stashNotice));
+    boxChildren.push(React.createElement(Text, { key: "stash", dimColor: true }, state.stashNotice));
   }
 
   // P0 #64 fix: the text row is WINDOWED around the cursor instead of rendering `state.text`
@@ -470,19 +477,21 @@ export function PromptInput({
   // typed text exceeded the visible column budget, the tail silently clipped off-screen, and
   // backspace (which only ever removed the last character) edited that invisible tail, producing
   // a diff-render with zero visible change: indistinguishable from a dead key.
+  // Available columns now also subtract the border (2: left+right "│") and the 1-col padding on
+  // each side the box applies -- content sits inside a real closed region, not flush to the edge.
   const cursor        = state.cursor ?? state.text.length;
-  const availableCols = Math.max(0, width - 2); // "❯ " prefix consumes 2 columns
+  const boxOverhead   = 2 /* border */ + 2 /* paddingX*2 */;
+  const availableCols = Math.max(0, width - boxOverhead - 2); // "❯ " prefix consumes 2 columns
   const viewport      = computeInputViewport(state.text, cursor, availableCols);
   const before         = viewport.visibleText.slice(0, viewport.cursorCol);
   const atCursorChar   = viewport.visibleText[viewport.cursorCol] ?? " ";
   const after          = viewport.visibleText.slice(viewport.cursorCol + 1);
   const cursorAtEnd    = viewport.cursorCol === viewport.visibleText.length;
 
-  children.push(
-    React.createElement(Box, { key: "rule-above" }, inputRule(width)),
+  boxChildren.push(
     React.createElement(
       Box, { key: "input" },
-      React.createElement(Text, { bold: true }, glyph),
+      React.createElement(Text, { bold: true, color: INPUT_BOX_BORDER_COLOR }, glyph),
       React.createElement(Text, null, ` ${before}`),
       React.createElement(Text, { inverse: true }, atCursorChar),
       after ? React.createElement(Text, null, after) : null,
@@ -490,30 +499,42 @@ export function PromptInput({
         ? React.createElement(Text, { dimColor: true }, suggestion)
         : null,
     ),
-    React.createElement(Box, { key: "rule-below" }, inputRule(width)),
   );
 
   for (let i = 0; i < qDisplay.visible.length; i++) {
     const item = qDisplay.visible[i]!;
-    children.push(React.createElement(Text, { key: `q${i}`, dimColor: true }, item));
+    boxChildren.push(React.createElement(Text, { key: `q${i}`, dimColor: true }, item));
   }
 
   if (qDisplay.overflowCount > 0) {
-    children.push(
+    boxChildren.push(
       React.createElement(Text, { key: "overflow", dimColor: true }, `+ ${qDisplay.overflowCount} more`),
     );
   }
 
   if (showStatusLine) {
-    children.push(
+    boxChildren.push(
       React.createElement(Text, { key: "status", dimColor: true }, statusLine),
     );
   }
+
+  const box = React.createElement(
+    Box,
+    {
+      key:           "input-box",
+      flexDirection: "column",
+      borderStyle:   PANEL_BORDER_STYLE,
+      borderColor:   INPUT_BOX_BORDER_COLOR,
+      paddingX:      1,
+      width,
+    },
+    ...boxChildren,
+  );
 
   // #561 P0-A: PromptInput is fixed bottom chrome, never a flex-shrink target — without this,
   // a transcript content flood (its "auto"-height sibling reporting the full unclipped sum of
   // every rendered card, see layout-engine.ts's shrink pass) proportionally shrinks this box
   // down to ~0 rows and it vanishes from the frame entirely (the operator's "input box scrolled
   // into the scrollback" report, issue #561/#565 AC-A).
-  return React.createElement(Box, { flexDirection: "column", flexShrink: 0 }, ...children);
+  return React.createElement(Box, { flexDirection: "column", flexShrink: 0 }, ...above, box);
 }

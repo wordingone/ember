@@ -16,8 +16,16 @@ import {
   INTERRUPT_MESSAGE,
   classifyToolResult,
   contentToString,
+  summarizeToolResultLine,
+  DIGEST_MAX_CHARS,
+  UserToolSuccessMessage,
   type ToolResultContent,
 } from "./tool-result-renderers.ts";
+import type { Tool } from "../core/tool-interface.ts";
+
+function ser(el: unknown): string {
+  return JSON.stringify(el);
+}
 
 // ---------------------------------------------------------------------------
 // AC10a — isLargeOutput
@@ -192,5 +200,100 @@ describe("AC10e: contentToString", () => {
 
   it("empty array → empty string", () => {
     expect(contentToString([])).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #240 — summarizeToolResultLine: compact one-line digest, never raw JSON
+// ---------------------------------------------------------------------------
+
+describe("#240: summarizeToolResultLine — one-line digest, no raw JSON syntax", () => {
+  it("a short single-line result is its own digest (not truncated)", () => {
+    const { digest, truncated } = summarizeToolResultLine("command output here");
+    expect(digest).toBe("command output here");
+    expect(truncated).toBe(false);
+  });
+
+  it("truncates a single line longer than DIGEST_MAX_CHARS with an ellipsis", () => {
+    const long = "x".repeat(DIGEST_MAX_CHARS + 50);
+    const { digest, truncated } = summarizeToolResultLine(long);
+    expect(digest.length).toBeLessThanOrEqual(DIGEST_MAX_CHARS);
+    expect(digest.endsWith("…")).toBe(true);
+    expect(truncated).toBe(true);
+  });
+
+  it("multi-line text digests to the first line and reports truncated=true", () => {
+    const { digest, truncated } = summarizeToolResultLine("line one\nline two\nline three");
+    expect(digest).toBe("line one");
+    expect(truncated).toBe(true);
+  });
+
+  it("empty text gets a non-empty placeholder digest", () => {
+    const { digest } = summarizeToolResultLine("");
+    expect(digest.length).toBeGreaterThan(0);
+  });
+
+  it("a pretty-printed JSON object never surfaces '{' as the digest -- structural summary instead", () => {
+    const text = JSON.stringify({ stdout: "ok", exitCode: 0, extra: "x" }, null, 2);
+    const { digest, truncated } = summarizeToolResultLine(text);
+    expect(digest).not.toBe("{");
+    expect(digest).not.toContain("{\n");
+    expect(digest).toContain("3 keys");
+    expect(truncated).toBe(true);
+  });
+
+  it("a pretty-printed JSON array never surfaces '[' as the digest -- structural summary instead", () => {
+    const text = JSON.stringify(["a.ts", "b.ts"], null, 2);
+    const { digest, truncated } = summarizeToolResultLine(text);
+    expect(digest).not.toBe("[");
+    expect(digest).toContain("2 items");
+    expect(truncated).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #240 — UserToolSuccessMessage: compact-by-default, full text behind isExpanded
+// ---------------------------------------------------------------------------
+
+describe("#240: UserToolSuccessMessage — glyph + tool name + digest, raw payload behind expand", () => {
+  const bashLikeTool = {
+    name: "Bash",
+    userFacingName: () => "Bash",
+  } as unknown as Tool;
+
+  it("renders the tool name in the header when a tool is supplied", () => {
+    const result: ToolResultContent = { type: "tool_result", tool_use_id: "t1", content: "ok" };
+    const el = UserToolSuccessMessage({ result, tool: bashLikeTool });
+    expect(ser(el)).toContain("Bash");
+  });
+
+  it("collapses a multi-line result to its first-line digest by default, with an expand hint", () => {
+    const content = Array.from({ length: 5 }, (_, i) => `line ${i}`).join("\n");
+    const result: ToolResultContent = { type: "tool_result", tool_use_id: "t2", content };
+    const el = UserToolSuccessMessage({ result });
+    const s = ser(el);
+    expect(s).toContain("line 0");
+    expect(s).not.toContain("line 4");
+    expect(s).toContain("Ctrl+O to expand");
+  });
+
+  it("shows the full multi-line result when isExpanded is true", () => {
+    const content = Array.from({ length: 5 }, (_, i) => `line ${i}`).join("\n");
+    const result: ToolResultContent = { type: "tool_result", tool_use_id: "t3", content };
+    const el = UserToolSuccessMessage({ result, isExpanded: true });
+    const s = ser(el);
+    expect(s).toContain("line 0");
+    expect(s).toContain("line 4");
+  });
+
+  it("never renders a bare '{' or '[' for a structured JSON tool result, even collapsed", () => {
+    const content = JSON.stringify({ filenames: ["a.ts", "b.ts"], numFiles: 2, extra: "x", more: "y" });
+    const result: ToolResultContent = { type: "tool_result", tool_use_id: "t4", content };
+    const el = UserToolSuccessMessage({ result });
+    const s = ser(el);
+    // formatToolResultForDisplay recognizes the {filenames,numFiles} shape and returns the
+    // plain filename list -- so this must render as readable text, never the raw wire JSON.
+    expect(s).not.toContain('"filenames"');
+    expect(s).toContain("a.ts");
   });
 });

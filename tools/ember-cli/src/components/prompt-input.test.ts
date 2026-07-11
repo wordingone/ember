@@ -1,9 +1,9 @@
-// components/prompt-input.test.ts — B7 item 5 ("input affordance", operator regrade 2026-07-03):
-// the prompt was a bare '❯' with no structural presence, vs Claude Code's bordered input region
-// (a visible rule directly above the prompt row). mock1's own intent (state/design-mockups/
-// gen-mockups.mjs's mockup1()) frames the input between two thinRule() lines -- a full-width dim
-// "─" repeat -- before the status bar. This gives PromptInput that same rule-above/rule-below
-// structural presence, gated on a `width` prop (mirrors StatusLine's width convention).
+// components/prompt-input.test.ts — B7 item 5 ("input affordance", operator regrade 2026-07-03)
+// gave PromptInput a rule-above/rule-below dim "─" treatment. Issue #243 ("bare '>' -- no
+// border/background/container, operator can't tell where to type or where the region ends")
+// replaced that with a real rounded border box (PANEL_BORDER_STYLE) on the cyan interaction
+// accent, with the status/mode line rendered INSIDE the box so it's anchored to the input
+// region rather than a separate floating row below it.
 
 import { describe, it, expect } from "bun:test";
 import {
@@ -15,6 +15,8 @@ import {
   moveCursorBy,
   computeInputViewport,
 } from "./prompt-input.ts";
+import { Box } from "../ink/components.ts";
+import { PANEL_BORDER_STYLE } from "./design-system.ts";
 
 function children(el: any): any[] {
   const c = el.props.children;
@@ -53,38 +55,44 @@ function baseState(overrides: Partial<PromptInputState> = {}): PromptInputState 
   };
 }
 
-describe("PromptInput — structural presence: rule above and below the input row (B7 item 5)", () => {
-  it("renders a full-width dim rule line directly above the input row", () => {
-    const el = PromptInput({ state: baseState(), width: 100 });
-    expect(findTextWhere(el, (s) => s === "─".repeat(100))).toBe(true);
+describe("PromptInput — bordered input region (issue #243: bare '>' had no visual container)", () => {
+  function findBorderedBox(el: any): any {
+    return flatten(el).find((n) => n?.type === Box && n?.props?.borderStyle !== undefined);
+  }
+
+  it("renders a real bordered box (not a bare rule line) framing the input", () => {
+    const el = PromptInput({ state: baseState(), width: 80 });
+    const box = findBorderedBox(el);
+    expect(box).toBeTruthy();
+    expect(box.props.borderStyle).toBe(PANEL_BORDER_STYLE);
   });
 
-  it("the rule spans the supplied width, not a fixed constant", () => {
-    const el = PromptInput({ state: baseState(), width: 60 });
-    expect(findTextWhere(el, (s) => s === "─".repeat(60))).toBe(true);
-    expect(findTextWhere(el, (s) => s === "─".repeat(100))).toBe(false);
+  it("the bordered box spans the supplied width, not a fixed constant", () => {
+    const el60 = PromptInput({ state: baseState(), width: 60 });
+    const el100 = PromptInput({ state: baseState(), width: 100 });
+    expect(findBorderedBox(el60).props.width).toBe(60);
+    expect(findBorderedBox(el100).props.width).toBe(100);
   });
 
   it("defaults to width 80 when no width prop is supplied", () => {
     const el = PromptInput({ state: baseState() });
-    expect(findTextWhere(el, (s) => s === "─".repeat(80))).toBe(true);
+    expect(findBorderedBox(el).props.width).toBe(80);
   });
 
-  it("a rule line sits immediately before the input row and another immediately after", () => {
+  it("the status/mode line is nested INSIDE the bordered box (anchored to it), not a separate floating row", () => {
+    const el = PromptInput({ state: baseState(), width: 80, showStatusLine: true });
+    const box = findBorderedBox(el);
+    const insideBox = flatten(box);
+    expect(insideBox.some((n) => typeof n?.props?.children === "string" &&
+      n.props.children.includes("bypass permissions on"))).toBe(true);
+  });
+
+  it("the input glyph and typed text render inside the same bordered box", () => {
     const el = PromptInput({ state: baseState({ text: "hello" }), width: 80 });
-    const flat = flatten(el);
-    const rule = "─".repeat(80);
-    const isRuleNode = (n: any) => n?.props?.children === rule;
-    const isInputRow = (n: any) => {
-      const kids = Array.isArray(n?.props?.children) ? n.props.children : [n?.props?.children];
-      return kids.some((k: any) => k?.props?.children === "❯");
-    };
-    const ruleIdx = flat.findIndex(isRuleNode);
-    const inputIdx = flat.findIndex(isInputRow);
-    const secondRuleIdx = flat.findIndex((n, i) => i > inputIdx && isRuleNode(n));
-    expect(ruleIdx).toBeGreaterThanOrEqual(0);
-    expect(inputIdx).toBeGreaterThan(ruleIdx);
-    expect(secondRuleIdx).toBeGreaterThan(inputIdx);
+    const box = findBorderedBox(el);
+    const insideBox = flatten(box);
+    expect(insideBox.some((n) => n?.props?.children === "❯")).toBe(true);
+    expect(insideBox.some((n) => n?.props?.children === " hello")).toBe(true);
   });
 });
 

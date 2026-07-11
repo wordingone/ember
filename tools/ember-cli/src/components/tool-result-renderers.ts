@@ -212,6 +212,71 @@ export function formatToolResultForDisplay(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// #240: compact "glyph + tool name + one-line digest" summary for tool results
+// ---------------------------------------------------------------------------
+
+/** Max characters of the first line shown before the digest truncates with an ellipsis. */
+export const DIGEST_MAX_CHARS = 100;
+
+/**
+ * When `text` is (still) recognizably JSON after formatToolResultForDisplay's pretty-print
+ * fallback (an unrecognized shape falls through to `JSON.stringify(parsed, null, 2)`), a
+ * one-line digest built from the first rendered line would just be "{" or "[" -- readable, but
+ * not a useful summary, and visually still "the shape leaking to the user" that #240 flags.
+ * Reparses and reports a structural summary instead (key/item count), never raw JSON syntax.
+ */
+function digestForStructuredJSON(text: string): string | null {
+  const trimmed = text.trimStart();
+  if (trimmed[0] !== "{" && trimmed[0] !== "[") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (Array.isArray(parsed)) {
+    return `[array \xB7 ${parsed.length} item${parsed.length === 1 ? "" : "s"}]`;
+  }
+  if (parsed !== null && typeof parsed === "object") {
+    const keys = Object.keys(parsed as Record<string, unknown>);
+    const preview = keys.slice(0, 3).join(", ") + (keys.length > 3 ? ", …" : "");
+    return `{object \xB7 ${keys.length} key${keys.length === 1 ? "" : "s"}${preview ? ": " + preview : ""}}`;
+  }
+  return null;
+}
+
+export interface ToolResultDigest {
+  /** One line, never containing raw JSON syntax or an embedded newline. */
+  digest:    string;
+  /** True when `digest` does not capture the entire `text` (more content exists behind expand). */
+  truncated: boolean;
+}
+
+/** Builds the compact one-line summary shown by default; the full `text` is the expand target. */
+export function summarizeToolResultLine(text: string): ToolResultDigest {
+  const structured = digestForStructuredJSON(text);
+  if (structured !== null) {
+    return { digest: structured, truncated: text.includes("\n") || structured.length < text.trimStart().length };
+  }
+
+  const firstLine    = text.split("\n")[0] ?? "";
+  const hasMoreLines = text.includes("\n");
+  let digest    = firstLine;
+  let truncated = hasMoreLines;
+
+  if (digest.length > DIGEST_MAX_CHARS) {
+    digest    = digest.slice(0, DIGEST_MAX_CHARS - 1) + "…";
+    truncated = true;
+  }
+
+  if (digest.length === 0) {
+    digest = hasMoreLines ? "(output)" : "(empty)";
+  }
+
+  return { digest, truncated };
+}
+
+// ---------------------------------------------------------------------------
 // Signal classification (priority order from spec)
 // ---------------------------------------------------------------------------
 
@@ -385,8 +450,25 @@ export interface UserToolSuccessMessageProps {
   isExpanded?:  boolean;
 }
 
+/** Resolves the human-facing label for the tool that produced a result, or undefined when no
+ * tool definition was supplied (matches the existing dispatch's optional `tool` prop). */
+function resolveToolLabel(tool?: Tool): string | undefined {
+  if (!tool) return undefined;
+  try {
+    return tool.userFacingName ? tool.userFacingName() : tool.name;
+  } catch {
+    return tool.name;
+  }
+}
+
 export function UserToolSuccessMessage(props: UserToolSuccessMessageProps): React.ReactElement {
   const { result, tool, isExpanded = false } = props;
+  const toolLabel = resolveToolLabel(tool);
+  // #240 ("glyph + tool name + one-line digest"): "└ " is the existing tree-connector glyph
+  // (unchanged, keeps continuity with the card visually attaching to the tool_use line above
+  // it); the tool name -- when known -- rides right after it, before whatever content follows.
+  const header = (): React.ReactElement =>
+    React.createElement(Text, { dimColor: true }, `└ ${toolLabel ? toolLabel + " \xB7 " : ""}`);
 
   try {
     // AC5: BASH_CLASSIFIER — remove classifier approval from display
@@ -413,19 +495,35 @@ export function UserToolSuccessMessage(props: UserToolSuccessMessageProps): Reac
     // not the `{"stdout":"..."}` wrapper it arrives in.
     const text = formatToolResultForDisplay(contentToString(content));
     const diffEl = tryRenderAsDiff(text);
-    if (diffEl !== null) return diffEl;
+    if (diffEl !== null) {
+      // A diff is already a compact, legible, syntax-appropriate rendering (never raw JSON) --
+      // it stays fully shown per the field-standard bar (state/field-ux-map.md §9: "syntax-
+      // highlighted, line-numbered diffs" are ADOPT, not something to collapse). Only the
+      // glyph+name header is added on top, for visual consistency with every other result card.
+      return React.createElement(Box, { flexDirection: "column" }, header(), diffEl);
+    }
 
     // Large-output tail truncation (M10 A2 large_output): for outputs exceeding
     // LARGE_OUTPUT_LINE_THRESHOLD lines, show a hidden-count indicator and the
-    // last LARGE_OUTPUT_TAIL_LINES lines so they stay visible in the viewport.
+    // last LARGE_OUTPUT_TAIL_LINES lines so they stay visible in the viewport. Already a
+    // deliberate, bounded view (not a raw dump) -- same treatment as the diff case above.
     if (!isExpanded && isLargeOutput(text)) {
-      return React.createElement(LargeTailOutput, { text });
+      return React.createElement(Box, { flexDirection: "column" },
+        header(),
+        React.createElement(LargeTailOutput, { text }),
+      );
     }
 
-    // Normal path: └ card (M9 fidelity baseline).
+    // Normal path: compact "glyph + tool name + one-line digest" by default (#240) -- the raw
+    // shape (JSON structure included) never reaches this line; formatToolResultForDisplay and
+    // summarizeToolResultLine both refuse to hand back unparsed JSON syntax. The full text sits
+    // behind isExpanded, same Ctrl+O convention every other truncated surface in this file uses.
+    const { digest, truncated } = summarizeToolResultLine(text);
+    const showFull = isExpanded || !truncated;
     return React.createElement(Box, { flexDirection: "row" },
-      React.createElement(Text, { dimColor: true }, "└ "),
-      React.createElement(Text, null, text),
+      header(),
+      React.createElement(Text, null, showFull ? text : digest),
+      !showFull ? React.createElement(Text, { dimColor: true }, "  (Ctrl+O to expand)") : null,
     );
   } catch (err) {
     // AC4: error boundary — rendering errors must not crash the session
