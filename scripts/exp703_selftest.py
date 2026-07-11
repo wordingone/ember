@@ -27,21 +27,37 @@ pass, no slice measurement, no Claim A/B number):
       PpmModel refuses (raises PpmStateCapExceeded) once estimated resident
       state exceeds a configured cap.
 
+  PPM703_P0_DOMAIN_INCIDENCE_PASS branch=b
+      AMENDMENT-1 + AMENDMENT-1a (issue #703): domain-D (valid-UTF-8,
+      no-NUL) restriction machinery is correct (renormalized support sums
+      to 1, NUL/invalid-UTF-8 continuations always excluded, EOT only at a
+      UTF-8 boundary), the P0 census function is correct on a synthetic
+      positive-control corpus, and the branch-b disposition (original
+      pre-tokenization-byte incidence is UNMEASURABLE in this checkout) is
+      cited LIVE against the two disposition receipts on disk.
+
 Usage: python scripts/exp703_selftest.py
 """
 
 from __future__ import annotations
 
+import os
 import sys
 
 from exp703_ppm_model import PpmModel, PpmStateCapExceeded
-from exp703_lattices import ALL_CASES, case_i_prefix_antichain
+from exp703_lattices import ALL_CASES, case_i_prefix_antichain, GreedyLongestMatchTokenizer
 from exp703_marginalization import (
     cylinder_mass_ground_truth,
     cylinder_mass_bounded_lookahead,
     p_ppm_tok,
     naive_renormalized_scores,
     l1_error,
+)
+from exp703_domain_d import (
+    RestrictedPpmModel,
+    document_domain_census,
+    p0_branch_b_citation,
+    at_utf8_boundary,
 )
 
 EQ_TOL = 1e-9
@@ -268,8 +284,133 @@ def run_state_cap_assert() -> bool:
     return ok
 
 
+def run_p0_domain_incidence() -> bool:
+    ok = True
+
+    # -- branch-b disposition: cite both receipts LIVE from disk -----------
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    citation = p0_branch_b_citation(repo_root)
+    print(f"  branch={citation['branch']}")
+    print(f"  declaration: {citation['declaration']}")
+    for c in citation["citations"]:
+        print(f"  cited {c['path']} [{c['field']}]:")
+        print(f"    {c['quote']}")
+    branch_ok = citation["branch"] == "b"
+    ok = ok and branch_ok
+    print(f"  branch-b citation live-verified: {'PASS' if branch_ok else 'FAIL'}")
+
+    # -- census apparatus, synthetic positive-control corpus ----------------
+    # Planted causes, independently hand-classified below: this proves the
+    # COUNTING APPARATUS is correct, not any claim about the real corpus --
+    # per branch b, original pre-tokenization-byte incidence stays
+    # UNMEASURABLE in this checkout regardless of how well this apparatus
+    # works.
+    synthetic_docs = [
+        b"hello world",              # clean ASCII, valid UTF-8, no NUL
+        b"caf\xc3\xa9 resume",       # valid UTF-8 multi-byte (e-acute), no NUL
+        b"bad\x00byte",              # NUL present (NUL is itself valid UTF-8
+                                      # for U+0000 -- excluded for the NUL
+                                      # cause, not the invalid-UTF-8 cause)
+        b"\xff\xfe invalid",         # 0xFF is never a valid UTF-8 lead byte
+        b"trunc\xe2\x82",            # truncated 3-byte sequence, incomplete
+    ]
+    expected_census = {"n_docs": 5, "nul_count": 1, "invalid_utf8_count": 2,
+                        "excluded_count": 3}
+    census = document_domain_census(synthetic_docs)
+    census_ok = census == expected_census
+    ok = ok and census_ok
+    print(f"  census(synthetic positive control)={census} "
+          f"expected={expected_census} {'PASS' if census_ok else 'FAIL'}")
+
+    # -- RestrictedPpmModel unit checks (real 257-alphabet model) -----------
+    EOT = 256
+    base = PpmModel(alphabet_size=257, order_cap=4, eot_symbol=EOT)
+    # Poison the training stream with NUL and an invalid lead byte (0xFF) so
+    # the BASE model does assign them positive raw probability at some
+    # contexts -- proving the wrapper below performs real exclusion, not a
+    # no-op against bytes that never had mass to begin with.
+    poison_stream = (list(b"hi hi hi ") + [195, 169] + list(b" hi")
+                      + [0, 0, 255, 255] + list(b" hi hi"))
+    for bnum in poison_stream:
+        base.train_symbol_stream_byte(bnum)
+    assert base.next_byte_probs(()).get(0, 0.0) > 0.0, \
+        "test setup invalid: base model should assign NUL positive raw mass (poisoned)"
+    assert base.next_byte_probs(()).get(255, 0.0) > 0.0, \
+        "test setup invalid: base model should assign 0xFF positive raw mass (poisoned)"
+    restricted = RestrictedPpmModel(base, eot_symbol=EOT)
+
+    unit_checks = []
+    for ctx, label in [((), "empty (boundary)"),
+                        ((195,), "mid-sequence (after 0xC3 lead byte)"),
+                        ((104, 105), "complete ASCII 'hi' (boundary)")]:
+        probs = restricted.next_byte_probs(ctx)
+        total = sum(probs.values())
+        sums_to_one = abs(total - 1.0) < EQ_TOL
+        nul_excluded = probs.get(0, 0.0) == 0.0
+        checks = [sums_to_one, nul_excluded]
+        detail = (f"  [{label}] ctx={ctx} sum={_fmt(total)} "
+                  f"({'PASS' if sums_to_one else 'FAIL'}) "
+                  f"NUL_excluded={'PASS' if nul_excluded else 'FAIL'}")
+        if ctx == ():
+            eot_present = probs.get(EOT, 0.0) > 0.0
+            checks.append(eot_present)
+            detail += f" EOT_present_at_boundary={'PASS' if eot_present else 'FAIL'}"
+        if ctx == (195,):
+            eot_absent = probs.get(EOT, 0.0) == 0.0
+            cont_ok = probs.get(169, 0.0) > 0.0            # 0xA9: valid continuation of 0xC3
+            noncont_excluded = probs.get(105, 0.0) == 0.0  # 'i': not a valid continuation byte
+            checks += [eot_absent, cont_ok, noncont_excluded]
+            detail += (f" EOT_absent_mid_seq={'PASS' if eot_absent else 'FAIL'} "
+                       f"valid_continuation(0xA9)={'PASS' if cont_ok else 'FAIL'} "
+                       f"invalid_continuation(0x69)_excluded={'PASS' if noncont_excluded else 'FAIL'}")
+        if ctx == (104, 105):
+            eot_present2 = probs.get(EOT, 0.0) > 0.0
+            checks.append(eot_present2)
+            detail += f" EOT_present_at_boundary={'PASS' if eot_present2 else 'FAIL'}"
+        unit_checks.append(all(checks))
+        print(detail)
+    unit_ok = all(unit_checks)
+    ok = ok and unit_ok
+
+    # -- integration proof: composition into the UNMODIFIED marginalization
+    # engine (exp703_marginalization.py) inherits the D-restriction with
+    # zero code changes to that module --------------------------------------
+    tokenizer = GreedyLongestMatchTokenizer(vocab=[(104, 105)], eot_symbol=EOT)
+    # alphabet_symbols deliberately INCLUDES NUL and the invalid lead byte
+    # 0xFF in the branching set the marginalization engine explores -- so
+    # their zero contribution below is a property of the model (the
+    # wrapper), not an artifact of never trying them.
+    alphabet_symbols = [104, 105, 0, 255, EOT]
+    gt_hi = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (104, 105),
+                                        alphabet_symbols, EOT, verify_depth=4, max_depth=20)
+    bl_hi = cylinder_mass_bounded_lookahead(restricted, tokenizer, (), (), 1, (104, 105),
+                                             alphabet_symbols, EOT, L_eff=2, max_depth=20)
+    diff_hi = abs(gt_hi - bl_hi)
+    eq_ok = diff_hi < EQ_TOL and gt_hi > 0.0
+    gt_nul = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (0,),
+                                         alphabet_symbols, EOT, verify_depth=4, max_depth=20)
+    gt_invalid = cylinder_mass_ground_truth(restricted, tokenizer, (), (), 1, (255,),
+                                             alphabet_symbols, EOT, verify_depth=4, max_depth=20)
+    zero_ok = gt_nul == 0.0 and gt_invalid == 0.0
+    ok = ok and eq_ok and zero_ok
+    print(f"  integration: cylinder_mass(candidate=(104,105)) ground_truth={_fmt(gt_hi)} "
+          f"bounded_lookahead={_fmt(bl_hi)} diff={diff_hi:.3e} "
+          f"{'PASS' if eq_ok else 'FAIL'}")
+    print(f"  integration: cylinder_mass(candidate=(0,)/NUL)={_fmt(gt_nul)} "
+          f"cylinder_mass(candidate=(255,)/invalid-lead-byte)={_fmt(gt_invalid)} "
+          f"both-zero={'PASS' if zero_ok else 'FAIL'} "
+          f"(exp703_marginalization.py UNCHANGED -- restriction inherited purely "
+          f"by passing RestrictedPpmModel as the `model` argument)")
+
+    print(f"PPM703_P0_DOMAIN_INCIDENCE_PASS={ok} branch={citation['branch']}")
+    return ok
+
+
 def main() -> int:
     results = []
+    print("=== PPM703 P0 domain-D incidence (AMENDMENT-1 + AMENDMENT-1a, branch b) ===")
+    results.append(run_p0_domain_incidence())
+    print()
     print("=== PPM703 P1 exhaustive equality (ground truth vs bounded lookahead) ===")
     results.append(run_p1_exhaustive_equality())
     print()
