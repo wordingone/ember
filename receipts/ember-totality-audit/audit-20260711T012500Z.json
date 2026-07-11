@@ -1,0 +1,47 @@
+{
+ "ts": "2026-07-11T01:25:00Z",
+ "batch": [
+  "C-EFF",
+  "C6",
+  "C12"
+ ],
+ "board_anchor": "scripts/ember_totality/receipts-totality/ember-totality-20260710T230837Z.json",
+ "method": "one sonnet adversary (audit3cond) per rotation batch; coordinator spot-verified both MAJOR probe-gap claims at source (test_c6.py L189-197 _valid_mismatch_record = cause-truthiness + len>=2 only; test_c12.py L240 os.path.isfile selector check, self-reported degrades booleans trusted)",
+ "honest_green": [
+  {
+   "slug": "C-EFF",
+   "probe_faithful": true,
+   "receipt_genuine": true,
+   "note": "fully execution-bound post-#683: git-verified commit 9d79cb86, byte-identical harness_sha aa57f5c7..., independently-recomputed FLOPs; GREEN is an honest PRICED_SCALEOUT_RESIDUAL (2.147x < 3.3x SHATTER bar). Hardening template for the fleet."
+  }
+ ],
+ "needs_work": [
+  {
+   "slug": "C6",
+   "severity": "MAJOR",
+   "ownership": "probe-harden",
+   "probe_faithful": false,
+   "receipt_genuine": true,
+   "gap": "_valid_mismatch_record (test_c6.py L189-197) accepts cause-truthiness + rerun-list len>=2; never opens/parses rerun paths, never recomputes rep1-vs-rep2 agreement, never resolves cause's commit shas. Primary 'reproduces the score' CHK path exercised 0 times historically (docker image never cached; network pulls disallowed).",
+   "cheap_pass": "deterministic_mismatch={'cause':'<story>','rerun_receipts':['a.json','b.json']} with nonexistent paths passes",
+   "evidence": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json rep1 arm_solution_sha256.C=43dcf892... independently matched; docker_score_reproduction.executed=false",
+   "fix": "resolve+parse every rerun_receipts path; recompute rep1-vs-rep2 hash agreement from the files; require >=1 git-resolvable commit sha in cause; flag score-path 0% exercise as standing debt",
+   "currently_exploited": false
+  },
+  {
+   "slug": "C12",
+   "severity": "MAJOR",
+   "ownership": "probe-harden",
+   "probe_faithful": false,
+   "receipt_genuine": true,
+   "gap": "test_c12.py trusts self-reported degrades_cycle/degrades_next_action booleans + mode_agreement_rate; never re-runs select_mode() on claimed state vectors; selector checked by os.path.isfile only (L240), never sha-pinned to provenance.git_sha.",
+   "cheap_pass": "one receipt with a 3-of-6-field decision dict + any mode string + ablation block naming the selector with degrades_cycle:true passes without invoking selector code",
+   "evidence": "receipts/ember-mvp/c12-cognitive-mode-ablation-20260710T000217Z.json decisions[10] hand-traced through real select_mode() -> 'observe' (matches); source_summary_used matches ember-totality-20260709T101919Z.json summary verbatim",
+   "fix": "import selector + recompute mode per claimed state vector asserting equality; recompute agreement rates from decisions[].divergence; pin selector sha256 at provenance.git_sha (C-EFF template)",
+   "currently_exploited": false
+  }
+ ],
+ "regressions": [],
+ "synthesis": "C6+C12 share the identical unpatched #683 class (self-attested strings/booleans on the positive-evidence branch) that C-EFF already cured. Receipts behind both GREENs are genuine today (every auditor-re-derived number matched byte-for-byte) -> severity is probe-debt, not false-green. Hardening dispatched; board colors expected to survive hardening honestly.",
+ "prior": "receipts/ember-totality-audit/audit-20260710T223333Z.json"
+}

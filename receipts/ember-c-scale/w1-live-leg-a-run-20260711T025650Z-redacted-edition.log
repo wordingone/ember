@@ -1,0 +1,16 @@
++ cd /b/M/wt-w1replay735b-live
++ export EMBER_GATE_AUTHORIZED=1
++ EMBER_GATE_AUTHORIZED=1
++ export EMBER_W1_MAINTAINER_WINDOW_CONFIRMED=1
++ EMBER_W1_MAINTAINER_WINDOW_CONFIRMED=1
++ python scripts/w1_baseline_replay_closure.py --live --device cuda --shard-dir <LOCAL-ABS-PATH>/M/shards-v0 --pricing-receipt <LOCAL-ABS-PATH>/M/ember/scratch/w1-control/w1-pricing-20260704T063236Z.json --rung-manifest <LOCAL-ABS-PATH>/M/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766/manifest.json --grow-checkpoint-dir <LOCAL-ABS-PATH>/M/ember/models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766 --control-step25-dir <LOCAL-ABS-PATH>/M/ember/scratch/w1-control/live/w1-live-20260707T110231Z/phase2-live/checkpoints/step-00000025 --custody-dir <LOCAL-ABS-PATH>/M/ember/models/w1-baseline-replay-custody
+W0710 19:57:45.449000 24516 torch\distributed\elastic\multiprocessing\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+[transformers] use_kernel_func_from_hub is not available in the installed kernels version. Please upgrade kernels to use this feature.
+[transformers] `use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`.
+{
+  "closure_receipt": "receipts\\ember-c-scale\\w1-baseline-replay-closure-20260711T025650Z.json",
+  "verdict": "REPLAY_TRUSTWORTHY",
+  "step50_checkpoint_custody_dir": "<LOCAL-ABS-PATH>/M/ember/models/w1-baseline-replay-custody\\w1-baseline-replay-step50-20260711T025650Z"
+}
++ echo LEG_A_EXIT_CODE=0
+LEG_A_EXIT_CODE=0
