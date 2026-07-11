@@ -211,6 +211,20 @@ RUNG2_REFERENCE_CHECKPOINT_HASHES = {
     "rng.pt": "2e30b6c87ed2e1edb9d4077e569da2115c2377d952bf256071ad93e990c8e6c7",
 }
 
+# Addendum-2 blocker (b): the pinned checkpoint's own on-disk file sizes,
+# hardcoded as a CROSS-CHECK only (same convention as every RUNG2_EXPECTED_*
+# constant above) -- _preflight_checkpoint_load_commit below always prices
+# the pre-load commit gate against the REAL os.path.getsize() of the files
+# actually present at grow_checkpoint_dir (a stat call, zero bytes read,
+# zero commit charged), never against these pins alone; a checkpoint whose
+# real sizes disagree with these pins is still priced correctly (and the
+# mismatch is disclosed in the preflight receipt), never silently
+# under/over-priced by trusting a stale pin. model.pt+optimizer.pt sum to
+# the addendum's own cited "12.6347 GiB" eager-load figure (rng.pt is a few
+# KB and priced from its own real size, never pinned).
+RUNG2_EXPECTED_CHECKPOINT_MODEL_PT_BYTES = 4_391_063_423
+RUNG2_EXPECTED_CHECKPOINT_OPTIMIZER_PT_BYTES = 9_175_455_079
+
 
 def _ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -454,6 +468,199 @@ def _restore_fork_(snapshot: dict, *, model, optimizers: dict, device: str) -> i
 
     _restore_rng_(snapshot["rng"], device=device)
     return snapshot["global_step"]
+
+
+# ---------------------------------------------------------------------------
+# In-place checkpoint optimizer-state restore -- ember #702 addendum-2
+# blocker (a). ts.load_optimizers_state (timeshare_pretrain.py) forwards to
+# torch.optim.Optimizer.load_state_dict, which REPLACES self.state[param]
+# with tensors freshly materialized from the loaded bundle -- for a
+# CPUOffloadOptimizer this REBINDS the per-parameter state off the
+# pre-seeded file-backed memmap tensors onto heap (~8.545GiB charge at the
+# pinned checkpoint), defeating the entire CPU-offload strategy DEV-002 and
+# cpu_offload_adamw.py exist for. Mirrors the SAME in-place copy_() pattern
+# _restore_fork_ above already uses for AB/BA fork restoration -- applied to
+# the positionally-indexed torch.optim.Optimizer.state_dict() shape
+# ts.save_optimizers_state/load_optimizers_state use (state keyed by
+# integer index into the flattened, single-group param list, which for a
+# CPUOffloadOptimizer is exactly opt._shadow's own construction order --
+# confirmed by reading build_split_optimizer/CPUOffloadOptimizer.__init__,
+# not assumed), instead of _snapshot_fork's own custom shadow-order list.
+# ---------------------------------------------------------------------------
+
+def _restore_checkpoint_optimizer_state_in_place(
+        optimizers: dict, bundle: dict, *, run_dir: str) -> dict:
+    """Restores each optimizer's state from a ts.load_checkpoint() bundle
+    (standard {"state": {idx: {...}}, "param_groups": [...]} shape) by
+    copy_()-ing values IN PLACE into the already-allocated shadow/inner-state
+    tensors every CPUOffloadOptimizer pre-seeds at construction (AdamW's
+    step/exp_avg/exp_avg_sq[/max_exp_avg_sq] and this repo's own Muon's
+    momentum_buffer alike -- generic over both schemas via saved_entry's own
+    keys, no per-schema special-casing). NEVER calls opt.load_state_dict().
+
+    Group hyperparams (lr/weight_decay/betas/eps -- everything in a saved
+    param_group except "params") are also copied onto the live optimizer's
+    param_groups, matching the addendum-2 requirement; lr is immediately
+    overridden by the caller's own apply_wsd() at the correct new absolute
+    step before the first restored step, so this is a completeness measure,
+    never load-bearing for correctness on its own.
+
+    Fail-closed (SystemExit, written receipt) on: a missing bundle key, a
+    param-count/index mismatch (checkpoint/live split_param_groups()
+    disagreement), any state tensor whose data_ptr() changed across the
+    restore (proves a reallocation slipped through -- the exact defect this
+    function exists to prevent), or a non-singleton AdamW internal step-set
+    after restore (a genuine checkpoint's optimizer steps every param
+    together each call; a real, specific step VALUE like 136 is NEVER
+    hardcoded here -- ember #702's explicit "do not require/rewrite internal
+    optimizer step" clause -- only INTERNAL CONSISTENCY is asserted, derived
+    from the loaded checkpoint itself).
+
+    Returns a per-optimizer receipt dict (n_params, any reallocated keys
+    disclosed by name, storage_identity_preserved, the observed singleton
+    adamw_internal_step where applicable)."""
+    import torch
+
+    report: dict = {}
+    for name, opt in optimizers.items():
+        if name not in bundle:
+            _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_bundle_key",
+                 "missing_key": name, "have_keys": sorted(bundle)},
+                run_dir=run_dir, ticket="EMBER-702-CONTINUATION-OPTIMIZER-BUNDLE-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_BUNDLE_MISSING_KEY: {name!r} not in "
+                f"checkpoint optimizer bundle (have {sorted(bundle)}) -- "
+                "checkpoint/runner optimizer mismatch")
+        if not isinstance(opt, _coa.CPUOffloadOptimizer):
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_NOT_OFFLOADED: {name!r} is "
+                f"{type(opt).__name__}, not CPUOffloadOptimizer -- in-place "
+                "restore requires offload_optimizer_state=True at "
+                "build_split_optimizer time")
+
+        saved = bundle[name]
+        saved_state = saved.get("state", {})
+        saved_groups = saved.get("param_groups", [])
+        n_shadow = len(opt._shadow)
+
+        if len(saved_state) != n_shadow:
+            _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_param_count",
+                 "optimizer": name, "n_shadow": n_shadow,
+                 "n_saved_state_entries": len(saved_state)},
+                run_dir=run_dir, ticket="EMBER-702-CONTINUATION-OPTIMIZER-PARAM-COUNT-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_PARAM_COUNT_MISMATCH: optimizer "
+                f"{name!r} has {n_shadow} live shadow params but the "
+                f"checkpoint bundle carries {len(saved_state)} state entries "
+                "-- checkpoint/live split_param_groups() disagreement")
+
+        pre_ptrs: list[dict[str, int]] = []
+        for i in range(n_shadow):
+            live_entry = opt._inner.state.get(opt._shadow[i], {})
+            pre_ptrs.append({k: v.data_ptr() for k, v in live_entry.items()
+                             if isinstance(v, torch.Tensor)})
+
+        reallocated_keys: list[str] = []
+        with torch.no_grad():
+            for i in range(n_shadow):
+                if i not in saved_state:
+                    _write_rung2_refusal_receipt(
+                        {"gate": "optimizer_restore_state_index",
+                         "optimizer": name, "missing_index": i,
+                         "have_indices": sorted(saved_state)},
+                        run_dir=run_dir,
+                        ticket="EMBER-702-CONTINUATION-OPTIMIZER-INDEX-REFUSAL")
+                    raise SystemExit(
+                        f"ATTRIBUTION_702_OPTIMIZER_STATE_INDEX_MISSING: "
+                        f"optimizer {name!r} index {i} absent from checkpoint "
+                        f"state (have {sorted(saved_state)}) -- param-order "
+                        "mismatch between checkpoint and this run's "
+                        "split_param_groups()")
+                shadow_p = opt._shadow[i]
+                live_entry = opt._inner.state.get(shadow_p, {})
+                saved_entry = saved_state[i]
+                for k, v in saved_entry.items():
+                    if isinstance(v, torch.Tensor):
+                        if k in live_entry and isinstance(live_entry[k], torch.Tensor):
+                            live_entry[k].copy_(v)
+                        else:
+                            # No pre-seeded destination (e.g. a lazily-added
+                            # amsgrad buffer CPUOffloadOptimizer.__init__
+                            # never pre-seeds) -- this IS a reallocation, of
+                            # a key that had no memmap identity to preserve
+                            # in the first place. Disclosed by name, never
+                            # silently matched to the common in-place case.
+                            live_entry[k] = v.clone()
+                            reallocated_keys.append(f"{name}[{i}].{k}")
+                    else:
+                        live_entry[k] = v
+                opt._inner.state[shadow_p] = live_entry
+
+            live_groups = opt._inner.param_groups
+            for gi, sg in enumerate(saved_groups):
+                if gi >= len(live_groups):
+                    break
+                for k, v in sg.items():
+                    if k == "params":
+                        continue
+                    live_groups[gi][k] = v
+
+        post_ptrs: list[dict[str, int]] = []
+        step_values: set[float] = set()
+        for i in range(n_shadow):
+            live_entry = opt._inner.state.get(opt._shadow[i], {})
+            post_ptrs.append({k: v.data_ptr() for k, v in live_entry.items()
+                              if isinstance(v, torch.Tensor)})
+            if "step" in live_entry:
+                step_t = live_entry["step"]
+                step_values.add(
+                    float(step_t.item()) if isinstance(step_t, torch.Tensor) else float(step_t))
+
+        identity_breaks: list[str] = []
+        for i in range(n_shadow):
+            for k, ptr in pre_ptrs[i].items():
+                tag = f"{name}[{i}].{k}"
+                if tag in reallocated_keys:
+                    continue
+                if post_ptrs[i].get(k) != ptr:
+                    identity_breaks.append(tag)
+        if identity_breaks:
+            _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_storage_identity",
+                 "optimizer": name, "identity_breaks": identity_breaks[:20],
+                 "n_identity_breaks": len(identity_breaks)},
+                run_dir=run_dir,
+                ticket="EMBER-702-CONTINUATION-OPTIMIZER-STORAGE-REBOUND-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_STORAGE_REBOUND: optimizer "
+                f"{name!r} tensors {identity_breaks[:10]} changed data_ptr() "
+                "across restore -- in-place copy_() invariant violated "
+                "(defeats the file-backed CPU-offload strategy)")
+
+        if len(step_values) > 1:
+            _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_step_set_consistency",
+                 "optimizer": name, "distinct_step_values": sorted(step_values)},
+                run_dir=run_dir,
+                ticket="EMBER-702-CONTINUATION-OPTIMIZER-STEP-SET-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_STEP_SET_INCONSISTENT: optimizer "
+                f"{name!r} post-restore step values are not a singleton set: "
+                f"{sorted(step_values)} -- a genuine checkpoint's optimizer "
+                "steps every param together each call; a non-singleton set "
+                "means checkpoint/param-order corruption, never proceed "
+                "(this function never hardcodes or requires any specific "
+                "step VALUE -- only internal consistency)")
+
+        report[name] = {
+            "n_params": n_shadow,
+            "reallocated_keys": reallocated_keys,
+            "storage_identity_preserved": True,
+            "adamw_internal_step": (sorted(step_values)[0] if step_values else None),
+        }
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -766,6 +973,126 @@ def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: s
               f"refusal={result['refusal']}", flush=True)
         raise SystemExit(
             f"ATTRIBUTION_702_FORK_CAPACITY_REFUSED: {result['refusal']} -- "
+            f"abort-not-degrade, no fix-forward, no widened floor (receipt={receipt_path})")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Pre-load checkpoint commit preflight -- ember #702 addendum-2 blocker (b).
+#
+# ts.load_checkpoint() (timeshare_pretrain.py) eagerly torch.loads model.pt +
+# optimizer.pt (+ rng.pt) to HEAP BEFORE returning -- ~12.6347GiB at the
+# pinned rung-2 checkpoint. _preflight_fork_capacity above runs AFTER this
+# load already happened (it gates the FORK snapshot, a later phase); a box
+# genuinely short on commit would OOM/pagefile-exhaust INSIDE that torch.load
+# call itself, before any gate in this file could refuse. This is its own,
+# earlier, independent gate -- same abort-not-degrade discipline, same
+# _read_commit_gib ground truth, sized from REAL on-disk file bytes
+# (os.path.getsize -- a stat call, never a read, never a commit charge),
+# cross-checked against the pinned sizes above without depending on them.
+# ---------------------------------------------------------------------------
+
+def _write_checkpoint_load_capacity_refusal_receipt(result: dict, *, run_dir: str) -> str:
+    import json
+    import os
+    receipt = {
+        "ticket": "EMBER-702-ATTRIBUTION-CHECKPOINT-LOAD-CAPACITY-REFUSAL",
+        "ts": _ts(),
+        "issue": "wordingone/ember#702",
+        "verdict": "GOVERNOR_CAPACITY_FAIL",
+        **result,
+        "api_spend_usd": 0, "paid_api_surface_used": False,
+    }
+    os.makedirs(run_dir, exist_ok=True)
+    path = os.path.join(run_dir, f"attribution-702-checkpoint-load-capacity-refusal-{receipt['ts']}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(receipt, f, indent=2, default=str)
+    return path
+
+
+def _preflight_checkpoint_load_commit(
+        ckpt_dir: str, *, run_dir: str,
+        margin_gib_floor: float = COMMIT_MARGIN_FLOOR_GIB,
+        expected_model_pt_bytes: int = RUNG2_EXPECTED_CHECKPOINT_MODEL_PT_BYTES,
+        expected_optimizer_pt_bytes: int = RUNG2_EXPECTED_CHECKPOINT_OPTIMIZER_PT_BYTES,
+        commit: dict | None = None) -> dict:
+    """Fail-closed BEFORE ts.load_checkpoint's eager torch.load. Sizes the
+    load from the checkpoint's REAL on-disk file bytes (model.pt +
+    optimizer.pt + rng.pt, os.path.getsize -- never read, never priced from
+    an assumption), cross-checks model.pt/optimizer.pt against the pinned
+    rung-2 sizes (disclosed, never gating on its own -- a real-but-different
+    checkpoint is still priced correctly by its own real size), and refuses
+    (SystemExit, written receipt) on insufficient OR unmeasured commit --
+    same fail-closed-on-unavailable discipline as _preflight_fork_capacity
+    (an unmeasured required resource is a refusal, never a silent pass).
+    `commit` is an optional injected measurement (same pure-function-of-a-
+    measured-dict pattern as vram_preflight/_preflight_fork_capacity) --
+    production call sites always omit it; only the selftest injects a
+    synthetic envelope to prove the pricing logic against known states."""
+    import os
+
+    sizes_bytes: dict[str, int] = {}
+    missing: list[str] = []
+    for fname in ("model.pt", "optimizer.pt", "rng.pt"):
+        fpath = os.path.join(ckpt_dir, fname)
+        try:
+            sizes_bytes[fname] = os.path.getsize(fpath)
+        except OSError as e:
+            missing.append(f"{fname}: {type(e).__name__}: {e}")
+
+    gib = 1024.0 ** 3
+    total_load_gib = round(sum(sizes_bytes.values()) / gib, 4)
+    size_cross_check = {
+        "model_pt_matches_pin": sizes_bytes.get("model.pt") == expected_model_pt_bytes,
+        "optimizer_pt_matches_pin": sizes_bytes.get("optimizer.pt") == expected_optimizer_pt_bytes,
+    }
+
+    result = {
+        "ckpt_dir": ckpt_dir,
+        "sizes_bytes": sizes_bytes,
+        "missing_files": missing,
+        "total_load_gib": total_load_gib,
+        "size_cross_check": size_cross_check,
+        "commit_before": None,
+        "margin_gib_floor": margin_gib_floor,
+        "sufficient": True,
+        "refusal_reasons": [],
+    }
+
+    def _refuse(reason: str) -> None:
+        result["sufficient"] = False
+        result["refusal_reasons"].append(reason)
+
+    if missing:
+        _refuse(f"checkpoint file(s) unavailable for size measurement: {missing}")
+
+    commit_stat = commit if commit is not None else _read_commit_gib()
+    result["commit_before"] = commit_stat
+    if commit_stat is not None:
+        margin_gib = round(commit_stat["free_gib"] - total_load_gib, 4)
+        result["margin_gib"] = margin_gib
+        if margin_gib < margin_gib_floor:
+            _refuse(
+                f"host-commit margin insufficient for the checkpoint's eager "
+                f"pre-load: free={commit_stat['free_gib']}GiB, "
+                f"required={total_load_gib}GiB, margin={margin_gib}GiB < "
+                f"floor={margin_gib_floor}GiB")
+    else:
+        # Commit is an ALWAYS-APPLICABLE, REQUIRED measurement -- a read
+        # failure is UNAVAILABLE, not inapplicable (same rule as
+        # _preflight_fork_capacity).
+        _refuse(
+            "host-commit measurement unavailable (read failure) -- an "
+            "unmeasured required resource is a refusal, never a pass")
+
+    result["refusal"] = " | ".join(result["refusal_reasons"]) or None
+
+    if not result["sufficient"]:
+        receipt_path = _write_checkpoint_load_capacity_refusal_receipt(result, run_dir=run_dir)
+        print(f"ATTRIBUTION_702_CHECKPOINT_LOAD_CAPACITY_REFUSED receipt={receipt_path} "
+              f"refusal={result['refusal']}", flush=True)
+        raise SystemExit(
+            f"ATTRIBUTION_702_CHECKPOINT_LOAD_CAPACITY_REFUSED: {result['refusal']} -- "
             f"abort-not-degrade, no fix-forward, no widened floor (receipt={receipt_path})")
     return result
 
@@ -1429,6 +1756,9 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     checkpoint_arch_identity = None
     checkpoint_hash_identity = None
     shard_manifest_identity = None
+    checkpoint_load_preflight = None
+    optimizer_restore_report = None
+    commit_telemetry = None
     start_step = 0
 
     if resume_continuation:
@@ -1452,11 +1782,24 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
             cfg, live=live, tiny_dims=tiny_dims,
             intermediate_override=intermediate_override, device=device)
 
+        # ---- addendum-2 blocker (b): pre-load commit gate BEFORE ts. ----
+        # ---- load_checkpoint's own eager torch.load (~12.6GiB) even ----
+        # ---- starts -- a genuinely low-commit box would OOM/pagefile- ----
+        # ---- exhaust INSIDE that call, before any later gate could run. ----
+        commit_before_load = _read_commit_gib()
+        checkpoint_load_preflight = _preflight_checkpoint_load_commit(
+            grow_checkpoint_dir, run_dir=run_dir, commit=commit_before_load)
+
         # ---- production load paths (clause 1): load_checkpoint / ----
-        # ---- load_optimizers_state / restore_rng, exactly the three ----
-        # ---- functions run_v0_segment's own resume block calls. ----
+        # ---- restore_rng, the same two of the three functions run_v0_ ----
+        # ---- segment's own resume block calls (the THIRD, load_optimizers_
+        # ---- state, is addendum-2 blocker (a)-defective for this offload
+        # ---- strategy -- see _restore_checkpoint_optimizer_state_in_place
+        # ---- below, which replaces it with an in-place, non-reallocating
+        # ---- restore instead of reimplementing checkpoint loading itself). ----
         model_state, optimizer_state, rng_state, manifest = ts.load_checkpoint(
             grow_checkpoint_dir)
+        commit_after_load = _read_commit_gib()
         resume_manifest = manifest
 
         # ---- identity refusal gates (clauses 3/4/5/6) -- ALL fire BEFORE ----
@@ -1497,8 +1840,36 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
             model, cfg, offload_optimizer_state=True,
             deviation_dir=os.path.join(run_dir, "deviations"),
             optstate_dir=os.path.join(run_dir, "optstate"))
-        ts.load_optimizers_state(optimizers, optimizer_state)
+        # addendum-2 blocker (a): in-place restore, NEVER ts.load_optimizers_
+        # state (torch.optim.Optimizer.load_state_dict reallocates NEW state
+        # tensors, silently rebinding CPUOffloadOptimizer's pre-seeded
+        # file-backed memmap state to heap -- the exact defect this function
+        # replaces, both AdamW and Muon schemas, generic over saved_entry's
+        # own keys).
+        optimizer_restore_report = _restore_checkpoint_optimizer_state_in_place(
+            optimizers, optimizer_state, run_dir=run_dir)
         ts.restore_rng(rng_state)
+
+        # Immediate release of the heap-loaded source bundle -- addendum-2
+        # blocker (a): model_state/optimizer_state/rng_state were only ever
+        # needed as a copy_() SOURCE (model.load_state_dict and the in-place
+        # optimizer restore above both copy INTO already-allocated live
+        # tensors); holding them for the rest of the run charges commit for
+        # nothing. del + gc.collect() + a measured before/after commit read
+        # so the receipt discloses the ACTUAL recovery, never an assumption.
+        import gc
+        del model_state, optimizer_state, rng_state
+        gc.collect()
+        commit_after_release = _read_commit_gib()
+        commit_telemetry = {
+            "before_load_gib": commit_before_load,
+            "after_load_gib": commit_after_load,
+            "after_release_gib": commit_after_release,
+            "recovered_gib": (
+                round(commit_after_release["free_gib"] - commit_after_load["free_gib"], 4)
+                if commit_after_release is not None and commit_after_load is not None
+                else None),
+        }
 
         fork_global_step = start_step + n_warmup
     else:
@@ -1586,6 +1957,25 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
         n_active=n_active, fork_global_step=fork_global_step, run_dir=run_dir, **common)
     collector = ab_ba["collector"]
 
+    # addendum-2/step-136-trap sanity: read back the LIVE AdamW internal
+    # step counter after the full warmup+AB/BA run (arm B's 2*n_active
+    # physical steps land on the never-restored-away live state -- arm A's
+    # steps are undone by the fork restore between arms, so this is exactly
+    # pre_run_step + n_warmup + 2*n_active, general over whatever internal
+    # step value the checkpoint actually carried; never hardcoded to any
+    # specific number like 136). None on any non-continuation caller.
+    post_run_adamw_internal_step = None
+    if resume_continuation and "adamw" in optimizers:
+        adamw_opt = optimizers["adamw"]
+        if isinstance(adamw_opt, _coa.CPUOffloadOptimizer):
+            steps_seen = {
+                float(s["step"].item()) if hasattr(s.get("step"), "item") else s.get("step")
+                for s in (adamw_opt._inner.state.get(sp, {}) for sp in adamw_opt._shadow)
+                if "step" in s
+            }
+            post_run_adamw_internal_step = (
+                sorted(steps_seen)[0] if len(steps_seen) == 1 else sorted(steps_seen))
+
     calibration = calibrate_pinned_vs_pageable(device=device)
 
     gates = _evaluate_gates(
@@ -1640,7 +2030,22 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                           "function stubbed",
             },
         },
-        "mode": {"live": live, "device": device, "n_warmup": n_warmup, "n_active": n_active},
+        "mode": {
+            "live": live, "device": device, "n_warmup": n_warmup, "n_active": n_active,
+            # addendum-4 spec self-correction: these are TWO DISTINCT
+            # quantities, never conflated. physical_step_executions counts
+            # every actual step() call (shared warmup once, then n_active
+            # executed independently in EACH of arms A and B).
+            # unique_absolute_schedule_steps counts distinct schedule
+            # POSITIONS touched (both arms replay the SAME n_active-step
+            # absolute interval, so only warmup+n_active positions are
+            # unique). Neither is ever a valid total_steps denominator on
+            # the continuation path -- _verify_rung2_schedule_identity binds
+            # total_steps to the checkpoint manifest's own original schedule
+            # only.
+            "physical_step_executions": n_warmup + 2 * n_active,
+            "unique_absolute_schedule_steps": n_warmup + n_active,
+        },
         # Clause 5 receipt emissions: source checkpoint 4-hash set, start/end
         # absolute steps, total_steps denominator, shard identity shas, full
         # checkpoint-derived arch identity, realized numel -- populated only
@@ -1658,6 +2063,15 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
             "checkpoint_arch_identity": checkpoint_arch_identity,
             "checkpoint_hash_identity": checkpoint_hash_identity,
             "shard_manifest_identity": shard_manifest_identity,
+            # addendum-2 additions: pre-load commit gate result, in-place
+            # optimizer-restore report (both schemas, storage-identity +
+            # AdamW step-set consistency proofs), and the full before/after-
+            # load/after-release commit telemetry for the immediate del+gc
+            # release of the heap-loaded source bundle.
+            "checkpoint_load_preflight": checkpoint_load_preflight,
+            "optimizer_restore_report": optimizer_restore_report,
+            "post_run_adamw_internal_step": post_run_adamw_internal_step,
+            "commit_telemetry": commit_telemetry,
         } if resume_continuation else {"resume_continuation": False},
         "optimizer_routing": routing,
         "expected_full_numel_from_split_param_groups": expected_full_numel,
@@ -2308,11 +2722,21 @@ def _selftest_rung2_identity_gate_units() -> None:
 
 
 def _selftest_continuation_schedule_bind() -> None:
-    """Clause 2/6 in isolation: proves total_steps binds to the checkpoint
-    manifest's OWN original schedule denominator, never the measurement-
-    window length n_warmup+2*n_active -- and that a step866-style
-    checkpoint driven with start=0 or total_steps=42 (the exact literal
-    negative fixture the spec names) refuses before any compute."""
+    """Clause 2/6 in isolation, PLUS addendum-4's spec self-correction:
+    total_steps binds to the checkpoint manifest's OWN original schedule
+    denominator, never either measurement-window-derived substitute.
+    Team-lead's own earlier "42" pin was a conflation the addendum
+    corrected: 42 = PHYSICAL_STEP_EXECUTIONS (n_warmup + 2*n_active -- the
+    shared warmup runs once, then n_active executes independently in EACH
+    of arms A and B) at the real production n_active=20 (2 warmup + 20 + 20);
+    22 = UNIQUE_ABSOLUTE_SCHEDULE_STEPS (n_warmup + n_active -- both arms
+    REPLAY the SAME n_active-step absolute-schedule interval, so the
+    distinct schedule POSITIONS touched is only warmup+n_active) at the
+    SAME n_active=20. These are two DIFFERENT quantities, not two names for
+    one number -- BOTH must independently refuse against a manifest
+    declaring a real, much larger schedule, and the receipt now discloses
+    both under their own names (attribution_run's "mode" dict), never
+    conflated into one."""
     step866_style_manifest = {
         "step": 43,                          # a small "step866" analog
         "extra": {"total_steps": 5000,       # a small "449651" analog --
@@ -2334,12 +2758,8 @@ def _selftest_continuation_schedule_bind() -> None:
         start0_refused = True
     assert start0_refused, "schedule gate must refuse start_step=0 against a resumed manifest"
 
-    # ---- refusal 2: total_steps=42 -- the LITERAL erratum value (the actual
-    # prior wrong-scale live run's own n_warmup+2*n_active at ITS n_active
-    # choice; not necessarily this file's current MIN_WARMUP_STEPS/
-    # MIN_ACTIVE_STEPS floor product, which is exercised separately below
-    # as the general "whatever measurement-window length this run used"
-    # case) ----
+    # ---- refusal 2: total_steps=42 -- PHYSICAL_STEP_EXECUTIONS at the real
+    # production n_active=20 (2 warmup + 20 active(A) + 20 active(B)). ----
     total42_refused = False
     try:
         _verify_rung2_schedule_identity(
@@ -2347,29 +2767,56 @@ def _selftest_continuation_schedule_bind() -> None:
     except SystemExit:
         total42_refused = True
     assert total42_refused, (
-        "schedule gate must refuse total_steps=42 (the erratum's literal "
-        "measurement-window substitute) against a manifest declaring the "
-        "real 5000-step schedule -- this is the exact erratum substitution "
-        "class")
+        "schedule gate must refuse total_steps=42 (physical_step_executions "
+        "at production n_active=20) against a manifest declaring the real "
+        "5000-step schedule -- this is the exact erratum substitution class")
 
-    # ---- refusal 3: THIS file's own current measurement-window formula
-    # (n_warmup+2*n_active at the floor constants) -- the general shape of
-    # the same substitution class, independent of the erratum's specific
-    # historical numbers. ----
-    measurement_window_total_steps = MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS
-    window_refused = False
+    # ---- refusal 3: total_steps=22 -- UNIQUE_ABSOLUTE_SCHEDULE_STEPS at the
+    # SAME real production n_active=20. addendum-4's own correction: this is
+    # NOT the same quantity as total_steps=42 above -- both AB/BA arms
+    # replay the identical 20-step absolute interval, so only 2+20=22
+    # distinct schedule positions are actually touched -- and BOTH 22 and 42
+    # must independently refuse. ----
+    total22_refused = False
     try:
         _verify_rung2_schedule_identity(
-            step866_style_manifest, start_step=43,
-            total_steps=measurement_window_total_steps)
+            step866_style_manifest, start_step=43, total_steps=22)
     except SystemExit:
-        window_refused = True
-    assert window_refused, (
-        "schedule gate must refuse THIS file's own measurement-window "
-        f"length ({measurement_window_total_steps}) against a manifest "
-        "declaring the real 5000-step schedule")
+        total22_refused = True
+    assert total22_refused, (
+        "schedule gate must refuse total_steps=22 "
+        "(unique_absolute_schedule_steps at production n_active=20) against "
+        "a manifest declaring the real 5000-step schedule")
 
-    # ---- refusal 4: both wrong at once (start=0 AND total_steps=42) ----
+    # ---- refusal 4: THIS file's own general formulas at ITS OWN floor
+    # constants (MIN_WARMUP_STEPS/MIN_ACTIVE_STEPS) -- proves the refusal
+    # logic generalizes past the one historical (n_active=20) worked
+    # example, to whatever n_active a given invocation actually used, for
+    # BOTH the physical and the unique formula independently. ----
+    physical_at_floor = MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS
+    unique_at_floor = MIN_WARMUP_STEPS + MIN_ACTIVE_STEPS
+    physical_floor_refused = False
+    try:
+        _verify_rung2_schedule_identity(
+            step866_style_manifest, start_step=43, total_steps=physical_at_floor)
+    except SystemExit:
+        physical_floor_refused = True
+    assert physical_floor_refused, (
+        "schedule gate must refuse this file's own physical_step_executions "
+        f"formula at its floor constants ({physical_at_floor})")
+
+    unique_floor_refused = False
+    try:
+        _verify_rung2_schedule_identity(
+            step866_style_manifest, start_step=43, total_steps=unique_at_floor)
+    except SystemExit:
+        unique_floor_refused = True
+    assert unique_floor_refused, (
+        "schedule gate must refuse this file's own "
+        f"unique_absolute_schedule_steps formula at its floor constants "
+        f"({unique_at_floor})")
+
+    # ---- refusal 5: both wrong at once (start=0 AND total_steps=42) ----
     both_refused = False
     try:
         _verify_rung2_schedule_identity(
@@ -2379,8 +2826,11 @@ def _selftest_continuation_schedule_bind() -> None:
     assert both_refused
 
     print("ATTRIB702_SCHEDULE_BIND_PASS "
-          f"start0_refused={start0_refused} total42_refused={total42_refused} "
-          f"measurement_window_refused={window_refused} "
+          f"start0_refused={start0_refused} "
+          f"total42_physical_refused={total42_refused} "
+          f"total22_unique_refused={total22_refused} "
+          f"physical_floor_refused={physical_floor_refused} "
+          f"unique_floor_refused={unique_floor_refused} "
           f"both_refused={both_refused}", flush=True)
 
 
@@ -2504,6 +2954,49 @@ def _selftest_continuation_resume_wiring() -> None:
     assert cont["checkpoint_arch_identity"]["matches_frozen_rung2_identity"] is True, cont
     assert cont["checkpoint_hash_identity"]["mismatches"] == {}, cont
     assert cont["shard_manifest_identity"]["matches_frozen_pins"] is True, cont
+
+    # addendum-2 blocker (b): pre-load commit gate ran and passed.
+    assert cont["checkpoint_load_preflight"] is not None, cont
+    assert cont["checkpoint_load_preflight"]["sufficient"] is True, cont["checkpoint_load_preflight"]
+    assert cont["checkpoint_load_preflight"]["total_load_gib"] > 0, cont["checkpoint_load_preflight"]
+
+    # addendum-2 blocker (a): in-place restore report, both schemas
+    # generically -- storage identity preserved for every optimizer this
+    # fixture actually built (adamw and/or muon).
+    assert cont["optimizer_restore_report"] is not None, cont
+    for opt_name, restore_info in cont["optimizer_restore_report"].items():
+        assert restore_info["storage_identity_preserved"] is True, (opt_name, restore_info)
+    assert "adamw" in cont["optimizer_restore_report"], cont["optimizer_restore_report"]
+    adamw_restore = cont["optimizer_restore_report"]["adamw"]
+    pre_run_adamw_step = adamw_restore["adamw_internal_step"]
+    assert pre_run_adamw_step is not None, adamw_restore
+
+    # addendum-2/step-136-trap sanity, generalized -- NEVER hardcoded to any
+    # specific step VALUE like 136: the live AdamW internal step counter
+    # must advance by EXACTLY n_warmup + 2*n_active physical opt.step()
+    # calls across the full warmup+AB/BA run (arm A's steps are undone by
+    # the fork restore between arms; only the warmup block and arm B's two
+    # sequential sub-blocks land on the never-restored-away live state).
+    # Proves the restore never silently re-bases the checkpoint's own
+    # internal step onto the resume global_step (the 866-vs-136 trap) in
+    # either direction -- whatever internal step the checkpoint carried is
+    # read back verbatim and advances only by real physical step() calls.
+    expected_post_run_step = pre_run_adamw_step + MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS
+    assert cont["post_run_adamw_internal_step"] == expected_post_run_step, (
+        cont["post_run_adamw_internal_step"], expected_post_run_step, adamw_restore)
+
+    # addendum-2 blocker (a): immediate del+gc release of the heap-loaded
+    # source bundle, with measured before/after-load/after-release commit.
+    assert cont["commit_telemetry"] is not None, cont
+    assert "recovered_gib" in cont["commit_telemetry"], cont["commit_telemetry"]
+
+    # addendum-4: physical_step_executions and unique_absolute_schedule_steps
+    # are two DISTINCT, separately-named receipt fields, never conflated.
+    assert receipt["mode"]["physical_step_executions"] == (
+        MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS), receipt["mode"]
+    assert receipt["mode"]["unique_absolute_schedule_steps"] == (
+        MIN_WARMUP_STEPS + MIN_ACTIVE_STEPS), receipt["mode"]
+
     # CPU has no real PCIe path -- pinned_pageable_calibration fails closed
     # here for the SAME reason it does in the base _selftest() (this
     # fixture is not stubbing it, unlike _selftest_integration_all_gates_
@@ -2523,7 +3016,15 @@ def _selftest_continuation_resume_wiring() -> None:
           f"{cont['checkpoint_arch_identity']['matches_frozen_rung2_identity']} "
           f"checkpoint_hash_identity_ok={cont['checkpoint_hash_identity']['mismatches'] == {}} "
           f"shard_manifest_identity_ok="
-          f"{cont['shard_manifest_identity']['matches_frozen_pins']}", flush=True)
+          f"{cont['shard_manifest_identity']['matches_frozen_pins']} "
+          f"checkpoint_load_preflight_sufficient="
+          f"{cont['checkpoint_load_preflight']['sufficient']} "
+          f"pre_run_adamw_internal_step={pre_run_adamw_step} "
+          f"post_run_adamw_internal_step={cont['post_run_adamw_internal_step']} "
+          f"commit_recovered_gib={cont['commit_telemetry']['recovered_gib']} "
+          f"physical_step_executions={receipt['mode']['physical_step_executions']} "
+          f"unique_absolute_schedule_steps="
+          f"{receipt['mode']['unique_absolute_schedule_steps']}", flush=True)
 
 
 # ---------------------------------------------------------------------------
