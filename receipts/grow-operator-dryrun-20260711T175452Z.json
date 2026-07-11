@@ -1,6 +1,6 @@
 {
   "ticket": "CBASE-GROW-CLAUSE-D-DRYRUN",
-  "ts": "2026-07-11T14:39:22.721987+00:00",
+  "ts": "2026-07-11T17:54:52.556553+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
   "experiment": "C-BASE-clause-d-dryrun",
@@ -17,7 +17,7 @@
   "post_grow": true,
   "replays": true,
   "replay_across_shape": true,
-  "grow_operator_evidence": "receipts/grow-op-verify-20260711T143922Z.json",
+  "grow_operator_evidence": "receipts/grow-op-verify-20260711T175452Z.json",
   "seed_identity": {
     "checkpoint": "models/cbase-smoke-run/checkpoints/step-00000610",
     "model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
@@ -56,13 +56,49 @@
     "replay_tolerance_bf16_roundtrip": 0.05,
     "replays": true
   },
-  "grown_checkpoint": "models/cbase-grow-clause-d-dryrun/grown-ff8192-20260711T143922Z/model.pt",
+  "grown_checkpoint": "models/cbase-grow-clause-d-dryrun/grown-ff8192-20260711T175452Z/model.pt",
+  "grown_model_pt_sha256": "5962c956558e969c7c8c359403175a326427736bd3f798c735d44313ab270bfa",
+  "grown_checkpoint_evidence": {
+    "path": "models/cbase-grow-clause-d-dryrun/grown-ff8192-20260711T175452Z/model.pt",
+    "model_pt_sha256": "5962c956558e969c7c8c359403175a326427736bd3f798c735d44313ab270bfa",
+    "manifest_path": "models/cbase-grow-clause-d-dryrun/grown-ff8192-20260711T175452Z/manifest.json",
+    "manifest_sha256": "d8e90c5331563d1805e72fffcbfa1ed49347ee7358dc3c950ea150020a2cc5c2",
+    "source_model_pt_sha256": "1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb",
+    "keyset_summary": {
+      "n_tensors": 185,
+      "ff_grown": 8192,
+      "mtp_heads_check": {
+        "n_mtp_heads_keys": 2,
+        "identical_across_seed_grown_replay": true,
+        "not_exercised_by_logits_forward_pass": true
+      },
+      "mtp_heads_tensor_check": {
+        "n_checked": 2,
+        "seed_grown_exact_match": true,
+        "grown_replay_rel_tol": 0.01,
+        "grown_replay_max_abs_diff": 0.0
+      }
+    }
+  },
+  "mtp_heads_keyset_check": {
+    "n_mtp_heads_keys": 2,
+    "identical_across_seed_grown_replay": true,
+    "not_exercised_by_logits_forward_pass": true
+  },
+  "mtp_heads_tensor_check": {
+    "n_checked": 2,
+    "seed_grown_exact_match": true,
+    "grown_replay_rel_tol": 0.01,
+    "grown_replay_max_abs_diff": 0.0
+  },
+  "executing_git_commit_sha": "398d47fa648ab9c0ee288e7f7f84819cd6c51517",
   "api_spend_usd": 0,
   "paid_api_surface_used": false,
   "invalid_tokens_present": [],
   "device": "cpu",
   "measured_on_train_daemon": false,
   "script": "scripts/cbase_grow_clause_d_dryrun.py",
+  "scope_line_eps_sigma": "eps_sigma=0 clears serialization/interface function-preserving replay ONLY -- it cannot evidence effective capacity or barrier reduction (#280).",
   "pass": true,
   "verdict": "PASS",
   "kill_criterion": null
