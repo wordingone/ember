@@ -76,7 +76,7 @@ FP19_SEQ           = 1024   # c03 seq
 # Launch interlock (default-closed)
 # ---------------------------------------------------------------------------
 
-def _check_launch_interlock(*, live: bool, requested_run: dict | None = None) -> None:
+def _check_launch_interlock(*, live: bool, requested_run: dict | None = None, shard_dir: str | None = None) -> None:
     """Refuse GPU/real-pretrain launch unless both guards are satisfied.
 
     Guards:
@@ -92,6 +92,10 @@ def _check_launch_interlock(*, live: bool, requested_run: dict | None = None) ->
     minutes-long net2net grow-continuity micro-run) instead of always pricing
     the full v0 ladder. None (default; every pre-existing caller) preserves
     today's full-ladder G-budget behavior byte-for-byte.
+
+    shard_dir: optional path to shard directory, threaded through to the launch
+    gate as shard_dir_override. None (default; every pre-existing caller) preserves
+    backward-compatible behavior.
     """
     authorized = os.environ.get("EMBER_GATE_AUTHORIZED", "") == "1"
     if not (authorized and live):
@@ -114,7 +118,7 @@ def _check_launch_interlock(*, live: bool, requested_run: dict | None = None) ->
     # module top CPU-safe and avoids any cycle — the gate never imports this.)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import v0_pretrain_launch_gate as _lg
-    rows = _lg.gate(datetime.now(timezone.utc).date(), requested_run=requested_run)
+    rows = _lg.gate(datetime.now(timezone.utc).date(), requested_run=requested_run, shard_dir_override=shard_dir)
     blocked = [r for r in rows if r[1] != "GREEN"]
     if blocked:
         detail = "; ".join(f"{r[0]}={r[2]}" for r in blocked)
@@ -1673,7 +1677,7 @@ def run_v0_segment(
     use_device = device or ("cuda" if live else "cpu")
 
     if live:
-        _check_launch_interlock(live=live, requested_run=requested_run)
+        _check_launch_interlock(live=live, requested_run=requested_run, shard_dir=shard_dir)
         gov_receipt = _apply_governor()
         if shard_dir is None:
             raise SystemExit(
