@@ -543,14 +543,83 @@ def copies_opt_other_totals(collector: "attrib.SubphaseCollector") -> dict:
     the two buckets #707 Section D measurand (2) names: 'copies' (the three
     pure data-movement subphases) and 'opt_other' (inner_optimizer_step --
     the only subphase whose wall-time the A1 dataflow's own fp32
-    upcast/EMA/Nesterov/downcast arithmetic can plausibly move)."""
+    upcast/EMA/Nesterov/downcast arithmetic can plausibly move).
+
+    LOAD-BEARING ACCOUNTING LINE, quoted (cpu_offload_adamw.py, unmodified):
+        _add_bytes("grad_to_cpu_fp32", g.numel() * g.element_size())
+        _add_bytes("grad_heap_to_memmap", g.numel() * g.element_size())
+        _add_bytes("updated_param_to_gpu", shadow_p.data.numel() * real_p.element_size())
+    Confirmed MEASURED (numel() * element_size() of the actual tensor moved
+    at that instant), never a fixed 4B-per-param constant -- so copies_bytes
+    is real for the three subphases it covers.
+
+    KNOWN GAP (team-lead review, addressed by momentum_buffer_bytes_sidecar
+    below): inner_optimizer_step (opt_other) gets ONLY a time measurement --
+    `_add("inner_optimizer_step", ...)` -- cpu_offload_adamw.py's step()
+    NEVER calls _add_bytes for this subphase, because self._inner.step() is
+    an opaque call into the wrapped Muon/MuonBF16MomentumFixed instance; the
+    span collector has no visibility into what happens inside it. The
+    momentum buffer's OWN read/write (buf.mul_/add_/copy_, where the fp32-
+    vs-bf16 storage delta actually lives) executes entirely inside that
+    opaque call. copies_bytes is therefore NOT lying (it correctly excludes
+    momentum traffic, which it was never instrumented to see) but it is
+    BLIND to exactly the byte delta this screen exists to measure -- the
+    existing instrument alone cannot answer measurand (2)'s momentum-storage
+    question, only its grad/param-transfer question (which is, correctly,
+    identical between arm A and arm B -- neither arm changes grad or param
+    handling)."""
     phase_totals = collector.phase_totals()
     byte_totals = collector.byte_totals()
     return {
         "copies_wall_s": round(sum(phase_totals[p] for p in COPIES_SUBPHASES), 6),
         "copies_bytes": int(sum(byte_totals[p] for p in COPIES_SUBPHASES)),
+        "copies_bytes_note": "measured (numel*element_size) for grad/param "
+                             "transfer only -- excludes momentum traffic; "
+                             "see momentum_buffer_bytes_sidecar for that",
         "opt_other_wall_s": round(sum(phase_totals[p] for p in OPT_OTHER_SUBPHASES), 6),
         "n_steps": len(collector.step_records),
+    }
+
+
+def momentum_buffer_bytes_sidecar(optimizers: dict) -> dict:
+    """MEASURED-BYTES SIDECAR (team-lead review, issue #792): the #702
+    attribution instrument's byte accounting has zero coverage of momentum-
+    buffer traffic (see copies_opt_other_totals docstring) -- this function
+    fills exactly that gap without editing cpu_offload_adamw.py or
+    cbase_grow_rung2_attribution_702.py. Reads each Muon shadow param's
+    REALIZED momentum_buffer tensor directly (same established internal-
+    state-read pattern as install_bf16_momentum / momentum_cosine_
+    diagnostic) and sums numel() * element_size() -- MEASURED from the
+    actual tensor object each arm is using, never a hardcoded per-param
+    constant, so arm B's halved momentum footprint (bf16, 2 bytes/elem)
+    versus arm A's (fp32, 4 bytes/elem) is directly visible here even
+    though it is invisible to copies_bytes."""
+    muon = optimizers.get("muon")
+    if muon is None:
+        return {"applicable": False, "reason": "no muon optimizer in this arm"}
+    total_bytes = 0
+    total_numel = 0
+    dtypes_seen = set()
+    for shadow_p in muon._shadow:
+        state = muon._inner.state.get(shadow_p)
+        if state is None or "momentum_buffer" not in state:
+            continue
+        buf = state["momentum_buffer"]
+        total_bytes += buf.numel() * buf.element_size()
+        total_numel += buf.numel()
+        dtypes_seen.add(str(buf.dtype))
+    return {
+        "applicable": True,
+        "momentum_buffer_bytes_resident": int(total_bytes),
+        "momentum_buffer_numel": int(total_numel),
+        "momentum_buffer_dtypes": sorted(dtypes_seen),
+        # Per-step read+modify+write traffic for the momentum buffer alone
+        # (one full read + one full write per step, in EITHER implementation
+        # -- A1 additionally upcasts to a transient fp32 tensor for compute,
+        # but that transient never touches the memmap/disk, so it is not
+        # counted as storage TRAFFIC here, only the persisted bf16/fp32
+        # read+write is).
+        "momentum_buffer_traffic_bytes_per_step": int(total_bytes * 2),
     }
 
 
@@ -747,6 +816,7 @@ def run_arm_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn,
 def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
                    commit_delta_gib: float, byte_check: dict,
                    copies_opt_other_a: dict, copies_opt_other_b: dict,
+                   momentum_bytes_a: dict, momentum_bytes_b: dict,
                    momentum_cosine: dict, band: dict, verdict: dict,
                    run_config: dict) -> dict:
     findings_note = (
@@ -774,6 +844,10 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
         "measurand_2_copies_opt_other": {
             "arm_fp32": copies_opt_other_a,
             "arm_bf16": copies_opt_other_b,
+            "momentum_buffer_bytes_sidecar": {
+                "arm_fp32": momentum_bytes_a,
+                "arm_bf16": momentum_bytes_b,
+            },
         },
         "measurand_3_loss_band": band,
         "measurand_4_momentum_cosine_diagnostic": momentum_cosine,
@@ -869,7 +943,13 @@ def _selftest() -> int:
     except RuntimeError:
         pass
 
-    # 5. required negative fixture -- delegated to the test module (single
+    # 5. momentum_buffer_bytes_sidecar's disclosed-inapplicable branch.
+    side_empty = momentum_buffer_bytes_sidecar({})
+    if side_empty.get("applicable") is not False:
+        print(f"FAIL momentum_buffer_bytes_sidecar: expected applicable=False for no-muon dict, got {side_empty}")
+        ok = False
+
+    # 6. required negative fixture -- delegated to the test module (single
     #    source of truth for the fixture itself).
     tests_dir = Path(__file__).resolve().parent / "tests"
     sys.path.insert(0, str(tests_dir))
@@ -910,6 +990,8 @@ def _schema_probe() -> int:
                             "opt_other_wall_s": 0.0, "n_steps": 0},
         copies_opt_other_b={"copies_wall_s": 0.0, "copies_bytes": 0,
                             "opt_other_wall_s": 0.0, "n_steps": 0},
+        momentum_bytes_a={"applicable": False, "reason": "schema-probe dummy"},
+        momentum_bytes_b={"applicable": False, "reason": "schema-probe dummy"},
         momentum_cosine={"applicable": False, "reason": "schema-probe dummy"},
         band=build_noise_band([0.0], [0.0]),
         verdict={"verdict": "INVALID", "reason": "schema-probe dummy run, not a real verdict"},
@@ -1011,6 +1093,13 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
         realized_p_matrix=realized_split["realized_matrix_params"])
     copies_a = copies_opt_other_totals(collector_a)
     copies_b = copies_opt_other_totals(collector_b)
+    # Measured-bytes sidecar (team-lead review, #792): the existing
+    # attribution instrument's copies_bytes has zero coverage of momentum
+    # traffic (see copies_opt_other_totals docstring) -- this reads each
+    # arm's REALIZED momentum_buffer tensors directly, so arm B's halved
+    # (bf16 vs fp32) momentum footprint is actually visible in the receipt.
+    momentum_bytes_a = momentum_buffer_bytes_sidecar(arm_a["optimizers"])
+    momentum_bytes_b = momentum_buffer_bytes_sidecar(arm_b["optimizers"])
     cosine = momentum_cosine_diagnostic(arm_a["optimizers"], arm_b["optimizers"])
     verdict = evaluate_verdict(losses_arm_b=arm_b["losses"], losses_arm_a=arm_a["losses"],
                                band=band, commit_check=byte_check)
@@ -1020,6 +1109,7 @@ def run_screen(*, cfg: dict, shard_dir: str, run_dir: str, device: str,
         ts_str=ts_str, live=True, realized_split=realized_split,
         commit_delta_gib=commit_delta_gib, byte_check=byte_check,
         copies_opt_other_a=copies_a, copies_opt_other_b=copies_b,
+        momentum_bytes_a=momentum_bytes_a, momentum_bytes_b=momentum_bytes_b,
         momentum_cosine=cosine, band=band, verdict=verdict,
         run_config={"n_warmup": n_warmup, "n_active": n_active,
                    "batch_size": batch_size, "seed_a": seed_a, "seed_a2": seed_a2,

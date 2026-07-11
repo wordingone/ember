@@ -8,41 +8,44 @@ read-modify-writeback dataflow and FAIL (detectably stall) under the naive
 in-place bf16 implementation. This fixture is the guard against the exact
 defect AMENDMENT-1 cured; a screen without it is unmergeable."
 
-DESIGN NOTE (why this is a REFERENCE-COMPARISON fixture, not a "stall at
-exactly the seed value" fixture): a momentum coefficient of exactly 1.0
-would make the naive two-op sequence (buf.mul_(mom); buf.add_(g)) and the
-A1 one-op fp32-combined sequence mathematically IDENTICAL (mul_ by exactly
-1.0 introduces no rounding, collapsing the "double rounding vs single
-rounding" distinction this fixture exists to catch) -- so momentum must be
-<1 (the production value, 0.95) for any real discrimination to exist. But
-with momentum <1, BOTH implementations exhibit real, large, CORRECT
-multiplicative decay of the seed value (buf ~ seed * momentum**n) -- the
-naive implementation does NOT freeze at the seed value; a "drift == 0"
-assertion against the raw seed would be the wrong test and would not
-actually verify anything about AMENDMENT-1's defect. The defect AMENDMENT-1
-names is specifically the compounded DOUBLE ROUNDING (bf16-round after
-mul_, then bf16-round again after add_) versus A1's SINGLE ROUNDING
-(fp32-combined mul+add, one round on write-back) -- a well-established
-numerical-analysis result (double rounding of a computation split into two
-ops is never more accurate, and is generically less accurate over an
-accumulated recurrence, than single rounding of the combined op). This
-fixture therefore checks BOTH implementations against an INDEPENDENT fp64
-ground-truth recurrence that uses NEITHER implementation's code
-(ground-truth-source discipline: a check must never derive its expectation
-from the object it is checking) -- A1 must track that reference closely;
-the naive control must track it measurably worse.
+DESIGN (team-lead review, shape (b) of the two amendment-authorized
+shapes): momentum stays at the production value (0.95, not 1.0 -- a
+momentum of exactly 1.0 would make the naive two-op sequence, buf.mul_(1.0)
+[an exact no-op] then buf.add_(g), and A1's one-op fp32-combined sequence
+mathematically IDENTICAL, collapsing the double-rounding-vs-single-rounding
+distinction this fixture exists to catch; either implementation would show
+the SAME behavior at mom=1.0, discriminating nothing -- flagged to the
+team-lead alongside this file for correction if that derivation is wrong).
+With mom=0.95, BOTH implementations exhibit real, large, CORRECT
+multiplicative decay of the seed value -- the discriminating question is
+NOT "did buf move" (both move) but "did the grad's contribution survive
+that decay": the naive implementation's PER-OP rounding (bf16-round after
+buf.mul_(mom), bf16-round AGAIN after buf.add_(g)) loses the grad term
+across the decay-dominated phase of the trajectory; A1's SINGLE rounding
+(fp32-combined mul+add, one round on write-back) does not.
+
+This fixture therefore compares BOTH implementations against TWO
+INDEPENDENT analytic references, computed in plain Python fp64 with zero
+bf16/torch/memmap anywhere (ground-truth-source discipline: a check must
+never derive its expectation from the object it is checking):
+  pure_decay(N)      = seed * momentum**N                    (NO grad term)
+  correct_with_grad(N) = the true recurrence buf = buf*mom + g, N times
+The naive control should land close to pure_decay(N) -- the grad
+contribution LOST. The A1-fixed implementation should land close to
+correct_with_grad(N) -- the grad contribution RETAINED, i.e. A1 should
+show the FULL analytic deviation from pure decay (correct_with_grad(N) -
+pure_decay(N)) that the naive control fails to show.
 
 UNVERIFIED PENDING EXECUTION: this file was authored and py_compile'd but
 never RUN (HARD TIMING RAIL, issue #792 -- no execution before the
-coordinator's window-release GO). The exact tolerance constants below
-(_A1_REL_TOL, the relative-divergence assertion) are derived from
-numerical-analysis first principles (single-rounding provably bounds error
-at least as tightly as double-rounding for this class of recurrence), NOT
-from a runtime measurement. If --selftest's first real run shows these
-thresholds mis-calibrated, that is a same-day CONSTANT-TUNING fix (the
-underlying mechanism -- compare both implementations against an
-independent fp64 reference -- is not in question), not a redesign; flag
-the actual measured numbers back to the issue thread either way.
+coordinator's window-release GO). The tolerance constants below are
+generous, derived from bf16's known ~2**-8 relative precision compounded
+over _N_SYNTHETIC_STEPS, not from a runtime measurement. If --selftest's
+first real run shows these mis-calibrated, that is a same-day CONSTANT-
+TUNING fix (the underlying mechanism -- compare both implementations
+against two independent analytic references -- is not in question), not a
+redesign; report the actual measured numbers back to the issue thread
+either way.
 
 Pure CPU, no model/GPU/live dispatch.
 
@@ -68,9 +71,8 @@ _SUB_ULP_GRAD = 1e-4
 _N_SYNTHETIC_STEPS = 500       # long enough for the decay (0.95**500 ~ 1e-11)
                               # to fully resolve toward the fp32 steady state
                               # g/(1-mom)=0.002, so the additive-accumulation
-                              # regime (where A1 vs naive actually diverge --
-                              # see module docstring) is fully exercised, not
-                              # just the early pure-decay phase
+                              # regime is fully exercised, not just the early
+                              # pure-decay phase
 _SHAPE = (4, 4)               # 2D -- Muon's split-routing invariant requires ndim==2
 _LR = 0.0                     # zero param-update lr -- isolates the
                               # MOMENTUM-BUFFER persistence question from any
@@ -80,15 +82,21 @@ _LR = 0.0                     # zero param-update lr -- isolates the
 _MOM = 0.95                   # production momentum coefficient (contract
                               # default) -- MUST be <1 for any discrimination
                               # to exist between the two implementations; see
-                              # module docstring DESIGN NOTE
+                              # module docstring DESIGN
+
+
+def _pure_decay(seed: float, momentum: float, n_steps: int) -> float:
+    """Analytic reference with NO grad term at all -- the naive control's
+    expected landing point if the grad's contribution is fully lost to
+    per-op bf16 rounding: buf_N = seed * momentum**n_steps."""
+    return float(seed) * (float(momentum) ** n_steps)
 
 
 def _fp64_reference_ema(seed: float, grad: float, momentum: float, n_steps: int) -> float:
     """Independent ground-truth recurrence -- plain Python floats (fp64),
-    zero bf16/torch/memmap anywhere in this function. Neither implementation
-    under test can trivially satisfy this by construction (ground-truth-
-    source discipline: the check must not derive its expectation from the
-    object under test)."""
+    zero bf16/torch/memmap anywhere in this function. The A1-fixed
+    implementation's expected landing point if the grad's contribution is
+    fully retained: buf = buf*momentum + grad, applied n_steps times."""
     buf = float(seed)
     g = float(grad)
     for _ in range(n_steps):
@@ -144,23 +152,28 @@ def _relative_error(measured: float, reference: float) -> float:
 
 
 def run_negative_fixture(*, verbose: bool = True) -> bool:
-    """The required negative fixture. Returns True iff BOTH conditions hold
-    against the independent fp64 reference recurrence:
-      (a) the A1-correct implementation (_MuonBF16MomentumFixed) tracks the
-          reference within _A1_REL_TOL (PASS case -- single rounding on
-          write-back stays close to the true accumulated EMA), and
-      (b) the naive in-place-bf16 control (_MuonBF16NaiveInPlace) diverges
-          from the reference by MORE than A1 does (FAIL case -- double
-          rounding, per-op, compounds error the combined fp32 computation
-          avoids).
-    A fixture that cannot produce both outcomes does not discriminate the
-    two implementations and is not evidence of anything -- this function IS
-    the falsifiability check on the fixture itself, run every time via
+    """The required negative fixture. Returns True iff ALL conditions hold
+    against the two independent analytic references:
+      (a) the naive in-place-bf16 control lands close to pure_decay(N) --
+          the grad contribution LOST to per-op double rounding (FAIL case);
+      (b) the A1-fixed implementation lands close to correct_with_grad(N)
+          -- the grad contribution RETAINED via single fp32-combined
+          rounding (PASS case);
+      (c) A1's deviation from pure_decay(N) is close to the FULL analytic
+          deviation (correct_with_grad(N) - pure_decay(N)) -- i.e. A1
+          genuinely shows the accumulated-grad term, not a partial/
+          attenuated fraction of it.
+    A fixture that cannot produce all three does not discriminate the two
+    implementations and is not evidence of anything -- this function IS the
+    falsifiability check on the fixture itself, run every time via
     screen792_bf16_momentum.py's --selftest."""
     MuonFixed = s792._muon_bf16_momentum_fixed_class()
     MuonNaive = s792._muon_bf16_naive_inplace_class()
 
-    reference = _fp64_reference_ema(_WORKING_MAGNITUDE, _SUB_ULP_GRAD, _MOM, _N_SYNTHETIC_STEPS)
+    pure_decay = _pure_decay(_WORKING_MAGNITUDE, _MOM, _N_SYNTHETIC_STEPS)
+    correct_with_grad = _fp64_reference_ema(
+        _WORKING_MAGNITUDE, _SUB_ULP_GRAD, _MOM, _N_SYNTHETIC_STEPS)
+    full_grad_term = correct_with_grad - pure_decay
 
     buf_fixed = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
     buf_naive = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
@@ -168,60 +181,79 @@ def run_negative_fixture(*, verbose: bool = True) -> bool:
     final_fixed = _run_n_steps(MuonFixed, buf_fixed, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
     final_naive = _run_n_steps(MuonNaive, buf_naive, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
 
-    err_fixed = _relative_error(final_fixed, reference)
-    err_naive = _relative_error(final_naive, reference)
+    err_naive_vs_pure_decay = _relative_error(final_naive, pure_decay)
+    err_fixed_vs_correct = _relative_error(final_fixed, correct_with_grad)
+    fixed_grad_term = final_fixed - pure_decay
+    grad_term_retained_frac = (
+        (fixed_grad_term / full_grad_term) if full_grad_term != 0 else None)
 
-    # Generous bound: bf16's per-element relative precision is ~2**-8
-    # (~0.4%); a single rounding on write-back every step, compounded over
-    # _N_SYNTHETIC_STEPS steps of a decaying recurrence, should stay within
-    # low-single-digit-percent of the fp64 reference. 10% is deliberately
-    # loose (this constant is UNVERIFIED pending execution -- see module
-    # docstring) to avoid a false FAIL on the correct implementation.
-    A1_REL_TOL = 0.10
+    # Generous bounds (UNVERIFIED pending execution -- see module docstring):
+    # bf16's per-element relative precision is ~2**-8 (~0.4%); compounded
+    # over _N_SYNTHETIC_STEPS steps of a decaying recurrence, 10% is
+    # deliberately loose to avoid a false FAIL on the correct mechanism.
+    NAIVE_TOL = 0.10          # naive must land within 10% of pure decay
+    A1_TOL = 0.10             # A1 must land within 10% of the true recurrence
+    GRAD_RETAINED_FLOOR = 0.5  # A1 must retain AT LEAST half the analytic
+                               # grad-term deviation from pure decay (a
+                               # partial/attenuated retention still counts
+                               # as evidence of the mechanism; well above
+                               # what the naive control should show)
 
-    fixed_passed = err_fixed < A1_REL_TOL
-    naive_worse = err_naive > err_fixed
+    naive_lost_grad = err_naive_vs_pure_decay < NAIVE_TOL
+    fixed_tracks_correct = err_fixed_vs_correct < A1_TOL
+    fixed_retained_grad = (grad_term_retained_frac is not None
+                           and grad_term_retained_frac > GRAD_RETAINED_FLOOR)
 
     if verbose:
-        print(f"screen792 negative fixture: reference={reference!r} "
-              f"final_fixed={final_fixed!r} (rel_err={err_fixed!r}) "
-              f"final_naive={final_naive!r} (rel_err={err_naive!r})")
-        print(f"  A1-correct tracks reference within {A1_REL_TOL}: {fixed_passed}")
-        print(f"  naive-in-place diverges MORE than A1 from reference: {naive_worse}")
+        print(f"screen792 negative fixture: pure_decay={pure_decay!r} "
+              f"correct_with_grad={correct_with_grad!r} full_grad_term={full_grad_term!r}")
+        print(f"  final_naive={final_naive!r} rel_err_vs_pure_decay={err_naive_vs_pure_decay!r} "
+              f"(naive lost the grad term: {naive_lost_grad})")
+        print(f"  final_fixed={final_fixed!r} rel_err_vs_correct={err_fixed_vs_correct!r} "
+              f"grad_term_retained_frac={grad_term_retained_frac!r} "
+              f"(A1 retained the grad term: {fixed_retained_grad})")
 
-    return fixed_passed and naive_worse
+    return naive_lost_grad and fixed_tracks_correct and fixed_retained_grad
 
 
-def test_a1_dataflow_tracks_fp64_reference():
-    reference = _fp64_reference_ema(_WORKING_MAGNITUDE, _SUB_ULP_GRAD, _MOM, _N_SYNTHETIC_STEPS)
+def test_naive_inplace_bf16_loses_grad_term():
+    """Shape (b): the naive control (per-op double rounding) should land
+    close to the NO-GRAD pure-decay analytic value -- the additive grad
+    contribution lost across the decay-dominated trajectory."""
+    pure_decay = _pure_decay(_WORKING_MAGNITUDE, _MOM, _N_SYNTHETIC_STEPS)
+    MuonNaive = s792._muon_bf16_naive_inplace_class()
+    buf = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
+    final = _run_n_steps(MuonNaive, buf, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
+    err = _relative_error(final, pure_decay)
+    assert err < 0.10, (
+        f"naive in-place-bf16 control should land close to the NO-GRAD "
+        f"pure-decay value ({pure_decay!r}) -- the grad contribution lost "
+        f"to per-op double rounding; got final={final!r} rel_err={err!r}")
+
+
+def test_a1_dataflow_retains_grad_term():
+    """Shape (b): the A1-fixed implementation (single fp32-combined
+    rounding) should land close to the TRUE recurrence (grad retained), and
+    should show substantially more deviation from pure decay than the
+    naive control does -- i.e. it actually carries the accumulated-grad
+    term the naive control loses."""
+    pure_decay = _pure_decay(_WORKING_MAGNITUDE, _MOM, _N_SYNTHETIC_STEPS)
+    correct_with_grad = _fp64_reference_ema(
+        _WORKING_MAGNITUDE, _SUB_ULP_GRAD, _MOM, _N_SYNTHETIC_STEPS)
+    full_grad_term = correct_with_grad - pure_decay
     MuonFixed = s792._muon_bf16_momentum_fixed_class()
     buf = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
     final = _run_n_steps(MuonFixed, buf, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
-    err = _relative_error(final, reference)
+    err = _relative_error(final, correct_with_grad)
     assert err < 0.10, (
-        f"A1-correct implementation should track the fp64 reference EMA "
-        f"({reference!r}) within 10% over {_N_SYNTHETIC_STEPS} sub-ULP-"
-        f"increment steps; got final={final!r} rel_err={err!r}")
-
-
-def test_naive_inplace_bf16_diverges_more_than_a1():
-    reference = _fp64_reference_ema(_WORKING_MAGNITUDE, _SUB_ULP_GRAD, _MOM, _N_SYNTHETIC_STEPS)
-    MuonFixed = s792._muon_bf16_momentum_fixed_class()
-    MuonNaive = s792._muon_bf16_naive_inplace_class()
-    buf_fixed = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
-    buf_naive = _seed_bf16_momentum(_SHAPE, _WORKING_MAGNITUDE)
-    final_fixed = _run_n_steps(MuonFixed, buf_fixed, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
-    final_naive = _run_n_steps(MuonNaive, buf_naive, _SUB_ULP_GRAD, _N_SYNTHETIC_STEPS)
-    err_fixed = _relative_error(final_fixed, reference)
-    err_naive = _relative_error(final_naive, reference)
-    assert err_naive > err_fixed, (
-        f"naive in-place-bf16 control (double rounding: bf16-round after "
-        f"mul_, bf16-round again after add_) should diverge from the fp64 "
-        f"reference MORE than the A1-fixed implementation (single rounding, "
-        f"fp32-combined) does -- got err_fixed={err_fixed!r} "
-        f"err_naive={err_naive!r}; if this fails, re-derive the fixture's "
-        f"parameters (see module docstring DESIGN NOTE) rather than "
-        f"loosening this assertion")
+        f"A1-fixed implementation should track the TRUE recurrence "
+        f"({correct_with_grad!r}) within 10%; got final={final!r} rel_err={err!r}")
+    retained_frac = (final - pure_decay) / full_grad_term if full_grad_term != 0 else None
+    assert retained_frac is not None and retained_frac > 0.5, (
+        f"A1-fixed implementation should retain more than half of the "
+        f"analytic grad-term deviation from pure decay ({full_grad_term!r}); "
+        f"got retained_frac={retained_frac!r} (final={final!r}, "
+        f"pure_decay={pure_decay!r})")
 
 
 def test_bf16_view_memmap_roundtrip():
@@ -251,8 +283,8 @@ def test_required_negative_fixture_discriminates():
 def _selftest() -> int:
     ok = True
     for fn in (test_bf16_view_memmap_roundtrip,
-               test_a1_dataflow_tracks_fp64_reference,
-               test_naive_inplace_bf16_diverges_more_than_a1,
+               test_naive_inplace_bf16_loses_grad_term,
+               test_a1_dataflow_retains_grad_term,
                test_required_negative_fixture_discriminates):
         try:
             fn()
