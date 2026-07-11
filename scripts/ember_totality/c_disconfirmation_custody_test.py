@@ -19,6 +19,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 
+# Add scripts to path so we can import cbase_grow_rung for the emitter function
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
 
 def _utc_ts():
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -143,6 +146,269 @@ def test_earned_growth_hinge_fires():
             return False
 
 
+def test_kill_with_dryrun_between():
+    """Fixture: KILL×2 with dry-run between -> EARNED_GROWTH fires (R2).
+
+    Tests that a dry-run in between two KILL attempts doesn't break the streak
+    (dry-run emits nothing, so it doesn't appear in tally at all).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo = Path(tmpdir) / "test_repo_kill_dryrun"
+        repo.mkdir()
+
+        # Minimal setup
+        scripts_src = REPO_ROOT / "scripts"
+        scripts_dst = repo / "scripts"
+        shutil.copytree(scripts_src, scripts_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        docs_src = REPO_ROOT / "docs"
+        if docs_src.exists():
+            docs_dst = repo / "docs"
+            shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        spec_dir = repo / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        (spec_dir / "h0-residual-lever-prereg-v1.md").write_text("| L1 |\n| L2 |\n| L3 |\n| L4 |\n| L5 |\n")
+        (spec_dir / "feasibility-envelope-v1.md").write_text("measured **1.5x**\n")
+        (spec_dir / "h0-lever-status.json").write_text(json.dumps({"L1": "PARKED", "L2": "PARKED", "L3": "PARKED", "L4": "PARKED", "L5": "PARKED"}))
+
+        receipts_dir = repo / "receipts"
+        receipts_dir.mkdir(exist_ok=True)
+        growth_dir = receipts_dir / "growth-rung-attempts"
+        growth_dir.mkdir(exist_ok=True)
+        (receipts_dir / "bootstrap-rung").mkdir(exist_ok=True)
+        (receipts_dir / "escalation").mkdir(exist_ok=True)
+
+        # Create KILL, dry-run, KILL
+        ts1 = "20260710T120000Z"
+        ts_dryrun = "20260710T125000Z"
+        ts2 = "20260710T130000Z"
+
+        kill1 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts1,
+            "verdict": "NOT_EARNED",
+            "evaluable": True,
+            "refs": ["receipts/cbase-grow-rung/kill1.json"],
+            "git_anchor": "abc1",
+            "rung": 1,
+            "mode": "live",
+            "run_verdict": "GROW_RUNG_KILL",
+        }
+        # dry-run: should NOT appear in tally
+        dryrun = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts_dryrun,
+            "evaluable": True,  # (dry-run doesn't emit, but if it did...)
+            "refs": ["receipts/cbase-grow-rung/dryrun.json"],
+            "mode": "dry-run",  # Mode indicates it's not live
+            "run_verdict": "GROW_RUNG_DRYRUN_PASS",
+        }
+        kill2 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts2,
+            "verdict": "NOT_EARNED",
+            "evaluable": True,
+            "refs": ["receipts/cbase-grow-rung/kill2.json"],
+            "git_anchor": "abc2",
+            "rung": 2,
+            "mode": "live",
+            "run_verdict": "GROW_RUNG_KILL",
+        }
+
+        (growth_dir / f"growth-rung-attempt-{ts1}.json").write_text(json.dumps(kill1))
+        # Deliberately don't emit the dry-run (it shouldn't appear in live tally anyway)
+        (growth_dir / f"growth-rung-attempt-{ts2}.json").write_text(json.dumps(kill2))
+
+        print("Fixture: KILL×2 with dry-run between (dry-run not emitted to tally)")
+        stdout, _ = _run_disconfirmation_probe(repo)
+
+        eval_receipts = sorted(
+            (repo / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"),
+            reverse=True
+        )
+        if not eval_receipts:
+            print("[FAIL] No eval receipt")
+            return False
+
+        eval_receipt = json.loads(eval_receipts[0].read_text(encoding="utf-8"))
+        hinges = {h["hinge"]: h for h in eval_receipt.get("hinges", [])}
+        earned_growth = hinges.get("EARNED_GROWTH", {})
+
+        if earned_growth.get("trigger_fired"):
+            print(f"[PASS] EARNED_GROWTH fired (streak={earned_growth.get('consecutive_fail_streak')})")
+            return True
+        else:
+            print(f"[FAIL] Did not fire")
+            print(f"  State: {earned_growth}")
+            return False
+
+
+def test_evaluable_false_between_kills():
+    """Fixture: evaluable=false row between two KILLs -> still fires (R2).
+
+    Tests that an unevaluable row (evaluable=false) doesn't break a KILL streak.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo = Path(tmpdir) / "test_repo_eval_false"
+        repo.mkdir()
+
+        scripts_src = REPO_ROOT / "scripts"
+        scripts_dst = repo / "scripts"
+        shutil.copytree(scripts_src, scripts_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        docs_src = REPO_ROOT / "docs"
+        if docs_src.exists():
+            docs_dst = repo / "docs"
+            shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        spec_dir = repo / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        (spec_dir / "h0-residual-lever-prereg-v1.md").write_text("| L1 |\n| L2 |\n| L3 |\n| L4 |\n| L5 |\n")
+        (spec_dir / "feasibility-envelope-v1.md").write_text("measured **1.5x**\n")
+        (spec_dir / "h0-lever-status.json").write_text(json.dumps({"L1": "PARKED", "L2": "PARKED", "L3": "PARKED", "L4": "PARKED", "L5": "PARKED"}))
+
+        receipts_dir = repo / "receipts"
+        receipts_dir.mkdir(exist_ok=True)
+        growth_dir = receipts_dir / "growth-rung-attempts"
+        growth_dir.mkdir(exist_ok=True)
+        (receipts_dir / "bootstrap-rung").mkdir(exist_ok=True)
+        (receipts_dir / "escalation").mkdir(exist_ok=True)
+
+        ts1 = "20260710T140000Z"
+        ts_unevaluable = "20260710T145000Z"
+        ts2 = "20260710T150000Z"
+
+        kill1 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts1,
+            "verdict": "NOT_EARNED",
+            "evaluable": True,
+            "refs": ["receipts/cbase-grow-rung/k1.json"],
+            "mode": "live",
+        }
+        # Unevaluable row (no verdict, evaluable=false)
+        unevaluable = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts_unevaluable,
+            "evaluable": False,  # Unevaluable — per checker, doesn't break streak
+            "refs": ["receipts/cbase-grow-rung/crashed.json"],
+            "mode": "live",
+        }
+        kill2 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts2,
+            "verdict": "NOT_EARNED",
+            "evaluable": True,
+            "refs": ["receipts/cbase-grow-rung/k2.json"],
+            "mode": "live",
+        }
+
+        (growth_dir / f"growth-rung-attempt-{ts1}.json").write_text(json.dumps(kill1))
+        (growth_dir / f"growth-rung-attempt-{ts_unevaluable}.json").write_text(json.dumps(unevaluable))
+        (growth_dir / f"growth-rung-attempt-{ts2}.json").write_text(json.dumps(kill2))
+
+        print("Fixture: evaluable=false between two KILLs (doesn't break streak)")
+        stdout, _ = _run_disconfirmation_probe(repo)
+
+        eval_receipts = sorted(
+            (repo / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"),
+            reverse=True
+        )
+        if not eval_receipts:
+            print("[FAIL] No eval receipt")
+            return False
+
+        eval_receipt = json.loads(eval_receipts[0].read_text(encoding="utf-8"))
+        hinges = {h["hinge"]: h for h in eval_receipt.get("hinges", [])}
+        earned_growth = hinges.get("EARNED_GROWTH", {})
+
+        if earned_growth.get("trigger_fired"):
+            print(f"[PASS] EARNED_GROWTH fired (attempts={earned_growth.get('attempts_seen')}, streak={earned_growth.get('consecutive_fail_streak')})")
+            return True
+        else:
+            print(f"[FAIL] Did not fire")
+            return False
+
+
+def test_blocked_alone_does_not_fire():
+    """Fixture: BLOCKED×2 alone -> does NOT fire (R2).
+
+    BLOCKED verdict creates evaluable=false rows, which can't contribute to the
+    NOT_EARNED streak. Two evaluable=false rows don't trigger.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo = Path(tmpdir) / "test_repo_blocked"
+        repo.mkdir()
+
+        scripts_src = REPO_ROOT / "scripts"
+        scripts_dst = repo / "scripts"
+        shutil.copytree(scripts_src, scripts_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        docs_src = REPO_ROOT / "docs"
+        if docs_src.exists():
+            docs_dst = repo / "docs"
+            shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+
+        spec_dir = repo / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        (spec_dir / "h0-residual-lever-prereg-v1.md").write_text("| L1 |\n| L2 |\n| L3 |\n| L4 |\n| L5 |\n")
+        (spec_dir / "feasibility-envelope-v1.md").write_text("measured **1.5x**\n")
+        (spec_dir / "h0-lever-status.json").write_text(json.dumps({"L1": "PARKED", "L2": "PARKED", "L3": "PARKED", "L4": "PARKED", "L5": "PARKED"}))
+
+        receipts_dir = repo / "receipts"
+        receipts_dir.mkdir(exist_ok=True)
+        growth_dir = receipts_dir / "growth-rung-attempts"
+        growth_dir.mkdir(exist_ok=True)
+        (receipts_dir / "bootstrap-rung").mkdir(exist_ok=True)
+        (receipts_dir / "escalation").mkdir(exist_ok=True)
+
+        ts1 = "20260710T160000Z"
+        ts2 = "20260710T170000Z"
+
+        blocked1 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts1,
+            "evaluable": False,  # BLOCKED is unevaluable
+            "refs": ["receipts/cbase-grow-rung/b1.json"],
+            "mode": "live",
+            "run_verdict": "GROW_RUNG_BLOCKED",
+        }
+        blocked2 = {
+            "receipt_type": "growth_rung_attempt",
+            "ts": ts2,
+            "evaluable": False,  # BLOCKED is unevaluable
+            "refs": ["receipts/cbase-grow-rung/b2.json"],
+            "mode": "live",
+            "run_verdict": "GROW_RUNG_BLOCKED",
+        }
+
+        (growth_dir / f"growth-rung-attempt-{ts1}.json").write_text(json.dumps(blocked1))
+        (growth_dir / f"growth-rung-attempt-{ts2}.json").write_text(json.dumps(blocked2))
+
+        print("Fixture: BLOCKED×2 alone (evaluable=false, should NOT fire)")
+        stdout, _ = _run_disconfirmation_probe(repo)
+
+        eval_receipts = sorted(
+            (repo / "scripts" / "ember_totality" / "receipts-disconfirmation").glob("disconfirmation-eval-*.json"),
+            reverse=True
+        )
+        if not eval_receipts:
+            print("[FAIL] No eval receipt")
+            return False
+
+        eval_receipt = json.loads(eval_receipts[0].read_text(encoding="utf-8"))
+        hinges = {h["hinge"]: h for h in eval_receipt.get("hinges", [])}
+        earned_growth = hinges.get("EARNED_GROWTH", {})
+
+        if not earned_growth.get("trigger_fired"):
+            print(f"[PASS] EARNED_GROWTH did NOT fire (as expected)")
+            return True
+        else:
+            print(f"[FAIL] Should not have fired")
+            return False
+
+
 def test_disconfirmation_custody():
     """Two-run TDD proof: no canonical receipts/ contamination, timestamped receipts in new location."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -252,17 +518,35 @@ if __name__ == "__main__":
         test1 = test_earned_growth_hinge_fires()
 
         print("\n" + "=" * 60)
-        print("TEST 2: Disconfirmation custody (no canonical contamination)")
+        print("TEST 2: KILL×2 with dry-run between -> fires (R2)")
         print("=" * 60)
-        test2 = test_disconfirmation_custody()
+        test2 = test_kill_with_dryrun_between()
+
+        print("\n" + "=" * 60)
+        print("TEST 3: evaluable=false between KILLs -> still fires (R2)")
+        print("=" * 60)
+        test3 = test_evaluable_false_between_kills()
+
+        print("\n" + "=" * 60)
+        print("TEST 4: BLOCKED×2 alone -> does NOT fire (R2)")
+        print("=" * 60)
+        test4 = test_blocked_alone_does_not_fire()
+
+        print("\n" + "=" * 60)
+        print("TEST 5: Disconfirmation custody (no canonical contamination)")
+        print("=" * 60)
+        test5 = test_disconfirmation_custody()
 
         print("\n" + "=" * 60)
         print("SUMMARY")
         print("=" * 60)
-        print(f"Test 1 (EARNED_GROWTH hinge): {'PASS' if test1 else 'FAIL'}")
-        print(f"Test 2 (Disconfirmation custody): {'PASS' if test2 else 'FAIL'}")
+        print(f"Test 1 (NOT_EARNED×2 fires): {'PASS' if test1 else 'FAIL'}")
+        print(f"Test 2 (KILL×2 with dry-run fires): {'PASS' if test2 else 'FAIL'}")
+        print(f"Test 3 (evaluable=false doesn't break): {'PASS' if test3 else 'FAIL'}")
+        print(f"Test 4 (BLOCKED×2 doesn't fire): {'PASS' if test4 else 'FAIL'}")
+        print(f"Test 5 (Custody): {'PASS' if test5 else 'FAIL'}")
 
-        sys.exit(0 if (test1 and test2) else 1)
+        sys.exit(0 if all([test1, test2, test3, test4, test5]) else 1)
     except Exception as e:
         print(f"TEST FAILED [ERROR]: {e}")
         import traceback

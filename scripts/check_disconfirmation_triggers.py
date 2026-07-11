@@ -14,6 +14,12 @@ to experimentation-v1.md sec 6, whose own T1/T2/T3 cadence does something else e
 claim/board-flip/GPU-spend adversarial review, not a disconfirmation tally -- is a maintainer
 text amendment, not code owed here).
 
+[2026-07-10 NOTE: Per gh issue #729, tally receipts landing 2026-07-10 onward. rung1
+(2026-07-03 receipt: cbase-grow-live-live-20260703T053225Z.json) and rung2 (2026-07-10
+completion, dated later in that day) predate the feed start — the emitter-side contract was
+formalized post-hoc. Both historical rungs EARNED per their completion receipts; the unwritten
+tallies do not affect streak math either way. This checker watches forward from the landing date.]
+
 Per-hinge tally rule (R3): attempts are ordered chronologically WITHIN the hinge's own receipt
 family (rung number never partitions the streak -- the hinge is program-grain); an attempt is
 included only if its own receipt says `evaluable: true` (UNEVALUABLE/crashed runs are SKIPPED --
@@ -47,8 +53,8 @@ the firing itself. Fire history is permanent (R7): an override returns the CHK t
 fire stays recorded in the attempts data -- it is never erased.
 
 DISCIPLINE: prints one verdict line matched by disconfirmation_leg.py's verdict_regex, writes a
-receipt of its own evaluation (every evaluation is itself receipted per GOAL.md sec 8), exit
-0=PASS (no unacknowledged fire) / 1=FAIL (>=1 hinge fired with no escalation/override).
+receipt of its own evaluation (every evaluation is itself receipted per conditions-v1.md sec 4.2),
+exit 0=PASS (no unacknowledged fire) / 1=FAIL (>=1 hinge fired with no escalation/override).
 """
 from __future__ import annotations
 
