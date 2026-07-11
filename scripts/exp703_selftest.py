@@ -655,6 +655,43 @@ def run_p1_global_mass_and_refusal() -> bool:
           f"{'PASS' if global_mass_ok else 'FAIL'}")
     print(f"PPM703_GLOBAL_MASS_100_BRANCH_COUNTEREXAMPLE_PASS={global_mass_ok}")
 
+    # -- self-loop construction, kept as a PERMANENT negative/soundness -----
+    # fixture (gate feedback: the original defect, preserved rather than
+    # deleted, is itself evidence the harness has teeth). Same 100-branch
+    # shape but WITHOUT the deterministic-continuation/EOT tail
+    # (rows[(s,)] = {s: 1.0}, a permanent self-loop). At the SAME
+    # prob_floor=0.01 used above, pruning fires at depth 1 before the
+    # difference from the terminating model is ever explored -- so this
+    # is only a genuine soundness check at a floor loose enough to
+    # actually explore the self-loop: max_depth=50, prob_floor~=0 (never
+    # negligible-terminates). Pre-cure (i.e. exactly what this fixture's
+    # OWN earlier flawed draft did), that combination does not silently
+    # return a wrong bracket -- cylinder_mass_ground_truth's own
+    # max_depth-exceeded invariant refuses outright (AssertionError), so
+    # the falsely-claimed analytic=0.01 never even reaches a bracket
+    # comparison. This is what "breaks the bracket" means here: the
+    # non-terminating construction is caught at the soundness layer, one
+    # level before value/bound arithmetic would matter.
+    selfloop_rows = {(): {s: 0.01 for s in BRANCH_SYMS}}
+    for s in BRANCH_SYMS:
+        selfloop_rows[(s,)] = {s: 1.0}
+    model_selfloop = FixedFixtureModel(alphabet_size=N_BRANCHES + 1, table=selfloop_rows,
+                                        default={N_BRANCHES: 1.0})
+    tok_selfloop = BpeMergeTokenizer(merges=[], eot_symbol=N_BRANCHES)
+    selfloop_raised = False
+    try:
+        cylinder_mass_ground_truth(model_selfloop, tok_selfloop, (), (), 1, (TARGET_SYM,),
+                                    BRANCH_SYMS, N_BRANCHES, max_depth=50, prob_floor=1e-30)
+    except AssertionError:
+        selfloop_raised = True
+    selfloop_ok = selfloop_raised
+    ok = ok and selfloop_ok
+    print(f"  [self-loop non-termination, negative/soundness] max_depth=50 prob_floor=1e-30 "
+          f"raised_AssertionError={selfloop_raised} (expected -- a non-terminating construction "
+          f"must never silently produce a value/bound, at ANY floor loose enough to explore it) "
+          f"{'PASS' if selfloop_ok else 'FAIL'}")
+    print(f"PPM703_SELFLOOP_NONTERMINATION_SOUNDNESS_NEGATIVE_PASS={selfloop_ok}")
+
     # -- bound-refusal mechanism, decoupled unit fixture ---------------------
     tight = CylinderMassResult(value=0.5, truncated_mass_bound=1e-12)
     loose = CylinderMassResult(value=0.5, truncated_mass_bound=0.3)
@@ -809,6 +846,21 @@ def run_state_cap_assert() -> bool:
     model_foreign = PpmModel(alphabet_size=257, order_cap=8, state_cap_bytes=1_000_000)
     rng_foreign = random.Random(42)
     N_FOREIGN_CALLS = model_foreign.LIVE_CHECK_INTERVAL + 20  # guarantee >=1 real periodic check
+    # Count periodic-check invocations the SAME way tier4 does (wrap
+    # isolated_ppm_state_bytes, the call _check_cap_periodic makes when its
+    # `due` branch actually fires) -- gate feedback: training completing
+    # without an exception is consistent with the periodic decision path
+    # never running at all; only a genuine invocation count proves the
+    # DECISION was exercised with the foreign block alive, not just that
+    # the readings differ when inspected afterward.
+    tier3_periodic_invocations = [0]
+    _orig_isolated_tier3 = model_foreign.isolated_ppm_state_bytes
+
+    def _counting_isolated_tier3():
+        tier3_periodic_invocations[0] += 1
+        return _orig_isolated_tier3()
+
+    model_foreign.isolated_ppm_state_bytes = _counting_isolated_tier3
     no_false_refusal_ok = True
     n_trained_foreign = 0
     try:
@@ -823,12 +875,20 @@ def run_state_cap_assert() -> bool:
     isolated_excludes_foreign_ok = isolated_reading < len(foreign_bytearray) * 0.1
     process_wide_includes_foreign_ok = process_wide_reading >= len(foreign_bytearray) * 0.9
     trained_full_ok = n_trained_foreign == N_FOREIGN_CALLS
+    # tier3_periodic_invocations[0] includes the +1 read just above (after
+    # training) -- the DURING-training count is that minus 1; require it
+    # to be >=1 so the fixture proves the decision path fired WHILE the
+    # foreign block was alive, not only in the post-hoc reading.
+    periodic_fired_during_training_ok = (tier3_periodic_invocations[0] - 1) >= 1
     tier3_ok = (isolated_excludes_foreign_ok and process_wide_includes_foreign_ok
-                and no_false_refusal_ok and trained_full_ok)
+                and no_false_refusal_ok and trained_full_ok
+                and periodic_fired_during_training_ok)
     ok = ok and tier3_ok
     print(f"  tier3 (foreign-allocation isolation) foreign_bytearray={len(foreign_bytearray)} "
           f"n_trained={n_trained_foreign}/{N_FOREIGN_CALLS} (LIVE_CHECK_INTERVAL="
-          f"{model_foreign.LIVE_CHECK_INTERVAL}, periodic check genuinely exercised) "
+          f"{model_foreign.LIVE_CHECK_INTERVAL}) "
+          f"periodic_check_invocations_during_training={tier3_periodic_invocations[0] - 1} "
+          f"(expected>=1, periodic decision path genuinely exercised with foreign block alive) "
           f"isolated_ppm_state_bytes={isolated_reading} "
           f"(excludes_foreign={isolated_excludes_foreign_ok}) "
           f"process_live_bytes_governor={process_wide_reading} "
