@@ -192,8 +192,32 @@ DEFAULT_GROW_CHECKPOINT_DIR = os.path.join(
 DEFAULT_CONTROL_STEP25_DIR = os.path.join(
     "scratch", "w1-control", "live", f"w1-live-{HISTORICAL_RUN_TS}",
     "phase2-live", "checkpoints", "step-00000025")
+# PROVENANCE RULING (team-lead, coordinator-verified in git): the decontam
+# receipt the launch/certification receipts CITE
+# (w2-heldout-decontam-20260707T055843Z.json) NEVER LANDED in git history --
+# only a CRASHED-20260707T034418Z sibling survives, in one worktree, never
+# committed. The file below IS the committed substitute: commit 5abbc54
+# ("w2 decontam-batch regen", #118/#455) landed it and updated the stale
+# DECONTAM_RECEIPT_DEFAULT constant in w1_collapse_control_run.py. This is a
+# disclosed substitution, never a silent swap -- its identity claim is
+# `batch_sha256` inside the substitute file being BYTE-EQUAL to the launch-
+# pinned eval-batch sha (EXPECTED_EVAL_BATCH_SHA256 below); the file-identity
+# check against EXPECTED_DECONTAM_RECEIPT_SHA256 is a secondary integrity
+# assert, not the load-bearing one. See PROVENANCE_NOTE_DECONTAM_SUBSTITUTION.
 DEFAULT_DECONTAM_RECEIPT = os.path.join(
-    "receipts", "ember-c-scale", "w2-heldout-decontam-20260707T055843Z.json")
+    "receipts", "ember-c-scale", "w2-heldout-decontam-20260708T121128Z.json")
+PROVENANCE_NOTE_DECONTAM_SUBSTITUTION = (
+    "decontam receipt substitution (disclosed, coordinator-ruled): the "
+    "original receipt cited by the launch/certification chain "
+    "(w2-heldout-decontam-20260707T055843Z.json) never landed in git "
+    "history -- only a CRASHED-20260707T034418Z sibling survives, "
+    "uncommitted, in one worktree. The substitute used here "
+    "(w2-heldout-decontam-20260708T121128Z.json, landed in commit "
+    "5abbc54975f3e4c8efe6eaf77d9595a59201a3c5, 'w2 decontam-batch regen', "
+    "#118/#455) is verified identical in the identity that matters: its "
+    "batch_sha256 field is byte-equal to the launch-pinned eval-batch sha "
+    "(91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929). "
+    "This is a disclosed substitution, not a silent swap.")
 DEFAULT_CUSTODY_ROOT = os.path.join("models", "w1-baseline-replay-custody")
 # Committed public-repo edition of the corpus-verification receipt (issue
 # #77) -- the literal path w1_collapse_control_run.CORPUS_VERIFICATION_RECEIPT
@@ -216,7 +240,7 @@ CONTROL_STEP25_EXPECTED_SHA256 = {
     "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379",
 }
 EXPECTED_CONFIG_SHA256 = "83bca66bffafe80ed5d2b4b7098c09ff5c562a04bf7ff9d6fb23f2d0a6ce0869"
-EXPECTED_DECONTAM_RECEIPT_SHA256 = "24e471f072d07d32bb3e012c695e9219ea35de0a0eafa1ce1d9a2c442660bbb3"
+EXPECTED_DECONTAM_RECEIPT_SHA256 = "40dfd9ecdd65cb74fb83d02b82c81c01aff1dd4586720847101cfb434452ec1a"
 EXPECTED_EVAL_BATCH_SHA256 = "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929"
 
 # --- terminal-receipt-cited scalar figures ---------------------------------
@@ -1194,6 +1218,7 @@ def main(argv: "list[str] | None" = None) -> int:
         "preflight": preflight, "replay": replay, "custody": custody,
         "governor": gov_receipt, "commit_margin_probe": commit_margin,
         "skip_custody_move_flag_used": args.skip_custody_move,
+        "provenance_note": PROVENANCE_NOTE_DECONTAM_SUBSTITUTION,
         "replay_verdict": replay["verdict"],
         "verdict": closure_verdict,
         "verdict_language": (
