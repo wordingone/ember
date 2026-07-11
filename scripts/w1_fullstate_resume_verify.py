@@ -301,8 +301,16 @@ def _git_source_commit(repo_root: str) -> dict:
         sha = subprocess.run(
             ["git", "-C", repo_root, "rev-parse", "HEAD"],
             capture_output=True, check=True, text=True).stdout.strip()
+        # --untracked-files=no: dirtiness here means "does the TRACKED,
+        # versioned content differ from HEAD" (what actually determines
+        # which code ran) -- an unrelated untracked scratch file sitting
+        # in the worktree is not a code-provenance concern and must never
+        # force every run to report dirty. `git diff HEAD` below already
+        # only ever considers tracked files, so this keeps the two checks
+        # consistent with each other.
         status_out = subprocess.run(
-            ["git", "-C", repo_root, "status", "--porcelain"],
+            ["git", "-C", repo_root, "status", "--porcelain",
+             "--untracked-files=no"],
             capture_output=True, check=True, text=True).stdout.strip()
         dirty = bool(status_out)
         dirty_diff_sha256 = None
