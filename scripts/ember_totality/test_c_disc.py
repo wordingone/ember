@@ -22,10 +22,11 @@ _run_one_checker UNMODIFIED -- the same C-ENF/C-MILE pattern, not a reimplementa
   - "UNRESOLVABLE" (timeout / missing checker / unparseable output) -- RED.
 
 Unlike C-MILE (which has NO honestly-closed non-PASS state), a FIRED hinge here is not itself a
-violation -- GOAL sec 8's own text is "the system may not continue past a fired trigger AS IF
-IT HAD NOT FIRED," i.e. the violation is an unacknowledged fire, not the fire itself. Fire
-history is permanent (maintainer ruling R7): an operator override returns this CHK to GREEN,
-but the underlying attempts record keeps the fire; nothing here erases that a trigger fired.
+violation -- conditions-v1.md sec 4.2's own text is "the system may not continue past a fired
+trigger AS IF IT HAD NOT FIRED," i.e. the violation is an unacknowledged fire, not the fire
+itself. Fire history is permanent (maintainer ruling R7): an operator override returns this CHK
+to GREEN, but the underlying attempts record keeps the fire; nothing here erases that a trigger
+fired. (Archived pre-2026-07-06 at goal-archive.md.)
 
 Fail-closed: disconfirmation_leg.py or enforcement_leg.py missing/unimportable = RED (the leg
 itself is gone -- that IS the regression), never UNEVALUABLE. UNEVALUABLE is reserved for

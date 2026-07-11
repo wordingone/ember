@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""check_disconfirmation_triggers.py -- GOAL sec 8's program-level disconfirmation triggers,
-made machine-evaluable (gh issue #94 C-DISC, phase 2; schema frozen by maintainer rulings
-R1-R7, phase-1 dossier).
+"""check_disconfirmation_triggers.py -- Program-level disconfirmation triggers per
+conditions-v1.md sec 4.2, made machine-evaluable (gh issue #94 C-DISC, phase 2; schema
+frozen by maintainer rulings R1-R7, phase-1 dossier).
 
-Sec 8 (GOAL.md lines 557-585) names three hinges, each carrying a disconfirmation predicate:
-EARNED_GROWTH (2 consecutive NOT-earned growth-rung attempts), B2_BOOTSTRAP (3 consecutive
-BOOTSTRAP_FAIL B-rung attempts), H0_CEILING (the L1-L5 lever ladder fully resolved with the
-composed stack still under the 3.3x shatter bar). "A trigger with no evaluator is prose"
-(GOAL.md's own words) -- this script, run via disconfirmation_leg.py's dual-source verdict
-wrapper and re-invoked on every board run, IS the standing evaluator sec 8 calls for (R1: the
-dangling citation to experimentation-v1.md sec 6, whose own T1/T2/T3 cadence does something
-else entirely -- claim/board-flip/GPU-spend adversarial review, not a disconfirmation tally --
-is a maintainer text amendment, not code owed here).
+Conditions-v1.md sec 4.2 (live authority; archived pre-2026-07-06 at docs/goal-archive.md)
+names three hinges, each carrying a disconfirmation predicate: EARNED_GROWTH (2 consecutive
+NOT-earned growth-rung attempts), B2_BOOTSTRAP (3 consecutive BOOTSTRAP_FAIL B-rung attempts),
+H0_CEILING (the L1-L5 lever ladder fully resolved with the composed stack still under the
+3.3x shatter bar). "A trigger with no evaluator is prose" (conditions-v1.md's own words) --
+this script, run via disconfirmation_leg.py's dual-source verdict wrapper and re-invoked on
+every board run, IS the standing evaluator the conditions call for (R1: the dangling citation
+to experimentation-v1.md sec 6, whose own T1/T2/T3 cadence does something else entirely --
+claim/board-flip/GPU-spend adversarial review, not a disconfirmation tally -- is a maintainer
+text amendment, not code owed here).
+
+[2026-07-10 NOTE: Per gh issue #729, tally receipts landing 2026-07-10 onward. rung1
+(2026-07-03 receipt: cbase-grow-live-live-20260703T053225Z.json) and rung2 (2026-07-10
+completion, dated later in that day) predate the feed start — the emitter-side contract was
+formalized post-hoc. Both historical rungs EARNED per their completion receipts; the unwritten
+tallies do not affect streak math either way. This checker watches forward from the landing date.]
 
 Per-hinge tally rule (R3): attempts are ordered chronologically WITHIN the hinge's own receipt
 family (rung number never partitions the streak -- the hinge is program-grain); an attempt is
@@ -46,8 +53,8 @@ the firing itself. Fire history is permanent (R7): an override returns the CHK t
 fire stays recorded in the attempts data -- it is never erased.
 
 DISCIPLINE: prints one verdict line matched by disconfirmation_leg.py's verdict_regex, writes a
-receipt of its own evaluation (every evaluation is itself receipted per GOAL.md sec 8), exit
-0=PASS (no unacknowledged fire) / 1=FAIL (>=1 hinge fired with no escalation/override).
+receipt of its own evaluation (every evaluation is itself receipted per conditions-v1.md sec 4.2),
+exit 0=PASS (no unacknowledged fire) / 1=FAIL (>=1 hinge fired with no escalation/override).
 """
 from __future__ import annotations
 
