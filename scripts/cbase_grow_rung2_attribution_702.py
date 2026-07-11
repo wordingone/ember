@@ -101,7 +101,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import timeshare_pretrain as ts                                       # noqa: E402
 import cpu_offload_adamw as _coa                                      # noqa: E402
-from cpu_offload_adamw import nvidia_smi_vram                         # noqa: E402
+from cpu_offload_adamw import nvidia_smi_vram, vram_preflight          # noqa: E402
 
 _REPO = Path(__file__).resolve().parent.parent
 
@@ -246,61 +246,39 @@ def uninstall_span_collector(optimizers: dict) -> None:
 
 # ---------------------------------------------------------------------------
 # AB/BA fork snapshot/restore -- ember #702 BLOCK_721_PRODUCTION_ATTRIBUTION
-# repair item (b). In-place copy_() restore (never optimizer.load_state_dict,
-# which reallocates new state tensors and would silently swap the file-
-# backed/zero-commit memmap tensors this whole offload strategy exists to
-# keep -- exactly the memory strategy under profiling) so both arms genuinely
-# run against the identical, non-reallocated tensor objects the live run
-# uses.
+# repair item (b), DISK-BACKED per the mid-build capacity repair (auditor
+# prelaunch review, coordinator disposition BLOCK_702_REPAIR_LIVE_AS_WRITTEN
+# item 1). The first revision of this section held an IN-MEMORY .clone() of
+# the entire fork (model weights + shadow params + optimizer state)
+# concurrently with the live run for the whole of Arm A's execution -- on a
+# full 2.2B live dispatch that adds ~4.09GiB extra VRAM (model weights, on
+# top of a measured ~20GiB peak on a 24GiB card) and ~16.36GiB extra host
+# commit (shadow + optimizer state), which the auditor's arithmetic showed
+# pushes both resources over their limits. This revision writes the fork to
+# DISK instead -- chosen over independently-reconstructed-fork-by-replay
+# (the block comment's alternative (b)): this repo's own file-backed-memmap
+# convention for CPUOffloadOptimizer state is already exactly "disk instead
+# of a second in-memory copy" (cpu_offload_adamw.py's own module docstring),
+# so a disk-backed fork snapshot is the SAME established pattern applied one
+# level up, not a new one.
+#
+# model.state_dict() and a CPUOffloadOptimizer's _shadow/_inner.state are
+# REFERENCES to the live tensors, not copies -- torch.save serializes their
+# CURRENT bytes directly to a file with zero extra concurrent allocation at
+# snapshot-write time. Restore loads each component (model, then each
+# optimizer's shadow, then its inner state) SEQUENTIALLY, never concurrently,
+# in-place copy_()s into the existing live tensors, and drops the loaded
+# reference immediately -- bounding peak transient extra memory to the
+# single LARGEST component, not the sum of all of them. mmap=True reads
+# tensor bytes lazily (page-mapped from the file rather than eagerly
+# materialized) -- the same "file-backed, zero pagefile-commit-charge" trick
+# cpu_offload_adamw.py's own memmap tensors already rely on. In-place copy_()
+# restore (never optimizer.load_state_dict, which reallocates NEW state
+# tensors and would silently swap the file-backed memmap tensors this whole
+# offload strategy exists to keep -- exactly the memory strategy under
+# profiling) so both arms genuinely run against the identical,
+# non-reallocated tensor objects the live run uses.
 # ---------------------------------------------------------------------------
-
-def _clone_model_state(model) -> dict:
-    return {k: v.detach().clone() for k, v in model.state_dict().items()}
-
-
-def _restore_model_state_(model, snapshot: dict) -> None:
-    import torch
-    with torch.no_grad():
-        for k, v in model.state_dict().items():
-            v.copy_(snapshot[k])
-
-
-def _snapshot_coa_state(opt: "_coa.CPUOffloadOptimizer") -> dict:
-    """In-memory fork of ONE CPUOffloadOptimizer's mutable state beyond the
-    real params (those are covered by _clone_model_state): the shadow fp32
-    copies and the inner optimizer's own per-parameter state (exp_avg/
-    exp_avg_sq/step for Adam-family, momentum_buffer for Muon -- the exact
-    keys cpu_offload_adamw.py's own __init__ seeds, walked directly via
-    opt._inner.state / opt._shadow rather than opt.state_dict(), for the
-    in-place-restore reason in this section's header comment)."""
-    import torch
-    shadow = [s.detach().clone() for s in opt._shadow]
-    inner_state = []
-    for shadow_p in opt._shadow:
-        entry = {}
-        for k, v in opt._inner.state.get(shadow_p, {}).items():
-            entry[k] = v.detach().clone() if isinstance(v, torch.Tensor) else v
-        inner_state.append(entry)
-    return {"shadow": shadow, "inner_state": inner_state}
-
-
-def _restore_coa_state_(opt: "_coa.CPUOffloadOptimizer", snapshot: dict) -> None:
-    import torch
-    with torch.no_grad():
-        for s, saved in zip(opt._shadow, snapshot["shadow"]):
-            s.copy_(saved)
-        for shadow_p, saved_entry in zip(opt._shadow, snapshot["inner_state"]):
-            live_entry = opt._inner.state.get(shadow_p, {})
-            for k, v in saved_entry.items():
-                if isinstance(v, torch.Tensor):
-                    if k in live_entry and isinstance(live_entry[k], torch.Tensor):
-                        live_entry[k].copy_(v)
-                    else:
-                        live_entry[k] = v.clone()
-                else:
-                    live_entry[k] = v
-            opt._inner.state[shadow_p] = live_entry
-
 
 def _snapshot_rng(device: str) -> dict:
     import random
@@ -320,37 +298,236 @@ def _restore_rng_(state: dict, *, device: str) -> None:
         torch.cuda.set_rng_state_all(state["torch_cuda"])
 
 
-def _snapshot_fork(*, model, optimizers: dict, device: str, global_step: int) -> dict:
-    """One forked snapshot of EVERYTHING that determines the next steps'
-    trajectory: model params/buffers, every optimizer's mutable state, both
-    RNG streams, and the loader position (global_step -- PackedShardLoader.
-    batch is a pure function of step, so the counter IS the loader state,
-    see module docstring item (b))."""
-    import copy
-    opt_snaps = {}
+def _snapshot_fork(*, model, optimizers: dict, device: str, global_step: int,
+                   fork_dir: Path) -> dict:
+    """Writes the fork to fork_dir -- never held in memory as a whole. RNG
+    state (a few KB) is the one piece kept in-memory in the returned dict;
+    it is not a capacity concern at any scale."""
+    import torch
+    fork_dir.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), str(fork_dir / "model_state.pt"))
+
+    opt_meta: dict = {}
     for name, opt in optimizers.items():
         if isinstance(opt, _coa.CPUOffloadOptimizer):
-            opt_snaps[name] = {"kind": "coa", "state": _snapshot_coa_state(opt)}
+            shadow_path = fork_dir / f"{name}.shadow.pt"
+            state_path = fork_dir / f"{name}.inner_state.pt"
+            torch.save(list(opt._shadow), str(shadow_path))
+            # Positionally keyed (index i <-> opt._shadow[i]) -- the SAME
+            # index-alignment convention timeshare_pretrain.py's
+            # load_optimizers_state already documents for this optimizer
+            # family ("same param order... state indices align").
+            state_list = [dict(opt._inner.state.get(sp, {})) for sp in opt._shadow]
+            torch.save(state_list, str(state_path))
+            opt_meta[name] = {"kind": "coa", "shadow_path": str(shadow_path),
+                              "state_path": str(state_path)}
         else:
-            opt_snaps[name] = {"kind": "plain", "state": copy.deepcopy(opt.state_dict())}
+            import copy
+            path = fork_dir / f"{name}.plain_state.pt"
+            torch.save(copy.deepcopy(opt.state_dict()), str(path))
+            opt_meta[name] = {"kind": "plain", "path": str(path)}
+
     return {
-        "model": _clone_model_state(model),
-        "optimizers": opt_snaps,
+        "fork_dir": str(fork_dir),
+        "model_path": str(fork_dir / "model_state.pt"),
+        "optimizers": opt_meta,
         "rng": _snapshot_rng(device),
         "global_step": global_step,
     }
 
 
 def _restore_fork_(snapshot: dict, *, model, optimizers: dict, device: str) -> int:
-    _restore_model_state_(model, snapshot["model"])
+    """Sequential, never-concurrent per-component load: model, then each
+    optimizer's shadow, then its inner state -- each loaded, copy_()'d
+    in-place into the live tensors, then dropped before the next component
+    loads. weights_only=False: this repo's own trusted, same-run data (never
+    externally sourced), and the inner-state dicts mix tensors with plain
+    step counters -- weights_only=True would reject that structure."""
+    import torch
+
+    loaded_model_sd = torch.load(snapshot["model_path"], map_location="cpu",
+                                 mmap=True, weights_only=False)
+    with torch.no_grad():
+        for k, v in model.state_dict().items():
+            v.copy_(loaded_model_sd[k])
+    del loaded_model_sd
+
     for name, opt in optimizers.items():
-        saved = snapshot["optimizers"][name]
-        if saved["kind"] == "coa":
-            _restore_coa_state_(opt, saved["state"])
+        meta = snapshot["optimizers"][name]
+        if meta["kind"] == "coa":
+            loaded_shadow = torch.load(meta["shadow_path"], map_location="cpu",
+                                       mmap=True, weights_only=False)
+            with torch.no_grad():
+                for s, saved in zip(opt._shadow, loaded_shadow):
+                    s.copy_(saved)
+            del loaded_shadow
+
+            loaded_state = torch.load(meta["state_path"], map_location="cpu",
+                                      mmap=True, weights_only=False)
+            with torch.no_grad():
+                for shadow_p, saved_entry in zip(opt._shadow, loaded_state):
+                    live_entry = opt._inner.state.get(shadow_p, {})
+                    for k, v in saved_entry.items():
+                        if isinstance(v, torch.Tensor):
+                            if k in live_entry and isinstance(live_entry[k], torch.Tensor):
+                                live_entry[k].copy_(v)
+                            else:
+                                live_entry[k] = v.clone()
+                        else:
+                            live_entry[k] = v
+                    opt._inner.state[shadow_p] = live_entry
+            del loaded_state
         else:
-            opt.load_state_dict(saved["state"])
+            loaded = torch.load(meta["path"], map_location="cpu", weights_only=False)
+            opt.load_state_dict(loaded)
+
     _restore_rng_(snapshot["rng"], device=device)
     return snapshot["global_step"]
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed fork-capacity preflight -- ember #702 mid-build repair item 3.
+# abort-not-degrade, same discipline as cpu_offload_adamw.vram_preflight and
+# this tree's other Windows-commit governors (cbase_grow_rung2_stabilize.py's
+# _commit_margin_assert / _read_commit_gb): hold, report numbers, refuse,
+# never proceed into the wall, never widen the floor to make a measurement
+# pass. _read_commit_gib below duplicates (rather than imports) that
+# module's ctypes read: cbase_grow_rung2_stabilize.py applies PROCESS-WIDE
+# monkeypatches at IMPORT TIME (torch.nn.Module.load_state_dict,
+# CPUOffloadOptimizer.load_state_dict) that this runner must not silently
+# inherit just to reuse a 15-line memory read.
+# ---------------------------------------------------------------------------
+
+COMMIT_MARGIN_FLOOR_GIB = 6.0   # same floor value as this tree's other commit governors
+VRAM_MARGIN_FLOOR_GIB = 2.0     # same floor as cpu_offload_adamw.vram_preflight's own default
+
+
+def _read_commit_gib() -> dict | None:
+    """Ground-truth Windows commit via ONE in-process GlobalMemoryStatusEx
+    call (ullAvailPageFile). Never raises -- returns None on any read
+    failure (non-Windows interpreter, API failure), the same
+    never-raises-on-read-failure contract every other commit-read helper in
+    this tree uses; a failed read is disclosed, never treated as a
+    violation."""
+    import ctypes
+
+    class _MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+    try:
+        stat = _MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+        ok = ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+        if not ok:
+            return None
+        gib = 1024.0 ** 3
+        return {
+            "committed_gib": round((stat.ullTotalPageFile - stat.ullAvailPageFile) / gib, 3),
+            "limit_gib": round(stat.ullTotalPageFile / gib, 3),
+            "free_gib": round(stat.ullAvailPageFile / gib, 3),
+        }
+    except Exception:
+        return None
+
+
+def _realized_fork_bytes(*, model, optimizers: dict) -> dict:
+    """Sizes the fork snapshot from REALIZED tensor bytes actually present
+    in THIS run (never a config-derived estimate) -- the exact numbers the
+    torch.save calls in _snapshot_fork are about to write."""
+    import torch
+    model_bytes = sum(v.numel() * v.element_size() for v in model.state_dict().values())
+    shadow_bytes = 0
+    state_bytes = 0
+    for opt in optimizers.values():
+        if isinstance(opt, _coa.CPUOffloadOptimizer):
+            shadow_bytes += sum(s.numel() * s.element_size() for s in opt._shadow)
+            for shadow_p in opt._shadow:
+                for v in opt._inner.state.get(shadow_p, {}).values():
+                    if isinstance(v, torch.Tensor):
+                        state_bytes += v.numel() * v.element_size()
+    return {"model_bytes": model_bytes, "shadow_bytes": shadow_bytes, "state_bytes": state_bytes}
+
+
+def _write_capacity_refusal_receipt(result: dict, *, run_dir: str) -> str:
+    import json
+    import os
+    receipt = {
+        "ticket": "EMBER-702-ATTRIBUTION-FORK-CAPACITY-REFUSAL",
+        "ts": _ts(),
+        "issue": "wordingone/ember#702",
+        "verdict": "GOVERNOR_CAPACITY_FAIL",
+        **result,
+        "api_spend_usd": 0, "paid_api_surface_used": False,
+    }
+    path = os.path.join(run_dir, f"attribution-702-fork-capacity-refusal-{receipt['ts']}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(receipt, f, indent=2, default=str)
+    return path
+
+
+def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: str) -> dict:
+    """Fail-closed capacity assert BEFORE any fork-snapshot write. Sized from
+    REALIZED tensor bytes (_realized_fork_bytes), not config. The disk-backed
+    design means the fork itself adds ~zero PERSISTENT VRAM/commit -- this
+    checks the TRANSIENT restore-time exposure conservatively: model_bytes
+    against free VRAM (device=='cuda' only -- the disk-backed restore's
+    actual added VRAM is near-zero since it copies CPU-loaded bytes into
+    already-allocated GPU tensors, but this stays conservative rather than
+    trusting that invariant never regresses), and the full
+    model+shadow+state byte sum against free host commit (the sequential
+    per-component load bounds the TRUE peak to the single largest component,
+    but Windows does not guarantee immediate commit release on del+GC, so
+    this checks the worst case). Raises SystemExit with a written refusal
+    receipt on insufficiency -- abort-not-degrade, no fix-forward, no
+    widened floor."""
+    sizes = _realized_fork_bytes(model=model, optimizers=optimizers)
+    gib = 1024.0 ** 3
+    total_gib = round(sum(sizes.values()) / gib, 3)
+    result = {"sizes_bytes": sizes, "total_required_gib": total_gib,
+             "vram": None, "commit": None, "sufficient": True, "refusal": None}
+
+    if device == "cuda":
+        try:
+            import torch
+            if torch.cuda.is_available():
+                vram_check = vram_preflight(sizes["model_bytes"] / gib,
+                                            margin_gib_floor=VRAM_MARGIN_FLOOR_GIB)
+                result["vram"] = vram_check
+                if not vram_check["sufficient"]:
+                    result["sufficient"] = False
+                    result["refusal"] = (
+                        f"VRAM margin insufficient for the fork snapshot's transient "
+                        f"restore exposure: {vram_check}")
+        except Exception as e:
+            result["vram"] = {"error": str(e)}
+
+    commit = _read_commit_gib()
+    result["commit"] = commit
+    if commit is not None:
+        commit_margin_gib = round(commit["free_gib"] - total_gib, 3)
+        result["commit_margin_gib"] = commit_margin_gib
+        if commit_margin_gib < COMMIT_MARGIN_FLOOR_GIB:
+            result["sufficient"] = False
+            result["refusal"] = (
+                f"host-commit margin insufficient for the fork snapshot: free="
+                f"{commit['free_gib']}GiB, required={total_gib}GiB, margin="
+                f"{commit_margin_gib}GiB < floor={COMMIT_MARGIN_FLOOR_GIB}GiB")
+    # commit is None (non-Windows / read failure): disclosed, never treated
+    # as a violation -- same contract as every other commit-read helper here.
+
+    if not result["sufficient"]:
+        receipt_path = _write_capacity_refusal_receipt(result, run_dir=run_dir)
+        print(f"ATTRIBUTION_702_FORK_CAPACITY_REFUSED receipt={receipt_path} "
+              f"refusal={result['refusal']}", flush=True)
+        raise SystemExit(
+            f"ATTRIBUTION_702_FORK_CAPACITY_REFUSED: {result['refusal']} -- "
+            f"abort-not-degrade, no fix-forward, no widened floor (receipt={receipt_path})")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +678,7 @@ def _run_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn, mtp_enabled,
 def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_fn,
                                 mtp_enabled, mtp_weight, ce_chunk_tokens, device,
                                 batch_size, total_steps, n_active: int,
-                                fork_global_step: int) -> dict:
+                                fork_global_step: int, run_dir: str) -> dict:
     """AB/BA counterbalanced overhead measurement -- ember #702
     BLOCK_721_PRODUCTION_ATTRIBUTION repair item (b). Both arms fork from the
     IDENTICAL post-warmup snapshot (model + every optimizer's mutable state +
@@ -516,14 +693,24 @@ def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_f
     warmth) a single fixed-order design cannot distinguish from real
     instrumentation cost. Returns pooled wall-time lists, the merged
     subphase collector, and the per-arm breakdown (for receipt disclosure /
-    falsifiability of the counterbalancing itself)."""
+    falsifiability of the counterbalancing itself).
+
+    A fail-closed capacity preflight (ember #702 mid-build repair item 3)
+    runs BEFORE the fork snapshot is written -- refuses (named receipt under
+    run_dir, SystemExit, no fix-forward) rather than writing a snapshot into
+    insufficient VRAM/commit margin. The fork itself is DISK-BACKED under
+    run_dir/fork_snapshot (mid-build repair item 1, see the section header
+    above _snapshot_fork), never an in-memory clone held for the whole of
+    Arm A's execution."""
     common = dict(model=model, loader=loader, optimizers=optimizers, base_lrs=base_lrs,
                  cfg=cfg, ce_fn=ce_fn, mtp_enabled=mtp_enabled, mtp_weight=mtp_weight,
                  ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
                  total_steps=total_steps)
 
+    _preflight_fork_capacity(model=model, optimizers=optimizers, device=device, run_dir=run_dir)
+    fork_dir = Path(run_dir) / "fork_snapshot"
     fork0 = _snapshot_fork(model=model, optimizers=optimizers, device=device,
-                           global_step=fork_global_step)
+                           global_step=fork_global_step, fork_dir=fork_dir)
 
     # ---- Arm A: profiled, then unprofiled ----
     collector_a = SubphaseCollector()
@@ -790,9 +977,17 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     loader = ts.PackedShardLoader(shard_dir, seq, n_mtp,
                                   mmap_cache_dir=os.path.join(run_dir, "mmap_cache"))
 
+    # optstate_dir is ALWAYS a per-invocation-unique path derived from run_dir
+    # (itself unique per call -- a fresh tempdir on every selftest/CLI
+    # invocation), never omitted -- ember #702 mid-build isolation repair.
+    # The shared global default (cpu_offload_adamw._DEFAULT_OPTSTATE_DIR) is
+    # therefore unreachable from this runner: a selftest's tiny-model param
+    # names (or a live run racing another live run) can never collide with
+    # or truncate another invocation's file-backed shadow/state.
     optimizers, base_lrs, routing = ts.build_split_optimizer(
         model, cfg, offload_optimizer_state=True,
-        deviation_dir=os.path.join(run_dir, "deviations"))
+        deviation_dir=os.path.join(run_dir, "deviations"),
+        optstate_dir=os.path.join(run_dir, "optstate"))
     muon_named, adamw_named = ts.split_param_groups(model)
     expected_full_numel = sum(p.numel() for _, p in muon_named) + \
         sum(p.numel() for _, p in adamw_named)
@@ -814,7 +1009,7 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
 
     # ---- counterbalanced AB/BA blocks (repair item (b)) ----
     ab_ba = _run_counterbalanced_ab_ba(
-        n_active=n_active, fork_global_step=n_warmup, **common)
+        n_active=n_active, fork_global_step=n_warmup, run_dir=run_dir, **common)
     collector = ab_ba["collector"]
 
     calibration = calibrate_pinned_vs_pageable(device=device)
@@ -1168,17 +1363,25 @@ def _selftest_integration_all_gates_pass() -> None:
     # on a too-tiny model the fixed Python-level cost of the instrumentation
     # calls themselves (perf_counter/sync/callback dispatch) is a large
     # enough fraction of each (otherwise near-instant) tensor op to blow the
-    # 10%/5% bounds on pure measurement noise -- swept empirically across 10
-    # seeds at these dims (overhead 0.3-6.7%, closure ~2.0%, both comfortably
-    # inside bound with margin) before freezing this fixture's parameters.
+    # 10%/5% bounds on pure measurement noise. Re-swept at these dims after
+    # the fork snapshot/restore went disk-backed (mid-build capacity repair,
+    # item 1): the one-time real disk I/O per AB/BA invocation (torch.save/
+    # torch.load around the fork, sharing the same disk as
+    # CPUOffloadOptimizer's own per-step memmap I/O) adds enough timing
+    # jitter that the PRIOR fixture (hidden=256/seq=32/n_active=14, tuned
+    # against the in-memory-clone fork) intermittently failed the overhead
+    # gate (observed 15.6%/31.9% against the 10% bound, 2 of 10 real CLI
+    # invocations) -- a genuine regression the deeper sweep below is chosen
+    # to survive, not a fluke. 20 seeds at these dims: overhead 0.2-5.8%,
+    # closure 1.3-1.5%, both comfortably inside bound with margin.
     cfg = {
-        "model": {"seq": 32, "vocab": 64, "hidden": 256, "tied_embeddings": False},
+        "model": {"seq": 64, "vocab": 64, "hidden": 384, "tied_embeddings": False},
         "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 2, "weight": 0.3}},
         "optimizer": {"lr_muon": 0.02, "lr_adamw": 3e-4, "weight_decay": 0.1},
         "schedule": {"warmup_frac": 0.1, "stable_until_frac": 0.8, "decay_to_lr_frac": 0.1},
         "throughput": {"batch": 2},
     }
-    tiny_dims = {"vocab": 64, "hidden": 256, "depth": 3, "seq": 32}
+    tiny_dims = {"vocab": 64, "hidden": 384, "depth": 3, "seq": 64}
     run_dir = tempfile.mkdtemp(prefix="attribution702_integration_")
 
     synthetic_calibration = {
@@ -1202,7 +1405,7 @@ def _selftest_integration_all_gates_pass() -> None:
     try:
         receipt = attribution_run(
             live=False, cfg=cfg, shard_dir=None, run_dir=run_dir, device="cpu",
-            tiny_dims=tiny_dims, batch_size=2, n_warmup=2, n_active=14, ce_chunk_tokens=32)
+            tiny_dims=tiny_dims, batch_size=2, n_warmup=2, n_active=24, ce_chunk_tokens=32)
     finally:
         module.calibrate_pinned_vs_pageable = _orig_calibrate
 
