@@ -590,15 +590,31 @@ def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: s
     disk states rather than depending on today's actual idle GPU/disk on
     whatever box runs the selftest.
 
-    Raises SystemExit with a written refusal receipt on insufficiency --
-    abort-not-degrade, no fix-forward, no widened floor."""
+    FAIL-CLOSED on an UNAVAILABLE required measurement -- ember #702
+    mid-build repair round 3 (post-merge falsifier finding on the round-2
+    head): the round-2 version treated a commit-read failure, a disk-read
+    failure, or a VRAM-read exception as "disclosed, never a violation" and
+    left result["sufficient"]=True -- fail-OPEN on exactly the inputs this
+    gate exists to assert. "Disclosed skip" is legitimate ONLY for an
+    INAPPLICABLE leg (VRAM when device != 'cuda' -- there is no GPU-side
+    restore exposure to measure for a CPU run at all); every leg that IS
+    applicable (commit and disk always; VRAM whenever device=='cuda') is
+    REQUIRED, and an unmeasured required resource refuses, exactly like an
+    insufficient one -- a capacity gate that cannot see a resource has not
+    cleared it. Raises SystemExit with a written refusal receipt on
+    insufficiency OR unavailability -- abort-not-degrade, no fix-forward,
+    no widened floor."""
     sizes = _realized_fork_bytes(model=model, optimizers=optimizers)
     gib = 1024.0 ** 3
     total_write_gib = round(sum(sizes.values()) / gib, 3)
     plain_gib = round(sizes["plain_bytes"] / gib, 3)
     result = {"sizes_bytes": sizes, "total_write_gib": total_write_gib,
              "plain_gib": plain_gib, "vram": None, "commit": None, "disk": None,
-             "sufficient": True, "refusal": None}
+             "sufficient": True, "refusal_reasons": []}
+
+    def _refuse(reason: str) -> None:
+        result["sufficient"] = False
+        result["refusal_reasons"].append(reason)
 
     if device == "cuda":
         try:
@@ -609,12 +625,29 @@ def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: s
                                             nvsmi=nvsmi)
                 result["vram"] = vram_check
                 if not vram_check["sufficient"]:
-                    result["sufficient"] = False
-                    result["refusal"] = (
-                        f"VRAM margin insufficient for the restore path's bounded "
-                        f"staging buffer: {vram_check}")
+                    _refuse(
+                        f"VRAM margin insufficient for the restore path's "
+                        f"bounded staging buffer: {vram_check}")
+            else:
+                # device=='cuda' makes VRAM an APPLICABLE, REQUIRED leg -- no
+                # visible CUDA runtime means that required measurement is
+                # UNAVAILABLE, not inapplicable.
+                result["vram"] = {"error": "torch.cuda.is_available() is "
+                                            "False for a device='cuda' preflight"}
+                _refuse(
+                    "VRAM measurement unavailable: device='cuda' but no CUDA "
+                    "runtime visible in this process -- a required, "
+                    "applicable measurement that could not be taken is a "
+                    "refusal, never a silent pass")
         except Exception as e:
             result["vram"] = {"error": str(e)}
+            _refuse(
+                f"VRAM measurement raised an exception for a device='cuda' "
+                f"preflight -- a required, applicable measurement that "
+                f"could not be taken is a refusal, never a silent pass: {e}")
+    # device != 'cuda': VRAM is INAPPLICABLE (no GPU-side restore exposure
+    # exists to measure on a CPU run) -- result["vram"] stays None, a
+    # legitimate disclosed skip, never a violation.
 
     commit_stat = commit if commit is not None else _read_commit_gib()
     result["commit"] = commit_stat
@@ -624,15 +657,18 @@ def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: s
         result["commit_required_gib"] = commit_required_gib
         result["commit_margin_gib"] = commit_margin_gib
         if commit_margin_gib < COMMIT_MARGIN_FLOOR_GIB:
-            result["sufficient"] = False
-            result["refusal"] = (
+            _refuse(
                 f"host-commit margin insufficient for the restore path's plain-"
                 f"optimizer bytes + staging buffer: free={commit_stat['free_gib']}"
                 f"GiB, required={commit_required_gib}GiB, margin="
                 f"{commit_margin_gib}GiB < floor={COMMIT_MARGIN_FLOOR_GIB}GiB")
-    # commit_stat is None (non-Windows / read failure): disclosed, never
-    # treated as a violation -- same contract as every other commit-read
-    # helper here.
+    else:
+        # commit is an ALWAYS-APPLICABLE, REQUIRED measurement (every host
+        # has a commit limit) -- a read failure is UNAVAILABLE, not
+        # inapplicable.
+        _refuse(
+            "host-commit measurement unavailable (read failure) -- an "
+            "unmeasured required resource is a refusal, never a pass")
 
     disk_stat = disk if disk is not None else _read_disk_free_gib(run_dir)
     result["disk"] = disk_stat
@@ -640,13 +676,18 @@ def _preflight_fork_capacity(*, model, optimizers: dict, device: str, run_dir: s
         disk_margin_gib = round(disk_stat["free_gib"] - total_write_gib, 3)
         result["disk_margin_gib"] = disk_margin_gib
         if disk_margin_gib < DISK_MARGIN_FLOOR_GIB:
-            result["sufficient"] = False
-            result["refusal"] = (
+            _refuse(
                 f"free disk insufficient for the fork snapshot write: free="
                 f"{disk_stat['free_gib']}GiB, required={total_write_gib}GiB, "
                 f"margin={disk_margin_gib}GiB < floor={DISK_MARGIN_FLOOR_GIB}GiB")
-    # disk_stat is None (read failure): disclosed, never treated as a
-    # violation -- same contract as commit/vram reads.
+    else:
+        # disk is an ALWAYS-APPLICABLE, REQUIRED measurement -- a read
+        # failure is UNAVAILABLE, not inapplicable.
+        _refuse(
+            "free-disk measurement unavailable (read failure) -- an "
+            "unmeasured required resource is a refusal, never a pass")
+
+    result["refusal"] = " | ".join(result["refusal_reasons"]) or None
 
     if not result["sufficient"]:
         receipt_path = _write_capacity_refusal_receipt(result, run_dir=run_dir)
@@ -835,7 +876,14 @@ def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_f
                  ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
                  total_steps=total_steps)
 
-    _preflight_fork_capacity(model=model, optimizers=optimizers, device=device, run_dir=run_dir)
+    # ember #702 mid-build repair round 3: the preflight's successful result
+    # was previously discarded (call for its side effect only) -- carried
+    # into the final receipt below so a claim-bearing output PRESERVES the
+    # realized sizes, margins, and all three measurement dicts a downstream
+    # reader could recheck, rather than only the fact that SOME preflight
+    # ran and did not raise.
+    preflight_result = _preflight_fork_capacity(
+        model=model, optimizers=optimizers, device=device, run_dir=run_dir)
     fork_dir = Path(run_dir) / "fork_snapshot"
     fork0 = _snapshot_fork(model=model, optimizers=optimizers, device=device,
                            global_step=fork_global_step, fork_dir=fork_dir)
@@ -877,6 +925,7 @@ def _run_counterbalanced_ab_ba(*, model, loader, optimizers, base_lrs, cfg, ce_f
                   "unprofiled_walls_s": unprofiled_walls_b},
         "fork_global_step": fork_global_step,
         "post_run_global_step": fork_global_step + 2 * n_active,
+        "preflight": preflight_result,
     }
 
 
@@ -1214,6 +1263,12 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                       "profiled_walls_s": ab_ba["arm_b"]["profiled_walls_s"],
                       "unprofiled_walls_s": ab_ba["arm_b"]["unprofiled_walls_s"]},
         },
+        # ember #702 mid-build repair round 3: the successful fork-capacity
+        # preflight's full record (realized sizes, margins, all three
+        # measurement dicts) -- previously discarded once the preflight
+        # passed. A claim-bearing receipt PRESERVES what was measured, not
+        # just that a check ran.
+        "fork_capacity_preflight": ab_ba["preflight"],
         "subphase_totals_s": totals,
         "subphase_byte_totals": collector.byte_totals(),
         "per_step_span_ratios": ratios,
@@ -1557,11 +1612,13 @@ def _selftest_integration_all_gates_pass() -> None:
 
 
 def _selftest_fork_capacity_preflight() -> None:
-    """ember #702 mid-build repair round 2 (independent falsifier re-test):
-    proves _preflight_fork_capacity prices the ACTUAL restore-path exposure
-    (bounded staging buffers + any real plain-optimizer bytes), never the
-    phantom full-model/full-snapshot charges the round-1 version used. Two
-    assertions, both explicitly named in the falsifier's cure:
+    """ember #702 mid-build repair rounds 2+3: proves _preflight_fork_
+    capacity prices the ACTUAL restore-path exposure (bounded staging
+    buffers + any real plain-optimizer bytes), never the phantom full-
+    model/full-snapshot charges round 1 used (round 2) -- AND fails CLOSED,
+    never open, on an unavailable required measurement (round 3, a post-
+    merge falsifier finding on the round-2 head: monkeypatched read
+    failures returned sufficient=True). Five assertions:
 
     1. CLEARS at a simulated 20GiB-VRAM-used envelope (24GiB card, ~4GiB
        free) with ample disk -- the exact real-world peak this repo's own
@@ -1569,16 +1626,36 @@ def _selftest_fork_capacity_preflight() -> None:
        preflight (pricing model_bytes~=4.09GiB + 2GiB margin against ~4GiB
        free) could NEVER clear -- safe-fail but undeliverable, not merely
        conservative.
-    2. REFUSES under genuinely low free disk -- proves the new disk check
-       (absent in round 1) actually fires, not just that it exists.
+    2. REFUSES under genuinely low free disk -- proves the disk check
+       actually fires, not just that it exists.
+    3. REFUSES when the commit measurement is UNAVAILABLE (module-level
+       _read_commit_gib monkeypatched to return None) -- round 1/2 treated
+       this as "disclosed, never a violation" and left sufficient=True;
+       commit is an ALWAYS-APPLICABLE, REQUIRED measurement, so an
+       unavailable read is a refusal, not a skip.
+    4. REFUSES when the disk measurement is UNAVAILABLE (module-level
+       _read_disk_free_gib monkeypatched to return None) -- same class of
+       fix as #3.
+    5. REFUSES when the VRAM measurement RAISES (a malformed nvsmi dict
+       missing "free_gib") -- round 1/2 recorded {"error": ...} without
+       setting sufficient=False; device=='cuda' makes VRAM an APPLICABLE,
+       REQUIRED leg, so an exception during its measurement is a refusal,
+       not a silently-absorbed error.
 
     nvsmi/disk are INJECTED synthetic measurement dicts (same pure-function-
-    of-a-measured-dict pattern as vram_preflight's own `nvsmi` param) so this
-    proves the PRICING LOGIC against a known envelope, not today's actual
-    idle GPU/disk state on whatever box happens to run this selftest.
-    Skips (disclosed, never a silent pass) if this process has no CUDA
-    device at all -- the VRAM leg of this gate is fundamentally CUDA-only,
-    same disclosed-skip discipline as calibrate_pinned_vs_pageable."""
+    of-a-measured-dict pattern as vram_preflight's own `nvsmi` param); the
+    commit/disk UNAVAILABLE fixtures monkeypatch the module-level read
+    functions themselves (the same try/finally-restored pattern
+    _selftest_integration_all_gates_pass already uses for
+    calibrate_pinned_vs_pageable) since `commit=None`/`disk=None` as
+    KEYWORD ARGUMENTS mean "measure for real" by design, not "force a read
+    failure" -- the monkeypatch is the only way to inject that state
+    deterministically. This proves the PRICING AND FAIL-CLOSED LOGIC
+    against known envelopes, not today's actual idle GPU/disk/commit state
+    on whatever box happens to run this selftest. Skips (disclosed, never a
+    silent pass) if this process has no CUDA device at all -- the VRAM leg
+    of this gate is fundamentally CUDA-only, same disclosed-skip discipline
+    as calibrate_pinned_vs_pageable."""
     import tempfile
 
     import torch
@@ -1605,6 +1682,7 @@ def _selftest_fork_capacity_preflight() -> None:
     }
     ample_disk = {"total_gib": 500.0, "used_gib": 100.0, "free_gib": 400.0}
 
+    # ---- 1: CLEARS at the measured real envelope ----
     result_clear = _preflight_fork_capacity(
         model=model, optimizers=optimizers, device="cuda", run_dir=run_dir,
         nvsmi=simulated_nvsmi_20gib_used, disk=ample_disk)
@@ -1613,20 +1691,74 @@ def _selftest_fork_capacity_preflight() -> None:
         f"a 24GiB card, ample disk) -- got {result_clear}")
     assert result_clear["vram"]["sufficient"] is True, result_clear["vram"]
 
+    # ---- 2: REFUSES under genuinely low free disk ----
     low_disk = {"total_gib": 500.0, "used_gib": 499.99, "free_gib": 0.01}
-    refused = False
+    low_disk_refused = False
     try:
         _preflight_fork_capacity(
             model=model, optimizers=optimizers, device="cuda", run_dir=run_dir,
             nvsmi=simulated_nvsmi_20gib_used, disk=low_disk)
     except SystemExit:
-        refused = True
-    assert refused, "gate must REFUSE (SystemExit) under genuinely low free disk"
+        low_disk_refused = True
+    assert low_disk_refused, (
+        "gate must REFUSE (SystemExit) under genuinely low free disk")
+
+    module = sys.modules[__name__]
+
+    # ---- 3: REFUSES when commit measurement is UNAVAILABLE (read failure) ----
+    _orig_read_commit_gib = module._read_commit_gib
+    module._read_commit_gib = lambda: None
+    commit_none_refused = False
+    try:
+        try:
+            _preflight_fork_capacity(
+                model=model, optimizers=optimizers, device="cuda", run_dir=run_dir,
+                nvsmi=simulated_nvsmi_20gib_used, disk=ample_disk)
+        except SystemExit:
+            commit_none_refused = True
+    finally:
+        module._read_commit_gib = _orig_read_commit_gib
+    assert commit_none_refused, (
+        "gate must REFUSE when the commit measurement is UNAVAILABLE (read "
+        "failure), not silently pass -- this is the exact fail-open the "
+        "round-3 post-merge falsifier caught")
+
+    # ---- 4: REFUSES when disk measurement is UNAVAILABLE (read failure) ----
+    _orig_read_disk_free_gib = module._read_disk_free_gib
+    module._read_disk_free_gib = lambda path: None
+    disk_none_refused = False
+    try:
+        try:
+            _preflight_fork_capacity(
+                model=model, optimizers=optimizers, device="cuda", run_dir=run_dir,
+                nvsmi=simulated_nvsmi_20gib_used)
+        except SystemExit:
+            disk_none_refused = True
+    finally:
+        module._read_disk_free_gib = _orig_read_disk_free_gib
+    assert disk_none_refused, (
+        "gate must REFUSE when the disk measurement is UNAVAILABLE (read "
+        "failure), not silently pass")
+
+    # ---- 5: REFUSES when VRAM measurement RAISES (malformed nvsmi) ----
+    vram_error_refused = False
+    try:
+        _preflight_fork_capacity(
+            model=model, optimizers=optimizers, device="cuda", run_dir=run_dir,
+            nvsmi={"bogus": True}, disk=ample_disk)
+    except SystemExit:
+        vram_error_refused = True
+    assert vram_error_refused, (
+        "gate must REFUSE when the VRAM measurement raises an exception, "
+        "not record {'error': ...} and silently pass")
 
     print("ATTRIBUTION_702_FORK_CAPACITY_PREFLIGHT_SELFTEST_PASS "
           f"clear_vram_margin_gib={result_clear['vram']['margin_gib']} "
           f"clear_sufficient={result_clear['sufficient']} "
-          f"low_disk_refused={refused}", flush=True)
+          f"low_disk_refused={low_disk_refused} "
+          f"commit_none_refused={commit_none_refused} "
+          f"disk_none_refused={disk_none_refused} "
+          f"vram_error_refused={vram_error_refused}", flush=True)
 
 
 # ---------------------------------------------------------------------------
