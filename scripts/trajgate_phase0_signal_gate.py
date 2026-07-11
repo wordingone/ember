@@ -629,21 +629,23 @@ def assert_vocab_tokenizer_identity(ckpt_infos: dict, model_states: dict,
                     raise PhaseZeroGuardBreach(
                         f"checkpoint {label!r}: failed to compute manifest sha: {e}")
 
-            # Get model.pt SHA from manifest (self-attested, NOT used for matching)
-            model_pt_sha_self_attested = manifest.get("files", {}).get("model.pt")
+            # Get model.pt SHA computed from actual checkpoint file (not manifest-declared)
+            model_pt_sha_computed = ckpt_infos[label].get("model_pt_sha256_computed")
 
             # Find matching sidecar record: CONJUNCTIVE (item 8)
-            # Both manifest_sha AND model_pt_sha must match the record's computed hashes
+            # Both manifest_sha AND model_pt_sha must match the record's independently-computed hashes
+            # N5: Ensure neither computed SHA is None before matching (fail-closed on incomplete evidence)
             matched_sidecar = None
-            for step, record in sidecar_data.items():
-                record_manifest_sha = record.get("manifest_sha256")
-                record_model_pt_sha = record.get("model_pt_sha256")
+            if computed_manifest_sha is not None and model_pt_sha_computed is not None:
+                for step, record in sidecar_data.items():
+                    record_manifest_sha = record.get("manifest_sha256")
+                    record_model_pt_sha = record.get("model_pt_sha256")
 
-                # Item 8: AND not OR -- BOTH must match independently-computed values
-                if (computed_manifest_sha == record_manifest_sha and
-                    model_pt_sha_self_attested == record_model_pt_sha):
-                    matched_sidecar = record
-                    break
+                    # Item 8: AND not OR -- BOTH must match independently-computed values
+                    if (computed_manifest_sha == record_manifest_sha and
+                        model_pt_sha_computed == record_model_pt_sha):
+                        matched_sidecar = record
+                        break
 
             if matched_sidecar:
                 sidecar_tokenizer_id = matched_sidecar.get("tokenizer_sha")
@@ -1455,28 +1457,51 @@ def _selftest_tokenizer_lineage_sidecar() -> None:
     except PhaseZeroGuardBreach:
         pass
 
-    # ---- Item 8: auditor's exploit (forged manifest hash + self-attested model hash) → breach ----
+    # ---- B4a: Real-file integration fixture (positive path) ----
     with tempfile.TemporaryDirectory() as td:
-        # Create a sidecar with wrong manifest SHA but correct (self-attested) model SHA
+        ckpt_dir = os.path.join(td, "ckpt_0")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        tok_id = "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+        manifest_data = {"step": 776, "extra": {"tokenizer_id": tok_id}, "files": {"model.pt": "will_be_filled"}}
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"head.weight": torch.zeros(64, 8)}, model_pt_path)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_computed = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_computed = hashlib.sha256(f.read()).hexdigest()
+        sidecar_path = os.path.join(td, "lineage.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({"step": 776, "manifest_sha256": manifest_sha_computed, "model_pt_sha256": model_pt_sha_computed, "tokenizer_sha": tok_id}) + '\n')
+        with open(sidecar_path, 'rb') as f:
+            sidecar_sha_computed = hashlib.sha256(f.read()).hexdigest()
+        integration_infos = {l: {"manifest": manifest_data, "manifest_path": manifest_path, "model_pt_sha256_computed": model_pt_sha_computed} for l in ("a", "b", "c")}
+        result = assert_vocab_tokenizer_identity(integration_infos, ok_states, tokenizer_lineage_sidecar=sidecar_path, sidecar_sha256=sidecar_sha_computed)
+        if result.get("tokenizer_ids") != {l: tok_id for l in ("a", "b", "c")}:
+            raise AssertionError(f"real-file integration: wrong tokenizer_ids: {result}")
+
+    # ---- B4c: Item 8 exploit fixture rebuilt on real files ----
+    with tempfile.TemporaryDirectory() as td:
+        ckpt_dir = os.path.join(td, "ckpt_exploit")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        manifest_data = {"step": 776, "extra": {}, "files": {"model.pt": "placeholder"}}
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"head.weight": torch.zeros(64, 8)}, model_pt_path)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_e = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_e = hashlib.sha256(f.read()).hexdigest()
         sidecar_path = os.path.join(td, "exploit.jsonl")
         with open(sidecar_path, 'w', encoding='utf-8') as f:
-            record = {
-                "step": 776,
-                "manifest_sha256": "f" * 64,  # Deliberately wrong manifest hash
-                "model_pt_sha256": "abc123",  # Self-attested model hash (from manifest)
-                "tokenizer_sha": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
-            }
-            f.write(json.dumps(record) + '\n')
-
-        exploit_infos = {l: {
-            "manifest": {"extra": {}, "files": {"model.pt": "abc123"}}
-        } for l in ("a", "b", "c")}
-
-        # Item 8: conjunctive match requires BOTH hashes to match (not OR)
-        # This should breach because manifest hash doesn't match (computed vs record)
+            f.write(json.dumps({"step": 776, "manifest_sha256": "f"*64, "model_pt_sha256": model_pt_sha_e, "tokenizer_sha": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"}) + '\n')
+        exploit_infos = {l: {"manifest": manifest_data, "manifest_path": manifest_path, "model_pt_sha256_computed": model_pt_sha_e} for l in ("a", "b", "c")}
         try:
-            assert_vocab_tokenizer_identity(exploit_infos, ok_states,
-                                          tokenizer_lineage_sidecar=sidecar_path)
+            assert_vocab_tokenizer_identity(exploit_infos, ok_states, tokenizer_lineage_sidecar=sidecar_path, sidecar_sha256=None)
             raise AssertionError("auditor exploit (forged manifest hash) did not breach")
         except PhaseZeroGuardBreach:
             pass
@@ -1502,10 +1527,32 @@ def _selftest_tokenizer_lineage_sidecar() -> None:
             if "duplicate step" not in str(e).lower():
                 raise AssertionError(f"wrong breach message: {e}")
 
-    # ---- Item 10: conflict (manifest tokenizer_id != sidecar tokenizer_sha when both present) → breach ----
-    # Note: conflict only detected when sidecar record matches (both hashes match)
-    # For this test, we'd need actual manifest files, so we skip the full integration test
-    # The conflict logic is tested implicitly through other fixtures
+    # ---- B4b: Item 10 conflict fixture (manifest tokenizer_id != sidecar tokenizer_sha) → breach ----
+    with tempfile.TemporaryDirectory() as td:
+        ckpt_dir = os.path.join(td, "ckpt_conflict")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        manifest_data = {"step": 888, "extra": {"tokenizer_id": "tok-v2"}, "files": {"model.pt": "will_be_filled"}}
+        manifest_path = os.path.join(ckpt_dir, "manifest.json")
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_data, f)
+        model_pt_path = os.path.join(ckpt_dir, "model.pt")
+        torch.save({"head.weight": torch.zeros(64, 8)}, model_pt_path)
+        with open(model_pt_path, 'rb') as f:
+            model_pt_sha_c = hashlib.sha256(f.read()).hexdigest()
+        with open(manifest_path, 'rb') as f:
+            manifest_sha_c = hashlib.sha256(f.read()).hexdigest()
+        sidecar_path = os.path.join(td, "conflict.jsonl")
+        with open(sidecar_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({"step": 888, "manifest_sha256": manifest_sha_c, "model_pt_sha256": model_pt_sha_c, "tokenizer_sha": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"}) + '\n')
+        with open(sidecar_path, 'rb') as f:
+            sidecar_sha_c = hashlib.sha256(f.read()).hexdigest()
+        conflict_infos = {l: {"manifest": manifest_data, "manifest_path": manifest_path, "model_pt_sha256_computed": model_pt_sha_c} for l in ("a", "b", "c")}
+        try:
+            assert_vocab_tokenizer_identity(conflict_infos, ok_states, tokenizer_lineage_sidecar=sidecar_path, sidecar_sha256=sidecar_sha_c)
+            raise AssertionError("conflict fixture should breach but passed")
+        except PhaseZeroGuardBreach as e:
+            if "conflict" not in str(e).lower():
+                raise AssertionError(f"conflict fixture expected conflict message: {e}")
 
     # ---- Item 6: sidecar SHA verification ----
     with tempfile.TemporaryDirectory() as td:
