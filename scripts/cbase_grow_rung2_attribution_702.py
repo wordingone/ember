@@ -515,21 +515,59 @@ def _restore_checkpoint_optimizer_state_in_place(
     step before the first restored step, so this is a completeness measure,
     never load-bearing for correctness on its own.
 
+    external-adjudication BLOCKER 5 hardening (this function was previously
+    fail-OPEN on four axes: a missing saved key left the pre-seeded ZERO
+    tensor in place silently; an unexpected saved key got heap-cloned
+    (disclosed in reallocated_keys, but never refused); a param_groups
+    count mismatch was tolerated via a silent `break`; the report
+    unconditionally claimed storage_identity_preserved=True regardless of
+    any of the above). Every axis is now a hard, pre-mutation refusal:
+
+    1. Exact param_groups COUNT equality both directions (never a partial
+       apply that silently drops trailing groups).
+    2. A validation-ONLY pre-pass (zero mutation) asserts, per param index,
+       that the live and saved state dicts carry the EXACT SAME key set
+       (a saved-only key would require a clone; a live-only key would
+       silently keep its pre-seeded zero -- BOTH refuse now, before any
+       copy_() runs, so a refusal never leaves live state partially
+       restored) and that every shared tensor key has matching shape/dtype.
+       Zero clones are possible after this pre-pass passes.
+    2. Post-copy VALUE PARITY: every restored tensor is compared
+       element-wise (torch.equal, exact -- this is a byte copy_(), never a
+       computed value) against the saved source, not just data_ptr()
+       identity -- proves the bytes actually match, not merely that the
+       object wasn't reallocated.
+    3. Post-copy BACKING-FILE byte-mutation proof: for every key backed by
+       a CPUOffloadOptimizer memmap file (exp_avg/exp_avg_sq/
+       max_exp_avg_sq/momentum_buffer -- "step" is a plain scalar tensor,
+       never file-backed, and is explicitly excluded with a disclosed
+       reason rather than silently skipped), the file is REOPENED fresh
+       (a brand-new np.memmap handle, independent of the in-process torch
+       view) and its on-disk values compared against the saved source --
+       proving the write reached the file-backed page the CPU-offload
+       strategy depends on, not merely an in-process tensor view.
+
     Fail-closed (SystemExit, written receipt) on: a missing bundle key, a
-    param-count/index mismatch (checkpoint/live split_param_groups()
-    disagreement), any state tensor whose data_ptr() changed across the
-    restore (proves a reallocation slipped through -- the exact defect this
-    function exists to prevent), or a non-singleton AdamW internal step-set
+    param-count/group-count/key-set/shape/dtype mismatch (checkpoint/live
+    split_param_groups() disagreement), any state tensor whose data_ptr()
+    changed across the restore or whose value/backing-file bytes do not
+    match the checkpoint source, or a non-singleton AdamW internal step-set
     after restore (a genuine checkpoint's optimizer steps every param
     together each call; a real, specific step VALUE like 136 is NEVER
     hardcoded here -- ember #702's explicit "do not require/rewrite internal
     optimizer step" clause -- only INTERNAL CONSISTENCY is asserted, derived
     from the loaded checkpoint itself).
 
-    Returns a per-optimizer receipt dict (n_params, any reallocated keys
-    disclosed by name, storage_identity_preserved, the observed singleton
-    adamw_internal_step where applicable)."""
+    Returns a per-optimizer receipt dict (n_params, reallocated_keys --
+    always [] now that clones are refused rather than tolerated,
+    storage_identity_preserved, value_parity_verified,
+    backing_files_verified/backing_files_skipped_no_file, the observed
+    singleton adamw_internal_step where applicable). storage_identity_
+    preserved is now an HONEST field: the function raises before returning
+    on any violation, so a normal return means every check above genuinely
+    passed for every param -- never an unconditional True."""
     import torch
+    import numpy as np
 
     report: dict = {}
     for name, opt in optimizers.items():
@@ -553,6 +591,21 @@ def _restore_checkpoint_optimizer_state_in_place(
         saved_state = saved.get("state", {})
         saved_groups = saved.get("param_groups", [])
         n_shadow = len(opt._shadow)
+        live_groups = opt._inner.param_groups
+
+        # ---- BLOCKER 5 (1): exact param_groups COUNT equality both
+        # directions -- previously a silent `break` tolerated any
+        # mismatch. ----
+        if len(saved_groups) != len(live_groups):
+            receipt_path = _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_group_count", "optimizer": name,
+                 "n_saved_groups": len(saved_groups), "n_live_groups": len(live_groups)},
+                run_dir=run_dir, ticket="EMBER-702-CONTINUATION-OPTIMIZER-GROUP-COUNT-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_GROUP_COUNT_MISMATCH: optimizer "
+                f"{name!r} has {len(live_groups)} live param_groups but the "
+                f"checkpoint bundle carries {len(saved_groups)} -- refuse, "
+                f"never partial-apply (receipt={receipt_path})")
 
         if len(saved_state) != n_shadow:
             _write_rung2_refusal_receipt(
@@ -566,57 +619,92 @@ def _restore_checkpoint_optimizer_state_in_place(
                 f"checkpoint bundle carries {len(saved_state)} state entries "
                 "-- checkpoint/live split_param_groups() disagreement")
 
+        # ---- BLOCKER 5 (2): validation-only pre-pass, ZERO mutation.
+        # Exact key-set equality BOTH directions + shape/dtype equality on
+        # every shared key, for every index -- collected in full (never
+        # fail-fast on the first) so one refusal discloses every violation
+        # at once. ----
+        mismatches: list[str] = []
+        for i in range(n_shadow):
+            if i not in saved_state:
+                mismatches.append(f"{name}[{i}]: missing from checkpoint state "
+                                   f"(have indices {sorted(saved_state)[:5]}...)")
+                continue
+            shadow_p = opt._shadow[i]
+            live_entry = opt._inner.state.get(shadow_p, {})
+            saved_entry = saved_state[i]
+            live_keys = set(live_entry.keys())
+            saved_keys = set(saved_entry.keys())
+            extra_in_saved = saved_keys - live_keys
+            missing_from_saved = live_keys - saved_keys
+            if extra_in_saved:
+                mismatches.append(
+                    f"{name}[{i}]: checkpoint carries key(s) {sorted(extra_in_saved)} "
+                    "with no pre-seeded live destination -- would require a "
+                    "clone, refused (zero clones permitted)")
+            if missing_from_saved:
+                mismatches.append(
+                    f"{name}[{i}]: checkpoint is MISSING key(s) "
+                    f"{sorted(missing_from_saved)} -- the live tensor would "
+                    "silently keep its pre-seeded ZERO value, refused")
+            for k in sorted(live_keys & saved_keys):
+                lv, sv = live_entry[k], saved_entry[k]
+                if isinstance(lv, torch.Tensor) != isinstance(sv, torch.Tensor):
+                    mismatches.append(
+                        f"{name}[{i}].{k}: tensor-ness mismatch "
+                        f"(live={type(lv).__name__}, saved={type(sv).__name__})")
+                elif isinstance(lv, torch.Tensor):
+                    if tuple(lv.shape) != tuple(sv.shape):
+                        mismatches.append(
+                            f"{name}[{i}].{k}: shape {tuple(lv.shape)} != "
+                            f"checkpoint {tuple(sv.shape)}")
+                    elif lv.dtype != sv.dtype:
+                        mismatches.append(
+                            f"{name}[{i}].{k}: dtype {lv.dtype} != checkpoint {sv.dtype}")
+        if mismatches:
+            receipt_path = _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_key_shape_dtype_parity",
+                 "optimizer": name, "mismatches": mismatches[:20],
+                 "n_mismatches": len(mismatches)},
+                run_dir=run_dir,
+                ticket="EMBER-702-CONTINUATION-OPTIMIZER-KEY-PARITY-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_KEY_SHAPE_DTYPE_MISMATCH: "
+                f"optimizer {name!r}: {mismatches[:10]} -- exact key-set/"
+                "shape/dtype parity required BOTH directions before any "
+                f"copy_() runs, zero clones ever (receipt={receipt_path})")
+
+        # ---- Mutation pass -- the pre-pass above guarantees every index's
+        # key set matches exactly, so this loop only ever copy_()s into a
+        # pre-existing, correctly-shaped/dtyped destination. No clone
+        # branch exists anymore (removed -- was the fail-open hole). ----
         pre_ptrs: list[dict[str, int]] = []
         for i in range(n_shadow):
             live_entry = opt._inner.state.get(opt._shadow[i], {})
             pre_ptrs.append({k: v.data_ptr() for k, v in live_entry.items()
                              if isinstance(v, torch.Tensor)})
 
-        reallocated_keys: list[str] = []
         with torch.no_grad():
             for i in range(n_shadow):
-                if i not in saved_state:
-                    _write_rung2_refusal_receipt(
-                        {"gate": "optimizer_restore_state_index",
-                         "optimizer": name, "missing_index": i,
-                         "have_indices": sorted(saved_state)},
-                        run_dir=run_dir,
-                        ticket="EMBER-702-CONTINUATION-OPTIMIZER-INDEX-REFUSAL")
-                    raise SystemExit(
-                        f"ATTRIBUTION_702_OPTIMIZER_STATE_INDEX_MISSING: "
-                        f"optimizer {name!r} index {i} absent from checkpoint "
-                        f"state (have {sorted(saved_state)}) -- param-order "
-                        "mismatch between checkpoint and this run's "
-                        "split_param_groups()")
                 shadow_p = opt._shadow[i]
                 live_entry = opt._inner.state.get(shadow_p, {})
                 saved_entry = saved_state[i]
                 for k, v in saved_entry.items():
                     if isinstance(v, torch.Tensor):
-                        if k in live_entry and isinstance(live_entry[k], torch.Tensor):
-                            live_entry[k].copy_(v)
-                        else:
-                            # No pre-seeded destination (e.g. a lazily-added
-                            # amsgrad buffer CPUOffloadOptimizer.__init__
-                            # never pre-seeds) -- this IS a reallocation, of
-                            # a key that had no memmap identity to preserve
-                            # in the first place. Disclosed by name, never
-                            # silently matched to the common in-place case.
-                            live_entry[k] = v.clone()
-                            reallocated_keys.append(f"{name}[{i}].{k}")
+                        live_entry[k].copy_(v)
                     else:
                         live_entry[k] = v
                 opt._inner.state[shadow_p] = live_entry
 
-            live_groups = opt._inner.param_groups
             for gi, sg in enumerate(saved_groups):
-                if gi >= len(live_groups):
-                    break
                 for k, v in sg.items():
                     if k == "params":
                         continue
                     live_groups[gi][k] = v
 
+        # ---- BLOCKER 5 (3a): storage-identity proof (data_ptr() unchanged
+        # -- now a sanity CONFIRMATION, since the pre-pass already forbids
+        # the clone path that used to cause breaks). ----
         post_ptrs: list[dict[str, int]] = []
         step_values: set[float] = set()
         for i in range(n_shadow):
@@ -631,13 +719,10 @@ def _restore_checkpoint_optimizer_state_in_place(
         identity_breaks: list[str] = []
         for i in range(n_shadow):
             for k, ptr in pre_ptrs[i].items():
-                tag = f"{name}[{i}].{k}"
-                if tag in reallocated_keys:
-                    continue
                 if post_ptrs[i].get(k) != ptr:
-                    identity_breaks.append(tag)
+                    identity_breaks.append(f"{name}[{i}].{k}")
         if identity_breaks:
-            _write_rung2_refusal_receipt(
+            receipt_path = _write_rung2_refusal_receipt(
                 {"gate": "optimizer_restore_storage_identity",
                  "optimizer": name, "identity_breaks": identity_breaks[:20],
                  "n_identity_breaks": len(identity_breaks)},
@@ -647,7 +732,81 @@ def _restore_checkpoint_optimizer_state_in_place(
                 f"ATTRIBUTION_702_OPTIMIZER_STORAGE_REBOUND: optimizer "
                 f"{name!r} tensors {identity_breaks[:10]} changed data_ptr() "
                 "across restore -- in-place copy_() invariant violated "
-                "(defeats the file-backed CPU-offload strategy)")
+                f"(defeats the file-backed CPU-offload strategy) "
+                f"(receipt={receipt_path})")
+
+        # ---- BLOCKER 5 (3b): VALUE parity -- data_ptr() unchanged proves
+        # object identity, never that the BYTES actually match the
+        # checkpoint. Exact element-wise equality (torch.equal): this is a
+        # byte copy_(), never a computed/lossy value. ----
+        value_mismatches: list[str] = []
+        for i in range(n_shadow):
+            shadow_p = opt._shadow[i]
+            live_entry = opt._inner.state.get(shadow_p, {})
+            saved_entry = saved_state[i]
+            for k, sv in saved_entry.items():
+                if not isinstance(sv, torch.Tensor):
+                    continue
+                lv = live_entry[k]
+                if not torch.equal(lv.detach().cpu(), sv.detach().cpu()):
+                    value_mismatches.append(f"{name}[{i}].{k}")
+        if value_mismatches:
+            receipt_path = _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_value_parity", "optimizer": name,
+                 "value_mismatches": value_mismatches[:20],
+                 "n_value_mismatches": len(value_mismatches)},
+                run_dir=run_dir,
+                ticket="EMBER-702-CONTINUATION-OPTIMIZER-VALUE-PARITY-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_VALUE_PARITY_FAILED: optimizer "
+                f"{name!r} tensors {value_mismatches[:10]} do not byte-match "
+                f"the checkpoint source after copy_() (receipt={receipt_path})")
+
+        # ---- BLOCKER 5 (3c): backing-FILE byte-mutation proof. Every
+        # memmap-backed key (never "step", a plain scalar with no file) is
+        # re-read from a BRAND-NEW np.memmap handle on its own file --
+        # independent of the in-process torch view -- and compared against
+        # the checkpoint source, proving the write reached the file-backed
+        # page the CPU-offload strategy's whole memory model depends on. ----
+        key_to_suffix = {"exp_avg": ".exp_avg.f32", "exp_avg_sq": ".exp_avg_sq.f32",
+                         "max_exp_avg_sq": ".max_exp_avg_sq.f32",
+                         "momentum_buffer": ".momentum.f32"}
+        backing_files_verified: list[str] = []
+        backing_files_skipped_no_file: list[str] = []
+        backing_mismatches: list[str] = []
+        for i in range(n_shadow):
+            saved_entry = saved_state[i]
+            stem = opt._optstate_dir / _coa._sanitize_name(opt._names[i])
+            for k, sv in saved_entry.items():
+                if not isinstance(sv, torch.Tensor):
+                    continue
+                if k not in key_to_suffix:
+                    backing_files_skipped_no_file.append(f"{name}[{i}].{k}")
+                    continue
+                fpath = Path(str(stem) + key_to_suffix[k])
+                if not fpath.is_file():
+                    backing_mismatches.append(f"{name}[{i}].{k}: backing file {fpath} does not exist")
+                    continue
+                fresh = np.memmap(str(fpath), dtype=np.float32, mode="r",
+                                  shape=tuple(sv.shape))
+                if not np.array_equal(fresh, sv.detach().cpu().numpy()):
+                    backing_mismatches.append(f"{name}[{i}].{k}: on-disk bytes "
+                                              f"({fpath}) do not match checkpoint source")
+                else:
+                    backing_files_verified.append(f"{name}[{i}].{k}")
+                del fresh
+        if backing_mismatches:
+            receipt_path = _write_rung2_refusal_receipt(
+                {"gate": "optimizer_restore_backing_file_parity", "optimizer": name,
+                 "backing_mismatches": backing_mismatches[:20],
+                 "n_backing_mismatches": len(backing_mismatches)},
+                run_dir=run_dir,
+                ticket="EMBER-702-CONTINUATION-OPTIMIZER-BACKING-FILE-REFUSAL")
+            raise SystemExit(
+                f"ATTRIBUTION_702_OPTIMIZER_BACKING_FILE_MISMATCH: optimizer "
+                f"{name!r} {backing_mismatches[:10]} -- the offload strategy's "
+                f"file-backed page did not receive the restored value "
+                f"(receipt={receipt_path})")
 
         if len(step_values) > 1:
             _write_rung2_refusal_receipt(
@@ -666,8 +825,11 @@ def _restore_checkpoint_optimizer_state_in_place(
 
         report[name] = {
             "n_params": n_shadow,
-            "reallocated_keys": reallocated_keys,
+            "reallocated_keys": [],
             "storage_identity_preserved": True,
+            "value_parity_verified": True,
+            "backing_files_verified": backing_files_verified,
+            "backing_files_skipped_no_file": backing_files_skipped_no_file,
             "adamw_internal_step": (sorted(step_values)[0] if step_values else None),
         }
     return report
@@ -2245,19 +2407,26 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
         },
         "mode": {
             "live": live, "device": device, "n_warmup": n_warmup, "n_active": n_active,
-            # addendum-4 spec self-correction: these are TWO DISTINCT
-            # quantities, never conflated. physical_step_executions counts
-            # every actual step() call (shared warmup once, then n_active
-            # executed independently in EACH of arms A and B).
-            # unique_absolute_schedule_steps counts distinct schedule
-            # POSITIONS touched (both arms replay the SAME n_active-step
-            # absolute interval, so only warmup+n_active positions are
-            # unique). Neither is ever a valid total_steps denominator on
-            # the continuation path -- _verify_rung2_schedule_identity binds
-            # total_steps to the checkpoint manifest's own original schedule
-            # only.
-            "physical_step_executions": n_warmup + 2 * n_active,
-            "unique_absolute_schedule_steps": n_warmup + n_active,
+            # addendum-4 spec self-correction, round-3 accounting repair
+            # (_run_counterbalanced_ab_ba's own docstring + code confirm this
+            # against the actual step boundaries, not just asserted):
+            # physical_step_executions counts every actual step() call --
+            # EACH arm runs a profiled n_active sub-block AND an unprofiled
+            # n_active sub-block (Arm A: profiled-then-unprofiled; Arm B,
+            # from the SAME restored fork point: unprofiled-then-profiled),
+            # so warmup runs once + 4*n_active physical step() calls total
+            # (2 sub-blocks x 2 arms). unique_absolute_schedule_steps counts
+            # distinct schedule POSITIONS touched -- both arms traverse the
+            # IDENTICAL absolute range [fork_global_step, fork_global_step +
+            # 2*n_active) (arm A's profiled+unprofiled sub-blocks cover it
+            # once; arm B's unprofiled+profiled sub-blocks, from the same
+            # restored fork point, cover the SAME range again in swapped
+            # order), so warmup once + 2*n_active unique positions. Neither
+            # is ever a valid total_steps denominator on the continuation
+            # path -- _verify_rung2_schedule_identity binds total_steps to
+            # the checkpoint manifest's own original schedule only.
+            "physical_step_executions": n_warmup + 4 * n_active,
+            "unique_absolute_schedule_steps": n_warmup + 2 * n_active,
         },
         # Clause 5 receipt emissions: source checkpoint 4-hash set, start/end
         # absolute steps, total_steps denominator, shard identity shas, full
@@ -2505,6 +2674,7 @@ def _selftest() -> int:
     _selftest_fork_capacity_preflight()
     _selftest_rung2_identity_gate_units()
     _selftest_continuation_schedule_bind()
+    _selftest_optimizer_restore_refusals()
     _selftest_continuation_resume_wiring()
     return 0
 
@@ -2941,22 +3111,181 @@ def _selftest_rung2_identity_gate_units() -> None:
           flush=True)
 
 
+def _selftest_optimizer_restore_refusals() -> None:
+    """BLOCKER-5 negative fixtures: proves every NEW fail-closed refusal
+    branch in _restore_checkpoint_optimizer_state_in_place actually FIRES
+    on a genuinely corrupted bundle (never just that the positive path in
+    _selftest_continuation_resume_wiring happens not to trigger them) --
+    bundle-key, group-count, param-count, extra-key (clone-avoidance),
+    missing-key (zero-value-avoidance), shape, dtype, and
+    step-set-singleton, each on a fresh, real (non-tiny-shortcut)
+    CPUOffloadOptimizer built the same way attribution_run's own
+    continuation branch builds one. value_parity and backing_file byte-
+    mutation proofs are validated ONLY by the positive-path selftest
+    (proving they do not false-positive on a genuine restore) -- forcing
+    either of those two specific refusals would require corrupting a
+    tensor strictly BETWEEN copy_() and the check itself, not reachable
+    without white-box interference on this function's own control flow;
+    disclosed here rather than silently assumed covered."""
+    import copy
+    import os
+    import tempfile
+
+    import torch
+
+    cfg = {
+        "model": {"seq": 16, "vocab": 64, "hidden": 32, "layers": 2, "heads": 2,
+                  "tied_embeddings": False, "grad_checkpointing": False},
+        "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 2, "weight": 0.3}},
+        "optimizer": {"lr_muon": 0.02, "lr_adamw": 3e-4, "weight_decay": 0.1},
+        "schedule": {"type": "wsd", "warmup_frac": 0.1, "stable_until_frac": 0.8,
+                    "decay_to_lr_frac": 0.1},
+        "throughput": {"batch": 2},
+    }
+    small_intermediate = 48
+
+    def _fresh_optimizers():
+        run_dir = tempfile.mkdtemp(prefix="attribution702_restore_negfix_")
+        model, _, _, _ = ts.build_v0_model(
+            cfg, live=True, tiny_dims=None, intermediate_override=small_intermediate,
+            device="cpu")
+        optimizers, _, _ = ts.build_split_optimizer(
+            model, cfg, offload_optimizer_state=True,
+            deviation_dir=os.path.join(run_dir, "deviations"),
+            optstate_dir=os.path.join(run_dir, "optstate"))
+        return optimizers, run_dir
+
+    def _good_bundle(optimizers):
+        bundle = {}
+        for name, opt in optimizers.items():
+            state = {}
+            for i in range(len(opt._shadow)):
+                live_entry = opt._inner.state.get(opt._shadow[i], {})
+                state[i] = {k: (v.clone() if isinstance(v, torch.Tensor) else v)
+                           for k, v in live_entry.items()}
+            bundle[name] = {"state": state,
+                            "param_groups": copy.deepcopy(opt._inner.param_groups)}
+        return bundle
+
+    def _refuses(optimizers, bundle, run_dir) -> bool:
+        try:
+            _restore_checkpoint_optimizer_state_in_place(optimizers, bundle, run_dir=run_dir)
+        except SystemExit:
+            return True
+        return False
+
+    # ---- refusal: missing top-level optimizer key ----
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    del bundle[next(iter(bundle))]
+    bundle_key_refused = _refuses(optimizers, bundle, run_dir)
+    assert bundle_key_refused, "must refuse a bundle missing a top-level optimizer key"
+
+    # ---- refusal: param_groups COUNT mismatch ----
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    fname = next(iter(bundle))
+    bundle[fname]["param_groups"] = (
+        bundle[fname]["param_groups"] + [dict(bundle[fname]["param_groups"][0])])
+    group_count_refused = _refuses(optimizers, bundle, run_dir)
+    assert group_count_refused, "must refuse a param_groups count mismatch"
+
+    # ---- refusal: state-entry COUNT mismatch ----
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    fname = next(iter(bundle))
+    last_idx = max(bundle[fname]["state"])
+    del bundle[fname]["state"][last_idx]
+    param_count_refused = _refuses(optimizers, bundle, run_dir)
+    assert param_count_refused, "must refuse a state-entry count mismatch"
+
+    # ---- refusal: extra saved key with no pre-seeded live destination
+    # (the clone-avoidance hole -- previously silently cloned+disclosed,
+    # never refused). ----
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    fname = next(iter(bundle))
+    idx0 = next(iter(bundle[fname]["state"]))
+    bundle[fname]["state"][idx0]["__bogus_extra_key__"] = torch.zeros(3)
+    extra_key_refused = _refuses(optimizers, bundle, run_dir)
+    assert extra_key_refused, "must refuse an unexpected saved key (would require a clone)"
+
+    # ---- refusal: live key missing from the saved bundle (the
+    # zero-value-avoidance hole -- previously left the pre-seeded ZERO
+    # tensor in place silently). ----
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    fname = next(iter(bundle))
+    idx0 = next(iter(bundle[fname]["state"]))
+    some_key = next(iter(bundle[fname]["state"][idx0]))
+    del bundle[fname]["state"][idx0][some_key]
+    missing_key_refused = _refuses(optimizers, bundle, run_dir)
+    assert missing_key_refused, "must refuse a checkpoint missing a live-expected key"
+
+    # ---- refusal: shape mismatch on a matching key ----
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    fname = next(iter(bundle))
+    idx0 = next(iter(bundle[fname]["state"]))
+    tensor_key = next(k for k, v in bundle[fname]["state"][idx0].items()
+                      if isinstance(v, torch.Tensor) and v.dim() > 0)
+    bundle[fname]["state"][idx0][tensor_key] = bundle[fname]["state"][idx0][tensor_key][:-1]
+    shape_refused = _refuses(optimizers, bundle, run_dir)
+    assert shape_refused, "must refuse a shape mismatch"
+
+    # ---- refusal: dtype mismatch on a matching key ----
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    fname = next(iter(bundle))
+    idx0 = next(iter(bundle[fname]["state"]))
+    tensor_key = next(k for k, v in bundle[fname]["state"][idx0].items()
+                      if isinstance(v, torch.Tensor))
+    bundle[fname]["state"][idx0][tensor_key] = (
+        bundle[fname]["state"][idx0][tensor_key].to(torch.float64))
+    dtype_refused = _refuses(optimizers, bundle, run_dir)
+    assert dtype_refused, "must refuse a dtype mismatch"
+
+    # ---- refusal: non-singleton AdamW internal step-set ----
+    step_set_refused = None
+    optimizers, run_dir = _fresh_optimizers()
+    bundle = _good_bundle(optimizers)
+    if "adamw" in bundle and len(bundle["adamw"]["state"]) >= 2:
+        indices = sorted(bundle["adamw"]["state"])
+        bundle["adamw"]["state"][indices[0]]["step"] = torch.tensor(1.0)
+        bundle["adamw"]["state"][indices[1]]["step"] = torch.tensor(2.0)
+        step_set_refused = _refuses(optimizers, bundle, run_dir)
+        assert step_set_refused, "must refuse a non-singleton AdamW step-set"
+
+    print("ATTRIB702_OPTIMIZER_RESTORE_REFUSAL_SELFTEST_PASS "
+          f"bundle_key_refused={bundle_key_refused} "
+          f"group_count_refused={group_count_refused} "
+          f"param_count_refused={param_count_refused} "
+          f"extra_key_refused={extra_key_refused} "
+          f"missing_key_refused={missing_key_refused} "
+          f"shape_refused={shape_refused} dtype_refused={dtype_refused} "
+          f"step_set_refused={step_set_refused}", flush=True)
+
+
 def _selftest_continuation_schedule_bind() -> None:
-    """Clause 2/6 in isolation, PLUS addendum-4's spec self-correction:
+    """Clause 2/6 in isolation, PLUS addendum-4's spec self-correction
+    (round-3 accounting repair -- verified against
+    _run_counterbalanced_ab_ba's own step boundaries, not just asserted):
     total_steps binds to the checkpoint manifest's OWN original schedule
-    denominator, never either measurement-window-derived substitute.
-    Team-lead's own earlier "42" pin was a conflation the addendum
-    corrected: 42 = PHYSICAL_STEP_EXECUTIONS (n_warmup + 2*n_active -- the
-    shared warmup runs once, then n_active executes independently in EACH
-    of arms A and B) at the real production n_active=20 (2 warmup + 20 + 20);
-    22 = UNIQUE_ABSOLUTE_SCHEDULE_STEPS (n_warmup + n_active -- both arms
-    REPLAY the SAME n_active-step absolute-schedule interval, so the
-    distinct schedule POSITIONS touched is only warmup+n_active) at the
-    SAME n_active=20. These are two DIFFERENT quantities, not two names for
-    one number -- BOTH must independently refuse against a manifest
-    declaring a real, much larger schedule, and the receipt now discloses
-    both under their own names (attribution_run's "mode" dict), never
-    conflated into one."""
+    denominator, never either measurement-window-derived substitute. The
+    frozen pins are 42 = PHYSICAL_STEP_EXECUTIONS (n_warmup + 4*n_active --
+    EACH arm runs a profiled n_active sub-block AND an unprofiled n_active
+    sub-block, 2 sub-blocks x 2 arms, plus the shared warmup once) and
+    22 = UNIQUE_ABSOLUTE_SCHEDULE_STEPS (n_warmup + 2*n_active -- both arms
+    traverse the IDENTICAL absolute range [fork_global_step,
+    fork_global_step + 2*n_active), just in swapped sub-block order, so the
+    distinct schedule POSITIONS touched is warmup+2*n_active). At this
+    file's own MIN_WARMUP_STEPS=2/MIN_ACTIVE_STEPS=10 floor: 2+4*10=42 and
+    2+2*10=22 exactly -- the frozen literals and the generalized formula
+    are the SAME numbers, not two separate scenarios. These are two
+    DIFFERENT quantities, not two names for one number -- BOTH must
+    independently refuse against a manifest declaring a real, much larger
+    schedule, and the receipt now discloses both under their own names
+    (attribution_run's "mode" dict), never conflated into one."""
     step866_style_manifest = {
         "step": 43,                          # a small "step866" analog
         "extra": {"total_steps": 5000,       # a small "449651" analog --
@@ -2978,8 +3307,15 @@ def _selftest_continuation_schedule_bind() -> None:
         start0_refused = True
     assert start0_refused, "schedule gate must refuse start_step=0 against a resumed manifest"
 
-    # ---- refusal 2: total_steps=42 -- PHYSICAL_STEP_EXECUTIONS at the real
-    # production n_active=20 (2 warmup + 20 active(A) + 20 active(B)). ----
+    # ---- refusal 2: total_steps=42 -- PHYSICAL_STEP_EXECUTIONS at this
+    # file's own MIN_WARMUP_STEPS=2/MIN_ACTIVE_STEPS=10 (2 warmup + 4*10 --
+    # each of arm A and arm B runs a profiled AND an unprofiled n_active
+    # sub-block). This literal IS the frozen ADDENDUM-4 pin, not a separate
+    # historical scenario -- see refusal 4 below, which re-derives the same
+    # number from the general formula. ----
+    assert MIN_WARMUP_STEPS + 4 * MIN_ACTIVE_STEPS == 42, (
+        MIN_WARMUP_STEPS, MIN_ACTIVE_STEPS, "frozen ADDENDUM-4 pin drifted "
+        "from this file's own floor constants")
     total42_refused = False
     try:
         _verify_rung2_schedule_identity(
@@ -2988,15 +3324,19 @@ def _selftest_continuation_schedule_bind() -> None:
         total42_refused = True
     assert total42_refused, (
         "schedule gate must refuse total_steps=42 (physical_step_executions "
-        "at production n_active=20) against a manifest declaring the real "
-        "5000-step schedule -- this is the exact erratum substitution class")
+        "at this file's floor constants) against a manifest declaring the "
+        "real 5000-step schedule -- this is the exact erratum substitution class")
 
     # ---- refusal 3: total_steps=22 -- UNIQUE_ABSOLUTE_SCHEDULE_STEPS at the
-    # SAME real production n_active=20. addendum-4's own correction: this is
-    # NOT the same quantity as total_steps=42 above -- both AB/BA arms
-    # replay the identical 20-step absolute interval, so only 2+20=22
-    # distinct schedule positions are actually touched -- and BOTH 22 and 42
-    # must independently refuse. ----
+    # SAME floor constants (2 warmup + 2*10). addendum-4's own correction:
+    # this is NOT the same quantity as total_steps=42 above -- both AB/BA
+    # arms traverse the IDENTICAL absolute range [fork_global_step,
+    # fork_global_step+2*n_active) in swapped sub-block order, so only
+    # 2+2*10=22 distinct schedule positions are actually touched -- and
+    # BOTH 22 and 42 must independently refuse. ----
+    assert MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS == 22, (
+        MIN_WARMUP_STEPS, MIN_ACTIVE_STEPS, "frozen ADDENDUM-4 pin drifted "
+        "from this file's own floor constants")
     total22_refused = False
     try:
         _verify_rung2_schedule_identity(
@@ -3005,16 +3345,18 @@ def _selftest_continuation_schedule_bind() -> None:
         total22_refused = True
     assert total22_refused, (
         "schedule gate must refuse total_steps=22 "
-        "(unique_absolute_schedule_steps at production n_active=20) against "
-        "a manifest declaring the real 5000-step schedule")
+        "(unique_absolute_schedule_steps at this file's floor constants) "
+        "against a manifest declaring the real 5000-step schedule")
 
     # ---- refusal 4: THIS file's own general formulas at ITS OWN floor
     # constants (MIN_WARMUP_STEPS/MIN_ACTIVE_STEPS) -- proves the refusal
-    # logic generalizes past the one historical (n_active=20) worked
-    # example, to whatever n_active a given invocation actually used, for
-    # BOTH the physical and the unique formula independently. ----
-    physical_at_floor = MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS
-    unique_at_floor = MIN_WARMUP_STEPS + MIN_ACTIVE_STEPS
+    # logic generalizes past the frozen 42/22 worked example, to whatever
+    # n_active a given invocation actually used, for BOTH the physical and
+    # the unique formula independently (numerically identical to refusals
+    # 2/3 above at THIS file's current floor constants -- that identity is
+    # itself the proof the frozen literals and the general formula agree). ----
+    physical_at_floor = MIN_WARMUP_STEPS + 4 * MIN_ACTIVE_STEPS
+    unique_at_floor = MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS
     physical_floor_refused = False
     try:
         _verify_rung2_schedule_identity(
@@ -3254,12 +3596,18 @@ def _selftest_continuation_resume_wiring() -> None:
     assert cont["commit_telemetry"] is not None, cont
     assert "recovered_gib" in cont["commit_telemetry"], cont["commit_telemetry"]
 
-    # addendum-4: physical_step_executions and unique_absolute_schedule_steps
-    # are two DISTINCT, separately-named receipt fields, never conflated.
+    # addendum-4, round-3 accounting repair: physical_step_executions and
+    # unique_absolute_schedule_steps are two DISTINCT, separately-named
+    # receipt fields, never conflated. physical = warmup + 4*n_active (each
+    # of arm A and arm B runs a profiled AND an unprofiled n_active
+    # sub-block); unique = warmup + 2*n_active (both arms traverse the
+    # IDENTICAL absolute range, swapped sub-block order). At this fixture's
+    # MIN_WARMUP_STEPS=2/MIN_ACTIVE_STEPS=10: 42 and 22, the frozen
+    # ADDENDUM-4 pins verbatim.
     assert receipt["mode"]["physical_step_executions"] == (
-        MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS), receipt["mode"]
+        MIN_WARMUP_STEPS + 4 * MIN_ACTIVE_STEPS) == 42, receipt["mode"]
     assert receipt["mode"]["unique_absolute_schedule_steps"] == (
-        MIN_WARMUP_STEPS + MIN_ACTIVE_STEPS), receipt["mode"]
+        MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS) == 22, receipt["mode"]
 
     # CPU has no real PCIe path -- pinned_pageable_calibration fails closed
     # here for the SAME reason it does in the base _selftest() (this
