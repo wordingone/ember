@@ -26,11 +26,15 @@ asserting byte-equivalent semantics.
 Selftest (Windows-safe, no torch): env parsing + receipt-block shape, plus
 the device-adaptive precision ladder (device_capability / select_precision /
 device_relative_threshold -- pure Python, no torch import needed for these
-three). fp8_matmul_with_fallback is torch-importing (CPU or GPU tensors) and
-is covered separately by scripts/test_governor.py (pytest).
+three), plus the in-run commit governor (commit_env_limit /
+estimate_checkpoint_mapped_bytes / _commit_status / commit_margin_preflight
+-- also pure Python, ctypes only on win32). fp8_matmul_with_fallback is
+torch-importing (CPU or GPU tensors) and is covered separately by
+scripts/test_governor.py (pytest).
 """
 
 import os
+import sys
 import time
 
 
@@ -59,6 +63,169 @@ def preflight():
 def throttle_step():
     """Headroom pause for one optimizer step (callback body)."""
     time.sleep(env_limits()[2])
+
+
+# ---------------------------------------------------------------------------
+# Commit-margin preflight (issue #763, refs #756, #702) -- host commit
+# charge, the sibling resource to VRAM above. #81 incident: a 27B checkpoint
+# load charged ~54GB of copy-on-write mmap commit against a 79.6GB ceiling
+# carrying ~51GB baseline, and died as a SIGSEGV in the mmap read (torch) /
+# OSError 1455 (numpy) -- a hard crash, never a clean refusal, because host
+# commit charge had no guard at all next to the VRAM fraction/margin assert
+# above. This is directly the mechanism #702 addendum-2 clause C (pre-load
+# commit gate before the eager checkpoint torch.load) needs, and converges
+# with the cockpit-commit-leak governor concern (#756). Kept as functions
+# separate from env_limits()/preflight() (never folded into their
+# signatures) so every existing `frac, margin_gb, throttle_s =
+# governor.env_limits()` 3-tuple unpacking call site is left byte-untouched.
+# ADDITIVE ONLY: no existing function's signature or default changes.
+# ---------------------------------------------------------------------------
+
+def commit_env_limit():
+    """Commit-margin floor from env, GiB. Sibling of env_limits()'s VRAM
+    margin, kept as its own function for the reason given above."""
+    return float(os.environ.get("EMBER_COMMIT_MARGIN_GB", "4.0"))
+
+
+def estimate_checkpoint_mapped_bytes(paths):
+    """expected_mapped_bytes estimation rule for commit_margin_preflight():
+    the sum of on-disk st_size for every file ONE load maps/reads
+    simultaneously -- every safetensors shard a from_pretrained() call opens
+    for one checkpoint, or every torch.load() file (model.pt + optimizer.pt +
+    rng.pt) a checkpoint resume reads. Callers own the file-list/glob; this
+    never re-derives a file list from a bare directory path itself. Sized
+    from REAL on-disk bytes (os.path.getsize), never a config-derived guess
+    -- the #702 rerun's own pinned sizes (model.pt 4,391,063,423B +
+    optimizer.pt 9,175,455,079B = 12.6347 GiB) are exactly this sum."""
+    return sum(os.path.getsize(p) for p in paths)
+
+
+def _commit_status():
+    """(commit_avail_bytes, commit_total_bytes) via GlobalMemoryStatusEx
+    (ctypes, ullAvailPageFile/ullTotalPageFile) -- the #81 incident's own
+    working repro (scratch/nf4-segv/mmap_repro5.py).
+
+    Two distinct "no number" outcomes, never conflated (gate-discipline:
+    an unavailable decisive statistic is a refusal, not a disclosed skip):
+      - INAPPLICABLE (returns None): non-Windows platform. Commit-charge/
+        page-file accounting is a Windows concept with no direct POSIX
+        equivalent (see commit_margin_preflight's docstring for the
+        documented psutil.virtual_memory() fallback stance) -- the leg does
+        not exist here, so there is nothing to refuse.
+      - UNAVAILABLE (raises OSError): on win32, but the syscall itself
+        failed. commit_margin_preflight below REFUSES this case rather than
+        treating a failed read as "not applicable" -- those two outcomes
+        must never collapse into the same NOT_APPLICABLE receipt.
+
+    Factored out so the selftest can monkeypatch the syscall
+    (governor._commit_status = lambda: (avail, total), or a raising callable
+    for the UNAVAILABLE path) without touching ctypes.windll on a
+    non-Windows box."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    import ctypes.wintypes as wt
+
+    class _MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [("dwLength", wt.DWORD), ("dwMemoryLoad", wt.DWORD)] + [
+            (n, ctypes.c_ulonglong) for n in (
+                "ullTotalPhys", "ullAvailPhys", "ullTotalPageFile",
+                "ullAvailPageFile", "ullTotalVirtual", "ullAvailVirtual",
+                "ullAvailExtendedVirtual")]
+
+    m = _MEMORYSTATUSEX()
+    m.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+    ok = ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+    if not ok:
+        raise OSError(
+            f"GlobalMemoryStatusEx failed: "
+            f"{ctypes.WinError(ctypes.get_last_error())}")
+    return m.ullAvailPageFile, m.ullTotalPageFile
+
+
+def commit_margin_preflight(expected_mapped_bytes, margin_gb=None):
+    """Host commit-charge preflight (issue #763, refs #756, #702 addendum-2
+    clause C) -- the mmap/commit-charge sibling of preflight()'s VRAM margin
+    assert (see module-section comment above for the #81 incident this
+    extracts from).
+
+    expected_mapped_bytes: caller-supplied sum of on-disk file sizes for
+    every file ONE load maps/reads simultaneously -- see
+    estimate_checkpoint_mapped_bytes's docstring for the exact estimation
+    rule. Never re-derived from a path here; callers own the file-list/glob.
+
+    This is the "before" leg of the #702 clause C before/peak/after commit
+    lifecycle (PRE-LOAD check -> load -> in-place copy -> del+gc.collect()
+    -> prove recovery): this function owns only the pre-load refusal
+    decision; callers measure "peak" (mid-load) and "after" (post-cleanup)
+    with their own _commit_status() reads around the load/cleanup they
+    perform, and assemble the before/peak/after receipt from all three.
+
+    Refuses (SystemExit, COMMIT_MARGIN_REFUSED, arithmetic in the message and
+    in the returned receipt's "detail") when
+    expected_mapped_bytes + margin_gb*GiB > commit_avail. The refusal fires
+    BEFORE the caller's load, never after -- a named wall, not a crash.
+
+    UNAVAILABLE (win32 syscall failure) also refuses (SystemExit,
+    COMMIT_MARGIN_UNAVAILABLE) rather than silently treating a failed
+    measurement as a disclosed skip -- see _commit_status's docstring for
+    the INAPPLICABLE-vs-UNAVAILABLE distinction this preserves.
+
+    Cross-platform: commit-charge/page-file accounting is a Windows concept.
+    On non-Windows platforms (INAPPLICABLE, _commit_status() returns None)
+    this returns a NOT_APPLICABLE receipt rather than asserting anything. A
+    psutil.virtual_memory()-based available-memory number is the natural
+    POSIX analog for a future host-memory margin, but virtual-memory
+    accounting there does not carry Windows' page-file commit/overcommit
+    semantics -- documented here as the fallback stance, not wired as an
+    enforced gate.
+    """
+    if margin_gb is None:
+        margin_gb = commit_env_limit()
+    try:
+        status = _commit_status()
+    except Exception as exc:
+        msg = (
+            f"COMMIT_MARGIN_UNAVAILABLE: commit-charge measurement failed on "
+            f"{sys.platform} ({exc!r}); a decisive gate statistic that could "
+            f"not be measured is a refusal, never a disclosed skip"
+        )
+        raise SystemExit(msg) from exc
+    if status is None:
+        return {
+            "status": "NOT_APPLICABLE",
+            "platform": sys.platform,
+            "note": ("commit-charge accounting is a Windows page-file concept; "
+                     "no enforced assert on this platform -- see "
+                     "commit_margin_preflight's docstring for the documented "
+                     "psutil.virtual_memory() fallback stance"),
+        }
+    commit_avail, commit_total = status
+    gib = 1 << 30
+    expected_gib = round(expected_mapped_bytes / gib, 2)
+    avail_gib = round(commit_avail / gib, 2)
+    total_gib = round(commit_total / gib, 2)
+    required_gib = round(expected_gib + margin_gb, 2)
+    receipt = {
+        "status": "PASS",
+        "platform": sys.platform,
+        "expected_mapped_gib": expected_gib,
+        "margin_gib": margin_gb,
+        "required_gib": required_gib,
+        "commit_avail_gib": avail_gib,
+        "commit_total_gib": total_gib,
+    }
+    if expected_mapped_bytes + margin_gb * gib > commit_avail:
+        receipt["status"] = "REFUSED"
+        msg = (
+            f"COMMIT_MARGIN_REFUSED: expected_mapped={expected_gib}GiB + "
+            f"margin={margin_gb}GiB = {required_gib}GiB required > "
+            f"{avail_gib}GiB commit available (of {total_gib}GiB commit "
+            f"ceiling); refusing launch"
+        )
+        receipt["detail"] = msg
+        raise SystemExit(msg)
+    return receipt
 
 
 # ---------------------------------------------------------------------------
@@ -249,11 +416,110 @@ def _selftest():
     for literal in ("19000", "25463", "27702"):
         assert literal not in str(thr_4090) and literal not in str(thr_3090)
 
+    # --- Commit-margin preflight (issue #763, refs #756, #702) ------------
+    assert os.environ.get("EMBER_COMMIT_MARGIN_GB") is None
+    assert commit_env_limit() == 4.0  # frozen default
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        p1, p2 = os.path.join(td, "a.bin"), os.path.join(td, "b.bin")
+        with open(p1, "wb") as f:
+            f.write(b"x" * 100)
+        with open(p2, "wb") as f:
+            f.write(b"y" * 250)
+        # real on-disk st_size, never a config-derived guess.
+        assert estimate_checkpoint_mapped_bytes([p1, p2]) == 350
+
+    real_commit_status = _commit_status
+    try:
+        # (a) Refusal path: 2GiB avail, 10GiB mapped + 4GiB margin required.
+        # Flip test: delete the `if expected_mapped_bytes + margin_gb*gib >
+        # commit_avail` branch and this assertion fails -- commit_margin_
+        # preflight would return a PASS receipt instead of raising.
+        globals()["_commit_status"] = lambda: (2 * (1 << 30), 64 * (1 << 30))
+        try:
+            commit_margin_preflight(10 * (1 << 30), margin_gb=4.0)
+            raise AssertionError("expected COMMIT_MARGIN_REFUSED SystemExit")
+        except SystemExit as exc:
+            assert "COMMIT_MARGIN_REFUSED" in str(exc)
+            assert "14.0GiB required > 2.0GiB" in str(exc)
+
+        # Pass path: 100GiB avail -- same requested load is a healthy no-op.
+        globals()["_commit_status"] = lambda: (100 * (1 << 30), 128 * (1 << 30))
+        receipt = commit_margin_preflight(10 * (1 << 30), margin_gb=4.0)
+        assert receipt == {
+            "status": "PASS", "platform": sys.platform,
+            "expected_mapped_gib": 10.0, "margin_gib": 4.0,
+            "required_gib": 14.0, "commit_avail_gib": 100.0,
+            "commit_total_gib": 128.0,
+        }
+
+        # Cross-platform stance: simulate off-Windows -- INAPPLICABLE, no
+        # assert (the leg does not exist on this simulated platform).
+        globals()["_commit_status"] = lambda: None
+        na_receipt = commit_margin_preflight(10 * (1 << 30), margin_gb=4.0)
+        assert na_receipt["status"] == "NOT_APPLICABLE"
+
+        # (b) UNAVAILABLE path: the win32 syscall itself fails (GlobalMemory
+        # StatusEx read error) -- must REFUSE, never silently collapse into
+        # the NOT_APPLICABLE receipt reserved for the non-Windows INAPPLICABLE
+        # leg above (gate-discipline: an unavailable decisive statistic is a
+        # refusal, not a disclosed skip). Flip test: delete the try/except
+        # around `_commit_status()` in commit_margin_preflight and this
+        # assertion fails -- the RuntimeError below propagates raw instead of
+        # the named COMMIT_MARGIN_UNAVAILABLE SystemExit.
+        def _raising_commit_status():
+            raise RuntimeError("simulated GlobalMemoryStatusEx failure")
+        globals()["_commit_status"] = _raising_commit_status
+        try:
+            commit_margin_preflight(1 * (1 << 30), margin_gb=4.0)
+            raise AssertionError("expected COMMIT_MARGIN_UNAVAILABLE SystemExit")
+        except SystemExit as exc:
+            assert "COMMIT_MARGIN_UNAVAILABLE" in str(exc)
+            assert "never a disclosed skip" in str(exc)
+        except RuntimeError:
+            raise AssertionError(
+                "UNAVAILABLE must surface as SystemExit, not a raw RuntimeError")
+
+        # (c) before/peak/after live-measurement lifecycle (#702 addendum-2
+        # clause C: "receipt carries before/peak/after commit").
+        # commit_margin_preflight owns only the pre-load ("before") refusal
+        # decision; peak/after are the caller's own _commit_status() reads
+        # around the load + del/gc.collect() it performs. Demonstrated here
+        # with a simulated load/cleanup trace, proving the primitive is
+        # sufficient to build that lifecycle without a new public function.
+        commit_trace = [
+            (80 * (1 << 30), 128 * (1 << 30)),   # before: plenty free
+            (65 * (1 << 30), 128 * (1 << 30)),   # peak: mid-load, ~15GiB charged
+            (79 * (1 << 30), 128 * (1 << 30)),   # after: recovered post del+gc
+        ]
+        trace_iter = iter(commit_trace)
+        globals()["_commit_status"] = lambda: next(trace_iter)
+        before_receipt = commit_margin_preflight(10 * (1 << 30), margin_gb=4.0)
+        assert before_receipt["status"] == "PASS"
+        peak_avail, _ = _commit_status()   # caller's own mid-load read
+        after_avail, _ = _commit_status()  # caller's own post-cleanup read
+        lifecycle_report = {
+            "before_commit_avail_gib": before_receipt["commit_avail_gib"],
+            "peak_commit_avail_gib": round(peak_avail / (1 << 30), 2),
+            "after_commit_avail_gib": round(after_avail / (1 << 30), 2),
+        }
+        assert set(lifecycle_report) == {
+            "before_commit_avail_gib", "peak_commit_avail_gib",
+            "after_commit_avail_gib"}
+        # load consumed commit, cleanup recovered it -- the shape #702
+        # clause C needs to "prove commit recovery".
+        assert (lifecycle_report["peak_commit_avail_gib"]
+                < lifecycle_report["before_commit_avail_gib"])
+        assert (lifecycle_report["after_commit_avail_gib"]
+                > lifecycle_report["peak_commit_avail_gib"])
+    finally:
+        globals()["_commit_status"] = real_commit_status
+
     print("GOVERNOR_SELFTEST_PASS")
 
 
 if __name__ == "__main__":
-    import sys
     if "--selftest" in sys.argv:
         _selftest()
     else:
