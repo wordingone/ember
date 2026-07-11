@@ -1,0 +1,112 @@
+{
+  "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN",
+  "ts": "20260711T071041Z",
+  "issue_refs": [
+    "#757",
+    "#735"
+  ],
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/tokenizer files",
+  "mode": "evaluator_run_bounded",
+  "device": "cpu",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "tasks_requested": [
+    "arc_challenge",
+    "hellaswag",
+    "mmlu_pro"
+  ],
+  "limit": 3,
+  "per_task": {
+    "arc_challenge": {
+      "version": 1.0,
+      "n_samples": {
+        "original": 1172,
+        "effective": 3
+      },
+      "n_shot": 0,
+      "metrics": {
+        "name": "arc_challenge",
+        "alias": "arc_challenge",
+        "sample_len": 3,
+        "acc,none": 0.0,
+        "acc_stderr,none": 0.0,
+        "acc_norm,none": 0.0,
+        "acc_norm_stderr,none": 0.0
+      },
+      "output_type": "multiple_choice",
+      "wall_seconds_run1": 5.873359441757202,
+      "filter_config": null
+    },
+    "hellaswag": {
+      "version": 1.0,
+      "n_samples": {
+        "original": 10042,
+        "effective": 3
+      },
+      "n_shot": 0,
+      "metrics": {
+        "name": "hellaswag",
+        "alias": "hellaswag",
+        "sample_len": 3,
+        "acc,none": 0.3333333333333333,
+        "acc_stderr,none": 0.33333333333333337,
+        "acc_norm,none": 0.6666666666666666,
+        "acc_norm_stderr,none": 0.33333333333333337
+      },
+      "output_type": "multiple_choice",
+      "wall_seconds_run1": 7.824950456619263,
+      "filter_config": null
+    }
+  },
+  "blocked": {
+    "mmlu_pro": {
+      "reason": "LEGB_SCORER_GENERATE_UNTIL_MAX_GEN_TOKS_EXCEEDS_MODEL_CAPACITY: max_gen_toks=2048 leaves max_ctx_len=-1024 under max_position_embeddings=1024 -- installed task config is UNCHANGED (AMENDMENT-2a), so this refuses rather than silently capping generation",
+      "refusal_class": "LEGB_SCORER_GENERATE_UNTIL_MAX_GEN_TOKS_EXCEEDS_MODEL_CAPACITY"
+    }
+  },
+  "binding": {
+    "checkpoint": {
+      "dir": "<external custody, path redacted -- basename='w1-baseline-replay-step50-20260711T025650Z'>",
+      "measured_sha256": {
+        "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+        "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+        "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379"
+      },
+      "expected_sha256": {
+        "model.pt": "8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54",
+        "optimizer.pt": "324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250",
+        "rng.pt": "c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379"
+      },
+      "measured_manifest_sha256": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504",
+      "expected_manifest_sha256": "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504",
+      "manifest_step": 50,
+      "key_shape_parity": {
+        "n_keys_checked": 185,
+        "keys_match": true,
+        "shapes_match": true
+      }
+    },
+    "tokenizer": {
+      "path": "<external custody, path redacted -- basename='tokenizer-2c557.json'>",
+      "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+      "n_dropped_orphan_merges": 0,
+      "n_merges_before": 31755,
+      "decoder_wiring": {
+        "attached": true,
+        "reason": "on-disk decoder is null; attached decoders.ByteLevel() in-memory as the canonical inverse of the on-disk ByteLevel pre_tokenizer"
+      }
+    },
+    "real_arch": {
+      "vocab": 32000,
+      "seq": 1024,
+      "batch": 16,
+      "hidden": 1024,
+      "n_mtp": 2,
+      "ff_grown": 16384,
+      "layers_assumed": 20,
+      "heads_assumed": 16
+    },
+    "real_arch_source": "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json real_lineage_reference.derived_target_architecture",
+    "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/tokenizer files"
+  }
+}
