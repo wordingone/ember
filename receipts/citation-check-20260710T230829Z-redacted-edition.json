@@ -1,0 +1,174 @@
+{
+  "tool": "check_goal_citations",
+  "version": 4,
+  "timestamp": "20260710T230829Z",
+  "repo_root": "<LOCAL-ABS-PATH>\\M\\ember",
+  "cross_tree_root": null,
+  "sources_scanned": [
+    "GOAL.md",
+    "docs/PROBLEMS.md",
+    "docs/spec/a1-postfreeze-heldout-selection-v1.md",
+    "docs/spec/a1-postfreeze-heldout-selection-v2.md",
+    "docs/spec/autonomy-relinquishment-ladder-v1.md",
+    "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+    "docs/spec/c-scale-s3-compute-protocol-v1.md",
+    "docs/spec/c8-preregistration-v1.md",
+    "docs/spec/conditions-v1.md",
+    "docs/spec/credibility-battery-v1.md",
+    "docs/spec/e2b-paired-protocol-v1.md",
+    "docs/spec/eval-suite-freeze-v1.md",
+    "docs/spec/l3-corpus-boundary-v2-PROPOSED.md",
+    "docs/spec/p1-envelope-sweep-prereg-v1.md",
+    "docs/spec/rung2-grow-spec-v1.md",
+    "docs/spec/rung2-stabilize-config-respec-v1.md",
+    "docs/spec/w2-scale-preregistration-v1.md"
+  ],
+  "checked": 75,
+  "missing": [
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "docs/spec/c-scale-s2-token-bill-protocol.md",
+      "line": 11
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "docs/spec/ceff-lever-ladder.md",
+      "line": 279
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/cbase-grow-dryrun/cbase-grow-dryrun-20260702T190532Z.json",
+      "line": 131
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/cbase-grow-live-live-20260703T053225Z-import-edition.json",
+      "line": 132
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/proof-growth-identity-20260702T064211Z.json",
+      "line": 116
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/shatter-verdict-bf16ns5-20260623T132000Z.json",
+      "line": 499
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/shatter-verdict-canonical-20260623.json",
+      "line": 498
+    },
+    {
+      "doc": "docs/spec/c-scale-s3-compute-protocol-v1.md",
+      "ref": "docs/spec/c-scale-s2-token-bill-protocol.md",
+      "line": 5
+    },
+    {
+      "doc": "docs/spec/c-scale-s3-compute-protocol-v1.md",
+      "ref": "docs/spec/w1-token-collapse-control-v1.md",
+      "line": 31
+    },
+    {
+      "doc": "docs/spec/conditions-v1.md",
+      "ref": "docs/c11-experience-horizon-spec.md",
+      "line": 140
+    },
+    {
+      "doc": "docs/spec/conditions-v1.md",
+      "ref": "docs/spec/milestones-v1.md",
+      "line": 147
+    },
+    {
+      "doc": "docs/spec/conditions-v1.md",
+      "ref": "docs/spec/operator-independence-v1.md",
+      "line": 272
+    },
+    {
+      "doc": "docs/spec/conditions-v1.md",
+      "ref": "docs/spec/publication-v1.md",
+      "line": 346
+    },
+    {
+      "doc": "docs/spec/conditions-v1.md",
+      "ref": "receipts/autonomy-ladder/",
+      "line": 407
+    },
+    {
+      "doc": "docs/spec/rung2-grow-spec-v1.md",
+      "ref": "docs/dossier/rung2-growth-ladder-dossier-v1.md",
+      "line": 3
+    },
+    {
+      "doc": "docs/spec/w2-scale-preregistration-v1.md",
+      "ref": "receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json",
+      "line": 8
+    }
+  ],
+  "documented_absent": [
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "docs/spec/growth-v1.md",
+      "marker": "absent as of 2026-07-03",
+      "line": 88
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/c04-design-bench-c03-h1024-d20-20260623T024512Z.json",
+      "marker": "absent as of 2026-07-03",
+      "line": 263
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/citation-check-20260703T122221Z.json",
+      "marker": "absent as of\n2026-07-03",
+      "line": 478
+    },
+    {
+      "doc": "docs/spec/conditions-v1.md",
+      "ref": "docs/ENTRY-MAP.md",
+      "marker": "not yet built",
+      "line": 329
+    }
+  ],
+  "stale_absent_marker": [
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "receipts/ceff-composition-ab-20260703T111351Z.json",
+      "marker": "absent as of",
+      "line": 264
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "scripts/cbase_grow_dryrun.py",
+      "marker": "absent as of",
+      "line": 87
+    },
+    {
+      "doc": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "ref": "scripts/cbase_grow_live.py",
+      "marker": "absent as of",
+      "line": 164
+    },
+    {
+      "doc": "docs/spec/c-scale-s3-compute-protocol-v1.md",
+      "ref": "scripts/ember_c_scale_s3_producer.py",
+      "marker": "build target",
+      "line": 100
+    }
+  ],
+  "cross_tree": [],
+  "wrap_joined": [],
+  "allowlisted": 0,
+  "templated_skipped": 8,
+  "allowlist_malformed_lines": 0,
+  "anchor_checked": 0,
+  "anchor_missing": [],
+  "anchor_suppressed": 0,
+  "row_id_checked": 0,
+  "row_id_missing": [],
+  "row_id_map_rows_found": 0,
+  "row_id_map_error": "paper/claims-evidence-map.md not found",
+  "pass": false
+}
