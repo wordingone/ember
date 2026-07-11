@@ -72,6 +72,14 @@ progress, never completion.
   battle-tested and conserved, none weakened.
 - L10 PUBLICATION: the workbench is pseudonymous (no personal names in git, PRs, issues,
   artifacts); THE PAPER IS NOT — paper and code carry the author's name and info.
+- L11 EXECUTION FLOOR: prep is not progress. Every operating window (ops parameter, default
+  8h) lands at least one EXECUTED measurement receipt — a run, bench, or eval against
+  reality — or the board names a STALL. Every prep artifact (spec, gate, harness, merge)
+  names the executed run it unblocks and what fires it; prep with no attached run is
+  stalling by definition. Instrument-repair loops carry a declared round/time budget; at
+  exhaustion the best bounded measurement FIRES with disclosed caveats rather than another
+  round — a disclosed-imperfect receipt outranks a perfect spec that has not run. Only the
+  operator waives a window.
 
 ## 4. Pillars (co-equal; starving any one is the failure state)
 
