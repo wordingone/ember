@@ -3607,12 +3607,31 @@ def _selftest_continuation_resume_wiring() -> None:
     fixture_start_step = 43
 
     build_dir = tempfile.mkdtemp(prefix="attribution702_rung2_ckptbuild_")
-    build_receipt = ts.run_v0_segment(
-        build_dir, cfg, n_steps=fixture_start_step, total_steps=fixture_total_steps,
-        live=False, real_arch=True, device="cpu",
-        intermediate_override=small_intermediate, offload_optimizer_state=True,
-        checkpoint_every=fixture_start_step,
-        segment_id="rung2-continuation-selftest-fixture", batch_size=2)
+    # ember #702 external falsifier finding (PR #762 comment 4945898324): this
+    # call offloads its optimizer state via run_v0_segment, which exposes no
+    # optstate_dir parameter of its own -- build_split_optimizer's default
+    # (cpu_offload_adamw._DEFAULT_OPTSTATE_DIR, a SHARED, non-unique scratch
+    # dir keyed by sanitized param name only) is what it always falls back
+    # to. Two concurrent/sequential callers reusing common param names
+    # collide with a PermissionError on the shared shadow file -- a selftest
+    # whose verdict depends on global mutable state. Exactly the SAME gap
+    # _selftest_production_step_parity's Path A already patches around (see
+    # that fixture's docstring); applying the identical pattern here:
+    # monkeypatch the module global to a fresh per-invocation tempdir for
+    # the duration of this call only, restored in finally -- never a change
+    # to run_v0_segment's own signature/behavior.
+    orig_default_optstate_dir = _coa._DEFAULT_OPTSTATE_DIR
+    _coa._DEFAULT_OPTSTATE_DIR = Path(
+        tempfile.mkdtemp(prefix="attribution702_rung2_ckptbuild_optstate_"))
+    try:
+        build_receipt = ts.run_v0_segment(
+            build_dir, cfg, n_steps=fixture_start_step, total_steps=fixture_total_steps,
+            live=False, real_arch=True, device="cpu",
+            intermediate_override=small_intermediate, offload_optimizer_state=True,
+            checkpoint_every=fixture_start_step,
+            segment_id="rung2-continuation-selftest-fixture", batch_size=2)
+    finally:
+        _coa._DEFAULT_OPTSTATE_DIR = orig_default_optstate_dir
     ckpt_dir = build_receipt["last_checkpoint"]
     assert ckpt_dir is not None, "fixture checkpoint build must produce a checkpoint"
     manifest = ts.read_manifest(ckpt_dir)
