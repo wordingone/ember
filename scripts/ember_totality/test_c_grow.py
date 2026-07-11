@@ -231,47 +231,54 @@ def measured_by_instrumented_execution(obj):
     device:cpu and used to pass anyway because the vocabulary check never
     read either field).
 
-    Returns (ok: bool, detail: str). Per the coordinator ruling (audit
-    receipts/ember-totality-audit/audit-20260710T145200Z.json, disclosed in
-    this file's module docstring):
-      - measured_on_train_daemon is True  -> pass outright.
-      - False or absent                   -> pass ONLY when ALL of:
-          (a) instrumented-execution provenance is present and NAMED
-              (flop_saving_vs_fromscratch.measured is True and .counter
-              names a real mechanism, e.g. FlopCounterMode);
-          (b) every checkpoint the FLOP figures derive from
-              (flop_saving_vs_fromscratch.per_width_measurements.*
-              .checkpoint_identity.model_pt_sha256) carries a real-shaped
-              sha256;
-          (c) the probe RECOMPUTES the total-FLOPs arithmetic from the
-              per-stage figures and it matches the receipt's own stated
-              totals exactly (grow-path total AND the from-scratch-at-
-              same-stepcount total, both derived from per_width_
-              measurements x step_provenance, never merely copied).
-      Otherwise: reject with an explicit reason (same shape as the
-      flop_saving_self_declares_unmeasured / smoke_markers cures)."""
+    [ISSUE #740 bypass-closure, 2026-07-11] measured_on_train_daemon no
+    longer produces an outright pass by itself. It USED to (per the
+    coordinator ruling in audit receipts/ember-totality-audit/
+    audit-20260710T145200Z.json): "measured_on_train_daemon is True -> pass
+    outright" -- a single self-attested boolean sufficient for GREEN with
+    zero instrumented-execution evidence behind it, the exact self-
+    declaration-blind class this function exists to close (a receipt author
+    could write `"measured_on_train_daemon": true` by hand). The flag may
+    still be read and reported (it names WHICH measurement context the
+    receipt claims -- daemon-resident vs. otherwise), but it never SUBSTITUTES
+    for evidence. Every receipt, regardless of the flag's value, must satisfy
+    ALL of:
+      (a) instrumented-execution provenance is present and NAMED
+          (flop_saving_vs_fromscratch.measured is True and .counter
+          names a real mechanism, e.g. FlopCounterMode);
+      (b) every checkpoint the FLOP figures derive from
+          (flop_saving_vs_fromscratch.per_width_measurements.*
+          .checkpoint_identity.model_pt_sha256) carries a real-shaped
+          sha256;
+      (c) the probe RECOMPUTES the total-FLOPs arithmetic from the
+          per-stage figures and it matches the receipt's own stated
+          totals exactly (grow-path total AND the from-scratch-at-
+          same-stepcount total, both derived from per_width_
+          measurements x step_provenance, never merely copied).
+    Returns (ok: bool, detail: str); any missing/mismatched piece rejects
+    with an explicit reason (same shape as the flop_saving_self_declares_
+    unmeasured / smoke_markers cures)."""
     if not isinstance(obj, dict):
         return False, "receipt is not a JSON object"
 
-    if obj.get("measured_on_train_daemon") is True:
-        return True, "measured_on_train_daemon=true (literal execution)"
+    daemon_flag = obj.get("measured_on_train_daemon")
 
     fs = obj.get("flop_saving_vs_fromscratch")
     if not isinstance(fs, dict):
         return False, (
-            "measured_on_train_daemon is false/absent AND "
-            "flop_saving_vs_fromscratch block is missing -- cannot "
-            "satisfy the instrumented-execution alternative")
+            f"measured_on_train_daemon={daemon_flag!r} (a bare flag is never "
+            "sufficient) AND flop_saving_vs_fromscratch block is missing -- "
+            "cannot satisfy the instrumented-execution requirement")
 
     # (a) instrumented-execution provenance present and named.
     counter = fs.get("counter")
     if fs.get("measured") is not True or not (
             isinstance(counter, str) and counter.strip()):
         return False, (
-            "measured_on_train_daemon is false/absent AND "
-            "flop_saving_vs_fromscratch.measured is not True or .counter "
-            f"does not name a real mechanism (measured={fs.get('measured')!r}, "
-            f"counter={counter!r})")
+            f"measured_on_train_daemon={daemon_flag!r} (a bare flag is never "
+            "sufficient) AND flop_saving_vs_fromscratch.measured is not True "
+            f"or .counter does not name a real mechanism "
+            f"(measured={fs.get('measured')!r}, counter={counter!r})")
 
     # (b) checkpoint sha256 present for every checkpoint the FLOP figures
     # derive from.
@@ -347,7 +354,8 @@ def measured_by_instrumented_execution(obj):
             f"{stated_fromscratch} (arithmetic does not reconcile)")
 
     return True, (
-        f"instrumented-execution measurement verified: counter={counter!r}, "
+        f"instrumented-execution measurement verified (measured_on_train_daemon="
+        f"{daemon_flag!r}, informational only -- not decisive): counter={counter!r}, "
         f"{len(per_width)} checkpoint(s) sha256-verified, grow-path total "
         f"{grow_path_total} and from-scratch total {recomputed_fromscratch} "
         "both independently recomputed from per-stage figures and matched")
