@@ -69,6 +69,34 @@ counts, each repaired here:
       run -- proving the stub is disclosed and isolated to one fixture, not a
       silent lowering of the real gate.
 
+This revision ALSO repairs the scale-substitution erratum (comment
+4942686121) both live runs hit: `main()` never threaded --intermediate-
+override through to attribution_run(), so build_v0_model silently built the
+c03 FF4096 model (433,890,304 numel) instead of the frozen rung-2 FF32768
+arch (2,195,497,984 numel) -- a 5.06x scale substitution the exact_bytes
+gate's own disclosed cross-check flagged (`matches_this_run: false`) but the
+prior gate comment explained away rather than refusing on. Two repairs:
+  (d) --intermediate-override is now threaded from main() through to
+      attribution_run() (was accepted by the function, silently dropped by
+      the CLI).
+  (e) A new --resume-continuation mode (builder-spec skeleton comment
+      4942704748, six numbered clauses; data-identity addendum 4942713685)
+      implements TRUE checkpoint continuation identity, not just scale
+      repair: model/optimizer/RNG load through the PRODUCTION
+      load_checkpoint/load_optimizers_state/restore_rng paths (the same
+      three functions run_v0_segment's own resume block calls); total_steps
+      binds to the checkpoint manifest's own original schedule denominator
+      (449651 at the frozen pins), never the measurement-window length
+      n_warmup+2*n_active=42 the erratum's wrong-scale runs silently
+      substituted; the loader binds to the pinned shard/mmap source by
+      content hash (never the misleading "shards-v1" filename); and a
+      fail-closed identity-refusal gate derives architecture identity
+      (dedup numel + FF width) DIRECTLY FROM THE CHECKPOINT BYTES and
+      refuses (structured receipt, before any compute) on any mismatch --
+      caller-supplied config alone is never accepted. See the
+      RUNG2_EXPECTED_* constants and the _verify_rung2_* gate functions
+      above attribution_run() for the frozen pins and each gate's contract.
+
 Reuse discipline (unchanged from #721, restated): this script does NOT
 reimplement Muon/AdamW/CE/WSD math. It builds the model/optimizer/loader via
 the SAME production functions run_v0_segment calls (build_v0_model,
@@ -139,6 +167,49 @@ VERDICT_GRAMMAR = (
     "DIRECT_COPY_FIRST", "FACTOR1_FIRST", "BOTH_COMPOSE",
     "GPU_COMPUTE_BOUND", "INCONCLUSIVE",
 )
+
+# ---- #702 2.2B rung-2 continuation-identity pins (frozen spec: comment
+# 4942686121 scope erratum, 4942704748 six-clause builder-spec skeleton,
+# 4942713685 data-identity addendum, and the step866-identity-pins final
+# addendum -- verbatim from the thread, never a runner-authored
+# derivation). Used ONLY by the --resume-continuation path added in this
+# revision; every pre-existing path (tiny CPU fixture, plain --live c03) is
+# unchanged. These are DEFAULTS for the identity-gate functions below, never
+# the gates' only check -- each gate also derives its own value from the
+# live checkpoint/config and refuses on a mismatch (the "hardcode as
+# cross-check, never hardcoded-only" convention REFERENCE_REALIZED_N_PARAMS
+# above already uses, extended to this second, independent identity plane).
+RUNG2_EXPECTED_DEDUP_NUMEL = 2_195_497_984
+RUNG2_EXPECTED_INTERMEDIATE_SIZE = 32768
+
+# Clause 2: the ORIGINAL stabilize schedule denominator (never the
+# measurement-window length n_warmup+2*n_active=42 the erratum's wrong-scale
+# runs silently substituted).
+RUNG2_EXPECTED_TOTAL_STEPS = 449651
+
+# Clause 3 data-identity pins (verbatim, comment 4942713685): the custody
+# mmap_cache manifest FILE's own byte-hash, and the CONTENT-derived combined
+# source-shard-set lineage hash _build_or_open_memmap_cache (timeshare_
+# pretrain.py) already writes/reads as "combined_manifest_sha256". Binding
+# is to CONTENT, never the misleading "shards-v1" filename (the thread's own
+# words).
+RUNG2_EXPECTED_MANIFEST_FILE_SHA256 = (
+    "8d8cc751bbcde2409d7e24b6ecf2f87a8b83078e71eaaf5ed48999819a188d05")
+RUNG2_EXPECTED_COMBINED_SOURCE_MANIFEST_SHA256 = (
+    "aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a")
+
+# Clause 5 (receipt emissions) / step866-final-addendum: the source
+# checkpoint's own 4-hash set, independently rehashed + torch-loaded by the
+# falsifier. ts.load_checkpoint() already verifies model.pt/optimizer.pt/
+# rng.pt against the checkpoint's OWN manifest (internal self-consistency);
+# this second cross-check proves it is THE PINNED checkpoint, not merely an
+# internally-consistent one at some other step.
+RUNG2_REFERENCE_CHECKPOINT_HASHES = {
+    "manifest.json": "6ef47596e05f04c98b6681481a8bbeca17baf5fe189297dd8dd2979d9559c6f9",
+    "model.pt": "757bdfbf7bc64e8047e3c5809c86fa73514348870460c3aaea0853066bf72821",
+    "optimizer.pt": "b0758a9921dfd31c18e059136a08d165c927959951d3bd9da4b5c56783bf182d",
+    "rng.pt": "2e30b6c87ed2e1edb9d4077e569da2115c2377d952bf256071ad93e990c8e6c7",
+}
 
 
 def _ts() -> str:
@@ -1115,6 +1186,206 @@ def _classify_verdict_predicates(ratios: dict, *, seed: int = BOOTSTRAP_SEED) ->
 
 
 # ---------------------------------------------------------------------------
+# Continuation-identity gates -- ember #702 2.2B rerun (builder-spec
+# skeleton comment 4942704748, clauses 4/5/6; data-identity addendum
+# 4942713685). Each gate is FAIL-CLOSED (structured refusal receipt under
+# run_dir, SystemExit, no fix-forward) and each expected value is an
+# INJECTABLE parameter defaulting to the frozen RUNG2_EXPECTED_* constant --
+# same pattern _preflight_fork_capacity's nvsmi/commit/disk params already
+# use, so the selftests below can prove the REFUSAL LOGIC against small,
+# fast, deterministic fixtures without needing the real 2.2B checkpoint on
+# this CPU-only box; the wired production call sites in attribution_run()
+# never pass these overrides, so they always bind to the frozen pins.
+# ---------------------------------------------------------------------------
+
+def _sha256_bytes_of_file(path: str) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _write_rung2_refusal_receipt(result: dict, *, run_dir: str, ticket: str) -> str:
+    import json
+    import os
+    receipt = {
+        "ticket": ticket, "ts": _ts(), "issue": "wordingone/ember#702",
+        "verdict": "CONTINUATION_IDENTITY_REFUSED",
+        **result, "api_spend_usd": 0, "paid_api_surface_used": False,
+    }
+    os.makedirs(run_dir, exist_ok=True)
+    path = os.path.join(
+        run_dir, f"{ticket.lower().replace('_', '-')}-{receipt['ts']}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(receipt, f, indent=2, default=str)
+    return path
+
+
+def _rung2_checkpoint_arch_identity(model_state: dict) -> dict:
+    """Derives raw/dedup numel + FF (gate_proj) width DIRECTLY from the
+    checkpoint's own tensor bytes -- final-addendum's own method (fresh
+    torch.load, 185 state keys, dedup by storage). Dedup-by-data_ptr() is
+    the SAME convention split_param_groups_from_state_dict already uses for
+    tied-tensor dedup (a tied embed/head shares storage after torch.load).
+    Never reads live-model config -- this is the checkpoint-intrinsic leg
+    the final addendum requires because "caller-supplied config alone is
+    never accepted"."""
+    raw_numel = sum(t.numel() for t in model_state.values())
+    seen_ptrs: set = set()
+    dedup_numel = 0
+    for t in model_state.values():
+        ptr = t.data_ptr()
+        if ptr in seen_ptrs:
+            continue
+        seen_ptrs.add(ptr)
+        dedup_numel += t.numel()
+    gate_proj_shapes = {
+        name: tuple(t.shape) for name, t in model_state.items()
+        if "gate_proj" in name.lower() and "weight" in name.lower()}
+    intermediate_size = (next(iter(gate_proj_shapes.values()))[0]
+                         if gate_proj_shapes else None)
+    return {
+        "raw_numel": raw_numel, "dedup_numel": dedup_numel,
+        "intermediate_size": intermediate_size,
+        "n_state_keys": len(model_state),
+        "n_gate_proj_tensors": len(gate_proj_shapes),
+    }
+
+
+def _verify_rung2_arch_identity(
+        model_state: dict, *, run_dir: str,
+        expected_dedup_numel: int = RUNG2_EXPECTED_DEDUP_NUMEL,
+        expected_intermediate_size: int = RUNG2_EXPECTED_INTERMEDIATE_SIZE) -> dict:
+    """Clause 4: refuses (before any compute) unless the CHECKPOINT-derived
+    dedup numel and FF width equal the expected values -- the exact c03/
+    FF4096-vs-FF32768 breach class becomes structurally impossible past
+    this gate."""
+    identity = _rung2_checkpoint_arch_identity(model_state)
+    ok = (identity["dedup_numel"] == expected_dedup_numel and
+          identity["intermediate_size"] == expected_intermediate_size)
+    identity["expected_dedup_numel"] = expected_dedup_numel
+    identity["expected_intermediate_size"] = expected_intermediate_size
+    identity["matches_frozen_rung2_identity"] = ok
+    if not ok:
+        receipt_path = _write_rung2_refusal_receipt(
+            {"gate": "arch_identity", **identity}, run_dir=run_dir,
+            ticket="EMBER-702-CONTINUATION-ARCH-IDENTITY-REFUSAL")
+        raise SystemExit(
+            f"ATTRIBUTION_702_ARCH_IDENTITY_REFUSED: checkpoint-derived "
+            f"dedup_numel={identity['dedup_numel']} (expected "
+            f"{expected_dedup_numel}), intermediate_size="
+            f"{identity['intermediate_size']} (expected "
+            f"{expected_intermediate_size}) -- caller-supplied config alone "
+            f"is never accepted, this is the exact c03/FF4096 breach class "
+            f"the erratum caught (receipt={receipt_path})")
+    return identity
+
+
+def _verify_rung2_checkpoint_hashes(
+        ckpt_dir: str, manifest: dict, *, run_dir: str,
+        expected_hashes: dict = RUNG2_REFERENCE_CHECKPOINT_HASHES) -> dict:
+    """Clause 5 / step866-final-addendum: cross-checks the checkpoint's own
+    per-file hashes (ts.load_checkpoint already verified these against the
+    checkpoint's OWN manifest -- internal self-consistency) PLUS a freshly
+    computed manifest.json FILE hash (excluded from that internal check by
+    save_checkpoint's own self-hash-avoidance convention) against the
+    expected pins -- proves this is the EXACT pinned checkpoint, not merely
+    an internally-consistent one at some other step."""
+    import os
+    computed = dict(manifest.get("files", {}))
+    computed["manifest.json"] = _sha256_bytes_of_file(
+        os.path.join(ckpt_dir, "manifest.json"))
+    mismatches = {
+        name: {"expected": expected, "actual": computed.get(name)}
+        for name, expected in expected_hashes.items()
+        if computed.get(name) != expected}
+    result = {"computed_hashes": computed, "expected_hashes": dict(expected_hashes),
+             "mismatches": mismatches}
+    if mismatches:
+        receipt_path = _write_rung2_refusal_receipt(
+            {"gate": "checkpoint_hash_identity", **result}, run_dir=run_dir,
+            ticket="EMBER-702-CONTINUATION-CHECKPOINT-HASH-REFUSAL")
+        raise SystemExit(
+            f"ATTRIBUTION_702_CHECKPOINT_HASH_REFUSED: {mismatches} -- this "
+            f"is not the pinned checkpoint (receipt={receipt_path})")
+    return result
+
+
+def _verify_rung2_shard_manifest_identity(
+        mmap_manifest_path: str, *, run_dir: str,
+        expected_manifest_file_sha256: str = RUNG2_EXPECTED_MANIFEST_FILE_SHA256,
+        expected_combined_source_manifest_sha256: str =
+            RUNG2_EXPECTED_COMBINED_SOURCE_MANIFEST_SHA256) -> dict:
+    """Clause 3: the custody mmap_cache/shards-v1-stream.manifest.json
+    FILE's own bytes must match the pinned manifest-file sha256, and its
+    CONTENT's combined_manifest_sha256 field (the source-shard-set lineage
+    hash _build_or_open_memmap_cache already writes/reads, see timeshare_
+    pretrain.py) must match the pinned combined-source-manifest sha256. The
+    filename is misleading (the thread's own words) -- this binds CONTENT,
+    never the name. This runs BEFORE the loader is constructed; the loader
+    itself performs a SECOND, independent check (PackedShardLoader's
+    expected_manifest_sha256 param, verified against a FRESH recompute over
+    the live shard_dir bytes) -- this gate instead verifies the custody
+    manifest ARTIFACT itself is the pinned one."""
+    import json
+    file_sha = _sha256_bytes_of_file(mmap_manifest_path)
+    with open(mmap_manifest_path, "r", encoding="utf-8") as f:
+        content = json.load(f)
+    combined_sha = content.get("combined_manifest_sha256")
+    result = {
+        "mmap_manifest_path": mmap_manifest_path,
+        "manifest_file_sha256": file_sha,
+        "expected_manifest_file_sha256": expected_manifest_file_sha256,
+        "combined_source_manifest_sha256": combined_sha,
+        "expected_combined_source_manifest_sha256":
+            expected_combined_source_manifest_sha256,
+    }
+    ok = (file_sha == expected_manifest_file_sha256 and
+          combined_sha == expected_combined_source_manifest_sha256)
+    result["matches_frozen_pins"] = ok
+    if not ok:
+        receipt_path = _write_rung2_refusal_receipt(
+            {"gate": "shard_manifest_identity", **result}, run_dir=run_dir,
+            ticket="EMBER-702-CONTINUATION-SHARD-MANIFEST-REFUSAL")
+        raise SystemExit(
+            f"ATTRIBUTION_702_SHARD_MANIFEST_REFUSED: {result} -- never "
+            f"trust the 'shards-v1' filename, bind content "
+            f"(receipt={receipt_path})")
+    return result
+
+
+def _verify_rung2_schedule_identity(manifest: dict, *, start_step: int,
+                                    total_steps: int) -> None:
+    """Clause 2/6: total_steps MUST equal the original stabilize schedule
+    denominator declared in the checkpoint's own manifest (never the
+    measurement-window length n_warmup+2*n_active), and start_step MUST
+    equal the manifest's own step -- refuses (SystemExit) otherwise. This is
+    the exact refusal the spec's negative fixture requires: a step866
+    checkpoint driven with start=0 or total_steps=42 must refuse before any
+    compute. Called in the wired attribution_run() path with values already
+    DERIVED from the manifest (so it is a standing invariant assert there,
+    never reachable via the CLI); the selftest below calls it directly with
+    deliberately wrong values to prove the refusal fires."""
+    manifest_step = manifest.get("step")
+    manifest_total_steps = (manifest.get("extra") or {}).get("total_steps")
+    reasons = []
+    if start_step != manifest_step:
+        reasons.append(f"start_step={start_step} != manifest step={manifest_step}")
+    if total_steps != manifest_total_steps:
+        reasons.append(
+            f"total_steps={total_steps} != manifest extra.total_steps="
+            f"{manifest_total_steps}")
+    if reasons:
+        raise SystemExit(
+            "ATTRIBUTION_702_SCHEDULE_IDENTITY_REFUSED: " + " | ".join(reasons) +
+            " -- continuation resume must traverse the checkpoint's OWN "
+            "absolute schedule, never a measurement-window substitute "
+            "(fail-closed, no partial credit).")
+
+
+# ---------------------------------------------------------------------------
 # Top-level run
 # ---------------------------------------------------------------------------
 
@@ -1123,11 +1394,30 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                     intermediate_override: int | None = None,
                     batch_size: int | None = None, n_warmup: int = MIN_WARMUP_STEPS,
                     n_active: int = MIN_ACTIVE_STEPS, ce_chunk_tokens: int = 256,
-                    total_steps: int | None = None) -> dict:
+                    total_steps: int | None = None,
+                    resume_continuation: bool = False,
+                    grow_checkpoint_dir: str | None = None,
+                    mmap_cache_dir: str | None = None,
+                    mmap_manifest_path: str | None = None) -> dict:
     """Runs warmup -> counterbalanced AB/BA blocks (repair item (b)) ->
     pinned/pageable calibration, evaluates every validity gate FAIL-CLOSED
     over the POOLED AB/BA samples, and returns the receipt dict (not yet
-    written to disk -- see main())."""
+    written to disk -- see main()).
+
+    resume_continuation (ember #702 2.2B rerun, additive -- False preserves
+    byte-identical existing behavior for every prior caller): loads model +
+    optimizer + RNG through the PRODUCTION ts.load_checkpoint /
+    ts.load_optimizers_state / ts.restore_rng paths -- the SAME three
+    functions run_v0_segment's own "--- resume ---" block calls, never a
+    reimplementation -- binds total_steps to the checkpoint manifest's own
+    original schedule denominator (clause 2; never n_warmup+2*n_active),
+    binds the loader to the pinned shard/mmap source (clause 3), and
+    REFUSES (fail-closed, SystemExit, structured receipt, before any
+    compute) on any of: checkpoint-derived architecture identity (clause 4),
+    checkpoint hash identity (clause 5), shard manifest identity (clause 3),
+    or schedule identity (clause 2/6). grow_checkpoint_dir/shard_dir/
+    mmap_cache_dir/mmap_manifest_path are ALL REQUIRED when
+    resume_continuation=True -- no synthetic continuation state exists."""
     import os
     import torch
 
@@ -1135,24 +1425,108 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     seq = cfg["model"]["seq"] if live else (tiny_dims or {}).get("seq", 16)
     batch_size = batch_size or (cfg["throughput"]["batch"] if live else 2)
 
-    model, vocab, hidden, n_mtp = ts.build_v0_model(
-        cfg, live=live, tiny_dims=tiny_dims,
-        intermediate_override=intermediate_override, device=device)
+    resume_manifest = None
+    checkpoint_arch_identity = None
+    checkpoint_hash_identity = None
+    shard_manifest_identity = None
+    start_step = 0
 
-    if shard_dir is None:
-        assert not live, "live dispatch must supply a real --shard-dir"
-        import numpy as np
-        shard_dir = os.path.join(run_dir, "shards")
-        os.makedirs(shard_dir, exist_ok=True)
-        rng = np.random.default_rng(0)
-        n_probe_steps = n_warmup + 2 * n_active + 4
-        need = n_probe_steps * batch_size * seq + seq + n_mtp + 8
-        toks = rng.integers(1, vocab, size=int(need), dtype=np.int64)
-        toks[:: max(1, seq * 3)] = 0
-        ts.write_packed_shard(
-            os.path.join(shard_dir, "synthetic-00000.bin"), toks.astype("uint16").tolist())
-    loader = ts.PackedShardLoader(shard_dir, seq, n_mtp,
-                                  mmap_cache_dir=os.path.join(run_dir, "mmap_cache"))
+    if resume_continuation:
+        if not grow_checkpoint_dir:
+            raise SystemExit(
+                "ATTRIBUTION_702_CONTINUATION_REFUSED: --resume-continuation "
+                "requires --grow-checkpoint-dir (no synthetic continuation "
+                "state).")
+        if not shard_dir:
+            raise SystemExit(
+                "ATTRIBUTION_702_CONTINUATION_REFUSED: --resume-continuation "
+                "requires a real --shard-dir (no synthetic tokens on the "
+                "continuation path).")
+        if not mmap_cache_dir or not mmap_manifest_path:
+            raise SystemExit(
+                "ATTRIBUTION_702_CONTINUATION_REFUSED: --resume-continuation "
+                "requires --mmap-cache-dir and --mmap-manifest-path (clause "
+                "3 data-identity binding).")
+
+        model, vocab, hidden, n_mtp = ts.build_v0_model(
+            cfg, live=live, tiny_dims=tiny_dims,
+            intermediate_override=intermediate_override, device=device)
+
+        # ---- production load paths (clause 1): load_checkpoint / ----
+        # ---- load_optimizers_state / restore_rng, exactly the three ----
+        # ---- functions run_v0_segment's own resume block calls. ----
+        model_state, optimizer_state, rng_state, manifest = ts.load_checkpoint(
+            grow_checkpoint_dir)
+        resume_manifest = manifest
+
+        # ---- identity refusal gates (clauses 3/4/5/6) -- ALL fire BEFORE ----
+        # ---- model.load_state_dict / any compute. Each gate's expected-*
+        # value is read from the MODULE GLOBAL at THIS call site, never left
+        # to the gate function's own default -- Python binds a keyword
+        # default ONCE at function-definition time, so a caller (e.g. a
+        # selftest) that monkeypatches the module-level RUNG2_EXPECTED_*
+        # constant to test the refusal logic against a small fixture would
+        # silently miss a gate that relied on its own frozen default. ----
+        checkpoint_arch_identity = _verify_rung2_arch_identity(
+            model_state, run_dir=run_dir,
+            expected_dedup_numel=RUNG2_EXPECTED_DEDUP_NUMEL,
+            expected_intermediate_size=RUNG2_EXPECTED_INTERMEDIATE_SIZE)
+        checkpoint_hash_identity = _verify_rung2_checkpoint_hashes(
+            grow_checkpoint_dir, manifest, run_dir=run_dir,
+            expected_hashes=RUNG2_REFERENCE_CHECKPOINT_HASHES)
+        shard_manifest_identity = _verify_rung2_shard_manifest_identity(
+            mmap_manifest_path, run_dir=run_dir,
+            expected_manifest_file_sha256=RUNG2_EXPECTED_MANIFEST_FILE_SHA256,
+            expected_combined_source_manifest_sha256=
+                RUNG2_EXPECTED_COMBINED_SOURCE_MANIFEST_SHA256)
+
+        start_step = manifest.get("step")
+        manifest_total_steps = (manifest.get("extra") or {}).get("total_steps")
+        _verify_rung2_schedule_identity(
+            manifest, start_step=start_step, total_steps=manifest_total_steps)
+        total_steps = manifest_total_steps
+
+        with torch.no_grad():
+            model.load_state_dict(model_state)
+
+        loader = ts.PackedShardLoader(
+            shard_dir, seq, n_mtp, mmap_cache_dir=mmap_cache_dir,
+            expected_manifest_sha256=RUNG2_EXPECTED_COMBINED_SOURCE_MANIFEST_SHA256)
+
+        optimizers, base_lrs, routing = ts.build_split_optimizer(
+            model, cfg, offload_optimizer_state=True,
+            deviation_dir=os.path.join(run_dir, "deviations"),
+            optstate_dir=os.path.join(run_dir, "optstate"))
+        ts.load_optimizers_state(optimizers, optimizer_state)
+        ts.restore_rng(rng_state)
+
+        fork_global_step = start_step + n_warmup
+    else:
+        model, vocab, hidden, n_mtp = ts.build_v0_model(
+            cfg, live=live, tiny_dims=tiny_dims,
+            intermediate_override=intermediate_override, device=device)
+
+        if shard_dir is None:
+            assert not live, "live dispatch must supply a real --shard-dir"
+            import numpy as np
+            shard_dir = os.path.join(run_dir, "shards")
+            os.makedirs(shard_dir, exist_ok=True)
+            rng = np.random.default_rng(0)
+            n_probe_steps = n_warmup + 2 * n_active + 4
+            need = n_probe_steps * batch_size * seq + seq + n_mtp + 8
+            toks = rng.integers(1, vocab, size=int(need), dtype=np.int64)
+            toks[:: max(1, seq * 3)] = 0
+            ts.write_packed_shard(
+                os.path.join(shard_dir, "synthetic-00000.bin"), toks.astype("uint16").tolist())
+        loader = ts.PackedShardLoader(shard_dir, seq, n_mtp,
+                                      mmap_cache_dir=os.path.join(run_dir, "mmap_cache"))
+
+        optimizers, base_lrs, routing = ts.build_split_optimizer(
+            model, cfg, offload_optimizer_state=True,
+            deviation_dir=os.path.join(run_dir, "deviations"),
+            optstate_dir=os.path.join(run_dir, "optstate"))
+
+        fork_global_step = n_warmup
 
     # optstate_dir is ALWAYS a per-invocation-unique path derived from run_dir
     # (itself unique per call -- a fresh tempdir on every selftest/CLI
@@ -1161,13 +1535,29 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
     # therefore unreachable from this runner: a selftest's tiny-model param
     # names (or a live run racing another live run) can never collide with
     # or truncate another invocation's file-backed shadow/state.
-    optimizers, base_lrs, routing = ts.build_split_optimizer(
-        model, cfg, offload_optimizer_state=True,
-        deviation_dir=os.path.join(run_dir, "deviations"),
-        optstate_dir=os.path.join(run_dir, "optstate"))
     muon_named, adamw_named = ts.split_param_groups(model)
     expected_full_numel = sum(p.numel() for _, p in muon_named) + \
         sum(p.numel() for _, p in adamw_named)
+
+    if resume_continuation and expected_full_numel != RUNG2_EXPECTED_DEDUP_NUMEL:
+        # Clause 4, SECOND independent leg: the checkpoint-derived gate above
+        # already refused on a wrong-scale checkpoint; this refuses if the
+        # LIVE model (built from cfg + intermediate_override) does NOT also
+        # realize the pinned scale -- catching a caller who fixed the
+        # checkpoint pin but forgot to also pass
+        # --intermediate-override=32768 (the exact class of silent
+        # substitution the erratum caught in main()).
+        receipt_path = _write_rung2_refusal_receipt(
+            {"gate": "live_model_arch_identity",
+             "expected_full_numel_from_split_param_groups": expected_full_numel,
+             "expected_dedup_numel": RUNG2_EXPECTED_DEDUP_NUMEL,
+             "intermediate_override": intermediate_override},
+            run_dir=run_dir, ticket="EMBER-702-CONTINUATION-LIVE-ARCH-REFUSAL")
+        raise SystemExit(
+            f"ATTRIBUTION_702_LIVE_ARCH_REFUSED: live model realizes "
+            f"{expected_full_numel} params (expected "
+            f"{RUNG2_EXPECTED_DEDUP_NUMEL}) -- intermediate_override="
+            f"{intermediate_override} is likely wrong (receipt={receipt_path})")
 
     ce_impl, ce_fn = ts.resolve_ce_impl(prefer_liger=live)
     mtp_cfg = cfg["objective"]["mtp_aux_heads"]
@@ -1180,13 +1570,20 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
                  ce_chunk_tokens=ce_chunk_tokens, device=device, batch_size=batch_size,
                  total_steps=total_steps)
 
-    # ---- warmup (uninstrumented) ----
-    _run_block(global_step_start=0, n_steps=n_warmup, profile=False,
+    # ---- warmup (uninstrumented) -- absolute step range: start_step is 0
+    # for every pre-existing (non-continuation) caller, byte-identical to
+    # prior behavior; start_step is the manifest's own step (866 at the
+    # frozen pins) for a continuation resume. ----
+    _run_block(global_step_start=start_step, n_steps=n_warmup, profile=False,
               collector=None, **common)
 
-    # ---- counterbalanced AB/BA blocks (repair item (b)) ----
+    # ---- counterbalanced AB/BA blocks (repair item (b)) -- fork_global_step
+    # is n_warmup for every pre-existing caller (byte-identical), and
+    # start_step + n_warmup (868 at the frozen pins) for a continuation
+    # resume, so both AB/BA arms traverse the SAME absolute continuation
+    # steps the frozen spec requires. ----
     ab_ba = _run_counterbalanced_ab_ba(
-        n_active=n_active, fork_global_step=n_warmup, run_dir=run_dir, **common)
+        n_active=n_active, fork_global_step=fork_global_step, run_dir=run_dir, **common)
     collector = ab_ba["collector"]
 
     calibration = calibrate_pinned_vs_pageable(device=device)
@@ -1244,6 +1641,24 @@ def attribution_run(*, live: bool, cfg: dict, shard_dir: str | None,
             },
         },
         "mode": {"live": live, "device": device, "n_warmup": n_warmup, "n_active": n_active},
+        # Clause 5 receipt emissions: source checkpoint 4-hash set, start/end
+        # absolute steps, total_steps denominator, shard identity shas, full
+        # checkpoint-derived arch identity, realized numel -- populated only
+        # on the continuation-resume path (None-valued keys on every
+        # pre-existing caller, byte-identical absence of this block's
+        # content otherwise).
+        "continuation": {
+            "resume_continuation": resume_continuation,
+            "grow_checkpoint_dir": grow_checkpoint_dir,
+            "checkpoint_manifest": resume_manifest,
+            "start_step": start_step if resume_continuation else None,
+            "fork_global_step": fork_global_step if resume_continuation else None,
+            "end_step": ab_ba["post_run_global_step"] if resume_continuation else None,
+            "total_steps_denominator": total_steps if resume_continuation else None,
+            "checkpoint_arch_identity": checkpoint_arch_identity,
+            "checkpoint_hash_identity": checkpoint_hash_identity,
+            "shard_manifest_identity": shard_manifest_identity,
+        } if resume_continuation else {"resume_continuation": False},
         "optimizer_routing": routing,
         "expected_full_numel_from_split_param_groups": expected_full_numel,
         "reference_pre_run_amendment": {
@@ -1454,6 +1869,9 @@ def _selftest() -> int:
     _selftest_span_collector_attach_detach()
     _selftest_integration_all_gates_pass()
     _selftest_fork_capacity_preflight()
+    _selftest_rung2_identity_gate_units()
+    _selftest_continuation_schedule_bind()
+    _selftest_continuation_resume_wiring()
     return 0
 
 
@@ -1762,6 +2180,353 @@ def _selftest_fork_capacity_preflight() -> None:
 
 
 # ---------------------------------------------------------------------------
+# #702 2.2B continuation-identity selftests -- clauses 1/2/3/4/5/6 of the
+# builder-spec skeleton (comment 4942704748) + data-identity addendum
+# (4942713685). Each _verify_rung2_* gate's expected-* value is an
+# injectable parameter (same pattern _preflight_fork_capacity's nvsmi/
+# commit/disk already use), so these selftests prove the REFUSAL LOGIC
+# against small, fast, deterministic fixtures -- never the real 2.2B
+# checkpoint, which this CPU-only box cannot build or hold.
+# ---------------------------------------------------------------------------
+
+def _selftest_rung2_identity_gate_units() -> None:
+    """Unit-level proof of the continuation-identity gates (clauses 3/4/5),
+    independent of the full attribution_run() pipeline: each gate is
+    exercised on a matching fixture (must NOT raise) and a deliberately
+    wrong one (must raise SystemExit) -- the wrong-scale-numel refusal
+    shape the #702 erratum's negative fixture requires."""
+    import json
+    import os
+    import tempfile
+
+    import torch
+
+    run_dir = tempfile.mkdtemp(prefix="attribution702_rung2_units_")
+
+    # ---- arch identity: matching small fixture passes, wrong FF width refuses ----
+    small_state = {
+        "backbone_model.embed_tokens.weight": torch.zeros(16, 8),
+        "backbone_model.layers.0.mlp.gate_proj.weight": torch.zeros(24, 8),
+        "backbone_model.layers.0.mlp.up_proj.weight": torch.zeros(24, 8),
+        "backbone_model.layers.0.mlp.down_proj.weight": torch.zeros(8, 24),
+        "head.weight": torch.zeros(16, 8),
+    }
+    small_dedup = sum(t.numel() for t in small_state.values())  # no shared storage here
+    identity_ok = _verify_rung2_arch_identity(
+        small_state, run_dir=run_dir,
+        expected_dedup_numel=small_dedup, expected_intermediate_size=24)
+    assert identity_ok["matches_frozen_rung2_identity"] is True, identity_ok
+
+    arch_refused = False
+    try:
+        _verify_rung2_arch_identity(
+            small_state, run_dir=run_dir,
+            expected_dedup_numel=RUNG2_EXPECTED_DEDUP_NUMEL,
+            expected_intermediate_size=RUNG2_EXPECTED_INTERMEDIATE_SIZE)
+    except SystemExit:
+        arch_refused = True
+    assert arch_refused, (
+        "arch identity gate must REFUSE a wrong-scale checkpoint -- this is "
+        "the exact c03/FF4096-vs-FF32768 breach class the erratum caught")
+
+    # a second small fixture at a DIFFERENT FF width, cross-checked against
+    # the FIRST fixture's own dedup/FF -- proves the refusal fires on a
+    # genuine mismatch between two otherwise-plausible small checkpoints,
+    # not only against the (at this CPU scale) unreachable real 2.2B pin.
+    other_small_state = {
+        "backbone_model.embed_tokens.weight": torch.zeros(16, 8),
+        "backbone_model.layers.0.mlp.gate_proj.weight": torch.zeros(40, 8),
+        "backbone_model.layers.0.mlp.up_proj.weight": torch.zeros(40, 8),
+        "backbone_model.layers.0.mlp.down_proj.weight": torch.zeros(8, 40),
+        "head.weight": torch.zeros(16, 8),
+    }
+    cross_refused = False
+    try:
+        _verify_rung2_arch_identity(
+            other_small_state, run_dir=run_dir,
+            expected_dedup_numel=small_dedup, expected_intermediate_size=24)
+    except SystemExit:
+        cross_refused = True
+    assert cross_refused, "arch identity gate must refuse a genuine FF-width mismatch"
+
+    # ---- checkpoint hash identity: matching sidecar passes, tampered pin refuses ----
+    ckpt_dir = os.path.join(run_dir, "fake_ckpt")
+    os.makedirs(ckpt_dir, exist_ok=True)
+    for name, content in (("model.pt", b"MODEL"), ("optimizer.pt", b"OPT"), ("rng.pt", b"RNG")):
+        with open(os.path.join(ckpt_dir, name), "wb") as f:
+            f.write(content)
+    file_hashes = {name: _sha256_bytes_of_file(os.path.join(ckpt_dir, name))
+                   for name in ("model.pt", "optimizer.pt", "rng.pt")}
+    manifest_path = os.path.join(ckpt_dir, "manifest.json")
+    fake_manifest = {"step": 43, "files": file_hashes, "extra": {"total_steps": 5000}}
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(fake_manifest, f)
+    expected_hashes = dict(file_hashes)
+    expected_hashes["manifest.json"] = _sha256_bytes_of_file(manifest_path)
+
+    hash_ok = _verify_rung2_checkpoint_hashes(
+        ckpt_dir, fake_manifest, run_dir=run_dir, expected_hashes=expected_hashes)
+    assert hash_ok["mismatches"] == {}, hash_ok
+
+    tampered_expected = dict(expected_hashes)
+    tampered_expected["model.pt"] = "0" * 64
+    hash_refused = False
+    try:
+        _verify_rung2_checkpoint_hashes(
+            ckpt_dir, fake_manifest, run_dir=run_dir, expected_hashes=tampered_expected)
+    except SystemExit:
+        hash_refused = True
+    assert hash_refused, "checkpoint hash gate must refuse a pin mismatch"
+
+    # ---- shard manifest identity: matching content passes, wrong pin refuses ----
+    mmap_manifest_path = os.path.join(run_dir, "shards-v1-stream.manifest.json")
+    sidecar = {"combined_manifest_sha256": "c" * 64, "n_tokens": 1000, "n_files": 1}
+    with open(mmap_manifest_path, "w", encoding="utf-8") as f:
+        json.dump(sidecar, f)
+    mmap_file_sha = _sha256_bytes_of_file(mmap_manifest_path)
+
+    shard_ok = _verify_rung2_shard_manifest_identity(
+        mmap_manifest_path, run_dir=run_dir,
+        expected_manifest_file_sha256=mmap_file_sha,
+        expected_combined_source_manifest_sha256="c" * 64)
+    assert shard_ok["matches_frozen_pins"] is True, shard_ok
+
+    shard_refused = False
+    try:
+        _verify_rung2_shard_manifest_identity(
+            mmap_manifest_path, run_dir=run_dir,
+            expected_manifest_file_sha256=mmap_file_sha,
+            expected_combined_source_manifest_sha256="d" * 64)
+    except SystemExit:
+        shard_refused = True
+    assert shard_refused, "shard manifest gate must refuse a combined-sha pin mismatch"
+
+    print("ATTRIB702_IDENTITY_REFUSAL_PASS "
+          f"arch_refused={arch_refused} cross_ff_refused={cross_refused} "
+          f"hash_refused={hash_refused} shard_manifest_refused={shard_refused}",
+          flush=True)
+
+
+def _selftest_continuation_schedule_bind() -> None:
+    """Clause 2/6 in isolation: proves total_steps binds to the checkpoint
+    manifest's OWN original schedule denominator, never the measurement-
+    window length n_warmup+2*n_active -- and that a step866-style
+    checkpoint driven with start=0 or total_steps=42 (the exact literal
+    negative fixture the spec names) refuses before any compute."""
+    step866_style_manifest = {
+        "step": 43,                          # a small "step866" analog
+        "extra": {"total_steps": 5000,       # a small "449651" analog --
+                                              # much larger than any
+                                              # measurement-window length
+                  "segment_id": "selftest-rung2-continuation-fixture"},
+    }
+
+    # ---- correct bind: start_step/total_steps derived from the manifest passes ----
+    _verify_rung2_schedule_identity(
+        step866_style_manifest, start_step=43, total_steps=5000)
+
+    # ---- refusal 1: start=0 (the exact literal negative fixture) ----
+    start0_refused = False
+    try:
+        _verify_rung2_schedule_identity(
+            step866_style_manifest, start_step=0, total_steps=5000)
+    except SystemExit:
+        start0_refused = True
+    assert start0_refused, "schedule gate must refuse start_step=0 against a resumed manifest"
+
+    # ---- refusal 2: total_steps=42 -- the LITERAL erratum value (the actual
+    # prior wrong-scale live run's own n_warmup+2*n_active at ITS n_active
+    # choice; not necessarily this file's current MIN_WARMUP_STEPS/
+    # MIN_ACTIVE_STEPS floor product, which is exercised separately below
+    # as the general "whatever measurement-window length this run used"
+    # case) ----
+    total42_refused = False
+    try:
+        _verify_rung2_schedule_identity(
+            step866_style_manifest, start_step=43, total_steps=42)
+    except SystemExit:
+        total42_refused = True
+    assert total42_refused, (
+        "schedule gate must refuse total_steps=42 (the erratum's literal "
+        "measurement-window substitute) against a manifest declaring the "
+        "real 5000-step schedule -- this is the exact erratum substitution "
+        "class")
+
+    # ---- refusal 3: THIS file's own current measurement-window formula
+    # (n_warmup+2*n_active at the floor constants) -- the general shape of
+    # the same substitution class, independent of the erratum's specific
+    # historical numbers. ----
+    measurement_window_total_steps = MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS
+    window_refused = False
+    try:
+        _verify_rung2_schedule_identity(
+            step866_style_manifest, start_step=43,
+            total_steps=measurement_window_total_steps)
+    except SystemExit:
+        window_refused = True
+    assert window_refused, (
+        "schedule gate must refuse THIS file's own measurement-window "
+        f"length ({measurement_window_total_steps}) against a manifest "
+        "declaring the real 5000-step schedule")
+
+    # ---- refusal 4: both wrong at once (start=0 AND total_steps=42) ----
+    both_refused = False
+    try:
+        _verify_rung2_schedule_identity(
+            step866_style_manifest, start_step=0, total_steps=42)
+    except SystemExit:
+        both_refused = True
+    assert both_refused
+
+    print("ATTRIB702_SCHEDULE_BIND_PASS "
+          f"start0_refused={start0_refused} total42_refused={total42_refused} "
+          f"measurement_window_refused={window_refused} "
+          f"both_refused={both_refused}", flush=True)
+
+
+def _selftest_continuation_resume_wiring() -> None:
+    """Full end-to-end proof of the --resume-continuation wiring (clause 1):
+    absolute step math, fork step, production ts.load_checkpoint/
+    ts.load_optimizers_state/ts.restore_rng call sites, schedule identity
+    bound to the manifest's own denominator, and the receipt's continuation
+    metadata -- against a genuine (tiny, real-arch) checkpoint written by
+    the SAME production ts.run_v0_segment/save_checkpoint path a real
+    rung-2 checkpoint is written by (never a hand-built fixture that could
+    diverge from what load_checkpoint actually expects). The module-level
+    RUNG2_EXPECTED_* pins are monkeypatched (restored in a finally block) to
+    this fixture's own genuine small-scale values -- attribution_run()'s own
+    identity-gate call sites read the CURRENT global at call time (see the
+    comment at those call sites), so this exercises the real wired path,
+    not a bypass of it. CPU-only calibration still fails closed (same
+    reason as every other selftest in this file) -- this fixture asserts
+    the CONTINUATION metadata, not gates_all_passed, which
+    _selftest_integration_all_gates_pass() already covers independently."""
+    import json
+    import os
+    import tempfile
+
+    import torch
+
+    cfg = {
+        "model": {"seq": 16, "vocab": 64, "hidden": 32, "layers": 2, "heads": 2,
+                  "tied_embeddings": False, "grad_checkpointing": False},
+        "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 2, "weight": 0.3}},
+        "optimizer": {"lr_muon": 0.02, "lr_adamw": 3e-4, "weight_decay": 0.1},
+        "schedule": {"type": "wsd", "warmup_frac": 0.1, "stable_until_frac": 0.8,
+                    "decay_to_lr_frac": 0.1},
+        "throughput": {"batch": 2},
+    }
+    small_intermediate = 48
+    fixture_total_steps = 5000
+    fixture_start_step = 43
+
+    build_dir = tempfile.mkdtemp(prefix="attribution702_rung2_ckptbuild_")
+    build_receipt = ts.run_v0_segment(
+        build_dir, cfg, n_steps=fixture_start_step, total_steps=fixture_total_steps,
+        live=False, real_arch=True, device="cpu",
+        intermediate_override=small_intermediate, offload_optimizer_state=True,
+        checkpoint_every=fixture_start_step,
+        segment_id="rung2-continuation-selftest-fixture", batch_size=2)
+    ckpt_dir = build_receipt["last_checkpoint"]
+    assert ckpt_dir is not None, "fixture checkpoint build must produce a checkpoint"
+    manifest = ts.read_manifest(ckpt_dir)
+    assert manifest["step"] == fixture_start_step, manifest
+    assert manifest["extra"]["total_steps"] == fixture_total_steps, manifest
+
+    shard_dir = os.path.join(build_dir, "shards")
+    assert os.path.isdir(shard_dir), shard_dir
+
+    mmap_cache_dir = os.path.join(build_dir, "mmap_cache_fixture")
+    n_mtp = cfg["objective"]["mtp_aux_heads"]["n_heads"]
+    # Build the mmap cache ONCE via the real production loader constructor
+    # (never hand-computed) to get a genuine shards-v1-stream.manifest.json
+    # with correct content, then read the two hashes clause 3 pins.
+    ts.PackedShardLoader(shard_dir, cfg["model"]["seq"], n_mtp,
+                         mmap_cache_dir=mmap_cache_dir)
+    mmap_manifest_path = os.path.join(mmap_cache_dir, "shards-v1-stream.manifest.json")
+    assert os.path.isfile(mmap_manifest_path), mmap_manifest_path
+    with open(mmap_manifest_path, "r", encoding="utf-8") as f:
+        mmap_sidecar = json.load(f)
+    pinned_combined_sha = mmap_sidecar["combined_manifest_sha256"]
+    pinned_manifest_file_sha = _sha256_bytes_of_file(mmap_manifest_path)
+
+    # Checkpoint-hash pins, read fresh off the fixture checkpoint's own
+    # (already internally sha-verified by ts.load_checkpoint) manifest --
+    # same shape as the real step866-final-addendum pins, sized to this
+    # small fixture.
+    pinned_checkpoint_hashes = dict(manifest["files"])
+    pinned_checkpoint_hashes["manifest.json"] = _sha256_bytes_of_file(
+        os.path.join(ckpt_dir, "manifest.json"))
+
+    # Checkpoint-derived arch identity pins, computed the SAME way
+    # _rung2_checkpoint_arch_identity does, off the fixture's own model.pt.
+    fixture_model_state = torch.load(
+        os.path.join(ckpt_dir, "model.pt"), map_location="cpu", weights_only=True)
+    fixture_identity = _rung2_checkpoint_arch_identity(fixture_model_state)
+    assert fixture_identity["intermediate_size"] == small_intermediate, fixture_identity
+
+    run_dir = tempfile.mkdtemp(prefix="attribution702_rung2_continuation_")
+
+    module = sys.modules[__name__]
+    _orig = {
+        "RUNG2_EXPECTED_DEDUP_NUMEL": module.RUNG2_EXPECTED_DEDUP_NUMEL,
+        "RUNG2_EXPECTED_INTERMEDIATE_SIZE": module.RUNG2_EXPECTED_INTERMEDIATE_SIZE,
+        "RUNG2_EXPECTED_COMBINED_SOURCE_MANIFEST_SHA256":
+            module.RUNG2_EXPECTED_COMBINED_SOURCE_MANIFEST_SHA256,
+        "RUNG2_EXPECTED_MANIFEST_FILE_SHA256": module.RUNG2_EXPECTED_MANIFEST_FILE_SHA256,
+        "RUNG2_REFERENCE_CHECKPOINT_HASHES": module.RUNG2_REFERENCE_CHECKPOINT_HASHES,
+    }
+    module.RUNG2_EXPECTED_DEDUP_NUMEL = fixture_identity["dedup_numel"]
+    module.RUNG2_EXPECTED_INTERMEDIATE_SIZE = fixture_identity["intermediate_size"]
+    module.RUNG2_EXPECTED_COMBINED_SOURCE_MANIFEST_SHA256 = pinned_combined_sha
+    module.RUNG2_EXPECTED_MANIFEST_FILE_SHA256 = pinned_manifest_file_sha
+    module.RUNG2_REFERENCE_CHECKPOINT_HASHES = pinned_checkpoint_hashes
+    try:
+        receipt = attribution_run(
+            live=True, cfg=cfg, shard_dir=shard_dir, run_dir=run_dir,
+            device="cpu", tiny_dims=None,
+            intermediate_override=small_intermediate,
+            batch_size=2, n_warmup=MIN_WARMUP_STEPS, n_active=MIN_ACTIVE_STEPS,
+            ce_chunk_tokens=32,
+            resume_continuation=True, grow_checkpoint_dir=ckpt_dir,
+            mmap_cache_dir=mmap_cache_dir, mmap_manifest_path=mmap_manifest_path)
+    finally:
+        for k, v in _orig.items():
+            setattr(module, k, v)
+
+    cont = receipt["continuation"]
+    assert cont["resume_continuation"] is True
+    assert cont["start_step"] == fixture_start_step, cont
+    assert cont["fork_global_step"] == fixture_start_step + MIN_WARMUP_STEPS, cont
+    assert cont["end_step"] == (
+        fixture_start_step + MIN_WARMUP_STEPS + 2 * MIN_ACTIVE_STEPS), cont
+    assert cont["total_steps_denominator"] == fixture_total_steps, cont
+    assert cont["checkpoint_arch_identity"]["matches_frozen_rung2_identity"] is True, cont
+    assert cont["checkpoint_hash_identity"]["mismatches"] == {}, cont
+    assert cont["shard_manifest_identity"]["matches_frozen_pins"] is True, cont
+    # CPU has no real PCIe path -- pinned_pageable_calibration fails closed
+    # here for the SAME reason it does in the base _selftest() (this
+    # fixture is not stubbing it, unlike _selftest_integration_all_gates_
+    # pass -- proving CONTINUATION metadata correctness is this fixture's
+    # job; the overhead/closure/exact_bytes gates' own numerical robustness
+    # at a clean-verdict scale is that OTHER fixture's job).
+    assert receipt["gates"]["pinned_pageable_calibration"]["passed"] is False
+    assert receipt["verdict"] == "INVALID"
+    assert "pinned_pageable_calibration" in receipt["failing_gates"]
+
+    print("ATTRIB702_CONTINUATION_RESUME_PASS "
+          f"start_step={cont['start_step']} "
+          f"fork_global_step={cont['fork_global_step']} "
+          f"end_step={cont['end_step']} "
+          f"total_steps_denominator={cont['total_steps_denominator']} "
+          f"checkpoint_arch_identity_ok="
+          f"{cont['checkpoint_arch_identity']['matches_frozen_rung2_identity']} "
+          f"checkpoint_hash_identity_ok={cont['checkpoint_hash_identity']['mismatches'] == {}} "
+          f"shard_manifest_identity_ok="
+          f"{cont['shard_manifest_identity']['matches_frozen_pins']}", flush=True)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1779,6 +2544,39 @@ def main(argv: list | None = None) -> int:
     ap.add_argument("--n-warmup", type=int, default=MIN_WARMUP_STEPS)
     ap.add_argument("--n-active", type=int, default=MIN_ACTIVE_STEPS)
     ap.add_argument("--device", default="cuda")
+    # ember #702 2.2B rerun (erratum 4942686121 fix): --intermediate-override
+    # was accepted by attribution_run() but NEVER threaded through from
+    # main() -- every --live dispatch silently built the c03 FF4096 model
+    # regardless of this flag. Now wired straight through.
+    ap.add_argument("--intermediate-override", type=int, default=None,
+                    help="FF width for the LlamaConfig (e.g. 32768 for the "
+                         "frozen rung-2 arch). None preserves the c03 "
+                         "FF4096 default -- the erratum's silent scale "
+                         "substitution is only possible by OMITTING this "
+                         "flag, never by passing it wrong at the frozen "
+                         "value, since --resume-continuation's identity "
+                         "gates refuse a mismatch either way.")
+    ap.add_argument("--resume-continuation", action="store_true",
+                    help="ember #702 2.2B rerun (clauses 1-6): load model/"
+                         "optimizer/RNG from --grow-checkpoint-dir through "
+                         "the production load_checkpoint/load_optimizers_"
+                         "state/restore_rng paths, bind total_steps to the "
+                         "checkpoint's own schedule denominator, bind the "
+                         "loader to the pinned shard/mmap source, and "
+                         "REFUSE before any compute on an architecture/"
+                         "checkpoint-hash/shard-manifest/schedule identity "
+                         "mismatch. Requires --grow-checkpoint-dir, "
+                         "--shard-dir, --mmap-cache-dir, "
+                         "--mmap-manifest-path.")
+    ap.add_argument("--grow-checkpoint-dir", default=None,
+                    help="rung-2 stabilize checkpoint dir to resume from "
+                         "(e.g. .../block-10/checkpoints/step-00000866)")
+    ap.add_argument("--mmap-cache-dir", default=None,
+                    help="custody mmap_cache dir for the continuation's "
+                         "shard stream (e.g. .../block-10/mmap_cache)")
+    ap.add_argument("--mmap-manifest-path", default=None,
+                    help="custody shards-v1-stream.manifest.json path "
+                         "(clause 3 data-identity binding)")
     args = ap.parse_args(argv)
 
     if args.selftest:
@@ -1801,6 +2599,16 @@ def main(argv: list | None = None) -> int:
                   f"--n-active>={MIN_ACTIVE_STEPS} are validity-gate floors, not "
                   "tunable below them.", flush=True)
             return 3
+    if args.resume_continuation:
+        missing = [name for name, val in (
+            ("--grow-checkpoint-dir", args.grow_checkpoint_dir),
+            ("--mmap-cache-dir", args.mmap_cache_dir),
+            ("--mmap-manifest-path", args.mmap_manifest_path),
+        ) if not val]
+        if missing:
+            print(f"ATTRIBUTION_702_REFUSED: --resume-continuation requires "
+                  f"{', '.join(missing)}.", flush=True)
+            return 3
 
     cfg = ts.load_contract()
     run_dir = args.out_dir or tempfile.mkdtemp(prefix="attribution702_")
@@ -1810,7 +2618,12 @@ def main(argv: list | None = None) -> int:
         live=args.live, cfg=cfg, shard_dir=args.shard_dir, run_dir=run_dir,
         device=args.device if args.live else "cpu",
         tiny_dims=None if args.live else {"vocab": 64, "hidden": 32, "depth": 2, "seq": 16},
-        n_warmup=args.n_warmup, n_active=args.n_active)
+        intermediate_override=args.intermediate_override,
+        n_warmup=args.n_warmup, n_active=args.n_active,
+        resume_continuation=args.resume_continuation,
+        grow_checkpoint_dir=args.grow_checkpoint_dir,
+        mmap_cache_dir=args.mmap_cache_dir,
+        mmap_manifest_path=args.mmap_manifest_path)
 
     from receipt_write import checked_write
     receipt_path = Path(args.receipt_dir) / f"attribution-702-{receipt['ts']}.json"
