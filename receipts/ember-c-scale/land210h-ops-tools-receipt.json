@@ -1,0 +1,63 @@
+{
+  "ticket": "LAND210H-OPS-TOOLS",
+  "ts": "20260711T081015Z",
+  "issue": "ember#210",
+  "tier": "Tier 2",
+  "family": "ops tools (family 4 in the issue #210 triage comment; lands AFTER harness/entry per the approved resequencing -- all 5 candidates hard-import ember_avir_tasks and/or ember_avir_harness, landed in PR #771)",
+  "worktree": "landing worktree wt-land210h (sibling of the main ember tree); re-cut fresh from post-#771 master after the prerequisite landed, superseding an earlier prep pass cut from a stale base",
+  "branch": "chore/210h-ops-tools",
+  "base_sha": "93b5b726",
+  "stage_source": "scratch/seed-export-v5/dryrun-20260704T211712Z/stage/ember_main/scripts",
+  "candidates_total": 5,
+  "import_closure_check": "All 5 files' non-stdlib repo-internal imports confirmed present on base_sha: ember_avir_tasks.py, ember_avir_harness.py (both landed in #771), governor.py (commit-governor functions landed in #769), timeshare_pretrain.py (already tracked pre-#210). Zero hard blockers remaining.",
+  "excluded": [],
+  "files": [
+    {
+      "path": "scripts/convert_nf4_prequant.py",
+      "stage_sha256": "bbbc1bda4b261d5bbfad24e5863558af1fea5ee2866d1189c7009c12d4cbd0c6",
+      "landed_sha256": "a6f2e6ae3fcf7d5d9d1406e03c784268f429f4577617518acc3adf01db4dc3c2",
+      "modified_from_stage": true,
+      "edit_class": "functional_redaction_portability_fix",
+      "edit_note": "Absolute drive-letter-rooted literals removed: SRC_DIR_DEFAULT/DST_DIR_DEFAULT (a fixed structural sibling of the repo root, same class as the shards-v0/sandbox-gpu-test junctions in families 3-5) switched to a computed repo-relative default using the module's own pre-existing REPO constant (Path(__file__).resolve().parent.parent). One docstring path citation in the SIGSEGV root-cause explanation generalized to descriptive text. Provenance note added to module docstring. Verified functionally identical on this machine: SRC_DIR_DEFAULT resolves to the same path as the hardcoded original and exists."
+    },
+    {
+      "path": "scripts/ember_cbase_avir_data.py",
+      "stage_sha256": "bee056d7ac96b6f5308d31af0da3dd4f79154086fcd5c19cc8f4a037847d9345",
+      "landed_sha256": "bee056d7ac96b6f5308d31af0da3dd4f79154086fcd5c19cc8f4a037847d9345",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/ember_cbase_avir_data_v2.py",
+      "stage_sha256": "8d68850500e95bc90af5a69108a69b285ef5264ca77710c7325799fa001ff252",
+      "landed_sha256": "8d68850500e95bc90af5a69108a69b285ef5264ca77710c7325799fa001ff252",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/test_ember_cbase_avir_data.py",
+      "stage_sha256": "766ef9a0c7d1f0893cb7be54778d1215f3cee569c8ba8cea304cdc4f9dfcf443",
+      "landed_sha256": "766ef9a0c7d1f0893cb7be54778d1215f3cee569c8ba8cea304cdc4f9dfcf443",
+      "modified_from_stage": false
+    },
+    {
+      "path": "scripts/test_ember_cbase_avir_data_v2.py",
+      "stage_sha256": "af5dffbe6afa49fc9d52b8620e047a23b8bfc0aa05cac87461560286d786ee88",
+      "landed_sha256": "af5dffbe6afa49fc9d52b8620e047a23b8bfc0aa05cac87461560286d786ee88",
+      "modified_from_stage": false
+    }
+  ],
+  "pre_existing_defect_disclosed": {
+    "summary": "tokenizer/tokenizer.json (already tracked on master, NOT part of this landing) fails to load directly via tokenizers.Tokenizer.from_str -- raises 'Exception: Token <literal> out of vocabulary' naming a five-letter merge-table literal not present in the vocab dict. Reproduced with a minimal isolated script that only reads the tracked tokenizer file and calls Tokenizer.from_str on its raw bytes (tokenizers==0.22.2 installed here), with zero involvement of any file in this PR. This is a defect in an already-tracked artifact / a tokenizers-library-version format mismatch, out of scope for a portability landing.",
+    "impact": "ember_cbase_avir_data.py's and ember_cbase_avir_data_v2.py's _load_production_tokenizer() call (and therefore run_pipeline()) cannot complete on this defect. test_ember_cbase_avir_data.py: 0/4 tests reach completion (all 4 call run_pipeline() directly, each failing at the same tokenizer load line). test_ember_cbase_avir_data_v2.py: 98 of 99 sub-assertions PASS -- only test_full_pipeline_round_trip (the one test requiring the real tokenizer) fails on the identical exception. The other 98 sub-assertions exercise real pipeline logic (train/heldout firewall across all 44 tasks, answer-perturbation detection, gate assertions, tool-call counting) and all pass, which is strong evidence the imports and wiring in both modules and both test files are correct -- the failure isolates precisely to the pre-existing tokenizer artifact.",
+    "landed_anyway": "Yes -- same precedent as #768 (family 3): byte-identical files with a disclosed downstream defect they did not introduce are landed, not held hostage to an unrelated fix. convert_nf4_prequant.py has zero tokenizer dependency (governor + torch only) and is fully functional."
+  },
+  "functional_verification": {
+    "compile_check": "python -m py_compile on all 5 scripts -- PASS, zero errors",
+    "leak_gate": "REPO_GUARD_SCOPE=staged bash tools/repo-guard.sh -- PASS (all 9 checks)",
+    "convert_nf4_prequant_help": "python convert_nf4_prequant.py --help -- exit 0",
+    "convert_nf4_prequant_default_resolution": "Imported the module directly and printed SRC_DIR_DEFAULT/DST_DIR_DEFAULT: resolves to the same path as the original hardcoded literal on this machine, and SRC_DIR_DEFAULT.exists() == True -- fix is functionally identical here, portable elsewhere",
+    "ember_cbase_avir_data_test": "0/4 PASS -- all 4 blocked by the disclosed pre-existing tokenizer defect (see pre_existing_defect_disclosed)",
+    "ember_cbase_avir_data_v2_test": "98/99 sub-assertions PASS -- the 1 failure is the disclosed pre-existing tokenizer defect (see pre_existing_defect_disclosed)"
+  },
+  "pass": true,
+  "verdict": "LAND210H_OPS_TOOLS_5_LANDED_0_EXCLUDED_1_PREEXISTING_DEFECT_DISCLOSED"
+}
