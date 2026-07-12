@@ -1,3 +1,6 @@
+# EMBER_ARTIFACT_CLASS=historical_only
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 """conv_c03_muon_ns3_live.py — live-dispatch wrapper for the muon_ns3 60M-token run.
 
 Sets EMBER_GATE_AUTHORIZED=1 and EMBER_SHARD_DIR, then delegates to conv_c03_muon_ns3.py.
@@ -20,6 +23,9 @@ empty-string fallback; setdefault() semantics mean this line only fires when
 the daemon/caller has NOT already set EMBER_SHARD_DIR, so the real dispatch
 path (which does set it) is unaffected. See receipts/ember-c-scale/land210g-*.
 """
+raise SystemExit(
+    'historical_only: this sub-3B agent-authorized gate-bypass wrapper is execution-denied'
+)
 import os
 import sys
 

@@ -1,148 +1,420 @@
-# EMBER — Constitution
+# EMBER - Constitution
 
-Sole goal source. Volatile state lives in CONTINUITY.md and the board receipts — never here.
-Re-founded 2026-07-06 from the maintainer-operator constitutional interview (8 rounds).
-History: docs/goal-archive.md and docs/goal-archive-v1-full.md (context only, never authority).
+INVARIANT.md is Ember's sole unamendable identity surface. GOAL.md is the
+highest amendable authority. Lower-precedence files may implement and test it;
+they cannot reduce, defer, replace, or reinterpret it.
 
-## 1. Mission
+<!-- EMBER_AUTHORITY_V1
+{
+  "allows_new_network": false,
+  "active_goal_id": "EMBER-00",
+  "next_executed_outcome": "EMBER-01 clean 3B custody and identity spine",
+  "architecture": {
+    "headline_hypothesis": "Verified Expert Accretion",
+    "owned_unified_decoder": true,
+    "published_family_backbone_allowed": false,
+    "sparse_differentiated_capacity": true,
+    "task_level_expert_routing": true
+  },
+  "benchmark_custody": {
+    "additional_direct_recovered": [
+      "ARC-AGI 1",
+      "ARC-AGI 2",
+      "ARC-AGI 3"
+    ],
+    "broader_named_families_minimum": 31,
+    "direct_recovered_minimum": 13,
+    "no_silent_retirement": true,
+    "operator_recollection_minimum": 15,
+    "owned_checkpoint_binding_required": true,
+    "recovered_operator_mandate": [
+      "SWE-Bench Pro",
+      "FrontierCode Diamond",
+      "GDPval-AA",
+      "GDPpdf",
+      "Blueprint-Bench 2",
+      "AutomationBench",
+      "OSWorld-Verified",
+      "Legal Agent Benchmark",
+      "Humanity's Last Exam",
+      "Terminal-Bench 2.1"
+    ],
+    "unrecovered_direct_names_minimum": 2
+  },
+  "conservation_hashes": {
+    "authority_matrix_sha256": "56B7DFDC2DDA2AFF04C2A48CE5FE7BD7367C81FE6056F9D10B2AFCD03E2C5936",
+    "governing_surfaces_sha256": {
+      "CONTINUITY.md": "C3ABAB414B474BB733778C0D5D29E2C86A8F528E78E44D6F449D963C745BAB65",
+      "GOVERNANCE.md": "AB049AA0B4B01A71D982A8F6FF371E14108ED1EAAF5B4CB35795EE440B7C4F9F",
+      "README.md": "AE72B2DA64A2616312B3B1669F4BE2479FD2ED6CD7F384B1222FD00431A0996C",
+      "docs/ember-authority-matrix.md": "56B7DFDC2DDA2AFF04C2A48CE5FE7BD7367C81FE6056F9D10B2AFCD03E2C5936",
+      "docs/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
+      "docs/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
+      "docs/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
+      "docs/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
+      "docs/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
+      "docs/spec/autonomy-relinquishment-ladder-v1.md": "3CA8C19DDAA726C8717C9E6F2DA9EBE522722F705E6301124ACD3E8E165B2B3E",
+      "docs/spec/conditions-v1.md": "5DCB85F97368CE773D25848362E164545D49BEEEFF12CB0B27FDB1C9CCE15229"
+    }
+  },
+  "authority_only_goal": true,
+  "destination": {
+    "competitive_reference_parameters": [
+      27000000000,
+      31000000000
+    ],
+    "initial_total_parameter_band": [
+      30000000000,
+      35000000000
+    ],
+    "minimum_total_parameters_exclusive": 27000000000,
+    "single_gpu_vram_gib": 24
+  },
+  "hard_rungs_total_parameters": [
+    3000000000,
+    7000000000,
+    15000000000,
+    27000000001
+  ],
+  "highest_amendable_authority": "GOAL.md",
+  "invariant_sha256": "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6",
+  "lineage": {
+    "borrowed_models_role": "frozen_reference_only",
+    "forbidden_model_mediated_signals": [
+      "weights",
+      "outputs",
+      "teachers",
+      "judges",
+      "filters",
+      "ranks",
+      "curricula",
+      "stopping_decisions",
+      "hidden_external_cognition"
+    ],
+    "published_ideas_allowed": true,
+    "transparent_deterministic_tools_allowed": true
+  },
+  "model_birth": {
+    "minimum_total_parameters": 3000000000,
+    "parameter_shell_is_model_birth": false,
+    "required_native_capabilities": [
+      "text",
+      "image",
+      "audio",
+      "reasoning",
+      "structured_tool_use"
+    ],
+    "sufficient_training_required": true
+  },
+  "mutation_controls_required": [
+    "invariant_tamper",
+    "missing_discrepancy",
+    "sub_3b_network",
+    "missing_native_modality",
+    "missing_native_reasoning",
+    "borrowed_backbone",
+    "model_mediated_signal",
+    "mechanism_erasure",
+    "missing_totality_member",
+    "ambiguous_identity",
+    "missing_goal_binding",
+    "non_authority_completion_claim",
+    "benchmark_obligation_erasure",
+    "governing_surface_semantic_drift",
+    "selection_duplicate_key",
+    "selection_path_substitution",
+    "historical_execution_reenable"
+  ],
+  "negative_evidence": {
+    "may_delete_required_capability": false,
+    "may_erase_research_family": false,
+    "may_force_named_successor": false,
+    "preserve_synergy_order_scale_modality_substrate_routing_precision_retests": true
+  },
+  "operator_relationship": {
+    "behavior_tested": true,
+    "dynamically_configurable": true,
+    "explicit": true,
+    "operator_retains_final_scope_authority": true,
+    "revocable": true
+  },
+  "reasoning_evidence": {
+    "checkpoint_bound": true,
+    "forbidden_substitutes": [
+      "borrowed_model",
+      "search",
+      "script",
+      "verifier",
+      "tool_wrapper",
+      "human_intervention"
+    ],
+    "hidden_trace_disclosure_required": false,
+    "required_axes": [
+      "multi_step",
+      "compositional",
+      "counterfactual",
+      "causal",
+      "action_coherence",
+      "component_deletion"
+    ],
+    "unseen_tasks_required": true
+  },
+  "required_future_artifact_fields": [
+    "goal_id",
+    "next_executed_outcome"
+  ],
+  "required_governing_surfaces": [
+    "docs/goal-clear-protocol.md",
+    "docs/nc2-own-technique-contract.md",
+    "docs/ember-floor-contract.md",
+    "docs/goal-mode-mechanism.md",
+    "docs/registry-dispatch-gate-spec-v0.md",
+    "docs/spec/autonomy-relinquishment-ladder-v1.md",
+    "docs/spec/conditions-v1.md",
+    "docs/ember-authority-matrix.md",
+    "GOVERNANCE.md",
+    "README.md",
+    "CONTINUITY.md"
+  ],
+  "schema": "ember-authority-v1",
+  "totality": [
+    "creation_primitive",
+    "foundation_model",
+    "organism",
+    "body",
+    "general_local_ai_laboratory",
+    "individual_local_ownership",
+    "whole_stack_ownership",
+    "operational_and_cognitive_self_sufficiency"
+  ]
+}
+-->
 
-Discover the computation primitive that lowers the barrier to foundation-model creation —
-and prove it by creating a true foundation model on a single consumer GPU.
+## 1. One project, conserved in full
 
-The proof target is the CREATION-INFERENCE GAP: this machine already runs >27B-class models;
-it cannot yet create one. Ember closes that gap.
+Ember is one clean-genesis sovereign foundation intelligence and one local AI
+laboratory. Its totality is inseparable:
 
-The deliverable is a trinity, inseparable: the PRIMITIVE (published, reproducible), the MODEL
-(a true FM born on this machine — natively MULTIMODAL, UNIFIED architecture), the ORGANISM (a
-living system that keeps growing through its own receipted cycles). Absence of any one is failure.
+1. the creation primitive that lowers barriers to local foundation-model
+   creation and ownership;
+2. the sufficiently trained owned foundation model;
+3. the organism whose verified experience changes useful neural state;
+4. the ember-cli body, typed tools, memory, observation, and action;
+5. the general local AI laboratory able to create materially different
+   clean-genesis intelligences; and
+6. individually owned local operation without mandatory hosted cognition,
+   central control, subscription, or data upload.
 
-Atop the trinity, ember is also a PLACE: a closed-loop AI lab for local/consumer-scale
-creation — the primitive, the corpus, the tooling, and the receipts are built to be usable
-by creators on consumer hardware beyond this machine. The lab's corpus floor is
-constitutional: docs/ai-lab-corpus-charter.md (operator directive, 2026-07-09).
+A checkpoint, CLI, benchmark harness, training runtime, symbolic loop, parameter
+shell, or laboratory wrapper cannot substitute for the totality.
 
-## 2. Completion
+## 2. Exact terms
 
-The goal clears when ALL FIVE hold, receipted per docs/goal-clear-protocol.md:
+- Ember means the complete project and conserved identity, not whichever
+  component is currently visible.
+- Ember model means a sufficiently trained clean-genesis checkpoint that meets
+  the birth floor. Random weights, a smoke run, or allocated parameters do not.
+- Research candidate means an explicitly identified experimental network or
+  mechanism with no milestone credit before admission.
+- Historical artifact means preserved evidence or implementation denied current
+  execution and milestone authority.
+- Borrowed reference means a frozen external model used only to measure a
+  comparison point and never to supply learned or evaluative lineage signal.
+- Parameter count means total unique stored neural parameters. Trainable and
+  episode-active parameters are reported separately.
+- Trained capacity means useful capacity supported by checkpoint-bound training
+  and capability evidence, not allocated storage.
+- Active capacity means parameters exercised for a declared episode.
+- Checkpoint means exact bytes plus architecture, tokenizer, data, token,
+  update/optimizer, parentage, and active-mechanism identity.
+- Body means the real operator-facing perception, action, tool, memory, and
+  observability surface attached to the owned model.
+- Organism means the connected experience, neural update, verification,
+  promotion, persistence, rollback, deletion, and non-regression loop.
+- Laboratory means the local system in which Ember can design, create, train,
+  verify, study, and operate clean-genesis intelligences.
 
-- C1 SCALE PARITY: a locally-created model in the scale-class of the largest locally-inferable
-  models (>27B-class), matching or beating the open-weights models of that class on frozen
-  external evals. The created model is a UNIFIED MULTIMODAL FM — one backbone across modalities
-  (per docs/nc2-own-technique-contract.md); a text-only result does not satisfy C1. Modality
-  scope is operator-owned (L8): narrowing it is a scope reduction only the operator can make.
-- C2 RATIO: creatable-scale / inferable-scale >= 1.0, tracked continuously on the bottleneck
-  ledger; every wall receipt must move it measurably.
-- C3 FRONTIER BEND: the capability-per-local-resource frontier (P1 energy law) provably bent
-  an order of magnitude past the standard stack at matched budget.
-- C4 NATIVE STACK: the creation path runs on ember-owned substrate (section 5).
-- C5 EFFECTIVE-CAPACITY MECHANISM (operator-added 2026-07-08): a named mechanism — not an
-  engineering aggregate — receipted on this machine, whereby local compute produces
-  frontier-like effective capacity without dense frontier-scale cost. Falsifiability floor:
-  (a) the mechanism is identified and ablatable — deleting it collapses the effect (L9
-  deletion-ablation); (b) on frozen external evals the model reaches capability that no
-  matched-budget dense control reaches (L9 equal-budget); (c) a receipted scaling trend shows
-  the gap to the dense control WIDENING with scale — a shrinking gap is the toy-model failure
-  state, named. "Frontier-like" pins to the frontier band at claim time (as C1 pins to the
-  locally-inferable class); the reference set freezes with the claim. C5 does not weaken C1:
-  the >27B parity floor stands unchanged.
+Every current object exposes one unambiguous identity. The unqualified name
+Ember cannot label a borrowed backend or unadmitted checkpoint.
 
-One completion event; after it the organism continues living. Anything less than all five is
-progress, never completion.
+## 3. Model birth, hard rungs, and destination
 
-## 3. Laws (permanent; violating any voids the violating claim)
+No newly created, trained, fine-tuned, grown, evaluated, or served Ember
+research network may contain fewer than 3,000,000,000 total parameters.
+Existing smaller artifacts are read-only history.
 
-- L1 HARDWARE IDENTITY: one consumer GPU, forever. Scaling hardware to reach the goal is
-  defeat disguised as progress.
-- L2 RECEIPTS-ONLY: claims come from executed local receipts; self-report is not evidence.
-- L3 ANTI-DISTILLATION, ABSOLUTE: nothing resembling distillation, in any form, ever. No
-  external model authors, filters, ranks, scores, or selects a training token, in any role.
-- L4 PROVENANCE: every training token carries a receipted lineage (source -> generator ->
-  verifier chain, all local). Data auditability is constitutional.
-- L5 ZERO-COST PROOF: no paid service may gate, verify, judge, or clear anything (conserved
-  from v1 in full; see protocol doc).
-- L6 EARNED COMPUTE: GPU-hours escalate only on receipts that earn them — a slow bad process
-  does not become fast and good with more GPU. Idle time is capped: something small must
-  always be earning within the cap (ops parameter, default 24h).
-- L7 KILL-PROTECTION: no ledger row or track dies by self-verdict; only the operator kills.
-  A self-kill is void, auto-revived, disclosed.
-- L8 SCOPE: only the operator reduces scope. A capability answer containing only
-  standard-stack terms is this goal's named failure state.
-- L9 ANTI-FRAUD CORE: equal budget, before/after, deletion-ablation, external held-out,
-  reproducible recipe, hardest-core-first — binding per docs/goal-clear-protocol.md;
-  battle-tested and conserved, none weakened.
-- L10 PUBLICATION: the workbench is pseudonymous (no personal names in git, PRs, issues,
-  artifacts); THE PAPER IS NOT — paper and code carry the author's name and info.
-- L11 EXECUTION FLOOR: prep is not progress. Every operating window (ops parameter, default
-  8h) lands at least one EXECUTED measurement receipt — a run, bench, or eval against
-  reality — or the board names a STALL. Every prep artifact (spec, gate, harness, merge)
-  names the executed run it unblocks and what fires it; prep with no attached run is
-  stalling by definition. Instrument-repair loops carry a declared round/time budget; at
-  exhaustion the best bounded measurement FIRES with disclosed caveats rather than another
-  round — a disclosed-imperfect receipt outranks a perfect spec that has not run. Only the
-  operator waives a window.
+The first admissible 3B model and every 7B, 15B, and >27B rung are sufficiently
+trained native text-image-audio foundation models with native reasoning and
+structured tool use. No capability is deferred. Every rung binds to exact
+checkpoint bytes, passes each modality, and shows no cross-modality regression.
 
-## 4. Pillars (co-equal; starving any one is the failure state)
+The destination is an owned model strictly above 27B total parameters,
+initially 30-35B, competitive with frozen 27B and 31B open-model references on
+one 24 GiB GPU. A 30B model that performs like a 4B model fails.
 
-- P-A THE RESEARCH: the walls (bottleneck ledger, issue #207 — data, training-state memory,
-  compute, transfer). Open field: no named favorite lever; receipts promote the winner.
-  One merged ladder — no goal regime holds privilege by vintage; ledger receipts order rungs.
-- P-B THE ORGANISM: identity lives in the system (loop + ledger + methods). Producing a
-  weight-lineage that beats restarts on receipts is itself a goal — the day continuity wins
-  is the day the organism is real. Physics: P1 energy law, P2 growth/assimilation law.
-- P-C THE BODY: ember-cli is where ember lives, acts, speaks, and is audited. The observatory
-  IS the flame — animated by the organism's real internal state (runs, receipts, intent); a
-  keyframed flame is a fabricated receipt in visual form. The body is the operator's audit
-  channel on every other claim and never lags the organism. Modes on arrival: colleague /
-  living lab / quiet forge.
+## 4. Architecture and the headline research hypothesis
 
-## 5. Nativization (a drive, not an aspiration — it starts now)
+The target is an owned sparse unified decoder: a shared core plus independently
+trainable differentiated expert banks, with only the episode-required expert
+set active. Vision, audio, reasoning, tool, and other domain experts coexist in
+the same decoder to limit cross-domain damage.
 
-Ember owns its full vertical: inference engine, training substrate (autograd, optimizer),
-GPU kernels, and the math itself. The ladder runs continuously; which layer comes home next
-is earned by receipts on where borrowed code costs most. C4 gates completion: a breakthrough
-standing on borrowed substrate is someone else's floor. Map: docs/ember-owned-substrate-diagnostic.md.
+Raw image patches and audio frames project directly into decoder tokens. The
+interface uses soft-token splicing, multimodal-span attention, and
+two-dimensional rotary position structure. Published studies may motivate
+properties. No published model family, copied implementation, or borrowed
+weights become Ember's backbone.
 
-## 6. Goal-mode organ (ember-cli /goal)
+The single headline causal hypothesis is Verified Expert Accretion: repeated
+locally verified experience can grow useful persistent capacity beyond 27B
+while active memory and episode-level training cost remain nearly constant, and
+its advantage over equal-budget dense restarts widens with scale.
 
-ember-cli implements goal mode natively: a 1:1 port of the proven field mechanism, then
-improved (issue #211; spec floor: docs/goal-mode-mechanism.md). Persistent objective immutable
-to the executor, status-only transitions, event-driven continue-on-idle with user preemption,
-a completion audit that must PROVE completion rather than fail to find remaining work, blocked
-only after repeated consecutive impasse, budget as soft-landing status. This organ is what
-makes constant autonomous working mode real for the body and its operators.
+Exact-duplicate growth is invalid. Expert upcycling is asymmetric or partially
+reinitialized. One candidate expert family trains at a time, while interacting
+mechanisms remain available for explicit synergy, order, scale, modality,
+substrate, routing, and precision tests.
 
-## 7. Operation
+## 5. Native reasoning is non-negotiable
 
-Ladder: maintainer operates -> capabilities earn the seat with receipts -> ember
-self-operates, audited. Operator and ember converse bidirectionally through the body.
+Reasoning credit requires frozen unseen multi-step, compositional,
+counterfactual, causal, and action-coherence tasks across text, mathematics,
+code, images, audio, tools, and grounded interaction where applicable. It binds
+to owned checkpoint bytes and degrades when responsible learned state is
+deleted or rolled back.
 
-## 8. The Map (each entry: answers / edited-by / invalidated-by)
+Search, scripts, verifiers, tool wrappers, human intervention, and borrowed
+models may expose or check behavior but cannot perform the load-bearing
+inference and transfer credit to Ember. Correct final answers are insufficient
+when memorization, leakage, shortcuts, or harness policy remain plausible.
+Hidden internal trace disclosure is not required; behavioral and causal
+evidence is.
 
-- issue #207 Bottleneck ledger — what walls block the gap; maintainer; a receipt closing a row.
-- docs/goal-clear-protocol.md — the completion law + conservation of v1's 17 conditions;
-  maintainer via PR; any weakening without a conservation entry.
-- docs/goal-mode-mechanism.md — the /goal organ spec floor; maintainer; a better mechanism
-  receipted.
-- docs/spec/w2-scale-preregistration-v1.md — experiment law for scale arms; frozen; deviation
-  without a docs/deviations.md entry.
-- docs/spec/p1-envelope-sweep-prereg-v1.md — P1 physics protocol; frozen; same.
-- docs/spec/rung2-grow-spec-v1.md — P2 growth mechanics; frozen; same.
-- docs/spec/c8-preregistration-v1.md — the unfakeable research-frontier condition; frozen; same.
-- docs/ember-floor-contract.md — REVIVAL QUEUE (not a deferral ledger): parked-with-a-path
-  rows mapped to walls; maintainer; a row dying without operator word.
-- docs/nc2-own-technique-contract.md — owned-core component law; operator-granted; silent pivot.
-- docs/ai-lab-corpus-charter.md — the closed-loop-lab corpus floor (11 domains, quality +
-  diversity bars, programmatic source connectors); maintainer via PR; a domain standing at
-  zero receipted acquisitions while the charter holds.
-- docs/ember-owned-substrate-diagnostic.md — nativization map; maintainer; a layer coming home.
-- ember_totality/ + board receipts — evidence surface; code-gated; any self-attesting condition.
-- CONTINUITY.md — volatile state, the ONLY state home; every session; staleness.
-- GOVERNANCE.md — repo law; operator; n/a.
-- docs/goal-archive.md, docs/goal-archive-v1-full.md — history; append-only; never authority.
+## 6. Clean genesis and frozen-reference boundary
 
-## 9. Precedence
+No borrowed weights, outputs, teachers, judges, filters, ranks, curricula,
+stopping decisions, or hidden external cognition may shape an Ember lineage or
+any intelligence created by Ember's laboratory. Published ideas and transparent
+deterministic tools are allowed research inputs.
 
-INVARIANT.md > this constitution > protocol/spec docs > ledgers > history. A conflict between goal surfaces
-stops the affected work until reconciled (goal-source-split rule, conserved from v1).
+Borrowed models occupy explicit frozen reference seats only. Removing them must
+not prevent creation, training, verification, or operation. Baseline work is a
+bounded instrument and cannot displace owned creation.
 
-invariant_sha256: 08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6
+## 7. Experience, memory, dreaming, tools, and world models
+
+A local generator creates frontier tasks across code, mathematics, SQL, files,
+browser and UI activity, images, audio, and laboratory research. A solver acts
+through typed tools. Only independently verified trajectories may update
+temporary neural state, create experts, or promote persistent capacity.
+
+KV and context are perception and working memory. Episodic records are
+replayable experience. Temporary adapters or fast weights are intermediate
+consolidation. Durable parametric burns require transfer, controls,
+non-regression, persistence, and deletion or rollback evidence. Predictive
+planning, episodic replay consolidation, fast-weight sleep, and durable neural
+promotion are distinct operations.
+
+World models may support learned environment prediction, counterfactual task
+generation, action simulation, cross-world transfer, and benchmark-world
+construction. Symbolic traces and deterministic fixtures receive no learned
+world-model credit.
+
+The laboratory also studies transferable self-improvement processes recovered
+from historical and modern research journals, laboratory notebooks, letters,
+and documented practice across scientific, technical, artistic, and
+professional fields. These sources motivate falsifiable process hypotheses;
+their prose or authority is not copied into model capability credit.
+
+## 8. Negative evidence preserves the research graph
+
+A negative result constrains its tested mechanism, regime, order, scale,
+modality, substrate, routing, precision, data, and budget. It remains evidence.
+It does not kill, retire, indefinitely park, exclude, or delete a mechanism,
+required capability, benchmark, modality, or research family; force a named
+successor; or prohibit later composition tests. Only the operator can reduce
+invariant scope.
+
+Deletion and rollback tests establish causal attribution. They do not erase the
+research object.
+
+## 9. Whole-stack ownership and the local AI laboratory
+
+Ember progressively owns data and tokenizer custody, training and inference
+runtimes, attention and state, kernels, compiler, optimizer and update
+computation, numerics, checkpointing, storage, routing, evaluation, deployment,
+and the transformation of inference optimizations into training optimizations.
+
+The laboratory lowers time, compute, data, expertise, and infrastructure
+barriers to local foundation-model creation. Useful autonomous AI research must
+emerge during bootstrap on a weeks-to-months horizon rather than waiting for
+the finished >27B model. Transitional agents and the operator may help build
+Ember, but none is permanent cognitive life support.
+
+Each operator can own an independent Ember, its weights, memory, tools,
+laboratory state, and created intelligences. Shared software and research are
+optional; central cognition and control are not.
+
+## 10. Body and operator relationship
+
+ember-cli is Ember's real body and observation surface. Its minimum product
+floor is the complete predecessor CLI surface plus goal mode, model and
+training observation, typed tools, native multimodal interaction, memory
+inspection, laboratory control, and truthful backend identity. The owned model
+is the default once admissible. Until then, the interface states that no
+admissible Ember model exists. Borrowed models are explicit reference seats.
+
+Operational authority is dynamically configurable by operator, task, scope,
+consequence, reversibility, and demonstrated trust. Modes are explicit,
+inspectable, behavior-tested, and revocable. Ember may challenge an operator
+with evidence and propose a relationship change; it cannot silently grant
+itself authority. The operator retains voluntary direction and final scope.
+
+## 11. Executable identity and evidence spine
+
+Every claim joins architecture, checkpoint bytes, total, trainable, and active
+parameters, trained tokens, tokenizer and data lineage, parentage, active
+mechanisms, backend, benchmark protocol, comparator, capability result, and
+deletion-sensitive evidence. The exact object is named at every boundary.
+
+### Conserved benchmark custody
+
+The exact recovered July mandate is: SWE-Bench Pro, FrontierCode Diamond,
+GDPval-AA, GDPpdf, Blueprint-Bench 2, AutomationBench, OSWorld-Verified, Legal
+Agent Benchmark, Humanity's Last Exam, and Terminal-Bench 2.1. ARC-AGI 1,
+ARC-AGI 2, and ARC-AGI 3 raise the stable directly recovered lower bound to
+thirteen. The operator's recollection is at least fifteen direct requests, so
+at least two still-unrecovered names remain an explicit unresolved obligation;
+they are not guessed, dismissed, or silently filled.
+
+The broader named research and governance universe remains above thirty
+families with distinct provenance classes. A pivot, blocker, frozen dataset,
+harness, smoke, subset, control, borrowed result, or unrelated run never
+retires or satisfies a named obligation. Only a result bound to the exact owned
+checkpoint and required official/comparable boundary can receive owned-model
+benchmark credit. Under the 3B genesis rule, the old 2.2B test subject remains
+history; its unexecuted mandate transfers intact to the first admissible Ember
+model rather than disappearing.
+
+Every future pull request, experiment, receipt, configuration, and control
+artifact names the active goal_id and the next executed model or capability
+outcome it directly enables. Reports, wrappers, boards, and preparatory
+machinery are not progress without that link.
+
+## 12. Completion and precedence
+
+docs/goal-clear-protocol.md defines the executable completion audit without
+changing this goal. docs/ember-authority-matrix.md maps D-001 through D-062 to
+enforcement, historical evidence, and explicit open research. STATE.md resolves
+every current model, checkpoint, backend, and benchmark class.
+
+Evidence and historical artifacts never become authority. Subordinate contracts
+carry the machine-checked conservation header and fail closed on contradiction.
+Precedence is INVARIANT.md, then GOAL.md, then named subordinate contracts,
+then implementation and evidence, then history.
+
+No completion claim is valid unless the primitive, model, organism, body, and
+laboratory totality and every hard-rung requirement pass together.
+
+This authority-only reconciliation creates, trains, evaluates, and serves no
+network and claims no model, runtime, or benchmark completion.

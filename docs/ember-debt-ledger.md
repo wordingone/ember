@@ -1,4 +1,10 @@
-﻿# Ember Technical And Cognitive Debt Ledger
+<!-- EMBER_ARTIFACT_CLASS=historical_only -->
+
+# Ember Technical And Cognitive Debt Ledger (historical, execution denied)
+
+This legacy control ledger is preserved as evidence. Its active commands,
+tiny-model sequencing, terminal dispositions, and blocker routing have no
+current execution, goal-selection, research, or completion authority.
 
 Date: 2026-06-20
 Status: Active control ledger. This is not a parking lot and not a scope reducer.

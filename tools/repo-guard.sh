@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 # repo-guard — the structural-invariant kernel for this repository.
 #
 # One script, run identically by (1) the local pre-commit/pre-push hook,
@@ -250,6 +252,26 @@ if [ -n "$RANGE" ]; then
     fail "goal/evidence" "commit(s) edit both GOAL.md and receipts/ in one change:$BAD"
   else
     ok "goal/evidence" "no goal+evidence co-commits in $RANGE"
+  fi
+fi
+
+# ---- 9. authority and totality conservation -----------------------------
+if [ ! -f scripts/verify_authority_conservation.py ]; then
+  fail "authority" "scripts/verify_authority_conservation.py is missing"
+else
+  AUTHORITY_ARGS=(--root .)
+  if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+    AUTHORITY_ARGS+=(--staged)
+  elif [ -n "$RANGE" ]; then
+    AUTHORITY_ARGS+=(--changed-range "$RANGE")
+  fi
+  AUTHORITY_OUT="$(python scripts/verify_authority_conservation.py "${AUTHORITY_ARGS[@]}" 2>&1)"
+  AUTHORITY_RC=$?
+  if [ "$AUTHORITY_RC" -eq 0 ]; then
+    ok "authority" "EMBER authority conservation certificate passes"
+  else
+    fail "authority" "EMBER authority conservation certificate failed"
+    printf '%s\n' "$AUTHORITY_OUT" | sed 's/^/      /' | head -30
   fi
 fi
 

@@ -1,4 +1,6 @@
 name: repo-guard
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 
 # Unbypassable server-side ring. Runs the same kernel as the local hook on every
 # push and PR. Make this a REQUIRED status check in branch protection so a change
@@ -30,3 +32,8 @@ jobs:
           else
             bash tools/repo-guard.sh
           fi
+      - name: Validate PR authority binding
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python scripts/check_pr_authority_binding.py --body-env PR_BODY

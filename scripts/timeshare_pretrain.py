@@ -1,3 +1,6 @@
+# EMBER_ARTIFACT_CLASS=historical_only
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 """timeshare_pretrain.py — pretrain segment runner for the v0 owned-core (#123, eng-33).
 
 Implements §3 of research/june22-critical-path.md (timeshare rule):
@@ -39,6 +42,10 @@ Selftest: python timeshare_pretrain.py --selftest
 """
 
 from __future__ import annotations
+
+raise SystemExit(
+    "historical_only: the sub-3B cbase trainer and every importer are execution-denied"
+)
 
 import hashlib
 import json

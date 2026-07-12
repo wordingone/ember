@@ -1,4 +1,10 @@
 {
+  "authority": {
+    "artifact_class": "historical_only",
+    "execution_authority": "denied",
+    "goal_id": "EMBER-00",
+    "next_executed_outcome": "EMBER-01 clean 3B custody and identity spine"
+  },
   "ticket": "OWNED-CORE-WIDEN-PREP",
   "description": "CPU-preparable config for function-preserving LoRA rank expansion (244K → ≥1.1e6 params)",
   "deviation_from_issue_125": {
