@@ -1,3 +1,5 @@
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 """repo_guard_selftest.py — hermetic fixture-repo selftests for tools/repo-guard.sh
 and tools/check_names_hashed.py (issue #91).
 
@@ -21,6 +23,34 @@ GUARD_SUPPORT_FILES = [
     "tools/repo-guard.sh",
     "tools/check_line_endings.py",
     "tools/check_names_hashed.py",
+    "scripts/verify_authority_conservation.py",
+    "INVARIANT.md",
+    "GOAL.md",
+    "STATE.md",
+    "GOVERNANCE.md",
+    "README.md",
+    "CONTINUITY.md",
+    "docs/ember-completeness.md",
+    "docs/ember-authority-matrix.md",
+    "docs/ember-floor-contract.md",
+    "docs/goal-clear-protocol.md",
+    "docs/goal-mode-mechanism.md",
+    "docs/nc2-own-technique-contract.md",
+    "docs/registry-dispatch-gate-spec-v0.md",
+    "docs/spec/autonomy-relinquishment-ladder-v1.md",
+    "docs/spec/conditions-v1.md",
+    "docs/technique-registry.jsonl",
+    "configs/nck-baseline/nck-invariants.json",
+    "configs/nck-c10.json",
+    "configs/nck-invariants.json",
+    "configs/nck-schedule.json",
+    "configs/owned-core-widen-config.json",
+    "configs/v0-multimodal-config.json",
+    "configs/v0-pretrain-config.json",
+    "configs/v1-pretrain-config.json",
+    "scripts/conv_c03_muon_ns3_live.py",
+    "scripts/timeshare_pretrain.py",
+    "scripts/train_multimodal_v0.py",
 ]
 
 
@@ -38,7 +68,6 @@ def make_fixture(branch: str = "fix/selftest") -> Path:
         dst = tmp / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPO_ROOT / rel, dst)
-    (tmp / "GOAL.md").write_text("# Fixture Goal\n\nnothing binding, test-only.\n", encoding="utf-8", newline="\n")
     return tmp
 
 
@@ -87,7 +116,7 @@ def test_red_name_via_hash_match():
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
-        (tmp / "docs").mkdir()
+        (tmp / "docs").mkdir(exist_ok=True)
         (tmp / "docs" / "note.md").write_text(
             f"This mentions {test_word} in passing.\n", encoding="utf-8", newline="\n",
         )
@@ -106,7 +135,7 @@ def test_red_name_via_hash_match():
 def test_red_absolute_path():
     tmp = make_fixture("fix/selftest-red-path")
     try:
-        (tmp / "docs").mkdir()
+        (tmp / "docs").mkdir(exist_ok=True)
         # Path literal assembled at runtime so the guard's own paths scan
         # never matches this tracked selftest source (self-referential-gate
         # dodge, same pattern as the leak-gate's own term list).
@@ -130,7 +159,7 @@ def test_red_absolute_path():
 def test_green_clean_fixture():
     tmp = make_fixture("fix/selftest-green")
     try:
-        (tmp / "docs").mkdir()
+        (tmp / "docs").mkdir(exist_ok=True)
         (tmp / "docs" / "note.md").write_text(
             "Nothing sensitive here, just ordinary prose.\n", encoding="utf-8", newline="\n",
         )
@@ -151,7 +180,7 @@ def test_green_hashed_denylist_no_match():
         (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
             sha256_lower("somenamethatneverappears") + "\n", encoding="utf-8", newline="\n",
         )
-        (tmp / "docs").mkdir()
+        (tmp / "docs").mkdir(exist_ok=True)
         (tmp / "docs" / "note.md").write_text("Ordinary prose only.\n", encoding="utf-8", newline="\n")
         commit_fixture(tmp)
         rc, out = run_guard(tmp)
@@ -167,7 +196,7 @@ def test_green_hashed_denylist_no_match():
 def test_ci_fail_closed_no_denylist():
     tmp = make_fixture("fix/selftest-ci-none")
     try:
-        (tmp / "docs").mkdir()
+        (tmp / "docs").mkdir(exist_ok=True)
         (tmp / "docs" / "note.md").write_text("Ordinary prose only.\n", encoding="utf-8", newline="\n")
         commit_fixture(tmp)
 
@@ -197,7 +226,7 @@ def test_red_name_outside_exclude_scope():
         (tmp / "tools" / "repo-guard-names-exclude.txt").write_text(
             "# selftest fixture\ntokenizer/\n", encoding="utf-8", newline="\n",
         )
-        (tmp / "docs").mkdir()
+        (tmp / "docs").mkdir(exist_ok=True)
         (tmp / "docs" / "note.md").write_text(
             f"This mentions {test_word} in passing.\n", encoding="utf-8", newline="\n",
         )
@@ -245,7 +274,7 @@ def test_ci_fail_closed_empty_hashed_denylist():
         (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
             "# only comments, no real entries\n", encoding="utf-8", newline="\n",
         )
-        (tmp / "docs").mkdir()
+        (tmp / "docs").mkdir(exist_ok=True)
         (tmp / "docs" / "note.md").write_text("Ordinary prose only.\n", encoding="utf-8", newline="\n")
         commit_fixture(tmp)
 

@@ -1,112 +1,98 @@
-# Goal-clear protocol — the completion law
+<!-- EMBER_CONSERVATION_V1
+minimum_new_network_parameters=3000000000
+destination_total_parameters=>27000000000
+required_native_capabilities=text,image,audio,reasoning,structured_tool_use
+borrowed_lineage=frozen_reference_only
+mechanism_erasure=forbidden
+-->
 
-Answers: exactly what must be proven, and how, for the constitution's C1-C4 to clear.
-Edited by: maintainer via PR. Invalidated by: any weakening without a conservation entry below.
+# Goal-clear protocol
 
-This document re-derives the v1 GOAL.md Goal Clear Condition (requirements -1..15, preserved
-in full at docs/goal-archive-v1-full.md) under the re-founded constitution. Per the operator's
-ruling the v1 conditions are BOTH re-derived AND battle-tested: every v1 mechanism is conserved
-— the conservation table proves none was silently weakened.
+This protocol is subordinate to GOAL.md. It defines proof, never a smaller goal.
 
-## A. The completion tests (constitution section 2)
+## One completion event
 
-- C1 SCALE PARITY. Evidence: a locally-created model in the >27B scale-class; frozen external
-  evals (sources, licenses, hashes frozen BEFORE the run; no held-out label access on the
-  candidate path); scores matching/beating the open-weights models of that class, per-slice
-  rows present, never a hidden average.
-- C2 RATIO >= 1.0. creatable-scale / inferable-scale, both terms receipt-defined: inferable =
-  largest class the card demonstrably serves; creatable = largest class with a complete local
-  creation receipt chain (data provenance -> training receipts -> eval receipts). Tracked on
-  the bottleneck ledger; every wall receipt states its ratio delta.
-- C3 FRONTIER BEND. The P1 capability-per-local-resource frontier bent an order of magnitude
-  past the standard stack at matched budget — measured per the P1 preregistration protocol,
-  standard-stack baseline receipts included (equal budget law below).
-- C4 NATIVE STACK. The creation path (data pipeline, training substrate, optimizer, kernels)
-  runs on ember-owned code; borrowed-layer inventory empty on the critical path, receipted
-  per the nativization map.
+Ember clears only when one receipt set proves all of the following together:
 
-## B. The anti-fraud laws (conserved v1 core; all binding on every C-test receipt)
+1. Creation primitive: the locally reproducible method materially lowers the
+   compute, time, data, expertise, and infrastructure barriers to foundation
+   model creation on one 24 GiB GPU.
+2. Foundation model: an owned clean-genesis model strictly above 27B total
+   parameters, initially 30-35B, is competitive with frozen 27B and 31B
+   references.
+3. Organism: verified experience causes persistent, transferable, deletion-
+   sensitive neural improvement across repeated cycles.
+4. Body: ember-cli truthfully attaches the owned model to multimodal
+   perception, typed tools, memory, action, goal mode, and observability.
+5. General local AI laboratory: Ember can design, create, train, verify, study,
+   and operate materially different clean-genesis intelligences locally.
+6. Individual ownership and self-sufficiency: an operator can own and continue
+   the weights, memory, tools, laboratory, and created intelligences without
+   mandatory hosted cognition, control, or upload.
+7. Whole-stack ownership: the creation path covers data/tokenizer custody,
+   training and inference runtime, kernels/compiler, attention/state,
+   optimizer/update computation, numerics, checkpointing, storage, routing,
+   evaluation, and deployment.
 
-1. ZERO-COST: no paid key/service/judge/credit may gate, verify, or clear anything; a clear
-   packet depending on paid access is invalid_paid_api_exit_ramp. Zero-cost verifiers govern
-   whenever an identical rubric is locally runnable. (v1 req -1, verbatim-in-spirit.)
-2. EXTERNAL HELD-OUT: eval tasks/labels/evaluators from external frozen sources, hashed,
-   frozen pre-run; no gold echoes, no locally-invented private answers. (v1 req 2.)
-3. EQUAL BUDGET: matched wall time, compute allowance, data access, attempt budget, seed
-   policy, scoring path across compared arms; a zero-attempt arm or waived governor
-   invalidates the comparison. Evaluation law, not a cognition scheduler. (v1 req 3.)
-4. BEFORE/AFTER: matched pre-change baseline on the same frozen task, metric, seeds, command;
-   one-shot scores prove nothing. (v1 req 4.)
-5. POSITIVE DELTA with per-task/per-slice rows. (v1 req 5.)
-6. REPRODUCIBLE RECIPE: commands, hashes, environment, seeds, artifact paths, rerun command;
-   the output must be a reusable method, never a task-specific answer. (v1 req 6.)
-7. DELETION/ABLATION: the claimed contribution, removed, must degrade or block the validated
-   capability while ordinary plumbing stays intact. (v1 reqs 7+8 ablation clauses.)
-8. FIELD-LEVEL CLAIM DISCIPLINE: exactly one primary contribution class; closest prior named;
-   material difference defined; external/disjoint validation; transfer beyond the scored
-   instance; anything less marks progress_not_field_breakthrough and cannot clear. (v1 req 8.)
-9. HARDEST-CORE-FIRST: the load-bearing obstacle is attacked before scaffolding/polish;
-   a clear receipt shows the hardest named blocker solved or converted with receipts. (v1 req 9.)
-10. VALIDITY GUARDS conserved verbatim: SYMBOLIC_PROXY_PASS reclassification (no trainable
-    neural update = never a training-gate pass); goal-source-split stops work until surfaces
-    reconcile; docs-only windows never count as substrate growth. (v1 blocker-packet laws.)
+Absence of one item is failure. Preparatory machinery and parameter allocation
+never clear an item.
 
-## C. Conservation table — every v1 requirement's disposition
+## Model-rung certificate
 
-| v1 req | Disposition | Where it lives now |
-|---|---|---|
-| -1 zero-cost | CONSERVED | B.1 + constitution L5 |
-| 0 no-loops-before-preconditions | RE-DERIVED | pre-loop gates dissolve into the merged ladder; RLM/iGRPO become kill-protected ledger rows (L7, #207); the clean-room CLI precondition is superseded-by-construction — ember-cli IS the live clean-room CLI |
-| 1 benchmark/dataset discovery | CONSERVED | C1 frozen-eval sourcing duty + B.2 |
-| 2 external held-out | CONSERVED | B.2 (+ W-arm decontamination machinery as its instantiation) |
-| 3 equal budget | CONSERVED | B.3 |
-| 4 before/after | CONSERVED | B.4 |
-| 5 positive delta | CONSERVED | B.5 |
-| 6 reproducible recipe | CONSERVED | B.6 |
-| 7 operator load-bearing + deletion | CONSERVED | B.7, re-anchored to the /goal organ (#211) and P-B |
-| 8 field-level breakthrough | CONSERVED | B.8 (primary class for this goal: the primitive; C1-C4 are its material difference) |
-| 9 hardest-core-first | CONSERVED | B.9 |
-| 10 no deferred-work escape | RE-DERIVED | revival-queue law: floor-contract rows are parked-with-a-path, kill-protected (L7); a clear audit sweeps the queue |
-| 11 cycle-duration growth | CONSERVED | P-B organism property, measured on the ladder |
-| 12 state-dependent cognitive modes | CONSERVED | P-B/P-C (organism states + body modes) |
-| 13 native goal-mode organ | CONSERVED, PROMOTED | constitution section 6 + issue #211 + docs/goal-mode-mechanism.md |
-| 14 RLM/iGRPO training organ pre-loop gate | RE-DERIVED | from pre-loop gate to kill-protected wall-lever rows on the ledger; the paper-source preflight duty is conserved for any RLM/iGRPO leg |
-| 15 immediate tiny BitNet comparison | RE-DERIVED | BitNet-class = B2 wall lever (revived row); the comparison duty is B2's first falsifiable leg |
-| blocker-packet validity laws | CONSERVED | B.10 |
+The 3B birth and every 7B, 15B, and >27B rung require:
 
-No v1 mechanism is retired. Re-derivations change WHERE a duty binds (ladder rows instead of
-global gates), never WHETHER it binds.
+- exact checkpoint, architecture, tokenizer, data, token, update, and parentage
+  identity;
+- sufficient training evidence rather than a smoke segment;
+- native text, image, audio, reasoning, and structured tool use in the same
+  decoder;
+- frozen unseen heldout tasks, equal-budget controls, before/after results,
+  transfer, persistence, and unrelated-modality non-regression;
+- checkpoint-bound reasoning across multi-step, compositional,
+  counterfactual, causal, and action-coherence tests;
+- causal deletion or rollback of the responsible expert, mechanism, or learned
+  state;
+- no borrowed learned or evaluative signal.
 
-## D. The clear audit
+No hidden chain-of-thought disclosure is required.
 
-/goal-complete-class claims run the full audit: C1-C4 each proven by current receipts under
-all of B; the completion audit discipline of the /goal organ applies (prove, never
-fail-to-find); the revival queue is swept (C.10); the verdict receipt states every test's
-evidence or the claim is invalid.
+## Verified Expert Accretion certificate
 
-## E. Addendum 2026-07-06 — multimodal-unified made explicit (operator correction)
+At 3B, 7B, 15B, and >27B, compare Verified Expert Accretion against dense
+restart, schedule growth, and ungated expert accumulation at equal tokens and
+FLOPs. The advantage must widen with scale. Promoted-expert deletion must erase
+the attributed advantage. No native modality may regress.
 
-The v1 system carried the unified-multimodal requirement IMPLICITLY: the nc2 owned-technique
-contract binds a unified multimodal architecture as an owned-core component (silent pivot = gate
-violation), the train_multimodal_v0 launch vehicle carries the multimodal floor (reserved IDs,
-soft-token splice, bidirectional span, 2D RoPE locks), and the floor contract holds the
-encoder-free multimodal training row. The v2 re-founding conserved all three surfaces (Map, §8)
-but the completion text itself did not state the requirement, and the constitutional interview
-never asked — the operator caught the omission on 2026-07-06 ("that was always a req").
+A negative result updates the tested regime and evidence graph. It cannot erase
+the mechanism family, required capability, benchmark, or later synergy test.
 
-Cure: C1 now names the requirement explicitly — the created model is a unified multimodal FM;
-a text-only result does not satisfy C1; modality scope is operator-owned (L8). This row records
-an implicit-to-explicit promotion. No v1 condition was weakened; conservation table unchanged.
+## Comparison and evaluation integrity
 
-## F. Addendum 2026-07-08 — completion set expanded four→five (C5 effective-capacity mechanism)
+Borrowed models are frozen reference seats only. Their weights or outputs never
+become training data, teachers, judges, filters, ranks, curricula, stopping
+signals, or hidden cognition. Scoring uses deterministic local evaluators,
+checked-in oracles, or human-authorized direct assessment that does not enter
+the lineage.
 
-The operator added a fifth completion condition, C5 EFFECTIVE-CAPACITY MECHANISM (`GOAL.md` §2),
-broadening the set this protocol answers for from C1–C4 to C1–C5 (operator-directed 2026-07-08,
-PR #484). C5 requires a named, ablatable mechanism — not an engineering aggregate — receipted on
-this machine: deletion collapses the effect (L9 deletion-ablation), the model reaches capability
-on frozen external evals that no matched-budget dense control reaches (L9 equal-budget), and the
-gap to the dense control widens with scale (a shrinking gap is the named toy-model failure state).
-This is an addition, not a substitution: C1–C4 above stand unweakened and this document's
-sections A–E still describe the four-condition protocol as it read before this addition; C5's own
-completion-test derivation (parallel to section A) is carried forward as a follow-up to this
-protocol, not executed in this addendum. No v1 mechanism is weakened by this row.
+Benchmark setup, download, harness creation, smoke execution, or subset custody
+is not an owned-model result. Every requested benchmark retains its provenance,
+exact protocol, model/checkpoint binding, comparator, status, and unresolved
+obligation.
+
+The benchmark custody gate reads `GOAL.md`'s machine-locked ten-name mandate,
+the three additional directly recovered ARC-AGI names, the thirteen-name
+recovered lower bound, the unresolved operator recollection of at least
+fifteen, and the greater-than-thirty named universe resolved in `STATE.md`.
+Clearance fails if any exact name, count, provenance class, blocker, pivot, or
+outstanding obligation disappears. Unrecovered names stay explicitly unknown;
+they are never guessed into false closure.
+
+## Release evidence
+
+Final clearance includes reproducible recipes, complete benchmark receipts, a
+truthful model card, paper or papers, recorded demonstrations, failure and
+limitation disclosure, and an independent clean-checkout replay of the
+authority, custody, lineage, capability, and release gates.
+
+EMBER-00 is authority-only. Its passing receipt proves no model, runtime,
+training, benchmark, or release capability.

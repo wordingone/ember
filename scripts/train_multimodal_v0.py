@@ -1,3 +1,6 @@
+# EMBER_ARTIFACT_CLASS=historical_only
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 """train_multimodal_v0.py — multimodal-unified v0 pretrain harness (eng-40 / #427).
 
 Wires all four multimodal locks into a single pretrain entry point:
@@ -27,6 +30,10 @@ Launch interlock (full GPU path):
 """
 
 from __future__ import annotations
+
+raise SystemExit(
+    "historical_only: the sub-3B multimodal trainer and smoke paths are execution-denied"
+)
 
 import json
 import math
