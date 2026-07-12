@@ -4,8 +4,9 @@
 
 ## Ember authority binding
 
-goal_id: EMBER-00
-next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+goal_id: EMBER-01
+workstream_id: EMBER-01A
+next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 <!-- Both values are machine-checked against GOAL.md. Explain in Summary how
      this change directly enables the named outcome. -->

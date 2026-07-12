@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-01
+# workstream_id: EMBER-01A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail-closed verifier for Ember's authority and totality conservation contract.
 
 This is an authority verifier, not a capability receipt.  It proves that the
@@ -26,10 +27,44 @@ from typing import Any
 
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
 POLICY_SCHEMA = "ember-authority-v1"
-ACTIVE_GOAL_ID = "EMBER-00"
-NEXT_EXECUTED_OUTCOME = "EMBER-01 clean 3B custody and identity spine"
+ACTIVE_GOAL_ID = "EMBER-01"
+NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+ACTIVE_WORKSTREAM_IDS = ["EMBER-01A", "EMBER-01B", "EMBER-01C"]
+WORKSTREAM_PATH_SCOPES = {
+    "EMBER-01A": {
+        "mode": "all_except",
+        "prefixes": [
+            "manifests/ember-01-custody/",
+            "scripts/ember_01_custody/",
+            "tests/ember_01_custody/",
+            "docs/ember-01-custody/",
+            "manifests/ember-01-identity/",
+            "scripts/ember_01_identity/",
+            "tests/ember_01_identity/",
+            "docs/ember-01-identity/",
+        ],
+    },
+    "EMBER-01B": {
+        "mode": "only",
+        "prefixes": [
+            "manifests/ember-01-custody/",
+            "scripts/ember_01_custody/",
+            "tests/ember_01_custody/",
+            "docs/ember-01-custody/",
+        ],
+    },
+    "EMBER-01C": {
+        "mode": "only",
+        "prefixes": [
+            "manifests/ember-01-identity/",
+            "scripts/ember_01_identity/",
+            "tests/ember_01_identity/",
+            "docs/ember-01-identity/",
+        ],
+    },
+}
 EXPECTED_ACTIVE_GOAL_SUFFIX = (
-    "goals/ember/ember-00-authority-totality-lock/goal.md"
+    "goals/ember/ember-01-custody-identity-experiment-spine/goal.md"
 )
 POLICY_RE = re.compile(
     r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
@@ -234,6 +269,20 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
         policy.get("next_executed_outcome") == NEXT_EXECUTED_OUTCOME,
         "policy.next_executed_outcome",
         NEXT_EXECUTED_OUTCOME,
+    )
+    expect(
+        errors,
+        4,
+        policy.get("active_workstream_ids") == ACTIVE_WORKSTREAM_IDS,
+        "policy.active_workstream_ids",
+        "active child workstreams must be exact and parent-bound",
+    )
+    expect(
+        errors,
+        4,
+        policy.get("workstream_path_scopes") == WORKSTREAM_PATH_SCOPES,
+        "policy.workstream_path_scopes",
+        "child workstreams must retain exact conflict-free path scopes",
     )
     expect(
         errors,
@@ -443,12 +492,13 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
     expect(
         errors,
         4,
-        policy.get("required_future_artifact_fields") == ["goal_id", "next_executed_outcome"],
+        policy.get("required_future_artifact_fields")
+        == ["goal_id", "workstream_id", "next_executed_outcome"],
         "policy.future_artifact_fields",
-        "future PR/run/control artifacts require goal and next outcome",
+        "future PR/run/control artifacts require goal, workstream, and next outcome",
     )
-    expect(errors, 7, policy.get("authority_only_goal") is True, "policy.authority_only", "EMBER-00 is authority-only")
-    expect(errors, 7, policy.get("allows_new_network") is False, "policy.new_network", "EMBER-00 may not create or execute a network")
+    expect(errors, 7, policy.get("authority_only_goal") is True, "policy.authority_only", f"{ACTIVE_GOAL_ID} makes no model or capability completion claim")
+    expect(errors, 7, policy.get("allows_new_network") is False, "policy.new_network", f"{ACTIVE_GOAL_ID} may not create or execute a network")
 
 
 def check_invariant(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
@@ -705,7 +755,10 @@ def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | No
                 valid = False
             else:
                 selected_text = read_text(selected_goal)
-                if not re.search(r"(?m)^goal_id:\s*EMBER-00\s*$", selected_text):
+                if not re.search(
+                    rf"(?m)^goal_id:\s*{re.escape(ACTIVE_GOAL_ID)}\s*$",
+                    selected_text,
+                ):
                     errors.append(
                         finding(4, "selection.goal_file_id_mismatch", str(selected_goal))
                     )
@@ -809,18 +862,20 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
         for field in ("goal_id", "next_executed_outcome"):
             if not isinstance(authority.get(field), str) or not authority[field].strip():
                 errors.append(finding(4, f"config.{field}_missing", rel))
-        if active_goal is not None and authority.get("goal_id") != active_goal:
-            errors.append(
-                finding(
-                    4, "selection.goal_binding", f"{rel}: expected {active_goal}, got {authority.get('goal_id')}"
-                )
-            )
         artifact_class = authority.get("artifact_class")
         execution = authority.get("execution_authority")
         if artifact_class == "historical_only":
             if execution != "denied":
                 errors.append(finding(4, "config.historical_execution", rel))
             continue
+        if active_goal is not None and authority.get("goal_id") != active_goal:
+            errors.append(
+                finding(
+                    4,
+                    "selection.goal_binding",
+                    f"{rel}: expected {active_goal}, got {authority.get('goal_id')}",
+                )
+            )
         if (policy or {}).get("authority_only_goal") is True:
             errors.append(
                 finding(
@@ -1016,8 +1071,24 @@ def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
 
 
 def validate_artifact_binding(
-    text: str, suffix: str, active_goal: str, next_outcome: str
+    text: str,
+    suffix: str,
+    active_goal: str,
+    next_outcome: str,
+    allowed_workstreams: tuple[str, ...] | list[str] = (),
 ) -> bool:
+    allowed = set(allowed_workstreams)
+
+    def valid_binding(binding: dict[str, Any]) -> bool:
+        workstream = binding.get("workstream_id")
+        return bool(
+            binding.get("goal_id") == active_goal
+            and binding.get("next_executed_outcome") == next_outcome
+            and (
+                isinstance(workstream, str) and workstream in allowed
+            )
+        )
+
     if suffix == ".json":
         try:
             payload = json.loads(text)
@@ -1028,10 +1099,7 @@ def validate_artifact_binding(
         binding = payload.get("authority")
         if not isinstance(binding, dict):
             binding = payload
-        return (
-            binding.get("goal_id") == active_goal
-            and binding.get("next_executed_outcome") == next_outcome
-        )
+        return valid_binding(binding)
     if suffix == ".jsonl":
         rows = []
         try:
@@ -1039,9 +1107,7 @@ def validate_artifact_binding(
         except json.JSONDecodeError:
             return False
         return bool(rows) and all(
-            isinstance(row, dict)
-            and row.get("goal_id") == active_goal
-            and row.get("next_executed_outcome") == next_outcome
+            isinstance(row, dict) and valid_binding(row)
             for row in rows
         )
     def marker_values(field: str) -> list[str]:
@@ -1049,19 +1115,99 @@ def validate_artifact_binding(
         marker = f"{field}:"
         for raw in text.splitlines():
             line = raw.strip()
+            is_marker_surface = False
             if line.startswith("<!--") and line.endswith("-->"):
                 line = line[4:-3].strip()
+                is_marker_surface = True
             elif line.startswith("//"):
                 line = line[2:].strip()
+                is_marker_surface = True
             elif line.startswith("#"):
                 line = line[1:].strip()
-            if line.startswith(marker):
+                is_marker_surface = True
+            elif suffix in {".md", ".yaml", ".yml", ".toml", ".ini", ".cfg"}:
+                is_marker_surface = True
+            if is_marker_surface and line.startswith(marker):
                 values.append(line[len(marker) :].strip())
         return values
 
     goal_matches = marker_values("goal_id")
     outcome_matches = marker_values("next_executed_outcome")
-    return goal_matches == [active_goal] and outcome_matches == [next_outcome]
+    workstream_matches = marker_values("workstream_id")
+    return bool(
+        goal_matches == [active_goal]
+        and outcome_matches == [next_outcome]
+        and (
+            len(workstream_matches) == 1
+            and workstream_matches[0] in allowed
+        )
+    )
+
+
+def artifact_workstream_ids(text: str, suffix: str) -> set[str]:
+    if suffix == ".json":
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        binding = payload.get("authority")
+        if not isinstance(binding, dict):
+            binding = payload
+        value = binding.get("workstream_id")
+        return {value} if isinstance(value, str) else set()
+    if suffix == ".jsonl":
+        try:
+            rows = [json.loads(raw) for raw in text.splitlines() if raw.strip()]
+        except json.JSONDecodeError:
+            return set()
+        return {
+            row["workstream_id"]
+            for row in rows
+            if isinstance(row, dict) and isinstance(row.get("workstream_id"), str)
+        }
+    values: set[str] = set()
+    marker = "workstream_id:"
+    for raw in text.splitlines():
+        line = raw.strip()
+        is_marker_surface = False
+        if line.startswith("<!--") and line.endswith("-->"):
+            line = line[4:-3].strip()
+            is_marker_surface = True
+        elif line.startswith("//"):
+            line = line[2:].strip()
+            is_marker_surface = True
+        elif line.startswith("#"):
+            line = line[1:].strip()
+            is_marker_surface = True
+        elif suffix in {".md", ".yaml", ".yml", ".toml", ".ini", ".cfg"}:
+            is_marker_surface = True
+        if is_marker_surface and line.startswith(marker):
+            values.add(line[len(marker) :].strip())
+    return values
+
+
+def workstream_path_allowed(
+    relative_path: str,
+    workstream_id: str,
+    scopes: dict[str, Any],
+) -> bool:
+    normalized = relative_path.replace("\\", "/").lstrip("/")
+    scope = scopes.get(workstream_id)
+    if not isinstance(scope, dict):
+        return False
+    prefixes = scope.get("prefixes")
+    if not isinstance(prefixes, list) or not all(
+        isinstance(prefix, str) and prefix for prefix in prefixes
+    ):
+        return False
+    matches = any(normalized.startswith(prefix) for prefix in prefixes)
+    if scope.get("mode") == "only":
+        return matches
+    if scope.get("mode") == "all_except":
+        return not matches
+    return False
 
 
 def check_changed_artifact_bindings(
@@ -1071,6 +1217,7 @@ def check_changed_artifact_bindings(
     *,
     changed_range: str | None = None,
     staged: bool = False,
+    expected_workstream: str | None = None,
 ) -> None:
     if not changed_range and not staged:
         return
@@ -1101,6 +1248,8 @@ def check_changed_artifact_bindings(
         return
     active_goal = str(policy.get("active_goal_id", ""))
     next_outcome = str(policy.get("next_executed_outcome", ""))
+    allowed_workstreams = tuple(policy.get("active_workstream_ids") or ())
+    scopes = policy.get("workstream_path_scopes") or {}
     for rel in sorted(set(result.stdout.splitlines())):
         normalized = rel.replace("\\", "/")
         suffix = Path(normalized).suffix.lower()
@@ -1206,12 +1355,48 @@ def check_changed_artifact_bindings(
         except Exception as exc:
             errors.append(finding(4, "artifact.binding_unreadable", f"{normalized}: {exc}"))
             continue
-        if not validate_artifact_binding(text, suffix, active_goal, next_outcome):
+        binding_valid = validate_artifact_binding(
+            text,
+            suffix,
+            active_goal,
+            next_outcome,
+            allowed_workstreams,
+        )
+        if not binding_valid:
             errors.append(
                 finding(
                     4,
                     "artifact.goal_binding",
                     f"{normalized}: requires goal_id={active_goal!r} and next_executed_outcome={next_outcome!r}",
+                )
+            )
+            continue
+        workstreams = artifact_workstream_ids(text, suffix)
+        if len(workstreams) != 1:
+            errors.append(
+                finding(
+                    4,
+                    "artifact.workstream_binding",
+                    f"{normalized}: requires exactly one workstream_id",
+                )
+            )
+            continue
+        workstream = next(iter(workstreams))
+        if expected_workstream is not None and workstream != expected_workstream:
+            errors.append(
+                finding(
+                    4,
+                    "artifact.pr_workstream_mismatch",
+                    f"{normalized}: bound to {workstream}, PR declares {expected_workstream}",
+                )
+            )
+            continue
+        if not workstream_path_allowed(normalized, workstream, scopes):
+            errors.append(
+                finding(
+                    4,
+                    "artifact.workstream_scope",
+                    f"{normalized}: outside the exclusive scope of {workstream}",
                 )
             )
 

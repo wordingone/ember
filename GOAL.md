@@ -7,8 +7,46 @@ they cannot reduce, defer, replace, or reinterpret it.
 <!-- EMBER_AUTHORITY_V1
 {
   "allows_new_network": false,
-  "active_goal_id": "EMBER-00",
-  "next_executed_outcome": "EMBER-01 clean 3B custody and identity spine",
+  "active_goal_id": "EMBER-01",
+  "active_workstream_ids": [
+    "EMBER-01A",
+    "EMBER-01B",
+    "EMBER-01C"
+  ],
+  "workstream_path_scopes": {
+    "EMBER-01A": {
+      "mode": "all_except",
+      "prefixes": [
+        "manifests/ember-01-custody/",
+        "scripts/ember_01_custody/",
+        "tests/ember_01_custody/",
+        "docs/ember-01-custody/",
+        "manifests/ember-01-identity/",
+        "scripts/ember_01_identity/",
+        "tests/ember_01_identity/",
+        "docs/ember-01-identity/"
+      ]
+    },
+    "EMBER-01B": {
+      "mode": "only",
+      "prefixes": [
+        "manifests/ember-01-custody/",
+        "scripts/ember_01_custody/",
+        "tests/ember_01_custody/",
+        "docs/ember-01-custody/"
+      ]
+    },
+    "EMBER-01C": {
+      "mode": "only",
+      "prefixes": [
+        "manifests/ember-01-identity/",
+        "scripts/ember_01_identity/",
+        "tests/ember_01_identity/",
+        "docs/ember-01-identity/"
+      ]
+    }
+  },
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "architecture": {
     "headline_hypothesis": "Verified Expert Accretion",
     "owned_unified_decoder": true,
@@ -161,6 +199,7 @@ they cannot reduce, defer, replace, or reinterpret it.
   },
   "required_future_artifact_fields": [
     "goal_id",
+    "workstream_id",
     "next_executed_outcome"
   ],
   "required_governing_surfaces": [
@@ -416,5 +455,7 @@ then implementation and evidence, then history.
 No completion claim is valid unless the primitive, model, organism, body, and
 laboratory totality and every hard-rung requirement pass together.
 
-This authority-only reconciliation creates, trains, evaluates, and serves no
-network and claims no model, runtime, or benchmark completion.
+This custody, identity, and experiment-spine goal creates, trains, evaluates,
+and serves no network and claims no model, training, benchmark, or capability
+completion. Its bounded control-plane runtime exists only to make the first
+clean-genesis 3B execution truthful, detachable, recoverable, and inspectable.
