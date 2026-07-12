@@ -127,8 +127,30 @@ def tracked_files(root: Path) -> list[str]:
     )
 
 
-def build_census(root: Path, *, tracked_files: Iterable[str] | None = None) -> dict:
+def source_commit(root: Path) -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    commit = completed.stdout.strip().lower()
+    if completed.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+        raise RuntimeError("unable to bind census to an exact source commit")
+    return commit
+
+
+def build_census(
+    root: Path,
+    *,
+    tracked_files: Iterable[str] | None = None,
+    source_commit: str | None = None,
+) -> dict:
     root = root.resolve()
+    bound_commit = source_commit if source_commit is not None else globals()["source_commit"](root)
+    if not re.fullmatch(r"[0-9a-f]{40,64}", bound_commit):
+        raise ValueError("source_commit must be an exact hexadecimal Git object ID")
     candidates = sorted(set(tracked_files if tracked_files is not None else globals()["tracked_files"](root)))
     evidence: list[dict[str, object]] = []
     scanned = 0
@@ -188,6 +210,7 @@ def build_census(root: Path, *, tracked_files: Iterable[str] | None = None) -> d
     }
     return {
         "schema": SCHEMA,
+        "source_commit": bound_commit,
         "goal_id": GOAL_ID,
         "workstream_id": WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,

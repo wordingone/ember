@@ -14,6 +14,9 @@ The machine schema is
 `manifests/ember-01-identity/schema-v1.json`. The executable semantics are in
 `scripts/ember_01_identity/validate_identity.py`. The schema closes the set of
 fields; the validator enforces relationships that JSON Schema cannot express.
+The runtime validator loads this exact checked-in schema and reports
+`schema.validation` findings before applying semantic admission rules; the CLI
+does not maintain a weaker parallel type system.
 Neither may derive missing identity from a filename, directory name, UI label,
 endpoint, architecture config, tensor shape, or parameter total.
 
@@ -56,14 +59,34 @@ shape, dtype, and content hash. Ancestry is an explicit ordered relation; the
 validator never reconstructs it from directories. Tokenizer, corpus, sample
 ordering, curriculum, verifier, optimizer state, numerics, and stopping rule
 are separate hashes or explicit values so changing any one changes identity.
+The stopping rule is a structured criterion/result/receipt object, never free
+text.
 
 ### Capability and mechanism state
 
-Native modality membership names text, image, and audio separately. Reasoning
-and structured tool use have explicit evidence states and receipt hashes.
+Native text, image, and audio each have an explicit evidence state and
+checkpoint-bound receipt hashes. Reasoning and structured tool use use the same
+evidence shape.
 Experts, routing, memory substrates, world models, and deletion objects are
 identity-bearing arrays. A harness, tool, script, verifier, UI label, human, or
 borrowed model cannot supply neural capability credit.
+
+### Owned admission
+
+`OWNED_ADMITTED` is the only disposition eligible for owned selection or
+owned-completion credit. Admission additionally requires all unresolved fields
+to be absent, clean-genesis ownership, at least 3B allocated/unique/active/
+served/actually-trained parameters, nonzero training exposure for text/image/
+audio, verified checkpoint-bound receipts for every native modality plus
+reasoning and structured tool use, and a `PASSED` sufficient-pretraining
+criterion with a receipt hash. Any missing proof leaves the object
+`OWNED_CANDIDATE`.
+
+Learned-signal and neural-credit sources use closed enumerations. Owned
+admission accepts only owned training data or locally verified experience as
+learned signal, and only owned-checkpoint or checkpoint-bound causal evidence
+as capability credit. Renamed external sources cannot pass by avoiding a
+denylisted spelling.
 
 ### Backend, evaluation, and references
 
@@ -80,10 +103,11 @@ completion.
 `git ls-files` by `census_consumers.py`. It scans current source and
 documentation extensions, excludes generated receipts and tests/fixtures,
 records raw-match counts, and retains at most three evidence lines per
-file/category. The snapshot at authoring inspected 2,869 tracked candidates,
+file/category. The checked-in snapshot inspected 2,878 tracked candidates,
 scanned 1,129 files, and identified 670 files containing at least one identity
-marker. It is a completeness net for candidate surfaces, not proof that every
-textual match is runtime-reachable.
+marker. Its top-level `source_commit` binds the exact tracked source universe
+that was scanned. It is a completeness net for candidate surfaces, not proof
+that every textual match is runtime-reachable.
 
 ## Load-bearing consumer map
 
@@ -120,6 +144,7 @@ textual match is runtime-reachable.
    evaluation IDs remain separate fields in one joined object.
 2. **Closed-world schema.** Unknown fields fail instead of becoming informal
    extension points that consumers reinterpret.
+   The executable validator applies this schema directly.
 3. **Explicit unresolved state.** Unknown is valid for census and migration but
    is never silently replaced. Execution/admission requires resolved mode.
 4. **Hash exact bytes and tensors.** Whole-file and tensor-level identities
@@ -134,6 +159,10 @@ textual match is runtime-reachable.
    restricted to the owned checkpoint and checkpoint-bound causal evidence.
 9. **Legacy consumers are adapters, not authorities.** EMBER-01C records their
    current behavior; EMBER-01A owns production binding.
+10. **Admission is positive proof.** Candidate, historical, and reference
+    dispositions can never select Ember or increment owned completion.
+11. **Multimodal and birth evidence are structured.** Each required modality
+    and the sufficient-pretraining stopping criterion carry receipt hashes.
 
 ## EMBER-01A integration checklist
 

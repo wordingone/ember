@@ -148,7 +148,7 @@
         },
         "optimizer_state_sha256": {"$ref": "#/$defs/sha256"},
         "numerics": {"type": "string", "minLength": 1},
-        "stopping_rule": {"type": "string", "minLength": 1}
+        "stopping_rule": {"$ref": "#/$defs/stoppingRule"}
       }
     },
     "capabilities": {
@@ -157,11 +157,14 @@
       "required": ["native_modalities", "reasoning", "structured_tool_use"],
       "properties": {
         "native_modalities": {
-          "type": "array",
-          "uniqueItems": true,
-          "minItems": 3,
-          "maxItems": 3,
-          "items": {"enum": ["text", "image", "audio"]}
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "image", "audio"],
+          "properties": {
+            "text": {"$ref": "#/$defs/capability"},
+            "image": {"$ref": "#/$defs/capability"},
+            "audio": {"$ref": "#/$defs/capability"}
+          }
         },
         "reasoning": {"$ref": "#/$defs/capability"},
         "structured_tool_use": {"$ref": "#/$defs/capability"}
@@ -245,10 +248,42 @@
         "neural_capability_credit_sources"
       ],
       "properties": {
-        "ownership": {"type": "string", "minLength": 1},
+        "ownership": {
+          "enum": [
+            "OWNED_CLEAN_GENESIS",
+            "REFERENCE_ONLY",
+            "HISTORICAL_UNKNOWN",
+            "EXCLUDED_CONTAMINATED"
+          ]
+        },
         "exclusion_reasons": {"type": "array", "items": {"type": "string"}},
-        "learned_signal_sources": {"type": "array", "items": {"type": "string"}},
-        "neural_capability_credit_sources": {"type": "array", "items": {"type": "string"}}
+        "learned_signal_sources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "owned_training_data",
+              "locally_verified_experience",
+              "borrowed_reference_weights",
+              "borrowed_reference_outputs",
+              "unknown_historical_signal"
+            ]
+          }
+        },
+        "neural_capability_credit_sources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "owned_checkpoint",
+              "checkpoint_bound_causal_evidence",
+              "reference_checkpoint",
+              "historical_receipt"
+            ]
+          }
+        }
       }
     },
     "unresolved": {
@@ -375,6 +410,21 @@
         "evidence_receipts": {
           "type": "array",
           "items": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "stoppingRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_id", "result", "receipt_sha256"],
+      "properties": {
+        "criterion_id": {"type": "string", "minLength": 1},
+        "result": {"enum": ["PASSED", "NOT_REACHED", "FAILED"]},
+        "receipt_sha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"$ref": "#/$defs/unresolved"}
+          ]
         }
       }
     }

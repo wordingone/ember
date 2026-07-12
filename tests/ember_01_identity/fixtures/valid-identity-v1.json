@@ -63,10 +63,30 @@
     },
     "optimizer_state_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
     "numerics": "bf16-activations-fp32-master",
-    "stopping_rule": "fixture-only-no-capability-claim"
+    "stopping_rule": {
+      "criterion_id": "sufficient-pretraining-v1",
+      "result": "NOT_REACHED",
+      "receipt_sha256": {
+        "status": "unresolved",
+        "reason": "synthetic candidate has no sufficient-pretraining proof"
+      }
+    }
   },
   "capabilities": {
-    "native_modalities": ["text", "image", "audio"],
+    "native_modalities": {
+      "text": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "image": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "audio": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      }
+    },
     "reasoning": {
       "state": "UNVERIFIED",
       "evidence_receipts": []
@@ -125,6 +145,7 @@
     "neural_capability_credit_sources": ["owned_checkpoint"]
   },
   "unresolved": [
+    "training.stopping_rule.receipt_sha256",
     "backend.process_identity",
     "backend.resource_lease_id",
     "evaluation.score",
