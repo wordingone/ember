@@ -15,6 +15,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from census_consumers import build_census  # noqa: E402
 
+FIXTURE_COMMIT = "f" * 40
 
 def test_census_is_deterministic_and_evidence_linked(tmp_path: Path) -> None:
     (tmp_path / "scripts").mkdir()
@@ -28,9 +29,16 @@ def test_census_is_deterministic_and_evidence_linked(tmp_path: Path) -> None:
     )
     tracked = ["server.ts", "scripts/train.py"]
 
-    first = build_census(tmp_path, tracked_files=tracked)
-    second = build_census(tmp_path, tracked_files=list(reversed(tracked)))
+    first = build_census(
+        tmp_path, tracked_files=tracked, source_commit="a" * 40
+    )
+    second = build_census(
+        tmp_path,
+        tracked_files=list(reversed(tracked)),
+        source_commit="a" * 40,
+    )
     assert first == second
+    assert first["source_commit"] == "a" * 40
     assert first["schema"] == "ember-identity-consumer-census-v1"
     assert first["goal_id"] == "EMBER-01"
     assert first["workstream_id"] == "EMBER-01C"
@@ -70,6 +78,7 @@ def test_census_excludes_generated_receipts_and_test_fixtures(tmp_path: Path) ->
             "tests/fixtures/fake.py",
             "scripts/ember_01_identity/self.py",
         ],
+        source_commit=FIXTURE_COMMIT,
     )
     assert census["evidence"] == []
     assert census["coverage"]["files_excluded"] == 3
@@ -80,7 +89,9 @@ def test_same_line_can_expose_multiple_identity_roles(tmp_path: Path) -> None:
         "const LOCAL_MODEL_ID = 'qwen-3.6'; // borrowed reference provider\n",
         encoding="utf-8",
     )
-    census = build_census(tmp_path, tracked_files=["cli.ts"])
+    census = build_census(
+        tmp_path, tracked_files=["cli.ts"], source_commit=FIXTURE_COMMIT
+    )
     rows = census["evidence"]
     assert {row["category"] for row in rows} >= {
         "cli_operator_surface",
@@ -93,7 +104,9 @@ def test_evidence_is_bounded_per_file_and_category(tmp_path: Path) -> None:
         "\n".join(f"checkpoint_path_{index} = 'model.pt'" for index in range(10)) + "\n",
         encoding="utf-8",
     )
-    census = build_census(tmp_path, tracked_files=["many.py"])
+    census = build_census(
+        tmp_path, tracked_files=["many.py"], source_commit=FIXTURE_COMMIT
+    )
     checkpoint_rows = [
         row for row in census["evidence"] if row["category"] == "checkpoint_save_load"
     ]
@@ -106,7 +119,9 @@ def test_generic_claim_and_receipt_prose_is_not_publication_identity(tmp_path: P
         "This claim cites a receipt but defines no publication identity surface.\n",
         encoding="utf-8",
     )
-    census = build_census(tmp_path, tracked_files=["notes.md"])
+    census = build_census(
+        tmp_path, tracked_files=["notes.md"], source_commit=FIXTURE_COMMIT
+    )
     assert not any(row["category"] == "publication_report" for row in census["evidence"])
 
 
@@ -115,7 +130,9 @@ def test_census_does_not_republish_local_paths(tmp_path: Path) -> None:
         "checkpoint_path = r'C:\\private\\model.pt'\n",
         encoding="utf-8",
     )
-    census = build_census(tmp_path, tracked_files=["runtime.py"])
+    census = build_census(
+        tmp_path, tracked_files=["runtime.py"], source_commit=FIXTURE_COMMIT
+    )
     rendered = json.dumps(census)
     assert "C:\\\\private" not in rendered
     assert all("excerpt" not in row for row in census["evidence"])

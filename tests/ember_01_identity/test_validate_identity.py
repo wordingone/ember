@@ -32,6 +32,46 @@ def valid_manifest() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 
+def admitted_manifest() -> dict:
+    payload = valid_manifest()
+    payload["identity"]["disposition"] = "OWNED_ADMITTED"
+    payload["identity"]["selected_as_owned_ember"] = True
+    for field in ("allocated", "unique", "active", "served", "actually_trained"):
+        payload["parameters"][field] = 3_000_000_000
+    payload["capabilities"]["reasoning"] = {
+        "state": "VERIFIED",
+        "evidence_receipts": ["6" * 64],
+    }
+    payload["capabilities"]["structured_tool_use"] = {
+        "state": "VERIFIED",
+        "evidence_receipts": ["7" * 64],
+    }
+    payload["capabilities"]["native_modalities"] = {
+        "text": {"state": "VERIFIED", "evidence_receipts": ["a" * 64]},
+        "image": {"state": "VERIFIED", "evidence_receipts": ["b" * 64]},
+        "audio": {"state": "VERIFIED", "evidence_receipts": ["c" * 64]},
+    }
+    payload["training"]["stopping_rule"] = {
+        "criterion_id": "sufficient-pretraining-v1",
+        "result": "PASSED",
+        "receipt_sha256": "d" * 64,
+    }
+    payload["backend"]["process_identity"] = {
+        "pid": 123,
+        "start_time_utc": "2026-07-12T00:00:00Z",
+        "executable_sha256": "4" * 64,
+        "command_sha256": "8" * 64,
+        "nonce": "fixture-process",
+    }
+    payload["backend"]["resource_lease_id"] = "fixture-lease"
+    payload["evaluation"]["score"] = {"value": 1.0, "unit": "fixture-score"}
+    payload["evaluation"]["uncertainty"] = {"value": 0.0, "unit": "fixture-score"}
+    payload["evaluation"]["receipt_sha256"] = "9" * 64
+    payload["evaluation"]["counts_toward_owned_completion"] = True
+    payload["unresolved"] = []
+    return payload
+
+
 def test_json_schema_is_versioned_and_closed_world() -> None:
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     assert schema["$id"] == "urn:ember:model-experiment-identity:v1"
@@ -169,6 +209,21 @@ def test_expected_identity_bindings_fail_closed(path: str, replacement: object) 
         ("data.ordering_sha256", "9" * 64, "binding.data_mismatch"),
         ("mechanisms.world_models", ["other-world"], "binding.mechanisms_mismatch"),
         ("backend.protocol", "other-protocol", "binding.backend_mismatch"),
+        (
+            "training.stopping_rule.result",
+            "FAILED",
+            "binding.training.stopping_rule_mismatch",
+        ),
+        (
+            "training.modality_mixture.audio",
+            0.20,
+            "binding.training.modality_mixture_mismatch",
+        ),
+        (
+            "capabilities.native_modalities.audio.state",
+            "REGRESSED",
+            "binding.capabilities.native_modalities_mismatch",
+        ),
         ("evaluation.version", "v2", "binding.evaluation.version_mismatch"),
         ("evaluation.split", "other", "binding.evaluation.split_mismatch"),
         ("evaluation.harness_sha256", "9" * 64, "binding.evaluation.harness_sha256_mismatch"),
@@ -272,3 +327,116 @@ def test_validator_rejects_malformed_shapes_without_crashing(
     payload = valid_manifest()
     _set_path(payload, path, replacement)
     assert expected_code in error_codes(payload)
+
+
+@pytest.mark.parametrize(
+    ("path", "replacement"),
+    [
+        ("identity.disposition", "EXTERNAL_QWEN_MISLABELED"),
+        ("identity.selected_as_owned_ember", "true"),
+        ("data.clean_genesis", "yes"),
+        ("provenance.ownership", "arbitrary-owner"),
+        ("provenance.learned_signal_sources", ["qwen_teacher_signal"]),
+        ("provenance.neural_capability_credit_sources", ["external_qwen"]),
+    ],
+)
+def test_runtime_validator_applies_canonical_schema(
+    path: str, replacement: object
+) -> None:
+    payload = valid_manifest()
+    _set_path(payload, path, replacement)
+    assert "schema.validation" in error_codes(payload)
+
+
+@pytest.mark.parametrize(
+    "disposition", ["OWNED_CANDIDATE", "HISTORICAL_ONLY", "REFERENCE_ONLY"]
+)
+def test_only_owned_admitted_can_be_selected_or_counted(disposition: str) -> None:
+    payload = valid_manifest()
+    payload["identity"]["disposition"] = disposition
+    payload["identity"]["selected_as_owned_ember"] = True
+    payload["evaluation"]["counts_toward_owned_completion"] = True
+    assert "admission.disposition" in error_codes(payload)
+
+
+@pytest.mark.parametrize(
+    ("path", "replacement", "expected_code"),
+    [
+        ("data.clean_genesis", False, "admission.clean_genesis"),
+        ("provenance.ownership", "REFERENCE_ONLY", "admission.ownership"),
+        ("parameters.served", 0, "admission.parameter_floor"),
+        ("parameters.actually_trained", 2_999_999_999, "admission.parameter_floor"),
+        (
+            "capabilities.reasoning.state",
+            "UNVERIFIED",
+            "admission.capability_evidence",
+        ),
+    ],
+)
+def test_owned_admission_requires_positive_evidence(
+    path: str, replacement: object, expected_code: str
+) -> None:
+    payload = admitted_manifest()
+    _set_path(payload, path, replacement)
+    assert expected_code in error_codes(payload)
+
+
+def test_owned_admission_rejects_any_unresolved_evidence() -> None:
+    payload = admitted_manifest()
+    payload["evaluation"]["score"] = {
+        "status": "unresolved",
+        "reason": "not measured",
+    }
+    payload["unresolved"] = ["evaluation.score"]
+    assert "admission.unresolved" in error_codes(payload)
+
+
+def test_fully_evidenced_owned_admission_passes() -> None:
+    payload = admitted_manifest()
+    assert validate_manifest(payload) == payload
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "provenance.learned_signal_sources",
+        "provenance.neural_capability_credit_sources",
+    ],
+)
+def test_malformed_admission_source_items_fail_without_crashing(path: str) -> None:
+    payload = admitted_manifest()
+    _set_path(payload, path, [{"renamed_external_source": "qwen"}])
+    assert "schema.validation" in error_codes(payload)
+
+
+def test_owned_admission_requires_nonzero_training_exposure_per_modality() -> None:
+    payload = admitted_manifest()
+    payload["training"]["modality_mixture"] = {
+        "text": 0.75,
+        "image": 0.0,
+        "audio": 0.25,
+    }
+    assert "admission.modality_exposure" in error_codes(payload)
+
+
+def test_owned_admission_requires_checkpoint_bound_receipt_per_modality() -> None:
+    payload = admitted_manifest()
+    payload["capabilities"]["native_modalities"] = {
+        "text": {"state": "VERIFIED", "evidence_receipts": ["a" * 64]},
+        "image": {"state": "VERIFIED", "evidence_receipts": ["b" * 64]},
+        "audio": {"state": "UNVERIFIED", "evidence_receipts": []},
+    }
+    assert "admission.native_modality_evidence" in error_codes(payload)
+
+
+@pytest.mark.parametrize("result", ["NOT_REACHED", "FAILED"])
+def test_owned_admission_requires_passed_sufficient_pretraining_receipt(
+    result: str,
+) -> None:
+    payload = admitted_manifest()
+    payload["training"]["stopping_rule"] = {
+        "criterion_id": "sufficient-pretraining-v1",
+        "result": result,
+        "receipt_sha256": "c" * 64,
+    }
+    assert "admission.sufficient_pretraining" in error_codes(payload)

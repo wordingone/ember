@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import functools
 import hashlib
 import json
 import re
@@ -15,9 +16,29 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
+try:
+    from jsonschema import Draft202012Validator
+except ImportError:  # pragma: no cover - exercised only in a broken runtime
+    Draft202012Validator = None  # type: ignore[assignment]
+
 
 SCHEMA = "ember-model-experiment-identity-v1"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "manifests"
+    / "ember-01-identity"
+    / "schema-v1.json"
+)
+OWNED_ADMISSION_PARAMETER_FLOOR = 3_000_000_000
+OWNED_LEARNED_SIGNAL_SOURCES = {
+    "owned_training_data",
+    "locally_verified_experience",
+}
+OWNED_CAPABILITY_CREDIT_SOURCES = {
+    "owned_checkpoint",
+    "checkpoint_bound_causal_evidence",
+}
 
 REQUIRED_PATHS = (
     "authority.goal_id",
@@ -108,6 +129,9 @@ BINDING_PATHS = (
     "data.sha256",
     "mechanisms",
     "mechanisms.router",
+    "training.modality_mixture",
+    "training.stopping_rule",
+    "capabilities.native_modalities",
     "backend",
     "backend.executable_sha256",
     "evaluation.benchmark_id",
@@ -170,7 +194,12 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
         "numerics", "stopping_rule",
     },
     "training.modality_mixture": {"text", "image", "audio"},
+    "training.stopping_rule": {"criterion_id", "result", "receipt_sha256"},
     "capabilities": {"native_modalities", "reasoning", "structured_tool_use"},
+    "capabilities.native_modalities": {"text", "image", "audio"},
+    "capabilities.native_modalities.text": {"state", "evidence_receipts"},
+    "capabilities.native_modalities.image": {"state", "evidence_receipts"},
+    "capabilities.native_modalities.audio": {"state", "evidence_receipts"},
     "capabilities.reasoning": {"state", "evidence_receipts"},
     "capabilities.structured_tool_use": {"state", "evidence_receipts"},
     "mechanisms": {"experts", "router", "memory_substrates", "world_models", "deletion_objects"},
@@ -214,8 +243,61 @@ def _finding(code: str, detail: str) -> dict[str, str]:
     return {"code": code, "detail": detail}
 
 
+@functools.lru_cache(maxsize=1)
+def _schema_validator() -> Any:
+    if Draft202012Validator is None:
+        raise RuntimeError("jsonschema Draft202012Validator is unavailable")
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
+def _apply_schema(
+    payload: Mapping[str, Any], findings: list[dict[str, str]]
+) -> None:
+    try:
+        errors = sorted(
+            _schema_validator().iter_errors(payload),
+            key=lambda error: (
+                tuple(str(part) for part in error.absolute_path),
+                error.message,
+            ),
+        )
+    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+        findings.append(
+            _finding("schema.authority_unavailable", type(exc).__name__)
+        )
+        return
+    for error in errors:
+        path = ".".join(str(part) for part in error.absolute_path) or "<root>"
+        findings.append(_finding("schema.validation", f"{path}: {error.message}"))
+
+
 def _is_unresolved(value: Any) -> bool:
     return isinstance(value, Mapping) and value.get("status") == "unresolved"
+
+
+def _string_list_subset(value: Any, allowed: set[str]) -> bool:
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(item, str) for item in value)
+        and set(value) <= allowed
+    )
+
+
+def _verified_receipt_evidence(value: Any) -> bool:
+    receipts = value.get("evidence_receipts") if isinstance(value, Mapping) else None
+    return (
+        isinstance(value, Mapping)
+        and value.get("state") == "VERIFIED"
+        and isinstance(receipts, list)
+        and bool(receipts)
+        and all(
+            isinstance(receipt, str) and bool(SHA256_RE.fullmatch(receipt))
+            for receipt in receipts
+        )
+    )
 
 
 def _check_closed_objects(
@@ -270,6 +352,7 @@ def validate_manifest(
 
     findings: list[dict[str, str]] = []
 
+    _apply_schema(payload, findings)
     _check_closed_objects(payload, findings)
 
     if payload.get("schema") != SCHEMA:
@@ -386,13 +469,21 @@ def validate_manifest(
     native_present, native = _get(payload, "capabilities.native_modalities")
     if native_present:
         valid_native = (
-            isinstance(native, list)
-            and all(isinstance(item, str) for item in native)
+            isinstance(native, Mapping)
             and set(native) == {"text", "image", "audio"}
-            and len(native) == 3
+            and all(
+                isinstance(native.get(modality), Mapping)
+                and set(native[modality]) == {"state", "evidence_receipts"}
+                for modality in ("text", "image", "audio")
+            )
         )
         if not valid_native:
-            findings.append(_finding("capabilities.native_modalities_invalid", "requires exact text/image/audio values"))
+            findings.append(
+                _finding(
+                    "capabilities.native_modalities_invalid",
+                    "requires exact text/image/audio evidence objects",
+                )
+            )
 
     for capability_name in ("reasoning", "structured_tool_use"):
         present, capability = _get(payload, f"capabilities.{capability_name}")
@@ -413,7 +504,7 @@ def validate_manifest(
                 if not isinstance(receipt, str) or not SHA256_RE.fullmatch(receipt):
                     findings.append(
                         _finding("capability.receipt_hash_invalid", capability_name)
-                    )
+                )
 
     process_present, process_identity = _get(payload, "backend.process_identity")
     if process_present and not _is_unresolved(process_identity):
@@ -490,6 +581,13 @@ def validate_manifest(
     disposition = _get(payload, "identity.disposition")[1]
     selected = _get(payload, "identity.selected_as_owned_ember")[1]
     completion_credit = _get(payload, "evaluation.counts_toward_owned_completion")[1]
+    if (selected is True or completion_credit is True) and disposition != "OWNED_ADMITTED":
+        findings.append(
+            _finding(
+                "admission.disposition",
+                "owned selection/completion requires OWNED_ADMITTED",
+            )
+        )
     if disposition == "REFERENCE_ONLY":
         if selected is True:
             findings.append(_finding("reference.selected_as_owned", "reference cannot be owned Ember"))
@@ -523,6 +621,121 @@ def validate_manifest(
     if require_resolved:
         for path in sorted(unresolved):
             findings.append(_finding("field.unresolved", path))
+
+    if disposition == "OWNED_ADMITTED":
+        if _get(payload, "data.clean_genesis")[1] is not True:
+            findings.append(
+                _finding("admission.clean_genesis", "OWNED_ADMITTED requires clean genesis")
+            )
+        ownership = _get(payload, "provenance.ownership")[1]
+        if ownership != "OWNED_CLEAN_GENESIS":
+            findings.append(
+                _finding("admission.ownership", "OWNED_ADMITTED requires owned provenance")
+            )
+        admitted_counts = _get(payload, "parameters")[1]
+        floor_fields = ("allocated", "unique", "active", "served", "actually_trained")
+        if not isinstance(admitted_counts, Mapping) or any(
+            not isinstance(admitted_counts.get(field), int)
+            or isinstance(admitted_counts.get(field), bool)
+            or admitted_counts[field] < OWNED_ADMISSION_PARAMETER_FLOOR
+            for field in floor_fields
+        ):
+            findings.append(
+                _finding(
+                    "admission.parameter_floor",
+                    "allocated/unique/active/served/actually_trained must each be >=3B",
+                )
+            )
+        for capability_name in ("reasoning", "structured_tool_use"):
+            capability = _get(payload, f"capabilities.{capability_name}")[1]
+            if (
+                not isinstance(capability, Mapping)
+                or capability.get("state") != "VERIFIED"
+                or not isinstance(capability.get("evidence_receipts"), list)
+                or not capability["evidence_receipts"]
+            ):
+                findings.append(
+                    _finding(
+                        "admission.capability_evidence",
+                        f"{capability_name} requires verified receipt evidence",
+                    )
+                    )
+        admitted_mixture = _get(payload, "training.modality_mixture")[1]
+        if (
+            not isinstance(admitted_mixture, Mapping)
+            or set(admitted_mixture) != {"text", "image", "audio"}
+            or any(
+                not isinstance(admitted_mixture.get(modality), (int, float))
+                or isinstance(admitted_mixture.get(modality), bool)
+                or admitted_mixture[modality] <= 0
+                for modality in ("text", "image", "audio")
+            )
+        ):
+            findings.append(
+                _finding(
+                    "admission.modality_exposure",
+                    "OWNED_ADMITTED requires nonzero text/image/audio training exposure",
+                )
+            )
+        admitted_modalities = _get(payload, "capabilities.native_modalities")[1]
+        if (
+            not isinstance(admitted_modalities, Mapping)
+            or set(admitted_modalities) != {"text", "image", "audio"}
+            or any(
+                not _verified_receipt_evidence(admitted_modalities.get(modality))
+                for modality in ("text", "image", "audio")
+            )
+        ):
+            findings.append(
+                _finding(
+                    "admission.native_modality_evidence",
+                    "OWNED_ADMITTED requires checkpoint-bound verification receipts for text/image/audio",
+                )
+            )
+        stopping_rule = _get(payload, "training.stopping_rule")[1]
+        if (
+            not isinstance(stopping_rule, Mapping)
+            or not isinstance(stopping_rule.get("criterion_id"), str)
+            or not stopping_rule.get("criterion_id")
+            or stopping_rule.get("result") != "PASSED"
+            or not isinstance(stopping_rule.get("receipt_sha256"), str)
+            or not SHA256_RE.fullmatch(stopping_rule["receipt_sha256"])
+        ):
+            findings.append(
+                _finding(
+                    "admission.sufficient_pretraining",
+                    "OWNED_ADMITTED requires a passed criterion and receipt",
+                )
+            )
+        admitted_learned = _get(payload, "provenance.learned_signal_sources")[1]
+        if not _string_list_subset(
+            admitted_learned, OWNED_LEARNED_SIGNAL_SOURCES
+        ):
+            findings.append(
+                _finding(
+                    "admission.learned_signal_source",
+                    "OWNED_ADMITTED permits only owned learned-signal classes",
+                )
+            )
+        admitted_credit = _get(
+            payload, "provenance.neural_capability_credit_sources"
+        )[1]
+        if not _string_list_subset(
+            admitted_credit, OWNED_CAPABILITY_CREDIT_SOURCES
+        ):
+            findings.append(
+                _finding(
+                    "admission.capability_credit_source",
+                    "OWNED_ADMITTED permits only checkpoint-bound owned credit",
+                )
+            )
+        if unresolved:
+            findings.append(
+                _finding(
+                    "admission.unresolved",
+                    "OWNED_ADMITTED cannot contain unresolved identity/evidence",
+                )
+            )
 
     if expected is not None:
         for path in BINDING_PATHS:
