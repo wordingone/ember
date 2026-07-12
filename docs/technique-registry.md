@@ -1,92 +1,95 @@
-# Technique Registry — permanent, receipt-gated pretraining-optimization registry
+<!-- EMBER_CONSERVATION_V1
+minimum_new_network_parameters=3000000000
+destination_total_parameters=>27000000000
+required_native_capabilities=text,image,audio,reasoning,structured_tool_use
+borrowed_lineage=frozen_reference_only
+mechanism_erasure=forbidden
+-->
 
-User directive 2026-06-12 (chat, verbatim intent): this line of inquiry is
-"exhaustively tested and stored permanently as compounding techniques for
-further optimizing pretraining, as much as only physics will allow. It's a GPU
-kernel level problem as much as a mathematical architecture of the network and
-its pretraining requirements."
+# Technique evidence graph
 
-This file + `technique-registry.jsonl` are that permanent store. The
-registry is machine-readable so the dispatch gate can ENFORCE it: a training
-run admits only if its config consumes every ADOPT row or carries a receipted
-exemption (fp-33 enforcement clause).
+`docs/technique-registry.jsonl` is the permanent machine-readable evidence
+graph for training, inference, architecture, memory, routing, and systems
+mechanisms studied around Ember. It is subordinate to `GOAL.md` and cannot
+authorize a network, change a required capability, or define Ember by itself.
 
-## The two axes (user framing)
+The registry preserves the useful intent of the earlier optimization program:
+measure both delivered hardware efficiency and tokens-to-capability efficiency
+on the single 24 GiB GPU, retain negative and positive results, and compound
+what later experiments can learn. Earlier sub-3B proxy results remain history;
+they cannot be resumed as neural experiments or promoted into model milestones.
 
-1. **Kernel/systems — FLOPs delivery.** How close the step loop runs to the
-   silicon ceiling: precision format, kernel fusion, launch overhead, memory
-   hierarchy, dataloader overlap.
-2. **Math/architecture — FLOPs efficiency.** How few delivered FLOPs the
-   target quality needs: optimizer geometry, parametrization, attention shape,
-   loss design, data curriculum, tokenization, distillation, verified
-   self-curriculum.
+## Evidence states
 
-A technique entry must name which axis it bends and the PHYSICS CEILING it
-approaches — "as much as physics allows" is a measured distance, not rhetoric.
+Legal status values are:
 
-## Physics ceilings — RTX 4090 (sm89), the binding envelope
+- `CANDIDATE`: a named, untested or incompletely tested hypothesis.
+- `TESTED_NEGATIVE`: a prediction contradicted in an exact recorded regime.
+- `TESTED_POSITIVE`: a prediction supported in an exact recorded regime.
+- `ADOPTED_CURRENT_CONFIG`: active only for an exact admissible config binding.
+- `INACTIVE_CURRENT_CONFIG`: measured evidence retained but not active in the
+  exact current config.
+- `HISTORICAL_EVIDENCE`: preserved evidence from an inadmissible, superseded,
+  borrowed-signal, or otherwise non-current context.
+- `RETEST_ELIGIBLE`: a retained question with an explicit materially different
+  scale, modality, order, routing, substrate, precision, or interaction regime.
 
-| Resource | Ceiling | Note |
-|---|---|---|
-| BF16 tensor-core, dense | ~165 TFLOP/s | realized MFU is the gap to close |
-| FP8 tensor-core, dense | ~330 TFLOP/s | 2x bf16 — the E5/fp-33 prize |
-| Memory bandwidth | ~1008 GB/s | roofline knee ≈164 FLOP/byte (bf16) |
-| VRAM | 24 GB | sets max trainable params (E2 measures) |
-| Power/thermal | governed (vram_frac 0.80, pacing) | governor rail, non-negotiable |
+Terminal states such as `KILL`, `PARK`, `EXCLUDED`, and `RETIRED` are illegal.
+A status updates evidence; it does not erase a mechanism, require a successor,
+or prohibit an untested interaction. The operator alone may reduce Ember's
+invariant scope through a conservation-audited authority change.
 
-Every kernel-axis receipt reports achieved TFLOP/s and % of the relevant
-ceiling. Every math-axis receipt reports tokens-to-target delta at fixed
-quality.
+No registry row is currently `ADOPTED_CURRENT_CONFIG`: every existing neural
+config is historical-only and execution-denied under EMBER-00. A future
+adoption must bind the exact admissible config, goal, next executed outcome,
+checkpoint identity, tested regime, and rollback/deletion control. It cannot
+become a silent global mandate on all future architectures.
 
-## Exhaustive testing — the ember speedrun (proxy protocol)
+## Required evidence for an experiment row
 
-Precedent: auto-nanogpt (Prime Intellect 2026-05) — agent loops running ~10k
-experiments beat human records. Our local equivalent:
+Each material result must retain, directly or through cited receipts:
 
-- **Frozen proxy target:** fixed val loss on a frozen shards-v0 slice at
-  ~50-100M params, fixed seeds, fixed eval cadence. One number out:
-  wall-clock-to-target (kernel axis) and tokens-to-target (math axis).
-- **Loop:** governed agent experiment loop (Haiku/Sonnet workers, deterministic
-  harness, jsonl receipts) mutates ONE technique per arm vs the current ADOPT
-  stack. Composability tested pairwise for claimed top movers.
-- **Transfer gate:** proxy wins are CANDIDATE only; ADOPT requires
-  confirmation at 0.37B+ on a real segment (proxy-scale gains can vanish —
-  µP-class parametrization mitigates but does not waive this).
-- **Kill is data:** KILLed techniques stay in the registry with their receipt —
-  the negative result is part of the permanent store.
-- **Park is not kill (legalized 2026-07-06, #230):** a PARKed technique's
-  claim tested TRUE — real, stable, receipted — but the prize is below the
-  accept bar at the config it was measured against. It keeps a revival path
-  (re-examined when the config changes) instead of being treated as a dead
-  end; conflating PARK with KILL would erase that revival path, which is why
-  the two are separate statuses, not one.
-- **ADOPT-PENDING-SEGMENT** is TESTED-and-winning but gated on a future event
-  (typically a WSD segment boundary) rather than more measurement; it
-  promotes to ADOPT on the receipt proving the gating event occurred.
+- exact implementation and code identity;
+- model architecture, total/trainable/active parameters, and checkpoint hash;
+- data, tokenizer, token count, modality mix, and leakage controls;
+- GPU, precision, kernels, memory limit, and runtime identity;
+- matched baseline, seeds, equal-token/FLOP/wall-clock boundary, and metrics;
+- observed result, uncertainty, confounders, and contradicted prediction;
+- untested regimes and plausible interactions; and
+- artifact retention plus rollback or deletion evidence where attribution is
+  claimed.
 
-## Registry schema (`technique-registry.jsonl`, append-only)
+A paper claim, implementation, fixture, smoke, or administrative status is not
+a result. Isolated negatives constrain only their measured condition. Factorial,
+staged-composition, scale, order, and cross-modality studies remain available
+when their interaction hypothesis is still open.
 
-`{id, axis, claim, physics_ceiling, proxy_protocol, receipts[], measured_multiplier,
-composes_with[], conflicts[], status: CANDIDATE|TESTED|ADOPT|KILL|WATCH-NEGATIVE|PARK|ADOPT-PENDING-SEGMENT, source}`
+## Lineage and scale boundary
 
-Seed rows (status at mint, 2026-06-12): muon (ADOPT — in v0), wsd-schedule
-(ADOPT — in v0), qat (ADOPT — in v0), governor-pacing (ADOPT — rail),
-fp8-rowwise-torchao (CANDIDATE — E5 receipt decides), unit-scaling-muP
-(CANDIDATE — µS 2502.05967), fused-muon-kernel (CANDIDATE — mine),
-cuda-graph-step (CANDIDATE — cheapest, test first), fp8-recipe-infir2
-(CANDIDATE — 2509.22536), distill-local-teacher (CANDIDATE), data-curation
-(CANDIDATE — FineWeb-edu class), drafter-decode (CANDIDATE — floor-contract
-row), kv-quant (CANDIDATE — AdaLLM sm89 precedent), verified-curriculum-loop
-(CANDIDATE — STV 2605.30290 / R-Zero 2508.05004; fp-27b measures ours),
-optimizer-state-quant (CANDIDATE — 2603.16731), muon-lowbit-qat-interaction
-(WATCH-NEGATIVE — 2604.07888 reports no consistent gain; gate composability).
+Any new neural experiment must pass the authority conservation verifier and
+contain at least 3,000,000,000 parameters with native text, image, audio,
+reasoning, and structured tool use. Borrowed weights, outputs, teachers,
+judges, filters, ranks, curricula, stopping decisions, or hidden model
+cognition cannot enter the target lineage. Rows based on those signals remain
+historical or frozen-reference evidence only.
 
-## Permanence + enforcement
+The registry may hold published ideas and transparent deterministic methods,
+but adoption requires an owned implementation and checkpoint-bound evidence.
+Inference optimizations are also research inputs: each may be decomposed into
+the physical resource it saves and transformed into a falsifiable
+training-side mechanism rather than assumed to transfer.
 
-- Lives in the ember repo, versioned; registry append-only; entries never
-  deleted (KILL is a status, not a removal).
-- Dispatch-gate hook reads the registry: run configs must consume ADOPT rows
-  or carry `exemption_receipt`. No silent drift back to defaults.
-- Every future fp/eng issue that tests a technique cites its registry id;
-  every receipt path lands in the row. The codex compounds because the next
-  run starts from the full ADOPT stack by construction.
+## Dispatch behavior
+
+Before any sanctioned dispatch, the gate must:
+
+1. run the authority conservation verifier;
+2. reject historical configs and any unbound or sub-3B neural artifact;
+3. validate the active goal and next executed outcome;
+4. enforce only technique rows explicitly adopted by that exact config;
+5. keep frozen borrowed references outside training and promotion signals; and
+6. emit a receipt binding config bytes, registry bytes, checkpoint identity,
+   outcome, and verdict.
+
+Registry entries and receipts are retained. Corrections append or supersede
+interpretation while preserving the original observation and its provenance.

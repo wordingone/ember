@@ -1,4 +1,10 @@
 {
+  "authority": {
+    "artifact_class": "historical_only",
+    "execution_authority": "denied",
+    "goal_id": "EMBER-00",
+    "next_executed_outcome": "EMBER-01 clean 3B custody and identity spine"
+  },
   "ticket": "V0-MULTIMODAL-CONFIG",
   "version": 1,
   "authored": "2026-06-16",

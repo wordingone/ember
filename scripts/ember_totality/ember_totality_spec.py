@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 """Ember Totality master spec — runner / board aggregator.
 
 Executes every test_*.py status probe in this directory, parses each probe's
@@ -13,7 +15,7 @@ never hardcoded here.
 Outcome contract (GOAL.md §4.1 amendment 2026-07-02; extended 2026-07-02 for
 the registry semantics split, GOAL.md §4.0(9)):
 
-  STATE-conditions (27 of the 30 registry ids) are THREE-VALUED:
+  STATE-conditions (every registry id except the process invariants) are THREE-VALUED:
     GREEN        a real receipt/artifact was found and satisfies the CHK.
     RED          inputs were found and opened; the condition's check
                  evaluated false (a genuine unmet condition).
@@ -36,7 +38,7 @@ the registry semantics split, GOAL.md §4.0(9)):
                           pre-epoch history is OUT OF AUDIT SCOPE, so these
                           rows are neither OK nor INCIDENT, and NEVER RED.
   Completion math (per GOAL.md §4.0(9)/conditions-v1.md §4.4) is computed
-  over the 26 STATE-conditions ONLY: complete iff every STATE-condition is
+  over the STATE-conditions ONLY: complete iff every STATE-condition is
   GREEN AND zero unresolved post-epoch AUDIT-INCIDENT rows exist. AUDIT rows
   are cadence-audit results, never completion conjuncts, never a GREEN.
 
@@ -46,8 +48,8 @@ compared. A startup assertion fails the WHOLE RUN with a named error
 (REGISTRY_DRIFT) if they diverge — this is what would have caught the stale
 27-of-29 registry defect. A registry id with no corresponding test_*.py probe
 on disk still gets a board row (synthesized UNEVALUABLE: "no probe
-implemented") rather than silently vanishing from the board. The 29-id
-registry count is unchanged by the STATE/AUDIT split — it changes how an id's
+implemented") rather than silently vanishing from the board. Registry size is
+derived from the governing spec; the STATE/AUDIT split changes how an id's
 OUTCOME is computed, not whether it is a registry member.
 
 Layout resolution: each probe resolves its state root via (in order) the
@@ -140,6 +142,7 @@ def _probe_timeout_seconds(fname):
 # probe's output line does not begin with a recognizable C-id token.
 FILENAME_ID = {
     "test_c_invariant.py": "C-INV",
+    "test_c_authority.py": "C-AUTHORITY",
     "test_c_eff.py": "C-EFF",
     "test_c_base.py": "C-BASE",
     "test_c_port.py": "C-PORT",
@@ -187,7 +190,7 @@ FILENAME_ID = {
 # v1 §9). Keep in sync by construction, not by hand: if this list and the
 # spec ever diverge, main() aborts the whole run before any probe executes.
 ORDER = [
-    "C-INV", "C-CUSTODY",
+    "C-INV", "C-AUTHORITY", "C-CUSTODY",
     "C-EFF", "C-BASE", "C-PORT", "C-FED", "C-GROW", "C-ORGANISM",
     "C(-1)", "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9",
     "C10", "C11", "C12", "C13", "C14", "C15",

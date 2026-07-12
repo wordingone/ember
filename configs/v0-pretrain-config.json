@@ -1,4 +1,10 @@
 {
+  "authority": {
+    "artifact_class": "historical_only",
+    "execution_authority": "denied",
+    "goal_id": "EMBER-00",
+    "next_executed_outcome": "EMBER-01 clean 3B custody and identity spine"
+  },
   "ticket": "V0-PRETRAIN-CONFIG",
   "version": 3,
   "frozen": "2026-06-11T07:20Z",

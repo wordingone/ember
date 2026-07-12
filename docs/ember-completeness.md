@@ -1,3 +1,15 @@
+<!-- EMBER_ARTIFACT_CLASS=historical_only -->
+
+# Legacy Ember completeness manifest (preserved, execution denied)
+
+This six-column M/C manifest remains byte-readable by the legacy tally and
+condition probes so none of its obligations or evidence is erased. It is
+historical diagnostic input under EMBER-00, not current completion authority.
+The current D-001-through-D-062 authority matrix is
+`docs/ember-authority-matrix.md`.
+
+## Preserved historical content
+
 # Ember completeness manifest (est. 2026-06-12, per user numeric-closure directive)
 
 One row per planned/known piece of ember. The tally script
@@ -134,6 +146,7 @@ pieces" with the source named:
 | C-LADM | S6 | Ladder administration: autonomy relinquishment tracking | Autonomy-ladder-state.json consistent and versioned | ladder state receipts | planned |
 | C-AUTO | S6 | Autonomy-ladder-state faithfulness | Ladder state file valid with proper provenance | autonomy state verification receipts | planned |
 | C-CUSTODY | S6 | Receipts custody and integrity | Every receipt is git-tracked, parseable JSON, all cited paths exist | custody verification receipts | planned |
+| C-AUTHORITY | S6 | EMBER-00 authority and totality conservation bridge | Seven-leg verifier, mutation suite, selector binding, and independent clean-checkout receipt pass | external EMBER-00 completion receipt bound to exact commit | PART |
 | C-MANIFEST | S6 | Completeness manifest enumerates every planned piece | docs/ember-completeness.md rows cover every §4 goal condition (id+subgoal+AC+receipt+status); an absent piece is a gate violation (does-NOT-count) | scripts/ember_totality/receipts-totality/ember-totality-20260710T150632Z.json (C-MANIFEST row, evaluated by scripts/ember_totality/test_c_manifest.py) | DONE |
 | C-TALLY | S6 | Tally script walks the manifest and emits the completion receipt | scripts/ember_tally.py verifies each row's receipt exists and passes its named check, emits receipts/tally-<ts>.json {total, implemented, pct, missing[]}; the tally receipt is the only completion authority | receipts/tally-20260708T065530Z.json (real scripts/ember_tally.py output) | DONE |
 

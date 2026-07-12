@@ -1,4 +1,10 @@
 {
+  "authority": {
+    "artifact_class": "historical_only",
+    "execution_authority": "denied",
+    "goal_id": "EMBER-00",
+    "next_executed_outcome": "EMBER-01 clean 3B custody and identity spine"
+  },
   "ticket": "CLEAN-CORPUS-V1-ASSEMBLY-285",
   "description": "v1 corpus assembly: drops fineweb_edu (TAINTED), retains CLEAN sources only",
   "v0_assembly_reference": "eng36-assembly-20260611T052337Z.json, sha256: a29d2e567f1853966cc72a4890eadc963164265e4f24a89cadea24d9ff5b80c2",

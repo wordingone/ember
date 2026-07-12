@@ -1,101 +1,64 @@
-# sp-7 — technique-registry dispatch gate, spec v0 (#256, the lead half)
+<!-- EMBER_CONSERVATION_V1
+minimum_new_network_parameters=3000000000
+destination_total_parameters=>27000000000
+required_native_capabilities=text,image,audio,reasoning,structured_tool_use
+borrowed_lineage=frozen_reference_only
+mechanism_erasure=forbidden
+-->
 
-User directive 2026-06-12: the optimization thread (docs/technique-registry.md
-+ .jsonl) is permanent and exhaustively tested. This spec makes the registry
-BINDING at dispatch time instead of advisory prose: a training dispatch that
-silently ignores an ADOPT row is refused, fail-closed, with the row named.
+# Research registry and dispatch gate
 
-## Contract
+This contract is subordinate to GOAL.md and applies before every sanctioned
+training, growth, evaluation, serving, or control dispatch.
 
-Every training-run config carries a top-level `registry` block:
+## Registry semantics
 
-```json
-{"registry": {
-  "consumes": ["muon", "wsd-schedule", "qat", "governor-pacing"],
-  "exemptions": [
-    {"row_id": "qat", "reason": "eval-only job, no weight updates",
-     "receipt_path": "receipts/<...>.json", "scope": "eval",
-     "expiry": "2026-06-22"}
-  ]
-}}
-```
+Legal evidence states describe observations without erasing research:
 
-Gate rule (fail-closed, deterministic):
-1. Every row with `status == "ADOPT"` in technique-registry.jsonl must appear
-   in `consumes` OR in `exemptions`.
-2. An exemption is valid only if `receipt_path` exists on disk AND `expiry`
-   (ISO date) has not passed. Invalid exemption = the row is unconsumed.
-3. **Corroboration (anti-gaming):** declaring `consumes` is not enough where
-   a config predicate is defined (table below). If the predicate's config
-   key exists and contradicts the declaration, verdict is
-   `declared-but-not-configured` = FAIL. Missing key = WARN (recorded), not
-   FAIL — config shapes vary by job class; the declaration stands.
-4. Verdict receipt: one jsonl line `{ts, config_path, registry_sha, ok,
-   missing[], invalid_exemptions[], contradicted[], warns[]}` appended to
-   `receipts/registry-gate.jsonl`.
+- CANDIDATE
+- TESTED_NEGATIVE
+- TESTED_POSITIVE
+- ADOPTED_CURRENT_CONFIG
+- INACTIVE_CURRENT_CONFIG
+- HISTORICAL_EVIDENCE
+- RETEST_ELIGIBLE
 
-## ADOPT-row config predicates (v0 — extend with every new ADOPT)
+KILL, PARK, EXCLUDED, RETIRED, mandatory-successor, or equivalent terminal
+states are illegal. A negative row records regime, scale, modality, data,
+budget, precision, routing, order, controls, result, and retest conditions.
 
-| row id          | predicate (corroborates `consumes`)                          |
-|-----------------|--------------------------------------------------------------|
-| muon            | any config key named `optimizer*` has value containing `muon` |
-| wsd-schedule    | any key named `*sched*` has value containing `wsd`            |
-| qat             | any key named `*qat*` is truthy                               |
-| governor-pacing | `*vram_fraction*` present and <= 0.85, or `EMBER_VRAM_FRACTION` in an `env` block |
+## Dispatch preconditions
 
-Predicates are substring/threshold checks over a flattened (dotted-key)
-config — declarative, shape-tolerant, defined in `scripts/registry_gate.py`
-(`PREDICATES`). Adding an ADOPT row without a predicate is allowed (rule 3
-then has nothing to corroborate; rules 1-2 still bind), but the selftest
-flags it as a coverage WARN so the table never silently rots.
+While `GOAL.md` declares `authority_only_goal=true`, every training, growth,
+evaluation, serving, borrowed-reference, and experiment dispatch is denied.
+Schema roles below describe later-goal admissibility; they do not grant
+EMBER-00 runtime authority.
 
-## Status semantics the gate reads (unchanged from registry doc)
+A config fails closed unless it:
 
-- `ADOPT` — binds dispatch (this gate). `CANDIDATE`/`TESTED`/`WATCH-NEGATIVE`
-  — never bind; they are worked through the proxy harness. `KILL` is a
-  status, not a removal; killed rows never bind.
-- `PARK` — legalized 2026-07-06 (#230). Never binds dispatch. **PARK != KILL**:
-  the claim tested TRUE (a real, stable, receipted effect) but the prize is
-  below the accept bar at the CURRENT config (e.g. below measurement noise
-  after Amdahl-bounding by the site's step-time share). A parked row keeps
-  its revival path — it is re-examined when the config it was measured
-  against changes (wider layer, different shape) rather than re-litigated
-  from scratch. Distinguishing PARK from KILL is load-bearing for the
-  kill-protection law: KILL means the technique itself lost; PARK means the
-  technique won but the current config can't cash the win yet.
-- `ADOPT-PENDING-SEGMENT` — legalized 2026-07-06 (#230). Does not bind
-  dispatch (only literal `ADOPT` rows bind, per `check()`). Marks a technique
-  that measured TESTED-and-winning but whose adoption is gated on a specific
-  future event (e.g. a WSD segment boundary, so switching mid-segment isn't
-  a confound) rather than on more measurement. The row is promoted to
-  `ADOPT` on the receipt that proves the gating event occurred; until then
-  a consuming config with a corroborating predicate hit still needs an
-  explicit exemption if it wants the effect early.
-- Promotion to ADOPT requires a TESTED proxy receipt + `measured_multiplier`
-  set; that promotion discipline lives in the registry doc — the gate only
-  trusts `status`.
+- binds the exact active goal_id and next_executed_outcome;
+- is not historical-only;
+- declares whether it is a candidate, milestone, deterministic control, or
+  frozen borrowed reference;
+- contains at least 3,000,000,000 parameters for any neural execution;
+- includes native text, image, audio, reasoning, and structured tool use;
+- declares total, trainable, and active parameters;
+- uses no published-family backbone or forbidden model-mediated signal;
+- binds architecture, checkpoint, tokenizer, data, parentage, mechanisms,
+  backend, controls, and rollback; and
+- passes the authority conservation verifier.
 
-## Proxy-speedrun harness contract (#256 second half — build is eng, behind E4/E5)
+Every mechanism named in `registry.consumes` must exist and have status
+`ADOPTED_CURRENT_CONFIG`. A historical, inactive, negative, retest-eligible,
+or unknown row cannot be smuggled into a runnable config. Evidence edges may
+still preserve composition history without granting dispatch.
 
-- Frozen target: ~50-100M params, fixed architecture, trained on the pinned
-  shards-v0 slice; seeds {16, 17, 18}; governed (vram fraction + pacer).
-- Output per arm: wall-clock-to-target and tokens-to-target at a frozen
-  loss/eval target, jsonl receipt with config sha + registry row(s) under
-  test. One row (or one declared composition) per arm — no multi-variable
-  arms.
-- A TESTED verdict = paired delta vs the frozen baseline arm on the same
-  seeds; `measured_multiplier` = baseline/arm wall-clock ratio (>1 is a win).
+Borrowed references may execute under a later non-authority goal only in an
+explicit frozen comparison seat with `execution_authority=reference_only`,
+`frozen=true`, `lineage_ingress=false`, `capability_credit=none`, and no
+model-mediated signal. They never satisfy an Ember-model result.
+Historical configs are denied execution. Deterministic non-neural fixtures may
+test gate logic but receive no neural or capability credit.
 
-## Wiring (eng successor)
-
-`python scripts/registry_gate.py --config <path>` exits 0/1 — the engineer wires it
-as a dispatch precondition in the train-daemon path (same precheck family as
-the governor asserts). The reference implementation in this repo is the
-contract; the daemon calls it, never reimplements it.
-
-## Selftest
-
-`scripts/registry_gate_selftest.py` — validates the live registry (parse,
-required fields, legal statuses), asserts predicate coverage of every ADOPT
-row (WARN-level for gaps), and runs the gate against PASS / missing-row /
-invalid-exemption / contradicted fixtures. Fail-closed on any mismatch.
+The gate emits a receipt containing goal binding, authority verdict, config
+identity, and the next executed outcome.
