@@ -76,11 +76,18 @@ borrowed model cannot supply neural capability credit.
 `OWNED_ADMITTED` is the only disposition eligible for owned selection or
 owned-completion credit. Admission additionally requires all unresolved fields
 to be absent, clean-genesis ownership, at least 3B allocated/unique/active/
-served/actually-trained parameters, nonzero training exposure for text/image/
-audio, verified checkpoint-bound receipts for every native modality plus
-reasoning and structured tool use, and a `PASSED` sufficient-pretraining
-criterion with a receipt hash. Any missing proof leaves the object
-`OWNED_CANDIDATE`.
+trainable/served/actually-trained parameters, nonzero training exposure for
+text/image/audio, verified checkpoint-bound receipts for every native modality
+plus reasoning and structured tool use, and a `PASSED`
+`ember-sufficient-pretraining-v1` criterion. Any missing proof leaves the
+object `OWNED_CANDIDATE`.
+
+Receipt hashes are references, not evidence by themselves. Admission requires a
+`--receipt-bundle` whose keys are SHA-256 digests of canonical receipt JSON.
+Each referenced receipt is resolved and rehashed, then checked for the exact
+checkpoint, verifier, evidence class, result, and (for model birth) allowed
+criterion. Missing content, a fabricated hash/content pair, or a receipt for a
+different checkpoint/verifier/class fails closed.
 
 Learned-signal and neural-credit sources use closed enumerations. Owned
 admission accepts only owned training data or locally verified experience as

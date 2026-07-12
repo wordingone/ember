@@ -18802,6 +18802,6 @@
   "goal_id": "EMBER-01",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "schema": "ember-identity-consumer-census-v1",
-  "source_commit": "6666d83e49d471ecf4f8005854270981ca0bdd5a",
+  "source_commit": "cf7c30aef8110de5828565deb83d0e25b74c8dc2",
   "workstream_id": "EMBER-01C"
 }

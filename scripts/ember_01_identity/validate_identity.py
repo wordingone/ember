@@ -31,6 +31,8 @@ SCHEMA_PATH = (
     / "schema-v1.json"
 )
 OWNED_ADMISSION_PARAMETER_FLOOR = 3_000_000_000
+EVIDENCE_RECEIPT_SCHEMA = "ember-identity-evidence-receipt-v1"
+SUFFICIENT_PRETRAINING_CRITERION = "ember-sufficient-pretraining-v1"
 OWNED_LEARNED_SIGNAL_SOURCES = {
     "owned_training_data",
     "locally_verified_experience",
@@ -300,6 +302,73 @@ def _verified_receipt_evidence(value: Any) -> bool:
     )
 
 
+def _receipt_sha256(receipt: Mapping[str, Any]) -> str:
+    encoded = json.dumps(
+        receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _resolve_admission_receipt(
+    digest: Any,
+    *,
+    receipt_bundle: Mapping[str, Any] | None,
+    expected_class: str,
+    expected_checkpoint: Any,
+    expected_verifier: Any,
+    findings: list[dict[str, str]],
+    expected_result: str = "VERIFIED",
+    expected_criterion: str | None = None,
+) -> None:
+    if receipt_bundle is None:
+        return
+    if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+        findings.append(_finding("admission.receipt_hash_invalid", expected_class))
+        return
+    receipt = receipt_bundle.get(digest)
+    if not isinstance(receipt, Mapping):
+        findings.append(_finding("admission.receipt_missing", digest))
+        return
+    if _receipt_sha256(receipt) != digest:
+        findings.append(_finding("admission.receipt_hash_mismatch", digest))
+
+    required = {
+        "schema",
+        "evidence_class",
+        "subject_checkpoint_sha256",
+        "verifier_sha256",
+        "result",
+    }
+    if expected_criterion is not None:
+        required.add("criterion_id")
+    if set(receipt) != required:
+        findings.append(_finding("admission.receipt_shape", expected_class))
+    if receipt.get("schema") != EVIDENCE_RECEIPT_SCHEMA:
+        findings.append(_finding("admission.receipt_schema", expected_class))
+    if receipt.get("evidence_class") != expected_class:
+        findings.append(_finding("admission.receipt_class_mismatch", expected_class))
+    if receipt.get("subject_checkpoint_sha256") != expected_checkpoint:
+        findings.append(
+            _finding("admission.receipt_checkpoint_mismatch", expected_class)
+        )
+    if receipt.get("verifier_sha256") != expected_verifier:
+        findings.append(
+            _finding("admission.receipt_verifier_mismatch", expected_class)
+        )
+    if receipt.get("result") != expected_result:
+        findings.append(_finding("admission.receipt_result_mismatch", expected_class))
+    if (
+        expected_criterion is not None
+        and receipt.get("criterion_id") != expected_criterion
+    ):
+        findings.append(
+            _finding(
+                "admission.sufficient_pretraining_criterion",
+                str(receipt.get("criterion_id")),
+            )
+        )
+
+
 def _check_closed_objects(
     payload: Mapping[str, Any], findings: list[dict[str, str]]
 ) -> None:
@@ -340,6 +409,7 @@ def validate_manifest(
     checkpoint_bytes: bytes | None = None,
     tensor_hashes: Mapping[str, str] | None = None,
     expected: Mapping[str, Any] | None = None,
+    receipt_bundle: Mapping[str, Any] | None = None,
     require_resolved: bool = False,
 ) -> dict[str, Any]:
     """Validate one manifest and return a deep copy on success.
@@ -623,6 +693,20 @@ def validate_manifest(
             findings.append(_finding("field.unresolved", path))
 
     if disposition == "OWNED_ADMITTED":
+        if receipt_bundle is None:
+            findings.append(
+                _finding(
+                    "admission.receipt_bundle_missing",
+                    "OWNED_ADMITTED requires resolved receipt content",
+                )
+            )
+        elif not isinstance(receipt_bundle, Mapping):
+            findings.append(
+                _finding(
+                    "admission.receipt_bundle_invalid",
+                    "receipt bundle must be a digest-to-object mapping",
+                )
+            )
         if _get(payload, "data.clean_genesis")[1] is not True:
             findings.append(
                 _finding("admission.clean_genesis", "OWNED_ADMITTED requires clean genesis")
@@ -633,7 +717,14 @@ def validate_manifest(
                 _finding("admission.ownership", "OWNED_ADMITTED requires owned provenance")
             )
         admitted_counts = _get(payload, "parameters")[1]
-        floor_fields = ("allocated", "unique", "active", "served", "actually_trained")
+        floor_fields = (
+            "allocated",
+            "unique",
+            "active",
+            "trainable",
+            "served",
+            "actually_trained",
+        )
         if not isinstance(admitted_counts, Mapping) or any(
             not isinstance(admitted_counts.get(field), int)
             or isinstance(admitted_counts.get(field), bool)
@@ -643,7 +734,7 @@ def validate_manifest(
             findings.append(
                 _finding(
                     "admission.parameter_floor",
-                    "allocated/unique/active/served/actually_trained must each be >=3B",
+                    "allocated/unique/active/trainable/served/actually_trained must each be >=3B",
                 )
             )
         for capability_name in ("reasoning", "structured_tool_use"):
@@ -659,6 +750,16 @@ def validate_manifest(
                         "admission.capability_evidence",
                         f"{capability_name} requires verified receipt evidence",
                     )
+                )
+            elif isinstance(receipt_bundle, Mapping):
+                for digest in capability["evidence_receipts"]:
+                    _resolve_admission_receipt(
+                        digest,
+                        receipt_bundle=receipt_bundle,
+                        expected_class=capability_name,
+                        expected_checkpoint=checkpoint_hash,
+                        expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                        findings=findings,
                     )
         admitted_mixture = _get(payload, "training.modality_mixture")[1]
         if (
@@ -692,6 +793,17 @@ def validate_manifest(
                     "OWNED_ADMITTED requires checkpoint-bound verification receipts for text/image/audio",
                 )
             )
+        elif isinstance(receipt_bundle, Mapping):
+            for modality in ("text", "image", "audio"):
+                for digest in admitted_modalities[modality]["evidence_receipts"]:
+                    _resolve_admission_receipt(
+                        digest,
+                        receipt_bundle=receipt_bundle,
+                        expected_class=f"native_{modality}",
+                        expected_checkpoint=checkpoint_hash,
+                        expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                        findings=findings,
+                    )
         stopping_rule = _get(payload, "training.stopping_rule")[1]
         if (
             not isinstance(stopping_rule, Mapping)
@@ -706,6 +818,24 @@ def validate_manifest(
                     "admission.sufficient_pretraining",
                     "OWNED_ADMITTED requires a passed criterion and receipt",
                 )
+            )
+        elif stopping_rule.get("criterion_id") != SUFFICIENT_PRETRAINING_CRITERION:
+            findings.append(
+                _finding(
+                    "admission.sufficient_pretraining_criterion",
+                    str(stopping_rule.get("criterion_id")),
+                )
+            )
+        elif isinstance(receipt_bundle, Mapping):
+            _resolve_admission_receipt(
+                stopping_rule["receipt_sha256"],
+                receipt_bundle=receipt_bundle,
+                expected_class="sufficient_pretraining",
+                expected_checkpoint=checkpoint_hash,
+                expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                expected_result="PASSED",
+                expected_criterion=SUFFICIENT_PRETRAINING_CRITERION,
+                findings=findings,
             )
         admitted_learned = _get(payload, "provenance.learned_signal_sources")[1]
         if not _string_list_subset(
@@ -755,6 +885,7 @@ def main() -> int:
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--tensor-hashes", type=Path)
     parser.add_argument("--expected", type=Path)
+    parser.add_argument("--receipt-bundle", type=Path)
     parser.add_argument("--require-resolved", action="store_true")
     parser.add_argument("--canonical", action="store_true")
     args = parser.parse_args()
@@ -771,11 +902,17 @@ def main() -> int:
             if args.expected
             else None
         )
+        receipt_bundle = (
+            json.loads(args.receipt_bundle.read_text(encoding="utf-8"))
+            if args.receipt_bundle
+            else None
+        )
         validated = validate_manifest(
             payload,
             checkpoint_bytes=args.checkpoint.read_bytes() if args.checkpoint else None,
             tensor_hashes=tensor_hashes,
             expected=expected,
+            receipt_bundle=receipt_bundle,
             require_resolved=args.require_resolved,
         )
     except (OSError, json.JSONDecodeError) as exc:
