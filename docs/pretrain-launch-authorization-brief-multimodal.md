@@ -1,3 +1,5 @@
+<!-- EMBER_ARTIFACT_CLASS=historical_only -->
+
 # Multimodal-unified v0 pretrain — launch authorization brief (maintainer-facing, pre-staged)
 
 **Status:** authored 2026-06-14 (the lead). **SUPERSEDES `pretrain-launch-authorization-brief.md`**

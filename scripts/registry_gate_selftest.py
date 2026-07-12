@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-00
+# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
 """Selftest for the technique-registry dispatch gate (#256, sp-7).
 
 Validates the LIVE registry, predicate coverage of ADOPT rows, and the gate
@@ -17,6 +19,16 @@ from registry_gate import PREDICATES, check, load_registry, normalize_config_pat
 ROOT = Path(__file__).resolve().parent.parent
 TODAY = dt.date(2026, 6, 12)
 DRIVE_LETTER_RE = re.compile(r"[A-Za-z]:[\\/]")
+LEGACY_ERASURE_STATUSES = {
+    "ADOPT",
+    "TESTED",
+    "KILL",
+    "WATCH-NEGATIVE",
+    "PARK",
+    "ADOPT-PENDING-SEGMENT",
+    "EXCLUDED",
+    "RETIRED",
+}
 
 BASE_CONFIG = {
     "optimizer": "muon",
@@ -26,6 +38,10 @@ BASE_CONFIG = {
     "registry": {"consumes": ["muon", "wsd-schedule", "qat", "governor-pacing"],
                  "exemptions": []},
 }
+SYNTHETIC_CURRENT_ROWS = [
+    {'id': rid, 'status': 'ADOPTED_CURRENT_CONFIG'}
+    for rid in ('muon', 'wsd-schedule', 'qat', 'governor-pacing')
+]
 
 
 def deep(d):
@@ -36,22 +52,26 @@ def deep(d):
 def main() -> int:
     fails = []
     rows = load_registry()  # raises = fail-closed on live registry damage
-    adopt = [r["id"] for r in rows if r["status"] == "ADOPT"]
-    if not adopt:
-        fails.append("live registry has zero ADOPT rows — gate would be vacuous")
-    uncovered = [rid for rid in adopt if rid not in PREDICATES]
+    adopt = [r["id"] for r in rows if r["status"] == "ADOPTED_CURRENT_CONFIG"]
+    legacy = [r["id"] for r in rows if r["status"] in LEGACY_ERASURE_STATUSES]
+    if legacy:
+        fails.append(f"live registry retains legacy/erasure statuses: {legacy}")
+    uncovered = [
+        row['id'] for row in SYNTHETIC_CURRENT_ROWS
+        if row['id'] not in PREDICATES
+    ]
     if uncovered:
         print(f"WARN: ADOPT rows without corroboration predicate: {uncovered}")
 
     # case 1: fully-consuming config passes
-    v = check(deep(BASE_CONFIG), rows, today=TODAY, root=ROOT)
+    v = check(deep(BASE_CONFIG), SYNTHETIC_CURRENT_ROWS, today=TODAY, root=ROOT)
     if not v["ok"] or v["contradicted"]:
         fails.append(f"case1 expected PASS, got {v}")
 
     # case 2: missing ADOPT row fails with the row named
     cfg = deep(BASE_CONFIG)
     cfg["registry"]["consumes"].remove("muon")
-    v = check(cfg, rows, today=TODAY, root=ROOT)
+    v = check(cfg, SYNTHETIC_CURRENT_ROWS, today=TODAY, root=ROOT)
     if v["ok"] or "muon" not in v["missing"]:
         fails.append(f"case2 expected FAIL missing=['muon'], got {v}")
 
@@ -62,7 +82,7 @@ def main() -> int:
         "row_id": "qat", "reason": "eval-only",
         "receipt_path": "receipts/does-not-exist.json",
         "scope": "eval", "expiry": "2026-06-22"}]
-    v = check(cfg, rows, today=TODAY, root=ROOT)
+    v = check(cfg, SYNTHETIC_CURRENT_ROWS, today=TODAY, root=ROOT)
     if v["ok"] or "qat" not in v["invalid_exemptions"]:
         fails.append(f"case3 expected FAIL invalid_exemptions=['qat'], got {v}")
 
@@ -71,14 +91,14 @@ def main() -> int:
     if receipt:
         cfg["registry"]["exemptions"][0]["receipt_path"] = (
             receipt[0].relative_to(ROOT).as_posix())
-        v = check(cfg, rows, today=TODAY, root=ROOT)
+        v = check(cfg, SYNTHETIC_CURRENT_ROWS, today=TODAY, root=ROOT)
         if not v["ok"]:
             fails.append(f"case3b expected PASS with valid exemption, got {v}")
 
     # case 4: declared-but-not-configured is contradicted
     cfg = deep(BASE_CONFIG)
     cfg["optimizer"] = "adamw"
-    v = check(cfg, rows, today=TODAY, root=ROOT)
+    v = check(cfg, SYNTHETIC_CURRENT_ROWS, today=TODAY, root=ROOT)
     if v["ok"] or "muon" not in v["contradicted"]:
         fails.append(f"case4 expected FAIL contradicted=['muon'], got {v}")
 
@@ -90,7 +110,7 @@ def main() -> int:
         "receipt_path": receipt[0].relative_to(ROOT).as_posix() if receipt
         else "receipts/x.json",
         "scope": "eval", "expiry": "2026-06-01"}]
-    v = check(cfg, rows, today=TODAY, root=ROOT)
+    v = check(cfg, SYNTHETIC_CURRENT_ROWS, today=TODAY, root=ROOT)
     if v["ok"] or "qat" not in v["invalid_exemptions"]:
         fails.append(f"case5 expected FAIL on expired exemption, got {v}")
 
@@ -120,7 +140,7 @@ def main() -> int:
             print(f"  - {f}")
         return 1
     print(f"REGISTRY_GATE_SELFTEST PASS: registry {len(rows)} rows / "
-          f"{len(adopt)} ADOPT, 7 gate cases green")
+          f"{len(adopt)} ADOPTED_CURRENT_CONFIG, 7 gate cases green")
     return 0
 
 

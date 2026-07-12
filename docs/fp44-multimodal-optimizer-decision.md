@@ -1,3 +1,5 @@
+<!-- EMBER_ARTIFACT_CLASS=historical_only -->
+
 # fp-44 ≤1-day-bar / optimizer decision — multimodal v0 launch
 
 **Status:** decision-record, authored 2026-06-14 (the lead). Resolves #21 (the fp-44

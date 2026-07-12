@@ -1,3 +1,22 @@
+<!-- EMBER_CONSERVATION_V1
+minimum_new_network_parameters=3000000000
+destination_total_parameters=>27000000000
+required_native_capabilities=text,image,audio,reasoning,structured_tool_use
+borrowed_lineage=frozen_reference_only
+mechanism_erasure=forbidden
+-->
+
+# Legacy condition registry and current C-AUTHORITY bridge
+
+Under EMBER-00, `C-AUTHORITY` is the only current condition in this file. All
+other clauses are preserved historical evidence and diagnostic board inputs;
+they cannot authorize execution or completion. Preserved phrases such as
+`GOVERNING`, `canonical`, `KILLED`, `RETIRED`, `successor`, or `kill` describe
+the legacy condition system and are not legal current authority or registry
+statuses. GOAL.md and the conservation verifier supersede every such phrase.
+
+## Preserved historical registry
+
 # Ember — condition registry v1 (board conditions, invariants, fixed contracts)
 
 **C-namespace disambiguation — read this first.** Three UNRELATED numbering schemes use the
@@ -42,6 +61,10 @@ violation. Premature clearing is a spec violation.
 ### 4.0.6 Receipts Custody (C-CUSTODY)
 
 - **C-CUSTODY — Receipts custody and integrity.** R: every receipt in receipts/ is git-tracked, parseable as JSON (utf-8 or utf-8-sig encoding), and every receipts/ path cited in verdict-bearing receipts or board receipts exists on disk. Does NOT count: receipts with acknowledged staging files (disclosed via __allowlist_untracked); cited paths that are conditional/planned (those must use future-date cond ition status, never be left missing). ✗ `invalid_untracked_receipt`, `invalid_unparseable_receipt`, `invalid_missing_cited_path`. CHK (per `scripts/ember_totality/test_c_custody.py`): (a) git ls-files check over receipts/ recursive, no untracked except allowlisted; (b) json.load with utf-8 then utf-8-sig fallback on every receipts/*.json, no parse errors; (c) walk verdict-bearing receipts and board totality, verify every receipts/ citation exists as a file on disk.
+
+### 4.0.7 Authority conservation (C-AUTHORITY)
+
+- **C-AUTHORITY — Authority and totality conservation.** R: the current tree passes the seven-leg EMBER-00 conservation certificate: invariant bytes unchanged; D-001 through D-062 present and classified; all governing surfaces conserve the 3B native text-image-audio-reasoning-tool birth and >27B destination; lower-precedence artifacts cannot authorize sub-3B, borrowed-lineage, modality-reduced, model-mediated, or mechanism-erasing work; every known artifact identity is qualified; and this authority-only goal makes no model, training, runtime, benchmark, or capability completion claim. Does NOT count: prose agreement without executable mutations; a verifier absent from repository, dispatch, merge, or board gates; a historical config that remains executable; a borrowed backend presented as Ember. CHK: `scripts/ember_totality/test_c_authority.py` executes `scripts/verify_authority_conservation.py`; GREEN iff every certificate leg passes. ✗ `invalid_authority_drift`, `invalid_goal_binding`, `invalid_identity_conflation`.
 
 ### 4.1 Substrate pre-conditions (gate C14)
 
@@ -422,18 +445,18 @@ pre-epoch history.
 
 **Count ruling (2026-07-02, relocated from GOAL.md §4.1; re-ruled same day on C-IND's addition,
 GOAL.md §4.0 amendment 10; re-ruled 2026-07-02 later the same day on C-PROC's addition per
-GOAL.md §13; re-ruled again same day on C-LEGIB's addition, gh issue #13):** the registry = 37
+GOAL.md §13; re-ruled again same day on C-LEGIB's addition, gh issue #13):** the registry = 39
 primary conditions (C(−1), C0–C15, C-EFF, C-BASE, C-PORT, C-FED, C-GROW, C-ORGANISM, C-OBS,
 C-ANAT, C-SCALE, C-E2B, C-IND, C-PROC, C-LEGIB, C-SURFACE2, C-ENF, C-MILE, C-DISC, C-LADM,
-C-AUTO, C-CUSTODY) + 2 roll-ups (C-MANIFEST, C-TALLY) = 39 entries (re-ruled 2026-07-03 on C-SURFACE2's
+C-AUTO, C-CUSTODY, C-AUTHORITY) + 2 roll-ups (C-MANIFEST, C-TALLY) = 41 entries (re-ruled 2026-07-03 on C-SURFACE2's
 addition, gh issue #11: 31 primary + 2 roll-ups; re-ruled 2026-07-04 on C-ENF's addition, gh
 issue #38: 32 primary + 2 roll-ups; re-ruled 2026-07-04 on C-MILE's addition, gh issue #35
 DISPATCH 3 of 3: 33 primary + 2 roll-ups; re-ruled 2026-07-04 on C-DISC's addition, gh issue
 #94: 34 primary + 2 roll-ups; re-ruled 2026-07-04 on C-LADM's addition, gh issue #95: 35
 primary + 2 roll-ups; re-ruled 2026-07-04 on C-AUTO's addition, gh issue #104: 36 primary + 2
-roll-ups; re-ruled 2026-07-07 on C-CUSTODY's addition, gh issue #382: 37 primary + 2
-roll-ups); any "38", "37", "36", "35", "34", "33", "31", "30", "29" or "28" elsewhere is a stale
-intermediate count, corrected by this ruling.
+roll-ups; re-ruled 2026-07-07 on C-CUSTODY's addition, gh issue #382; re-ruled
+by EMBER-00 on C-AUTHORITY's addition: 39 primary + 2 roll-ups). Any lower
+count elsewhere is a stale intermediate count, corrected by this ruling.
 
 - **C-MANIFEST.** `docs/ember-completeness.md` enumerates every planned piece (id, subgoal, AC, test,
   receipt pointer, status). A planned piece absent from the manifest is a gate violation. ✗
@@ -463,7 +486,7 @@ cadence-audit results, never completion conjuncts; PRE-EPOCH (no acceptance obje
 they render AUDIT-PENDING — neither OK nor INCIDENT, never RED (2026-07-02; the executable
 runner emits this as `AUDIT-PENDING-EPOCH`, same status, more precise label — and defensively
 reclassifies a crashed/contract-violating invariant probe to it rather than leak RED/UNEVALUABLE). The red/green board BECOMES the definition
-of done when its registry covers all 30 entries (GOAL.md §4.1); it is the observatory's core
+of done when its registry covers every current entry; it is the observatory's core
 view.
 Completion ⇔ every STATE-condition test GREEN ∧ zero AUDIT-INCIDENT ⇔ §4.3 pct=100 (AUDIT rows
 are cadence results, never GREEN — 2026-07-02). ✗ `invalid_condition_without_executable_test`.
@@ -531,4 +554,3 @@ are cadence results, never GREEN — 2026-07-02). ✗ `invalid_condition_without
   exists AND C-SCALE receipt exists. Blocked/incomplete otherwise.
 
 ---
-
