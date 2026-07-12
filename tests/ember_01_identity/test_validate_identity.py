@@ -7,6 +7,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,29 +33,71 @@ def valid_manifest() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 
-def admitted_manifest() -> dict:
+def receipt_sha256(receipt: dict) -> str:
+    encoded = json.dumps(
+        receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def admitted_manifest() -> tuple[dict, dict[str, dict]]:
     payload = valid_manifest()
+    receipts: dict[str, dict] = {}
     payload["identity"]["disposition"] = "OWNED_ADMITTED"
     payload["identity"]["selected_as_owned_ember"] = True
-    for field in ("allocated", "unique", "active", "served", "actually_trained"):
+    for field in (
+        "allocated",
+        "unique",
+        "active",
+        "trainable",
+        "served",
+        "actually_trained",
+    ):
         payload["parameters"][field] = 3_000_000_000
+    subject = payload["checkpoint"]["byte_sha256"]
+    verifier = payload["data"]["verifier_sha256"]
+
+    def bind_evidence(evidence_class: str) -> str:
+        receipt = {
+            "schema": "ember-identity-evidence-receipt-v1",
+            "evidence_class": evidence_class,
+            "subject_checkpoint_sha256": subject,
+            "verifier_sha256": verifier,
+            "result": "VERIFIED",
+        }
+        digest = receipt_sha256(receipt)
+        receipts[digest] = receipt
+        return digest
+
     payload["capabilities"]["reasoning"] = {
         "state": "VERIFIED",
-        "evidence_receipts": ["6" * 64],
+        "evidence_receipts": [bind_evidence("reasoning")],
     }
     payload["capabilities"]["structured_tool_use"] = {
         "state": "VERIFIED",
-        "evidence_receipts": ["7" * 64],
+        "evidence_receipts": [bind_evidence("structured_tool_use")],
     }
     payload["capabilities"]["native_modalities"] = {
-        "text": {"state": "VERIFIED", "evidence_receipts": ["a" * 64]},
-        "image": {"state": "VERIFIED", "evidence_receipts": ["b" * 64]},
-        "audio": {"state": "VERIFIED", "evidence_receipts": ["c" * 64]},
+        modality: {
+            "state": "VERIFIED",
+            "evidence_receipts": [bind_evidence(f"native_{modality}")],
+        }
+        for modality in ("text", "image", "audio")
     }
-    payload["training"]["stopping_rule"] = {
-        "criterion_id": "sufficient-pretraining-v1",
+    stopping_receipt = {
+        "schema": "ember-identity-evidence-receipt-v1",
+        "evidence_class": "sufficient_pretraining",
+        "subject_checkpoint_sha256": subject,
+        "verifier_sha256": verifier,
+        "criterion_id": "ember-sufficient-pretraining-v1",
         "result": "PASSED",
-        "receipt_sha256": "d" * 64,
+    }
+    stopping_digest = receipt_sha256(stopping_receipt)
+    receipts[stopping_digest] = stopping_receipt
+    payload["training"]["stopping_rule"] = {
+        "criterion_id": "ember-sufficient-pretraining-v1",
+        "result": "PASSED",
+        "receipt_sha256": stopping_digest,
     }
     payload["backend"]["process_identity"] = {
         "pid": 123,
@@ -69,7 +112,20 @@ def admitted_manifest() -> dict:
     payload["evaluation"]["receipt_sha256"] = "9" * 64
     payload["evaluation"]["counts_toward_owned_completion"] = True
     payload["unresolved"] = []
-    return payload
+    return payload, receipts
+
+
+def rebind_receipt(
+    payload: dict,
+    bundle: dict[str, dict],
+    old_digest: str,
+    **changes: object,
+) -> str:
+    receipt = copy.deepcopy(bundle.pop(old_digest))
+    receipt.update(changes)
+    new_digest = receipt_sha256(receipt)
+    bundle[new_digest] = receipt
+    return new_digest
 
 
 def test_json_schema_is_versioned_and_closed_world() -> None:
@@ -364,6 +420,7 @@ def test_only_owned_admitted_can_be_selected_or_counted(disposition: str) -> Non
     [
         ("data.clean_genesis", False, "admission.clean_genesis"),
         ("provenance.ownership", "REFERENCE_ONLY", "admission.ownership"),
+        ("parameters.trainable", 500_000_000, "admission.parameter_floor"),
         ("parameters.served", 0, "admission.parameter_floor"),
         ("parameters.actually_trained", 2_999_999_999, "admission.parameter_floor"),
         (
@@ -376,24 +433,24 @@ def test_only_owned_admitted_can_be_selected_or_counted(disposition: str) -> Non
 def test_owned_admission_requires_positive_evidence(
     path: str, replacement: object, expected_code: str
 ) -> None:
-    payload = admitted_manifest()
+    payload, receipts = admitted_manifest()
     _set_path(payload, path, replacement)
-    assert expected_code in error_codes(payload)
+    assert expected_code in error_codes(payload, receipt_bundle=receipts)
 
 
 def test_owned_admission_rejects_any_unresolved_evidence() -> None:
-    payload = admitted_manifest()
+    payload, receipts = admitted_manifest()
     payload["evaluation"]["score"] = {
         "status": "unresolved",
         "reason": "not measured",
     }
     payload["unresolved"] = ["evaluation.score"]
-    assert "admission.unresolved" in error_codes(payload)
+    assert "admission.unresolved" in error_codes(payload, receipt_bundle=receipts)
 
 
 def test_fully_evidenced_owned_admission_passes() -> None:
-    payload = admitted_manifest()
-    assert validate_manifest(payload) == payload
+    payload, receipts = admitted_manifest()
+    assert validate_manifest(payload, receipt_bundle=receipts) == payload
 
 
 @pytest.mark.parametrize(
@@ -404,39 +461,152 @@ def test_fully_evidenced_owned_admission_passes() -> None:
     ],
 )
 def test_malformed_admission_source_items_fail_without_crashing(path: str) -> None:
-    payload = admitted_manifest()
+    payload, receipts = admitted_manifest()
     _set_path(payload, path, [{"renamed_external_source": "qwen"}])
-    assert "schema.validation" in error_codes(payload)
+    assert "schema.validation" in error_codes(payload, receipt_bundle=receipts)
 
 
 def test_owned_admission_requires_nonzero_training_exposure_per_modality() -> None:
-    payload = admitted_manifest()
+    payload, receipts = admitted_manifest()
     payload["training"]["modality_mixture"] = {
         "text": 0.75,
         "image": 0.0,
         "audio": 0.25,
     }
-    assert "admission.modality_exposure" in error_codes(payload)
+    assert "admission.modality_exposure" in error_codes(
+        payload, receipt_bundle=receipts
+    )
 
 
 def test_owned_admission_requires_checkpoint_bound_receipt_per_modality() -> None:
-    payload = admitted_manifest()
+    payload, receipts = admitted_manifest()
     payload["capabilities"]["native_modalities"] = {
         "text": {"state": "VERIFIED", "evidence_receipts": ["a" * 64]},
         "image": {"state": "VERIFIED", "evidence_receipts": ["b" * 64]},
         "audio": {"state": "UNVERIFIED", "evidence_receipts": []},
     }
-    assert "admission.native_modality_evidence" in error_codes(payload)
+    assert "admission.native_modality_evidence" in error_codes(
+        payload, receipt_bundle=receipts
+    )
 
 
 @pytest.mark.parametrize("result", ["NOT_REACHED", "FAILED"])
 def test_owned_admission_requires_passed_sufficient_pretraining_receipt(
     result: str,
 ) -> None:
-    payload = admitted_manifest()
+    payload, receipts = admitted_manifest()
     payload["training"]["stopping_rule"] = {
         "criterion_id": "sufficient-pretraining-v1",
         "result": result,
         "receipt_sha256": "c" * 64,
     }
-    assert "admission.sufficient_pretraining" in error_codes(payload)
+    assert "admission.sufficient_pretraining" in error_codes(
+        payload, receipt_bundle=receipts
+    )
+
+
+def test_owned_admission_requires_receipt_bundle() -> None:
+    payload, _ = admitted_manifest()
+    assert "admission.receipt_bundle_missing" in error_codes(payload)
+
+
+def test_owned_admission_rejects_non_object_receipt_bundle() -> None:
+    payload, _ = admitted_manifest()
+    assert "admission.receipt_bundle_invalid" in error_codes(
+        payload, receipt_bundle=[]
+    )
+
+
+def test_owned_admission_rejects_missing_receipt_content() -> None:
+    payload, receipts = admitted_manifest()
+    digest = payload["capabilities"]["reasoning"]["evidence_receipts"][0]
+    receipts.pop(digest)
+    assert "admission.receipt_missing" in error_codes(
+        payload, receipt_bundle=receipts
+    )
+
+
+def test_owned_admission_rejects_receipt_for_wrong_checkpoint() -> None:
+    payload, receipts = admitted_manifest()
+    old = payload["capabilities"]["reasoning"]["evidence_receipts"][0]
+    new = rebind_receipt(
+        payload, receipts, old, subject_checkpoint_sha256="0" * 64
+    )
+    payload["capabilities"]["reasoning"]["evidence_receipts"] = [new]
+    assert "admission.receipt_checkpoint_mismatch" in error_codes(
+        payload, receipt_bundle=receipts
+    )
+
+
+def test_owned_admission_rejects_wrong_evidence_class() -> None:
+    payload, receipts = admitted_manifest()
+    old = payload["capabilities"]["reasoning"]["evidence_receipts"][0]
+    new = rebind_receipt(payload, receipts, old, evidence_class="native_text")
+    payload["capabilities"]["reasoning"]["evidence_receipts"] = [new]
+    assert "admission.receipt_class_mismatch" in error_codes(
+        payload, receipt_bundle=receipts
+    )
+
+
+def test_owned_admission_rejects_unbound_verifier() -> None:
+    payload, receipts = admitted_manifest()
+    old = payload["capabilities"]["reasoning"]["evidence_receipts"][0]
+    new = rebind_receipt(payload, receipts, old, verifier_sha256="0" * 64)
+    payload["capabilities"]["reasoning"]["evidence_receipts"] = [new]
+    assert "admission.receipt_verifier_mismatch" in error_codes(
+        payload, receipt_bundle=receipts
+    )
+
+
+def test_owned_admission_rejects_unapproved_pretraining_criterion() -> None:
+    payload, receipts = admitted_manifest()
+    old = payload["training"]["stopping_rule"]["receipt_sha256"]
+    new = rebind_receipt(
+        payload, receipts, old, criterion_id="self-declared-good-enough"
+    )
+    payload["training"]["stopping_rule"]["criterion_id"] = "self-declared-good-enough"
+    payload["training"]["stopping_rule"]["receipt_sha256"] = new
+    assert "admission.sufficient_pretraining_criterion" in error_codes(
+        payload, receipt_bundle=receipts
+    )
+
+
+def test_owned_admission_rejects_fabricated_hash_content_pair() -> None:
+    payload, receipts = admitted_manifest()
+    digest = payload["capabilities"]["reasoning"]["evidence_receipts"][0]
+    receipts[digest]["result"] = "FABRICATED"
+    assert "admission.receipt_hash_mismatch" in error_codes(
+        payload, receipt_bundle=receipts
+    )
+
+
+def test_cli_requires_and_resolves_admission_receipt_bundle(tmp_path: Path) -> None:
+    payload, receipts = admitted_manifest()
+    manifest_path = tmp_path / "admitted.json"
+    bundle_path = tmp_path / "receipts.json"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    bundle_path.write_text(json.dumps(receipts), encoding="utf-8")
+
+    missing = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "validate_identity.py"), str(manifest_path)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert missing.returncode == 1
+    assert "admission.receipt_bundle_missing" in missing.stdout
+
+    resolved = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "validate_identity.py"),
+            str(manifest_path),
+            "--receipt-bundle",
+            str(bundle_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert resolved.returncode == 0, resolved.stdout + resolved.stderr
+    assert json.loads(resolved.stdout)["ok"] is True
