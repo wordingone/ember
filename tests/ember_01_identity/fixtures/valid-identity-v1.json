@@ -1,0 +1,134 @@
+{
+  "authority": {
+    "goal_id": "EMBER-01",
+    "workstream_id": "EMBER-01C",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema": "ember-model-experiment-identity-v1",
+  "identity": {
+    "model_id": "ember-candidate-fixture",
+    "experiment_id": "experiment-fixture-001",
+    "disposition": "OWNED_CANDIDATE",
+    "selected_as_owned_ember": false
+  },
+  "architecture": {
+    "source": "architecture/fixture.py",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "checkpoint": {
+    "format": "synthetic-bytes-v1",
+    "byte_sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+    "tensors": [
+      {
+        "name": "fixture.weight",
+        "shape": [2, 2],
+        "dtype": "float32",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "ancestry": [
+      {
+        "checkpoint_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "relationship": "clean_genesis_parent"
+      }
+    ]
+  },
+  "tokenizer": {
+    "id": "owned-tokenizer-fixture",
+    "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "data": {
+    "corpus_id": "owned-corpus-fixture",
+    "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "ordering_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "curriculum_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "verifier_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "clean_genesis": true
+  },
+  "parameters": {
+    "allocated": 3000000000,
+    "unique": 3000000000,
+    "active": 2500000000,
+    "trainable": 500000000,
+    "served": 3000000000,
+    "actually_trained": 500000000
+  },
+  "training": {
+    "steps": 100,
+    "effective_tokens": 1000000,
+    "modality_mixture": {
+      "text": 0.5,
+      "image": 0.25,
+      "audio": 0.25
+    },
+    "optimizer_state_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "numerics": "bf16-activations-fp32-master",
+    "stopping_rule": "fixture-only-no-capability-claim"
+  },
+  "capabilities": {
+    "native_modalities": ["text", "image", "audio"],
+    "reasoning": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    },
+    "structured_tool_use": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    }
+  },
+  "mechanisms": {
+    "experts": [],
+    "router": [],
+    "memory_substrates": [],
+    "world_models": [],
+    "deletion_objects": []
+  },
+  "backend": {
+    "executable_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "process_identity": {
+      "status": "unresolved",
+      "reason": "synthetic fixture is not running"
+    },
+    "protocol": "fixture-v1",
+    "device": "cpu",
+    "runtime_dependencies": [],
+    "resource_lease_id": {
+      "status": "unresolved",
+      "reason": "synthetic fixture has no lease"
+    }
+  },
+  "evaluation": {
+    "benchmark_id": "fixture-benchmark",
+    "version": "v1",
+    "split": "fixture",
+    "harness_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "subject_checkpoint_sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+    "comparator_identity": "fixture-comparator",
+    "score": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "uncertainty": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "receipt_sha256": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "counts_toward_owned_completion": false
+  },
+  "provenance": {
+    "ownership": "OWNED_CLEAN_GENESIS",
+    "exclusion_reasons": [],
+    "learned_signal_sources": ["owned_training_data"],
+    "neural_capability_credit_sources": ["owned_checkpoint"]
+  },
+  "unresolved": [
+    "backend.process_identity",
+    "backend.resource_lease_id",
+    "evaluation.score",
+    "evaluation.uncertainty",
+    "evaluation.receipt_sha256"
+  ]
+}
