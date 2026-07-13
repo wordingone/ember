@@ -855,10 +855,16 @@ def test_exact_head_coverage_allows_only_declared_self_referential_metadata(
     adjudication_path.write_text(json.dumps({
         "schema": "ember-consumer-adjudication-review-set-v1",
         "source_commit": source,
-    }), encoding="utf-8")
+    }) + "\n", encoding="utf-8")
     stability_path.write_text('{"receipt":true}\n', encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "receipt"], cwd=tmp_path, check=True)
+    committed_adjudication_sha = hashlib.sha256(
+        adjudication_path.read_bytes()
+    ).hexdigest()
+    adjudication_path.write_bytes(
+        adjudication_path.read_bytes().replace(b"\n", b"\r\n")
+    )
     relative_adjudication = "manifests/ember-01-identity/consumer-adjudication-v1.json"
     relative_roots = "manifests/ember-01-identity/consumer-census-roots-v1.json"
     relative_stability = "manifests/ember-01-identity/consumer-census-stability-v1.json"
@@ -870,7 +876,7 @@ def test_exact_head_coverage_allows_only_declared_self_referential_metadata(
             relative_adjudication, relative_roots, relative_stability, relative_scope,
         ],
         "metadata_sha256": {
-            relative_adjudication: hashlib.sha256(adjudication_path.read_bytes()).hexdigest(),
+            relative_adjudication: committed_adjudication_sha,
             relative_roots: hashlib.sha256(roots_path.read_bytes()).hexdigest(),
             relative_scope: hashlib.sha256(scope_path.read_bytes()).hexdigest(),
         },
@@ -890,7 +896,7 @@ def test_exact_head_coverage_allows_only_declared_self_referential_metadata(
             relative_adjudication, relative_roots, relative_stability, relative_scope,
         ],
         "metadata_sha256": {
-            relative_adjudication: hashlib.sha256(adjudication_path.read_bytes()).hexdigest(),
+            relative_adjudication: committed_adjudication_sha,
             relative_roots: hashlib.sha256(roots_path.read_bytes()).hexdigest(),
             relative_scope: hashlib.sha256(scope_path.read_bytes()).hexdigest(),
         },
