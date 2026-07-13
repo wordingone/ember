@@ -43,10 +43,12 @@
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["model_id", "experiment_id", "disposition", "selected_as_owned_ember"],
+      "required": ["model_id", "experiment_id", "run_id", "checkpoint_id", "disposition", "selected_as_owned_ember"],
       "properties": {
         "model_id": {"type": "string", "minLength": 1},
         "experiment_id": {"type": "string", "minLength": 1},
+        "run_id": {"type": "string", "minLength": 1},
+        "checkpoint_id": {"type": "string", "minLength": 1},
         "disposition": {
           "enum": ["OWNED_CANDIDATE", "OWNED_ADMITTED", "REFERENCE_ONLY", "HISTORICAL_ONLY"]
         },
@@ -65,7 +67,7 @@
     "checkpoint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["format", "byte_sha256", "tensors", "ancestry"],
+      "required": ["format", "byte_sha256", "tensors", "ancestry", "recovery_state"],
       "properties": {
         "format": {"type": "string", "minLength": 1},
         "byte_sha256": {"$ref": "#/$defs/sha256"},
@@ -77,7 +79,8 @@
         "ancestry": {
           "type": "array",
           "items": {"$ref": "#/$defs/ancestry"}
-        }
+        },
+        "recovery_state": {"enum": ["CLEAN", "RESUMED", "RECOVERED"]}
       }
     },
     "tokenizer": {
@@ -194,12 +197,15 @@
     "mechanisms": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["experts", "router", "memory_substrates", "world_models", "deletion_objects"],
+      "required": ["experts", "router", "temporary_adapters", "permanent_merges", "memory_substrates", "world_models", "dreaming_updates", "deletion_objects"],
       "properties": {
         "experts": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
         "router": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "temporary_adapters": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "permanent_merges": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
         "memory_substrates": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
         "world_models": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "dreaming_updates": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
         "deletion_objects": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}}
       }
     },

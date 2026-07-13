@@ -189,9 +189,9 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
         "mechanisms", "backend", "evaluation", "provenance", "unresolved",
     },
     "authority": {"goal_id", "workstream_id", "next_executed_outcome"},
-    "identity": {"model_id", "experiment_id", "disposition", "selected_as_owned_ember"},
+    "identity": {"model_id", "experiment_id", "run_id", "checkpoint_id", "disposition", "selected_as_owned_ember"},
     "architecture": {"source", "sha256"},
-    "checkpoint": {"format", "byte_sha256", "tensors", "ancestry"},
+    "checkpoint": {"format", "byte_sha256", "tensors", "ancestry", "recovery_state"},
     "tokenizer": {"id", "sha256"},
     "data": {
         "corpus_id", "sha256", "ordering_sha256", "curriculum_sha256",
@@ -212,7 +212,7 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
     "capabilities.native_modalities.audio": {"state", "evidence_receipts"},
     "capabilities.reasoning": {"state", "evidence_receipts"},
     "capabilities.structured_tool_use": {"state", "evidence_receipts"},
-    "mechanisms": {"experts", "router", "memory_substrates", "world_models", "deletion_objects"},
+    "mechanisms": {"experts", "router", "temporary_adapters", "permanent_merges", "memory_substrates", "world_models", "dreaming_updates", "deletion_objects"},
     "backend": {
         "executable_sha256", "process_identity", "protocol", "device",
         "runtime_dependencies", "resource_lease_id",
@@ -747,7 +747,8 @@ def validate_manifest(
                     )
 
     mechanism_groups = (
-        "experts", "router", "memory_substrates", "world_models", "deletion_objects"
+        "experts", "router", "temporary_adapters", "permanent_merges",
+        "memory_substrates", "world_models", "dreaming_updates", "deletion_objects"
     )
     for group in mechanism_groups:
         present, items = _get(payload, f"mechanisms.{group}")
