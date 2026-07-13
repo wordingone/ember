@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
@@ -144,9 +145,19 @@ def _semantic_fields(
     *,
     exact: dict[str, str] | None,
     line_scoped: bool,
+    source_role: str,
 ) -> dict[str, str]:
     if exact is not None:
         return {"record_class": "VERIFIED_CONSUMER", **exact}
+    if source_role == "TEST_EVIDENCE":
+        return {
+            "record_class": "REVIEWED_NON_CONSUMER",
+            "current_input": ",".join(matched_terms),
+            "review_state": "REVIEWED",
+            "review_basis": "PATH_BOUND_TEST_OR_FIXTURE",
+            "claim_effect": "NO_CREDIT",
+            "integration_requirement": INTEGRATION_REQUIREMENTS[category],
+        }
     return {
         "record_class": (
             "CANDIDATE_EXECUTABLE_MATCH" if line_scoped else "CANDIDATE_EVIDENCE_MATCH"
@@ -165,6 +176,25 @@ def _excluded(rel: str) -> bool:
         any(normalized.startswith(prefix) for prefix in EXCLUDED_PREFIXES)
         or normalized in EXCLUDED_PATHS
     )
+
+
+def _source_role(rel: str) -> str:
+    normalized = rel.replace("\\", "/").lower()
+    name = Path(normalized).name
+    if (
+        any(f"/{segment}/" in f"/{normalized}/" for segment in ("test", "tests", "fixture", "fixtures"))
+        or name.startswith("test_")
+        or "_selftest." in name
+        or ".test." in name
+        or ".tests." in name
+    ):
+        return "TEST_EVIDENCE"
+    suffix = Path(normalized).suffix
+    if suffix in EXECUTABLE_SOURCE_SUFFIXES:
+        return "EXECUTABLE_CANDIDATE"
+    if suffix in {".md", ".rst", ".txt"}:
+        return "DOCUMENTATION_EVIDENCE"
+    return "DATA_EVIDENCE"
 
 
 def _public_path(relative: str, redactions: Iterable[str]) -> str:
@@ -388,6 +418,7 @@ def build_census(
             continue
         content_sha256 = hashlib.sha256(content_bytes).hexdigest()
         line_scoped = Path(rel).suffix.lower() in EXECUTABLE_SOURCE_SUFFIXES
+        source_role = _source_role(rel)
         file_matches: dict[str, dict[str, object]] = {}
         matched_categories: set[str] = set()
         for line_number, line in enumerate(lines, start=1):
@@ -423,12 +454,14 @@ def build_census(
                                 "line_sha256": line_sha256,
                                 "content_sha256": content_sha256,
                                 "evidence_scope": "LINE",
+                                "source_role": source_role,
                                 "matched_terms": matched_terms,
                                 **_semantic_fields(
                                     category,
                                     matched_terms,
                                     exact=exact_semantics,
                                     line_scoped=True,
+                                    source_role=source_role,
                                 ),
                             }
                         )
@@ -457,12 +490,14 @@ def build_census(
                     "line_sha256": record["line_sha256"],
                     "content_sha256": content_sha256,
                     "evidence_scope": "FILE_CATEGORY",
+                    "source_role": source_role,
                     "matched_terms": matched_terms,
                     **_semantic_fields(
                         category,
                         matched_terms,
                         exact=exact_semantics,
                         line_scoped=False,
+                        source_role=source_role,
                     ),
                 }
             )
@@ -530,8 +565,56 @@ def build_git_census(
     )
 
 
+def _apply_adjudication_policy(
+    evidence: list[dict[str, object]],
+    roots: list[dict[str, object]],
+    policy: dict | None,
+) -> None:
+    if policy is None:
+        return
+    expected_roles = {
+        "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
+        "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+        "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+        "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+    }
+    if (
+        not isinstance(policy, dict)
+        or set(policy) != {"schema", "policy_id", "root_id", "source_commit", "roles"}
+        or policy.get("schema") != "ember-conservative-candidate-adjudication-v1"
+        or policy.get("policy_id") != "fail-closed-static-superset-v1"
+        or policy.get("roles") != expected_roles
+        or not isinstance(policy.get("root_id"), str)
+        or not re.fullmatch(r"[0-9a-f]{40,64}", str(policy.get("source_commit")))
+    ):
+        raise ValueError("candidate adjudication policy is invalid")
+    matching_roots = [
+        row for row in roots
+        if row["root_id"] == policy["root_id"]
+        and row["source_commit"] == policy["source_commit"]
+    ]
+    if len(matching_roots) != 1:
+        raise ValueError("candidate adjudication policy is not bound to an exact census root")
+    for row in evidence:
+        if (
+            row["root_id"] != policy["root_id"]
+            or row.get("record_class") == "VERIFIED_CONSUMER"
+        ):
+            continue
+        source_role = str(row["source_role"])
+        if source_role not in expected_roles:
+            raise ValueError(f"candidate adjudication has no closed role rule: {source_role}")
+        row["record_class"] = expected_roles[source_role]
+        row["review_state"] = "POLICY_ADJUDICATED"
+        row["review_basis"] = policy["policy_id"]
+        row["claim_effect"] = "NO_CREDIT"
+
+
 def build_census_set(
-    root_specs: Iterable[dict], *, consumer_semantics: Iterable[dict[str, str]] = ()
+    root_specs: Iterable[dict],
+    *,
+    consumer_semantics: Iterable[dict[str, str]] = (),
+    adjudication_policy: dict | None = None,
 ) -> dict:
     """Combine logical public/private/live roots without serializing host paths."""
     built: list[dict] = []
@@ -602,12 +685,28 @@ def build_census_set(
             item["root_id"], item["path"], item["line"], item["category"]
         ),
     )
+    _apply_adjudication_policy(evidence, roots, adjudication_policy)
     canonical_subject = json.dumps(
         {"roots": roots, "semantic_profiles": SEMANTIC_PROFILES, "evidence": evidence},
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
     ).encode("utf-8")
+    discovered = [
+        row for row in evidence if row.get("record_class") != "VERIFIED_CONSUMER"
+    ]
+    candidates = [
+        row for row in discovered
+        if str(row.get("record_class", "")).startswith("CANDIDATE_")
+    ]
+    adjudicated = [
+        row for row in discovered if row.get("review_state") == "POLICY_ADJUDICATED"
+    ]
+    complete = (
+        adjudication_policy is not None
+        and not candidates
+        and all(row["root_id"] == adjudication_policy["root_id"] for row in evidence)
+    )
     return {
         "schema": "ember-identity-consumer-census-set-v1",
         "goal_id": GOAL_ID,
@@ -616,6 +715,19 @@ def build_census_set(
         "roots": roots,
         "semantic_profiles": SEMANTIC_PROFILES,
         "evidence": evidence,
+        "candidate_discovery": {
+            "record_count": len(discovered),
+            "unadjudicated_count": len(candidates),
+            "source_role_counts": dict(sorted(Counter(
+                str(row["source_role"]) for row in discovered
+            ).items())),
+            **({"adjudication_counts": dict(sorted(Counter(
+                str(row["record_class"]) for row in adjudicated
+            ).items()))} if adjudication_policy is not None else {}),
+            "global_consumer_completeness": (
+                "CONSERVATIVE_SUPERSET_COMPLETE" if complete else "NOT_CLAIMED"
+            ),
+        },
         "canonical_subject_sha256": hashlib.sha256(canonical_subject).hexdigest(),
     }
 

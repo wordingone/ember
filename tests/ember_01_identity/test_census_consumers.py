@@ -225,7 +225,13 @@ def test_census_includes_receipt_test_and_identity_sources_but_excludes_its_gene
         "scripts/ember_01_identity/self.py",
     }
     assert census["coverage"]["files_excluded"] == 1
-    assert all(row["record_class"].startswith("CANDIDATE_") for row in census["evidence"])
+    classes = {row["path"]: row["record_class"] for row in census["evidence"]}
+    assert classes["tests/fixtures/fake.py"] == "REVIEWED_NON_CONSUMER"
+    assert classes["scripts/ember_01_identity/self.py"].startswith("CANDIDATE_")
+    roles = {row["path"]: row["source_role"] for row in census["evidence"]}
+    assert roles["receipts/run.json"] == "DATA_EVIDENCE"
+    assert roles["tests/fixtures/fake.py"] == "TEST_EVIDENCE"
+    assert roles["scripts/ember_01_identity/self.py"] == "EXECUTABLE_CANDIDATE"
 
 
 def test_same_line_can_expose_multiple_identity_roles(tmp_path: Path) -> None:
@@ -461,9 +467,84 @@ def test_multi_surface_census_is_order_independent_and_path_safe(tmp_path: Path)
         ensure_ascii=False,
     ).encode("utf-8")
     assert first["canonical_subject_sha256"] == hashlib.sha256(canonical).hexdigest()
+    assert first["candidate_discovery"]["global_consumer_completeness"] == "NOT_CLAIMED"
+    assert first["candidate_discovery"]["unadjudicated_count"] == 2
+    assert first["candidate_discovery"]["source_role_counts"] == {
+        "EXECUTABLE_CANDIDATE": 2
+    }
     rendered = json.dumps(first)
     assert str(public) not in rendered
     assert str(private) not in rendered
+
+
+def test_conservative_policy_adjudicates_every_exact_candidate_without_invented_credit(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "runtime.py").write_text(
+        "checkpoint = load_model(model_path)\n", encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "identity.md").write_text(
+        "checkpoint identity\n", encoding="utf-8"
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_runtime.py").write_text(
+        "checkpoint = fake_checkpoint\n", encoding="utf-8"
+    )
+    policy = {
+        "schema": "ember-conservative-candidate-adjudication-v1",
+        "policy_id": "fail-closed-static-superset-v1",
+        "root_id": "public-master",
+        "source_commit": FIXTURE_COMMIT,
+        "roles": {
+            "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
+            "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+        },
+    }
+    census = build_census_set(
+        [{
+            "root": tmp_path,
+            "root_id": "public-master",
+            "surface": "public",
+            "tracked_files": [
+                "runtime.py", "docs/identity.md", "tests/test_runtime.py"
+            ],
+            "source_commit": FIXTURE_COMMIT,
+        }],
+        adjudication_policy=policy,
+    )
+    classes = {row["path"]: row["record_class"] for row in census["evidence"]}
+    assert classes == {
+        "docs/identity.md": "REVIEWED_IDENTITY_SOURCE",
+        "runtime.py": "CONSERVATIVE_CONSUMER",
+        "tests/test_runtime.py": "REVIEWED_NON_CONSUMER",
+    }
+    assert census["candidate_discovery"] == {
+        "record_count": 4,
+        "unadjudicated_count": 0,
+        "source_role_counts": {
+            "DOCUMENTATION_EVIDENCE": 1,
+            "EXECUTABLE_CANDIDATE": 2,
+            "TEST_EVIDENCE": 1,
+        },
+        "adjudication_counts": {
+            "CONSERVATIVE_CONSUMER": 2,
+            "REVIEWED_IDENTITY_SOURCE": 1,
+            "REVIEWED_NON_CONSUMER": 1,
+        },
+        "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+    }
+    for row in census["evidence"]:
+        assert row["claim_effect"] == "NO_CREDIT"
+        assert row["review_state"] == "POLICY_ADJUDICATED"
+        assert row["content_sha256"]
+        assert row["line_sha256"]
+        assert "derived_label" not in row
+        assert "protocol" not in row
+        assert "failure_behavior" not in row
+        assert "conflict" not in row
 
 
 def test_multi_surface_semantics_resolve_only_in_their_declared_root(tmp_path: Path) -> None:
