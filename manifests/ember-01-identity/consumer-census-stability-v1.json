@@ -1,5 +1,7 @@
 {
   "schema": "ember-identity-consumer-census-stability-v1",
+  "artifact_class": "ENVIRONMENTAL_DISCOVERY",
+  "global_consumer_completeness": "NOT_CLAIMED",
   "goal_id": "EMBER-01",
   "workstream_id": "EMBER-01C",
   "snapshot_path": "manifests/ember-01-identity/consumer-census-v1.json",
@@ -19,11 +21,31 @@
   "model_loaded_or_run": false,
   "benchmark_executed": false,
   "gpu_used": false,
+  "portable_replay": {
+    "profile": "portable",
+    "root_id": "public-master",
+    "source_commit": "1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138",
+    "snapshot_bytes": 19742118,
+    "snapshot_sha256": "9abb441667f68ab1a2f9fcb8c855c346c42d66348077a1b4292964a9904e2cdf",
+    "canonical_subject_sha256": "99774627979c811065fc11fb8ea9e31bede393236a59eaf990bb48a45ffce63d",
+    "complete_run_sha256": [
+      "9abb441667f68ab1a2f9fcb8c855c346c42d66348077a1b4292964a9904e2cdf",
+      "9abb441667f68ab1a2f9fcb8c855c346c42d66348077a1b4292964a9904e2cdf"
+    ],
+    "byte_identical": true,
+    "candidate_evidence_count": 23522,
+    "verified_consumer_count": 13,
+    "reviewed_scope_status": "REVIEWED_SCOPE_COMPLETE",
+    "global_consumer_completeness": "NOT_CLAIMED",
+    "host_environment_required": false
+  },
   "notes": [
     "Git surfaces were read from exact committed objects, independent of index or checkout state.",
     "Executable sources preserve every matching line; state and document surfaces preserve one content-hashed record per file and category.",
     "Static matches are explicitly no-credit candidates; thirteen reviewed consumers resolve through exact root, path, category, and evidence hashes.",
     "The current EMBER-01C exclusive namespace is covered as a separate filesystem-bound candidate surface.",
+    "The eight-root snapshot is supplemental environment-bound discovery, not clean-clone completion authority.",
+    "Portable replay proves the pinned reviewed scope and exhaustive regex discovery in public-master only; it does not claim every consumer has been adjudicated.",
     "The configured local private-backup root is explicitly MISSING; private backup evidence is resolved through the verified private-backup default clone at commit 054d6e8d94ea218c3ad3b177df790602fe075b01."
   ]
 }
