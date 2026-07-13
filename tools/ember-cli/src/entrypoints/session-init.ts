@@ -1,3 +1,7 @@
+// goal_id: EMBER-01
+// workstream_id: EMBER-01A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // entrypoints/session-init.ts — session bootstrap and dependency wiring.
 // Initialises config, TLS, analytics, IDE detection, shell setup, and the
 // production LoopDeps (callModel / microcompact / autocompact).
@@ -410,11 +414,10 @@ export function buildGuardedProductionCallModel(
  */
 function buildOfflineCallModel(): GuardedProductionCallModel {
   const callModel = async (_params: CallModelParams): Promise<ModelResponse> => {
-    // Return an error response that the UI can render as "OFFLINE (GPU leased to training)"
+    // Return an error response that the UI can render as an honest OFFLINE state.
     const err = new ModelHttpError(
-      "model_offline",
-      "Model server is offline (GPU leased to training). Board and activity display remain available.",
       503,
+      "Model server is offline (GPU-free observation). Board and activity display remain available.",
     );
     throw err;
   };
@@ -532,7 +535,7 @@ export function resolveInitServerUrl(
   envModelUrl: string | undefined,
 ): string | null {
   if (optsServerUrl === null) return null;
-  return optsServerUrl ?? envModelUrl ?? "http://localhost:8081";
+  return optsServerUrl ?? envModelUrl ?? null;
 }
 
 async function _runInit(opts: InitOpts): Promise<void> {
