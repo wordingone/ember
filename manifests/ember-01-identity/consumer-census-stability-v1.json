@@ -41,36 +41,45 @@
   "portable_replay": {
     "profile": "portable",
     "root_id": "public-master",
-    "source_commit": "ca500aabe0f597ab85e762ceb53748724fb0ae98",
-    "snapshot_bytes": 30383497,
-    "snapshot_sha256": "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a",
-    "canonical_subject_sha256": "0a59eeb75925c68bbe4c7cad5c030fcc8298affd061b3b226ea420368506bf85",
+    "source_commit": "a94ba51f92ab16df50d210c4f64a2bd11e2a954b",
+    "snapshot_bytes": 44953816,
+    "snapshot_sha256": "3baa9c16f29078d2d4f4d5309376def6bcc16bef3945165adf91959603c51d02",
+    "canonical_subject_sha256": "1b8e3cf355ed364fc9cff162eee7bd03477086f8398657179c2270c4d2ad469d",
     "complete_run_sha256": [
-      "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a",
-      "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a"
+      "3baa9c16f29078d2d4f4d5309376def6bcc16bef3945165adf91959603c51d02",
+      "3baa9c16f29078d2d4f4d5309376def6bcc16bef3945165adf91959603c51d02"
     ],
     "byte_identical": true,
-    "tracked_file_count": 2878,
-    "files_accounted": 2878,
-    "evidence_record_count": 24648,
-    "discovered_evidence_count": 24635,
+    "tracked_file_count": 2893,
+    "files_accounted": 2893,
+    "evidence_record_count": 25297,
+    "discovered_evidence_count": 25284,
     "verified_consumer_count": 13,
     "adjudication_counts": {
-      "CONSERVATIVE_CONSUMER": 21830,
-      "REVIEWED_IDENTITY_SOURCE": 2805
+      "CONSERVATIVE_CONSUMER": 22422,
+      "REVIEWED_IDENTITY_SOURCE": 2862
     },
     "unadjudicated_count": 0,
     "reviewed_scope_status": "REVIEWED_SCOPE_COMPLETE",
     "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
     "host_environment_required": false
   },
+  "exact_head_coverage": {
+    "schema": "ember-exact-head-census-coverage-v1",
+    "source_commit": "a94ba51f92ab16df50d210c4f64a2bd11e2a954b",
+    "self_referential_metadata_exclusions": [
+      "manifests/ember-01-identity/consumer-census-roots-v1.json",
+      "manifests/ember-01-identity/consumer-census-stability-v1.json",
+      "manifests/ember-01-identity/consumer-scope-v1.json"
+    ]
+  },
   "notes": [
     "Git surfaces were read from exact committed objects, independent of index or checkout state.",
     "Executable sources preserve every matching line; state and document surfaces preserve one content-hashed record per file and category.",
-    "Every static match is content-bound and fail-closed: executable matches remain conservative integration consumers, documents and data remain identity sources, and test or fixture matches receive no credit.",
+    "Every tracked file is content-bound and fail-closed: executable, test, and opaque files remain conservative integration consumers; documents and data remain identity sources.",
     "The current EMBER-01C exclusive namespace is covered as a separate filesystem-bound candidate surface.",
     "The eight-root snapshot is supplemental environment-bound discovery, not clean-clone completion authority.",
-    "Portable replay proves the pinned reviewed scope and an exhaustive conservative public-master superset with zero unadjudicated matches.",
+    "Portable replay covers every tracked file at the substantive source commit; exact-head verification permits only the three declared self-referential metadata paths afterward.",
     "The configured local private-backup root is explicitly MISSING; private backup evidence is resolved through the verified private-backup default clone at commit 054d6e8d94ea218c3ad3b177df790602fe075b01."
   ]
 }
