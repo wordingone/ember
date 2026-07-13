@@ -11,12 +11,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources, materialize_scoped_semantics, resolve_root_locator_spec, summarize_snapshot_adjudication, verify_exact_head_coverage  # noqa: E402
+from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources, materialize_scoped_semantics, resolve_global_consumer_completeness, resolve_root_locator_spec, summarize_snapshot_adjudication, verify_exact_head_coverage  # noqa: E402
 
 FIXTURE_COMMIT = "f" * 40
 CENSUS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-v1.json"
@@ -24,6 +26,26 @@ STABILITY_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-sta
 SEMANTICS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-semantics-v1.json"
 ROOT_LOCATOR_SPEC_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-roots-v1.json"
 CONSUMER_SCOPE_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-scope-v1.json"
+
+
+def test_substantive_review_can_close_a_conservative_source_scope_only() -> None:
+    assert resolve_global_consumer_completeness(
+        "CONSERVATIVE_SUPERSET_COMPLETE",
+        "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+        substantive_review=True,
+    ) == "REVIEWED_EXECUTABLE_CENSUS_COMPLETE"
+    with pytest.raises(ValueError, match="did not close"):
+        resolve_global_consumer_completeness(
+            "CONSERVATIVE_SUPERSET_COMPLETE",
+            "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+            substantive_review=False,
+        )
+    with pytest.raises(ValueError, match="did not close"):
+        resolve_global_consumer_completeness(
+            "NOT_CLAIMED",
+            "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+            substantive_review=True,
+        )
 
 
 def test_checked_semantics_manifest_covers_every_identity_category_without_placeholders() -> None:
@@ -68,7 +90,10 @@ def test_checked_consumer_scope_is_portable_exact_and_claims_only_conservative_c
     roots = json.loads(ROOT_LOCATOR_SPEC_PATH.read_text(encoding="utf-8"))["roots"]
     public_root = next(row for row in roots if row["root_id"] == "public-master")
     assert public_root["source_commit"] == scope["source_commit"]
-    assert scope["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
+    assert scope["global_consumer_completeness"] in {
+        "CONSERVATIVE_SUPERSET_COMPLETE",
+        "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+    }
     assert scope["candidate_adjudication"] == {
         "schema": "ember-conservative-candidate-adjudication-v1",
         "policy_id": "fail-closed-static-superset-v1",
@@ -170,7 +195,10 @@ def test_checked_census_matches_byte_stability_receipt() -> None:
         + portable["discovered_evidence_count"]
     )
     assert portable["unadjudicated_count"] == 0
-    assert portable["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
+    assert portable["global_consumer_completeness"] in {
+        "CONSERVATIVE_SUPERSET_COMPLETE",
+        "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+    }
     rendered = snapshot_bytes.decode("utf-8")
     for drive_code in range(ord("A"), ord("Z") + 1):
         assert chr(drive_code) + ":" + chr(92) * 2 not in rendered
@@ -637,6 +665,153 @@ def test_complete_policy_accounts_for_every_file_and_never_auto_dismisses_tests(
         assert row["line_sha256"] in row["protocol"]
 
 
+def test_substantive_adjudication_closes_every_executable_row_with_exact_semantics(
+    tmp_path: Path,
+) -> None:
+    line = "checkpoint = torch.load(source)"
+    (tmp_path / "runtime.py").write_text(line + "\n", encoding="utf-8")
+    helper = "print('helper')\n"
+    (tmp_path / "helper.py").write_text(helper, encoding="utf-8")
+    line_sha = hashlib.sha256(line.encode()).hexdigest()
+    helper_sha = hashlib.sha256((tmp_path / "helper.py").read_bytes()).hexdigest()
+    review = {
+        "schema": "ember-consumer-adjudication-review-set-v1",
+        "source_commit": FIXTURE_COMMIT,
+        "lanes": [{"scope": "fixture", "sha256": "a" * 64}],
+        "consumer_rows": [{
+            "path": "runtime.py",
+            "line": 1,
+            "category": "checkpoint_save_load",
+            "evidence_sha256": line_sha,
+            "current_input": "source checkpoint bytes",
+            "derived_label": "PyTorch checkpoint deserialization",
+            "protocol": "torch.load from source",
+            "failure_behavior": "may deserialize an unbound checkpoint",
+            "claim_effect": "selects restored training state",
+            "conflict": "path does not prove checkpoint identity",
+            "integration_requirement": "validate exact manifest before torch.load",
+        }],
+        "nonconsumer_rows": [],
+        "nonconsumer_files": [{
+            "path": "helper.py",
+            "content_sha256": helper_sha,
+            "review_basis": "INSPECTED_NO_IDENTITY_OPERATION",
+        }],
+    }
+    policy = {
+        "schema": "ember-conservative-candidate-adjudication-v1",
+        "policy_id": "fail-closed-static-superset-v1",
+        "root_id": "public-master",
+        "source_commit": FIXTURE_COMMIT,
+        "roles": {
+            "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
+            "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "OPAQUE_FILE": "CONSERVATIVE_CONSUMER",
+        },
+    }
+    census = build_census_set([{
+        "root": tmp_path,
+        "root_id": "public-master",
+        "surface": "public",
+        "tracked_files": ["runtime.py", "helper.py"],
+        "source_commit": FIXTURE_COMMIT,
+    }], adjudication_policy=policy, review_adjudication=review)
+    rows = {row["path"]: row for row in census["evidence"]}
+    assert rows["runtime.py"]["record_class"] == "REVIEWED_CONSUMER"
+    assert rows["runtime.py"]["protocol"] == "torch.load from source"
+    assert rows["helper.py"]["record_class"] == "REVIEWED_NON_CONSUMER"
+    assert census["substantive_adjudication"] == {
+        "executable_evidence_rows": 2,
+        "reviewed_consumer_rows": 1,
+        "reviewed_nonconsumer_rows": 1,
+        "unresolved_executable_rows": 0,
+        "status": "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+    }
+    assert census["candidate_discovery"]["global_consumer_completeness"] == (
+        "REVIEWED_EXECUTABLE_CENSUS_COMPLETE"
+    )
+
+
+def test_substantive_adjudication_binds_repeated_identical_lines_by_line_number(
+    tmp_path: Path,
+) -> None:
+    repeated = "checkpoint = torch.load(source)"
+    (tmp_path / "runtime.py").write_text(
+        repeated + "\n# separation\n" + repeated + "\n", encoding="utf-8"
+    )
+    digest = hashlib.sha256(repeated.encode()).hexdigest()
+    common = {
+        "path": "runtime.py",
+        "category": "checkpoint_save_load",
+        "evidence_sha256": digest,
+        "current_input": "source checkpoint bytes",
+        "protocol": "torch.load from source",
+        "failure_behavior": "may deserialize an unbound checkpoint",
+        "claim_effect": "selects restored training state",
+        "conflict": "path does not prove checkpoint identity",
+        "integration_requirement": "validate exact manifest before torch.load",
+    }
+    review = {
+        "schema": "ember-consumer-adjudication-review-set-v1",
+        "source_commit": FIXTURE_COMMIT,
+        "lanes": [{"scope": "fixture", "sha256": "a" * 64}],
+        "consumer_rows": [
+            {**common, "line": 1, "derived_label": "first restore site"},
+            {**common, "line": 3, "derived_label": "second restore site"},
+        ],
+        "nonconsumer_rows": [],
+        "nonconsumer_files": [],
+    }
+    census = build_census_set([{
+        "root": tmp_path,
+        "root_id": "public-master",
+        "surface": "public",
+        "tracked_files": ["runtime.py"],
+        "source_commit": FIXTURE_COMMIT,
+    }], review_adjudication=review)
+    rows = sorted(
+        (row for row in census["evidence"] if row["category"] == "checkpoint_save_load"),
+        key=lambda row: row["line"],
+    )
+    assert [(row["line"], row["derived_label"]) for row in rows] == [
+        (1, "first restore site"),
+        (3, "second restore site"),
+    ]
+
+
+def test_substantive_adjudication_rejects_whole_file_nonconsumer_over_consumer(
+    tmp_path: Path,
+) -> None:
+    line = "checkpoint = torch.load(source)"
+    path = tmp_path / "runtime.py"
+    path.write_text(line + "\n", encoding="utf-8")
+    review = {
+        "schema": "ember-consumer-adjudication-review-set-v1",
+        "source_commit": FIXTURE_COMMIT,
+        "lanes": [{"scope": "fixture", "sha256": "a" * 64}],
+        "consumer_rows": [{
+            "path": "runtime.py", "line": 1, "category": "checkpoint_save_load",
+            "evidence_sha256": hashlib.sha256(line.encode()).hexdigest(),
+            "current_input": "checkpoint bytes", "derived_label": "restore",
+            "protocol": "torch.load", "failure_behavior": "fails closed",
+            "claim_effect": "selects state", "conflict": "path is not identity",
+            "integration_requirement": "bind the exact checkpoint",
+        }],
+        "nonconsumer_rows": [],
+        "nonconsumer_files": [{
+            "path": "runtime.py",
+            "content_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "review_basis": "INSPECTED_NO_IDENTITY_OPERATION",
+        }],
+    }
+    with pytest.raises(ValueError, match="whole-file nonconsumer conflicts"):
+        build_census_set([{
+            "root": tmp_path, "root_id": "public-master", "surface": "public",
+            "tracked_files": ["runtime.py"], "source_commit": FIXTURE_COMMIT,
+        }], review_adjudication=review)
+
+
 def test_exact_head_coverage_allows_only_declared_self_referential_metadata(
     tmp_path: Path,
 ) -> None:
@@ -648,26 +823,80 @@ def test_exact_head_coverage_allows_only_declared_self_referential_metadata(
     subprocess.run(
         ["git", "config", "user.name", "Fixture"], cwd=tmp_path, check=True
     )
-    (tmp_path / "runtime.py").write_text("print('covered')\n", encoding="utf-8")
-    subprocess.run(["git", "add", "runtime.py"], cwd=tmp_path, check=True)
+    manifest_dir = tmp_path / "manifests" / "ember-01-identity"
+    manifest_dir.mkdir(parents=True)
+    roots_path = manifest_dir / "consumer-census-roots-v1.json"
+    scope_path = manifest_dir / "consumer-scope-v1.json"
+    stability_path = manifest_dir / "consumer-census-stability-v1.json"
+    adjudication_path = manifest_dir / "consumer-adjudication-v1.json"
+    roots_path.write_text(json.dumps({
+        "roots": [{"root_id": "public-master", "source_commit": "0" * 40}]
+    }), encoding="utf-8")
+    scope_path.write_text(json.dumps({
+        "source_commit": "0" * 40,
+        "candidate_adjudication": {"source_commit": "0" * 40},
+        "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+    }), encoding="utf-8")
+    stability_path.write_text("{}\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "substantive"], cwd=tmp_path, check=True)
     source = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True,
         check=True, text=True,
     ).stdout.strip()
-    for relative in ("scope.json", "stability.json"):
-        (tmp_path / relative).write_text("{}\n", encoding="utf-8")
-    subprocess.run(
-        ["git", "add", "scope.json", "stability.json"], cwd=tmp_path, check=True
-    )
+    roots = json.loads(roots_path.read_text(encoding="utf-8"))
+    roots["roots"][0]["source_commit"] = source
+    roots_path.write_text(json.dumps(roots), encoding="utf-8")
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    scope["source_commit"] = source
+    scope["candidate_adjudication"]["source_commit"] = source
+    scope["global_consumer_completeness"] = "REVIEWED_EXECUTABLE_CENSUS_COMPLETE"
+    scope_path.write_text(json.dumps(scope), encoding="utf-8")
+    adjudication_path.write_text(json.dumps({
+        "schema": "ember-consumer-adjudication-review-set-v1",
+        "source_commit": source,
+    }), encoding="utf-8")
+    stability_path.write_text('{"receipt":true}\n', encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "receipt"], cwd=tmp_path, check=True)
+    relative_adjudication = "manifests/ember-01-identity/consumer-adjudication-v1.json"
+    relative_roots = "manifests/ember-01-identity/consumer-census-roots-v1.json"
+    relative_stability = "manifests/ember-01-identity/consumer-census-stability-v1.json"
+    relative_scope = "manifests/ember-01-identity/consumer-scope-v1.json"
     result = verify_exact_head_coverage(tmp_path, {
         "schema": "ember-exact-head-census-coverage-v1",
         "source_commit": source,
-        "self_referential_metadata_exclusions": ["scope.json", "stability.json"],
+        "self_referential_metadata_exclusions": [
+            relative_adjudication, relative_roots, relative_stability, relative_scope,
+        ],
+        "metadata_sha256": {
+            relative_adjudication: hashlib.sha256(adjudication_path.read_bytes()).hexdigest(),
+            relative_roots: hashlib.sha256(roots_path.read_bytes()).hexdigest(),
+            relative_scope: hashlib.sha256(scope_path.read_bytes()).hexdigest(),
+        },
     })
     assert result["status"] == "EXACT_HEAD_COVERED"
-    assert result["changed_paths"] == ["scope.json", "stability.json"]
+    assert result["changed_paths"] == sorted([
+        relative_adjudication, relative_roots, relative_stability, relative_scope,
+    ])
+    scope["global_consumer_completeness"] = "FORGED_COMPLETE"
+    scope_path.write_text(json.dumps(scope), encoding="utf-8")
+    subprocess.run(["git", "add", relative_scope], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "forged scope"], cwd=tmp_path, check=True)
+    forged = {
+        "schema": "ember-exact-head-census-coverage-v1",
+        "source_commit": source,
+        "self_referential_metadata_exclusions": [
+            relative_adjudication, relative_roots, relative_stability, relative_scope,
+        ],
+        "metadata_sha256": {
+            relative_adjudication: hashlib.sha256(adjudication_path.read_bytes()).hexdigest(),
+            relative_roots: hashlib.sha256(roots_path.read_bytes()).hexdigest(),
+            relative_scope: hashlib.sha256(scope_path.read_bytes()).hexdigest(),
+        },
+    }
+    with pytest.raises(ValueError, match="scope changed beyond"):
+        verify_exact_head_coverage(tmp_path, forged)
 
 
 def test_multi_surface_semantics_resolve_only_in_their_declared_root(tmp_path: Path) -> None:
