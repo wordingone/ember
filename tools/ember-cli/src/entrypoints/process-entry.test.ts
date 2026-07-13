@@ -1,3 +1,7 @@
+// goal_id: EMBER-01
+// workstream_id: EMBER-01A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // process-entry.test.ts — AC1–AC12 tests for process-entry.ts
 // Spec: specs/entrypoints/process-entry.md
 
@@ -232,7 +236,7 @@ describe("process-entry — AC13: --help prints usage and exits 0 without spawni
       return makeServerHandle({ kill() {} } as unknown as ServerHandle["process"], 20000);
     };
     try {
-      await main({ argv: ["node", "ember", "--help"], spawnServer: spawnSpy });
+      await main({ argv: ["node", "ember", "--reference-seat", "--help"], spawnServer: spawnSpy });
     } catch (e) {
       if (!(e instanceof Error && "code" in e)) throw e; // mockProcessExit throws to abort
     } finally {
@@ -804,7 +808,7 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
     let exitCodeReceived = -1;
 
     await main({
-      argv: ["node", "ember", "-p", "hello headless"],
+      argv: ["node", "ember", "--reference-seat", "-p", "hello headless"],
       spawnServer: async () => makeFakeHandle(29901),
       waitReady: async () => {},
       // #159: deterministic in tests -- the real default performs an actual health-probe
@@ -838,7 +842,7 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
     let receivedPrompt = "UNSET";
 
     await main({
-      argv: ["node", "ember", "--print=my test prompt"],
+      argv: ["node", "ember", "--reference-seat", "--print=my test prompt"],
       spawnServer: async () => makeFakeHandle(29902),
       waitReady: async () => {},
       // #159: deterministic in tests -- the real default performs an actual health-probe
@@ -860,7 +864,7 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
     let exitCodeReceived = -1;
 
     await main({
-      argv: ["node", "ember", "-p", "fail prompt"],
+      argv: ["node", "ember", "--reference-seat", "-p", "fail prompt"],
       spawnServer: async () => makeFakeHandle(29903),
       waitReady: async () => {},
       // #159: deterministic in tests -- the real default performs an actual health-probe
@@ -887,7 +891,7 @@ describe("process-entry — G1: headlessRunner receives LoopDeps from getLoopDep
     const capture: { deps: Partial<LoopDeps> | undefined } = { deps: undefined };
 
     await main({
-      argv: ["node", "ember", "-p", "deps test"],
+      argv: ["node", "ember", "--reference-seat", "-p", "deps test"],
       spawnServer: async () => makeFakeHandle(29904),
       waitReady: async () => {},
       // #159: deterministic in tests -- the real default performs an actual health-probe
@@ -963,7 +967,7 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
     let receivedServerUrl = "UNSET";
 
     await main({
-      argv: ["node", "ember", "-p", "hello"],
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
       spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29997); },
       waitReady: async () => {},
       // #159: deterministic in tests -- the real default performs an actual health-probe
@@ -994,7 +998,7 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
     let spawnCalls = 0;
 
     await main({
-      argv: ["node", "ember", "-p", "hello"],
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
       spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29996); },
       waitReady: async () => {},
       // #159: deterministic in tests -- the real default performs an actual health-probe
@@ -1016,7 +1020,7 @@ describe("process-entry — main() end-to-end: EMBER_MODEL_URL precedence over m
     let receivedServerUrl = "UNSET";
 
     await main({
-      argv: ["node", "ember", "-p", "hello"],
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
       spawnServer: async () => makeFakeHandle(29995),
       waitReady: async () => {},
       // #159: deterministic in tests -- the real default performs an actual health-probe
@@ -1108,7 +1112,7 @@ describe("process-entry — main() end-to-end: EMBER_GPU_FREE precedence over pe
     let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
 
     await main({
-      argv: ["node", "ember", "-p", "hello"],
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
       spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29993); },
       waitReady: async () => {},
       probeExisting: async () => false,
@@ -1196,7 +1200,7 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
 
     try {
       await main({
-        argv: ["node", "ember", "-p", "hello"],
+        argv: ["node", "ember", "--reference-seat", "-p", "hello"],
         spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29980); },
         waitReady: async () => {},
         probeExisting: async () => false,
@@ -1238,7 +1242,7 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
 
     try {
       await main({
-        argv: ["node", "ember", "-p", "hello"],
+        argv: ["node", "ember", "--reference-seat", "-p", "hello"],
         spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29981); },
         waitReady: async () => {},
         probeExisting: async () => false,
@@ -1279,7 +1283,7 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
 
     try {
       await main({
-        argv: ["node", "ember", "-p", "hello"],
+        argv: ["node", "ember", "--reference-seat", "-p", "hello"],
         spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29982); },
         // Deliberately never resolves -- if the preflight check did NOT catch this cell,
         // this test would hang until its own timeout instead of failing fast, which is
@@ -1323,7 +1327,7 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
 
     try {
       await main({
-        argv: ["node", "ember", "-p", "hello"],
+        argv: ["node", "ember", "--reference-seat", "-p", "hello"],
         spawnServer: async () => { throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" }); },
         waitReady: async () => {},
         probeExisting: async () => false,
@@ -1364,7 +1368,7 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
 
     try {
       await main({
-        argv: ["node", "ember", "-p", "hello"],
+        argv: ["node", "ember", "--reference-seat", "-p", "hello"],
         spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29983); },
         waitReady: async () => {},
         probeExisting: async () => true, // a healthy server already answers on this port
@@ -1412,7 +1416,7 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     const start = Date.now();
     try {
       await main({
-        argv: ["node", "ember", "-p", "hello"],
+        argv: ["node", "ember", "--reference-seat", "-p", "hello"],
         spawnServer: async () => ({ process: fakeProc as unknown as ServerHandle["process"], port: 29984, kill() {} }),
         // Never resolves on its own -- only the raced child-exit should end this cell.
         waitReady: () => new Promise(() => {}),
@@ -1457,7 +1461,7 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     let receivedServerUrl = "UNSET";
 
     await main({
-      argv: ["node", "ember", "-p", "hello"],
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
       spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29985); },
       waitReady: async () => {},
       probeExisting: async () => false,
@@ -1496,6 +1500,8 @@ describe("process-entry — AC13 --help contract: EMBER_MODEL_URL precedence par
     }
     const out = stdoutCap.output();
     expect(out).toContain("EMBER_MODEL_URL");
-    expect(out.toLowerCase()).toContain("wins over models.json");
+    expect(out).toContain("requires admitted owned identity");
+    expect(out).toContain("--reference-seat");
+    expect(out).toContain("EMBER_REFERENCE_SEAT");
   });
 });
