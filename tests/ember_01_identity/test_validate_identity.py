@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from jsonschema import Draft202012Validator
 
 
@@ -43,8 +45,8 @@ CHECKPOINT_BYTES = json.dumps(
         "tensors": [
             {
                 "name": "fixture.weight",
-                "shape": [3_000_000_000],
-                "dtype": "constant_float32",
+                "shape": [1],
+                "dtype": "float32",
                 "content_hex": ARTIFACT_BYTES["tensor:fixture.weight"].hex(),
             }
         ],
@@ -57,11 +59,38 @@ TRUSTED_REGISTRY_PATH = (
 )
 sys.path.insert(0, str(SCRIPT_DIR))
 
+import validate_identity as identity_validator  # noqa: E402
+
 from validate_identity import (  # noqa: E402
     IdentityValidationError,
     canonical_json,
     validate_manifest,
 )
+
+TEST_SIGNING_KEY = Ed25519PrivateKey.generate()
+TEST_PUBLIC_KEY_HEX = TEST_SIGNING_KEY.public_key().public_bytes(
+    encoding=serialization.Encoding.Raw,
+    format=serialization.PublicFormat.Raw,
+).hex()
+
+
+@pytest.fixture(autouse=True)
+def pinned_test_verifier_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    registry = tmp_path / "trusted-verifiers-v1.json"
+    registry.write_text(json.dumps({
+        "schema": "ember-trusted-verifier-registry-v1",
+        "verifiers": [{
+            "verifier_sha256": hashlib.sha256(VERIFIER_BYTES).hexdigest(),
+            "public_key_ed25519": TEST_PUBLIC_KEY_HEX,
+        }],
+    }), encoding="utf-8")
+    monkeypatch.setattr(identity_validator, "TRUSTED_VERIFIER_REGISTRY_PATH", registry)
+    if request.node.name != "test_production_admission_floor_remains_three_billion":
+        monkeypatch.setattr(identity_validator, "OWNED_ADMISSION_PARAMETER_FLOOR", 1)
+
+
+def test_production_admission_floor_remains_three_billion() -> None:
+    assert identity_validator.OWNED_ADMISSION_PARAMETER_FLOOR == 3_000_000_000
 
 
 def valid_manifest() -> dict:
@@ -73,6 +102,14 @@ def receipt_sha256(receipt: dict) -> str:
         receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def sign_receipt(receipt: dict) -> dict:
+    unsigned = json.dumps(
+        receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    receipt["signature_ed25519"] = TEST_SIGNING_KEY.sign(unsigned).hex()
+    return receipt
 
 
 def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict, dict[str, dict]]:
@@ -105,7 +142,7 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
         "served",
         "actually_trained",
     ):
-        payload["parameters"][field] = 3_000_000_000
+        payload["parameters"][field] = 1
     payload["data"]["verifier_sha256"] = hashlib.sha256(VERIFIER_BYTES).hexdigest()
     subject = payload["checkpoint"]["byte_sha256"]
     verifier = payload["data"]["verifier_sha256"]
@@ -119,6 +156,7 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
             "result": "VERIFIED",
             **claims,
         }
+        sign_receipt(receipt)
         digest = receipt_sha256(receipt)
         receipts[digest] = receipt
         return digest
@@ -162,6 +200,7 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
         "criterion_id": "ember-sufficient-pretraining-v1",
         "result": "PASSED",
     }
+    sign_receipt(stopping_receipt)
     stopping_digest = receipt_sha256(stopping_receipt)
     receipts[stopping_digest] = stopping_receipt
     payload["training"]["stopping_rule"] = {
@@ -253,7 +292,9 @@ def rebind_receipt(
     **changes: object,
 ) -> str:
     receipt = copy.deepcopy(bundle.pop(old_digest))
+    receipt.pop("signature_ed25519", None)
     receipt.update(changes)
+    sign_receipt(receipt)
     new_digest = receipt_sha256(receipt)
     bundle[new_digest] = receipt
     return new_digest
@@ -569,8 +610,9 @@ def test_only_owned_admitted_can_be_selected_or_counted(disposition: str) -> Non
     ],
 )
 def test_owned_admission_requires_positive_evidence(
-    path: str, replacement: object, expected_code: str
+    path: str, replacement: object, expected_code: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(identity_validator, "OWNED_ADMISSION_PARAMETER_FLOOR", 3_000_000_000)
     payload, receipts = admitted_manifest()
     _set_path(payload, path, replacement)
     assert expected_code in error_codes(payload, receipt_bundle=receipts)
@@ -671,7 +713,10 @@ def test_caller_created_verifier_registry_cannot_authorize_itself() -> None:
     artifacts.pop("verifier_bytes")
     registry = {
         "schema": "ember-trusted-verifier-registry-v1",
-        "verifier_sha256": [payload["data"]["verifier_sha256"], "0" * 64],
+        "verifiers": [
+            {"verifier_sha256": payload["data"]["verifier_sha256"], "public_key_ed25519": TEST_PUBLIC_KEY_HEX},
+            {"verifier_sha256": "0" * 64, "public_key_ed25519": "0" * 64},
+        ],
     }
     assert "admission.verifier_registry_untrusted_root" in error_codes(
         payload,
@@ -681,11 +726,11 @@ def test_caller_created_verifier_registry_cannot_authorize_itself() -> None:
     )
 
 
-def test_checked_in_verifier_registry_pins_the_reviewed_program() -> None:
+def test_checked_in_verifier_registry_is_empty_until_operator_authorizes_a_signing_key() -> None:
     registry = json.loads(TRUSTED_REGISTRY_PATH.read_text(encoding="utf-8"))
     assert registry == {
         "schema": "ember-trusted-verifier-registry-v1",
-        "verifier_sha256": [hashlib.sha256(VERIFIER_BYTES).hexdigest()],
+        "verifiers": [],
     }
 
 
@@ -695,7 +740,7 @@ def test_owned_admission_rejects_untrusted_verifier_registry() -> None:
     artifacts.pop("verifier_bytes")
     registry = {
         "schema": "ember-trusted-verifier-registry-v1",
-        "verifier_sha256": ["0" * 64],
+        "verifiers": [{"verifier_sha256": "0" * 64, "public_key_ed25519": "0" * 64}],
     }
     assert "admission.verifier_registry_untrusted_root" in error_codes(
         payload,
@@ -742,6 +787,7 @@ def test_owned_admission_resolves_mechanism_and_runtime_dependency_bytes() -> No
         "mechanism_id": "router-v1",
         "mechanism_sha256": mechanism_sha,
     }
+    sign_receipt(mechanism_receipt)
     mechanism_digest = receipt_sha256(mechanism_receipt)
     receipts[mechanism_digest] = mechanism_receipt
     payload["mechanisms"]["router"] = [{
@@ -799,9 +845,22 @@ def test_owned_admission_rejects_self_attested_parameter_axes() -> None:
 def test_owned_admission_rejects_parameter_receipt_with_wrong_count() -> None:
     payload, receipts = admitted_manifest()
     old = payload["parameters"]["evidence_receipts"]["actually_trained"][0]
-    new = rebind_receipt(payload, receipts, old, claimed_count=1)
+    new = rebind_receipt(payload, receipts, old, claimed_count=2)
     payload["parameters"]["evidence_receipts"]["actually_trained"] = [new]
     assert "admission.receipt_claim_mismatch" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_claimant_cannot_rehash_modified_receipt_without_verifier_signature() -> None:
+    payload, receipts = admitted_manifest()
+    old = payload["parameters"]["evidence_receipts"]["active"][0]
+    receipt = receipts.pop(old)
+    receipt["claimed_count"] = 2
+    forged = receipt_sha256(receipt)
+    receipts[forged] = receipt
+    payload["parameters"]["evidence_receipts"]["active"] = [forged]
+    assert "admission.receipt_signature_invalid" in error_codes(
         payload, receipt_bundle=receipts, **artifact_authority(payload)
     )
 
@@ -809,10 +868,10 @@ def test_owned_admission_rejects_parameter_receipt_with_wrong_count() -> None:
 def test_owned_admission_rejects_parameter_counts_not_derived_from_checkpoint_tensors() -> None:
     payload, receipts = admitted_manifest()
     for field in ("allocated", "unique"):
-        payload["parameters"][field] = 3_000_000_001
+        payload["parameters"][field] = 2
         old = payload["parameters"]["evidence_receipts"][field][0]
         payload["parameters"]["evidence_receipts"][field] = [
-            rebind_receipt(payload, receipts, old, claimed_count=3_000_000_001)
+            rebind_receipt(payload, receipts, old, claimed_count=2)
         ]
     assert "admission.checkpoint_parameter_count_mismatch" in error_codes(
         payload, receipt_bundle=receipts, **artifact_authority(payload)
@@ -821,7 +880,7 @@ def test_owned_admission_rejects_parameter_counts_not_derived_from_checkpoint_te
 
 def test_checkpoint_envelope_rejects_tensor_bytes_inconsistent_with_shape_and_dtype() -> None:
     envelope = json.loads(CHECKPOINT_BYTES)
-    envelope["tensors"][0]["dtype"] = "float32"
+    envelope["tensors"][0]["shape"] = [2]
     malformed = json.dumps(
         envelope, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
@@ -845,6 +904,7 @@ def test_owned_admission_rejects_deletion_object_without_erasure_evidence() -> N
         "mechanism_sha256": deletion_sha,
         "deletion_effect": "CAPABILITY_RETAINED",
     }
+    sign_receipt(receipt)
     digest = receipt_sha256(receipt)
     receipts[digest] = receipt
     payload["mechanisms"]["deletion_objects"] = [{
@@ -1125,5 +1185,7 @@ def test_cli_requires_and_resolves_admission_receipt_bundle(tmp_path: Path) -> N
         capture_output=True,
         check=False,
     )
-    assert resolved.returncode == 0, resolved.stdout + resolved.stderr
-    assert json.loads(resolved.stdout)["ok"] is True
+    assert resolved.returncode == 1
+    assert "admission.verifier_untrusted" in resolved.stdout
+    assert "admission.receipt_signature_invalid" in resolved.stdout
+    assert json.loads(resolved.stdout)["ok"] is False

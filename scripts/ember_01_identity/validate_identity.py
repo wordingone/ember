@@ -17,6 +17,9 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
 try:
     from jsonschema import Draft202012Validator
 except ImportError:  # pragma: no cover - exercised only in a broken runtime
@@ -317,6 +320,34 @@ def _receipt_sha256(receipt: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _pinned_verifier_entries() -> dict[str, str]:
+    try:
+        registry = json.loads(TRUSTED_VERIFIER_REGISTRY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if (
+        not isinstance(registry, Mapping)
+        or set(registry) != {"schema", "verifiers"}
+        or registry.get("schema") != "ember-trusted-verifier-registry-v1"
+        or not isinstance(registry.get("verifiers"), list)
+    ):
+        return {}
+    entries: dict[str, str] = {}
+    for row in registry["verifiers"]:
+        if (
+            not isinstance(row, Mapping)
+            or set(row) != {"verifier_sha256", "public_key_ed25519"}
+            or not isinstance(row.get("verifier_sha256"), str)
+            or not SHA256_RE.fullmatch(row["verifier_sha256"])
+            or not isinstance(row.get("public_key_ed25519"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", row["public_key_ed25519"])
+            or row["verifier_sha256"] in entries
+        ):
+            return {}
+        entries[row["verifier_sha256"]] = row["public_key_ed25519"]
+    return entries
+
+
 def _resolve_admission_receipt(
     digest: Any,
     *,
@@ -347,6 +378,7 @@ def _resolve_admission_receipt(
         "subject_checkpoint_sha256",
         "verifier_sha256",
         "result",
+        "signature_ed25519",
     }
     if expected_criterion is not None:
         required.add("criterion_id")
@@ -356,6 +388,27 @@ def _resolve_admission_receipt(
         findings.append(_finding("admission.receipt_shape", expected_class))
     if receipt.get("schema") != EVIDENCE_RECEIPT_SCHEMA:
         findings.append(_finding("admission.receipt_schema", expected_class))
+    signature = receipt.get("signature_ed25519")
+    public_key = _pinned_verifier_entries().get(str(expected_verifier))
+    try:
+        if (
+            not isinstance(signature, str)
+            or not re.fullmatch(r"[0-9a-f]{128}", signature)
+            or public_key is None
+        ):
+            raise ValueError("missing signature authority")
+        unsigned = dict(receipt)
+        unsigned.pop("signature_ed25519")
+        message = json.dumps(
+            unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key)).verify(
+            bytes.fromhex(signature), message
+        )
+    except (InvalidSignature, ValueError):
+        findings.append(
+            _finding("admission.receipt_signature_invalid", expected_class)
+        )
     if receipt.get("evidence_class") != expected_class:
         findings.append(_finding("admission.receipt_class_mismatch", expected_class))
     if receipt.get("subject_checkpoint_sha256") != expected_checkpoint:
@@ -554,10 +607,7 @@ def validate_manifest(
                         "int8": 1,
                         "uint8": 1,
                     }
-                    if dtype == "constant_float32":
-                        if len(tensor_bytes) != 4:
-                            raise ValueError("constant tensor requires one float32 value")
-                    elif dtype in scalar_widths:
+                    if dtype in scalar_widths:
                         if len(tensor_bytes) != element_count * scalar_widths[dtype]:
                             raise ValueError("tensor byte length does not match shape and dtype")
                     else:
@@ -971,11 +1021,7 @@ def validate_manifest(
                 )
             except (OSError, json.JSONDecodeError):
                 pinned_registry = None
-            pinned_hashes = (
-                pinned_registry.get("verifier_sha256", [])
-                if isinstance(pinned_registry, Mapping)
-                else []
-            )
+            pinned_hashes = _pinned_verifier_entries()
             if actual_verifier not in pinned_hashes:
                 findings.append(
                     _finding("admission.verifier_untrusted", actual_verifier)
@@ -984,18 +1030,10 @@ def validate_manifest(
             registry_valid = (
                 isinstance(trusted_verifier_registry, Mapping)
                 and set(trusted_verifier_registry)
-                == {"schema", "verifier_sha256"}
+                == {"schema", "verifiers"}
                 and trusted_verifier_registry.get("schema")
                 == "ember-trusted-verifier-registry-v1"
-                and isinstance(
-                    trusted_verifier_registry.get("verifier_sha256"), list
-                )
-                and all(
-                    isinstance(item, str) and bool(SHA256_RE.fullmatch(item))
-                    for item in trusted_verifier_registry["verifier_sha256"]
-                )
-                and len(set(trusted_verifier_registry["verifier_sha256"]))
-                == len(trusted_verifier_registry["verifier_sha256"])
+                and isinstance(trusted_verifier_registry.get("verifiers"), list)
             )
             if not registry_valid:
                 findings.append(
@@ -1034,9 +1072,7 @@ def validate_manifest(
                             "supplied registry does not match the checked-in trust root",
                         )
                     )
-                elif declared_verifier not in trusted_verifier_registry[
-                "verifier_sha256"
-                ]:
+                elif declared_verifier not in _pinned_verifier_entries():
                     findings.append(
                         _finding(
                             "admission.verifier_untrusted",
