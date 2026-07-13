@@ -1,3 +1,7 @@
+// goal_id: EMBER-01
+// workstream_id: EMBER-01A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // entrypoints/session-init.test.ts — issue #157 Leg 2: buildProductionCallModel must
 // proactively refuse an oversized request BEFORE it ever reaches the network, rather than
 // sending it and risking the server silently wedging (receipt: receipts/operator-sessions/
@@ -365,8 +369,8 @@ describe("session-init — resolveInitServerUrl: EMBER_GPU_FREE null signal must
     expect(resolveInitServerUrl(undefined, "http://localhost:9999")).toBe("http://localhost:9999");
   });
 
-  it("falls back to the hardcoded default when both opts.serverUrl and EMBER_MODEL_URL are unset", () => {
-    expect(resolveInitServerUrl(undefined, undefined)).toBe("http://localhost:8081");
+  it("fails closed to offline when both opts.serverUrl and EMBER_MODEL_URL are unset", () => {
+    expect(resolveInitServerUrl(undefined, undefined)).toBeNull();
   });
 
   it("an explicit opts.serverUrl string wins over EMBER_MODEL_URL", () => {
