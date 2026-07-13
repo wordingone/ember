@@ -1,7 +1,7 @@
 {
   "schema": "ember-identity-consumer-census-stability-v1",
   "artifact_class": "ENVIRONMENTAL_DISCOVERY",
-  "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+  "global_consumer_completeness": "NOT_CLAIMED",
   "goal_id": "EMBER-01",
   "workstream_id": "EMBER-01C",
   "snapshot_path": "manifests/ember-01-identity/consumer-census-v1.json",
@@ -29,34 +29,35 @@
       "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
       "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
       "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
-      "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER"
+      "OPAQUE_FILE": "CONSERVATIVE_CONSUMER"
     },
     "adjudication_counts": {
-      "CONSERVATIVE_CONSUMER": 45607,
-      "REVIEWED_IDENTITY_SOURCE": 7302,
-      "REVIEWED_NON_CONSUMER": 12280
+      "CONSERVATIVE_CONSUMER": 57694,
+      "REVIEWED_IDENTITY_SOURCE": 7495
     },
     "unadjudicated_count": 0,
-    "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE"
+    "global_consumer_completeness": "ENVIRONMENTAL_DISCOVERY_ONLY"
   },
   "portable_replay": {
     "profile": "portable",
     "root_id": "public-master",
     "source_commit": "ca500aabe0f597ab85e762ceb53748724fb0ae98",
-    "snapshot_bytes": 22226462,
-    "snapshot_sha256": "a3d0afc545e377a7126468e9937fc72da4afb6f39d2bd951813fedb4f0009f93",
-    "canonical_subject_sha256": "1d4500a851e35c42f87214797dbd3729729cc7bb68561ecb6413328d1405d6f8",
+    "snapshot_bytes": 30383497,
+    "snapshot_sha256": "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a",
+    "canonical_subject_sha256": "0a59eeb75925c68bbe4c7cad5c030fcc8298affd061b3b226ea420368506bf85",
     "complete_run_sha256": [
-      "a3d0afc545e377a7126468e9937fc72da4afb6f39d2bd951813fedb4f0009f93",
-      "a3d0afc545e377a7126468e9937fc72da4afb6f39d2bd951813fedb4f0009f93"
+      "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a",
+      "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a"
     ],
     "byte_identical": true,
-    "discovered_evidence_count": 23677,
+    "tracked_file_count": 2878,
+    "files_accounted": 2878,
+    "evidence_record_count": 24648,
+    "discovered_evidence_count": 24635,
     "verified_consumer_count": 13,
     "adjudication_counts": {
-      "CONSERVATIVE_CONSUMER": 16279,
-      "REVIEWED_IDENTITY_SOURCE": 2453,
-      "REVIEWED_NON_CONSUMER": 4945
+      "CONSERVATIVE_CONSUMER": 21830,
+      "REVIEWED_IDENTITY_SOURCE": 2805
     },
     "unadjudicated_count": 0,
     "reviewed_scope_status": "REVIEWED_SCOPE_COMPLETE",

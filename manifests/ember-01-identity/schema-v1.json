@@ -116,6 +116,8 @@
           "additionalProperties": false,
           "required": [
             "input_id",
+            "authority_id",
+            "authority_record_sha256",
             "authority",
             "shard_manifest_sha256",
             "caller_sha256",
@@ -125,6 +127,8 @@
           ],
           "properties": {
             "input_id": {"type": "string", "minLength": 1},
+            "authority_id": {"type": "string", "minLength": 1},
+            "authority_record_sha256": {"$ref": "#/$defs/sha256"},
             "authority": {
               "enum": ["CURRENT_EXECUTABLE", "HISTORICAL_REFERENCE", "UNRESOLVED"]
             },
@@ -267,6 +271,7 @@
         "harness_sha256",
         "subject_checkpoint_sha256",
         "comparator_identity",
+        "comparator_sha256",
         "score",
         "uncertainty",
         "receipt_sha256",
@@ -279,6 +284,7 @@
         "harness_sha256": {"$ref": "#/$defs/sha256"},
         "subject_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
         "comparator_identity": {"$ref": "#/$defs/stringOrUnresolved"},
+        "comparator_sha256": {"$ref": "#/$defs/sha256"},
         "score": {"$ref": "#/$defs/measurementOrUnresolved"},
         "uncertainty": {"$ref": "#/$defs/measurementOrUnresolved"},
         "receipt_sha256": {

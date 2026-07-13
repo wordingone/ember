@@ -74,7 +74,7 @@ def test_checked_consumer_scope_is_portable_exact_and_claims_only_conservative_c
             "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
             "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
             "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
-            "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+            "OPAQUE_FILE": "CONSERVATIVE_CONSUMER",
         },
     }
     ids = [row["consumer_id"] for row in scope["consumers"]]
@@ -142,23 +142,24 @@ def test_checked_census_matches_byte_stability_receipt() -> None:
     assert receipt["evidence_record_count"] == len(snapshot["evidence"])
     assert receipt["absolute_host_paths_published"] is False
     assert receipt["artifact_class"] == "ENVIRONMENTAL_DISCOVERY"
-    assert receipt["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
+    assert receipt["global_consumer_completeness"] == "NOT_CLAIMED"
     assert summarize_snapshot_adjudication(
         snapshot, receipt["environmental_adjudication"]
     ) == {
         "adjudication_counts": {
-            "CONSERVATIVE_CONSUMER": 45607,
-            "REVIEWED_IDENTITY_SOURCE": 7302,
-            "REVIEWED_NON_CONSUMER": 12280,
+            "CONSERVATIVE_CONSUMER": 57694,
+            "REVIEWED_IDENTITY_SOURCE": 7495,
         },
         "unadjudicated_count": 0,
-        "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+        "global_consumer_completeness": "ENVIRONMENTAL_DISCOVERY_ONLY",
     }
     portable = receipt["portable_replay"]
     assert portable["byte_identical"] is True
-    assert portable["snapshot_sha256"] == "a3d0afc545e377a7126468e9937fc72da4afb6f39d2bd951813fedb4f0009f93"
+    assert portable["snapshot_sha256"] == "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a"
     assert portable["verified_consumer_count"] == 13
-    assert portable["discovered_evidence_count"] == 23677
+    assert portable["tracked_file_count"] == portable["files_accounted"] == 2878
+    assert portable["evidence_record_count"] == 24648
+    assert portable["discovered_evidence_count"] == 24635
     assert portable["unadjudicated_count"] == 0
     assert portable["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
     rendered = snapshot_bytes.decode("utf-8")
@@ -251,11 +252,11 @@ def test_census_includes_receipt_test_and_identity_sources_but_excludes_its_gene
     }
     assert census["coverage"]["files_excluded"] == 1
     classes = {row["path"]: row["record_class"] for row in census["evidence"]}
-    assert classes["tests/fixtures/fake.py"] == "REVIEWED_NON_CONSUMER"
+    assert classes["tests/fixtures/fake.py"] == "CANDIDATE_EXECUTABLE_MATCH"
     assert classes["scripts/ember_01_identity/self.py"].startswith("CANDIDATE_")
     roles = {row["path"]: row["source_role"] for row in census["evidence"]}
     assert roles["receipts/run.json"] == "DATA_EVIDENCE"
-    assert roles["tests/fixtures/fake.py"] == "TEST_EVIDENCE"
+    assert roles["tests/fixtures/fake.py"] == "EXECUTABLE_CANDIDATE"
     assert roles["scripts/ember_01_identity/self.py"] == "EXECUTABLE_CANDIDATE"
 
 
@@ -525,7 +526,7 @@ def test_conservative_policy_adjudicates_every_exact_candidate_without_invented_
             "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
             "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
             "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
-            "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+            "OPAQUE_FILE": "CONSERVATIVE_CONSUMER",
         },
     }
     census = build_census_set(
@@ -544,20 +545,18 @@ def test_conservative_policy_adjudicates_every_exact_candidate_without_invented_
     assert classes == {
         "docs/identity.md": "REVIEWED_IDENTITY_SOURCE",
         "runtime.py": "CONSERVATIVE_CONSUMER",
-        "tests/test_runtime.py": "REVIEWED_NON_CONSUMER",
+        "tests/test_runtime.py": "CONSERVATIVE_CONSUMER",
     }
     assert census["candidate_discovery"] == {
         "record_count": 4,
         "unadjudicated_count": 0,
         "source_role_counts": {
             "DOCUMENTATION_EVIDENCE": 1,
-            "EXECUTABLE_CANDIDATE": 2,
-            "TEST_EVIDENCE": 1,
+                "EXECUTABLE_CANDIDATE": 3,
         },
         "adjudication_counts": {
-            "CONSERVATIVE_CONSUMER": 2,
+            "CONSERVATIVE_CONSUMER": 3,
             "REVIEWED_IDENTITY_SOURCE": 1,
-            "REVIEWED_NON_CONSUMER": 1,
         },
         "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
     }
@@ -566,10 +565,64 @@ def test_conservative_policy_adjudicates_every_exact_candidate_without_invented_
         assert row["review_state"] == "POLICY_ADJUDICATED"
         assert row["content_sha256"]
         assert row["line_sha256"]
-        assert "derived_label" not in row
-        assert "protocol" not in row
-        assert "failure_behavior" not in row
-        assert "conflict" not in row
+        assert row["derived_label"]
+        assert row["protocol"]
+        assert row["failure_behavior"]
+        assert row["conflict"]
+
+
+def test_complete_policy_accounts_for_every_file_and_never_auto_dismisses_tests(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "runtime.py").write_text("print('no identity token')\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_runtime.py").write_text(
+        "def test_stub(): pass\n", encoding="utf-8"
+    )
+    (tmp_path / "notes.md").write_text("ordinary note\n", encoding="utf-8")
+    (tmp_path / "opaque.bin").write_bytes(b"\x00\xff\x00")
+    policy = {
+        "schema": "ember-conservative-candidate-adjudication-v1",
+        "policy_id": "fail-closed-static-superset-v1",
+        "root_id": "public-master",
+        "source_commit": FIXTURE_COMMIT,
+        "roles": {
+            "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
+            "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "OPAQUE_FILE": "CONSERVATIVE_CONSUMER",
+        },
+    }
+    census = build_census_set(
+        [{
+            "root": tmp_path,
+            "root_id": "public-master",
+            "surface": "public",
+            "tracked_files": [
+                "runtime.py", "tests/test_runtime.py", "notes.md", "opaque.bin"
+            ],
+            "source_commit": FIXTURE_COMMIT,
+        }],
+        adjudication_policy=policy,
+    )
+    assert {row["path"] for row in census["evidence"]} == {
+        "runtime.py", "tests/test_runtime.py", "notes.md", "opaque.bin"
+    }
+    by_path = {row["path"]: row for row in census["evidence"]}
+    assert by_path["tests/test_runtime.py"]["record_class"] == "CONSERVATIVE_CONSUMER"
+    assert by_path["opaque.bin"]["record_class"] == "CONSERVATIVE_CONSUMER"
+    assert by_path["notes.md"]["record_class"] == "REVIEWED_IDENTITY_SOURCE"
+    assert census["roots"][0]["coverage"]["tracked_candidates"] == 4
+    assert census["roots"][0]["coverage"]["files_accounted"] == 4
+    assert census["candidate_discovery"]["unadjudicated_count"] == 0
+    assert census["candidate_discovery"]["global_consumer_completeness"] == (
+        "CONSERVATIVE_SUPERSET_COMPLETE"
+    )
+    for row in census["evidence"]:
+        assert row["derived_label"]
+        assert row["protocol"]
+        assert row["failure_behavior"]
+        assert row["conflict"]
 
 
 def test_multi_surface_semantics_resolve_only_in_their_declared_root(tmp_path: Path) -> None:

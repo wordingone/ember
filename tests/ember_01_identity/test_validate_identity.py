@@ -24,7 +24,8 @@ SCHEMA_PATH = ROOT / "manifests" / "ember-01-identity" / "schema-v1.json"
 NEGATIVE_CASES = Path(__file__).parent / "fixtures" / "negative-cases-v1.json"
 VERIFIER_BYTES = (
     b'{"rules":["bind_checkpoint","bind_claims","derive_allocated_unique",'
-    b'"require_verified_result"],"schema":"ember-admission-verifier-program-v1"}'
+    b'"require_verified_result","resolve_accepted_training_input_authority"],'
+    b'"schema":"ember-admission-verifier-program-v1"}'
 )
 TENSOR_HASHES = {"fixture.weight": "b" * 64}
 ARTIFACT_BYTES = {
@@ -40,6 +41,8 @@ ARTIFACT_BYTES = {
     "training.optimizer_state": b"owned optimizer state",
     "training.numerics": b"bf16 activations fp32 master",
     "backend.executable": b"owned backend executable",
+    "evaluation.harness": b"owned benchmark harness",
+    "evaluation.comparator": b"frozen comparator identity artifact",
     "ancestry:0": b"clean genesis parent checkpoint",
     "tensor:fixture.weight": b"\x00\x00\x00\x00",
 }
@@ -192,6 +195,8 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
     accepted_input["forwarding_receipt_sha256"] = bind_evidence(
         "training_input_forwarding",
         input_id=accepted_input["input_id"],
+        authority_id=accepted_input["authority_id"],
+        authority_record_sha256=accepted_input["authority_record_sha256"],
         authority=accepted_input["authority"],
         shard_manifest_sha256=accepted_input["shard_manifest_sha256"],
         caller_sha256=accepted_input["caller_sha256"],
@@ -239,6 +244,12 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
     }
     payload["backend"]["resource_lease_id"] = "fixture-lease"
     payload["evaluation"]["score"] = {"value": 1.0, "unit": "fixture-score"}
+    payload["evaluation"]["harness_sha256"] = hashlib.sha256(
+        ARTIFACT_BYTES["evaluation.harness"]
+    ).hexdigest()
+    payload["evaluation"]["comparator_sha256"] = hashlib.sha256(
+        ARTIFACT_BYTES["evaluation.comparator"]
+    ).hexdigest()
     payload["evaluation"]["uncertainty"] = {"value": 0.0, "unit": "fixture-score"}
     payload["evaluation"]["counts_toward_owned_completion"] = True
     payload["evaluation"]["receipt_sha256"] = bind_evidence(
@@ -248,6 +259,7 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
         split=payload["evaluation"]["split"],
         harness_sha256=payload["evaluation"]["harness_sha256"],
         comparator_identity=payload["evaluation"]["comparator_identity"],
+        comparator_sha256=payload["evaluation"]["comparator_sha256"],
         score=payload["evaluation"]["score"],
         uncertainty=payload["evaluation"]["uncertainty"],
         counts_toward_owned_completion=True,
@@ -654,6 +666,55 @@ def test_owned_admission_rejects_forwarding_receipt_for_another_shard() -> None:
     )
 
 
+def test_owned_admission_rejects_signed_but_unpinned_training_input_identity() -> None:
+    payload, receipts = admitted_manifest()
+    old_digest = payload["data"]["accepted_input"]["forwarding_receipt_sha256"]
+    receipt = copy.deepcopy(receipts.pop(old_digest))
+    receipt.pop("signature_ed25519")
+    receipt["input_id"] = "unauthorized-training-input"
+    payload["data"]["accepted_input"]["input_id"] = receipt["input_id"]
+    sign_receipt(receipt)
+    new_digest = receipt_sha256(receipt)
+    receipts[new_digest] = receipt
+    payload["data"]["accepted_input"]["forwarding_receipt_sha256"] = new_digest
+    assert "admission.training_input_authority" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_rejects_modified_accepted_input_trust_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry = json.loads(
+        (
+            ROOT
+            / "manifests"
+            / "ember-01-identity"
+            / "accepted-training-input-authorities-v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    registry["active"]["body_sha256"] = "0" * 64
+    modified = tmp_path / "accepted-training-input-authorities-v1.json"
+    modified.write_text(json.dumps(registry), encoding="utf-8")
+    monkeypatch.setattr(
+        identity_validator, "ACCEPTED_TRAINING_INPUT_AUTHORITIES_PATH", modified
+    )
+    payload, receipts = admitted_manifest()
+    assert "admission.training_input_authority" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_requires_harness_and_comparator_bytes() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["artifact_bundle"]["artifacts"].pop("evaluation.harness")
+    artifacts["artifact_bundle"]["artifacts"].pop("evaluation.comparator")
+    assert {
+        "admission.artifact_missing",
+    } <= error_codes(payload, receipt_bundle=receipts, **artifacts)
+
+
 @pytest.mark.parametrize(
     "disposition", ["OWNED_CANDIDATE", "HISTORICAL_ONLY", "REFERENCE_ONLY"]
 )
@@ -1008,6 +1069,8 @@ def test_owned_admission_rejects_deletion_object_without_erasure_evidence() -> N
         ("training.optimizer_state", "admission.artifact_missing"),
         ("training.numerics", "admission.artifact_missing"),
         ("backend.executable", "admission.artifact_missing"),
+        ("evaluation.harness", "admission.artifact_missing"),
+        ("evaluation.comparator", "admission.artifact_missing"),
         ("ancestry:0", "admission.artifact_missing"),
         ("tensor:fixture.weight", "admission.artifact_missing"),
     ],
@@ -1034,6 +1097,8 @@ def test_owned_admission_rejects_missing_required_artifact(
         "training.optimizer_state",
         "training.numerics",
         "backend.executable",
+        "evaluation.harness",
+        "evaluation.comparator",
         "ancestry:0",
         "tensor:fixture.weight",
     ],

@@ -1,0 +1,11 @@
+{
+  "schema": "ember-accepted-training-input-authority-registry-v1",
+  "active": {
+    "authority_id": "ember-02-issue-812",
+    "body_sha256": "4c5a3e110778f6e54c0f26d0cb878aacc8f2b62bcb5653f774d595b1fd7cf654",
+    "input_id": "github-issue-812",
+    "issue_url": "https://github.com/wordingone/ember/issues/812",
+    "state": "CURRENT_EXECUTABLE"
+  },
+  "historical_issue_ids": [682, 793]
+}
