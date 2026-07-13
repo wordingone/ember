@@ -3,14 +3,14 @@
   "schema": "ember-reviewed-consumer-scope-v1",
   "scope_id": "ember-load-bearing-consumers-v1",
   "root_id": "public-master",
-  "source_commit": "0bcfa148c8e5af09f7abe3e550a840c998a3e218",
+  "source_commit": "f6cacc05ffc6b3b5b03c84c2d9a1f4686947c832",
   "claim_boundary": "reviewed_load_bearing_identity_boundaries",
   "global_consumer_completeness": "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
   "candidate_adjudication": {
     "schema": "ember-conservative-candidate-adjudication-v1",
     "policy_id": "fail-closed-static-superset-v1",
     "root_id": "public-master",
-    "source_commit": "0bcfa148c8e5af09f7abe3e550a840c998a3e218",
+    "source_commit": "f6cacc05ffc6b3b5b03c84c2d9a1f4686947c832",
     "roles": {
       "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
       "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
