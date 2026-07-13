@@ -81,6 +81,36 @@ pub enum EmberdError {
         setup: String,
         cleanup: String,
     },
+    PreparedResumeCleanupFailed {
+        job_id: String,
+        transition: String,
+        cleanup: String,
+    },
+    InvalidPlannedOutage {
+        resource: String,
+        detail: String,
+    },
+    PlannedOutageActive {
+        resource: String,
+        ends_at_ms: i64,
+        reason: String,
+    },
+    ReceiptHashCollision {
+        path: PathBuf,
+    },
+    NonTerminalReceipt {
+        job_id: String,
+        state: String,
+    },
+    LogEvidenceUnsealed {
+        job_id: String,
+    },
+    LogEvidenceMismatch {
+        job_id: String,
+        stream: String,
+        expected: String,
+        actual: String,
+    },
     Poisoned,
 }
 
@@ -153,6 +183,37 @@ impl JobState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RestartPolicy {
+    #[default]
+    Never,
+}
+
+impl RestartPolicy {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Never => "never",
+        }
+    }
+
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "never" => Ok(Self::Never),
+            _ => Err(EmberdError::InvalidTransition {
+                job_id: String::new(),
+                detail: format!("unknown restart policy {value}"),
+            }),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReceiptArtifact {
+    pub path: PathBuf,
+    pub sha256: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct JobSpec {
     job_id: String,
@@ -160,6 +221,7 @@ pub struct JobSpec {
     args: Vec<String>,
     resource_lease: String,
     env: BTreeMap<String, String>,
+    restart_policy: RestartPolicy,
 }
 
 impl JobSpec {
@@ -177,10 +239,16 @@ impl JobSpec {
             args: args.into_iter().map(Into::into).collect(),
             resource_lease: resource_lease.into(),
             env: BTreeMap::new(),
+            restart_policy: RestartPolicy::Never,
         }
     }
     pub fn with_env<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
         self.env.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn with_restart_policy(mut self, restart_policy: RestartPolicy) -> Self {
+        self.restart_policy = restart_policy;
         self
     }
 }
@@ -218,6 +286,8 @@ impl Drop for OwnedHandle {
 struct LiveProcess {
     job: OwnedHandle,
     process: OwnedHandle,
+    _stdout_log_guard: OwnedHandle,
+    _stderr_log_guard: OwnedHandle,
     pid: u32,
 }
 
@@ -229,6 +299,7 @@ struct RetainedProcess {
 
 pub struct Daemon {
     _state_writer_lock: fs::File,
+    log_dir: PathBuf,
     db: Arc<Mutex<Connection>>,
     #[cfg(windows)]
     live: Arc<Mutex<HashMap<String, RetainedProcess>>>,
@@ -256,6 +327,13 @@ impl Daemon {
             fs::create_dir_all(parent)?;
         }
         let state_writer_lock = acquire_state_writer_lock(path)?;
+        let mut log_dir_name = path
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("emberd"))
+            .to_os_string();
+        log_dir_name.push(".logs");
+        let log_dir = path.with_file_name(log_dir_name);
+        fs::create_dir_all(&log_dir)?;
         #[cfg(windows)]
         let monitor_shutdown = create_monitor_shutdown()?;
         let conn = Connection::open(path)?;
@@ -266,10 +344,14 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS identities(job_id TEXT PRIMARY KEY, canonical_path TEXT NOT NULL, sha256 TEXT NOT NULL, identity_blob BLOB NOT NULL, bound_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS lease_generations(resource TEXT PRIMARY KEY, generation INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS leases(resource TEXT PRIMARY KEY, owner_job_id TEXT NOT NULL, lease_epoch INTEGER NOT NULL, acquired_at_ms INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, exit_code INTEGER, exited_at_ms INTEGER, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, restart_policy TEXT NOT NULL DEFAULT 'never', stdout_log_path TEXT NOT NULL, stderr_log_path TEXT NOT NULL, stdout_child_handle INTEGER NOT NULL DEFAULT 0, stderr_child_handle INTEGER NOT NULL DEFAULT 0, stdout_log_sha256 TEXT, stderr_log_sha256 TEXT, outage_event_cutoff_seq INTEGER, exit_code INTEGER, exited_at_ms INTEGER, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS planned_outages(outage_id INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, starts_at_ms INTEGER NOT NULL, ends_at_ms INTEGER NOT NULL, reason TEXT NOT NULL, created_at_ms INTEGER NOT NULL, cancelled_at_ms INTEGER);
+            CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);")?;
+        migrate_schema(&conn, &log_dir)?;
         Ok(Self {
             _state_writer_lock: state_writer_lock,
+            log_dir,
             db: Arc::new(Mutex::new(conn)),
             #[cfg(windows)]
             live: Arc::new(Mutex::new(HashMap::new())),
@@ -422,15 +504,119 @@ impl Daemon {
             .optional()?)
     }
 
+    pub fn plan_outage(
+        &self,
+        resource: &str,
+        starts_at_ms: i64,
+        ends_at_ms: i64,
+        reason: &str,
+    ) -> Result<i64> {
+        if resource.trim().is_empty() || reason.trim().is_empty() || ends_at_ms <= starts_at_ms {
+            return Err(EmberdError::InvalidPlannedOutage {
+                resource: resource.into(),
+                detail: "resource/reason must be non-empty and ends_at_ms must exceed starts_at_ms"
+                    .into(),
+            });
+        }
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
+            "INSERT INTO planned_outages(resource,starts_at_ms,ends_at_ms,reason,created_at_ms) VALUES(?1,?2,?3,?4,?5)",
+            params![resource, starts_at_ms, ends_at_ms, reason, now_ms()],
+        )?;
+        let outage_id = tx.last_insert_rowid();
+        tx.execute(
+            "INSERT INTO outage_events(resource,ts_ms,kind,payload_json) VALUES(?1,?2,'outage_planned',?3)",
+            params![
+                resource,
+                now_ms(),
+                json!({"outage_id":outage_id,"starts_at_ms":starts_at_ms,"ends_at_ms":ends_at_ms,"reason":reason}).to_string(),
+            ],
+        )?;
+        tx.commit()?;
+        Ok(outage_id)
+    }
+
+    pub fn cancel_outages(&self, resource: &str) -> Result<usize> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let cancelled_at_ms = now_ms();
+        let changed = tx.execute(
+            "UPDATE planned_outages SET cancelled_at_ms=?2 WHERE resource=?1 AND cancelled_at_ms IS NULL",
+            params![resource, cancelled_at_ms],
+        )?;
+        tx.execute(
+            "INSERT INTO outage_events(resource,ts_ms,kind,payload_json) VALUES(?1,?2,'outages_cancelled',?3)",
+            params![
+                resource,
+                cancelled_at_ms,
+                json!({"count":changed}).to_string(),
+            ],
+        )?;
+        tx.commit()?;
+        Ok(changed)
+    }
+
+    pub fn job_log_paths(&self, job_id: &str) -> Result<(PathBuf, PathBuf)> {
+        self.conn()?
+            .query_row(
+                "SELECT stdout_log_path,stderr_log_path FROM jobs WHERE job_id=?1",
+                [job_id],
+                |row| {
+                    Ok((
+                        PathBuf::from(row.get::<_, String>(0)?),
+                        PathBuf::from(row.get::<_, String>(1)?),
+                    ))
+                },
+            )
+            .optional()?
+            .ok_or_else(|| EmberdError::JobNotFound {
+                job_id: job_id.into(),
+            })
+    }
+
+    pub fn job_restart_policy(&self, job_id: &str) -> Result<RestartPolicy> {
+        let policy: String = self
+            .conn()?
+            .query_row(
+                "SELECT restart_policy FROM jobs WHERE job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| EmberdError::JobNotFound {
+                job_id: job_id.into(),
+            })?;
+        RestartPolicy::parse(&policy)
+    }
+
     pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
         self.verify_identity(&spec.job_id)?;
         let argv_json = serde_json::to_string(&spec.args)?;
         let env_json = serde_json::to_string(&spec.env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
         let job_object_name = job_object_name(&spec.job_id);
+        let log_key = hash_bytes(spec.job_id.as_bytes());
+        let stdout_log_path = self.log_dir.join(format!("{log_key}.stdout.log"));
+        let stderr_log_path = self.log_dir.join(format!("{log_key}.stderr.log"));
         {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let timestamp = now_ms();
+            let outage: Option<(i64, String)> = tx
+                .query_row(
+                    "SELECT ends_at_ms,reason FROM planned_outages WHERE resource=?1 AND cancelled_at_ms IS NULL AND starts_at_ms<=?2 AND ends_at_ms>?2 ORDER BY outage_id DESC LIMIT 1",
+                    params![spec.resource_lease, timestamp],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?;
+            if let Some((ends_at_ms, reason)) = outage {
+                return Err(EmberdError::PlannedOutageActive {
+                    resource: spec.resource_lease.clone(),
+                    ends_at_ms,
+                    reason,
+                });
+            }
             let lease: Option<(String, i64)> = tx
                 .query_row(
                     "SELECT owner_job_id,lease_epoch FROM leases WHERE resource=?1",
@@ -461,8 +647,8 @@ impl Daemon {
                 });
             }
             tx.execute(
-                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'starting',?9,?9)",
-                params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, now_ms()],
+                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,'starting',?12,?12)",
+                params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), timestamp],
             )?;
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
@@ -470,21 +656,22 @@ impl Daemon {
             )?;
             tx.commit()?;
         }
-        let mut spawned = match spawn_managed(&spec, &job_object_name) {
-            Ok(spawned) => spawned,
-            Err(error) => {
-                let _ = self.mark_failed(&spec.job_id, "job_spawn_failed");
-                return Err(error);
-            }
-        };
+        let mut spawned =
+            match spawn_managed(&spec, &job_object_name, &stdout_log_path, &stderr_log_path) {
+                Ok(spawned) => spawned,
+                Err(error) => {
+                    let _ = self.mark_failed(&spec.job_id, "job_spawn_failed");
+                    return Err(error);
+                }
+            };
         let pid = spawned.pid();
         let identity = spawned.identity();
         let prepared = (|| -> Result<()> {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let changed = tx.execute(
-                "UPDATE jobs SET pid=?2,main_thread_id=?3,process_start_token=?4,executable_identity=?5,state='prepared',updated_at_ms=?6 WHERE job_id=?1 AND state='starting' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
-                params![spec.job_id, pid, spawned.main_thread_id(), identity.start_token, identity.executable, now_ms()],
+                "UPDATE jobs SET pid=?2,main_thread_id=?3,process_start_token=?4,executable_identity=?5,stdout_child_handle=?6,stderr_child_handle=?7,state='prepared',updated_at_ms=?8 WHERE job_id=?1 AND state='starting' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+                params![spec.job_id, pid, spawned.main_thread_id(), identity.start_token, identity.executable, spawned.stdout_child_handle(), spawned.stderr_child_handle(), now_ms()],
             )?;
             if changed != 1 {
                 return Err(EmberdError::InvalidTransition {
@@ -504,14 +691,35 @@ impl Daemon {
             let _ = self.mark_failed(&spec.job_id, "job_prepare_commit_failed");
             return Err(error);
         }
-        if let Err(error) = spawned.resume() {
-            let _ = spawned.terminate_and_wait();
-            let _ = self.mark_failed(&spec.job_id, "job_resume_failed");
-            return Err(error);
-        }
         let running = (|| -> Result<()> {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let launch_at_ms = now_ms();
+            let outage: Option<(i64, String)> = tx
+                .query_row(
+                    "SELECT ends_at_ms,reason FROM planned_outages WHERE resource=?1 AND cancelled_at_ms IS NULL AND starts_at_ms<=?2 AND ends_at_ms>?2 ORDER BY outage_id DESC LIMIT 1",
+                    params![spec.resource_lease, launch_at_ms],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?;
+            if let Some((ends_at_ms, reason)) = outage {
+                return Err(EmberdError::PlannedOutageActive {
+                    resource: spec.resource_lease.clone(),
+                    ends_at_ms,
+                    reason,
+                });
+            }
+            let fenced = tx.execute(
+                "UPDATE jobs SET updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+                params![spec.job_id, launch_at_ms],
+            )?;
+            if fenced != 1 {
+                return Err(EmberdError::InvalidTransition {
+                    job_id: spec.job_id.clone(),
+                    detail: "prepared start lost its state or lease fence".into(),
+                });
+            }
+            spawned.resume()?;
             let changed = tx.execute(
                 "UPDATE jobs SET state='running',updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
                 params![spec.job_id, now_ms()],
@@ -519,7 +727,7 @@ impl Daemon {
             if changed != 1 {
                 return Err(EmberdError::InvalidTransition {
                     job_id: spec.job_id.clone(),
-                    detail: "prepared start lost its lease fence".into(),
+                    detail: "resumed start lost its held state or lease fence".into(),
                 });
             }
             tx.execute(
@@ -535,7 +743,7 @@ impl Daemon {
         })();
         if let Err(error) = running {
             let _ = spawned.terminate_and_wait();
-            let _ = self.mark_failed(&spec.job_id, "job_running_commit_failed");
+            let _ = self.mark_failed(&spec.job_id, "job_launch_commit_failed");
             return Err(error);
         }
         #[cfg(windows)]
@@ -580,7 +788,7 @@ impl Daemon {
         let live = match open_live_status(&row) {
             LiveStatus::Verified(live) => live,
             LiveStatus::Dead => {
-                let _ = self.mark_dead(job_id, &row, "job_reconciled_dead");
+                let _ = self.mark_exited_unknown(job_id, &row, "job_reconciled_exited_unknown");
                 return Err(EmberdError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
@@ -657,11 +865,11 @@ impl Daemon {
         let live = match live {
             LiveStatus::Verified(live) => live,
             LiveStatus::Dead if row.state == JobState::Stopping => {
-                self.finalize_stopped(job_id, &row)?;
+                self.finalize_stopped(job_id, &row, false)?;
                 return Ok(());
             }
             LiveStatus::Dead => {
-                self.mark_dead(job_id, &row, "job_dead_before_stop")?;
+                self.mark_exited_unknown(job_id, &row, "job_exited_before_stop")?;
                 return Err(EmberdError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
@@ -740,34 +948,186 @@ impl Daemon {
         }
         #[cfg(not(windows))]
         terminate_process(row.pid)?;
-        self.finalize_stopped(job_id, &row)
+        self.finalize_stopped(job_id, &row, true)
     }
 
-    pub fn export_receipt(&self, job_id: &str, path: &Path) -> Result<()> {
+    fn receipt_bytes(&self, job_id: &str) -> Result<Vec<u8>> {
         self.verify_identity(job_id)?;
-        if path.exists() {
-            return Err(EmberdError::ReceiptAlreadyExists {
-                path: path.to_path_buf(),
-            });
-        }
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Deferred)?;
-        let row: (String,String,String,String,i64) = tx.query_row("SELECT j.state,j.resource,i.sha256,j.executable_identity,j.pid FROM jobs j JOIN identities i ON i.job_id=j.job_id WHERE j.job_id=?1", [job_id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).optional()?.ok_or_else(|| EmberdError::JobNotFound { job_id: job_id.into() })?;
+        let row: ReceiptRow = tx
+            .query_row(
+                "SELECT j.state,j.resource,i.sha256,j.executable_identity,j.pid,j.restart_policy,j.stdout_log_path,j.stderr_log_path,j.exit_code,j.stdout_log_sha256,j.stderr_log_sha256,j.outage_event_cutoff_seq FROM jobs j JOIN identities i ON i.job_id=j.job_id WHERE j.job_id=?1",
+                [job_id],
+                |row| {
+                    Ok(ReceiptRow {
+                        state: row.get(0)?,
+                        resource: row.get(1)?,
+                        identity_sha256: row.get(2)?,
+                        executable_identity: row.get(3)?,
+                        pid: row.get(4)?,
+                        restart_policy: row.get(5)?,
+                        stdout_log_path: row.get(6)?,
+                        stderr_log_path: row.get(7)?,
+                        exit_code: row.get(8)?,
+                        stdout_log_sha256: row.get(9)?,
+                        stderr_log_sha256: row.get(10)?,
+                        outage_event_cutoff_seq: row.get(11)?,
+                    })
+                },
+            )
+            .optional()?
+            .ok_or_else(|| EmberdError::JobNotFound {
+                job_id: job_id.into(),
+            })?;
         let mut stmt = tx.prepare(
             "SELECT seq,ts_ms,kind,payload_json FROM events WHERE job_id=?1 ORDER BY seq",
         )?;
         let raw_events: Vec<(i64, i64, String, String)> = stmt
-            .query_map([job_id], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            .query_map([job_id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
             })?
             .collect::<std::result::Result<_, _>>()?;
         drop(stmt);
+        let mut outage_stmt = tx.prepare(
+            "SELECT seq,ts_ms,kind,payload_json FROM outage_events WHERE resource=?1 AND seq<=?2 ORDER BY seq",
+        )?;
+        let raw_outage_events: Vec<(i64, i64, String, String)> = outage_stmt
+            .query_map(
+                params![
+                    &row.resource,
+                    row.outage_event_cutoff_seq.unwrap_or(i64::MAX)
+                ],
+                |outage| {
+                    Ok((
+                        outage.get(0)?,
+                        outage.get(1)?,
+                        outage.get(2)?,
+                        outage.get(3)?,
+                    ))
+                },
+            )?
+            .collect::<std::result::Result<_, _>>()?;
+        drop(outage_stmt);
         tx.commit()?;
-        let events: Vec<Value> = raw_events.into_iter().map(|(seq,ts,kind,payload)| Ok(json!({"seq":seq,"ts_ms":ts,"kind":kind,"payload":serde_json::from_str::<Value>(&payload)?}))).collect::<Result<_>>()?;
-        let receipt = json!({"schema":"emberd-operational-receipt-v1","job_id":job_id,"identity_sha256":row.2,"resource_lease":row.1,"state":row.0,"pid":row.4,"executable_identity":row.3,"events":events,"scientific_capability_evidence":false});
-        atomic_create(path, &serde_json::to_vec_pretty(&receipt)?)
+        let events: Vec<Value> = raw_events
+            .into_iter()
+            .map(|(seq, ts, kind, payload)| {
+                Ok(json!({"seq":seq,"ts_ms":ts,"kind":kind,"payload":serde_json::from_str::<Value>(&payload)?}))
+            })
+            .collect::<Result<_>>()?;
+        let outage_events: Vec<Value> = raw_outage_events
+            .into_iter()
+            .map(|(seq, ts, kind, payload)| {
+                Ok(json!({"seq":seq,"ts_ms":ts,"kind":kind,"payload":serde_json::from_str::<Value>(&payload)?}))
+            })
+            .collect::<Result<_>>()?;
+        let stdout_path = PathBuf::from(&row.stdout_log_path);
+        let stderr_path = PathBuf::from(&row.stderr_log_path);
+        let file_name = |path: &Path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        };
+        let (stdout_evidence, stderr_evidence) = match (
+            row.stdout_log_sha256.as_ref(),
+            row.stderr_log_sha256.as_ref(),
+        ) {
+            (Some(expected_stdout), Some(expected_stderr)) => {
+                let stdout_sha256 = hash_file(&stdout_path)?;
+                let stderr_sha256 = hash_file(&stderr_path)?;
+                for (stream, expected, actual) in [
+                    ("stdout", expected_stdout, &stdout_sha256),
+                    ("stderr", expected_stderr, &stderr_sha256),
+                ] {
+                    if expected != actual {
+                        return Err(EmberdError::LogEvidenceMismatch {
+                            job_id: job_id.into(),
+                            stream: stream.into(),
+                            expected: expected.clone(),
+                            actual: actual.clone(),
+                        });
+                    }
+                }
+                (
+                    json!({"file_name":file_name(&stdout_path),"sealed":true,"sha256":stdout_sha256}),
+                    json!({"file_name":file_name(&stderr_path),"sealed":true,"sha256":stderr_sha256}),
+                )
+            }
+            (None, None) => (
+                json!({"file_name":file_name(&stdout_path),"sealed":false,"sha256":Value::Null}),
+                json!({"file_name":file_name(&stderr_path),"sealed":false,"sha256":Value::Null}),
+            ),
+            _ => {
+                return Err(EmberdError::LogEvidenceUnsealed {
+                    job_id: job_id.into(),
+                })
+            }
+        };
+        let receipt = json!({
+            "schema":"emberd-operational-receipt-v1",
+            "job_id":job_id,
+            "identity_sha256":row.identity_sha256,
+            "resource_lease":row.resource,
+            "state":row.state,
+            "pid":row.pid,
+            "executable_identity":row.executable_identity,
+            "restart_policy":row.restart_policy,
+            "exit_code":row.exit_code,
+            "logs":{
+                "stdout":stdout_evidence,
+                "stderr":stderr_evidence
+            },
+            "events":events,
+            "outage_events":outage_events,
+            "scientific_capability_evidence":false
+        });
+        Ok(serde_json::to_vec_pretty(&receipt)?)
     }
 
+    pub fn export_receipt(&self, job_id: &str, path: &Path) -> Result<()> {
+        atomic_create(path, &self.receipt_bytes(job_id)?)
+    }
+
+    pub fn export_content_addressed_receipt(
+        &self,
+        job_id: &str,
+        directory: &Path,
+    ) -> Result<ReceiptArtifact> {
+        let state = self
+            .job_state(job_id)?
+            .ok_or_else(|| EmberdError::JobNotFound {
+                job_id: job_id.into(),
+            })?;
+        if !matches!(
+            state,
+            JobState::Stopped | JobState::Exited | JobState::Failed
+        ) {
+            return Err(EmberdError::NonTerminalReceipt {
+                job_id: job_id.into(),
+                state: state.as_str().into(),
+            });
+        }
+        let bytes = self.receipt_bytes(job_id)?;
+        let sha256 = hash_bytes(&bytes);
+        fs::create_dir_all(directory)?;
+        let path = directory.join(format!("{sha256}.json"));
+        if path.exists() {
+            if fs::read(&path)? == bytes {
+                return Ok(ReceiptArtifact { path, sha256 });
+            }
+            return Err(EmberdError::ReceiptHashCollision { path });
+        }
+        match atomic_create(&path, &bytes) {
+            Ok(()) => Ok(ReceiptArtifact { path, sha256 }),
+            Err(EmberdError::ReceiptAlreadyExists { .. }) if fs::read(&path)? == bytes => {
+                Ok(ReceiptArtifact { path, sha256 })
+            }
+            Err(EmberdError::ReceiptAlreadyExists { .. }) => {
+                Err(EmberdError::ReceiptHashCollision { path })
+            }
+            Err(error) => Err(error),
+        }
+    }
     #[cfg(windows)]
     fn retain_and_monitor(&self, job_id: &str, live: LiveProcess) -> Result<()> {
         let registration = (|| -> Result<(OwnedHandle, OwnedHandle)> {
@@ -881,12 +1241,46 @@ impl Daemon {
                     self.reclaim_starting_job(&job_id, &row, "job_reconciled_unrecorded_process")?
                 }
                 (JobState::Prepared, LiveStatus::Verified(live)) => {
-                    resume_thread_id(row.main_thread_id)?;
-                    self.transition_prepared_running(&job_id, &row)?;
-                    self.retain_and_monitor(&job_id, live)?;
+                    match self.transition_prepared_running(&job_id, &row) {
+                        Ok(true) => self.retain_and_monitor(&job_id, live)?,
+                        Ok(false) => {}
+                        Err(PreparedTransitionError::BeforeResume(error)) => return Err(error),
+                        Err(PreparedTransitionError::AfterResume(transition_error)) => {
+                            if let Err(termination_error) = terminate_live(&live) {
+                                self.live
+                                    .lock()
+                                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                                    .insert(
+                                        job_id.clone(),
+                                        RetainedProcess {
+                                            live,
+                                            monitored: false,
+                                        },
+                                    );
+                                return Err(EmberdError::PreparedResumeCleanupFailed {
+                                    job_id,
+                                    transition: format!("{transition_error:?}"),
+                                    cleanup: format!("{termination_error:?}"),
+                                });
+                            }
+                            if let Err(cleanup_error) =
+                                self.mark_failed(&job_id, "job_recovered_resume_commit_failed")
+                            {
+                                return Err(EmberdError::PreparedResumeCleanupFailed {
+                                    job_id,
+                                    transition: format!("{transition_error:?}"),
+                                    cleanup: format!("{cleanup_error:?}"),
+                                });
+                            }
+                            return Err(transition_error);
+                        }
+                    }
                 }
-                (JobState::Prepared, LiveStatus::Dead) | (JobState::Running, LiveStatus::Dead) => {
+                (JobState::Prepared, LiveStatus::Dead) => {
                     self.mark_dead(&job_id, &row, "job_reconciled_dead")?
+                }
+                (JobState::Running, LiveStatus::Dead) => {
+                    self.mark_exited_unknown(&job_id, &row, "job_reconciled_exited_unknown")?
                 }
                 (JobState::Running, LiveStatus::Verified(live)) => {
                     self.commit_adoption(&job_id, &row)?;
@@ -894,14 +1288,14 @@ impl Daemon {
                 }
                 (JobState::Stopping, LiveStatus::Verified(live)) => {
                     terminate_live(&live)?;
-                    self.finalize_stopped(&job_id, &row)?;
+                    self.finalize_stopped(&job_id, &row, true)?;
                     self.live
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
                         .remove(&job_id);
                 }
                 (JobState::Stopping, LiveStatus::Dead) => {
-                    self.finalize_stopped(&job_id, &row)?;
+                    self.finalize_stopped(&job_id, &row, false)?;
                     self.live
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -956,18 +1350,64 @@ impl Daemon {
         Ok(())
     }
 
-    fn transition_prepared_running(&self, job_id: &str, row: &JobProcessRow) -> Result<()> {
-        let mut conn = self.conn()?;
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    #[cfg(windows)]
+    fn transition_prepared_running(
+        &self,
+        job_id: &str,
+        row: &JobProcessRow,
+    ) -> std::result::Result<bool, PreparedTransitionError> {
+        let mut conn = self.conn().map_err(PreparedTransitionError::BeforeResume)?;
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|error| PreparedTransitionError::BeforeResume(error.into()))?;
+        let launch_at_ms = now_ms();
+        let fenced = tx.execute(
+            "UPDATE jobs SET updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, launch_at_ms, row.lease_epoch],
+        ).map_err(|error| PreparedTransitionError::BeforeResume(error.into()))?;
+        if fenced != 1 {
+            return Err(PreparedTransitionError::BeforeResume(
+                EmberdError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: "prepared reconciliation lost its pre-resume state or lease fence"
+                        .into(),
+                },
+            ));
+        }
+        let outage: Option<(i64, String)> = tx
+            .query_row(
+                "SELECT ends_at_ms,reason FROM planned_outages WHERE resource=?1 AND cancelled_at_ms IS NULL AND starts_at_ms<=?2 AND ends_at_ms>?2 ORDER BY outage_id DESC LIMIT 1",
+                params![row.resource, launch_at_ms],
+                |outage| Ok((outage.get(0)?, outage.get(1)?)),
+            )
+            .optional()
+            .map_err(|error| PreparedTransitionError::BeforeResume(error.into()))?;
+        if let Some((ends_at_ms, reason)) = outage {
+            tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_resume_deferred_outage',?3)",
+                params![
+                    job_id,
+                    launch_at_ms,
+                    json!({"resource":row.resource,"ends_at_ms":ends_at_ms,"reason":reason}).to_string()
+                ],
+            )
+            .map_err(|error| PreparedTransitionError::BeforeResume(error.into()))?;
+            tx.commit()
+                .map_err(|error| PreparedTransitionError::BeforeResume(error.into()))?;
+            return Ok(false);
+        }
+        resume_thread_id(row.main_thread_id).map_err(PreparedTransitionError::BeforeResume)?;
         let changed = tx.execute(
             "UPDATE jobs SET state='running',updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
             params![job_id, now_ms(), row.lease_epoch],
-        )?;
+        ).map_err(|error| PreparedTransitionError::AfterResume(error.into()))?;
         if changed != 1 {
-            return Err(EmberdError::InvalidTransition {
-                job_id: job_id.into(),
-                detail: "prepared reconciliation lost its state or lease fence".into(),
-            });
+            return Err(PreparedTransitionError::AfterResume(
+                EmberdError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: "prepared reconciliation lost its state or lease fence".into(),
+                },
+            ));
         }
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_started',?3)",
@@ -976,17 +1416,25 @@ impl Daemon {
                 now_ms(),
                 json!({"pid":row.pid,"reconciled":true}).to_string()
             ],
-        )?;
-        tx.commit()?;
-        Ok(())
+        )
+        .map_err(|error| PreparedTransitionError::AfterResume(error.into()))?;
+        tx.commit()
+            .map_err(|error| PreparedTransitionError::AfterResume(error.into()))?;
+        Ok(true)
     }
 
-    fn finalize_stopped(&self, job_id: &str, row: &JobProcessRow) -> Result<()> {
+    fn finalize_stopped(&self, job_id: &str, row: &JobProcessRow, seal_logs: bool) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let (stdout_sha256, stderr_sha256) = if seal_logs {
+            let (stdout, stderr) = seal_log_hashes(&tx, job_id)?;
+            (Some(stdout), Some(stderr))
+        } else {
+            (None, None)
+        };
         let changed = tx.execute(
-            "UPDATE jobs SET state='stopped',updated_at_ms=?2 WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3",
-            params![job_id, now_ms(), row.lease_epoch],
+            "UPDATE jobs SET state='stopped',stdout_log_sha256=?4,stderr_log_sha256=?5,outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3",
+            params![job_id, now_ms(), row.lease_epoch, stdout_sha256, stderr_sha256],
         )?;
         if changed != 1 {
             return Err(EmberdError::InvalidTransition {
@@ -1031,7 +1479,7 @@ impl Daemon {
         }
         terminate_job_object_by_name(&row.job_object_name)?;
         let failed = tx.execute(
-            "UPDATE jobs SET state='failed',updated_at_ms=?2 WHERE job_id=?1 AND state='starting' AND lease_epoch=?3",
+            "UPDATE jobs SET state='failed',outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state='starting' AND lease_epoch=?3",
             params![job_id, now_ms(), row.lease_epoch],
         )?;
         if failed != 1 {
@@ -1096,11 +1544,47 @@ impl Daemon {
         self.mark_dead(job_id, &row, kind)
     }
 
+    fn mark_exited_unknown(&self, job_id: &str, row: &JobProcessRow, kind: &str) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE jobs SET state='exited',exit_code=NULL,exited_at_ms=?2,outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state=?3 AND lease_epoch=?4 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, now_ms(), row.state.as_str(), row.lease_epoch],
+        )?;
+        if changed != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "unknown-exit reconciliation lost its state or lease epoch fence".into(),
+            });
+        }
+        let released = tx.execute(
+            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+            params![row.resource, job_id, row.lease_epoch],
+        )?;
+        if released != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "unknown-exit reconciliation lost its lease epoch".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                now_ms(),
+                kind,
+                json!({"pid":row.pid,"exit_code":"unknown"}).to_string(),
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     fn mark_dead(&self, job_id: &str, row: &JobProcessRow, kind: &str) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let changed = tx.execute(
-            "UPDATE jobs SET state='failed',updated_at_ms=?2 WHERE job_id=?1 AND state=?3 AND lease_epoch=?4 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            "UPDATE jobs SET state='failed',outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state=?3 AND lease_epoch=?4 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
             params![job_id, now_ms(), row.state.as_str(), row.lease_epoch],
         )?;
         if changed != 1 {
@@ -1128,7 +1612,48 @@ impl Daemon {
     }
 
     fn job_process_row(&self, job_id: &str) -> Result<JobProcessRow> {
-        self.conn()?.query_row("SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch FROM jobs WHERE job_id=?1", [job_id], |r| { let state:String=r.get(4)?; Ok((r.get::<_,u32>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,state,r.get::<_,String>(5)?,r.get::<_,u32>(6)?,r.get::<_,i64>(7)?)) }).optional()?.ok_or_else(|| EmberdError::JobNotFound { job_id: job_id.into() }).and_then(|r| Ok(JobProcessRow { pid:r.0,start_token:r.1,executable:r.2,resource:r.3,state:JobState::parse(&r.4)?,job_object_name:r.5,main_thread_id:r.6,lease_epoch:r.7 }))
+        self.conn()?
+            .query_row(
+                "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle FROM jobs WHERE job_id=?1",
+                [job_id],
+                |row| {
+                    let state: String = row.get(4)?;
+                    Ok((
+                        row.get::<_, u32>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        state,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, u32>(6)?,
+                        row.get::<_, i64>(7)?,
+                        row.get::<_, String>(8)?,
+                        row.get::<_, String>(9)?,
+                        row.get::<_, i64>(10)?,
+                        row.get::<_, i64>(11)?,
+                    ))
+                },
+            )
+            .optional()?
+            .ok_or_else(|| EmberdError::JobNotFound {
+                job_id: job_id.into(),
+            })
+            .and_then(|row| {
+                Ok(JobProcessRow {
+                    pid: row.0,
+                    start_token: row.1,
+                    executable: row.2,
+                    resource: row.3,
+                    state: JobState::parse(&row.4)?,
+                    job_object_name: row.5,
+                    main_thread_id: row.6,
+                    lease_epoch: row.7,
+                    stdout_log_path: PathBuf::from(row.8),
+                    stderr_log_path: PathBuf::from(row.9),
+                    stdout_child_handle: row.10,
+                    stderr_child_handle: row.11,
+                })
+            })
     }
 }
 
@@ -1141,7 +1666,33 @@ struct JobProcessRow {
     job_object_name: String,
     main_thread_id: u32,
     lease_epoch: i64,
+    stdout_log_path: PathBuf,
+    stderr_log_path: PathBuf,
+    stdout_child_handle: i64,
+    stderr_child_handle: i64,
 }
+
+#[cfg(windows)]
+enum PreparedTransitionError {
+    BeforeResume(EmberdError),
+    AfterResume(EmberdError),
+}
+
+struct ReceiptRow {
+    state: String,
+    resource: String,
+    identity_sha256: String,
+    executable_identity: String,
+    pid: i64,
+    restart_policy: String,
+    stdout_log_path: String,
+    stderr_log_path: String,
+    exit_code: Option<i64>,
+    stdout_log_sha256: Option<String>,
+    stderr_log_sha256: Option<String>,
+    outage_event_cutoff_seq: Option<i64>,
+}
+
 #[derive(Clone)]
 struct ProcessIdentity {
     start_token: String,
@@ -1167,6 +1718,72 @@ fn hash_file(path: &Path) -> Result<String> {
 fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+fn seal_log_hashes(tx: &rusqlite::Transaction<'_>, job_id: &str) -> Result<(String, String)> {
+    let (stdout_path, stderr_path): (String, String) = tx.query_row(
+        "SELECT stdout_log_path,stderr_log_path FROM jobs WHERE job_id=?1",
+        [job_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    Ok((
+        hash_file(Path::new(&stdout_path))?,
+        hash_file(Path::new(&stderr_path))?,
+    ))
+}
+
+fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
+    let columns: Vec<String> = {
+        let mut statement = conn.prepare("PRAGMA table_info(jobs)")?;
+        let rows = statement
+            .query_map([], |row| row.get(1))?
+            .collect::<std::result::Result<_, _>>()?;
+        rows
+    };
+    for (column, definition) in [
+        ("restart_policy", "TEXT NOT NULL DEFAULT 'never'"),
+        ("stdout_log_path", "TEXT NOT NULL DEFAULT ''"),
+        ("stderr_log_path", "TEXT NOT NULL DEFAULT ''"),
+        ("stdout_child_handle", "INTEGER NOT NULL DEFAULT 0"),
+        ("stderr_child_handle", "INTEGER NOT NULL DEFAULT 0"),
+        ("stdout_log_sha256", "TEXT"),
+        ("stderr_log_sha256", "TEXT"),
+        ("outage_event_cutoff_seq", "INTEGER"),
+        ("exit_code", "INTEGER"),
+        ("exited_at_ms", "INTEGER"),
+    ] {
+        if !columns.iter().any(|existing| existing == column) {
+            conn.execute_batch(&format!(
+                "ALTER TABLE jobs ADD COLUMN {column} {definition}"
+            ))?;
+        }
+    }
+    let jobs: Vec<String> = {
+        let mut statement =
+            conn.prepare("SELECT job_id FROM jobs WHERE stdout_log_path='' OR stderr_log_path=''")?;
+        let rows = statement
+            .query_map([], |row| row.get(0))?
+            .collect::<std::result::Result<_, _>>()?;
+        rows
+    };
+    for job_id in jobs {
+        let key = hash_bytes(job_id.as_bytes());
+        let stdout = log_dir.join(format!("{key}.stdout.log"));
+        let stderr = log_dir.join(format!("{key}.stderr.log"));
+        conn.execute(
+            "UPDATE jobs SET stdout_log_path=?2,stderr_log_path=?3 WHERE job_id=?1",
+            params![job_id, stdout.to_string_lossy(), stderr.to_string_lossy()],
+        )?;
+    }
+    conn.execute(
+        "UPDATE jobs SET outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events) WHERE outage_event_cutoff_seq IS NULL AND state IN ('stopped','exited','failed')",
+        [],
+    )?;
+    conn.execute(
+        "UPDATE metadata SET value='2' WHERE key='schema_version'",
+        [],
+    )?;
+    Ok(())
+}
+
 #[cfg(windows)]
 fn create_monitor_shutdown() -> Result<OwnedHandle> {
     use windows_sys::Win32::System::Threading::CreateEventW;
@@ -1288,6 +1905,8 @@ struct SpawnedProcess {
     job: OwnedHandle,
     process: OwnedHandle,
     thread: OwnedHandle,
+    stdout_log_guard: OwnedHandle,
+    stderr_log_guard: OwnedHandle,
     pid: u32,
     main_thread_id: u32,
     identity: ProcessIdentity,
@@ -1304,6 +1923,12 @@ impl SpawnedProcess {
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
     }
+    fn stdout_child_handle(&self) -> i64 {
+        self.stdout_log_guard.raw() as isize as i64
+    }
+    fn stderr_child_handle(&self) -> i64 {
+        self.stderr_log_guard.raw() as isize as i64
+    }
     fn resume(&mut self) -> Result<()> {
         use windows_sys::Win32::System::Threading::ResumeThread;
         if unsafe { ResumeThread(self.thread.0) } == u32::MAX {
@@ -1318,6 +1943,8 @@ impl SpawnedProcess {
         LiveProcess {
             job: self.job,
             process: self.process,
+            _stdout_log_guard: self.stdout_log_guard,
+            _stderr_log_guard: self.stderr_log_guard,
             pid: self.pid,
         }
     }
@@ -1325,25 +1952,30 @@ impl SpawnedProcess {
 
 #[cfg(windows)]
 struct ProcThreadAttributeList {
-    _storage: Vec<u8>,
+    _storage: Vec<usize>,
     _jobs: Box<[windows_sys::Win32::Foundation::HANDLE; 1]>,
+    _handles: Box<[windows_sys::Win32::Foundation::HANDLE; 3]>,
     ptr: windows_sys::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST,
 }
 #[cfg(windows)]
 impl ProcThreadAttributeList {
-    fn for_job(job: windows_sys::Win32::Foundation::HANDLE) -> Result<Self> {
+    fn for_job_and_handles(
+        job: windows_sys::Win32::Foundation::HANDLE,
+        handles: [windows_sys::Win32::Foundation::HANDLE; 3],
+    ) -> Result<Self> {
         use windows_sys::Win32::System::Threading::{
             InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
-            PROC_THREAD_ATTRIBUTE_JOB_LIST,
+            PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROC_THREAD_ATTRIBUTE_JOB_LIST,
         };
         let mut bytes = 0usize;
-        unsafe { InitializeProcThreadAttributeList(std::ptr::null_mut(), 1, 0, &mut bytes) };
+        unsafe { InitializeProcThreadAttributeList(std::ptr::null_mut(), 2, 0, &mut bytes) };
         if bytes == 0 {
             return Err(std::io::Error::last_os_error().into());
         }
-        let mut storage = vec![0u8; bytes];
+        let words = bytes.div_ceil(std::mem::size_of::<usize>());
+        let mut storage = vec![0usize; words.max(1)];
         let ptr = storage.as_mut_ptr().cast();
-        if unsafe { InitializeProcThreadAttributeList(ptr, 1, 0, &mut bytes) } == 0 {
+        if unsafe { InitializeProcThreadAttributeList(ptr, 2, 0, &mut bytes) } == 0 {
             return Err(std::io::Error::last_os_error().into());
         }
         let jobs = Box::new([job]);
@@ -1362,9 +1994,26 @@ impl ProcThreadAttributeList {
             unsafe { windows_sys::Win32::System::Threading::DeleteProcThreadAttributeList(ptr) };
             return Err(std::io::Error::last_os_error().into());
         }
+        let handles = Box::new(handles);
+        if unsafe {
+            UpdateProcThreadAttribute(
+                ptr,
+                0,
+                PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                handles.as_ptr().cast(),
+                std::mem::size_of_val(handles.as_ref()),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        } == 0
+        {
+            unsafe { windows_sys::Win32::System::Threading::DeleteProcThreadAttributeList(ptr) };
+            return Err(std::io::Error::last_os_error().into());
+        }
         Ok(Self {
             _storage: storage,
             _jobs: jobs,
+            _handles: handles,
             ptr,
         })
     }
@@ -1375,9 +2024,99 @@ impl Drop for ProcThreadAttributeList {
         unsafe { windows_sys::Win32::System::Threading::DeleteProcThreadAttributeList(self.ptr) };
     }
 }
+#[cfg(windows)]
+fn duplicate_remote_log_handle(
+    process: windows_sys::Win32::Foundation::HANDLE,
+    remote_handle_value: i64,
+    expected_path: &Path,
+) -> Result<OwnedHandle> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
+    use windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW;
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+    if remote_handle_value == 0 {
+        return Err(EmberdError::InvalidTransition {
+            job_id: String::new(),
+            detail: "persisted child log handle is absent".into(),
+        });
+    }
+    let mut duplicated = std::ptr::null_mut();
+    if unsafe {
+        DuplicateHandle(
+            process,
+            remote_handle_value as isize as windows_sys::Win32::Foundation::HANDLE,
+            GetCurrentProcess(),
+            &mut duplicated,
+            0,
+            0,
+            DUPLICATE_SAME_ACCESS,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let owned = OwnedHandle(duplicated);
+    let mut buffer = vec![0u16; 32768];
+    let len = unsafe {
+        GetFinalPathNameByHandleW(owned.raw(), buffer.as_mut_ptr(), buffer.len() as u32, 0)
+    };
+    if len == 0 || len as usize >= buffer.len() {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let actual = PathBuf::from(OsString::from_wide(&buffer[..len as usize]));
+    let normalize = |path: &Path| {
+        path.to_string_lossy()
+            .trim_start_matches(r"\\?\")
+            .replace('/', "\\")
+            .to_lowercase()
+    };
+    if normalize(&actual) != normalize(&fs::canonicalize(expected_path)?) {
+        return Err(EmberdError::InvalidTransition {
+            job_id: String::new(),
+            detail: format!(
+                "duplicated child log handle path mismatch: expected {}, got {}",
+                expected_path.display(),
+                actual.display()
+            ),
+        });
+    }
+    Ok(owned)
+}
 
 #[cfg(windows)]
-fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
+fn duplicate_inheritable_file_handle(file: &fs::File) -> Result<OwnedHandle> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+    let current = unsafe { GetCurrentProcess() };
+    let mut duplicate = std::ptr::null_mut();
+    if unsafe {
+        DuplicateHandle(
+            current,
+            file.as_raw_handle().cast(),
+            current,
+            &mut duplicate,
+            0,
+            1,
+            DUPLICATE_SAME_ACCESS,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(OwnedHandle(duplicate))
+}
+
+#[cfg(windows)]
+fn spawn_managed(
+    spec: &JobSpec,
+    job_name: &str,
+    stdout_path: &Path,
+    stderr_path: &Path,
+) -> Result<SpawnedProcess> {
     use std::mem::{size_of, zeroed};
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
@@ -1389,7 +2128,7 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
     use windows_sys::Win32::System::Threading::{
         CreateProcessW, GetCurrentProcess, WaitForSingleObject, CREATE_NEW_PROCESS_GROUP,
         CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT,
-        PROCESS_INFORMATION, STARTUPINFOEXW,
+        PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
     };
 
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
@@ -1422,7 +2161,43 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
         return Err(error.into());
     }
 
-    let attributes = match ProcThreadAttributeList::for_job(job) {
+    let inherited_stdio = (|| -> Result<(OwnedHandle, OwnedHandle, OwnedHandle)> {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ_RIGHT: u32 = 0x0000_0001;
+        let stdin_file = OpenOptions::new().read(true).open("NUL")?;
+        let stdout_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .truncate(false)
+            .share_mode(FILE_SHARE_READ_RIGHT)
+            .open(stdout_path)?;
+        let stderr_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .truncate(false)
+            .share_mode(FILE_SHARE_READ_RIGHT)
+            .open(stderr_path)?;
+        Ok((
+            duplicate_inheritable_file_handle(&stdin_file)?,
+            duplicate_inheritable_file_handle(&stdout_file)?,
+            duplicate_inheritable_file_handle(&stderr_file)?,
+        ))
+    })();
+    let (inherited_stdin, inherited_stdout, inherited_stderr) = match inherited_stdio {
+        Ok(handles) => handles,
+        Err(error) => {
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+            return Err(error);
+        }
+    };
+    let attributes = match ProcThreadAttributeList::for_job_and_handles(
+        job,
+        [
+            inherited_stdin.raw(),
+            inherited_stdout.raw(),
+            inherited_stderr.raw(),
+        ],
+    ) {
         Ok(attributes) => attributes,
         Err(error) => {
             unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
@@ -1437,6 +2212,10 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
     let environment = windows_environment(&spec.env);
     let mut startup: STARTUPINFOEXW = unsafe { zeroed() };
     startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = inherited_stdin.raw();
+    startup.StartupInfo.hStdOutput = inherited_stdout.raw();
+    startup.StartupInfo.hStdError = inherited_stderr.raw();
     startup.lpAttributeList = attributes.ptr;
     let mut info: PROCESS_INFORMATION = unsafe { zeroed() };
     let created = unsafe {
@@ -1445,7 +2224,7 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
             command_line.as_mut_ptr(),
             std::ptr::null(),
             std::ptr::null(),
-            0,
+            1,
             CREATE_SUSPENDED
                 | CREATE_NEW_PROCESS_GROUP
                 | CREATE_UNICODE_ENVIRONMENT
@@ -1504,6 +2283,8 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
         job: OwnedHandle(job),
         process: OwnedHandle(info.hProcess),
         thread: OwnedHandle(info.hThread),
+        stdout_log_guard: inherited_stdout,
+        stderr_log_guard: inherited_stderr,
         pid: info.dwProcessId,
         main_thread_id: info.dwThreadId,
         identity,
@@ -1563,10 +2344,19 @@ fn record_natural_exit(
         detail: "natural-exit monitor lost its running state fence".into(),
     })?;
     terminate_live(live)?;
+    let (stdout_sha256, stderr_sha256) = seal_log_hashes(&tx, job_id)?;
     let timestamp = now_ms();
     let changed = tx.execute(
-        "UPDATE jobs SET state='exited',exit_code=?3,exited_at_ms=?4,updated_at_ms=?4 WHERE job_id=?1 AND state='running' AND pid=?2 AND lease_epoch=?5",
-        params![job_id, pid, exit_code as i64, timestamp, lease_epoch],
+        "UPDATE jobs SET state='exited',exit_code=?3,exited_at_ms=?4,stdout_log_sha256=?6,stderr_log_sha256=?7,outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?4 WHERE job_id=?1 AND state='running' AND pid=?2 AND lease_epoch=?5",
+        params![
+            job_id,
+            pid,
+            exit_code as i64,
+            timestamp,
+            lease_epoch,
+            stdout_sha256,
+            stderr_sha256
+        ],
     )?;
     if changed != 1 {
         return Err(EmberdError::InvalidTransition {
@@ -1651,7 +2441,7 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
         QueryInformationJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
     };
     use windows_sys::Win32::System::Threading::{
-        OpenProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+        OpenProcess, WaitForSingleObject, PROCESS_DUP_HANDLE, PROCESS_QUERY_LIMITED_INFORMATION,
     };
     const SYNCHRONIZE_RIGHT: u32 = 0x0010_0000;
     const JOB_OBJECT_QUERY_RIGHT: u32 = 0x0004;
@@ -1676,7 +2466,7 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
         }
         let process = unsafe {
             OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE_RIGHT,
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_DUP_HANDLE | SYNCHRONIZE_RIGHT,
                 0,
                 row.pid,
             )
@@ -1709,7 +2499,7 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
     }
     let process = unsafe {
         OpenProcess(
-            PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE_RIGHT,
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_DUP_HANDLE | SYNCHRONIZE_RIGHT,
             0,
             row.pid,
         )
@@ -1785,9 +2575,37 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
             "recorded process is not the verified root member of the named job".into(),
         );
     }
+    let stdout_log_guard =
+        match duplicate_remote_log_handle(process, row.stdout_child_handle, &row.stdout_log_path) {
+            Ok(guard) => guard,
+            Err(error) => {
+                unsafe {
+                    windows_sys::Win32::Foundation::CloseHandle(process);
+                    windows_sys::Win32::Foundation::CloseHandle(job);
+                }
+                return LiveStatus::IdentityConflict(format!(
+                    "stdout log guard cannot be re-established: {error:?}"
+                ));
+            }
+        };
+    let stderr_log_guard =
+        match duplicate_remote_log_handle(process, row.stderr_child_handle, &row.stderr_log_path) {
+            Ok(guard) => guard,
+            Err(error) => {
+                unsafe {
+                    windows_sys::Win32::Foundation::CloseHandle(process);
+                    windows_sys::Win32::Foundation::CloseHandle(job);
+                }
+                return LiveStatus::IdentityConflict(format!(
+                    "stderr log guard cannot be re-established: {error:?}"
+                ));
+            }
+        };
     LiveStatus::Verified(LiveProcess {
         job: OwnedHandle(job),
         process: OwnedHandle(process),
+        _stdout_log_guard: stdout_log_guard,
+        _stderr_log_guard: stderr_log_guard,
         pid: row.pid,
     })
 }
@@ -1998,6 +2816,12 @@ impl SpawnedProcess {
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
     }
+    fn stdout_child_handle(&self) -> i64 {
+        0
+    }
+    fn stderr_child_handle(&self) -> i64 {
+        0
+    }
     fn resume(&mut self) -> Result<()> {
         Ok(())
     }
@@ -2017,13 +2841,30 @@ impl SpawnedProcess {
     }
 }
 #[cfg(not(windows))]
-fn spawn_managed(spec: &JobSpec, _job_name: &str) -> Result<SpawnedProcess> {
+fn spawn_managed(
+    spec: &JobSpec,
+    _job_name: &str,
+    stdout_path: &Path,
+    stderr_path: &Path,
+) -> Result<SpawnedProcess> {
     let child = Command::new(&spec.program)
         .args(&spec.args)
         .envs(&spec.env)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::from(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .truncate(false)
+                .open(stdout_path)?,
+        ))
+        .stderr(Stdio::from(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .truncate(false)
+                .open(stderr_path)?,
+        ))
         .spawn()?;
     let pid = child.id();
     let identity = inspect_process(pid)?;

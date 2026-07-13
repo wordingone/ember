@@ -2,7 +2,7 @@
 // workstream_id: EMBER-01A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use emberd::{Daemon, EmberdError, JobSpec, JobState};
+use emberd::{Daemon, EmberdError, JobSpec, JobState, RestartPolicy};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -64,6 +64,10 @@ fn fixture_child_process() {
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(30_000);
+    if let Ok(message) = std::env::var("EMBERD_FIXTURE_LOG_MESSAGE") {
+        println!("stdout:{message}");
+        eprintln!("stderr:{message}");
+    }
     thread::sleep(Duration::from_millis(sleep_ms));
 }
 
@@ -87,6 +91,18 @@ fn process_is_alive(pid: u32) -> bool {
     let status = unsafe { WaitForSingleObject(handle, 0) };
     unsafe { CloseHandle(handle) };
     status == WAIT_TIMEOUT
+}
+
+#[cfg(windows)]
+fn suspend_thread_id(thread_id: u32) {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenThread, SuspendThread, THREAD_SUSPEND_RESUME};
+
+    let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, thread_id) };
+    assert!(!thread.is_null(), "fixture main thread must be openable");
+    let previous = unsafe { SuspendThread(thread) };
+    unsafe { CloseHandle(thread) };
+    assert_ne!(previous, u32::MAX, "fixture main thread must suspend");
 }
 #[test]
 fn sqlite_wal_identity_binding_and_exclusive_lease_survive_reopen() {
@@ -242,7 +258,7 @@ fn write_identity_for(root: &Path, name: &str) -> (PathBuf, String) {
 }
 
 #[test]
-fn dead_persisted_job_is_failed_and_releases_its_lease_on_adoption() {
+fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
     let root = sandbox("dead-reconcile");
     let db = root.join("emberd.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
@@ -274,9 +290,61 @@ fn dead_persisted_job_is_failed_and_releases_its_lease_on_adoption() {
     ));
     assert_eq!(
         reopened.job_state("short-job").unwrap(),
-        Some(JobState::Failed)
+        Some(JobState::Exited)
     );
     assert_eq!(reopened.lease_owner("cpu-fixture").unwrap(), None);
+    assert_eq!(reopened.job_exit_code("short-job").unwrap(), None);
+    assert!(reopened
+        .job_event_kinds("short-job")
+        .unwrap()
+        .iter()
+        .any(|kind| kind == "job_reconciled_exited_unknown"));
+    let first = reopened
+        .export_content_addressed_receipt("short-job", &root.join("receipts"))
+        .unwrap();
+    let second = reopened
+        .export_content_addressed_receipt("short-job", &root.join("receipts"))
+        .unwrap();
+    assert_eq!(first, second);
+    let payload: Value = serde_json::from_slice(&fs::read(first.path).unwrap()).unwrap();
+    assert_eq!(payload["state"], "exited");
+    assert_eq!(payload["logs"]["stdout"]["sealed"], false);
+    assert!(payload["logs"]["stdout"]["sha256"].is_null());
+}
+
+#[cfg(windows)]
+#[test]
+fn failed_launch_exports_stable_receipt_without_blessing_unsealed_logs() {
+    let root = sandbox("failed-launch-receipt");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("failed-launch", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "failed-launch")
+        .unwrap();
+    assert!(daemon
+        .start_job(JobSpec::new(
+            "failed-launch",
+            root.join("does-not-exist.exe").to_string_lossy(),
+            std::iter::empty::<String>(),
+            "cpu-fixture",
+        ))
+        .is_err());
+    assert_eq!(
+        daemon.job_state("failed-launch").unwrap(),
+        Some(JobState::Failed)
+    );
+    assert_eq!(daemon.lease_owner("cpu-fixture").unwrap(), None);
+    let artifact = daemon
+        .export_content_addressed_receipt("failed-launch", &root.join("receipts"))
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&fs::read(artifact.path).unwrap()).unwrap();
+    assert_eq!(payload["state"], "failed");
+    assert_eq!(payload["logs"]["stdout"]["sealed"], false);
+    assert!(payload["logs"]["stdout"]["sha256"].is_null());
 }
 
 #[test]
@@ -857,4 +925,525 @@ fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
         "a former daemon monitor wrote after ownership handoff: {events:?}"
     );
     assert_eq!(reopened.lease_owner("cpu-fixture").unwrap(), None);
+}
+
+#[cfg(windows)]
+#[test]
+fn planned_outage_blocks_launch_and_receipt_is_content_addressed() {
+    let root = sandbox("outage-receipt");
+    let db = root.join("emberd.sqlite3");
+    let receipts = root.join("receipts");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("outage-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "outage-job").unwrap();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    daemon
+        .plan_outage(
+            "cpu-fixture",
+            now - 1,
+            now + 60_000,
+            "operator-planned maintenance",
+        )
+        .unwrap();
+    let spec = || {
+        JobSpec::new(
+            "outage-job",
+            std::env::current_exe().unwrap().to_string_lossy(),
+            ["--exact", "fixture_child_process", "--nocapture"],
+            "cpu-fixture",
+        )
+        .with_env("EMBERD_FIXTURE_CHILD", "1")
+        .with_env("EMBERD_FIXTURE_SLEEP_MS", "25")
+    };
+    assert!(matches!(
+        daemon.start_job(spec()),
+        Err(EmberdError::PlannedOutageActive { .. })
+    ));
+    daemon.cancel_outages("cpu-fixture").unwrap();
+    daemon.start_job(spec()).unwrap();
+    for _ in 0..200 {
+        if daemon.job_state("outage-job").unwrap() == Some(JobState::Exited) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        daemon.job_restart_policy("outage-job").unwrap(),
+        RestartPolicy::Never
+    );
+    let first = daemon
+        .export_content_addressed_receipt("outage-job", &receipts)
+        .unwrap();
+    let second = daemon
+        .export_content_addressed_receipt("outage-job", &receipts)
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(
+        first.path.file_name().unwrap().to_string_lossy(),
+        format!("{}.json", first.sha256)
+    );
+    assert_eq!(sha256(&first.path), first.sha256);
+    let payload: Value = serde_json::from_slice(&fs::read(&first.path).unwrap()).unwrap();
+    assert_eq!(payload["restart_policy"], "never");
+    assert_eq!(payload["exit_code"], 0);
+}
+#[cfg(windows)]
+#[test]
+fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
+    let root = sandbox("process-logs");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("logged-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "logged-job").unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "logged-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBERD_FIXTURE_CHILD", "1")
+            .with_env("EMBERD_FIXTURE_LOG_MESSAGE", "durable-output")
+            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+        )
+        .unwrap();
+    for _ in 0..200 {
+        if daemon.job_state("logged-job").unwrap() == Some(JobState::Exited) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let (stdout_path, stderr_path) = daemon.job_log_paths("logged-job").unwrap();
+    assert!(fs::read_to_string(&stdout_path)
+        .unwrap()
+        .contains("stdout:durable-output"));
+    assert!(fs::read_to_string(&stderr_path)
+        .unwrap()
+        .contains("stderr:durable-output"));
+    let artifact = daemon
+        .export_content_addressed_receipt("logged-job", &root.join("receipts"))
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&fs::read(artifact.path).unwrap()).unwrap();
+    assert_eq!(payload["logs"]["stdout"]["sha256"], sha256(&stdout_path));
+    assert_eq!(payload["logs"]["stderr"]["sha256"], sha256(&stderr_path));
+    assert_eq!(
+        payload["logs"]["stdout"]["file_name"],
+        stdout_path.file_name().unwrap().to_string_lossy().as_ref()
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn nonterminal_job_cannot_publish_a_content_addressed_receipt() {
+    let root = sandbox("nonterminal-receipt");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("running-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "running-job").unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "running-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBERD_FIXTURE_CHILD", "1")
+            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+
+    assert!(matches!(
+        daemon.export_content_addressed_receipt("running-job", &root.join("receipts")),
+        Err(EmberdError::NonTerminalReceipt { state, .. }) if state == "running"
+    ));
+    daemon.stop_job("running-job").unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn sealed_log_tampering_is_detected_instead_of_blessed() {
+    let root = sandbox("sealed-log-tamper");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("tamper-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "tamper-job").unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "tamper-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBERD_FIXTURE_CHILD", "1")
+            .with_env("EMBERD_FIXTURE_LOG_MESSAGE", "sealed")
+            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+        )
+        .unwrap();
+    for _ in 0..200 {
+        if daemon.job_state("tamper-job").unwrap() == Some(JobState::Exited) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        daemon.job_state("tamper-job").unwrap(),
+        Some(JobState::Exited)
+    );
+    let (stdout_path, _) = daemon.job_log_paths("tamper-job").unwrap();
+    fs::write(&stdout_path, b"rewritten-after-seal").unwrap();
+
+    assert!(matches!(
+        daemon.export_content_addressed_receipt("tamper-job", &root.join("receipts")),
+        Err(EmberdError::LogEvidenceMismatch { stream, .. }) if stream == "stdout"
+    ));
+}
+
+#[cfg(windows)]
+#[test]
+fn terminal_receipt_ignores_outage_events_after_its_persisted_cutoff() {
+    let root = sandbox("receipt-outage-cutoff");
+    let db = root.join("emberd.sqlite3");
+    let receipts = root.join("receipts");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("cutoff-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "cutoff-job").unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "cutoff-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBERD_FIXTURE_CHILD", "1")
+            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+        )
+        .unwrap();
+    for _ in 0..200 {
+        if daemon.job_state("cutoff-job").unwrap() == Some(JobState::Exited) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        daemon.job_state("cutoff-job").unwrap(),
+        Some(JobState::Exited)
+    );
+    let first = daemon
+        .export_content_addressed_receipt("cutoff-job", &receipts)
+        .unwrap();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    daemon
+        .plan_outage("cpu-fixture", now + 1000, now + 2000, "later outage")
+        .unwrap();
+    daemon.cancel_outages("cpu-fixture").unwrap();
+    let second = daemon
+        .export_content_addressed_receipt("cutoff-job", &receipts)
+        .unwrap();
+    assert_eq!(first, second);
+}
+
+#[cfg(windows)]
+#[test]
+fn prepared_recovery_defers_resume_while_outage_is_active() {
+    let root = sandbox("prepared-outage-recovery");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("prepared-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "prepared-job").unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "prepared-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBERD_FIXTURE_CHILD", "1")
+            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let thread_id: u32 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT main_thread_id FROM jobs WHERE job_id='prepared-job'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    suspend_thread_id(thread_id);
+    drop(daemon);
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE jobs SET state='prepared' WHERE job_id='prepared-job' AND state='running'",
+            [],
+        )
+        .unwrap();
+
+    let reopened = Daemon::open(&db).unwrap();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    reopened
+        .plan_outage("cpu-fixture", now - 1, now + 60_000, "defer recovery")
+        .unwrap();
+    reopened.reconcile().unwrap();
+    assert_eq!(
+        reopened.job_state("prepared-job").unwrap(),
+        Some(JobState::Prepared)
+    );
+    assert!(reopened
+        .job_event_kinds("prepared-job")
+        .unwrap()
+        .iter()
+        .any(|kind| kind == "job_resume_deferred_outage"));
+    reopened.cancel_outages("cpu-fixture").unwrap();
+    reopened.reconcile().unwrap();
+    assert_eq!(
+        reopened.job_state("prepared-job").unwrap(),
+        Some(JobState::Running)
+    );
+    reopened.stop_job("prepared-job").unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn prepared_recovery_terminates_process_when_running_commit_fails() {
+    let root = sandbox("prepared-commit-failure");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("prepared-failure", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "prepared-failure")
+        .unwrap();
+    let handle = daemon
+        .start_job(
+            JobSpec::new(
+                "prepared-failure",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBERD_FIXTURE_CHILD", "1")
+            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let thread_id: u32 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT main_thread_id FROM jobs WHERE job_id='prepared-failure'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    suspend_thread_id(thread_id);
+    drop(daemon);
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch(
+            "UPDATE jobs SET state='prepared' WHERE job_id='prepared-failure' AND state='running';
+             CREATE TRIGGER fail_recovered_running
+             BEFORE UPDATE OF state ON jobs
+             WHEN OLD.job_id='prepared-failure' AND NEW.state='running'
+             BEGIN SELECT RAISE(FAIL, 'forced recovered-running persistence failure'); END;",
+        )
+        .unwrap();
+
+    let reopened = Daemon::open(&db).unwrap();
+    assert!(matches!(reopened.reconcile(), Err(EmberdError::Sqlite(_))));
+    assert_eq!(
+        reopened.job_state("prepared-failure").unwrap(),
+        Some(JobState::Failed)
+    );
+    assert_eq!(reopened.lease_owner("cpu-fixture").unwrap(), None);
+    for _ in 0..200 {
+        if !process_is_alive(handle.pid) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        !process_is_alive(handle.pid),
+        "a resumed process escaped after its running-state commit failed"
+    );
+    assert!(reopened
+        .job_event_kinds("prepared-failure")
+        .unwrap()
+        .iter()
+        .any(|kind| kind == "job_recovered_resume_commit_failed"));
+}
+
+#[cfg(windows)]
+#[test]
+fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
+    let root = sandbox("pre-resume-fence-failure");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("pre-resume-failure", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "pre-resume-failure")
+        .unwrap();
+    let handle = daemon
+        .start_job(
+            JobSpec::new(
+                "pre-resume-failure",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBERD_FIXTURE_CHILD", "1")
+            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let thread_id: u32 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT main_thread_id FROM jobs WHERE job_id='pre-resume-failure'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    suspend_thread_id(thread_id);
+    drop(daemon);
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch(
+            "UPDATE jobs SET state='prepared' WHERE job_id='pre-resume-failure' AND state='running';
+             CREATE TRIGGER fail_pre_resume_fence
+             BEFORE UPDATE OF updated_at_ms ON jobs
+             WHEN OLD.job_id='pre-resume-failure' AND OLD.state='prepared'
+             BEGIN SELECT RAISE(FAIL, 'forced pre-resume fence failure'); END;",
+        )
+        .unwrap();
+
+    let reopened = Daemon::open(&db).unwrap();
+    assert!(matches!(reopened.reconcile(), Err(EmberdError::Sqlite(_))));
+    assert_eq!(
+        reopened.job_state("pre-resume-failure").unwrap(),
+        Some(JobState::Prepared)
+    );
+    assert_eq!(
+        reopened.lease_owner("cpu-fixture").unwrap(),
+        Some("pre-resume-failure".into())
+    );
+    assert!(
+        process_is_alive(handle.pid),
+        "a pre-resume fence error must not kill the still-valid prepared process"
+    );
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch("DROP TRIGGER fail_pre_resume_fence;")
+        .unwrap();
+    reopened.reconcile().unwrap();
+    assert_eq!(
+        reopened.job_state("pre-resume-failure").unwrap(),
+        Some(JobState::Running)
+    );
+    reopened.stop_job("pre-resume-failure").unwrap();
+}
+
+#[test]
+fn pre_log_schema_migrates_without_reinterpreting_existing_job_identity() {
+    let root = sandbox("schema-migration");
+    let db = root.join("emberd.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let connection = rusqlite::Connection::open(&db).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             INSERT INTO metadata(key,value) VALUES('schema_version','1');
+             CREATE TABLE jobs(
+               job_id TEXT PRIMARY KEY,
+               program TEXT NOT NULL,
+               args_json TEXT NOT NULL,
+               env_json TEXT NOT NULL,
+               resource TEXT NOT NULL,
+               lease_epoch INTEGER NOT NULL,
+               pid INTEGER NOT NULL DEFAULT 0,
+               main_thread_id INTEGER NOT NULL DEFAULT 0,
+               job_object_name TEXT NOT NULL,
+               process_start_token TEXT NOT NULL DEFAULT '',
+               executable_identity TEXT NOT NULL DEFAULT '',
+               argv_sha256 TEXT NOT NULL,
+               state TEXT NOT NULL,
+               exit_code INTEGER,
+               exited_at_ms INTEGER,
+               started_at_ms INTEGER NOT NULL,
+               updated_at_ms INTEGER NOT NULL
+             );
+             INSERT INTO jobs(
+               job_id,program,args_json,env_json,resource,lease_epoch,
+               job_object_name,argv_sha256,state,started_at_ms,updated_at_ms
+             ) VALUES(
+               'legacy-job','fixture.exe','[]','{}','cpu-fixture',7,
+               'emberd-job-legacy','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+               'failed',1,1
+             );",
+        )
+        .unwrap();
+    drop(connection);
+
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("legacy-job", &identity, &identity_hash)
+        .unwrap();
+    assert_eq!(
+        daemon.job_restart_policy("legacy-job").unwrap(),
+        RestartPolicy::Never
+    );
+    let (stdout, stderr) = daemon.job_log_paths("legacy-job").unwrap();
+    assert!(!stdout.as_os_str().is_empty());
+    assert!(!stderr.as_os_str().is_empty());
+    assert_ne!(stdout, stderr);
+    let receipts = root.join("receipts");
+    let first = daemon
+        .export_content_addressed_receipt("legacy-job", &receipts)
+        .unwrap();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    daemon
+        .plan_outage("cpu-fixture", now + 1000, now + 2000, "post-migration")
+        .unwrap();
+    daemon.cancel_outages("cpu-fixture").unwrap();
+    let second = daemon
+        .export_content_addressed_receipt("legacy-job", &receipts)
+        .unwrap();
+    assert_eq!(first, second);
 }

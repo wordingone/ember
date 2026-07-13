@@ -116,6 +116,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     let db = root.join("emberd.sqlite3");
     let identity = root.join("identity.json");
     let receipt = root.join("receipt.json");
+    let content_addressed_receipts = root.join("content-addressed-receipts");
     fs::write(
         &identity,
         br#"{"schema":"ember-identity-v1","model_id":"fixture-owned-3b","checkpoint_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","lineage":"clean_genesis"}"#,
@@ -167,6 +168,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
             "args": ["--exact", "fixture_rpc_child_process", "--nocapture"],
             "resource_lease": "cpu-fixture",
             "env": env,
+            "restart_policy": "never",
         }),
     );
     assert!(started["pid"].as_u64().unwrap() > 0);
@@ -185,21 +187,63 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         "running"
     );
     rpc(&pipe, 9, "stop_job", json!({"job_id": "rpc-job"}));
+    assert!(rpc(&pipe, 10, "job_exit_code", json!({"job_id": "rpc-job"}))["exit_code"].is_null());
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let planned = rpc(
+        &pipe,
+        11,
+        "plan_outage",
+        json!({
+            "resource": "cpu-fixture",
+            "starts_at_ms": now + 60_000,
+            "ends_at_ms": now + 120_000,
+            "reason": "rpc typed-method proof",
+        }),
+    );
+    assert!(planned["outage_id"].as_i64().unwrap() > 0);
+    assert_eq!(
+        rpc(
+            &pipe,
+            12,
+            "cancel_outages",
+            json!({"resource": "cpu-fixture"})
+        )["cancelled"],
+        1
+    );
     rpc(
         &pipe,
-        10,
+        13,
         "export_receipt",
         json!({"job_id": "rpc-job", "path": receipt}),
     );
     let payload: Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
     assert_eq!(payload["job_id"], "rpc-job");
     assert_eq!(payload["state"], "stopped");
+    assert_eq!(payload["restart_policy"], "never");
     assert!(payload["events"]
         .as_array()
         .unwrap()
         .iter()
         .any(|event| event["kind"] == "job_adopted"));
+    let artifact = rpc(
+        &pipe,
+        14,
+        "export_content_addressed_receipt",
+        json!({
+            "job_id": "rpc-job",
+            "directory": content_addressed_receipts,
+        }),
+    );
+    let artifact_path = PathBuf::from(artifact["path"].as_str().unwrap());
+    assert_eq!(sha256(&artifact_path), artifact["sha256"]);
+    assert_eq!(
+        artifact_path.file_name().unwrap().to_string_lossy(),
+        format!("{}.json", artifact["sha256"].as_str().unwrap())
+    );
 
-    rpc(&pipe, 11, "shutdown", json!({}));
+    rpc(&pipe, 15, "shutdown", json!({}));
     wait_for_exit(&mut second);
 }

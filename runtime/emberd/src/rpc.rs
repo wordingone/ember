@@ -2,7 +2,7 @@
 // workstream_id: EMBER-01A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use crate::{Daemon, JobSpec};
+use crate::{Daemon, JobSpec, RestartPolicy};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -44,12 +44,33 @@ struct StartJobParams {
     resource_lease: String,
     #[serde(default)]
     env: BTreeMap<String, String>,
+    #[serde(default)]
+    restart_policy: RestartPolicy,
 }
 
 #[derive(Debug, Deserialize)]
 struct ExportReceiptParams {
     job_id: String,
     path: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+struct ContentAddressedReceiptParams {
+    job_id: String,
+    directory: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlanOutageParams {
+    resource: String,
+    starts_at_ms: i64,
+    ends_at_ms: i64,
+    reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResourceParams {
+    resource: String,
 }
 
 fn invalid_request(id: Value, message: impl Into<String>) -> Value {
@@ -130,6 +151,7 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 params.args,
                 params.resource_lease,
             );
+            spec = spec.with_restart_policy(params.restart_policy);
             for (key, value) in params.env {
                 spec = spec.with_env(key, value);
             }
@@ -166,6 +188,54 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
             };
             match daemon.export_receipt(&params.job_id, &params.path) {
                 Ok(()) => (success(id, json!({"exported": true})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "export_content_addressed_receipt" => {
+            let params: ContentAddressedReceiptParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.export_content_addressed_receipt(&params.job_id, &params.directory) {
+                Ok(artifact) => (
+                    success(id, json!({"path":artifact.path,"sha256":artifact.sha256})),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "plan_outage" => {
+            let params: PlanOutageParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.plan_outage(
+                &params.resource,
+                params.starts_at_ms,
+                params.ends_at_ms,
+                &params.reason,
+            ) {
+                Ok(outage_id) => (success(id, json!({"outage_id":outage_id})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "cancel_outages" => {
+            let params: ResourceParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.cancel_outages(&params.resource) {
+                Ok(count) => (success(id, json!({"cancelled":count})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "job_exit_code" => {
+            let params: JobIdParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.job_exit_code(&params.job_id) {
+                Ok(exit_code) => (success(id, json!({"exit_code":exit_code})), false),
                 Err(error) => (operation_error(id, error), false),
             }
         }
