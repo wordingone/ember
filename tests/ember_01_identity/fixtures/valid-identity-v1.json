@@ -62,7 +62,10 @@
       "audio": 0.25
     },
     "optimizer_state_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
-    "numerics": "bf16-activations-fp32-master",
+    "numerics": {
+      "profile": "bf16-activations-fp32-master",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
     "stopping_rule": {
       "criterion_id": "sufficient-pretraining-v1",
       "result": "NOT_REACHED",

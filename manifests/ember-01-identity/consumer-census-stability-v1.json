@@ -1,0 +1,27 @@
+{
+  "schema": "ember-identity-consumer-census-stability-v1",
+  "goal_id": "EMBER-01",
+  "workstream_id": "EMBER-01C",
+  "snapshot_path": "manifests/ember-01-identity/consumer-census-v1.json",
+  "snapshot_bytes": 22671446,
+  "snapshot_sha256": "b9bbe5fb8703c86993a73cbf95183a26a27868ab558015a1a61209a68cde1366",
+  "canonical_subject_sha256": "1585426040b530bc546c9af25a95636003c5535890a7f7cb4f70ed3d15433c79",
+  "complete_run_sha256": [
+    "b9bbe5fb8703c86993a73cbf95183a26a27868ab558015a1a61209a68cde1366",
+    "b9bbe5fb8703c86993a73cbf95183a26a27868ab558015a1a61209a68cde1366"
+  ],
+  "byte_identical": true,
+  "root_count": 7,
+  "evidence_record_count": 25402,
+  "line_record_count": 22679,
+  "file_category_record_count": 2723,
+  "absolute_host_paths_published": false,
+  "model_loaded_or_run": false,
+  "benchmark_executed": false,
+  "gpu_used": false,
+  "notes": [
+    "Git surfaces were read from exact committed objects, independent of index or checkout state.",
+    "Executable sources preserve every matching line; state and document surfaces preserve one content-hashed record per file and category.",
+    "The configured local private-backup root is explicitly MISSING; private backup evidence is resolved through the verified private-backup default clone at commit 054d6e8d94ea218c3ad3b177df790602fe075b01."
+  ]
+}

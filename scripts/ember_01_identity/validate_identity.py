@@ -408,8 +408,12 @@ def validate_manifest(
     *,
     checkpoint_bytes: bytes | None = None,
     tensor_hashes: Mapping[str, str] | None = None,
+    tensor_manifest: Mapping[str, Any] | None = None,
+    artifact_bundle: Mapping[str, Any] | None = None,
     expected: Mapping[str, Any] | None = None,
     receipt_bundle: Mapping[str, Any] | None = None,
+    verifier_bytes: bytes | None = None,
+    trusted_verifier_registry: Mapping[str, Any] | None = None,
     require_resolved: bool = False,
 ) -> dict[str, Any]:
     """Validate one manifest and return a deep copy on success.
@@ -499,6 +503,27 @@ def validate_manifest(
         for name in sorted(set(declared) | set(tensor_hashes)):
             if declared.get(name) != tensor_hashes.get(name):
                 findings.append(_finding("checkpoint.tensor_hash_mismatch", str(name)))
+
+    if tensor_manifest is not None:
+        valid_tensor_manifest = (
+            isinstance(tensor_manifest, Mapping)
+            and set(tensor_manifest) == {"schema", "checkpoint_sha256", "tensors"}
+            and tensor_manifest.get("schema") == "ember-tensor-manifest-v1"
+            and tensor_manifest.get("checkpoint_sha256") == checkpoint_hash
+            and tensor_manifest.get("tensors") == tensors
+        )
+        if not valid_tensor_manifest:
+            manifest_tensors = tensor_manifest.get("tensors") if isinstance(tensor_manifest, Mapping) else None
+            declared_by_name = {
+                row.get("name"): row.get("sha256") for row in tensors or []
+                if isinstance(row, Mapping)
+            }
+            supplied_by_name = {
+                row.get("name"): row.get("sha256") for row in manifest_tensors or []
+                if isinstance(row, Mapping)
+            }
+            code = "checkpoint.tensor_hash_mismatch" if declared_by_name != supplied_by_name else "checkpoint.tensor_manifest_mismatch"
+            findings.append(_finding(code, "tensor manifest does not exactly match checkpoint identity"))
 
     counts_present, counts = _get(payload, "parameters")
     if counts_present and isinstance(counts, Mapping):
@@ -693,6 +718,118 @@ def validate_manifest(
             findings.append(_finding("field.unresolved", path))
 
     if disposition == "OWNED_ADMITTED":
+        if checkpoint_bytes is None:
+            findings.append(
+                _finding(
+                    "admission.checkpoint_bytes_missing",
+                    "OWNED_ADMITTED requires actual checkpoint bytes",
+                )
+            )
+        if tensor_manifest is None:
+            findings.append(
+                _finding(
+                    "admission.tensor_manifest_missing",
+                    "OWNED_ADMITTED requires an independently resolved tensor manifest",
+                )
+            )
+        if artifact_bundle is None:
+            findings.append(_finding("admission.artifact_bundle_missing", "OWNED_ADMITTED requires content-addressed artifact bytes"))
+        elif not (
+            isinstance(artifact_bundle, Mapping)
+            and set(artifact_bundle) == {"schema", "artifacts"}
+            and artifact_bundle.get("schema") == "ember-artifact-bundle-v1"
+            and isinstance(artifact_bundle.get("artifacts"), Mapping)
+        ):
+            findings.append(_finding("admission.artifact_bundle_invalid", "invalid artifact bundle"))
+        else:
+            required_artifacts: dict[str, Any] = {
+                "architecture": _get(payload, "architecture.sha256")[1],
+                "tokenizer": _get(payload, "tokenizer.sha256")[1],
+                "data.corpus": _get(payload, "data.sha256")[1],
+                "data.ordering": _get(payload, "data.ordering_sha256")[1],
+                "data.curriculum": _get(payload, "data.curriculum_sha256")[1],
+                "training.optimizer_state": _get(payload, "training.optimizer_state_sha256")[1],
+                "training.numerics": _get(payload, "training.numerics.sha256")[1],
+                "backend.executable": _get(payload, "backend.executable_sha256")[1],
+            }
+            for index, row in enumerate(ancestry or []):
+                if isinstance(row, Mapping):
+                    required_artifacts[f"ancestry:{index}"] = row.get("checkpoint_sha256")
+            for row in tensors or []:
+                if isinstance(row, Mapping):
+                    required_artifacts[f"tensor:{row.get('name')}"] = row.get("sha256")
+            for group in mechanism_groups:
+                for row in _get(payload, f"mechanisms.{group}")[1] or []:
+                    if isinstance(row, Mapping) and not _is_unresolved(row):
+                        required_artifacts[f"mechanism:{group}:{row.get('id')}"] = row.get("sha256")
+            for row in dependencies or []:
+                if isinstance(row, Mapping):
+                    required_artifacts[f"runtime_dependency:{row.get('name')}"] = row.get("sha256")
+            supplied_artifacts = artifact_bundle["artifacts"]
+            for artifact_id, expected_sha in required_artifacts.items():
+                entry = supplied_artifacts.get(artifact_id)
+                if not isinstance(entry, Mapping):
+                    findings.append(_finding("admission.artifact_missing", artifact_id))
+                    continue
+                valid_entry = set(entry) == {"sha256", "content_hex"}
+                try:
+                    content = bytes.fromhex(entry.get("content_hex", "")) if valid_entry else b""
+                except (TypeError, ValueError):
+                    content = b""
+                    valid_entry = False
+                actual_sha = hashlib.sha256(content).hexdigest()
+                if not valid_entry or entry.get("sha256") != expected_sha or actual_sha != expected_sha:
+                    findings.append(_finding("admission.artifact_hash_mismatch", artifact_id))
+        declared_verifier = _get(payload, "data.verifier_sha256")[1]
+        if verifier_bytes is not None:
+            actual_verifier = hashlib.sha256(verifier_bytes).hexdigest()
+            if actual_verifier != declared_verifier:
+                findings.append(
+                    _finding(
+                        "admission.verifier_hash_mismatch",
+                        f"manifest={declared_verifier}; actual={actual_verifier}",
+                    )
+                )
+        elif trusted_verifier_registry is not None:
+            registry_valid = (
+                isinstance(trusted_verifier_registry, Mapping)
+                and set(trusted_verifier_registry)
+                == {"schema", "verifier_sha256"}
+                and trusted_verifier_registry.get("schema")
+                == "ember-trusted-verifier-registry-v1"
+                and isinstance(
+                    trusted_verifier_registry.get("verifier_sha256"), list
+                )
+                and all(
+                    isinstance(item, str) and bool(SHA256_RE.fullmatch(item))
+                    for item in trusted_verifier_registry["verifier_sha256"]
+                )
+                and len(set(trusted_verifier_registry["verifier_sha256"]))
+                == len(trusted_verifier_registry["verifier_sha256"])
+            )
+            if not registry_valid:
+                findings.append(
+                    _finding(
+                        "admission.verifier_registry_invalid",
+                        "trusted verifier registry has invalid schema or entries",
+                    )
+                )
+            elif declared_verifier not in trusted_verifier_registry[
+                "verifier_sha256"
+            ]:
+                findings.append(
+                    _finding(
+                        "admission.verifier_untrusted",
+                        str(declared_verifier),
+                    )
+                )
+        else:
+            findings.append(
+                _finding(
+                    "admission.verifier_authority_missing",
+                    "OWNED_ADMITTED requires verifier bytes or trusted registry",
+                )
+            )
         if receipt_bundle is None:
             findings.append(
                 _finding(
@@ -884,8 +1021,12 @@ def main() -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--tensor-hashes", type=Path)
+    parser.add_argument("--tensor-manifest", type=Path)
+    parser.add_argument("--artifact-bundle", type=Path)
     parser.add_argument("--expected", type=Path)
     parser.add_argument("--receipt-bundle", type=Path)
+    parser.add_argument("--verifier", type=Path)
+    parser.add_argument("--trusted-verifier-registry", type=Path)
     parser.add_argument("--require-resolved", action="store_true")
     parser.add_argument("--canonical", action="store_true")
     args = parser.parse_args()
@@ -897,6 +1038,8 @@ def main() -> int:
             if args.tensor_hashes
             else None
         )
+        tensor_manifest = json.loads(args.tensor_manifest.read_text(encoding="utf-8")) if args.tensor_manifest else None
+        artifact_bundle = json.loads(args.artifact_bundle.read_text(encoding="utf-8")) if args.artifact_bundle else None
         expected = (
             json.loads(args.expected.read_text(encoding="utf-8"))
             if args.expected
@@ -907,12 +1050,21 @@ def main() -> int:
             if args.receipt_bundle
             else None
         )
+        trusted_verifier_registry = (
+            json.loads(args.trusted_verifier_registry.read_text(encoding="utf-8"))
+            if args.trusted_verifier_registry
+            else None
+        )
         validated = validate_manifest(
             payload,
             checkpoint_bytes=args.checkpoint.read_bytes() if args.checkpoint else None,
             tensor_hashes=tensor_hashes,
+            tensor_manifest=tensor_manifest,
+            artifact_bundle=artifact_bundle,
             expected=expected,
             receipt_bundle=receipt_bundle,
+            verifier_bytes=args.verifier.read_bytes() if args.verifier else None,
+            trusted_verifier_registry=trusted_verifier_registry,
             require_resolved=args.require_resolved,
         )
     except (OSError, json.JSONDecodeError) as exc:
