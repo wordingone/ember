@@ -14,7 +14,7 @@
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "workstream_id": "EMBER-01B"
   },
-  "closed_issue_snapshot_sha256": "279e8dcf9a4d224d1f7d3c52627662e25ec241ed39cfe534d5b56a0c8f43f0d9",
+  "closed_issue_snapshot_sha256": "0f53ff1e617f03a79d76f37cb28068ac928fa5ff11f5745ad22d6ede2020b628",
   "closed_issue_source_snapshot": [
     {
       "author": "wordingone",
@@ -138,6 +138,42 @@
       "title": "Two pre-existing ink check failures at master: overflow-clip height containment + bold-color style leftover",
       "updated_at": "2026-07-13T07:04:48Z",
       "url": "https://github.com/wordingone/ember/issues/336"
+    },
+    {
+      "author": "wordingone",
+      "body_base64": "IyBSZW5kZXJlciBlbWl0cyBOVUwtY2VsbCBydW5zIHVuZGVyIGEgWzdtIHN0eWxlIHN0YWNrIGF0IH4xOTB4ODUg4oCUIHZpc2libGUgZ3JleSBiYXJzICsgaW52ZXJ0ZWQgc3RhdHVzIHJvdyBhdCB0aGUgb3BlcmF0b3IncyByZWFsIHZpZXdwb3J0CgojIyBXaGF0IHRoZSBvcGVyYXRvciBzZWVzIChsaXZlIHdpbmRvdywgc2NyZWVuc2hvdC12ZXJpZmllZCkKQXQgdGhlIHByaW1hcnkgb3BlcmF0aW5nIHZpZXdwb3J0ICh+MTkwIGNvbHMgeCA4NSByb3dzID0gbGVmdCBoYWxmIG9mIGEgMzQ0MHgxNDQwIGRpc3BsYXkpLCB0aGUKYm90dG9tIG9mIHRoZSBjb2NrcGl0IHJlbmRlcnM6IGEgVEhJQ0sgc29saWQgZ3JleSBiYXIgd2hlcmUgdGhlIHNlcGFyYXRvciBsaW5lIGJlbG93IHRoZSBpbnB1dCByb3cKc2hvdWxkIGJlLCBhbmQgdGhlIHN0YXR1cyByb3cgKCJvIG9ic2VydmUgwrcgLi4uIikgYXMgZGFyayB0ZXh0IG9uIGEgZ3JleSBiYWNrZ3JvdW5kIGVuZGluZyBhZnRlcgoidGFza3MiIOKAlCB0aGUgc2FtZSB2aXN1YWwgY2xhc3MgYXMgdGhlIG9yaWdpbmFsICMzMTAgY29tcGxhaW50LCBvbiB0aGUgYnVpbGQgdGhhdCBjYXJyaWVzIHRoZSAjMzEwCmN1cmUgKCMzMjUsIG1lcmdlZCkuCgojIyBCeXRlLWxldmVsIHJlY2VpcHRzIChwaXBlLXB0eSBjYXB0dXJlIGF0IGV4YWN0bHkgMTkweDg1LCBjd2Q9QjovTS9lbWJlciwgYnVpbGQgYzk5ZDBkNikKQ2FwdHVyZTogYHNjcmF0Y2gvY2xpcmVidWlsZC9jYXB0dXJlLTE5MHg4NS9mcmFtZS0xOTB4ODUuYW5zaWAgKDE4LDAyNCBieXRlcykuCgpUd28gYEVTQ1s3bWAgc3BhbnMgaW4gdGhlIGZyYW1lIHRhaWwgKHplcm8gYXQgMTAweDMyLCAxMzB4NjAsIDIyMHg2MCDigJQgYWxsIHRocmVlIGVhcmxpZXIgc2l6ZXMgY2xlYW4pOgoKMS4gYnl0ZSAxNjYzODogYG8gXHgxYls3bSBceDFiWzIybVx4MWJbMjdtYCDigJQgc2luZ2xlIGludmVyc2UgU1BBQ0UsIHByb3Blcmx5IGNsb3NlZCA9IHRoZSBibG9jawogICBjdXJzb3IgY2VsbC4gTGVnYWwuCjIuIGJ5dGUgMTY4NDg6IGBceDFiWzFtXHgxYlsybVx4MWJbN21gIGZvbGxvd2VkIGJ5IGEgcnVuIG9mICoqcmF3IDB4MDAgKE5VTCkgYnl0ZXMqKiDigJQgYW4KICAgaW52ZXJzZStib2xkK2RpbSBzdHlsZSBzdGFjayBvcGVuZWQgb3ZlciBhIE5VTC1jZWxsIHJ1bi4gQSBzdHlsZWQgcnVuIG92ZXIgYmxhbmtzIHBhaW50cyBhIHNvbGlkCiAgIGZpbGxlZCBiYXI7IHRoYXQgaXMgdGhlIGdyZXkgYmFyIC8gaW52ZXJ0ZWQgc3RhdHVzIHZpc3VhbC4KCkFkZGl0aW9uYWxseSB0aGUgZnJhbWUgY29udGFpbnMgbG9uZyBydW5zIG9mIE5VTCBieXRlcyBhcyBjZWxsIGNvbnRlbnQgaW4gbXVsdGlwbGUgcGxhY2VzCihlLmcuIHRoZSB+NzggTlVMcyBwcmVjZWRpbmcgc3BhbiAxJ3MgY29udGV4dCkuIEEgcmVuZGVyZWQgZnJhbWUgc2hvdWxkIGVtaXQgc3BhY2VzICgweDIwKSBmb3IKYmxhbmsgY2VsbHMg4oCUIE5VTCBieXRlcyBpbiB0aGUgb3V0cHV0IHN0cmVhbSBhcmUgbmV2ZXIgbGVnYWwgY2VsbCBjb250ZW50LgoKIyMgVHdvIGRlZmVjdHMsIGxpa2VseSBvbmUgZW1pc3Npb24gc2l0ZQotIEQxOiB0aGUgcmVuZGVyZXIgZW1pdHMgdW5pbml0aWFsaXplZC9OVUwgY2VsbHMgYXMgcGFkZGluZyBhdCB0aGlzIHNpemUgKHNpemUtZGVwZW5kZW50IGJ1ZmZlciBvcgogIGRpZmYtcmVuZGVyZXIgcGF0aDsgYWJzZW50IGF0IHRoZSB0aHJlZSBzbWFsbGVyL290aGVyIHRlc3Qgc2l6ZXMpLgotIEQyOiB0aGUgc3R5bGUgc3RhdGUgYWN0aXZlIHdoZW4gdGhhdCBwYWRkaW5nIGlzIGVtaXR0ZWQgaW5jbHVkZXMgdGhlIGN1cnNvcidzIGBbN21gIHN0YWNrIOKAlCB0aGUKICBzYW1lIHN0eWxlLXN0YXRlLWRpc2NpcGxpbmUgZmFtaWx5IGFzICM0NC8jMzEwIChzdHlsZSBsZWFraW5nIGFjcm9zcyBhbiBlbWlzc2lvbiBib3VuZGFyeSksIGJ1dCBhCiAgRElGRkVSRU5UIHNpdGU6IE5VTC1wYWRkaW5nIGVtaXNzaW9uLCBub3QgbGFzdC1jZWxsIHRyYWlsaW5nIHJlc2V0ICh3aGljaCAjMzI1IGZpeGVkIGFuZCB3aG9zZQogIHJlZ3Jlc3Npb24gdGVzdHMgc3RpbGwgcGFzcyBhdCB0aGUgdGhyZWUgb3JpZ2luYWwgc2l6ZXMpLgoKIyMgUmVwcm8KUGlwZS1wdHkgYXQgZXhhY3RseSAxOTB4ODUsIGN3ZD1COi9NL2VtYmVyLCBib290ICsgc2V0dGxlOyBncmVwIHRoZSBzdHJlYW0gZm9yIGBceDAwYCBhbmQgYFx4MWJbN21gLgpSaWc6IGBzY3JhdGNoL2NsaXJlYnVpbGQvY2FwdHVyZS0xOTB4ODUvY2FwdHVyZS0xOTB4ODUubWpzYC4KCiMjIEFjY2VwdGFuY2UgZm9yIHRoZSBmaXgKLSBObyBOVUwgYnl0ZXMgYW55d2hlcmUgaW4gdGhlIGVtaXR0ZWQgc3RyZWFtIGF0IEFOWSBzaXplIChwcm9wZXJ0eSB0ZXN0IGFjcm9zcyBhIHNpemUgc3dlZXAsCiAgZS5nLiB7MTAweDMyLCAxMzB4NjAsIDE5MHg4NSwgMjIweDYwLCAyNTB4OTB9IG1pbmltdW0pLgotIE5vIFs3bSBvdXRzaWRlIHNpbmdsZS1jZWxsIGN1cnNvciBzcGFucyBhdCBhbnkgc3dlcHQgc2l6ZS4KLSBSZWdyZXNzaW9uIHRlc3QgbG9ja3MgdGhlIDE5MHg4NSBjYXNlIHNwZWNpZmljYWxseSAodGhlIG9wZXJhdG9yJ3MgcmVhbCBoYWxmLXNjcmVlbiB2aWV3cG9ydCkuCgojIyBQcm9jZXNzIGRlZmVjdCBiYW5rZWQgd2l0aCB0aGlzIChjb29yZGluYXRpb24gc2lkZSwgZm9yIHRoZSByZWNvcmQpClRoZSBjYXB0dXJlIG1hdHJpeCBjYWxsZWQgMTMweDYwICJoYWxmc2NyZWVuIiB3aXRob3V0IGRlcml2aW5nIGl0IGZyb20gdGhlIG9wZXJhdG9yJ3MgYWN0dWFsCmRpc3BsYXkgKDM0NDB4MTQ0MCA9PiBoYWxmID0gfjE5MHg4NSkuIFZpZXdwb3J0IGFyaXRobWV0aWMgbXVzdCBiZSBjb21wdXRlZCBmcm9tIHRoZSBlbnVtZXJhdGVkCmRpc3BsYXksIG5ldmVyIGFzc3VtZWQuCg==",
+      "closed_at": "2026-07-13T12:49:46Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "IyMgQWNjZXB0YW5jZSBhbWVuZGVkIChwb3N0LWZvcmVuc2ljLCAyMDI2LTA3LTA3IH4xMToxMFopCgpMYW5lIGZvcmVuc2ljcyAoNS1wcm9iZSB0YWJsZSwgd2lsbCBsYW5kIGluIHRoZSBmaXggUFIpIHJlbG9jYXRlZCB0aGUgZGVmZWN0OiB0aGUgSlMgY2VsbCBtb2RlbCBlbWl0cyBjbGVhbiBieXRlcyBhdCBldmVyeSBzd2VwdCBzaXplIChpbi1tZW1vcnkgQU5EIGlzb2xhdGVkIHJlYWwtQ29uUFRZIHByb2JlcyBib3RoIGNsZWFuKTsgdGhlIE5VTCBjb3JydXB0aW9uIHJlcHJvZHVjZXMgT05MWSB0aHJvdWdoIGEgcmVhbCBDb25QVFkgdW5kZXIgdGhlIGZ1bGwgYm9vdCBzZXF1ZW5jZSdzIG11bHRpLXNvdXJjZSB3cml0ZSBjb250ZW50aW9uIOKAlCA5NzYgTlVMcyBkZXRlcm1pbmlzdGljLCBmaXJzdCBydW4gPSAxODAgYnl0ZXMgPSBleGFjdGx5IHRoZSBIb21lc2NyZWVuIGJvcmRlci10aXRsZSdzIHJpZ2h0RmlsbCBvZiBVKzI1MDAgZ2x5cGhzICgzIGJ5dGVzL2NlbGwsIHRoZSBsYXJnZXN0IGNvbnRpZ3VvdXMgbXVsdGlieXRlIHJ1biBvbiB0aGUgd2lyZSkuIFdvcmtpbmcgbWVjaGFuaXNtOiBhIHdyaXRlLWNodW5rIGJvdW5kYXJ5IHNwbGl0dGluZyBhIG11bHRpLWJ5dGUgVVRGLTggc2VxdWVuY2UgY29ycnVwdHMgQ29uUFRZJ3MgcGVyLWNodW5rIGRlY29kZSAoa25vd24gQ29uUFRZIGNsYXNzKTsgY29udGVudGlvbiBtYWtlcyBtaWQtZ2x5cGggYm91bmRhcmllcyBsaWtlbHkuCgpBbWVuZG1lbnRzOgotIEZpeCB0YXJnZXQgPSB0aGUgV1JJVEUgbGF5ZXIgKHNpbmdsZSBzZXJpYWxpemVkIHdyaXRlciArIGNodW5rLXNhZmUgd3JpdGVzIHRoYXQgbmV2ZXIgc3BsaXQgYSBVVEYtOCBzZXF1ZW5jZTsgd2hvbGUtZnJhbWUgc2luZ2xlIHdyaXRlIHByZWZlcnJlZCksIE5PVCB0aGUgY2VsbCBtb2RlbCwgTk9UIGEgcHJlLXdyaXRlIHNjcnViIChieXRlcyBhcmUgYWxyZWFkeSBjbGVhbiBwcmUtd3JpdGUg4oCUIGEgc2NydWIgdGhlcmUgZ3VhcmRzIGEgY2xlYW4gYm91bmRhcnkpLgotIERlY2lzaXZlIHRlc3QgPSB0aGUgcHR5IFJJRyAoc2NyYXRjaC9jbGlyZWJ1aWxkL2NhcHR1cmUtMTkweDg1L2NhcHR1cmUtMTkweDg1Lm1qcyBnZW5lcmFsaXplZCBhY3Jvc3MgdGhlIHN3ZXB0IHNpemVzKSB3aXJlZCBhcyBhbiBpbnRlZ3JhdGlvbiB0ZXN0IGFzc2VydGluZyB6ZXJvIDB4MDAgYnl0ZXM6IGN1cnJlbnRseSBSRUQgYXQgbWFzdGVyLCBtdXN0IGJlIEdSRUVOIHVuZGVyIHRoZSBmaXguIFRoZSBvcmlnaW5hbGx5LXNwZWNpZmllZCBtb3VudEluayBwcm9wZXJ0eSB0ZXN0IGNhbm5vdCByZXByb2R1Y2UgdGhlIGRlZmVjdCAocHJveHkgcGF0aCDigJQgdGhlIGluLXByb2Nlc3MgaGFybmVzcyBieXBhc3NlcyB0aGUgcHR5IHNlYW0gd2hlcmUgdGhlIGNvcnJ1cHRpb24gbGl2ZXMpIGFuZCBpcyBkZW1vdGVkIHRvIHN1cHBsZW1lbnRhcnkuCi0gVGhlICdubyBbN20gb3V0c2lkZSBjdXJzb3IgY2VsbHMnIGFjY2VwdGFuY2Ugc3RhbmRzIHVuY2hhbmdlZCAodGhlIGludmVyc2UgYmFyIHdhcyB0aGUgc3R5bGUgc3RhY2sgcGFpbnRlZCBhY3Jvc3MgdGhlIE5VTCBydW47IGN1cmluZyB0aGUgTlVMcyBhdCB0aGUgd3JpdGUgbGF5ZXIgbXVzdCBlbGltaW5hdGUgaXQg4oCUIHRoZSByaWcgdGVzdCBhc3NlcnRzIGJvdGgpLgo=",
+          "created_at": "2026-07-07T11:07:47Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/343#issuecomment-4903098765"
+        },
+        {
+          "author": "wordingone",
+          "body_base64": "IyMgQ29ycmVjdGlvbiB0byBteSBhY2NlcHRhbmNlIGFtZW5kbWVudCBhYm92ZSAobWVjaGFuaXNtIHJlZnV0ZWQgYnkgZXhwZXJpbWVudCwgMjAyNi0wNy0wNyB+MTE6NTBaKQoKTXkgcHJldmlvdXMgY29tbWVudCBhdHRyaWJ1dGVkIHRoZSBOVUwgY29ycnVwdGlvbiB0byB3cml0ZS1jaHVuayBib3VuZGFyaWVzIHNwbGl0dGluZyBtdWx0aS1ieXRlIFVURi04IHNlcXVlbmNlcyB1bmRlciBib290IGNvbnRlbnRpb24uIFRoYXQgaHlwb3RoZXNpcyBpcyBub3cgUkVGVVRFRCBieSB0aHJlZSBpbmRlcGVuZGVudCBkaXNjcmltaW5hdGluZyBleHBlcmltZW50cyAoZml4IGxhbmUsIHJlY2VpcHRzIGluIFBSICMzNTIncyB0cmFpbCk6CgoxLiAqKkNodW5rLXNpemUgaW52YXJpYW5jZSoqOiBmb3JjZWQgNjQtYnl0ZSB3cml0ZSBjaHVua2luZyB2cyBvbmUgbGFyZ2Ugd3JpdGUg4oCUIGlkZW50aWNhbCBOVUwgY291bnQuCjIuICoqV3JpdGUtc2lkZSBpbnN0cnVtZW50YXRpb24qKjogZXZlcnkgc3RyaW5nIGNoZWNrZWQgZm9yIE5VTCBiZWZvcmUgcmVhY2hpbmcgdGhlIHB0eSBpbnNpZGUgdGhlIHJlYWwgcHR5LWhvc3RlZCBjaGlsZCDigJQgMCBOVUwgd3JpdHRlbiwgfjQwOCBOVUwgb24gdGhlIHB0eSdzIHJlY2VpdmluZyBzaWRlLCBzYW1lIHJ1bi4KMy4gKipCb290LWRlZmVyKio6IGZpcnN0IHBhaW50IGRlZmVycmVkIDBtcy81MDBtcy8xNTAwbXMgcGFzdCBzdGFydHVwL3Jhdy1tb2RlIG5lZ290aWF0aW9uIOKAlCBOVUwgY291bnQgaWRlbnRpY2FsICg0MDgpIGluIGFsbCB0aHJlZS4KClRoZSBjb3JydXB0aW9uIGlzIGFkZGVkIHN0cmljdGx5IGJldHdlZW4gb3VyIHdyaXRlKCkgYW5kIENvblBUWSdzIHJlYWQgc2lkZSDigJQgZGV0ZXJtaW5pc3RpYywgY29udGVudC1kZXBlbmRlbnQgKHJ1biBsZW5ndGhzIHRyYWNrIHRoZSBib3JkZXIgcmlnaHRGaWxsIGFyaXRobWV0aWMpLCBjb25zaXN0ZW50IHdpdGggYSBDb25QVFkvY29uaG9zdC1pbnRlcm5hbCBkZWZlY3Qgb24gdGhpcyBzdHlsZWQtZ2x5cGggY29udGVudC4gTm90IG91ciB3cml0ZSB0aW1pbmcsIGNodW5raW5nLCBvciBzdGFydHVwIGludGVybGVhdmluZy4KCiMjIEZpbmFsIGFjY2VwdGFuY2UgKHJlLWF0dHJpYnV0ZWQsIG5vdCByZWR1Y2VkKQotIFRoZSBvcGVyYXRvci12aXNpYmxlIGRlZmVjdCAoc3R5bGVkIGJhciAvIGludmVydGVkIHN0YXR1cykgdHJhY2VzIHRvIGEgUkVBTCBpbi1jb2RlIGJ1ZyDigJQgU0dSIHRyYW5zaXRpb25zIGNvbXB1dGVkIGFnYWluc3QgYSBoYXJkY29kZWQgZW1wdHkgcHJldmlvdXMtc3R5bGUsIGxlYWtpbmcgYm9sZC9pbnZlcnNlIGZvcndhcmQg4oCUIGZpeGVkIGluIFBSICMzNTIgd2l0aCByZWQvZ3JlZW4gdGVzdHMuIFdpdGggdGhlIGZpeCwgdGhlIGV4dGVybmFsbHktaW5qZWN0ZWQgTlVMcyByZW5kZXIgYXMgdW5zdHlsZWQgYmxhbmtzOiBpbnZpc2libGUgYXQgdGhlIG9wZXJhdG9yJ3Mgdmlld3BvcnQuCi0gSW4tY29kZSBiYXI6IHplcm8gTlVMIGJ5dGVzIGluIHdoYXQgdGhlIHByb2Nlc3MgV1JJVEVTIChwcm92ZW4gYnkgaW5zdHJ1bWVudGF0aW9uLCBsb2NrZWQgYnkgdGhlIG5ldyB0ZXN0IHN1aXRlKSArIG5vIGludmVyc2UgcnVuIGxvbmdlciB0aGFuIHRoZSBzaW5nbGUgY3Vyc29yIGNlbGwgYXQgYW55IHN3ZXB0IHNpemUuCi0gWmVybyBOVUwgYnl0ZXMgYXQgdGhlIHB0eSBSRUFEIHNpZGUgaXMgbm90IGFjaGlldmFibGUgZnJvbSB0aGlzIGNvZGViYXNlOyB0aGF0IGRlZmVjdCBtb3ZlcyB0byBpdHMgb3duIGZvbGxvdy11cCBpc3N1ZSB3aXRoIHRoZSBldmlkZW5jZSBhYm92ZS4=",
+          "created_at": "2026-07-07T11:44:41Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/343#issuecomment-4903404784"
+        },
+        {
+          "author": "wordingone",
+          "body_base64": "Q2xvc3VyZSBiYXNpcyAoaW5kZXBlbmRlbnRseSByZXZlcmlmaWVkIGFnYWluc3QgcHVibGljIG1hc3RlciBmZTRkOWUyYmViNWE4MjU3M2YzZjU5YTVjYjA1ZmU5YjJjMWEwOTdjKToKCi0gUFIgIzM1MiBtZXJnZWQgYXMgZjk2NWYwNTU3MWY2MDJlMmQyYzFjMTEyYmJlMTVkOGE0M2MyNzIzOSBhbmQgdGhhdCBtZXJnZSBpcyBhbiBhbmNlc3RvciBvZiBjdXJyZW50IHB1YmxpYyBtYXN0ZXIuCi0gVGhlIGZpbmFsIG93bmVyLWFtZW5kZWQgYWNjZXB0YW5jZSBjcml0ZXJpb24gaXMgcHJvY2Vzcy13cml0ZSBOVUw9MCBwbHVzIG5vIGludmVyc2UgcnVuIHdpZGVyIHRoYW4gb25lIGN1cnNvciBjZWxsOyBQVFkgcmVhZC1zaWRlIE5VTCB3YXMgZXhwbGljaXRseSByZW1vdmVkIGZyb20gdGhlIGNyaXRlcmlvbi4KLSBDdXJyZW50IHNvdXJjZSB1c2VzIG9uZSBzaGFyZWQgYFByZXZTdHlsZVRyYWNrZXJgIGFjcm9zcyB0ZXh0LCBib3JkZXIsIGFuZCB0cmVlIHJlbmRlcmluZy4KLSBDdXJyZW50IHRlc3RzIHN0YXRpY2FsbHkgY292ZXIgYWxsIGZpdmUgc3dlcHQgc2l6ZXMgcGx1cyB0aGUgbG9ja2VkIDE5MHg4NSB2aWV3cG9ydCBhbmQgYm90aCByZXF1aXJlZCBwcm9wZXJ0aWVzLgotIFBSICMzNTIgcmV0YWlucyB0aGUgZXhlY3V0aW9uIHJlY2VpcHQ6IGFsbCBzaXggZm9ybWVybHktcmVkIGludmVyc2UgdGVzdHMgZ3JlZW4sIHdpdGggMiw5MjkgcGFzc2VzIGFuZCAxMSBwcmUtZXhpc3RpbmcgdW5yZWxhdGVkIGZhaWx1cmVzLgotIEltcG9ydGFudCBsaW1pdGF0aW9uOiB0aGUgZnJlc2ggYXVkaXQgY2xvbmUgY291bGQgbm90IGV4ZWN1dGUgdGhlIEJ1biB0ZXN0IGJlY2F1c2UgdGhlIHB1YmxpYyBjbG9uZSBsYWNrcyB0aGUgUmVhY3QgZGVwZW5kZW5jeTsgdGhpcyBpcyBub3QgcmVwcmVzZW50ZWQgYXMgYSBmcmVzaCB0ZXN0IHBhc3MuCgpDbG9zaW5nIHRoZSByZW5kZXJlciBkZWZlY3QgdW5kZXIgaXRzIGZpbmFsIGFtZW5kZWQgYWNjZXB0YW5jZSBjcml0ZXJpb24uIFRoaXMgY2xvc3VyZSBtYWtlcyBubyBFbWJlciBtb2RlbC1jYXBhYmlsaXR5IG9yIHNjaWVudGlmaWMtYnJlYWt0aHJvdWdoIGNsYWltLg==",
+          "created_at": "2026-07-13T12:49:41Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/343#issuecomment-4958115853"
+        }
+      ],
+      "created_at": "2026-07-07T10:40:46Z",
+      "labels": [],
+      "number": 343,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "Renderer emits NUL-cell runs under a [7m style stack at ~190x85 — grey bars + inverted status at the operator's real viewport",
+      "updated_at": "2026-07-13T12:49:46Z",
+      "url": "https://github.com/wordingone/ember/issues/343"
     },
     {
       "author": "wordingone",
@@ -314,6 +350,28 @@
       "title": "C-INV probe overwrites its TRACKED receipt in place — tree perpetually dirty by design",
       "updated_at": "2026-07-13T08:41:22Z",
       "url": "https://github.com/wordingone/ember/issues/377"
+    },
+    {
+      "author": "wordingone",
+      "body_base64": "IyMgRGVmZWN0IChib2FyZCAxODM4NTZaLCAyMDI2LTA3LTA3KQoKQygtMSkgZmxpcHBlZCBSRUQoMTMvMjc0IHVuYW5uZXhlZCBkZWNpc2l2ZSByZWNlaXB0cykgLT4gR1JFRU4gYmV0d2VlbiByZWNlaXB0cyAxNzM1NTZaIGFuZCAxODM4NTZaIHdpdGggTk8gY3VyZSBsYW5kaW5nLiBUaGUgY2F1c2U6IHRoZSAxMyBvZmZlbmRpbmcgcmVjZWlwdHMgd2VyZSBERUxFVEVEIGZyb20gdGhlIHdvcmtpbmcgdHJlZSBiZXR3ZWVuIHRoZSBydW5zIChhIGxhbmUncyBicmFuY2gtZXhpdCBjaGVja291dCByZW1vdmVkIHRoZW0g4oCUIGN1c3RvZHkgaW5jaWRlbnQsIHNhbHZhZ2UgUFIgIzM5MyBpbiBmbGlnaHQpLiBUaGUgQygtMSkgc2Nhbm5lciBwYXNzZXMgYmVjYXVzZSBpdHMgZXZpZGVuY2UgU0VUIGVtcHRpZWQsIG5vdCBiZWNhdXNlIGNvdmVyYWdlIHdhcyBhY2hpZXZlZC4KCk1lYW53aGlsZSBDLUNVU1RPRFkgKHNhbWUgcmVjZWlwdCkgY29ycmVjdGx5IHJlcG9ydHMgY2l0ZWRfbWlzc2luZz0xMCBmb3IgdGhvc2UgdmVyeSBmaWxlcyDigJQgdGhlIGJvYXJkIHNpbXVsdGFuZW91c2x5IHNheXMgJ3NwZW5kLXByb29mIGNvbXBsZXRlJyAoQygtMSkgR1JFRU4pIGFuZCAndGhlIHJlY2VpcHRzIHRoYXQgcHJvb2YgZGVwZW5kcyBvbiBhcmUgbWlzc2luZycgKEMtQ1VTVE9EWSBSRUQpLiBBIGNvbmRpdGlvbiB3aG9zZSBHUkVFTiBjYW4gYmUgTUFOVUZBQ1RVUkVEIEJZIERFTEVUSU5HIEVWSURFTkNFIGlzIGEgdGhlYXRlciBob2xlOiBhIGZ1dHVyZSBhbGwtZ3JlZW4gY2xhaW0gY291bGQgcmlkZSBhIGRlbGV0aW9uLgoKIyMgQ3VyZQpDKC0xKSBtdXN0IGZhaWwtY2xvc2VkIG9uIGFic2VudC1idXQtcmVmZXJlbmNlZCBldmlkZW5jZTogdGhlIHNjYW5uZXIncyBkZWNpc2l2ZS1yZWNlaXB0IHVuaXZlcnNlID0gcmVjZWlwdHMgcHJlc2VudCBvbiBkaXNrIFVOSU9OIHJlY2VpcHRzIGNpdGVkIGJ5IGFueSB0cmFja2VkIGFydGlmYWN0IChhbm5leCByb3dzLCBhdHRlc3RhdGlvbnMsIGJvYXJkIGhpc3RvcnkpLiBBIGNpdGVkLWJ1dC1taXNzaW5nIGRlY2lzaXZlIHJlY2VpcHQgY291bnRzIGFzIFVOUFJPVkVOIChSRUQgY29udHJpYnV0aW9uKSwgbWlycm9yaW5nIEMtQ1VTVE9EWSdzIGNpdGVkX21pc3Npbmcgc2VtYW50aWNzLiBSZWdyZXNzaW9uIGZpeHR1cmU6IGRlbGV0ZSBhIGZpeHR1cmUgZGVjaXNpdmUgcmVjZWlwdCB0aGF0IGFuIGFubmV4IHJvdyBjaXRlcyAtPiBDKC0xKSBtdXN0IHN0YXkgUkVEIHdpdGggYSBtaXNzaW5nLWV2aWRlbmNlIG1lc3NhZ2UsIG5vdCBmbGlwIEdSRUVOLgoKIyMgT3JkZXJpbmcgbm90ZQojMzkzIChzYWx2YWdlKSByZXN0b3JlcyB0aGUgMTMgdHJhY2tlZCthbm5leGVkIGFuZCBzaG91bGQgbWFrZSBDKC0xKSBIT05FU1RMWSBncmVlbjsgdGhpcyBpc3N1ZSBpcyBhYm91dCB0aGUgc2Nhbm5lcidzIGNvdW50ZXJmYWN0dWFsIGJlaGF2aW9yLCB3aGljaCBzdGF5cyB3cm9uZyBldmVuIGFmdGVyICMzOTMgbGFuZHMu",
+      "closed_at": "2026-07-13T12:49:31Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "Q2xvc3VyZSBiYXNpcyAoaW5kZXBlbmRlbnRseSByZXZlcmlmaWVkIGFnYWluc3QgcHVibGljIG1hc3RlciBmZTRkOWUyYmViNWE4MjU3M2YzZjU5YTVjYjA1ZmU5YjJjMWEwOTdjKToKCi0gUFIgIzM5NyBtZXJnZWQgYXMgMTVkMTg2OGMyNjNkMzFiNjg2OTJhMGIyYTU5NGM1Mjk3NzkzYTNiZCBhbmQgdGhhdCBtZXJnZSBpcyBhbiBhbmNlc3RvciBvZiBjdXJyZW50IHB1YmxpYyBtYXN0ZXIuCi0gVGhlIGV4YWN0IGFjY2VwdGFuY2UgYmVoYXZpb3Igd2FzIGZyZXNobHkgZXhlY3V0ZWQ6IGEgY2l0ZWQtYnV0LW1pc3NpbmcgZGVjaXNpdmUgcmVjZWlwdCByZW1haW5zIFJFRCwgd2hpbGUgdGhlIGFsbC1wcmVzZW50IGNhc2UgaXMgR1JFRU4uCi0gRnJlc2ggZGlyZWN0IGV4ZWN1dGlvbiBvZiB0aGUgZXhhY3QgdGVzdCBmaWxlIHBhc3NlZCAyLzIgaW4gMC40MHMuCi0gQSBjb21iaW5lZCByZWxhdGVkIGN1c3RvZHkgcnVuIHBhc3NlZCAxMC8xMC4KCkNsb3NpbmcgdGhlIGRlbGV0aW9uLWluZHVjZWQtdmFjdW91cy1HUkVFTiBkZWZlY3QgYXMgY29tcGxldGVkLiBUaGlzIGNsb3N1cmUgbWFrZXMgbm8gRW1iZXIgbW9kZWwtY2FwYWJpbGl0eSBvciBzY2llbnRpZmljLWJyZWFrdGhyb3VnaCBjbGFpbS4=",
+          "created_at": "2026-07-13T12:49:25Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/394#issuecomment-4958113593"
+        }
+      ],
+      "created_at": "2026-07-07T18:51:30Z",
+      "labels": [],
+      "number": 394,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "C(-1) scanner passes vacuously when cited decisive receipts are DELETED from disk (deletion-induced GREEN, board 183856Z)",
+      "updated_at": "2026-07-13T12:49:31Z",
+      "url": "https://github.com/wordingone/ember/issues/394"
     },
     {
       "author": "wordingone",
@@ -500,6 +558,28 @@
     },
     {
       "author": "wordingone",
+      "body_base64": "VGhpcmQgaW5zdGFuY2UgdG9kYXkgKDIwMjYtMDctMDgpIG9mIHRoZSBzYW1lIGNsYXNzOiBhIGNhbGwgc2l0ZSByZWFjaGVzIGZvciB3MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weSdzIFJBVyBzZXJpYWwgY29udGFtaW5hdGlvbl9yZWNoZWNrIGFuZCBkaWVzIG9uIGEgY29udGlndW91cy1hbGxvYyBmYWlsdXJlLCB3aGlsZSBidWlsZF9kZWNvbnRhbV9iYXRjaF9tcC5weSdzIGFkYXB0aXZlLWNodW5rZWQsIE1lbW9yeUVycm9yLXNwbGl0dGluZyB3cmFwcGVyIHNpdHMgcHJvdmVuIG9uZSBtb2R1bGUgb3Zlci4KCkluc3RhbmNlczogKDEpIHRoZSBwcmUtZml4IFcxYyBzY2FuIHdvcmtlciAoY3VyZWQgYnkgY2h1bmtpbmcsIHRoZW4gc3VwZXJzZWRlZCBieSAjMzAyJ3MgYWRhcHRpdmUgcGF0aCk7ICgyKSBwMV9lbnZlbG9wZV9zd2VlcC5weTo0NDAgY2FsbGluZyB3MWMuY29udGFtaW5hdGlvbl9yZWNoZWNrIGRpcmVjdGx5IOKAlCBraWxsZWQgUDEgcG9pbnQgMyBhdCB0aGUgRklOQUwgcmVjaGVjayB3aXRoIG51bXB5IEFycmF5TWVtb3J5RXJyb3IgKDJHaUIgY29udGlndW91cywgMjY4TS1lbGVtZW50IHVpbnQ2NCkgYWZ0ZXIgdGhlIGNvcnB1cyttb2RlbCBhbHJlYWR5IG9jY3VwaWVkIFJBTSAodHJhY2ViYWNrIGJhbmtlZCBpbiB0aGUgUDEgbGFuZTsgY3VyZSA9IHN3YXAgdG8gdGhlIHdyYXBwZXIsIHJ1bGVkICsgaW4gZmxpZ2h0KTsgKDMpIHRoZSBFUVVJViBoYXJuZXNzJ3Mgbl93b3JrZXJzIGRlZmF1bHQgc2lsZW50bHkgcmVzb2x2aW5nIHRvIHRoZSBzZXJpYWwgcGF0aCBvbiBsb3ctY29yZSBib3hlcyAoZmxhZ2dlZCBpbiBQUiAjNDQzJ3MgYm9keSkuCgpDdXJlIGRpcmVjdGlvbiAob25lIG9mLCBtYWludGFpbmVyJ3MgcGljayBhdCBpbXBsZW1lbnRhdGlvbik6IChhKSBtYWtlIHRoZSBhZGFwdGl2ZSB3cmFwcGVyIHRoZSBtb2R1bGUtbGV2ZWwgZGVmYXVsdCBleHBvcnQgYW5kIHJlbmFtZSB0aGUgcmF3IHNlcmlhbCBmdW5jdGlvbiB0byBfY29udGFtaW5hdGlvbl9yZWNoZWNrX3NlcmlhbF91bnNhZmUgKGdyZXAgKyBmaXggdGhlIDQga25vd24gY2FsbCBzaXRlcyksIG9yIChiKSBhZGQgdGhlIGFkYXB0aXZlLXNwbGl0IGd1YXJkIElOVE8gdGhlIHNlcmlhbCBmdW5jdGlvbiBpdHNlbGYgc28gdGhlcmUgaXMgbm8gdW5zYWZlIGVudHJ5IHBvaW50IGF0IGFsbC4gT3B0aW9uIChiKSBpcyBzdHJvbmdlciDigJQgbm8gZnV0dXJlIGNhbGwgc2l0ZSBjYW4gcGljayB3cm9uZy4gUmVncmVzc2lvbiBiYXI6IHRoZSBsaWtlLWZvci1saWtlIGVxdWl2YWxlbmNlIHJlY2VpcHRzIGFscmVhZHkgZXhpc3QgKDE2LDQ3MiBleGFjdCByZXByb2R1Y3Rpb24gdGhyb3VnaCB0aGUgY2h1bmtlZCBwYXRoLCBQUiAjNDQzIGJvZHk7IGNvbnRhbWluYXRpb249MCBhZ3JlZW1lbnQgb24gdGhlIHJlZ2VuIGJhdGNoKS4KClJlZnM6ICM0NDAgKGNvcnB1cyB3b3JrIHRoYXQgc3VyZmFjZWQgdGhlIGNsYXNzKSwgIzQ0MyAoZm9vdGd1biBmbGFnKSwgIzExOCAoUDEgc3dlZXAsIGluc3RhbmNlIDIpLg==",
+      "closed_at": "2026-07-13T12:49:19Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "Q2xvc3VyZSBiYXNpcyAoaW5kZXBlbmRlbnRseSByZXZlcmlmaWVkIGFnYWluc3QgcHVibGljIG1hc3RlciBmZTRkOWUyYmViNWE4MjU3M2YzZjU5YTVjYjA1ZmU5YjJjMWEwOTdjKToKCi0gUFIgIzQ1MSBtZXJnZWQgYXMgMzhmYjEyNzU5OGIwNmYwNzA1MjJlZTM4YjY4OTcwMzA2ZGUxOGM5ZSBhbmQgdGhhdCBtZXJnZSBpcyBhbiBhbmNlc3RvciBvZiBjdXJyZW50IHB1YmxpYyBtYXN0ZXIuCi0gVGhlIGFjY2VwdGVkIG9wdGlvbiAoYikgaXMgaW1wbGVtZW50ZWQ6IHRoZSBtZW1vcnkgZ3VhcmQgaXMgZm9sZGVkIGludG8gdGhlIHNvbGUgc2VyaWFsIGVudHJ5IHBvaW50LgotIEEgZnJlc2ggQVNUIGNvbnRyYWN0IHByb2JlIHZlcmlmaWVkIHRoZSBkZWZhdWx0IGNodW5rL2Zsb29yIHBhcmFtZXRlcnMgYW5kIGNhbGwgcm91dGluZy4KLSBBIGZyZXNoIGR5bmFtaWMgcHJvYmUgZXhlY3V0aW5nIHRoZSBleGFjdCBwdWJsaWMtbWFzdGVyIGZ1bmN0aW9ucyBzdXJ2aXZlZCBhIHNpbXVsYXRlZCA+MzAtdG9rZW4gTWVtb3J5RXJyb3Igd2l0aCBpZGVudGljYWwgb3V0cHV0IGAoNTcsIFsxMF0pYCwgYW5kIGl0IHJhaXNlZCB0aGUgbmFtZWQgYFcxX0xJVkVfQ09OVEFNSU5BVElPTl9TQ0FOX09PTWAgZmFpbHVyZSBhdCB0aGUgY29uZmlndXJlZCBmbG9vci4KLSBJbXBvcnRhbnQgbGltaXRhdGlvbjogbm9ybWFsIHB5dGVzdCBjb2xsZWN0aW9uIGlzIGludGVudGlvbmFsbHkgc3RvcHBlZCBieSBgdGltZXNoYXJlX3ByZXRyYWluLnB5YCdzIGhpc3RvcmljYWwtb25seSBpbXBvcnQgcmFpbCwgc28gdGhpcyBjbG9zdXJlIGRvZXMgbm90IGNsYWltIGEgZnJlc2ggZnVsbCBweXRlc3QgcGFzcy4gUFIgIzQ1MSBwcmVzZXJ2ZXMgaXRzIG9yaWdpbmFsIGZvY3VzZWQgYW5kIGNhbGxzaXRlIHJlY2VpcHRzLgoKQ2xvc2luZyB0aGlzIGltcGxlbWVudGF0aW9uIGlzc3VlIGFzIGNvbXBsZXRlZC4gVGhpcyBjbG9zdXJlIG1ha2VzIG5vIEVtYmVyIG1vZGVsLWNhcGFiaWxpdHkgb3Igc2NpZW50aWZpYy1icmVha3Rocm91Z2ggY2xhaW0u",
+          "created_at": "2026-07-13T12:49:12Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/445#issuecomment-4958111785"
+        }
+      ],
+      "created_at": "2026-07-08T13:10:15Z",
+      "labels": [],
+      "number": 445,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "Raw serial contamination_recheck keeps getting called where the hardened wrapper exists — make the memory-safe path the default entry point",
+      "updated_at": "2026-07-13T12:49:19Z",
+      "url": "https://github.com/wordingone/ember/issues/445"
+    },
+    {
+      "author": "wordingone",
       "body_base64": "UHJlLWV4aXN0aW5nIGJ1ZyAocmVwcm9kdWNlZCBvbiBwcmlzdGluZSBwdWJsaWMvbWFzdGVyIGJlZm9yZSBQUiAjNDQ4IHRvdWNoZWQgdGhlIGZpbGUsIGRpc2Nsb3NlZCBpbiAjNDQ4J3MgYm9keSk6IHJob19yYW5rX3Job19ncm93X25hKCkgKGxpbmUgfjEwMTQpIHJldHVybnMgYSB0dXBsZSwgYnV0IHRoZSBzZWxmdGVzdCBjYWxsIHNpdGUgKH5saW5lIDE1NTAsIGBuYVsicmhvX3JhbmsiXWApIGFuZCB0aGUgZHJ5LXJ1biBjYWxsIHNpdGUgKH5saW5lIDE5NzgpIGluZGV4IGl0IGxpa2UgYSBkaWN0IOKAlCBUeXBlRXJyb3I6IHR1cGxlIGluZGljZXMgbXVzdCBiZSBpbnRlZ2VycyBvciBzbGljZXMsIG5vdCBzdHIuIFRoZSBsaXZlLXJ1biBwYXRoICh+bGluZSAyMzAzKSB1bnBhY2tzIHRoZSB0dXBsZSBjb3JyZWN0bHk7IG9ubHkgdGhlIHNlbGZ0ZXN0L2RyeS1ydW4gbGVnYWN5IHNpdGVzIGFyZSBicm9rZW4sIHdoaWNoIGJsb2NrcyBhbnlvbmUgZnJvbSBydW5uaW5nIC0tc2VsZnRlc3Qgb3IgLS1kcnktcnVuIG9uIHRoZSBQNSBoYXJuZXNzIGVuZC10by1lbmQgKHRoZSAjNDQ4IHZlcmlmaWNhdGlvbiBoYWQgdG8gaW1wb3J0IHRoZSBtb2R1bGUgYW5kIGV4ZXJjaXNlIGZpeHR1cmVzIGRpcmVjdGx5KS4gRml4IGlzIG1lY2hhbmljYWw6IHVucGFjayBhdCBib3RoIHNpdGVzIHRoZSB3YXkgdGhlIGxpdmUgcGF0aCBkb2VzLiBNYXR0ZXJzIG5vdyBiZWNhdXNlICM0NDkncyBydW5nLTIgcHJlcmVnIGxlYW5zIG9uIHRoaXMgaGFybmVzcyDigJQgaXRzIHNlbGZ0ZXN0IHNob3VsZCBydW4gY2xlYW4gYmVmb3JlIHRoZSBydW5nLTIgbWVhc3VyZW1lbnQuIHJlZnMgIzQ0OCAjNDQ5",
       "closed_at": "2026-07-13T07:54:21Z",
       "comments": [
@@ -642,6 +722,28 @@
       "title": "fix: C-SURFACE2 probe default exec-root is a redaction placeholder — structurally UNEVALUABLE; re-root to the consolidated tree",
       "updated_at": "2026-07-13T08:56:33Z",
       "url": "https://github.com/wordingone/ember/issues/533"
+    },
+    {
+      "author": "wordingone",
+      "body_base64": "Rm9sbG93LXVwIHRvIHRoZSBydW5fdjBfc2VnbWVudCBmaXggKG1lcmdlZCB2aWEgUFIgIzU3MykuIFRoYXQgUFIncyBBQzMgY2FsbC1zaXRlIHRhYmxlIGVudW1lcmF0ZWQgZXZlcnkgaW4tdHJlZSBQYWNrZWRTaGFyZExvYWRlciBjb25zdHJ1Y3Rpb24gYW5kIGZsYWdnZWQgNCBnZW51aW5lIGdhcHMgdGhhdCBzdGlsbCByaWRlIHRoZSBsZWdhY3kgZnJvbWZpbGUrY29uY2F0ZW5hdGUgcGF0aCBhdCByZWFsLWNvcnB1cyBzY2FsZSDigJQgdGhlIGV4YWN0IEFycmF5TWVtb3J5RXJyb3IvZnJhZ21lbnRhdGlvbiBjbGFzcyB0aGUgbWVtbWFwIGNhY2hlIGV4aXN0cyB0byBraWxsIChyZWNlaXB0ZWQgYXQgMTcuNUdCIGFuZCAzMC42R0IgZnJlZSBSQU0gaW4gdGhlIGxvYWRlcidzIG93biBkb2NzdHJpbmcpOgoKLSBzY3JpcHRzL3cxYl9mcDMyX2NoZWNrLnB5OjcyCi0gc2NyaXB0cy93MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weToyMTczCi0gc2NyaXB0cy93MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weToyNTQ3Ci0gcmVzZWFyY2gvZXhwb3N1cmVfbGVkZ2VyLnB5OjkzCgpBQ3MgKG1pcnJvciBQUiAjNTczJ3MgcHJvdmVuIHNoYXBlKToKLSBBQzE6IGVhY2ggc2l0ZSBmb3J3YXJkcyBtbWFwX2NhY2hlX2RpciB3aXRoIHRoZSBzYW1lIHNlbWFudGljcyBydW5fdjBfc2VnbWVudCBub3cgaGFzIOKAlCBvbWl0dGVkIGVuZ2FnZXMgYSBzYW5lIGRlZmF1bHQgY2FjaGUgZGlyIHVuZGVyIHRoZSBjYWxsZXIncyBydW4vb3V0cHV0IHRyZWU7IGV4cGxpY2l0IE5vbmUgcHJlc2VydmVzIGxlZ2FjeSBieXRlLWZvci1ieXRlLgotIEFDMjogcmVncmVzc2lvbiBjb3ZlcmFnZSB0aHJvdWdoIGVhY2ggY2FsbGVyJ3Mgb3duIGNvbnN0cnVjdGlvbiBwYXRoIHdoZXJlIGEgdGVzdCBoYXJuZXNzIGV4aXN0czsgd2hlcmUgbm9uZSBleGlzdHMsIGEgY2FsbC1zaXRlIGFzc2VydGlvbiBvciBkb2N1bWVudGVkIG1hbnVhbCByZWNlaXB0IGluIHRoZSBQUiBib2R5LgotIEFDMzogc3VyZ2ljYWwgcGFyYW1ldGVyLWZvcndhcmRpbmcgb25seTsgbmV2ZXIgdG91Y2ggX2J1aWxkX29yX29wZW5fbWVtbWFwX2NhY2hlIG9yIHZlcmlmeV9tZW1tYXBfc3RyZWFtX2VxdWl2YWxlbmNlLgoKcmVmcyAjNTcwICM1NzMgIzExOA==",
+      "closed_at": "2026-07-13T12:37:07Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "UmVzb2x1dGlvbiB2ZXJpZmllZCBvbiBwdWJsaWMgbWFzdGVyIGZlNGQ5ZTJiZWI1YTgyNTczZjNmNTlhNWNiMDVmZTliMmMxYTA5N2MuCgpUaGUgY3VyZSBsYW5kZWQgaW4gUFIgIzU3OSwgbWVyZ2UgMTI1NTNmM2ViNWVlZWNhOTNlN2ZkNTNhZDg4YzBmOGM2YWYyMGIzMi4gQSBmcmVzaCBBU1QgY2hlY2sgZm91bmQgZXhhY3RseSB0aGUgZm91ciBzY29wZWQgcmVhbC1jb3JwdXMgUGFja2VkU2hhcmRMb2FkZXIgY29uc3RydWN0aW9uIHNpdGVzIGFuZCB2ZXJpZmllZCB0aGF0IGFsbCBmb3J3YXJkIG1tYXBfY2FjaGVfZGlyOgoKLSBzY3JpcHRzL3cxYl9mcDMyX2NoZWNrLnB5OjkyCi0gc2NyaXB0cy93MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weToyMTk0Ci0gc2NyaXB0cy93MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weToyNTg0Ci0gc2NyaXB0cy9yZXNlYXJjaC9leHBvc3VyZV9sZWRnZXIucHk6MTE2CgpTZW50aW5lbCBkZWZhdWx0cyBhbmQgZXhwbGljaXQtTm9uZSBsZWdhY3kgcGF0aHMgcmVtYWluIHByZXNlbnQuIFRoZSBoaXN0b3JpY2FsIHRlc3QgbW9kdWxlcyBhcmUgY29sbGVjdGlvbi1ibG9ja2VkIG9ubHkgYnkgdGhlIGRlbGliZXJhdGUgZXhlY3V0aW9uIHJhaWw7IHRoZSBleGFjdCBmb3J3YXJkaW5nIGNvbnRyYWN0IGlzIGNvbXBsZXRlLiBObyB0cmFpbmluZyBvciBtb2RlbCBvdXRjb21lIGlzIGNyZWRpdGVkLg==",
+          "created_at": "2026-07-13T12:37:06Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/575#issuecomment-4958011230"
+        }
+      ],
+      "created_at": "2026-07-09T16:49:37Z",
+      "labels": [],
+      "number": 575,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "forward mmap_cache_dir at the 4 remaining real-corpus-scale PackedShardLoader call sites",
+      "updated_at": "2026-07-13T12:37:07Z",
+      "url": "https://github.com/wordingone/ember/issues/575"
     },
     {
       "author": "wordingone",
@@ -805,6 +907,28 @@
     },
     {
       "author": "wordingone",
+      "body_base64": "IyMgRGVmZWN0IChmcm9tIHRoZSAjNDgwIGluZGVwZW5kZW50IGF1ZGl0LCBjb21tZW50IDQ5MzI2MDk3Nzkg4oCUIGxhdW5jaC1iaW5kaW5nLCBwb2ludC03IG9mIHRoZSBmcm96ZW4gY3VyZSBzZXQpCgpgc2NyaXB0cy9jYmFzZV9ncm93X3J1bmcyX3N0YWJpbGl6ZS5weTo6YXNzZXJ0X2xpbmVhZ2VfcmVzdW1lYCBjaGVja3Mgb25seSBgbm90IGRldmlhdGlvbmA6IG9uIHRoZSBtZXJnZWQgYmxvYiBgNTI0ZjVlZTlhMTU5Zjk1YWMwMDk1ZTZiZDZkNmJiZTQyN2FjOGZjNGAgKHB1YmxpYyBtYXN0ZXIgYDU2NDg4NmE4YCksIHN0ZXAtNzk2IHJvbGxiYWNrIGlzIGFjY2VwdGVkIHdpdGggZWFjaCBvZiBgeGAsIGBub3QtYS1kYXRlYCwgYDIwMjYtOTktOTkgbm9uc2Vuc2VgIGFzIHRoZSBkZXZpYXRpb24gZW50cnksIHJldHVybmluZyBgTElORUFHRV9ERVZJQVRJT05fREVDTEFSRURgLiBPbmx5IGVtcHR5IHRleHQgaXMgcmVmdXNlZC4gVGhlIGZyb3plbiBjb250cmFjdCByZXF1aXJlcyBhICoqZGF0ZWQqKiBkZXZpYXRpb24gZW50cnk7IHRoZSBnYXRlIGFzIHNoaXBwZWQgYWNjZXB0cyBhbnkgbm9uLWVtcHR5IHN0cmluZy4gUmVwcm8gY29tbWFuZCBpcyBpbiB0aGUgYXVkaXQgY29tbWVudCB2ZXJiYXRpbS4KCkNvbnNlcXVlbmNlOiB0aGUgYXVkaXQgcnVsaW5nIGJsb2NrcyBBQzIgZGlzcGF0Y2ggKHByZXJlZyBjb21tZW50IDQ5MzI1NTc5MTUpIHVuZGVyIHRoZSBjdXJyZW50IGdhdGUg4oCUIHRoaXMgaXNzdWUgaXMgdGhlIG5hbWVkIHVuYmxvY2sgZm9yIHRoZSB2OSByZWxhdW5jaCB3aW5kb3cuCgojIyBGcm96ZW4gY3VyZSBzcGVjIChleGVjdXRpb24tb3JkZXIgYmluZGluZykKCjEuIGBhc3NlcnRfbGluZWFnZV9yZXN1bWVgIHBhcnNlcyBhIHN0cmljdCBjYWxlbmRhci1kYXRlIHByZWZpeCBmcm9tIHRoZSBkZXZpYXRpb24gZW50cnk6IGBZWVlZLU1NLUREYCB3aGVyZSB0aGUgZGF0ZSBtdXN0IGNvbnN0cnVjdCBhcyBhIHJlYWwgYGRhdGV0aW1lLmRhdGVgICgyMDI2LTk5LTk5IG11c3QgZmFpbCkuIE1hbGZvcm1lZCAvIGltcG9zc2libGUgLyBtaXNzaW5nIGRhdGUgcHJlZml4IOKGkiBmYWlsIENMT1NFRCAocmVmdXNhbCBwYXRoIGlkZW50aWNhbCB0byB0aGUgZW1wdHktdGV4dCByZWZ1c2FsLCBkaXN0aW5jdCBtZXNzYWdlIG5hbWluZyB0aGUgbWFsZm9ybWVkIGVudHJ5KS4KMi4gTmVnYXRpdmUgY29udHJvbHMgYWRkZWQgdG8gYHRlc3RzL3Rlc3Rfc3RhYmlsaXplX3Y5X2N1cmUucHlgOiB0aGUgYXVkaXQncyBleGFjdCB0aHJlZSBwcm9iZXMgKGB4YCwgYG5vdC1hLWRhdGVgLCBgMjAyNi05OS05OSBub25zZW5zZWApIGVhY2ggUkVGVVNFRCwgcGx1cyB0aGUgZXhpc3RpbmcgdmFsaWQgZGF0ZWQgcG9zaXRpdmUgY2FzZSBzdGlsbCBwYXNzaW5nLiBUREQ6IG5lZ2F0aXZlIGNvbnRyb2xzIHNob3duIGZhaWxpbmcgYXQgdGhlIHByZS1maXggaGVhZCBpbiB0aGUgUFIgYm9keS4KMy4gU2NvcGUgZmVuY2U6IE5PIG90aGVyIGJlaGF2aW9yIGNoYW5nZSBpbiB0aGUgc3RhYmlsaXplIHNjcmlwdDsgdGhlIFIyL1I0IHVuaXQgKyBDUFUtcHJlY2hlY2sgZXZpZGVuY2Ugc3Vydml2aW5nIHRoZSBhdWRpdCBtdXN0IHJlbWFpbiBncmVlbiAocnVuIHRoZSBmdWxsIGV4aXN0aW5nIHN1aXRlLCBwYXN0ZSBjb3VudCkuCjQuIE5vbi1ibG9ja2luZyBmb2xsb3ctdXAsIE5PVCBpbiB0aGlzIFBSOiB3aGV0aGVyIGEgZGV2aWF0aW9uIGVudHJ5IGFkZGl0aW9uYWxseSByZXF1aXJlcyBjb29yZGluYXRvciBhdXRob3JpdHkgYmluZGluZyAodGhlIGF1ZGl0J3Mgb3B0aW9uYWwgc3VnZ2VzdGlvbikg4oCUIGRlc2lnbiBxdWVzdGlvbiwgc2VwYXJhdGUgaXNzdWUgaWYgcHVyc3VlZC4KCiMjIEFjY2VwdGFuY2UKUmVwcm8gdHJpbyByZWZ1c2VzIGF0IGZpeCBoZWFkICh2ZXJiYXRpbSBvdXRwdXQgcGFzdGVkKTsgZnVsbCB0ZXN0IHN1aXRlIGdyZWVuIHdpdGggY291bnQgbWF0Y2hpbmcgcHJlLWZpeCBjb3VudCArIG5ldyB0ZXN0czsgUFIgcmVmcy1vbmx5ICgicmVmcyAjNDgwIikuCgpyZWZzICM0ODA=",
+      "closed_at": "2026-07-13T12:36:50Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "UmVzb2x1dGlvbiB2ZXJpZmllZCBvbiBwdWJsaWMgbWFzdGVyIGZlNGQ5ZTJiZWI1YTgyNTczZjNmNTlhNWNiMDVmZTliMmMxYTA5N2MuCgpUaGUgY3VyZSBsYW5kZWQgaW4gUFIgIzY2OCwgbWVyZ2UgYmNlOGZjOGZjMWQ4MDcyZjQ3ZmViNDE0NTI1ODRkZGMxNDRiNTUyYy4gQSBmcmVzaCBleGFjdC1jdXJyZW50LXNvdXJjZSBwcm9iZSB2ZXJpZmllZCB0aGF0IGFzc2VydF9saW5lYWdlX3Jlc3VtZSByZWZ1c2VzIG1hbGZvcm1lZCBkZXZpYXRpb24gaW5wdXRzIHgsIG5vdC1hLWRhdGUsIGFuZCAyMDI2LTk5LTk5IG5vbnNlbnNlLCB3aGlsZSBhY2NlcHRpbmcgYSB2YWxpZCBkYXRlZCBkZXZpYXRpb24gd2l0aCBpdHMgcGlubmVkIHN0ZXAuCgpUaGUgZnVsbCBoaXN0b3JpY2FsIHB5dGVzdCBtb2R1bGUgaXMgY29sbGVjdGlvbi1ibG9ja2VkIG9ubHkgYnkgdGhlIGRlbGliZXJhdGUgaGlzdG9yaWNhbF9vbmx5IGV4ZWN1dGlvbiByYWlsOyB0aGUgY3VycmVudCBmYWlsLWNsb3NlZCBmdW5jdGlvbiBhbmQgaXRzIHJlZ3Jlc3Npb24gY29udHJhY3QgcmVtYWluIHByZXNlbnQuIFRoaXMgY2xvc2VzIHRoZSBtYWxmb3JtZWQtZGF0ZSBnYXRlIGRlZmVjdCBvbmx5IGFuZCBkb2VzIG5vdCBhdXRob3JpemUgYSByZWxhdW5jaCBvciBtb2RlbCBjbGFpbS4=",
+          "created_at": "2026-07-13T12:36:50Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/665#issuecomment-4958008855"
+        }
+      ],
+      "created_at": "2026-07-10T13:03:51Z",
+      "labels": [],
+      "number": 665,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "stabilize lineage gate fail-opens on malformed deviation dates — make assert_lineage_resume fail-closed (blocks AC2/v9 relaunch)",
+      "updated_at": "2026-07-13T12:36:50Z",
+      "url": "https://github.com/wordingone/ember/issues/665"
+    },
+    {
+      "author": "wordingone",
       "body_base64": "VGhlICM3NDAgc3dlZXAgKGRvY3MvcHJvYmUtYXV0aG9yaW5nLWNvbnRyYWN0Lm1kLCBQUiAjNzQ2KSBjbGFzc2lmaWVzIHRoZXNlIHRocmVlIHByb2JlcyBhcyBmdWxseS9uZWFyLWZ1bGx5IHNlbGYtYXR0ZXN0ZWQ6IHRleHQvcmVnZXgtb25seSBvciBwdXJlIHBhc3MtdGhyb3VnaCBwcmVkaWNhdGVzLCB6ZXJvIGV4ZWN1dGlvbi1iaW5kaW5nIGFueXdoZXJlLiBBIHJlY2VpcHQgY2FuIGZvcmNlIEdSRUVOIG9uIGVhY2ggd2l0aCBoYW5kLXdyaXR0ZW4gZmllbGRzLiBUaGlzIGlzIHRoZSAjNjgzIGNsYXNzOyB0aGUgY3VyZSBiYXIgaXMgdGhlIGNvbnRyYWN0IGRvYydzIEFORC1jb21wb3NpdGlvbiBwcmluY2lwbGUgcGx1cyB0aGUgIzc0MS8jNzQyIHJlc29sdXRpb24rcmVjb21wdXRlIHN0YW5kYXJkLgoKRlJPWkVOIFNQRUMgKHBlciBwcm9iZSwgc2FtZSB0aHJlZS1zdGVwIHNoYXBlKToKMS4gSWRlbnRpZnkgdGhlIERFQ0lTSVZFIHBvc2l0aXZlLWV2aWRlbmNlIGJyYW5jaCAodGhlIHByZWRpY2F0ZSB3aG9zZSB0cnV0aCBtYWtlcyB0aGUgY29uZGl0aW9uIEdSRUVOKS4gQ29uc3VsdCB0aGUgc3dlZXAgdGFibGUgYXBwZW5kaXggcm93cyBmb3IgdGhlIHByb2JlIGluIGRvY3MvcHJvYmUtYXV0aG9yaW5nLWNvbnRyYWN0Lm1kLgoyLiBCaW5kIGl0IHRvIGV4ZWN1dGlvbjogdGhlIHByb2JlIG11c3QgUkVTT0xWRSB0aGUgY2xhaW1lZCBhcnRpZmFjdHMgKGZpbGVzLCByZWNlaXB0cywgcnVuIG91dHB1dHMpIGZyb20gdGhlIHJlY2VpcHQncyBvd24gcG9pbnRlcnMsIFJFQ09NUFVURSB0aGUgZGVjaXNpdmUgcXVhbnRpdGllcyBmcm9tIHRob3NlIGFydGlmYWN0IGJ5dGVzIChoYXNoZXMsIGNvdW50cywgc2NvcmVzIGFzIGFwcGxpY2FibGUpLCBhbmQgY29tcGFyZSBhZ2FpbnN0IHRoZSBjbGFpbWVkIHZhbHVlcy4gQXV4aWxpYXJ5IHRleHQvZm9ybWF0IGNoZWNrcyBtYXkgcmVtYWluIGxpZ2h0ZXIgYnV0IG11c3QgbmV2ZXIgYmUgaW5kZXBlbmRlbnRseSBzdWZmaWNpZW50IGZvciBHUkVFTiAoQU5ELWNvbXBvc2l0aW9uKS4KMy4gRm9yZ2VkLXJlY2VpcHQgbmVnYXRpdmUgY29udHJvbCBpbiB0aGUgcHJvYmUncyBzZWxmdGVzdDogYSByZWNlaXB0IGNhcnJ5aW5nIG9ubHkgc2VsZi1hdHRlc3RlZCBmaWVsZHMgKGNvcnJlY3Qgc3RyaW5ncy9ib29sZWFucywgbm8gcmVzb2x2YWJsZSBhcnRpZmFjdHMpIG11c3QgZ28gUkVELiBSYXcgc2VsZnRlc3Qgb3V0cHV0IHBvc3RlZCBvbiB0aGUgUFIuCgpDb25zdHJhaW50czogb25lIFBSIGZvciB0aGUgdHJpbyBpcyBhY2NlcHRhYmxlIChkaXNqb2ludCBmaWxlcykgYnV0IGVhY2ggcHJvYmUncyBmaXggKyBuZWdhdGl2ZSBjb250cm9sIG11c3QgYmUgc2VwYXJhdGVseSByZXZpZXdhYmxlIGluIHRoZSBkaWZmOyBubyBkcml2ZS1ieSBlZGl0cyB0byBhbnkgb3RoZXIgcHJvYmUgKHRoZSB0aHJlZSAjNzQwIHNpbmdsZS1maWVsZCBieXBhc3NlcyBhcmUgb3duZWQgYnkgYSBzZXBhcmF0ZSBpbi1mbGlnaHQgbGFuZSk7IHN1cmdpY2FsIGRpZmZzLCBubyBwcm9iZSBkZWxldGVkIG9yIHJlcGxhY2VkIHdob2xlc2FsZTsgVU5BVkFJTEFCTEUgZXZpZGVuY2UgKGFydGlmYWN0IHJlZmVyZW5jZWQgYnV0IHVucmVhZGFibGUpIG11c3QgcmVmdXNlL1JFRCwgbmV2ZXIgZGlzY2xvc2VkLXNraXAsIGluIGNsYWltLWJlYXJpbmcgbW9kZS4KCnJlZnMgIzc0MCwgIzY4Mw==",
       "closed_at": "2026-07-13T11:21:18Z",
       "comments": [
@@ -826,7 +950,7 @@
       "url": "https://github.com/wordingone/ember/issues/749"
     }
   ],
-  "closed_outcome_count": 33,
+  "closed_outcome_count": 38,
   "closed_outcomes": [
     {
       "author": "wordingone",
@@ -1072,6 +1196,73 @@
       "unresolved_remainder": null,
       "updated_at": "2026-07-13T07:04:48Z",
       "url": "https://github.com/wordingone/ember/issues/336"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "96da2543e34ecd0b4e45c6b10fac9bb24469f7034a8601a444579896f469a97e",
+      "closed_at": "2026-07-13T12:49:46Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "tools/ember-cli/src/ink/rendering-pipeline.ts",
+          "artifact_sha256": "e1532dab27a954abb664060d6294f4ce202642adcd427ceccb3343ea7ed551f6",
+          "closed_disposition": "unresolved",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Retain zero process-written NUL cells and no inverse run wider than one cursor cell across the amended five-size plus 190x85 scope, without claiming the excluded ConPTY read-side behavior.",
+          "criterion_sha256": "9ee3e49168abd5a282b1ace8b6f56b4424e5009b47d16c564d0316d7859289a5",
+          "evidence_comment_body_sha256": "b0dc864813ade4782fca50186258aa6137b5184b9adf8d2dc2c17725a88886bf",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/343#issuecomment-4958115853",
+          "implementation_commit": "f965f05571f602e2d2c1c112bbe15d8a43c27239",
+          "implementation_diff_sha256": "2122e68007bd5433c2d63658a40bbeb71b8be508868b33837583987dd98f75b0",
+          "implementation_paths": [
+            "tools/ember-cli/src/ink/nul-cell-emission.test.ts",
+            "tools/ember-cli/src/ink/rendering-pipeline.ts",
+            "tools/ember-cli/src/screens/repl-slash-dropdown.test.ts"
+          ],
+          "number": 343,
+          "unresolved_remainder": "Implementation and structural tests are present, but no fresh executable verification or immutable execution receipt supports strict independent-verification classification.",
+          "verification_executed_at": "2026-07-13T12:49:41Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts",
+          "verifier_sha256": "a9b4fb0393c6a8a42192283c5df764e8dad54f8270168b74695f6d3947eefa44"
+        }
+      ],
+      "created_at": "2026-07-07T10:40:46Z",
+      "disposition": "unresolved",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "72a60cc84f2d8e3242c8e1c28cf8173569c185c275896f52f61bf13d4bb77fba",
+          "created_at": "2026-07-07T11:07:47Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/343#issuecomment-4903098765"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "965cd23dd518b46fd9a73bd01a7834f5f0d4f6e942e2e6042b8261ccc70dc8f2",
+          "created_at": "2026-07-07T11:44:41Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/343#issuecomment-4903404784"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "b0dc864813ade4782fca50186258aa6137b5184b9adf8d2dc2c17725a88886bf",
+          "created_at": "2026-07-13T12:49:41Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/343#issuecomment-4958115853"
+        }
+      ],
+      "issue_record_sha256": "548b339ff20815fdff590225820552ed003e3e80199cf729bfd6de8a90091db0",
+      "labels": [],
+      "number": 343,
+      "obligation_sha256": "a0a7750afc9492a47c2be3caef5764208167f57d812ae1edf979f3ff74f959ce",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "Renderer emits NUL-cell runs under a [7m style stack at ~190x85 — grey bars + inverted status at the operator's real viewport",
+      "unresolved_remainder": "Implementation and structural tests are present, but no fresh executable verification or immutable execution receipt supports strict independent-verification classification.",
+      "updated_at": "2026-07-13T12:49:46Z",
+      "url": "https://github.com/wordingone/ember/issues/343"
     },
     {
       "author": "wordingone",
@@ -1500,6 +1691,56 @@
       "unresolved_remainder": null,
       "updated_at": "2026-07-13T08:41:22Z",
       "url": "https://github.com/wordingone/ember/issues/377"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "1e16df94c0ac0dff8aa25d81e3bebc21d3de728a752d3e7b54efa22b589d20d7",
+      "closed_at": "2026-07-13T12:49:31Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "scripts/ember_totality/test_c_neg1.py",
+          "artifact_sha256": "e19ce983cede347233430679a882b44e7d740cbad1c64e134f9192b1cd1c203c",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Keep the C(-1) universe equal to present receipts union tracked citations, with cited-but-missing decisive receipts RED and the deletion fixture unable to pass vacuously.",
+          "criterion_sha256": "cf692394d2602b3925205038a727dacaeb69ee074632c9a7eeb71828bdb2fe4c",
+          "evidence_comment_body_sha256": "6f079ecba118674822cbb7281d790ce1f39cfb0fa37cad70e6d40f6e43811be1",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/394#issuecomment-4958113593",
+          "implementation_commit": "15d1868c263d31b68692a0b2a594c5297793a3bd",
+          "implementation_diff_sha256": "4212bf705ce2b3c6fa43ba23532c57172fca09164c610f9e7bf1b44d4804e187",
+          "implementation_paths": [
+            "scripts/ember_totality/test_c_neg1.py",
+            "scripts/ember_totality/test_c_neg1_394_cited_missing.py"
+          ],
+          "number": 394,
+          "verification_executed_at": "2026-07-13T12:49:25Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "scripts/ember_totality/c_neg1_394_cited_missing_test.py",
+          "verifier_sha256": "7f91f4038b7681e96d81fe55e528d38e3660f4005e64d690100e6a101958785d"
+        }
+      ],
+      "created_at": "2026-07-07T18:51:30Z",
+      "disposition": "implemented and independently verified",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "6f079ecba118674822cbb7281d790ce1f39cfb0fa37cad70e6d40f6e43811be1",
+          "created_at": "2026-07-13T12:49:25Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/394#issuecomment-4958113593"
+        }
+      ],
+      "issue_record_sha256": "a5270900015ba94c0cf2157ae76d211bfbb404f526319e7a37b61a6f9bf13734",
+      "labels": [],
+      "number": 394,
+      "obligation_sha256": "7b7517290c5af9783f1905fc57a83100192971c92ffd0dd493ea0452020b55ba",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "C(-1) scanner passes vacuously when cited decisive receipts are DELETED from disk (deletion-induced GREEN, board 183856Z)",
+      "unresolved_remainder": null,
+      "updated_at": "2026-07-13T12:49:31Z",
+      "url": "https://github.com/wordingone/ember/issues/394"
     },
     {
       "author": "wordingone",
@@ -1938,6 +2179,56 @@
     },
     {
       "author": "wordingone",
+      "body_sha256": "cb3178a887af35cb25870ddacfce4f60617544515f98af5dbe333365917ed22e",
+      "closed_at": "2026-07-13T12:49:19Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "scripts/w1_collapse_control_run.py",
+          "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Retain adaptive chunk-halving inside the sole serial contamination-recheck entry point, equivalent output, and a named out-of-memory failure at the configured floor.",
+          "criterion_sha256": "b8e439491904485882ee609496771dc44069340d1bb567b6dccf2dcfadbaa4a8",
+          "evidence_comment_body_sha256": "95ccad59724e863cd1e9c39780a1a5a3c2b72b7d651df5c52511704e305baeae",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/445#issuecomment-4958111785",
+          "implementation_commit": "38fb127598b06f070522ee38b68970306de18c9e",
+          "implementation_diff_sha256": "42b981ea1f9a9d690a8218d638f9ae1c853ad103f5549c8486914547b8b0a799",
+          "implementation_paths": [
+            "scripts/test_w1_contamination_recheck_scan_guard.py",
+            "scripts/w1_collapse_control_run.py"
+          ],
+          "number": 445,
+          "verification_executed_at": "2026-07-13T12:49:12Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "scripts/test_w1_contamination_recheck_scan_guard.py",
+          "verifier_sha256": "cef9ca7e247221acaf8fb676ebb51662fee3a1c9e5e0e7243d410948aae7e825"
+        }
+      ],
+      "created_at": "2026-07-08T13:10:15Z",
+      "disposition": "implemented and independently verified",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "95ccad59724e863cd1e9c39780a1a5a3c2b72b7d651df5c52511704e305baeae",
+          "created_at": "2026-07-13T12:49:12Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/445#issuecomment-4958111785"
+        }
+      ],
+      "issue_record_sha256": "cf6637a247e42ab558edaacd15c753f493989f093b9d098121f7605198ad2f8a",
+      "labels": [],
+      "number": 445,
+      "obligation_sha256": "b0fdbbac7bddc1b042e49386d3d705e8e6dd63f3ba1d0f4e81e9c6288497bedc",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "Raw serial contamination_recheck keeps getting called where the hardened wrapper exists — make the memory-safe path the default entry point",
+      "unresolved_remainder": null,
+      "updated_at": "2026-07-13T12:49:19Z",
+      "url": "https://github.com/wordingone/ember/issues/445"
+    },
+    {
+      "author": "wordingone",
       "body_sha256": "943ce966661fe681ef327ac8233a6d959e1a75e94aa6d1cc7b3f77c88e3b05ca",
       "closed_at": "2026-07-13T07:54:21Z",
       "closure_proposed": false,
@@ -2251,6 +2542,59 @@
       "unresolved_remainder": null,
       "updated_at": "2026-07-13T08:56:33Z",
       "url": "https://github.com/wordingone/ember/issues/533"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "c8e3623fd770b8c99aa506a57eab9df4250a27fff88546c695a7d7671ba9d10b",
+      "closed_at": "2026-07-13T12:37:07Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "scripts/research/exposure_ledger.py",
+          "artifact_sha256": "d1b44712bca954d4286e2d3cc0c185273de53c227703953aad7f9526fb99f276",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Retain mmap_cache_dir forwarding at all four scoped real-corpus PackedShardLoader call sites, with omission selecting the sane caller-tree default and explicit None preserving legacy behavior.",
+          "criterion_sha256": "6b7e9daa03e094d4724aea514020fefa0509b5e7554a5f8583ea4118a56c5d27",
+          "evidence_comment_body_sha256": "82bc38b83693d830ee587afc5acd983fff72ff385d1d069569ee2280a10124ee",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/575#issuecomment-4958011230",
+          "implementation_commit": "12553f3eb5eeeca93e7fd53ad88c0f8c6af20b32",
+          "implementation_diff_sha256": "0a5917b56a6124a60f2ce9c092c025f637256e8dbd758c202b655c0085859367",
+          "implementation_paths": [
+            "scripts/research/exposure_ledger.py",
+            "scripts/research/test_exposure_ledger_mmap_forward.py",
+            "scripts/test_w1b_fp32_check_mmap_forward.py",
+            "scripts/w1_collapse_control_run.py",
+            "scripts/w1b_fp32_check.py"
+          ],
+          "number": 575,
+          "verification_executed_at": "2026-07-13T12:37:06Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "scripts/research/test_exposure_ledger_mmap_forward.py",
+          "verifier_sha256": "ad20c88e676a5a93dd22d27a71d40de4c8eb2abe68dec55c886714184ad650ca"
+        }
+      ],
+      "created_at": "2026-07-09T16:49:37Z",
+      "disposition": "implemented and independently verified",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "82bc38b83693d830ee587afc5acd983fff72ff385d1d069569ee2280a10124ee",
+          "created_at": "2026-07-13T12:37:06Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/575#issuecomment-4958011230"
+        }
+      ],
+      "issue_record_sha256": "081cee1d101ac2ec2b174a4b8ef8027f3d5ae978fcf9733b79d3574a34992e0a",
+      "labels": [],
+      "number": 575,
+      "obligation_sha256": "a84d4c1aaf1f4eeda8aae7e733df7f6994cdc6bec2a24aaa7834c25f8ef5cec8",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "forward mmap_cache_dir at the 4 remaining real-corpus-scale PackedShardLoader call sites",
+      "unresolved_remainder": null,
+      "updated_at": "2026-07-13T12:37:07Z",
+      "url": "https://github.com/wordingone/ember/issues/575"
     },
     {
       "author": "wordingone",
@@ -2645,6 +2989,56 @@
     },
     {
       "author": "wordingone",
+      "body_sha256": "5462a1a762674b1b1020c944e900931374e5ecf68f3a3cfe53e790bc8a133384",
+      "closed_at": "2026-07-13T12:36:50Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "scripts/cbase_grow_rung2_stabilize.py",
+          "artifact_sha256": "05a5491e3f4297caebb621cc937170d0883218a05623c62c0b21efb5fe43e89c",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Require a real strict YYYY-MM-DD lineage-resume prefix, rejecting x, not-a-date, and 2026-99-99 while accepting a valid dated positive fixture.",
+          "criterion_sha256": "238a595635b7ca60537cb46709e9aaf83bc291c689192707e306cc46fa85e883",
+          "evidence_comment_body_sha256": "0c1db6a0094d1c35f5f7febeac1fc754c3cabba9d5255d32fa7d1f86f856588e",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/665#issuecomment-4958008855",
+          "implementation_commit": "bce8fc8fc1d8072f47feb41452584ddc144b552c",
+          "implementation_diff_sha256": "8457f5e2ff97e0dc259a0db70deceb21ad55e9ab2e259a1dfebacded9b76e1f1",
+          "implementation_paths": [
+            "scripts/cbase_grow_rung2_stabilize.py",
+            "tests/test_stabilize_v9_cure.py"
+          ],
+          "number": 665,
+          "verification_executed_at": "2026-07-13T12:36:50Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "tests/test_stabilize_v9_cure.py",
+          "verifier_sha256": "9fdec2d565e871eadc059f3b5cba65649472765a8ec9c45ede50c90ac65e0628"
+        }
+      ],
+      "created_at": "2026-07-10T13:03:51Z",
+      "disposition": "implemented and independently verified",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "0c1db6a0094d1c35f5f7febeac1fc754c3cabba9d5255d32fa7d1f86f856588e",
+          "created_at": "2026-07-13T12:36:50Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/665#issuecomment-4958008855"
+        }
+      ],
+      "issue_record_sha256": "227b730c2a7c0e0da040e0d392239a6d9a8f2804a4ba04508ff6d9175af867dd",
+      "labels": [],
+      "number": 665,
+      "obligation_sha256": "058cdfb21485fa24a90440226bf7827221f14552428e5ef73a24841a13b748a6",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "stabilize lineage gate fail-opens on malformed deviation dates — make assert_lineage_resume fail-closed (blocks AC2/v9 relaunch)",
+      "unresolved_remainder": null,
+      "updated_at": "2026-07-13T12:36:50Z",
+      "url": "https://github.com/wordingone/ember/issues/665"
+    },
+    {
+      "author": "wordingone",
       "body_sha256": "4b2fc32d0ca72aaaaa97d4785fd2d529ff4ee8d8e558c605ddfc3eeafd1bc682",
       "closed_at": "2026-07-13T11:21:18Z",
       "closure_proposed": false,
@@ -2791,6 +3185,30 @@
       "verification_outcome": "independently_verified",
       "verifier_path": "receipts/process-visibility/process-visibility-20260709T232909Z.json",
       "verifier_sha256": "f32ba1731f19cd0f2f62330d05ab05db03b0b3f13b29a7bf4ada0335fadea1e3"
+    },
+    {
+      "artifact_path": "tools/ember-cli/src/ink/rendering-pipeline.ts",
+      "artifact_sha256": "e1532dab27a954abb664060d6294f4ce202642adcd427ceccb3343ea7ed551f6",
+      "closed_disposition": "unresolved",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Retain zero process-written NUL cells and no inverse run wider than one cursor cell across the amended five-size plus 190x85 scope, without claiming the excluded ConPTY read-side behavior.",
+      "criterion_sha256": "9ee3e49168abd5a282b1ace8b6f56b4424e5009b47d16c564d0316d7859289a5",
+      "evidence_comment_body_sha256": "b0dc864813ade4782fca50186258aa6137b5184b9adf8d2dc2c17725a88886bf",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/343#issuecomment-4958115853",
+      "implementation_commit": "f965f05571f602e2d2c1c112bbe15d8a43c27239",
+      "implementation_diff_sha256": "2122e68007bd5433c2d63658a40bbeb71b8be508868b33837583987dd98f75b0",
+      "implementation_paths": [
+        "tools/ember-cli/src/ink/nul-cell-emission.test.ts",
+        "tools/ember-cli/src/ink/rendering-pipeline.ts",
+        "tools/ember-cli/src/screens/repl-slash-dropdown.test.ts"
+      ],
+      "number": 343,
+      "unresolved_remainder": "Implementation and structural tests are present, but no fresh executable verification or immutable execution receipt supports strict independent-verification classification.",
+      "verification_executed_at": "2026-07-13T12:49:41Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts",
+      "verifier_sha256": "a9b4fb0393c6a8a42192283c5df764e8dad54f8270168b74695f6d3947eefa44"
     },
     {
       "absent_paths": [
@@ -2989,6 +3407,27 @@
       "verifier_sha256": "17fade60065f839dda9fd97619f86197095c1b3c4f399ce7f6b0915d0134e4cc"
     },
     {
+      "artifact_path": "scripts/ember_totality/test_c_neg1.py",
+      "artifact_sha256": "e19ce983cede347233430679a882b44e7d740cbad1c64e134f9192b1cd1c203c",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Keep the C(-1) universe equal to present receipts union tracked citations, with cited-but-missing decisive receipts RED and the deletion fixture unable to pass vacuously.",
+      "criterion_sha256": "cf692394d2602b3925205038a727dacaeb69ee074632c9a7eeb71828bdb2fe4c",
+      "evidence_comment_body_sha256": "6f079ecba118674822cbb7281d790ce1f39cfb0fa37cad70e6d40f6e43811be1",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/394#issuecomment-4958113593",
+      "implementation_commit": "15d1868c263d31b68692a0b2a594c5297793a3bd",
+      "implementation_diff_sha256": "4212bf705ce2b3c6fa43ba23532c57172fca09164c610f9e7bf1b44d4804e187",
+      "implementation_paths": [
+        "scripts/ember_totality/test_c_neg1.py",
+        "scripts/ember_totality/test_c_neg1_394_cited_missing.py"
+      ],
+      "number": 394,
+      "verification_executed_at": "2026-07-13T12:49:25Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "scripts/ember_totality/c_neg1_394_cited_missing_test.py",
+      "verifier_sha256": "7f91f4038b7681e96d81fe55e528d38e3660f4005e64d690100e6a101958785d"
+    },
+    {
       "artifact_path": "scripts/ember_totality/test_c_custody.py",
       "artifact_sha256": "2fc1312c215d926264f8c3db1239545bb2af72488bbcd6db9e896f3bf2f8d121",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
@@ -3185,6 +3624,27 @@
       "verifier_sha256": "4301a0554cba31251684265bdf0d636b83ec28cf46cc309d88e6ba609f8a9240"
     },
     {
+      "artifact_path": "scripts/w1_collapse_control_run.py",
+      "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Retain adaptive chunk-halving inside the sole serial contamination-recheck entry point, equivalent output, and a named out-of-memory failure at the configured floor.",
+      "criterion_sha256": "b8e439491904485882ee609496771dc44069340d1bb567b6dccf2dcfadbaa4a8",
+      "evidence_comment_body_sha256": "95ccad59724e863cd1e9c39780a1a5a3c2b72b7d651df5c52511704e305baeae",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/445#issuecomment-4958111785",
+      "implementation_commit": "38fb127598b06f070522ee38b68970306de18c9e",
+      "implementation_diff_sha256": "42b981ea1f9a9d690a8218d638f9ae1c853ad103f5549c8486914547b8b0a799",
+      "implementation_paths": [
+        "scripts/test_w1_contamination_recheck_scan_guard.py",
+        "scripts/w1_collapse_control_run.py"
+      ],
+      "number": 445,
+      "verification_executed_at": "2026-07-13T12:49:12Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "scripts/test_w1_contamination_recheck_scan_guard.py",
+      "verifier_sha256": "cef9ca7e247221acaf8fb676ebb51662fee3a1c9e5e0e7243d410948aae7e825"
+    },
+    {
       "artifact_path": "receipts/p5-ratio-audit-dryrun-20260709T035824Z.json",
       "artifact_sha256": "27f3ba7aca99da604240c47661c8f8b4db5c9a8ab300de56fc8a118a9c7e9692",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
@@ -3319,6 +3779,30 @@
       "verification_outcome": "independently_verified",
       "verifier_path": "receipts/process-visibility/process-visibility-20260709T094500Z.json",
       "verifier_sha256": "8ecb09f5c0f86f7b6c98b45a4529d56c57452e615a0015a084a8822223112cfc"
+    },
+    {
+      "artifact_path": "scripts/research/exposure_ledger.py",
+      "artifact_sha256": "d1b44712bca954d4286e2d3cc0c185273de53c227703953aad7f9526fb99f276",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Retain mmap_cache_dir forwarding at all four scoped real-corpus PackedShardLoader call sites, with omission selecting the sane caller-tree default and explicit None preserving legacy behavior.",
+      "criterion_sha256": "6b7e9daa03e094d4724aea514020fefa0509b5e7554a5f8583ea4118a56c5d27",
+      "evidence_comment_body_sha256": "82bc38b83693d830ee587afc5acd983fff72ff385d1d069569ee2280a10124ee",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/575#issuecomment-4958011230",
+      "implementation_commit": "12553f3eb5eeeca93e7fd53ad88c0f8c6af20b32",
+      "implementation_diff_sha256": "0a5917b56a6124a60f2ce9c092c025f637256e8dbd758c202b655c0085859367",
+      "implementation_paths": [
+        "scripts/research/exposure_ledger.py",
+        "scripts/research/test_exposure_ledger_mmap_forward.py",
+        "scripts/test_w1b_fp32_check_mmap_forward.py",
+        "scripts/w1_collapse_control_run.py",
+        "scripts/w1b_fp32_check.py"
+      ],
+      "number": 575,
+      "verification_executed_at": "2026-07-13T12:37:06Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "scripts/research/test_exposure_ledger_mmap_forward.py",
+      "verifier_sha256": "ad20c88e676a5a93dd22d27a71d40de4c8eb2abe68dec55c886714184ad650ca"
     },
     {
       "artifact_path": "receipts/process-visibility/process-visibility-20260709T232909Z.json",
@@ -3503,6 +3987,27 @@
       "verifier_sha256": "447453b8d6fb2ff9cd5d845a8927c4af42c3e613e0a29094bbed23cf70b090f0"
     },
     {
+      "artifact_path": "scripts/cbase_grow_rung2_stabilize.py",
+      "artifact_sha256": "05a5491e3f4297caebb621cc937170d0883218a05623c62c0b21efb5fe43e89c",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Require a real strict YYYY-MM-DD lineage-resume prefix, rejecting x, not-a-date, and 2026-99-99 while accepting a valid dated positive fixture.",
+      "criterion_sha256": "238a595635b7ca60537cb46709e9aaf83bc291c689192707e306cc46fa85e883",
+      "evidence_comment_body_sha256": "0c1db6a0094d1c35f5f7febeac1fc754c3cabba9d5255d32fa7d1f86f856588e",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/665#issuecomment-4958008855",
+      "implementation_commit": "bce8fc8fc1d8072f47feb41452584ddc144b552c",
+      "implementation_diff_sha256": "8457f5e2ff97e0dc259a0db70deceb21ad55e9ab2e259a1dfebacded9b76e1f1",
+      "implementation_paths": [
+        "scripts/cbase_grow_rung2_stabilize.py",
+        "tests/test_stabilize_v9_cure.py"
+      ],
+      "number": 665,
+      "verification_executed_at": "2026-07-13T12:36:50Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "tests/test_stabilize_v9_cure.py",
+      "verifier_sha256": "9fdec2d565e871eadc059f3b5cba65649472765a8ec9c45ede50c90ac65e0628"
+    },
+    {
       "canonical_issue": 812,
       "canonical_issue_url": "https://github.com/wordingone/ember/issues/812",
       "canonical_obligation_sha256": "6876226b0cf0e8f7c99a9b01107b90b8c60ad73f065da5e4ecf24adf7d7930cf",
@@ -3543,7 +4048,7 @@
       "preserved_issue_body_sha256": "62fe4a4d1eacffea4d1b963015cbdf479490cce78f686e73483525460dae3527"
     }
   ],
-  "issue_snapshot_sha256": "d1f1bab223637fc33ce7e2c65afe59b4041040371249462145fc51e79914a34f",
+  "issue_snapshot_sha256": "df57dcc9e4dcdbe2edd0ab76d8d53b3c615e15b5a170334a4fa8c46c04cba3e7",
   "issue_source_snapshot": [
     {
       "author": "wordingone",
@@ -4827,20 +5332,6 @@
     },
     {
       "author": "wordingone",
-      "body_base64": "IyBSZW5kZXJlciBlbWl0cyBOVUwtY2VsbCBydW5zIHVuZGVyIGEgWzdtIHN0eWxlIHN0YWNrIGF0IH4xOTB4ODUg4oCUIHZpc2libGUgZ3JleSBiYXJzICsgaW52ZXJ0ZWQgc3RhdHVzIHJvdyBhdCB0aGUgb3BlcmF0b3IncyByZWFsIHZpZXdwb3J0CgojIyBXaGF0IHRoZSBvcGVyYXRvciBzZWVzIChsaXZlIHdpbmRvdywgc2NyZWVuc2hvdC12ZXJpZmllZCkKQXQgdGhlIHByaW1hcnkgb3BlcmF0aW5nIHZpZXdwb3J0ICh+MTkwIGNvbHMgeCA4NSByb3dzID0gbGVmdCBoYWxmIG9mIGEgMzQ0MHgxNDQwIGRpc3BsYXkpLCB0aGUKYm90dG9tIG9mIHRoZSBjb2NrcGl0IHJlbmRlcnM6IGEgVEhJQ0sgc29saWQgZ3JleSBiYXIgd2hlcmUgdGhlIHNlcGFyYXRvciBsaW5lIGJlbG93IHRoZSBpbnB1dCByb3cKc2hvdWxkIGJlLCBhbmQgdGhlIHN0YXR1cyByb3cgKCJvIG9ic2VydmUgwrcgLi4uIikgYXMgZGFyayB0ZXh0IG9uIGEgZ3JleSBiYWNrZ3JvdW5kIGVuZGluZyBhZnRlcgoidGFza3MiIOKAlCB0aGUgc2FtZSB2aXN1YWwgY2xhc3MgYXMgdGhlIG9yaWdpbmFsICMzMTAgY29tcGxhaW50LCBvbiB0aGUgYnVpbGQgdGhhdCBjYXJyaWVzIHRoZSAjMzEwCmN1cmUgKCMzMjUsIG1lcmdlZCkuCgojIyBCeXRlLWxldmVsIHJlY2VpcHRzIChwaXBlLXB0eSBjYXB0dXJlIGF0IGV4YWN0bHkgMTkweDg1LCBjd2Q9QjovTS9lbWJlciwgYnVpbGQgYzk5ZDBkNikKQ2FwdHVyZTogYHNjcmF0Y2gvY2xpcmVidWlsZC9jYXB0dXJlLTE5MHg4NS9mcmFtZS0xOTB4ODUuYW5zaWAgKDE4LDAyNCBieXRlcykuCgpUd28gYEVTQ1s3bWAgc3BhbnMgaW4gdGhlIGZyYW1lIHRhaWwgKHplcm8gYXQgMTAweDMyLCAxMzB4NjAsIDIyMHg2MCDigJQgYWxsIHRocmVlIGVhcmxpZXIgc2l6ZXMgY2xlYW4pOgoKMS4gYnl0ZSAxNjYzODogYG8gXHgxYls3bSBceDFiWzIybVx4MWJbMjdtYCDigJQgc2luZ2xlIGludmVyc2UgU1BBQ0UsIHByb3Blcmx5IGNsb3NlZCA9IHRoZSBibG9jawogICBjdXJzb3IgY2VsbC4gTGVnYWwuCjIuIGJ5dGUgMTY4NDg6IGBceDFiWzFtXHgxYlsybVx4MWJbN21gIGZvbGxvd2VkIGJ5IGEgcnVuIG9mICoqcmF3IDB4MDAgKE5VTCkgYnl0ZXMqKiDigJQgYW4KICAgaW52ZXJzZStib2xkK2RpbSBzdHlsZSBzdGFjayBvcGVuZWQgb3ZlciBhIE5VTC1jZWxsIHJ1bi4gQSBzdHlsZWQgcnVuIG92ZXIgYmxhbmtzIHBhaW50cyBhIHNvbGlkCiAgIGZpbGxlZCBiYXI7IHRoYXQgaXMgdGhlIGdyZXkgYmFyIC8gaW52ZXJ0ZWQgc3RhdHVzIHZpc3VhbC4KCkFkZGl0aW9uYWxseSB0aGUgZnJhbWUgY29udGFpbnMgbG9uZyBydW5zIG9mIE5VTCBieXRlcyBhcyBjZWxsIGNvbnRlbnQgaW4gbXVsdGlwbGUgcGxhY2VzCihlLmcuIHRoZSB+NzggTlVMcyBwcmVjZWRpbmcgc3BhbiAxJ3MgY29udGV4dCkuIEEgcmVuZGVyZWQgZnJhbWUgc2hvdWxkIGVtaXQgc3BhY2VzICgweDIwKSBmb3IKYmxhbmsgY2VsbHMg4oCUIE5VTCBieXRlcyBpbiB0aGUgb3V0cHV0IHN0cmVhbSBhcmUgbmV2ZXIgbGVnYWwgY2VsbCBjb250ZW50LgoKIyMgVHdvIGRlZmVjdHMsIGxpa2VseSBvbmUgZW1pc3Npb24gc2l0ZQotIEQxOiB0aGUgcmVuZGVyZXIgZW1pdHMgdW5pbml0aWFsaXplZC9OVUwgY2VsbHMgYXMgcGFkZGluZyBhdCB0aGlzIHNpemUgKHNpemUtZGVwZW5kZW50IGJ1ZmZlciBvcgogIGRpZmYtcmVuZGVyZXIgcGF0aDsgYWJzZW50IGF0IHRoZSB0aHJlZSBzbWFsbGVyL290aGVyIHRlc3Qgc2l6ZXMpLgotIEQyOiB0aGUgc3R5bGUgc3RhdGUgYWN0aXZlIHdoZW4gdGhhdCBwYWRkaW5nIGlzIGVtaXR0ZWQgaW5jbHVkZXMgdGhlIGN1cnNvcidzIGBbN21gIHN0YWNrIOKAlCB0aGUKICBzYW1lIHN0eWxlLXN0YXRlLWRpc2NpcGxpbmUgZmFtaWx5IGFzICM0NC8jMzEwIChzdHlsZSBsZWFraW5nIGFjcm9zcyBhbiBlbWlzc2lvbiBib3VuZGFyeSksIGJ1dCBhCiAgRElGRkVSRU5UIHNpdGU6IE5VTC1wYWRkaW5nIGVtaXNzaW9uLCBub3QgbGFzdC1jZWxsIHRyYWlsaW5nIHJlc2V0ICh3aGljaCAjMzI1IGZpeGVkIGFuZCB3aG9zZQogIHJlZ3Jlc3Npb24gdGVzdHMgc3RpbGwgcGFzcyBhdCB0aGUgdGhyZWUgb3JpZ2luYWwgc2l6ZXMpLgoKIyMgUmVwcm8KUGlwZS1wdHkgYXQgZXhhY3RseSAxOTB4ODUsIGN3ZD1COi9NL2VtYmVyLCBib290ICsgc2V0dGxlOyBncmVwIHRoZSBzdHJlYW0gZm9yIGBceDAwYCBhbmQgYFx4MWJbN21gLgpSaWc6IGBzY3JhdGNoL2NsaXJlYnVpbGQvY2FwdHVyZS0xOTB4ODUvY2FwdHVyZS0xOTB4ODUubWpzYC4KCiMjIEFjY2VwdGFuY2UgZm9yIHRoZSBmaXgKLSBObyBOVUwgYnl0ZXMgYW55d2hlcmUgaW4gdGhlIGVtaXR0ZWQgc3RyZWFtIGF0IEFOWSBzaXplIChwcm9wZXJ0eSB0ZXN0IGFjcm9zcyBhIHNpemUgc3dlZXAsCiAgZS5nLiB7MTAweDMyLCAxMzB4NjAsIDE5MHg4NSwgMjIweDYwLCAyNTB4OTB9IG1pbmltdW0pLgotIE5vIFs3bSBvdXRzaWRlIHNpbmdsZS1jZWxsIGN1cnNvciBzcGFucyBhdCBhbnkgc3dlcHQgc2l6ZS4KLSBSZWdyZXNzaW9uIHRlc3QgbG9ja3MgdGhlIDE5MHg4NSBjYXNlIHNwZWNpZmljYWxseSAodGhlIG9wZXJhdG9yJ3MgcmVhbCBoYWxmLXNjcmVlbiB2aWV3cG9ydCkuCgojIyBQcm9jZXNzIGRlZmVjdCBiYW5rZWQgd2l0aCB0aGlzIChjb29yZGluYXRpb24gc2lkZSwgZm9yIHRoZSByZWNvcmQpClRoZSBjYXB0dXJlIG1hdHJpeCBjYWxsZWQgMTMweDYwICJoYWxmc2NyZWVuIiB3aXRob3V0IGRlcml2aW5nIGl0IGZyb20gdGhlIG9wZXJhdG9yJ3MgYWN0dWFsCmRpc3BsYXkgKDM0NDB4MTQ0MCA9PiBoYWxmID0gfjE5MHg4NSkuIFZpZXdwb3J0IGFyaXRobWV0aWMgbXVzdCBiZSBjb21wdXRlZCBmcm9tIHRoZSBlbnVtZXJhdGVkCmRpc3BsYXksIG5ldmVyIGFzc3VtZWQuCg==",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-07T10:40:46Z",
-      "labels": [],
-      "number": 343,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "Renderer emits NUL-cell runs under a [7m style stack at ~190x85 — grey bars + inverted status at the operator's real viewport",
-      "updated_at": "2026-07-07T11:44:42Z",
-      "url": "https://github.com/wordingone/ember/issues/343"
-    },
-    {
-      "author": "wordingone",
       "body_base64": "IyMgSW5jaWRlbnQgKDIwMjYtMDctMDcsIHJlY2VpcHRzIGluIHNjcmF0Y2gvdzEtY29udHJvbC9saXZlL3cxLWxpdmUtMjAyNjA3MDdUMTAxMjM0WiArIHNjcmF0Y2gvcmVuZGVyZml4IGNvbnRleHQpCgpXMSBjb2xsYXBzZS1jb250cm9sIGF0dGVtcHQgMyAoMS4yMkIgYmYxNiB0cmFpbmluZyBsZWcpIGxhdW5jaGVkIDEwOjEyOjM0WiB3aXRoIGEgcGFzc2luZyBWUkFNIHByZWZsaWdodCAoOTMuNyUgZnJlZSkuIEF0IDEwOjEzOjQ2WiB0aGUgZW1iZXItY2xpIGNvY2twaXQgd2FzIGxhdW5jaGVkIHZpc2libHkgd2l0aCBjd2Q9QjovTS9lbWJlcjsgaXRzIGJvb3QgcGF0aCB1bmNvbmRpdGlvbmFsbHkgc3Bhd25lZCBsbGFtYS1zZXJ2ZXIgKFF3ZW4zLjYtMjdCLVE0X0tfTSwgcG9ydCA4MDgyKSwgbG9hZGluZyB+MTAuNUdCIGludG8gVlJBTS4gQXQgMTA6MzlaIHRoZSB0cmFpbmluZyBsZWcncyBmaXJzdCBiYWNrd2FyZCBwYXNzIGZhaWxlZDogdG9yY2guT3V0T2ZNZW1vcnlFcnJvciAodHJpZWQgNTEyTWlCOyAxMy40MkdpQiBwaHlzaWNhbGx5IGZyZWUgYnV0IHBvb2wgY29udGVzdGVkL2ZyYWdtZW50ZWQgdW5kZXIgdGhlIHByb2Nlc3MncyAxOS4xOUdpQiBnb3Zlcm5vciBjYXApLiBUaGUgdHJhaW5pbmcgbGVnIGRpZWQgYWZ0ZXIgYSBzdGVwLTAgZXZhbCB0aGF0IGV4YWN0bHkgcmVwcm9kdWNlZCB0aGUgcHJpb3IgYXR0ZW1wdCAoMTAuNTYyNSkuCgojIyBEZWZlY3QKVGhlIGNvY2twaXQncyBib290IGxvYWRzIHRoZSByZXNpZGVudCBtb2RlbCB1bmNvbmRpdGlvbmFsbHkuIFRoZSBib2R5IGF0ZSB0aGUgb3JnYW5pc20ncyBjb21wdXRlOiBMNiAoZWFybmVkIGNvbXB1dGUpIGFuZCB0aGUgc3RhbmRpbmcgMS1tb2RlbC1hdC1hLXRpbWUgc2VyaWFsaXphdGlvbiBib3RoIGltcGx5IGEgdHJhaW5pbmcgbGVnIG93bnMgdGhlIEdQVSB3aGlsZSBhbGl2ZS4KCiMjIFByb3Bvc2VkIGN1cmUgKHByb2R1Y3Qgc2lkZSkKLSBNb2RlbCBsYXp5LWxvYWQ6IGJvb3QgdGhlIFRVSSB3aXRob3V0IHNwYXduaW5nIGxsYW1hLXNlcnZlcjsgbG9hZCBvbiBmaXJzdCBpbmZlcmVuY2UtcmVxdWlyaW5nIGludGVyYWN0aW9uLgotIEdQVS1sZWFzZSBhd2FyZW5lc3M6IGJlZm9yZSBzcGF3bmluZyB0aGUgbW9kZWwgc2VydmVyLCBjaGVjayBhIGxlYXNlIHN1cmZhY2UgKGEgcnVubmluZyB0cmFpbmluZyBwcm9jZXNzIGhvbGRpbmcgYSBsYXVuY2ggcmVjZWlwdCwgb3IgYSBzaW1wbGUgbGVhc2UgZmlsZSB1bmRlciBzY3JhdGNoLyBuYW1lZCBieSB0aGUgbGl2ZSBydW4pIGFuZCBib290IG1vZGVsLWxlc3Mgd2l0aCBhIHZpc2libGUgJ0dQVSBsZWFzZWQgdG8gdHJhaW5pbmc6IDxydW4taWQ+JyBsaW5lIGluIHRoZSBzdGF0dXMgYXJlYSBpbnN0ZWFkLiBPYnNlcnZlIG1vZGUgKGJvYXJkIHBhbmUsIGFjdGl2aXR5IGZlZWQsIHJlY2VpcHRzIGJyb3dzaW5nKSBuZWVkcyBubyByZXNpZGVudCBtb2RlbC4KLSBUaGUgc3RhdHVzIGxpbmUgc2hvdWxkIGFsd2F5cyBkaXNjbG9zZSB3aGV0aGVyIGEgbW9kZWwgaXMgcmVzaWRlbnQgYW5kIGhvdyBtdWNoIFZSQU0gaXQgaG9sZHMg4oCUIHRoZSBvcGVyYXRvcidzIGF1ZGl0IGNoYW5uZWwgc2hvdWxkIG5ldmVyIGhpZGUgYSAxMEdCIHRlbmFudC4KCiMjIENvb3JkaW5hdGlvbiBzaWRlIChhbHJlYWR5IG1lY2hhbml6ZWQsIGZvciB0aGUgcmVjb3JkKQpXb3JrLWxvb3AgR1BVLUxFQVNFIGNsYXVzZTogbm8gVlJBTSBjb25zdW1lciBsYXVuY2hlcyB3aGlsZSBhIHRyYWluaW5nIGxlZyBpcyBsaXZlOyB0cmFpbmluZyBwcmVmbGlnaHRzIGFzc2VydCBuby1pbmZlcmVuY2UtaG9sZGVyIChubyBsbGFtYS1zZXJ2ZXIgLyA6ODA4MiBsaXN0ZW5lcikgaW4gdGhlIGxhdW5jaCByZWNlaXB0Lg==",
       "closed_at": "",
       "comments": [],
@@ -5037,20 +5528,6 @@
     },
     {
       "author": "wordingone",
-      "body_base64": "IyMgRGVmZWN0IChib2FyZCAxODM4NTZaLCAyMDI2LTA3LTA3KQoKQygtMSkgZmxpcHBlZCBSRUQoMTMvMjc0IHVuYW5uZXhlZCBkZWNpc2l2ZSByZWNlaXB0cykgLT4gR1JFRU4gYmV0d2VlbiByZWNlaXB0cyAxNzM1NTZaIGFuZCAxODM4NTZaIHdpdGggTk8gY3VyZSBsYW5kaW5nLiBUaGUgY2F1c2U6IHRoZSAxMyBvZmZlbmRpbmcgcmVjZWlwdHMgd2VyZSBERUxFVEVEIGZyb20gdGhlIHdvcmtpbmcgdHJlZSBiZXR3ZWVuIHRoZSBydW5zIChhIGxhbmUncyBicmFuY2gtZXhpdCBjaGVja291dCByZW1vdmVkIHRoZW0g4oCUIGN1c3RvZHkgaW5jaWRlbnQsIHNhbHZhZ2UgUFIgIzM5MyBpbiBmbGlnaHQpLiBUaGUgQygtMSkgc2Nhbm5lciBwYXNzZXMgYmVjYXVzZSBpdHMgZXZpZGVuY2UgU0VUIGVtcHRpZWQsIG5vdCBiZWNhdXNlIGNvdmVyYWdlIHdhcyBhY2hpZXZlZC4KCk1lYW53aGlsZSBDLUNVU1RPRFkgKHNhbWUgcmVjZWlwdCkgY29ycmVjdGx5IHJlcG9ydHMgY2l0ZWRfbWlzc2luZz0xMCBmb3IgdGhvc2UgdmVyeSBmaWxlcyDigJQgdGhlIGJvYXJkIHNpbXVsdGFuZW91c2x5IHNheXMgJ3NwZW5kLXByb29mIGNvbXBsZXRlJyAoQygtMSkgR1JFRU4pIGFuZCAndGhlIHJlY2VpcHRzIHRoYXQgcHJvb2YgZGVwZW5kcyBvbiBhcmUgbWlzc2luZycgKEMtQ1VTVE9EWSBSRUQpLiBBIGNvbmRpdGlvbiB3aG9zZSBHUkVFTiBjYW4gYmUgTUFOVUZBQ1RVUkVEIEJZIERFTEVUSU5HIEVWSURFTkNFIGlzIGEgdGhlYXRlciBob2xlOiBhIGZ1dHVyZSBhbGwtZ3JlZW4gY2xhaW0gY291bGQgcmlkZSBhIGRlbGV0aW9uLgoKIyMgQ3VyZQpDKC0xKSBtdXN0IGZhaWwtY2xvc2VkIG9uIGFic2VudC1idXQtcmVmZXJlbmNlZCBldmlkZW5jZTogdGhlIHNjYW5uZXIncyBkZWNpc2l2ZS1yZWNlaXB0IHVuaXZlcnNlID0gcmVjZWlwdHMgcHJlc2VudCBvbiBkaXNrIFVOSU9OIHJlY2VpcHRzIGNpdGVkIGJ5IGFueSB0cmFja2VkIGFydGlmYWN0IChhbm5leCByb3dzLCBhdHRlc3RhdGlvbnMsIGJvYXJkIGhpc3RvcnkpLiBBIGNpdGVkLWJ1dC1taXNzaW5nIGRlY2lzaXZlIHJlY2VpcHQgY291bnRzIGFzIFVOUFJPVkVOIChSRUQgY29udHJpYnV0aW9uKSwgbWlycm9yaW5nIEMtQ1VTVE9EWSdzIGNpdGVkX21pc3Npbmcgc2VtYW50aWNzLiBSZWdyZXNzaW9uIGZpeHR1cmU6IGRlbGV0ZSBhIGZpeHR1cmUgZGVjaXNpdmUgcmVjZWlwdCB0aGF0IGFuIGFubmV4IHJvdyBjaXRlcyAtPiBDKC0xKSBtdXN0IHN0YXkgUkVEIHdpdGggYSBtaXNzaW5nLWV2aWRlbmNlIG1lc3NhZ2UsIG5vdCBmbGlwIEdSRUVOLgoKIyMgT3JkZXJpbmcgbm90ZQojMzkzIChzYWx2YWdlKSByZXN0b3JlcyB0aGUgMTMgdHJhY2tlZCthbm5leGVkIGFuZCBzaG91bGQgbWFrZSBDKC0xKSBIT05FU1RMWSBncmVlbjsgdGhpcyBpc3N1ZSBpcyBhYm91dCB0aGUgc2Nhbm5lcidzIGNvdW50ZXJmYWN0dWFsIGJlaGF2aW9yLCB3aGljaCBzdGF5cyB3cm9uZyBldmVuIGFmdGVyICMzOTMgbGFuZHMu",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-07T18:51:30Z",
-      "labels": [],
-      "number": 394,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "C(-1) scanner passes vacuously when cited decisive receipts are DELETED from disk (deletion-induced GREEN, board 183856Z)",
-      "updated_at": "2026-07-07T18:51:30Z",
-      "url": "https://github.com/wordingone/ember/issues/394"
-    },
-    {
-      "author": "wordingone",
       "body_base64": "VGhlIDIwMjYwNzA3VDIwNDkzNVogYm9hcmQgcnVuIGl0c2VsZiB3cm90ZSB0d28gTkVXIHVudHJhY2tlZCBmaWxlcyBpbnRvIGNhbm9uaWNhbCByZWNlaXB0cy86IHJlY2VpcHRzL21pbGVzdG9uZS1yZWNvbmNpbGlhdGlvbi0yMDI2MDcwN1QyMDU0MjZaLmpzb24gYW5kIHJlY2VpcHRzL3B1YmxpY2F0aW9uLWdhdGUtMjAyNjA3MDdUMjA1NDE1Wi5qc29uLiBUaGUgIzM5NiBQUidzIHN3ZWVwIGNsYWltICgnbm8gb3RoZXIgYm9hcmQtdGltZSB3cml0ZXJzIHRvIGNhbm9uaWNhbCByZWNlaXB0cy8gcm9vdCcpIHdhcyBmYWxzZSDigJQgdGhlc2UgdHdvIHByb2JlIGZhbWlsaWVzIHdyaXRlIGF0IGJvYXJkIHRpbWUsIHNhbWUgY2xhc3MgYXMgdGhlIGRpc2NvbmZpcm1hdGlvbiB3cml0ZXIgY3VyZWQgaW4gIzM5NiAoYW5kICMzNzcgYmVmb3JlIGl0KS4KCkFsc28gaW4gc2NvcGUgKGN1c3RvZHkgc3RyYWdnbGVycyBmb3VuZCBpbiB0aGUgc2FtZSBlbnVtZXJhdGlvbik6Ci0gUHJlLWN1cmUgZGlzY29uZmlybWF0aW9uLWV2YWwgcmVjZWlwdHMgZnJvbSBlYXJsaWVyIHJ1bnMgdG9kYXkgKDE3Mzl4eFosIDE3NDF4eFosIDE4NDl4eFopICsgdGhlaXIgbWlsZXN0b25lLXJlY29uY2lsaWF0aW9uL3B1YmxpY2F0aW9uLWdhdGUgc2libGluZ3Mg4oCUIG5lZWQgdHJhY2tpbmcgKHNhbWUgdHJlYXRtZW50IGFzIHRoZSAxMyBpbiB0aGUgQygtMSkgYW5uZXggbGFuZGluZykuCi0gU2l4IHJlY2VpcHRzL2VtYmVyLW0xMC1zdXJmYWNlMy8qKi9maWIucHkgc2NyYXRjaCBhcnRpZmFjdHMgZnJvbSAyMDI2LTA2LTI4IOKAlCBjb2RlIGZpbGVzIGluc2lkZSByZWNlaXB0IGJ1bmRsZXMsIHVudHJhY2tlZCBzaW5jZSBKdW5lOyBkaXNwb3NpdGlvbiA9IHRyYWNrIHRoZW0gKHRoZXkgYXJlIHBhcnQgb2YgdGhlaXIgYnVuZGxlcycgZXZpZGVuY2UpLgoKQWNjZXB0YW5jZTogKDEpIGJvdGggd3JpdGVycyByZWRpcmVjdGVkIHRvIHNjcmlwdHMvZW1iZXJfdG90YWxpdHkvIHNpZGUgKHJlY2VpcHRzLW1pbGVzdG9uZS8sIHJlY2VpcHRzLXB1YmxpY2F0aW9uLyBtaXJyb3JpbmcgdGhlICMzOTYgcGF0dGVybikgd2l0aCBjb25zdW1lcnMgdXBkYXRlZDsgKDIpIGEgY29uc2VjdXRpdmUtcnVucyB0ZXN0IHByb3Zpbmcgbm8gbmV3IHVudHJhY2tlZCBmaWxlcyBhcHBlYXIgdW5kZXIgY2Fub25pY2FsIHJlY2VpcHRzLyBhZnRlciBhIGJvYXJkIHJ1biAoZXh0ZW5kIHRoZSBleGlzdGluZyB0d28tcnVuIGN1c3RvZHkgdGVzdCB0byBhc3NlcnQgb24gdGhlIFdIT0xFIGNhbm9uaWNhbCB0cmVlLCBub3Qgb25lIGZhbWlseSk7ICgzKSBzdHJhZ2dsZXJzIHRyYWNrZWQgdmlhIHRoZSBQUjsgKDQpIEMtQ1VTVE9EWSB1bnRyYWNrZWQgY291bnQgZHJvcHMgdG8gMCBvbiB0aGUgbmV4dCBib2FyZCBydW4u",
       "closed_at": "",
       "comments": [],
@@ -5132,20 +5609,6 @@
       "title": "Corpus defect: massive late-region near-duplication in shards-v0 (shard-19 x1044 concentration + tail zero-clean) — repair-vs-certify decision tree",
       "updated_at": "2026-07-08T16:06:52Z",
       "url": "https://github.com/wordingone/ember/issues/440"
-    },
-    {
-      "author": "wordingone",
-      "body_base64": "VGhpcmQgaW5zdGFuY2UgdG9kYXkgKDIwMjYtMDctMDgpIG9mIHRoZSBzYW1lIGNsYXNzOiBhIGNhbGwgc2l0ZSByZWFjaGVzIGZvciB3MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weSdzIFJBVyBzZXJpYWwgY29udGFtaW5hdGlvbl9yZWNoZWNrIGFuZCBkaWVzIG9uIGEgY29udGlndW91cy1hbGxvYyBmYWlsdXJlLCB3aGlsZSBidWlsZF9kZWNvbnRhbV9iYXRjaF9tcC5weSdzIGFkYXB0aXZlLWNodW5rZWQsIE1lbW9yeUVycm9yLXNwbGl0dGluZyB3cmFwcGVyIHNpdHMgcHJvdmVuIG9uZSBtb2R1bGUgb3Zlci4KCkluc3RhbmNlczogKDEpIHRoZSBwcmUtZml4IFcxYyBzY2FuIHdvcmtlciAoY3VyZWQgYnkgY2h1bmtpbmcsIHRoZW4gc3VwZXJzZWRlZCBieSAjMzAyJ3MgYWRhcHRpdmUgcGF0aCk7ICgyKSBwMV9lbnZlbG9wZV9zd2VlcC5weTo0NDAgY2FsbGluZyB3MWMuY29udGFtaW5hdGlvbl9yZWNoZWNrIGRpcmVjdGx5IOKAlCBraWxsZWQgUDEgcG9pbnQgMyBhdCB0aGUgRklOQUwgcmVjaGVjayB3aXRoIG51bXB5IEFycmF5TWVtb3J5RXJyb3IgKDJHaUIgY29udGlndW91cywgMjY4TS1lbGVtZW50IHVpbnQ2NCkgYWZ0ZXIgdGhlIGNvcnB1cyttb2RlbCBhbHJlYWR5IG9jY3VwaWVkIFJBTSAodHJhY2ViYWNrIGJhbmtlZCBpbiB0aGUgUDEgbGFuZTsgY3VyZSA9IHN3YXAgdG8gdGhlIHdyYXBwZXIsIHJ1bGVkICsgaW4gZmxpZ2h0KTsgKDMpIHRoZSBFUVVJViBoYXJuZXNzJ3Mgbl93b3JrZXJzIGRlZmF1bHQgc2lsZW50bHkgcmVzb2x2aW5nIHRvIHRoZSBzZXJpYWwgcGF0aCBvbiBsb3ctY29yZSBib3hlcyAoZmxhZ2dlZCBpbiBQUiAjNDQzJ3MgYm9keSkuCgpDdXJlIGRpcmVjdGlvbiAob25lIG9mLCBtYWludGFpbmVyJ3MgcGljayBhdCBpbXBsZW1lbnRhdGlvbik6IChhKSBtYWtlIHRoZSBhZGFwdGl2ZSB3cmFwcGVyIHRoZSBtb2R1bGUtbGV2ZWwgZGVmYXVsdCBleHBvcnQgYW5kIHJlbmFtZSB0aGUgcmF3IHNlcmlhbCBmdW5jdGlvbiB0byBfY29udGFtaW5hdGlvbl9yZWNoZWNrX3NlcmlhbF91bnNhZmUgKGdyZXAgKyBmaXggdGhlIDQga25vd24gY2FsbCBzaXRlcyksIG9yIChiKSBhZGQgdGhlIGFkYXB0aXZlLXNwbGl0IGd1YXJkIElOVE8gdGhlIHNlcmlhbCBmdW5jdGlvbiBpdHNlbGYgc28gdGhlcmUgaXMgbm8gdW5zYWZlIGVudHJ5IHBvaW50IGF0IGFsbC4gT3B0aW9uIChiKSBpcyBzdHJvbmdlciDigJQgbm8gZnV0dXJlIGNhbGwgc2l0ZSBjYW4gcGljayB3cm9uZy4gUmVncmVzc2lvbiBiYXI6IHRoZSBsaWtlLWZvci1saWtlIGVxdWl2YWxlbmNlIHJlY2VpcHRzIGFscmVhZHkgZXhpc3QgKDE2LDQ3MiBleGFjdCByZXByb2R1Y3Rpb24gdGhyb3VnaCB0aGUgY2h1bmtlZCBwYXRoLCBQUiAjNDQzIGJvZHk7IGNvbnRhbWluYXRpb249MCBhZ3JlZW1lbnQgb24gdGhlIHJlZ2VuIGJhdGNoKS4KClJlZnM6ICM0NDAgKGNvcnB1cyB3b3JrIHRoYXQgc3VyZmFjZWQgdGhlIGNsYXNzKSwgIzQ0MyAoZm9vdGd1biBmbGFnKSwgIzExOCAoUDEgc3dlZXAsIGluc3RhbmNlIDIpLg==",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-08T13:10:15Z",
-      "labels": [],
-      "number": 445,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "Raw serial contamination_recheck keeps getting called where the hardened wrapper exists — make the memory-safe path the default entry point",
-      "updated_at": "2026-07-08T13:10:15Z",
-      "url": "https://github.com/wordingone/ember/issues/445"
     },
     {
       "author": "wordingone",
@@ -5625,20 +6088,6 @@
     },
     {
       "author": "wordingone",
-      "body_base64": "Rm9sbG93LXVwIHRvIHRoZSBydW5fdjBfc2VnbWVudCBmaXggKG1lcmdlZCB2aWEgUFIgIzU3MykuIFRoYXQgUFIncyBBQzMgY2FsbC1zaXRlIHRhYmxlIGVudW1lcmF0ZWQgZXZlcnkgaW4tdHJlZSBQYWNrZWRTaGFyZExvYWRlciBjb25zdHJ1Y3Rpb24gYW5kIGZsYWdnZWQgNCBnZW51aW5lIGdhcHMgdGhhdCBzdGlsbCByaWRlIHRoZSBsZWdhY3kgZnJvbWZpbGUrY29uY2F0ZW5hdGUgcGF0aCBhdCByZWFsLWNvcnB1cyBzY2FsZSDigJQgdGhlIGV4YWN0IEFycmF5TWVtb3J5RXJyb3IvZnJhZ21lbnRhdGlvbiBjbGFzcyB0aGUgbWVtbWFwIGNhY2hlIGV4aXN0cyB0byBraWxsIChyZWNlaXB0ZWQgYXQgMTcuNUdCIGFuZCAzMC42R0IgZnJlZSBSQU0gaW4gdGhlIGxvYWRlcidzIG93biBkb2NzdHJpbmcpOgoKLSBzY3JpcHRzL3cxYl9mcDMyX2NoZWNrLnB5OjcyCi0gc2NyaXB0cy93MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weToyMTczCi0gc2NyaXB0cy93MV9jb2xsYXBzZV9jb250cm9sX3J1bi5weToyNTQ3Ci0gcmVzZWFyY2gvZXhwb3N1cmVfbGVkZ2VyLnB5OjkzCgpBQ3MgKG1pcnJvciBQUiAjNTczJ3MgcHJvdmVuIHNoYXBlKToKLSBBQzE6IGVhY2ggc2l0ZSBmb3J3YXJkcyBtbWFwX2NhY2hlX2RpciB3aXRoIHRoZSBzYW1lIHNlbWFudGljcyBydW5fdjBfc2VnbWVudCBub3cgaGFzIOKAlCBvbWl0dGVkIGVuZ2FnZXMgYSBzYW5lIGRlZmF1bHQgY2FjaGUgZGlyIHVuZGVyIHRoZSBjYWxsZXIncyBydW4vb3V0cHV0IHRyZWU7IGV4cGxpY2l0IE5vbmUgcHJlc2VydmVzIGxlZ2FjeSBieXRlLWZvci1ieXRlLgotIEFDMjogcmVncmVzc2lvbiBjb3ZlcmFnZSB0aHJvdWdoIGVhY2ggY2FsbGVyJ3Mgb3duIGNvbnN0cnVjdGlvbiBwYXRoIHdoZXJlIGEgdGVzdCBoYXJuZXNzIGV4aXN0czsgd2hlcmUgbm9uZSBleGlzdHMsIGEgY2FsbC1zaXRlIGFzc2VydGlvbiBvciBkb2N1bWVudGVkIG1hbnVhbCByZWNlaXB0IGluIHRoZSBQUiBib2R5LgotIEFDMzogc3VyZ2ljYWwgcGFyYW1ldGVyLWZvcndhcmRpbmcgb25seTsgbmV2ZXIgdG91Y2ggX2J1aWxkX29yX29wZW5fbWVtbWFwX2NhY2hlIG9yIHZlcmlmeV9tZW1tYXBfc3RyZWFtX2VxdWl2YWxlbmNlLgoKcmVmcyAjNTcwICM1NzMgIzExOA==",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-09T16:49:37Z",
-      "labels": [],
-      "number": 575,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "forward mmap_cache_dir at the 4 remaining real-corpus-scale PackedShardLoader call sites",
-      "updated_at": "2026-07-09T16:49:37Z",
-      "url": "https://github.com/wordingone/ember/issues/575"
-    },
-    {
-      "author": "wordingone",
       "body_base64": "IyMgV2hhdCdzIGhhcHBlbmluZwoKVGhlIG9wZXJhdG9yIGNvY2twaXQncyBgc3RhdGUvYWN0aXZpdHktbGVkZ2VyLmpzb25sYCBzaG93cyB0d28gbWVnYS1idXJzdHMsIGVhY2ggbGFuZGluZyBpbgphIHNpbmdsZSBzZWNvbmQsIGVhY2ggZHVtcGluZyByb3VnaGx5IDJeMTYgKDY1LDUzNikgbmVhci1pZGVudGljYWwgbGluZXMgaW50byB0aGUgYWN0aXZpdHkKZmVlZCDigJQgdGhlIGFjdHVhbCBmbG9vZCB0aGUgb3BlcmF0b3Igc2F3LCBhbmQgc29tZXRoaW5nICM1NzEgKGJhbm5lci9pbnB1dC9zdGF0dXMgcmVnaW9ucyArCnJlbmRlciBjbGlwKSBhbmQgIzU3NCAoUDAtQjogcmVjZWlwdHMvYm9hcmQgd2F0ZXJtYXJrK2V4Y2x1c2lvbitjb2FsZXNjaW5nKSBkbyBOT1QgZml4LCBzaW5jZQpib3RoIGJ1cnN0cyBhcmUgZW50aXJlbHkgb24gdGhlIHRhaWwtcG9sbCBwYXRoIChgcG9sbFRhaWxgIG92ZXIgYHJlc3RhcnRMb2dQYXRoYCAvCmBraWxsUmVjZWlwdHNQYXRoYCBpbiBgc2VydmljZXMvYWN0aXZpdHktZmVlZC50c2ApLCBhIHNlcGFyYXRlIG1lY2hhbmlzbSBmcm9tIHRoZSByZWNlaXB0cy9ib2FyZAp3YXRjaGVyIHBhdGggdGhvc2UgdHdvIFBScyBnYXRlLgoKIyMgRXZpZGVuY2UKCioqVHJpZ2dlciBjb3JyZWxhdGlvbiDigJQgZXhhY3QsIDItZm9yLTIuKiogQm90aCBidXJzdHMgbGFuZCAxLTIgc2Vjb25kcyBhZnRlciBhCmAidGFyZ2V0IjoiY29ja3BpdCJgIHJlbGF1bmNoIGV2ZW50IGluIGBsaXZlbmVzcy13YXRjaGRvZy1yZXN0YXJ0LWxvZy5qc29ubGAuIE5vbmUgb2YgdGhlIGZpdmUKYCJ0YXJnZXQiOiJzZXJ2ZXIiYCByZWxhdW5jaGVzIGluIHRoZSBzYW1lIH4xNWggd2luZG93IGNvcnJlbGF0ZSB3aXRoIGFueSBidXJzdC4KCnwgQ29ja3BpdCByZWxhdW5jaCAoYHRzYCkgfCBkZWFkUGlkIOKGkiByZWxhdW5jaFBpZCB8IEJ1cnN0IChgdHNgKSB8IEJ1cnN0IHNpemUgfAp8LS0tfC0tLXwtLS18LS0tfAp8IDIwMjYtMDctMDlUMDg6MjI6MDcuMzU1NTM0NlogfCAzNjEyOCDihpIgMzQ4MzYgfCAyMDI2LTA3LTA5VDA4OjIyOjA4IHwgNjUsOTEzIGxpbmVzIHwKfCAyMDI2LTA3LTA5VDA1OjA4OjA3LjI1NzQ2NDBaIHwgNDQwMjgg4oaSIDcwNDQgIHwgMjAyNi0wNy0wOVQwNTowODowOSB8IDY1LDc3OSBsaW5lcyB8CgpUaGlzIGlzIHN0cnVjdHVyYWw6IHRoZSBhY3Rpdml0eS1mZWVkIGVuZ2luZSBpcyBtb3VudGVkIGluc2lkZSB0aGUgY29ja3BpdCBwcm9jZXNzIGl0c2VsZgooYHVzZUVmZmVjdCgoKSA9PiBzdGFydEFjdGl2aXR5RmVlZCgpLCBbXSlgIGluIGBzY3JlZW5zL3JlcGwudHM6NzAzYCksIHNvIGEgY29ja3BpdCByZWxhdW5jaCBpcwphIGZyZXNoIGJvb3Qgb2YgdGhlIHZlcnkgdGhpbmcgaG9zdGluZyB0aGlzIGVuZ2luZS4KCioqVGhlIGFub21hbHkgaXMgb25lIHNwZWNpZmljIHJvdywgbm90ICJldmVyeXRoaW5nIHJlcGxheXMiLioqIFdpdGhpbiB0aGUgZmlyc3QgYnVyc3QsIDY1LDAyOApvZiB0aGUgNjUsOTEzIGxpbmVzIGFyZSB0aGUgYnl0ZS1pZGVudGljYWwgdGV4dCBgInNlcnZlciBraWxsZWQgYnkgd2F0Y2hkb2cgKHJlYXNvbgp1bmF2YWlsYWJsZSkiYCDigJQgdGhlIG9ubHkgdGV4dCBgZm9ybWF0V2F0Y2hkb2dMaW5lYCBjYW4gcHJvZHVjZSBmb3IgYSByb3cgc2hhcGVkCmB7cGlkczogWy4uLl19YCB3aXRoIG5vIGByZWFzb25gIGZpZWxkLiBUaGUgcmVzb2x2ZWQgYGxsYW1hLXNlcnZlci1raWxsLXJlY2VpcHRzLmpzb25sYCBoYXMKZXhhY3RseSAzIGxpbmVzIHRvdGFsIChjb25maXJtZWQgdW5pcXVlIHZpYSBgc29ydCAtdWApLCBhbmQgZXhhY3RseSBPTkUgb2YgdGhlbSBtYXRjaGVzIHRoYXQKc2hhcGUuIEl0cyBtdGltZSAoSnVsIDggMTY6MjcpIHByZWRhdGVzIGJvdGggYnVyc3RzIGJ5IG1hbnkgaG91cnMg4oCUIHRoZSBzb3VyY2UgZmlsZSB3YXMgbmV2ZXIKcmV3cml0dGVuLCBzbyB0aGlzIGlzbid0IGZpbGUgZ3Jvd3RoLgoKTWVhbndoaWxlIGBsaXZlbmVzcy13YXRjaGRvZy1yZXN0YXJ0LWxvZy5qc29ubGAgKDg1OSBsaW5lcywgYWxsIGNvbmZpcm1lZCB1bmlxdWUgdmlhIGBzb3J0IC11YCwKZWFjaCB3aXRoIGl0cyBvd24gYHRzYCByb3VnaGx5IDMwcyBhcGFydCkgaXMgTk9UIHByb3BvcnRpb25hbGx5IGV4cGxvZGVkIOKAlCBpdHMgbGVkZ2VyIGNvdW50cwooNDQtNzQ4IGRlcGVuZGluZyBvbiBtYXJrZXIgb3duZXIpIGFyZSBjb25zaXN0ZW50IHdpdGggcmVhbCwgaW5kaXZpZHVhbGx5LXRhaWxlZCB3YXRjaGRvZwpldmVudHMgYWNjdW11bGF0ZWQgb3ZlciBob3Vycywgbm90IGEgcmVwbGF5IGFydGlmYWN0LiBXaGF0ZXZlciBtZWNoYW5pc20gaXMgYXQgZmF1bHQgdHJlYXRzCnRoZSB0d28gdGFpbC1wb2xsZWQgZmlsZXMgdmVyeSBkaWZmZXJlbnRseSBkZXNwaXRlIHNoYXJpbmcgdGhlIHNhbWUgYHNldEludGVydmFsYCB0aWNrLgoKKipNYWduaXR1ZGUg4oCUIHRoZSAyXjE2IGxlYWQuKiogNjUsOTEzIGFuZCA2NSw3NzkgYm90aCBzaXQgd2l0aGluIDAuNiUgb2YgNjUsNTM2ICgyXjE2KTsgdGhlCmlkZW50aWNhbC1saW5lIGNvdW50IDY1LDAyOCBpcyBpbiB0aGUgc2FtZSBiYW5kLiBUaGlzIGlzIHVubGlrZWx5IHRvIGJlIGNvaW5jaWRlbmNlIGFuZCBwb2ludHMKYXQgYSA2NEtCIGJ1ZmZlciBzaXplLCBhIHVpbnQxNiB3cmFwLCBvciBhIGJ5dGUtb2Zmc2V0LWNvbnN1bWVkLWFzLWEtcmVwZWF0LWNvdW50IGNvbmZ1c2lvbgpzb21ld2hlcmUgaW4gdGhlIGJvb3QtdGltZSB0YWlsIHBhdGggKGNhbmRpZGF0ZXM6IGBmcmVzaFRhaWxTdGF0ZWAncyBpbml0aWFsIGJ5dGUgb2Zmc2V0IGJlaW5nCnJlYWQvdHJlYXRlZCBhcyBhbiBpdGVyYXRpb24gY291bnQgYnkgc29tZSBjb25zdW1lcjsgYSBmaXhlZCA2NTUzNi1ieXRlIHJlYWQvbG9vcCBib3VuZCB0aGF0IGEKdGlueSA4NzMtYnl0ZSBmaWxlJ3MgcmVhZCBsb29wIGluY3JlbWVudHMgaW5jb3JyZWN0bHkg4oCUIGUuZy4gYnkgYSBjb25zdGFudCBpbnN0ZWFkIG9mIGJ5IHRoZQphY3R1YWwgYnl0ZXMgcmVhZCDigJQgcnVubmluZyB0aGUgZnVsbCA2NTUzNi1jb3VudCByZWdhcmRsZXNzIG9mIHRoZSBmaWxlJ3MgcmVhbCBzaXplKS4gVGhlCmFzeW1tZXRyeSBiZXR3ZWVuIHRoZSB0d28gZmlsZXMgd291bGQgZm9sbG93IG5hdHVyYWxseSBpZiB0aGUgYnVnIHNjYWxlcyB3aXRoIGEgRklYRUQgYnVmZmVyCnNpemUgcmF0aGVyIHRoYW4gdGhlIGZpbGUncyBvd24gYnl0ZSBsZW5ndGg6IHRoZSBraWxsLXJlY2VpcHRzIGZpbGUncyBzaG9ydCBjb250ZW50IGxldHMgbWFueQptb3JlICJpdGVyYXRpb25zIiBvZiBhIGJyb2tlbiBsb29wIGNvbXBsZXRlIGF1ZGlibHkgd2l0aGluIHRoZSBzYW1lIHdhbGwtY2xvY2sgd2luZG93IHRoYW4gdGhlCmxhcmdlciwgc2xvd2VyLXRvLXByb2Nlc3MgcmVzdGFydC1sb2cgY29udGVudCBkb2VzLgoKKipSdWxlZCBvdXQ6KiogZmlsZSByZXdyaXRlL2dyb3d0aCAoa2lsbC1yZWNlaXB0cyBtdGltZSBwcmVkYXRlcyBib3RoIGJ1cnN0cyk7IGEgbmFpdmUKIndob2xlLWVuZ2luZS1yZXN0YXJ0cy1yZXBlYXRlZGx5LWluLWEtdGlnaHQtbG9vcCIgdGhlb3J5IHJlcGxheWluZyBCT1RIIGZpbGVzIHN5bW1ldHJpY2FsbHkKKHdvdWxkIHJlcXVpcmUgcmVzdGFydC1sb2cncyBkaXZlcnNlIGNvbnRlbnQgdG8gZXhwbG9kZSBieSB0aGUgc2FtZSBmYWN0b3IsIHdoaWNoIGl0IGRvZXMgbm90KS4KCioqTmF0dXJhbCBleHBlcmltZW50IChjbGlzd2FwNzIncyBtYW51YWwgY29ja3BpdCBraWxsL3JlbGF1bmNoLCAyMDI2LTA3LTA5IH4xNjo1MzoyOVosCnBvc3QtIzU3NCBidWlsZCk6Kiogd2F0Y2hlZCBgc3RhdGUvYWN0aXZpdHktbGVkZ2VyLmpzb25sYCBsaXZlIHRocm91Z2ggaXQuIFJlc3VsdDogKiphIGJ1cnN0CkRJRCBmaXJlLCBidXQgb25seSBoYWxmIHRoZSBwYXR0ZXJuIHJlcHJvZHVjZWQsIHdoaWNoIGRpc2NyaW1pbmF0ZXMgdGhlIHR3byBmaWxlcycgbWVjaGFuaXNtcwpjbGVhbmx5LioqCgotICoqUmVzdGFydC1sb2cgaGFsZjogY29uZmlybWVkLCByZXByb2R1Y2VzIG9uIG1hbnVhbCBib290LioqIEEgY2xlYW4gYnVyc3Qgb2YgZXhhY3RseSA4NTkKICBsaW5lcyBsYW5kZWQgYXQgYDE2OjUzOjI5WmAg4oCUIGFuIGV4YWN0IG1hdGNoIHRvIGBsaXZlbmVzcy13YXRjaGRvZy1yZXN0YXJ0LWxvZy5qc29ubGAncwogIENVUlJFTlQgdG90YWwgbGluZSBjb3VudCBhdCB0aGF0IG1vbWVudC4gVGhlIHBlci1vd25lciBjb3VudHMgKDc0OCBgcmVtZWFzdXJlNDY2YCwgNjAKICBgYjNmaXg1MTNgLCA0NCBgZ3Jvd2V2ZW50NDY2YCwgcGx1cyB0aGUgdmFyaW91cyBvbmUtb2ZmIHJlbGF1bmNoIGxpbmVzKSBtYXRjaCB0aGUgU0FNRQogIGRpc3RyaWJ1dGlvbiBzZWVuIGluIHRoZSBvcmlnaW5hbCB0d28gbWVnYS1idXJzdHMnIHJlc3RhcnQtbG9nIGNvbnRyaWJ1dGlvbi4gQ3JpdGljYWxseSwKICBgbGl2ZW5lc3Mtd2F0Y2hkb2ctc3RhdGUuanNvbmAncyBgY29ja3BpdC5kZWF0aHNgIGFycmF5IHdhcyBVTkNIQU5HRUQgKHN0aWxsIHNob3dzIG9ubHkKICBgMjAyNi0wNy0wOVQwODoyMjowN1pgLCB0aGUgb3JpZ2luYWwgaW5jaWRlbnQpIOKAlCB0aGUgd2F0Y2hkb2cgaXRzZWxmIG5ldmVyIHJlY29yZGVkIHRoaXMKICBtYW51YWwga2lsbCBhcyBhIGRlYXRoL3JlbGF1bmNoIGV2ZW50LCB5ZXQgdGhlIGZ1bGwgZmlsZSBzdGlsbCByZXBsYXllZC4gVGhpcyBjb25maXJtczogKiphbnkKICBmcmVzaCBjb2NrcGl0IHByb2Nlc3MgYm9vdCDigJQgd2F0Y2hkb2ctdHJpZ2dlcmVkIG9yIG1hbnVhbCDigJQgY2F1c2VzIGV4YWN0bHkgb25lIGZ1bGwgcmVwbGF5IG9mCiAgdGhlIENVUlJFTlQgcmVzdGFydC1sb2cgY29udGVudCoqLCBiZWNhdXNlIGByZXN0YXJ0VGFpbGAvYGtpbGxUYWlsYCBhcmUgcHJvY2Vzcy1sb2NhbAogIChgbGV0YC1kZWNsYXJlZCBpbnNpZGUgYHN0YXJ0QWN0aXZpdHlGZWVkYCwgcmVzZXQgdmlhIGBmcmVzaFRhaWxTdGF0ZSgpYCBvbiBldmVyeSBjYWxsKSB3aXRoCiAgbm8gcGVyc2lzdGVuY2UgYWNyb3NzIGEgcHJvY2VzcyBib3VuZGFyeS4gVGhpcyBpcyBhIHJlYWwsIGRldGVybWluaXN0aWMsIGFsd2F5cy1oYXBwZW5pbmcKICBkZWZlY3Qgd2hvc2Ugc2V2ZXJpdHkgc2NhbGVzIHdpdGggaG93IGxhcmdlIGByZXN0YXJ0LWxvZ2AgaGFzIGdyb3duIGJ5IHRoZSB0aW1lIG9mIHRoZSBuZXh0CiAgYm9vdCAoY3VycmVudGx5IDg1OSBsaW5lczsgd2lsbCBrZWVwIGdyb3dpbmcpLgotICoqS2lsbC1yZWNlaXB0cyBoYWxmOiBkaWQgTk9UIHJlcHJvZHVjZSBvbiB0aGlzIG1hbnVhbCBib290LioqIFplcm8gYCIocmVhc29uIHVuYXZhaWxhYmxlKSJgCiAgbGluZXMgYXBwZWFyZWQgYW55d2hlcmUgaW4gdGhpcyBidXJzdCB3aW5kb3cgKGBncmVwIC1jYCA9IDApLCBldmVuIHRob3VnaCB0aGUgc2FtZSBzdGF0aWMKICAzLWxpbmUga2lsbC1yZWNlaXB0cyBmaWxlIChjb250YWluaW5nIHRoZSBvbmUgYHtwaWRzOlsuLi5dfWAsIG5vLWByZWFzb25gIHJvdykgd2FzIGluIHNjb3BlCiAgdGhlIHdob2xlIHRpbWUuIFRoaXMgbWVhbnMgdGhlIH42NSwwMDB4IGV4cGxvc2lvbiBpcyBOT1Qgc2ltcGx5ICJmcmVzaCBib290IHJlcGxheXMKICBraWxsLXJlY2VpcHRzIG9uY2UiICh0aGF0IGFsb25lIHdvdWxkIHByb2R1Y2UgMyBsaW5lcywgbm90IDY1LDAwMCkg4oCUIGl0IHJlcXVpcmVzIGFuCiAgQURESVRJT05BTCBjb25kaXRpb24gcHJlc2VudCBkdXJpbmcgdGhlIHR3byBoaXN0b3JpY2FsIFdBVENIRE9HLXRyaWdnZXJlZCByZWxhdW5jaGVzIGJ1dAogIGFic2VudCBmcm9tIHRoaXMgbWFudWFsIG9uZS4gTGVhZGluZyBjYW5kaWRhdGU6IHNvbWV0aGluZyBzcGVjaWZpYyB0byB0aGUgd2F0Y2hkb2cncyBvd24KICBhdXRvbWF0aWMgcmVsYXVuY2ggc2VxdWVuY2UgKGl0cyBvd24gcmV0cnkvd2FpdCBsb2dpYyBhcm91bmQgYHJlc29sdmVLaWxsUmVjZWlwdHNQYXRoYCBvciB0aGUKICBgd2F0Y2hkb2dTdGF0ZVBhdGhgIHJlYWQsIHBvc3NpYmx5IHJhY2luZyBhIGNvbmN1cnJlbnQgcmV3cml0ZSBvZiB0aGF0IHN0YXRlIGZpbGUgZHVyaW5nIGFuCiAgYXV0b21hdGljIHJlbGF1bmNoLCB3aGljaCBhIG1hbnVhbCBraWxsK3JlbGF1bmNoIGJ5IGFuIG9wZXJhdG9yIGRvZXNuJ3QgZXhlcmNpc2UgdGhlIHNhbWUgd2F5KS4KCk5ldDogdGhlIHJlc3RhcnQtbG9nIGZ1bGwtcmVwbGF5LW9uLWJvb3QgbWVjaGFuaXNtIGlzIG5vdyBDT05GSVJNRUQgYW5kIHJlcHJvZHVjaWJsZSBhdCB3aWxsCihhbnkgY29ja3BpdCByZXN0YXJ0KS4gVGhlIGtpbGwtcmVjZWlwdHMgNjUsMDAweCBleHBsb3Npb24gcmVtYWlucyBvcGVuIOKAlCBpdCBuZWVkcyBlaXRoZXIgYQp3YXRjaGRvZy10cmlnZ2VyZWQgcmVsYXVuY2ggdG8gb2JzZXJ2ZSBsaXZlLCBvciB0aGUgaW5zdHJ1bWVudGF0aW9uIGNvdW50ZXJzIGJlbG93IHRvIGNhdGNoIGl0CnJldHJvYWN0aXZlbHkgbmV4dCB0aW1lIGl0IGZpcmVzLgoKIyMgSW1wYWN0CgpUaGUgb3BlcmF0b3IncyBjb2NrcGl0IGNhbiBzZWUgYSBuZWFyLWlkZW50aWNhbCBtZWdhLWZsb29kIGFnYWluIG9uIHRoZSBuZXh0CnNlcnZlci1raWxsL3BsYW5uZWQtb3V0YWdlIGN5Y2xlIHRoYXQgYWxzbyByZXN0YXJ0cyB0aGUgY29ja3BpdCBwcm9jZXNzLCBldmVuIHdpdGggYm90aCAjNTcxCmFuZCAjNTc0IG1lcmdlZCDigJQgdGhlIGRvbWluYW50IGZsb29kIGRyaXZlciBieSB2b2x1bWUgKDk0LjglIG9mIHRoZSBoaXN0b3JpY2FsIGxlZGdlcikgaXMgbm90CnlldCBmaXhlZC4KCiMjIEZpeCBzaGFwZSAoY29tcGFuaW9uIFBSIGluIHByb2dyZXNzKQoKMS4gKipDb250YWlubWVudCAoc2hpcHMgcmVnYXJkbGVzcyBvZiByb290IGNhdXNlKToqKiBhIHBlci10aWNrIGVtaXNzaW9uIGNhcCBvbiB0aGUgdGFpbC1wb2xsCiAgIHBhdGgsIG1pcnJvcmluZyAjNTc0J3MgYnVyc3QtY29hbGVzY2luZyBwaGlsb3NvcGh5IGZvciByZWNlaXB0cyDigJQgaWYgYSBzaW5nbGUgYHBvbGxUYWlsYAogICBpbnZvY2F0aW9uIHdvdWxkIGVtaXQgbW9yZSB0aGFuIGEgc21hbGwgdGhyZXNob2xkIG9mIGxpbmVzIGluIG9uZSB0aWNrLCByZW5kZXIgT05FCiAgICJOIHdhdGNoZG9nIGV2ZW50cyBjb2xsYXBzZWQgKHRhaWwtcG9sbCBhbm9tYWx5KSIgc3VtbWFyeSBsaW5lIGluc3RlYWQgb2YgTiBpbmRpdmlkdWFsIG9uZXMsCiAgIHBsdXMgYSBkaWFnbm9zdGljIG5vdGUgdG8gYSBkZWJ1ZyBsb2cgc28gdGhlIGFub21hbHkgc3RheXMgdmlzaWJsZSBmb3Igcm9vdC1jYXVzZSB3b3JrLgoyLiAqKkluc3RydW1lbnRhdGlvbiAoZm9yIHJvb3QtY2F1c2UpOioqIGludm9jYXRpb24gY291bnRlcnMvbG9nZ2luZyBvbgogICBgcG9sbFRhaWxgL2BmcmVzaFRhaWxTdGF0ZWAvYHN0YXJ0QWN0aXZpdHlGZWVkYCwgYWN0aXZlIGFoZWFkIG9mIHRoZSBuZXh0IHJlYWwgY29ja3BpdAogICByZWxhdW5jaCwgdG8gZGlyZWN0bHkgb2JzZXJ2ZSB0aGUgY2FsbC9ieXRlLW9mZnNldCBwYXR0ZXJuIHJhdGhlciB0aGFuIGluZmVyIGl0IGZyb20gbGVkZ2VyCiAgIG91dHB1dCBhZnRlciB0aGUgZmFjdC4KCnJlZnMgIzQ4NSAjNTYxCg==",
       "closed_at": "",
       "comments": [],
@@ -6070,20 +6519,6 @@
       "title": "goal organ: update_goal(Complete) has no code-level completion-proof gate (floor clause 4 gap)",
       "updated_at": "2026-07-10T06:34:48Z",
       "url": "https://github.com/wordingone/ember/issues/663"
-    },
-    {
-      "author": "wordingone",
-      "body_base64": "IyMgRGVmZWN0IChmcm9tIHRoZSAjNDgwIGluZGVwZW5kZW50IGF1ZGl0LCBjb21tZW50IDQ5MzI2MDk3Nzkg4oCUIGxhdW5jaC1iaW5kaW5nLCBwb2ludC03IG9mIHRoZSBmcm96ZW4gY3VyZSBzZXQpCgpgc2NyaXB0cy9jYmFzZV9ncm93X3J1bmcyX3N0YWJpbGl6ZS5weTo6YXNzZXJ0X2xpbmVhZ2VfcmVzdW1lYCBjaGVja3Mgb25seSBgbm90IGRldmlhdGlvbmA6IG9uIHRoZSBtZXJnZWQgYmxvYiBgNTI0ZjVlZTlhMTU5Zjk1YWMwMDk1ZTZiZDZkNmJiZTQyN2FjOGZjNGAgKHB1YmxpYyBtYXN0ZXIgYDU2NDg4NmE4YCksIHN0ZXAtNzk2IHJvbGxiYWNrIGlzIGFjY2VwdGVkIHdpdGggZWFjaCBvZiBgeGAsIGBub3QtYS1kYXRlYCwgYDIwMjYtOTktOTkgbm9uc2Vuc2VgIGFzIHRoZSBkZXZpYXRpb24gZW50cnksIHJldHVybmluZyBgTElORUFHRV9ERVZJQVRJT05fREVDTEFSRURgLiBPbmx5IGVtcHR5IHRleHQgaXMgcmVmdXNlZC4gVGhlIGZyb3plbiBjb250cmFjdCByZXF1aXJlcyBhICoqZGF0ZWQqKiBkZXZpYXRpb24gZW50cnk7IHRoZSBnYXRlIGFzIHNoaXBwZWQgYWNjZXB0cyBhbnkgbm9uLWVtcHR5IHN0cmluZy4gUmVwcm8gY29tbWFuZCBpcyBpbiB0aGUgYXVkaXQgY29tbWVudCB2ZXJiYXRpbS4KCkNvbnNlcXVlbmNlOiB0aGUgYXVkaXQgcnVsaW5nIGJsb2NrcyBBQzIgZGlzcGF0Y2ggKHByZXJlZyBjb21tZW50IDQ5MzI1NTc5MTUpIHVuZGVyIHRoZSBjdXJyZW50IGdhdGUg4oCUIHRoaXMgaXNzdWUgaXMgdGhlIG5hbWVkIHVuYmxvY2sgZm9yIHRoZSB2OSByZWxhdW5jaCB3aW5kb3cuCgojIyBGcm96ZW4gY3VyZSBzcGVjIChleGVjdXRpb24tb3JkZXIgYmluZGluZykKCjEuIGBhc3NlcnRfbGluZWFnZV9yZXN1bWVgIHBhcnNlcyBhIHN0cmljdCBjYWxlbmRhci1kYXRlIHByZWZpeCBmcm9tIHRoZSBkZXZpYXRpb24gZW50cnk6IGBZWVlZLU1NLUREYCB3aGVyZSB0aGUgZGF0ZSBtdXN0IGNvbnN0cnVjdCBhcyBhIHJlYWwgYGRhdGV0aW1lLmRhdGVgICgyMDI2LTk5LTk5IG11c3QgZmFpbCkuIE1hbGZvcm1lZCAvIGltcG9zc2libGUgLyBtaXNzaW5nIGRhdGUgcHJlZml4IOKGkiBmYWlsIENMT1NFRCAocmVmdXNhbCBwYXRoIGlkZW50aWNhbCB0byB0aGUgZW1wdHktdGV4dCByZWZ1c2FsLCBkaXN0aW5jdCBtZXNzYWdlIG5hbWluZyB0aGUgbWFsZm9ybWVkIGVudHJ5KS4KMi4gTmVnYXRpdmUgY29udHJvbHMgYWRkZWQgdG8gYHRlc3RzL3Rlc3Rfc3RhYmlsaXplX3Y5X2N1cmUucHlgOiB0aGUgYXVkaXQncyBleGFjdCB0aHJlZSBwcm9iZXMgKGB4YCwgYG5vdC1hLWRhdGVgLCBgMjAyNi05OS05OSBub25zZW5zZWApIGVhY2ggUkVGVVNFRCwgcGx1cyB0aGUgZXhpc3RpbmcgdmFsaWQgZGF0ZWQgcG9zaXRpdmUgY2FzZSBzdGlsbCBwYXNzaW5nLiBUREQ6IG5lZ2F0aXZlIGNvbnRyb2xzIHNob3duIGZhaWxpbmcgYXQgdGhlIHByZS1maXggaGVhZCBpbiB0aGUgUFIgYm9keS4KMy4gU2NvcGUgZmVuY2U6IE5PIG90aGVyIGJlaGF2aW9yIGNoYW5nZSBpbiB0aGUgc3RhYmlsaXplIHNjcmlwdDsgdGhlIFIyL1I0IHVuaXQgKyBDUFUtcHJlY2hlY2sgZXZpZGVuY2Ugc3Vydml2aW5nIHRoZSBhdWRpdCBtdXN0IHJlbWFpbiBncmVlbiAocnVuIHRoZSBmdWxsIGV4aXN0aW5nIHN1aXRlLCBwYXN0ZSBjb3VudCkuCjQuIE5vbi1ibG9ja2luZyBmb2xsb3ctdXAsIE5PVCBpbiB0aGlzIFBSOiB3aGV0aGVyIGEgZGV2aWF0aW9uIGVudHJ5IGFkZGl0aW9uYWxseSByZXF1aXJlcyBjb29yZGluYXRvciBhdXRob3JpdHkgYmluZGluZyAodGhlIGF1ZGl0J3Mgb3B0aW9uYWwgc3VnZ2VzdGlvbikg4oCUIGRlc2lnbiBxdWVzdGlvbiwgc2VwYXJhdGUgaXNzdWUgaWYgcHVyc3VlZC4KCiMjIEFjY2VwdGFuY2UKUmVwcm8gdHJpbyByZWZ1c2VzIGF0IGZpeCBoZWFkICh2ZXJiYXRpbSBvdXRwdXQgcGFzdGVkKTsgZnVsbCB0ZXN0IHN1aXRlIGdyZWVuIHdpdGggY291bnQgbWF0Y2hpbmcgcHJlLWZpeCBjb3VudCArIG5ldyB0ZXN0czsgUFIgcmVmcy1vbmx5ICgicmVmcyAjNDgwIikuCgpyZWZzICM0ODA=",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-10T13:03:51Z",
-      "labels": [],
-      "number": 665,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "stabilize lineage gate fail-opens on malformed deviation dates — make assert_lineage_resume fail-closed (blocks AC2/v9 relaunch)",
-      "updated_at": "2026-07-10T13:03:51Z",
-      "url": "https://github.com/wordingone/ember/issues/665"
     },
     {
       "author": "wordingone",
@@ -15017,121 +15452,6 @@
     },
     {
       "author": "wordingone",
-      "body_sha256": "96da2543e34ecd0b4e45c6b10fac9bb24469f7034a8601a444579896f469a97e",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "git_evidence_without_completion_proof",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "Renderer emits NUL-cell runs under a [7m style stack at ~190x85 — grey bars + inverted status at the operator's real viewport",
-        "body_sha256:96da2543e34ecd0b4e45c6b10fac9bb24469f7034a8601a444579896f469a97e"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-07T10:40:46Z",
-      "disposition": "current executable obligation",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "f965f05571f602e2d2c1c112bbe15d8a43c27239"
-        }
-      ],
-      "issue_record_sha256": "3aa45d402aa89b973dc7131285300d2eda5a706863195e168d2abddd407860da",
-      "labels": [],
-      "master_evidence": [
-        {
-          "blob_sha1": "274cbac56c440632c3a00d05dc319cc51a47487b",
-          "line": 82,
-          "path": "docs/ember-completeness.md"
-        },
-        {
-          "blob_sha1": "dcfc2b50c32069fb082fa6b49d73f939c7a9ba5c",
-          "line": 13,
-          "path": "receipts/c55-surpass-prestage-20260613T042503Z.json"
-        },
-        {
-          "blob_sha1": "cc3eed3675662f8c800846fc5cbe9ab9387fefb3",
-          "line": 34,
-          "path": "receipts/tally-20260612T180944Z.json"
-        },
-        {
-          "blob_sha1": "99b6782d706a6abac83e6bc658629650bc0c807b",
-          "line": 34,
-          "path": "receipts/tally-20260612T203107Z.json"
-        },
-        {
-          "blob_sha1": "2a23d53c44561740bc5d5abc8fda34cb7bdf201c",
-          "line": 34,
-          "path": "receipts/tally-20260612T213243Z.json"
-        },
-        {
-          "blob_sha1": "934df145aafd01d43867d4d727c487e5038331f5",
-          "line": 34,
-          "path": "receipts/tally-20260613T004807Z.json"
-        },
-        {
-          "blob_sha1": "e86cfcc55568322be3264074e1e03f5d7421cebb",
-          "line": 1,
-          "path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts"
-        },
-        {
-          "blob_sha1": "e86cfcc55568322be3264074e1e03f5d7421cebb",
-          "line": 16,
-          "path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts"
-        },
-        {
-          "blob_sha1": "e86cfcc55568322be3264074e1e03f5d7421cebb",
-          "line": 17,
-          "path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts"
-        },
-        {
-          "blob_sha1": "e86cfcc55568322be3264074e1e03f5d7421cebb",
-          "line": 26,
-          "path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts"
-        },
-        {
-          "blob_sha1": "e86cfcc55568322be3264074e1e03f5d7421cebb",
-          "line": 28,
-          "path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts"
-        },
-        {
-          "blob_sha1": "e86cfcc55568322be3264074e1e03f5d7421cebb",
-          "line": 120,
-          "path": "tools/ember-cli/src/ink/nul-cell-emission.test.ts"
-        },
-        {
-          "blob_sha1": "da5b8fdc2b668da1752740480db3ac99b0438d35",
-          "line": 385,
-          "path": "tools/ember-cli/src/ink/rendering-pipeline.ts"
-        },
-        {
-          "blob_sha1": "da5b8fdc2b668da1752740480db3ac99b0438d35",
-          "line": 476,
-          "path": "tools/ember-cli/src/ink/rendering-pipeline.ts"
-        },
-        {
-          "blob_sha1": "da5b8fdc2b668da1752740480db3ac99b0438d35",
-          "line": 720,
-          "path": "tools/ember-cli/src/ink/rendering-pipeline.ts"
-        },
-        {
-          "blob_sha1": "4cf8fd2b177c091f39f86d17a6b1f55077a79d2d",
-          "line": 122,
-          "path": "tools/ember-cli/src/screens/repl-slash-dropdown.test.ts"
-        }
-      ],
-      "number": 343,
-      "obligation_sha256": "a0a7750afc9492a47c2be3caef5764208167f57d812ae1edf979f3ff74f959ce",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "Renderer emits NUL-cell runs under a [7m style stack at ~190x85 — grey bars + inverted status at the operator's real viewport",
-      "title": "Renderer emits NUL-cell runs under a [7m style stack at ~190x85 — grey bars + inverted status at the operator's real viewport",
-      "unresolved_remainder": "requested_outcome_not_independently_verified",
-      "updated_at": "2026-07-07T11:44:42Z",
-      "url": "https://github.com/wordingone/ember/issues/343"
-    },
-    {
-      "author": "wordingone",
       "body_sha256": "461b208b99547e2fa658218330e850c7b027a9eac2dde2b34c3c5f942629858d",
       "canonical_issue": null,
       "canonical_obligation_sha256": null,
@@ -16465,71 +16785,6 @@
     },
     {
       "author": "wordingone",
-      "body_sha256": "1e16df94c0ac0dff8aa25d81e3bebc21d3de728a752d3e7b54efa22b589d20d7",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "git_evidence_without_completion_proof",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "C(-1) scanner passes vacuously when cited decisive receipts are DELETED from disk (deletion-induced GREEN, board 183856Z)",
-        "body_sha256:1e16df94c0ac0dff8aa25d81e3bebc21d3de728a752d3e7b54efa22b589d20d7"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-07T18:51:30Z",
-      "disposition": "current executable obligation",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "15d1868c263d31b68692a0b2a594c5297793a3bd"
-        }
-      ],
-      "issue_record_sha256": "ab08180706195f29170288551dcf80a65e02db20e9c57f23a564cce6d2002804",
-      "labels": [],
-      "master_evidence": [
-        {
-          "blob_sha1": "24294e4d0eb0952bcb78b0a35453a490c8bff700",
-          "line": 63,
-          "path": "receipts/ember-totality-audit/audit-20260710T223333Z.json"
-        },
-        {
-          "blob_sha1": "390bd4080a13d9e67f195bff95bbe054dc926000",
-          "line": 2,
-          "path": "scripts/ember_totality/c_neg1_394_cited_missing_test.py"
-        },
-        {
-          "blob_sha1": "390bd4080a13d9e67f195bff95bbe054dc926000",
-          "line": 6,
-          "path": "scripts/ember_totality/c_neg1_394_cited_missing_test.py"
-        },
-        {
-          "blob_sha1": "92ca12098613f4f8cec3f54eb19256d28fc9a7e2",
-          "line": 232,
-          "path": "scripts/ember_totality/test_c_neg1.py"
-        },
-        {
-          "blob_sha1": "92ca12098613f4f8cec3f54eb19256d28fc9a7e2",
-          "line": 354,
-          "path": "scripts/ember_totality/test_c_neg1.py"
-        },
-        {
-          "blob_sha1": "92ca12098613f4f8cec3f54eb19256d28fc9a7e2",
-          "line": 364,
-          "path": "scripts/ember_totality/test_c_neg1.py"
-        }
-      ],
-      "number": 394,
-      "obligation_sha256": "7b7517290c5af9783f1905fc57a83100192971c92ffd0dd493ea0452020b55ba",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "C(-1) scanner passes vacuously when cited decisive receipts are DELETED from disk (deletion-induced GREEN, board 183856Z)",
-      "title": "C(-1) scanner passes vacuously when cited decisive receipts are DELETED from disk (deletion-induced GREEN, board 183856Z)",
-      "unresolved_remainder": "requested_outcome_not_independently_verified",
-      "updated_at": "2026-07-07T18:51:30Z",
-      "url": "https://github.com/wordingone/ember/issues/394"
-    },
-    {
-      "author": "wordingone",
       "body_sha256": "2a66a7e02faf15c69b131911dee74500b93e0b6e0f2d2f6a2a523b6434a8f1dd",
       "canonical_issue": null,
       "canonical_obligation_sha256": null,
@@ -17058,106 +17313,6 @@
       "unresolved_remainder": "requested_outcome_not_independently_verified",
       "updated_at": "2026-07-08T16:06:52Z",
       "url": "https://github.com/wordingone/ember/issues/440"
-    },
-    {
-      "author": "wordingone",
-      "body_sha256": "cb3178a887af35cb25870ddacfce4f60617544515f98af5dbe333365917ed22e",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "research_marker_plus_git_evidence",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "Raw serial contamination_recheck keeps getting called where the hardened wrapper exists — make the memory-safe path the default entry point",
-        "body_sha256:cb3178a887af35cb25870ddacfce4f60617544515f98af5dbe333365917ed22e"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-08T13:10:15Z",
-      "disposition": "preserved research direction",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "38fb127598b06f070522ee38b68970306de18c9e"
-        }
-      ],
-      "issue_record_sha256": "20fbf172ab88ea7041f07f9a1543aa60585b6fdf5365d4ba14b299bf8fc45022",
-      "labels": [],
-      "master_evidence": [
-        {
-          "blob_sha1": "faf0968cd832b9e91fcf134bb2ee2d62fe26634b",
-          "line": 308122,
-          "path": "receipts/p1-envelope-sweep/20260708T144213Z-point3.json"
-        },
-        {
-          "blob_sha1": "43b6c12e084d0d96de1bfa2e5567acf5264ab741",
-          "line": 144,
-          "path": "scripts/p1_envelope_sweep.py"
-        },
-        {
-          "blob_sha1": "43b6c12e084d0d96de1bfa2e5567acf5264ab741",
-          "line": 480,
-          "path": "scripts/p1_envelope_sweep.py"
-        },
-        {
-          "blob_sha1": "ddf3a060db5c8857e8edff83f87bbe32fe4c7f1e",
-          "line": 1,
-          "path": "scripts/test_w1_contamination_recheck_scan_guard.py"
-        },
-        {
-          "blob_sha1": "ddf3a060db5c8857e8edff83f87bbe32fe4c7f1e",
-          "line": 43,
-          "path": "scripts/test_w1_contamination_recheck_scan_guard.py"
-        },
-        {
-          "blob_sha1": "ddf3a060db5c8857e8edff83f87bbe32fe4c7f1e",
-          "line": 58,
-          "path": "scripts/test_w1_contamination_recheck_scan_guard.py"
-        },
-        {
-          "blob_sha1": "ddf3a060db5c8857e8edff83f87bbe32fe4c7f1e",
-          "line": 160,
-          "path": "scripts/test_w1_contamination_recheck_scan_guard.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 168,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 173,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 1153,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 1200,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 1206,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 1248,
-          "path": "scripts/w1_collapse_control_run.py"
-        }
-      ],
-      "number": 445,
-      "obligation_sha256": "b0fdbbac7bddc1b042e49386d3d705e8e6dd63f3ba1d0f4e81e9c6288497bedc",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "Raw serial contamination_recheck keeps getting called where the hardened wrapper exists — make the memory-safe path the default entry point",
-      "title": "Raw serial contamination_recheck keeps getting called where the hardened wrapper exists — make the memory-safe path the default entry point",
-      "unresolved_remainder": "research_direction_preserved_no_completion_claim",
-      "updated_at": "2026-07-08T13:10:15Z",
-      "url": "https://github.com/wordingone/ember/issues/445"
     },
     {
       "author": "wordingone",
@@ -20337,131 +20492,6 @@
     },
     {
       "author": "wordingone",
-      "body_sha256": "c8e3623fd770b8c99aa506a57eab9df4250a27fff88546c695a7d7671ba9d10b",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "git_evidence_without_completion_proof",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "forward mmap_cache_dir at the 4 remaining real-corpus-scale PackedShardLoader call sites",
-        "body_sha256:c8e3623fd770b8c99aa506a57eab9df4250a27fff88546c695a7d7671ba9d10b"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-09T16:49:37Z",
-      "disposition": "current executable obligation",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "12553f3eb5eeeca93e7fd53ad88c0f8c6af20b32"
-        }
-      ],
-      "issue_record_sha256": "e176cdc781d3d5285589f2d701509dc4f760c70b47437567edcb0a58b2b75298",
-      "labels": [],
-      "master_evidence": [
-        {
-          "blob_sha1": "f43de596e553ef5abe9a3d63571ebfbef533be9d",
-          "line": 36,
-          "path": "receipts/process-visibility/process-visibility-20260709T173000Z.json"
-        },
-        {
-          "blob_sha1": "b504f76f7031b698f2d6011190a31c590ac7ef05",
-          "line": 39,
-          "path": "scripts/research/exposure_ledger.py"
-        },
-        {
-          "blob_sha1": "b504f76f7031b698f2d6011190a31c590ac7ef05",
-          "line": 96,
-          "path": "scripts/research/exposure_ledger.py"
-        },
-        {
-          "blob_sha1": "b504f76f7031b698f2d6011190a31c590ac7ef05",
-          "line": 410,
-          "path": "scripts/research/exposure_ledger.py"
-        },
-        {
-          "blob_sha1": "9b48c5a201181f15b904f4c44f79ef25af5c6674",
-          "line": 2,
-          "path": "scripts/research/test_exposure_ledger_mmap_forward.py"
-        },
-        {
-          "blob_sha1": "9b48c5a201181f15b904f4c44f79ef25af5c6674",
-          "line": 60,
-          "path": "scripts/research/test_exposure_ledger_mmap_forward.py"
-        },
-        {
-          "blob_sha1": "9b48c5a201181f15b904f4c44f79ef25af5c6674",
-          "line": 95,
-          "path": "scripts/research/test_exposure_ledger_mmap_forward.py"
-        },
-        {
-          "blob_sha1": "bc31748ac6b8ed97deeb99ab3584d7564c64e538",
-          "line": 2,
-          "path": "scripts/test_w1b_fp32_check_mmap_forward.py"
-        },
-        {
-          "blob_sha1": "bc31748ac6b8ed97deeb99ab3584d7564c64e538",
-          "line": 150,
-          "path": "scripts/test_w1b_fp32_check_mmap_forward.py"
-        },
-        {
-          "blob_sha1": "bc31748ac6b8ed97deeb99ab3584d7564c64e538",
-          "line": 157,
-          "path": "scripts/test_w1b_fp32_check_mmap_forward.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 2182,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 2191,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 2200,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 2573,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 2579,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
-          "line": 2590,
-          "path": "scripts/w1_collapse_control_run.py"
-        },
-        {
-          "blob_sha1": "264fc928946cbee8b4a857900bebc9e95fbbdb27",
-          "line": 68,
-          "path": "scripts/w1b_fp32_check.py"
-        },
-        {
-          "blob_sha1": "264fc928946cbee8b4a857900bebc9e95fbbdb27",
-          "line": 84,
-          "path": "scripts/w1b_fp32_check.py"
-        }
-      ],
-      "number": 575,
-      "obligation_sha256": "a84d4c1aaf1f4eeda8aae7e733df7f6994cdc6bec2a24aaa7834c25f8ef5cec8",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "forward mmap_cache_dir at the 4 remaining real-corpus-scale PackedShardLoader call sites",
-      "title": "forward mmap_cache_dir at the 4 remaining real-corpus-scale PackedShardLoader call sites",
-      "unresolved_remainder": "requested_outcome_not_independently_verified",
-      "updated_at": "2026-07-09T16:49:37Z",
-      "url": "https://github.com/wordingone/ember/issues/575"
-    },
-    {
-      "author": "wordingone",
       "body_sha256": "d0aa12af12581d7a57769ec76ec5859e6ed4bc69cf550b221d7e8ca194790980",
       "canonical_issue": null,
       "canonical_obligation_sha256": null,
@@ -23199,51 +23229,6 @@
       "unresolved_remainder": "no_public_master_or_history_binding_found",
       "updated_at": "2026-07-10T06:34:48Z",
       "url": "https://github.com/wordingone/ember/issues/663"
-    },
-    {
-      "author": "wordingone",
-      "body_sha256": "5462a1a762674b1b1020c944e900931374e5ecf68f3a3cfe53e790bc8a133384",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "git_evidence_without_completion_proof",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "stabilize lineage gate fail-opens on malformed deviation dates — make assert_lineage_resume fail-closed (blocks AC2/v9 relaunch)",
-        "body_sha256:5462a1a762674b1b1020c944e900931374e5ecf68f3a3cfe53e790bc8a133384"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-10T13:03:51Z",
-      "disposition": "current executable obligation",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "bce8fc8fc1d8072f47feb41452584ddc144b552c"
-        }
-      ],
-      "issue_record_sha256": "f5d5e5e004299ade8ed880269ce6e80b0adbe401e6f032040d7ff9e6e00a0e35",
-      "labels": [],
-      "master_evidence": [
-        {
-          "blob_sha1": "ebf49db3c2b3dc8d6587fc84842d3db9bea37704",
-          "line": 685,
-          "path": "scripts/cbase_grow_rung2_stabilize.py"
-        },
-        {
-          "blob_sha1": "ef08a3e93d78c9050b1bac1204bda8a3a2285047",
-          "line": 424,
-          "path": "tests/test_stabilize_v9_cure.py"
-        }
-      ],
-      "number": 665,
-      "obligation_sha256": "058cdfb21485fa24a90440226bf7827221f14552428e5ef73a24841a13b748a6",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "stabilize lineage gate fail-opens on malformed deviation dates — make assert_lineage_resume fail-closed (blocks AC2/v9 relaunch)",
-      "title": "stabilize lineage gate fail-opens on malformed deviation dates — make assert_lineage_resume fail-closed (blocks AC2/v9 relaunch)",
-      "unresolved_remainder": "requested_outcome_not_independently_verified",
-      "updated_at": "2026-07-10T13:03:51Z",
-      "url": "https://github.com/wordingone/ember/issues/665"
     },
     {
       "author": "wordingone",
@@ -26879,7 +26864,7 @@
     }
   ],
   "mutation_performed": false,
-  "open_issue_count": 244,
+  "open_issue_count": 239,
   "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
   "repository": "wordingone/ember",
   "schema": "ember-01-public-issue-census-v1",
