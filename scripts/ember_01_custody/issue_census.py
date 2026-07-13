@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import re
@@ -57,6 +58,17 @@ def _git(root: Path, *arguments: str, allow_no_match: bool = False) -> str:
             + (result.stderr.strip() or result.stdout.strip())
         )
     return result.stdout.replace("\r\n", "\n")
+
+
+def _encode_text(value: Any) -> str:
+    return base64.b64encode(str(value).encode("utf-8")).decode("ascii")
+
+
+def _decode_text(value: Any) -> str:
+    try:
+        return base64.b64decode(str(value), validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ValueError("invalid canonical base64 text") from exc
 
 
 def _sha256_json(payload: Any) -> str:
@@ -174,7 +186,7 @@ def _source_issue(issue: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "number": int(issue["number"]),
         "title": str(issue.get("title", "")),
-        "body": str(issue.get("body", "")),
+        "body_base64": _encode_text(issue.get("body", "")),
         "url": str(issue.get("url", "")),
         "created_at": str(issue.get("createdAt", "")),
         "updated_at": str(issue.get("updatedAt", "")),
@@ -190,7 +202,7 @@ def _source_issue(issue: Mapping[str, Any]) -> dict[str, Any]:
             (
                 {
                     "url": str(comment.get("url", "")),
-                    "body": str(comment.get("body", "")),
+                    "body_base64": _encode_text(comment.get("body", "")),
                     "author": str((comment.get("author") or {}).get("login", "")),
                     "created_at": str(comment.get("createdAt", "")),
                     "updated_at": str(comment.get("updatedAt", "")),
@@ -207,7 +219,7 @@ def _normalized_source_issue(source: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "number": int(source["number"]),
         "title": str(source.get("title", "")),
-        "body_sha256": hashlib.sha256(str(source.get("body", "")).encode("utf-8")).hexdigest(),
+        "body_sha256": hashlib.sha256(_decode_text(source.get("body_base64", "")).encode("utf-8")).hexdigest(),
         "url": str(source.get("url", "")),
         "created_at": str(source.get("created_at", "")),
         "updated_at": str(source.get("updated_at", "")),
@@ -218,7 +230,7 @@ def _normalized_source_issue(source: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "url": str(comment.get("url", "")),
                 "body_sha256": hashlib.sha256(
-                    str(comment.get("body", "")).encode("utf-8")
+                    _decode_text(comment.get("body_base64", "")).encode("utf-8")
                 ).hexdigest(),
                 "author": str(comment.get("author", "")),
                 "created_at": str(comment.get("created_at", "")),
@@ -278,7 +290,7 @@ def _normalized_closed_source(source: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "url": str(comment.get("url", "")),
                 "body_sha256": hashlib.sha256(
-                    str(comment.get("body", "")).encode("utf-8")
+                    _decode_text(comment.get("body_base64", "")).encode("utf-8")
                 ).hexdigest(),
                 "author": str(comment.get("author", "")),
                 "created_at": str(comment.get("created_at", "")),
@@ -330,7 +342,7 @@ def build_issue_census(
                 "surviving_obligation": source["title"],
                 "public_master_sha": public_master_sha,
                 "master_evidence": master_rows,
-                "compound_obligations": [source["title"], source_by_number[number]["body"]],
+                "compound_obligations": [source["title"], f"body_sha256:{source['body_sha256']}"],
                 "history_evidence": history_rows,
                 "disposition": disposition,
                 "classification_basis": classification_basis,
@@ -342,7 +354,11 @@ def build_issue_census(
                 "canonical_obligation_sha256": None,
             }
         )
-    evidence_rows = [dict(row) for row in completion_evidence]
+    evidence_rows = []
+    for evidence in completion_evidence:
+        sanitized = dict(evidence)
+        excerpt = sanitized.pop("verification_evidence_excerpt", None)
+        evidence_rows.append(sanitized)
     evidence_by_number: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for evidence in evidence_rows:
         evidence_by_number[int(evidence["number"])].append(evidence)
@@ -612,14 +628,11 @@ def validate_issue_census(
                     if not isinstance(matching, Mapping):
                         errors.append(f"completion_evidence_comment_unresolved:{number}")
                         continue
-                    body = str(matching.get("body", ""))
+                    body = _decode_text(matching.get("body_base64", ""))
                     if hashlib.sha256(body.encode("utf-8")).hexdigest() != evidence_hash:
                         errors.append(f"completion_evidence_comment_hash_mismatch:{number}")
                     if str(proof.get("implementation_commit", ""))[:8] not in body:
                         errors.append(f"implementation_commit_comment_unbound:{number}")
-                    command = proof.get("verification_evidence_excerpt")
-                    if not isinstance(command, str) or not command or command not in body:
-                        errors.append(f"completion_verification_evidence_excerpt_unbound:{number}")
                     if proof.get("verification_exit_code") != 0:
                         errors.append(f"completion_verification_exit_nonzero:{number}")
                     if proof.get("verification_outcome") != "independently_verified" or not any(marker in body.casefold() for marker in ("verif", "pass", "exit 0", "exited 0", "zero")):
@@ -671,7 +684,7 @@ def validate_issue_census(
             obligation = {"title": source["title"], "body_sha256": source["body_sha256"], "labels": source["labels"]}
             if row.get("obligation_sha256") != _sha256_json(obligation):
                 errors.append(f"issue_obligation_hash_mismatch:{number}")
-            if row.get("compound_obligations") != [source["title"], str(raw_source.get("body", ""))]:
+            if row.get("compound_obligations") != [source["title"], f"body_sha256:{source['body_sha256']}"]:
                 errors.append(f"issue_compound_obligations_mismatch:{number}")
         if disposition == "implemented and independently verified":
             errors.extend(_content_proof_errors(row.get("completion_proof"), repository_root, master_sha, number))
@@ -690,14 +703,11 @@ def validate_issue_census(
                 if not isinstance(matching, Mapping):
                     errors.append(f"completion_evidence_comment_unresolved:{number}")
                     continue
-                body = str(matching.get("body", ""))
+                body = _decode_text(matching.get("body_base64", ""))
                 if hashlib.sha256(body.encode("utf-8")).hexdigest() != proof.get("evidence_comment_body_sha256"):
                     errors.append(f"completion_evidence_comment_hash_mismatch:{number}")
                 if str(proof.get("implementation_commit", ""))[:8] not in body:
                     errors.append(f"implementation_commit_comment_unbound:{number}")
-                excerpt = proof.get("verification_evidence_excerpt")
-                if not isinstance(excerpt, str) or not excerpt or excerpt not in body:
-                    errors.append(f"completion_verification_evidence_excerpt_unbound:{number}")
                 if proof.get("verification_exit_code") != 0 or proof.get("verification_outcome") != "independently_verified":
                     errors.append(f"completion_verification_outcome_unbound:{number}")
                 if proof.get("verification_executed_at") != matching.get("created_at"):

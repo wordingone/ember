@@ -66,7 +66,9 @@ confidence, public-master blob/history evidence, and unresolved remainder.
 Audited completed closures remain in a separately content-bound closed-outcome
 snapshot instead of disappearing when the live open set changes. Open-state identity,
 closed evidence-comment bytes, independently verified outcomes, and landed
-implementation commits are content-bound and revalidated.
+implementation commits are content-bound and revalidated. Raw issue/comment prose is
+stored as canonical Base64 so exact bytes survive without exposing executable-looking
+operator-local paths; SHA-256 is always recomputed from the decoded UTF-8 bytes.
 
 A closure proposal is invalid unless its commit is an ancestor of the bound
 public master and its artifact, criterion, and verifier SHA-256 resolve through
