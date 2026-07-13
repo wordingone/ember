@@ -924,25 +924,26 @@ def verify_exact_head_coverage(repo_root: Path, coverage: object) -> dict:
         raise ValueError(
             f"exact-head diff exceeds self-referential metadata: {changed}"
         )
+    def git_bytes(revision: str, relative: str) -> bytes:
+        return subprocess.run(
+            ["git", "show", f"{revision}:{relative}"],
+            cwd=repo_root, capture_output=True, check=True,
+        ).stdout
+
     for relative, expected_sha in coverage["metadata_sha256"].items():
-        actual_sha = hashlib.sha256((repo_root / relative).read_bytes()).hexdigest()
+        actual_sha = hashlib.sha256(git_bytes(head, relative)).hexdigest()
         if actual_sha != expected_sha:
             raise ValueError(f"exact-head metadata hash mismatch: {relative}")
 
-    def git_json(relative: str) -> dict:
-        raw = subprocess.run(
-            ["git", "show", f"{coverage['source_commit']}:{relative}"],
-            cwd=repo_root, capture_output=True, check=True,
-        ).stdout
+    def git_json(revision: str, relative: str) -> dict:
+        raw = git_bytes(revision, relative)
         payload = json.loads(raw)
         if not isinstance(payload, dict):
             raise ValueError(f"exact-head metadata is not an object: {relative}")
         return payload
 
     adjudication_path, roots_path, _, scope_path = EXACT_HEAD_METADATA_PATHS
-    adjudication = json.loads(
-        (repo_root / adjudication_path).read_text(encoding="utf-8")
-    )
+    adjudication = git_json(head, adjudication_path)
     if (
         not isinstance(adjudication, dict)
         or adjudication.get("schema")
@@ -950,8 +951,8 @@ def verify_exact_head_coverage(repo_root: Path, coverage: object) -> dict:
         or adjudication.get("source_commit") != coverage["source_commit"]
     ):
         raise ValueError("adjudication metadata is not bound to substantive source")
-    source_roots = git_json(roots_path)
-    current_roots = json.loads((repo_root / roots_path).read_text(encoding="utf-8"))
+    source_roots = git_json(coverage["source_commit"], roots_path)
+    current_roots = git_json(head, roots_path)
     normalized_roots = json.loads(json.dumps(current_roots))
     source_public = next(
         row for row in source_roots["roots"] if row.get("root_id") == "public-master"
@@ -966,8 +967,8 @@ def verify_exact_head_coverage(repo_root: Path, coverage: object) -> dict:
     if normalized_roots != source_roots:
         raise ValueError("root metadata changed beyond the public source commit")
 
-    source_scope = git_json(scope_path)
-    current_scope = json.loads((repo_root / scope_path).read_text(encoding="utf-8"))
+    source_scope = git_json(coverage["source_commit"], scope_path)
+    current_scope = git_json(head, scope_path)
     normalized_scope = json.loads(json.dumps(current_scope))
     if (
         normalized_scope.get("source_commit") != coverage["source_commit"]
