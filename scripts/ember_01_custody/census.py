@@ -325,6 +325,7 @@ def build_root_census(
                     "resolution": "unresolved_preserve_all",
                 }
             )
+    physical_hash_cache: dict[tuple[str, int, int], str] = {}
     for root_spec in sorted(
         specification.get("roots", []), key=lambda row: row["root_id"]
     ):
@@ -620,42 +621,53 @@ def build_root_census(
             }
             try:
                 stat = path.stat()
-                cached = completed_journal.get(artifact_key)
-                if (
-                    cached is not None
-                    and cached.get("size_bytes") == stat.st_size
-                    and cached.get("mtime_ns_non_authoritative") == stat.st_mtime_ns
-                ):
-                    digest = str(cached["sha256"])
+                physical_key = (
+                    str(path.resolve()).replace("\\", "/").casefold(),
+                    stat.st_size,
+                    stat.st_mtime_ns,
+                )
+                physical_digest = physical_hash_cache.get(physical_key)
+                if physical_digest is not None:
+                    digest = physical_digest
                 else:
-                    def progress(record: dict[str, Any]) -> None:
+                    cached = completed_journal.get(artifact_key)
+                    if (
+                        cached is not None
+                        and cached.get("size_bytes") == stat.st_size
+                        and cached.get("mtime_ns_non_authoritative")
+                        == stat.st_mtime_ns
+                    ):
+                        digest = str(cached["sha256"])
+                    else:
+                        def progress(record: dict[str, Any]) -> None:
+                            if journal_path is not None:
+                                append_hash_journal(
+                                    journal_path,
+                                    {
+                                        **record,
+                                        "artifact_key": artifact_key,
+                                        "size_bytes": stat.st_size,
+                                        "mtime_ns_non_authoritative": stat.st_mtime_ns,
+                                    },
+                                )
+
+                        result = hash_file_streaming(
+                            path,
+                            on_progress=(
+                                progress if stat.st_size > 1024 * 1024 else None
+                            ),
+                        )
+                        digest = str(result["sha256"])
                         if journal_path is not None:
                             append_hash_journal(
                                 journal_path,
                                 {
-                                    **record,
+                                    **result,
                                     "artifact_key": artifact_key,
-                                    "size_bytes": stat.st_size,
                                     "mtime_ns_non_authoritative": stat.st_mtime_ns,
                                 },
                             )
-
-                    result = hash_file_streaming(
-                        path,
-                        on_progress=(
-                            progress if stat.st_size > 1024 * 1024 else None
-                        ),
-                    )
-                    digest = str(result["sha256"])
-                    if journal_path is not None:
-                        append_hash_journal(
-                            journal_path,
-                            {
-                                **result,
-                                "artifact_key": artifact_key,
-                                "mtime_ns_non_authoritative": stat.st_mtime_ns,
-                            },
-                        )
+                    physical_hash_cache[physical_key] = digest
             except OSError as exc:
                 access_error = {
                     "exception": type(exc).__name__,
