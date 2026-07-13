@@ -266,6 +266,13 @@ def test_json_schema_is_versioned_and_closed_world() -> None:
     assert set(schema["required"]) == set(valid_manifest())
     assert schema["properties"]["schema"]["const"] == "ember-model-experiment-identity-v1"
     assert "anyOf" in schema["$defs"]["valueOrUnresolved"]
+    assert {"model_id", "experiment_id", "run_id", "checkpoint_id", "disposition", "selected_as_owned_ember"} == set(
+        schema["properties"]["identity"]["required"]
+    )
+    assert "recovery_state" in schema["properties"]["checkpoint"]["required"]
+    assert {"temporary_adapters", "permanent_merges", "dreaming_updates"} <= set(
+        schema["properties"]["mechanisms"]["required"]
+    )
 
 
 def test_json_schema_rejects_untyped_runtime_and_mechanism_objects() -> None:

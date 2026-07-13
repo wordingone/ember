@@ -8,6 +8,8 @@
   "identity": {
     "model_id": "ember-candidate-fixture",
     "experiment_id": "experiment-fixture-001",
+    "run_id": "run-fixture-001",
+    "checkpoint_id": "checkpoint-fixture-001",
     "disposition": "OWNED_CANDIDATE",
     "selected_as_owned_ember": false
   },
@@ -31,7 +33,8 @@
         "checkpoint_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "relationship": "clean_genesis_parent"
       }
-    ]
+    ],
+    "recovery_state": "CLEAN"
   },
   "tokenizer": {
     "id": "owned-tokenizer-fixture",
@@ -110,8 +113,11 @@
   "mechanisms": {
     "experts": [],
     "router": [],
+    "temporary_adapters": [],
+    "permanent_merges": [],
     "memory_substrates": [],
     "world_models": [],
+    "dreaming_updates": [],
     "deletion_objects": []
   },
   "backend": {
