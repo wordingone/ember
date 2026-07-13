@@ -659,7 +659,8 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
         encoding="utf-8",
     )
     outputs = [tmp_path / "first.json", tmp_path / "second.json"]
-    for output in outputs:
+    sidecars = [tmp_path / "first.sidecar.json", tmp_path / "second.sidecar.json"]
+    for output, sidecar in zip(outputs, sidecars):
         result = subprocess.run(
             [
                 sys.executable,
@@ -680,6 +681,8 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
                 f"public-repository={repository}",
                 "--output",
                 str(output),
+                "--sidecar",
+                str(sidecar),
             ],
             cwd=REPO_ROOT,
             text=True,
@@ -687,8 +690,19 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
             check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr
-    assert outputs[0].read_bytes() == outputs[1].read_bytes()
+    full_payloads = [json.loads(path.read_text(encoding="utf-8")) for path in outputs]
+    assert full_payloads[0]["run_identity"]["execution_id"] != full_payloads[1]["run_identity"]["execution_id"]
+    normalized_payloads = [json.loads(path.read_text(encoding="utf-8")) for path in outputs]
+    for row in normalized_payloads:
+        row["run_identity"].pop("execution_id")
+    assert normalized_payloads[0] == normalized_payloads[1]
+    sidecar_payloads = [json.loads(path.read_text(encoding="utf-8")) for path in sidecars]
+    identities = [row["run_identity"] for row in sidecar_payloads]
+    assert identities[0]["canonical_manifest_sha256"] == identities[1]["canonical_manifest_sha256"]
+    assert all(row["transient_contradictions"] == [] for row in identities)
     payload = json.loads(outputs[0].read_text(encoding="utf-8"))
+    assert next(iter(payload)) == "run_identity"
+    assert payload["run_identity"] == identities[0]
     assert payload["benchmark_validation_errors"] == []
     assert payload["issue_validation_errors"] == []
     assert payload["source_commit"] == source_commit

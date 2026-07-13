@@ -89,6 +89,7 @@ From a clean checkout invoke:
       --binding benchmark-root=<path>
       --binding local-execution-tree=<path>
       --output <receipt.json>
+      --sidecar <receipt.sidecar.json>
 
 Supply every required binding; roots with source_root_id use the source
 repository binding. Exit zero means no validation error or contradiction. Exit
@@ -102,5 +103,18 @@ complete public-issue census, validation arrays, source commit, and summary
 counts for roots, artifacts, bytes, duplicates, access errors, contradictions,
 benchmarks, and issues. canonical_manifest_sha256 binds the canonical
 root-census JSON hash, benchmark-registry SHA-256, issue-census SHA-256, and
-source commit. A compact checked receipt binds two full external receipts by
-exact byte hash and never replaces their underlying rows.
+source commit. The bounded sidecar records the giant receipt byte hash, content-bound
+execution ID, canonical identity, summary, validation state, and torn-snapshot contradictions.
+
+After two unchanged runs, bind them without loading the giant JSON bodies:
+
+    python -B scripts/ember_01_custody/compact_receipt.py
+      --run-one-sidecar <run1.sidecar.json>
+      --run-two-sidecar <run2.sidecar.json>
+      --publication-sha <40-hex-sha>
+      --output manifests/ember-01-custody/census-receipt.json
+
+The compact checked receipt requires distinct execution IDs and full-receipt hashes,
+identical canonical identities, an identical streaming raw-byte hash after replacing
+only the execution IDs with a fixed sentinel, zero registry validation errors, and zero
+torn-snapshot contradictions. It never replaces the underlying full rows.

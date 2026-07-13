@@ -9,6 +9,7 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import secrets
 import re
 import subprocess
 from collections import defaultdict
@@ -1135,11 +1136,11 @@ def _parse_bindings(values: Iterable[str]) -> dict[str, Path]:
     return bindings
 
 
-def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
+def _write_json_atomic(path: Path, payload: Mapping[str, Any], *, sort_keys: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        json.dumps(payload, indent=2, sort_keys=sort_keys) + "\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -1156,6 +1157,7 @@ def main() -> int:
     parser.add_argument("--binding", action="append", default=[])
     parser.add_argument("--journal")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--sidecar")
     arguments = parser.parse_args()
     try:
         spec_path = Path(arguments.root_spec)
@@ -1208,6 +1210,17 @@ def main() -> int:
             "issue_census_sha256": sha256_file(issue_path),
             "source_commit": source_commit,
         }
+        transient_codes = {
+            "artifact_mutated_during_hash",
+            "artifact_changed_after_hash",
+            "directory_membership_changed_during_scan",
+            "directory_snapshot_changed_during_scan",
+            "git_snapshot_changed_during_scan",
+        }
+        transient = [
+            row for row in root_census["contradictions"]
+            if row.get("code") in transient_codes
+        ]
         payload = {
             "schema": "ember-01-custody-census-v1",
             "authority": specification.get("authority"),
@@ -1245,7 +1258,33 @@ def main() -> int:
                 "issue_row_count": len(issue_census.get("issues", [])),
             },
         }
-        _write_json_atomic(Path(arguments.output), payload)
+        run_identity = {
+            "authority": specification.get("authority"),
+            "execution_id": secrets.token_hex(16),
+            "source_commit": source_commit,
+            "root_spec_sha256": sha256_file(spec_path),
+            "benchmark_registry_sha256": manifest_binding["benchmark_registry_sha256"],
+            "issue_census_sha256": manifest_binding["issue_census_sha256"],
+            "canonical_root_census_sha256": manifest_binding["root_census_sha256"],
+            "canonical_manifest_sha256": payload["canonical_manifest_sha256"],
+            "summary": payload["summary"],
+            "benchmark_validation_errors": benchmark_errors,
+            "issue_validation_errors": issue_errors,
+            "contradiction_count": len(root_census["contradictions"]),
+            "transient_contradictions": transient,
+        }
+        payload = {"run_identity": run_identity, **payload}
+        output_path = Path(arguments.output)
+        _write_json_atomic(output_path, payload, sort_keys=False)
+        if arguments.sidecar:
+            sidecar = {
+                "schema": "ember-01-custody-run-sidecar-v1",
+                "receipt_name": output_path.name,
+                "receipt_sha256": sha256_file(output_path),
+                "receipt_size_bytes": output_path.stat().st_size,
+                "run_identity": run_identity,
+            }
+            _write_json_atomic(Path(arguments.sidecar), sidecar)
     except Exception as exc:
         print(f"EMBER_01_CUSTODY FAIL: {exc}")
         return 1
