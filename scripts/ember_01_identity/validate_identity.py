@@ -388,7 +388,7 @@ def _pinned_accepted_training_input() -> tuple[dict[str, Any], str] | None:
         return None
     if (
         not isinstance(registry, Mapping)
-        or set(registry) != {"schema", "active", "historical_issue_ids"}
+        or set(registry) != {"schema", "active", "historical"}
         or registry.get("schema")
             != "ember-accepted-training-input-authority-registry-v1"
         or not isinstance(registry.get("active"), Mapping)
@@ -404,10 +404,16 @@ def _pinned_accepted_training_input() -> tuple[dict[str, Any], str] | None:
         or not registry["active"]["issue_url"]
         or not isinstance(registry["active"].get("body_sha256"), str)
         or not SHA256_RE.fullmatch(registry["active"]["body_sha256"])
-        or not isinstance(registry.get("historical_issue_ids"), list)
+        or not isinstance(registry.get("historical"), list)
         or any(
-            not isinstance(issue_id, int) or isinstance(issue_id, bool)
-            for issue_id in registry["historical_issue_ids"]
+            not isinstance(row, Mapping)
+            or set(row) != {"issue_id", "body_sha256", "state"}
+            or not isinstance(row.get("issue_id"), int)
+            or isinstance(row.get("issue_id"), bool)
+            or not isinstance(row.get("body_sha256"), str)
+            or not SHA256_RE.fullmatch(row["body_sha256"])
+            or row.get("state") != "HISTORICAL_REFERENCE"
+            for row in registry["historical"]
         )
     ):
         return None

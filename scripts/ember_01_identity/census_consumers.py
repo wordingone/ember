@@ -654,17 +654,32 @@ def _apply_adjudication_policy(
         row["review_state"] = "POLICY_ADJUDICATED"
         row["review_basis"] = policy["policy_id"]
         row["claim_effect"] = "NO_CREDIT"
-        row["derived_label"] = (
-            "FAIL_CLOSED_CONSERVATIVE_CONSUMER"
-            if row["record_class"] == "CONSERVATIVE_CONSUMER"
-            else "CONTENT_BOUND_IDENTITY_SOURCE"
+        evidence_locator = (
+            f"{row['path']}:{row['line']}:{row['line_sha256']}"
         )
-        row["protocol"] = "STATIC_FILE_INVENTORY_NOT_RUNTIME_VERIFIED"
+        matched = row.get("current_input")
+        row["current_input"] = (
+            str(matched) if matched else f"content_sha256={row['content_sha256']}"
+        )
+        row["derived_label"] = (
+            f"{row['record_class']}:{row['category']}:{row['source_role']}"
+        )
+        row["protocol"] = (
+            "STATIC_EVIDENCE_ONLY_NO_RUNTIME_PROTOCOL_CLAIM:"
+            + evidence_locator
+        )
         row["failure_behavior"] = (
-            "MUST_NOT_AFFECT_ADMITTED_IDENTITY_UNTIL_EXPLICITLY_BOUND"
+            "FAIL_CLOSED_NO_IDENTITY_OR_CLAIM_AUTHORITY:"
+            + evidence_locator
         )
         row["conflict"] = (
-            "CONSERVATIVE_CLASSIFICATION_MAY_OVERAPPROXIMATE_BUT_CANNOT_OMIT"
+            "RUNTIME_ROLE_UNPROVEN_CONSERVATIVE_SUPERSET:"
+            + evidence_locator
+        )
+        row["integration_requirement"] = (
+            f"{row['integration_requirement']}; exact_evidence={evidence_locator}; "
+            "EMBER-01A must bind this exact row or content-hash an explicit "
+            "non-consumer disposition"
         )
 
 
@@ -709,6 +724,55 @@ def summarize_snapshot_adjudication(payload: object, policy: object) -> dict:
     if any(policy[key] != value for key, value in result.items()):
         raise ValueError("snapshot adjudication overlay counts do not replay")
     return result
+
+
+def verify_exact_head_coverage(repo_root: Path, coverage: object) -> dict:
+    if (
+        not isinstance(coverage, dict)
+        or set(coverage) != {
+            "schema", "source_commit", "self_referential_metadata_exclusions"
+        }
+        or coverage.get("schema") != "ember-exact-head-census-coverage-v1"
+        or not re.fullmatch(r"[0-9a-f]{40}", str(coverage.get("source_commit")))
+        or not isinstance(coverage.get("self_referential_metadata_exclusions"), list)
+        or not coverage["self_referential_metadata_exclusions"]
+        or any(
+            not isinstance(path, str)
+            or not path
+            or Path(path).is_absolute()
+            or "\\" in path
+            for path in coverage["self_referential_metadata_exclusions"]
+        )
+    ):
+        raise ValueError("exact-head census coverage is invalid")
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    changed_raw = subprocess.run(
+        [
+            "git", "diff", "--name-only", "-z",
+            f"{coverage['source_commit']}..{head}",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        check=True,
+    ).stdout
+    changed = sorted(path for path in changed_raw.decode("utf-8").split("\0") if path)
+    excluded = sorted(set(coverage["self_referential_metadata_exclusions"]))
+    if changed != excluded:
+        raise ValueError(
+            f"exact-head diff exceeds self-referential metadata: {changed}"
+        )
+    return {
+        "source_commit": coverage["source_commit"],
+        "head_commit": head,
+        "changed_paths": changed,
+        "status": "EXACT_HEAD_COVERED",
+    }
 
 
 def build_census_set(
@@ -962,9 +1026,19 @@ def main() -> int:
     root_group.add_argument("--root-locator-spec", type=Path)
     parser.add_argument("--semantics-manifest", type=Path)
     parser.add_argument("--consumer-scope", type=Path)
+    parser.add_argument("--verify-exact-head-coverage", type=Path)
     parser.add_argument("--replay-profile", choices=("full", "portable"), default="full")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.verify_exact_head_coverage:
+        receipt = json.loads(
+            args.verify_exact_head_coverage.read_text(encoding="utf-8")
+        )
+        result = verify_exact_head_coverage(
+            args.root, receipt.get("exact_head_coverage")
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
     if args.roots_spec or args.root_locator_spec:
         if args.root_locator_spec:
             locator_payload = json.loads(args.root_locator_spec.read_text(encoding="utf-8"))

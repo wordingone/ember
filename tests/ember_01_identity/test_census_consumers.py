@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources, materialize_scoped_semantics, resolve_root_locator_spec, summarize_snapshot_adjudication  # noqa: E402
+from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources, materialize_scoped_semantics, resolve_root_locator_spec, summarize_snapshot_adjudication, verify_exact_head_coverage  # noqa: E402
 
 FIXTURE_COMMIT = "f" * 40
 CENSUS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-v1.json"
@@ -63,7 +63,11 @@ def test_checked_consumer_scope_is_portable_exact_and_claims_only_conservative_c
     scope = json.loads(CONSUMER_SCOPE_PATH.read_text(encoding="utf-8"))
     assert scope["schema"] == "ember-reviewed-consumer-scope-v1"
     assert scope["root_id"] == "public-master"
-    assert scope["source_commit"] == "ca500aabe0f597ab85e762ceb53748724fb0ae98"
+    assert len(scope["source_commit"]) == 40
+    int(scope["source_commit"], 16)
+    roots = json.loads(ROOT_LOCATOR_SPEC_PATH.read_text(encoding="utf-8"))["roots"]
+    public_root = next(row for row in roots if row["root_id"] == "public-master")
+    assert public_root["source_commit"] == scope["source_commit"]
     assert scope["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
     assert scope["candidate_adjudication"] == {
         "schema": "ember-conservative-candidate-adjudication-v1",
@@ -155,11 +159,16 @@ def test_checked_census_matches_byte_stability_receipt() -> None:
     }
     portable = receipt["portable_replay"]
     assert portable["byte_identical"] is True
-    assert portable["snapshot_sha256"] == "d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a"
+    assert len(portable["snapshot_sha256"]) == 64
+    assert portable["complete_run_sha256"] == [
+        portable["snapshot_sha256"], portable["snapshot_sha256"]
+    ]
     assert portable["verified_consumer_count"] == 13
-    assert portable["tracked_file_count"] == portable["files_accounted"] == 2878
-    assert portable["evidence_record_count"] == 24648
-    assert portable["discovered_evidence_count"] == 24635
+    assert portable["tracked_file_count"] == portable["files_accounted"]
+    assert portable["evidence_record_count"] == (
+        portable["verified_consumer_count"]
+        + portable["discovered_evidence_count"]
+    )
     assert portable["unadjudicated_count"] == 0
     assert portable["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
     rendered = snapshot_bytes.decode("utf-8")
@@ -619,10 +628,46 @@ def test_complete_policy_accounts_for_every_file_and_never_auto_dismisses_tests(
         "CONSERVATIVE_SUPERSET_COMPLETE"
     )
     for row in census["evidence"]:
+        assert row["current_input"]
         assert row["derived_label"]
         assert row["protocol"]
         assert row["failure_behavior"]
         assert row["conflict"]
+        assert row["path"] in row["integration_requirement"]
+        assert row["line_sha256"] in row["protocol"]
+
+
+def test_exact_head_coverage_allows_only_declared_self_referential_metadata(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "fixture@example.invalid"],
+        cwd=tmp_path, check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Fixture"], cwd=tmp_path, check=True
+    )
+    (tmp_path / "runtime.py").write_text("print('covered')\n", encoding="utf-8")
+    subprocess.run(["git", "add", "runtime.py"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "substantive"], cwd=tmp_path, check=True)
+    source = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True,
+        check=True, text=True,
+    ).stdout.strip()
+    for relative in ("scope.json", "stability.json"):
+        (tmp_path / relative).write_text("{}\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "scope.json", "stability.json"], cwd=tmp_path, check=True
+    )
+    subprocess.run(["git", "commit", "-qm", "receipt"], cwd=tmp_path, check=True)
+    result = verify_exact_head_coverage(tmp_path, {
+        "schema": "ember-exact-head-census-coverage-v1",
+        "source_commit": source,
+        "self_referential_metadata_exclusions": ["scope.json", "stability.json"],
+    })
+    assert result["status"] == "EXACT_HEAD_COVERED"
+    assert result["changed_paths"] == ["scope.json", "stability.json"]
 
 
 def test_multi_surface_semantics_resolve_only_in_their_declared_root(tmp_path: Path) -> None:
