@@ -7,7 +7,7 @@
   "schema": "ember-census-root-locators-v1",
   "portable_root_id": "public-master",
   "roots": [
-    {"root_id":"public-master","surface":"public","mode":"git","source_commit":"57c33bf36289bd80ae9deeb4d271e53bbe50cff6","locator":{"kind":"repo_root"},"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"public-master","surface":"public","mode":"git","source_commit":"0bcfa148c8e5af09f7abe3e550a840c998a3e218","locator":{"kind":"repo_root"},"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
     {"root_id":"private-backup-default","surface":"private","mode":"git","source_commit":"054d6e8d94ea218c3ad3b177df790602fe075b01","locator":{"kind":"env","env":"EMBER_CENSUS_PRIVATE_BACKUP_DEFAULT"},"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
     {"root_id":"identity-contract-candidate","surface":"live-local","mode":"filesystem","locator":{"kind":"repo_root"},"include_prefixes":["docs/ember-01-identity/","manifests/ember-01-identity/","scripts/ember_01_identity/","tests/ember_01_identity/"],"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
     {"root_id":"live-execution-tree","surface":"live-local","mode":"filesystem","locator":{"kind":"env","env":"EMBER_CENSUS_LIVE_EXECUTION_ROOT"},"include_prefixes":["GOAL.md","README.md","STATE.md","baseline/","configs/","docs/","manifests/","scripts/","tools/ember-cli/package.json","tools/ember-cli/models.json","tools/ember-cli/scripts/","tools/ember-cli/src/"],"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
