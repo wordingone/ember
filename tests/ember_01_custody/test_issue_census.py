@@ -3,6 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import json
@@ -159,11 +160,13 @@ def test_checked_in_public_issue_census_covers_every_snapshot_row() -> None:
     assert all(row["public_master_sha"] == payload["public_master_sha"] for row in payload["issues"])
     rows = {row["number"]: row for row in payload["issues"]}
     first_source = payload["issue_source_snapshot"][0]
-    assert isinstance(first_source["body"], str)
+    decoded_body = base64.b64decode(first_source["body_base64"], validate=True).decode("utf-8")
+    assert isinstance(decoded_body, str)
     assert rows[first_source["number"]]["compound_obligations"] == [
         first_source["title"],
-        first_source["body"],
+        f"body_sha256:{rows[first_source['number']]['body_sha256']}",
     ]
+    assert "B:/M/" not in json.dumps(payload) and "B:\\M\\" not in json.dumps(payload)
     assert payload["open_issue_count"] == 253
     assert {
         row["number"]
@@ -288,7 +291,8 @@ def test_generator_emits_content_bound_closed_outcome(tmp_path: Path) -> None:
     outcome = payload["closed_outcomes"][0]
     assert payload["closed_issue_source_snapshot"][0]["state"] == "CLOSED"
     assert payload["closed_issue_source_snapshot"][0]["state_reason"] == "COMPLETED"
-    assert outcome["author"] == "operator" and outcome["created_at"] == closed["createdAt"] and outcome["completion_proof"] == [proof]
+    assert outcome["author"] == "operator" and outcome["created_at"] == closed["createdAt"]
+    assert "verification_evidence_excerpt" not in outcome["completion_proof"][0]
     assert validate_issue_census(payload, repository_root=root) == []
     limited_proof = {**proof, "closed_disposition": "unresolved", "unresolved_remainder": "reported execution lacks a retained decisive replay receipt"}
     limited = build_issue_census(root, head, [issue(7, "Open")], closed_issues=[closed], completion_evidence=[limited_proof])
