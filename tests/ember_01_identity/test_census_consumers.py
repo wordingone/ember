@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources, materialize_scoped_semantics, resolve_root_locator_spec  # noqa: E402
+from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources, materialize_scoped_semantics, resolve_root_locator_spec, summarize_snapshot_adjudication  # noqa: E402
 
 FIXTURE_COMMIT = "f" * 40
 CENSUS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-v1.json"
@@ -59,12 +59,24 @@ def test_checked_root_locator_spec_is_path_safe_and_complete() -> None:
     assert all(set(row["locator"]) <= {"kind", "env"} for row in roots)
 
 
-def test_checked_consumer_scope_is_portable_exact_and_does_not_claim_global_completeness() -> None:
+def test_checked_consumer_scope_is_portable_exact_and_claims_only_conservative_completeness() -> None:
     scope = json.loads(CONSUMER_SCOPE_PATH.read_text(encoding="utf-8"))
     assert scope["schema"] == "ember-reviewed-consumer-scope-v1"
     assert scope["root_id"] == "public-master"
-    assert scope["source_commit"] == "1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138"
-    assert scope["global_consumer_completeness"] == "NOT_CLAIMED"
+    assert scope["source_commit"] == "ca500aabe0f597ab85e762ceb53748724fb0ae98"
+    assert scope["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
+    assert scope["candidate_adjudication"] == {
+        "schema": "ember-conservative-candidate-adjudication-v1",
+        "policy_id": "fail-closed-static-superset-v1",
+        "root_id": "public-master",
+        "source_commit": scope["source_commit"],
+        "roles": {
+            "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
+            "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+            "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+        },
+    }
     ids = [row["consumer_id"] for row in scope["consumers"]]
     assert len(ids) == len(set(ids)) == 13
     assert {row["category"] for row in scope["consumers"]} == {
@@ -130,12 +142,25 @@ def test_checked_census_matches_byte_stability_receipt() -> None:
     assert receipt["evidence_record_count"] == len(snapshot["evidence"])
     assert receipt["absolute_host_paths_published"] is False
     assert receipt["artifact_class"] == "ENVIRONMENTAL_DISCOVERY"
-    assert receipt["global_consumer_completeness"] == "NOT_CLAIMED"
+    assert receipt["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
+    assert summarize_snapshot_adjudication(
+        snapshot, receipt["environmental_adjudication"]
+    ) == {
+        "adjudication_counts": {
+            "CONSERVATIVE_CONSUMER": 45607,
+            "REVIEWED_IDENTITY_SOURCE": 7302,
+            "REVIEWED_NON_CONSUMER": 12280,
+        },
+        "unadjudicated_count": 0,
+        "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+    }
     portable = receipt["portable_replay"]
     assert portable["byte_identical"] is True
-    assert portable["snapshot_sha256"] == "9abb441667f68ab1a2f9fcb8c855c346c42d66348077a1b4292964a9904e2cdf"
+    assert portable["snapshot_sha256"] == "a3d0afc545e377a7126468e9937fc72da4afb6f39d2bd951813fedb4f0009f93"
     assert portable["verified_consumer_count"] == 13
-    assert portable["candidate_evidence_count"] == 23522
+    assert portable["discovered_evidence_count"] == 23677
+    assert portable["unadjudicated_count"] == 0
+    assert portable["global_consumer_completeness"] == "CONSERVATIVE_SUPERSET_COMPLETE"
     rendered = snapshot_bytes.decode("utf-8")
     for drive_code in range(ord("A"), ord("Z") + 1):
         assert chr(drive_code) + ":" + chr(92) * 2 not in rendered

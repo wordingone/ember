@@ -3,9 +3,21 @@
   "schema": "ember-reviewed-consumer-scope-v1",
   "scope_id": "ember-load-bearing-consumers-v1",
   "root_id": "public-master",
-  "source_commit": "1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138",
+  "source_commit": "ca500aabe0f597ab85e762ceb53748724fb0ae98",
   "claim_boundary": "reviewed_load_bearing_identity_boundaries",
-  "global_consumer_completeness": "NOT_CLAIMED",
+  "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+  "candidate_adjudication": {
+    "schema": "ember-conservative-candidate-adjudication-v1",
+    "policy_id": "fail-closed-static-superset-v1",
+    "root_id": "public-master",
+    "source_commit": "ca500aabe0f597ab85e762ceb53748724fb0ae98",
+    "roles": {
+      "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
+      "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+      "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+      "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER"
+    }
+  },
   "consumers": [
     {"consumer_id":"owned-architecture","path":"scripts/serve_cbase_openai.py","category":"architecture_config","evidence_sha256":"efea23bb32b21b21e769cdf4a2098ecd916c26567abd8b77d3ef335dd0d32d4c"},
     {"consumer_id":"training-state","path":"scripts/timeshare_pretrain.py","category":"training_optimizer","evidence_sha256":"e6457d9d135b51bf2322f066123c9e92639d7841a337651a71c98038decd5173"},
