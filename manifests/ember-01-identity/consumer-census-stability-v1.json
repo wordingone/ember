@@ -41,37 +41,53 @@
   "portable_replay": {
     "profile": "portable",
     "root_id": "public-master",
-    "source_commit": "a94ba51f92ab16df50d210c4f64a2bd11e2a954b",
-    "snapshot_bytes": 44953816,
-    "snapshot_sha256": "3baa9c16f29078d2d4f4d5309376def6bcc16bef3945165adf91959603c51d02",
-    "canonical_subject_sha256": "1b8e3cf355ed364fc9cff162eee7bd03477086f8398657179c2270c4d2ad469d",
+    "source_commit": "57c33bf36289bd80ae9deeb4d271e53bbe50cff6",
+    "snapshot_bytes": 42055865,
+    "snapshot_sha256": "4240a74bea1ff7925737a5c82aecda9db33e2f080d348cd4ce74ef1a9c59b614",
+    "canonical_subject_sha256": "ab8b1d53273863bbcdb85b14e591d3ced5c393b2de32028f557fc79b1b74ef66",
     "complete_run_sha256": [
-      "3baa9c16f29078d2d4f4d5309376def6bcc16bef3945165adf91959603c51d02",
-      "3baa9c16f29078d2d4f4d5309376def6bcc16bef3945165adf91959603c51d02"
+      "4240a74bea1ff7925737a5c82aecda9db33e2f080d348cd4ce74ef1a9c59b614",
+      "4240a74bea1ff7925737a5c82aecda9db33e2f080d348cd4ce74ef1a9c59b614"
     ],
     "byte_identical": true,
-    "tracked_file_count": 2893,
-    "files_accounted": 2893,
-    "evidence_record_count": 25297,
-    "discovered_evidence_count": 25284,
+    "tracked_file_count": 2897,
+    "files_accounted": 2897,
+    "evidence_record_count": 25347,
+    "discovered_evidence_count": 25334,
     "verified_consumer_count": 13,
     "adjudication_counts": {
-      "CONSERVATIVE_CONSUMER": 22422,
-      "REVIEWED_IDENTITY_SOURCE": 2862
+      "CONSERVATIVE_CONSUMER": 95,
+      "REVIEWED_CONSUMER": 14191,
+      "REVIEWED_IDENTITY_SOURCE": 2862,
+      "REVIEWED_NON_CONSUMER": 8186,
+      "VERIFIED_CONSUMER": 13
     },
     "unadjudicated_count": 0,
     "reviewed_scope_status": "REVIEWED_SCOPE_COMPLETE",
-    "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+    "global_consumer_completeness": "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+    "substantive_adjudication": {
+      "executable_evidence_rows": 22390,
+      "reviewed_consumer_rows": 14204,
+      "reviewed_nonconsumer_rows": 8186,
+      "unresolved_executable_rows": 0,
+      "status": "REVIEWED_EXECUTABLE_CENSUS_COMPLETE"
+    },
     "host_environment_required": false
   },
   "exact_head_coverage": {
     "schema": "ember-exact-head-census-coverage-v1",
-    "source_commit": "a94ba51f92ab16df50d210c4f64a2bd11e2a954b",
+    "source_commit": "57c33bf36289bd80ae9deeb4d271e53bbe50cff6",
     "self_referential_metadata_exclusions": [
+      "manifests/ember-01-identity/consumer-adjudication-v1.json",
       "manifests/ember-01-identity/consumer-census-roots-v1.json",
       "manifests/ember-01-identity/consumer-census-stability-v1.json",
       "manifests/ember-01-identity/consumer-scope-v1.json"
-    ]
+    ],
+    "metadata_sha256": {
+      "manifests/ember-01-identity/consumer-adjudication-v1.json": "d2c6384c5c1505614be2a37c0a1fe5491ee559c4cbe4d3a7362dfdf9ac71560d",
+      "manifests/ember-01-identity/consumer-census-roots-v1.json": "67ed804aeff09aca5dd7e509131dc0d97a542424f5f6de643a383f9615e51bab",
+      "manifests/ember-01-identity/consumer-scope-v1.json": "ef0c5f880e2538c23e778c48459df38ec76684171c297d7bbdacb529105f57a0"
+    }
   },
   "notes": [
     "Git surfaces were read from exact committed objects, independent of index or checkout state.",
@@ -79,7 +95,8 @@
     "Every tracked file is content-bound and fail-closed: executable, test, and opaque files remain conservative integration consumers; documents and data remain identity sources.",
     "The current EMBER-01C exclusive namespace is covered as a separate filesystem-bound candidate surface.",
     "The eight-root snapshot is supplemental environment-bound discovery, not clean-clone completion authority.",
-    "Portable replay covers every tracked file at the substantive source commit; exact-head verification permits only the three declared self-referential metadata paths afterward.",
+    "Portable replay covers every tracked file at the substantive source commit; exact-head verification permits only the four fixed, hash-bound receipt-metadata paths afterward.",
+    "Every executable evidence row is line/content-bound to a reviewed consumer, reviewed nonconsumer, or exact hand-reviewed consumer; opaque non-code artifacts remain conservative and earn no credit.",
     "The configured local private-backup root is explicitly MISSING; private backup evidence is resolved through the verified private-backup default clone at commit 054d6e8d94ea218c3ad3b177df790602fe075b01."
   ]
 }
