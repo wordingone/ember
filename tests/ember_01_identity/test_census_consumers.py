@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,12 +16,14 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources  # noqa: E402
+from census_consumers import build_census, build_census_set, build_git_census, discover_filesystem_sources, materialize_scoped_semantics, resolve_root_locator_spec  # noqa: E402
 
 FIXTURE_COMMIT = "f" * 40
 CENSUS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-v1.json"
 STABILITY_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-stability-v1.json"
 SEMANTICS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-semantics-v1.json"
+ROOT_LOCATOR_SPEC_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-roots-v1.json"
+CONSUMER_SCOPE_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-scope-v1.json"
 
 
 def test_checked_semantics_manifest_covers_every_identity_category_without_placeholders() -> None:
@@ -39,6 +42,80 @@ def test_checked_semantics_manifest_covers_every_identity_category_without_place
                for row in rows for value in row.values())
 
 
+def test_checked_root_locator_spec_is_path_safe_and_complete() -> None:
+    payload = json.loads(ROOT_LOCATOR_SPEC_PATH.read_text(encoding="utf-8"))
+    assert payload["schema"] == "ember-census-root-locators-v1"
+    assert payload["portable_root_id"] == "public-master"
+    roots = payload["roots"]
+    assert len(roots) == 8
+    assert {row["root_id"] for row in roots} == {
+        "public-master", "private-backup-default", "identity-contract-candidate",
+        "live-execution-tree", "live-benchmark-assets",
+        "coordination-evidence-primary", "coordination-evidence-secondary",
+        "configured-private-backup-root",
+    }
+    rendered = json.dumps(payload)
+    assert not any(f"{chr(code)}:\\\\" in rendered for code in range(ord("A"), ord("Z") + 1))
+    assert all(set(row["locator"]) <= {"kind", "env"} for row in roots)
+
+
+def test_checked_consumer_scope_is_portable_exact_and_does_not_claim_global_completeness() -> None:
+    scope = json.loads(CONSUMER_SCOPE_PATH.read_text(encoding="utf-8"))
+    assert scope["schema"] == "ember-reviewed-consumer-scope-v1"
+    assert scope["root_id"] == "public-master"
+    assert scope["source_commit"] == "1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138"
+    assert scope["global_consumer_completeness"] == "NOT_CLAIMED"
+    ids = [row["consumer_id"] for row in scope["consumers"]]
+    assert len(ids) == len(set(ids)) == 13
+    assert {row["category"] for row in scope["consumers"]} == {
+        "architecture_config", "training_optimizer", "checkpoint_save_load",
+        "serving_runtime", "cli_operator_surface", "evaluation_benchmark",
+        "publication_report", "borrowed_reference", "process_registry_watchdog",
+        "parameter_identity", "tokenizer_data_lineage", "mechanism_identity",
+        "receipt_identity",
+    }
+
+
+def test_scoped_semantics_reanchor_reviewed_consumers_to_portable_root() -> None:
+    scope = json.loads(CONSUMER_SCOPE_PATH.read_text(encoding="utf-8"))
+    semantics = json.loads(SEMANTICS_PATH.read_text(encoding="utf-8"))
+    rows = materialize_scoped_semantics(scope, semantics)
+    assert {row["consumer_id"] for row in rows} == {
+        row["consumer_id"] for row in scope["consumers"]
+    }
+    assert all(row["root_id"] == "public-master" for row in rows)
+
+
+def test_root_locator_spec_resolves_repo_env_and_missing_without_serializing_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    external = tmp_path / "external"
+    external.mkdir()
+    monkeypatch.setenv("EMBER_TEST_EXTERNAL", str(external))
+    payload = {
+        "schema": "ember-census-root-locators-v1",
+        "portable_root_id": "repo",
+        "roots": [
+            {"root_id":"repo","surface":"public","mode":"filesystem","locator":{"kind":"repo_root"}},
+            {"root_id":"env","surface":"private","mode":"filesystem","locator":{"kind":"env","env":"EMBER_TEST_EXTERNAL"}},
+            {"root_id":"missing","surface":"private","mode":"filesystem","locator":{"kind":"missing"}},
+        ],
+    }
+    resolved = resolve_root_locator_spec(payload, repo_root=tmp_path)
+    assert [Path(row["root"]) for row in resolved[:2]] == [tmp_path, external]
+    assert not Path(resolved[2]["root"]).exists()
+    assert all("locator" not in row for row in resolved)
+
+
+def test_portable_root_profile_requires_no_host_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = json.loads(ROOT_LOCATOR_SPEC_PATH.read_text(encoding="utf-8"))
+    for key in list(os.environ):
+        if key.startswith("EMBER_CENSUS_"):
+            monkeypatch.delenv(key, raising=False)
+    resolved = resolve_root_locator_spec(
+        payload, repo_root=tmp_path, replay_profile="portable"
+    )
+    assert [row["root_id"] for row in resolved] == ["public-master"]
+
+
 def test_checked_census_matches_byte_stability_receipt() -> None:
     snapshot_bytes = CENSUS_PATH.read_bytes()
     snapshot = json.loads(snapshot_bytes)
@@ -52,6 +129,13 @@ def test_checked_census_matches_byte_stability_receipt() -> None:
     assert receipt["root_count"] == len(snapshot["roots"])
     assert receipt["evidence_record_count"] == len(snapshot["evidence"])
     assert receipt["absolute_host_paths_published"] is False
+    assert receipt["artifact_class"] == "ENVIRONMENTAL_DISCOVERY"
+    assert receipt["global_consumer_completeness"] == "NOT_CLAIMED"
+    portable = receipt["portable_replay"]
+    assert portable["byte_identical"] is True
+    assert portable["snapshot_sha256"] == "9abb441667f68ab1a2f9fcb8c855c346c42d66348077a1b4292964a9904e2cdf"
+    assert portable["verified_consumer_count"] == 13
+    assert portable["candidate_evidence_count"] == 23522
     rendered = snapshot_bytes.decode("utf-8")
     for drive_code in range(ord("A"), ord("Z") + 1):
         assert chr(drive_code) + ":" + chr(92) * 2 not in rendered
@@ -93,11 +177,7 @@ def test_census_is_deterministic_and_evidence_linked(tmp_path: Path) -> None:
         and row["root_id"] == "public-master"
         and row["surface"] == "public"
         and row["current_input"]
-        and row["derived_label"]
-        and row["protocol"]
-        and row["failure_behavior"]
         and row["claim_effect"]
-        and row["conflict"]
         and row["integration_requirement"]
         for row in first["evidence"]
     )
@@ -161,8 +241,13 @@ def test_same_line_can_expose_multiple_identity_roles(tmp_path: Path) -> None:
         "cli_operator_surface",
         "borrowed_reference",
     }
-    assert all(row["failure_behavior"] == "UNRESOLVED_STATIC_ANALYSIS" for row in rows)
-    assert all(row["claim_effect"] == "POTENTIAL_ONLY_NO_CREDIT" for row in rows)
+    assert all(row["review_state"] == "UNADJUDICATED" for row in rows)
+    assert all(row["claim_effect"] == "NO_CREDIT" for row in rows)
+    assert all(
+        field not in row
+        for row in rows
+        for field in ("derived_label", "protocol", "failure_behavior", "conflict")
+    )
 
 
 def test_exact_semantics_override_is_required_for_verified_consumer_record(tmp_path: Path) -> None:

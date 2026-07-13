@@ -152,11 +152,8 @@ def _semantic_fields(
             "CANDIDATE_EXECUTABLE_MATCH" if line_scoped else "CANDIDATE_EVIDENCE_MATCH"
         ),
         "current_input": ",".join(matched_terms),
-        "derived_label": "UNRESOLVED_STATIC_MATCH",
-        "protocol": "UNRESOLVED_STATIC_ANALYSIS",
-        "failure_behavior": "UNRESOLVED_STATIC_ANALYSIS",
-        "claim_effect": "POTENTIAL_ONLY_NO_CREDIT",
-        "conflict": "STATIC_MATCH_MAY_BE_COMMENT_TEST_OR_NON_AUTHORITY",
+        "review_state": "UNADJUDICATED",
+        "claim_effect": "NO_CREDIT",
         "integration_requirement": INTEGRATION_REQUIREMENTS[category],
     }
 
@@ -349,16 +346,23 @@ def build_census(
     semantics_index: dict[tuple[str, str, str, str], dict[str, str]] = {}
     matched_semantics: set[tuple[str, str, str, str]] = set()
     for row in consumer_semantics:
-        if not isinstance(row, dict) or set(row) != {
+        required_semantic_keys = {
             "root_id", "path", "category", "evidence_sha256", *SEMANTIC_FIELDS
-        }:
+        }
+        if (
+            not isinstance(row, dict)
+            or set(row) not in (required_semantic_keys, required_semantic_keys | {"consumer_id"})
+        ):
             raise ValueError("consumer semantics rows use a closed schema")
         if not re.fullmatch(r"[0-9a-f]{64}", row["evidence_sha256"]):
             raise ValueError("consumer semantics evidence_sha256 must be exact")
         key = (row["root_id"], row["path"], row["category"], row["evidence_sha256"])
         if key in semantics_index:
             raise ValueError(f"duplicate consumer semantics row: {key}")
-        semantics_index[key] = {field: row[field] for field in SEMANTIC_FIELDS}
+        semantics_index[key] = {
+            **({"consumer_id": row["consumer_id"]} if "consumer_id" in row else {}),
+            **{field: row[field] for field in SEMANTIC_FIELDS},
+        }
 
     for raw_rel in candidates:
         rel = raw_rel.replace("\\", "/")
@@ -616,15 +620,130 @@ def build_census_set(
     }
 
 
+def resolve_root_locator_spec(
+    payload: object, *, repo_root: Path, replay_profile: str | None = None
+) -> list[dict]:
+    """Resolve a checked-in logical locator spec without publishing host paths."""
+    if not isinstance(payload, dict) or set(payload) not in (
+        {"schema", "portable_root_id", "roots"},
+        {"authority", "schema", "portable_root_id", "roots"}
+    ):
+        raise ValueError("root locator spec uses a closed top-level schema")
+    if payload.get("schema") != "ember-census-root-locators-v1":
+        raise ValueError("unsupported root locator spec schema")
+    roots = payload.get("roots")
+    if not isinstance(roots, list) or not roots:
+        raise ValueError("root locator spec requires root rows")
+    if replay_profile not in (None, "full", "portable"):
+        raise ValueError("unsupported replay profile")
+    if replay_profile == "portable":
+        roots = [
+            row for row in roots
+            if isinstance(row, dict) and row.get("root_id") == payload.get("portable_root_id")
+        ]
+        if len(roots) != 1:
+            raise ValueError("portable replay root must resolve exactly once")
+    resolved: list[dict] = []
+    for raw in roots:
+        if not isinstance(raw, dict) or not isinstance(raw.get("locator"), dict):
+            raise ValueError("root locator row is invalid")
+        row = dict(raw)
+        locator = row.pop("locator")
+        redactions_env = row.pop("path_redactions_env", None)
+        if set(locator) == {"kind"} and locator.get("kind") == "repo_root":
+            root = repo_root.resolve()
+        elif set(locator) == {"kind", "env"} and locator.get("kind") == "env":
+            name = locator.get("env")
+            value = os.environ.get(name, "") if isinstance(name, str) else ""
+            if not value:
+                raise ValueError(f"required census root environment variable is absent: {name}")
+            root = Path(value).resolve()
+        elif set(locator) == {"kind"} and locator.get("kind") == "missing":
+            root = repo_root.resolve() / "__configured_missing_root__"
+            if root.exists():
+                raise ValueError("configured missing-root sentinel unexpectedly exists")
+        else:
+            raise ValueError("unsupported root locator")
+        if redactions_env is not None:
+            if not isinstance(redactions_env, str) or not redactions_env:
+                raise ValueError("path_redactions_env must name an environment variable")
+            row["path_redactions"] = [
+                item.strip() for item in os.environ.get(redactions_env, "").split(",")
+                if item.strip()
+            ]
+        row["root"] = root
+        resolved.append(row)
+    return resolved
+
+
+def materialize_scoped_semantics(scope: object, semantics: object) -> list[dict[str, str]]:
+    if not isinstance(scope, dict) or set(scope) != {
+        "authority", "schema", "scope_id", "root_id", "source_commit",
+        "claim_boundary", "global_consumer_completeness", "consumers",
+    }:
+        raise ValueError("consumer scope uses a closed schema")
+    if (
+        scope.get("schema") != "ember-reviewed-consumer-scope-v1"
+        or scope.get("root_id") != "public-master"
+        or not re.fullmatch(r"[0-9a-f]{40}", str(scope.get("source_commit")))
+        or scope.get("global_consumer_completeness") != "NOT_CLAIMED"
+        or not isinstance(scope.get("consumers"), list)
+        or not isinstance(semantics, list)
+    ):
+        raise ValueError("consumer scope is invalid")
+    semantic_index: dict[tuple[str, str, str], dict[str, str]] = {}
+    for row in semantics:
+        if not isinstance(row, dict):
+            raise ValueError("semantics row is invalid")
+        key = (str(row.get("path")), str(row.get("category")), str(row.get("evidence_sha256")))
+        if key in semantic_index:
+            raise ValueError(f"ambiguous semantics selector: {key}")
+        semantic_index[key] = row
+    resolved: list[dict[str, str]] = []
+    consumer_ids: set[str] = set()
+    for selector in scope["consumers"]:
+        if not isinstance(selector, dict) or set(selector) != {
+            "consumer_id", "path", "category", "evidence_sha256"
+        }:
+            raise ValueError("consumer selector is invalid")
+        consumer_id = selector["consumer_id"]
+        if not isinstance(consumer_id, str) or not consumer_id or consumer_id in consumer_ids:
+            raise ValueError("consumer IDs must be unique nonempty strings")
+        consumer_ids.add(consumer_id)
+        key = (selector["path"], selector["category"], selector["evidence_sha256"])
+        source = semantic_index.get(key)
+        if source is None:
+            raise ValueError(f"consumer scope selector has no reviewed semantics: {key}")
+        resolved.append({
+            "consumer_id": consumer_id,
+            "root_id": scope["root_id"],
+            "path": selector["path"],
+            "category": selector["category"],
+            "evidence_sha256": selector["evidence_sha256"],
+            **{field: source[field] for field in SEMANTIC_FIELDS},
+        })
+    return resolved
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
-    parser.add_argument("--roots-spec", type=Path)
+    root_group = parser.add_mutually_exclusive_group()
+    root_group.add_argument("--roots-spec", type=Path)
+    root_group.add_argument("--root-locator-spec", type=Path)
     parser.add_argument("--semantics-manifest", type=Path)
+    parser.add_argument("--consumer-scope", type=Path)
+    parser.add_argument("--replay-profile", choices=("full", "portable"), default="full")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    if args.roots_spec:
-        raw_specs = json.loads(args.roots_spec.read_text(encoding="utf-8"))
+    if args.roots_spec or args.root_locator_spec:
+        if args.root_locator_spec:
+            locator_payload = json.loads(args.root_locator_spec.read_text(encoding="utf-8"))
+            raw_specs = resolve_root_locator_spec(
+                locator_payload, repo_root=args.root, replay_profile=args.replay_profile
+            )
+        else:
+            raw_specs = json.loads(args.roots_spec.read_text(encoding="utf-8"))
         if not isinstance(raw_specs, list) or not all(isinstance(item, dict) for item in raw_specs):
             raise ValueError("roots spec must be a list of root objects")
         semantics = (
@@ -633,7 +752,32 @@ def main() -> int:
         )
         if not isinstance(semantics, list):
             raise ValueError("semantics manifest must be a list")
+        scope = (
+            json.loads(args.consumer_scope.read_text(encoding="utf-8"))
+            if args.consumer_scope else None
+        )
+        if scope is not None:
+            semantics = materialize_scoped_semantics(scope, semantics)
         payload = build_census_set(raw_specs, consumer_semantics=semantics)
+        if scope is not None:
+            resolved_ids = sorted(
+                row["consumer_id"] for row in payload["evidence"]
+                if row.get("record_class") == "VERIFIED_CONSUMER"
+            )
+            required_ids = sorted(row["consumer_id"] for row in scope["consumers"])
+            if resolved_ids != required_ids:
+                raise ValueError("reviewed consumer scope did not resolve exactly")
+            payload["verified_consumer_scope"] = {
+                "scope_id": scope["scope_id"],
+                "root_id": scope["root_id"],
+                "source_commit": scope["source_commit"],
+                "required_consumer_ids": required_ids,
+                "resolved_consumer_ids": resolved_ids,
+                "status": "REVIEWED_SCOPE_COMPLETE",
+            }
+            payload["global_consumer_completeness"] = scope[
+                "global_consumer_completeness"
+            ]
     else:
         payload = build_census(args.root)
     rendered = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"

@@ -1,0 +1,19 @@
+{
+  "authority": {
+    "goal_id": "EMBER-01",
+    "workstream_id": "EMBER-01C",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema": "ember-census-root-locators-v1",
+  "portable_root_id": "public-master",
+  "roots": [
+    {"root_id":"public-master","surface":"public","mode":"git","source_commit":"1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138","locator":{"kind":"repo_root"},"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"private-backup-default","surface":"private","mode":"git","source_commit":"054d6e8d94ea218c3ad3b177df790602fe075b01","locator":{"kind":"env","env":"EMBER_CENSUS_PRIVATE_BACKUP_DEFAULT"},"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"identity-contract-candidate","surface":"live-local","mode":"filesystem","locator":{"kind":"repo_root"},"include_prefixes":["docs/ember-01-identity/","manifests/ember-01-identity/","scripts/ember_01_identity/","tests/ember_01_identity/"],"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"live-execution-tree","surface":"live-local","mode":"filesystem","locator":{"kind":"env","env":"EMBER_CENSUS_LIVE_EXECUTION_ROOT"},"include_prefixes":["GOAL.md","README.md","STATE.md","baseline/","configs/","docs/","manifests/","scripts/","tools/ember-cli/package.json","tools/ember-cli/models.json","tools/ember-cli/scripts/","tools/ember-cli/src/"],"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"live-benchmark-assets","surface":"live-local","mode":"filesystem","locator":{"kind":"env","env":"EMBER_CENSUS_BENCHMARK_ROOT"},"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"coordination-evidence-primary","surface":"live-local","mode":"filesystem","locator":{"kind":"env","env":"EMBER_CENSUS_COORDINATION_PRIMARY"},"include_prefixes":["ember-dissonance-ledger.md","operator-standing-directives.md","ember-audits/","ember-discussions/","ember-mvp/breakthrough-goal-20260619/","ember-mvp/core-loop-attempt-1-20260618T-now/","ember-mvp/real-avir-observation/","ember-mvp/research-benchmarks/","ember-mvp/research-papers/","ember-mvp/resident-training-adapter/","ember-mvp/resident-training-candidate/","ember-mvp/resident-training-gate/","ember-mvp/sab-stronger-transfer/","ember-mvp/sab-zero-cost-regrade/","ember-mvp/tiny-bitnet-comparison/","ember-mvp/tools/","ember-outage/","ember-paper-grounding/","ember-rung1-comparisons/","ember-storage-guard/","goals/"],"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"coordination-evidence-secondary","surface":"live-local","mode":"filesystem","locator":{"kind":"env","env":"EMBER_CENSUS_COORDINATION_SECONDARY"},"include_prefixes":["ember-audits/","ember-cli-captures/","ember-cli-exposed-side-backup-20260704/","ember-remediation-logs/","episodic/","spec-drafts/","specs/","tools/"],"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"},
+    {"root_id":"configured-private-backup-root","surface":"private","mode":"filesystem","locator":{"kind":"missing"},"path_redactions_env":"EMBER_CENSUS_PATH_REDACTIONS"}
+  ]
+}
