@@ -20,6 +20,23 @@ from census_consumers import build_census, build_census_set, build_git_census, d
 FIXTURE_COMMIT = "f" * 40
 CENSUS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-v1.json"
 STABILITY_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-census-stability-v1.json"
+SEMANTICS_PATH = ROOT / "manifests" / "ember-01-identity" / "consumer-semantics-v1.json"
+
+
+def test_checked_semantics_manifest_covers_every_identity_category_without_placeholders() -> None:
+    rows = json.loads(SEMANTICS_PATH.read_text(encoding="utf-8"))
+    required = {
+        "architecture_config", "training_optimizer", "checkpoint_save_load",
+        "serving_runtime", "cli_operator_surface", "evaluation_benchmark",
+        "publication_report", "borrowed_reference", "process_registry_watchdog",
+        "parameter_identity", "tokenizer_data_lineage", "mechanism_identity",
+        "receipt_identity",
+    }
+    assert {row["category"] for row in rows} == required
+    assert all(row["root_id"] == "live-execution-tree" for row in rows)
+    assert all(len(row["evidence_sha256"]) == 64 for row in rows)
+    assert all("UNRESOLVED" not in value and "POTENTIAL_ONLY" not in value
+               for row in rows for value in row.values())
 
 
 def test_checked_census_matches_byte_stability_receipt() -> None:
@@ -85,8 +102,8 @@ def test_census_is_deterministic_and_evidence_linked(tmp_path: Path) -> None:
         for row in first["evidence"]
     )
     assert all(
-        row["integration_requirement"] in first["semantic_profiles"]
-        and first["semantic_profiles"][row["integration_requirement"]]["integration_requirement"]
+            row["category"] in first["semantic_profiles"]
+            and first["semantic_profiles"][row["category"]]["integration_requirement"]
         for row in first["evidence"]
     )
     assert {row["category"] for row in first["evidence"]} >= {
@@ -95,18 +112,22 @@ def test_census_is_deterministic_and_evidence_linked(tmp_path: Path) -> None:
     }
 
 
-def test_census_excludes_generated_receipts_and_test_fixtures(tmp_path: Path) -> None:
+def test_census_includes_receipt_test_and_identity_sources_but_excludes_its_generated_snapshot(tmp_path: Path) -> None:
     (tmp_path / "receipts").mkdir()
     (tmp_path / "receipts" / "run.json").write_text(
         json.dumps({"checkpoint": "model.pt"}), encoding="utf-8"
     )
     (tmp_path / "tests" / "fixtures").mkdir(parents=True)
     (tmp_path / "tests" / "fixtures" / "fake.py").write_text(
-        "MODEL_ID = 'fake'\n", encoding="utf-8"
+        "LOCAL_MODEL_ID = 'fake'\n", encoding="utf-8"
     )
     (tmp_path / "scripts" / "ember_01_identity").mkdir(parents=True)
     (tmp_path / "scripts" / "ember_01_identity" / "self.py").write_text(
-        "MODEL_ID = 'self-reference'\n", encoding="utf-8"
+        "LOCAL_MODEL_ID = 'self-reference'\n", encoding="utf-8"
+    )
+    (tmp_path / "manifests" / "ember-01-identity").mkdir(parents=True)
+    (tmp_path / "manifests" / "ember-01-identity" / "consumer-census-v1.json").write_text(
+        json.dumps({"checkpoint": "self-reference"}), encoding="utf-8"
     )
     census = build_census(
         tmp_path,
@@ -114,11 +135,17 @@ def test_census_excludes_generated_receipts_and_test_fixtures(tmp_path: Path) ->
             "receipts/run.json",
             "tests/fixtures/fake.py",
             "scripts/ember_01_identity/self.py",
+            "manifests/ember-01-identity/consumer-census-v1.json",
         ],
         source_commit=FIXTURE_COMMIT,
     )
-    assert census["evidence"] == []
-    assert census["coverage"]["files_excluded"] == 3
+    assert {row["path"] for row in census["evidence"]} == {
+        "receipts/run.json",
+        "tests/fixtures/fake.py",
+        "scripts/ember_01_identity/self.py",
+    }
+    assert census["coverage"]["files_excluded"] == 1
+    assert all(row["record_class"].startswith("CANDIDATE_") for row in census["evidence"])
 
 
 def test_same_line_can_expose_multiple_identity_roles(tmp_path: Path) -> None:
@@ -134,6 +161,69 @@ def test_same_line_can_expose_multiple_identity_roles(tmp_path: Path) -> None:
         "cli_operator_surface",
         "borrowed_reference",
     }
+    assert all(row["failure_behavior"] == "UNRESOLVED_STATIC_ANALYSIS" for row in rows)
+    assert all(row["claim_effect"] == "POTENTIAL_ONLY_NO_CREDIT" for row in rows)
+
+
+def test_exact_semantics_override_is_required_for_verified_consumer_record(tmp_path: Path) -> None:
+    (tmp_path / "server.py").write_text("EMBER_MODEL_URL = config.endpoint\n", encoding="utf-8")
+    semantics = [{
+        "root_id": "public-master",
+        "path": "server.py",
+        "category": "serving_runtime",
+        "evidence_sha256": hashlib.sha256(
+            "EMBER_MODEL_URL = config.endpoint".encode()
+        ).hexdigest(),
+        "current_input": "config.endpoint",
+        "derived_label": "selected serving endpoint",
+        "protocol": "environment-or-config endpoint selection",
+        "failure_behavior": "falls back when identity binding is absent",
+        "claim_effect": "can select the served subject",
+        "conflict": "endpoint location is not checkpoint identity",
+        "integration_requirement": "require a validated manifest before endpoint adoption",
+    }]
+    census = build_census(
+        tmp_path,
+        tracked_files=["server.py"],
+        source_commit=FIXTURE_COMMIT,
+        consumer_semantics=semantics,
+    )
+    row = census["evidence"][0]
+    assert row["record_class"] == "VERIFIED_CONSUMER"
+    for field in (
+        "current_input", "derived_label", "protocol", "failure_behavior",
+        "claim_effect", "conflict", "integration_requirement",
+    ):
+        assert row[field] == semantics[0][field]
+
+
+def test_semantics_override_selects_one_exact_evidence_record(tmp_path: Path) -> None:
+    first = "EMBER_MODEL_URL = config.primary"
+    second = "EMBER_MODEL_URL = config.fallback"
+    (tmp_path / "server.py").write_text(first + "\n" + second + "\n", encoding="utf-8")
+    semantics = [{
+        "root_id": "public-master",
+        "path": "server.py",
+        "category": "serving_runtime",
+        "evidence_sha256": hashlib.sha256(first.encode()).hexdigest(),
+        "current_input": "config.primary",
+        "derived_label": "primary serving endpoint",
+        "protocol": "primary configuration",
+        "failure_behavior": "fails closed when absent",
+        "claim_effect": "selects primary served endpoint",
+        "conflict": "endpoint is not checkpoint identity",
+        "integration_requirement": "validate manifest before primary adoption",
+    }]
+    rows = build_census(
+        tmp_path,
+        tracked_files=["server.py"],
+        source_commit=FIXTURE_COMMIT,
+        consumer_semantics=semantics,
+    )["evidence"]
+    assert [row["record_class"] for row in rows] == [
+        "VERIFIED_CONSUMER",
+        "CANDIDATE_EXECUTABLE_MATCH",
+    ]
 
 
 def test_every_identity_bearing_line_is_preserved(tmp_path: Path) -> None:
@@ -186,6 +276,32 @@ def test_generic_claim_and_receipt_prose_is_not_publication_identity(tmp_path: P
         tmp_path, tracked_files=["notes.md"], source_commit=FIXTURE_COMMIT
     )
     assert not any(row["category"] == "publication_report" for row in census["evidence"])
+
+
+def test_required_memory_world_dream_adapter_update_deletion_and_receipt_surfaces_are_classified(tmp_path: Path) -> None:
+    (tmp_path / "loop.py").write_text(
+        "temporary_adapter = lora_buffer\n"
+        "world_model = dreaming_loop(memory_system)\n"
+        "deletion_test = verified_experience_update\n"
+        "receipt_bundle = receipt_store\n",
+        encoding="utf-8",
+    )
+    rows = build_census(
+        tmp_path, tracked_files=["loop.py"], source_commit=FIXTURE_COMMIT
+    )["evidence"]
+    categories = {row["category"] for row in rows}
+    assert "mechanism_identity" in categories
+    assert "receipt_identity" in categories
+
+
+def test_chained_receipt_store_state_identifier_is_classified(tmp_path: Path) -> None:
+    (tmp_path / "store.py").write_text(
+        'raise RuntimeError("receipt_store_deleted")\n', encoding="utf-8"
+    )
+    rows = build_census(
+        tmp_path, tracked_files=["store.py"], source_commit=FIXTURE_COMMIT
+    )["evidence"]
+    assert "receipt_identity" in {row["category"] for row in rows}
 
 
 def test_census_does_not_republish_local_paths(tmp_path: Path) -> None:
@@ -263,6 +379,31 @@ def test_multi_surface_census_is_order_independent_and_path_safe(tmp_path: Path)
     rendered = json.dumps(first)
     assert str(public) not in rendered
     assert str(private) not in rendered
+
+
+def test_multi_surface_semantics_resolve_only_in_their_declared_root(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "train.py").write_text("optimizer.step()\n", encoding="utf-8")
+    line = "EMBER_MODEL_URL = config.endpoint"
+    (second / "serve.py").write_text(line + "\n", encoding="utf-8")
+    semantics = [{
+        "root_id": "second-root", "path": "serve.py",
+        "category": "serving_runtime",
+        "evidence_sha256": hashlib.sha256(line.encode()).hexdigest(),
+        "current_input": "config.endpoint", "derived_label": "selected endpoint",
+        "protocol": "configuration selection", "failure_behavior": "fails closed",
+        "claim_effect": "selects served subject", "conflict": "endpoint is not identity",
+        "integration_requirement": "validate manifest before endpoint adoption",
+    }]
+    census = build_census_set([
+        {"root": first, "root_id": "first-root", "surface": "public", "tracked_files": ["train.py"], "source_commit": "a" * 40},
+        {"root": second, "root_id": "second-root", "surface": "live-local", "tracked_files": ["serve.py"], "source_commit": "b" * 40},
+    ], consumer_semantics=semantics)
+    verified = [row for row in census["evidence"] if row["record_class"] == "VERIFIED_CONSUMER"]
+    assert [(row["root_id"], row["path"]) for row in verified] == [("second-root", "serve.py")]
 
 
 def test_filesystem_surface_discovers_untracked_sources_and_binds_content(tmp_path: Path) -> None:

@@ -51,7 +51,15 @@
     "active": 2500000000,
     "trainable": 500000000,
     "served": 3000000000,
-    "actually_trained": 500000000
+    "actually_trained": 500000000,
+    "evidence_receipts": {
+      "allocated": [],
+      "unique": [],
+      "active": [],
+      "trainable": [],
+      "served": [],
+      "actually_trained": []
+    }
   },
   "training": {
     "steps": 100,

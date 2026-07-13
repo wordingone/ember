@@ -51,16 +51,11 @@ DISCOVERY_EXCLUDED_DIRS = {
 EXCLUDED_PREFIXES = (
     ".git/",
     "node_modules/",
-    "receipts/",
-    "tests/",
-    "scripts/tests/",
-    "scripts/ember_01_identity/",
-    "docs/ember-01-identity/",
-    "manifests/ember-01-identity/",
-    "tests/fixtures/",
-    "docs/verification/receipts-",
-    "scripts/ember_totality/receipts-",
 )
+EXCLUDED_PATHS = {
+    "manifests/ember-01-identity/consumer-census-v1.json",
+    "manifests/ember-01-identity/consumer-census-stability-v1.json",
+}
 
 CATEGORY_PATTERNS: dict[str, tuple[str, ...]] = {
     "architecture_config": (
@@ -97,7 +92,10 @@ CATEGORY_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(?:tokenizer(?:_path|_id|_hash)?|corpus(?:_id|_hash)?|curriculum|sample_order|data_lineage|clean_genesis)\b",
     ),
     "mechanism_identity": (
-        r"\b(?:expert(?:_id|_bank)?|router|memory_substrate|world_model|deletion_object|mechanism_id)\b",
+        r"\b(?:expert(?:_id|_bank)?|router|adapter|lora|upcycl[a-z]*|memory(?:_|\s)+(?:substrate|system)|world(?:_|\s)+model|dream(?:ing)?(?:_|\s)+loop|verified(?:_|\s)+experience(?:_|\s)+update|deletion(?:_|\s)+(?:object|test)|mechanism_id)\b",
+    ),
+    "receipt_identity": (
+        r"\b(?:receipt(?:_[a-z0-9]+)*|evidence_receipts)\b",
     ),
 }
 
@@ -119,6 +117,7 @@ INTEGRATION_REQUIREMENTS = {
     "parameter_identity": "emit all six parameter axes from independently verified evidence",
     "tokenizer_data_lineage": "bind tokenizer, corpus, order, curriculum, verifier, and provenance bytes",
     "mechanism_identity": "bind mechanism bytes, state transitions, merge ancestry, and deletion evidence",
+    "receipt_identity": "resolve content-addressed receipts and bind them to the exact checkpoint, verifier, evidence class, and result",
 }
 SEMANTIC_PROFILES = {
     category: {
@@ -133,15 +132,32 @@ SEMANTIC_PROFILES = {
 }
 
 
-def _semantic_fields(category: str, matched_terms: list[str]) -> dict[str, str]:
+SEMANTIC_FIELDS = {
+    "current_input", "derived_label", "protocol", "failure_behavior",
+    "claim_effect", "conflict", "integration_requirement",
+}
+
+
+def _semantic_fields(
+    category: str,
+    matched_terms: list[str],
+    *,
+    exact: dict[str, str] | None,
+    line_scoped: bool,
+) -> dict[str, str]:
+    if exact is not None:
+        return {"record_class": "VERIFIED_CONSUMER", **exact}
     return {
+        "record_class": (
+            "CANDIDATE_EXECUTABLE_MATCH" if line_scoped else "CANDIDATE_EVIDENCE_MATCH"
+        ),
         "current_input": ",".join(matched_terms),
-        "derived_label": category,
-        "protocol": category,
-        "failure_behavior": category,
-        "claim_effect": category,
-        "conflict": category,
-        "integration_requirement": category,
+        "derived_label": "UNRESOLVED_STATIC_MATCH",
+        "protocol": "UNRESOLVED_STATIC_ANALYSIS",
+        "failure_behavior": "UNRESOLVED_STATIC_ANALYSIS",
+        "claim_effect": "POTENTIAL_ONLY_NO_CREDIT",
+        "conflict": "STATIC_MATCH_MAY_BE_COMMENT_TEST_OR_NON_AUTHORITY",
+        "integration_requirement": INTEGRATION_REQUIREMENTS[category],
     }
 
 
@@ -150,9 +166,7 @@ def _excluded(rel: str) -> bool:
     name = Path(normalized).name.lower()
     return (
         any(normalized.startswith(prefix) for prefix in EXCLUDED_PREFIXES)
-        or ".test." in name
-        or name.startswith("test_")
-        or name.endswith("_test.py")
+        or normalized in EXCLUDED_PATHS
     )
 
 
@@ -315,6 +329,7 @@ def build_census(
     surface: str = "public",
     source_contents: dict[str, bytes] | None = None,
     path_redactions: Iterable[str] = (),
+    consumer_semantics: Iterable[dict[str, str]] = (),
 ) -> dict:
     root = root.resolve()
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", root_id):
@@ -331,6 +346,19 @@ def build_census(
     evidence_files: set[str] = set()
     category_files: dict[str, set[str]] = {category: set() for category in COMPILED}
     raw_match_counts: dict[str, int] = {category: 0 for category in COMPILED}
+    semantics_index: dict[tuple[str, str, str, str], dict[str, str]] = {}
+    matched_semantics: set[tuple[str, str, str, str]] = set()
+    for row in consumer_semantics:
+        if not isinstance(row, dict) or set(row) != {
+            "root_id", "path", "category", "evidence_sha256", *SEMANTIC_FIELDS
+        }:
+            raise ValueError("consumer semantics rows use a closed schema")
+        if not re.fullmatch(r"[0-9a-f]{64}", row["evidence_sha256"]):
+            raise ValueError("consumer semantics evidence_sha256 must be exact")
+        key = (row["root_id"], row["path"], row["category"], row["evidence_sha256"])
+        if key in semantics_index:
+            raise ValueError(f"duplicate consumer semantics row: {key}")
+        semantics_index[key] = {field: row[field] for field in SEMANTIC_FIELDS}
 
     for raw_rel in candidates:
         rel = raw_rel.replace("\\", "/")
@@ -376,6 +404,10 @@ def build_census(
                     matched_categories.add(category)
                     line_sha256 = hashlib.sha256(line.encode("utf-8")).hexdigest()
                     if line_scoped:
+                        semantic_key = (root_id, public_rel, category, line_sha256)
+                        exact_semantics = semantics_index.get(semantic_key)
+                        if exact_semantics is not None:
+                            matched_semantics.add(semantic_key)
                         evidence.append(
                             {
                                 "category": category,
@@ -388,7 +420,12 @@ def build_census(
                                 "content_sha256": content_sha256,
                                 "evidence_scope": "LINE",
                                 "matched_terms": matched_terms,
-                                **_semantic_fields(category, matched_terms),
+                                **_semantic_fields(
+                                    category,
+                                    matched_terms,
+                                    exact=exact_semantics,
+                                    line_scoped=True,
+                                ),
                             }
                         )
                     else:
@@ -401,6 +438,10 @@ def build_census(
             matched_terms = sorted(
                 record["matched_terms"], key=lambda value: (value.casefold(), value)
             )
+            semantic_key = (root_id, public_rel, category, content_sha256)
+            exact_semantics = semantics_index.get(semantic_key)
+            if exact_semantics is not None:
+                matched_semantics.add(semantic_key)
             evidence.append(
                 {
                     "category": category,
@@ -413,7 +454,12 @@ def build_census(
                     "content_sha256": content_sha256,
                     "evidence_scope": "FILE_CATEGORY",
                     "matched_terms": matched_terms,
-                    **_semantic_fields(category, matched_terms),
+                    **_semantic_fields(
+                        category,
+                        matched_terms,
+                        exact=exact_semantics,
+                        line_scoped=False,
+                    ),
                 }
             )
         if matched_categories:
@@ -422,6 +468,9 @@ def build_census(
                 category_files[category].add(public_rel)
 
     evidence.sort(key=lambda row: (str(row["path"]), int(row["line"]), str(row["category"])))
+    unmatched_semantics = sorted(set(semantics_index) - matched_semantics)
+    if unmatched_semantics:
+        raise ValueError(f"consumer semantics rows did not resolve: {unmatched_semantics}")
     categories = {
         category: {
             "files": sorted(paths),
@@ -457,6 +506,7 @@ def build_census(
 def build_git_census(
     root: Path, *, source_commit: str, root_id: str, surface: str,
     path_redactions: Iterable[str] = (),
+    consumer_semantics: Iterable[dict[str, str]] = (),
 ) -> dict:
     candidates = _git_tree_files(root, source_commit)
     source_paths = [
@@ -472,18 +522,23 @@ def build_git_census(
         surface=surface,
         source_contents=contents,
         path_redactions=path_redactions,
+        consumer_semantics=consumer_semantics,
     )
 
 
-def build_census_set(root_specs: Iterable[dict]) -> dict:
+def build_census_set(
+    root_specs: Iterable[dict], *, consumer_semantics: Iterable[dict[str, str]] = ()
+) -> dict:
     """Combine logical public/private/live roots without serializing host paths."""
     built: list[dict] = []
     seen: set[str] = set()
+    semantics = list(consumer_semantics)
     for spec in root_specs:
         root_id = spec["root_id"]
         if root_id in seen:
             raise ValueError(f"duplicate root_id: {root_id}")
         seen.add(root_id)
+        root_semantics = [row for row in semantics if row.get("root_id") == root_id]
         root_path = Path(spec["root"])
         discovery_errors: list[dict[str, str]] = []
         tracked = spec.get("tracked_files")
@@ -500,6 +555,7 @@ def build_census_set(root_specs: Iterable[dict]) -> dict:
                 root_id=root_id,
                 surface=spec["surface"],
                 path_redactions=spec.get("path_redactions", ()),
+                consumer_semantics=root_semantics,
             )
         else:
             row = build_census(
@@ -509,6 +565,7 @@ def build_census_set(root_specs: Iterable[dict]) -> dict:
                 root_id=root_id,
                 surface=spec["surface"],
                 path_redactions=spec.get("path_redactions", ()),
+                consumer_semantics=root_semantics,
             )
         row["discovery_errors"] = discovery_errors
         row["availability"] = "MISSING" if any(
@@ -516,6 +573,13 @@ def build_census_set(root_specs: Iterable[dict]) -> dict:
             for error in discovery_errors
         ) else ("PARTIAL" if discovery_errors else "AVAILABLE")
         built.append(row)
+    unknown_semantic_roots = sorted(
+        {row.get("root_id") for row in semantics} - seen
+    )
+    if unknown_semantic_roots:
+        raise ValueError(
+            f"consumer semantics reference unknown roots: {unknown_semantic_roots}"
+        )
     built.sort(key=lambda row: row["root_id"])
     roots = [
         {
@@ -556,13 +620,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--roots-spec", type=Path)
+    parser.add_argument("--semantics-manifest", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.roots_spec:
         raw_specs = json.loads(args.roots_spec.read_text(encoding="utf-8"))
         if not isinstance(raw_specs, list) or not all(isinstance(item, dict) for item in raw_specs):
             raise ValueError("roots spec must be a list of root objects")
-        payload = build_census_set(raw_specs)
+        semantics = (
+            json.loads(args.semantics_manifest.read_text(encoding="utf-8"))
+            if args.semantics_manifest else []
+        )
+        if not isinstance(semantics, list):
+            raise ValueError("semantics manifest must be a list")
+        payload = build_census_set(raw_specs, consumer_semantics=semantics)
     else:
         payload = build_census(args.root)
     rendered = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"

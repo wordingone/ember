@@ -11,6 +11,7 @@ import copy
 import functools
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -29,6 +30,12 @@ SCHEMA_PATH = (
     / "manifests"
     / "ember-01-identity"
     / "schema-v1.json"
+)
+TRUSTED_VERIFIER_REGISTRY_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "manifests"
+    / "ember-01-identity"
+    / "trusted-verifiers-v1.json"
 )
 OWNED_ADMISSION_PARAMETER_FLOOR = 3_000_000_000
 EVIDENCE_RECEIPT_SCHEMA = "ember-identity-evidence-receipt-v1"
@@ -190,7 +197,8 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
         "corpus_id", "sha256", "ordering_sha256", "curriculum_sha256",
         "verifier_sha256", "clean_genesis",
     },
-    "parameters": {"allocated", "unique", "active", "trainable", "served", "actually_trained"},
+    "parameters": {"allocated", "unique", "active", "trainable", "served", "actually_trained", "evidence_receipts"},
+    "parameters.evidence_receipts": {"allocated", "unique", "active", "trainable", "served", "actually_trained"},
     "training": {
         "steps", "effective_tokens", "modality_mixture", "optimizer_state_sha256",
         "numerics", "stopping_rule",
@@ -319,6 +327,7 @@ def _resolve_admission_receipt(
     findings: list[dict[str, str]],
     expected_result: str = "VERIFIED",
     expected_criterion: str | None = None,
+    expected_claims: Mapping[str, Any] | None = None,
 ) -> None:
     if receipt_bundle is None:
         return
@@ -341,6 +350,8 @@ def _resolve_admission_receipt(
     }
     if expected_criterion is not None:
         required.add("criterion_id")
+    if expected_claims is not None:
+        required.update(expected_claims)
     if set(receipt) != required:
         findings.append(_finding("admission.receipt_shape", expected_class))
     if receipt.get("schema") != EVIDENCE_RECEIPT_SCHEMA:
@@ -367,6 +378,12 @@ def _resolve_admission_receipt(
                 str(receipt.get("criterion_id")),
             )
         )
+    if expected_claims is not None:
+        for key, expected_value in expected_claims.items():
+            if receipt.get(key) != expected_value:
+                findings.append(
+                    _finding("admission.receipt_claim_mismatch", f"{expected_class}.{key}")
+                )
 
 
 def _check_closed_objects(
@@ -484,6 +501,7 @@ def validate_manifest(
                 findings.append(_finding("hash.invalid", f"{prefix}.checkpoint_sha256"))
 
     checkpoint_present, checkpoint_hash = _get(payload, "checkpoint.byte_sha256")
+    parsed_checkpoint_tensors: list[dict[str, Any]] | None = None
     if checkpoint_bytes is not None and checkpoint_present:
         actual = hashlib.sha256(checkpoint_bytes).hexdigest()
         if checkpoint_hash != actual:
@@ -493,6 +511,82 @@ def validate_manifest(
                     f"manifest={checkpoint_hash}; actual={actual}",
                 )
             )
+        if _get(payload, "checkpoint.format")[1] == "ember-checkpoint-envelope-v1":
+            try:
+                envelope = json.loads(checkpoint_bytes.decode("utf-8"))
+                if (
+                    not isinstance(envelope, Mapping)
+                    or set(envelope) != {"schema", "tensors"}
+                    or envelope.get("schema") != "ember-checkpoint-envelope-v1"
+                    or not isinstance(envelope.get("tensors"), list)
+                    or not envelope["tensors"]
+                ):
+                    raise ValueError("closed checkpoint envelope required")
+                parsed_checkpoint_tensors = []
+                seen_checkpoint_names: set[str] = set()
+                for row in envelope["tensors"]:
+                    if (
+                        not isinstance(row, Mapping)
+                        or set(row) != {"name", "shape", "dtype", "content_hex"}
+                        or not isinstance(row.get("name"), str)
+                        or not row["name"]
+                        or row["name"] in seen_checkpoint_names
+                        or not isinstance(row.get("shape"), list)
+                        or not row["shape"]
+                        or any(
+                            not isinstance(dimension, int)
+                            or isinstance(dimension, bool)
+                            or dimension <= 0
+                            for dimension in row["shape"]
+                        )
+                        or not isinstance(row.get("dtype"), str)
+                        or not row["dtype"]
+                        or not isinstance(row.get("content_hex"), str)
+                    ):
+                        raise ValueError("invalid checkpoint tensor entry")
+                    tensor_bytes = bytes.fromhex(row["content_hex"])
+                    element_count = math.prod(row["shape"])
+                    dtype = row["dtype"]
+                    scalar_widths = {
+                        "float32": 4,
+                        "float16": 2,
+                        "bfloat16": 2,
+                        "int8": 1,
+                        "uint8": 1,
+                    }
+                    if dtype == "constant_float32":
+                        if len(tensor_bytes) != 4:
+                            raise ValueError("constant tensor requires one float32 value")
+                    elif dtype in scalar_widths:
+                        if len(tensor_bytes) != element_count * scalar_widths[dtype]:
+                            raise ValueError("tensor byte length does not match shape and dtype")
+                    else:
+                        raise ValueError("unsupported checkpoint tensor dtype")
+                    seen_checkpoint_names.add(row["name"])
+                    parsed_checkpoint_tensors.append(
+                        {
+                            "name": row["name"],
+                            "shape": list(row["shape"]),
+                            "dtype": row["dtype"],
+                            "sha256": hashlib.sha256(tensor_bytes).hexdigest(),
+                        }
+                    )
+            except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+                parsed_checkpoint_tensors = None
+                findings.append(
+                    _finding(
+                        "checkpoint.envelope_invalid",
+                        "checkpoint bytes do not resolve the declared tensor envelope",
+                    )
+                )
+            else:
+                if parsed_checkpoint_tensors != tensors:
+                    findings.append(
+                        _finding(
+                            "checkpoint.envelope_tensor_mismatch",
+                            "checkpoint-derived tensors do not match manifest tensors",
+                        )
+                    )
 
     if tensor_hashes is not None and isinstance(tensors, list):
         declared = {
@@ -524,6 +618,13 @@ def validate_manifest(
             }
             code = "checkpoint.tensor_hash_mismatch" if declared_by_name != supplied_by_name else "checkpoint.tensor_manifest_mismatch"
             findings.append(_finding(code, "tensor manifest does not exactly match checkpoint identity"))
+        elif parsed_checkpoint_tensors is not None and tensor_manifest.get("tensors") != parsed_checkpoint_tensors:
+            findings.append(
+                _finding(
+                    "checkpoint.tensor_manifest_not_in_checkpoint",
+                    "tensor manifest was not derived from checkpoint bytes",
+                )
+            )
 
     counts_present, counts = _get(payload, "parameters")
     if counts_present and isinstance(counts, Mapping):
@@ -657,12 +758,17 @@ def validate_manifest(
                 continue
             valid_item = (
                 isinstance(item, Mapping)
-                and set(item) == {"id", "sha256", "state"}
+                and set(item) == {"id", "sha256", "state", "evidence_receipts"}
                 and isinstance(item.get("id"), str)
                 and bool(item.get("id"))
                 and isinstance(item.get("sha256"), str)
                 and bool(SHA256_RE.fullmatch(item["sha256"]))
                 and item.get("state") in {"ACTIVE", "INACTIVE", "HISTORICAL", "UNVERIFIED"}
+                and isinstance(item.get("evidence_receipts"), list)
+                and all(
+                    isinstance(receipt, str) and bool(SHA256_RE.fullmatch(receipt))
+                    for receipt in item["evidence_receipts"]
+                )
             )
             if not valid_item:
                 findings.append(
@@ -676,6 +782,47 @@ def validate_manifest(
     disposition = _get(payload, "identity.disposition")[1]
     selected = _get(payload, "identity.selected_as_owned_ember")[1]
     completion_credit = _get(payload, "evaluation.counts_toward_owned_completion")[1]
+    if disposition == "OWNED_ADMITTED" and parsed_checkpoint_tensors is not None:
+        checkpoint_parameter_count = sum(
+            math.prod(row["shape"]) for row in parsed_checkpoint_tensors
+        )
+        parameters = payload.get("parameters")
+        if not isinstance(parameters, Mapping) or any(
+            parameters.get(field) != checkpoint_parameter_count
+            for field in ("allocated", "unique")
+        ):
+            findings.append(
+                _finding(
+                    "admission.checkpoint_parameter_count_mismatch",
+                    str(checkpoint_parameter_count),
+                )
+            )
+    if disposition == "OWNED_ADMITTED" and completion_credit is True:
+        evaluation = payload.get("evaluation")
+        if not isinstance(evaluation, Mapping):
+            findings.append(_finding("admission.evaluation_receipt", "evaluation object missing"))
+        else:
+            digest = evaluation.get("receipt_sha256")
+            if not isinstance(receipt_bundle, Mapping) or digest not in receipt_bundle:
+                findings.append(_finding("admission.evaluation_receipt", str(digest)))
+            if isinstance(receipt_bundle, Mapping):
+                _resolve_admission_receipt(
+                    digest,
+                    receipt_bundle=receipt_bundle,
+                    expected_class="evaluation_result",
+                    expected_checkpoint=checkpoint_hash,
+                    expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                    expected_result="VERIFIED",
+                    expected_claims={
+                        field: evaluation.get(field)
+                        for field in (
+                            "benchmark_id", "version", "split", "harness_sha256",
+                            "comparator_identity", "score", "uncertainty",
+                            "counts_toward_owned_completion",
+                        )
+                    },
+                    findings=findings,
+                )
     if (selected is True or completion_credit is True) and disposition != "OWNED_ADMITTED":
         findings.append(
             _finding(
@@ -718,6 +865,13 @@ def validate_manifest(
             findings.append(_finding("field.unresolved", path))
 
     if disposition == "OWNED_ADMITTED":
+        if _get(payload, "checkpoint.format")[1] != "ember-checkpoint-envelope-v1":
+            findings.append(
+                _finding(
+                    "admission.checkpoint_format_unsupported",
+                    "OWNED_ADMITTED requires a parseable Ember checkpoint envelope",
+                )
+            )
         if checkpoint_bytes is None:
             findings.append(
                 _finding(
@@ -790,6 +944,41 @@ def validate_manifest(
                         f"manifest={declared_verifier}; actual={actual_verifier}",
                     )
                 )
+            try:
+                verifier_program = json.loads(verifier_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                verifier_program = None
+            required_program = {
+                "schema": "ember-admission-verifier-program-v1",
+                "rules": [
+                    "bind_checkpoint",
+                    "bind_claims",
+                    "derive_allocated_unique",
+                    "require_verified_result",
+                ],
+            }
+            if verifier_program != required_program:
+                findings.append(
+                    _finding(
+                        "admission.verifier_program_invalid",
+                        "verifier bytes do not encode the closed admission program",
+                    )
+                )
+            try:
+                pinned_registry = json.loads(
+                    TRUSTED_VERIFIER_REGISTRY_PATH.read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError):
+                pinned_registry = None
+            pinned_hashes = (
+                pinned_registry.get("verifier_sha256", [])
+                if isinstance(pinned_registry, Mapping)
+                else []
+            )
+            if actual_verifier not in pinned_hashes:
+                findings.append(
+                    _finding("admission.verifier_untrusted", actual_verifier)
+                )
         elif trusted_verifier_registry is not None:
             registry_valid = (
                 isinstance(trusted_verifier_registry, Mapping)
@@ -814,15 +1003,45 @@ def validate_manifest(
                         "trusted verifier registry has invalid schema or entries",
                     )
                 )
-            elif declared_verifier not in trusted_verifier_registry[
-                "verifier_sha256"
-            ]:
-                findings.append(
-                    _finding(
-                        "admission.verifier_untrusted",
-                        str(declared_verifier),
+            else:
+                try:
+                    pinned_registry = json.loads(
+                        TRUSTED_VERIFIER_REGISTRY_PATH.read_text(encoding="utf-8")
                     )
+                except (OSError, json.JSONDecodeError):
+                    pinned_registry = None
+                supplied_canonical = json.dumps(
+                    trusted_verifier_registry,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
                 )
+                pinned_canonical = (
+                    json.dumps(
+                        pinned_registry,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=False,
+                    )
+                    if isinstance(pinned_registry, Mapping)
+                    else None
+                )
+                if supplied_canonical != pinned_canonical:
+                    findings.append(
+                        _finding(
+                            "admission.verifier_registry_untrusted_root",
+                            "supplied registry does not match the checked-in trust root",
+                        )
+                    )
+                elif declared_verifier not in trusted_verifier_registry[
+                "verifier_sha256"
+                ]:
+                    findings.append(
+                        _finding(
+                            "admission.verifier_untrusted",
+                            str(declared_verifier),
+                        )
+                    )
         else:
             findings.append(
                 _finding(
@@ -874,6 +1093,68 @@ def validate_manifest(
                     "allocated/unique/active/trainable/served/actually_trained must each be >=3B",
                 )
             )
+        parameter_receipts = (
+            admitted_counts.get("evidence_receipts")
+            if isinstance(admitted_counts, Mapping)
+            else None
+        )
+        if (
+            not isinstance(parameter_receipts, Mapping)
+            or set(parameter_receipts) != set(floor_fields)
+            or any(
+                not isinstance(parameter_receipts.get(field), list)
+                or not parameter_receipts[field]
+                for field in floor_fields
+            )
+        ):
+            findings.append(
+                _finding(
+                    "admission.parameter_evidence",
+                    "every parameter axis requires checkpoint-bound count evidence",
+                )
+            )
+        elif isinstance(receipt_bundle, Mapping):
+            for field in floor_fields:
+                for digest in parameter_receipts[field]:
+                    _resolve_admission_receipt(
+                        digest,
+                        receipt_bundle=receipt_bundle,
+                        expected_class=f"parameter_{field}",
+                        expected_checkpoint=checkpoint_hash,
+                        expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                        expected_claims={"claimed_count": admitted_counts[field]},
+                        findings=findings,
+                    )
+        for group in mechanism_groups:
+            mechanism_items = _get(payload, f"mechanisms.{group}")[1]
+            if not isinstance(mechanism_items, list):
+                continue
+            for item in mechanism_items:
+                if not isinstance(item, Mapping) or _is_unresolved(item):
+                    continue
+                mechanism_receipts = item.get("evidence_receipts")
+                if not isinstance(mechanism_receipts, list) or not mechanism_receipts:
+                    findings.append(
+                        _finding("admission.mechanism_evidence", f"{group}:{item.get('id')}")
+                    )
+                    continue
+                if isinstance(receipt_bundle, Mapping):
+                    expected_claims = {
+                        "mechanism_id": item.get("id"),
+                        "mechanism_sha256": item.get("sha256"),
+                    }
+                    if group == "deletion_objects":
+                        expected_claims["deletion_effect"] = "CAPABILITY_ERASED"
+                    for digest in mechanism_receipts:
+                        _resolve_admission_receipt(
+                            digest,
+                            receipt_bundle=receipt_bundle,
+                            expected_class=f"mechanism_{group}",
+                            expected_checkpoint=checkpoint_hash,
+                            expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                            expected_claims=expected_claims,
+                            findings=findings,
+                        )
         for capability_name in ("reasoning", "structured_tool_use"):
             capability = _get(payload, f"capabilities.{capability_name}")[1]
             if (
