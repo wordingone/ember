@@ -80,15 +80,18 @@ milestone. The signed forwarding receipt must repeat the exact accepted-input
 ID and every component hash and must bind the resulting checkpoint.
 
 The current coordination authority is public issue #812 with body SHA-256
-`4c5a3e110778f6e54c0f26d0cb878aacc8f2b62bcb5653f774d595b1fd7cf654`.
-Issues #682 and #793 are historical references only. Issue text is not artifact
+`6876226b0cf0e8f7c99a9b01107b90b8c60ad73f065da5e4ecf24adf7d7930cf`.
+Issues #682 and #793 are historical references only, pinned respectively at
+`c4f794643ea163cb313fc893637006452ac6abf6ca6ac9b3c1bbe8b1b2b19219`
+and `62fe4a4d1eacffea4d1b963015cbdf479490cce78f686e73483525460dae3527`.
+Issue text is not artifact
 authority by itself: EMBER-01A must resolve the actual accepted shard/caller/
 gate/validator bytes into this contract.
 The executable trust root is
 `accepted-training-input-authorities-v1.json`; admission rehashes its closed
 active record and requires manifest and signed receipt to bind authority ID
 `ember-02-issue-812`, input ID `github-issue-812`, and active-record SHA-256
-`19f5e874fe852baa13536242468f1fd910a5eae4b790add6ddc94d45d38eba9f`.
+`cb77071a43d117d78edb5a7687bd9fcdb0ad8213326bc168dc7e00a3dcf42554`.
 
 ### Capability and mechanism state
 
@@ -178,15 +181,13 @@ deterministic clean-clone verifier replays the overlay from every exact
 content-bound row, producing zero unadjudicated discovered matches. Because
 the snapshot is stale, suffix-limited, and contains a missing configured root,
 it is environmental discovery only and makes no global-completeness claim. A
-host-independent portable profile separately
-replays current public master
-`ca500aabe0f597ab85e762ceb53748724fb0ae98` with no environment roots.
-Two complete portable runs were byte-identical at SHA-256
-`d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a`.
-All 2,878 tracked files are accounted: the replay contains 13 hand-reviewed
-consumers, 21,830 conservative consumers, 2,805 identity sources, and zero
-unadjudicated matches. Test paths and opaque artifacts remain conservative
-consumers; neither is automatically dismissed.
+host-independent portable profile separately replays the exact substantive PR
+source commit with no environment roots. Two complete portable runs must be
+byte-identical, all tracked files must be accounted, and zero matches may
+remain unadjudicated. Test paths and opaque artifacts remain conservative
+consumers; neither is automatically dismissed. The exact source commit,
+counts, canonical hash, and byte hash live only in the machine receipt so a
+later receipt-only commit does not make this prose stale.
 The machine receipt is `consumer-census-stability-v1.json`.
 
 ## Load-bearing consumer map

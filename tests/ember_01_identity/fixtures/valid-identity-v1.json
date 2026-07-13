@@ -50,7 +50,7 @@
     "accepted_input": {
       "input_id": "github-issue-812",
       "authority_id": "ember-02-issue-812",
-      "authority_record_sha256": "19f5e874fe852baa13536242468f1fd910a5eae4b790add6ddc94d45d38eba9f",
+      "authority_record_sha256": "cb77071a43d117d78edb5a7687bd9fcdb0ad8213326bc168dc7e00a3dcf42554",
       "authority": "UNRESOLVED",
       "shard_manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
       "caller_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
