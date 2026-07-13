@@ -167,6 +167,69 @@ def _normalized_issue(issue: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _source_issue(issue: Mapping[str, Any]) -> dict[str, Any]:
+    labels = issue.get("labels")
+    author = issue.get("author")
+    comments = issue.get("comments")
+    return {
+        "number": int(issue["number"]),
+        "title": str(issue.get("title", "")),
+        "body": str(issue.get("body", "")),
+        "url": str(issue.get("url", "")),
+        "created_at": str(issue.get("createdAt", "")),
+        "updated_at": str(issue.get("updatedAt", "")),
+        "labels": sorted(
+            row.get("name") for row in labels or []
+            if isinstance(row, Mapping) and isinstance(row.get("name"), str)
+        ),
+        "author": str(author.get("login", "")) if isinstance(author, Mapping) else "",
+        "state": str(issue.get("state", "")),
+        "state_reason": str(issue.get("stateReason", "")),
+        "closed_at": str(issue.get("closedAt", "")),
+        "comments": sorted(
+            (
+                {
+                    "url": str(comment.get("url", "")),
+                    "body": str(comment.get("body", "")),
+                    "author": str((comment.get("author") or {}).get("login", "")),
+                    "created_at": str(comment.get("createdAt", "")),
+                    "updated_at": str(comment.get("updatedAt", "")),
+                }
+                for comment in comments or []
+                if isinstance(comment, Mapping)
+            ),
+            key=lambda row: (row["created_at"], row["url"]),
+        ),
+    }
+
+
+def _normalized_source_issue(source: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "number": int(source["number"]),
+        "title": str(source.get("title", "")),
+        "body_sha256": hashlib.sha256(str(source.get("body", "")).encode("utf-8")).hexdigest(),
+        "url": str(source.get("url", "")),
+        "created_at": str(source.get("created_at", "")),
+        "updated_at": str(source.get("updated_at", "")),
+        "labels": sorted(str(label) for label in source.get("labels", [])),
+        "author": str(source.get("author", "")),
+        "state": str(source.get("state", "")),
+        "evidence_comments": [
+            {
+                "url": str(comment.get("url", "")),
+                "body_sha256": hashlib.sha256(
+                    str(comment.get("body", "")).encode("utf-8")
+                ).hexdigest(),
+                "author": str(comment.get("author", "")),
+                "created_at": str(comment.get("created_at", "")),
+                "updated_at": str(comment.get("updated_at", "")),
+            }
+            for comment in source.get("comments", [])
+            if isinstance(comment, Mapping)
+        ],
+    }
+
+
 def _conservative_disposition(
     source: Mapping[str, Any],
     master_rows: list[dict[str, Any]],
@@ -203,19 +266,44 @@ def _conservative_disposition(
     )
 
 
+
+
+def _normalized_closed_source(source: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        **_normalized_source_issue(source),
+        "state": str(source.get("state", "")),
+        "state_reason": str(source.get("state_reason", "")),
+        "closed_at": str(source.get("closed_at", "")),
+        "evidence_comments": [
+            {
+                "url": str(comment.get("url", "")),
+                "body_sha256": hashlib.sha256(
+                    str(comment.get("body", "")).encode("utf-8")
+                ).hexdigest(),
+                "author": str(comment.get("author", "")),
+                "created_at": str(comment.get("created_at", "")),
+                "updated_at": str(comment.get("updated_at", "")),
+            }
+            for comment in source.get("comments", [])
+            if isinstance(comment, Mapping)
+        ],
+    }
 def build_issue_census(
     repository_root: Path,
     public_ref: str,
     issues: Iterable[Mapping[str, Any]],
+    closed_issues: Iterable[Mapping[str, Any]] = (),
+    completion_evidence: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     root = repository_root.resolve()
     public_master_sha = _git(root, "rev-parse", public_ref).strip()
     if not re.fullmatch(r"[0-9a-f]{40}", public_master_sha):
         raise ValueError("public ref did not resolve to one commit")
-    normalized = sorted(
-        (_normalized_issue(issue) for issue in issues),
-        key=lambda row: row["number"],
+    source_snapshot = sorted(
+        (_source_issue(issue) for issue in issues), key=lambda row: row["number"]
     )
+    normalized = [_normalized_source_issue(source) for source in source_snapshot]
+    source_by_number = {row["number"]: row for row in source_snapshot}
     master = _master_evidence(root, public_master_sha)
     history = _history_evidence(root, public_master_sha)
     rows: list[dict[str, Any]] = []
@@ -242,6 +330,7 @@ def build_issue_census(
                 "surviving_obligation": source["title"],
                 "public_master_sha": public_master_sha,
                 "master_evidence": master_rows,
+                "compound_obligations": [source["title"], source_by_number[number]["body"]],
                 "history_evidence": history_rows,
                 "disposition": disposition,
                 "classification_basis": classification_basis,
@@ -253,6 +342,38 @@ def build_issue_census(
                 "canonical_obligation_sha256": None,
             }
         )
+    evidence_rows = [dict(row) for row in completion_evidence]
+    evidence_by_number: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for evidence in evidence_rows:
+        evidence_by_number[int(evidence["number"])].append(evidence)
+    for row in rows:
+        audit_rows = evidence_by_number.get(row["number"], [])
+        if not audit_rows:
+            continue
+        override = next((item for item in audit_rows if isinstance(item.get("disposition"), str)), None)
+        if override is not None:
+            disposition = str(override["disposition"])
+            if disposition not in ALLOWED_DISPOSITIONS:
+                raise ValueError(f"audit disposition invalid: {row['number']}")
+            row.update({"disposition": disposition, "classification_basis": "audited_disposition_override", "confidence": "high", "canonical_issue": override.get("canonical_issue"), "canonical_issue_url": override.get("canonical_issue_url"), "canonical_obligation_sha256": override.get("canonical_obligation_sha256"), "preserved_issue_body_sha256": override.get("preserved_issue_body_sha256"), "completion_proof": []})
+        else:
+            row.update({"disposition": "implemented and independently verified", "classification_basis": "audited_completion_evidence", "confidence": "high", "unresolved_remainder": None, "completion_proof": audit_rows})
+    closed_items = list(closed_issues)
+    closed_snapshot = sorted((_source_issue(issue) for issue in closed_items), key=lambda row: row["number"])
+    normalized_closed = [_normalized_closed_source(source) for source in closed_snapshot]
+    raw_closed = {int(issue["number"]): issue for issue in closed_items}
+    closed_outcomes = []
+    for source in normalized_closed:
+        raw = raw_closed[source["number"]]
+        obligation = {"title": source["title"], "body_sha256": source["body_sha256"], "labels": source["labels"]}
+        proof_rows = evidence_by_number.get(source["number"], [])
+        limitation = next(
+            (row for row in proof_rows if row.get("closed_disposition") == "unresolved"),
+            None,
+        )
+        disposition = "unresolved" if limitation is not None else "implemented and independently verified"
+        unresolved_remainder = limitation.get("unresolved_remainder") if limitation is not None else None
+        closed_outcomes.append({**source, "issue_record_sha256": _sha256_json(source), "obligation_sha256": _sha256_json(obligation), "disposition": disposition, "closure_proposed": False, "completion_proof": proof_rows, "unresolved_remainder": unresolved_remainder})
     return {
         "authority": {
             "goal_id": "EMBER-01",
@@ -270,30 +391,267 @@ def build_issue_census(
             (row["updated_at"] for row in rows), default=None
         ),
         "allowed_dispositions": list(ALLOWED_DISPOSITIONS),
+        "issue_source_snapshot": source_snapshot,
+        "closed_issue_source_snapshot": closed_snapshot,
+        "closed_issue_snapshot_sha256": _sha256_json(normalized_closed),
+        "closed_outcome_count": len(closed_outcomes),
+        "closed_outcomes": closed_outcomes,
+        "immutable_custody_evidence": evidence_rows,
         "mutation_performed": False,
         "issues": rows,
     }
 
 
-def validate_issue_census(payload: Mapping[str, Any]) -> list[str]:
+def _content_proof_errors(
+    proof: Any, repository_root: Path | None, master_sha: Any, number: Any,
+) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(proof, list) or not proof:
+        return [f"completion_proof_missing:{number}"]
+    if repository_root is None:
+        return [f"completion_repository_unresolved:{number}"]
+    for item in proof:
+        if not isinstance(item, Mapping):
+            errors.append(f"completion_proof_invalid:{number}")
+            continue
+        if item.get("number") != number:
+            errors.append(f"completion_proof_issue_mismatch:{number}")
+        commit = str(item.get("commit", ""))
+        implementation_commit = str(item.get("implementation_commit", ""))
+        criterion = item.get("criterion")
+        criterion_sha = str(item.get("criterion_sha256", ""))
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            errors.append(f"completion_commit_invalid:{number}")
+            continue
+        ancestry = subprocess.run(["git", "merge-base", "--is-ancestor", commit, str(master_sha)], cwd=repository_root, capture_output=True, check=False)
+        if ancestry.returncode != 0:
+            errors.append(f"completion_commit_not_ancestor:{number}")
+        if not re.fullmatch(r"[0-9a-f]{40}", implementation_commit):
+            errors.append(f"implementation_commit_invalid:{number}")
+        else:
+            implemented = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", implementation_commit, str(master_sha)],
+                cwd=repository_root,
+                capture_output=True,
+                check=False,
+            )
+            if implemented.returncode != 0:
+                errors.append(f"implementation_commit_not_ancestor:{number}")
+            changed = subprocess.run(
+                ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "-m", implementation_commit],
+                cwd=repository_root,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            changed_paths = sorted(set(changed.stdout.splitlines())) if changed.returncode == 0 else []
+            implementation_paths = item.get("implementation_paths")
+            if not isinstance(implementation_paths, list) or not implementation_paths:
+                errors.append(f"implementation_paths_missing:{number}")
+            elif not all(isinstance(path, str) and path in changed_paths for path in implementation_paths):
+                errors.append(f"implementation_paths_not_changed:{number}")
+            expected_diff_hash = hashlib.sha256(
+                ("\n".join(changed_paths) + "\n").encode("utf-8")
+            ).hexdigest()
+            if item.get("implementation_diff_sha256") != expected_diff_hash:
+                errors.append(f"implementation_diff_hash_mismatch:{number}")
+        if not isinstance(criterion, str) or hashlib.sha256(criterion.encode("utf-8")).hexdigest() != criterion_sha:
+            errors.append(f"completion_criterion_hash_mismatch:{number}")
+        for kind in ("artifact", "verifier"):
+            path = item.get(f"{kind}_path")
+            expected = str(item.get(f"{kind}_sha256", ""))
+            if not isinstance(path, str) or not path or path.startswith("/") or ".." in Path(path).parts:
+                errors.append(f"completion_{kind}_path_invalid:{number}")
+                continue
+            shown = subprocess.run(["git", "show", f"{commit}:{path}"], cwd=repository_root, capture_output=True, check=False)
+            if shown.returncode != 0:
+                errors.append(f"completion_{kind}_path_unresolved:{number}")
+            elif hashlib.sha256(shown.stdout).hexdigest() != expected:
+                errors.append(f"completion_{kind}_hash_mismatch:{number}")
+        absent_paths = item.get("absent_paths", [])
+        if not isinstance(absent_paths, list):
+            errors.append(f"completion_absent_paths_invalid:{number}")
+        else:
+            for absent in absent_paths:
+                if (
+                    not isinstance(absent, str)
+                    or not absent
+                    or Path(absent).is_absolute()
+                    or ".." in Path(absent).parts
+                ):
+                    errors.append(f"completion_absent_path_invalid:{number}")
+                    continue
+                probe = subprocess.run(
+                    ["git", "cat-file", "-e", f"{commit}:{Path(absent).as_posix()}"],
+                    cwd=repository_root,
+                    capture_output=True,
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    errors.append(f"completion_absent_path_present:{number}")
+    return errors
+
+def validate_issue_census(
+    payload: Mapping[str, Any], repository_root: Path | None = None
+) -> list[str]:
     errors: list[str] = []
     rows = payload.get("issues")
     if not isinstance(rows, list):
         return ["issues_not_list"]
-    numbers = [
-        row.get("number") for row in rows if isinstance(row, Mapping)
-    ]
+    numbers = [row.get("number") for row in rows if isinstance(row, Mapping)]
     for number in sorted(set(numbers), key=lambda value: str(value)):
         if numbers.count(number) > 1:
             errors.append(f"issue_number_duplicate:{number}")
     if payload.get("open_issue_count") != len(rows):
         errors.append("open_issue_count_mismatch")
-    allowed = payload.get("allowed_dispositions")
-    if allowed != list(ALLOWED_DISPOSITIONS):
+    if payload.get("allowed_dispositions") != list(ALLOWED_DISPOSITIONS):
         errors.append("allowed_dispositions_mismatch")
     master_sha = payload.get("public_master_sha")
-    by_number = {
-        row.get("number"): row for row in rows if isinstance(row, Mapping)
+    source_snapshot = payload.get("issue_source_snapshot")
+    if not isinstance(source_snapshot, list):
+        errors.append("issue_source_snapshot_missing")
+        source_snapshot = []
+    source_numbers = [
+        row.get("number") for row in source_snapshot if isinstance(row, Mapping)
+    ]
+    for source in source_snapshot:
+        if isinstance(source, Mapping) and source.get("state") != "OPEN":
+            errors.append(f"open_issue_state_invalid:{source.get('number')}")
+    if sorted(source_numbers, key=str) != sorted(numbers, key=str):
+        errors.append("issue_source_number_set_mismatch")
+    normalized_snapshot = sorted(
+        (_normalized_source_issue(row) for row in source_snapshot if isinstance(row, Mapping)),
+        key=lambda row: row["number"],
+    )
+    if source_snapshot and payload.get("issue_snapshot_sha256") != _sha256_json(normalized_snapshot):
+        errors.append("issue_snapshot_hash_mismatch")
+    source_by_number = {row["number"]: row for row in normalized_snapshot}
+    raw_by_number = {row.get("number"): row for row in source_snapshot if isinstance(row, Mapping)}
+    closed_source = payload.get("closed_issue_source_snapshot", [])
+    closed_outcomes = payload.get("closed_outcomes", [])
+    closed_raw_by_number = (
+        {row.get("number"): row for row in closed_source if isinstance(row, Mapping)}
+        if isinstance(closed_source, list)
+        else {}
+    )
+    if closed_source or closed_outcomes:
+        if not isinstance(closed_source, list) or not isinstance(closed_outcomes, list):
+            errors.append("closed_outcome_snapshot_invalid")
+        else:
+            closed_source_numbers = [
+                row.get("number")
+                for row in closed_source
+                if isinstance(row, Mapping)
+            ]
+            closed_outcome_numbers = [
+                row.get("number")
+                for row in closed_outcomes
+                if isinstance(row, Mapping)
+            ]
+            for number in sorted(set(closed_source_numbers), key=str):
+                if closed_source_numbers.count(number) > 1:
+                    errors.append(f"closed_issue_number_duplicate:{number}")
+            for number in sorted(set(closed_outcome_numbers), key=str):
+                if closed_outcome_numbers.count(number) > 1:
+                    errors.append(f"closed_outcome_number_duplicate:{number}")
+            for number in sorted(set(source_numbers) & set(closed_source_numbers), key=str):
+                errors.append(f"open_closed_issue_overlap:{number}")
+            normalized_closed = sorted(
+                (
+                    _normalized_closed_source(row)
+                    for row in closed_source
+                    if isinstance(row, Mapping)
+                ),
+                key=lambda row: row["number"],
+            )
+            if payload.get("closed_issue_snapshot_sha256") != _sha256_json(
+                normalized_closed
+            ):
+                errors.append("closed_issue_snapshot_hash_mismatch")
+            if payload.get("closed_outcome_count") != len(closed_outcomes):
+                errors.append("closed_outcome_count_mismatch")
+            closed_by_number = {
+                row.get("number"): row
+                for row in closed_outcomes
+                if isinstance(row, Mapping)
+            }
+            if set(closed_by_number) != {
+                row["number"] for row in normalized_closed
+            }:
+                errors.append("closed_outcome_number_set_mismatch")
+            for source in normalized_closed:
+                number = source["number"]
+                outcome = closed_by_number.get(number)
+                if not isinstance(outcome, Mapping):
+                    continue
+                obligation = {
+                    "title": source["title"],
+                    "body_sha256": source["body_sha256"],
+                    "labels": source["labels"],
+                }
+                for field in ("number", "title", "body_sha256", "url", "created_at", "updated_at", "labels", "author", "state", "state_reason", "closed_at"):
+                    if outcome.get(field) != source.get(field):
+                        errors.append(f"closed_outcome_source_mismatch:{number}:{field}")
+                errors.extend(_content_proof_errors(outcome.get("completion_proof"), repository_root, master_sha, number))
+                raw_closed = closed_raw_by_number.get(number, {})
+                raw_comments = raw_closed.get("comments", []) if isinstance(raw_closed, Mapping) else []
+                for proof in outcome.get("completion_proof", []):
+                    if not isinstance(proof, Mapping):
+                        continue
+                    evidence_url = proof.get("evidence_comment_url")
+                    evidence_hash = proof.get("evidence_comment_body_sha256")
+                    matching = next(
+                        (
+                            comment for comment in raw_comments
+                            if isinstance(comment, Mapping) and comment.get("url") == evidence_url
+                        ),
+                        None,
+                    )
+                    if not isinstance(matching, Mapping):
+                        errors.append(f"completion_evidence_comment_unresolved:{number}")
+                        continue
+                    body = str(matching.get("body", ""))
+                    if hashlib.sha256(body.encode("utf-8")).hexdigest() != evidence_hash:
+                        errors.append(f"completion_evidence_comment_hash_mismatch:{number}")
+                    if str(proof.get("implementation_commit", ""))[:8] not in body:
+                        errors.append(f"implementation_commit_comment_unbound:{number}")
+                    command = proof.get("verification_evidence_excerpt")
+                    if not isinstance(command, str) or not command or command not in body:
+                        errors.append(f"completion_verification_evidence_excerpt_unbound:{number}")
+                    if proof.get("verification_exit_code") != 0:
+                        errors.append(f"completion_verification_exit_nonzero:{number}")
+                    if proof.get("verification_outcome") != "independently_verified" or not any(marker in body.casefold() for marker in ("verif", "pass", "exit 0", "exited 0", "zero")):
+                        errors.append(f"completion_verification_outcome_unbound:{number}")
+                    if proof.get("verification_executed_at") != matching.get("created_at"):
+                        errors.append(f"completion_verification_time_unbound:{number}")
+                if outcome.get("issue_record_sha256") != _sha256_json(source):
+                    errors.append(f"closed_issue_record_hash_mismatch:{number}")
+                if outcome.get("obligation_sha256") != _sha256_json(obligation):
+                    errors.append(f"closed_issue_obligation_hash_mismatch:{number}")
+                disposition = outcome.get("disposition")
+                if (
+                    outcome.get("state") != "CLOSED"
+                    or outcome.get("state_reason") != "COMPLETED"
+                    or disposition not in ALLOWED_DISPOSITIONS
+                ):
+                    errors.append(f"closed_outcome_state_invalid:{number}")
+                if disposition == "implemented and independently verified" and outcome.get("unresolved_remainder") is not None:
+                    errors.append(f"closed_verified_remainder_present:{number}")
+                if disposition == "unresolved" and not (
+                    isinstance(outcome.get("unresolved_remainder"), str)
+                    and outcome["unresolved_remainder"].strip()
+                ):
+                    errors.append(f"closed_unresolved_remainder_missing:{number}")
+    by_number = {row.get("number"): row for row in rows if isinstance(row, Mapping)}
+    custody_evidence = {
+        (item.get("artifact_sha256"), item.get("criterion"), item.get("verifier_sha256"))
+        for item in payload.get("immutable_custody_evidence", []) if isinstance(item, Mapping)
+    }
+    canonical_dispositions = {
+        "superseded by an exact named successor",
+        "exact duplicate of one canonical issue",
     }
     for row in rows:
         if not isinstance(row, Mapping):
@@ -303,79 +661,126 @@ def validate_issue_census(payload: Mapping[str, Any]) -> list[str]:
         disposition = row.get("disposition")
         if disposition not in ALLOWED_DISPOSITIONS:
             errors.append(f"issue_disposition_invalid:{number}")
-        if "public_master_sha" in row and row.get("public_master_sha") != master_sha:
+        if row.get("public_master_sha") != master_sha:
             errors.append(f"issue_master_binding_mismatch:{number}")
+        source = source_by_number.get(number)
+        raw_source = raw_by_number.get(number)
+        if isinstance(source, Mapping) and isinstance(raw_source, Mapping):
+            if row.get("issue_record_sha256") != _sha256_json(source):
+                errors.append(f"issue_record_hash_mismatch:{number}")
+            obligation = {"title": source["title"], "body_sha256": source["body_sha256"], "labels": source["labels"]}
+            if row.get("obligation_sha256") != _sha256_json(obligation):
+                errors.append(f"issue_obligation_hash_mismatch:{number}")
+            if row.get("compound_obligations") != [source["title"], str(raw_source.get("body", ""))]:
+                errors.append(f"issue_compound_obligations_mismatch:{number}")
+        if disposition == "implemented and independently verified":
+            errors.extend(_content_proof_errors(row.get("completion_proof"), repository_root, master_sha, number))
+            raw_comments = raw_source.get("comments", []) if isinstance(raw_source, Mapping) else []
+            for proof in row.get("completion_proof", []):
+                if not isinstance(proof, Mapping):
+                    continue
+                matching = next(
+                    (
+                        comment for comment in raw_comments
+                        if isinstance(comment, Mapping)
+                        and comment.get("url") == proof.get("evidence_comment_url")
+                    ),
+                    None,
+                )
+                if not isinstance(matching, Mapping):
+                    errors.append(f"completion_evidence_comment_unresolved:{number}")
+                    continue
+                body = str(matching.get("body", ""))
+                if hashlib.sha256(body.encode("utf-8")).hexdigest() != proof.get("evidence_comment_body_sha256"):
+                    errors.append(f"completion_evidence_comment_hash_mismatch:{number}")
+                if str(proof.get("implementation_commit", ""))[:8] not in body:
+                    errors.append(f"implementation_commit_comment_unbound:{number}")
+                excerpt = proof.get("verification_evidence_excerpt")
+                if not isinstance(excerpt, str) or not excerpt or excerpt not in body:
+                    errors.append(f"completion_verification_evidence_excerpt_unbound:{number}")
+                if proof.get("verification_exit_code") != 0 or proof.get("verification_outcome") != "independently_verified":
+                    errors.append(f"completion_verification_outcome_unbound:{number}")
+                if proof.get("verification_executed_at") != matching.get("created_at"):
+                    errors.append(f"completion_verification_time_unbound:{number}")
         closure = row.get("closure_proposed") is True
-        if closure and disposition == "implemented and independently verified":
-            proof = row.get("completion_proof")
-            if not isinstance(proof, list) or not proof:
-                errors.append(f"closure_completion_proof_missing:{number}")
-            elif not all(
+        proof = row.get("completion_proof")
+        proof_shape_valid = (
+            isinstance(proof, list) and bool(proof) and all(
                 isinstance(item, Mapping)
                 and re.fullmatch(r"[0-9a-f]{40}", str(item.get("commit", "")))
-                and re.fullmatch(
-                    r"[0-9a-f]{64}", str(item.get("artifact_sha256", ""))
-                )
-                and isinstance(item.get("criterion"), str)
-                and bool(item["criterion"].strip())
+                and re.fullmatch(r"[0-9a-f]{64}", str(item.get("artifact_sha256", "")))
+                and isinstance(item.get("criterion"), str) and bool(item["criterion"].strip())
+                and re.fullmatch(r"[0-9a-f]{64}", str(item.get("verifier_sha256", "")))
                 for item in proof
+            )
+        )
+        proof_custody_valid = proof_shape_valid and all(
+            (item["artifact_sha256"], item["criterion"], item["verifier_sha256"]) in custody_evidence
+            for item in proof
+        )
+        if (
+            disposition
+            == "historical sub-3B or borrowed-lineage non-executable evidence"
+            and row.get("canonical_issue") is not None
+        ):
+            historical_target = source_by_number.get(row.get("canonical_issue"))
+            expected_url = (
+                historical_target.get("url")
+                if isinstance(historical_target, Mapping)
+                else None
+            )
+            expected_body_hash = (
+                historical_target.get("body_sha256")
+                if isinstance(historical_target, Mapping)
+                else None
+            )
+            if (
+                row.get("canonical_issue") == number
+                or not isinstance(historical_target, Mapping)
+                or row.get("canonical_issue_url") != expected_url
+                or row.get("canonical_obligation_sha256")
+                != expected_body_hash
+                or row.get("preserved_issue_body_sha256")
+                != source.get("body_sha256")
             ):
+                errors.append(f"historical_canonical_mapping_invalid:{number}")
+        canonical = row.get("canonical_issue")
+        target = by_number.get(canonical)
+        canonical_valid = (
+            disposition in canonical_dispositions and isinstance(canonical, int)
+            and canonical != number and isinstance(target, Mapping)
+            and target.get("obligation_sha256") == row.get("obligation_sha256")
+            and row.get("canonical_obligation_sha256") == row.get("obligation_sha256")
+        )
+        if closure and disposition == "implemented and independently verified":
+            if not isinstance(proof, list) or not proof:
+                errors.append(f"closure_completion_proof_missing:{number}")
+            elif not proof_shape_valid:
                 errors.append(f"closure_completion_proof_invalid:{number}")
-        canonical_dispositions = {
-            "superseded by an exact named successor",
-            "exact duplicate of one canonical issue",
-        }
-        if closure and disposition in canonical_dispositions:
-            canonical = row.get("canonical_issue")
-            if not isinstance(canonical, int) or canonical == number:
-                errors.append(f"closure_canonical_issue_invalid:{number}")
-            else:
-                target = by_number.get(canonical)
-                obligation = row.get("obligation_sha256")
-                if (
-                    not isinstance(target, Mapping)
-                    or target.get("obligation_sha256") != obligation
-                    or row.get("canonical_obligation_sha256") != obligation
-                ):
-                    errors.append(
-                        f"closure_canonical_obligation_not_exact:{number}"
-                    )
+        if closure and disposition in canonical_dispositions and not canonical_valid:
+            errors.append(f"closure_canonical_obligation_not_exact:{number}")
         if closure and disposition not in canonical_dispositions | {
             "implemented and independently verified",
             "historical sub-3B or borrowed-lineage non-executable evidence",
             "expired operational incident",
         }:
             errors.append(f"closure_disposition_lacks_allowed_basis:{number}")
-        if closure:
-            proof = row.get("completion_proof")
-            proof_valid = (
-                isinstance(proof, list)
-                and bool(proof)
-                and all(
-                    isinstance(item, Mapping)
-                    and re.fullmatch(
-                        r"[0-9a-f]{40}", str(item.get("commit", ""))
+        if closure and not proof_custody_valid and not canonical_valid:
+            errors.append(f"closure_proof_or_canonical_missing:{number}")
+            if proof_shape_valid:
+                errors.append(f"closure_custody_evidence_unresolved:{number}")
+        if closure and proof_custody_valid:
+            if repository_root is None:
+                errors.append(f"closure_repository_unresolved:{number}")
+            else:
+                for item in proof:
+                    ancestry = subprocess.run(
+                        ["git", "merge-base", "--is-ancestor", str(item["commit"]), str(master_sha)],
+                        cwd=repository_root, capture_output=True, check=False,
                     )
-                    and re.fullmatch(
-                        r"[0-9a-f]{64}", str(item.get("artifact_sha256", ""))
-                    )
-                    and isinstance(item.get("criterion"), str)
-                    and bool(item["criterion"].strip())
-                    for item in proof
-                )
-            )
-            canonical_valid = (
-                disposition in canonical_dispositions
-                and isinstance(row.get("canonical_issue"), int)
-                and row.get("canonical_issue") != number
-                and isinstance(by_number.get(row.get("canonical_issue")), Mapping)
-                and by_number[row["canonical_issue"]].get("obligation_sha256")
-                == row.get("obligation_sha256")
-                and row.get("canonical_obligation_sha256")
-                == row.get("obligation_sha256")
-            )
-            if not proof_valid and not canonical_valid:
-                errors.append(f"closure_proof_or_canonical_missing:{number}")
+                    if ancestry.returncode != 0:
+                        errors.append(f"closure_commit_not_ancestor:{number}")
+                        break
     return errors
 
 
@@ -395,6 +800,8 @@ def main() -> int:
     parser.add_argument("--repo-root", required=True)
     parser.add_argument("--public-ref", required=True)
     parser.add_argument("--issues-json")
+    parser.add_argument("--closed-issues-json")
+    parser.add_argument("--completion-evidence-json")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
     try:
@@ -407,9 +814,11 @@ def main() -> int:
         if not isinstance(issues, list):
             raise ValueError("issue snapshot must be a JSON list")
         payload = build_issue_census(
-            Path(args.repo_root), args.public_ref, issues
+            Path(args.repo_root), args.public_ref, issues,
+            closed_issues=(json.loads(Path(args.closed_issues_json).read_text(encoding="utf-8")) if args.closed_issues_json else []),
+            completion_evidence=(json.loads(Path(args.completion_evidence_json).read_text(encoding="utf-8")) if args.completion_evidence_json else []),
         )
-        errors = validate_issue_census(payload)
+        errors = validate_issue_census(payload, repository_root=Path(args.repo_root))
         if errors:
             raise ValueError("; ".join(errors))
         _write_json_atomic(Path(args.output), payload)

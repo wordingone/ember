@@ -39,11 +39,13 @@ not abort neighboring files.
 ## Resumable progress
 
 --journal appends canonical JSONL progress. Large-file chunk progress has
-state=partial, a byte offset, and no accepted SHA-256. Only state=complete with
-the exact algorithm tag, size/timestamp binding, and 64-hex digest may be
-reused. Truncated JSONL tails are ignored. The two completion-proof censuses
-are fresh journal-free runs; journal reuse cannot substitute for byte-stability
-evidence.
+state=partial, a byte offset, and no accepted SHA-256. Completed journal rows
+are progress receipts only: every exact census re-hashes the current bytes,
+checks pre/post file identity and size, and rejects mutation during hashing.
+Truncated JSONL tails are ignored. Non-authoritative mtimes remain observable
+receipt fields but are excluded from canonical byte identity. Git and directory
+snapshots are rechecked after traversal; movement is an explicit contradiction,
+never silently accepted as byte stability.
 
 ## Benchmark boundary
 
@@ -57,15 +59,20 @@ the frozen official/comparable boundary.
 
 ## Public issue boundary
 
-public-issue-census.json binds every live open issue body hash to exactly one of
-the eight durable dispositions. Every row carries its complete obligation hash,
-surviving obligation, confidence, public-master blob/history evidence, and
-unresolved remainder.
+public-issue-census.json embeds the normalized raw live source snapshot and
+binds every open issue body to exactly one of the eight durable dispositions.
+Every row carries its recomputable record and compound-obligation hashes,
+confidence, public-master blob/history evidence, and unresolved remainder.
+Audited completed closures remain in a separately content-bound closed-outcome
+snapshot instead of disappearing when the live open set changes. Open-state identity,
+closed evidence-comment bytes, independently verified outcomes, and landed
+implementation commits are content-bound and revalidated.
 
-A closure proposal is invalid without immutable completion proof (commit,
-artifact SHA-256, and criterion) or one exact canonical issue with the same
-complete obligation hash. Age, inactivity, prose, labels, and mere commit/PR
-references are never closure proof.
+A closure proposal is invalid unless its commit is an ancestor of the bound
+public master and its artifact, criterion, and verifier SHA-256 resolve through
+immutable custody evidence, or one exact canonical issue preserves the complete
+obligation hash. Age, inactivity, prose, labels, and mere commit/PR references
+are never closure proof.
 
 ## Deterministic replay
 
@@ -76,6 +83,7 @@ From a clean checkout invoke:
       --benchmark-registry manifests/ember-01-custody/benchmark-registry.json
       --issue-census manifests/ember-01-custody/public-issue-census.json
       --source-commit <40-hex-commit>
+      --public-master-ref refs/remotes/origin/master
       --binding benchmark-root=<path>
       --binding local-execution-tree=<path>
       --output <receipt.json>

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -13,9 +14,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_ROOT = REPO_ROOT / "scripts" / "ember_01_custody"
 sys.path.insert(0, str(SCRIPT_ROOT))
 
+import census as census_module  # noqa: E402
 from census import (  # noqa: E402
     build_duplicate_groups,
     build_root_census,
+    canonical_root_identity,
     detect_contradictions,
     git_repository_summary,
     parse_worktree_porcelain,
@@ -233,15 +236,18 @@ def test_harness_or_borrowed_result_cannot_be_completed() -> None:
     assert "completion_not_executed:automationbench" in errors
 
 
-def test_exact_owned_execution_can_be_completed() -> None:
+def test_completion_requires_exact_frozen_inputs_and_content_bindings() -> None:
     registry = valid_benchmark_registry()
-    automation = next(
-        row
-        for row in registry["benchmarks"]
-        if row["benchmark_id"] == "automationbench"
+    row = next(
+        item for item in registry["benchmarks"]
+        if item["benchmark_id"] == "automationbench"
     )
-    automation.update(
+    row.update(
         {
+            "version": "1.0",
+            "split": "test",
+            "harness_path": "benchmarks/automationbench/run.py",
+            "harness_identity": "sha256:" + "c" * 64,
             "harness_status": "verified",
             "data_status": "frozen",
             "license_status": "verified",
@@ -250,10 +256,28 @@ def test_exact_owned_execution_can_be_completed() -> None:
             "subject_manifest": "sha256:" + "d" * 64,
             "result_receipt": "sha256:" + "e" * 64,
             "official_boundary": True,
+            "completion_eligibility": "eligible_exact_owned_execution",
             "completion": True,
         }
     )
-    assert validate_benchmark_registry(registry) == []
+    assert "completion_repository_unresolved:automationbench" in validate_benchmark_registry(registry)
+
+    mutations = {
+        "version": "unresolved",
+        "split": "unresolved",
+        "data_status": "unresolved",
+        "license_status": "unresolved",
+        "harness_identity": None,
+        "completion_eligibility": "ineligible_until_exact_owned_execution",
+        "subject_manifest": "arbitrary-subject",
+        "result_receipt": "arbitrary-result",
+    }
+    for field, invalid in mutations.items():
+        original = row[field]
+        row[field] = invalid
+        errors = validate_benchmark_registry(registry)
+        assert any(error.startswith("completion_") for error in errors), field
+        row[field] = original
 
 
 def test_registry_requires_frozen_boundary_fields_and_rejects_unknown_completion() -> None:
@@ -390,7 +414,7 @@ def test_worktree_registry_is_portable_and_preserves_each_entry() -> None:
     rows = parse_worktree_porcelain(text)
     assert rows == [
         {
-            "worktree_id": "worktree-0001",
+            "worktree_id": "worktree-fae3c4be302362d0",
             "normalized_path": "X:/private/feature",
             "head": "b" * 40,
             "branch": None,
@@ -398,7 +422,7 @@ def test_worktree_registry_is_portable_and_preserves_each_entry() -> None:
             "prunable": True,
         },
         {
-            "worktree_id": "worktree-0002",
+            "worktree_id": "worktree-63082be5dcb04b85",
             "normalized_path": "X:/private/main",
             "head": "a" * 40,
             "branch": "refs/heads/main",
@@ -435,9 +459,104 @@ def test_git_repository_scan_records_identity_without_git_object_files(
     assert result["roots"][0]["git"]["head"] == git(root, "rev-parse", "HEAD")
     assert {row["artifact_id"] for row in result["artifacts"]} == {
         "repo-root:git-refs",
+            "repo-root:git-index",
+            "repo-root:git-reachable-objects",
+            "repo-root:git-tracked-tree",
         "repo-root:git-status",
     }
     assert all(".git/" not in row["source"]["relative_path"] for row in result["artifacts"])
+
+
+def test_git_repository_scan_binds_tracked_index_and_local_material_bytes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init")
+    git(root, "config", "user.email", "fixture@example.invalid")
+    git(root, "config", "user.name", "fixture")
+    (root / ".gitignore").write_text("ignored/\n", encoding="utf-8")
+    tracked = root / "tracked.txt"
+    tracked.write_text("committed\n", encoding="utf-8")
+    git(root, "add", ".gitignore", "tracked.txt")
+    git(root, "commit", "-m", "fixture")
+    tracked.write_text("staged\n", encoding="utf-8")
+    git(root, "add", "tracked.txt")
+    tracked.write_text("working\n", encoding="utf-8")
+    (root / "untracked.bin").write_bytes(b"untracked")
+    ignored = root / "ignored" / "payload.bin"
+    ignored.parent.mkdir()
+    ignored.write_bytes(b"ignored")
+    spec = {"roots": [{"root_id": "repo", "required": True, "scan": "git_repository"}]}
+
+    result = build_root_census(spec, {"repo": root})
+    summary = result["roots"][0]["git"]
+    assert summary["reachable_object_manifest_sha256"]
+    assert summary["tracked_tree_manifest_sha256"]
+    assert summary["index_manifest_sha256"]
+    assert result["roots"][0]["normalized_bound_path"] == str(root.resolve()).replace("\\", "/")
+    artifacts = {row["source"]["relative_path"]: row for row in result["artifacts"]}
+    assert artifacts["git-material/tracked.txt"]["sha256"] == sha256_file(tracked)
+    assert artifacts["git-material/untracked.bin"]["sha256"] == sha256_file(root / "untracked.bin")
+    assert artifacts["git-material/ignored/payload.bin"]["sha256"] == sha256_file(ignored)
+
+
+def test_directory_membership_change_is_rejected(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    first = root / "first.bin"
+    first.write_bytes(b"first")
+    real_hash = census_module.hash_file_streaming
+    changed = False
+    def mutate_membership(path, *args, **kwargs):
+        nonlocal changed
+        result = real_hash(path, *args, **kwargs)
+        if not changed:
+            (root / "late.bin").write_bytes(b"late")
+            changed = True
+        return result
+    monkeypatch.setattr(census_module, "hash_file_streaming", mutate_membership)
+    result = build_root_census({"roots": [{"root_id": "root", "required": True, "scan": "files"}]}, {"root": root})
+    assert any(row["code"] == "directory_membership_changed_during_scan" for row in result["contradictions"])
+
+
+def test_inaccessible_directory_is_coverage_contradiction_not_file_artifact(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    blocked = root / "blocked"
+    blocked.mkdir()
+    real_iterdir = Path.iterdir
+    def selective_iterdir(path):
+        if path == blocked:
+            raise OSError(5, "blocked directory")
+        return real_iterdir(path)
+    monkeypatch.setattr(Path, "iterdir", selective_iterdir)
+    result = build_root_census({"roots": [{"root_id": "root", "required": True, "scan": "files"}]}, {"root": root})
+    assert result["artifacts"] == []
+    assert result["contradictions"] == [{
+        "code": "directory_coverage_inaccessible",
+        "root_id": "root",
+        "relative_path": "blocked",
+        "exception": "OSError",
+        "winerror": None,
+        "errno": 5,
+        "resolution": "unresolved_preserve_directory",
+    }]
+
+
+def test_canonical_root_identity_excludes_mtime_receipt_metadata(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    artifact = root / "payload.bin"
+    artifact.write_bytes(b"same")
+    spec = {"roots": [{"root_id": "root", "required": True, "scan": "files"}]}
+    first = build_root_census(spec, {"root": root})
+    os.utime(artifact, ns=(1_800_000_000_000_000_000, 1_800_000_000_000_000_000))
+    second = build_root_census(spec, {"root": root})
+    assert first["artifacts"][0]["mtime_ns_non_authoritative"] != second["artifacts"][0]["mtime_ns_non_authoritative"]
+    assert canonical_root_identity(first) == canonical_root_identity(second)
 
 
 def test_remote_and_worktree_registry_modes_use_source_repo(tmp_path: Path) -> None:
@@ -493,6 +612,16 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
     root = tmp_path / "evidence"
     root.mkdir()
     (root / "receipt.json").write_text("{}\n", encoding="utf-8")
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=repository, check=True)
+    subprocess.run(["git", "config", "user.name", "fixture"], cwd=repository, check=True)
+    (repository / "README.md").write_text("fixture\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-m", "fixture"], cwd=repository, check=True, capture_output=True)
+    source_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repository, text=True, capture_output=True, check=True).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/master", source_commit], cwd=repository, check=True)
     spec = {
         "authority": {
             "goal_id": "EMBER-01",
@@ -520,8 +649,9 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
         json.dumps(
             {
                 "schema": "ember-01-public-issue-census-v1",
-                "public_master_sha": "a" * 40,
+                "public_master_sha": source_commit,
                 "open_issue_count": 0,
+                "issue_source_snapshot": [],
                 "allowed_dispositions": list(ALLOWED_DISPOSITIONS),
                 "issues": [],
             }
@@ -541,9 +671,13 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
                 "--issue-census",
                 str(issue_path),
                 "--source-commit",
-                "a" * 40,
+                source_commit,
+                "--public-master-ref",
+                "refs/remotes/origin/master",
                 "--binding",
                 f"evidence-root={root}",
+                "--binding",
+                f"public-repository={repository}",
                 "--output",
                 str(output),
             ],
@@ -557,7 +691,7 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
     payload = json.loads(outputs[0].read_text(encoding="utf-8"))
     assert payload["benchmark_validation_errors"] == []
     assert payload["issue_validation_errors"] == []
-    assert payload["source_commit"] == "a" * 40
+    assert payload["source_commit"] == source_commit
     assert payload["canonical_manifest_sha256"]
     assert payload["benchmark_registry"]["benchmarks"]
     assert payload["public_issue_census"]["issues"] == []
@@ -710,3 +844,156 @@ def test_git_ignored_registry_hashes_ignored_bytes_without_object_walk(
     assert artifacts[0]["source"]["relative_path"] == "ignored/payload.bin"
     assert artifacts[0]["sha256"] == sha256_file(ignored)
     assert str(root) not in json.dumps(result)
+
+
+def test_completed_benchmark_resolves_content_bindings(tmp_path: Path) -> None:
+    root = tmp_path / "repo"; root.mkdir()
+    fields = {"harness_path": ("harness_identity", "h.py"), "subject_manifest_path": ("subject_manifest", "subject.json"), "result_receipt_path": ("result_receipt", "result.json"), "data_evidence_path": ("data_evidence", "data.json"), "license_evidence_path": ("license_evidence", "license.txt")}
+    registry = valid_benchmark_registry(); row = next(item for item in registry["benchmarks"] if item["benchmark_id"] == "automationbench")
+    row.update({"version": "1", "split": "test", "harness_status": "verified", "data_status": "frozen", "license_status": "verified", "execution_status": "executed", "subject_class": "owned_admissible_ember_checkpoint", "completion_eligibility": "eligible_exact_owned_execution", "official_boundary": True, "completion": True})
+    git(root, "init")
+    git(root, "config", "user.email", "fixture@example.invalid")
+    git(root, "config", "user.name", "fixture")
+    for path_field, (identity_field, relative) in fields.items():
+        path = root / relative; path.write_text(relative, encoding="utf-8"); row[path_field] = relative; row[identity_field] = "sha256:" + sha256_file(path)
+    git(root, "add", ".")
+    git(root, "commit", "-m", "proof")
+    head = git(root, "rev-parse", "HEAD")
+    assert validate_benchmark_registry(registry, repository_root=root, source_commit=head) == []
+    (root / "h.py").write_text("mutated", encoding="utf-8")
+    row["harness_identity"] = "sha256:" + sha256_file(root / "h.py")
+    assert "completion_harness_identity_mismatch:automationbench" in validate_benchmark_registry(registry, repository_root=root, source_commit=head)
+    row["result_receipt_path"] = "../outside.json"
+    assert "completion_result_receipt_path_outside_repository:automationbench" in validate_benchmark_registry(registry, repository_root=root, source_commit=head)
+
+
+def test_directory_discovery_emits_full_git_identity_and_errors(tmp_path: Path, monkeypatch) -> None:
+    parent = tmp_path / "parent"; child = parent / "ember-child"; child.mkdir(parents=True); subprocess.run(["git", "init"], cwd=child, check=True, capture_output=True); subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=child, check=True); subprocess.run(["git", "config", "user.name", "fixture"], cwd=child, check=True); (child / "tracked.txt").write_text("tracked", encoding="utf-8"); subprocess.run(["git", "add", "tracked.txt"], cwd=child, check=True); subprocess.run(["git", "commit", "-m", "fixture"], cwd=child, check=True, capture_output=True); (child / "dirty.txt").write_text("dirty", encoding="utf-8")
+    blocked = parent / "ember-blocked"; blocked.mkdir(); real_iterdir = Path.iterdir
+    monkeypatch.setattr(Path, "iterdir", lambda path: (_ for _ in ()).throw(PermissionError(13, "blocked")) if path == blocked else real_iterdir(path))
+    result = build_root_census({"roots": [{"root_id": "discovery", "required": True, "scan": "directory_discovery", "name_patterns": ["ember*"]}]}, {"discovery": parent})
+    summary = git_repository_summary("discovery:ember-child", child); artifacts = {row["source"]["relative_path"]: row["sha256"] for row in result["artifacts"]}
+    for suffix, key in {"git-refs": "refs_sha256", "git-status": "status_sha256", "git-reachable-objects": "reachable_object_manifest_sha256", "git-tracked-tree": "tracked_tree_manifest_sha256", "git-index": "index_manifest_sha256"}.items(): assert artifacts[f"ember-child/{suffix}"] == summary[key]
+    assert "ember-child/git-material/dirty.txt" in artifacts
+    assert any(row["code"] == "directory_coverage_inaccessible" for row in result["contradictions"])
+
+
+def test_census_cli_rejects_unresolved_source_commit(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"; repo.mkdir(); subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    spec_path, registry_path, issue_path = tmp_path / "root.json", tmp_path / "registry.json", tmp_path / "issues.json"
+    spec_path.write_text(json.dumps({"roots": [{"root_id": "public-repository", "required": True, "scan": "git_repository"}]}), encoding="utf-8"); registry_path.write_text(json.dumps(valid_benchmark_registry()), encoding="utf-8")
+    issue_path.write_text(json.dumps({"public_master_sha": "a" * 40, "open_issue_count": 0, "issue_source_snapshot": [], "allowed_dispositions": list(ALLOWED_DISPOSITIONS), "issues": []}), encoding="utf-8")
+    result = subprocess.run([sys.executable, str(SCRIPT_ROOT / "census.py"), "--root-spec", str(spec_path), "--benchmark-registry", str(registry_path), "--issue-census", str(issue_path), "--source-commit", "a" * 40, "--public-master-ref", "refs/remotes/origin/master", "--binding", f"public-repository={repo}", "--output", str(tmp_path / "out.json")], cwd=REPO_ROOT, text=True, capture_output=True, check=False)
+    assert result.returncode == 1 and "source commit does not resolve" in result.stdout
+
+
+def test_census_cli_rejects_issue_master_source_commit_mismatch(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init")
+    git(repo, "config", "user.email", "fixture@example.invalid")
+    git(repo, "config", "user.name", "fixture")
+    (repo / "tracked.txt").write_text("one", encoding="utf-8")
+    git(repo, "add", "tracked.txt")
+    git(repo, "commit", "-m", "one")
+    issue_master = git(repo, "rev-parse", "HEAD")
+    (repo / "tracked.txt").write_text("two", encoding="utf-8")
+    git(repo, "commit", "-am", "two")
+    source_commit = git(repo, "rev-parse", "HEAD")
+    git(repo, "update-ref", "refs/remotes/origin/master", source_commit)
+    spec_path = tmp_path / "root.json"
+    registry_path = tmp_path / "registry.json"
+    issue_path = tmp_path / "issues.json"
+    spec_path.write_text(
+        json.dumps(
+            {
+                "roots": [
+                    {
+                        "root_id": "public-repository",
+                        "required": True,
+                        "scan": "git_repository",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry_path.write_text(json.dumps(valid_benchmark_registry()), encoding="utf-8")
+    issue_path.write_text(
+        json.dumps(
+            {
+                "public_master_sha": issue_master,
+                "open_issue_count": 0,
+                "issue_source_snapshot": [],
+                "allowed_dispositions": list(ALLOWED_DISPOSITIONS),
+                "issues": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_ROOT / "census.py"),
+            "--root-spec",
+            str(spec_path),
+            "--benchmark-registry",
+            str(registry_path),
+            "--issue-census",
+            str(issue_path),
+            "--source-commit",
+            source_commit,
+            "--public-master-ref",
+            "refs/remotes/origin/master",
+            "--binding",
+            f"public-repository={repo}",
+            "--output",
+            str(tmp_path / "out.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "issue census public master does not match source commit" in result.stdout
+
+
+def test_census_cli_rejects_historical_commit_labeled_public_master(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init")
+    git(repo, "config", "user.email", "fixture@example.invalid")
+    git(repo, "config", "user.name", "fixture")
+    (repo / "a.txt").write_text("one\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-m", "one")
+    historical = git(repo, "rev-parse", "HEAD")
+    (repo / "a.txt").write_text("two\n", encoding="utf-8")
+    git(repo, "commit", "-am", "two")
+    git(repo, "update-ref", "refs/remotes/origin/master", "HEAD")
+    spec = tmp_path / "spec.json"
+    registry = tmp_path / "registry.json"
+    issues = tmp_path / "issues.json"
+    spec.write_text(json.dumps({"roots": []}), encoding="utf-8")
+    registry.write_text(json.dumps({"benchmarks": []}), encoding="utf-8")
+    issues.write_text(json.dumps({"public_master_sha": historical, "issues": []}), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_ROOT / "census.py"),
+            "--root-spec", str(spec),
+            "--benchmark-registry", str(registry),
+            "--issue-census", str(issues),
+            "--source-commit", historical,
+            "--public-master-ref", "refs/remotes/origin/master",
+            "--binding", f"public-repository={repo}",
+            "--output", str(tmp_path / "out.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "source commit is not the bound public master ref" in result.stdout
