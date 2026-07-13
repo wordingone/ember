@@ -14,6 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_ROOT = REPO_ROOT / "scripts" / "ember_01_custody"
 sys.path.insert(0, str(SCRIPT_ROOT))
 
+import census as census_module  # noqa: E402
+
 from census import (  # noqa: E402
     append_hash_journal,
     build_root_census,
@@ -227,3 +229,34 @@ def test_directory_discovery_classifies_git_bare_and_non_git_bytes(
     assert "ember-payload/weights.bin" in relatives
     assert not any("unrelated" in path for path in relatives)
     assert any(path.endswith("/git-refs") for path in relatives)
+
+
+def test_same_physical_file_is_hashed_once_but_keeps_all_logical_rows(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    root = tmp_path / "evidence"
+    root.mkdir()
+    (root / "same.bin").write_bytes(b"same")
+    calls = 0
+    real_hash = census_module.hash_file_streaming
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_hash(*args, **kwargs)
+
+    monkeypatch.setattr(census_module, "hash_file_streaming", counted)
+    spec = {
+        "roots": [
+            {"root_id": "logical-a", "required": True, "scan": "files"},
+            {"root_id": "logical-b", "required": True, "scan": "files"},
+        ]
+    }
+
+    result = build_root_census(
+        spec, {"logical-a": root, "logical-b": root}
+    )
+
+    assert calls == 1
+    assert len(result["artifacts"]) == 2
+    assert result["artifacts"][0]["sha256"] == result["artifacts"][1]["sha256"]
