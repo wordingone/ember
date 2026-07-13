@@ -84,6 +84,11 @@ The current coordination authority is public issue #812 with body SHA-256
 Issues #682 and #793 are historical references only. Issue text is not artifact
 authority by itself: EMBER-01A must resolve the actual accepted shard/caller/
 gate/validator bytes into this contract.
+The executable trust root is
+`accepted-training-input-authorities-v1.json`; admission rehashes its closed
+active record and requires manifest and signed receipt to bind authority ID
+`ember-02-issue-812`, input ID `github-issue-812`, and active-record SHA-256
+`19f5e874fe852baa13536242468f1fd910a5eae4b790add6ddc94d45d38eba9f`.
 
 ### Capability and mechanism state
 
@@ -127,7 +132,8 @@ denylisted spelling.
 Backend identity binds executable bytes, process identity, protocol, device,
 runtime dependencies, and a resource lease. An endpoint is location, not
 identity. Evaluation binds exact subject checkpoint, benchmark/version/split,
-harness, comparator, score, uncertainty, and receipt. A
+harness bytes/hash, comparator identity plus artifact bytes/hash, score,
+uncertainty, and receipt. A
 `REFERENCE_ONLY` subject cannot be selected as owned Ember or increment owned
 completion.
 
@@ -152,8 +158,9 @@ category-level integration requirement. The snapshot''s earlier generic
 derived-label/protocol/failure/conflict fields are superseded and supply no
 credit. Its content-bound adjudication overlay fails closed: all 45,607
 executable matches remain conservative integration consumers, 7,302 document
-or data matches remain identity sources, and 12,280 test/fixture matches are
-reviewed non-consumers. Nothing is left unadjudicated. Thirteen load-bearing
+or data matches remain identity sources. Test paths are not dismissed: their
+57,694 executable matches remain conservative consumers. Nothing among the
+discovered rows is left unadjudicated. Thirteen load-bearing
 consumers additionally have hand-reviewed semantics bound by exact root, path,
 category, and evidence hash in `consumer-semantics-v1.json`.
 
@@ -168,14 +175,18 @@ configured-but-missing private backup root. The canonical snapshot is
 `d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda`.
 Two complete unchanged-input environment runs were byte-identical. A
 deterministic clean-clone verifier replays the overlay from every exact
-content-bound row, producing zero unadjudicated matches and the conservative
-superset completeness state. A host-independent portable profile separately
+content-bound row, producing zero unadjudicated discovered matches. Because
+the snapshot is stale, suffix-limited, and contains a missing configured root,
+it is environmental discovery only and makes no global-completeness claim. A
+host-independent portable profile separately
 replays current public master
 `ca500aabe0f597ab85e762ceb53748724fb0ae98` with no environment roots.
 Two complete portable runs were byte-identical at SHA-256
-`a3d0afc545e377a7126468e9937fc72da4afb6f39d2bd951813fedb4f0009f93`;
-they contain 13 hand-reviewed consumers, 16,279 conservative consumers, 2,453
-identity sources, 4,945 reviewed non-consumers, and zero unadjudicated matches.
+`d34208f7c617c151d2e07f4a185e86c5868fe3e6d7bb986148b75fa39aac1d4a`.
+All 2,878 tracked files are accounted: the replay contains 13 hand-reviewed
+consumers, 21,830 conservative consumers, 2,805 identity sources, and zero
+unadjudicated matches. Test paths and opaque artifacts remain conservative
+consumers; neither is automatically dismissed.
 The machine receipt is `consumer-census-stability-v1.json`.
 
 ## Load-bearing consumer map

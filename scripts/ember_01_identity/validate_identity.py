@@ -40,6 +40,12 @@ TRUSTED_VERIFIER_REGISTRY_PATH = (
     / "ember-01-identity"
     / "trusted-verifiers-v1.json"
 )
+ACCEPTED_TRAINING_INPUT_AUTHORITIES_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "manifests"
+    / "ember-01-identity"
+    / "accepted-training-input-authorities-v1.json"
+)
 OWNED_ADMISSION_PARAMETER_FLOOR = 3_000_000_000
 EVIDENCE_RECEIPT_SCHEMA = "ember-identity-evidence-receipt-v1"
 SUFFICIENT_PRETRAINING_CRITERION = "ember-sufficient-pretraining-v1"
@@ -76,8 +82,11 @@ REQUIRED_PATHS = (
     "data.verifier_sha256",
     "data.clean_genesis",
     "data.accepted_input.input_id",
+    "data.accepted_input.authority_id",
+    "data.accepted_input.authority_record_sha256",
     "data.accepted_input.authority",
     "data.accepted_input.shard_manifest_sha256",
+    "data.accepted_input.authority_record_sha256",
     "data.accepted_input.caller_sha256",
     "data.accepted_input.gate_sha256",
     "data.accepted_input.validator_sha256",
@@ -114,6 +123,7 @@ REQUIRED_PATHS = (
     "evaluation.harness_sha256",
     "evaluation.subject_checkpoint_sha256",
     "evaluation.comparator_identity",
+    "evaluation.comparator_sha256",
     "evaluation.score",
     "evaluation.uncertainty",
     "evaluation.receipt_sha256",
@@ -141,6 +151,7 @@ HASH_PATHS = (
     "training.optimizer_state_sha256",
     "backend.executable_sha256",
     "evaluation.harness_sha256",
+    "evaluation.comparator_sha256",
     "evaluation.subject_checkpoint_sha256",
 )
 
@@ -164,6 +175,7 @@ BINDING_PATHS = (
     "evaluation.split",
     "evaluation.harness_sha256",
     "evaluation.comparator_identity",
+    "evaluation.comparator_sha256",
     "checkpoint.ancestry",
 )
 
@@ -214,8 +226,9 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
         "verifier_sha256", "clean_genesis", "accepted_input",
     },
     "data.accepted_input": {
-        "input_id", "authority", "shard_manifest_sha256", "caller_sha256",
-        "gate_sha256", "validator_sha256", "forwarding_receipt_sha256",
+        "input_id", "authority_id", "authority_record_sha256", "authority",
+        "shard_manifest_sha256", "caller_sha256", "gate_sha256",
+        "validator_sha256", "forwarding_receipt_sha256",
     },
     "parameters": {"allocated", "unique", "active", "trainable", "served", "actually_trained", "evidence_receipts"},
     "parameters.evidence_receipts": {"allocated", "unique", "active", "trainable", "served", "actually_trained"},
@@ -239,8 +252,9 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
     },
     "evaluation": {
         "benchmark_id", "version", "split", "harness_sha256",
-        "subject_checkpoint_sha256", "comparator_identity", "score",
-        "uncertainty", "receipt_sha256", "counts_toward_owned_completion",
+        "subject_checkpoint_sha256", "comparator_identity", "comparator_sha256",
+        "score", "uncertainty", "receipt_sha256",
+        "counts_toward_owned_completion",
     },
     "provenance": {
         "ownership", "exclusion_reasons", "learned_signal_sources",
@@ -363,6 +377,47 @@ def _pinned_verifier_entries() -> dict[str, str]:
             return {}
         entries[row["verifier_sha256"]] = row["public_key_ed25519"]
     return entries
+
+
+def _pinned_accepted_training_input() -> tuple[dict[str, Any], str] | None:
+    try:
+        registry = json.loads(
+            ACCEPTED_TRAINING_INPUT_AUTHORITIES_PATH.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return None
+    if (
+        not isinstance(registry, Mapping)
+        or set(registry) != {"schema", "active", "historical_issue_ids"}
+        or registry.get("schema")
+            != "ember-accepted-training-input-authority-registry-v1"
+        or not isinstance(registry.get("active"), Mapping)
+        or set(registry["active"]) != {
+            "authority_id", "body_sha256", "input_id", "issue_url", "state"
+        }
+        or registry["active"].get("state") != "CURRENT_EXECUTABLE"
+        or not isinstance(registry["active"].get("authority_id"), str)
+        or not registry["active"]["authority_id"]
+        or not isinstance(registry["active"].get("input_id"), str)
+        or not registry["active"]["input_id"]
+        or not isinstance(registry["active"].get("issue_url"), str)
+        or not registry["active"]["issue_url"]
+        or not isinstance(registry["active"].get("body_sha256"), str)
+        or not SHA256_RE.fullmatch(registry["active"]["body_sha256"])
+        or not isinstance(registry.get("historical_issue_ids"), list)
+        or any(
+            not isinstance(issue_id, int) or isinstance(issue_id, bool)
+            for issue_id in registry["historical_issue_ids"]
+        )
+    ):
+        return None
+    active = dict(registry["active"])
+    digest = hashlib.sha256(
+        json.dumps(
+            active, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+    return active, digest
 
 
 def _resolve_admission_receipt(
@@ -885,7 +940,8 @@ def validate_manifest(
                         field: evaluation.get(field)
                         for field in (
                             "benchmark_id", "version", "split", "harness_sha256",
-                            "comparator_identity", "score", "uncertainty",
+                            "comparator_identity", "comparator_sha256",
+                            "score", "uncertainty",
                             "counts_toward_owned_completion",
                         )
                     },
@@ -985,6 +1041,10 @@ def validate_manifest(
                 "training.optimizer_state": _get(payload, "training.optimizer_state_sha256")[1],
                 "training.numerics": _get(payload, "training.numerics.sha256")[1],
                 "backend.executable": _get(payload, "backend.executable_sha256")[1],
+                "evaluation.harness": _get(payload, "evaluation.harness_sha256")[1],
+                "evaluation.comparator": _get(
+                    payload, "evaluation.comparator_sha256"
+                )[1],
             }
             for index, row in enumerate(ancestry or []):
                 if isinstance(row, Mapping):
@@ -1035,6 +1095,7 @@ def validate_manifest(
                     "bind_claims",
                     "derive_allocated_unique",
                     "require_verified_result",
+                    "resolve_accepted_training_input_authority",
                 ],
             }
             if verifier_program != required_program:
@@ -1134,9 +1195,15 @@ def validate_manifest(
                 _finding("admission.clean_genesis", "OWNED_ADMITTED requires clean genesis")
             )
         accepted_input = _get(payload, "data.accepted_input")[1]
+        pinned_input = _pinned_accepted_training_input()
         if (
             not isinstance(accepted_input, Mapping)
             or accepted_input.get("authority") != "CURRENT_EXECUTABLE"
+            or pinned_input is None
+            or accepted_input.get("authority_id")
+                != pinned_input[0]["authority_id"]
+            or accepted_input.get("input_id") != pinned_input[0]["input_id"]
+            or accepted_input.get("authority_record_sha256") != pinned_input[1]
         ):
             findings.append(
                 _finding(
@@ -1155,6 +1222,8 @@ def validate_manifest(
                     key: accepted_input.get(key)
                     for key in (
                         "input_id",
+                        "authority_id",
+                        "authority_record_sha256",
                         "authority",
                         "shard_manifest_sha256",
                         "caller_sha256",

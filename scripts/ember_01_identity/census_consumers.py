@@ -106,6 +106,7 @@ COMPILED = {
 }
 
 INTEGRATION_REQUIREMENTS = {
+    "unclassified_file": "treat as identity-affecting until EMBER-01A proves and binds its exact role",
     "architecture_config": "bind canonical architecture bytes and reject inferred identity",
     "training_optimizer": "bind optimizer, numerics, ordering, update set, and checkpoint ancestry",
     "checkpoint_save_load": "validate full identity before save, load, conversion, recovery, or merge",
@@ -149,15 +150,6 @@ def _semantic_fields(
 ) -> dict[str, str]:
     if exact is not None:
         return {"record_class": "VERIFIED_CONSUMER", **exact}
-    if source_role == "TEST_EVIDENCE":
-        return {
-            "record_class": "REVIEWED_NON_CONSUMER",
-            "current_input": ",".join(matched_terms),
-            "review_state": "REVIEWED",
-            "review_basis": "PATH_BOUND_TEST_OR_FIXTURE",
-            "claim_effect": "NO_CREDIT",
-            "integration_requirement": INTEGRATION_REQUIREMENTS[category],
-        }
     return {
         "record_class": (
             "CANDIDATE_EXECUTABLE_MATCH" if line_scoped else "CANDIDATE_EVIDENCE_MATCH"
@@ -180,18 +172,11 @@ def _excluded(rel: str) -> bool:
 
 def _source_role(rel: str) -> str:
     normalized = rel.replace("\\", "/").lower()
-    name = Path(normalized).name
-    if (
-        any(f"/{segment}/" in f"/{normalized}/" for segment in ("test", "tests", "fixture", "fixtures"))
-        or name.startswith("test_")
-        or "_selftest." in name
-        or ".test." in name
-        or ".tests." in name
-    ):
-        return "TEST_EVIDENCE"
     suffix = Path(normalized).suffix
     if suffix in EXECUTABLE_SOURCE_SUFFIXES:
         return "EXECUTABLE_CANDIDATE"
+    if suffix not in SOURCE_SUFFIXES:
+        return "OPAQUE_FILE"
     if suffix in {".md", ".rst", ".txt"}:
         return "DOCUMENTATION_EVIDENCE"
     return "DATA_EVIDENCE"
@@ -371,7 +356,9 @@ def build_census(
     scanned = 0
     excluded = 0
     evidence_files: set[str] = set()
-    category_files: dict[str, set[str]] = {category: set() for category in COMPILED}
+    category_files: dict[str, set[str]] = {
+        category: set() for category in INTEGRATION_REQUIREMENTS
+    }
     raw_match_counts: dict[str, int] = {category: 0 for category in COMPILED}
     semantics_index: dict[tuple[str, str, str, str], dict[str, str]] = {}
     matched_semantics: set[tuple[str, str, str, str]] = set()
@@ -399,7 +386,7 @@ def build_census(
         public_rel = _public_path(rel, path_redactions)
         path_sha256 = hashlib.sha256(rel.encode("utf-8")).hexdigest()
         path = root / rel
-        if _excluded(rel) or Path(rel).suffix.lower() not in SOURCE_SUFFIXES:
+        if _excluded(rel):
             excluded += 1
             continue
         if source_contents is None and not path.is_file():
@@ -410,15 +397,57 @@ def build_census(
                 content_bytes = path.read_bytes()
             else:
                 content_bytes = source_contents[rel]
-            text_content = content_bytes.decode("utf-8")
-            lines = text_content.splitlines()
-        except (OSError, UnicodeDecodeError):
-            excluded += 1
+        except (KeyError, OSError):
             scanned -= 1
             continue
         content_sha256 = hashlib.sha256(content_bytes).hexdigest()
-        line_scoped = Path(rel).suffix.lower() in EXECUTABLE_SOURCE_SUFFIXES
         source_role = _source_role(rel)
+        if source_role == "OPAQUE_FILE":
+            evidence.append({
+                "category": "unclassified_file",
+                "root_id": root_id,
+                "surface": surface,
+                "path": public_rel,
+                "path_sha256": path_sha256,
+                "line": 0,
+                "line_sha256": content_sha256,
+                "content_sha256": content_sha256,
+                "evidence_scope": "WHOLE_FILE",
+                "source_role": source_role,
+                "matched_terms": [],
+                **_semantic_fields(
+                    "unclassified_file", [], exact=None, line_scoped=False,
+                    source_role=source_role,
+                ),
+            })
+            evidence_files.add(public_rel)
+            category_files["unclassified_file"].add(public_rel)
+            continue
+        try:
+            text_content = content_bytes.decode("utf-8")
+            lines = text_content.splitlines()
+        except UnicodeDecodeError:
+            evidence.append({
+                "category": "unclassified_file",
+                "root_id": root_id,
+                "surface": surface,
+                "path": public_rel,
+                "path_sha256": path_sha256,
+                "line": 0,
+                "line_sha256": content_sha256,
+                "content_sha256": content_sha256,
+                "evidence_scope": "WHOLE_FILE",
+                "source_role": "OPAQUE_FILE",
+                "matched_terms": [],
+                **_semantic_fields(
+                    "unclassified_file", [], exact=None, line_scoped=False,
+                    source_role="OPAQUE_FILE",
+                ),
+            })
+            evidence_files.add(public_rel)
+            category_files["unclassified_file"].add(public_rel)
+            continue
+        line_scoped = Path(rel).suffix.lower() in EXECUTABLE_SOURCE_SUFFIXES
         file_matches: dict[str, dict[str, object]] = {}
         matched_categories: set[str] = set()
         for line_number, line in enumerate(lines, start=1):
@@ -501,6 +530,25 @@ def build_census(
                     ),
                 }
             )
+        if not matched_categories:
+            evidence.append({
+                "category": "unclassified_file",
+                "root_id": root_id,
+                "surface": surface,
+                "path": public_rel,
+                "path_sha256": path_sha256,
+                "line": 0,
+                "line_sha256": content_sha256,
+                "content_sha256": content_sha256,
+                "evidence_scope": "WHOLE_FILE",
+                "source_role": source_role,
+                "matched_terms": [],
+                **_semantic_fields(
+                    "unclassified_file", [], exact=None, line_scoped=False,
+                    source_role=source_role,
+                ),
+            })
+            matched_categories.add("unclassified_file")
         if matched_categories:
             evidence_files.add(public_rel)
             for category in matched_categories:
@@ -515,7 +563,7 @@ def build_census(
             "files": sorted(paths),
             "file_count": len(paths),
             "evidence_count": sum(1 for row in evidence if row["category"] == category),
-            "raw_match_count": raw_match_counts[category],
+            "raw_match_count": raw_match_counts.get(category, 0),
         }
         for category, paths in sorted(category_files.items())
     }
@@ -532,9 +580,10 @@ def build_census(
             "files_scanned": scanned,
             "files_excluded": excluded,
             "files_with_identity_evidence": len(evidence_files),
+            "files_accounted": scanned + excluded,
             "identity_evidence_rows": len(evidence),
             "exclusion_prefixes": list(EXCLUDED_PREFIXES),
-            "source_suffixes": sorted(SOURCE_SUFFIXES),
+            "source_suffixes": ["ALL_TRACKED_FILES"],
         },
         "categories": categories,
         "semantic_profiles": SEMANTIC_PROFILES,
@@ -548,10 +597,7 @@ def build_git_census(
     consumer_semantics: Iterable[dict[str, str]] = (),
 ) -> dict:
     candidates = _git_tree_files(root, source_commit)
-    source_paths = [
-        path for path in candidates
-        if not _excluded(path) and Path(path).suffix.lower() in SOURCE_SUFFIXES
-    ]
+    source_paths = [path for path in candidates if not _excluded(path)]
     contents = _git_blob_contents(root, source_commit, source_paths)
     return build_census(
         root,
@@ -576,7 +622,7 @@ def _apply_adjudication_policy(
         "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
         "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
         "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
-        "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+        "OPAQUE_FILE": "CONSERVATIVE_CONSUMER",
     }
     if (
         not isinstance(policy, dict)
@@ -608,6 +654,18 @@ def _apply_adjudication_policy(
         row["review_state"] = "POLICY_ADJUDICATED"
         row["review_basis"] = policy["policy_id"]
         row["claim_effect"] = "NO_CREDIT"
+        row["derived_label"] = (
+            "FAIL_CLOSED_CONSERVATIVE_CONSUMER"
+            if row["record_class"] == "CONSERVATIVE_CONSUMER"
+            else "CONTENT_BOUND_IDENTITY_SOURCE"
+        )
+        row["protocol"] = "STATIC_FILE_INVENTORY_NOT_RUNTIME_VERIFIED"
+        row["failure_behavior"] = (
+            "MUST_NOT_AFFECT_ADMITTED_IDENTITY_UNTIL_EXPLICITLY_BOUND"
+        )
+        row["conflict"] = (
+            "CONSERVATIVE_CLASSIFICATION_MAY_OVERAPPROXIMATE_BUT_CANNOT_OMIT"
+        )
 
 
 def summarize_snapshot_adjudication(payload: object, policy: object) -> dict:
@@ -615,7 +673,7 @@ def summarize_snapshot_adjudication(payload: object, policy: object) -> dict:
         "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
         "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
         "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
-        "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+        "OPAQUE_FILE": "CONSERVATIVE_CONSUMER",
     }
     if (
         not isinstance(payload, dict)
@@ -646,7 +704,7 @@ def summarize_snapshot_adjudication(payload: object, policy: object) -> dict:
     result = {
         "adjudication_counts": dict(sorted(counts.items())),
         "unadjudicated_count": 0,
-        "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+        "global_consumer_completeness": "ENVIRONMENTAL_DISCOVERY_ONLY",
     }
     if any(policy[key] != value for key, value in result.items()):
         raise ValueError("snapshot adjudication overlay counts do not replay")
@@ -748,7 +806,14 @@ def build_census_set(
     complete = (
         adjudication_policy is not None
         and not candidates
+        and len(roots) == 1
         and all(row["root_id"] == adjudication_policy["root_id"] for row in evidence)
+        and all(
+            row["availability"] == "AVAILABLE"
+            and row["coverage"]["files_accounted"]
+                == row["coverage"]["tracked_candidates"]
+            for row in roots
+        )
     )
     return {
         "schema": "ember-identity-consumer-census-set-v1",
