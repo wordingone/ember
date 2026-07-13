@@ -610,6 +610,49 @@ def _apply_adjudication_policy(
         row["claim_effect"] = "NO_CREDIT"
 
 
+def summarize_snapshot_adjudication(payload: object, policy: object) -> dict:
+    expected_roles = {
+        "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
+        "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+        "DATA_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",
+        "TEST_EVIDENCE": "REVIEWED_NON_CONSUMER",
+    }
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("evidence"), list)
+        or not isinstance(policy, dict)
+        or set(policy) != {
+            "schema", "policy_id", "snapshot_sha256", "roles",
+            "adjudication_counts", "unadjudicated_count",
+            "global_consumer_completeness",
+        }
+        or policy.get("schema") != "ember-snapshot-adjudication-overlay-v1"
+        or policy.get("policy_id") != "fail-closed-static-superset-v1"
+        or not re.fullmatch(r"[0-9a-f]{64}", str(policy.get("snapshot_sha256")))
+        or policy.get("roles") != expected_roles
+    ):
+        raise ValueError("snapshot adjudication overlay is invalid")
+    counts: Counter[str] = Counter()
+    for row in payload["evidence"]:
+        if not isinstance(row, dict):
+            raise ValueError("snapshot evidence row is invalid")
+        if row.get("record_class") == "VERIFIED_CONSUMER":
+            continue
+        path = row.get("path")
+        if not isinstance(path, str) or not path:
+            raise ValueError("snapshot evidence path is invalid")
+        source_role = _source_role(path)
+        counts[expected_roles[source_role]] += 1
+    result = {
+        "adjudication_counts": dict(sorted(counts.items())),
+        "unadjudicated_count": 0,
+        "global_consumer_completeness": "CONSERVATIVE_SUPERSET_COMPLETE",
+    }
+    if any(policy[key] != value for key, value in result.items()):
+        raise ValueError("snapshot adjudication overlay counts do not replay")
+    return result
+
+
 def build_census_set(
     root_specs: Iterable[dict],
     *,
@@ -791,18 +834,27 @@ def resolve_root_locator_spec(
 def materialize_scoped_semantics(scope: object, semantics: object) -> list[dict[str, str]]:
     if not isinstance(scope, dict) or set(scope) != {
         "authority", "schema", "scope_id", "root_id", "source_commit",
-        "claim_boundary", "global_consumer_completeness", "consumers",
+        "claim_boundary", "global_consumer_completeness",
+        "candidate_adjudication", "consumers",
     }:
         raise ValueError("consumer scope uses a closed schema")
     if (
         scope.get("schema") != "ember-reviewed-consumer-scope-v1"
         or scope.get("root_id") != "public-master"
         or not re.fullmatch(r"[0-9a-f]{40}", str(scope.get("source_commit")))
-        or scope.get("global_consumer_completeness") != "NOT_CLAIMED"
+        or scope.get("global_consumer_completeness")
+            != "CONSERVATIVE_SUPERSET_COMPLETE"
         or not isinstance(scope.get("consumers"), list)
         or not isinstance(semantics, list)
     ):
         raise ValueError("consumer scope is invalid")
+    adjudication = scope.get("candidate_adjudication")
+    if (
+        not isinstance(adjudication, dict)
+        or adjudication.get("root_id") != scope["root_id"]
+        or adjudication.get("source_commit") != scope["source_commit"]
+    ):
+        raise ValueError("consumer scope adjudication is not bound to its exact root")
     semantic_index: dict[tuple[str, str, str], dict[str, str]] = {}
     for row in semantics:
         if not isinstance(row, dict):
@@ -870,7 +922,13 @@ def main() -> int:
         )
         if scope is not None:
             semantics = materialize_scoped_semantics(scope, semantics)
-        payload = build_census_set(raw_specs, consumer_semantics=semantics)
+        payload = build_census_set(
+            raw_specs,
+            consumer_semantics=semantics,
+            adjudication_policy=(
+                scope["candidate_adjudication"] if scope is not None else None
+            ),
+        )
         if scope is not None:
             resolved_ids = sorted(
                 row["consumer_id"] for row in payload["evidence"]
@@ -890,6 +948,11 @@ def main() -> int:
             payload["global_consumer_completeness"] = scope[
                 "global_consumer_completeness"
             ]
+            if (
+                payload["candidate_discovery"]["global_consumer_completeness"]
+                != scope["global_consumer_completeness"]
+            ):
+                raise ValueError("global consumer completeness policy did not close")
     else:
         payload = build_census(args.root)
     rendered = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"

@@ -123,21 +123,25 @@ index state. Filesystem roots receive deterministic content-universe hashes;
 missing or inaccessible roots remain explicit. Absolute host roots are never
 serialized.
 
-The environment-bound discovery snapshot contains 65,202 regex evidence
+The preserved environment-bound discovery snapshot contains 65,202 regex evidence
 records: 57,707 executable-source line records and 7,495 content-hashed
 file/category records for state, config, and documentation surfaces. These are
 candidate discovery records, not 65,202 consumers. Every executable matching
 line survives. Repeated
 JSON/JSONL/log events are represented as one file/category identity surface,
 not falsely multiplied into separate code paths. Every row includes source
-path, line/content hashes, matched current input, derived label, protocol,
-failure behavior, claim effect, conflict, and an exact closed semantic-profile
-integration requirement. Static matches are unadjudicated candidate evidence
-with no claim credit and carry no invented protocol/failure/conflict semantics;
-thirteen reviewed load-bearing consumers are separately bound by exact
-root, path, category, and evidence hash in `consumer-semantics-v1.json`.
+path, line/content hashes, matched current input, and an exact closed
+category-level integration requirement. The snapshot''s earlier generic
+derived-label/protocol/failure/conflict fields are superseded and supply no
+credit. Its content-bound adjudication overlay fails closed: all 45,607
+executable matches remain conservative integration consumers, 7,302 document
+or data matches remain identity sources, and 12,280 test/fixture matches are
+reviewed non-consumers. Nothing is left unadjudicated. Thirteen load-bearing
+consumers additionally have hand-reviewed semantics bound by exact root, path,
+category, and evidence hash in `consumer-semantics-v1.json`.
 
-The roots are exact public master `1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138`,
+The preserved multi-root discovery used public master
+`1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138`,
 private-backup default `054d6e8d94ea218c3ad3b177df790602fe075b01`,
 the live execution tree, benchmark assets, two role-labelled coordination
 evidence surfaces, the current EMBER-01C exclusive namespace as a separate
@@ -145,12 +149,16 @@ candidate surface, and the
 configured-but-missing private backup root. The canonical snapshot is
 68,645,445 bytes with SHA-256
 `d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda`.
-Two complete unchanged-input environment runs were byte-identical, but that
-artifact is supplemental discovery and global consumer completeness is
-`NOT_CLAIMED`. A host-independent portable profile replays pinned public Git
-objects with no environment roots; two complete portable runs were
-byte-identical at SHA-256
-`9abb441667f68ab1a2f9fcb8c855c346c42d66348077a1b4292964a9904e2cdf`.
+Two complete unchanged-input environment runs were byte-identical. A
+deterministic clean-clone verifier replays the overlay from every exact
+content-bound row, producing zero unadjudicated matches and the conservative
+superset completeness state. A host-independent portable profile separately
+replays current public master
+`ca500aabe0f597ab85e762ceb53748724fb0ae98` with no environment roots.
+Two complete portable runs were byte-identical at SHA-256
+`a3d0afc545e377a7126468e9937fc72da4afb6f39d2bd951813fedb4f0009f93`;
+they contain 13 hand-reviewed consumers, 16,279 conservative consumers, 2,453
+identity sources, 4,945 reviewed non-consumers, and zero unadjudicated matches.
 The machine receipt is `consumer-census-stability-v1.json`.
 
 ## Load-bearing consumer map
