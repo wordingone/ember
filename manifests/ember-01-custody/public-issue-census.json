@@ -14,7 +14,7 @@
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "workstream_id": "EMBER-01B"
   },
-  "closed_issue_snapshot_sha256": "a5a01df21602091d598ce449afabfb35fa6e2a08e739ab7708d07ce882972fc1",
+  "closed_issue_snapshot_sha256": "7d2259cbf5825fa467a284e814ec7e1acef74979234856e0d1795bb8a4e3b319",
   "closed_issue_source_snapshot": [
     {
       "author": "wordingone",
@@ -51,6 +51,42 @@
       "title": "ember-cli: d5-chat-turn-render fails full-suite only (test-isolation state bleed), passes 6/6 in isolation",
       "updated_at": "2026-07-13T07:04:26Z",
       "url": "https://github.com/wordingone/ember/issues/56"
+    },
+    {
+      "author": "wordingone",
+      "body_base64": "UmVzZWFyY2gtbG9vcCBkZXJpdmF0aW9uICh6ZXJvIGNvbXB1dGU7IE1vbnRlIENhcmxvIHZlcmlmaWNhdGlvbiBsZWcgZGlzcGF0Y2hlZCBzZXBhcmF0ZWx5KS4gVGhlIFA1IHYxLjIgaGVhZGxpbmUgbWVhc3VyZW1lbnQgZF9jb21tID0gMS4xMzUyIChyZWNlaXB0IHA1LXJhdGlvLWF1ZGl0LU9LLTIwMjYwNzA3VDAzNDk1MVopIGlzIGN1cnJlbnRseSBhIG51bWJlciB3aXRob3V0IGEgbnVsbC4gRGVyaXZhdGlvbiBvZiB0aGUgbnVsbCwgZnJvbSB0aGUgaGFybmVzcydzIG93biBmb3JtdWxhIChydW5fcDVfYXVkaXQucHk6OmNvbXB1dGVfZF9jb21tKToKCmRfY29tbSA9IHx8VV97aysxfShHKHRoKSkgLSBHKFVfayh0aCkpfHxfUk1TIC8gfHxVX2sodGgpIC0gdGh8fF9STVMKCiMjIE51bGwgbW9kZWwgKGluZGVwZW5kZW50IHVwZGF0ZSBkaXJlY3Rpb25zKQpXcml0ZSBVX2sodGgpPXRoK3UsIFVfe2srMX0ocGgpPXBoK3YsIEcgbGluZWFyIChuZXQybmV0IHdpZGVuID0gZHVwbGljYXRpb24gbWFwIFA7IGV4YWN0IGZvciB0aGUgcHJvZHVjdGlvbiB3aWRlbl9zdGF0ZV9kaWN0IG9uIHdlaWdodCB0ZW5zb3JzKS4gVGhlbiBudW1lcmF0b3IgPSB8fHYgLSBQdXx8X1JNUyBhbmQ6CgogIGRfY29tbV4yID0gcl4yICsgcV4yIC0gMiBjIHIgcSwgICByID0gcm1zKHYpL3Jtcyh1KSwgIHEgPSBybXMoUHUpL3Jtcyh1KSwgIGMgPSBjb3ModiwgUHUpCgpJTkRFUEVOREVOQ0UgTlVMTDogYz0wICh0aGUgY3Jvc3MgdGVybSB2YW5pc2hlcyB1bmRlciBpbmRlcGVuZGVuY2UgaXJyZXNwZWN0aXZlIG9mIG1hcmdpbmFscyDigJQgcm9idXN0IHRvIE11b24ncyBub24taXNvdHJvcGljIG9ydGhvZ29uYWxpemVkIHN0ZXBzKS4gU28gZF9jb21tX251bGwgPSBzcXJ0KHJeMiArIHFeMikuCgojIyBSZWZlcmVuY2UgcG9pbnRzIGF0IHRoZSByZWFsIGdlb21ldHJ5IChydW5nLTE6IGZmIDgxOTIgLT4gMTYzODQsIGhpZGRlbiAxMDI0KQotIE5haXZlIGVxdWFsLW5vcm1zIChyPXE9MSk6IHNxcnQoMikgfiAxLjQxNC4KLSBNdW9uIHdpZHRoIHNjYWxpbmc6IHJtcyBvZiBhbiBvcnRob2dvbmFsaXplZCAobSxuKSBzdGVwID0gc3FydChtaW4obSxuKS8obSpuKSk7IGZvciBnYXRlL3VwIChtaW4gPSBoaWRkZW4gPSAxMDI0IGF0IGJvdGggd2lkdGhzLCBuIGRvdWJsZXMpID0+IHIgPSBzcXJ0KG4xL24yKSAqIChscl9wb3N0L2xyX3ByZSkgPSAxL3NxcnQoMikgYXQgZXF1YWwgTFIuIER1cGxpY2F0aW9uIHByZXNlcnZlcyBybXMgb24gZ2F0ZS91cCAocT0xKTsgZG93bl9wcm9qJ3Mgb3V0Z29pbmcgaGFsdmluZyBnaXZlcyBxPTEvMiBvbiB0aGF0IHRlbnNvci4KLSBHYXRlL3VwLWRvbWluYXRlZCByZWZpbmVkIG51bGwgYXQgZXF1YWwgTFI6IHNxcnQoMS8yICsgMSkgPSBzcXJ0KDEuNSkgfiAxLjIyNDcuCi0gRGVnZW5lcmF0ZSByZWZlcmVuY2U6IHYgLT4gMCAocG9zdC1ncm93IHN0ZXAgdmFuaXNoaW5nKSBnaXZlcyBkX2NvbW0gLT4gcSB+IDEuMC4KCiMjIFRoZSBpbnRlcnByZXRhdGlvbiBwcm9ibGVtICh0aGUgYWN0aW9uYWJsZSBmaW5kaW5nKQpNZWFzdXJlZCAxLjEzNTIgc2l0cyBCRVRXRUVOIHRoZSB2YW5pc2hpbmctc3RlcCByZWZlcmVuY2UgKH4xLjApIGFuZCB0aGUgcmVmaW5lZCBpbmRlcGVuZGVuY2UgbnVsbCAofjEuMjI0NykuIFR3byBxdWFsaXRhdGl2ZWx5IGRpZmZlcmVudCByZWdpbWVzIHByb2R1Y2UgbnVtYmVycyBoZXJlOgooYSkgbmVhci1udWxsIGluZGVwZW5kZW5jZSB3aXRoIHRoZSBleGFjdCByLHEgbWl4dHVyZSAoZG93bi1wcm9qICsgTFIgcmF0aW8gcHVsbGluZyAxLjIyNDcgZG93biksIGkuZS4gdGhlIGdyb3cgZXZlbnQgZG9lcyBOT1QgcHJlc2VydmUgdXBkYXRlLWRpcmVjdGlvbiBzdHJ1Y3R1cmUgYmV5b25kIHdpZHRoIGJvb2trZWVwaW5nOyBvcgooYikgc21hbGxlciBwb3N0LWdyb3cgc3RlcCB3aXRoIHBhcnRpYWwgYWxpZ25tZW50IChjPjApLCBpLmUuIGdlbnVpbmUgcGFydGlhbCBjb21tdXRhdGlvbi4KVGhlIGN1cnJlbnQgcmVjZWlwdCBDQU5OT1QgZGlzdGluZ3Vpc2ggdGhlbTogaXQgY2FycmllcyBudW1lcmF0b3Jfcm1zIGFuZCBkZW5vbWluYXRvcl9ybXMgYnV0IG5vdCBybXModiksIHJtcyhQdSksIG9yIGMg4oCUIGFsbCB0aHJlZSBjb21wdXRhYmxlIGZvciBmcmVlIGZyb20gdGVuc29ycyBjb21wdXRlX2RfY29tbSBhbHJlYWR5IGhvbGRzLgoKIyMgUHJvcG9zZWQgc3BlYyBhZGRpdGlvbiAoUFJPUE9TRUQ7IGFkZGl0aXZlLCByZWNlaXB0cyBpbW11dGFibGUsIHByZXJlZyBtZWFzdXJlbWVudCBzdGF0dXMgdW5jaGFuZ2VkKQpjb21wdXRlX2RfY29tbSByZXR1cm5zIHRocmVlIG1vcmUgZmllbGRzOiBzdGVwX3Jtc19wb3N0ID0gcm1zKFVfe2srMX0oRyh0aCkpIC0gRyh0aCkpLCBwdXNoZm9yd2FyZF9zdGVwX3JtcyA9IHJtcyhHKFVfayh0aCkpIC0gRyh0aCkpLCBjb3NfYWxpZ25tZW50ID0gPHYsIFB1PiAvICh8fHZ8fCB8fFB1fHwpLiBUaGVuIGRfY29tbSBkZWNvbXBvc2VzIGV4YWN0bHkgYXMgZF9jb21tXjIgPSByXjIgKyBxXjIgLSAyIGMgciBxIGFnYWluc3QgaXRzIG93biBudWxsIHNxcnQocl4yK3FeMikgaW5zaWRlIHRoZSByZWNlaXB0IOKAlCB0aGUgbWVhc3VyZW1lbnQgYmVjb21lcyBzZWxmLWludGVycHJldGluZy4gVmVyaWZpY2F0aW9uOiBNb250ZSBDYXJsbyBhdCB0aGUgcmVhbCBzaGFwZXMgKGluZGVwZW5kZW50IE11b24tb3J0aG9nb25hbGl6ZWQgcmFuZG9tIG1vbWVudGEsIHByb2R1Y3Rpb24gd2lkZW4gc2VtYW50aWNzIGluY2wuIGRvd24taGFsdmluZykgbXVzdCByZXByb2R1Y2Ugc3FydChyXjIrcV4yKSBhbmQgYyB+IDA7IGRpc3BhdGNoZWQgYXMgYSBzZXBhcmF0ZSByZWNlaXB0ZWQgbGVnLCByZXN1bHRzIHRvIGJlIGF0dGFjaGVkIGhlcmUuCgpObyBwYXNzIGJhciBpcyBwcm9wb3NlZCDigJQgdjEuMS92MS4yJ3MgbWVhc3VyZW1lbnQtb25seSBzdGF0dXMgaXMgY29uc2VydmVkOyB0aGlzIGFkZHMgaW50ZXJwcmV0YWJpbGl0eSwgbm90IHZlcmRpY3Qu",
+      "closed_at": "2026-07-13T12:05:28Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "TW9udGUgQ2FybG8gdmVyaWZpY2F0aW9uIENPTVBMRVRFIOKAlCB0aGUgbnVsbCBtb2RlbCBpcyB2ZXJpZmllZCB0byA1IGRlY2ltYWxzIGFuZCB0aGUgbWVhc3VyZWQgdmFsdWUgaXMgbm93IGludGVycHJldGFibGUuIFJlY2VpcHRzOiBkY29tbS1udWxsLW1jLTIwMjYwNzA3VDA3NTQ1M1ouanNvbiAoMzAgc2VlZHMsIHJlYWwgcnVuZy0xIGdlb21ldHJ5LCBwcm9kdWN0aW9uIHdpZGVuIHNlbWFudGljcyBtaXJyb3JlZCBmcm9tIGNiYXNlX2dyb3dfZHJ5cnVuLnB5IGxpbmVzIDg5LTkyLCBTVkQgb3J0aG9nb25hbGl6YXRpb24pLiBSZXN1bHRzOiBGVUxMIFRSSVBMRSAoZ2F0ZSt1cCtkb3duKTogZF9jb21tID0gMS4xMTgwNCArLy0gMC4wMDAwOCB2cyBhbmFseXRpYyBzcXJ0KHJeMitxXjIpID0gMS4xMTgwMyAociA9IDAuNzA3MTEgPSAxL3NxcnQoMikgZXhhY3RseSBhcyBkZXJpdmVkIGZyb20gTXVvbiB3aWR0aCBzY2FsaW5nOyBxID0gMC44NjYwMyA9IHNxcnQoMykvNC1mcmVlIOKAlCB0aGUgZG93bi1wcm9qIGhhbHZlZC1kdXBsaWNhdGlvbiBwdWxscyBxIGZyb20gMSB0byBzcXJ0KDAuNzUpOyBjID0gLTJlLTUgfiAwLCBpbmRlcGVuZGVuY2UgY29uZmlybWVkKS4gR0FURS9VUC1PTkxZOiAxLjIyNDc0ICsvLSAwLjAwMDA5IHZzIHNxcnQoMS41KSA9IDEuMjI0NzQuIElOVEVSUFJFVEFUSU9OIE9GIFRIRSBSRUFMIE1FQVNVUkVNRU5UOiBtZWFzdXJlZCBkX2NvbW0gPSAxLjEzNTIgdnMgdmVyaWZpZWQgaW5kZXBlbmRlbmNlIG51bGwgMS4xMTgwIOKAlCB0aGUgcnVuZy0xIGdyb3cgZXZlbnQncyB1cGRhdGUgZGlyZWN0aW9ucyBhcmUgaW5kZXBlbmRlbnQgdG8gfjEuNSU7IHRoZSBwYXJ0aWFsLWNvbW11dGF0aW9uIGh5cG90aGVzaXMgaXMgZGVhZCBhdCB0aGVzZSBub3JtczsgdGhlIG9ic2VydmFibGUgaXMgZ2VvbWV0cnktZGV0ZXJtaW5lZCAoemVyby1wYXJhbWV0ZXIgcHJlZGljdGlvbiBkX2NvbW0gfiBzcXJ0KGxyX3JhdGlvXjIgKiBuMS9uMiArIHEoUCleMikgZm9yIGFueSBncm93IGV2ZW50KSwgYW5kIHRoZSArMC4wMTcgcmVzaWR1YWwgaXMgdGhlIHBoeXNpY3MgdG8gdHJhY2sgYWNyb3NzIHJ1bmdzIChyZWFsLW1vbWVudHVtIGFuaXNvdHJvcHkgLyBub3JtLXJhdGlvIGRldmlhdGlvbikuIFRoZSB0aHJlZSBwcm9wb3NlZCByZWNlaXB0IGZpZWxkcyB3b3VsZCBkZWNvbXBvc2UgdGhlIHJlc2lkdWFsIGV4YWN0bHku",
+          "created_at": "2026-07-07T08:36:23Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/327#issuecomment-4901783475"
+        },
+        {
+          "author": "wordingone",
+          "body_base64": "Q09SUkVDVElPTiAocmVzZWFyY2ggdGljayAxOCwgcGFuZWwtdmVyaWZpZWQgd2l0aCBjb2RlLXJlYWQgcmVjZWlwdHMpIOKAlCB0aGUgTUMgY29tbWVudCdzIGludGVycHJldGF0aW9uIGFib3ZlIGlzIFJFVFJBQ1RFRCBvbiB0d28gcmVmZXJlbmNlLXNldCBlcnJvcnMsIGFuZCB0aGUgaGVhZGxpbmUgY29uY2x1c2lvbiBJTlZFUlRTOgoKMS4gKipUZW5zb3Igc2NvcGUqKjogdGhlIG1lYXN1cmVkIHJ1bmctMSBkX2NvbW0gPSAxLjEzNTI2NDggaXMgR0FURV9QUk9KLU9OTFkg4oCUIHJ1bl9wNV9hdWRpdC5weSBjYWxscyBjb21wdXRlX2RfY29tbV9yZWFsX3J1biBleGFjdGx5IG9uY2UsIG9uIGdhdGVfa2V5IG9ubHkgKGxpbmVzIDIzMjctMjMzMiwgMTMyMykuIENvbXBhcmluZyBpdCB0byB0aGUgRlVMTC1UUklQTEUgbnVsbCBzcXJ0KDEuMjUpPTEuMTE4MCB3YXMgYXBwbGVzLXRvLW9yYW5nZXMuIFRoZSBmbGF0LUxSIGdhdGUtb25seSBudWxsIGlzIHNxcnQoMS41KT0xLjIyNDcg4oaSIHJlc2lkdWFsICoq4oiSNy4zJSoqLCBzaWduIGZsaXBwZWQuCjIuICoqTFIgY29udmVudGlvbioqOiB0aGUgZXhhY3QgZnVuY3Rpb24gdGhhdCBwcm9kdWNlZCB0aGUgcmVjZWlwdCAoX211b25fc3RlcF9pbl9jb3B5LCBydW5fcDVfYXVkaXQucHk6MTg5OS0xOTMyOyBzYW1lIGNvbnZlbnRpb24gaW4gZnAzNV9mdXNlZF9tdW9uX2tlcm5lbF9hYi5weToyMDAgYW5kIG11b25fc3BlY3RydW1fcHJvYmUucHk6NTI3KSBhcHBsaWVzIHNjYWxlPW1heCgxLHNoYXBlWzBdL3NoYXBlWzFdKSoqMC41IHRvIHRoZSBMUi4gQWNyb3NzIGEgcm93LWRpbSBkb3VibGluZyB0aGlzIGdyb3dzIGJ5IHNxcnQoMiksIGV4YWN0bHkgY2FuY2VsbGluZyB0aGUgb3J0aG9nb25hbGl6ZWQtUk1TIHNocmluazogKipyX2dhdGUvdXAgPSAxLjAsIG5vdCAxL3NxcnQoMikqKiAoZG93bl9wcm9qIHVuYWZmZWN0ZWQ6IHNjYWxlIGNsYW1wcyBhdCAxIGJvdGggc2lkZXMpLiBGdWxseS1jb3JyZWN0ZWQgZ2F0ZS1vbmx5IG51bGw6ICoqc3FydCgyKT0xLjQxNDIqKiDihpIgbWVhc3VyZWQgcmVzaWR1YWwgKiriiJIxOS43JSoqLgoKKipDb3JyZWN0ZWQgcmVhZGluZzogdGhlIG1lYXN1cmVtZW50IHNpdHMgRkFSIEJFTE9XIGl0cyBjb3JyZWN0IG51bGwsIG5vdCAxLjUlIGFib3ZlIGl0LioqIFZpYSBkwrIgPSBywrIgKyBxwrIg4oiSIDJjcnEgKHFfZ2F0ZT0xIGV4YWN0KTogYyDiiYggKiorMC4zNTYqKiAoc2NhbGUgY29udmVudGlvbikgb3IgKzAuMTQ5IChmbGF0LUxSKS4gRWl0aGVyIHdheSBjID4gMDogJ2luZGVwZW5kZW5jZSBjb25maXJtZWQgLyBwYXJ0aWFsIGNvbW11dGF0aW9uIGRlYWQnIGlzIHJldHJhY3RlZCDigJQgKipwYXJ0aWFsIGNvbW11dGF0aW9uIGlzIHJldml2ZWQgYXMgdGhlIGxlYWRpbmcgaW50ZXJwcmV0YXRpb24uKiogUHJvcG9zZWQgbWVjaGFuaXNtOiB0aGUgZ3JvdyBpcyBmdW5jdGlvbi1wcmVzZXJ2aW5nLCBzbyBwcmUvcG9zdC1ncm93IGdyYWRpZW50cyBhcmUgY29tcHV0ZWQgb24gdGhlIHNhbWUgbG9zcyBsYW5kc2NhcGUgYW5kIGNvcnJlbGF0ZSDigJQgYyA+IDAgaXMgd2hhdCBmdW5jdGlvbiBwcmVzZXJ2YXRpb24gcHJlZGljdHM7IHRoZSBpbmRlcGVuZGVuY2UgbnVsbCB3YXMgdGhlIHdyb25nIHBoeXNpY2FsIG51bGwgZm9yIGdyYWRpZW50LWRlcml2ZWQgdXBkYXRlcy4KCkNhdmVhdHMgdGhhdCBjYXJyeTogdGhlIHJ1bmctMSBwcmUtZ3JvdyBjaGVja3BvaW50IGlzIFJFQ09OU1RSVUNURUQgKHJlY2VpcHQncyBvd24gY2hlY2twb2ludF9kaXNjb3ZlcnkgZmllbGQ6IGludmVyc2UgbmV0Mm5ldCwgbm8gb3B0aW1pemVyIHN0YXRlKSDigJQgdGhlIG1lYXN1cmVkIGMgbWF5IHBhcnRseSByZWZsZWN0IHRoYXQ7IGFuZCB0aGUgTUMgbnVsbCBpdHNlbGYgcmVtYWlucyBWRVJJRklFRCBmb3Igd2hhdCBpdCBtb2RlbHMgKGlzb3Ryb3BpYywgZmxhdC1MUiwgZnVsbC10cmlwbGUpIOKAlCB0aGUgZXJyb3Igd2FzIGFwcGx5aW5nIGl0IHRvIGEgZ2F0ZS1vbmx5LCBzY2FsZS1jb252ZW50aW9uZWQgbWVhc3VyZW1lbnQuCgpUaGUgdGhyZWUgZGVjb21wb3NpdGlvbiBmaWVsZHMgcHJvcG9zZWQgYWJvdmUgYXJlIG5vdyBNRVJHRUQgKFBSICM0NDgpIOKAlCB0aGUgbmV4dCBtZWFzdXJlbWVudCBzZWxmLWF0dHJpYnV0ZXMgciwgcSwgYyBpbnN0ZWFkIG9mIGxlYXZpbmcgdGhpcyB0byByZWZlcmVuY2Utc2V0IGFyaXRobWV0aWMuIFByZS1yZWdpc3RlcmVkIHJ1bmctMiBwcmVkaWN0aW9uIChwZXItY2xhc3MsIHBlci1jb252ZW50aW9uLCB3aXRoIGEgZ2VudWluZSBwcmUtZ3Jvdy1zbmFwc2hvdCBjb25kaXRpb24gYW5kIGEgbW9tZW50dW0gdHJhbnNwbGFudC12cy1yZXNldCBkZWNpc2lvbiBjbGF1c2UpIGZvbGxvd3MgaW4gYSBzZXBhcmF0ZSBpc3N1ZS4gRnVsbCBzeW50aGVzaXM6IHJlc2VhcmNoIHRpY2stMTggbm90ZSAocGFuZWwgd2ZfYTQ3ZTc2NDUtMjBkOiAyIGZhYmxlIHNlYXRzICsgc29ubmV0IHZlcmlmeTsgdGhlIHZlcmlmeSBsZWcncyBjb2RlLXJlYWRzIGNhdWdodCBib3RoIGVycm9ycyku",
+          "created_at": "2026-07-08T14:15:13Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/327#issuecomment-4915729138"
+        },
+        {
+          "author": "wordingone",
+          "body_base64": "Q2xvc2luZyBhcyBjb21wbGV0ZWQgYWZ0ZXIgaW5kZXBlbmRlbnQgdmVyaWZpY2F0aW9uIGFnYWluc3QgY3VycmVudCBwdWJsaWMgbWFzdGVyIGZlNGQ5ZTJiZWI1YTgyNTczZjNmNTlhNWNiMDVmZTliMmMxYTA5N2MuCgpQUiAjNDQ4IChkZTY2N2ZlMjU5YmEyMmRiMmZhNGM3OTJmODdhODI2OTgzNzJlYzk3KSBpcyBhbiBhbmNlc3RvciBvZiBjdXJyZW50IG1hc3Rlci4gQ3VycmVudCBjb2RlIHJldGFpbnMgYWxsIHRocmVlIHJlcXVlc3RlZCByZXNpZHVhbC1kZWNvbXBvc2l0aW9uIGZpZWxkcywgYW5kIGEgZnJlc2ggQVNUIGNvbnRyYWN0IGNoZWNrIHZlcmlmaWVzIHRoYXQgdGhlIGZpZWxkcyByZW1haW4gZW1pdHRlZCBhdCB0aGUgbWVhc3VyZW1lbnQgYm91bmRhcnkuCgpUaGUgaXNzdWUncyBvd24gY29ycmVjdGlvbiBjb21tZW50IHJldHJhY3RzIHRoZSBlYXJsaWVyIGFwcGxlcy10by1vcmFuZ2VzIGludGVycHJldGF0aW9uIGFuZCBzdGF0ZXMgdGhhdCB0aGUgbmV4dCBnb3Zlcm5lZCBtZWFzdXJlbWVudCBpcyBhIHNlcGFyYXRlIG9ibGlnYXRpb24uIFRoYXQgY29ycmVjdGVkIGludGVycHJldGF0aW9uIGlzIHByZXNlcnZlZC4gVGhlIGhpc3RvcmljYWwgc3ViLTNCIGhhcm5lc3MgY2Fubm90IGJlIHJlcnVuIGJlY2F1c2UgcHVibGljIG1hc3RlciBpbnRlbnRpb25hbGx5IGV4ZWN1dGlvbi1kZW5pZXMgdGhvc2UgdHJhaW5lcnMvaW1wb3J0ZXJzOyB0aGlzIGNsb3N1cmUgZG9lcyBub3QgcmVhY3RpdmF0ZSB0aGVtIGFuZCBkb2VzIG5vdCBjcmVkaXQgYSBzY2llbnRpZmljIHJlc3VsdC4gSXQgcmVjb3JkcyBvbmx5IHRoYXQgdGhlIHJlcXVlc3RlZCByZWNlaXB0IGZpZWxkcy9tZWFzdXJlbWVudCBpbnN0cnVtZW50YXRpb24gbGFuZGVkIHdpdGggbm8gcmVtYWluZGVyIG9uIHRoaXMgaXNzdWUu",
+          "created_at": "2026-07-13T12:05:27Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/327#issuecomment-4957743776"
+        }
+      ],
+      "created_at": "2026-07-07T07:49:26Z",
+      "labels": [],
+      "number": 327,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "d_comm null model derived: the 1.1352 measurement needs two free receipt fields to be interpretable (P5/P0 composition law)",
+      "updated_at": "2026-07-13T12:05:28Z",
+      "url": "https://github.com/wordingone/ember/issues/327"
     },
     {
       "author": "wordingone",
@@ -369,6 +405,64 @@
     },
     {
       "author": "wordingone",
+      "body_base64": "IyMgVGhlIGluY2lkZW50IChib2FyZCByZWNlaXB0IDIwMjYwNzA4VDE4MjMyNlopCkMwIGZsaXBwZWQgdG8gQVVESVQtSU5DSURFTlQ6IHR3byBkMy1uYXRpdmUtbG9vcCByZWNlaXB0cyAoMjAyNjA3MDRUMTYxMzE1WiwgMjAyNjA3MDRUMjM1MTQ0Wikgc2l0IGluIHRoZSBhdWRpdCB3aW5kb3cgd2l0aCB6ZXJvIG1hdGNoaW5nIEMxNCBSRVNJREVOVF9UUkFJTklOR19HQVRFX1BBU1MgcmVjZWlwdHMgaW4gdGhlIGNhbm9uaWNhbCBnYXRlIGRpcmVjdG9yeS4gVGhlIGRldGVjdG9yIGlzIENPUlJFQ1QgYWJvdXQgdGhlIGNhbm9uaWNhbCBldmlkZW5jZSBzdXJmYWNlIOKAlCB0aGlzIGlzc3VlIGlzIHRoZSByZWNlaXB0ZWQgZGlzcG9zaXRpb24uCgojIyBUaGUgdHJhY2UgKHJlYWQtb25seSwgdHdvIHBhc3NlcykKLSBHYXRlIHJlY2VpcHRzIERPIGV4aXN0IGluIGdpdCBvYmplY3RzLCBjb250ZW50LXZlcmlmaWVkIGFnYWluc3QgdGVzdF9jMCdzIG93biBjcml0ZXJpYTogcmVzaWRlbnQtdHJhaW5pbmctZ2F0ZS0yMDI2MDcwNFQwNjI5NTFaLWlzc3VlNjktY3VyZWQuanNvbiBhbmQgcmVzaWRlbnQtdHJhaW5pbmctZ2F0ZS0yMDI2MDcwNFQwNjU1MDdaLWludHJlZS1pc3N1ZTcwLmpzb24g4oCUIGJvdGggdmVyZGljdCBSRVNJREVOVF9UUkFJTklOR19HQVRFX1BBU1MsIHN0YXR1cyBQQVNTLCBhbGwgY29tcG9uZW50cyBQQVNTLCBubyBkaXNxdWFsaWZ5aW5nIHRva2VucywgcGx1cyByZXNpZGVudC1nYXRlLWNvbmZsYXRpb24tYXVkaXQtMjAyNjA3MDRUMDYzMDE5Wi5qc29uIHJlY29uY2lsaW5nIGNsZWFubHkgKFJFU0lERU5UX0dBVEVfQ09ORkxBVElPTl9HVUFSRF9QQVNTKS4gTm8gbGF0ZXIgQkxPQ0tFRC9yZXZvY2F0aW9uIHN1cGVyc2VkZXMgdGhlbSBhbnl3aGVyZSBpbiBoaXN0b3J5LgotIEJvdGggbGl2ZSBleGNsdXNpdmVseSBpbiBjb21taXRzIGU0NjZlNmEgLyBmYTczNzY1IG9uIHRoZSBvcnBoYW5lZCBnb2FsZm9yZ2UgbGluZWFnZS4gTGluZWFnZSBmYXRlOiBPUlBIQU5FRCwgbm90IHJlamVjdGVkIOKAlCBubyBQUiByZWplY3RlZCB0aGVzZSByZWNlaXB0cyBmb3IgY2F1c2U7IG1hc3RlciBwaXZvdGVkIHRvIHRoZSBjbGVhbiBjb25zb2xpZGF0aW9uICg1OGRkZjhkIG9ud2FyZCkgYW5kIHRoZSBjb25zb2xpZGF0aW9uIGltcG9ydGVkIHRoZSB0d28gbG9vcCByZWNlaXB0cyAoYXMgKi1yZWRhY3RlZC1lZGl0aW9uKSBXSVRIT1VUIHRoZWlyIHNhbWUtZGF5IGF1dGhvcml6YXRpb24gcmVjZWlwdHMuIFRoZSBjdXN0b2R5IGFzeW1tZXRyeSB3YXMgY3JlYXRlZCBieSB0aGUgbWlncmF0aW9uLCBub3QgYnkgYW4gdW5hdXRob3JpemVkIGxvb3AuCi0gVGltZWxpbmU6IGdhdGUgUEFTUyAwNjoyOeKAkzA2OjU1WiBKdWx5IDQ7IGxvb3AgcnVucyAxNjoxM1ogYW5kIDIzOjUxWiB0aGUgc2FtZSBkYXkuIFRoZSBsb29wIHJlY2VpcHRzIGRvIG5vdCBjaXRlIHRoZSBnYXRlIHJlY2VpcHRzIGludGVybmFsbHkgKGEgZ2FwIHRoZSBmYWlsLWNsb3NlZCBjdXJlIGJlbG93IG1ha2VzIHN0cnVjdHVyYWwpLgoKIyMgUnVsaW5nIChhY3Rpbmcgb3BlcmF0b3IsIHJlY2VpcHRzLWJhc2VkKQoxLiAqKkN1c3RvZHkgaW1wb3J0LCBuYXJyb3dseSBzY29wZWQgYW5kIGZ1bGx5IGRpc2Nsb3NlZDoqKiBsYW5kIEVYQUNUTFkgdGhlIHRocmVlIHJlY2VpcHQgZmlsZXMgYWJvdmUgaW50byByZWNlaXB0cy9lbWJlci1yZXNpZGVudC10cmFpbmluZy1nYXRlLywgZXh0cmFjdGVkIHZlcmJhdGltIGZyb20gZ2l0IG9iamVjdHMgKGdpdCBzaG93IDxjb21taXQ+OjxwYXRoPiksIGVhY2ggd2l0aCBhIHNpYmxpbmcgY3VzdG9keSBub3RlIHJlY29yZGluZzogcmVjb3ZlcmVkLWZyb20gY29tbWl0IHNoYSwgdmVyaWZpZWQtYWdhaW5zdC1jcml0ZXJpYSBkYXRlLCBhbmQgdGhhdCB0aGlzIGltcG9ydCBjYXJyaWVzIE5PIG90aGVyIGNsYWltIGZyb20gdGhlIG9ycGhhbmVkIGxpbmVhZ2UgKGluIHBhcnRpY3VsYXIgbm9uZSBvZiBmYTczNzY1J3MgYm9hcmQtcGVyY2VudGFnZSBjbGFpbXMsIHdoaWNoIGJlbG9uZyB0byB0aGUgc3VwZXJzZWRlZCBvdmVyc3RhdGVtZW50IGVyYSkuIFRoZSBpbXBvcnQgbWFrZXMgdGhlIGNhbm9uaWNhbCBzdXJmYWNlIG1hdGNoIHdoYXQgcmVjZWlwdHMgcHJvdmUgd2FzIHRydWUgYXQgcnVuIHRpbWUuCjIuICoqVGhlIGluY2lkZW50IHJlY29yZCBzdGF5cyBwdWJsaWMqKiDigJQgdGhpcyBpc3N1ZSBpcyB0aGUgZGlzY2xvc3VyZTsgdGhlIGJvYXJkJ3MgQVVESVQtSU5DSURFTlQgd2luZG93IGFuZCBpdHMgcmVzb2x1dGlvbiBhcmUgYm90aCBwYXJ0IG9mIHRoZSByZWNvcmQuIE5vIGhpc3RvcnkgcmV3cml0ZSwgbm8gcmVjZWlwdCBiYWNrZGF0aW5nOiBmaWxlIG10aW1lcy9sYW5kaW5nIGRhdGVzIHdpbGwgaG9uZXN0bHkgc2hvdyB0aGUgbGF0ZSBpbXBvcnQuCjMuICoqRmFpbC1jbG9zZWQgbGF1bmNoZXIgY3VyZSAodGhlIHN0cnVjdHVyYWwgaGFsZik6KiogdGhlIGxvb3AgbGF1bmNoZXIgbXVzdCByZWZ1c2UgdG8gc3RhcnQgd2hlbiBubyBpbi13aW5kb3cgY2Fub25pY2FsIFBBU1MgcmVjZWlwdCBleGlzdHMgKHByZS1ob2MpLCBhbmQgZXZlcnkgbG9vcCByZWNlaXB0IG11c3QgY2l0ZSBpdHMgYXV0aG9yaXppbmcgZ2F0ZSByZWNlaXB0IGJ5IHRzK3NoYSAobWFraW5nIHRoZSBDMCBqb2luIG1lY2hhbmljYWwpLiBQb3N0LWhvYyBhdWRpdCBjYXRjaGluZyB0aGlzIDQgZGF5cyBsYXRlciBpcyB0aGUgZGV0ZWN0b3Igd29ya2luZzsgdGhlIGxhdW5jaGVyIHJlZnVzaW5nIGF0IFQwIGlzIHRoZSBjbGFzcyBkeWluZy4KCiMjIEFjY2VwdGFuY2UKLSBQUiBsYW5kaW5nIHRoZSAzIGZpbGVzICsgY3VzdG9keSBub3RlcyAocmVmcyB0aGlzIGlzc3VlKS4KLSBDMCByZS1ldmFsdWF0aW9uIG9uIHRoZSBuZXh0IGJvYXJkIHJ1biBzaG93aW5nIHRoZSBpbmNpZGVudCByZXNvbHZlZCAob3IgdGhlIGRpc3Bvc2l0aW9uLWFzc2VtYmxlciBwYXRoIGlmIHRlc3RfYzAgcmVxdWlyZXMgYW4gZXhwbGljaXQgZGlzcG9zaXRpb24gcmVjZWlwdCDigJQgdGhlIGFzc2VtYmxlciBleGlzdHMgb25seSBvbiB0aGUgb3JwaGFuZWQgbGluZWFnZTsgcG9ydCBpdCBuYXJyb3dseSBpZiBuZWVkZWQpLgotIEZvbGxvdy11cCBpdGVtIGZvciB0aGUgbGF1bmNoZXIgZ2F0ZSArIGxvb3AtcmVjZWlwdCBjaXRhdGlvbiBmaWVsZC4KCnJlZnMgIzQ2Nw==",
+      "closed_at": "2026-07-13T12:05:04Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "UkVTT0xWRUQgb24gdGhlIGJvYXJkOiB0b3RhbGl0eSByZWNlaXB0IDIwMjYwNzA4VDIwMzgyNVogcmVuZGVycyBDMCA9IEFVRElULU9LIOKAlCAidmFsaWQgQzE0IFBBU1MgcmVzaWRlbnQtdHJhaW5pbmctZ2F0ZS0yMDI2MDcwNFQwNjI5NTFaLWlzc3VlNjktY3VyZWQtcmVkYWN0ZWQtZWRpdGlvbi5qc29uIEAgMjAyNjA3MDRUMDYyOTUxWiBwcmVkYXRlcyBlYXJsaWVzdCBjaXRlZCBsb29wIEAgMjAyNjA3MDRUMTYxMzE1WjsgcHJlY29uZGl0aW9uIHNhdGlzZmllZCBiZWZvcmUgYW55IGxvb3AuIiBUaGUgZnVsbCBwdWJsaWMgdHJhaWw6IHR3by1wYXNzIGZvcmVuc2ljIHRyYWNlICh0aGlzIGlzc3VlKSDihpIgY3VzdG9keSBydWxpbmcg4oaSIHJlZGFjdGVkLWVkaXRpb24gaW1wb3J0IHdpdGggb3JpZ2luYWwtb2JqZWN0IHNoYSBhbmNob3JzIChQUiAjNDcyKSDihpIgYm9hcmQgZmxpcCwgYWxsIHJlY2VpcHRlZC4gVGhlIGluY2lkZW50IGRpc2Nsb3N1cmUgc3RheXMgaW4gcGxhY2UgcGVyIHRoZSBydWxpbmcgKGN1c3RvZHkgaW1wb3J0IOKJoCBoaXN0b3J5IHJld3JpdGUpLiBSZW1haW5pbmcgYWNjZXB0YW5jZSBpdGVtIGZyb20gdGhlIHJ1bGluZyDigJQgdGhlIGZhaWwtY2xvc2VkIGxhdW5jaGVyIGN1cmUgKGEgbG9vcCBsYXVuY2ggcmVmdXNlcyB3aGVuIHRoZSBDMTQgZ2F0ZSByZWNlaXB0IGlzIGFic2VudCBmcm9tIHRoZSBjYW5vbmljYWwgZGlyIGluc3RlYWQgb2YgcHJvY2VlZGluZykg4oCUIHN0YXlzIG9wZW4gb24gdGhpcyBpc3N1ZS4=",
+          "created_at": "2026-07-08T20:50:48Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/468#issuecomment-4919088191"
+        },
+        {
+          "author": "wordingone",
+          "body_base64": "RmFpbC1jbG9zZWQgbGF1bmNoZXIgY3VyZSDigJQgYWNjZXB0YW5jZSBpdGVtIENMT1NFRCBhcyBhbHJlYWR5LXNhdGlzZmllZCwgaW5kZXBlbmRlbnRseSB2ZXJpZmllZDogc2NyaXB0cy9sb29wX2xhdW5jaF9ndWFyZC5weSAobGFuZGVkIFBSICMxMzgpIGltcGxlbWVudHMgZXhhY3RseSB0aGUgIzQ2OCBjdXJlIOKAlCBmYWlsLWNsb3NlZCByZWZ1c2FsIHdoZW4gcmVjZWlwdHMvZW1iZXItcmVzaWRlbnQtdHJhaW5pbmctZ2F0ZS8gaG9sZHMgbm8gUkVTSURFTlRfVFJBSU5JTkdfR0FURV9QQVNTIHJlY2VpcHQgcHJlZGF0aW5nIHRoZSBsYXVuY2ggKHZlcmRpY3QtRklFTEQgbWF0Y2gsIHNvIHRoZSAjNDcyIHJlZGFjdGVkIGVkaXRpb25zIGF1dGhvcml6ZTsgdW5wYXJzZWFibGUgZmlsZXMgc2tpcHBlZDsgbWlzc2luZyBkaXIgPSByZWZ1c2UpLiBXaXJpbmcgdmVyaWZpZWQgaW4gYWxsIHRocmVlIGxvb3AgZW50cnkgcG9pbnRzIChuYXRpdmUgcHJvcG9zZXIgOjMwNSwgYnJvYWRlciBtdWx0aWZhbWlseSA6MTQ4LCByZXNlYXJjaCBoYXJuZXNzIDoyOTUpLiBUaGUgQzAgY2hhaW4gaXMgZnVsbHkgY2xvc2VkOiBpbmNpZGVudCB0cmFjZWQg4oaSIHJ1bGVkIOKGkiBjdXN0b2R5IGltcG9ydGVkICgjNDcyKSDihpIgYm9hcmQgQVVESVQtT0sg4oaSIHJlY3VycmVuY2Ugc3RydWN0dXJhbGx5IHByZXZlbnRlZCAoIzEzOCBndWFyZCkuIE5vdGU6IFBSICM0NzcsIHdoaWNoIGNsYWltZWQgdG8gZGVsaXZlciB0aGlzIGN1cmUsIHdhcyByZWplY3RlZCB3aXRoIG5hbWVkIGRlZmVjdHMgKGVtcHR5IHJlY2VpcHQgZHVwbGljYXRlcyArIGEgd2lsZGNhcmQgcmVwby1ndWFyZCBleGVtcHRpb24gdmlvbGF0aW5nIHRoZSBjdXN0b2R5IHJ1bGluZyk7IGl0cyBvbmUgcmVhbCBmaW5kaW5nIGlzIHByZXNlcnZlZCBpbiB0aGlzIGNvbW1lbnQu",
+          "created_at": "2026-07-08T21:22:30Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/468#issuecomment-4919336619"
+        },
+        {
+          "author": "wordingone",
+          "body_base64": "Q2xvc2luZyBhcyBjb21wbGV0ZWQgYWZ0ZXIgaW5kZXBlbmRlbnQgdmVyaWZpY2F0aW9uIGFnYWluc3QgY3VycmVudCBwdWJsaWMgbWFzdGVyIGZlNGQ5ZTJiZWI1YTgyNTczZjNmNTlhNWNiMDVmZTliMmMxYTA5N2MuCgpUaGUgZnVsbCByZXRhaW5lZCBjdXJlIGNoYWluIGlzIHByZXNlbnQ6CgotIFBSICM0NzIgKGJkZTdkZjMwYWQ3ZDU2ZDlhZjJjY2U4OGEyZTIxMTAzNmZmYmJlNDMpIGltcG9ydGVkIHRoZSByZWNvdmVyZWQgQzE0IGdhdGUgcmVjZWlwdHMgd2l0aCBvcmlnaW5hbC1vYmplY3QgaGFzaCBhbmNob3JzIGFuZCBwcmVzZXJ2ZWQgdGhlIGluY2lkZW50IGRpc2Nsb3N1cmUuCi0gUmVwZWF0ZWQgY3VycmVudCBDMCByZWNlaXB0cyByZXBvcnQgQVVESVQtT0sgZm9yIHRoZSBnYXRlIHByZWRhdGluZyB0aGUgZWFybGllc3QgY2l0ZWQgbG9vcC4KLSBQUiAjMTM4ICg2ODc3NDA1YmYzMDFjNzUzMjhkNjYxZjdlYzlkYTUzYzg2MTQwZDA3KSBzdXBwbGllcyB0aGUgZmFpbC1jbG9zZWQgbG9vcCBsYXVuY2gtb3JkZXIgZ3VhcmQ7IGFsbCB0aHJlZSBsb29wIGVudHJ5IHBvaW50cyByZXRhaW4gdGhlIHdpcmluZy4KCkEgZnJlc2ggZ3VhcmQgc2VsZnRlc3QgcGFzc2VkIDUvNS4gTWlzc2luZywgbGF0ZSwgb3IgaW52YWxpZCBnYXRlIGN1c3RvZHkgcmVtYWlucyBhIHJlZnVzYWwgcmF0aGVyIHRoYW4gYW4gaW5mZXJyZWQgYXV0aG9yaXphdGlvbi4gVGhlIHJlamVjdGVkIFBSICM0NzcgaXMgbm90IGNyZWRpdGVkLiBUaGlzIGNsb3NlcyB0aGUgY3VzdG9keSBpbmNpZGVudCBhbmQgcmVjdXJyZW5jZS1wcmV2ZW50aW9uIGNvbnRyYWN0IHdpdGhvdXQgcmV3cml0aW5nIGhpc3Rvcnkgb3IgY3JlZGl0aW5nIG1vZGVsL3Jlc2VhcmNoIHByb2dyZXNzLg==",
+          "created_at": "2026-07-13T12:05:03Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/468#issuecomment-4957740683"
+        }
+      ],
+      "created_at": "2026-07-08T19:04:03Z",
+      "labels": [],
+      "number": 468,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "C0 AUDIT-INCIDENT disposition: July-4 loop authorization receipts recovered from orphaned lineage — custody import + launcher fail-closed gate",
+      "updated_at": "2026-07-13T12:05:04Z",
+      "url": "https://github.com/wordingone/ember/issues/468"
+    },
+    {
+      "author": "wordingone",
+      "body_base64": "IyMgRnJvemVuIHNwZWMgdjEgKGNvb3JkaW5hdG9yLWF1dGhvcmVkOyBTNSBjb25zdGl0dXRpb25hbCBjbGF1c2UgZ2V0cyBpdHMgbWVhc3VyZW1lbnQpCgpHT0FMLm1kIMKnNSBtYWtlcyBuYXRpdml6YXRpb24gYSBEUklWRSAoJ3doaWNoIGxheWVyIGNvbWVzIGhvbWUgbmV4dCBpcyBlYXJuZWQgYnkgcmVjZWlwdHMgb24gd2hlcmUgYm9ycm93ZWQgY29kZSBjb3N0cyBtb3N0Jykg4oCUIGJ1dCBubyByZWNlaXB0IHNlcmllcyBtZWFzdXJlcyBib3Jyb3dlZCBzdXJmYWNlLiBUaGlzIHJ1bm5lciBlbmRzIFM1IGFzIGFuIHVubWVhc3VyZWQgY2xhdXNlLgoKIyMjIFJ1bm5lcjogc2NyaXB0cy9uYXRpdml6YXRpb25fbW90aW9uLnB5ClB1cmUtbG9jYWwgc3RhdGljIGNlbnN1cywgbm8gR1BVLCBubyBuZXR3b3JrLiBGb3IgZWFjaCBMQVlFUiBpbiB0aGUgc3Vic3RyYXRlIG1hcCAoZG9jcy9lbWJlci1vd25lZC1zdWJzdHJhdGUtZGlhZ25vc3RpYy5tZCDigJQgcGFyc2UgaXRzIGxheWVyIGxpc3Q7IGlmIGhlYWRpbmdzIGRyaWZ0LCBmYWlsIGxvdWRseSByYXRoZXIgdGhhbiBndWVzc2luZyk6Ci0gKipib3Jyb3dlZF9kZXBzKio6IGNvdW50IG9mIGRpc3RpbmN0IGV4dGVybmFsIHBhY2thZ2VzIGltcG9ydGVkIChzdGRsaWIgZXhjbHVkZWQ7IGVtYmVyLW93bmVkIG1vZHVsZXMgZXhjbHVkZWQpIGFjcm9zcyB0aGUgbGF5ZXIncyBmaWxlIGdsb2JzCi0gKipib3Jyb3dlZF9sb2MqKjogdG90YWwgbGluZXMgaW4gZmlsZXMgd2hvc2UgaW1wb3J0cyBpbmNsdWRlIGV4dGVybmFsIHBhY2thZ2VzLCBzcGxpdCBpbnRvIG93bmVkX2xvYyB2cyBib3Jyb3dlZC10b3VjaGluZyBsb2MKLSAqKmJvcnJvd2VkX2JpbmFyaWVzKio6IG5hbWVkIGV4dGVybmFsIGV4ZWN1dGFibGVzIHRoZSBsYXllciBzaGVsbHMgb3V0IHRvIChsbGFtYS1zZXJ2ZXIsIGRvY2tlciwgZ2l0LCBidW4pIOKAlCByZWdleCBvdmVyIHN1YnByb2Nlc3MvZXhlYyBjYWxsIHNpdGVzCi0gKipkZWx0YV92c19wcmlvcioqOiBudW1lcmljIGRpZmYgdnMgdGhlIHByZXZpb3VzIHJlY2VpcHQgaW4gdGhlIHNlcmllcyAoZmlyc3QgcmVjZWlwdDogZGVsdGEgbnVsbCwgZGlzY2xvc2VkKQotICoqbmV4dF9ob21lX2NhbmRpZGF0ZSoqOiB2MSBwcm94eSA9IHRoZSBsYXllciB3aXRoIHRoZSBoaWdoZXN0IGJvcnJvd2VkX2RlcHMgbm90IHlldCBtYXJrZWQgJ2hvbWUnIGluIHRoZSBkaWFnbm9zdGljIG1hcDsgdGhlIHJlY2VpcHQgc3RhdGVzIHRoZSBwcm94eSBpcyBhIFJBTktJTkcgSEVVUklTVElDLCBub3QgYSB3YWxsLXJlY2VpcHQgbWVhc3VyZW1lbnQgKHYyIHVwZ3JhZGVzIHRvIHdhbGwtcmVjZWlwdCB3ZWlnaHRpbmcgcGVyIMKnNSdzIG93biB0ZXh0KQoKIyMjIFJlY2VpcHQ6IHJlY2VpcHRzL25hdGl2aXphdGlvbi1tb3Rpb24vbm0tPFVUQ3RzPi5qc29uClNjaGVtYToge3RzLCBpbnZhcmlhbnRfc2hhMjU2LCBtYXBfc291cmNlX3NoYSAoc2hhMjU2IG9mIHRoZSBkaWFnbm9zdGljIGRvYyBjb25zdW1lZCksIGxheWVyczogW3tuYW1lLCBib3Jyb3dlZF9kZXBzOiBbbmFtZXNdLCBib3Jyb3dlZF9kZXBzX2NvdW50LCBib3Jyb3dlZF9sb2MsIG93bmVkX2xvYywgYm9ycm93ZWRfYmluYXJpZXN9XSwgZGVsdGFzLCBuZXh0X2hvbWVfY2FuZGlkYXRlLCBtZXRob2Q6ICdzdGF0aWMtaW1wb3J0LWNlbnN1cy12MScsIGxpbWl0czogW25hbWVkIGJsaW5kIHNwb3RzIOKAlCBkeW5hbWljIGltcG9ydHMsIHZlbmRvcmVkIGNvZGUsIGJpbmFyeSBkZXBzIG9mIGRlcHNdfQoKIyMjIFRlc3RzIChUREQsIENJLCBubyBuZXR3b3JrKQpGaXh0dXJlIG1pbmktdHJlZSB3aXRoIGtub3duIGltcG9ydHMg4oaSIGV4YWN0IGV4cGVjdGVkIGNvdW50czsgbWFwLWRyaWZ0IGZhaWx1cmUgY2FzZSAobWlzc2luZyBoZWFkaW5nIOKGkiBsb3VkIGVycm9yKTsgZGVsdGEgY29tcHV0YXRpb24gdnMgYSBmaXh0dXJlIHByaW9yIHJlY2VpcHQuCgojIyMgUmFpbHMKV29ya3RyZWUgbGFuZTsgUFIgc3RvcC1hdC1vcGVuOyByZWZzLW9ubHkgYm9keTsgcnVubmVyIGlzIHJlYWQtb25seSBvdmVyIHRoZSB0cmVlICh3cml0ZXMgT05MWSBpdHMgcmVjZWlwdCku",
+      "closed_at": "2026-07-13T12:04:41Z",
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_base64": "Q2xvc2luZyBhcyBjb21wbGV0ZWQgYWZ0ZXIgaW5kZXBlbmRlbnQgdmVyaWZpY2F0aW9uIGFnYWluc3QgY3VycmVudCBwdWJsaWMgbWFzdGVyIGZlNGQ5ZTJiZWI1YTgyNTczZjNmNTlhNWNiMDVmZTliMmMxYTA5N2MuCgpQUiAjNTA1ICg2Njc1ZTJhZTYzZmJlYTIwYTc3MWQwYmMzMWQ5NDZmODA2ZDA1MzNmKSBpcyBhbiBhbmNlc3RvciBvZiBjdXJyZW50IG1hc3Rlci4gVGhlIHJldGFpbmVkIHJ1bm5lciwgaXRzIHRlc3Qgc3VpdGUsIGFuZCBjYW5vbmljYWwgcmVjZWlwdCByZW1haW4gYnl0ZS1pZGVudGljYWwgdG8gdGhlIG1lcmdlZCBjdXJlOgoKLSBzY3JpcHRzL25hdGl2aXphdGlvbl9tb3Rpb24ucHkKLSB0ZXN0cy90ZXN0X25hdGl2aXphdGlvbl9tb3Rpb24ucHkKLSByZWNlaXB0cy9uYXRpdml6YXRpb24tbW90aW9uL25tLTIwMjYwNzA5VDAxMTMwOFouanNvbgoKQSBmcmVzaCBjdXJyZW50LW1hc3RlciByZXBsYXkgcGFzc2VkIGFsbCAxOSB0ZXN0cy4gVGhlIHJ1bm5lciBtZWFzdXJlcyB0aGUgc3BlY2lmaWVkIHN1YnN0cmF0ZSBsYXllcnMsIHJlcG9ydHMgYm9ycm93ZWQgZGVwZW5kZW5jaWVzL0xPQy9iaW5hcmllcywgY29tcHV0ZXMgcmVjZWlwdC10by1yZWNlaXB0IGRlbHRhcywgaWRlbnRpZmllcyB0aGUgbmV4dCBob21lIGNhbmRpZGF0ZSwgZmFpbHMgb24gbWFwLWhlYWRpbmcgZHJpZnQsIGFuZCBkaXNjbG9zZXMgbWV0aG9kIGxpbWl0cy4gVGhpcyBjbG9zZXMgdGhlIHBlci13aW5kb3cgbWVhc3VyZW1lbnQgbWFjaGluZXJ5IG9ubHk7IGl0IGRvZXMgbm90IGNsYWltIHRoYXQgRW1iZXIgaGFzIGNvbXBsZXRlZCBuYXRpdml6YXRpb24gb3IgYWNoaWV2ZWQgYW55IG1vZGVsIGNhcGFiaWxpdHku",
+          "created_at": "2026-07-13T12:04:41Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/504#issuecomment-4957737701"
+        }
+      ],
+      "created_at": "2026-07-09T00:57:14Z",
+      "labels": [],
+      "number": 504,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "S5 nativization-motion: per-window borrowed-substrate measurement (runner + receipt series)",
+      "updated_at": "2026-07-13T12:04:41Z",
+      "url": "https://github.com/wordingone/ember/issues/504"
+    },
+    {
+      "author": "wordingone",
       "body_base64": "IyMgRGVmZWN0Cgpgc2NyaXB0cy9lbWJlcl90b3RhbGl0eS90ZXN0X3N1cmZhY2UyLnB5YCBsaW5lIDExNDogYERFRkFVTFRfRVhFQ19ST09UID0gb3MuZW52aXJvbi5nZXQoIkVNQkVSX0VYRUNfUk9PVCIsICI8bG9jYWwtZXhlYy1yb290PiIpYCDigJQgdGhlIGRlZmF1bHQgaXMgYSAqKnJlZGFjdGlvbiBwbGFjZWhvbGRlcioqLCBub3QgYSBwYXRoLiBBIHBsYWNlaG9sZGVyIHN0cmluZyBjYW4gbmV2ZXIgYmUgYSBkaXJlY3RvcnksIHNvIHRoZSBwcm9iZSBlbWl0cyBgVU5FVkFMVUFCTEU6IGV4ZWN1dGlvbiByb290IDxsb2NhbC1leGVjLXJvb3Q+IG5vdCBmb3VuZGAgb24gZXZlcnkgbWFjaGluZSwgdW5jb25kaXRpb25hbGx5LiBUaGUgYm9hcmQncyBDLVNVUkZBQ0UyIHJvdyBoYXMgYmVlbiBzdHJ1Y3R1cmFsbHkgVU5FVkFMVUFCTEUgc2luY2UgdGhlIHJlZGFjdGlvbiBsYW5kZWQuCgpTYW1lIGRlZmVjdCBjbGFzcywgc2FtZSBkYXksIHNlY29uZCBpbnN0YW5jZTogdGhlIHRyYWNrZWQgYHRva2VuaXplci90b2tlbml6ZXIuanNvbmAgd2FzIG1hZGUgbm9uLWxvYWRhYmxlIGJ5IHRoZSBzYW1lIHJlZGFjdGlvbiBwYXNzIChzZWUgIzUzMSBjb21tZW50KS4gQ2xhc3M6ICoqcmVkYWN0aW9uIHBsYWNlaG9sZGVycyBpbnNpZGUgRlVOQ1RJT05BTCBhcnRpZmFjdHMqKiDigJQgcmVjZWlwdHMgYXJlIHJlY29yZHMgKHBsYWNlaG9sZGVyIGZpbmUpOyBjb2RlIGlzIGV4ZWN1dGVkIChwbGFjZWhvbGRlciA9IGJyb2tlbiBkZWZhdWx0KS4KCiMjIFN0YWxlIHByZW1pc2UgKGZpcnN0LXByaW5jaXBsZXMpCgpUaGUgcHJvYmUgZG9jc3RyaW5nJ3Mgcm9vdCBub3RlIHNheXMgc3VyZmFjZS0yIHRlbGVtZXRyeSBsaXZlcyBvbiBhICJwaHlzaWNhbGx5IHNlcGFyYXRlIEVYRUNVVElPTiB0cmVlIiAoZnJvemVuIHNwZWMgdjEpLiBUaGF0IHdhcyBhIHByZS1jb25zb2xpZGF0aW9uIGNvbnZlbmllbmNlOiBzaW5jZSB0aGUgc2luZ2xlLXRyZWUgY29uc29saWRhdGlvbiwgdGhlIGNvbnRyYWN0IHJlcG8gSVMgdGhlIGV4ZWN1dGlvbiBob21lLCBhbmQgdGhlIG9sZCBleGVjdXRpb24gdHJlZSBob2xkcyBubyBgcmVjZWlwdHMvZW1iZXItc3VyZmFjZTItdGVsZW1ldHJ5L2AgZGlyIGF0IGFsbCAodmVyaWZpZWQgb24gZGlzayB0aGlzIHNlc3Npb24pLiBUaGUgc2VwYXJhdGUtdHJlZSBwcmVtaXNlIGlzIGRlYWQ7IHRoZSByZWRhY3Rpb24gcGxhY2Vob2xkZXIganVzdCBleHBvc2VkIGl0LgoKIyMgRnJvemVuIEFDCgoxLiBSb290IHJlc29sdXRpb24gYmVjb21lczogYEVNQkVSX0VYRUNfUk9PVGAgZW52IG92ZXJyaWRlIChyZXRhaW5lZCkg4oaSIGVsc2UgKip0aGUgY29udHJhY3QgcmVwbyByb290IGl0c2VsZioqIChzYW1lIHJlc29sdXRpb24gdGhlIHNpYmxpbmcgcHJvYmVzIHVzZSkuIFRoZSBwbGFjZWhvbGRlciBsaXRlcmFsIGlzIGRlbGV0ZWQuIE5vIG5ldyBlbnYgdmFycywgbm8gY29uZmlnIGZpbGVzLgoyLiBFeHBlY3RlZCBib2FyZCB0cmFuc2l0aW9uOiBVTkVWQUxVQUJMRSDihpIgKipSRUQqKiAoYHJlY2VpcHRzL2VtYmVyLXN1cmZhY2UyLXRlbGVtZXRyeS9gIGFic2VudCBpbi10cmVlID0gcmVhbCwgbG9va2VkLWF0IGFic2VuY2UgcGVyIGZyb3plbiBzcGVjIGNsYXVzZSAoYSkpLiBSRUQgaXMgdGhlIGN1cmUgd29ya2luZy4gRG8gTk9UIGNyZWF0ZSB0aGUgdGVsZW1ldHJ5IGRpciwgZG8gTk9UIHNlZWQgZml4dHVyZXMsIGRvIE5PVCB3ZWFrZW4gY2xhdXNlcyAoYSktKGMpIOKAlCBmYWtpbmcgYWxpdmVuZXNzIGlzIHRoZSBmYWlsdXJlIHN0YXRlIHRoaXMgcHJvYmUgZXhpc3RzIHRvIGNhdGNoLgozLiBEb2NzdHJpbmcgcm9vdC1ub3RlIHVwZGF0ZWQgdG8gcmVjb3JkIHRoZSBjb25zb2xpZGF0aW9uICsgdGhpcyBpc3N1ZSBhcyB0aGUgZGV2aWF0aW9uIHJlY29yZCBmb3IgdGhlIHNwZWMtdjEgInZlcmJhdGltIiByb290IG5vdGUgKG9uZSBwYXJhZ3JhcGgsIG5vIGhpc3RvcnkgcmV3cml0ZSkuCjQuIFJlZ3Jlc3Npb24gbGlzdDogcHJvYmUgc3RpbGwgYWx3YXlzIGV4aXRzIDAsIG9uZSBsaW5lOyBVTkVWQUxVQUJMRSByZW1haW5zIG9ubHkgZm9yIGEgZ2VudWluZWx5IHVucmVzb2x2YWJsZSByb290OyBzeW50aGV0aWMtcmVqZWN0aW9uIChgX3N5bnRoZXRpY19jb250cm9sX2ZpeHR1cmVgIC8gYHN5bnRoZXRpY19ldmVudGApLCB2ZXJiLXNjaGVtYSBjbGF1c2UgKGIpLCBhbmQgYG1ldHJpY3NfZGVsdGFgIGNsYXVzZSAoYykgYnl0ZS11bnRvdWNoZWQuCjUuIFVuaXQgY2hlY2s6IHJ1biB0aGUgcHJvYmUgb25jZSBwb3N0LWZpeCBmcm9tIGEgY2xlYW4gZW52IGFuZCBwYXN0ZSBpdHMgb25lLWxpbmUgb3V0cHV0IChleHBlY3RlZCBSRUQgcmVjZWlwdC1hYnNlbnQpIGluIHRoZSBQUiBib2R5LgoKIyMgUmFpbHMKCkNQVS1vbmx5OyBuZXZlciBgLS1saXZlYDsgdG91Y2ggT05MWSBgc2NyaXB0cy9lbWJlcl90b3RhbGl0eS90ZXN0X3N1cmZhY2UyLnB5YDsgUFIgc3RvcC1hdC1vcGVuLCByZWZzLW9ubHkgYm9keSAobmV2ZXIgY2xvc2VzL2ZpeGVzIGtleXdvcmRzKS4KCiMjIENsYXNzIGV4dHJhY3Rpb24gKGZvciB0aGUgcmVkYWN0aW9uIHV0aWxpdHksIHRyYWNrZWQgb24gdGhlIGxhbmRtaW5lIHRocmVhZCkKClRoZSByZWRhY3Rpb24vbGFuZGluZyB1dGlsaXR5IG11c3QgaGFyZC1mYWlsIChibG9jayB0aGUgbGFuZGluZykgd2hlbiBhIHJlcGxhY2VtZW50IHRhcmdldCBzaXRzIGluc2lkZSBhIHN0cmluZyBsaXRlcmFsIG9mIGEgdHJhY2tlZCBgKi5weWAvYCoudHNgIGZpbGUsIGluc3RlYWQgb2Ygc2lsZW50bHkgbGFuZGluZyBhIHBsYWNlaG9sZGVyLiBUaGF0IGhhbGYgcmlkZXMgIzUwMi8jNTI1IOKAlCBvbmUgY29tbWVudCB0aGVyZSByZWZlcmVuY2VzIHRoaXMgaW5zdGFuY2UuCgpyZWZzICM1MDIgIzUyNSAjNTMxCg==",
       "closed_at": "2026-07-13T08:56:33Z",
       "comments": [
@@ -572,7 +666,7 @@
       "url": "https://github.com/wordingone/ember/issues/749"
     }
   ],
-  "closed_outcome_count": 24,
+  "closed_outcome_count": 27,
   "closed_outcomes": [
     {
       "author": "wordingone",
@@ -637,6 +731,71 @@
       "unresolved_remainder": null,
       "updated_at": "2026-07-13T07:04:26Z",
       "url": "https://github.com/wordingone/ember/issues/56"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "1e7b14a554d9ec394e7a2290bdaeab81c24c94e6941c5136e7ace8e97027c513",
+      "closed_at": "2026-07-13T12:05:28Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "scripts/p5_ratio_audit/run_p5_audit.py",
+          "artifact_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0",
+          "closed_disposition": "unresolved",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Retain step_rms_post, pushforward_step_rms, and cos_alignment at the d_comm measurement boundary without crediting a historical scientific result.",
+          "criterion_sha256": "c197ff05ec69369a9a5f6d1976565452bc507db60f435c7bb886c26e144131d2",
+          "evidence_comment_body_sha256": "0289ecb9db447e918033dfd0bb50e784662ed6b15cb5f936ad53e443fb555e77",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/327#issuecomment-4957743776",
+          "implementation_commit": "de667fe259ba22db2fa4c792f87a82698372ec97",
+          "implementation_diff_sha256": "a4fe60210f9b99ec316e37ec5f113f9105d81bde1943751189b18694821394c1",
+          "implementation_paths": [
+            "scripts/p5_ratio_audit/run_p5_audit.py"
+          ],
+          "number": 327,
+          "unresolved_remainder": "The instrumentation is implemented, but the ad hoc AST check is unretained and the historical governed runtime is absent and execution-denied.",
+          "verification_executed_at": "2026-07-13T12:05:27Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "scripts/p5_ratio_audit/run_p5_audit.py",
+          "verifier_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0"
+        }
+      ],
+      "created_at": "2026-07-07T07:49:26Z",
+      "disposition": "unresolved",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "b0c641a6a330754e8c17e36a6ba9529783b0ae89d3bad600679ead5011d38872",
+          "created_at": "2026-07-07T08:36:23Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/327#issuecomment-4901783475"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "89a86a7a5460439c8375f40e0ea1f6960d8c7002db1ba0701404de5727eb1ec0",
+          "created_at": "2026-07-08T14:15:13Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/327#issuecomment-4915729138"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "0289ecb9db447e918033dfd0bb50e784662ed6b15cb5f936ad53e443fb555e77",
+          "created_at": "2026-07-13T12:05:27Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/327#issuecomment-4957743776"
+        }
+      ],
+      "issue_record_sha256": "655bcb1ae3a19c8a73ad59f14d0ea9392423fabfce3588f9c35e3df2039b09fb",
+      "labels": [],
+      "number": 327,
+      "obligation_sha256": "8036f76315094c50b67f18e071bdb7a6034741abf12ae7e86ff51577c74bab0e",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "d_comm null model derived: the 1.1352 measurement needs two free receipt fields to be interpretable (P5/P0 composition law)",
+      "unresolved_remainder": "The instrumentation is implemented, but the ad hoc AST check is unretained and the historical governed runtime is absent and execution-denied.",
+      "updated_at": "2026-07-13T12:05:28Z",
+      "url": "https://github.com/wordingone/ember/issues/327"
     },
     {
       "author": "wordingone",
@@ -1404,6 +1563,151 @@
     },
     {
       "author": "wordingone",
+      "body_sha256": "02771df1d0cfd15d360c0453101391bf89433bb9ff85b1a7fee32e964f2788cf",
+      "closed_at": "2026-07-13T12:05:04Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "scripts/loop_launch_guard.py",
+          "artifact_sha256": "30c19ecb5f3334f0e1553c6f6ef0a4de96b7dce1502b298e76cf32dc6bfd6e32",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Fail closed unless an in-window canonical authorization gate is valid, and retain that guard in all three loop entry points.",
+          "criterion_sha256": "5a5535a06918b6a950856ceeded1dbe1cd9d1c99e1b3f058069c54d91653a65f",
+          "evidence_comment_body_sha256": "6ffd213ad7f7a845a190ff3c239990cc98b4440ccc39ff1d8c248cb5afbf34ff",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/468#issuecomment-4957740683",
+          "implementation_commit": "6877405bf301c75328d661f7ec9da53c86140d07",
+          "implementation_diff_sha256": "7680e3a490297d04102c0a57292109cc5d9e48401ac95b87b85014c4e857ff00",
+          "implementation_paths": [
+            "scripts/ember_d3_broader_multifamily_loop.py",
+            "scripts/ember_d3_native_proposer_loop.py",
+            "scripts/ember_research_loop_harness.py",
+            "scripts/loop_launch_guard.py",
+            "scripts/loop_launch_guard_selftest.py"
+          ],
+          "number": 468,
+          "verification_executed_at": "2026-07-13T12:05:03Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "scripts/loop_launch_guard_selftest.py",
+          "verifier_sha256": "73a83703c23e6c5bbf9ed65ff341291f46f91820bd5369859dae60660c32b59a"
+        },
+        {
+          "artifact_path": "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-gate-conflation-audit.md",
+          "artifact_sha256": "fffb365e750ee6594a4626a0dabc2f3e5aecc6cd4a0d58482a96c6c44ef895e4",
+          "closed_disposition": "unresolved",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Preserve the three recovered authorization-gate records and incident disclosure with explicit custody attestations.",
+          "criterion_sha256": "ac460687bc105a87c9685330281df34859d4ecf50d017120c921d09ad495554a",
+          "evidence_comment_body_sha256": "6ffd213ad7f7a845a190ff3c239990cc98b4440ccc39ff1d8c248cb5afbf34ff",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/468#issuecomment-4957740683",
+          "implementation_commit": "bde7df30ad7d56d9af2cce88a2e211036ffbbe43",
+          "implementation_diff_sha256": "de243f0552dee0b054f31f45f172fd092e9c5911f4a30e18ab02a7e0fb509c58",
+          "implementation_paths": [
+            "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-gate-conflation-audit.md",
+            "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-intree-issue70.md",
+            "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-issue69-cured.md",
+            "receipts/ember-resident-training-gate/resident-gate-conflation-audit-20260704T063019Z-redacted-edition.json",
+            "receipts/ember-resident-training-gate/resident-training-gate-20260704T062951Z-issue69-cured-redacted-edition.json",
+            "receipts/ember-resident-training-gate/resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json"
+          ],
+          "number": 468,
+          "unresolved_remainder": "The recurrence guard and current C0 state are independently verifiable, but the original unredacted orphan bytes are not publicly reachable, so end-to-end custody provenance cannot be rederived.",
+          "verification_executed_at": "2026-07-13T12:05:03Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-issue69-cured.md",
+          "verifier_sha256": "328a5f10d121c65560234e55cdfc60ef7b2279a501e306400ccf901591557ccb"
+        }
+      ],
+      "created_at": "2026-07-08T19:04:03Z",
+      "disposition": "unresolved",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "a65207f1d530f99619a9968e719f7f99627f42de92b11d69199d58556ed4824b",
+          "created_at": "2026-07-08T20:50:48Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/468#issuecomment-4919088191"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "609e4634eee5366c62f41a17a41feababc740c9be95cc601238833e48e10eaed",
+          "created_at": "2026-07-08T21:22:30Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/468#issuecomment-4919336619"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "6ffd213ad7f7a845a190ff3c239990cc98b4440ccc39ff1d8c248cb5afbf34ff",
+          "created_at": "2026-07-13T12:05:03Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/468#issuecomment-4957740683"
+        }
+      ],
+      "issue_record_sha256": "ca199dfd946f3ca60d91686e19a640bd8074c009026f17ed3ab274f3b14c90bb",
+      "labels": [],
+      "number": 468,
+      "obligation_sha256": "8ec8348a4b4de2317d8ea37e4dd40579f1cd570dec8663b6363dd73af74a5c74",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "C0 AUDIT-INCIDENT disposition: July-4 loop authorization receipts recovered from orphaned lineage — custody import + launcher fail-closed gate",
+      "unresolved_remainder": "The recurrence guard and current C0 state are independently verifiable, but the original unredacted orphan bytes are not publicly reachable, so end-to-end custody provenance cannot be rederived.",
+      "updated_at": "2026-07-13T12:05:04Z",
+      "url": "https://github.com/wordingone/ember/issues/468"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "1b18468e70d53ee7c8b84108b85e31ab6bae4f5ff5929ad01e1bb6ecfc032841",
+      "closed_at": "2026-07-13T12:04:41Z",
+      "closure_proposed": false,
+      "completion_proof": [
+        {
+          "artifact_path": "receipts/nativization-motion/nm-20260709T011308Z.json",
+          "artifact_sha256": "4accb6b262053eb440abae7ab1222216b4583cca7f3e97f6d0d1a0d337e26c6c",
+          "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+          "criterion": "Retain the pure-local substrate-map measurement, receipt-to-receipt deltas, next-home heuristic, schema receipt, drift failure, and fixture/prior-receipt tests without claiming completed nativization.",
+          "criterion_sha256": "646c0372a0580dba92374c5cab715fcdbb77b43d4651a7bf1de221dce3318806",
+          "evidence_comment_body_sha256": "833fe401c2826ccd5e5afec1a972d7f9bd8cff83c247ecfb2cdea40c7ef22d3c",
+          "evidence_comment_url": "https://github.com/wordingone/ember/issues/504#issuecomment-4957737701",
+          "implementation_commit": "6675e2ae63fbea20a771d0bc31d946f806d0533f",
+          "implementation_diff_sha256": "bdddd2b787939cf38d146b2640ae8fe8b6ac2b07033181094676056bfdd256d6",
+          "implementation_paths": [
+            "receipts/nativization-motion/nm-20260709T011308Z.json",
+            "scripts/nativization_motion.py",
+            "tests/test_nativization_motion.py"
+          ],
+          "number": 504,
+          "verification_executed_at": "2026-07-13T12:04:41Z",
+          "verification_exit_code": 0,
+          "verification_outcome": "independently_verified",
+          "verifier_path": "tests/test_nativization_motion.py",
+          "verifier_sha256": "61d2b2788d2bae8b64d2f8483ee5b37ae2839a72ca713efb40047fb00912829d"
+        }
+      ],
+      "created_at": "2026-07-09T00:57:14Z",
+      "disposition": "implemented and independently verified",
+      "evidence_comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "833fe401c2826ccd5e5afec1a972d7f9bd8cff83c247ecfb2cdea40c7ef22d3c",
+          "created_at": "2026-07-13T12:04:41Z",
+          "updated_at": "",
+          "url": "https://github.com/wordingone/ember/issues/504#issuecomment-4957737701"
+        }
+      ],
+      "issue_record_sha256": "5a5dde22d5031ad7c57cae1db2dd3758d8e69f6e76aac0d7c034c9b6ff757660",
+      "labels": [],
+      "number": 504,
+      "obligation_sha256": "a6948f58c9df13dfb2cab6c404bdc31d39a8030006481c01f41f8f6fc9f0b723",
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "title": "S5 nativization-motion: per-window borrowed-substrate measurement (runner + receipt series)",
+      "unresolved_remainder": null,
+      "updated_at": "2026-07-13T12:04:41Z",
+      "url": "https://github.com/wordingone/ember/issues/504"
+    },
+    {
+      "author": "wordingone",
       "body_sha256": "c54625eca805d4127def746adfccbfbc1208d7f005b748c945a3b4b7034a9bbb",
       "closed_at": "2026-07-13T08:56:33Z",
       "closure_proposed": false,
@@ -1919,6 +2223,28 @@
       "verifier_sha256": "f32ba1731f19cd0f2f62330d05ab05db03b0b3f13b29a7bf4ada0335fadea1e3"
     },
     {
+      "artifact_path": "scripts/p5_ratio_audit/run_p5_audit.py",
+      "artifact_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0",
+      "closed_disposition": "unresolved",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Retain step_rms_post, pushforward_step_rms, and cos_alignment at the d_comm measurement boundary without crediting a historical scientific result.",
+      "criterion_sha256": "c197ff05ec69369a9a5f6d1976565452bc507db60f435c7bb886c26e144131d2",
+      "evidence_comment_body_sha256": "0289ecb9db447e918033dfd0bb50e784662ed6b15cb5f936ad53e443fb555e77",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/327#issuecomment-4957743776",
+      "implementation_commit": "de667fe259ba22db2fa4c792f87a82698372ec97",
+      "implementation_diff_sha256": "a4fe60210f9b99ec316e37ec5f113f9105d81bde1943751189b18694821394c1",
+      "implementation_paths": [
+        "scripts/p5_ratio_audit/run_p5_audit.py"
+      ],
+      "number": 327,
+      "unresolved_remainder": "The instrumentation is implemented, but the ad hoc AST check is unretained and the historical governed runtime is absent and execution-denied.",
+      "verification_executed_at": "2026-07-13T12:05:27Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "scripts/p5_ratio_audit/run_p5_audit.py",
+      "verifier_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0"
+    },
+    {
       "artifact_path": "receipts/process-visibility/process-visibility-20260709T232909Z.json",
       "artifact_sha256": "f32ba1731f19cd0f2f62330d05ab05db03b0b3f13b29a7bf4ada0335fadea1e3",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
@@ -2270,6 +2596,79 @@
       "verifier_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0"
     },
     {
+      "artifact_path": "scripts/loop_launch_guard.py",
+      "artifact_sha256": "30c19ecb5f3334f0e1553c6f6ef0a4de96b7dce1502b298e76cf32dc6bfd6e32",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Fail closed unless an in-window canonical authorization gate is valid, and retain that guard in all three loop entry points.",
+      "criterion_sha256": "5a5535a06918b6a950856ceeded1dbe1cd9d1c99e1b3f058069c54d91653a65f",
+      "evidence_comment_body_sha256": "6ffd213ad7f7a845a190ff3c239990cc98b4440ccc39ff1d8c248cb5afbf34ff",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/468#issuecomment-4957740683",
+      "implementation_commit": "6877405bf301c75328d661f7ec9da53c86140d07",
+      "implementation_diff_sha256": "7680e3a490297d04102c0a57292109cc5d9e48401ac95b87b85014c4e857ff00",
+      "implementation_paths": [
+        "scripts/ember_d3_broader_multifamily_loop.py",
+        "scripts/ember_d3_native_proposer_loop.py",
+        "scripts/ember_research_loop_harness.py",
+        "scripts/loop_launch_guard.py",
+        "scripts/loop_launch_guard_selftest.py"
+      ],
+      "number": 468,
+      "verification_executed_at": "2026-07-13T12:05:03Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "scripts/loop_launch_guard_selftest.py",
+      "verifier_sha256": "73a83703c23e6c5bbf9ed65ff341291f46f91820bd5369859dae60660c32b59a"
+    },
+    {
+      "artifact_path": "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-gate-conflation-audit.md",
+      "artifact_sha256": "fffb365e750ee6594a4626a0dabc2f3e5aecc6cd4a0d58482a96c6c44ef895e4",
+      "closed_disposition": "unresolved",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Preserve the three recovered authorization-gate records and incident disclosure with explicit custody attestations.",
+      "criterion_sha256": "ac460687bc105a87c9685330281df34859d4ecf50d017120c921d09ad495554a",
+      "evidence_comment_body_sha256": "6ffd213ad7f7a845a190ff3c239990cc98b4440ccc39ff1d8c248cb5afbf34ff",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/468#issuecomment-4957740683",
+      "implementation_commit": "bde7df30ad7d56d9af2cce88a2e211036ffbbe43",
+      "implementation_diff_sha256": "de243f0552dee0b054f31f45f172fd092e9c5911f4a30e18ab02a7e0fb509c58",
+      "implementation_paths": [
+        "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-gate-conflation-audit.md",
+        "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-intree-issue70.md",
+        "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-issue69-cured.md",
+        "receipts/ember-resident-training-gate/resident-gate-conflation-audit-20260704T063019Z-redacted-edition.json",
+        "receipts/ember-resident-training-gate/resident-training-gate-20260704T062951Z-issue69-cured-redacted-edition.json",
+        "receipts/ember-resident-training-gate/resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json"
+      ],
+      "number": 468,
+      "unresolved_remainder": "The recurrence guard and current C0 state are independently verifiable, but the original unredacted orphan bytes are not publicly reachable, so end-to-end custody provenance cannot be rederived.",
+      "verification_executed_at": "2026-07-13T12:05:03Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-issue69-cured.md",
+      "verifier_sha256": "328a5f10d121c65560234e55cdfc60ef7b2279a501e306400ccf901591557ccb"
+    },
+    {
+      "artifact_path": "receipts/nativization-motion/nm-20260709T011308Z.json",
+      "artifact_sha256": "4accb6b262053eb440abae7ab1222216b4583cca7f3e97f6d0d1a0d337e26c6c",
+      "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
+      "criterion": "Retain the pure-local substrate-map measurement, receipt-to-receipt deltas, next-home heuristic, schema receipt, drift failure, and fixture/prior-receipt tests without claiming completed nativization.",
+      "criterion_sha256": "646c0372a0580dba92374c5cab715fcdbb77b43d4651a7bf1de221dce3318806",
+      "evidence_comment_body_sha256": "833fe401c2826ccd5e5afec1a972d7f9bd8cff83c247ecfb2cdea40c7ef22d3c",
+      "evidence_comment_url": "https://github.com/wordingone/ember/issues/504#issuecomment-4957737701",
+      "implementation_commit": "6675e2ae63fbea20a771d0bc31d946f806d0533f",
+      "implementation_diff_sha256": "bdddd2b787939cf38d146b2640ae8fe8b6ac2b07033181094676056bfdd256d6",
+      "implementation_paths": [
+        "receipts/nativization-motion/nm-20260709T011308Z.json",
+        "scripts/nativization_motion.py",
+        "tests/test_nativization_motion.py"
+      ],
+      "number": 504,
+      "verification_executed_at": "2026-07-13T12:04:41Z",
+      "verification_exit_code": 0,
+      "verification_outcome": "independently_verified",
+      "verifier_path": "tests/test_nativization_motion.py",
+      "verifier_sha256": "61d2b2788d2bae8b64d2f8483ee5b37ae2839a72ca713efb40047fb00912829d"
+    },
+    {
       "artifact_path": "receipts/process-visibility/process-visibility-20260709T094500Z.json",
       "artifact_sha256": "8ecb09f5c0f86f7b6c98b45a4529d56c57452e615a0015a084a8822223112cfc",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
@@ -2512,7 +2911,7 @@
       "preserved_issue_body_sha256": "62fe4a4d1eacffea4d1b963015cbdf479490cce78f686e73483525460dae3527"
     }
   ],
-  "issue_snapshot_sha256": "3de6baf87e5f3bdba7931957ef80d75e323e25f7fc68c5f478c436115b9f5c37",
+  "issue_snapshot_sha256": "fa4975fb31b9cd88c3bf7652f294f9530cb9d8c6fcc74e6ea01553d0d032bb61",
   "issue_source_snapshot": [
     {
       "author": "wordingone",
@@ -3754,20 +4153,6 @@
     },
     {
       "author": "wordingone",
-      "body_base64": "UmVzZWFyY2gtbG9vcCBkZXJpdmF0aW9uICh6ZXJvIGNvbXB1dGU7IE1vbnRlIENhcmxvIHZlcmlmaWNhdGlvbiBsZWcgZGlzcGF0Y2hlZCBzZXBhcmF0ZWx5KS4gVGhlIFA1IHYxLjIgaGVhZGxpbmUgbWVhc3VyZW1lbnQgZF9jb21tID0gMS4xMzUyIChyZWNlaXB0IHA1LXJhdGlvLWF1ZGl0LU9LLTIwMjYwNzA3VDAzNDk1MVopIGlzIGN1cnJlbnRseSBhIG51bWJlciB3aXRob3V0IGEgbnVsbC4gRGVyaXZhdGlvbiBvZiB0aGUgbnVsbCwgZnJvbSB0aGUgaGFybmVzcydzIG93biBmb3JtdWxhIChydW5fcDVfYXVkaXQucHk6OmNvbXB1dGVfZF9jb21tKToKCmRfY29tbSA9IHx8VV97aysxfShHKHRoKSkgLSBHKFVfayh0aCkpfHxfUk1TIC8gfHxVX2sodGgpIC0gdGh8fF9STVMKCiMjIE51bGwgbW9kZWwgKGluZGVwZW5kZW50IHVwZGF0ZSBkaXJlY3Rpb25zKQpXcml0ZSBVX2sodGgpPXRoK3UsIFVfe2srMX0ocGgpPXBoK3YsIEcgbGluZWFyIChuZXQybmV0IHdpZGVuID0gZHVwbGljYXRpb24gbWFwIFA7IGV4YWN0IGZvciB0aGUgcHJvZHVjdGlvbiB3aWRlbl9zdGF0ZV9kaWN0IG9uIHdlaWdodCB0ZW5zb3JzKS4gVGhlbiBudW1lcmF0b3IgPSB8fHYgLSBQdXx8X1JNUyBhbmQ6CgogIGRfY29tbV4yID0gcl4yICsgcV4yIC0gMiBjIHIgcSwgICByID0gcm1zKHYpL3Jtcyh1KSwgIHEgPSBybXMoUHUpL3Jtcyh1KSwgIGMgPSBjb3ModiwgUHUpCgpJTkRFUEVOREVOQ0UgTlVMTDogYz0wICh0aGUgY3Jvc3MgdGVybSB2YW5pc2hlcyB1bmRlciBpbmRlcGVuZGVuY2UgaXJyZXNwZWN0aXZlIG9mIG1hcmdpbmFscyDigJQgcm9idXN0IHRvIE11b24ncyBub24taXNvdHJvcGljIG9ydGhvZ29uYWxpemVkIHN0ZXBzKS4gU28gZF9jb21tX251bGwgPSBzcXJ0KHJeMiArIHFeMikuCgojIyBSZWZlcmVuY2UgcG9pbnRzIGF0IHRoZSByZWFsIGdlb21ldHJ5IChydW5nLTE6IGZmIDgxOTIgLT4gMTYzODQsIGhpZGRlbiAxMDI0KQotIE5haXZlIGVxdWFsLW5vcm1zIChyPXE9MSk6IHNxcnQoMikgfiAxLjQxNC4KLSBNdW9uIHdpZHRoIHNjYWxpbmc6IHJtcyBvZiBhbiBvcnRob2dvbmFsaXplZCAobSxuKSBzdGVwID0gc3FydChtaW4obSxuKS8obSpuKSk7IGZvciBnYXRlL3VwIChtaW4gPSBoaWRkZW4gPSAxMDI0IGF0IGJvdGggd2lkdGhzLCBuIGRvdWJsZXMpID0+IHIgPSBzcXJ0KG4xL24yKSAqIChscl9wb3N0L2xyX3ByZSkgPSAxL3NxcnQoMikgYXQgZXF1YWwgTFIuIER1cGxpY2F0aW9uIHByZXNlcnZlcyBybXMgb24gZ2F0ZS91cCAocT0xKTsgZG93bl9wcm9qJ3Mgb3V0Z29pbmcgaGFsdmluZyBnaXZlcyBxPTEvMiBvbiB0aGF0IHRlbnNvci4KLSBHYXRlL3VwLWRvbWluYXRlZCByZWZpbmVkIG51bGwgYXQgZXF1YWwgTFI6IHNxcnQoMS8yICsgMSkgPSBzcXJ0KDEuNSkgfiAxLjIyNDcuCi0gRGVnZW5lcmF0ZSByZWZlcmVuY2U6IHYgLT4gMCAocG9zdC1ncm93IHN0ZXAgdmFuaXNoaW5nKSBnaXZlcyBkX2NvbW0gLT4gcSB+IDEuMC4KCiMjIFRoZSBpbnRlcnByZXRhdGlvbiBwcm9ibGVtICh0aGUgYWN0aW9uYWJsZSBmaW5kaW5nKQpNZWFzdXJlZCAxLjEzNTIgc2l0cyBCRVRXRUVOIHRoZSB2YW5pc2hpbmctc3RlcCByZWZlcmVuY2UgKH4xLjApIGFuZCB0aGUgcmVmaW5lZCBpbmRlcGVuZGVuY2UgbnVsbCAofjEuMjI0NykuIFR3byBxdWFsaXRhdGl2ZWx5IGRpZmZlcmVudCByZWdpbWVzIHByb2R1Y2UgbnVtYmVycyBoZXJlOgooYSkgbmVhci1udWxsIGluZGVwZW5kZW5jZSB3aXRoIHRoZSBleGFjdCByLHEgbWl4dHVyZSAoZG93bi1wcm9qICsgTFIgcmF0aW8gcHVsbGluZyAxLjIyNDcgZG93biksIGkuZS4gdGhlIGdyb3cgZXZlbnQgZG9lcyBOT1QgcHJlc2VydmUgdXBkYXRlLWRpcmVjdGlvbiBzdHJ1Y3R1cmUgYmV5b25kIHdpZHRoIGJvb2trZWVwaW5nOyBvcgooYikgc21hbGxlciBwb3N0LWdyb3cgc3RlcCB3aXRoIHBhcnRpYWwgYWxpZ25tZW50IChjPjApLCBpLmUuIGdlbnVpbmUgcGFydGlhbCBjb21tdXRhdGlvbi4KVGhlIGN1cnJlbnQgcmVjZWlwdCBDQU5OT1QgZGlzdGluZ3Vpc2ggdGhlbTogaXQgY2FycmllcyBudW1lcmF0b3Jfcm1zIGFuZCBkZW5vbWluYXRvcl9ybXMgYnV0IG5vdCBybXModiksIHJtcyhQdSksIG9yIGMg4oCUIGFsbCB0aHJlZSBjb21wdXRhYmxlIGZvciBmcmVlIGZyb20gdGVuc29ycyBjb21wdXRlX2RfY29tbSBhbHJlYWR5IGhvbGRzLgoKIyMgUHJvcG9zZWQgc3BlYyBhZGRpdGlvbiAoUFJPUE9TRUQ7IGFkZGl0aXZlLCByZWNlaXB0cyBpbW11dGFibGUsIHByZXJlZyBtZWFzdXJlbWVudCBzdGF0dXMgdW5jaGFuZ2VkKQpjb21wdXRlX2RfY29tbSByZXR1cm5zIHRocmVlIG1vcmUgZmllbGRzOiBzdGVwX3Jtc19wb3N0ID0gcm1zKFVfe2srMX0oRyh0aCkpIC0gRyh0aCkpLCBwdXNoZm9yd2FyZF9zdGVwX3JtcyA9IHJtcyhHKFVfayh0aCkpIC0gRyh0aCkpLCBjb3NfYWxpZ25tZW50ID0gPHYsIFB1PiAvICh8fHZ8fCB8fFB1fHwpLiBUaGVuIGRfY29tbSBkZWNvbXBvc2VzIGV4YWN0bHkgYXMgZF9jb21tXjIgPSByXjIgKyBxXjIgLSAyIGMgciBxIGFnYWluc3QgaXRzIG93biBudWxsIHNxcnQocl4yK3FeMikgaW5zaWRlIHRoZSByZWNlaXB0IOKAlCB0aGUgbWVhc3VyZW1lbnQgYmVjb21lcyBzZWxmLWludGVycHJldGluZy4gVmVyaWZpY2F0aW9uOiBNb250ZSBDYXJsbyBhdCB0aGUgcmVhbCBzaGFwZXMgKGluZGVwZW5kZW50IE11b24tb3J0aG9nb25hbGl6ZWQgcmFuZG9tIG1vbWVudGEsIHByb2R1Y3Rpb24gd2lkZW4gc2VtYW50aWNzIGluY2wuIGRvd24taGFsdmluZykgbXVzdCByZXByb2R1Y2Ugc3FydChyXjIrcV4yKSBhbmQgYyB+IDA7IGRpc3BhdGNoZWQgYXMgYSBzZXBhcmF0ZSByZWNlaXB0ZWQgbGVnLCByZXN1bHRzIHRvIGJlIGF0dGFjaGVkIGhlcmUuCgpObyBwYXNzIGJhciBpcyBwcm9wb3NlZCDigJQgdjEuMS92MS4yJ3MgbWVhc3VyZW1lbnQtb25seSBzdGF0dXMgaXMgY29uc2VydmVkOyB0aGlzIGFkZHMgaW50ZXJwcmV0YWJpbGl0eSwgbm90IHZlcmRpY3Qu",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-07T07:49:26Z",
-      "labels": [],
-      "number": 327,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "d_comm null model derived: the 1.1352 measurement needs two free receipt fields to be interpretable (P5/P0 composition law)",
-      "updated_at": "2026-07-08T14:15:13Z",
-      "url": "https://github.com/wordingone/ember/issues/327"
-    },
-    {
-      "author": "wordingone",
       "body_base64": "Rm91bmQgZHVyaW5nIHRoZSAyMDI2LTA3LTA3IFcxIHJlZnVzYWwgZm9yZW5zaWNzIChsYXVuY2ggbGFuZSdzIHdpbmRvdy1jb3VudCByZWNvbmNpbGlhdGlvbjsgdGhlIDg0LXdpbmRvdyBkZWx0YSBiZXR3ZWVuIHRoZSBydW5uZXIncyByZWNoZWNrIGFuZCB0aGUgZGVjb250YW0gcmVjZWlwdCBkZWNvZGVkIGV4YWN0bHkgYXMgMTIqKG5fZ3JvdXBzLTEpIHdpdGggbl9ncm91cHM9OCkuCgpERUZFQ1Q6IGNvbnRhbWluYXRpb25fcmVjaGVja19tcCAoYW5kIHRoZSBzYW1lIHBhdHRlcm4gd2hlcmV2ZXIgYnVpbGRfZGVjb250YW1fYmF0Y2hfbXAucHkgZGlzdHJpYnV0ZXMgc2hhcmRzKSBhc3NpZ25zIHNoYXJkcyB0byB3b3JrZXJzIFJPVU5ELVJPQklOIChncm91cF9pZHggPSBzaGFyZF9pZHggJSBuX2dyb3VwcyksIHNvIG5vIHdvcmtlciBldmVyIGhvbGRzIHR3byBjb3JwdXMtY29uc2VjdXRpdmUgc2hhcmRzOyBlYWNoIHdvcmtlcidzIGJvdW5kYXJ5LWpvaW4gbG9naWMgdGhlcmVmb3JlIGpvaW5zIHJvdW5kLXJvYmluLWFkamFjZW50IHNoYXJkcywgc2Nhbm5pbmcgMjYtbl9ncm91cHMgRkFLRSBib3VuZGFyaWVzIHdoaWxlIG1pc3NpbmcgNyBvZiB0aGUgMjUgVFJVRSBwaHlzaWNhbCBzaGFyZCBib3VuZGFyaWVzIGVudGlyZWx5LiBBIDEzLXRva2VuIHdpbmRvdyBzdHJhZGRsaW5nIG9uZSBvZiB0aG9zZSA3IGJvdW5kYXJpZXMgaXMgbmV2ZXIgaGFzaGVkIGJ5IHRoZSBNUCBwYXRoLgoKSU1QQUNUOiBuYXJyb3cg4oCUIG9ubHkgd2luZG93cyBwaHlzaWNhbGx5IHN0cmFkZGxpbmcgdGhlIG1pc3NlZCBib3VuZGFyaWVzIGVzY2FwZSBzY2FubmluZyAoZG96ZW5zIG9mIHdpbmRvd3MgcGVyIGJvdW5kYXJ5KS4gVG9uaWdodCdzIGhlbGQtb3V0IHJlY2VpcHQgaXMgVU5BRkZFQ1RFRCAoYWxsIDE2IHNlbGVjdGVkIHdpbmRvd3Mgc2l0IGRlZXAgaW4gc2hhcmQtMTYncyBpbnRlcmlvciwgcmVjZWlwdHMgdW5jaGFuZ2VkKS4gQnV0IHRoZSBnYXAgaXMgc3lzdGVtYXRpYzogZXZlcnkgTVAgc2NhbiB0byBkYXRlIHNoYXJlcyBpdCwgYW5kIGFueSBmdXR1cmUgaGVsZC1vdXQgd2luZG93IG5lYXIgYSBtaXNzZWQgYm91bmRhcnkgd291bGQgZ2V0IGEgZmFsc2UgQ0xFQU4uCgpDVVJFIChidWlsZGVyLWRpc3BhdGNoYWJsZSk6IGRpc3RyaWJ1dGUgc2hhcmRzIHRvIHdvcmtlcnMgYXMgQ09OVElHVU9VUyByYW5nZXMgKHdvcmtlciBrIGdldHMgc2hhcmRzIFtrKmcsIChrKzEpKmcpKSBzbyBpbnRyYS13b3JrZXIgam9pbnMgYXJlIHRydWUgYm91bmRhcmllcywgYW5kIHBhc3MgZWFjaCB3b3JrZXIgaXRzIHN1Y2Nlc3NvcidzIGZpcnN0IHdpbmRvdy1sZW5ndGggdG9rZW5zIGZvciB0aGUgc2VhbTsgT1Iga2VlcCByb3VuZC1yb2JpbiBhbmQgYWRkIGEgZGVkaWNhdGVkIGJvdW5kYXJ5IHBhc3MgdGhhdCBoYXNoZXMgdGhlIDI1IHRydWUgc2VhbXMgZXhwbGljaXRseS4gRWl0aGVyIHdheTogYSByZWdyZXNzaW9uIHRlc3QgdGhhdCBwbGFudHMgYSBkdXBsaWNhdGUgc3RyYWRkbGluZyBhIHRydWUgc2hhcmQgYm91bmRhcnkgYW5kIGFzc2VydHMgdGhlIHNjYW5uZXIgZmluZHMgaXQgKGZhaWxzIGF0IGN1cnJlbnQgaGVhZCwgcGFzc2VzIGF0IGZpeCk7IGFuZCB0aGUgd2luZG93LWNvdW50IGNvbnZlbnRpb24gKGJvdW5kYXJ5IHdpbmRvd3MgaW5jbHVkZWQpIHN0YXRlZCBpbiB0aGUgcmVjZWlwdCBzbyBjb3VudCBkZWx0YXMgc3RvcCBiZWluZyBmb3JlbnNpYyBzdXJwcmlzZXMu",
       "closed_at": "",
       "comments": [],
@@ -4272,20 +4657,6 @@
     },
     {
       "author": "wordingone",
-      "body_base64": "IyMgVGhlIGluY2lkZW50IChib2FyZCByZWNlaXB0IDIwMjYwNzA4VDE4MjMyNlopCkMwIGZsaXBwZWQgdG8gQVVESVQtSU5DSURFTlQ6IHR3byBkMy1uYXRpdmUtbG9vcCByZWNlaXB0cyAoMjAyNjA3MDRUMTYxMzE1WiwgMjAyNjA3MDRUMjM1MTQ0Wikgc2l0IGluIHRoZSBhdWRpdCB3aW5kb3cgd2l0aCB6ZXJvIG1hdGNoaW5nIEMxNCBSRVNJREVOVF9UUkFJTklOR19HQVRFX1BBU1MgcmVjZWlwdHMgaW4gdGhlIGNhbm9uaWNhbCBnYXRlIGRpcmVjdG9yeS4gVGhlIGRldGVjdG9yIGlzIENPUlJFQ1QgYWJvdXQgdGhlIGNhbm9uaWNhbCBldmlkZW5jZSBzdXJmYWNlIOKAlCB0aGlzIGlzc3VlIGlzIHRoZSByZWNlaXB0ZWQgZGlzcG9zaXRpb24uCgojIyBUaGUgdHJhY2UgKHJlYWQtb25seSwgdHdvIHBhc3NlcykKLSBHYXRlIHJlY2VpcHRzIERPIGV4aXN0IGluIGdpdCBvYmplY3RzLCBjb250ZW50LXZlcmlmaWVkIGFnYWluc3QgdGVzdF9jMCdzIG93biBjcml0ZXJpYTogcmVzaWRlbnQtdHJhaW5pbmctZ2F0ZS0yMDI2MDcwNFQwNjI5NTFaLWlzc3VlNjktY3VyZWQuanNvbiBhbmQgcmVzaWRlbnQtdHJhaW5pbmctZ2F0ZS0yMDI2MDcwNFQwNjU1MDdaLWludHJlZS1pc3N1ZTcwLmpzb24g4oCUIGJvdGggdmVyZGljdCBSRVNJREVOVF9UUkFJTklOR19HQVRFX1BBU1MsIHN0YXR1cyBQQVNTLCBhbGwgY29tcG9uZW50cyBQQVNTLCBubyBkaXNxdWFsaWZ5aW5nIHRva2VucywgcGx1cyByZXNpZGVudC1nYXRlLWNvbmZsYXRpb24tYXVkaXQtMjAyNjA3MDRUMDYzMDE5Wi5qc29uIHJlY29uY2lsaW5nIGNsZWFubHkgKFJFU0lERU5UX0dBVEVfQ09ORkxBVElPTl9HVUFSRF9QQVNTKS4gTm8gbGF0ZXIgQkxPQ0tFRC9yZXZvY2F0aW9uIHN1cGVyc2VkZXMgdGhlbSBhbnl3aGVyZSBpbiBoaXN0b3J5LgotIEJvdGggbGl2ZSBleGNsdXNpdmVseSBpbiBjb21taXRzIGU0NjZlNmEgLyBmYTczNzY1IG9uIHRoZSBvcnBoYW5lZCBnb2FsZm9yZ2UgbGluZWFnZS4gTGluZWFnZSBmYXRlOiBPUlBIQU5FRCwgbm90IHJlamVjdGVkIOKAlCBubyBQUiByZWplY3RlZCB0aGVzZSByZWNlaXB0cyBmb3IgY2F1c2U7IG1hc3RlciBwaXZvdGVkIHRvIHRoZSBjbGVhbiBjb25zb2xpZGF0aW9uICg1OGRkZjhkIG9ud2FyZCkgYW5kIHRoZSBjb25zb2xpZGF0aW9uIGltcG9ydGVkIHRoZSB0d28gbG9vcCByZWNlaXB0cyAoYXMgKi1yZWRhY3RlZC1lZGl0aW9uKSBXSVRIT1VUIHRoZWlyIHNhbWUtZGF5IGF1dGhvcml6YXRpb24gcmVjZWlwdHMuIFRoZSBjdXN0b2R5IGFzeW1tZXRyeSB3YXMgY3JlYXRlZCBieSB0aGUgbWlncmF0aW9uLCBub3QgYnkgYW4gdW5hdXRob3JpemVkIGxvb3AuCi0gVGltZWxpbmU6IGdhdGUgUEFTUyAwNjoyOeKAkzA2OjU1WiBKdWx5IDQ7IGxvb3AgcnVucyAxNjoxM1ogYW5kIDIzOjUxWiB0aGUgc2FtZSBkYXkuIFRoZSBsb29wIHJlY2VpcHRzIGRvIG5vdCBjaXRlIHRoZSBnYXRlIHJlY2VpcHRzIGludGVybmFsbHkgKGEgZ2FwIHRoZSBmYWlsLWNsb3NlZCBjdXJlIGJlbG93IG1ha2VzIHN0cnVjdHVyYWwpLgoKIyMgUnVsaW5nIChhY3Rpbmcgb3BlcmF0b3IsIHJlY2VpcHRzLWJhc2VkKQoxLiAqKkN1c3RvZHkgaW1wb3J0LCBuYXJyb3dseSBzY29wZWQgYW5kIGZ1bGx5IGRpc2Nsb3NlZDoqKiBsYW5kIEVYQUNUTFkgdGhlIHRocmVlIHJlY2VpcHQgZmlsZXMgYWJvdmUgaW50byByZWNlaXB0cy9lbWJlci1yZXNpZGVudC10cmFpbmluZy1nYXRlLywgZXh0cmFjdGVkIHZlcmJhdGltIGZyb20gZ2l0IG9iamVjdHMgKGdpdCBzaG93IDxjb21taXQ+OjxwYXRoPiksIGVhY2ggd2l0aCBhIHNpYmxpbmcgY3VzdG9keSBub3RlIHJlY29yZGluZzogcmVjb3ZlcmVkLWZyb20gY29tbWl0IHNoYSwgdmVyaWZpZWQtYWdhaW5zdC1jcml0ZXJpYSBkYXRlLCBhbmQgdGhhdCB0aGlzIGltcG9ydCBjYXJyaWVzIE5PIG90aGVyIGNsYWltIGZyb20gdGhlIG9ycGhhbmVkIGxpbmVhZ2UgKGluIHBhcnRpY3VsYXIgbm9uZSBvZiBmYTczNzY1J3MgYm9hcmQtcGVyY2VudGFnZSBjbGFpbXMsIHdoaWNoIGJlbG9uZyB0byB0aGUgc3VwZXJzZWRlZCBvdmVyc3RhdGVtZW50IGVyYSkuIFRoZSBpbXBvcnQgbWFrZXMgdGhlIGNhbm9uaWNhbCBzdXJmYWNlIG1hdGNoIHdoYXQgcmVjZWlwdHMgcHJvdmUgd2FzIHRydWUgYXQgcnVuIHRpbWUuCjIuICoqVGhlIGluY2lkZW50IHJlY29yZCBzdGF5cyBwdWJsaWMqKiDigJQgdGhpcyBpc3N1ZSBpcyB0aGUgZGlzY2xvc3VyZTsgdGhlIGJvYXJkJ3MgQVVESVQtSU5DSURFTlQgd2luZG93IGFuZCBpdHMgcmVzb2x1dGlvbiBhcmUgYm90aCBwYXJ0IG9mIHRoZSByZWNvcmQuIE5vIGhpc3RvcnkgcmV3cml0ZSwgbm8gcmVjZWlwdCBiYWNrZGF0aW5nOiBmaWxlIG10aW1lcy9sYW5kaW5nIGRhdGVzIHdpbGwgaG9uZXN0bHkgc2hvdyB0aGUgbGF0ZSBpbXBvcnQuCjMuICoqRmFpbC1jbG9zZWQgbGF1bmNoZXIgY3VyZSAodGhlIHN0cnVjdHVyYWwgaGFsZik6KiogdGhlIGxvb3AgbGF1bmNoZXIgbXVzdCByZWZ1c2UgdG8gc3RhcnQgd2hlbiBubyBpbi13aW5kb3cgY2Fub25pY2FsIFBBU1MgcmVjZWlwdCBleGlzdHMgKHByZS1ob2MpLCBhbmQgZXZlcnkgbG9vcCByZWNlaXB0IG11c3QgY2l0ZSBpdHMgYXV0aG9yaXppbmcgZ2F0ZSByZWNlaXB0IGJ5IHRzK3NoYSAobWFraW5nIHRoZSBDMCBqb2luIG1lY2hhbmljYWwpLiBQb3N0LWhvYyBhdWRpdCBjYXRjaGluZyB0aGlzIDQgZGF5cyBsYXRlciBpcyB0aGUgZGV0ZWN0b3Igd29ya2luZzsgdGhlIGxhdW5jaGVyIHJlZnVzaW5nIGF0IFQwIGlzIHRoZSBjbGFzcyBkeWluZy4KCiMjIEFjY2VwdGFuY2UKLSBQUiBsYW5kaW5nIHRoZSAzIGZpbGVzICsgY3VzdG9keSBub3RlcyAocmVmcyB0aGlzIGlzc3VlKS4KLSBDMCByZS1ldmFsdWF0aW9uIG9uIHRoZSBuZXh0IGJvYXJkIHJ1biBzaG93aW5nIHRoZSBpbmNpZGVudCByZXNvbHZlZCAob3IgdGhlIGRpc3Bvc2l0aW9uLWFzc2VtYmxlciBwYXRoIGlmIHRlc3RfYzAgcmVxdWlyZXMgYW4gZXhwbGljaXQgZGlzcG9zaXRpb24gcmVjZWlwdCDigJQgdGhlIGFzc2VtYmxlciBleGlzdHMgb25seSBvbiB0aGUgb3JwaGFuZWQgbGluZWFnZTsgcG9ydCBpdCBuYXJyb3dseSBpZiBuZWVkZWQpLgotIEZvbGxvdy11cCBpdGVtIGZvciB0aGUgbGF1bmNoZXIgZ2F0ZSArIGxvb3AtcmVjZWlwdCBjaXRhdGlvbiBmaWVsZC4KCnJlZnMgIzQ2Nw==",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-08T19:04:03Z",
-      "labels": [],
-      "number": 468,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "C0 AUDIT-INCIDENT disposition: July-4 loop authorization receipts recovered from orphaned lineage — custody import + launcher fail-closed gate",
-      "updated_at": "2026-07-08T21:22:30Z",
-      "url": "https://github.com/wordingone/ember/issues/468"
-    },
-    {
-      "author": "wordingone",
       "body_base64": "VG9uaWdodCdzIGdyb3ctZXZlbnQgd2luZG93cyB0b29rIHRoZSBsbGFtYS1zZXJ2ZXIgZG93biB0d2ljZSB1bmRlciB0aGUgIzQ2NCBwbGFubmVkLW91dGFnZSBtYXJrZXIgY29udHJhY3QuIFRoZSB3YXRjaGRvZ3MgaG9ub3IgdGhlIG1hcmtlciAodmVyaWZpZWQgbGl2ZSB0b25pZ2h0OiB6ZXJvIGZhaWx1cmUtY291bnRpbmcgYWNyb3NzIGJvdGggd2luZG93cyksIGJ1dCB0aGUgQ09DS1BJVCBzdXJmYWNlIGp1c3Qgc2hvd3MgdGhlIG1vZGVsIG9mZmxpbmUgd2l0aCBubyBleHBsYW5hdGlvbiDigJQgdG8gYW4gb3BlcmF0b3IgZ2xhbmNpbmcgYXQgdGhlIHBhbmUgaXQgaXMgaW5kaXN0aW5ndWlzaGFibGUgZnJvbSBhIGNyYXNoLgoKRmVhdHVyZTogd2hlbiB0b29scy9lbWJlci1jbGkvc3RhdGUvcGxhbm5lZC1vdXRhZ2UuanNvbiBleGlzdHMgYW5kIGlzIHVuZXhwaXJlZCwgdGhlIGNvY2twaXQgaGVhZGVyL3N0YXR1cyBhcmVhIHJlbmRlcnMgYSBiYW5uZXIgZnJvbSBpdHMgZmllbGRzOiAnUExBTk5FRCBPVVRBR0UgKDxvd25lcj4pOiA8cmVhc29uPiDigJQgdW50aWwgPGV4cGlyZXM+Jy4gTWFya2VyIGFic2VudCBvciBleHBpcmVkID0gbm8gYmFubmVyLiBSZWFkIHdpdGggdXRmLTgtc2lnIHRvbGVyYW5jZSAoUFMtd3JpdHRlbiBzdGF0ZSBmaWxlcyBjYXJyeSBCT01zLCBzZWUgIzQ2NCBjYXZlYXQpLgoKQWNjZXB0YW5jZTogYmFubmVyIHZpc2libGUgZHVyaW5nIGEgbWFya2VyIHdpbmRvdyBhdCB0aGUgb3BlcmF0b3IncyBoYWxmLXNjcmVlbiB2aWV3cG9ydDsgZGlzYXBwZWFycyBvbiBtYXJrZXIgZGVsZXRlL2V4cGlyeTsgbm8gcG9sbGluZyBjb3N0IGJleW9uZCB0aGUgZXhpc3Rpbmcgc3RhdGUtZmlsZSByZWFkIGNhZGVuY2UuCgpyZWZzICM0NjQ=",
       "closed_at": "",
       "comments": [],
@@ -4395,20 +4766,6 @@
       "title": "redaction placeholders in executable code are landmines",
       "updated_at": "2026-07-09T00:39:29Z",
       "url": "https://github.com/wordingone/ember/issues/502"
-    },
-    {
-      "author": "wordingone",
-      "body_base64": "IyMgRnJvemVuIHNwZWMgdjEgKGNvb3JkaW5hdG9yLWF1dGhvcmVkOyBTNSBjb25zdGl0dXRpb25hbCBjbGF1c2UgZ2V0cyBpdHMgbWVhc3VyZW1lbnQpCgpHT0FMLm1kIMKnNSBtYWtlcyBuYXRpdml6YXRpb24gYSBEUklWRSAoJ3doaWNoIGxheWVyIGNvbWVzIGhvbWUgbmV4dCBpcyBlYXJuZWQgYnkgcmVjZWlwdHMgb24gd2hlcmUgYm9ycm93ZWQgY29kZSBjb3N0cyBtb3N0Jykg4oCUIGJ1dCBubyByZWNlaXB0IHNlcmllcyBtZWFzdXJlcyBib3Jyb3dlZCBzdXJmYWNlLiBUaGlzIHJ1bm5lciBlbmRzIFM1IGFzIGFuIHVubWVhc3VyZWQgY2xhdXNlLgoKIyMjIFJ1bm5lcjogc2NyaXB0cy9uYXRpdml6YXRpb25fbW90aW9uLnB5ClB1cmUtbG9jYWwgc3RhdGljIGNlbnN1cywgbm8gR1BVLCBubyBuZXR3b3JrLiBGb3IgZWFjaCBMQVlFUiBpbiB0aGUgc3Vic3RyYXRlIG1hcCAoZG9jcy9lbWJlci1vd25lZC1zdWJzdHJhdGUtZGlhZ25vc3RpYy5tZCDigJQgcGFyc2UgaXRzIGxheWVyIGxpc3Q7IGlmIGhlYWRpbmdzIGRyaWZ0LCBmYWlsIGxvdWRseSByYXRoZXIgdGhhbiBndWVzc2luZyk6Ci0gKipib3Jyb3dlZF9kZXBzKio6IGNvdW50IG9mIGRpc3RpbmN0IGV4dGVybmFsIHBhY2thZ2VzIGltcG9ydGVkIChzdGRsaWIgZXhjbHVkZWQ7IGVtYmVyLW93bmVkIG1vZHVsZXMgZXhjbHVkZWQpIGFjcm9zcyB0aGUgbGF5ZXIncyBmaWxlIGdsb2JzCi0gKipib3Jyb3dlZF9sb2MqKjogdG90YWwgbGluZXMgaW4gZmlsZXMgd2hvc2UgaW1wb3J0cyBpbmNsdWRlIGV4dGVybmFsIHBhY2thZ2VzLCBzcGxpdCBpbnRvIG93bmVkX2xvYyB2cyBib3Jyb3dlZC10b3VjaGluZyBsb2MKLSAqKmJvcnJvd2VkX2JpbmFyaWVzKio6IG5hbWVkIGV4dGVybmFsIGV4ZWN1dGFibGVzIHRoZSBsYXllciBzaGVsbHMgb3V0IHRvIChsbGFtYS1zZXJ2ZXIsIGRvY2tlciwgZ2l0LCBidW4pIOKAlCByZWdleCBvdmVyIHN1YnByb2Nlc3MvZXhlYyBjYWxsIHNpdGVzCi0gKipkZWx0YV92c19wcmlvcioqOiBudW1lcmljIGRpZmYgdnMgdGhlIHByZXZpb3VzIHJlY2VpcHQgaW4gdGhlIHNlcmllcyAoZmlyc3QgcmVjZWlwdDogZGVsdGEgbnVsbCwgZGlzY2xvc2VkKQotICoqbmV4dF9ob21lX2NhbmRpZGF0ZSoqOiB2MSBwcm94eSA9IHRoZSBsYXllciB3aXRoIHRoZSBoaWdoZXN0IGJvcnJvd2VkX2RlcHMgbm90IHlldCBtYXJrZWQgJ2hvbWUnIGluIHRoZSBkaWFnbm9zdGljIG1hcDsgdGhlIHJlY2VpcHQgc3RhdGVzIHRoZSBwcm94eSBpcyBhIFJBTktJTkcgSEVVUklTVElDLCBub3QgYSB3YWxsLXJlY2VpcHQgbWVhc3VyZW1lbnQgKHYyIHVwZ3JhZGVzIHRvIHdhbGwtcmVjZWlwdCB3ZWlnaHRpbmcgcGVyIMKnNSdzIG93biB0ZXh0KQoKIyMjIFJlY2VpcHQ6IHJlY2VpcHRzL25hdGl2aXphdGlvbi1tb3Rpb24vbm0tPFVUQ3RzPi5qc29uClNjaGVtYToge3RzLCBpbnZhcmlhbnRfc2hhMjU2LCBtYXBfc291cmNlX3NoYSAoc2hhMjU2IG9mIHRoZSBkaWFnbm9zdGljIGRvYyBjb25zdW1lZCksIGxheWVyczogW3tuYW1lLCBib3Jyb3dlZF9kZXBzOiBbbmFtZXNdLCBib3Jyb3dlZF9kZXBzX2NvdW50LCBib3Jyb3dlZF9sb2MsIG93bmVkX2xvYywgYm9ycm93ZWRfYmluYXJpZXN9XSwgZGVsdGFzLCBuZXh0X2hvbWVfY2FuZGlkYXRlLCBtZXRob2Q6ICdzdGF0aWMtaW1wb3J0LWNlbnN1cy12MScsIGxpbWl0czogW25hbWVkIGJsaW5kIHNwb3RzIOKAlCBkeW5hbWljIGltcG9ydHMsIHZlbmRvcmVkIGNvZGUsIGJpbmFyeSBkZXBzIG9mIGRlcHNdfQoKIyMjIFRlc3RzIChUREQsIENJLCBubyBuZXR3b3JrKQpGaXh0dXJlIG1pbmktdHJlZSB3aXRoIGtub3duIGltcG9ydHMg4oaSIGV4YWN0IGV4cGVjdGVkIGNvdW50czsgbWFwLWRyaWZ0IGZhaWx1cmUgY2FzZSAobWlzc2luZyBoZWFkaW5nIOKGkiBsb3VkIGVycm9yKTsgZGVsdGEgY29tcHV0YXRpb24gdnMgYSBmaXh0dXJlIHByaW9yIHJlY2VpcHQuCgojIyMgUmFpbHMKV29ya3RyZWUgbGFuZTsgUFIgc3RvcC1hdC1vcGVuOyByZWZzLW9ubHkgYm9keTsgcnVubmVyIGlzIHJlYWQtb25seSBvdmVyIHRoZSB0cmVlICh3cml0ZXMgT05MWSBpdHMgcmVjZWlwdCku",
-      "closed_at": "",
-      "comments": [],
-      "created_at": "2026-07-09T00:57:14Z",
-      "labels": [],
-      "number": 504,
-      "state": "OPEN",
-      "state_reason": "",
-      "title": "S5 nativization-motion: per-window borrowed-substrate measurement (runner + receipt series)",
-      "updated_at": "2026-07-09T00:57:14Z",
-      "url": "https://github.com/wordingone/ember/issues/504"
     },
     {
       "author": "wordingone",
@@ -13981,81 +14338,6 @@
     },
     {
       "author": "wordingone",
-      "body_sha256": "1e7b14a554d9ec394e7a2290bdaeab81c24c94e6941c5136e7ace8e97027c513",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "git_evidence_without_completion_proof",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "d_comm null model derived: the 1.1352 measurement needs two free receipt fields to be interpretable (P5/P0 composition law)",
-        "body_sha256:1e7b14a554d9ec394e7a2290bdaeab81c24c94e6941c5136e7ace8e97027c513"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-07T07:49:26Z",
-      "disposition": "current executable obligation",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "de667fe259ba22db2fa4c792f87a82698372ec97"
-        }
-      ],
-      "issue_record_sha256": "efb4d9d55767401423bde478ab571e00e9a8a7d92b7a7e8eee6512d7ee429a44",
-      "labels": [],
-      "master_evidence": [
-        {
-          "blob_sha1": "eb3f8fc64bb0d63bb22dd45731a2e7ec35141c20",
-          "line": 157,
-          "path": "docs/START-HERE.md"
-        },
-        {
-          "blob_sha1": "eb3f8fc64bb0d63bb22dd45731a2e7ec35141c20",
-          "line": 161,
-          "path": "docs/START-HERE.md"
-        },
-        {
-          "blob_sha1": "713e13a02a00271a1cf38996b6ac402824abf5d6",
-          "line": 4,
-          "path": "receipts/dcomm-null-mc-20260707T075104Z.json"
-        },
-        {
-          "blob_sha1": "ddbb826b5b000413c99a97f39c6d33e1b088f187",
-          "line": 4,
-          "path": "receipts/dcomm-null-mc-20260707T075453Z.json"
-        },
-        {
-          "blob_sha1": "5590d3aa914e79a9cf4eb3339ec4929871f0bba7",
-          "line": 1213,
-          "path": "scripts/p5_ratio_audit/run_p5_audit.py"
-        },
-        {
-          "blob_sha1": "5590d3aa914e79a9cf4eb3339ec4929871f0bba7",
-          "line": 1995,
-          "path": "scripts/p5_ratio_audit/run_p5_audit.py"
-        },
-        {
-          "blob_sha1": "5590d3aa914e79a9cf4eb3339ec4929871f0bba7",
-          "line": 2039,
-          "path": "scripts/p5_ratio_audit/run_p5_audit.py"
-        },
-        {
-          "blob_sha1": "5590d3aa914e79a9cf4eb3339ec4929871f0bba7",
-          "line": 2054,
-          "path": "scripts/p5_ratio_audit/run_p5_audit.py"
-        }
-      ],
-      "number": 327,
-      "obligation_sha256": "8036f76315094c50b67f18e071bdb7a6034741abf12ae7e86ff51577c74bab0e",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "d_comm null model derived: the 1.1352 measurement needs two free receipt fields to be interpretable (P5/P0 composition law)",
-      "title": "d_comm null model derived: the 1.1352 measurement needs two free receipt fields to be interpretable (P5/P0 composition law)",
-      "unresolved_remainder": "requested_outcome_not_independently_verified",
-      "updated_at": "2026-07-08T14:15:13Z",
-      "url": "https://github.com/wordingone/ember/issues/327"
-    },
-    {
-      "author": "wordingone",
       "body_sha256": "32dc40395ce9ff7b23f584a0ee8323b10d38c672c17b3c6be0e6f46cbea341bc",
       "canonical_issue": null,
       "canonical_obligation_sha256": null,
@@ -17508,56 +17790,6 @@
     },
     {
       "author": "wordingone",
-      "body_sha256": "02771df1d0cfd15d360c0453101391bf89433bb9ff85b1a7fee32e964f2788cf",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "git_evidence_without_completion_proof",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "C0 AUDIT-INCIDENT disposition: July-4 loop authorization receipts recovered from orphaned lineage — custody import + launcher fail-closed gate",
-        "body_sha256:02771df1d0cfd15d360c0453101391bf89433bb9ff85b1a7fee32e964f2788cf"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-08T19:04:03Z",
-      "disposition": "current executable obligation",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "bde7df30ad7d56d9af2cce88a2e211036ffbbe43"
-        }
-      ],
-      "issue_record_sha256": "97a09f53ab6098d151d955e264e79e23614749072583767911a091b585dad5f9",
-      "labels": [],
-      "master_evidence": [
-        {
-          "blob_sha1": "30e321abe1daf8cd8cb96cd76c42dc0e7031d84e",
-          "line": 23,
-          "path": "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-gate-conflation-audit.md"
-        },
-        {
-          "blob_sha1": "c139e58d5eeefe2cf84da117edede66176a1738c",
-          "line": 24,
-          "path": "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-intree-issue70.md"
-        },
-        {
-          "blob_sha1": "9867010218fdd34055a4cc9fd123040837758081",
-          "line": 24,
-          "path": "receipts/ember-resident-training-gate/CUSTODY-IMPORT-20260708-issue69-cured.md"
-        }
-      ],
-      "number": 468,
-      "obligation_sha256": "8ec8348a4b4de2317d8ea37e4dd40579f1cd570dec8663b6363dd73af74a5c74",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "C0 AUDIT-INCIDENT disposition: July-4 loop authorization receipts recovered from orphaned lineage — custody import + launcher fail-closed gate",
-      "title": "C0 AUDIT-INCIDENT disposition: July-4 loop authorization receipts recovered from orphaned lineage — custody import + launcher fail-closed gate",
-      "unresolved_remainder": "requested_outcome_not_independently_verified",
-      "updated_at": "2026-07-08T21:22:30Z",
-      "url": "https://github.com/wordingone/ember/issues/468"
-    },
-    {
-      "author": "wordingone",
       "body_sha256": "e7d4e2056ccef111a031d96a857fec5bbb13af9858af743aaa6ac4fe8bd3d185",
       "canonical_issue": null,
       "canonical_obligation_sha256": null,
@@ -19060,40 +19292,6 @@
       "unresolved_remainder": "requested_outcome_not_independently_verified",
       "updated_at": "2026-07-09T00:39:29Z",
       "url": "https://github.com/wordingone/ember/issues/502"
-    },
-    {
-      "author": "wordingone",
-      "body_sha256": "1b18468e70d53ee7c8b84108b85e31ab6bae4f5ff5929ad01e1bb6ecfc032841",
-      "canonical_issue": null,
-      "canonical_obligation_sha256": null,
-      "classification_basis": "explicit_historical_or_borrowed_marker_in_issue_title",
-      "closure_proposed": false,
-      "completion_proof": [],
-      "compound_obligations": [
-        "S5 nativization-motion: per-window borrowed-substrate measurement (runner + receipt series)",
-        "body_sha256:1b18468e70d53ee7c8b84108b85e31ab6bae4f5ff5929ad01e1bb6ecfc032841"
-      ],
-      "confidence": "medium",
-      "created_at": "2026-07-09T00:57:14Z",
-      "disposition": "historical sub-3B or borrowed-lineage non-executable evidence",
-      "evidence_comments": [],
-      "history_evidence": [
-        {
-          "commit": "6675e2ae63fbea20a771d0bc31d946f806d0533f"
-        }
-      ],
-      "issue_record_sha256": "55becc91f6718e6a7f3e440fa1a8086ce717ade8710374c8dec1a98f7f70e2dd",
-      "labels": [],
-      "master_evidence": [],
-      "number": 504,
-      "obligation_sha256": "a6948f58c9df13dfb2cab6c404bdc31d39a8030006481c01f41f8f6fc9f0b723",
-      "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
-      "state": "OPEN",
-      "surviving_obligation": "S5 nativization-motion: per-window borrowed-substrate measurement (runner + receipt series)",
-      "title": "S5 nativization-motion: per-window borrowed-substrate measurement (runner + receipt series)",
-      "unresolved_remainder": "historical_evidence_only_surviving_obligation_requires_mapping",
-      "updated_at": "2026-07-09T00:57:14Z",
-      "url": "https://github.com/wordingone/ember/issues/504"
     },
     {
       "author": "wordingone",
@@ -27155,7 +27353,7 @@
     }
   ],
   "mutation_performed": false,
-  "open_issue_count": 253,
+  "open_issue_count": 250,
   "public_master_sha": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
   "repository": "wordingone/ember",
   "schema": "ember-01-public-issue-census-v1",
