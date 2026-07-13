@@ -1,3 +1,7 @@
+// goal_id: EMBER-01
+// workstream_id: EMBER-01A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // entrypoints/process-entry.ts — process bootstrap: env cleanup, server spawn,
 // port resolution, arg parsing, and the main() wiring function.
 // Bundle: entrypoints/process-entry.ts (lines 323033–323519)
@@ -8,6 +12,12 @@ import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
 import React from "react";
+import {
+  REFERENCE_SEAT_FLAG,
+  isModelFreeFastPath,
+  referenceSeatModelName,
+  resolveModelSeat,
+} from "./model-seat.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
@@ -513,13 +523,15 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  --dump-system-prompt           Print the system prompt and exit\n` +
       `  --mcp                          Run as an MCP server over stdio\n` +
       `  --daemon-worker                Run as a background daemon worker\n` +
+      `  --reference-seat               Explicitly run a borrowed model as REFERENCE_ONLY\n` +
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
       `  new, list, reply, environment-runner, self-hosted-runner, gh doctor\n` +
       `\n` +
       `Environment:\n` +
-      `  EMBER_MODEL_URL   External model server URL; wins over models.json (skips the managed spawn)\n` +
+      `  EMBER_MODEL_URL       External endpoint; requires admitted owned identity or explicit reference seat\n` +
+      `  EMBER_REFERENCE_SEAT  Set to 1 for explicit REFERENCE_ONLY automation\n` +
       `  EMBER_API_KEY     API key for the model endpoint (default: local)\n`,
     );
     process.exit(0);
@@ -659,7 +671,7 @@ export interface MainOptions {
 // ---------------------------------------------------------------------------
 
 export async function main(opts: MainOptions = {}): Promise<void> {
-  const argv = opts.argv ?? process.argv;
+  const rawArgv = opts.argv ?? process.argv;
 
   // issue #196: captured BEFORE applyModelsJsonToEnv's ??= writes below may
   // populate EMBER_MODEL_URL from config -- otherwise the disclosure below
@@ -669,12 +681,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   applyAblationBaseline();
 
   const modelsCfg = await loadModelsJson();
-  if (modelsCfg) {
-    applyModelsJsonToEnv(modelsCfg);
+  const fastPathArgv = rawArgv.filter(
+    (argument, index) => index < 2 || argument !== REFERENCE_SEAT_FLAG,
+  );
+  if (isModelFreeFastPath(rawArgv)) {
+    const didFastPath = await dispatchFastPath(fastPathArgv);
+    if (didFastPath) return;
   }
-
-  const didFastPath = await dispatchFastPath(argv);
-  if (didFastPath) return;
 
   // issue #602: EMBER_GPU_FREE is read once here, ahead of the externalUrl fallback below,
   // so a persisted models.json endpoint can never silently defeat it when EMBER_MODEL_URL
@@ -682,6 +695,47 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // this must key off "is GPU_FREE set" alone -- an empty-string EMBER_MODEL_URL is not a
   // reachable signal from a Windows .bat launcher.
   const gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
+  const seatDecision = resolveModelSeat({
+    argv: rawArgv,
+    explicitModelUrl: envModelUrlBeforeConfigApply,
+    gpuFreeRequested,
+    referenceSeatEnv: process.env["EMBER_REFERENCE_SEAT"],
+  });
+  const argv = seatDecision.argv;
+  const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
+  const seatBannerStream = argv.slice(2)[0] === "--mcp"
+    ? process.stderr
+    : process.stdout;
+
+  if (!seatDecision.allowed || seatDecision.seat === null) {
+    process.stderr.write("[ember] ERROR: " + seatDecision.error + "\n");
+    doExitMain(1);
+    return;
+  }
+
+  if (modelsCfg && seatDecision.seat === "REFERENCE_ONLY") {
+    applyModelsJsonToEnv(modelsCfg);
+  }
+
+  process.env["EMBER_MODEL_SEAT"] = seatDecision.seat;
+  if (seatDecision.seat === "REFERENCE_ONLY") {
+    process.env["EMBER_MODEL_NAME"] = referenceSeatModelName(
+      process.env["EMBER_MODEL_NAME"] ?? modelsCfg?.modelName ?? modelsCfg?.model,
+    );
+    seatBannerStream.write(
+      "[ember] model seat: REFERENCE_ONLY (" +
+        seatDecision.source +
+        "); owned completion disabled\n",
+    );
+  } else {
+    process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
+    seatBannerStream.write(
+      "[ember] model seat: OFFLINE (GPU-free observation; no model identity)\n",
+    );
+  }
+
+  const didSeatGatedFastPath = await dispatchFastPath(argv);
+  if (didSeatGatedFastPath) return;
 
   // issue #196 / #602: one disclosure line, always -- so a leaked/stale EMBER_MODEL_URL (or
   // a models.json "binary"/"endpoint" field silently discarding an explicit override, or a
@@ -701,11 +755,6 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // check relies on (issue #602) -- a real, typed null, not an unsafe cast.
   let serverUrl:    string | null;
   let detectedNCtx: number;
-
-  // #159 boot matrix: shared exit path for every managed-spawn failure cell below, so each
-  // produces one clean operator-facing message and a controlled exit -- never an uncaught
-  // exception surfacing as a raw stack trace via main.ts's last-resort handler.
-  const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
 
   // issue #602: GPU-free is a dedicated branch checked AHEAD of the env-or-config fallback
   // (`externalUrl`) below -- with EMBER_MODEL_URL unset, EMBER_GPU_FREE=1 wins outright, even
