@@ -244,6 +244,7 @@
       "required": [
         "executable_sha256",
         "process_identity",
+        "process_receipt_sha256",
         "protocol",
         "device",
         "runtime_dependencies",
@@ -252,6 +253,12 @@
       "properties": {
         "executable_sha256": {"$ref": "#/$defs/sha256"},
         "process_identity": {"$ref": "#/$defs/processIdentityOrUnresolved"},
+        "process_receipt_sha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"$ref": "#/$defs/unresolved"}
+          ]
+        },
         "protocol": {"type": "string", "minLength": 1},
         "device": {"type": "string", "minLength": 1},
         "runtime_dependencies": {

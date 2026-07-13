@@ -113,6 +113,7 @@ REQUIRED_PATHS = (
     "mechanisms.deletion_objects",
     "backend.executable_sha256",
     "backend.process_identity",
+    "backend.process_receipt_sha256",
     "backend.protocol",
     "backend.device",
     "backend.runtime_dependencies",
@@ -170,6 +171,8 @@ BINDING_PATHS = (
     "capabilities.native_modalities",
     "backend",
     "backend.executable_sha256",
+    "backend.process_identity",
+    "backend.process_receipt_sha256",
     "evaluation.benchmark_id",
     "evaluation.version",
     "evaluation.split",
@@ -247,7 +250,8 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
     "capabilities.structured_tool_use": {"state", "evidence_receipts"},
     "mechanisms": {"experts", "router", "temporary_adapters", "permanent_merges", "memory_substrates", "world_models", "dreaming_updates", "deletion_objects"},
     "backend": {
-        "executable_sha256", "process_identity", "protocol", "device",
+        "executable_sha256", "process_identity", "process_receipt_sha256",
+        "protocol", "device",
         "runtime_dependencies", "resource_lease_id",
     },
     "evaluation": {
@@ -926,7 +930,7 @@ def validate_manifest(
                     str(checkpoint_parameter_count),
                 )
             )
-    if disposition == "OWNED_ADMITTED" and completion_credit is True:
+    if disposition == "OWNED_ADMITTED":
         evaluation = payload.get("evaluation")
         if not isinstance(evaluation, Mapping):
             findings.append(_finding("admission.evaluation_receipt", "evaluation object missing"))
@@ -995,6 +999,38 @@ def validate_manifest(
             findings.append(_finding("field.unresolved", path))
 
     if disposition == "OWNED_ADMITTED":
+        backend = payload.get("backend")
+        process_identity = (
+            backend.get("process_identity") if isinstance(backend, Mapping) else None
+        )
+        backend_executable_sha = (
+            backend.get("executable_sha256") if isinstance(backend, Mapping) else None
+        )
+        if (
+            not isinstance(process_identity, Mapping)
+            or process_identity.get("executable_sha256") != backend_executable_sha
+        ):
+            findings.append(
+                _finding(
+                    "admission.backend_process_executable_mismatch",
+                    "running process executable is not the artifact-bound backend",
+                )
+            )
+        if isinstance(receipt_bundle, Mapping) and isinstance(backend, Mapping):
+            _resolve_admission_receipt(
+                backend.get("process_receipt_sha256"),
+                receipt_bundle=receipt_bundle,
+                expected_class="backend_process_identity",
+                expected_checkpoint=checkpoint_hash,
+                expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                expected_claims={
+                    "process_identity": process_identity,
+                    "protocol": backend.get("protocol"),
+                    "device": backend.get("device"),
+                    "resource_lease_id": backend.get("resource_lease_id"),
+                },
+                findings=findings,
+            )
         if _get(payload, "checkpoint.format")[1] != "ember-checkpoint-envelope-v1":
             findings.append(
                 _finding(
@@ -1047,6 +1083,10 @@ def validate_manifest(
                 "training.optimizer_state": _get(payload, "training.optimizer_state_sha256")[1],
                 "training.numerics": _get(payload, "training.numerics.sha256")[1],
                 "backend.executable": _get(payload, "backend.executable_sha256")[1],
+                "backend.command": (
+                    process_identity.get("command_sha256")
+                    if isinstance(process_identity, Mapping) else None
+                ),
                 "evaluation.harness": _get(payload, "evaluation.harness_sha256")[1],
                 "evaluation.comparator": _get(
                     payload, "evaluation.comparator_sha256"
