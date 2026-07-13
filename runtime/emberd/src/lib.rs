@@ -13,7 +13,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(not(windows))]
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+#[cfg(windows)]
+use std::sync::{RwLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub mod rpc;
@@ -71,6 +73,14 @@ pub enum EmberdError {
     ReceiptAlreadyExists {
         path: PathBuf,
     },
+    StateWriterBusy {
+        path: PathBuf,
+    },
+    MonitorSetupCleanupFailed {
+        job_id: String,
+        setup: String,
+        cleanup: String,
+    },
     Poisoned,
 }
 
@@ -106,6 +116,7 @@ pub enum JobState {
     Orphaned,
     IdentityConflict,
     Stopped,
+    Exited,
     Failed,
 }
 
@@ -119,6 +130,7 @@ impl JobState {
             Self::Orphaned => "orphaned",
             Self::IdentityConflict => "identity_conflict",
             Self::Stopped => "stopped",
+            Self::Exited => "exited",
             Self::Failed => "failed",
         }
     }
@@ -131,6 +143,7 @@ impl JobState {
             "orphaned" => Ok(Self::Orphaned),
             "identity_conflict" => Ok(Self::IdentityConflict),
             "stopped" => Ok(Self::Stopped),
+            "exited" => Ok(Self::Exited),
             "failed" => Ok(Self::Failed),
             _ => Err(EmberdError::InvalidTransition {
                 job_id: String::new(),
@@ -180,6 +193,20 @@ pub struct JobHandle {
 #[cfg(windows)]
 struct OwnedHandle(windows_sys::Win32::Foundation::HANDLE);
 #[cfg(windows)]
+// SAFETY: kernel handles are process-wide values; ownership is unique, and the
+// operations used here (wait, duplicate, set, close) are thread-safe.
+unsafe impl Send for OwnedHandle {}
+#[cfg(windows)]
+unsafe impl Sync for OwnedHandle {}
+
+#[cfg(windows)]
+impl OwnedHandle {
+    fn raw(&self) -> windows_sys::Win32::Foundation::HANDLE {
+        self.0
+    }
+}
+
+#[cfg(windows)]
 impl Drop for OwnedHandle {
     fn drop(&mut self) {
         if !self.0.is_null() {
@@ -194,10 +221,33 @@ struct LiveProcess {
     pid: u32,
 }
 
+#[cfg(windows)]
+struct RetainedProcess {
+    live: LiveProcess,
+    monitored: bool,
+}
+
 pub struct Daemon {
-    db: Mutex<Connection>,
+    _state_writer_lock: fs::File,
+    db: Arc<Mutex<Connection>>,
     #[cfg(windows)]
-    live: Mutex<HashMap<String, LiveProcess>>,
+    live: Arc<Mutex<HashMap<String, RetainedProcess>>>,
+    #[cfg(windows)]
+    monitor_shutdown: OwnedHandle,
+    #[cfg(windows)]
+    monitor_ownership: Arc<RwLock<bool>>,
+}
+
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        {
+            if let Ok(mut alive) = self.monitor_ownership.write() {
+                *alive = false;
+            }
+            unsafe { windows_sys::Win32::System::Threading::SetEvent(self.monitor_shutdown.raw()) };
+        }
+    }
 }
 
 impl Daemon {
@@ -205,6 +255,9 @@ impl Daemon {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
+        let state_writer_lock = acquire_state_writer_lock(path)?;
+        #[cfg(windows)]
+        let monitor_shutdown = create_monitor_shutdown()?;
         let conn = Connection::open(path)?;
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
@@ -213,12 +266,17 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS identities(job_id TEXT PRIMARY KEY, canonical_path TEXT NOT NULL, sha256 TEXT NOT NULL, identity_blob BLOB NOT NULL, bound_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS lease_generations(resource TEXT PRIMARY KEY, generation INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS leases(resource TEXT PRIMARY KEY, owner_job_id TEXT NOT NULL, lease_epoch INTEGER NOT NULL, acquired_at_ms INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, exit_code INTEGER, exited_at_ms INTEGER, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);")?;
         Ok(Self {
-            db: Mutex::new(conn),
+            _state_writer_lock: state_writer_lock,
+            db: Arc::new(Mutex::new(conn)),
             #[cfg(windows)]
-            live: Mutex::new(HashMap::new()),
+            live: Arc::new(Mutex::new(HashMap::new())),
+            #[cfg(windows)]
+            monitor_shutdown,
+            #[cfg(windows)]
+            monitor_ownership: Arc::new(RwLock::new(true)),
         })
     }
 
@@ -481,10 +539,7 @@ impl Daemon {
             return Err(error);
         }
         #[cfg(windows)]
-        self.live
-            .lock()
-            .map_err(|_| EmberdError::Poisoned)?
-            .insert(spec.job_id.clone(), spawned.into_live());
+        self.retain_and_monitor(&spec.job_id, spawned.into_live())?;
         #[cfg(not(windows))]
         spawned.detach_reaper();
         Ok(JobHandle { pid })
@@ -500,6 +555,19 @@ impl Daemon {
         value.map(|v| JobState::parse(&v)).transpose()
     }
 
+    pub fn job_exit_code(&self, job_id: &str) -> Result<Option<i64>> {
+        self.conn()?
+            .query_row(
+                "SELECT exit_code FROM jobs WHERE job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| EmberdError::JobNotFound {
+                job_id: job_id.into(),
+            })
+    }
+
     pub fn adopt_job(&self, job_id: &str) -> Result<JobHandle> {
         let row = self.job_process_row(job_id)?;
         if row.state != JobState::Running {
@@ -512,7 +580,7 @@ impl Daemon {
         let live = match open_live_status(&row) {
             LiveStatus::Verified(live) => live,
             LiveStatus::Dead => {
-                let _ = self.mark_dead(job_id, "job_reconciled_dead");
+                let _ = self.mark_dead(job_id, &row, "job_reconciled_dead");
                 return Err(EmberdError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
@@ -521,6 +589,7 @@ impl Daemon {
             LiveStatus::Orphaned(detail) => {
                 self.mark_uncertain(
                     job_id,
+                    &row,
                     JobState::Orphaned,
                     "job_reconciled_orphaned",
                     &detail,
@@ -534,6 +603,7 @@ impl Daemon {
             LiveStatus::IdentityConflict(detail) => {
                 self.mark_uncertain(
                     job_id,
+                    &row,
                     JobState::IdentityConflict,
                     "job_reconciled_identity_conflict",
                     &detail,
@@ -561,25 +631,18 @@ impl Daemon {
                 });
             }
         }
-        self.event(
-            job_id,
-            "job_adopted",
-            json!({"pid":row.pid,"job_object_name":row.job_object_name}),
-        )?;
+        self.commit_adoption(job_id, &row)?;
         #[cfg(windows)]
-        self.live
-            .lock()
-            .map_err(|_| EmberdError::Poisoned)?
-            .insert(job_id.into(), live);
+        self.retain_and_monitor(job_id, live)?;
         Ok(JobHandle { pid: row.pid })
     }
 
     pub fn stop_job(&self, job_id: &str) -> Result<()> {
         let row = self.job_process_row(job_id)?;
-        if row.state != JobState::Running {
+        if !matches!(row.state, JobState::Running | JobState::Stopping) {
             return Err(EmberdError::InvalidTransition {
                 job_id: job_id.into(),
-                detail: "only running jobs can be stopped".into(),
+                detail: "only running or stopping jobs can be stopped".into(),
             });
         }
         #[cfg(windows)]
@@ -588,20 +651,30 @@ impl Daemon {
             .lock()
             .map_err(|_| EmberdError::Poisoned)?
             .remove(job_id)
-            .map(LiveStatus::Verified)
+            .map(|retained| LiveStatus::Verified(retained.live))
             .unwrap_or_else(|| open_live_status(&row));
         #[cfg(windows)]
         let live = match live {
             LiveStatus::Verified(live) => live,
+            LiveStatus::Dead if row.state == JobState::Stopping => {
+                self.finalize_stopped(job_id, &row)?;
+                return Ok(());
+            }
             LiveStatus::Dead => {
-                self.mark_dead(job_id, "job_dead_before_stop")?;
+                self.mark_dead(job_id, &row, "job_dead_before_stop")?;
                 return Err(EmberdError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
                 });
             }
             LiveStatus::Orphaned(detail) => {
-                self.mark_uncertain(job_id, JobState::Orphaned, "job_stop_orphaned", &detail)?;
+                self.mark_uncertain(
+                    job_id,
+                    &row,
+                    JobState::Orphaned,
+                    "job_stop_orphaned",
+                    &detail,
+                )?;
                 return Err(EmberdError::ProcessControlUncertain {
                     job_id: job_id.into(),
                     pid: row.pid,
@@ -611,6 +684,7 @@ impl Daemon {
             LiveStatus::IdentityConflict(detail) => {
                 self.mark_uncertain(
                     job_id,
+                    &row,
                     JobState::IdentityConflict,
                     "job_stop_identity_conflict",
                     &detail,
@@ -638,25 +712,30 @@ impl Daemon {
                 });
             }
         }
-        {
-            let mut conn = self.conn()?;
-            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let changed = tx.execute("UPDATE jobs SET state='stopping',updated_at_ms=?2 WHERE job_id=?1 AND state='running' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)", params![job_id, now_ms()])?;
-            if changed != 1 {
-                return Err(EmberdError::InvalidTransition {
-                    job_id: job_id.into(),
-                    detail: "stop lost its state or lease fence".into(),
-                });
+        if row.state == JobState::Running {
+            {
+                let mut conn = self.conn()?;
+                let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                let changed = tx.execute("UPDATE jobs SET state='stopping',updated_at_ms=?2 WHERE job_id=?1 AND state='running' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)", params![job_id, now_ms(), row.lease_epoch])?;
+                if changed != 1 {
+                    return Err(EmberdError::InvalidTransition {
+                        job_id: job_id.into(),
+                        detail: "stop lost its state or lease fence".into(),
+                    });
+                }
+                tx.execute("INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stop_requested',?3)", params![job_id, now_ms(), json!({"pid":row.pid}).to_string()])?;
+                tx.commit()?;
             }
-            tx.execute("INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stop_requested',?3)", params![job_id, now_ms(), json!({"pid":row.pid}).to_string()])?;
-            tx.commit()?;
         }
         #[cfg(windows)]
         if let Err(error) = terminate_live(&live) {
-            self.live
-                .lock()
-                .map_err(|_| EmberdError::Poisoned)?
-                .insert(job_id.into(), live);
+            self.live.lock().map_err(|_| EmberdError::Poisoned)?.insert(
+                job_id.into(),
+                RetainedProcess {
+                    live,
+                    monitored: false,
+                },
+            );
             return Err(error);
         }
         #[cfg(not(windows))]
@@ -689,6 +768,73 @@ impl Daemon {
         atomic_create(path, &serde_json::to_vec_pretty(&receipt)?)
     }
 
+    #[cfg(windows)]
+    fn retain_and_monitor(&self, job_id: &str, live: LiveProcess) -> Result<()> {
+        let registration = (|| -> Result<(OwnedHandle, OwnedHandle)> {
+            Ok((
+                duplicate_owned_handle(live.process.raw())?,
+                duplicate_owned_handle(self.monitor_shutdown.raw())?,
+            ))
+        })();
+        let (waiter, shutdown) = match registration {
+            Ok(registration) => registration,
+            Err(setup_error) => {
+                let cleanup = terminate_live(&live)
+                    .and_then(|_| self.mark_failed(job_id, "job_monitor_setup_failed"));
+                return match cleanup {
+                    Ok(()) => Err(setup_error),
+                    Err(cleanup_error) => {
+                        self.live
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .insert(
+                                job_id.into(),
+                                RetainedProcess {
+                                    live,
+                                    monitored: false,
+                                },
+                            );
+                        Err(EmberdError::MonitorSetupCleanupFailed {
+                            job_id: job_id.into(),
+                            setup: format!("{setup_error:?}"),
+                            cleanup: format!("{cleanup_error:?}"),
+                        })
+                    }
+                };
+            }
+        };
+        let pid = live.pid;
+        let mut retained = self
+            .live
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(existing) = retained.get_mut(job_id) {
+            if existing.monitored {
+                return Ok(());
+            }
+            existing.monitored = true;
+            drop(retained);
+        } else {
+            retained.insert(
+                job_id.into(),
+                RetainedProcess {
+                    live,
+                    monitored: true,
+                },
+            );
+            drop(retained);
+        }
+        spawn_exit_monitor(
+            Arc::downgrade(&self.db),
+            Arc::downgrade(&self.live),
+            Arc::clone(&self.monitor_ownership),
+            shutdown,
+            job_id.into(),
+            pid,
+            waiter,
+        );
+        Ok(())
+    }
     pub fn has_retained_process_handle(&self, job_id: &str) -> bool {
         #[cfg(windows)]
         {
@@ -714,69 +860,63 @@ impl Daemon {
     }
 
     pub fn reconcile(&self) -> Result<()> {
-        let jobs: Vec<(String, String)> = {
+        let jobs: Vec<String> = {
             let conn = self.conn()?;
-            let mut stmt = conn.prepare("SELECT job_id,state FROM jobs WHERE state IN ('starting','prepared','running','stopping') ORDER BY job_id")?;
+            let mut stmt = conn.prepare(
+                "SELECT job_id FROM jobs WHERE state IN ('starting','prepared','running','stopping') ORDER BY job_id",
+            )?;
             let rows = stmt
-                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+                .query_map([], |r| r.get(0))?
                 .collect::<std::result::Result<_, _>>()?;
             rows
         };
-        for (job_id, state) in jobs {
+        for job_id in jobs {
             let row = self.job_process_row(&job_id)?;
             #[cfg(windows)]
-            match (JobState::parse(&state)?, open_live_status(&row)) {
+            match (row.state, open_live_status(&row)) {
                 (JobState::Starting, LiveStatus::Dead) => {
-                    self.mark_dead(&job_id, "job_reconciled_unlaunched")?
+                    self.mark_dead(&job_id, &row, "job_reconciled_unlaunched")?
                 }
-                (JobState::Starting, LiveStatus::Verified(_))
-                | (JobState::Starting, LiveStatus::Orphaned(_)) => self.mark_uncertain(
-                    &job_id,
-                    JobState::Orphaned,
-                    "job_reconciled_unrecorded_process",
-                    "process exists before prepared identity was persisted",
-                )?,
-                (JobState::Starting, LiveStatus::IdentityConflict(detail)) => self.mark_uncertain(
-                    &job_id,
-                    JobState::IdentityConflict,
-                    "job_reconciled_identity_conflict",
-                    &detail,
-                )?,
+                (JobState::Starting, _) => {
+                    self.reclaim_starting_job(&job_id, &row, "job_reconciled_unrecorded_process")?
+                }
                 (JobState::Prepared, LiveStatus::Verified(live)) => {
                     resume_thread_id(row.main_thread_id)?;
                     self.transition_prepared_running(&job_id, &row)?;
-                    self.live
-                        .lock()
-                        .map_err(|_| EmberdError::Poisoned)?
-                        .insert(job_id.clone(), live);
+                    self.retain_and_monitor(&job_id, live)?;
                 }
                 (JobState::Prepared, LiveStatus::Dead) | (JobState::Running, LiveStatus::Dead) => {
-                    self.mark_dead(&job_id, "job_reconciled_dead")?
+                    self.mark_dead(&job_id, &row, "job_reconciled_dead")?
                 }
                 (JobState::Running, LiveStatus::Verified(live)) => {
-                    self.event(
-                        &job_id,
-                        "job_adopted",
-                        json!({"pid":row.pid,"job_object_name":row.job_object_name}),
-                    )?;
-                    self.live
-                        .lock()
-                        .map_err(|_| EmberdError::Poisoned)?
-                        .insert(job_id.clone(), live);
+                    self.commit_adoption(&job_id, &row)?;
+                    self.retain_and_monitor(&job_id, live)?;
                 }
                 (JobState::Stopping, LiveStatus::Verified(live)) => {
                     terminate_live(&live)?;
                     self.finalize_stopped(&job_id, &row)?;
+                    self.live
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .remove(&job_id);
                 }
-                (JobState::Stopping, LiveStatus::Dead) => self.finalize_stopped(&job_id, &row)?,
+                (JobState::Stopping, LiveStatus::Dead) => {
+                    self.finalize_stopped(&job_id, &row)?;
+                    self.live
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .remove(&job_id);
+                }
                 (_, LiveStatus::Orphaned(detail)) => self.mark_uncertain(
                     &job_id,
+                    &row,
                     JobState::Orphaned,
                     "job_reconciled_orphaned",
                     &detail,
                 )?,
                 (_, LiveStatus::IdentityConflict(detail)) => self.mark_uncertain(
                     &job_id,
+                    &row,
                     JobState::IdentityConflict,
                     "job_reconciled_identity_conflict",
                     &detail,
@@ -784,21 +924,49 @@ impl Daemon {
                 _ => {}
             }
             #[cfg(not(windows))]
-            if JobState::parse(&state)? == JobState::Running {
+            if row.state == JobState::Running {
                 let _ = self.adopt_job(&job_id);
             }
         }
         Ok(())
     }
 
-    fn transition_prepared_running(&self, job_id: &str, row: &JobProcessRow) -> Result<()> {
+    fn commit_adoption(&self, job_id: &str, row: &JobProcessRow) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let changed = tx.execute("UPDATE jobs SET state='running',updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)", params![job_id, now_ms()])?;
+        let changed = tx.execute(
+            "UPDATE jobs SET updated_at_ms=?2 WHERE job_id=?1 AND state='running' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, now_ms(), row.lease_epoch],
+        )?;
         if changed != 1 {
             return Err(EmberdError::InvalidTransition {
                 job_id: job_id.into(),
-                detail: "prepared reconciliation lost its lease fence".into(),
+                detail: "adoption lost its state or lease fence".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_adopted',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({"pid":row.pid,"job_object_name":row.job_object_name}).to_string(),
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn transition_prepared_running(&self, job_id: &str, row: &JobProcessRow) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE jobs SET state='running',updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, now_ms(), row.lease_epoch],
+        )?;
+        if changed != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "prepared reconciliation lost its state or lease fence".into(),
             });
         }
         tx.execute(
@@ -817,13 +985,13 @@ impl Daemon {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let changed = tx.execute(
-            "UPDATE jobs SET state='stopped',updated_at_ms=?2 WHERE job_id=?1 AND state='stopping'",
-            params![job_id, now_ms()],
+            "UPDATE jobs SET state='stopped',updated_at_ms=?2 WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3",
+            params![job_id, now_ms(), row.lease_epoch],
         )?;
         if changed != 1 {
             return Err(EmberdError::InvalidTransition {
                 job_id: job_id.into(),
-                detail: "stop finalization lost its state fence".into(),
+                detail: "stop finalization lost its state or lease epoch fence".into(),
             });
         }
         let released = tx.execute(
@@ -848,19 +1016,68 @@ impl Daemon {
         Ok(())
     }
 
+    fn reclaim_starting_job(&self, job_id: &str, row: &JobProcessRow, kind: &str) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let fenced = tx.execute(
+            "UPDATE jobs SET updated_at_ms=?2 WHERE job_id=?1 AND state='starting' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, now_ms(), row.lease_epoch],
+        )?;
+        if fenced != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "starting reconciliation lost its state or lease epoch fence".into(),
+            });
+        }
+        terminate_job_object_by_name(&row.job_object_name)?;
+        let failed = tx.execute(
+            "UPDATE jobs SET state='failed',updated_at_ms=?2 WHERE job_id=?1 AND state='starting' AND lease_epoch=?3",
+            params![job_id, now_ms(), row.lease_epoch],
+        )?;
+        if failed != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "starting reconciliation lost its held state fence".into(),
+            });
+        }
+        let released = tx.execute(
+            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+            params![row.resource, job_id, row.lease_epoch],
+        )?;
+        if released != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "starting reconciliation lost its lease epoch".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
+            params![job_id, now_ms(), kind],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     fn mark_uncertain(
         &self,
         job_id: &str,
+        row: &JobProcessRow,
         state: JobState,
         kind: &str,
         detail: &str,
     ) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        tx.execute(
-            "UPDATE jobs SET state=?2,updated_at_ms=?3 WHERE job_id=?1",
-            params![job_id, state.as_str(), now_ms()],
+        let changed = tx.execute(
+            "UPDATE jobs SET state=?2,updated_at_ms=?3 WHERE job_id=?1 AND state=?4 AND lease_epoch=?5 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, state.as_str(), now_ms(), row.state.as_str(), row.lease_epoch],
         )?;
+        if changed != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "uncertain reconciliation lost its state or lease epoch fence".into(),
+            });
+        }
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
             params![
@@ -875,43 +1092,41 @@ impl Daemon {
     }
 
     fn mark_failed(&self, job_id: &str, kind: &str) -> Result<()> {
-        self.mark_dead(job_id, kind)
+        let row = self.job_process_row(job_id)?;
+        self.mark_dead(job_id, &row, kind)
     }
-    fn mark_dead(&self, job_id: &str, kind: &str) -> Result<()> {
+
+    fn mark_dead(&self, job_id: &str, row: &JobProcessRow, kind: &str) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let lease: Option<(String, i64)> = tx
-            .query_row(
-                "SELECT resource,lease_epoch FROM jobs WHERE job_id=?1",
-                [job_id],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .optional()?;
-        if let Some((resource, lease_epoch)) = lease {
-            tx.execute(
-                "UPDATE jobs SET state='failed',updated_at_ms=?2 WHERE job_id=?1",
-                params![job_id, now_ms()],
-            )?;
-            tx.execute(
-                "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
-                params![resource, job_id, lease_epoch],
-            )?;
-            tx.execute(
-                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
-                params![job_id, now_ms(), kind],
-            )?;
+        let changed = tx.execute(
+            "UPDATE jobs SET state='failed',updated_at_ms=?2 WHERE job_id=?1 AND state=?3 AND lease_epoch=?4 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, now_ms(), row.state.as_str(), row.lease_epoch],
+        )?;
+        if changed != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "dead reconciliation lost its state or lease epoch fence".into(),
+            });
         }
+        let released = tx.execute(
+            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+            params![row.resource, job_id, row.lease_epoch],
+        )?;
+        if released != 1 {
+            return Err(EmberdError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "dead reconciliation lost its lease epoch".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
+            params![job_id, now_ms(), kind],
+        )?;
         tx.commit()?;
         Ok(())
     }
 
-    fn event(&self, job_id: &str, kind: &str, payload: Value) -> Result<()> {
-        self.conn()?.execute(
-            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
-            params![job_id, now_ms(), kind, payload.to_string()],
-        )?;
-        Ok(())
-    }
     fn job_process_row(&self, job_id: &str) -> Result<JobProcessRow> {
         self.conn()?.query_row("SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch FROM jobs WHERE job_id=?1", [job_id], |r| { let state:String=r.get(4)?; Ok((r.get::<_,u32>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,state,r.get::<_,String>(5)?,r.get::<_,u32>(6)?,r.get::<_,i64>(7)?)) }).optional()?.ok_or_else(|| EmberdError::JobNotFound { job_id: job_id.into() }).and_then(|r| Ok(JobProcessRow { pid:r.0,start_token:r.1,executable:r.2,resource:r.3,state:JobState::parse(&r.4)?,job_object_name:r.5,main_thread_id:r.6,lease_epoch:r.7 }))
     }
@@ -952,6 +1167,57 @@ fn hash_file(path: &Path) -> Result<String> {
 fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+#[cfg(windows)]
+fn create_monitor_shutdown() -> Result<OwnedHandle> {
+    use windows_sys::Win32::System::Threading::CreateEventW;
+
+    let handle = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
+    if handle.is_null() {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(OwnedHandle(handle))
+}
+
+fn state_writer_lock_path(path: &Path) -> PathBuf {
+    let mut name = path
+        .file_name()
+        .unwrap_or_else(|| std::ffi::OsStr::new("emberd"))
+        .to_os_string();
+    name.push(".writer.lock");
+    path.with_file_name(name)
+}
+
+#[cfg(windows)]
+fn acquire_state_writer_lock(path: &Path) -> Result<fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let lock_path = state_writer_lock_path(path);
+    match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .share_mode(0)
+        .open(&lock_path)
+    {
+        Ok(lock) => Ok(lock),
+        Err(error) if matches!(error.raw_os_error(), Some(32 | 33)) => {
+            Err(EmberdError::StateWriterBusy { path: lock_path })
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+#[cfg(not(windows))]
+fn acquire_state_writer_lock(path: &Path) -> Result<fs::File> {
+    Ok(OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(state_writer_lock_path(path))?)
+}
+
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1060,15 +1326,15 @@ impl SpawnedProcess {
 #[cfg(windows)]
 struct ProcThreadAttributeList {
     _storage: Vec<u8>,
-    _handles: Box<[windows_sys::Win32::Foundation::HANDLE; 1]>,
+    _jobs: Box<[windows_sys::Win32::Foundation::HANDLE; 1]>,
     ptr: windows_sys::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST,
 }
 #[cfg(windows)]
 impl ProcThreadAttributeList {
-    fn for_handle(handle: windows_sys::Win32::Foundation::HANDLE) -> Result<Self> {
+    fn for_job(job: windows_sys::Win32::Foundation::HANDLE) -> Result<Self> {
         use windows_sys::Win32::System::Threading::{
             InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
-            PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+            PROC_THREAD_ATTRIBUTE_JOB_LIST,
         };
         let mut bytes = 0usize;
         unsafe { InitializeProcThreadAttributeList(std::ptr::null_mut(), 1, 0, &mut bytes) };
@@ -1080,14 +1346,14 @@ impl ProcThreadAttributeList {
         if unsafe { InitializeProcThreadAttributeList(ptr, 1, 0, &mut bytes) } == 0 {
             return Err(std::io::Error::last_os_error().into());
         }
-        let handles = Box::new([handle]);
+        let jobs = Box::new([job]);
         if unsafe {
             UpdateProcThreadAttribute(
                 ptr,
                 0,
-                PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
-                handles.as_ptr().cast(),
-                std::mem::size_of_val(handles.as_ref()),
+                PROC_THREAD_ATTRIBUTE_JOB_LIST as usize,
+                jobs.as_ptr().cast(),
+                std::mem::size_of_val(jobs.as_ref()),
                 std::ptr::null_mut(),
                 std::ptr::null(),
             )
@@ -1098,7 +1364,7 @@ impl ProcThreadAttributeList {
         }
         Ok(Self {
             _storage: storage,
-            _handles: handles,
+            _jobs: jobs,
             ptr,
         })
     }
@@ -1116,15 +1382,16 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
     use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
-        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
+        TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{
-        CreateProcessW, GetCurrentProcess, CREATE_NEW_PROCESS_GROUP, CREATE_SUSPENDED,
-        CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION,
-        STARTUPINFOEXW,
+        CreateProcessW, GetCurrentProcess, WaitForSingleObject, CREATE_NEW_PROCESS_GROUP,
+        CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT,
+        PROCESS_INFORMATION, STARTUPINFOEXW,
     };
+
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
     let name = wide(job_name);
     let job = unsafe { CreateJobObjectW(std::ptr::null(), name.as_ptr()) };
@@ -1138,6 +1405,7 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
             detail: "job object name already exists".into(),
         });
     }
+
     let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
     limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if unsafe {
@@ -1153,26 +1421,8 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
         unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
         return Err(error.into());
     }
-    let current = unsafe { GetCurrentProcess() };
-    let mut inherited_job = std::ptr::null_mut();
-    if unsafe {
-        DuplicateHandle(
-            current,
-            job,
-            current,
-            &mut inherited_job,
-            0,
-            1,
-            DUPLICATE_SAME_ACCESS,
-        )
-    } == 0
-    {
-        let error = std::io::Error::last_os_error();
-        unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
-        return Err(error.into());
-    }
-    let inherited_job = OwnedHandle(inherited_job);
-    let attributes = match ProcThreadAttributeList::for_handle(inherited_job.0) {
+
+    let attributes = match ProcThreadAttributeList::for_job(job) {
         Ok(attributes) => attributes,
         Err(error) => {
             unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
@@ -1195,7 +1445,7 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
             command_line.as_mut_ptr(),
             std::ptr::null(),
             std::ptr::null(),
-            1,
+            0,
             CREATE_SUSPENDED
                 | CREATE_NEW_PROCESS_GROUP
                 | CREATE_UNICODE_ENVIRONMENT
@@ -1207,26 +1457,42 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
         )
     };
     drop(attributes);
-    drop(inherited_job);
     if created == 0 {
         unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
         return Err(std::io::Error::last_os_error().into());
     }
-    if unsafe { AssignProcessToJobObject(job, info.hProcess) } == 0 {
+
+    let current = unsafe { GetCurrentProcess() };
+    let mut remote_lifetime_handle = std::ptr::null_mut();
+    if unsafe {
+        DuplicateHandle(
+            current,
+            job,
+            info.hProcess,
+            &mut remote_lifetime_handle,
+            0,
+            0,
+            DUPLICATE_SAME_ACCESS,
+        )
+    } == 0
+    {
+        let error = std::io::Error::last_os_error();
         unsafe {
-            windows_sys::Win32::System::Threading::TerminateProcess(info.hProcess, 1);
+            TerminateJobObject(job, 1);
+            WaitForSingleObject(info.hProcess, 5000);
             windows_sys::Win32::Foundation::CloseHandle(info.hThread);
             windows_sys::Win32::Foundation::CloseHandle(info.hProcess);
             windows_sys::Win32::Foundation::CloseHandle(job);
         }
-        return Err(std::io::Error::last_os_error().into());
+        return Err(error.into());
     }
+
     let identity = match inspect_handle(info.hProcess, info.dwProcessId) {
         Ok(identity) => identity,
         Err(error) => {
             unsafe {
-                windows_sys::Win32::System::JobObjects::TerminateJobObject(job, 1);
-                windows_sys::Win32::System::Threading::WaitForSingleObject(info.hProcess, 5000);
+                TerminateJobObject(job, 1);
+                WaitForSingleObject(info.hProcess, 5000);
                 windows_sys::Win32::Foundation::CloseHandle(info.hThread);
                 windows_sys::Win32::Foundation::CloseHandle(info.hProcess);
                 windows_sys::Win32::Foundation::CloseHandle(job);
@@ -1243,7 +1509,6 @@ fn spawn_managed(spec: &JobSpec, job_name: &str) -> Result<SpawnedProcess> {
         identity,
     })
 }
-
 #[cfg(windows)]
 enum LiveStatus {
     Verified(LiveProcess),
@@ -1252,6 +1517,132 @@ enum LiveStatus {
     IdentityConflict(String),
 }
 
+#[cfg(windows)]
+fn duplicate_owned_handle(source: windows_sys::Win32::Foundation::HANDLE) -> Result<OwnedHandle> {
+    use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+    let current = unsafe { GetCurrentProcess() };
+    let mut duplicate = std::ptr::null_mut();
+    if unsafe {
+        DuplicateHandle(
+            current,
+            source,
+            current,
+            &mut duplicate,
+            0,
+            0,
+            DUPLICATE_SAME_ACCESS,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(OwnedHandle(duplicate))
+}
+
+#[cfg(windows)]
+fn record_natural_exit(
+    db: &Mutex<Connection>,
+    job_id: &str,
+    pid: u32,
+    exit_code: u32,
+    live: &LiveProcess,
+) -> Result<()> {
+    let mut conn = db.lock().map_err(|_| EmberdError::Poisoned)?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let lease: Option<(String, i64)> = tx
+        .query_row(
+            "SELECT resource,lease_epoch FROM jobs WHERE job_id=?1 AND state='running' AND pid=?2",
+            params![job_id, pid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    let (resource, lease_epoch) = lease.ok_or_else(|| EmberdError::InvalidTransition {
+        job_id: job_id.into(),
+        detail: "natural-exit monitor lost its running state fence".into(),
+    })?;
+    terminate_live(live)?;
+    let timestamp = now_ms();
+    let changed = tx.execute(
+        "UPDATE jobs SET state='exited',exit_code=?3,exited_at_ms=?4,updated_at_ms=?4 WHERE job_id=?1 AND state='running' AND pid=?2 AND lease_epoch=?5",
+        params![job_id, pid, exit_code as i64, timestamp, lease_epoch],
+    )?;
+    if changed != 1 {
+        return Err(EmberdError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "natural-exit monitor lost its state or lease epoch fence".into(),
+        });
+    }
+    let released = tx.execute(
+        "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+        params![resource, job_id, lease_epoch],
+    )?;
+    if released != 1 {
+        return Err(EmberdError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "natural-exit monitor lost its lease epoch".into(),
+        });
+    }
+    tx.execute(
+        "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_exited',?3)",
+        params![
+            job_id,
+            timestamp,
+            json!({"pid":pid,"exit_code":exit_code}).to_string()
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn spawn_exit_monitor(
+    db: Weak<Mutex<Connection>>,
+    retained: Weak<Mutex<HashMap<String, RetainedProcess>>>,
+    ownership: Arc<RwLock<bool>>,
+    shutdown: OwnedHandle,
+    job_id: String,
+    pid: u32,
+    waiter: OwnedHandle,
+) {
+    std::thread::spawn(move || {
+        use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
+        use windows_sys::Win32::System::Threading::{
+            GetExitCodeProcess, WaitForMultipleObjects, INFINITE,
+        };
+
+        let handles = [waiter.raw(), shutdown.raw()];
+        if unsafe { WaitForMultipleObjects(2, handles.as_ptr(), 0, INFINITE) } != WAIT_OBJECT_0 {
+            return;
+        }
+        let mut exit_code = 0u32;
+        if unsafe { GetExitCodeProcess(waiter.raw(), &mut exit_code) } == 0 {
+            return;
+        }
+        let Ok(alive) = ownership.read() else {
+            return;
+        };
+        if !*alive {
+            return;
+        }
+        let Some(db) = db.upgrade() else {
+            return;
+        };
+        let Some(retained) = retained.upgrade() else {
+            return;
+        };
+        let Ok(mut retained) = retained.lock() else {
+            return;
+        };
+        let Some(retained_process) = retained.get(&job_id) else {
+            return;
+        };
+        if record_natural_exit(&db, &job_id, pid, exit_code, &retained_process.live).is_ok() {
+            retained.remove(&job_id);
+        }
+    });
+}
 #[cfg(windows)]
 fn open_live_status(row: &JobProcessRow) -> LiveStatus {
     use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
@@ -1399,6 +1790,22 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
         process: OwnedHandle(process),
         pid: row.pid,
     })
+}
+
+#[cfg(windows)]
+fn terminate_job_object_by_name(name: &str) -> Result<()> {
+    use windows_sys::Win32::System::JobObjects::{OpenJobObjectW, TerminateJobObject};
+    const JOB_OBJECT_TERMINATE_RIGHT: u32 = 0x0008;
+    let name = wide(name);
+    let job = unsafe { OpenJobObjectW(JOB_OBJECT_TERMINATE_RIGHT, 0, name.as_ptr()) };
+    if job.is_null() {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let job = OwnedHandle(job);
+    if unsafe { TerminateJobObject(job.0, 0xE0D00001) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
