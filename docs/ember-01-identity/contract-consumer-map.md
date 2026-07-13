@@ -118,7 +118,10 @@ Receipt hashes are references, not evidence by themselves. Admission requires a
 Each referenced receipt is resolved and rehashed, then checked for the exact
 checkpoint, verifier, evidence class, result, and (for model birth) allowed
 criterion. Missing content, a fabricated hash/content pair, or a receipt for a
-different checkpoint/verifier/class fails closed.
+different checkpoint/verifier/class fails closed. An admitted identity always
+resolves its evaluation receipt even when the result does not count toward
+owned completion; disabling completion credit cannot preserve unverified
+scientific-result fields.
 The CLI therefore requires `--checkpoint`, `--tensor-manifest`,
 `--artifact-bundle`, `--receipt-bundle`, and either `--verifier` or
 `--trusted-verifier-registry` for an admitted subject. Supplying only mutually
@@ -132,9 +135,11 @@ denylisted spelling.
 
 ### Backend, evaluation, and references
 
-Backend identity binds executable bytes, process identity, protocol, device,
-runtime dependencies, and a resource lease. An endpoint is location, not
-identity. Evaluation binds exact subject checkpoint, benchmark/version/split,
+Backend identity binds executable and command bytes, requires the running
+process executable hash to equal the artifact-bound backend, and resolves a
+signed checkpoint/verifier-bound receipt over process identity, protocol,
+device, and resource lease. Runtime dependencies are independently rehashed.
+An endpoint is location, not identity. Evaluation binds exact subject checkpoint, benchmark/version/split,
 harness bytes/hash, comparator identity plus artifact bytes/hash, score,
 uncertainty, and receipt. A
 `REFERENCE_ONLY` subject cannot be selected as owned Ember or increment owned

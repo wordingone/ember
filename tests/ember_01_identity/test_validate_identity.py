@@ -41,6 +41,7 @@ ARTIFACT_BYTES = {
     "training.optimizer_state": b"owned optimizer state",
     "training.numerics": b"bf16 activations fp32 master",
     "backend.executable": b"owned backend executable",
+    "backend.command": b"emberd --manifest fixture-owned-admitted",
     "evaluation.harness": b"owned benchmark harness",
     "evaluation.comparator": b"frozen comparator identity artifact",
     "ancestry:0": b"clean genesis parent checkpoint",
@@ -238,11 +239,22 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
     payload["backend"]["process_identity"] = {
         "pid": 123,
         "start_time_utc": "2026-07-12T00:00:00Z",
-        "executable_sha256": "4" * 64,
-        "command_sha256": "8" * 64,
+        "executable_sha256": hashlib.sha256(
+            ARTIFACT_BYTES["backend.executable"]
+        ).hexdigest(),
+        "command_sha256": hashlib.sha256(
+            ARTIFACT_BYTES["backend.command"]
+        ).hexdigest(),
         "nonce": "fixture-process",
     }
     payload["backend"]["resource_lease_id"] = "fixture-lease"
+    payload["backend"]["process_receipt_sha256"] = bind_evidence(
+        "backend_process_identity",
+        process_identity=payload["backend"]["process_identity"],
+        protocol=payload["backend"]["protocol"],
+        device=payload["backend"]["device"],
+        resource_lease_id=payload["backend"]["resource_lease_id"],
+    )
     payload["evaluation"]["score"] = {"value": 1.0, "unit": "fixture-score"}
     payload["evaluation"]["harness_sha256"] = hashlib.sha256(
         ARTIFACT_BYTES["evaluation.harness"]
@@ -765,6 +777,42 @@ def test_fully_evidenced_owned_admission_passes() -> None:
     assert validate_manifest(
         payload, receipt_bundle=receipts, **artifact_authority(payload)
     ) == payload
+
+
+def test_owned_admission_rejects_process_executable_mismatch() -> None:
+    payload, receipts = admitted_manifest()
+    payload["backend"]["process_identity"]["executable_sha256"] = "4" * 64
+    codes = error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+    assert "admission.backend_process_executable_mismatch" in codes
+
+
+def test_owned_admission_requires_backend_command_artifact() -> None:
+    payload, receipts = admitted_manifest()
+    authority = artifact_authority(payload)
+    authority["artifact_bundle"]["artifacts"].pop("backend.command")
+    codes = error_codes(payload, receipt_bundle=receipts, **authority)
+    assert "admission.artifact_missing" in codes
+
+
+def test_owned_admission_requires_backend_process_receipt() -> None:
+    payload, receipts = admitted_manifest()
+    receipts.pop(payload["backend"]["process_receipt_sha256"])
+    codes = error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+    assert "admission.receipt_missing" in codes
+
+
+def test_owned_admission_resolves_evaluation_receipt_without_completion_credit() -> None:
+    payload, receipts = admitted_manifest()
+    payload["evaluation"]["counts_toward_owned_completion"] = False
+    receipts.pop(payload["evaluation"]["receipt_sha256"])
+    codes = error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+    assert "admission.evaluation_receipt" in codes
 
 
 def test_owned_completion_rejects_unresolved_evaluation_receipt() -> None:
