@@ -167,20 +167,25 @@ def test_checked_in_public_issue_census_covers_every_snapshot_row() -> None:
         f"body_sha256:{rows[first_source['number']]['body_sha256']}",
     ]
     assert "B:/M/" not in json.dumps(payload) and "B:\\M\\" not in json.dumps(payload)
-    assert payload["open_issue_count"] == 250
+    assert payload["open_issue_count"] == 244
     assert {
         row["number"]
         for row in payload["issues"]
         if row["disposition"] == "implemented and independently verified"
     } == set()
-    assert payload["closed_outcome_count"] == 27
+    assert payload["closed_outcome_count"] == 33
     assert {row["number"] for row in payload["closed_outcomes"]} == {
         56,
+        133,
         327,
         336,
         349,
+        351,
+        357,
         358,
+        365,
         368,
+        375,
         377,
         401,
         410,
@@ -192,6 +197,7 @@ def test_checked_in_public_issue_census_covers_every_snapshot_row() -> None:
         437,
         450,
         468,
+        482,
         504,
         533,
         581,
@@ -204,7 +210,7 @@ def test_checked_in_public_issue_census_covers_every_snapshot_row() -> None:
         749,
     }
     assert all(row["state_reason"] == "COMPLETED" for row in payload["closed_outcomes"])
-    assert {row["number"] for row in payload["closed_outcomes"] if row["disposition"] == "unresolved"} == {327, 468, 615, 631, 749}
+    assert {row["number"] for row in payload["closed_outcomes"] if row["disposition"] == "unresolved"} == {327, 468, 482, 615, 631, 749}
 
 
 def test_issue_snapshot_and_row_hashes_are_recomputed_from_raw_source(tmp_path: Path) -> None:
