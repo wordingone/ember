@@ -101,7 +101,8 @@
         "ordering_sha256",
         "curriculum_sha256",
         "verifier_sha256",
-        "clean_genesis"
+        "clean_genesis",
+        "accepted_input"
       ],
       "properties": {
         "corpus_id": {"type": "string", "minLength": 1},
@@ -109,7 +110,31 @@
         "ordering_sha256": {"$ref": "#/$defs/sha256"},
         "curriculum_sha256": {"$ref": "#/$defs/sha256"},
         "verifier_sha256": {"$ref": "#/$defs/sha256"},
-        "clean_genesis": {"type": "boolean"}
+        "clean_genesis": {"type": "boolean"},
+        "accepted_input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input_id",
+            "authority",
+            "shard_manifest_sha256",
+            "caller_sha256",
+            "gate_sha256",
+            "validator_sha256",
+            "forwarding_receipt_sha256"
+          ],
+          "properties": {
+            "input_id": {"type": "string", "minLength": 1},
+            "authority": {
+              "enum": ["CURRENT_EXECUTABLE", "HISTORICAL_REFERENCE", "UNRESOLVED"]
+            },
+            "shard_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "caller_sha256": {"$ref": "#/$defs/sha256"},
+            "gate_sha256": {"$ref": "#/$defs/sha256"},
+            "validator_sha256": {"$ref": "#/$defs/sha256"},
+            "forwarding_receipt_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
       }
     },
     "parameters": {

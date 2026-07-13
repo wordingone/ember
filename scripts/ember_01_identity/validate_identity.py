@@ -75,6 +75,13 @@ REQUIRED_PATHS = (
     "data.curriculum_sha256",
     "data.verifier_sha256",
     "data.clean_genesis",
+    "data.accepted_input.input_id",
+    "data.accepted_input.authority",
+    "data.accepted_input.shard_manifest_sha256",
+    "data.accepted_input.caller_sha256",
+    "data.accepted_input.gate_sha256",
+    "data.accepted_input.validator_sha256",
+    "data.accepted_input.forwarding_receipt_sha256",
     "parameters.allocated",
     "parameters.unique",
     "parameters.active",
@@ -126,6 +133,11 @@ HASH_PATHS = (
     "data.ordering_sha256",
     "data.curriculum_sha256",
     "data.verifier_sha256",
+    "data.accepted_input.shard_manifest_sha256",
+    "data.accepted_input.caller_sha256",
+    "data.accepted_input.gate_sha256",
+    "data.accepted_input.validator_sha256",
+    "data.accepted_input.forwarding_receipt_sha256",
     "training.optimizer_state_sha256",
     "backend.executable_sha256",
     "evaluation.harness_sha256",
@@ -139,6 +151,7 @@ BINDING_PATHS = (
     "tokenizer.sha256",
     "data",
     "data.sha256",
+    "data.accepted_input",
     "mechanisms",
     "mechanisms.router",
     "training.modality_mixture",
@@ -198,7 +211,11 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
     "tokenizer": {"id", "sha256"},
     "data": {
         "corpus_id", "sha256", "ordering_sha256", "curriculum_sha256",
-        "verifier_sha256", "clean_genesis",
+        "verifier_sha256", "clean_genesis", "accepted_input",
+    },
+    "data.accepted_input": {
+        "input_id", "authority", "shard_manifest_sha256", "caller_sha256",
+        "gate_sha256", "validator_sha256", "forwarding_receipt_sha256",
     },
     "parameters": {"allocated", "unique", "active", "trainable", "served", "actually_trained", "evidence_receipts"},
     "parameters.evidence_receipts": {"allocated", "unique", "active", "trainable", "served", "actually_trained"},
@@ -953,6 +970,18 @@ def validate_manifest(
                 "data.corpus": _get(payload, "data.sha256")[1],
                 "data.ordering": _get(payload, "data.ordering_sha256")[1],
                 "data.curriculum": _get(payload, "data.curriculum_sha256")[1],
+                "data.shard_manifest": _get(
+                    payload, "data.accepted_input.shard_manifest_sha256"
+                )[1],
+                "data.input_caller": _get(
+                    payload, "data.accepted_input.caller_sha256"
+                )[1],
+                "data.input_gate": _get(
+                    payload, "data.accepted_input.gate_sha256"
+                )[1],
+                "data.input_validator": _get(
+                    payload, "data.accepted_input.validator_sha256"
+                )[1],
                 "training.optimizer_state": _get(payload, "training.optimizer_state_sha256")[1],
                 "training.numerics": _get(payload, "training.numerics.sha256")[1],
                 "backend.executable": _get(payload, "backend.executable_sha256")[1],
@@ -1103,6 +1132,37 @@ def validate_manifest(
         if _get(payload, "data.clean_genesis")[1] is not True:
             findings.append(
                 _finding("admission.clean_genesis", "OWNED_ADMITTED requires clean genesis")
+            )
+        accepted_input = _get(payload, "data.accepted_input")[1]
+        if (
+            not isinstance(accepted_input, Mapping)
+            or accepted_input.get("authority") != "CURRENT_EXECUTABLE"
+        ):
+            findings.append(
+                _finding(
+                    "admission.training_input_authority",
+                    "OWNED_ADMITTED requires the current executable accepted-input authority",
+                )
+            )
+        elif isinstance(receipt_bundle, Mapping):
+            _resolve_admission_receipt(
+                accepted_input.get("forwarding_receipt_sha256"),
+                receipt_bundle=receipt_bundle,
+                expected_class="training_input_forwarding",
+                expected_checkpoint=checkpoint_hash,
+                expected_verifier=_get(payload, "data.verifier_sha256")[1],
+                expected_claims={
+                    key: accepted_input.get(key)
+                    for key in (
+                        "input_id",
+                        "authority",
+                        "shard_manifest_sha256",
+                        "caller_sha256",
+                        "gate_sha256",
+                        "validator_sha256",
+                    )
+                },
+                findings=findings,
             )
         ownership = _get(payload, "provenance.ownership")[1]
         if ownership != "OWNED_CLEAN_GENESIS":

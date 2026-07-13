@@ -64,9 +64,26 @@ text.
 For `OWNED_ADMITTED`, hash strings alone are insufficient: the caller supplies
 actual checkpoint bytes, an exact tensor manifest, a content-addressed artifact
 bundle for every declared architecture/tokenizer/data/order/curriculum/
-optimizer/numerics/backend/ancestry/mechanism/runtime-dependency object, and
+accepted-shard/caller/gate/validator/optimizer/numerics/backend/ancestry/
+mechanism/runtime-dependency object, and
 verifier bytes or an independently trusted closed verifier registry. Artifact
 entries are rehashed from decoded bytes and checked against the manifest.
+
+### Accepted training-input identity
+
+`data.accepted_input` binds the accepted input ID, shard-manifest bytes,
+trainer caller bytes, gate bytes, validator bytes, authority disposition, and
+a checkpoint-bound forwarding receipt. Owned admission accepts only
+`CURRENT_EXECUTABLE`; `HISTORICAL_REFERENCE` and `UNRESOLVED` remain
+preservable evidence but cannot authorize training input, model birth, or a
+milestone. The signed forwarding receipt must repeat the exact accepted-input
+ID and every component hash and must bind the resulting checkpoint.
+
+The current coordination authority is public issue #812 with body SHA-256
+`4c5a3e110778f6e54c0f26d0cb878aacc8f2b62bcb5653f774d595b1fd7cf654`.
+Issues #682 and #793 are historical references only. Issue text is not artifact
+authority by itself: EMBER-01A must resolve the actual accepted shard/caller/
+gate/validator bytes into this contract.
 
 ### Capability and mechanism state
 

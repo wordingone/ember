@@ -33,6 +33,10 @@ ARTIFACT_BYTES = {
     "data.corpus": b"owned corpus bytes",
     "data.ordering": b"owned sample order",
     "data.curriculum": b"owned curriculum",
+    "data.shard_manifest": b"accepted clean-genesis shard manifest",
+    "data.input_caller": b"trainer input caller",
+    "data.input_gate": b"trainer input gate",
+    "data.input_validator": b"trainer input validator",
     "training.optimizer_state": b"owned optimizer state",
     "training.numerics": b"bf16 activations fp32 master",
     "backend.executable": b"owned backend executable",
@@ -117,6 +121,7 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
     receipts: dict[str, dict] = {}
     payload["identity"]["disposition"] = "OWNED_ADMITTED"
     payload["identity"]["selected_as_owned_ember"] = True
+    payload["data"]["accepted_input"]["authority"] = "CURRENT_EXECUTABLE"
     payload["checkpoint"]["format"] = "ember-checkpoint-envelope-v1"
     payload["checkpoint"]["byte_sha256"] = hashlib.sha256(checkpoint_bytes).hexdigest()
     try:
@@ -176,6 +181,23 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
             "actually_trained",
         )
     }
+    accepted_input = payload["data"]["accepted_input"]
+    for field, artifact_id in {
+        "shard_manifest_sha256": "data.shard_manifest",
+        "caller_sha256": "data.input_caller",
+        "gate_sha256": "data.input_gate",
+        "validator_sha256": "data.input_validator",
+    }.items():
+        accepted_input[field] = hashlib.sha256(ARTIFACT_BYTES[artifact_id]).hexdigest()
+    accepted_input["forwarding_receipt_sha256"] = bind_evidence(
+        "training_input_forwarding",
+        input_id=accepted_input["input_id"],
+        authority=accepted_input["authority"],
+        shard_manifest_sha256=accepted_input["shard_manifest_sha256"],
+        caller_sha256=accepted_input["caller_sha256"],
+        gate_sha256=accepted_input["gate_sha256"],
+        validator_sha256=accepted_input["validator_sha256"],
+    )
 
     payload["capabilities"]["reasoning"] = {
         "state": "VERIFIED",
@@ -247,6 +269,18 @@ def artifact_authority(payload: dict, checkpoint_bytes: bytes = CHECKPOINT_BYTES
     payload["data"]["sha256"] = digest(ARTIFACT_BYTES["data.corpus"])
     payload["data"]["ordering_sha256"] = digest(ARTIFACT_BYTES["data.ordering"])
     payload["data"]["curriculum_sha256"] = digest(ARTIFACT_BYTES["data.curriculum"])
+    payload["data"]["accepted_input"]["shard_manifest_sha256"] = digest(
+        ARTIFACT_BYTES["data.shard_manifest"]
+    )
+    payload["data"]["accepted_input"]["caller_sha256"] = digest(
+        ARTIFACT_BYTES["data.input_caller"]
+    )
+    payload["data"]["accepted_input"]["gate_sha256"] = digest(
+        ARTIFACT_BYTES["data.input_gate"]
+    )
+    payload["data"]["accepted_input"]["validator_sha256"] = digest(
+        ARTIFACT_BYTES["data.input_validator"]
+    )
     payload["training"]["optimizer_state_sha256"] = digest(
         ARTIFACT_BYTES["training.optimizer_state"]
     )
@@ -581,6 +615,43 @@ def test_runtime_validator_applies_canonical_schema(
     payload = valid_manifest()
     _set_path(payload, path, replacement)
     assert "schema.validation" in error_codes(payload)
+
+
+def test_schema_requires_artifact_bound_accepted_training_input() -> None:
+    payload = valid_manifest()
+    payload["data"].pop("accepted_input", None)
+    assert "schema.validation" in error_codes(payload)
+
+
+def test_owned_admission_rejects_historical_training_input_authority() -> None:
+    payload, receipts = admitted_manifest()
+    payload["data"]["accepted_input"]["authority"] = "HISTORICAL_REFERENCE"
+    assert "admission.training_input_authority" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_resolves_checkpoint_bound_training_input_forwarding() -> None:
+    payload, receipts = admitted_manifest()
+    payload["data"]["accepted_input"]["forwarding_receipt_sha256"] = "a" * 64
+    assert "admission.receipt_missing" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_rejects_forwarding_receipt_for_another_shard() -> None:
+    payload, receipts = admitted_manifest()
+    old_digest = payload["data"]["accepted_input"]["forwarding_receipt_sha256"]
+    receipt = copy.deepcopy(receipts.pop(old_digest))
+    receipt.pop("signature_ed25519")
+    receipt["shard_manifest_sha256"] = "9" * 64
+    sign_receipt(receipt)
+    new_digest = receipt_sha256(receipt)
+    receipts[new_digest] = receipt
+    payload["data"]["accepted_input"]["forwarding_receipt_sha256"] = new_digest
+    assert "admission.receipt_claim_mismatch" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
 
 
 @pytest.mark.parametrize(
@@ -930,6 +1001,10 @@ def test_owned_admission_rejects_deletion_object_without_erasure_evidence() -> N
         ("data.corpus", "admission.artifact_missing"),
         ("data.ordering", "admission.artifact_missing"),
         ("data.curriculum", "admission.artifact_missing"),
+        ("data.shard_manifest", "admission.artifact_missing"),
+        ("data.input_caller", "admission.artifact_missing"),
+        ("data.input_gate", "admission.artifact_missing"),
+        ("data.input_validator", "admission.artifact_missing"),
         ("training.optimizer_state", "admission.artifact_missing"),
         ("training.numerics", "admission.artifact_missing"),
         ("backend.executable", "admission.artifact_missing"),
