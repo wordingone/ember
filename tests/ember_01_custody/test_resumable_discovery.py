@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -87,6 +88,37 @@ def test_journal_ignores_partial_and_truncated_records(tmp_path: Path) -> None:
 
     assert set(completed) == {"root:b.bin"}
     assert completed["root:b.bin"]["sha256"] == "a" * 64
+
+
+def test_completed_journal_never_substitutes_for_current_bytes(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    artifact = root / "payload.bin"
+    artifact.write_bytes(b"new!")
+    fixed_ns = 1_700_000_000_000_000_000
+    os.utime(artifact, ns=(fixed_ns, fixed_ns))
+    journal = tmp_path / "progress.jsonl"
+    append_hash_journal(journal, {"artifact_key": "root:payload.bin", "state": "complete", "size_bytes": 4, "mtime_ns_non_authoritative": fixed_ns, "sha256": hashlib.sha256(b"old!").hexdigest(), "algorithm": "sha256-byte-stream-v1"})
+    result = build_root_census({"roots": [{"root_id": "root", "required": True, "scan": "files"}]}, {"root": root}, journal)
+    assert result["proof_mode"] == "current_bytes_rehashed"
+    assert result["artifacts"][0]["sha256"] == hashlib.sha256(b"new!").hexdigest()
+    assert result["artifacts"][0]["hash_source"] == "current_bytes"
+
+
+def test_concurrent_mutation_is_not_admitted_as_a_complete_hash(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    artifact = root / "payload.bin"
+    artifact.write_bytes(b"before")
+    real_hash = census_module.hash_file_streaming
+    def mutate_after_hash(path, *args, **kwargs):
+        result = real_hash(path, *args, **kwargs)
+        path.write_bytes(b"after-different-size")
+        return result
+    monkeypatch.setattr(census_module, "hash_file_streaming", mutate_after_hash)
+    result = build_root_census({"roots": [{"root_id": "root", "required": True, "scan": "files"}]}, {"root": root})
+    assert result["artifacts"][0]["sha256"] is None
+    assert result["contradictions"][0]["code"] == "artifact_mutated_during_hash"
 
 
 def test_bare_repository_and_all_refs_are_inventoryable(tmp_path: Path) -> None:
@@ -257,6 +289,99 @@ def test_same_physical_file_is_hashed_once_but_keeps_all_logical_rows(
         spec, {"logical-a": root, "logical-b": root}
     )
 
-    assert calls == 1
+    # One shared initial hash plus one final byte-stability verification per logical root.
+    assert calls == 3
     assert len(result["artifacts"]) == 2
     assert result["artifacts"][0]["sha256"] == result["artifacts"][1]["sha256"]
+
+def test_worktree_ids_are_path_derived_not_ordinal() -> None:
+    common = "worktree X:/private/main\nHEAD " + "a" * 40 + "\n\n"
+    with_extra = "worktree X:/private/aaa\nHEAD " + "b" * 40 + "\n\n" + common
+    first = census_module.parse_worktree_porcelain(common)[0]
+    second = next(row for row in census_module.parse_worktree_porcelain(with_extra) if row["normalized_path"] == "X:/private/main")
+    assert first["worktree_id"] == second["worktree_id"]
+
+
+def test_directory_discovery_detects_git_state_change_during_scan(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    parent = tmp_path / "material"
+    parent.mkdir()
+    repo = parent / "ember-repo"
+    init_repo(repo)
+    spec = {
+        "roots": [
+            {
+                "root_id": "discovery-root",
+                "required": True,
+                "scan": "directory_discovery",
+                "name_patterns": ["ember*"],
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved_requires_item_review",
+            }
+        ]
+    }
+    real_summary = census_module.git_repository_summary
+    calls = 0
+
+    def changing_summary(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        summary = real_summary(*args, **kwargs)
+        if calls > 1:
+            summary = {**summary, "status_sha256": "f" * 64}
+        return summary
+
+    monkeypatch.setattr(census_module, "git_repository_summary", changing_summary)
+    result = build_root_census(spec, {"discovery-root": parent})
+    assert {
+        row["code"] for row in result["contradictions"]
+    } >= {"directory_snapshot_changed_during_scan"}
+
+
+def test_git_repository_detects_same_status_dirty_byte_change(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    repo = tmp_path / "repo"
+    init_repo(repo)
+    dirty = repo / "tracked.txt"
+    dirty.write_text("dirty-one\n", encoding="utf-8")
+    spec = {"roots": [{"root_id": "repo", "required": True, "scan": "git_repository"}]}
+    real_summary = census_module.git_repository_summary
+    calls = 0
+
+    def mutate_between_passes(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            dirty.write_text("dirty-two\n", encoding="utf-8")
+        return real_summary(*args, **kwargs)
+
+    monkeypatch.setattr(census_module, "git_repository_summary", mutate_between_passes)
+    result = build_root_census(spec, {"repo": repo})
+    assert "artifact_changed_after_hash" in {row["code"] for row in result["contradictions"]}
+
+
+def test_directory_discovery_detects_nested_membership_change(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    parent = tmp_path / "material"
+    child = parent / "ember-payload"
+    child.mkdir(parents=True)
+    original = child / "one.bin"
+    original.write_bytes(b"one")
+    spec = {"roots": [{"root_id": "discovery", "required": True, "scan": "directory_discovery", "name_patterns": ["ember*"]}]}
+    real_hash = census_module.hash_file_streaming
+    calls = 0
+
+    def add_nested_file(*args, **kwargs):
+        nonlocal calls
+        result = real_hash(*args, **kwargs)
+        calls += 1
+        if calls == 1:
+            (child / "two.bin").write_bytes(b"two")
+        return result
+
+    monkeypatch.setattr(census_module, "hash_file_streaming", add_nested_file)
+    result = build_root_census(spec, {"discovery": parent})
+    assert "directory_membership_changed_during_scan" in {row["code"] for row in result["contradictions"]}
