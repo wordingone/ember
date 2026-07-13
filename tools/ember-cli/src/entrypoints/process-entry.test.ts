@@ -1401,7 +1401,6 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
 
     const fakeProc = new EventEmitter();
-    setTimeout(() => fakeProc.emit("exit", 17), 20);
 
     // Widened via `as number | null` (not just the type annotation) to work around a real TS
     // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
@@ -1417,7 +1416,10 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     try {
       await main({
         argv: ["node", "ember", "--reference-seat", "-p", "hello"],
-        spawnServer: async () => ({ process: fakeProc as unknown as ServerHandle["process"], port: 29984, kill() {} }),
+        spawnServer: async () => {
+          setTimeout(() => fakeProc.emit("exit", 17), 20);
+          return { process: fakeProc as unknown as ServerHandle["process"], port: 29984, kill() {} };
+        },
         // Never resolves on its own -- only the raced child-exit should end this cell.
         waitReady: () => new Promise(() => {}),
         probeExisting: async () => false,
