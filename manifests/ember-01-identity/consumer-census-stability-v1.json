@@ -3,18 +3,18 @@
   "goal_id": "EMBER-01",
   "workstream_id": "EMBER-01C",
   "snapshot_path": "manifests/ember-01-identity/consumer-census-v1.json",
-  "snapshot_bytes": 22671446,
-  "snapshot_sha256": "b9bbe5fb8703c86993a73cbf95183a26a27868ab558015a1a61209a68cde1366",
-  "canonical_subject_sha256": "1585426040b530bc546c9af25a95636003c5535890a7f7cb4f70ed3d15433c79",
+  "snapshot_bytes": 68645445,
+  "snapshot_sha256": "d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda",
+  "canonical_subject_sha256": "bb47ae9442dea6a554288b940a4c87dafb70a1378153593b7c04b6345ec4144f",
   "complete_run_sha256": [
-    "b9bbe5fb8703c86993a73cbf95183a26a27868ab558015a1a61209a68cde1366",
-    "b9bbe5fb8703c86993a73cbf95183a26a27868ab558015a1a61209a68cde1366"
+    "d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda",
+    "d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda"
   ],
   "byte_identical": true,
-  "root_count": 7,
-  "evidence_record_count": 25402,
-  "line_record_count": 22679,
-  "file_category_record_count": 2723,
+  "root_count": 8,
+  "evidence_record_count": 65202,
+  "line_record_count": 57707,
+  "file_category_record_count": 7495,
   "absolute_host_paths_published": false,
   "model_loaded_or_run": false,
   "benchmark_executed": false,
@@ -22,6 +22,8 @@
   "notes": [
     "Git surfaces were read from exact committed objects, independent of index or checkout state.",
     "Executable sources preserve every matching line; state and document surfaces preserve one content-hashed record per file and category.",
+    "Static matches are explicitly no-credit candidates; thirteen reviewed consumers resolve through exact root, path, category, and evidence hashes.",
+    "The current EMBER-01C exclusive namespace is covered as a separate filesystem-bound candidate surface.",
     "The configured local private-backup root is explicitly MISSING; private backup evidence is resolved through the verified private-backup default clone at commit 054d6e8d94ea218c3ad3b177df790602fe075b01."
   ]
 }

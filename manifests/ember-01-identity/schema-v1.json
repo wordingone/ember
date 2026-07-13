@@ -112,14 +112,27 @@
     "parameters": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["allocated", "unique", "active", "trainable", "served", "actually_trained"],
+      "required": ["allocated", "unique", "active", "trainable", "served", "actually_trained", "evidence_receipts"],
       "properties": {
         "allocated": {"type": "integer", "minimum": 0},
         "unique": {"type": "integer", "minimum": 0},
         "active": {"type": "integer", "minimum": 0},
         "trainable": {"type": "integer", "minimum": 0},
         "served": {"type": "integer", "minimum": 0},
-        "actually_trained": {"type": "integer", "minimum": 0}
+        "actually_trained": {"type": "integer", "minimum": 0},
+        "evidence_receipts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allocated", "unique", "active", "trainable", "served", "actually_trained"],
+          "properties": {
+            "allocated": {"$ref": "#/$defs/receiptHashList"},
+            "unique": {"$ref": "#/$defs/receiptHashList"},
+            "active": {"$ref": "#/$defs/receiptHashList"},
+            "trainable": {"$ref": "#/$defs/receiptHashList"},
+            "served": {"$ref": "#/$defs/receiptHashList"},
+            "actually_trained": {"$ref": "#/$defs/receiptHashList"}
+          }
+        }
       }
     },
     "training": {
@@ -372,13 +385,14 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["id", "sha256", "state"],
+          "required": ["id", "sha256", "state", "evidence_receipts"],
           "properties": {
             "id": {"type": "string", "minLength": 1},
             "sha256": {"$ref": "#/$defs/sha256"},
             "state": {
               "enum": ["ACTIVE", "INACTIVE", "HISTORICAL", "UNVERIFIED"]
-            }
+            },
+            "evidence_receipts": {"$ref": "#/$defs/receiptHashList"}
           }
         },
         {"$ref": "#/$defs/unresolved"}
@@ -406,6 +420,10 @@
         "checkpoint_sha256": {"$ref": "#/$defs/sha256"},
         "relationship": {"type": "string", "minLength": 1}
       }
+    },
+    "receiptHashList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sha256"}
     },
     "capability": {
       "type": "object",

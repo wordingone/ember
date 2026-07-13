@@ -20,8 +20,10 @@ SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
 FIXTURE = Path(__file__).parent / "fixtures" / "valid-identity-v1.json"
 SCHEMA_PATH = ROOT / "manifests" / "ember-01-identity" / "schema-v1.json"
 NEGATIVE_CASES = Path(__file__).parent / "fixtures" / "negative-cases-v1.json"
-CHECKPOINT_BYTES = b"hello world"
-VERIFIER_BYTES = b"owned verifier fixture"
+VERIFIER_BYTES = (
+    b'{"rules":["bind_checkpoint","bind_claims","derive_allocated_unique",'
+    b'"require_verified_result"],"schema":"ember-admission-verifier-program-v1"}'
+)
 TENSOR_HASHES = {"fixture.weight": "b" * 64}
 ARTIFACT_BYTES = {
     "architecture": b"owned architecture source",
@@ -33,8 +35,26 @@ ARTIFACT_BYTES = {
     "training.numerics": b"bf16 activations fp32 master",
     "backend.executable": b"owned backend executable",
     "ancestry:0": b"clean genesis parent checkpoint",
-    "tensor:fixture.weight": b"tensor bytes fixture",
+    "tensor:fixture.weight": b"\x00\x00\x00\x00",
 }
+CHECKPOINT_BYTES = json.dumps(
+    {
+        "schema": "ember-checkpoint-envelope-v1",
+        "tensors": [
+            {
+                "name": "fixture.weight",
+                "shape": [3_000_000_000],
+                "dtype": "constant_float32",
+                "content_hex": ARTIFACT_BYTES["tensor:fixture.weight"].hex(),
+            }
+        ],
+    },
+    sort_keys=True,
+    separators=(",", ":"),
+).encode("utf-8")
+TRUSTED_REGISTRY_PATH = (
+    ROOT / "manifests" / "ember-01-identity" / "trusted-verifiers-v1.json"
+)
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from validate_identity import (  # noqa: E402
@@ -55,11 +75,28 @@ def receipt_sha256(receipt: dict) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def admitted_manifest() -> tuple[dict, dict[str, dict]]:
+def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict, dict[str, dict]]:
     payload = valid_manifest()
     receipts: dict[str, dict] = {}
     payload["identity"]["disposition"] = "OWNED_ADMITTED"
     payload["identity"]["selected_as_owned_ember"] = True
+    payload["checkpoint"]["format"] = "ember-checkpoint-envelope-v1"
+    payload["checkpoint"]["byte_sha256"] = hashlib.sha256(checkpoint_bytes).hexdigest()
+    try:
+        envelope = json.loads(checkpoint_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        pass
+    else:
+        payload["checkpoint"]["tensors"] = [
+            {
+                "name": row["name"],
+                "shape": row["shape"],
+                "dtype": row["dtype"],
+                "sha256": hashlib.sha256(bytes.fromhex(row["content_hex"])).hexdigest(),
+            }
+            for row in envelope["tensors"]
+        ]
+    payload["evaluation"]["subject_checkpoint_sha256"] = payload["checkpoint"]["byte_sha256"]
     for field in (
         "allocated",
         "unique",
@@ -73,17 +110,34 @@ def admitted_manifest() -> tuple[dict, dict[str, dict]]:
     subject = payload["checkpoint"]["byte_sha256"]
     verifier = payload["data"]["verifier_sha256"]
 
-    def bind_evidence(evidence_class: str) -> str:
+    def bind_evidence(evidence_class: str, **claims: object) -> str:
         receipt = {
             "schema": "ember-identity-evidence-receipt-v1",
             "evidence_class": evidence_class,
             "subject_checkpoint_sha256": subject,
             "verifier_sha256": verifier,
             "result": "VERIFIED",
+            **claims,
         }
         digest = receipt_sha256(receipt)
         receipts[digest] = receipt
         return digest
+
+    payload["parameters"]["evidence_receipts"] = {
+        field: [
+            bind_evidence(
+                f"parameter_{field}", claimed_count=payload["parameters"][field]
+            )
+        ]
+        for field in (
+            "allocated",
+            "unique",
+            "active",
+            "trainable",
+            "served",
+            "actually_trained",
+        )
+    }
 
     payload["capabilities"]["reasoning"] = {
         "state": "VERIFIED",
@@ -125,8 +179,18 @@ def admitted_manifest() -> tuple[dict, dict[str, dict]]:
     payload["backend"]["resource_lease_id"] = "fixture-lease"
     payload["evaluation"]["score"] = {"value": 1.0, "unit": "fixture-score"}
     payload["evaluation"]["uncertainty"] = {"value": 0.0, "unit": "fixture-score"}
-    payload["evaluation"]["receipt_sha256"] = "9" * 64
     payload["evaluation"]["counts_toward_owned_completion"] = True
+    payload["evaluation"]["receipt_sha256"] = bind_evidence(
+        "evaluation_result",
+        benchmark_id=payload["evaluation"]["benchmark_id"],
+        version=payload["evaluation"]["version"],
+        split=payload["evaluation"]["split"],
+        harness_sha256=payload["evaluation"]["harness_sha256"],
+        comparator_identity=payload["evaluation"]["comparator_identity"],
+        score=payload["evaluation"]["score"],
+        uncertainty=payload["evaluation"]["uncertainty"],
+        counts_toward_owned_completion=True,
+    )
     payload["unresolved"] = []
     return payload, receipts
 
@@ -135,7 +199,7 @@ def admission_artifacts() -> dict:
     raise AssertionError("call artifact_authority(payload) instead")
 
 
-def artifact_authority(payload: dict) -> dict:
+def artifact_authority(payload: dict, checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> dict:
     def digest(content: bytes) -> str:
         return hashlib.sha256(content).hexdigest()
 
@@ -175,7 +239,7 @@ def artifact_authority(payload: dict) -> dict:
         },
     }
     return {
-        "checkpoint_bytes": CHECKPOINT_BYTES,
+        "checkpoint_bytes": checkpoint_bytes,
         "tensor_manifest": tensor_manifest,
         "artifact_bundle": artifact_bundle,
         "verifier_bytes": VERIFIER_BYTES,
@@ -522,6 +586,15 @@ def test_fully_evidenced_owned_admission_passes() -> None:
     ) == payload
 
 
+def test_owned_completion_rejects_unresolved_evaluation_receipt() -> None:
+    payload, receipts = admitted_manifest()
+    receipts.pop(payload["evaluation"]["receipt_sha256"])
+    codes = error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+    assert "admission.evaluation_receipt" in codes
+
+
 def test_owned_admission_requires_checkpoint_tensor_and_verifier_artifacts() -> None:
     payload, receipts = admitted_manifest()
     codes = error_codes(payload, receipt_bundle=receipts)
@@ -541,6 +614,16 @@ def test_owned_admission_rejects_wrong_checkpoint_bytes() -> None:
         payload,
         receipt_bundle=receipts,
         **artifacts,
+    )
+
+
+def test_owned_admission_rejects_unparseable_checkpoint_even_when_all_hashes_agree() -> None:
+    unrelated_checkpoint = b"caller-controlled checkpoint bytes"
+    payload, receipts = admitted_manifest(unrelated_checkpoint)
+    artifacts = artifact_authority(payload)
+    artifacts["checkpoint_bytes"] = unrelated_checkpoint
+    assert "checkpoint.envelope_invalid" in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
     )
 
 
@@ -566,20 +649,37 @@ def test_owned_admission_rejects_wrong_verifier_bytes() -> None:
     )
 
 
-def test_owned_admission_accepts_independently_trusted_verifier_registry() -> None:
+def test_owned_admission_rejects_non_executable_verifier_bytes() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["verifier_bytes"] = b"caller-authored opaque verifier"
+    assert "admission.verifier_program_invalid" in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
+    )
+
+
+def test_caller_created_verifier_registry_cannot_authorize_itself() -> None:
     payload, receipts = admitted_manifest()
     artifacts = artifact_authority(payload)
     artifacts.pop("verifier_bytes")
     registry = {
         "schema": "ember-trusted-verifier-registry-v1",
-        "verifier_sha256": [payload["data"]["verifier_sha256"]],
+        "verifier_sha256": [payload["data"]["verifier_sha256"], "0" * 64],
     }
-    assert validate_manifest(
+    assert "admission.verifier_registry_untrusted_root" in error_codes(
         payload,
         receipt_bundle=receipts,
         trusted_verifier_registry=registry,
         **artifacts,
-    ) == payload
+    )
+
+
+def test_checked_in_verifier_registry_pins_the_reviewed_program() -> None:
+    registry = json.loads(TRUSTED_REGISTRY_PATH.read_text(encoding="utf-8"))
+    assert registry == {
+        "schema": "ember-trusted-verifier-registry-v1",
+        "verifier_sha256": [hashlib.sha256(VERIFIER_BYTES).hexdigest()],
+    }
 
 
 def test_owned_admission_rejects_untrusted_verifier_registry() -> None:
@@ -590,7 +690,7 @@ def test_owned_admission_rejects_untrusted_verifier_registry() -> None:
         "schema": "ember-trusted-verifier-registry-v1",
         "verifier_sha256": ["0" * 64],
     }
-    assert "admission.verifier_untrusted" in error_codes(
+    assert "admission.verifier_registry_untrusted_root" in error_codes(
         payload,
         receipt_bundle=receipts,
         trusted_verifier_registry=registry,
@@ -626,9 +726,23 @@ def test_owned_admission_resolves_mechanism_and_runtime_dependency_bytes() -> No
     dependency_bytes = b"owned runtime dependency"
     mechanism_sha = hashlib.sha256(mechanism_bytes).hexdigest()
     dependency_sha = hashlib.sha256(dependency_bytes).hexdigest()
-    payload["mechanisms"]["router"] = [
-        {"id": "router-v1", "sha256": mechanism_sha, "state": "ACTIVE"}
-    ]
+    mechanism_receipt = {
+        "schema": "ember-identity-evidence-receipt-v1",
+        "evidence_class": "mechanism_router",
+        "subject_checkpoint_sha256": payload["checkpoint"]["byte_sha256"],
+        "verifier_sha256": payload["data"]["verifier_sha256"],
+        "result": "VERIFIED",
+        "mechanism_id": "router-v1",
+        "mechanism_sha256": mechanism_sha,
+    }
+    mechanism_digest = receipt_sha256(mechanism_receipt)
+    receipts[mechanism_digest] = mechanism_receipt
+    payload["mechanisms"]["router"] = [{
+        "id": "router-v1",
+        "sha256": mechanism_sha,
+        "state": "ACTIVE",
+        "evidence_receipts": [mechanism_digest],
+    }]
     payload["backend"]["runtime_dependencies"] = [
         {"name": "runtime-v1", "version": "1", "sha256": dependency_sha}
     ]
@@ -648,6 +762,95 @@ def test_owned_admission_resolves_mechanism_and_runtime_dependency_bytes() -> No
     assert validate_manifest(payload, receipt_bundle=receipts, **artifacts) == payload
     artifacts["artifact_bundle"]["artifacts"].pop("mechanism:router:router-v1")
     assert "admission.artifact_missing" in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
+    )
+    payload, receipts = admitted_manifest()
+    payload["mechanisms"]["router"] = [{
+        "id": "router-v1",
+        "sha256": mechanism_sha,
+        "state": "ACTIVE",
+        "evidence_receipts": [],
+    }]
+    artifacts = artifact_authority(payload)
+    artifacts["artifact_bundle"]["artifacts"]["mechanism:router:router-v1"] = {
+        "sha256": mechanism_sha,
+        "content_hex": mechanism_bytes.hex(),
+    }
+    assert "admission.mechanism_evidence" in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
+    )
+
+
+def test_owned_admission_rejects_self_attested_parameter_axes() -> None:
+    payload, receipts = admitted_manifest()
+    payload["parameters"]["evidence_receipts"]["active"] = []
+    assert "admission.parameter_evidence" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_rejects_parameter_receipt_with_wrong_count() -> None:
+    payload, receipts = admitted_manifest()
+    old = payload["parameters"]["evidence_receipts"]["actually_trained"][0]
+    new = rebind_receipt(payload, receipts, old, claimed_count=1)
+    payload["parameters"]["evidence_receipts"]["actually_trained"] = [new]
+    assert "admission.receipt_claim_mismatch" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_rejects_parameter_counts_not_derived_from_checkpoint_tensors() -> None:
+    payload, receipts = admitted_manifest()
+    for field in ("allocated", "unique"):
+        payload["parameters"][field] = 3_000_000_001
+        old = payload["parameters"]["evidence_receipts"][field][0]
+        payload["parameters"]["evidence_receipts"][field] = [
+            rebind_receipt(payload, receipts, old, claimed_count=3_000_000_001)
+        ]
+    assert "admission.checkpoint_parameter_count_mismatch" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_checkpoint_envelope_rejects_tensor_bytes_inconsistent_with_shape_and_dtype() -> None:
+    envelope = json.loads(CHECKPOINT_BYTES)
+    envelope["tensors"][0]["dtype"] = "float32"
+    malformed = json.dumps(
+        envelope, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    payload, receipts = admitted_manifest(malformed)
+    assert "checkpoint.envelope_invalid" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload, malformed)
+    )
+
+
+def test_owned_admission_rejects_deletion_object_without_erasure_evidence() -> None:
+    payload, receipts = admitted_manifest()
+    deletion_bytes = b"owned deletion object"
+    deletion_sha = hashlib.sha256(deletion_bytes).hexdigest()
+    receipt = {
+        "schema": "ember-identity-evidence-receipt-v1",
+        "evidence_class": "mechanism_deletion_objects",
+        "subject_checkpoint_sha256": payload["checkpoint"]["byte_sha256"],
+        "verifier_sha256": payload["data"]["verifier_sha256"],
+        "result": "VERIFIED",
+        "mechanism_id": "delete-router-v1",
+        "mechanism_sha256": deletion_sha,
+        "deletion_effect": "CAPABILITY_RETAINED",
+    }
+    digest = receipt_sha256(receipt)
+    receipts[digest] = receipt
+    payload["mechanisms"]["deletion_objects"] = [{
+        "id": "delete-router-v1",
+        "sha256": deletion_sha,
+        "state": "ACTIVE",
+        "evidence_receipts": [digest],
+    }]
+    artifacts = artifact_authority(payload)
+    artifacts["artifact_bundle"]["artifacts"][
+        "mechanism:deletion_objects:delete-router-v1"
+    ] = {"sha256": deletion_sha, "content_hex": deletion_bytes.hex()}
+    assert "admission.receipt_claim_mismatch" in error_codes(
         payload, receipt_bundle=receipts, **artifacts
     )
 
