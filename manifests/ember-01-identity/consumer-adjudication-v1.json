@@ -41342,29 +41342,29 @@
     },
     {
       "category": "receipt_identity",
-      "claim_effect": "controls whether an executable path is recorded as reviewed consumer, reviewed nonconsumer, or verified consumer",
-      "conflict": "census classification cannot supply model identity, neural capability, benchmark success, or research credit",
-      "current_input": "exact source-bound consumer census, scope, semantics, and review state at scripts/ember_01_identity/census_consumers.py:1287:89e055e07fe92eec0ef2305911bdbce4ce2febf9cf14e13bfcfb485bde6d1232",
-      "derived_label": "receipt_identity consumer-census authority path",
+      "claim_effect": "controls exact-head census and metadata-integrity verification only",
+      "conflict": "Git metadata verification cannot supply model identity, capability, benchmark, or scientific credit",
+      "current_input": "exact Git commit, metadata blob, and source-bound census state at scripts/ember_01_identity/census_consumers.py:1288:89e055e07fe92eec0ef2305911bdbce4ce2febf9cf14e13bfcfb485bde6d1232",
+      "derived_label": "receipt_identity committed-blob verification consumer",
       "evidence_sha256": "89e055e07fe92eec0ef2305911bdbce4ce2febf9cf14e13bfcfb485bde6d1232",
-      "failure_behavior": "an omitted, colliding, or fail-open row can hide or misstate an Ember identity consumer",
-      "integration_requirement": "EMBER-01A must consume only the exact artifact-bound disposition and fail closed on absent or mismatched evidence",
-      "line": 1287,
+      "failure_behavior": "checkout conversion or dirty working-tree bytes can otherwise create false mismatch or bypass committed evidence",
+      "integration_requirement": "verify committed Git blobs and exact source/head bindings before EMBER-01A consumes census metadata",
+      "line": 1288,
       "path": "scripts/ember_01_identity/census_consumers.py",
-      "protocol": "discover, classify, validate, or serialize content-bound Ember identity consumer evidence"
+      "protocol": "resolve exact Git objects, hash committed metadata bytes, and validate closed source-to-head field transitions"
     },
     {
       "category": "receipt_identity",
-      "claim_effect": "controls whether an executable path is recorded as reviewed consumer, reviewed nonconsumer, or verified consumer",
-      "conflict": "census classification cannot supply model identity, neural capability, benchmark success, or research credit",
-      "current_input": "exact source-bound consumer census, scope, semantics, and review state at scripts/ember_01_identity/census_consumers.py:1291:14d3a09d3c78ea88614304fac907b76696a42f8c2af34cf2731c0d7859dd0892",
-      "derived_label": "receipt_identity consumer-census authority path",
+      "claim_effect": "controls exact-head census and metadata-integrity verification only",
+      "conflict": "Git metadata verification cannot supply model identity, capability, benchmark, or scientific credit",
+      "current_input": "exact Git commit, metadata blob, and source-bound census state at scripts/ember_01_identity/census_consumers.py:1292:14d3a09d3c78ea88614304fac907b76696a42f8c2af34cf2731c0d7859dd0892",
+      "derived_label": "receipt_identity committed-blob verification consumer",
       "evidence_sha256": "14d3a09d3c78ea88614304fac907b76696a42f8c2af34cf2731c0d7859dd0892",
-      "failure_behavior": "an omitted, colliding, or fail-open row can hide or misstate an Ember identity consumer",
-      "integration_requirement": "EMBER-01A must consume only the exact artifact-bound disposition and fail closed on absent or mismatched evidence",
-      "line": 1291,
+      "failure_behavior": "checkout conversion or dirty working-tree bytes can otherwise create false mismatch or bypass committed evidence",
+      "integration_requirement": "verify committed Git blobs and exact source/head bindings before EMBER-01A consumes census metadata",
+      "line": 1292,
       "path": "scripts/ember_01_identity/census_consumers.py",
-      "protocol": "discover, classify, validate, or serialize content-bound Ember identity consumer evidence"
+      "protocol": "resolve exact Git objects, hash committed metadata bytes, and validate closed source-to-head field transitions"
     },
     {
       "category": "unclassified_file",
@@ -184494,23 +184494,27 @@
   "lanes": [
     {
       "scope": "all EXECUTABLE_CANDIDATE evidence rows outside scripts/** in ember-01c-portable-e.json",
-      "sha256": "a5b7d578eb8b6e123cc7850b1d3efe94afa89eea6b9961abbdd0f92b6cde8f10"
+      "sha256": "7bf993c3f678c81bb0b1fc41dc7e30955fc365d4eb7a3b1ac7511e4faac10a32"
     },
     {
       "scope": "scripts/_muon_smallfoot_retry_runner.py",
-      "sha256": "80be59db984a7c33ac53d51abd15849b3d5764e119915399124a8d2ccfb26415"
+      "sha256": "d4e3785c741ed2b5c642785f17513042569fd1ae0a0616f377181d0276629572"
     },
     {
       "scope": "{\"first_path_character_range\":\"n-z\",\"path_prefix\":\"scripts/\",\"root_id\":\"public-master\",\"source_role\":\"EXECUTABLE_CANDIDATE\"}",
-      "sha256": "9adc553694bea1dd575881899b462b4ce4efdb1e9268e15b6dcc761c10c8b0e2"
+      "sha256": "b3039ec2264dcb121bae29a468b1fdf6223953c3b0d86f28d70089748e3784fb"
     },
     {
       "scope": "{\"inspection_method\":\"exact source content hashes and whole-file executable context\",\"path_initial_range\":\"a-m\",\"path_prefix\":\"scripts/\",\"source_role\":\"EXECUTABLE_CANDIDATE\"}",
-      "sha256": "04f0f02db7fa8c621d18b31e905f1988c548af628436afac529fe3d22f58d5b0"
+      "sha256": "ba90e8d50462e3ce13c823a4f217dd33ae4dfd32a3abfe28ea86e751a7a4613f"
     },
     {
       "scope": "{\"kind\":\"exact-substantive-delta\",\"paths\":[\"scripts/ember_01_identity/census_consumers.py\",\"scripts/ember_01_identity/merge_adjudications.py\",\"scripts/ember_01_integration/issue_reconcile.py\",\"tests/ember_01_identity/test_census_consumers.py\",\"tests/ember_01_identity/test_merge_adjudications.py\",\"tests/ember_01_integration/test_issue_reconcile.py\"]}",
-      "sha256": "e363a8258821d3b194bc5f9235906a00ab08f003e808712932d84295c44b3041"
+      "sha256": "31bb2c1591c9db9fa6a8255919aa16352644e30f6453b6461076d46dc1c43821"
+    },
+    {
+      "scope": "{\"kind\":\"git-blob-portability-delta\",\"paths\":[\"scripts/ember_01_identity/census_consumers.py\",\"tests/ember_01_identity/test_census_consumers.py\"]}",
+      "sha256": "4329d85c18b4278046b045bfdd3691bd3e4d02b1f0766a82d5e01f12ba727277"
     }
   ],
   "nonconsumer_files": [
@@ -186435,7 +186439,7 @@
       "review_basis": "test or fixture only; no production identity/claim authority"
     },
     {
-      "content_sha256": "93127f55e1f7ef29d49054f9cfee714a7c303ae3c0d30c03c61507481965bb97",
+      "content_sha256": "ac773f3b30938f93f373883b321bac1632816cc3ea893612589da9abc66b12ef",
       "path": "tests/ember_01_identity/test_census_consumers.py",
       "review_basis": "INSPECTED_TEST_ONLY_NO_PRODUCTION_IDENTITY_AUTHORITY"
     },
@@ -223822,5 +223826,5 @@
     }
   ],
   "schema": "ember-consumer-adjudication-review-set-v1",
-  "source_commit": "57c33bf36289bd80ae9deeb4d271e53bbe50cff6"
+  "source_commit": "0bcfa148c8e5af09f7abe3e550a840c998a3e218"
 }
