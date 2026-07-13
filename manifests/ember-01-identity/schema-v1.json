@@ -147,7 +147,15 @@
           }
         },
         "optimizer_state_sha256": {"$ref": "#/$defs/sha256"},
-        "numerics": {"type": "string", "minLength": 1},
+        "numerics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile", "sha256"],
+          "properties": {
+            "profile": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
         "stopping_rule": {"$ref": "#/$defs/stoppingRule"}
       }
     },

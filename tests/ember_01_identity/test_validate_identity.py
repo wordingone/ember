@@ -20,6 +20,21 @@ SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
 FIXTURE = Path(__file__).parent / "fixtures" / "valid-identity-v1.json"
 SCHEMA_PATH = ROOT / "manifests" / "ember-01-identity" / "schema-v1.json"
 NEGATIVE_CASES = Path(__file__).parent / "fixtures" / "negative-cases-v1.json"
+CHECKPOINT_BYTES = b"hello world"
+VERIFIER_BYTES = b"owned verifier fixture"
+TENSOR_HASHES = {"fixture.weight": "b" * 64}
+ARTIFACT_BYTES = {
+    "architecture": b"owned architecture source",
+    "tokenizer": b"owned tokenizer bytes",
+    "data.corpus": b"owned corpus bytes",
+    "data.ordering": b"owned sample order",
+    "data.curriculum": b"owned curriculum",
+    "training.optimizer_state": b"owned optimizer state",
+    "training.numerics": b"bf16 activations fp32 master",
+    "backend.executable": b"owned backend executable",
+    "ancestry:0": b"clean genesis parent checkpoint",
+    "tensor:fixture.weight": b"tensor bytes fixture",
+}
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from validate_identity import (  # noqa: E402
@@ -54,6 +69,7 @@ def admitted_manifest() -> tuple[dict, dict[str, dict]]:
         "actually_trained",
     ):
         payload["parameters"][field] = 3_000_000_000
+    payload["data"]["verifier_sha256"] = hashlib.sha256(VERIFIER_BYTES).hexdigest()
     subject = payload["checkpoint"]["byte_sha256"]
     verifier = payload["data"]["verifier_sha256"]
 
@@ -113,6 +129,57 @@ def admitted_manifest() -> tuple[dict, dict[str, dict]]:
     payload["evaluation"]["counts_toward_owned_completion"] = True
     payload["unresolved"] = []
     return payload, receipts
+
+
+def admission_artifacts() -> dict:
+    raise AssertionError("call artifact_authority(payload) instead")
+
+
+def artifact_authority(payload: dict) -> dict:
+    def digest(content: bytes) -> str:
+        return hashlib.sha256(content).hexdigest()
+
+    payload["architecture"]["sha256"] = digest(ARTIFACT_BYTES["architecture"])
+    payload["tokenizer"]["sha256"] = digest(ARTIFACT_BYTES["tokenizer"])
+    payload["data"]["sha256"] = digest(ARTIFACT_BYTES["data.corpus"])
+    payload["data"]["ordering_sha256"] = digest(ARTIFACT_BYTES["data.ordering"])
+    payload["data"]["curriculum_sha256"] = digest(ARTIFACT_BYTES["data.curriculum"])
+    payload["training"]["optimizer_state_sha256"] = digest(
+        ARTIFACT_BYTES["training.optimizer_state"]
+    )
+    payload["training"]["numerics"] = {
+        "profile": "bf16-activations-fp32-master",
+        "sha256": digest(ARTIFACT_BYTES["training.numerics"]),
+    }
+    payload["backend"]["executable_sha256"] = digest(
+        ARTIFACT_BYTES["backend.executable"]
+    )
+    payload["checkpoint"]["ancestry"][0]["checkpoint_sha256"] = digest(
+        ARTIFACT_BYTES["ancestry:0"]
+    )
+    tensor_sha = digest(ARTIFACT_BYTES["tensor:fixture.weight"])
+    payload["checkpoint"]["tensors"][0]["sha256"] = tensor_sha
+    tensor_manifest = {
+        "schema": "ember-tensor-manifest-v1",
+        "checkpoint_sha256": payload["checkpoint"]["byte_sha256"],
+        "tensors": copy.deepcopy(payload["checkpoint"]["tensors"]),
+    }
+    artifact_bundle = {
+        "schema": "ember-artifact-bundle-v1",
+        "artifacts": {
+            artifact_id: {
+                "sha256": digest(content),
+                "content_hex": content.hex(),
+            }
+            for artifact_id, content in ARTIFACT_BYTES.items()
+        },
+    }
+    return {
+        "checkpoint_bytes": CHECKPOINT_BYTES,
+        "tensor_manifest": tensor_manifest,
+        "artifact_bundle": artifact_bundle,
+        "verifier_bytes": VERIFIER_BYTES,
+    }
 
 
 def rebind_receipt(
@@ -450,7 +517,210 @@ def test_owned_admission_rejects_any_unresolved_evidence() -> None:
 
 def test_fully_evidenced_owned_admission_passes() -> None:
     payload, receipts = admitted_manifest()
-    assert validate_manifest(payload, receipt_bundle=receipts) == payload
+    assert validate_manifest(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    ) == payload
+
+
+def test_owned_admission_requires_checkpoint_tensor_and_verifier_artifacts() -> None:
+    payload, receipts = admitted_manifest()
+    codes = error_codes(payload, receipt_bundle=receipts)
+    assert {
+        "admission.checkpoint_bytes_missing",
+        "admission.tensor_manifest_missing",
+        "admission.artifact_bundle_missing",
+        "admission.verifier_authority_missing",
+    } <= codes
+
+
+def test_owned_admission_rejects_wrong_checkpoint_bytes() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["checkpoint_bytes"] = b"nonexistent fabricated checkpoint"
+    assert "checkpoint.byte_hash_mismatch" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        **artifacts,
+    )
+
+
+def test_owned_admission_rejects_wrong_tensor_hashes() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["tensor_manifest"]["tensors"][0]["sha256"] = "0" * 64
+    assert "checkpoint.tensor_hash_mismatch" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        **artifacts,
+    )
+
+
+def test_owned_admission_rejects_wrong_verifier_bytes() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["verifier_bytes"] = b"fabricated verifier"
+    assert "admission.verifier_hash_mismatch" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        **artifacts,
+    )
+
+
+def test_owned_admission_accepts_independently_trusted_verifier_registry() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts.pop("verifier_bytes")
+    registry = {
+        "schema": "ember-trusted-verifier-registry-v1",
+        "verifier_sha256": [payload["data"]["verifier_sha256"]],
+    }
+    assert validate_manifest(
+        payload,
+        receipt_bundle=receipts,
+        trusted_verifier_registry=registry,
+        **artifacts,
+    ) == payload
+
+
+def test_owned_admission_rejects_untrusted_verifier_registry() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts.pop("verifier_bytes")
+    registry = {
+        "schema": "ember-trusted-verifier-registry-v1",
+        "verifier_sha256": ["0" * 64],
+    }
+    assert "admission.verifier_untrusted" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        trusted_verifier_registry=registry,
+        **artifacts,
+    )
+
+
+@pytest.mark.parametrize(
+    "registry",
+    [
+        {"schema": "wrong", "verifier_sha256": []},
+        {"schema": "ember-trusted-verifier-registry-v1", "verifier_sha256": "not-a-list"},
+        {"schema": "ember-trusted-verifier-registry-v1", "verifier_sha256": ["not-a-hash"]},
+        {"schema": "ember-trusted-verifier-registry-v1", "verifier_sha256": ["0" * 64, "0" * 64]},
+        {"schema": "ember-trusted-verifier-registry-v1", "verifier_sha256": [], "extra": True},
+    ],
+)
+def test_owned_admission_rejects_malformed_trusted_verifier_registry(registry: dict) -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts.pop("verifier_bytes")
+    assert "admission.verifier_registry_invalid" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        trusted_verifier_registry=registry,
+        **artifacts,
+    )
+
+
+def test_owned_admission_resolves_mechanism_and_runtime_dependency_bytes() -> None:
+    payload, receipts = admitted_manifest()
+    mechanism_bytes = b"owned router module"
+    dependency_bytes = b"owned runtime dependency"
+    mechanism_sha = hashlib.sha256(mechanism_bytes).hexdigest()
+    dependency_sha = hashlib.sha256(dependency_bytes).hexdigest()
+    payload["mechanisms"]["router"] = [
+        {"id": "router-v1", "sha256": mechanism_sha, "state": "ACTIVE"}
+    ]
+    payload["backend"]["runtime_dependencies"] = [
+        {"name": "runtime-v1", "version": "1", "sha256": dependency_sha}
+    ]
+    artifacts = artifact_authority(payload)
+    artifacts["artifact_bundle"]["artifacts"].update(
+        {
+            "mechanism:router:router-v1": {
+                "sha256": mechanism_sha,
+                "content_hex": mechanism_bytes.hex(),
+            },
+            "runtime_dependency:runtime-v1": {
+                "sha256": dependency_sha,
+                "content_hex": dependency_bytes.hex(),
+            },
+        }
+    )
+    assert validate_manifest(payload, receipt_bundle=receipts, **artifacts) == payload
+    artifacts["artifact_bundle"]["artifacts"].pop("mechanism:router:router-v1")
+    assert "admission.artifact_missing" in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
+    )
+
+
+@pytest.mark.parametrize(
+    ("artifact_id", "expected_code"),
+    [
+        ("architecture", "admission.artifact_missing"),
+        ("tokenizer", "admission.artifact_missing"),
+        ("data.corpus", "admission.artifact_missing"),
+        ("data.ordering", "admission.artifact_missing"),
+        ("data.curriculum", "admission.artifact_missing"),
+        ("training.optimizer_state", "admission.artifact_missing"),
+        ("training.numerics", "admission.artifact_missing"),
+        ("backend.executable", "admission.artifact_missing"),
+        ("ancestry:0", "admission.artifact_missing"),
+        ("tensor:fixture.weight", "admission.artifact_missing"),
+    ],
+)
+def test_owned_admission_rejects_missing_required_artifact(
+    artifact_id: str, expected_code: str
+) -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["artifact_bundle"]["artifacts"].pop(artifact_id)
+    assert expected_code in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
+    )
+
+
+@pytest.mark.parametrize(
+    "artifact_id",
+    [
+        "architecture",
+        "tokenizer",
+        "data.corpus",
+        "data.ordering",
+        "data.curriculum",
+        "training.optimizer_state",
+        "training.numerics",
+        "backend.executable",
+        "ancestry:0",
+        "tensor:fixture.weight",
+    ],
+)
+def test_owned_admission_rejects_artifact_hash_content_mismatch(artifact_id: str) -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["artifact_bundle"]["artifacts"][artifact_id][
+        "content_hex"
+    ] = b"fabricated artifact bytes".hex()
+    assert "admission.artifact_hash_mismatch" in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
+    )
+
+
+def test_owned_admission_rejects_receipt_with_wrong_result() -> None:
+    payload, receipts = admitted_manifest()
+    digest = payload["capabilities"]["reasoning"]["evidence_receipts"][0]
+    replacement = rebind_receipt(payload, receipts, digest, result="FAILED")
+    payload["capabilities"]["reasoning"]["evidence_receipts"] = [replacement]
+    assert "admission.receipt_result_mismatch" in error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_rejects_wrong_tensor_shape_or_dtype() -> None:
+    payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
+    artifacts["tensor_manifest"]["tensors"][0]["shape"] = [999]
+    assert "checkpoint.tensor_manifest_mismatch" in error_codes(
+        payload, receipt_bundle=receipts, **artifacts
+    )
 
 
 @pytest.mark.parametrize(
@@ -582,10 +852,21 @@ def test_owned_admission_rejects_fabricated_hash_content_pair() -> None:
 
 def test_cli_requires_and_resolves_admission_receipt_bundle(tmp_path: Path) -> None:
     payload, receipts = admitted_manifest()
+    artifacts = artifact_authority(payload)
     manifest_path = tmp_path / "admitted.json"
     bundle_path = tmp_path / "receipts.json"
+    checkpoint_path = tmp_path / "checkpoint.bin"
+    tensor_path = tmp_path / "tensor-manifest.json"
+    artifact_path = tmp_path / "artifact-bundle.json"
+    verifier_path = tmp_path / "verifier.bin"
     manifest_path.write_text(json.dumps(payload), encoding="utf-8")
     bundle_path.write_text(json.dumps(receipts), encoding="utf-8")
+    checkpoint_path.write_bytes(CHECKPOINT_BYTES)
+    tensor_path.write_text(json.dumps(artifacts["tensor_manifest"]), encoding="utf-8")
+    artifact_path.write_text(
+        json.dumps(artifacts["artifact_bundle"]), encoding="utf-8"
+    )
+    verifier_path.write_bytes(VERIFIER_BYTES)
 
     missing = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "validate_identity.py"), str(manifest_path)],
@@ -596,6 +877,24 @@ def test_cli_requires_and_resolves_admission_receipt_bundle(tmp_path: Path) -> N
     assert missing.returncode == 1
     assert "admission.receipt_bundle_missing" in missing.stdout
 
+    bundle_only = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "validate_identity.py"),
+            str(manifest_path),
+            "--receipt-bundle",
+            str(bundle_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert bundle_only.returncode == 1
+    assert "admission.checkpoint_bytes_missing" in bundle_only.stdout
+    assert "admission.tensor_manifest_missing" in bundle_only.stdout
+    assert "admission.artifact_bundle_missing" in bundle_only.stdout
+    assert "admission.verifier_authority_missing" in bundle_only.stdout
+
     resolved = subprocess.run(
         [
             sys.executable,
@@ -603,6 +902,14 @@ def test_cli_requires_and_resolves_admission_receipt_bundle(tmp_path: Path) -> N
             str(manifest_path),
             "--receipt-bundle",
             str(bundle_path),
+            "--checkpoint",
+            str(checkpoint_path),
+            "--tensor-manifest",
+            str(tensor_path),
+            "--artifact-bundle",
+            str(artifact_path),
+            "--verifier",
+            str(verifier_path),
         ],
         text=True,
         capture_output=True,
