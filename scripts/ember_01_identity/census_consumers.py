@@ -57,6 +57,17 @@ EXCLUDED_PATHS = {
     "manifests/ember-01-identity/consumer-census-v1.json",
     "manifests/ember-01-identity/consumer-census-stability-v1.json",
 }
+EXACT_HEAD_METADATA_PATHS = (
+    "manifests/ember-01-identity/consumer-adjudication-v1.json",
+    "manifests/ember-01-identity/consumer-census-roots-v1.json",
+    "manifests/ember-01-identity/consumer-census-stability-v1.json",
+    "manifests/ember-01-identity/consumer-scope-v1.json",
+)
+HASH_BOUND_EXACT_HEAD_METADATA = (
+    "manifests/ember-01-identity/consumer-adjudication-v1.json",
+    "manifests/ember-01-identity/consumer-census-roots-v1.json",
+    "manifests/ember-01-identity/consumer-scope-v1.json",
+)
 
 CATEGORY_PATTERNS: dict[str, tuple[str, ...]] = {
     "architecture_config": (
@@ -645,6 +656,7 @@ def _apply_adjudication_policy(
         if (
             row["root_id"] != policy["root_id"]
             or row.get("record_class") == "VERIFIED_CONSUMER"
+            or row.get("review_state") == "SUBSTANTIVE_REVIEWED"
         ):
             continue
         source_role = str(row["source_role"])
@@ -681,6 +693,159 @@ def _apply_adjudication_policy(
             "EMBER-01A must bind this exact row or content-hash an explicit "
             "non-consumer disposition"
         )
+
+
+def _apply_review_adjudication(
+    evidence: list[dict[str, object]], review: object
+) -> dict:
+    required_top = {
+        "schema", "source_commit", "lanes", "consumer_rows",
+        "nonconsumer_rows", "nonconsumer_files",
+    }
+    if (
+        not isinstance(review, dict)
+        or not required_top <= set(review)
+        or set(review) - required_top - {"coverage"}
+        or review.get("schema") != "ember-consumer-adjudication-review-set-v1"
+        or not re.fullmatch(r"[0-9a-f]{40}", str(review.get("source_commit")))
+        or not isinstance(review.get("lanes"), list)
+        or not review["lanes"]
+        or any(
+            not isinstance(lane, dict)
+            or set(lane) != {"scope", "sha256"}
+            or not isinstance(lane["scope"], str)
+            or not lane["scope"]
+            or not re.fullmatch(r"[0-9a-f]{64}", str(lane["sha256"]))
+            for lane in review["lanes"]
+        )
+        or any(
+            not isinstance(review.get(key), list)
+            for key in ("consumer_rows", "nonconsumer_rows", "nonconsumer_files")
+        )
+    ):
+        raise ValueError("substantive consumer adjudication uses an invalid schema")
+    semantic_keys = {
+        "current_input", "derived_label", "protocol", "failure_behavior",
+        "claim_effect", "conflict", "integration_requirement",
+    }
+    selector_keys = {"path", "line", "category", "evidence_sha256"}
+    consumers: dict[tuple[str, int, str, str], dict] = {}
+    nonconsumers: dict[tuple[str, int, str, str], dict] = {}
+    files: dict[tuple[str, str], dict] = {}
+    for item in review["consumer_rows"]:
+        if (
+            not isinstance(item, dict)
+            or set(item) != selector_keys | semantic_keys
+            or not isinstance(item["line"], int)
+            or item["line"] < 0
+            or any(not isinstance(item[key], str) or not item[key] for key in item if key != "line")
+            or not re.fullmatch(r"[0-9a-f]{64}", item["evidence_sha256"])
+        ):
+            raise ValueError("consumer adjudication row is invalid")
+        key = tuple(
+            item[field] for field in ("path", "line", "category", "evidence_sha256")
+        )
+        if key in consumers:
+            if any(consumers[key][field] != item[field] for field in semantic_keys):
+                raise ValueError(f"conflicting consumer adjudication: {key}")
+            continue
+        consumers[key] = item
+    for item in review["nonconsumer_rows"]:
+        if (
+            not isinstance(item, dict)
+            or set(item) != selector_keys | {"review_basis"}
+            or not isinstance(item["line"], int)
+            or item["line"] < 0
+            or any(not isinstance(item[key], str) or not item[key] for key in item if key != "line")
+            or not re.fullmatch(r"[0-9a-f]{64}", item["evidence_sha256"])
+        ):
+            raise ValueError("nonconsumer adjudication row is invalid")
+        key = tuple(
+            item[field] for field in ("path", "line", "category", "evidence_sha256")
+        )
+        if key in nonconsumers or key in consumers:
+            raise ValueError(f"duplicate/disjoint adjudication selector: {key}")
+        nonconsumers[key] = item
+    for item in review["nonconsumer_files"]:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"path", "content_sha256", "review_basis"}
+            or any(not isinstance(item[key], str) or not item[key] for key in item)
+            or not re.fullmatch(r"[0-9a-f]{64}", item["content_sha256"])
+        ):
+            raise ValueError("whole-file nonconsumer adjudication is invalid")
+        key = (item["path"], item["content_sha256"])
+        if key in files:
+            raise ValueError(f"duplicate whole-file adjudication: {key}")
+        files[key] = item
+
+    matched_consumers: set[tuple[str, int, str, str]] = set()
+    matched_nonconsumers: set[tuple[str, int, str, str]] = set()
+    matched_files: set[tuple[str, str]] = set()
+    consumer_count = nonconsumer_count = unresolved_count = executable_count = 0
+    for row in evidence:
+        if row.get("source_role") != "EXECUTABLE_CANDIDATE":
+            continue
+        executable_count += 1
+        digest = str(
+            row["line_sha256"] if row.get("evidence_scope") == "LINE"
+            else row["content_sha256"]
+        )
+        selector = (
+            str(row["path"]), int(row["line"]), str(row["category"]), digest
+        )
+        file_selector = (str(row["path"]), str(row["content_sha256"]))
+        if file_selector in files:
+            matched_files.add(file_selector)
+            if selector in consumers or row.get("record_class") == "VERIFIED_CONSUMER":
+                raise ValueError(
+                    f"whole-file nonconsumer conflicts with consumer: {selector}"
+                )
+        if selector in consumers:
+            item = consumers[selector]
+            matched_consumers.add(selector)
+            row.update({field: item[field] for field in semantic_keys})
+            if row.get("record_class") != "VERIFIED_CONSUMER":
+                row["record_class"] = "REVIEWED_CONSUMER"
+            row["review_state"] = "SUBSTANTIVE_REVIEWED"
+            row["review_basis"] = "EXACT_EXECUTABLE_CONTEXT_REVIEW"
+            consumer_count += 1
+        elif row.get("record_class") == "VERIFIED_CONSUMER":
+            row["review_state"] = "SUBSTANTIVE_REVIEWED"
+            row["review_basis"] = "EXACT_HAND_REVIEWED_SEMANTICS"
+            consumer_count += 1
+        elif selector in nonconsumers:
+            matched_nonconsumers.add(selector)
+            row["record_class"] = "REVIEWED_NON_CONSUMER"
+            row["review_state"] = "SUBSTANTIVE_REVIEWED"
+            row["review_basis"] = nonconsumers[selector]["review_basis"]
+            row["claim_effect"] = "NO_CREDIT"
+            nonconsumer_count += 1
+        elif file_selector in files:
+            row["record_class"] = "REVIEWED_NON_CONSUMER"
+            row["review_state"] = "SUBSTANTIVE_REVIEWED"
+            row["review_basis"] = files[file_selector]["review_basis"]
+            row["claim_effect"] = "NO_CREDIT"
+            nonconsumer_count += 1
+        else:
+            unresolved_count += 1
+    unused = {
+        "consumer_rows": sorted(set(consumers) - matched_consumers),
+        "nonconsumer_rows": sorted(set(nonconsumers) - matched_nonconsumers),
+        "nonconsumer_files": sorted(set(files) - matched_files),
+    }
+    if any(unused.values()) or unresolved_count:
+        raise ValueError(
+            f"substantive executable adjudication is incomplete: "
+            f"unresolved={unresolved_count}; unused={unused}"
+        )
+    return {
+        "executable_evidence_rows": executable_count,
+        "reviewed_consumer_rows": consumer_count,
+        "reviewed_nonconsumer_rows": nonconsumer_count,
+        "unresolved_executable_rows": unresolved_count,
+        "status": "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+    }
 
 
 def summarize_snapshot_adjudication(payload: object, policy: object) -> dict:
@@ -730,47 +895,106 @@ def verify_exact_head_coverage(repo_root: Path, coverage: object) -> dict:
     if (
         not isinstance(coverage, dict)
         or set(coverage) != {
-            "schema", "source_commit", "self_referential_metadata_exclusions"
+            "schema", "source_commit", "self_referential_metadata_exclusions",
+            "metadata_sha256",
         }
         or coverage.get("schema") != "ember-exact-head-census-coverage-v1"
         or not re.fullmatch(r"[0-9a-f]{40}", str(coverage.get("source_commit")))
-        or not isinstance(coverage.get("self_referential_metadata_exclusions"), list)
-        or not coverage["self_referential_metadata_exclusions"]
+        or tuple(coverage.get("self_referential_metadata_exclusions", ()))
+            != EXACT_HEAD_METADATA_PATHS
+        or not isinstance(coverage.get("metadata_sha256"), dict)
+        or set(coverage["metadata_sha256"]) != set(HASH_BOUND_EXACT_HEAD_METADATA)
         or any(
-            not isinstance(path, str)
-            or not path
-            or Path(path).is_absolute()
-            or "\\" in path
-            for path in coverage["self_referential_metadata_exclusions"]
+            not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            for digest in coverage["metadata_sha256"].values()
         )
     ):
         raise ValueError("exact-head census coverage is invalid")
     head = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        capture_output=True,
-        check=True,
-        text=True,
+        ["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True,
+        check=True, text=True,
     ).stdout.strip()
     changed_raw = subprocess.run(
-        [
-            "git", "diff", "--name-only", "-z",
-            f"{coverage['source_commit']}..{head}",
-        ],
-        cwd=repo_root,
-        capture_output=True,
-        check=True,
+        ["git", "diff", "--name-only", "-z", f"{coverage['source_commit']}..{head}"],
+        cwd=repo_root, capture_output=True, check=True,
     ).stdout
     changed = sorted(path for path in changed_raw.decode("utf-8").split("\0") if path)
-    excluded = sorted(set(coverage["self_referential_metadata_exclusions"]))
+    excluded = sorted(EXACT_HEAD_METADATA_PATHS)
     if changed != excluded:
         raise ValueError(
             f"exact-head diff exceeds self-referential metadata: {changed}"
         )
+    for relative, expected_sha in coverage["metadata_sha256"].items():
+        actual_sha = hashlib.sha256((repo_root / relative).read_bytes()).hexdigest()
+        if actual_sha != expected_sha:
+            raise ValueError(f"exact-head metadata hash mismatch: {relative}")
+
+    def git_json(relative: str) -> dict:
+        raw = subprocess.run(
+            ["git", "show", f"{coverage['source_commit']}:{relative}"],
+            cwd=repo_root, capture_output=True, check=True,
+        ).stdout
+        payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            raise ValueError(f"exact-head metadata is not an object: {relative}")
+        return payload
+
+    adjudication_path, roots_path, _, scope_path = EXACT_HEAD_METADATA_PATHS
+    adjudication = json.loads(
+        (repo_root / adjudication_path).read_text(encoding="utf-8")
+    )
+    if (
+        not isinstance(adjudication, dict)
+        or adjudication.get("schema")
+            != "ember-consumer-adjudication-review-set-v1"
+        or adjudication.get("source_commit") != coverage["source_commit"]
+    ):
+        raise ValueError("adjudication metadata is not bound to substantive source")
+    source_roots = git_json(roots_path)
+    current_roots = json.loads((repo_root / roots_path).read_text(encoding="utf-8"))
+    normalized_roots = json.loads(json.dumps(current_roots))
+    source_public = next(
+        row for row in source_roots["roots"] if row.get("root_id") == "public-master"
+    )
+    current_public = next(
+        row for row in normalized_roots["roots"]
+        if row.get("root_id") == "public-master"
+    )
+    if current_public.get("source_commit") != coverage["source_commit"]:
+        raise ValueError("public census root does not select substantive source")
+    current_public["source_commit"] = source_public["source_commit"]
+    if normalized_roots != source_roots:
+        raise ValueError("root metadata changed beyond the public source commit")
+
+    source_scope = git_json(scope_path)
+    current_scope = json.loads((repo_root / scope_path).read_text(encoding="utf-8"))
+    normalized_scope = json.loads(json.dumps(current_scope))
+    if (
+        normalized_scope.get("source_commit") != coverage["source_commit"]
+        or normalized_scope.get("candidate_adjudication", {}).get("source_commit")
+            != coverage["source_commit"]
+    ):
+        raise ValueError("consumer scope does not select substantive source")
+    normalized_scope["source_commit"] = source_scope["source_commit"]
+    normalized_scope["candidate_adjudication"]["source_commit"] = (
+        source_scope["candidate_adjudication"]["source_commit"]
+    )
+    if (
+        source_scope.get("global_consumer_completeness")
+            == "CONSERVATIVE_SUPERSET_COMPLETE"
+        and normalized_scope.get("global_consumer_completeness")
+            == "REVIEWED_EXECUTABLE_CENSUS_COMPLETE"
+    ):
+        normalized_scope["global_consumer_completeness"] = (
+            "CONSERVATIVE_SUPERSET_COMPLETE"
+        )
+    if normalized_scope != source_scope:
+        raise ValueError("consumer scope changed beyond exact source bindings")
     return {
         "source_commit": coverage["source_commit"],
         "head_commit": head,
         "changed_paths": changed,
+        "metadata_sha256": coverage["metadata_sha256"],
         "status": "EXACT_HEAD_COVERED",
     }
 
@@ -780,6 +1004,7 @@ def build_census_set(
     *,
     consumer_semantics: Iterable[dict[str, str]] = (),
     adjudication_policy: dict | None = None,
+    review_adjudication: dict | None = None,
 ) -> dict:
     """Combine logical public/private/live roots without serializing host paths."""
     built: list[dict] = []
@@ -850,6 +1075,10 @@ def build_census_set(
             item["root_id"], item["path"], item["line"], item["category"]
         ),
     )
+    substantive_adjudication = (
+        _apply_review_adjudication(evidence, review_adjudication)
+        if review_adjudication is not None else None
+    )
     _apply_adjudication_policy(evidence, roots, adjudication_policy)
     canonical_subject = json.dumps(
         {"roots": roots, "semantic_profiles": SEMANTIC_PROFILES, "evidence": evidence},
@@ -879,6 +1108,13 @@ def build_census_set(
             for row in roots
         )
     )
+    completeness = (
+        "REVIEWED_EXECUTABLE_CENSUS_COMPLETE"
+        if complete
+        and substantive_adjudication is not None
+        and substantive_adjudication["unresolved_executable_rows"] == 0
+        else ("CONSERVATIVE_SUPERSET_COMPLETE" if complete else "NOT_CLAIMED")
+    )
     return {
         "schema": "ember-identity-consumer-census-set-v1",
         "goal_id": GOAL_ID,
@@ -887,6 +1123,8 @@ def build_census_set(
         "roots": roots,
         "semantic_profiles": SEMANTIC_PROFILES,
         "evidence": evidence,
+        **({"substantive_adjudication": substantive_adjudication}
+           if substantive_adjudication is not None else {}),
         "candidate_discovery": {
             "record_count": len(discovered),
             "unadjudicated_count": len(candidates),
@@ -896,9 +1134,7 @@ def build_census_set(
             **({"adjudication_counts": dict(sorted(Counter(
                 str(row["record_class"]) for row in adjudicated
             ).items()))} if adjudication_policy is not None else {}),
-            "global_consumer_completeness": (
-                "CONSERVATIVE_SUPERSET_COMPLETE" if complete else "NOT_CLAIMED"
-            ),
+            "global_consumer_completeness": completeness,
         },
         "canonical_subject_sha256": hashlib.sha256(canonical_subject).hexdigest(),
     }
@@ -971,8 +1207,10 @@ def materialize_scoped_semantics(scope: object, semantics: object) -> list[dict[
         scope.get("schema") != "ember-reviewed-consumer-scope-v1"
         or scope.get("root_id") != "public-master"
         or not re.fullmatch(r"[0-9a-f]{40}", str(scope.get("source_commit")))
-        or scope.get("global_consumer_completeness")
-            != "CONSERVATIVE_SUPERSET_COMPLETE"
+        or scope.get("global_consumer_completeness") not in {
+            "CONSERVATIVE_SUPERSET_COMPLETE",
+            "REVIEWED_EXECUTABLE_CENSUS_COMPLETE",
+        }
         or not isinstance(scope.get("consumers"), list)
         or not isinstance(semantics, list)
     ):
@@ -1018,6 +1256,20 @@ def materialize_scoped_semantics(scope: object, semantics: object) -> list[dict[
     return resolved
 
 
+def resolve_global_consumer_completeness(
+    declared: object, derived: object, *, substantive_review: bool
+) -> str:
+    if declared == derived and isinstance(derived, str):
+        return derived
+    if (
+        substantive_review
+        and declared == "CONSERVATIVE_SUPERSET_COMPLETE"
+        and derived == "REVIEWED_EXECUTABLE_CENSUS_COMPLETE"
+    ):
+        return derived
+    raise ValueError("global consumer completeness policy did not close")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
@@ -1026,6 +1278,7 @@ def main() -> int:
     root_group.add_argument("--root-locator-spec", type=Path)
     parser.add_argument("--semantics-manifest", type=Path)
     parser.add_argument("--consumer-scope", type=Path)
+    parser.add_argument("--adjudication-manifest", type=Path)
     parser.add_argument("--verify-exact-head-coverage", type=Path)
     parser.add_argument("--replay-profile", choices=("full", "portable"), default="full")
     parser.add_argument("--output", type=Path)
@@ -1061,12 +1314,17 @@ def main() -> int:
         )
         if scope is not None:
             semantics = materialize_scoped_semantics(scope, semantics)
+        review_adjudication = (
+            json.loads(args.adjudication_manifest.read_text(encoding="utf-8"))
+            if args.adjudication_manifest else None
+        )
         payload = build_census_set(
             raw_specs,
             consumer_semantics=semantics,
             adjudication_policy=(
                 scope["candidate_adjudication"] if scope is not None else None
             ),
+            review_adjudication=review_adjudication,
         )
         if scope is not None:
             resolved_ids = sorted(
@@ -1084,14 +1342,13 @@ def main() -> int:
                 "resolved_consumer_ids": resolved_ids,
                 "status": "REVIEWED_SCOPE_COMPLETE",
             }
-            payload["global_consumer_completeness"] = scope[
-                "global_consumer_completeness"
-            ]
-            if (
-                payload["candidate_discovery"]["global_consumer_completeness"]
-                != scope["global_consumer_completeness"]
-            ):
-                raise ValueError("global consumer completeness policy did not close")
+            payload["global_consumer_completeness"] = (
+                resolve_global_consumer_completeness(
+                    scope["global_consumer_completeness"],
+                    payload["candidate_discovery"]["global_consumer_completeness"],
+                    substantive_review=review_adjudication is not None,
+                )
+            )
     else:
         payload = build_census(args.root)
     rendered = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"

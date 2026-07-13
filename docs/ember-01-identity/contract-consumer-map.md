@@ -182,12 +182,16 @@ content-bound row, producing zero unadjudicated discovered matches. Because
 the snapshot is stale, suffix-limited, and contains a missing configured root,
 it is environmental discovery only and makes no global-completeness claim. A
 host-independent portable profile separately replays the exact substantive PR
-source commit with no environment roots. Two complete portable runs must be
-byte-identical, all tracked files must be accounted, and zero matches may
-remain unadjudicated. Test paths and opaque artifacts remain conservative
-consumers; neither is automatically dismissed. The exact source commit,
-counts, canonical hash, and byte hash live only in the machine receipt so a
-later receipt-only commit does not make this prose stale.
+source commit with no environment roots. Its checked adjudication manifest
+binds every executable decision by path, line, category, and evidence hash;
+whole-file nonconsumer decisions additionally bind the file-content hash.
+Repeated identical source lines therefore cannot share or overwrite a review
+decision. Every executable row is either a reviewed consumer, a reviewed
+nonconsumer, or one of the thirteen exact hand-reviewed consumers; zero rows
+may remain unresolved. Two complete portable runs must be byte-identical and
+all tracked files must be accounted. The exact source commit, counts, canonical
+hash, and byte hash live only in the machine receipt so a later receipt-only
+commit does not make this prose stale.
 The machine receipt is `consumer-census-stability-v1.json`.
 
 ## Load-bearing consumer map
@@ -271,7 +275,7 @@ The machine receipt is `consumer-census-stability-v1.json`.
 
 ```text
 python -B -m pytest -q -p no:cacheprovider tests/ember_01_identity
-python -B scripts/ember_01_identity/census_consumers.py --root . --root-locator-spec manifests/ember-01-identity/consumer-census-roots-v1.json --replay-profile portable --semantics-manifest manifests/ember-01-identity/consumer-semantics-v1.json --consumer-scope manifests/ember-01-identity/consumer-scope-v1.json --output <portable-output.json>
+python -B scripts/ember_01_identity/census_consumers.py --root . --root-locator-spec manifests/ember-01-identity/consumer-census-roots-v1.json --replay-profile portable --semantics-manifest manifests/ember-01-identity/consumer-semantics-v1.json --consumer-scope manifests/ember-01-identity/consumer-scope-v1.json --adjudication-manifest manifests/ember-01-identity/consumer-adjudication-v1.json --output <portable-output.json>
 python -B scripts/ember_01_identity/validate_identity.py tests/ember_01_identity/fixtures/valid-identity-v1.json
 ```
 
