@@ -52,5 +52,16 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertTrue(all(len(value) == 64 for value in hashes.values()))
 
 
+    def test_production_runner_refuses_retired_bootstrap_curriculum(self) -> None:
+        packet = {
+            "input_identity": {
+                "artifact_id": "owned-clean-curriculum-128-v1",
+                "shard_path": "data/ember-restart-3b/owned-curriculum-128.json",
+            }
+        }
+        with patch.object(run_vertical_slice, "run_launch", return_value=(packet, {"decision": "ACCEPTED"}, {})):
+            with self.assertRaisesRegex(RuntimeError, "retired bootstrap"):
+                run_vertical_slice.load_authorized_records(ROOT)
+
 if __name__ == "__main__":
     unittest.main()
