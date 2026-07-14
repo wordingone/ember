@@ -52,6 +52,22 @@ A candidate must bind all of the following:
 
 Candidate validation proves an internally bound checkpoint path, not sufficient pretraining or capability.
 
+## Training-input phase boundary
+
+The manifest must bind the exact owned tokenizer bytes to their training script, training-corpus manifest, freeze receipt, and an independently trusted content-addressed tokenizer verifier. The verifier executes against those exact artifacts and must reproduce the receipt, which records the 32k vocabulary, tokenizer/corpus/script/verifier hashes, pre-step-0 freeze, and an explicit false borrowed-tokenizer flag.
+
+Every text, image, audio, reasoning, and tool data binding contains:
+
+- a content-addressed source manifest and the exact content-addressed training-record bytes;
+- one class, either `SMOKE_ONLY` or `SEMANTIC_PRETRAINING`, shared by the whole run;
+- exact tokenizer, record-count, and token-count bindings with model-mediated data and borrowed labels explicitly false;
+- an independently trusted, content-addressed local verifier whose executed output must reproduce the receipt;
+- empty semantic checks for `SMOKE_ONLY`; or capability-specific tokenizer round-trip, source/target pairing, and raw-media/local-answer/typed-tool execution checks for `SEMANTIC_PRETRAINING`.
+
+Changing only a manifest label cannot turn smoke fixtures into pretraining data. `OWNED_ADMITTED` requires `SEMANTIC_PRETRAINING` throughout.
+
+The optimizer is one structured object containing implementation, hyperparameters, and state format. That exact object must agree across the run manifest, model config, checkpoint manifest, and optimizer-realization receipt. A checkpoint produced by `torch.optim.AdamW` cannot be described as paged 8-bit AdamW, or vice versa.
+
 ## `OWNED_ADMITTED`
 
 Admission adds all of the following without weakening the candidate gates:
@@ -73,4 +89,4 @@ Efficiency, retention, deletion/ablation, comparator gaps, and honest deficienci
 
 ## Next execution
 
-This contract directly enables the model-building founder's disk-budgeted sparse >=3B allocation plus one-real-batch routed vertical slice to emit the first `CHECKPOINT_CANDIDATE` manifest, followed by the evaluation founder running the frozen preflight against that exact manifest. It does not authorize a capability claim from allocation, a dry run, or a toy checkpoint.
+This contract directly enables the model-building founder to preserve the current bounded synthetic-ID run as `SMOKE_ONLY`, bind the checked-in owned tokenizer, replace arbitrary token cycles with content-addressed semantic text/image/audio/reasoning/tool records, make the optimizer declaration match the executed runtime, and run the first disk-budgeted semantic pretraining segment. That segment may emit a `CHECKPOINT_CANDIDATE` for the evaluation founder's frozen preflight. It does not authorize sufficient-pretraining or capability credit from allocation, a dry run, a smoke checkpoint, or a renamed data class.
