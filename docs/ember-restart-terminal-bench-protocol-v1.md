@@ -7,11 +7,14 @@
 
 - Benchmark source: `harbor-framework/terminal-bench-2`
 - Source commit: `2fd12b88aafdd04a52c298e3940bcb189f9766d6`
+- Source Git tree: `ec7c02c7f0b59ce8ed2f7c88d1e70cda7427edfa`
+- License: Apache-2.0; exact `LICENSE` SHA-256:
+  `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
 - Dataset selector: `terminal-bench@2.0`
 - Official runner family: Harbor
-- Source materialization receipt: local disk-budget receipt, C cap `0.50 GiB`,
-  B cap `0.01 GiB`, exit `0`; source checkout resolved to the source commit
-  above.
+- Evaluator cache disposition: exact source checkout verified read-only for
+  evaluation. Task content and any run outputs remain outside the public
+  repository and target-training lineage.
 
 The source README identifies `harbor run --dataset terminal-bench@2.0` as the
 task-outcome runner. Its illustrated hosted-agent commands are not Ember
