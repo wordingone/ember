@@ -16,6 +16,7 @@ CONTRACT_PATH = ROOT / "configs" / "ember-restart-3b.json"
 class RestartContractTests(unittest.TestCase):
     def test_contract_declares_sparse_clean_random_shape_lineage_and_namespaces(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(contract["architecture_revision"], "ember-sparse-3b-v1")
         self.assertEqual(contract["supersedes"]["contract_version"], 1)
         model = contract["model"]
         self.assertEqual((model["hidden_size"], model["layers"], model["attention_heads"], model["vocab_size"]), (2048, 14, 16, 32000))
