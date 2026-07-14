@@ -27,6 +27,7 @@ def main():
  parser.add_argument('--trusted-verifier-registry',type=Path)
  parser.add_argument('--output',required=True,type=Path)
  args=parser.parse_args()
+ if args.output.exists():parser.error('output must not pre-exist')
  try: result=json.loads(args.input.read_text(encoding='utf-8'))
  except (OSError,UnicodeError,json.JSONDecodeError):parser.error('input must be JSON')
  if not isinstance(result,dict):parser.error('input must be an object')
