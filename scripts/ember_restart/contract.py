@@ -17,6 +17,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+try:
+    from .prediction_contract import ContractError, load_predictions
+except ImportError:  # Direct execution: python scripts/ember_restart/contract.py
+    from prediction_contract import ContractError, load_predictions
+
 
 SCHEMA_VERSION = "ember-owned-rung-v1"
 PARAMETER_FLOOR = 3_000_000_000
@@ -35,6 +40,7 @@ EVALUATION_EVIDENCE = {
     "split": "split_sha256",
     "harness": "harness_sha256",
     "protocol": "protocol_sha256",
+    "inference_implementation": "inference_implementation_sha256",
     "predictions": "predictions_sha256",
     "score_artifact": "score_artifact_sha256",
 }
@@ -955,6 +961,11 @@ def _verify_admission(
 ) -> None:
     checkpoint = manifest.get("checkpoint")
     checkpoint_sha256 = checkpoint.get("sha256") if isinstance(checkpoint, dict) else None
+    architecture = manifest.get("architecture")
+    model_config = architecture.get("model_config") if isinstance(architecture, dict) else None
+    model_config_sha256 = model_config.get("sha256") if isinstance(model_config, dict) else None
+    tokenizer = manifest.get("tokenizer")
+    tokenizer_sha256 = tokenizer.get("sha256") if isinstance(tokenizer, dict) else None
 
     training = manifest.get("training")
     sufficient = training.get("sufficient_pretraining") if isinstance(training, dict) else None
@@ -1154,6 +1165,46 @@ def _verify_admission(
                 sample_count = payload.get("sample_count")
                 if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count <= 0:
                     errors.append(f"{prefix} receipt: executed evidence sample_count must be positive")
+                predictions_path = evidence_paths.get("predictions")
+                if predictions_path is not None:
+                    try:
+                        predictions = load_predictions(predictions_path)
+                    except ContractError as exc:
+                        errors.append(f"{prefix} predictions: {exc}")
+                    else:
+                        prediction_benchmark = predictions["benchmark"]
+                        prediction_bindings = {
+                            "checkpoint": (
+                                predictions["checkpoint_manifest_sha256"], checkpoint_sha256
+                            ),
+                            "model config": (
+                                predictions["model_config_sha256"], model_config_sha256
+                            ),
+                            "tokenizer": (
+                                predictions["tokenizer_sha256"], tokenizer_sha256
+                            ),
+                            "inference implementation": (
+                                predictions["inference_implementation_sha256"],
+                                payload.get("inference_implementation_sha256"),
+                            ),
+                            "capability": (prediction_benchmark["capability"], capability),
+                            "benchmark id": (prediction_benchmark["id"], benchmark_id),
+                            "benchmark version": (
+                                prediction_benchmark["version"], benchmark_version
+                            ),
+                            "split": (
+                                prediction_benchmark["split_sha256"],
+                                payload.get("split_sha256"),
+                            ),
+                            "protocol": (
+                                prediction_benchmark["protocol_sha256"],
+                                payload.get("protocol_sha256"),
+                            ),
+                            "sample count": (len(predictions["rows"]), sample_count),
+                        }
+                        for binding, (actual, expected) in prediction_bindings.items():
+                            if actual != expected:
+                                errors.append(f"{prefix} predictions: {binding} mismatch")
                 metrics = payload.get("metrics")
                 if (
                     not isinstance(metrics, dict)
