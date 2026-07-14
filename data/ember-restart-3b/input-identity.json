@@ -1,0 +1,11 @@
+{
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02B",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-input-identity-v1",
+    "artifact_id":  "owned-clean-shard-v1",
+    "shard_path":  "data/ember-restart-3b/owned-bootstrap-v1.json",
+    "sha256":  "fe32a7804d52ca76abd41271327764472d0e5fc35c4d321e2e35a7bdae0eea8d",
+    "bytes":  11618,
+    "provenance":  "owned slice-only bootstrap bytes; not sufficient-pretraining evidence"
+}
