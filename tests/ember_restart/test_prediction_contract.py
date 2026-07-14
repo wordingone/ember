@@ -44,7 +44,7 @@ def prediction_envelope(*, capability: str = "text", output: dict | None = None)
             {
                 "id": "sample-1",
                 "input_sha256": "1" * 64,
-                "generated_token_ids": [7, 8],
+                "generated_token_ids": [7, 2],
                 "stop_reason": "eos",
                 "output": output or {"kind": "text", "text": "answer"},
             }
