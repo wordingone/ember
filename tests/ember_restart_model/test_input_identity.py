@@ -131,6 +131,8 @@ class InputIdentityTests(unittest.TestCase):
             self.assertEqual(receipt["input_artifact_sha256"], packet["input_identity"]["sha256"])
             self.assertEqual(receipt["launch_decision"], "ACCEPTED")
             self.assertRegex(receipt["validator_sha256"], r"^[0-9a-f]{64}$")
+            with self.assertRaisesRegex(InputIdentityError, "wrong_identity"):
+                emit_integration_receipt(packet, result, code_commit="Z" * 40)
 
 
 if __name__ == "__main__":

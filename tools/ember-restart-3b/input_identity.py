@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -179,7 +180,7 @@ def emit_integration_receipt(
 ) -> dict[str, Any]:
     """Produce a path-free receipt payload for a later bounded write."""
 
-    if not isinstance(code_commit, str) or len(code_commit) != 40:
+    if not isinstance(code_commit, str) or re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise InputIdentityError("wrong_identity", "receipt requires an exact code commit")
     if validation.get("decision") != "ACCEPTED":
         raise InputIdentityError("wrong_identity", "only accepted launch packets receive a receipt")

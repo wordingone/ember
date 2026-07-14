@@ -27,17 +27,29 @@ def load_authorized_record(root: Path) -> tuple[dict[str, object], dict[str, obj
     return json.loads(shard.read_text(encoding="utf-8")), input_receipt
 
 
-def run() -> dict[str, object]:
+def _rng_state_hash(device: torch.device) -> dict[str, str]:
+    cpu = hashlib.sha256(torch.get_rng_state().cpu().numpy().tobytes()).hexdigest()
+    cuda = hashlib.sha256(torch.cuda.get_rng_state(device).cpu().numpy().tobytes()).hexdigest()
+    return {"cpu": cpu, "cuda": cuda}
+
+
+def run(*, seed: int) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     root = Path(__file__).resolve().parents[2]
     config = RestartDecoderConfig.from_contract(root / "configs" / "ember-restart-3b.json")
+    if not isinstance(seed, int) or seed < 0:
+        raise ValueError("launch seed must be a nonnegative integer")
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    rng_state_before_init = _rng_state_hash(torch.device("cuda"))
     previous_dtype = torch.get_default_dtype()
     torch.set_default_dtype(torch.bfloat16)
     try:
-        model = UnifiedDecoder(config, device="cuda", allow_production_allocation=True)
+        model = UnifiedDecoder(config, device="cuda", allow_production_allocation=True, genesis_seed=seed)
     finally:
         torch.set_default_dtype(previous_dtype)
+    genesis_hashes = model.expert_bank_genesis_hashes()
     model.train()
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_134_515_200 or counts["active_parameters"] != 1_020_585_984:
@@ -54,11 +66,17 @@ def run() -> dict[str, object]:
     return {
         "loss": float(loss.detach().cpu()),
         "counts": counts,
-        "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+        "launch_seed": seed,
+        "rng_state_before_init_sha256": rng_state_before_init,
+        "expert_genesis_sha256": genesis_hashes,
         "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
         "input_identity_receipt": input_receipt,
     }
 
 
 if __name__ == "__main__":
-    print(json.dumps(run(), sort_keys=True))
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, required=True)
+    args = parser.parse_args()
+    print(json.dumps(run(seed=args.seed), sort_keys=True))
