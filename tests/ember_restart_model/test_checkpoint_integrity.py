@@ -158,7 +158,7 @@ class CheckpointIntegrityTests(unittest.TestCase):
                 cursor = load_checkpoint_artifacts(restored, restored_optimizer, root, receipt)["data_cursor"]
             resumed = run_pretraining_segment(
                 model=restored, optimizer=restored_optimizer,
-                records=records[cursor["record_index"]:], config=self.config, device=torch.device("cpu"),
+                records=records, config=self.config, device=torch.device("cpu"),
                 checkpoint_every=4, checkpoint_callback=lambda _step, _result: None,
                 initial_global_step=cursor["global_step"], initial_tokens_seen=cursor["tokens_seen"],
                 initial_data_cursor=cursor["record_index"], data_shard_id=cursor["shard"],

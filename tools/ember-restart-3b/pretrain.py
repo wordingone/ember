@@ -82,6 +82,8 @@ def run_pretraining_segment(
         raise ValueError("checkpoint_every must be positive")
     if min(initial_global_step, initial_tokens_seen, initial_data_cursor) < 0:
         raise ValueError("resume counters must be nonnegative")
+    if initial_data_cursor > len(records):
+        raise ValueError("resume data cursor exceeds the bound record sequence")
     if not isinstance(data_shard_id, str) or not data_shard_id:
         raise ValueError("data_shard_id must be a nonempty owned shard identifier")
     model.train()
@@ -90,7 +92,8 @@ def run_pretraining_segment(
     expert_examples = {expert: 0 for expert in EXPERT_NAMES}
     tokens_seen = initial_tokens_seen
     data_cursor = initial_data_cursor
-    for local_step, record in enumerate(records, start=1):
+    remaining_records = records[initial_data_cursor:]
+    for local_step, record in enumerate(remaining_records, start=1):
         batch = decode_owned_batch(record, config, device=device)
         active_expert = batch["active_expert"]
         capabilities = _verified_capabilities(record, active_expert=active_expert)
@@ -130,8 +133,8 @@ def run_pretraining_segment(
                 f"capabilities={missing_capabilities}, experts={missing_experts}"
             )
     return {
-        "steps": len(records), "global_step": initial_global_step + len(records), "losses": losses,
+        "steps": len(remaining_records), "global_step": initial_global_step + len(remaining_records), "losses": losses,
         "tokens_seen": tokens_seen,
-        "data_cursor": {"shard": data_shard_id, "record_index": data_cursor, "global_step": initial_global_step + len(records), "tokens_seen": tokens_seen},
+        "data_cursor": {"shard": data_shard_id, "record_index": data_cursor, "global_step": initial_global_step + len(remaining_records), "tokens_seen": tokens_seen},
         "modality_examples": modality_examples, "expert_examples": expert_examples,
     }
