@@ -9,18 +9,15 @@ import json
 import math
 from pathlib import Path
 
-
 CAPABILITIES = ("text", "image", "audio", "reasoning", "tool")
-
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--capability", required=True, choices=CAPABILITIES)
-    parser.add_argument("--checkpoint", required=True, type=Path)
+    parser.add_argument("--checkpoint-manifest", required=True, type=Path)
     parser.add_argument("--benchmark-id", required=True)
     parser.add_argument("--benchmark-version", required=True)
     parser.add_argument("--split-artifact", required=True, type=Path)
@@ -31,19 +28,12 @@ def main() -> int:
     parser.add_argument("--criterion-result", required=True, choices=("PASSED", "FAILED"))
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    if not args.benchmark_id.strip() or not args.benchmark_version.strip():
-        parser.error("benchmark id and version must be non-empty")
-    predictions = json.loads(args.raw_predictions.read_text(encoding="utf-8"))
-    metrics = json.loads(args.result_artifact.read_text(encoding="utf-8"))
-    if not isinstance(predictions, list) or not predictions:
-        parser.error("raw predictions must be a non-empty list")
-    if not isinstance(metrics, dict) or not metrics or any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in metrics.values()):
-        parser.error("result artifact must contain non-empty finite numeric metrics")
-    payload = {"result": "PREFLIGHT_ONLY", "admission": "NOT_ELIGIBLE", "capability": args.capability, "subject_checkpoint_sha256": sha256(args.checkpoint), "benchmark_id": args.benchmark_id, "benchmark_version": args.benchmark_version, "split_sha256": sha256(args.split_artifact), "harness_sha256": sha256(args.harness_artifact), "protocol_sha256": sha256(args.protocol_artifact), "predictions_sha256": sha256(args.raw_predictions), "score_artifact_sha256": sha256(args.result_artifact), "sample_count": len(predictions), "metrics": metrics, "criterion_id": f"ember-3b-{args.capability}-capability-v1", "criterion_result": args.criterion_result}
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+    if not args.benchmark_id.strip() or not args.benchmark_version.strip(): parser.error("benchmark id and version must be non-empty")
+    predictions = json.loads(args.raw_predictions.read_text(encoding="utf-8")); metrics = json.loads(args.result_artifact.read_text(encoding="utf-8"))
+    if not isinstance(predictions, list) or not predictions: parser.error("raw predictions must be a non-empty list")
+    if not isinstance(metrics, dict) or not metrics or any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in metrics.values()): parser.error("result artifact must contain non-empty finite numeric metrics")
+    payload = {"result":"PREFLIGHT_ONLY","admission":"NOT_ELIGIBLE","capability":args.capability,"subject_checkpoint_sha256":sha256(args.checkpoint_manifest),"benchmark_id":args.benchmark_id,"benchmark_version":args.benchmark_version,"split_sha256":sha256(args.split_artifact),"harness_sha256":sha256(args.harness_artifact),"protocol_sha256":sha256(args.protocol_artifact),"predictions_sha256":sha256(args.raw_predictions),"score_artifact_sha256":sha256(args.result_artifact),"sample_count":len(predictions),"metrics":metrics,"criterion_id":f"ember-3b-{args.capability}-capability-v1","criterion_result":args.criterion_result}
+    args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text(json.dumps(payload, sort_keys=True)+"\n", encoding="utf-8")
     return 0
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())
