@@ -9,6 +9,17 @@ from pathlib import Path
 def rows(path: Path) -> int:
  return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
+def sql_lines(path: Path) -> list[str]:
+ raw=path.read_text(encoding="utf-8")
+ try: value=json.loads(raw)
+ except json.JSONDecodeError: return [line for line in raw.splitlines() if line.strip()]
+ if not isinstance(value,list) or not value: raise ValueError("Spider predictions must be non-empty SQL lines or a JSON list")
+ result=[]
+ for index,row in enumerate(value):
+  if not isinstance(row,dict) or row.get("index")!=index or not isinstance(row.get("sql"),str): raise ValueError("Spider JSON predictions require contiguous index and sql")
+  result.append(row["sql"])
+ return result
+
 def load_evaluator(root: Path):
  source=root/"evaluation.py"
  if not source.is_file(): raise ValueError("pinned Spider evaluation.py is required")
@@ -24,17 +35,18 @@ def main() -> int:
  if a.score_output.exists(): p.error("score output must not pre-exist")
  if not all(x.is_file() for x in(a.gold,a.predictions,a.tables)): p.error("gold, predictions, and tables must be files")
  if not a.database_dir.is_dir(): p.error("database directory must exist")
- count=rows(a.predictions)
- if count<=0 or count!=rows(a.gold): p.error("non-empty predictions must exactly cover the frozen gold rows")
+ try: predictions=sql_lines(a.predictions)
+ except (OSError,ValueError,json.JSONDecodeError) as exc:p.error(f"invalid Spider predictions: {exc}")
+ if len(predictions)!=rows(a.gold): p.error("non-empty predictions must exactly cover the frozen gold rows")
+ with tempfile.NamedTemporaryFile("w",encoding="utf-8",dir=a.predictions.parent,prefix=a.predictions.name+".",suffix=".spider.tmp",delete=False)as handle:handle.write("\n".join(predictions)+"\n");temporary=Path(handle.name)
  try:
-  evaluator=load_evaluator(a.spider_root);foreign_keys=evaluator.build_foreign_key_map_from_json(str(a.tables));captured={};evaluator.print_scores=lambda scores,etype:captured.update(scores);evaluator.evaluate(str(a.gold),str(a.predictions),str(a.database_dir),"match",foreign_keys);exact=captured["all"]["exact"]
- except Exception as exc:
-  p.error(f"pinned Spider scorer failed: {exc}")
+  evaluator=load_evaluator(a.spider_root);foreign_keys=evaluator.build_foreign_key_map_from_json(str(a.tables));captured={};evaluator.print_scores=lambda scores,etype:captured.update(scores);evaluator.evaluate(str(a.gold),str(temporary),str(a.database_dir),"match",foreign_keys);exact=captured["all"]["exact"]
+ except Exception as exc: p.error(f"pinned Spider scorer failed: {exc}")
+ finally: temporary.unlink(missing_ok=True)
  if isinstance(exact,bool) or not isinstance(exact,(int,float)) or not math.isfinite(exact): p.error("pinned Spider scorer did not return finite exact match")
- payload={"metrics":{"exact_match":float(exact)},"sample_count":count,"criterion_id":"ember-3b-tool-capability-v1","criterion_result":"FAILED","upstream":"pinned local Spider exact-match scorer"}
+ payload={"metrics":{"exact_match":float(exact)},"sample_count":len(predictions),"criterion_id":"ember-3b-tool-capability-v1","criterion_result":"FAILED","upstream":"pinned local Spider exact-match scorer"}
  a.score_output.parent.mkdir(parents=True,exist_ok=True)
- with tempfile.NamedTemporaryFile("w",encoding="utf-8",dir=a.score_output.parent,prefix=a.score_output.name+".",suffix=".tmp",delete=False) as handle:
-  handle.write(json.dumps(payload,sort_keys=True)+"\n");temporary=Path(handle.name)
+ with tempfile.NamedTemporaryFile("w",encoding="utf-8",dir=a.score_output.parent,prefix=a.score_output.name+".",suffix=".tmp",delete=False) as handle:handle.write(json.dumps(payload,sort_keys=True)+"\n");temporary=Path(handle.name)
  os.replace(temporary,a.score_output);return 0
 
 if __name__=="__main__": raise SystemExit(main())
