@@ -29,11 +29,18 @@ def validate(value: dict) -> list[str]:
         errors.append("TARGET_NOT_OWNED_CHECKPOINT")
     elif not HEX64.fullmatch(str(target.get("checkpoint_sha256", ""))) or not target.get("lineage_manifest"):
         errors.append("TARGET_BINDING")
-    for comparator in value.get("comparators", []):
-        if comparator.get("role") != "comparison_only":
-            errors.append("COMPARATOR_ROLE")
-        if not HEX40.fullmatch(str(comparator.get("revision", ""))):
-            errors.append("COMPARATOR_REVISION")
+    comparators = value.get("comparators", [])
+    if not isinstance(comparators, list):
+        errors.append("COMPARATORS_NOT_LIST")
+    else:
+        for comparator in comparators:
+            if not isinstance(comparator, dict):
+                errors.append("COMPARATOR_OBJECT")
+                continue
+            if comparator.get("role") != "comparison_only":
+                errors.append("COMPARATOR_ROLE")
+            if not HEX40.fullmatch(str(comparator.get("revision", ""))):
+                errors.append("COMPARATOR_REVISION")
     suites = value.get("suites", [])
     present = {suite.get("family") for suite in suites if isinstance(suite, dict)}
     missing = sorted(FAMILIES - present)
