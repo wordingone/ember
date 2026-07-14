@@ -99,5 +99,13 @@ class VerticalSliceTests(unittest.TestCase):
         self.assertLess(result["episode_trainable_parameters"], result["total_unique_parameters"])
 
 
+    def test_decoded_image_patch_preserves_raw_u8_endpoints_for_projector(self) -> None:
+        record = self._record("vision")
+        raw = bytes([0, 255, 0]) * (48 * 48)
+        record["image_patches_u8_base64"] = [base64.b64encode(raw).decode("ascii")]
+        batch = decode_owned_batch(record, self.config, device=torch.device("cpu"))
+        self.assertEqual(batch["image_patches"][0, 0, 0, 0].tolist(), [0.0, 255.0, 0.0])
+
+
 if __name__ == "__main__":
     unittest.main()
