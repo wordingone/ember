@@ -109,6 +109,25 @@ class SparseSuccessorTests(unittest.TestCase):
         model(torch.randint(0, self.config.vocab_size - 2, (1, 3)), active_expert="tool")
         self.assertEqual(calls, ["tool"] * self.config.layers)
 
+
+    def test_checkpointed_layers_match_noncheckpointed_logits_and_gradients(self) -> None:
+        checkpointed = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64, gradient_checkpointing=True)
+        direct = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64, gradient_checkpointing=False)
+        torch.manual_seed(73)
+        with_checkpoint = UnifiedDecoder(checkpointed, genesis_seed=73).train()
+        torch.manual_seed(73)
+        without_checkpoint = UnifiedDecoder(direct, genesis_seed=73).train()
+        tokens = torch.tensor([[4, 5, 6]])
+        with_logits = with_checkpoint(tokens, active_expert="reasoning")
+        without_logits = without_checkpoint(tokens, active_expert="reasoning")
+        with_logits.sum().backward()
+        without_logits.sum().backward()
+        self.assertTrue(torch.allclose(with_logits, without_logits))
+        for (name, first), (_, second) in zip(with_checkpoint.named_parameters(), without_checkpoint.named_parameters()):
+            if first.requires_grad:
+                self.assertEqual(first.grad is None, second.grad is None, name)
+                if first.grad is not None:
+                    self.assertTrue(torch.allclose(first.grad, second.grad), name)
     def test_meta_production_count_is_exact_and_at_least_three_billion(self) -> None:
         config = RestartDecoderConfig.from_contract()
         model = UnifiedDecoder(config, device="meta")

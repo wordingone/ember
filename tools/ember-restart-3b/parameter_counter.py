@@ -180,7 +180,7 @@ def _inspect_realization(manifest_path: Path, *, active_expert: str, shape: Mapp
         if _sha256(shard) != record.get("sha256"):
             raise ValueError(f"checkpoint shard hash mismatch: {relative}")
         by_path[relative] = record
-    required = {"shared.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
+    required = {"shared.pt", "replay-state.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
     if set(by_path) != required:
         raise ValueError("checkpoint realization must have one shared and four expert shards")
     if manifest.get("active_expert_ids") != [active_expert]:

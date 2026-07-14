@@ -65,7 +65,7 @@ def _sha256_value(value: str, *, name: str) -> str:
 def _validate_replay_bindings(
     *,
     launch_seed: int,
-    rng_state_sha256: Mapping[str, str],
+    rng_state: Mapping[str, torch.Tensor],
     data_cursor: Mapping[str, Any],
     model_config_sha256: str,
     contract_sha256: str,
@@ -73,10 +73,11 @@ def _validate_replay_bindings(
 ) -> None:
     if not isinstance(launch_seed, int) or launch_seed < 0:
         raise ValueError("launch_seed must be a nonnegative integer")
-    if set(rng_state_sha256) != {"cpu", "cuda"}:
-        raise ValueError("checkpoint requires CPU and CUDA RNG-state hashes")
-    for name, digest in rng_state_sha256.items():
-        _sha256_value(digest, name=f"{name} RNG-state hash")
+    if set(rng_state) != {"cpu", "cuda"}:
+        raise ValueError("checkpoint requires CPU and CUDA RNG states")
+    for name, state in rng_state.items():
+        if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
+            raise ValueError(f"{name} RNG state must be a one-dimensional uint8 tensor")
     if not isinstance(data_cursor, Mapping) or not data_cursor:
         raise ValueError("checkpoint requires a nonempty data cursor")
     _sha256_value(model_config_sha256, name="model_config_sha256")
@@ -93,7 +94,7 @@ def write_checkpoint_artifacts(
     root: Path,
     *,
     launch_seed: int,
-    rng_state_sha256: Mapping[str, str],
+    rng_state: Mapping[str, torch.Tensor],
     data_cursor: Mapping[str, Any],
     model_config_sha256: str,
     contract_sha256: str,
@@ -103,13 +104,18 @@ def write_checkpoint_artifacts(
 
     _validate_replay_bindings(
         launch_seed=launch_seed,
-        rng_state_sha256=rng_state_sha256,
+        rng_state=rng_state,
         data_cursor=data_cursor,
         model_config_sha256=model_config_sha256,
         contract_sha256=contract_sha256,
         expert_genesis_sha256=expert_genesis_sha256,
     )
-    root.mkdir(parents=True, exist_ok=True)
+    published_root = root
+    if published_root.exists():
+        raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
+    published_root.parent.mkdir(parents=True, exist_ok=True)
+    root = published_root.parent / f".{published_root.name}.{uuid.uuid4().hex}.staging"
+    root.mkdir()
     shared_state = {
         name: value.detach().cpu()
         for name, value in model.state_dict().items()
@@ -121,6 +127,8 @@ def write_checkpoint_artifacts(
         lambda handle: torch.save({"model": shared_state, "optimizer": optimizer.state_dict()}, handle),
     )
     shards = [_record(shared, root, role="shared_model_and_optimizer")]
+    replay = _write_atomic(root, "replay-state.pt", lambda handle: torch.save({"rng_state": {name: state.detach().cpu() for name, state in rng_state.items()}, "data_cursor": dict(data_cursor)}, handle))
+    shards.append(_record(replay, root, role="replay_state"))
     expert_checkpoint_sha256: dict[str, str] = {}
     for name in EXPERT_NAMES:
         state = {
@@ -142,7 +150,7 @@ def write_checkpoint_artifacts(
     manifest = {
         "schema_version": "ember-sparse-checkpoint-v2",
         "launch_seed": launch_seed,
-        "rng_state_sha256": dict(rng_state_sha256),
+        "rng_state_sha256": {name: hashlib.sha256(state.detach().cpu().numpy().tobytes()).hexdigest() for name, state in rng_state.items()},
         "data_cursor": dict(data_cursor),
         "model_config_sha256": model_config_sha256,
         "contract_sha256": contract_sha256,
@@ -153,7 +161,9 @@ def write_checkpoint_artifacts(
         "shards": shards,
     }
     manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
-    return {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+    receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+    os.replace(root, published_root)
+    return receipt
 
 
 def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
@@ -183,7 +193,7 @@ def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict
                 raise ValueError(f"checkpoint expert shard hash mismatch: {name}")
             raise ValueError(f"checkpoint shard hash mismatch: {relative}")
         records[relative] = item
-    expected_paths = {"shared.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
+    expected_paths = {"shared.pt", "replay-state.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
     if set(records) != expected_paths:
         raise ValueError("checkpoint does not contain exactly the shared and four expert shards")
     return records
@@ -220,6 +230,12 @@ def load_checkpoint_artifacts(
     payloads: dict[str, Any] = {}
     for relative in records:
         payloads[relative] = torch.load(root / relative, map_location="cpu", weights_only=False)
+    replay_payload = payloads["replay-state.pt"]
+    if (not isinstance(replay_payload, dict) or not isinstance(replay_payload.get("rng_state"), dict) or set(replay_payload["rng_state"]) != {"cpu", "cuda"} or replay_payload.get("data_cursor") != receipt.get("data_cursor")):
+        raise ValueError("checkpoint replay state is incomplete or cursor-mismatched")
+    for name, state in replay_payload["rng_state"].items():
+        if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
+            raise ValueError(f"checkpoint replay RNG state is invalid: {name}")
     shared_payload = payloads["shared.pt"]
     if not isinstance(shared_payload, dict) or not isinstance(shared_payload.get("optimizer"), dict):
         raise ValueError("shared checkpoint does not contain optimizer realization")
@@ -244,3 +260,6 @@ def load_checkpoint_artifacts(
         model.load_state_dict(state, strict=False)
     optimizer.load_state_dict(shared_payload["optimizer"])
     model._activate_expert(active[0])
+    torch.set_rng_state(replay_payload["rng_state"]["cpu"])
+    torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
+    return {"data_cursor": dict(replay_payload["data_cursor"])}

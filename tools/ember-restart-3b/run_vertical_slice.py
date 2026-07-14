@@ -69,11 +69,15 @@ def load_authorized_record(root: Path) -> tuple[dict[str, object], dict[str, obj
     return json.loads(shard.read_text(encoding="utf-8")), packet, input_receipt
 
 
-def _rng_state_hash(device: torch.device) -> dict[str, str]:
-    cpu = hashlib.sha256(torch.get_rng_state().cpu().numpy().tobytes()).hexdigest()
-    cuda = hashlib.sha256(torch.cuda.get_rng_state(device).cpu().numpy().tobytes()).hexdigest()
-    return {"cpu": cpu, "cuda": cuda}
+def _rng_state(device: torch.device) -> dict[str, torch.Tensor]:
+    return {"cpu": torch.get_rng_state().clone(), "cuda": torch.cuda.get_rng_state(device).clone()}
 
+
+def _rng_state_hash(device: torch.device) -> dict[str, str]:
+    return {
+        name: hashlib.sha256(state.cpu().numpy().tobytes()).hexdigest()
+        for name, state in _rng_state(device).items()
+    }
 
 def _execute_realization_counter(
     *,
@@ -117,7 +121,7 @@ def _execute_realization_counter(
     )
     if any(receipt.get(name) != expected_counts.get(name) for name in required):
         raise RuntimeError("isolated parameter counter disagrees with instantiated capacity")
-    if receipt.get("counter_sha256") not in {None, _sha256(counter_path)}:
+    if receipt.get("counter_sha256") != _sha256(counter_path):
         raise RuntimeError("isolated parameter counter source hash is not self-consistent")
     return receipt
 
@@ -130,6 +134,9 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
     artifact_root = production_artifact_root(artifact_root)
     root = Path(__file__).resolve().parents[2]
     config_path = root / "configs" / "ember-restart-3b.json"
+    integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
+    if not integration_contract_path.is_file():
+        raise RuntimeError("the merged Ember integration contract is required for production launch")
     config = RestartDecoderConfig.from_contract(config_path)
     record, launch_packet, input_receipt = load_authorized_record(root)
     checkpoint_parent = artifact_root / "checkpoints"
@@ -160,14 +167,14 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
     torch.cuda.reset_peak_memory_stats()
     logits = model(
         batch["input_ids"],
-        image_patches=batch["image_patches"].bfloat16(),
+        image_patches=batch["image_patches"],
         audio_frames=batch["audio_frames"].bfloat16(),
         active_expert=batch["active_expert"],
     )
     loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
     loss.backward()
     optimizer.step()
-    rng_state_after_step = _rng_state_hash(torch.device("cuda"))
+    rng_state_after_step = _rng_state(torch.device("cuda"))
     data_cursor = {
         "record_index": 0,
         "input_identity_receipt_sha256": _json_sha256(input_receipt),
@@ -178,10 +185,10 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
         optimizer,
         checkpoint_root,
         launch_seed=seed,
-        rng_state_sha256=rng_state_after_step,
+        rng_state=rng_state_after_step,
         data_cursor=data_cursor,
         model_config_sha256=_sha256(config_path),
-        contract_sha256=_sha256(config_path),
+        contract_sha256=_sha256(integration_contract_path),
         expert_genesis_sha256=genesis_hashes,
     )
     parameter_receipt = _execute_realization_counter(

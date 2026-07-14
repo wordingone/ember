@@ -44,7 +44,7 @@ class CounterCliTests(unittest.TestCase):
             config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
             write_checkpoint_artifacts(
                 model, optimizer, root / "checkpoint", launch_seed=7,
-                rng_state_sha256={"cpu": "a" * 64, "cuda": "b" * 64},
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
                 data_cursor={"shard": "owned-bootstrap-v1", "record": 0},
                 model_config_sha256=config_sha256, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
             )
