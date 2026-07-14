@@ -31,7 +31,7 @@ def _verified_capabilities(record: Mapping[str, object], *, active_expert: str) 
     if active_expert not in DOMAIN_MODALITIES:
         raise ValueError("record must select a declared routed expert")
     capabilities = {"text", *DOMAIN_MODALITIES[active_expert]}
-    if active_expert in {"vision", "audio"}:
+    if active_expert in {"vision", "audio", "shared"}:
         return capabilities
     receipt = record.get("capability_receipt")
     if not isinstance(receipt, Mapping):
@@ -108,7 +108,8 @@ def run_pretraining_segment(
         losses.append(float(loss.detach().cpu()))
         tokens_seen += int(batch["input_ids"].numel())
         data_cursor += 1
-        expert_examples[active_expert] += 1
+        if active_expert in EXPERT_NAMES:
+            expert_examples[active_expert] += 1
         for capability in capabilities:
             modality_examples[capability] += 1
         global_step = initial_global_step + local_step

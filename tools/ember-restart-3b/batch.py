@@ -19,6 +19,7 @@ DOMAIN_MODALITIES = {
     "audio": {"audio"},
     "reasoning": set(),
     "tool": set(),
+    "shared": set(),
 }
 
 
@@ -94,7 +95,8 @@ def decode_owned_batch(
 ) -> dict[str, Any]:
     """Decode explicit raw sequences, 2D coordinates, and exact-cover attention spans."""
 
-    if record.get("schema_version") != "ember-owned-bootstrap-batch-v1":
+    schema_version = record.get("schema_version")
+    if schema_version not in {"ember-owned-bootstrap-batch-v1", "ember-owned-semantic-text-v1"}:
         raise ValueError("unrecognized owned batch schema")
     token_ids = record.get("token_ids")
     target_ids = record.get("target_ids")
@@ -102,6 +104,16 @@ def decode_owned_batch(
         raise ValueError("token_ids and target_ids must be equal-length lists")
     if not token_ids or any(not isinstance(item, int) or item < 0 or item >= config.vocab_size for item in token_ids + target_ids):
         raise ValueError("token IDs must be within the configured vocabulary")
+    if schema_version == "ember-owned-semantic-text-v1":
+        if record.get("active_expert") != "shared":
+            raise ValueError("semantic text episodes must use the shared core route")
+        return {
+            "input_ids": torch.tensor(token_ids, dtype=torch.long, device=device).unsqueeze(0),
+            "target_ids": torch.tensor(target_ids, dtype=torch.long, device=device).unsqueeze(0),
+            "image_patches": None, "audio_frames": None,
+            "image_coordinates": torch.empty((0, 2), dtype=torch.long, device=device),
+            "spans": [], "active_expert": "shared",
+        }
     image_positions = [index for index, token in enumerate(token_ids) if token == config.image_token_id]
     audio_positions = [index for index, token in enumerate(token_ids) if token == config.audio_token_id]
     image_bytes = _sequence_bytes(record, plural="image_patches_u8_base64", legacy="image_u8_base64", field="image patches")

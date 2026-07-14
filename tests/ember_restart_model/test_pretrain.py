@@ -21,6 +21,26 @@ from verify_capability_record import expected_receipt
 
 
 class PretrainingSegmentTests(unittest.TestCase):
+    def test_core_only_text_episode_updates_shared_state_without_crediting_or_updating_an_expert(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=41)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        experts_before = {name: parameter.detach().clone() for name, parameter in model.named_parameters() if ".experts." in name}
+        shared_before = model.token_embedding.weight.detach().clone()
+        record = {
+            "schema_version": "ember-owned-semantic-text-v1",
+            "active_expert": "shared",
+            "token_ids": [8, 9, 10, 11],
+            "target_ids": [9, 10, 11, 12],
+        }
+        result = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=[record], config=config, device=torch.device("cpu"),
+            checkpoint_every=1, checkpoint_callback=lambda _step, _result: None, require_complete_coverage=False,
+        )
+        self.assertEqual(result["modality_examples"], {"text": 1, "image": 0, "audio": 0, "reasoning": 0, "tool": 0})
+        self.assertEqual(result["expert_examples"], {"vision": 0, "audio": 0, "reasoning": 0, "tool": 0})
+        self.assertTrue(all(torch.equal(parameter.detach(), experts_before[name]) for name, parameter in model.named_parameters() if ".experts." in name))
+        self.assertFalse(torch.equal(model.token_embedding.weight.detach(), shared_before))
     def _record(self, config: RestartDecoderConfig, *, expert: str, sample_id: str | None = None) -> dict[str, object]:
         image = bytes(index % 251 for index in range(48 * 48 * 3))
         audio = (torch.arange(640, dtype=torch.int16) - 320).numpy().tobytes()
