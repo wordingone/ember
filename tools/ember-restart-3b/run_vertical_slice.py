@@ -73,6 +73,11 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
     packet, validation, input_receipt = run_launch(repo_root=root)
     if validation["decision"] != "ACCEPTED":
         raise RuntimeError("input launch gate did not accept the selected shard")
+    identity = packet.get("input_identity")
+    if not isinstance(identity, dict):
+        raise RuntimeError("accepted launch packet lacks a concrete input identity")
+    if identity.get("artifact_id") == "owned-clean-curriculum-128-v1" or identity.get("shard_path") == "data/ember-restart-3b/owned-curriculum-128.json":
+        raise RuntimeError("retired bootstrap curriculum is mechanics-only evidence and cannot drive production training")
     shard = root / str(packet["input_identity"]["shard_path"])
     payload = json.loads(shard.read_text(encoding="utf-8"))
     records = payload.get("records") if isinstance(payload, dict) else None
