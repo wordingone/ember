@@ -266,7 +266,8 @@ def load_checkpoint_artifacts(
     model.load_state_dict(shared_state, strict=False)
     for state in expert_states.values():
         model.load_state_dict(state, strict=False)
-    optimizer.load_state_dict(shared_payload["optimizer"])
+    if optimizer is not None:
+        optimizer.load_state_dict(shared_payload["optimizer"])
     model._activate_expert(active[0])
     torch.set_rng_state(replay_payload["rng_state"]["cpu"])
     torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
