@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail closed unless an Ember restart evaluation is fully checkpoint-bound."""
 

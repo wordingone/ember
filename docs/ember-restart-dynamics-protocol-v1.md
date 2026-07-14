@@ -1,5 +1,5 @@
-<!-- goal_id: EMBER-01 -->
-<!-- workstream_id: EMBER-01A -->
+<!-- goal_id: EMBER-02 -->
+<!-- workstream_id: EMBER-02C -->
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 # Ember Restart Dynamics Protocol v1
 
@@ -12,7 +12,7 @@ replaced by a configuration claim, training log summary, or self-report.
 Before target inference, freeze the hardware identity, runtime/build hashes,
 precision policy, batch/sequence shape, decoding parameters, warm-up count,
 measurement window, and counter source. Record per-window wall time, tokens,
-peak allocated memory, and—when a local counter is available—energy or average
+peak allocated memory, andâ€”when a local counter is availableâ€”energy or average
 power. Report throughput and uncertainty from the preserved raw windows.
 
 Comparator throughput is valid only under the same hardware, runtime,
