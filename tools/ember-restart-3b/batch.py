@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Decode owned raw multimodal sequences and execute routed training updates."""
+"""Decode owned raw multimodal sequences and enforce domain-routed training episodes."""
 
 from __future__ import annotations
 
@@ -14,6 +14,14 @@ import torch.nn.functional as F
 from model import EXPERT_NAMES, MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
 
 
+DOMAIN_MODALITIES = {
+    "vision": {"image"},
+    "audio": {"audio"},
+    "reasoning": set(),
+    "tool": set(),
+}
+
+
 def _base64_bytes(value: object, field: str) -> bytes:
     if not isinstance(value, str):
         raise ValueError(f"{field} must be a base64 string")
@@ -24,18 +32,21 @@ def _base64_bytes(value: object, field: str) -> bytes:
 
 
 def _sequence_bytes(record: dict[str, Any], *, plural: str, legacy: str, field: str) -> list[bytes]:
-    values = record.get(plural)
-    if values is None:
-        values = [record.get(legacy)]
-    if not isinstance(values, list) or not values:
-        raise ValueError(f"{field} sequence must be a nonempty list")
+    if plural in record:
+        values = record[plural]
+    elif legacy in record:
+        values = [record[legacy]]
+    else:
+        return []
+    if not isinstance(values, list):
+        raise ValueError(f"{field} sequence must be a list when present")
     return [_base64_bytes(value, f"{field}[{index}]") for index, value in enumerate(values)]
 
 
 def _spans(record: dict[str, Any], *, sequence_length: int) -> list[MultimodalSpan]:
     raw = record.get("multimodal_spans")
-    if not isinstance(raw, list) or not raw:
-        raise ValueError("multimodal_spans must be a nonempty explicit list")
+    if not isinstance(raw, list):
+        raise ValueError("multimodal_spans must be an explicit list")
     spans: list[MultimodalSpan] = []
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
@@ -66,13 +77,22 @@ def _validate_span_coverage(spans: list[MultimodalSpan], *, marker_positions: di
             raise ValueError(f"multimodal spans must cover exactly all {modality} marker positions")
 
 
+def _validate_domain(*, active_expert: str, image_count: int, audio_count: int) -> None:
+    present = {name for name, count in {"image": image_count, "audio": audio_count}.items() if count}
+    expected = DOMAIN_MODALITIES[active_expert]
+    if present != expected:
+        raise ValueError(
+            f"{active_expert} episode must contain exactly its routed raw modalities; expected={sorted(expected)}, found={sorted(present)}"
+        )
+
+
 def decode_owned_batch(
     record: dict[str, Any],
     config: RestartDecoderConfig,
     *,
     device: torch.device,
 ) -> dict[str, Any]:
-    """Decode signed raw sequences, coordinates, and explicit attention spans."""
+    """Decode explicit raw sequences, 2D coordinates, and exact-cover attention spans."""
 
     if record.get("schema_version") != "ember-owned-bootstrap-batch-v1":
         raise ValueError("unrecognized owned batch schema")
@@ -82,14 +102,14 @@ def decode_owned_batch(
         raise ValueError("token_ids and target_ids must be equal-length lists")
     if not token_ids or any(not isinstance(item, int) or item < 0 or item >= config.vocab_size for item in token_ids + target_ids):
         raise ValueError("token IDs must be within the configured vocabulary")
+    image_positions = [index for index, token in enumerate(token_ids) if token == config.image_token_id]
+    audio_positions = [index for index, token in enumerate(token_ids) if token == config.audio_token_id]
     image_bytes = _sequence_bytes(record, plural="image_patches_u8_base64", legacy="image_u8_base64", field="image patches")
     audio_bytes = _sequence_bytes(record, plural="audio_frames_i16le_base64", legacy="audio_i16le_base64", field="audio frames")
     if any(len(value) != 48 * 48 * 3 for value in image_bytes):
         raise ValueError("every image patch must encode raw 48x48x3 bytes")
     if any(len(value) != 640 * 2 for value in audio_bytes):
         raise ValueError("every audio frame must encode raw 640-sample int16 bytes")
-    image_positions = [index for index, token in enumerate(token_ids) if token == config.image_token_id]
-    audio_positions = [index for index, token in enumerate(token_ids) if token == config.audio_token_id]
     if len(image_positions) != len(image_bytes) or len(audio_positions) != len(audio_bytes):
         raise ValueError("raw modality sequence length must equal its marker count")
     raw_coordinates = record.get("image_coordinates")
@@ -102,30 +122,26 @@ def decode_owned_batch(
     active_expert = record.get("active_expert")
     if active_expert not in EXPERT_NAMES:
         raise ValueError("batch must declare one authorized expert")
-    image = torch.tensor(
-        [list(value) for value in image_bytes], dtype=torch.float32, device=device
-    ).reshape(1, len(image_bytes), 48, 48, 3) / 255.0
-    audio = torch.tensor(
-        [list(memoryview(value).cast("h")) for value in audio_bytes],
-        dtype=torch.float32,
-        device=device,
-    ).reshape(1, len(audio_bytes), 640) / 32768.0
+    _validate_domain(active_expert=active_expert, image_count=len(image_bytes), audio_count=len(audio_bytes))
+    image = None
+    if image_bytes:
+        image = torch.tensor([list(value) for value in image_bytes], dtype=torch.float32, device=device).reshape(1, len(image_bytes), 48, 48, 3) / 255.0
+    audio = None
+    if audio_bytes:
+        audio = torch.tensor([list(memoryview(value).cast("h")) for value in audio_bytes], dtype=torch.float32, device=device).reshape(1, len(audio_bytes), 640) / 32768.0
     return {
         "input_ids": torch.tensor(token_ids, dtype=torch.long, device=device).unsqueeze(0),
         "target_ids": torch.tensor(target_ids, dtype=torch.long, device=device).unsqueeze(0),
         "image_patches": image,
         "audio_frames": audio,
-        "image_coordinates": torch.tensor(raw_coordinates, dtype=torch.long, device=device),
+        "image_coordinates": (torch.tensor(raw_coordinates, dtype=torch.long, device=device).reshape(-1, 2) if raw_coordinates else torch.empty((0, 2), dtype=torch.long, device=device)),
         "spans": spans,
         "active_expert": active_expert,
     }
 
 
 def run_one_batch(
-    record: dict[str, Any],
-    config: RestartDecoderConfig,
-    *,
-    device: torch.device,
+    record: dict[str, Any], config: RestartDecoderConfig, *, device: torch.device
 ) -> dict[str, Any]:
     """Run one real decoded sequence with only its declared expert trainable."""
 
@@ -134,12 +150,8 @@ def run_one_batch(
     batch = decode_owned_batch(record, config, device=device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
     logits = model(
-        batch["input_ids"],
-        image_patches=batch["image_patches"],
-        audio_frames=batch["audio_frames"],
-        image_coordinates=batch["image_coordinates"],
-        spans=batch["spans"],
-        active_expert=batch["active_expert"],
+        batch["input_ids"], image_patches=batch["image_patches"], audio_frames=batch["audio_frames"],
+        image_coordinates=batch["image_coordinates"], spans=batch["spans"], active_expert=batch["active_expert"],
     )
     loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
     loss.backward()

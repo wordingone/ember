@@ -45,7 +45,7 @@ class CounterCliTests(unittest.TestCase):
             write_checkpoint_artifacts(
                 model, optimizer, root / "checkpoint", launch_seed=7,
                 rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
-                data_cursor={"shard": "owned-bootstrap-v1", "record": 0},
+                data_cursor={"shard": "owned-bootstrap-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
                 model_config_sha256=config_sha256, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
             )
             command = [

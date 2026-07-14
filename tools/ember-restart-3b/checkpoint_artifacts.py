@@ -78,8 +78,16 @@ def _validate_replay_bindings(
     for name, state in rng_state.items():
         if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
             raise ValueError(f"{name} RNG state must be a one-dimensional uint8 tensor")
-    if not isinstance(data_cursor, Mapping) or not data_cursor:
+    if not isinstance(data_cursor, Mapping):
         raise ValueError("checkpoint requires a nonempty data cursor")
+    required_cursor = {"shard", "record_index", "global_step", "tokens_seen"}
+    if not required_cursor.issubset(data_cursor):
+        raise ValueError("checkpoint data cursor must bind shard, record_index, global_step, and tokens_seen")
+    if not isinstance(data_cursor["shard"], str) or not data_cursor["shard"]:
+        raise ValueError("checkpoint data cursor shard must be a nonempty string")
+    for field in ("record_index", "global_step", "tokens_seen"):
+        if not isinstance(data_cursor[field], int) or data_cursor[field] < 0:
+            raise ValueError(f"checkpoint data cursor {field} must be a nonnegative integer")
     _sha256_value(model_config_sha256, name="model_config_sha256")
     _sha256_value(contract_sha256, name="contract_sha256")
     if set(expert_genesis_sha256) != set(EXPERT_NAMES):

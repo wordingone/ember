@@ -17,6 +17,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
+import torch
+
+from model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from pretrain import run_pretraining_segment  # noqa: E402
 from train import run_launch  # noqa: E402
 
 from input_identity import (  # noqa: E402
@@ -119,6 +123,20 @@ class InputIdentityTests(unittest.TestCase):
             self.assertEqual(validation["decision"], "ACCEPTED")
             self.assertEqual(receipt["input_artifact_sha256"], packet["input_identity"]["sha256"])
 
+    def test_checked_in_bound_bootstrap_record_executes_real_reasoning_segment(self) -> None:
+        record = json.loads((ROOT / "data" / "ember-restart-3b" / "owned-bootstrap-v1.json").read_text(encoding="utf-8"))
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=53)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        result = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=[record], config=config, device=torch.device("cpu"),
+            checkpoint_every=1, checkpoint_callback=lambda _step, _result: None,
+            data_shard_id="owned-bootstrap-v1", require_complete_coverage=False,
+        )
+        self.assertEqual(result["expert_examples"]["reasoning"], 1)
+        self.assertEqual(result["modality_examples"]["reasoning"], 1)
+        self.assertEqual(result["modality_examples"]["image"], 0)
+        self.assertEqual(result["data_cursor"]["record_index"], 1)
     def test_receipt_binds_commit_config_input_validator_and_decision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"

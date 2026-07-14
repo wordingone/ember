@@ -31,7 +31,7 @@ class ParameterReceiptTests(unittest.TestCase):
             root = Path(directory)
             config_path = root / "config.json"
             config_path.write_text("{}", encoding="utf-8")
-            checkpoint = write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=7, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)}, data_cursor={"record": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=genesis)
+            checkpoint = write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=7, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=genesis)
             receipt = write_parameter_receipt(model, config_path, root / "checkpoint" / "checkpoint-manifest.json", genesis)
         self.assertEqual(receipt["result"], "MEASURED")
         self.assertEqual(receipt["active_expert_ids"], ["reasoning"])
