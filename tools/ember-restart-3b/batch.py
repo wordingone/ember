@@ -34,10 +34,8 @@ def _sequence_bytes(record: dict[str, Any], *, plural: str, legacy: str, field: 
 
 def _spans(record: dict[str, Any], *, sequence_length: int) -> list[MultimodalSpan]:
     raw = record.get("multimodal_spans")
-    if raw is None:
-        return []
-    if not isinstance(raw, list):
-        raise ValueError("multimodal_spans must be a list")
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("multimodal_spans must be a nonempty explicit list")
     spans: list[MultimodalSpan] = []
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
@@ -58,8 +56,6 @@ def _spans(record: dict[str, Any], *, sequence_length: int) -> list[MultimodalSp
 
 
 def _validate_span_coverage(spans: list[MultimodalSpan], *, marker_positions: dict[str, list[int]]) -> None:
-    if not spans:
-        return
     for modality in ("image", "audio"):
         expected = set(marker_positions[modality])
         covered: set[int] = set()
@@ -97,8 +93,6 @@ def decode_owned_batch(
     if len(image_positions) != len(image_bytes) or len(audio_positions) != len(audio_bytes):
         raise ValueError("raw modality sequence length must equal its marker count")
     raw_coordinates = record.get("image_coordinates")
-    if raw_coordinates is None:
-        raw_coordinates = [[index % 48, index // 48] for index in range(len(image_bytes))]
     if not isinstance(raw_coordinates, list) or len(raw_coordinates) != len(image_bytes):
         raise ValueError("image_coordinates must provide one [x,y] pair per raw patch")
     if any(not isinstance(pair, list) or len(pair) != 2 or any(not isinstance(value, int) or value < 0 for value in pair) for pair in raw_coordinates):
