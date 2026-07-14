@@ -25,13 +25,13 @@ class CheckpointArtifactTests(unittest.TestCase):
         model = UnifiedDecoder(config, genesis_seed=11)
         optimizer = torch.optim.AdamW((parameter for parameter in model.parameters() if parameter.requires_grad), lr=1e-4)
         with tempfile.TemporaryDirectory() as directory:
-            receipt = write_checkpoint_artifacts(model, optimizer, Path(directory), launch_seed=11, rng_state_sha256={"cpu": "a" * 64, "cuda": "b" * 64}, data_cursor={"record": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            receipt = write_checkpoint_artifacts(model, optimizer, Path(directory) / "checkpoint-0001", launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)}, data_cursor={"record": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
             restored = UnifiedDecoder(config, genesis_seed=99)
             restore_optimizer = torch.optim.AdamW((parameter for parameter in restored.parameters() if parameter.requires_grad), lr=1e-4)
-            load_checkpoint_artifacts(restored, restore_optimizer, Path(directory), receipt)
+            load_checkpoint_artifacts(restored, restore_optimizer, Path(directory) / "checkpoint-0001", receipt)
             self.assertEqual(restored.active_expert, "reasoning")
         self.assertEqual(set(receipt["expert_checkpoint_sha256"]), {"vision", "audio", "reasoning", "tool"})
-        self.assertEqual(len(receipt["shards"]), 5)
+        self.assertEqual(len(receipt["shards"]), 6)
         self.assertEqual(receipt["launch_seed"], 11)
 
 

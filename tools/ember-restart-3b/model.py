@@ -219,7 +219,7 @@ class RawPatchProjector(nn.Module):
     def forward(self, patches: torch.Tensor) -> torch.Tensor:
         if tuple(patches.shape[-3:]) != (48, 48, 3):
             raise ValueError("image patches must end with [48, 48, 3]")
-        return self.linear(patches.reshape(*patches.shape[:-3], -1))
+        return F.layer_norm(self.linear(patches.reshape(*patches.shape[:-3], -1).to(dtype=self.linear.weight.dtype)), (self.linear.out_features,))
 
 
 class RawAudioProjector(nn.Module):
@@ -230,7 +230,7 @@ class RawAudioProjector(nn.Module):
     def forward(self, frames: torch.Tensor) -> torch.Tensor:
         if frames.shape[-1] != 640:
             raise ValueError("audio frames must end with 640 raw samples")
-        return self.linear(frames)
+        return F.layer_norm(self.linear(frames.to(dtype=self.linear.weight.dtype)), (self.linear.out_features,))
 
 
 class RotaryCoordinates(nn.Module):
@@ -451,7 +451,7 @@ class UnifiedDecoder(nn.Module):
         allowed = self.build_attention_mask(batch_size=input_ids.shape[0], sequence_length=input_ids.shape[1], spans=spans, device=input_ids.device)
         for layer in self.layers:
             if self.config.gradient_checkpointing and self.training:
-                hidden_states = checkpoint_utils.checkpoint(lambda states: layer(states, coordinates, allowed, selected), hidden_states, use_reentrant=False)
+                hidden_states = checkpoint_utils.checkpoint(lambda states, current_layer=layer: current_layer(states, coordinates, allowed, selected), hidden_states, use_reentrant=False)
             else:
                 hidden_states = layer(hidden_states, coordinates, allowed, selected)
         return self.lm_head(self.final_norm(hidden_states))

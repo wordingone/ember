@@ -42,10 +42,33 @@ class VerticalSliceTests(unittest.TestCase):
     def test_decoded_record_retains_raw_modalities_and_declared_expert(self) -> None:
         batch = decode_owned_batch(self._record(), self.config, device=torch.device("cpu"))
         self.assertEqual(batch["input_ids"].shape, (1, 4))
-        self.assertEqual(batch["image_patches"].shape, (1, 48, 48, 3))
-        self.assertEqual(batch["audio_frames"].shape, (1, 640))
+        self.assertEqual(batch["image_patches"].shape, (1, 1, 48, 48, 3))
+        self.assertEqual(batch["audio_frames"].shape, (1, 1, 640))
         self.assertEqual(batch["active_expert"], "reasoning")
 
+
+    def test_decoded_record_forwards_patch_frame_sequences_coordinates_and_span(self) -> None:
+        record = self._record()
+        image_a = bytes(index % 251 for index in range(48 * 48 * 3))
+        image_b = bytes((index + 7) % 251 for index in range(48 * 48 * 3))
+        audio_a = (torch.arange(640, dtype=torch.int16) - 320).numpy().tobytes()
+        audio_b = (torch.arange(640, dtype=torch.int16) - 120).numpy().tobytes()
+        record.update({
+            "token_ids": [1, self.config.image_token_id, self.config.image_token_id, self.config.audio_token_id, self.config.audio_token_id, 2],
+            "target_ids": [2, 3, 4, 5, 6, 7],
+            "image_patches_u8_base64": [base64.b64encode(image_a).decode("ascii"), base64.b64encode(image_b).decode("ascii")],
+            "audio_frames_i16le_base64": [base64.b64encode(audio_a).decode("ascii"), base64.b64encode(audio_b).decode("ascii")],
+            "image_coordinates": [[0, 0], [1, 0]],
+            "multimodal_spans": [
+                {"start": 1, "length": 2, "modality": "image", "attention_mode": "isolated"},
+                {"start": 3, "length": 2, "modality": "audio", "attention_mode": "causal"},
+            ],
+        })
+        batch = decode_owned_batch(record, self.config, device=torch.device("cpu"))
+        self.assertEqual(batch["image_patches"].shape, (1, 2, 48, 48, 3))
+        self.assertEqual(batch["audio_frames"].shape, (1, 2, 640))
+        self.assertTrue(torch.equal(batch["image_coordinates"], torch.tensor([[0, 0], [1, 0]])))
+        self.assertEqual([(span.start, span.length, span.modality) for span in batch["spans"]], [(1, 2, "image"), (3, 2, "audio")])
     def test_counter_emits_total_and_single_expert_fields(self) -> None:
         from model import UnifiedDecoder
         model = UnifiedDecoder(self.config)
