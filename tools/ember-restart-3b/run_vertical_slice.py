@@ -166,7 +166,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     import bitsandbytes as bnb
 
-    optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5, optim_bits=8, percentile_clipping=5)
+    optimizer = bnb.optim.AdamW(model.parameters(), lr=1e-5, optim_bits=8, percentile_clipping=5)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
         resume_checkpoint = resume_checkpoint.resolve()
