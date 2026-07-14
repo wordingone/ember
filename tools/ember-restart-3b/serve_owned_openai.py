@@ -71,6 +71,32 @@ def _contains_target_leak(value: Any) -> bool:
 def _error(message: str) -> dict[str, object]:
     return {"error": {"message": message, "type": "invalid_request_error"}}
 
+def validate_admission_identity(
+    admission: object,
+    *,
+    checkpoint_sha256: str,
+    model_config_sha256: str,
+    server_source_sha256: str,
+) -> Mapping[str, object]:
+    """Reject an admission artifact that is not for this exact loaded runtime."""
+
+    if not isinstance(admission, Mapping) or admission.get("seat") != "OWNED_ADMITTED":
+        raise ValueError("server requires an OWNED_ADMITTED admission artifact")
+    if admission.get("checkpoint_sha256") != checkpoint_sha256:
+        raise ValueError("admission checkpoint hash does not match loaded manifest")
+    if admission.get("model_config_sha256") != model_config_sha256:
+        raise ValueError("admission model config hash does not match loaded configuration")
+    if admission.get("server_source_sha256") != server_source_sha256:
+        raise ValueError("admission server source hash does not match loaded server")
+    expected_model_name = "ember-owned:" + checkpoint_sha256[:12]
+    if admission.get("model_name") != expected_model_name:
+        raise ValueError("admission model name does not match loaded checkpoint")
+    tokenizer_sha256 = admission.get("tokenizer_sha256")
+    if not isinstance(tokenizer_sha256, str) or len(tokenizer_sha256) != 64 or any(char not in "0123456789abcdef" for char in tokenizer_sha256):
+        raise ValueError("admission must bind lowercase tokenizer_sha256")
+    return admission
+
+
 
 def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -> ThreadingHTTPServer:
     """Create a local-only server whose identity and completions share one runtime object."""
@@ -152,6 +178,14 @@ class LoadedOwnedRuntime:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         checkpoint_sha256 = sha(manifest_path)
         admission = json.loads(admission_path.read_text(encoding="utf-8"))
+        model_config_sha256 = sha(config_path)
+        server_source_sha256 = sha(Path(__file__))
+        admission = validate_admission_identity(
+            admission,
+            checkpoint_sha256=checkpoint_sha256,
+            model_config_sha256=model_config_sha256,
+            server_source_sha256=server_source_sha256,
+        )
         if not isinstance(admission, dict) or admission.get("seat") != "OWNED_ADMITTED":
             raise ValueError("server requires an OWNED_ADMITTED admission artifact")
         if admission.get("checkpoint_sha256") != checkpoint_sha256:
