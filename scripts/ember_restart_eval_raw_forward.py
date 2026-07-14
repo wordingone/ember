@@ -79,6 +79,7 @@ def main() -> None:
     parser.add_argument("--row-id")
     parser.add_argument("--stop-token-id", type=int, default=2)
     arguments = parser.parse_args()
+    if arguments.output.exists(): parser.error("refusing to overwrite existing output")
     try:
         tokenizer = Tokenizer.from_file(str(arguments.tokenizer))
         checkpoint = _verify(arguments.checkpoint_manifest, arguments.model_config)
