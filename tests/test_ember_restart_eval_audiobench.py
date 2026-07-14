@@ -8,8 +8,9 @@ SCRIPT=Path(__file__).resolve().parents[1]/"scripts"/"ember_restart_eval_audiobe
 
 def test_derives_audio_score_from_completed_audiobench_run_artifact():
  with tempfile.TemporaryDirectory() as tmp:
-  root=Path(tmp);run=root/"run.json";score=root/"score.json"
+  root=Path(tmp);run=root/"run.json";raw=root/"raw.json";score=root/"score.json"
   run.write_text(json.dumps({"suite":"ab/sound-id","run_hash":"a"*64,"headline":{"weighted_recall":0.75,"weighted_fpr":0.1},"per_mixture":[{},{}]}),encoding="utf-8")
-  result=subprocess.run([sys.executable,str(SCRIPT),"--run-artifact",str(run),"--score-output",str(score)],text=True,capture_output=True,check=False)
+  result=subprocess.run([sys.executable,str(SCRIPT),"--run-artifact",str(run),"--raw-predictions",str(raw),"--score-output",str(score)],text=True,capture_output=True,check=False)
   assert result.returncode==0,result.stderr
+  assert json.loads(raw.read_text(encoding="utf-8"))==[{},{}]
   assert json.loads(score.read_text(encoding="utf-8"))=={"criterion_id":"ember-3b-audio-capability-v1","criterion_result":"FAILED","metrics":{"weighted_fpr":0.1,"weighted_recall":0.75},"sample_count":2,"upstream":"pinned local AudioBench run artifact"}
