@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 
 SCHEMA_VERSION = "ember-owned-rung-v1"
@@ -927,6 +928,30 @@ def _verify_admission(
         model_format = serving_payload.get("model_format")
         if not isinstance(model_format, str) or not model_format.strip():
             errors.append("cli serving manifest: model_format must be non-empty")
+        endpoint_url = serving_payload.get("endpoint_url")
+        endpoint_valid = False
+        if isinstance(endpoint_url, str):
+            try:
+                parsed_endpoint = urlparse(endpoint_url)
+                endpoint_valid = (
+                    parsed_endpoint.scheme == "http"
+                    and parsed_endpoint.hostname in {"127.0.0.1", "::1", "localhost"}
+                    and parsed_endpoint.username is None
+                    and parsed_endpoint.password is None
+                    and parsed_endpoint.query == ""
+                    and parsed_endpoint.fragment == ""
+                    and parsed_endpoint.path in {"", "/"}
+                )
+                # Accessing port validates malformed or out-of-range values.
+                _ = parsed_endpoint.port
+            except ValueError:
+                endpoint_valid = False
+        if not endpoint_valid:
+            errors.append("cli serving manifest: endpoint_url must be loopback HTTP")
+        if serving_payload.get("protocol") != "openai-chat-v1":
+            errors.append("cli serving manifest: protocol must equal openai-chat-v1")
+        if serving_payload.get("identity_path") != "/v1/models":
+            errors.append("cli serving manifest: identity_path must equal /v1/models")
 
 
 def validate_manifest(

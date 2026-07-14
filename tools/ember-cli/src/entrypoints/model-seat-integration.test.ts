@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -41,6 +41,9 @@ describe("process entry model-seat enforcement", () => {
       "EMBER_MODEL_SEAT",
       "EMBER_MODEL_URL",
       "EMBER_REFERENCE_SEAT",
+      "EMBER_OWNED_RUNG_MANIFEST",
+      "EMBER_TRUSTED_VERIFIER_REGISTRY",
+      "EMBER_PYTHON",
     ]) {
       savedEnv[key] = process.env[key];
       delete process.env[key];
@@ -207,6 +210,64 @@ describe("process entry model-seat enforcement", () => {
     expect(initCalls).toBe(0);
     expect(stderr).toContain("no admitted owned Ember identity");
     expect(process.env["EMBER_MODEL_NAME"]).toBeUndefined();
+  });
+
+  it("selects the admitted owned endpoint and ignores persisted Qwen configuration", async () => {
+    await writeFile(
+      join(tmpDir, "models.json"),
+      JSON.stringify({
+        endpoint: "http://127.0.0.1:9999",
+        modelName: "qwen3.6-27b",
+      }),
+    );
+
+    let exitCode = -1;
+    let initCalls = 0;
+    let verifyCalls = 0;
+    let stdout = "";
+    const originalStdout = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => {
+      stdout += chunk;
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => ({
+          checkpointSha256: "e".repeat(64),
+          endpointUrl: "http://127.0.0.1:9",
+          identityUrl: "http://127.0.0.1:9/v1/models",
+          modelName: "ember-owned:" + "e".repeat(12),
+        }),
+        verifyOwnedEndpointFn: async () => {
+          verifyCalls += 1;
+        },
+        initFn: async () => {
+          initCalls += 1;
+        },
+        getLoopDepsFn: fakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => {
+          exitCode = code;
+        },
+      });
+    } finally {
+      process.stdout.write = originalStdout;
+    }
+
+    expect(exitCode).toBe(0);
+    expect(initCalls).toBe(1);
+    expect(verifyCalls).toBe(1);
+    expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_ADMITTED");
+    expect(process.env["EMBER_MODEL_URL"]).toBe("http://127.0.0.1:9");
+    expect(process.env["EMBER_MODEL_NAME"]).toBe(
+      "ember-owned:" + "e".repeat(12),
+    );
+    expect(stdout).toContain("model seat: OWNED_ADMITTED");
+    expect(stdout).toContain("bound by admitted checkpoint manifest");
+    expect(stdout).not.toContain("qwen3.6-27b");
+    expect(stdout).not.toContain("http://127.0.0.1:9999");
   });
 
   it("allows the same endpoint only in an explicit visible reference seat", async () => {

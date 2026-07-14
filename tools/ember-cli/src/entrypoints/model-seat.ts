@@ -1,10 +1,17 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 export const REFERENCE_SEAT_FLAG = "--reference-seat";
 
-export type ModelSeat = "REFERENCE_ONLY" | "OFFLINE";
+export type ModelSeat = "OWNED_ADMITTED" | "REFERENCE_ONLY" | "OFFLINE";
+
+export interface OwnedModelIdentity {
+  checkpointSha256: string;
+  endpointUrl: string;
+  identityUrl: string;
+  modelName: string;
+}
 
 const MODEL_FREE_FAST_FLAGS = new Set([
   "--help",
@@ -34,13 +41,15 @@ export interface ModelSeatResolutionInput {
   explicitModelUrl: string | undefined;
   gpuFreeRequested: boolean;
   referenceSeatEnv: string | undefined;
+  ownedIdentity?: OwnedModelIdentity;
 }
 
 export interface ModelSeatDecision {
   allowed: boolean;
   seat: ModelSeat | null;
-  source: "flag" | "env" | "gpu-free" | "none";
+  source: "flag" | "env" | "gpu-free" | "owned-manifest" | "none";
   argv: string[];
+  ownedIdentity?: OwnedModelIdentity;
   error?: string;
 }
 
@@ -70,6 +79,30 @@ export function resolveModelSeat(
       seat: "OFFLINE",
       source: "gpu-free",
       argv: sanitizedArgv,
+    };
+  }
+
+  if (input.ownedIdentity) {
+    const admittedEndpoint = input.ownedIdentity.endpointUrl.replace(/\/$/, "");
+    const explicitEndpoint = input.explicitModelUrl?.replace(/\/$/, "");
+    if (explicitEndpoint !== undefined && explicitEndpoint !== admittedEndpoint) {
+      return {
+        allowed: false,
+        seat: null,
+        source: "none",
+        argv: sanitizedArgv,
+        error:
+          "EMBER_MODEL_URL does not match the admitted owned endpoint; " +
+          "ordinary launch will not redirect an OWNED_ADMITTED identity. " +
+          "Use --reference-seat for explicit comparison models.",
+      };
+    }
+    return {
+      allowed: true,
+      seat: "OWNED_ADMITTED",
+      source: "owned-manifest",
+      argv: sanitizedArgv,
+      ownedIdentity: input.ownedIdentity,
     };
   }
 
