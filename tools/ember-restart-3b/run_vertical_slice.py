@@ -140,6 +140,13 @@ def _execute_realization_counter(
     return receipt
 
 
+def build_production_optimizer(model: UnifiedDecoder) -> torch.optim.Optimizer:
+    """Use explicit 8-bit AdamW moments for the full four-expert checkpoint budget."""
+
+    import bitsandbytes as bnb
+
+    return bnb.optim.AdamW(model.parameters(), lr=1e-5, optim_bits=8, percentile_clipping=5)
+
 def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
@@ -170,9 +177,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_134_515_200 or counts["active_parameters"] != 1_020_585_984:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
-    import bitsandbytes as bnb
-
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, foreach=False)
+    optimizer = build_production_optimizer(model)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
         resume_checkpoint = resume_checkpoint.resolve()
