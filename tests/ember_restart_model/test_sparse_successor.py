@@ -52,7 +52,7 @@ class SparseSuccessorTests(unittest.TestCase):
 
     def test_image_span_is_bidirectional_internally_and_causal_elsewhere(self) -> None:
         model = UnifiedDecoder(self.config)
-        spans = [MultimodalSpan(start=1, length=2, modality="image", attention_mode="isolated")]
+        spans = [MultimodalSpan(start=1, length=2, modality="image", attention_mode="bidirectional")]
         allowed = model.build_attention_mask(batch_size=1, sequence_length=4, spans=spans, device=torch.device("cpu"))
         self.assertTrue(allowed[0, 1, 1])
         self.assertTrue(allowed[0, 1, 2])
@@ -60,6 +60,10 @@ class SparseSuccessorTests(unittest.TestCase):
         self.assertTrue(allowed[0, 1, 0])
         self.assertTrue(allowed[0, 3, 2])
         self.assertFalse(allowed[0, 0, 3])
+
+    def test_legacy_isolated_mode_is_rejected_by_the_claim_bearing_span_type(self) -> None:
+        with self.assertRaisesRegex(ValueError, "bidirectional"):
+            MultimodalSpan(start=0, length=1, modality="image", attention_mode="isolated")
 
     def test_four_expert_banks_are_distinct_and_named(self) -> None:
         model = UnifiedDecoder(self.config)

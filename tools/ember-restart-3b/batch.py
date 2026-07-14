@@ -50,6 +50,9 @@ def _spans(record: dict[str, Any], *, sequence_length: int) -> list[MultimodalSp
         raise ValueError("multimodal_spans must be an explicit list")
     spans: list[MultimodalSpan] = []
     for index, item in enumerate(raw):
+        attention_mode = str(item.get("attention_mode", "causal"))
+        if attention_mode == "isolated" and record.get("schema_version") == "ember-owned-bootstrap-batch-v1":
+            attention_mode = "bidirectional"
         if not isinstance(item, dict):
             raise ValueError(f"multimodal_spans[{index}] must be an object")
         try:
@@ -57,7 +60,7 @@ def _spans(record: dict[str, Any], *, sequence_length: int) -> list[MultimodalSp
                 start=int(item["start"]),
                 length=int(item["length"]),
                 modality=str(item["modality"]),
-                attention_mode=str(item.get("attention_mode", "causal")),
+                attention_mode=attention_mode,
             )
         except (KeyError, TypeError, ValueError) as error:
             raise ValueError(f"multimodal_spans[{index}] is invalid") from error

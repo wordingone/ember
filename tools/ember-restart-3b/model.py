@@ -41,8 +41,8 @@ class MultimodalSpan:
             raise ValueError("span start must be nonnegative and length must be positive")
         if self.modality not in {"image", "audio", "text"}:
             raise ValueError("span modality must be image, audio, or text")
-        if self.attention_mode not in {"causal", "isolated"}:
-            raise ValueError("span attention_mode must be causal or isolated")
+        if self.attention_mode not in {"causal", "bidirectional"}:
+            raise ValueError("span attention_mode must be causal or bidirectional")
 
 
 @dataclass(frozen=True)
@@ -389,7 +389,7 @@ class UnifiedDecoder(nn.Module):
             end = span.start + span.length
             if end > sequence_length:
                 raise ValueError("multimodal span exceeds sequence length")
-            if span.attention_mode == "isolated":
+            if span.attention_mode == "bidirectional":
                 allowed[:, span.start:end, span.start:end] = True
         return allowed
 
