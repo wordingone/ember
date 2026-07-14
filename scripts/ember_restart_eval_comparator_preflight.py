@@ -7,7 +7,9 @@ import argparse,json,re
 from pathlib import Path
 FIELDS=("capability","benchmark_id","benchmark_version","split_sha256","harness_sha256","protocol_sha256")
 def main()->int:
- p=argparse.ArgumentParser();p.add_argument("--target",required=True,type=Path);p.add_argument("--comparator",required=True,type=Path);p.add_argument("--output",required=True,type=Path);a=p.parse_args();target=json.loads(a.target.read_text(encoding="utf-8"));comparator=json.loads(a.comparator.read_text(encoding="utf-8"))
+ p=argparse.ArgumentParser();p.add_argument("--target",required=True,type=Path);p.add_argument("--comparator",required=True,type=Path);p.add_argument("--output",required=True,type=Path);a=p.parse_args()
+ if a.output.exists():p.error("output must not pre-exist")
+ target=json.loads(a.target.read_text(encoding="utf-8"));comparator=json.loads(a.comparator.read_text(encoding="utf-8"))
  for name,payload in (("target",target),("comparator",comparator)):
   if not isinstance(payload,dict) or payload.get("result")!="PREFLIGHT_ONLY" or payload.get("admission")!="NOT_ELIGIBLE":p.error(f"{name} must be a non-admissible evaluator preflight")
   if not isinstance(payload.get("subject_checkpoint_sha256"),str) or not re.fullmatch(r"[0-9a-f]{64}",payload["subject_checkpoint_sha256"]):p.error(f"{name} requires a checkpoint hash")
