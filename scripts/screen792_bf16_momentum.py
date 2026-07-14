@@ -143,6 +143,8 @@ _REPO = Path(__file__).resolve().parent.parent
 
 TICKET = "SCREEN-792-BF16-MOMENTUM"
 ISSUE_REFS = "wordingone/ember#792 #707 #787 #667"
+goal_id = 'EMBER-02'
+next_executed_outcome = 'EMBER-02 first sufficiently pretrained clean-genesis 3B Ember'
 
 # ---------------------------------------------------------------------------
 # #707 pre-registered kill conditions, quoted verbatim -- copied into every
