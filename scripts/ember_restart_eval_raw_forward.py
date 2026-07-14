@@ -81,6 +81,8 @@ def main() -> None:
     checkpoint_sha256 = sha256(arguments.checkpoint_manifest)
     if checkpoint_sha256 != arguments.checkpoint_sha256:
         parser.error("checkpoint manifest SHA-256 does not match --checkpoint-sha256")
+    if sha256(arguments.model_config) != arguments.model_config_sha256:
+        parser.error("model config SHA-256 does not match --model-config-sha256")
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     payload = {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "checkpoint_sha256": checkpoint_sha256, "checkpoint_model_config_sha256": checkpoint["model_config_sha256"], "shard_count": checkpoint["shard_count"], "tokenizer_sha256": sha256(arguments.tokenizer), **execution}
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.output.parent, delete=False) as handle:
