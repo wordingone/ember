@@ -69,8 +69,8 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
     shard = root / str(packet["input_identity"]["shard_path"])
     payload = json.loads(shard.read_text(encoding="utf-8"))
     records = payload.get("records") if isinstance(payload, dict) else None
-    if payload.get("schema_version") != "ember-owned-pretraining-shard-v1" or not isinstance(records, list) or len(records) != 4:
-        raise RuntimeError("production slice requires the exact four-domain owned shard")
+    if payload.get("schema_version") != "ember-owned-pretraining-shard-v1" or not isinstance(records, list) or not records:
+        raise RuntimeError("production slice requires a nonempty owned four-domain shard")
     if {record.get("active_expert") for record in records if isinstance(record, dict)} != {"vision", "audio", "reasoning", "tool"}:
         raise RuntimeError("production slice requires one record for every declared expert")
     return records, packet, input_receipt

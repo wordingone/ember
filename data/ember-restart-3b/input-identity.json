@@ -1,11 +1,11 @@
 {
-  "artifact_id": "owned-clean-pretraining-shard-v1",
-  "bytes": 14346,
-  "goal_id": "EMBER-02",
-  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "provenance": "owned four-domain bootstrap bytes; slice-only and not sufficient-pretraining evidence",
-  "schema_version": "ember-input-identity-v1",
-  "sha256": "0a5815d194c367ef11e6a83c9bb8cdccf4b1576f401958f35331598f48081d4e",
-  "shard_path": "data/ember-restart-3b/owned-pretrain-v1.json",
-  "workstream_id": "EMBER-02B"
+    "artifact_id":  "owned-clean-curriculum-128-v1",
+    "bytes":  1655769,
+    "goal_id":  "EMBER-02",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "provenance":  "deterministically generated owned four-domain curriculum; content-addressed local verifier receipts; bootstrap-scale and not sufficient-pretraining evidence",
+    "schema_version":  "ember-input-identity-v1",
+    "sha256":  "8e435db16be595ee5de8bde367003a7f4e7fa0667b266fe5302779060a6fbb79",
+    "shard_path":  "data/ember-restart-3b/owned-curriculum-128.json",
+    "workstream_id":  "EMBER-02B"
 }
