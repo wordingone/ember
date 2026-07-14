@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from serve_owned_openai import OwnedIdentity, create_loopback_server
+from serve_owned_openai import OwnedIdentity, create_loopback_server, validate_admission_identity
 
 
 class _Runtime:
@@ -84,6 +84,37 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertIn("target", response["error"]["message"])
         self.assertEqual(self.runtime.calls, [])
 
+
+    def test_admission_rejects_config_or_server_source_substitution(self) -> None:
+        checkpoint = "a" * 64
+        admission = {
+            "seat": "OWNED_ADMITTED",
+            "checkpoint_sha256": checkpoint,
+            "model_config_sha256": "b" * 64,
+            "tokenizer_sha256": "c" * 64,
+            "server_source_sha256": "d" * 64,
+            "model_name": "ember-owned:" + checkpoint[:12],
+        }
+        validate_admission_identity(
+            admission,
+            checkpoint_sha256=checkpoint,
+            model_config_sha256="b" * 64,
+            server_source_sha256="d" * 64,
+        )
+        with self.assertRaisesRegex(ValueError, "model config hash"):
+            validate_admission_identity(
+                admission,
+                checkpoint_sha256=checkpoint,
+                model_config_sha256="e" * 64,
+                server_source_sha256="d" * 64,
+            )
+        with self.assertRaisesRegex(ValueError, "server source hash"):
+            validate_admission_identity(
+                admission,
+                checkpoint_sha256=checkpoint,
+                model_config_sha256="b" * 64,
+                server_source_sha256="e" * 64,
+            )
 
 if __name__ == "__main__":
     unittest.main()
