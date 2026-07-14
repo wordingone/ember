@@ -81,6 +81,7 @@ def main() -> None:
     arguments = parser.parse_args()
     if arguments.output.exists(): parser.error("refusing to overwrite existing output")
     if arguments.canonical_output is not None and arguments.canonical_output.exists(): parser.error("refusing to overwrite existing canonical output")
+    if arguments.canonical_output is not None and arguments.canonical_output.resolve() == arguments.output.resolve(): parser.error("canonical output must differ from output")
     try:
         tokenizer = Tokenizer.from_file(str(arguments.tokenizer))
         checkpoint = _verify(arguments.checkpoint_manifest, arguments.model_config)
