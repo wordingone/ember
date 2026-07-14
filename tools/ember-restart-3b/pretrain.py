@@ -39,10 +39,13 @@ def run_pretraining_segment(
     tokens_seen = 0
     for step, record in enumerate(records, start=1):
         batch = decode_owned_batch(record, config, device=device)
+        optimizer.zero_grad(set_to_none=True)
         logits = model(
             batch["input_ids"],
             image_patches=batch["image_patches"],
             audio_frames=batch["audio_frames"],
+            image_coordinates=batch["image_coordinates"],
+            spans=batch["spans"],
             active_expert=batch["active_expert"],
         )
         loss = F.cross_entropy(
@@ -51,14 +54,13 @@ def run_pretraining_segment(
         )
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining segment stopped on non-finite loss at step {step}")
-        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
         tokens_seen += int(batch["input_ids"].numel())
         modality_examples["text"] += 1
-        modality_examples["image"] += int(batch["image_patches"].shape[0])
-        modality_examples["audio"] += int(batch["audio_frames"].shape[0])
+        modality_examples["image"] += int(batch["image_patches"].shape[1])
+        modality_examples["audio"] += int(batch["audio_frames"].shape[1])
         result = {
             "step": step,
             "losses": list(losses),
