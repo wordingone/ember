@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """receipt.py -- shared receipt core for the corpus connector CLIs.
 
 Every connector (hf_fetch.py, arxiv_fetch.py, openreview_fetch.py, kaggle_fetch.py,
@@ -51,6 +54,7 @@ from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 SCHEMA_NAME = "corpus-connector-receipt-v1"
 L3_STATEMENT = "fetch-only; no external model authored/filtered/ranked/scored/selected any token"
 UNVERIFIED = "UNVERIFIED"
+MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024  # 512 MiB
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +84,10 @@ class UnverifiedLicenseError(BlockedError):
 
 
 class ReceiptWriteError(BlockedError):
+    pass
+
+
+class DownloadTooLargeError(BlockedError):
     pass
 
 
@@ -264,6 +272,7 @@ def download_url(
     timeout: int = 60,
     headers: Optional[dict] = None,
     opener: Optional[Callable] = None,
+    max_bytes: int = MAX_DOWNLOAD_BYTES,
 ) -> Tuple[int, str]:
     check_no_collision(dest_path)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -275,7 +284,15 @@ def download_url(
     urlopen = opener or urllib.request.urlopen
     try:
         with urlopen(request, timeout=timeout) as resp, tmp_path.open("wb") as out:
-            shutil.copyfileobj(resp, out)
+            written = 0
+            while True:
+                chunk = resp.read(1 << 20)  # 1 MiB
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    raise DownloadTooLargeError(f"{url} exceeded {max_bytes} bytes")
+                out.write(chunk)
     except Exception:
         if tmp_path.exists():
             tmp_path.unlink()
