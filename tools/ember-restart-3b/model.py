@@ -301,6 +301,8 @@ class _DecoderLayer(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor, active_expert: str) -> torch.Tensor:
         hidden_states = hidden_states + self.attention(self.pre_attention_norm(hidden_states), coordinates, allowed)
+        if active_expert == "shared":
+            return hidden_states
         return hidden_states + self.experts[active_expert](self.pre_ffn_norm(hidden_states))
 
 
@@ -339,13 +341,13 @@ class UnifiedDecoder(nn.Module):
             elif isinstance(module, RMSNorm) and module.weight.device.type != "meta":
                 nn.init.ones_(module.weight)
     def _activate_expert(self, active_expert: str) -> None:
-        if active_expert not in self.config.expert_names:
+        if active_expert != "shared" and active_expert not in self.config.expert_names:
             raise ValueError(f"unknown declared expert: {active_expert}")
         self.active_expert = active_expert
         for layer in self.layers:
             for name, expert in layer.experts.items():
                 for parameter in expert.parameters():
-                    parameter.requires_grad_(name == active_expert)
+                    parameter.requires_grad_(active_expert != "shared" and name == active_expert)
 
     def count_unique_trainable_parameters(self, *, include_frozen: bool = False) -> int:
         return count_unique_trainable_parameters(self, include_frozen=include_frozen)

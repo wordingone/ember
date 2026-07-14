@@ -1,0 +1,107 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Manifest-bound owned token-stream regression tests."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import struct
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import torch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+
+from batch import decode_owned_batch
+from model import RestartDecoderConfig, UnifiedDecoder
+from pretrain import run_pretraining_segment
+from semantic_stream import ManifestBoundTokenStream
+
+
+class SemanticStreamTests(unittest.TestCase):
+    def _receipt(self, root: Path, shard_tokens: list[list[int]]) -> tuple[Path, Path, Path]:
+        tokenizer = root / "tokenizer.json"
+        vocab = {f"token-{index}": index for index in range(8, 1025)}
+        tokenizer.write_text(json.dumps({"model": {"vocab": vocab}}, sort_keys=True), encoding="utf-8")
+        shards = []
+        for index, tokens in enumerate(shard_tokens):
+            shard = root / f"v0-{index:05d}.bin"
+            shard.write_bytes(struct.pack(f"<{len(tokens)}H", *tokens))
+            shards.append({"name": shard.name, "sha256": hashlib.sha256(shard.read_bytes()).hexdigest(), "n_tokens": len(tokens)})
+        receipt = {
+            "ticket": "TOKEN-SHARDS-V0", "shards": shards,
+            "total_stream_tokens": sum(item["n_tokens"] for item in shards),
+            "reserved_band_guard": {"max_id_lt": 32},
+            "premises": {"tokenizer_json": {"path": tokenizer.name, "sha256": hashlib.sha256(tokenizer.read_bytes()).hexdigest()}},
+        }
+        receipt_path = root / "token-shards-v0.json"
+        receipt_path.write_text(json.dumps(receipt, sort_keys=True) + "\n", encoding="utf-8")
+        return receipt_path, root, tokenizer
+
+    def test_emits_receipt_and_tokenizer_bound_shared_next_token_episode(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[0x0102, 0x0304, 10, 11, 12, 13]])
+            stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer)
+            expected_receipt_sha256 = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            expected_tokenizer_sha256 = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
+            episode, cursor = stream.next_episode(shard_index=0, token_offset=0, sequence_length=4)
+        self.assertEqual(episode["active_expert"], "shared")
+        self.assertEqual(episode["token_ids"], [0x0102, 0x0304, 10, 11])
+        self.assertEqual(episode["target_ids"], [0x0304, 10, 11, 12])
+        self.assertEqual(cursor, {"shard_index": 0, "token_offset": 4, "tokens_seen": 4})
+        self.assertEqual(stream.receipt_sha256, expected_receipt_sha256)
+        self.assertEqual(stream.tokenizer_sha256, expected_tokenizer_sha256)
+
+    def test_shared_stream_record_decodes_and_updates_only_shared_parameters(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13]])
+            episode, _ = ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer).next_episode(shard_index=0, token_offset=0, sequence_length=4)
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        batch = decode_owned_batch(episode, config, device=torch.device("cpu"))
+        self.assertEqual(batch["active_expert"], "shared")
+        model = UnifiedDecoder(config, genesis_seed=43)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        experts_before = {name: parameter.detach().clone() for name, parameter in model.named_parameters() if ".experts." in name}
+        result = run_pretraining_segment(model=model, optimizer=optimizer, records=[episode], config=config, device=torch.device("cpu"), checkpoint_every=1, checkpoint_callback=lambda _step, _result: None, require_complete_coverage=False)
+        self.assertEqual(result["expert_examples"], {"vision": 0, "audio": 0, "reasoning": 0, "tool": 0})
+        self.assertTrue(all(torch.equal(parameter.detach(), experts_before[name]) for name, parameter in model.named_parameters() if ".experts." in name))
+
+    def test_rejects_a_shard_whose_bytes_no_longer_match_the_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13]])
+            (shards_root / "v0-00000.bin").write_bytes(struct.pack("<6H", 8, 9, 10, 11, 12, 14))
+            with self.assertRaisesRegex(ValueError, "sha256"):
+                ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer)
+
+    def test_rejects_tokenizer_bytes_that_do_not_match_the_receipt_premise(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13]])
+            tokenizer.write_text('{"model":{"vocab":{}}}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "tokenizer sha256"):
+                ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer)
+
+    def test_rolls_deterministically_into_the_next_receipt_bound_shard(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10], [11, 12, 13]])
+            stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer)
+            expected_receipt_sha256 = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            expected_tokenizer_sha256 = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
+            episode, cursor = stream.next_episode(shard_index=0, token_offset=0, sequence_length=4)
+        self.assertEqual(episode["token_ids"], [8, 9, 10, 11])
+        self.assertEqual(episode["target_ids"], [9, 10, 11, 12])
+        self.assertEqual(cursor, {"shard_index": 1, "token_offset": 1, "tokens_seen": 4})
+
+
+if __name__ == "__main__":
+    unittest.main()

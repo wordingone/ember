@@ -83,6 +83,27 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
     return records, packet, input_receipt
 
 
+def checkpoint_retention_limit(config_path: Path) -> int:
+    """Read the contract retention policy instead of maintaining a runner-local copy."""
+
+    try:
+        value = json.loads(config_path.read_text(encoding="utf-8"))["checkpoints"]["retention"]["max_count"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare checkpoint retention") from error
+    if not isinstance(value, int) or value < 1:
+        raise ValueError("checkpoint retention max_count must be a positive integer")
+    return value
+
+
+def _training_optimizer_name(config_path: Path) -> str:
+    try:
+        value = json.loads(config_path.read_text(encoding="utf-8"))["training"]["optimizer"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare its optimizer") from error
+    if value != "paged_8bit_adamw":
+        raise ValueError("production contract optimizer must be paged_8bit_adamw")
+    return value
+
 def _rng_state(device: torch.device) -> dict[str, torch.Tensor]:
     return {"cpu": torch.get_rng_state().clone(), "cuda": torch.cuda.get_rng_state(device).clone()}
 
@@ -140,12 +161,14 @@ def _execute_realization_counter(
     return receipt
 
 
-def build_production_optimizer(model: UnifiedDecoder) -> torch.optim.Optimizer:
-    """Use explicit 8-bit AdamW moments for the full four-expert checkpoint budget."""
+def build_production_optimizer(model: UnifiedDecoder, *, optimizer_name: str) -> torch.optim.Optimizer:
+    """Build the exact paged 8-bit optimizer declared by the production contract."""
 
+    if optimizer_name != "paged_8bit_adamw":
+        raise ValueError("production optimizer must be paged_8bit_adamw")
     import bitsandbytes as bnb
 
-    return bnb.optim.AdamW(model.parameters(), lr=1e-5, optim_bits=8, percentile_clipping=5)
+    return bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, percentile_clipping=5)
 
 def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
@@ -177,7 +200,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_134_515_200 or counts["active_parameters"] != 1_020_585_984:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
-    optimizer = build_production_optimizer(model)
+    optimizer = build_production_optimizer(model, optimizer_name=_training_optimizer_name(config_path))
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
         resume_checkpoint = resume_checkpoint.resolve()
@@ -205,7 +228,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     checkpoint = _retain_after_success(
         checkpoint_parent,
-        max_count=2,
+        max_count=checkpoint_retention_limit(config_path),
         operation=lambda: write_checkpoint_artifacts(
             model,
             optimizer,
