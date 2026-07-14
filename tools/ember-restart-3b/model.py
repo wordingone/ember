@@ -418,8 +418,8 @@ class UnifiedDecoder(nn.Module):
         coordinates = torch.stack((position_ids, torch.zeros_like(position_ids)), dim=-1)
         count = int(image_mask.sum().item())
         if not count:
-            if image_coordinates is not None:
-                raise ValueError("image coordinates were supplied without image markers")
+            if image_coordinates is not None and image_coordinates.numel() != 0:
+                raise ValueError("nonempty image coordinates were supplied without image markers")
             return coordinates
         if image_coordinates is None:
             ordinal = torch.arange(count, device=input_ids.device)

@@ -178,9 +178,11 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
     optimizer.step()
     rng_state_after_step = _rng_state(torch.device("cuda"))
     data_cursor = {
-        "record_index": 0,
+        "shard": str(launch_packet["input_identity"]["shard_path"]),
+        "record_index": 1,
+        "global_step": 1,
+        "tokens_seen": int(batch["input_ids"].numel()),
         "input_identity_receipt_sha256": _json_sha256(input_receipt),
-        "input_shard_path": str(launch_packet["input_identity"]["shard_path"]),
     }
     checkpoint = write_checkpoint_artifacts(
         model,
