@@ -17,7 +17,7 @@ from typing import Any, Mapping
 
 
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
-ARCHITECTURE_REVISION = "ember-sparse-3b-v1"
+ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
 
 
 def _sha256(path: Path) -> str:
@@ -85,6 +85,8 @@ def _expected_shared(shape: Mapping[str, int]) -> dict[str, tuple[int, ...]]:
             prefix + "attention.qkv.weight": (3 * hidden, hidden),
             prefix + "attention.output.weight": (hidden, hidden),
             prefix + "pre_ffn_norm.weight": (hidden,),
+            prefix + "shared_ffn.up_gate.weight": (8 * hidden, hidden),
+            prefix + "shared_ffn.down.weight": (hidden, 4 * hidden),
         })
     return expected
 
@@ -212,7 +214,7 @@ def _counts(shape: Mapping[str, int]) -> dict[str, int]:
     hidden, layers, vocab = shape["hidden_size"], shape["layers"], shape["vocab_size"]
     shared = (
         vocab * hidden
-        + layers * (4 * hidden * hidden + 2 * hidden)
+        + layers * (4 * hidden * hidden + 12 * hidden * hidden + 2 * hidden)
         + hidden
         + (48 * 48 * 3) * hidden
         + 640 * hidden
@@ -235,7 +237,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         raise ValueError("active expert must be one of the four authorized banks")
     config = _load_json(model_config)
     if config.get("architecture_revision") != ARCHITECTURE_REVISION:
-        raise ValueError("model config revision is not ember-sparse-3b-v1")
+        raise ValueError("model config revision is not ember-sparse-3b-v2")
     shape = _model_shape(config)
     manifest = _inspect_realization(checkpoint_manifest, active_expert=active_expert, shape=shape)
     config_sha256 = _sha256(model_config)

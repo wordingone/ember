@@ -6,17 +6,22 @@
 from __future__ import annotations
 
 import json
+import tempfile
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+from model import RestartDecoderConfig
+
 CONTRACT_PATH = ROOT / "configs" / "ember-restart-3b.json"
 
 
 class RestartContractTests(unittest.TestCase):
     def test_contract_declares_sparse_clean_random_shape_lineage_and_namespaces(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["architecture_revision"], "ember-sparse-3b-v1")
+        self.assertEqual(contract["architecture_revision"], "ember-sparse-3b-v2")
         self.assertEqual(contract["supersedes"]["contract_version"], 1)
         model = contract["model"]
         self.assertEqual((model["hidden_size"], model["layers"], model["attention_heads"], model["vocab_size"]), (2048, 14, 16, 32000))
@@ -38,6 +43,14 @@ class RestartContractTests(unittest.TestCase):
         self.assertEqual(roots["data"], "data/ember-restart-3b")
         self.assertTrue(all(entry["exclusive"] for entry in contract["namespaces"].values()))
 
+    def test_production_contract_rejects_a_shared_text_route_without_declared_nonlinear_ffn(self) -> None:
+        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        del contract["model"]["expert_routing"]["shared_text_ffn"]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "contract.json"
+            path.write_text(json.dumps(contract), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "shared nonlinear text FFN"):
+                RestartDecoderConfig.from_contract(path)
     def test_declared_capacity_is_sparse_total_not_dense_active_claim(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
         model = contract["model"]
@@ -47,6 +60,7 @@ class RestartContractTests(unittest.TestCase):
         formula = model["parameter_formula"]
         self.assertEqual(formula["shared_attention_per_layer"], "4*hidden_size^2")
         self.assertEqual(formula["four_experts_per_layer"], "4*(12*hidden_size^2)")
+        self.assertEqual(formula["shared_text_ffn_per_layer"], "12*hidden_size^2")
 
 
 if __name__ == "__main__":

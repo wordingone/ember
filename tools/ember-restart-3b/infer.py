@@ -12,7 +12,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import torch
 
@@ -32,6 +32,81 @@ def sha(path: Path) -> str:
             digest.update(block)
     return digest.hexdigest()
 
+
+class FrozenTokenizer:
+    """Content-addressed tokenizer bytes used for both prompt IDs and answer text."""
+
+    def __init__(self, tokenizer: Any, *, sha256: str) -> None:
+        self._tokenizer = tokenizer
+        self.sha256 = sha256
+
+    def encode(self, text: str) -> list[int]:
+        if not isinstance(text, str) or not text:
+            raise ValueError("frozen split prompt must be a nonempty string")
+        return list(self._tokenizer.encode(text).ids)
+
+    def decode(self, token_ids: list[int]) -> str:
+        if not isinstance(token_ids, list) or any(not isinstance(token, int) or token < 0 for token in token_ids):
+            raise ValueError("generated token IDs must be nonnegative integers")
+        return str(self._tokenizer.decode(token_ids, skip_special_tokens=False))
+
+
+def load_frozen_tokenizer(path: Path, *, expected_sha256: str) -> FrozenTokenizer:
+    """Load exact frozen tokenizer bytes and refuse substitutions or malformed bytes."""
+
+    actual_sha256 = sha(path)
+    if actual_sha256 != expected_sha256:
+        raise ValueError("tokenizer sha256 does not match the frozen split")
+    try:
+        from tokenizers import Tokenizer
+        tokenizer = Tokenizer.from_file(str(path))
+    except Exception as error:
+        raise ValueError("frozen tokenizer bytes are not loadable by the tokenizer runtime") from error
+    return FrozenTokenizer(tokenizer, sha256=actual_sha256)
+
+
+def _contains_target_leak(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            normalized = str(key).casefold()
+            if "target" in normalized or "answer" in normalized or "label" in normalized:
+                return True
+            if _contains_target_leak(child):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_target_leak(child) for child in value)
+    return False
+
+
+def frozen_split_prompt(split_path: Path, row_id: str, tokenizer: FrozenTokenizer) -> tuple[str, dict[str, Any]]:
+    """Select one target-free prompt from exact frozen split bytes and tokenize it."""
+
+    payload = json.loads(split_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != "ember-owned-frozen-inference-split-v1":
+        raise ValueError("inference split must use ember-owned-frozen-inference-split-v1")
+    if payload.get("tokenizer_sha256") != tokenizer.sha256:
+        raise ValueError("frozen split tokenizer sha256 does not match loaded tokenizer")
+    rows = payload.get("rows")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("frozen inference split requires nonempty rows")
+    selected = [row for row in rows if isinstance(row, Mapping) and row.get("id") == row_id]
+    if len(selected) != 1:
+        raise ValueError("frozen inference split must contain exactly one requested row")
+    row = dict(selected[0])
+    if _contains_target_leak(row):
+        raise ValueError("frozen inference split row contains a target leak")
+    prompt = row.get("prompt")
+    if not isinstance(prompt, str) or not prompt:
+        raise ValueError("frozen inference split row requires a nonempty prompt")
+    if row.get("active_expert") != "shared":
+        raise ValueError("frozen text inference row must route through the shared text path")
+    return row_id, {
+        "schema_version": "ember-owned-inference-prompt-v1",
+        "id": row_id,
+        "active_expert": "shared",
+        "token_ids": tokenizer.encode(prompt),
+        "frozen_row_sha256": hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
+    }
 
 def greedy_generate(
     *,
@@ -78,6 +153,7 @@ def canonical_prediction_envelope(
     input_sha256: str,
     generated_token_ids: list[int],
     stop_reason: str,
+    decoded_text: str,
 ) -> dict[str, Any]:
     """Build the exact non-admissible central prediction envelope for one prompt."""
 
@@ -108,7 +184,7 @@ def canonical_prediction_envelope(
             "input_sha256": input_sha256,
             "generated_token_ids": generated_token_ids,
             "stop_reason": stop_reason,
-            "output": {"kind": "text", "text": " ".join(str(token) for token in generated_token_ids)},
+            "output": {"kind": "text", "text": decoded_text},
         }],
     }
     return validate_predictions(envelope)
@@ -164,7 +240,18 @@ def main(argv: list[str] | None = None) -> int:
     receipt = {**manifest, "checkpoint_manifest_sha256": sha(manifest_path)}
     model = UnifiedDecoder(config, device=args.device, allow_production_allocation=True).eval()
     load_checkpoint_artifacts(model, None, args.checkpoint, receipt)
-    record = json.loads(args.input.read_text(encoding="utf-8"))
+    request = json.loads(args.input.read_text(encoding="utf-8"))
+    if not isinstance(request, dict) or request.get("schema_version") != "ember-owned-inference-row-request-v1":
+        parser.error("inference input must request one frozen split row")
+    requested_row_id = request.get("row_id")
+    if not isinstance(requested_row_id, str) or not requested_row_id:
+        parser.error("inference request requires a nonempty row_id")
+    split_payload = json.loads(args.split.read_text(encoding="utf-8"))
+    expected_tokenizer_sha256 = split_payload.get("tokenizer_sha256") if isinstance(split_payload, dict) else None
+    if not isinstance(expected_tokenizer_sha256, str):
+        parser.error("frozen inference split must bind tokenizer_sha256")
+    tokenizer = load_frozen_tokenizer(args.tokenizer, expected_sha256=expected_tokenizer_sha256)
+    row_id, record = frozen_split_prompt(args.split, requested_row_id, tokenizer)
     row_id, batch = _prompt_batch(record, config, device=torch.device(args.device))
     with torch.inference_mode():
         generated, stop_reason = greedy_generate(
@@ -193,9 +280,10 @@ def main(argv: list[str] | None = None) -> int:
         max_new_tokens=args.max_new_tokens,
         stop_token_ids=args.stop_token_id,
         row_id=row_id,
-        input_sha256=sha(args.input),
+        input_sha256=record["frozen_row_sha256"],
         generated_token_ids=generated,
         stop_reason=stop_reason,
+        decoded_text=tokenizer.decode(generated),
     )
     _atomic_json(args.output, output)
     print(json.dumps(output, sort_keys=True))

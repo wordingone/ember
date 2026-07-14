@@ -120,6 +120,20 @@ class SparseSuccessorTests(unittest.TestCase):
         self.assertEqual(calls, ["tool"] * self.config.layers)
 
 
+    def test_shared_text_route_executes_and_trains_a_nonlinear_shared_ffn(self) -> None:
+        model = UnifiedDecoder(self.config).train()
+        calls: list[int] = []
+        for index, layer in enumerate(model.layers):
+            original = layer.shared_ffn.forward
+            def observed(hidden, *, _index=index, _original=original):
+                calls.append(_index)
+                return _original(hidden)
+            layer.shared_ffn.forward = observed  # type: ignore[method-assign]
+        logits = model(torch.tensor([[4, 5, 6]]), active_expert="shared")
+        logits.sum().backward()
+        self.assertEqual(set(calls), set(range(self.config.layers)))
+        self.assertTrue(all(layer.shared_ffn.up_gate.weight.grad is not None for layer in model.layers))
+        self.assertTrue(all(all(parameter.grad is None for parameter in layer.experts["reasoning"].parameters()) for layer in model.layers))
     def test_checkpointed_layers_match_noncheckpointed_logits_and_gradients(self) -> None:
         checkpointed = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64, gradient_checkpointing=True)
         direct = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64, gradient_checkpointing=False)
@@ -144,6 +158,7 @@ class SparseSuccessorTests(unittest.TestCase):
         measured = count_unique_trainable_parameters(model, include_frozen=True)
         self.assertEqual(measured, config.total_unique_trainable_parameters)
         self.assertGreaterEqual(measured, 3_000_000_000)
+        self.assertEqual(count_unique_trainable_parameters(model), 1_725_229_056)
 
 
 if __name__ == "__main__":

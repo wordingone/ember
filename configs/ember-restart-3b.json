@@ -1,7 +1,7 @@
 {
     "contract_name":  "ember-restart-3b",
-    "contract_version":  2,
-    "architecture_revision":  "ember-sparse-3b-v1",
+    "contract_version":  3,
+    "architecture_revision":  "ember-sparse-3b-v2",
     "contract_path":  "configs/ember-restart-3b.json",
     "purpose":  "Superseding sparse clean-random genesis contract for the owned unified decoder.",
     "supersedes":  {
@@ -67,6 +67,7 @@
                                                               "tool"
                                                           ],
                                          "expert_architecture":  "SwiGLU_4H",
+                                         "shared_text_ffn":  "always_active_SwiGLU_4H",
                                          "expert_parameter_formula":  "12*hidden_size^2",
                                          "default_active_expert":  "reasoning",
                                          "active_experts_per_episode_or_batch":  1,
@@ -92,13 +93,14 @@
                                             "tied_embedding":  "vocab_size*hidden_size",
                                             "shared_attention_per_layer":  "4*hidden_size^2",
                                             "four_experts_per_layer":  "4*(12*hidden_size^2)",
+                                            "shared_text_ffn_per_layer":  "12*hidden_size^2",
                                             "rmsnorm_per_layer":  "2*hidden_size",
                                             "final_rmsnorm":  "hidden_size",
                                             "image_projection":  "(48*48*3)*hidden_size",
                                             "audio_projection":  "640*hidden_size",
-                                            "total_unique_trainable":  "tied_embedding + layers*(shared_attention_per_layer + four_experts_per_layer + rmsnorm_per_layer) + final_rmsnorm + image_projection + audio_projection"
+                                            "total_unique_trainable":  "tied_embedding + layers*(shared_attention_per_layer + shared_text_ffn_per_layer + four_experts_per_layer + rmsnorm_per_layer) + final_rmsnorm + image_projection + audio_projection"
                                         },
-                  "total_unique_trainable_parameters":  3134515200,
+                  "total_unique_trainable_parameters":  3839158272,
                   "assertion_minimum_unique_trainable_parameters":  3000000000
               },
     "training":  {
@@ -168,7 +170,7 @@
                       "goal_id":  "EMBER-02",
                       "workstream_id":  "EMBER-02B",
                       "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-                      "total_parameters":  3134515200,
+                      "total_parameters":  3839158272,
                       "native_capabilities":  [
                                                   "text",
                                                   "image",

@@ -112,12 +112,14 @@ class RestartDecoderConfig:
         )
         with contract_path.open(encoding="utf-8") as handle:
             contract = json.load(handle)
-        if contract.get("architecture_revision") != "ember-sparse-3b-v1":
-            raise ValueError("production contract must declare ember-sparse-3b-v1")
+        if contract.get("architecture_revision") != "ember-sparse-3b-v2":
+            raise ValueError("production contract must declare ember-sparse-3b-v2")
         model = contract["model"]
         image = model["image_projection"]
         audio = model["audio_projection"]
         routing = model["expert_routing"]
+        if routing.get("shared_text_ffn") != "always_active_SwiGLU_4H":
+            raise ValueError("production contract must declare an always-active shared nonlinear text FFN")
         config = cls(
             hidden_size=int(model["hidden_size"]),
             layers=int(model["layers"]),
@@ -174,7 +176,7 @@ class RestartDecoderConfig:
     def structural_parameter_count(self) -> int:
         hidden = self.hidden_size
         image_input = math.prod(self.image_input_shape)
-        per_layer = 4 * hidden * hidden + len(self.expert_names) * 12 * hidden * hidden + 2 * hidden
+        per_layer = 4 * hidden * hidden + (1 + len(self.expert_names)) * 12 * hidden * hidden + 2 * hidden
         return (
             self.vocab_size * hidden
             + self.layers * per_layer
@@ -297,10 +299,12 @@ class _DecoderLayer(nn.Module):
         self.pre_attention_norm = RMSNorm(config.hidden_size, device=device)
         self.attention = SharedAttention(config, device=device)
         self.pre_ffn_norm = RMSNorm(config.hidden_size, device=device)
+        self.shared_ffn = SwiGLUExpert(config.hidden_size, device=device)
         self.experts = nn.ModuleDict({name: SwiGLUExpert(config.hidden_size, device=device) for name in config.expert_names})
 
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor, active_expert: str) -> torch.Tensor:
         hidden_states = hidden_states + self.attention(self.pre_attention_norm(hidden_states), coordinates, allowed)
+        hidden_states = hidden_states + self.shared_ffn(self.pre_ffn_norm(hidden_states))
         if active_expert == "shared":
             return hidden_states
         return hidden_states + self.experts[active_expert](self.pre_ffn_norm(hidden_states))
@@ -345,6 +349,8 @@ class UnifiedDecoder(nn.Module):
             raise ValueError(f"unknown declared expert: {active_expert}")
         self.active_expert = active_expert
         for layer in self.layers:
+            for parameter in layer.shared_ffn.parameters():
+                parameter.requires_grad_(True)
             for name, expert in layer.experts.items():
                 for parameter in expert.parameters():
                     parameter.requires_grad_(active_expert != "shared" and name == active_expert)
