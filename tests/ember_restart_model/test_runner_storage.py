@@ -35,6 +35,20 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertFalse(oldest.exists())
             self.assertTrue(middle.exists())
             self.assertTrue(newest.exists())
+    def test_retention_prunes_measured_bytes_but_keeps_a_known_good_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            old = parent / "checkpoint-old"; old.mkdir()
+            newest = parent / "checkpoint-new"; newest.mkdir()
+            (old / "state.bin").write_bytes(b"old!!")
+            (newest / "state.bin").write_bytes(b"newest!")
+            now = time.time_ns(); os.utime(old, ns=(now - 1_000_000_000, now - 1_000_000_000))
+            self.assertTrue(hasattr(run_vertical_slice, "_bundle_serialized_bytes"))
+            run_vertical_slice._enforce_retention(parent, max_serialized_bytes=8)
+            self.assertFalse(old.exists())
+            self.assertTrue(newest.exists())
+            self.assertEqual(run_vertical_slice._bundle_serialized_bytes(newest), 7)
+
     def test_production_artifact_root_requires_an_explicit_b_drive_path(self) -> None:
         with self.assertRaisesRegex(ValueError, "B:"):
             run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-checkpoint"))

@@ -67,19 +67,34 @@ def production_artifact_root(candidate: Path) -> Path:
     return resolved
 
 
-def _enforce_retention(parent: Path, *, max_count: int) -> None:
-    """Prune only after successful publication; keep newest known-good bundles."""
+def _bundle_serialized_bytes(bundle: Path) -> int:
+    """Measure exactly the bytes currently published beneath one bundle root."""
+    return sum(path.stat().st_size for path in bundle.rglob("*") if path.is_file())
 
-    if max_count < 1:
-        raise ValueError("checkpoint retention must retain at least one bundle")
+def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serialized_bytes: int | None = None) -> None:
+    """Prune only older successful bundles; never delete the final known-good bundle."""
+    if max_count is None and max_serialized_bytes is None:
+        raise ValueError("checkpoint retention requires a count or serialized-byte budget")
+    if max_count is not None and max_count < 1:
+        raise ValueError("checkpoint retention count must retain at least one bundle")
+    if max_serialized_bytes is not None and max_serialized_bytes < 1:
+        raise ValueError("checkpoint retention serialized-byte budget must be positive")
     parent.mkdir(parents=True, exist_ok=True)
     bundles = sorted(
         (path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-")),
         key=lambda path: (path.stat().st_mtime_ns, path.name),
     )
-    while len(bundles) > max_count:
-        oldest = bundles.pop(0)
-        shutil.rmtree(oldest)
+    if max_count is not None:
+        while len(bundles) > max_count:
+            shutil.rmtree(bundles.pop(0))
+    if max_serialized_bytes is not None:
+        total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+        while total > max_serialized_bytes and len(bundles) > 1:
+            shutil.rmtree(bundles.pop(0))
+            total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+        if total > max_serialized_bytes:
+            raise RuntimeError("published checkpoint exceeds serialized-byte retention budget while preserving the final known-good bundle")
+
 
 def _retain_after_success(parent: Path, *, max_count: int, operation: Callable[[], Any]) -> Any:
     """Preserve every known-good bundle when a new publication operation fails."""
@@ -109,6 +124,17 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
         raise RuntimeError("production slice requires one record for every declared expert")
     return records, packet, input_receipt
 
+
+def checkpoint_retention_budget_bytes(config_path: Path) -> int:
+    """Load the measured serialized-byte ceiling for published checkpoint bundles."""
+    try:
+        retention = json.loads(config_path.read_text(encoding="utf-8"))["checkpoints"]["retention"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare checkpoint retention") from error
+    gib = retention.get("max_serialized_gib") if isinstance(retention, dict) else None
+    if not isinstance(gib, int) or gib < 1 or retention.get("preserve_last_known_good") is not True:
+        raise ValueError("checkpoint retention must declare a positive serialized-byte budget and preserve the last good bundle")
+    return gib * 1024**3
 
 def checkpoint_retention_limit(config_path: Path) -> int:
     """Read the contract retention policy instead of maintaining a runner-local copy."""
@@ -304,7 +330,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     checkpoint = _retain_after_success(
         checkpoint_parent,
-        max_count=checkpoint_retention_limit(config_path),
+        max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
         operation=lambda: write_checkpoint_artifacts(
             model,
             optimizer,
