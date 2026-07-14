@@ -74,6 +74,13 @@ Admission adds all of the following without weakening the candidate gates:
 
 - a `PASSED` `ember-sufficient-pretraining-v1` receipt bound to the exact checkpoint-manifest SHA-256, content-addressed training ledger, stopping evaluation, and checkpoint progression; it records checkpoint-matching tokens, GPU-hours, and final loss, and its independently trusted local verifier is executed with fixed arguments against those artifacts with output required to match the receipt;
 - exactly one checkpoint-bound `MEASURED` external-evaluation receipt for each of text, image, audio, reasoning, and typed tools; every receipt binds benchmark ID/version, split, harness, protocol, raw predictions, score artifact, nonzero sample count, finite numeric metrics, and a capability-specific `PASSED` criterion; the exact local verifier bytes must be externally trusted for that criterion and are executed with fixed arguments against those artifacts, with output required to match the receipt;
+- raw predictions use the closed `ember-owned-predictions-v1` envelope validated by
+  `scripts/ember_restart/prediction_contract.py`. The envelope binds the exact checkpoint
+  manifest, model config, owned tokenizer, inference implementation bytes, benchmark,
+  version, capability, split, protocol, decoding parameters, per-row input hashes,
+  generated token IDs, stop reasons, and typed outputs. Decoding must be greedy and
+  autoregressive with teacher forcing explicitly false. Text, reasoning, audio, MMMU,
+  Spider, and typed-tool adapters materialize scorer inputs without changing answers;
 - verifier-byte hashes admitted for the correct evidence class by the externally supplied trusted-verifier registry;
 - a content-addressed serving manifest whose seat is exactly `OWNED_ADMITTED`, checkpoint binding matches the training and evaluation subject, endpoint is loopback HTTP, protocol is `openai-chat-v1`, and identity route is `/v1/models`.
 - Ember CLI executes the checked-in central resolver against the run manifest and independently supplied verifier registry before selecting that seat. It then requires the live identity route to return the exact admitted seat, checkpoint SHA-256, and derived `ember-owned:<12 hex>` model name before session initialization.
