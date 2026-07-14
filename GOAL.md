@@ -32,7 +32,12 @@ they cannot reduce, defer, replace, or reinterpret it.
         "docs/ember-restart-image-",
         "manifests/ember-restart-eval-",
         "scripts/ember_restart_eval",
-        "tests/test_ember_restart_eval"
+        "tests/test_ember_restart_eval",
+        "docs/ember-restart-sql-",
+        "docs/ember-restart-structured-tools-",
+        "docs/ember-restart-dynamics-",
+        "scripts/ember_restart_measured_receipts",
+        "tests/test_ember_restart_measured_receipts"
       ]
     },
     "EMBER-02B": {
@@ -58,7 +63,12 @@ they cannot reduce, defer, replace, or reinterpret it.
         "docs/ember-restart-image-",
         "manifests/ember-restart-eval-",
         "scripts/ember_restart_eval",
-        "tests/test_ember_restart_eval"
+        "tests/test_ember_restart_eval",
+        "docs/ember-restart-sql-",
+        "docs/ember-restart-structured-tools-",
+        "docs/ember-restart-dynamics-",
+        "scripts/ember_restart_measured_receipts",
+        "tests/test_ember_restart_measured_receipts"
       ]
     }
   },

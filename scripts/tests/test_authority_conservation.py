@@ -50,7 +50,12 @@ WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
                             'docs/ember-restart-image-',
                             'manifests/ember-restart-eval-',
                             'scripts/ember_restart_eval',
-                            'tests/test_ember_restart_eval']},
+                            'tests/test_ember_restart_eval',
+                            'docs/ember-restart-sql-',
+                            'docs/ember-restart-structured-tools-',
+                            'docs/ember-restart-dynamics-',
+                            'scripts/ember_restart_measured_receipts',
+                            'tests/test_ember_restart_measured_receipts']},
  'EMBER-02B': {'mode': 'only',
                'prefixes': ['configs/ember-restart-3b.json',
                             'docs/ember-restart-3b-',
@@ -68,7 +73,12 @@ WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
                             'docs/ember-restart-image-',
                             'manifests/ember-restart-eval-',
                             'scripts/ember_restart_eval',
-                            'tests/test_ember_restart_eval']}}
+                            'tests/test_ember_restart_eval',
+                            'docs/ember-restart-sql-',
+                            'docs/ember-restart-structured-tools-',
+                            'docs/ember-restart-dynamics-',
+                            'scripts/ember_restart_measured_receipts',
+                            'tests/test_ember_restart_measured_receipts']}}
 
 CONSERVATION_HEADER = """<!-- EMBER_CONSERVATION_V1
 minimum_new_network_parameters=3000000000
