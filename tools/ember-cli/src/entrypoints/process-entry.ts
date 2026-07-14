@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // entrypoints/process-entry.ts — process bootstrap: env cleanup, server spawn,
@@ -18,6 +18,10 @@ import {
   referenceSeatModelName,
   resolveModelSeat,
 } from "./model-seat.ts";
+import {
+  loadOwnedModelIdentity,
+  verifyOwnedEndpointIdentity,
+} from "./owned-seat-loader.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
@@ -530,7 +534,10 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  new, list, reply, environment-runner, self-hosted-runner, gh doctor\n` +
       `\n` +
       `Environment:\n` +
-      `  EMBER_MODEL_URL       External endpoint; requires admitted owned identity or explicit reference seat\n` +
+      `  EMBER_MODEL_URL       External endpoint; requires admitted owned identity match or explicit reference seat\n` +
+      `  EMBER_OWNED_RUNG_MANIFEST  Admitted run manifest (default: EMBER_HOME/owned/current.json)\n` +
+      `  EMBER_TRUSTED_VERIFIER_REGISTRY  Independent verifier registry for owned admission\n` +
+      `  EMBER_PYTHON          Python executable used for the checked-in admission resolver\n` +
       `  EMBER_REFERENCE_SEAT  Set to 1 for explicit REFERENCE_ONLY automation\n` +
       `  EMBER_API_KEY     API key for the model endpoint (default: local)\n`,
     );
@@ -654,6 +661,8 @@ export interface MainOptions {
   /** #159 boot matrix, "backend already running": probed BEFORE spawning. Defaults to a
    *  short real health probe; tests inject a fake to avoid real network I/O. */
   probeExisting?:  (port: number) => Promise<boolean>;
+  loadOwnedIdentityFn?: typeof loadOwnedModelIdentity;
+  verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
   initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
@@ -695,14 +704,34 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // this must key off "is GPU_FREE set" alone -- an empty-string EMBER_MODEL_URL is not a
   // reachable signal from a Windows .bat launcher.
   const gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
-  const seatDecision = resolveModelSeat({
+  const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
+  const seatInput = {
     argv: rawArgv,
     explicitModelUrl: envModelUrlBeforeConfigApply,
     gpuFreeRequested,
     referenceSeatEnv: process.env["EMBER_REFERENCE_SEAT"],
-  });
+  };
+  let seatDecision = resolveModelSeat(seatInput);
+  if (!seatDecision.allowed) {
+    try {
+      const ownedIdentity = (opts.loadOwnedIdentityFn ?? loadOwnedModelIdentity)({
+        repoRoot: resolveEmberRepoRootOrCwd({}, "[ember-cli]"),
+        configHome: getEmberConfigHomeDir(),
+        manifestPath: process.env["EMBER_OWNED_RUNG_MANIFEST"],
+        verifierRegistryPath: process.env["EMBER_TRUSTED_VERIFIER_REGISTRY"],
+        pythonExecutable: process.env["EMBER_PYTHON"],
+      });
+      if (ownedIdentity) {
+        seatDecision = resolveModelSeat({ ...seatInput, ownedIdentity });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: " + message + "\n");
+      doExitMain(1);
+      return;
+    }
+  }
   const argv = seatDecision.argv;
-  const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
   const seatBannerStream = argv.slice(2)[0] === "--mcp"
     ? process.stderr
     : process.stdout;
@@ -727,6 +756,14 @@ export async function main(opts: MainOptions = {}): Promise<void> {
         seatDecision.source +
         "); owned completion disabled\n",
     );
+  } else if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
+    process.env["EMBER_MODEL_URL"] = seatDecision.ownedIdentity.endpointUrl;
+    process.env["EMBER_MODEL_NAME"] = seatDecision.ownedIdentity.modelName;
+    seatBannerStream.write(
+      "[ember] model seat: OWNED_ADMITTED (checkpoint " +
+        seatDecision.ownedIdentity.checkpointSha256.slice(0, 12) +
+        ")\n",
+    );
   } else {
     process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
     seatBannerStream.write(
@@ -741,15 +778,22 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // a models.json "binary"/"endpoint" field silently discarding an explicit override, or a
   // persisted endpoint silently discarding EMBER_GPU_FREE=1) can never reroute the cockpit
   // with zero visible signal.
-  process.stdout.write(
-    describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply, gpuFreeRequested).text + "\n",
-  );
+  if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
+    process.stdout.write(
+      "[ember] model endpoint: " + seatDecision.ownedIdentity.endpointUrl +
+        " -- bound by admitted checkpoint manifest\n",
+    );
+  } else {
+    process.stdout.write(
+      describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply, gpuFreeRequested).text + "\n",
+    );
+  }
 
   // Determine whether we use an external server or spawn our own. issue #196:
   // an explicit EMBER_MODEL_URL always wins over models.json (env > config >
   // managed) -- envModelUrlBeforeConfigApply is the pre-config snapshot, so a
   // config-populated env value can never masquerade as an operator override.
-  const externalUrl = envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
+  const externalUrl = seatDecision.ownedIdentity?.endpointUrl ?? envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
 
   // string | null: null is the explicit GPU-free signal session-init.ts's `!serverUrl`
   // check relies on (issue #602) -- a real, typed null, not an unsafe cast.
@@ -879,6 +923,19 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
       registerManagedModel({ pid: serverHandle.process.pid! });
       void serverHandle; // handle held in closure via cleanup hooks
+    }
+  }
+
+  if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
+    try {
+      await (opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity)(
+        seatDecision.ownedIdentity,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: " + message + "\n");
+      doExitMain(1);
+      return;
     }
   }
 

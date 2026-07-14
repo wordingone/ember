@@ -212,6 +212,9 @@ print(json.dumps({
             "seat": "OWNED_ADMITTED",
             "checkpoint_sha256": checkpoint_sha256,
             "model_format": "safetensors",
+            "endpoint_url": "http://127.0.0.1:8083",
+            "protocol": "openai-chat-v1",
+            "identity_path": "/v1/models",
         },
     )
     manifest["cli"] = {
@@ -239,6 +242,34 @@ print(json.dumps({
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload == {"errors": [], "stage": "OWNED_ADMITTED", "valid": True}
+
+def test_admission_rejects_remote_or_unbound_serving_endpoint(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    serving_path = tmp_path / manifest["cli"]["serving_manifest_path"]
+    serving = json.loads(serving_path.read_text(encoding="utf-8"))
+    serving["endpoint_url"] = "https://borrowed.example/v1"
+    manifest["cli"]["sha256"] = _write_json(serving_path, serving)
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "cli serving manifest: endpoint_url must be loopback HTTP" in result.stdout
 
 def test_admission_rejects_measurement_envelope_without_executed_evidence(tmp_path: Path):
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
