@@ -59,14 +59,20 @@ def _enforce_retention(parent: Path, *, max_count: int) -> None:
         shutil.rmtree(oldest)
 
 
-def load_authorized_record(root: Path) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
-    """Consume the #812 launch-gate identity before reading training bytes."""
+def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
+    """Consume #812 identity before reading the exact owned four-domain bytes."""
 
     packet, validation, input_receipt = run_launch(repo_root=root)
     if validation["decision"] != "ACCEPTED":
         raise RuntimeError("input launch gate did not accept the selected shard")
     shard = root / str(packet["input_identity"]["shard_path"])
-    return json.loads(shard.read_text(encoding="utf-8")), packet, input_receipt
+    payload = json.loads(shard.read_text(encoding="utf-8"))
+    records = payload.get("records") if isinstance(payload, dict) else None
+    if payload.get("schema_version") != "ember-owned-pretraining-shard-v1" or not isinstance(records, list) or len(records) != 4:
+        raise RuntimeError("production slice requires the exact four-domain owned shard")
+    if {record.get("active_expert") for record in records if isinstance(record, dict)} != {"vision", "audio", "reasoning", "tool"}:
+        raise RuntimeError("production slice requires one record for every declared expert")
+    return records, packet, input_receipt
 
 
 def _rng_state(device: torch.device) -> dict[str, torch.Tensor]:
@@ -138,7 +144,7 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     config = RestartDecoderConfig.from_contract(config_path)
-    record, launch_packet, input_receipt = load_authorized_record(root)
+    records, launch_packet, input_receipt = load_authorized_records(root)
     checkpoint_parent = artifact_root / "checkpoints"
     _enforce_retention(checkpoint_parent, max_count=8)
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
@@ -157,33 +163,21 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_134_515_200 or counts["active_parameters"] != 1_020_585_984:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
-    batch = decode_owned_batch(record, config, device=torch.device("cuda"))
     import bitsandbytes as bnb
 
-    optimizer = bnb.optim.AdamW8bit(
-        model.parameters(),
-        lr=1e-4,
-    )
+    optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-4)
     torch.cuda.reset_peak_memory_stats()
-    logits = model(
-        batch["input_ids"],
-        image_patches=batch["image_patches"],
-        audio_frames=batch["audio_frames"],
-        image_coordinates=batch["image_coordinates"],
-        spans=batch["spans"],
-        active_expert=batch["active_expert"],
+    segment = run_pretraining_segment(
+        model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
+        checkpoint_every=len(records), checkpoint_callback=lambda _step, _result: None,
+        data_shard_id=str(launch_packet["input_identity"]["shard_path"]),
     )
-    loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
-    loss.backward()
-    optimizer.step()
     rng_state_after_step = _rng_state(torch.device("cuda"))
-    data_cursor = {
-        "shard": str(launch_packet["input_identity"]["shard_path"]),
-        "record_index": 1,
-        "global_step": 1,
-        "tokens_seen": int(batch["input_ids"].numel()),
-        "input_identity_receipt_sha256": _json_sha256(input_receipt),
-    }
+    data_cursor = dict(segment["data_cursor"])
+    data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
+    counts = measure_parameter_counts(model)
+    if counts["unique_parameters"] != 3_134_515_200 or counts["active_parameters"] != 1_020_585_984:
+        raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     checkpoint = write_checkpoint_artifacts(
         model,
         optimizer,
@@ -200,11 +194,11 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
         root=root,
         config_path=config_path,
         checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
-        active_expert=str(batch["active_expert"]),
+        active_expert=str(model.active_expert),
         expected_counts=counts,
     )
     return {
-        "loss": float(loss.detach().cpu()),
+        "losses": segment["losses"],
         "counts": counts,
         "launch_seed": seed,
         "rng_state_before_init_sha256": rng_state_before_init,
