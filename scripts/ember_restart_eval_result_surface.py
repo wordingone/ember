@@ -9,7 +9,7 @@ def main():
  try:r=json.loads(a.input.read_text())
  except Exception:p.error('input must be JSON')
  if not isinstance(r,dict):p.error('input must be an object')
- measured=r.get('result')=='MEASURED' and r.get('admission')=='ADMITTED'
+ measured=r.get('result')=='MEASURED' and r.get('admission')=='ADMITTED' and r.get('checkpoint_status')!='NON_CLAIM_BOOTSTRAP'
  label='MEASURED CAPABILITY' if measured else 'NOT CLAIM-BEARING'
  text=f'# Ember evaluation result\n\nStatus: {label}\n\nCapability: {r.get("capability","unknown")}\n'
  a.output.parent.mkdir(parents=True,exist_ok=True)
