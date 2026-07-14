@@ -101,5 +101,22 @@ class DomainTrainingManifestTests(unittest.TestCase):
                 load_domain_training_manifest(manifest_path=manifest, repo_root=root)
 
 
+    def test_source_receipt_rejects_generated_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "data"; data.mkdir()
+            receipts = root / "receipts"; receipts.mkdir()
+            shard = data / "capture.json"; shard.write_bytes(b"captured domain bytes")
+            source_payload = {"schema_version": "ember-owned-domain-source-receipt-v1", "result": "VERIFIED", "provenance": {"generated_labels": True, "borrowed_model_outputs": False, "teacher_outputs": False}}
+            source = receipts / "source.json"; source.write_text(json.dumps(source_payload), encoding="utf-8")
+            shard_hash = hashlib.sha256(shard.read_bytes()).hexdigest()
+            source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+            domains = [{"expert": expert, "shard_path": "data/capture.json", "shard_sha256": shard_hash, "source_receipt_path": "receipts/source.json", "source_receipt_sha256": source_hash} for expert in ("vision", "audio", "reasoning", "tool")]
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"schema_version": "ember-owned-domain-training-manifest-v1", "artifact_id": "owned-captured-domain-v1", "shard_path": "data/capture.json", "domains": domains}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "generated labels"):
+                load_domain_training_manifest(manifest_path=manifest, repo_root=root)
+
+
 if __name__ == "__main__":
     unittest.main()
