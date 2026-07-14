@@ -99,7 +99,7 @@ def _verify(manifest_path: Path, model_config: Path) -> dict[str, object]:
     for expert in EXPERTS:
         payload = torch.load(manifest_path.parent / f"expert-{expert}.pt", map_location="cpu", weights_only=True)
         state = payload.get("model") if isinstance(payload, dict) else None
-        if not isinstance(payload, dict) or payload.get("expert") != expert or not isinstance(state, dict) or any(f".experts.{expert}." not in key for key in state):
+        if not isinstance(payload, dict) or payload.get("expert") != expert or payload.get("genesis_sha256") != manifest["expert_genesis_sha256"][expert] or not isinstance(state, dict) or any(f".experts.{expert}." not in key for key in state):
             raise ValueError(f"checkpoint expert payload identity mismatch: {expert}")
     return {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "checkpoint_manifest_sha256": _sha256(manifest_path), "model_config_sha256": manifest["model_config_sha256"], "result": "VERIFIED_CHECKPOINT_INPUT", "shard_count": len(records)}
 
