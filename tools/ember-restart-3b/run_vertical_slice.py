@@ -166,7 +166,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     import bitsandbytes as bnb
 
-    optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-4)
+    optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
         resume_checkpoint = resume_checkpoint.resolve()
@@ -176,6 +176,8 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
         resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
+        for group in optimizer.param_groups:
+            group["lr"] = 1e-5
         checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
     torch.cuda.reset_peak_memory_stats()
     segment = run_pretraining_segment(
