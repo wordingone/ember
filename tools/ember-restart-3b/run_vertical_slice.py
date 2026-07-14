@@ -46,7 +46,7 @@ def production_artifact_root(candidate: Path) -> Path:
 
 
 def _enforce_retention(parent: Path, *, max_count: int) -> None:
-    """Reserve one bounded checkpoint slot before the next training step."""
+    """Prune only after successful publication; keep newest known-good bundles."""
 
     if max_count < 1:
         raise ValueError("checkpoint retention must retain at least one bundle")
@@ -147,7 +147,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     config = RestartDecoderConfig.from_contract(config_path)
     records, launch_packet, input_receipt = load_authorized_records(root)
     checkpoint_parent = artifact_root / "checkpoints"
-    _enforce_retention(checkpoint_parent, max_count=8)
+    _enforce_retention(checkpoint_parent, max_count=2)
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
 
     torch.manual_seed(seed)
@@ -201,7 +201,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         contract_sha256=_sha256(integration_contract_path),
         expert_genesis_sha256=genesis_hashes,
     )
-    _enforce_retention(checkpoint_parent, max_count=8)
+    _enforce_retention(checkpoint_parent, max_count=2)
     parameter_receipt = _execute_realization_counter(
         root=root,
         config_path=config_path,
