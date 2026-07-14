@@ -80,10 +80,21 @@ def _candidate_manifest(tmp_path: Path) -> Path:
         },
         "architecture": {
             "family": "ember-unified-decoder",
-            "allocated_parameters": 3_140_000_000,
-            "trainable_parameters": 3_140_000_000,
-            "active_parameters": 3_140_000_000,
-            "served_parameters": 3_140_000_000,
+            "allocated_parameters": 3_134_000_000,
+            "unique_parameters": 3_134_000_000,
+            "trainable_parameters": 3_134_000_000,
+            "active_parameters": 1_021_000_000,
+            "episode_trainable_parameters": 1_021_000_000,
+            "served_parameters": 3_134_000_000,
+            "shared_core": True,
+            "sparse_differentiated_capacity": True,
+            "task_level_expert_routing": True,
+            "asymmetric_expert_initialization": True,
+            "expert_banks": [
+                {"id": domain, "domain": domain, "genesis_sha256": f"{index + 1:064x}"}
+                for index, domain in enumerate(("vision", "audio", "reasoning", "tool"))
+            ],
+            "active_expert_ids": ["reasoning"],
             "raw_image_patches": True,
             "raw_audio_frames": True,
             "soft_token_splicing": True,

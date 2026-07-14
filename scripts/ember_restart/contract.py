@@ -31,13 +31,18 @@ ARCHITECTURE_FLAGS = (
     "soft_token_splicing",
     "multimodal_span_attention",
     "rope_2d",
+    "shared_core",
+    "sparse_differentiated_capacity",
+    "task_level_expert_routing",
+    "asymmetric_expert_initialization",
 )
-PARAMETER_FIELDS = (
+TOTAL_PARAMETER_FIELDS = (
     "allocated_parameters",
+    "unique_parameters",
     "trainable_parameters",
-    "active_parameters",
     "served_parameters",
 )
+EXPERT_DOMAINS = ("vision", "audio", "reasoning", "tool")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -107,15 +112,74 @@ def _verify_architecture(manifest: dict[str, Any], errors: list[str]) -> None:
         return
     if architecture.get("family") != "ember-unified-decoder":
         errors.append("architecture.family: must equal ember-unified-decoder")
-    for field in PARAMETER_FIELDS:
+    for field in TOTAL_PARAMETER_FIELDS:
         value = architecture.get(field)
         if not isinstance(value, int) or isinstance(value, bool) or value < PARAMETER_FLOOR:
             errors.append(f"architecture.{field}: must be an integer >= {PARAMETER_FLOOR}")
+    allocated = architecture.get("allocated_parameters")
+    unique = architecture.get("unique_parameters")
+    trainable = architecture.get("trainable_parameters")
+    served = architecture.get("served_parameters")
+    active = architecture.get("active_parameters")
+    episode_trainable = architecture.get("episode_trainable_parameters")
+    if not isinstance(active, int) or isinstance(active, bool) or active <= 0:
+        errors.append("architecture.active_parameters: must be a positive integer")
+    if not isinstance(episode_trainable, int) or isinstance(episode_trainable, bool) or episode_trainable <= 0:
+        errors.append("architecture.episode_trainable_parameters: must be a positive integer")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (allocated, unique)) and unique > allocated:
+        errors.append("architecture.unique_parameters: cannot exceed allocated_parameters")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (unique, trainable)) and trainable > unique:
+        errors.append("architecture.trainable_parameters: cannot exceed unique_parameters")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (unique, served)) and served != unique:
+        errors.append("architecture.served_parameters: must equal unique_parameters")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (active, unique)) and active >= unique:
+        errors.append("architecture.active_parameters: sparse execution requires active < unique")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (episode_trainable, active)) and episode_trainable > active:
+        errors.append("architecture.episode_trainable_parameters: cannot exceed active_parameters")
     for field in ARCHITECTURE_FLAGS:
         if architecture.get(field) is not True:
             errors.append(f"architecture.{field}: must be true")
     if architecture.get("separate_pretrained_encoders") is not False:
         errors.append("architecture.separate_pretrained_encoders: must be false")
+
+    expert_banks = architecture.get("expert_banks")
+    bank_ids: set[str] = set()
+    bank_domains: set[str] = set()
+    genesis_hashes: set[str] = set()
+    if not isinstance(expert_banks, list) or len(expert_banks) != len(EXPERT_DOMAINS):
+        errors.append("architecture.expert_banks: requires exactly vision/audio/reasoning/tool banks")
+    else:
+        for index, bank in enumerate(expert_banks):
+            prefix = f"architecture.expert_banks[{index}]"
+            if not isinstance(bank, dict):
+                errors.append(f"{prefix}: expected object")
+                continue
+            bank_id = bank.get("id")
+            domain = bank.get("domain")
+            genesis = bank.get("genesis_sha256")
+            if not isinstance(bank_id, str) or not bank_id:
+                errors.append(f"{prefix}.id: expected non-empty string")
+            elif bank_id in bank_ids:
+                errors.append(f"{prefix}.id: duplicate expert id")
+            else:
+                bank_ids.add(bank_id)
+            if domain not in EXPERT_DOMAINS:
+                errors.append(f"{prefix}.domain: unsupported domain")
+            else:
+                bank_domains.add(domain)
+            if not isinstance(genesis, str) or not SHA256_RE.fullmatch(genesis):
+                errors.append(f"{prefix}.genesis_sha256: expected lowercase SHA-256")
+            elif genesis in genesis_hashes:
+                errors.append(f"{prefix}.genesis_sha256: expert genesis hashes must be distinct")
+            else:
+                genesis_hashes.add(genesis)
+        if bank_domains != set(EXPERT_DOMAINS):
+            errors.append("architecture.expert_banks: domains must equal vision/audio/reasoning/tool")
+    active_experts = architecture.get("active_expert_ids")
+    if not isinstance(active_experts, list) or len(active_experts) != 1:
+        errors.append("architecture.active_expert_ids: exactly one expert must be active per episode")
+    elif active_experts[0] not in bank_ids:
+        errors.append("architecture.active_expert_ids: active expert is not declared")
 
 
 def _verify_data(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
