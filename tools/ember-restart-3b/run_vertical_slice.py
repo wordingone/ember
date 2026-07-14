@@ -154,7 +154,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     torch.cuda.manual_seed_all(seed)
     rng_state_before_init = _rng_state_hash(torch.device("cuda"))
     previous_dtype = torch.get_default_dtype()
-    torch.set_default_dtype(torch.bfloat16)
+    torch.set_default_dtype(torch.float32)
     try:
         model = UnifiedDecoder(config, device="cuda", allow_production_allocation=True, genesis_seed=seed)
     finally:
