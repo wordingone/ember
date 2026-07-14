@@ -26,6 +26,13 @@ class RestartContractTests(unittest.TestCase):
         model = contract["model"]
         self.assertEqual((model["hidden_size"], model["layers"], model["attention_heads"], model["vocab_size"]), (2048, 14, 16, 32000))
         self.assertTrue(model["tied_embeddings"])
+        self.assertIn("memory", contract["training"])
+        memory = contract["training"]["memory"]
+        self.assertEqual(memory["parameter_dtype"], "bfloat16")
+        self.assertEqual(memory["parameter_bytes"], 2)
+        self.assertEqual(memory["gradient_bytes_per_active_parameter"], 2)
+        self.assertEqual(memory["optimizer_state_bytes_per_active_parameter"], 2)
+        self.assertEqual(memory["activation_reserve_gib"], 4)
         self.assertEqual(model["expert_routing"]["expert_names"], ["vision", "audio", "reasoning", "tool"])
         self.assertEqual(model["expert_routing"]["active_experts_per_episode_or_batch"], 1)
         self.assertTrue(model["expert_routing"]["inactive_experts_frozen"])
