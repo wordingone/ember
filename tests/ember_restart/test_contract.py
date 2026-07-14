@@ -74,6 +74,35 @@ def _candidate_manifest(tmp_path: Path) -> Path:
         checkpoint_index,
         {"shards": shard_records},
     )
+    parameter_counts = {
+        "allocated_parameters": 3_134_515_200,
+        "unique_parameters": 3_134_515_200,
+        "trainable_parameters": 3_134_515_200,
+        "active_parameters": 1_020_585_984,
+        "episode_trainable_parameters": 1_020_585_984,
+        "served_parameters": 3_134_515_200,
+    }
+    counter = tmp_path / "counter" / "instantiated_meta_counter.py"
+    counter.parent.mkdir(parents=True)
+    counter.write_text("# fixture instantiated-meta counter\n", encoding="utf-8")
+    counter_record = {
+        "path": str(counter.relative_to(tmp_path)),
+        "sha256": _sha256(counter),
+    }
+    parameter_receipt = tmp_path / "receipts" / "parameter-count.json"
+    parameter_receipt_hash = _write_json(
+        parameter_receipt,
+        {
+            "result": "MEASURED",
+            "subject_checkpoint_sha256": checkpoint_index_hash,
+            "counter_sha256": counter_record["sha256"],
+            **parameter_counts,
+            "active_expert_ids": ["reasoning"],
+            "expert_genesis_sha256": {
+                bank["id"]: bank["genesis_sha256"] for bank in expert_banks
+            },
+        },
+    )
 
     manifest = {
         "schema_version": "ember-owned-rung-v1",
@@ -91,12 +120,12 @@ def _candidate_manifest(tmp_path: Path) -> Path:
         },
         "architecture": {
             "family": "ember-unified-decoder",
-            "allocated_parameters": 3_134_000_000,
-            "unique_parameters": 3_134_000_000,
-            "trainable_parameters": 3_134_000_000,
-            "active_parameters": 1_021_000_000,
-            "episode_trainable_parameters": 1_021_000_000,
-            "served_parameters": 3_134_000_000,
+            **parameter_counts,
+            "parameter_counter": counter_record,
+            "parameter_receipt": {
+                "path": str(parameter_receipt.relative_to(tmp_path)),
+                "sha256": parameter_receipt_hash,
+            },
             "shared_core": True,
             "sparse_differentiated_capacity": True,
             "task_level_expert_routing": True,

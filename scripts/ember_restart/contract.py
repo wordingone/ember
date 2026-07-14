@@ -188,6 +188,39 @@ def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]
     elif active_experts[0] not in bank_ids:
         errors.append("architecture.active_expert_ids: active expert is not declared")
 
+    counter = architecture.get("parameter_counter")
+    counter_path = _verify_file(root, counter, "architecture.parameter_counter", errors)
+    counter_sha256 = counter.get("sha256") if isinstance(counter, dict) else None
+    parameter_receipt = architecture.get("parameter_receipt")
+    receipt = _load_bound_json(
+        root,
+        parameter_receipt,
+        "path",
+        "architecture.parameter_receipt",
+        errors,
+    )
+    if receipt is not None:
+        if receipt.get("result") != "MEASURED":
+            errors.append("architecture.parameter_receipt: result must equal MEASURED")
+        checkpoint = manifest.get("checkpoint")
+        checkpoint_sha256 = checkpoint.get("sha256") if isinstance(checkpoint, dict) else None
+        if receipt.get("subject_checkpoint_sha256") != checkpoint_sha256:
+            errors.append("architecture.parameter_receipt: checkpoint mismatch")
+        if counter_path is None or receipt.get("counter_sha256") != counter_sha256:
+            errors.append("architecture.parameter_receipt: counter mismatch")
+        for field in (*TOTAL_PARAMETER_FIELDS, "active_parameters", "episode_trainable_parameters"):
+            if receipt.get(field) != architecture.get(field):
+                errors.append(f"architecture.parameter_receipt: {field} mismatch")
+        if receipt.get("active_expert_ids") != active_experts:
+            errors.append("architecture.parameter_receipt: active_expert_ids mismatch")
+        expected_banks = {
+            bank.get("id"): bank.get("genesis_sha256")
+            for bank in expert_banks
+            if isinstance(bank, dict)
+        } if isinstance(expert_banks, list) else {}
+        if receipt.get("expert_genesis_sha256") != expected_banks:
+            errors.append("architecture.parameter_receipt: expert genesis mismatch")
+
 
 def _verify_data(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
     tokenizer = manifest.get("tokenizer")
