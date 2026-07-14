@@ -116,6 +116,7 @@ def main() -> None:
         receipt = _verify(arguments.manifest, arguments.model_config)
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
         parser.error(str(error))
+    if arguments.output.exists(): parser.error("refusing to overwrite existing output")
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.output.parent, delete=False) as handle:
         json.dump(receipt, handle, sort_keys=True, separators=(",", ":"))
