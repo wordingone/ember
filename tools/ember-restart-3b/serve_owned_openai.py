@@ -9,11 +9,12 @@ import argparse
 import hashlib
 import json
 import sys
+import subprocess
 import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
 
 import torch
 
@@ -71,33 +72,55 @@ def _contains_target_leak(value: Any) -> bool:
 def _error(message: str) -> dict[str, object]:
     return {"error": {"message": message, "type": "invalid_request_error"}}
 
-def validate_admission_identity(
-    admission: object,
+
+
+
+def resolve_central_owned_admission(
     *,
+    run_manifest: Path,
+    trusted_verifier_registry: Path,
     checkpoint_sha256: str,
-    model_config_sha256: str,
-    server_source_sha256: str,
-) -> Mapping[str, object]:
-    """Reject an admission artifact that is not for this exact loaded runtime."""
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+) -> dict[str, object]:
+    """Execute the central seat resolver and bind its decision to the loaded checkpoint."""
 
-    if not isinstance(admission, Mapping) or admission.get("seat") != "OWNED_ADMITTED":
-        raise ValueError("server requires an OWNED_ADMITTED admission artifact")
-    if admission.get("checkpoint_sha256") != checkpoint_sha256:
-        raise ValueError("admission checkpoint hash does not match loaded manifest")
-    if admission.get("model_config_sha256") != model_config_sha256:
-        raise ValueError("admission model config hash does not match loaded configuration")
-    if admission.get("server_source_sha256") != server_source_sha256:
-        raise ValueError("admission server source hash does not match loaded server")
-    expected_model_name = "ember-owned:" + checkpoint_sha256[:12]
-    if admission.get("model_name") != expected_model_name:
-        raise ValueError("admission model name does not match loaded checkpoint")
-    tokenizer_sha256 = admission.get("tokenizer_sha256")
-    if not isinstance(tokenizer_sha256, str) or len(tokenizer_sha256) != 64 or any(char not in "0123456789abcdef" for char in tokenizer_sha256):
-        raise ValueError("admission must bind lowercase tokenizer_sha256")
-    return admission
-
-
-
+    command = [
+        sys.executable,
+        "-I",
+        str(ROOT / "scripts" / "ember_restart" / "cli_seat.py"),
+        str(run_manifest),
+        "--trusted-verifier-registry",
+        str(trusted_verifier_registry),
+    ]
+    try:
+        completed = (
+            runner(command)
+            if runner is not None
+            else subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                timeout=120,
+                check=False,
+            )
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"central owned-seat resolver failed: {exc}") from exc
+    if completed.returncode != 0:
+        raise ValueError("central owned-seat resolver rejected the run manifest")
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("central owned-seat resolver returned invalid JSON") from exc
+    if not isinstance(payload, dict) or payload.get("valid") is not True:
+        raise ValueError("central owned-seat resolver did not return a valid decision")
+    if payload.get("seat") != "OWNED_ADMITTED":
+        raise ValueError("central owned-seat resolver did not admit the owned checkpoint")
+    if payload.get("checkpoint_sha256") != checkpoint_sha256:
+        raise ValueError("central admission checkpoint hash does not match loaded manifest")
+    if payload.get("model_name") != "ember-owned:" + checkpoint_sha256[:12]:
+        raise ValueError("central admission model name does not match loaded checkpoint")
+    return payload
 def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -> ThreadingHTTPServer:
     """Create a local-only server whose identity and completions share one runtime object."""
 
@@ -172,39 +195,67 @@ class LoadedOwnedRuntime:
         self.device = device
 
     @classmethod
-    def from_paths(cls, *, checkpoint: Path, tokenizer_path: Path, admission_path: Path, device: str) -> "LoadedOwnedRuntime":
+    def from_paths(
+        cls,
+        *,
+        checkpoint: Path,
+        tokenizer_path: Path,
+        run_manifest: Path,
+        trusted_verifier_registry: Path,
+        device: str,
+    ) -> "LoadedOwnedRuntime":
         config_path = ROOT / "configs" / "ember-restart-3b.json"
         manifest_path = checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         checkpoint_sha256 = sha(manifest_path)
-        admission = json.loads(admission_path.read_text(encoding="utf-8"))
-        model_config_sha256 = sha(config_path)
-        server_source_sha256 = sha(Path(__file__))
-        admission = validate_admission_identity(
-            admission,
+        run_manifest_sha256 = sha(run_manifest)
+        admission = resolve_central_owned_admission(
+            run_manifest=run_manifest,
+            trusted_verifier_registry=trusted_verifier_registry,
             checkpoint_sha256=checkpoint_sha256,
-            model_config_sha256=model_config_sha256,
-            server_source_sha256=server_source_sha256,
         )
-        if not isinstance(admission, dict) or admission.get("seat") != "OWNED_ADMITTED":
-            raise ValueError("server requires an OWNED_ADMITTED admission artifact")
-        if admission.get("checkpoint_sha256") != checkpoint_sha256:
-            raise ValueError("admission checkpoint hash does not match loaded manifest")
-        expected_tokenizer_sha256 = admission.get("tokenizer_sha256")
-        if not isinstance(expected_tokenizer_sha256, str):
-            raise ValueError("admission must bind tokenizer_sha256")
+        if sha(run_manifest) != run_manifest_sha256:
+            raise ValueError("central run manifest changed during owned-seat resolution")
+        try:
+            central_manifest = json.loads(run_manifest.read_text(encoding="utf-8"))
+            config_record = central_manifest["architecture"]["model_config"]
+            tokenizer_record = central_manifest["tokenizer"]
+        except (KeyError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"central run manifest lacks runtime bindings: {exc}") from exc
+
+        def bound_sha256(record: object, name: str) -> str:
+            value = record.get("sha256") if isinstance(record, Mapping) else None
+            if (
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(char not in "0123456789abcdef" for char in value)
+            ):
+                raise ValueError(f"central run manifest lacks lowercase {name} sha256")
+            return value
+
+        expected_config_sha256 = bound_sha256(config_record, "model config")
+        expected_tokenizer_sha256 = bound_sha256(tokenizer_record, "tokenizer")
+        model_config_sha256 = sha(config_path)
+        if model_config_sha256 != expected_config_sha256:
+            raise ValueError("central model config hash does not match loaded configuration")
         tokenizer = load_frozen_tokenizer(tokenizer_path, expected_sha256=expected_tokenizer_sha256)
         config = RestartDecoderConfig.from_contract(config_path)
         model = UnifiedDecoder(config, device=device, allow_production_allocation=True).eval()
-        load_checkpoint_artifacts(model, None, checkpoint, {**manifest, "checkpoint_manifest_sha256": checkpoint_sha256})
+        load_checkpoint_artifacts(
+            model,
+            None,
+            checkpoint,
+            {**manifest, "checkpoint_manifest_sha256": checkpoint_sha256},
+        )
         identity = OwnedIdentity(
             checkpoint_sha256=checkpoint_sha256,
-            model_config_sha256=sha(config_path),
+            model_config_sha256=model_config_sha256,
             tokenizer_sha256=tokenizer.sha256,
             server_source_sha256=sha(Path(__file__)),
+            seat=str(admission["seat"]),
         )
-        if admission.get("model_name") not in (None, identity.model_name):
-            raise ValueError("admission model name does not match loaded checkpoint")
+        if admission["model_name"] != identity.model_name:
+            raise ValueError("central admission model name does not match loaded checkpoint")
         return cls(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(device))
 
     def chat(self, messages: list[dict[str, object]], *, max_tokens: int) -> tuple[str, str]:
@@ -225,12 +276,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--tokenizer", type=Path, required=True)
-    parser.add_argument("--admission", type=Path, required=True)
+    parser.add_argument("--run-manifest", type=Path, required=True)
+    parser.add_argument("--trusted-verifier-registry", type=Path, required=True)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args(argv)
-    runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, admission_path=args.admission, device=args.device)
+    runtime = LoadedOwnedRuntime.from_paths(
+        checkpoint=args.checkpoint,
+        tokenizer_path=args.tokenizer,
+        run_manifest=args.run_manifest,
+        trusted_verifier_registry=args.trusted_verifier_registry,
+        device=args.device,
+    )
     server = create_loopback_server(runtime, host=args.host, port=args.port)
     server.serve_forever()
     return 0
