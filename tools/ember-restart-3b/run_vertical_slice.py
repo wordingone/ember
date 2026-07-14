@@ -17,7 +17,7 @@ import torch
 import torch.nn.functional as F
 
 from batch import decode_owned_batch
-from checkpoint_artifacts import write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_pretraining_segment
 from parameter_counter import measure_parameter_counts
@@ -133,7 +133,7 @@ def _execute_realization_counter(
     return receipt
 
 
-def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
+def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
@@ -167,11 +167,22 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
     import bitsandbytes as bnb
 
     optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-4)
+    resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
+    if resume_checkpoint is not None:
+        resume_checkpoint = resume_checkpoint.resolve()
+        if resume_checkpoint.drive.upper() != "B:" or not resume_checkpoint.is_dir():
+            raise ValueError("resume checkpoint must be a published B: bundle")
+        manifest_path = resume_checkpoint / "checkpoint-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+        resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
+        checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
     torch.cuda.reset_peak_memory_stats()
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
         checkpoint_every=len(records), checkpoint_callback=lambda _step, _result: None,
-        data_shard_id=str(launch_packet["input_identity"]["shard_path"]),
+        initial_global_step=int(resume_cursor["global_step"]), initial_tokens_seen=int(resume_cursor["tokens_seen"]),
+        initial_data_cursor=int(resume_cursor["record_index"]), data_shard_id=str(launch_packet["input_identity"]["shard_path"]),
     )
     rng_state_after_step = _rng_state(torch.device("cuda"))
     data_cursor = dict(segment["data_cursor"])
@@ -217,5 +228,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--artifact-root", type=Path, required=True)
+    parser.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
-    print(json.dumps(run(seed=args.seed, artifact_root=args.artifact_root), sort_keys=True))
+    print(json.dumps(run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint), sort_keys=True))
