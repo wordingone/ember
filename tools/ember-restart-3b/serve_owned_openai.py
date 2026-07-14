@@ -267,7 +267,7 @@ class LoadedOwnedRuntime:
                 prompt_ids=torch.tensor([prompt_ids], dtype=torch.long, device=self.device),
                 model_kwargs={"active_expert": "shared"},
                 max_new_tokens=max_tokens,
-                stop_token_ids={0},
+                stop_token_ids=self.tokenizer.eos_token_ids,
             )
         return self.tokenizer.decode(generated), "stop" if reason == "eos" else "length"
 

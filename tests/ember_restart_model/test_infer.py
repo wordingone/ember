@@ -45,10 +45,12 @@ class InferenceTests(unittest.TestCase):
             tokenizer_path = root / "tokenizer.json"
             fixture = Tokenizer(models.WordLevel({"<unk>": 0, "hello": 1, "Ember": 2, "answer": 3}, unk_token="<unk>"))
             fixture.pre_tokenizer = pre_tokenizers.Whitespace()
+            fixture.add_special_tokens(["<|endoftext|>"])
             fixture.save(str(tokenizer_path))
             tokenizer_sha256 = hashlib.sha256(tokenizer_path.read_bytes()).hexdigest()
             tokenizer = load_frozen_tokenizer(tokenizer_path, expected_sha256=tokenizer_sha256)
             split = root / "frozen-split.json"
+            self.assertEqual(tokenizer.eos_token_ids, {4})
             split.write_text(json.dumps({"schema_version": "ember-owned-frozen-inference-split-v1", "tokenizer_sha256": tokenizer_sha256, "rows": [{"id": "row-1", "prompt": "hello Ember", "active_expert": "shared"}]}), encoding="utf-8")
             row_id, prompt = frozen_split_prompt(split, "row-1", tokenizer)
             self.assertEqual((row_id, prompt["active_expert"]), ("row-1", "shared"))

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import torch
 import sys
 import subprocess
 import threading
@@ -20,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 from serve_owned_openai import (
     OwnedIdentity,
     create_loopback_server,
+    LoadedOwnedRuntime,
     resolve_central_owned_admission,
 )
 
@@ -91,7 +93,42 @@ class OwnedOpenAiServerTests(unittest.TestCase):
 
 
 
+    def test_loaded_runtime_stops_on_tokenizer_derived_eos(self) -> None:
+        class Tokenizer:
+            eos_token_ids = {4}
 
+            def encode(self, text: str) -> list[int]:
+                if text != "user: hello":
+                    raise AssertionError(text)
+                return [1, 2]
+
+            def decode(self, token_ids: list[int]) -> str:
+                if token_ids != [4]:
+                    raise AssertionError(token_ids)
+                return "eos"
+
+        class Model:
+            def __init__(self) -> None:
+                self.inputs: list[list[int]] = []
+
+            def __call__(self, input_ids: torch.Tensor, **kwargs: object) -> torch.Tensor:
+                self.inputs.append(input_ids.squeeze(0).tolist())
+                if kwargs != {"active_expert": "shared"}:
+                    raise AssertionError(kwargs)
+                logits = torch.full((1, input_ids.shape[1], 8), -100.0)
+                logits[0, -1, 4] = 100.0
+                return logits
+
+        model = Model()
+        runtime = LoadedOwnedRuntime(
+            model=model,
+            tokenizer=Tokenizer(),
+            identity=self.runtime.identity,
+            device=torch.device("cpu"),
+        )
+
+        answer, reason = runtime.chat([{"role": "user", "content": "hello"}], max_tokens=3)
+        self.assertEqual((answer, reason, model.inputs), ("eos", "stop", [[1, 2]]))
     def test_central_admission_requires_exact_resolved_owned_seat(self) -> None:
         checkpoint = "a" * 64
         payload = {
