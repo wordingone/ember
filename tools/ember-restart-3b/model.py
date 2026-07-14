@@ -219,7 +219,8 @@ class RawPatchProjector(nn.Module):
     def forward(self, patches: torch.Tensor) -> torch.Tensor:
         if tuple(patches.shape[-3:]) != (48, 48, 3):
             raise ValueError("image patches must end with [48, 48, 3]")
-        return F.layer_norm(self.linear(patches.reshape(*patches.shape[:-3], -1).to(dtype=self.linear.weight.dtype)), (self.linear.out_features,))
+        raw = patches.reshape(*patches.shape[:-3], -1).to(dtype=self.linear.weight.dtype).div(255.0).sub(0.5)
+        return F.layer_norm(self.linear(raw), (self.linear.out_features,))
 
 
 class RawAudioProjector(nn.Module):

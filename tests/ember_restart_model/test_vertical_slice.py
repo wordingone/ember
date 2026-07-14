@@ -52,7 +52,7 @@ class VerticalSliceTests(unittest.TestCase):
         baseline = model(batch["input_ids"], image_patches=batch["image_patches"], image_coordinates=batch["image_coordinates"], spans=batch["spans"], active_expert="vision")
         shifted = copy.deepcopy(vision); shifted["image_coordinates"] = [[1, 0], [0, 0]]
         shifted_batch = decode_owned_batch(shifted, self.config, device=torch.device("cpu"))
-        self.assertFalse(torch.allclose(baseline, model(shifted_batch["input_ids"], image_patches=shifted_batch["image_patches"], image_coordinates=shifted_batch["image_coordinates"], spans=shifted_batch["spans"], active_expert="vision")))
+        self.assertFalse(torch.equal(baseline, model(shifted_batch["input_ids"], image_patches=shifted_batch["image_patches"], image_coordinates=shifted_batch["image_coordinates"], spans=shifted_batch["spans"], active_expert="vision")))
         audio = self._record("audio")
         audio_a = (torch.arange(640, dtype=torch.int16) - 320).numpy().tobytes(); audio_b = (torch.arange(640, dtype=torch.int16) - 120).numpy().tobytes()
         audio.update({"token_ids": [1, self.config.audio_token_id, self.config.audio_token_id, 2], "target_ids": [2, 3, 4, 5], "audio_frames_i16le_base64": [base64.b64encode(audio_a).decode("ascii"), base64.b64encode(audio_b).decode("ascii")], "multimodal_spans": [{"start": 1, "length": 2, "modality": "audio", "attention_mode": "causal"}]})

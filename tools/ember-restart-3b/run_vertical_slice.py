@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import torch
 import torch.nn.functional as F
@@ -58,6 +58,13 @@ def _enforce_retention(parent: Path, *, max_count: int) -> None:
     while len(bundles) > max_count:
         oldest = bundles.pop(0)
         shutil.rmtree(oldest)
+
+def _retain_after_success(parent: Path, *, max_count: int, operation: Callable[[], Any]) -> Any:
+    """Preserve every known-good bundle when a new publication operation fails."""
+
+    result = operation()
+    _enforce_retention(parent, max_count=max_count)
+    return result
 
 
 def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
@@ -147,7 +154,6 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     config = RestartDecoderConfig.from_contract(config_path)
     records, launch_packet, input_receipt = load_authorized_records(root)
     checkpoint_parent = artifact_root / "checkpoints"
-    _enforce_retention(checkpoint_parent, max_count=2)
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
 
     torch.manual_seed(seed)
@@ -192,18 +198,21 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_134_515_200 or counts["active_parameters"] != 1_020_585_984:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
-    checkpoint = write_checkpoint_artifacts(
-        model,
-        optimizer,
-        checkpoint_root,
-        launch_seed=seed,
-        rng_state=rng_state_after_step,
-        data_cursor=data_cursor,
-        model_config_sha256=_sha256(config_path),
-        contract_sha256=_sha256(integration_contract_path),
-        expert_genesis_sha256=genesis_hashes,
+    checkpoint = _retain_after_success(
+        checkpoint_parent,
+        max_count=2,
+        operation=lambda: write_checkpoint_artifacts(
+            model,
+            optimizer,
+            checkpoint_root,
+            launch_seed=seed,
+            rng_state=rng_state_after_step,
+            data_cursor=data_cursor,
+            model_config_sha256=_sha256(config_path),
+            contract_sha256=_sha256(integration_contract_path),
+            expert_genesis_sha256=genesis_hashes,
+        ),
     )
-    _enforce_retention(checkpoint_parent, max_count=2)
     parameter_receipt = _execute_realization_counter(
         root=root,
         config_path=config_path,

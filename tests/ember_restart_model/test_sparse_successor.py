@@ -37,6 +37,11 @@ class SparseSuccessorTests(unittest.TestCase):
         second = model(tokens, position_ids=torch.tensor([[0, 3]]))
         self.assertFalse(torch.allclose(first[:, -1], second[:, -1]))
 
+    def test_zero_raw_image_patch_is_normalized_to_a_content_bearing_soft_token(self) -> None:
+        model = UnifiedDecoder(self.config)
+        projected = model.image_projector(torch.zeros(1, 48, 48, 3))
+        self.assertGreater(float(projected.detach().abs().sum()), 0.0)
+
     def test_image_2d_rope_coordinates_are_position_sensitive(self) -> None:
         model = UnifiedDecoder(self.config).eval()
         tokens = torch.tensor([[4, self.config.image_token_id]])
