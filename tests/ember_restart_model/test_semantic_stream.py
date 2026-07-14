@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from batch import decode_owned_batch
 from model import RestartDecoderConfig, UnifiedDecoder
-from pretrain import run_pretraining_segment
+from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from semantic_stream import ManifestBoundTokenStream
 
 
@@ -103,5 +103,34 @@ class SemanticStreamTests(unittest.TestCase):
         self.assertEqual(cursor, {"shard_index": 1, "token_offset": 1, "tokens_seen": 4})
 
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_segment_carries_receipt_bound_shard_cursor_into_checkpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13, 14]])
+            stream = ManifestBoundTokenStream.from_receipt(
+                receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer
+            )
+            config = RestartDecoderConfig.small_for_tests(
+                hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+            )
+            model = UnifiedDecoder(config, genesis_seed=47)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            checkpoints: list[dict[str, object]] = []
+            result = run_manifest_bound_semantic_segment(
+                model=model,
+                optimizer=optimizer,
+                stream=stream,
+                config=config,
+                device=torch.device("cpu"),
+                sequence_length=2,
+                steps=2,
+                checkpoint_every=1,
+                checkpoint_callback=lambda _step, state: checkpoints.append(state),
+            )
+        self.assertEqual(result["steps"], 2)
+        self.assertEqual(result["tokens_seen"], 4)
+        self.assertEqual(result["expert_examples"], {"vision": 0, "audio": 0, "reasoning": 0, "tool": 0})
+        self.assertEqual(
+            result["data_cursor"],
+            {"receipt_sha256": stream.receipt_sha256, "tokenizer_sha256": stream.tokenizer_sha256, "shard_index": 0, "token_offset": 4, "global_step": 2, "tokens_seen": 4},
+        )
