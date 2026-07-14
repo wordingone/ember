@@ -105,7 +105,7 @@ def _verify_lineage(manifest: dict[str, Any], errors: list[str]) -> None:
             errors.append(f"lineage.{field}: must be false")
 
 
-def _verify_architecture(manifest: dict[str, Any], errors: list[str]) -> None:
+def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
     architecture = manifest.get("architecture")
     if not isinstance(architecture, dict):
         errors.append("architecture: expected object")
@@ -169,10 +169,17 @@ def _verify_architecture(manifest: dict[str, Any], errors: list[str]) -> None:
                 bank_domains.add(domain)
             if not isinstance(genesis, str) or not SHA256_RE.fullmatch(genesis):
                 errors.append(f"{prefix}.genesis_sha256: expected lowercase SHA-256")
-            elif genesis in genesis_hashes:
-                errors.append(f"{prefix}.genesis_sha256: expert genesis hashes must be distinct")
             else:
-                genesis_hashes.add(genesis)
+                _verify_file(
+                    root,
+                    {"path": bank.get("path"), "sha256": genesis},
+                    f"{prefix}.genesis_artifact",
+                    errors,
+                )
+                if genesis in genesis_hashes:
+                    errors.append(f"{prefix}.genesis_sha256: expert genesis hashes must be distinct")
+                else:
+                    genesis_hashes.add(genesis)
         if bank_domains != set(EXPERT_DOMAINS):
             errors.append("architecture.expert_banks: domains must equal vision/audio/reasoning/tool")
     active_experts = architecture.get("active_expert_ids")
@@ -266,6 +273,7 @@ def _verify_checkpoint(root: Path, manifest: dict[str, Any], errors: list[str]) 
     if not isinstance(shards, list) or not shards:
         errors.append("checkpoint manifest: shards must be a non-empty list")
         return
+    checkpoint_shards: dict[str, str] = {}
     for index, shard in enumerate(shards):
         prefix = f"checkpoint.shards[{index}]"
         shard_path = _verify_file(root, shard, prefix, errors)
@@ -275,6 +283,20 @@ def _verify_checkpoint(root: Path, manifest: dict[str, Any], errors: list[str]) 
                 errors.append(f"{prefix}.bytes: expected non-negative integer")
             elif shard_path is not None and shard_path.stat().st_size != expected_bytes:
                 errors.append(f"{prefix}.bytes: size mismatch")
+            if isinstance(shard.get("path"), str) and isinstance(shard.get("sha256"), str):
+                checkpoint_shards[shard["path"]] = shard["sha256"]
+    architecture = manifest.get("architecture")
+    expert_banks = architecture.get("expert_banks") if isinstance(architecture, dict) else None
+    if isinstance(expert_banks, list):
+        for index, bank in enumerate(expert_banks):
+            if not isinstance(bank, dict):
+                continue
+            path_value = bank.get("path")
+            genesis = bank.get("genesis_sha256")
+            if checkpoint_shards.get(path_value) != genesis:
+                errors.append(
+                    f"architecture.expert_banks[{index}]: genesis artifact must be an exact checkpoint shard"
+                )
 
 
 def _load_bound_json(
@@ -465,7 +487,7 @@ def validate_manifest(
         else {}
     )
     _verify_lineage(manifest, errors)
-    _verify_architecture(manifest, errors)
+    _verify_architecture(root, manifest, errors)
     _verify_data(root, manifest, errors)
     _verify_training(manifest, errors)
     _verify_checkpoint(root, manifest, errors)

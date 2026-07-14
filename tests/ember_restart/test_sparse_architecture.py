@@ -34,14 +34,6 @@ def _make_sparse(tmp_path: Path) -> Path:
             "sparse_differentiated_capacity": True,
             "task_level_expert_routing": True,
             "asymmetric_expert_initialization": True,
-            "expert_banks": [
-                {
-                    "id": domain,
-                    "domain": domain,
-                    "genesis_sha256": f"{index + 1:064x}",
-                }
-                for index, domain in enumerate(DOMAINS)
-            ],
             "active_expert_ids": ["reasoning"],
         }
     )
@@ -100,3 +92,18 @@ def test_only_one_expert_may_be_active_per_episode(tmp_path: Path) -> None:
     result = _run(path)
     assert result.returncode == 1
     assert any("active_expert_ids" in error for error in json.loads(result.stdout)["errors"])
+
+
+def test_expert_genesis_hash_must_bind_actual_bytes(tmp_path: Path) -> None:
+    path = _make_sparse(tmp_path)
+    expert = tmp_path / "checkpoint" / "reasoning-expert.bin"
+    expert.write_bytes(b"reasoning expert genesis")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    bank = payload["architecture"]["expert_banks"][2]
+    bank["path"] = str(expert.relative_to(tmp_path))
+    bank["genesis_sha256"] = __import__("hashlib").sha256(expert.read_bytes()).hexdigest()
+    _write_json(path, payload)
+    expert.write_bytes(b"tampered reasoning expert")
+    result = _run(path)
+    assert result.returncode == 1
+    assert any("content hash mismatch" in error for error in json.loads(result.stdout)["errors"])
