@@ -587,7 +587,9 @@ def _load_trusted_verifiers(
             if sha256 in trusted:
                 errors.append(f"{prefix}.sha256: duplicate verifier")
             else:
-                trusted[sha256] = entry
+                resolved_entry = dict(entry)
+                resolved_entry["_resolved_path"] = path
+                trusted[sha256] = resolved_entry
     return trusted
 
 
@@ -605,6 +607,12 @@ def _verify_admission(
     sufficient_payload = _load_bound_json(
         root, sufficient, "receipt_path", "training.sufficient_pretraining", errors
     )
+    sufficient_evidence_paths: dict[str, Path] = {}
+    sufficient_evidence_fields = {
+        "training_ledger": "training_ledger_sha256",
+        "stopping_evaluation": "stopping_evaluation_sha256",
+        "checkpoint_progression": "checkpoint_progression_sha256",
+    }
     if not isinstance(sufficient, dict):
         errors.append("training.sufficient_pretraining: expected object")
     else:
@@ -612,6 +620,25 @@ def _verify_admission(
             errors.append("training.sufficient_pretraining.criterion_id: unsupported criterion")
         if sufficient.get("result") != "PASSED":
             errors.append("training.sufficient_pretraining.result: must equal PASSED")
+        sufficient_evidence = sufficient.get("evidence")
+        if not isinstance(sufficient_evidence, dict):
+            errors.append("training.sufficient_pretraining: executed evidence object missing")
+        else:
+            for evidence_name, receipt_field in sufficient_evidence_fields.items():
+                record = sufficient_evidence.get(evidence_name)
+                evidence_path = _verify_file(
+                    root,
+                    record,
+                    f"training.sufficient_pretraining.evidence.{evidence_name}",
+                    errors,
+                )
+                if evidence_path is not None:
+                    sufficient_evidence_paths[evidence_name] = evidence_path
+                evidence_hash = record.get("sha256") if isinstance(record, dict) else None
+                if sufficient_payload is not None and sufficient_payload.get(receipt_field) != evidence_hash:
+                    errors.append(
+                        f"training.sufficient_pretraining receipt: executed evidence {receipt_field} mismatch"
+                    )
     if sufficient_payload is not None:
         if sufficient_payload.get("criterion_id") != "ember-sufficient-pretraining-v1":
             errors.append("training.sufficient_pretraining receipt: criterion mismatch")
@@ -619,11 +646,108 @@ def _verify_admission(
             errors.append("training.sufficient_pretraining receipt: result must equal PASSED")
         if sufficient_payload.get("subject_checkpoint_sha256") != checkpoint_sha256:
             errors.append("training.sufficient_pretraining receipt: checkpoint mismatch")
+        training = manifest.get("training")
+        tokens_seen = sufficient_payload.get("tokens_seen")
+        if (
+            not isinstance(tokens_seen, int)
+            or isinstance(tokens_seen, bool)
+            or tokens_seen <= 0
+            or not isinstance(training, dict)
+            or tokens_seen != training.get("tokens_seen")
+        ):
+            errors.append("training.sufficient_pretraining receipt: executed tokens_seen mismatch")
+        for field in ("gpu_hours", "final_loss"):
+            value = sufficient_payload.get(field)
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                errors.append(f"training.sufficient_pretraining receipt: executed {field} invalid")
         verifier = trusted_verifiers.get(sufficient_payload.get("verifier_sha256"))
         if verifier is None or "sufficient_pretraining" not in verifier.get("evidence_classes", []):
             errors.append("training.sufficient_pretraining receipt: verifier is not trusted")
         elif "ember-sufficient-pretraining-v1" not in verifier.get("criterion_ids", []):
             errors.append("training.sufficient_pretraining receipt: criterion is not trusted")
+        else:
+            verifier_path = verifier.get("_resolved_path")
+            checkpoint_record = manifest.get("checkpoint")
+            checkpoint_path = (
+                _artifact(
+                    root,
+                    checkpoint_record.get("manifest_path"),
+                    "checkpoint.manifest_path",
+                    errors,
+                )
+                if isinstance(checkpoint_record, dict)
+                else None
+            )
+            if (
+                isinstance(verifier_path, Path)
+                and checkpoint_path is not None
+                and set(sufficient_evidence_paths) == set(sufficient_evidence_fields)
+            ):
+                command = [
+                    sys.executable,
+                    "-I",
+                    str(verifier_path),
+                    "--checkpoint-manifest",
+                    str(checkpoint_path),
+                    "--criterion-id",
+                    "ember-sufficient-pretraining-v1",
+                ]
+                for evidence_name in sufficient_evidence_fields:
+                    command.extend(
+                        [f"--{evidence_name.replace('_', '-')}", str(sufficient_evidence_paths[evidence_name])]
+                    )
+                try:
+                    completed = subprocess.run(
+                        command,
+                        cwd=root,
+                        text=True,
+                        capture_output=True,
+                        timeout=120,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError) as exc:
+                    errors.append(
+                        f"training.sufficient_pretraining receipt: sufficiency verifier execution failed: {exc}"
+                    )
+                else:
+                    if completed.returncode != 0:
+                        errors.append(
+                            "training.sufficient_pretraining receipt: sufficiency verifier execution "
+                            f"failed with exit code {completed.returncode}"
+                        )
+                    else:
+                        try:
+                            executed = json.loads(completed.stdout)
+                        except json.JSONDecodeError:
+                            errors.append(
+                                "training.sufficient_pretraining receipt: sufficiency verifier execution returned invalid JSON"
+                            )
+                        else:
+                            executed_fields = (
+                                "criterion_id",
+                                "result",
+                                "subject_checkpoint_sha256",
+                                *sufficient_evidence_fields.values(),
+                                "tokens_seen",
+                                "gpu_hours",
+                                "final_loss",
+                            )
+                            if not isinstance(executed, dict):
+                                errors.append(
+                                    "training.sufficient_pretraining receipt: sufficiency verifier execution must return an object"
+                                )
+                            else:
+                                for field in executed_fields:
+                                    if executed.get(field) != sufficient_payload.get(field):
+                                        errors.append(
+                                            "training.sufficient_pretraining receipt: sufficiency verifier "
+                                            f"execution {field} mismatch"
+                                        )
 
     evaluations = manifest.get("evaluations")
     if not isinstance(evaluations, list):
@@ -659,12 +783,17 @@ def _verify_admission(
                 if not isinstance(benchmark_version, str) or not benchmark_version.strip():
                     errors.append(f"{prefix} receipt: executed evidence benchmark_version missing")
                 evidence = evaluation.get("evidence")
+                evidence_paths: dict[str, Path] = {}
                 if not isinstance(evidence, dict):
                     errors.append(f"{prefix}: executed evidence object missing")
                 else:
                     for evidence_name, receipt_field in EVALUATION_EVIDENCE.items():
                         record = evidence.get(evidence_name)
-                        _verify_file(root, record, f"{prefix}.evidence.{evidence_name}", errors)
+                        evidence_path = _verify_file(
+                            root, record, f"{prefix}.evidence.{evidence_name}", errors
+                        )
+                        if evidence_path is not None:
+                            evidence_paths[evidence_name] = evidence_path
                         evidence_hash = record.get("sha256") if isinstance(record, dict) else None
                         if payload.get(receipt_field) != evidence_hash:
                             errors.append(f"{prefix} receipt: executed evidence {receipt_field} mismatch")
@@ -693,6 +822,88 @@ def _verify_admission(
                     errors.append(f"{prefix} receipt: verifier is not trusted")
                 elif criterion_id not in verifier.get("criterion_ids", []):
                     errors.append(f"{prefix} receipt: capability criterion is not trusted")
+                else:
+                    verifier_path = verifier.get("_resolved_path")
+                    checkpoint_record = manifest.get("checkpoint")
+                    checkpoint_path = (
+                        _artifact(
+                            root,
+                            checkpoint_record.get("manifest_path"),
+                            "checkpoint.manifest_path",
+                            errors,
+                        )
+                        if isinstance(checkpoint_record, dict)
+                        else None
+                    )
+                    if (
+                        isinstance(verifier_path, Path)
+                        and checkpoint_path is not None
+                        and set(evidence_paths) == set(EVALUATION_EVIDENCE)
+                        and isinstance(benchmark_version, str)
+                        and isinstance(criterion_id, str)
+                    ):
+                        command = [
+                            sys.executable,
+                            "-I",
+                            str(verifier_path),
+                            "--capability",
+                            str(capability),
+                            "--checkpoint-manifest",
+                            str(checkpoint_path),
+                            "--benchmark-id",
+                            str(benchmark_id),
+                            "--benchmark-version",
+                            benchmark_version,
+                            "--criterion-id",
+                            criterion_id,
+                        ]
+                        for evidence_name in EVALUATION_EVIDENCE:
+                            command.extend(
+                                [f"--{evidence_name.replace('_', '-')}", str(evidence_paths[evidence_name])]
+                            )
+                        try:
+                            completed = subprocess.run(
+                                command,
+                                cwd=root,
+                                text=True,
+                                capture_output=True,
+                                timeout=120,
+                                check=False,
+                            )
+                        except (OSError, subprocess.SubprocessError) as exc:
+                            errors.append(f"{prefix} receipt: verifier execution failed: {exc}")
+                        else:
+                            if completed.returncode != 0:
+                                errors.append(
+                                    f"{prefix} receipt: verifier execution failed with exit code "
+                                    f"{completed.returncode}"
+                                )
+                            else:
+                                try:
+                                    executed = json.loads(completed.stdout)
+                                except json.JSONDecodeError:
+                                    errors.append(f"{prefix} receipt: verifier execution returned invalid JSON")
+                                else:
+                                    executed_fields = (
+                                        "capability",
+                                        "result",
+                                        "subject_checkpoint_sha256",
+                                        "benchmark_id",
+                                        "benchmark_version",
+                                        *EVALUATION_EVIDENCE.values(),
+                                        "sample_count",
+                                        "metrics",
+                                        "criterion_id",
+                                        "criterion_result",
+                                    )
+                                    if not isinstance(executed, dict):
+                                        errors.append(f"{prefix} receipt: verifier execution must return an object")
+                                    else:
+                                        for field in executed_fields:
+                                            if executed.get(field) != payload.get(field):
+                                                errors.append(
+                                                    f"{prefix} receipt: verifier execution {field} mismatch"
+                                                )
         for capability in CAPABILITIES:
             if found.get(capability) != 1:
                 errors.append(f"evaluations: requires exactly one {capability} receipt")
