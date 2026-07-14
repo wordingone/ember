@@ -95,14 +95,28 @@ def checkpoint_retention_limit(config_path: Path) -> int:
     return value
 
 
-def _training_optimizer_name(config_path: Path) -> str:
+def load_optimizer_contract(config_path: Path) -> dict[str, object]:
+    """Load the one structured optimizer declaration used by config, runtime, and checkpoint."""
+
     try:
-        value = json.loads(config_path.read_text(encoding="utf-8"))["training"]["optimizer"]
+        contract = json.loads(config_path.read_text(encoding="utf-8"))["training"]["optimizer"]
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
-        raise ValueError("production contract must declare its optimizer") from error
-    if value != "paged_8bit_adamw":
-        raise ValueError("production contract optimizer must be paged_8bit_adamw")
-    return value
+        raise ValueError("production contract must declare a structured optimizer") from error
+    if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"}:
+        raise ValueError("production optimizer contract has an invalid shape")
+    expected = {
+        "name": "paged_8bit_adamw",
+        "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+        "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+    }
+    if any(contract.get(field) != value for field, value in expected.items()):
+        raise ValueError("production optimizer contract does not declare canonical PagedAdamW8bit")
+    hyperparameters = contract.get("hyperparameters")
+    if not isinstance(hyperparameters, dict) or set(hyperparameters) != {"learning_rate", "weight_decay", "percentile_clipping", "block_wise"}:
+        raise ValueError("production optimizer hyperparameters have an invalid shape")
+    if (not isinstance(hyperparameters["learning_rate"], (int, float)) or hyperparameters["learning_rate"] <= 0 or not isinstance(hyperparameters["weight_decay"], (int, float)) or hyperparameters["weight_decay"] < 0 or not isinstance(hyperparameters["percentile_clipping"], int) or hyperparameters["percentile_clipping"] <= 0 or not isinstance(hyperparameters["block_wise"], bool)):
+        raise ValueError("production optimizer hyperparameters are invalid")
+    return contract
 
 def _rng_state(device: torch.device) -> dict[str, torch.Tensor]:
     return {"cpu": torch.get_rng_state().clone(), "cuda": torch.cuda.get_rng_state(device).clone()}
@@ -161,14 +175,23 @@ def _execute_realization_counter(
     return receipt
 
 
-def build_production_optimizer(model: UnifiedDecoder, *, optimizer_name: str) -> torch.optim.Optimizer:
-    """Build the exact paged 8-bit optimizer declared by the production contract."""
+def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dict[str, object]) -> torch.optim.Optimizer:
+    """Build exactly the structured PagedAdamW8bit optimizer declared by config."""
 
-    if optimizer_name != "paged_8bit_adamw":
-        raise ValueError("production optimizer must be paged_8bit_adamw")
+    if optimizer_contract.get("implementation") != "bitsandbytes.optim.PagedAdamW8bit":
+        raise ValueError("production optimizer implementation must be PagedAdamW8bit")
+    hyperparameters = optimizer_contract.get("hyperparameters")
+    if not isinstance(hyperparameters, dict):
+        raise ValueError("production optimizer contract lacks hyperparameters")
     import bitsandbytes as bnb
 
-    return bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, percentile_clipping=5)
+    return bnb.optim.PagedAdamW8bit(
+        model.parameters(),
+        lr=float(hyperparameters["learning_rate"]),
+        weight_decay=float(hyperparameters["weight_decay"]),
+        percentile_clipping=int(hyperparameters["percentile_clipping"]),
+        block_wise=bool(hyperparameters["block_wise"]),
+    )
 
 def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
@@ -200,7 +223,8 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_134_515_200 or counts["active_parameters"] != 1_020_585_984:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
-    optimizer = build_production_optimizer(model, optimizer_name=_training_optimizer_name(config_path))
+    optimizer_contract = load_optimizer_contract(config_path)
+    optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
         resume_checkpoint = resume_checkpoint.resolve()
@@ -239,6 +263,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
             model_config_sha256=_sha256(config_path),
             contract_sha256=_sha256(integration_contract_path),
             expert_genesis_sha256=genesis_hashes,
+            optimizer_contract=optimizer_contract,
         ),
     )
     parameter_receipt = _execute_realization_counter(

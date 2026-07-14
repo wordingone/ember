@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import os
 import uuid
@@ -62,6 +63,59 @@ def _sha256_value(value: str, *, name: str) -> str:
     return value
 
 
+def _canonical_sha256(value: Mapping[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(dict(value), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _default_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
+    cls = type(optimizer)
+    return {
+        "name": cls.__name__,
+        "implementation": f"{cls.__module__}.{cls.__qualname__}",
+        "hyperparameters": {"param_group_count": len(optimizer.param_groups)},
+        "state_format": "torch-optimizer-state-dict-v1",
+    }
+
+
+def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
+    required = {"name", "implementation", "hyperparameters", "state_format"}
+    if not isinstance(contract, Mapping) or set(contract) != required:
+        raise ValueError("checkpoint optimizer contract has an invalid shape")
+    if not isinstance(contract["name"], str) or not contract["name"]:
+        raise ValueError("checkpoint optimizer contract name is invalid")
+    if not isinstance(contract["implementation"], str) or not contract["implementation"]:
+        raise ValueError("checkpoint optimizer contract implementation is invalid")
+    if not isinstance(contract["hyperparameters"], Mapping) or not contract["hyperparameters"]:
+        raise ValueError("checkpoint optimizer contract hyperparameters are invalid")
+    if not isinstance(contract["state_format"], str) or not contract["state_format"]:
+        raise ValueError("checkpoint optimizer contract state format is invalid")
+    return {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
+
+
+def _optimizer_realization(optimizer: torch.optim.Optimizer, contract: Mapping[str, Any]) -> dict[str, str]:
+    source = inspect.getsourcefile(type(optimizer))
+    if source is None or not Path(source).is_file():
+        raise ValueError("optimizer implementation source cannot be content-addressed")
+    return {
+        "implementation": str(contract["implementation"]),
+        "implementation_source_sha256": _sha256(Path(source)),
+        "state_format": str(contract["state_format"]),
+        "optimizer_contract_sha256": _canonical_sha256(contract),
+    }
+
+
+def _validate_optimizer_realization(contract: Mapping[str, Any], realization: Any) -> dict[str, str]:
+    required = {"implementation", "implementation_source_sha256", "state_format", "optimizer_contract_sha256"}
+    if not isinstance(realization, Mapping) or set(realization) != required:
+        raise ValueError("checkpoint optimizer realization has an invalid shape")
+    if realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"]:
+        raise ValueError("checkpoint optimizer realization drifts from its contract")
+    for field in ("implementation_source_sha256", "optimizer_contract_sha256"):
+        _sha256_value(str(realization.get(field, "")), name=f"optimizer realization {field}")
+    if realization["optimizer_contract_sha256"] != _canonical_sha256(contract):
+        raise ValueError("checkpoint optimizer realization contract hash mismatch")
+    return dict(realization)
+
 def _validate_replay_bindings(
     *,
     launch_seed: int,
@@ -107,6 +161,7 @@ def write_checkpoint_artifacts(
     model_config_sha256: str,
     contract_sha256: str,
     expert_genesis_sha256: Mapping[str, str],
+    optimizer_contract: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
@@ -118,6 +173,8 @@ def write_checkpoint_artifacts(
         contract_sha256=contract_sha256,
         expert_genesis_sha256=expert_genesis_sha256,
     )
+    optimizer_contract = _validate_optimizer_contract(optimizer_contract or _default_optimizer_contract(optimizer))
+    optimizer_realization = _optimizer_realization(optimizer, optimizer_contract)
     published_root = root
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
@@ -132,7 +189,7 @@ def write_checkpoint_artifacts(
     shared = _write_atomic(
         root,
         "shared.pt",
-        lambda handle: torch.save({"model": shared_state, "optimizer": optimizer.state_dict()}, handle),
+        lambda handle: torch.save({"model": shared_state, "optimizer": optimizer.state_dict(), "optimizer_contract": optimizer_contract, "optimizer_realization": optimizer_realization}, handle),
     )
     shards = [_record(shared, root, role="shared_model_and_optimizer")]
     replay = _write_atomic(root, "replay-state.pt", lambda handle: torch.save({"rng_state": {name: state.detach().cpu() for name, state in rng_state.items()}, "data_cursor": dict(data_cursor)}, handle))
@@ -156,7 +213,7 @@ def write_checkpoint_artifacts(
         expert_checkpoint_sha256[name] = record["sha256"]
 
     manifest = {
-        "schema_version": "ember-sparse-checkpoint-v2",
+        "schema_version": "ember-sparse-checkpoint-v3",
         "launch_seed": launch_seed,
         "rng_state_sha256": {name: hashlib.sha256(state.detach().cpu().numpy().tobytes()).hexdigest() for name, state in rng_state.items()},
         "data_cursor": dict(data_cursor),
@@ -166,6 +223,8 @@ def write_checkpoint_artifacts(
         "expert_genesis_sha256": dict(expert_genesis_sha256),
         "expert_checkpoint_sha256": expert_checkpoint_sha256,
         "shared_optimizer_shard_sha256": shards[0]["sha256"],
+        "optimizer_contract": optimizer_contract,
+        "optimizer_realization": optimizer_realization,
         "shards": shards,
     }
     manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
@@ -224,6 +283,10 @@ def load_checkpoint_artifacts(
 ) -> None:
     """Verify every manifest/shard/payload before mutating model or optimizer."""
 
+    if receipt.get("schema_version") != "ember-sparse-checkpoint-v3":
+        raise ValueError("checkpoint optimizer contract requires v3 manifest")
+    optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
+    optimizer_realization = _validate_optimizer_realization(optimizer_contract, receipt.get("optimizer_realization"))
     expected = receipt.get("expert_checkpoint_sha256")
     genesis = receipt.get("expert_genesis_sha256")
     active = receipt.get("active_expert_ids")
@@ -246,7 +309,9 @@ def load_checkpoint_artifacts(
             raise ValueError(f"checkpoint replay RNG state is invalid: {name}")
     shared_payload = payloads["shared.pt"]
     if not isinstance(shared_payload, dict) or not isinstance(shared_payload.get("optimizer"), dict):
-        raise ValueError("shared checkpoint does not contain optimizer realization")
+        raise ValueError("shared checkpoint does not contain optimizer state")
+    if shared_payload.get("optimizer_contract") != optimizer_contract or shared_payload.get("optimizer_realization") != optimizer_realization:
+        raise ValueError("shared checkpoint optimizer realization does not match manifest")
     expected_state = model.state_dict()
     shared_expected = {key: value for key, value in expected_state.items() if ".experts." not in key}
     shared_state = _validate_model_state(shared_expected, shared_payload.get("model"), label="shared")

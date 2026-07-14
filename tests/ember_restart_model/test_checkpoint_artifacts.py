@@ -20,6 +20,17 @@ from model import RestartDecoderConfig, UnifiedDecoder
 
 
 class CheckpointArtifactTests(unittest.TestCase):
+    def test_refuses_checkpoint_receipt_without_optimizer_contract(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=11)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "checkpoint-0001"
+            receipt = write_checkpoint_artifacts(model, optimizer, root, launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            receipt.pop("optimizer_contract")
+            restored = UnifiedDecoder(config, genesis_seed=12)
+            with self.assertRaisesRegex(ValueError, "optimizer contract"):
+                load_checkpoint_artifacts(restored, optimizer, root, receipt)
     def test_writes_and_restores_hashed_shared_and_four_expert_shards(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=11)
@@ -33,6 +44,8 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertEqual(set(receipt["expert_checkpoint_sha256"]), {"vision", "audio", "reasoning", "tool"})
         self.assertEqual(len(receipt["shards"]), 6)
         self.assertEqual(receipt["launch_seed"], 11)
+        self.assertIn("optimizer_contract", receipt)
+        self.assertRegex(receipt["optimizer_realization"]["optimizer_contract_sha256"], r"^[0-9a-f]{64}$")
 
 
 if __name__ == "__main__":
