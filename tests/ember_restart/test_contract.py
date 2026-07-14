@@ -82,6 +82,25 @@ def _candidate_manifest(tmp_path: Path) -> Path:
         "episode_trainable_parameters": 1_020_585_984,
         "served_parameters": 3_134_515_200,
     }
+    model_config = tmp_path / "configs" / "ember-restart-3b.json"
+    model_config_hash = _write_json(
+        model_config,
+        {
+            "contract_name": "ember-restart-3b",
+            "contract_version": 2,
+            "model": {
+                "hidden_size": 2048,
+                "layers": 14,
+                "attention_heads": 16,
+                "vocab_size": 32000,
+                "tied_embeddings": True,
+                "image_projection": {"input_shape": [48, 48, 3]},
+                "audio_projection": {"frame_samples": 640},
+                "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
+                "total_unique_trainable_parameters": 3_134_515_200,
+            },
+        },
+    )
     counter = tmp_path / "counter" / "instantiated_meta_counter.py"
     counter.parent.mkdir(parents=True)
     counter.write_text("# fixture instantiated-meta counter\n", encoding="utf-8")
@@ -96,6 +115,8 @@ def _candidate_manifest(tmp_path: Path) -> Path:
             "result": "MEASURED",
             "subject_checkpoint_sha256": checkpoint_index_hash,
             "counter_sha256": counter_record["sha256"],
+            "model_config_sha256": model_config_hash,
+            "architecture_revision": "ember-sparse-3b-v1",
             **parameter_counts,
             "active_expert_ids": ["reasoning"],
             "expert_genesis_sha256": {
@@ -120,6 +141,11 @@ def _candidate_manifest(tmp_path: Path) -> Path:
         },
         "architecture": {
             "family": "ember-unified-decoder",
+            "revision": "ember-sparse-3b-v1",
+            "model_config": {
+                "path": str(model_config.relative_to(tmp_path)),
+                "sha256": model_config_hash,
+            },
             **parameter_counts,
             "parameter_counter": counter_record,
             "parameter_receipt": {
