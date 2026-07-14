@@ -3,13 +3,12 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Generate deterministic owned multimodal curriculum records with local receipts."""
 from __future__ import annotations
-import argparse, base64, hashlib, json, random
+import argparse, base64, hashlib, json
 from pathlib import Path
 from verify_capability_record import expected_receipt
 
 def _raw(seed: int, size: int) -> bytes:
-    rng = random.Random(seed)
-    return bytes(rng.randrange(256) for _ in range(size))
+    return bytes([seed % 251]) * size
 
 def records(count_per_domain: int) -> list[dict[str, object]]:
     if count_per_domain <= 0: raise ValueError('count_per_domain must be positive')
