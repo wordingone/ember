@@ -36,6 +36,28 @@ def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def production_memory_preflight(*, total_parameters: int, active_parameters: int, device_free_bytes: int) -> dict[str, int | str]:
+    """Derive the exact BF16 episode envelope before CUDA model construction."""
+    if min(total_parameters, active_parameters, device_free_bytes) <= 0 or active_parameters > total_parameters:
+        raise ValueError("production memory preflight requires positive total/active/free byte values")
+    parameter_bytes = total_parameters * 2
+    gradient_bytes = active_parameters * 2
+    optimizer_state_bytes = active_parameters * 2
+    activation_reserve_bytes = 4 * 1024**3
+    runtime_reserve_bytes = 2 * 1024**3
+    required_bytes = parameter_bytes + gradient_bytes + optimizer_state_bytes + activation_reserve_bytes + runtime_reserve_bytes
+    if required_bytes > device_free_bytes:
+        raise MemoryError(f"BF16 production envelope requires {required_bytes} bytes but only {device_free_bytes} are free; refusing before allocation")
+    return {
+        "parameter_dtype": "bfloat16",
+        "parameter_bytes": parameter_bytes,
+        "gradient_bytes": gradient_bytes,
+        "optimizer_state_bytes": optimizer_state_bytes,
+        "activation_reserve_bytes": activation_reserve_bytes,
+        "runtime_reserve_bytes": runtime_reserve_bytes,
+        "required_bytes": required_bytes,
+        "device_free_bytes": device_free_bytes,
+    }
 def production_artifact_root(candidate: Path) -> Path:
     """Require B: for production bundles; manifests themselves stay portable."""
 
@@ -99,6 +121,24 @@ def checkpoint_retention_limit(config_path: Path) -> int:
         raise ValueError("checkpoint retention max_count must be a positive integer")
     return value
 
+
+def load_memory_contract(config_path: Path) -> dict[str, object]:
+    """Load the numerics declaration that must agree with the allocation preflight."""
+    try:
+        value = json.loads(config_path.read_text(encoding="utf-8"))["training"]["memory"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare BF16 memory numerics") from error
+    expected = {
+        "parameter_dtype": "bfloat16",
+        "parameter_bytes": 2,
+        "gradient_bytes_per_active_parameter": 2,
+        "optimizer_state_bytes_per_active_parameter": 2,
+        "activation_reserve_gib": 4,
+        "runtime_reserve_gib": 2,
+    }
+    if value != expected:
+        raise ValueError("production BF16 memory contract differs from the audited numerical envelope")
+    return dict(value)
 
 def load_optimizer_contract(config_path: Path) -> dict[str, object]:
     """Load the one structured optimizer declaration used by config, runtime, and checkpoint."""
@@ -210,6 +250,13 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     config = RestartDecoderConfig.from_contract(config_path)
+    memory_contract = load_memory_contract(config_path)
+    total_parameters = config.structural_parameter_count()
+    active_parameters = total_parameters - (len(config.expert_names) - 1) * config.layers * 12 * config.hidden_size * config.hidden_size
+    device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
+    memory_preflight = production_memory_preflight(total_parameters=total_parameters, active_parameters=active_parameters, device_free_bytes=int(device_free_bytes))
+    if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
+        raise RuntimeError("memory preflight and production numerics disagree")
     records, launch_packet, input_receipt = load_authorized_records(root)
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
@@ -218,7 +265,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     torch.cuda.manual_seed_all(seed)
     rng_state_before_init = _rng_state_hash(torch.device("cuda"))
     previous_dtype = torch.get_default_dtype()
-    torch.set_default_dtype(torch.float32)
+    torch.set_default_dtype(torch.bfloat16)
     try:
         model = UnifiedDecoder(config, device="cuda", allow_production_allocation=True, genesis_seed=seed)
     finally:
@@ -281,6 +328,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     return {
         "losses": segment["losses"],
         "counts": counts,
+        "memory_preflight": memory_preflight,
         "launch_seed": seed,
         "rng_state_before_init_sha256": rng_state_before_init,
         "expert_genesis_sha256": genesis_hashes,

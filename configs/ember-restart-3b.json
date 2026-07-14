@@ -125,6 +125,14 @@
                                  "gpu_hours_cap":  1,
                                  "receipt_path":  "receipts/ember-restart-3b"
                              },
+                     "memory":  {
+                                    "parameter_dtype":  "bfloat16",
+                                    "parameter_bytes":  2,
+                                    "gradient_bytes_per_active_parameter":  2,
+                                    "optimizer_state_bytes_per_active_parameter":  2,
+                                    "activation_reserve_gib":  4,
+                                    "runtime_reserve_gib":  2
+                                },
                      "write_policy":  {
                                           "runner_contract":  "disk_budget_runner",
                                           "required_for_write_heavy_commands":  true

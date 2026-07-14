@@ -45,12 +45,24 @@ class RunnerPreflightTests(unittest.TestCase):
     def test_contract_retention_limit_is_used_as_the_runner_limit(self) -> None:
         contract = ROOT / "configs" / "ember-restart-3b.json"
         self.assertEqual(run_vertical_slice.checkpoint_retention_limit(contract), 8)
-    def test_rng_preflight_hashes_cpu_and_cuda_without_allocation(self) -> None:
+    def test_runtime_loads_the_exact_bf16_memory_contract(self) -> None:
+        self.assertTrue(hasattr(run_vertical_slice, "load_memory_contract"))
+        memory = run_vertical_slice.load_memory_contract(ROOT / "configs" / "ember-restart-3b.json")
+        self.assertEqual(memory["parameter_dtype"], "bfloat16")
+
         with patch.object(run_vertical_slice.torch.cuda, "get_rng_state", return_value=torch.tensor([1, 2, 3], dtype=torch.uint8)):
             hashes = run_vertical_slice._rng_state_hash(torch.device("cuda"))
         self.assertEqual(set(hashes), {"cpu", "cuda"})
         self.assertTrue(all(len(value) == 64 for value in hashes.values()))
 
+
+    def test_bf16_memory_plan_rejects_before_production_allocation(self) -> None:
+        self.assertTrue(hasattr(run_vertical_slice, "production_memory_preflight"))
+        plan = run_vertical_slice.production_memory_preflight(total_parameters=3_839_161_856, active_parameters=1_725_232_640, device_free_bytes=22 * 1024**3)
+        self.assertEqual(plan["parameter_dtype"], "bfloat16")
+        self.assertLessEqual(plan["required_bytes"], 22 * 1024**3)
+        with self.assertRaisesRegex(MemoryError, "before allocation"):
+            run_vertical_slice.production_memory_preflight(total_parameters=3_839_161_856, active_parameters=1_725_232_640, device_free_bytes=plan["required_bytes"] - 1)
 
     def test_production_runner_refuses_retired_bootstrap_curriculum(self) -> None:
         packet = {
