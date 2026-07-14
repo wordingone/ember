@@ -14,7 +14,7 @@ def sha(path):
  return h.hexdigest()
 def fail(message):raise ValueError(message)
 def verify(manifest_path,custody_path):
- manifest=json.loads(manifest_path.read_text(encoding='utf-8'));custody=json.loads(custody_path.read_text(encoding='utf-8'));digest=sha(manifest_path)
+ manifest=json.loads(manifest_path.read_text(encoding='utf-8-sig'));custody=json.loads(custody_path.read_text(encoding='utf-8-sig'));digest=sha(manifest_path)
  if not isinstance(manifest,dict) or manifest.get('schema_version')!='ember-sparse-checkpoint-v2':fail('historical input requires v2 manifest')
  if not isinstance(custody,dict) or custody.get('schema_version')!='ember-restart-hardlink-custody-v1' or custody.get('result')!='HISTORICAL_ONLY_V2' or custody.get('source_schema_version')!='ember-sparse-checkpoint-v2' or custody.get('checkpoint_manifest_sha256')!=digest:fail('historical custody receipt does not bind v2 manifest')
  records=manifest.get('shards')

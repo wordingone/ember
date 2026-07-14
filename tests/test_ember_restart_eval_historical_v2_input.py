@@ -24,3 +24,10 @@ def test_rejects_custody_manifest_hash_mismatch_without_output():
  with tempfile.TemporaryDirectory()as temporary:
   root=Path(temporary);manifest,custody=write_v2(root);data=json.loads(custody.read_text());data['checkpoint_manifest_sha256']='0'*64;custody.write_text(json.dumps(data));output=root/'output.json';completed=subprocess.run([sys.executable,str(SCRIPT),'--manifest',str(manifest),'--custody-receipt',str(custody),'--output',str(output)],capture_output=True,text=True)
   assert completed.returncode!=0 and not output.exists()
+
+def test_accepts_utf8_bom_custody_receipt_without_relaxing_custody_binding():
+ with tempfile.TemporaryDirectory()as temporary:
+  root=Path(temporary);manifest,custody=write_v2(root);custody.write_text('\ufeff'+custody.read_text(),encoding='utf-8');output=root/'output.json'
+  completed=subprocess.run([sys.executable,str(SCRIPT),'--manifest',str(manifest),'--custody-receipt',str(custody),'--output',str(output)],capture_output=True,text=True)
+  assert completed.returncode==0,completed.stderr
+  assert json.loads(output.read_text())['result']=='HISTORICAL_V2_INPUT_ONLY'
