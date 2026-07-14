@@ -66,4 +66,14 @@ def load_domain_training_manifest(*, manifest_path: Path, repo_root: Path) -> di
                 raise ValueError(f"domain {label} path escapes the repository root") from error
             if not candidate.is_file() or _sha256(candidate) != expected_sha256:
                 raise ValueError(f"domain {label} bytes do not match the content-addressed binding")
+        try:
+            source_payload = json.loads((root / source_receipt).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError("domain source receipt must be readable JSON") from error
+        provenance = source_payload.get("provenance") if isinstance(source_payload, dict) else None
+        if source_payload.get("schema_version") != "ember-owned-domain-source-receipt-v1" or source_payload.get("result") != "VERIFIED" or not isinstance(provenance, dict):
+            raise ValueError("domain source receipt is not a verified provenance record")
+        for field, message in (("generated_labels", "generated labels"), ("borrowed_model_outputs", "borrowed model outputs"), ("teacher_outputs", "teacher outputs"), ("model_derived_data", "model-derived data")):
+            if provenance.get(field) is not False:
+                raise ValueError(f"domain source receipt permits forbidden {message}")
     return payload
