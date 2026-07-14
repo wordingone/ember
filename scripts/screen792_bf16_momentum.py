@@ -1927,6 +1927,7 @@ def main(argv: list | None = None) -> int:
     cfg = ts.load_contract()
     out_dir = args.out_dir or str(_REPO / "scratch" / "screen792")
     os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(args.receipt_dir, exist_ok=True)
     receipt = run_screen(
         cfg=cfg, shard_dir=args.shard_dir, run_dir=out_dir, device=args.device,
         n_warmup=args.n_warmup, n_active=args.n_active, batch_size=args.batch_size,
