@@ -1,41 +1,23 @@
 <!-- goal_id: EMBER-02 -->
 <!-- workstream_id: EMBER-02B -->
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
-# Ember restart 3B namespace and run contract
 
-The immutable contract is [configs/ember-restart-3b.json](../configs/ember-restart-3b.json), version 1. It describes a clean-random-initialized, unified decoder with no parent checkpoint, borrowed weights, teacher outputs, model-derived data, or external judges. The contract is a declaration only: the source entries do not claim that any training artifact already exists.
+# Ember restart sparse 3B namespace and run contract
+
+[configs/ember-restart-3b.json](../configs/ember-restart-3b.json) version 2 supersedes the retired dense, positionless declaration before any production allocation. It describes a clean-random 14-layer H=2048 unified decoder with shared attention and four independently trainable SwiGLU banks per layer: vision, audio, reasoning, and tool.
+
+Each episode or batch declares exactly one active expert. All other expert banks are frozen for that episode, while shared attention, token embeddings, raw projectors, RMSNorm weights, and the selected bank remain trainable. This is capacity accounting, not a claim of completed training: total unique capacity is validated on a meta-instantiated model, and active cost is separately measured in run receipts.
+
+Raw 48x48x3 RGB patches and raw 640-sample audio frames are projected directly into decoder-width soft tokens. Text and audio use parameter-free 1D RoPE; image markers use explicit 2D coordinates. Multimodal spans carry a tested causal or isolated attention policy. No pretrained encoder, borrowed checkpoint, or learned external routing signal is admitted.
 
 ## Exclusive namespaces
 
-Every namespace below is exclusive. A producer may write only within its own root and may not claim a file from another root as its output.
+| Namespace | Exclusive root |
+| --- | --- |
+| model | models/ember-restart-3b |
+| training | tools/ember-restart-3b |
+| checkpoints | receipts/ember-restart-3b |
+| inference | inference/ember-restart-3b |
+| data | data/ember-restart-3b |
 
-| Namespace | Exclusive root | Boundary |
-| --- | --- | --- |
-| model | `models/ember-restart-3b` | model weights and model metadata |
-| training | `tools/ember-restart-3b` | training entry points and run-local tooling |
-| checkpoints | `receipts/ember-restart-3b` | checkpoint manifests and custody receipts |
-| inference | `inference/ember-restart-3b` | serving and inference configuration derived from this model |
-
-The contract file itself is `configs/ember-restart-3b.json`. No file below any of these declared roots—or below the contract path—can be claimed as a target output unless a later contract explicitly changes the boundary:
-
-* `models/ember-restart-3b`
-* `receipts/ember-restart-3b`
-* `tools/ember-restart-3b`
-* `configs/ember-restart-3b.json`
-
-## Immutable model and training declarations
-
-The model shape is H=3072, L=20, 24 attention heads, and a 32,000-token vocabulary with tied text embeddings. Image inputs are raw RGB patches of `48x48x3`; audio inputs are raw frames of 640 samples. Gradient checkpointing is enabled and the optimizer is paged 8-bit AdamW. GPU work requires the explicit memory and GPU-hour caps plus a receipt path in the JSON contract, and every write-heavy invocation must use the declared disk-budget runner contract.
-
-The independently auditable unique-parameter formula is:
-
-```text
-vocab*hidden
-+ layers*(4*hidden^2 + 12*hidden^2)
-+ (48*48*3)*hidden
-+ 640*hidden
-```
-
-With the declared shape this is 3,141,402,624 unique trainable parameters, above the assertion minimum of 3,000,000,000. The tied embedding is counted once; projection and decoder matrices are counted as trainable unique weights without inventing an artifact claim.
-
-Text, image, and audio source arrays are intentionally non-empty declarations. They become claim-bearing only when later custody manifests bind concrete owned records and hashes.
+The runtime supports meta construction for exact parameter inspection. Bounded GPU work records its receipts in the checkpoint namespace.

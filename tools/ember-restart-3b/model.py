@@ -1,15 +1,18 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Small-test and guarded production shape for the owned restart decoder.
+"""Sparse clean-genesis unified decoder for the authorized Ember 3B rung.
 
-The production shape is deliberately constructed only when explicitly allowed,
-or on the ``meta`` device for shape/count validation.  All parameters are
-freshly initialized by PyTorch; no checkpoint or teacher state is accepted.
+The production shape is meta-validatable but allocation-guarded. Every learned
+parameter is freshly initialized: raw RGB patches and raw audio frames are
+projected directly into decoder soft tokens, and a declared expert is selected
+locally per episode/batch without pretrained encoders or learned external
+routing signals.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import dataclass, field
@@ -21,10 +24,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint_utils
 
+EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
+
+
+@dataclass(frozen=True)
+class MultimodalSpan:
+    """An explicit contiguous multimodal span and its attention policy."""
+
+    start: int
+    length: int
+    modality: str
+    attention_mode: str = "causal"
+
+    def __post_init__(self) -> None:
+        if self.start < 0 or self.length <= 0:
+            raise ValueError("span start must be nonnegative and length must be positive")
+        if self.modality not in {"image", "audio", "text"}:
+            raise ValueError("span modality must be image, audio, or text")
+        if self.attention_mode not in {"causal", "isolated"}:
+            raise ValueError("span attention_mode must be causal or isolated")
+
 
 @dataclass(frozen=True)
 class RestartDecoderConfig:
-    """Architecture and clean-genesis metadata for the unified decoder."""
+    """Clean-genesis sparse decoder architecture and provenance contract."""
 
     hidden_size: int
     layers: int
@@ -34,12 +57,14 @@ class RestartDecoderConfig:
     audio_frame_samples: int = 640
     gradient_checkpointing: bool = True
     tied_embeddings: bool = True
+    expert_names: tuple[str, ...] = EXPERT_NAMES
+    default_active_expert: str = "reasoning"
     image_token_id: int | None = None
     audio_token_id: int | None = None
     contract_name: str = "ember-restart-3b"
-    contract_version: int = 1
+    contract_version: int = 2
     production: bool = False
-    declared_unique_trainable_parameters: int | None = None
+    declared_total_unique_trainable_parameters: int | None = None
     lineage: Mapping[str, Any] = field(
         default_factory=lambda: {
             "parent_checkpoint": None,
@@ -52,30 +77,34 @@ class RestartDecoderConfig:
     )
 
     def __post_init__(self) -> None:
-        if self.hidden_size <= 0 or self.layers <= 0 or self.vocab_size <= 0:
-            raise ValueError("hidden_size, layers, and vocab_size must be positive")
+        if self.hidden_size <= 0 or self.layers <= 0 or self.vocab_size < 3:
+            raise ValueError("hidden_size, layers, and a vocab of at least three are required")
         if self.attention_heads <= 0 or self.hidden_size % self.attention_heads:
             raise ValueError("hidden_size must be divisible by attention_heads")
+        if (self.hidden_size // self.attention_heads) % 4:
+            raise ValueError("head dimension must be divisible by four for 2D RoPE")
         if not self.tied_embeddings:
             raise ValueError("the restart decoder requires tied input/output embeddings")
         if tuple(self.image_input_shape) != (48, 48, 3):
             raise ValueError("restart decoder image input must be a raw 48x48x3 patch")
         if self.audio_frame_samples != 640:
             raise ValueError("restart decoder audio input must be a raw 640-sample frame")
+        if tuple(self.expert_names) != EXPERT_NAMES:
+            raise ValueError("the four declared asymmetric expert banks are required")
+        if self.default_active_expert not in self.expert_names:
+            raise ValueError("default active expert must be declared")
         if self.image_token_id is None:
             object.__setattr__(self, "image_token_id", self.vocab_size - 2)
         if self.audio_token_id is None:
             object.__setattr__(self, "audio_token_id", self.vocab_size - 1)
-        marker_ids = (self.image_token_id, self.audio_token_id)
-        if any(marker_id is None or marker_id < 0 or marker_id >= self.vocab_size for marker_id in marker_ids):
+        markers = (self.image_token_id, self.audio_token_id)
+        if any(marker is None or marker < 0 or marker >= self.vocab_size for marker in markers):
             raise ValueError("modality marker IDs must be nonnegative vocabulary IDs")
         if self.image_token_id == self.audio_token_id:
             raise ValueError("image and audio marker IDs must be distinct")
 
     @classmethod
     def from_contract(cls, path: str | Path | None = None) -> "RestartDecoderConfig":
-        """Load the role-named production JSON contract and verify its count."""
-
         contract_path = (
             Path(path)
             if path is not None
@@ -83,33 +112,32 @@ class RestartDecoderConfig:
         )
         with contract_path.open(encoding="utf-8") as handle:
             contract = json.load(handle)
-
         model = contract["model"]
         image = model["image_projection"]
         audio = model["audio_projection"]
+        routing = model["expert_routing"]
         config = cls(
             hidden_size=int(model["hidden_size"]),
             layers=int(model["layers"]),
             attention_heads=int(model["attention_heads"]),
             vocab_size=int(model["vocab_size"]),
-            image_input_shape=tuple(int(v) for v in image["input_shape"]),
+            image_input_shape=tuple(int(value) for value in image["input_shape"]),
             audio_frame_samples=int(audio["frame_samples"]),
             gradient_checkpointing=bool(contract["training"]["gradient_checkpointing"]),
             tied_embeddings=bool(model["tied_embeddings"]),
+            expert_names=tuple(routing["expert_names"]),
+            default_active_expert=str(routing["default_active_expert"]),
             contract_name=str(contract["contract_name"]),
             contract_version=int(contract["contract_version"]),
             production=True,
-            declared_unique_trainable_parameters=int(model["unique_trainable_parameters"]),
+            declared_total_unique_trainable_parameters=int(model["total_unique_trainable_parameters"]),
             lineage=dict(contract["lineage"]),
         )
-        if config.calculate_unique_trainable_parameters() != config.declared_unique_trainable_parameters:
-            raise ValueError("production contract parameter count does not match its formula")
-        if config.declared_unique_trainable_parameters < int(
-            model["assertion_minimum_unique_trainable_parameters"]
-        ):
-            raise ValueError("production contract is below its declared parameter floor")
-        if config.declared_unique_trainable_parameters < 3_000_000_000:
+        declared = config.declared_total_unique_trainable_parameters
+        if declared is None or declared < 3_000_000_000:
             raise ValueError("production contract must allocate at least 3,000,000,000 parameters")
+        if declared != config.structural_parameter_count():
+            raise ValueError("production contract total does not match the sparse architecture")
         if int(image["output_size"]) != config.hidden_size or int(audio["output_size"]) != config.hidden_size:
             raise ValueError("modality projectors must emit decoder-width soft tokens")
         return config
@@ -124,8 +152,6 @@ class RestartDecoderConfig:
         vocab_size: int = 64,
         gradient_checkpointing: bool = True,
     ) -> "RestartDecoderConfig":
-        """Return a CPU-cheap shape that preserves production input contracts."""
-
         return cls(
             hidden_size=hidden_size,
             layers=layers,
@@ -137,39 +163,29 @@ class RestartDecoderConfig:
         )
 
     @property
-    def num_layers(self) -> int:
-        return self.layers
-
-    @property
-    def num_heads(self) -> int:
-        return self.attention_heads
-
-    @property
-    def image_patch_size(self) -> tuple[int, int, int]:
-        return self.image_input_shape
-
-    @property
-    def unique_trainable_parameters(self) -> int:
-        return self.calculate_unique_trainable_parameters()
+    def total_unique_trainable_parameters(self) -> int:
+        return self.structural_parameter_count()
 
     def parameter_count(self) -> int:
-        return self.unique_trainable_parameters
+        return self.total_unique_trainable_parameters
 
-    def calculate_unique_trainable_parameters(self) -> int:
-        """Recompute the contract's tied-embedding + decoder + projector count."""
-
+    def structural_parameter_count(self) -> int:
         hidden = self.hidden_size
         image_input = math.prod(self.image_input_shape)
+        per_layer = 4 * hidden * hidden + len(self.expert_names) * 12 * hidden * hidden + 2 * hidden
         return (
             self.vocab_size * hidden
-            + self.layers * (4 * hidden * hidden + 12 * hidden * hidden)
+            + self.layers * per_layer
             + image_input * hidden
             + self.audio_frame_samples * hidden
+            + hidden
         )
 
-    def genesis_metadata(self, seed: int = 0) -> dict[str, Any]:
-        """Return deterministic metadata describing clean random initialization."""
+    def calculate_unique_trainable_parameters(self) -> int:
+        """Compatibility alias for the sparse structural count."""
+        return self.structural_parameter_count()
 
+    def genesis_metadata(self, seed: int = 0) -> dict[str, Any]:
         return {
             "contract_name": self.contract_name,
             "contract_version": self.contract_version,
@@ -183,121 +199,176 @@ class RestartDecoderConfig:
         }
 
 
-class _RawProjector(nn.Module):
-    """Bias-free linear projection that preserves leading sample dimensions."""
+class RMSNorm(nn.Module):
+    def __init__(self, hidden_size: int, *, device: torch.device | str | None = None) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size, device=device))
 
-    input_shape: tuple[int, ...]
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        scale = torch.rsqrt(hidden_states.pow(2).mean(dim=-1, keepdim=True) + 1e-6)
+        return hidden_states * scale * self.weight
 
+
+class RawPatchProjector(nn.Module):
     def __init__(self, config: RestartDecoderConfig, *, device: torch.device | str | None = None) -> None:
         super().__init__()
-        input_size = math.prod(self.input_shape)
-        self.linear = nn.Linear(input_size, config.hidden_size, bias=False, device=device)
+        self.linear = nn.Linear(math.prod(config.image_input_shape), config.hidden_size, bias=False, device=device)
 
-    @property
-    def weight(self) -> nn.Parameter:
-        return self.linear.weight
-
-    def forward(self, values: torch.Tensor) -> torch.Tensor:
-        if not torch.is_tensor(values):
-            raise TypeError("raw modality values must be torch tensors")
-        input_size = math.prod(self.input_shape)
-        suffix_size = len(self.input_shape)
-        if values.ndim >= suffix_size and tuple(values.shape[-suffix_size:]) == self.input_shape:
-            leading = tuple(values.shape[:-suffix_size])
-        elif values.ndim >= 1 and values.shape[-1] == input_size:
-            leading = tuple(values.shape[:-1])
-        elif values.numel() == input_size:
-            leading = ()
-        else:
-            raise ValueError(
-                f"expected raw input ending in {self.input_shape} or flattened size {input_size}, "
-                f"got {tuple(values.shape)}"
-            )
-        projected = self.linear(values.reshape(-1, input_size))
-        return projected.reshape(*leading, projected.shape[-1]) if leading else projected.reshape(-1)
+    def forward(self, patches: torch.Tensor) -> torch.Tensor:
+        if tuple(patches.shape[-3:]) != (48, 48, 3):
+            raise ValueError("image patches must end with [48, 48, 3]")
+        return self.linear(patches.reshape(*patches.shape[:-3], -1))
 
 
-class RawPatchProjector(_RawProjector):
-    """Trainable bias-free projector for raw 48x48x3 RGB patches."""
+class RawAudioProjector(nn.Module):
+    def __init__(self, config: RestartDecoderConfig, *, device: torch.device | str | None = None) -> None:
+        super().__init__()
+        self.linear = nn.Linear(config.audio_frame_samples, config.hidden_size, bias=False, device=device)
 
-    input_shape = (48, 48, 3)
+    def forward(self, frames: torch.Tensor) -> torch.Tensor:
+        if frames.shape[-1] != 640:
+            raise ValueError("audio frames must end with 640 raw samples")
+        return self.linear(frames)
 
 
-class RawAudioProjector(_RawProjector):
-    """Trainable bias-free projector for raw 640-sample audio frames."""
+class RotaryCoordinates(nn.Module):
+    """Parameter-free 1D text/audio and 2D image rotary coordinates."""
 
-    input_shape = (640,)
+    def __init__(self, head_dim: int) -> None:
+        super().__init__()
+        self.head_dim = head_dim
+        self.axis_dim = head_dim // 2
+
+    def apply(self, values: torch.Tensor, coordinates: torch.Tensor) -> torch.Tensor:
+        chunks = values.split(self.axis_dim, dim=-1)
+        rotated: list[torch.Tensor] = []
+        base = torch.arange(0, self.axis_dim, 2, device=values.device, dtype=torch.float32)
+        frequencies = torch.pow(10000.0, -base / self.axis_dim)
+        for axis, chunk in enumerate(chunks):
+            angle = coordinates[..., axis].to(torch.float32).unsqueeze(-1) * frequencies
+            cos = angle.cos().to(chunk.dtype).unsqueeze(1)
+            sin = angle.sin().to(chunk.dtype).unsqueeze(1)
+            even = chunk[..., 0::2]
+            odd = chunk[..., 1::2]
+            rotated_axis = torch.stack((even * cos - odd * sin, even * sin + odd * cos), dim=-1)
+            rotated.append(rotated_axis.flatten(-2))
+        return torch.cat(rotated, dim=-1)
+
+
+class SharedAttention(nn.Module):
+    def __init__(self, config: RestartDecoderConfig, *, device: torch.device | str | None = None) -> None:
+        super().__init__()
+        self.heads = config.attention_heads
+        self.head_dim = config.hidden_size // config.attention_heads
+        self.qkv = nn.Linear(config.hidden_size, 3 * config.hidden_size, bias=False, device=device)
+        self.output = nn.Linear(config.hidden_size, config.hidden_size, bias=False, device=device)
+        self.rope = RotaryCoordinates(self.head_dim)
+
+    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor) -> torch.Tensor:
+        batch, sequence, width = hidden_states.shape
+        qkv = self.qkv(hidden_states).view(batch, sequence, 3, self.heads, self.head_dim)
+        query, key, value = qkv.unbind(dim=2)
+        query = self.rope.apply(query.transpose(1, 2), coordinates)
+        key = self.rope.apply(key.transpose(1, 2), coordinates)
+        value = value.transpose(1, 2)
+        attended = F.scaled_dot_product_attention(query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False)
+        return self.output(attended.transpose(1, 2).reshape(batch, sequence, width))
+
+
+class SwiGLUExpert(nn.Module):
+    """One independently trainable 4H SwiGLU expert bank."""
+
+    def __init__(self, hidden_size: int, *, device: torch.device | str | None = None) -> None:
+        super().__init__()
+        self.up_gate = nn.Linear(hidden_size, 8 * hidden_size, bias=False, device=device)
+        self.down = nn.Linear(4 * hidden_size, hidden_size, bias=False, device=device)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
+        return self.down(F.silu(gate) * up)
 
 
 class _DecoderLayer(nn.Module):
     def __init__(self, config: RestartDecoderConfig, *, device: torch.device | str | None = None) -> None:
         super().__init__()
-        hidden = config.hidden_size
-        intermediate = 4 * hidden
-        self.heads = config.attention_heads
-        self.head_dim = hidden // self.heads
-        self.q_proj = nn.Linear(hidden, hidden, bias=False, device=device)
-        self.k_proj = nn.Linear(hidden, hidden, bias=False, device=device)
-        self.v_proj = nn.Linear(hidden, hidden, bias=False, device=device)
-        self.o_proj = nn.Linear(hidden, hidden, bias=False, device=device)
-        self.gate_proj = nn.Linear(hidden, intermediate, bias=False, device=device)
-        self.up_proj = nn.Linear(hidden, intermediate, bias=False, device=device)
-        self.down_proj = nn.Linear(intermediate, hidden, bias=False, device=device)
+        self.pre_attention_norm = RMSNorm(config.hidden_size, device=device)
+        self.attention = SharedAttention(config, device=device)
+        self.pre_ffn_norm = RMSNorm(config.hidden_size, device=device)
+        self.experts = nn.ModuleDict({name: SwiGLUExpert(config.hidden_size, device=device) for name in config.expert_names})
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        batch, sequence, hidden = hidden_states.shape
-        q = self.q_proj(hidden_states).view(batch, sequence, self.heads, self.head_dim).transpose(1, 2)
-        k = self.k_proj(hidden_states).view(batch, sequence, self.heads, self.head_dim).transpose(1, 2)
-        v = self.v_proj(hidden_states).view(batch, sequence, self.heads, self.head_dim).transpose(1, 2)
-        attended = F.scaled_dot_product_attention(q, k, v, is_causal=True)
-        attended = attended.transpose(1, 2).contiguous().view(batch, sequence, hidden)
-        hidden_states = hidden_states + self.o_proj(attended)
-        gated = F.silu(self.gate_proj(hidden_states)) * self.up_proj(hidden_states)
-        return hidden_states + self.down_proj(gated)
+    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor, active_expert: str) -> torch.Tensor:
+        hidden_states = hidden_states + self.attention(self.pre_attention_norm(hidden_states), coordinates, allowed)
+        return hidden_states + self.experts[active_expert](self.pre_ffn_norm(hidden_states))
 
 
 class UnifiedDecoder(nn.Module):
-    """Causal decoder accepting text IDs plus raw image/audio marker values."""
+    """Routed causal decoder with raw multimodal soft-token injection."""
 
-    def __init__(
-        self,
-        config: RestartDecoderConfig,
-        *,
-        allow_production_materialization: bool = False,
-        device: torch.device | str | None = None,
-    ) -> None:
+    def __init__(self, config: RestartDecoderConfig, *, device: str | torch.device | None = None, allow_production_allocation: bool = False) -> None:
         super().__init__()
-        target_device = torch.device("cpu" if device is None else device)
-        if config.production and target_device.type != "meta" and not allow_production_materialization:
-            raise ValueError(
-                "production decoder materialization is guarded; pass "
-                "allow_production_materialization=True or use device='meta'"
-            )
-
+        target_device = torch.device(device) if device is not None else torch.device("cpu")
+        if config.production and target_device.type != "meta" and not allow_production_allocation:
+            raise ValueError("production allocation requires explicit measured-launch authorization")
         self.config = config
-        self.image_token_id = int(config.image_token_id)
-        self.audio_token_id = int(config.audio_token_id)
         self.token_embedding = nn.Embedding(config.vocab_size, config.hidden_size, device=target_device)
-        self.layers = nn.ModuleList(
-            [_DecoderLayer(config, device=target_device) for _ in range(config.layers)]
-        )
         self.image_projector = RawPatchProjector(config, device=target_device)
         self.audio_projector = RawAudioProjector(config, device=target_device)
+        self.layers = nn.ModuleList([_DecoderLayer(config, device=target_device) for _ in range(config.layers)])
+        self.final_norm = RMSNorm(config.hidden_size, device=target_device)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False, device=target_device)
-        if config.tied_embeddings:
-            self.lm_head.weight = self.token_embedding.weight
+        self.lm_head.weight = self.token_embedding.weight
+        self.active_expert = config.default_active_expert
+        self._activate_expert(self.active_expert)
         self.genesis_metadata = config.genesis_metadata()
 
-    def count_unique_trainable_parameters(self) -> int:
-        """Count trainable Parameter objects once, including tied embeddings once."""
+    def _activate_expert(self, active_expert: str) -> None:
+        if active_expert not in self.config.expert_names:
+            raise ValueError(f"unknown declared expert: {active_expert}")
+        self.active_expert = active_expert
+        for layer in self.layers:
+            for name, expert in layer.experts.items():
+                for parameter in expert.parameters():
+                    parameter.requires_grad_(name == active_expert)
 
-        seen: set[int] = set()
-        count = 0
-        for parameter in self.parameters():
-            if parameter.requires_grad and id(parameter) not in seen:
-                seen.add(id(parameter))
-                count += parameter.numel()
-        return count
+    def count_unique_trainable_parameters(self, *, include_frozen: bool = False) -> int:
+        return count_unique_trainable_parameters(self, include_frozen=include_frozen)
+
+    def expert_bank_genesis_hashes(self) -> dict[str, str]:
+        """Hash the freshly initialized parameters for each declared expert bank."""
+
+        hashes: dict[str, str] = {}
+        for name in self.config.expert_names:
+            digest = hashlib.sha256()
+            for layer in self.layers:
+                for parameter in layer.experts[name].parameters():
+                    if parameter.device.type == "meta":
+                        raise ValueError("expert genesis hashes require materialized parameters")
+                    digest.update(parameter.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes())
+            hashes[name] = digest.hexdigest()
+        if len(set(hashes.values())) != len(hashes):
+            raise RuntimeError("random genesis produced non-distinct expert-bank hashes")
+        return hashes
+
+    def build_attention_mask(
+        self,
+        *,
+        batch_size: int,
+        sequence_length: int,
+        spans: Sequence[MultimodalSpan] | None,
+        device: torch.device,
+    ) -> torch.Tensor:
+        positions = torch.arange(sequence_length, device=device)
+        allowed = positions.unsqueeze(0) <= positions.unsqueeze(1)
+        allowed = allowed.expand(batch_size, -1, -1).clone()
+        for span in spans or ():
+            end = span.start + span.length
+            if end > sequence_length:
+                raise ValueError("multimodal span exceeds sequence length")
+            if span.attention_mode == "isolated":
+                inside = (positions >= span.start) & (positions < end)
+                allowed[:, inside, ~inside] = False
+                allowed[:, ~inside, inside] = False
+        return allowed
 
     def _inject_modality(
         self,
@@ -306,67 +377,82 @@ class UnifiedDecoder(nn.Module):
         *,
         marker_id: int,
         raw_values: torch.Tensor | None,
-        projector: _RawProjector,
+        projector: nn.Module,
         name: str,
-    ) -> torch.Tensor:
-        marker_mask = input_ids.eq(marker_id)
-        marker_count = int(marker_mask.sum().item())
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        mask = input_ids.eq(marker_id)
+        count = int(mask.sum().item())
         if raw_values is None:
-            if marker_count:
+            if count:
                 raise ValueError(f"{name} marker requires corresponding raw modality values")
-            return hidden_states
-        if marker_count == 0:
+            return hidden_states, mask
+        if not count:
             raise ValueError(f"raw {name} values were supplied but no {name} marker is present")
         projected = projector(raw_values).reshape(-1, self.config.hidden_size)
-        if projected.shape[0] != marker_count:
-            raise ValueError(
-                f"{name} value count ({projected.shape[0]}) does not match marker count ({marker_count})"
-            )
-        flat_hidden = hidden_states.reshape(-1, self.config.hidden_size)
-        flat_mask = marker_mask.reshape(-1)
-        marker_indices = flat_mask.nonzero(as_tuple=False).flatten()
-        flat_hidden = flat_hidden.index_copy(
-            0, marker_indices, projected.to(device=flat_hidden.device, dtype=flat_hidden.dtype)
-        )
-        return flat_hidden.reshape_as(hidden_states)
+        if projected.shape[0] != count:
+            raise ValueError(f"{name} value count does not match {name} marker count")
+        flat = hidden_states.reshape(-1, self.config.hidden_size)
+        flat = flat.index_copy(0, mask.reshape(-1).nonzero(as_tuple=False).flatten(), projected.to(hidden_states.dtype))
+        return flat.reshape_as(hidden_states), mask
+
+    def _coordinates(
+        self,
+        input_ids: torch.Tensor,
+        image_mask: torch.Tensor,
+        image_coordinates: torch.Tensor | None,
+        position_ids: torch.Tensor | None,
+    ) -> torch.Tensor:
+        batch, sequence = input_ids.shape
+        if position_ids is None:
+            position_ids = torch.arange(sequence, device=input_ids.device).expand(batch, -1)
+        if position_ids.shape != input_ids.shape:
+            raise ValueError("position_ids must match input_ids")
+        coordinates = torch.stack((position_ids, torch.zeros_like(position_ids)), dim=-1)
+        count = int(image_mask.sum().item())
+        if not count:
+            if image_coordinates is not None:
+                raise ValueError("image coordinates were supplied without image markers")
+            return coordinates
+        if image_coordinates is None:
+            ordinal = torch.arange(count, device=input_ids.device)
+            image_coordinates = torch.stack((ordinal.remainder(48), ordinal.div(48, rounding_mode="floor")), dim=-1)
+        if image_coordinates.reshape(-1, 2).shape[0] != count:
+            raise ValueError("image_coordinates must provide one [x, y] pair per image marker")
+        flat = coordinates.reshape(-1, 2)
+        return flat.index_copy(0, image_mask.reshape(-1).nonzero(as_tuple=False).flatten(), image_coordinates.reshape(-1, 2).to(coordinates.device)).reshape_as(coordinates)
 
     def forward(
         self,
         input_ids: torch.Tensor,
         image_patches: torch.Tensor | None = None,
         audio_frames: torch.Tensor | None = None,
+        *,
+        image_coordinates: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        spans: Sequence[MultimodalSpan] | None = None,
+        active_expert: str | None = None,
     ) -> torch.Tensor:
         if input_ids.ndim != 2:
             raise ValueError("input_ids must have shape [batch, sequence]")
+        selected = active_expert or self.active_expert
+        self._activate_expert(selected)
         hidden_states = self.token_embedding(input_ids)
-        hidden_states = self._inject_modality(
-            hidden_states,
-            input_ids,
-            marker_id=self.image_token_id,
-            raw_values=image_patches,
-            projector=self.image_projector,
-            name="image",
-        )
-        hidden_states = self._inject_modality(
-            hidden_states,
-            input_ids,
-            marker_id=self.audio_token_id,
-            raw_values=audio_frames,
-            projector=self.audio_projector,
-            name="audio",
-        )
+        hidden_states, image_mask = self._inject_modality(hidden_states, input_ids, marker_id=self.config.image_token_id, raw_values=image_patches, projector=self.image_projector, name="image")
+        hidden_states, _ = self._inject_modality(hidden_states, input_ids, marker_id=self.config.audio_token_id, raw_values=audio_frames, projector=self.audio_projector, name="audio")
+        coordinates = self._coordinates(input_ids, image_mask, image_coordinates, position_ids)
+        allowed = self.build_attention_mask(batch_size=input_ids.shape[0], sequence_length=input_ids.shape[1], spans=spans, device=input_ids.device)
         for layer in self.layers:
             if self.config.gradient_checkpointing and self.training:
-                hidden_states = checkpoint_utils.checkpoint(layer, hidden_states, use_reentrant=False)
+                hidden_states = checkpoint_utils.checkpoint(lambda states: layer(states, coordinates, allowed, selected), hidden_states, use_reentrant=False)
             else:
-                hidden_states = layer(hidden_states)
-        return self.lm_head(hidden_states)
+                hidden_states = layer(hidden_states, coordinates, allowed, selected)
+        return self.lm_head(self.final_norm(hidden_states))
 
 
-def count_unique_trainable_parameters(subject: nn.Module | RestartDecoderConfig) -> int:
-    """Return the unique trainable parameter count for a config or module."""
+def count_unique_trainable_parameters(subject: nn.Module | RestartDecoderConfig, *, include_frozen: bool = False) -> int:
+    """Count unique parameter storage, optionally including episode-frozen banks."""
 
     if isinstance(subject, RestartDecoderConfig):
-        return subject.parameter_count()
+        return subject.total_unique_trainable_parameters
     unique = {id(parameter): parameter for parameter in subject.parameters()}
-    return sum(parameter.numel() for parameter in unique.values() if parameter.requires_grad)
+    return sum(parameter.numel() for parameter in unique.values() if include_frozen or parameter.requires_grad)

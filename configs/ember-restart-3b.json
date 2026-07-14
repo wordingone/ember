@@ -1,129 +1,99 @@
 {
-    "contract_name":  "ember-restart-3b",
-    "contract_version":  1,
-    "contract_path":  "configs/ember-restart-3b.json",
-    "purpose":  "Immutable clean-random genesis contract for an owned unified decoder.",
-    "lineage":  {
-                    "parent_checkpoint":  null,
-                    "initialization":  "random",
-                    "borrowed_weights":  false,
-                    "teacher_outputs":  false,
-                    "model_derived_data":  false,
-                    "external_judges":  false
-                },
-    "namespaces":  {
-                       "model":  {
-                                     "root":  "models/ember-restart-3b",
-                                     "exclusive":  true
-                                 },
-                       "training":  {
-                                        "root":  "tools/ember-restart-3b",
-                                        "exclusive":  true
-                                    },
-                       "checkpoints":  {
-                                           "root":  "receipts/ember-restart-3b",
-                                           "exclusive":  true
-                                       },
-                       "inference":  {
-                                         "root":  "inference/ember-restart-3b",
-                                         "exclusive":  true
-                                     }
-                   },
-    "model":  {
-                  "architecture":  "unified_decoder",
-                  "hidden_size":  3072,
-                  "layers":  20,
-                  "attention_heads":  24,
-                  "vocab_size":  32000,
-                  "tied_embeddings":  true,
-                  "image_projection":  {
-                                           "input_shape":  [
-                                                               48,
-                                                               48,
-                                                               3
-                                                           ],
-                                           "output_size":  3072,
-                                           "parameter_formula":  "(48*48*3)*3072"
-                                       },
-                  "audio_projection":  {
-                                           "frame_samples":  640,
-                                           "output_size":  3072,
-                                           "parameter_formula":  "640*3072"
-                                       },
-                  "parameter_formula":  {
-                                            "tied_embedding":  "vocab_size*hidden_size",
-                                            "decoder_layer":  "4*hidden_size^2 + 12*hidden_size^2",
-                                            "image_projection":  "(48*48*3)*hidden_size",
-                                            "audio_projection":  "640*hidden_size",
-                                            "unique_trainable":  "tied_embedding + layers*decoder_layer + image_projection + audio_projection"
-                                        },
-                  "unique_trainable_parameters":  3141402624,
-                  "assertion_minimum_unique_trainable_parameters":  3000000000
-              },
-    "training":  {
-                     "gradient_checkpointing":  true,
-                     "optimizer":  "paged_8bit_adamw",
-                     "gpu":  {
-                                 "required":  true,
-                                 "memory_cap_gib":  22,
-                                 "gpu_hours_cap":  1,
-                                 "receipt_path":  "receipts/ember-restart-3b"
-                             },
-                     "write_policy":  {
-                                          "runner_contract":  "disk_budget_runner",
-                                          "required_for_write_heavy_commands":  true
-                                      }
-                 },
-    "checkpoints":  {
-                        "retention":  {
-                                          "max_count":  8,
-                                          "delete_oldest_only":  true
-                                      },
-                        "required_state":  [
-                                               "model",
-                                               "optimizer",
-                                               "rng",
-                                               "data_cursor",
-                                               "contract_hash"
-                                           ]
-                    },
-    "sources":  {
-                    "text":  [
-                                 {
-                                     "kind":  "owned_text",
-                                     "declaration":  "operator-supplied text shards; provenance and hashes required before training"
-                                 }
-                             ],
-                    "image":  [
-                                  {
-                                      "kind":  "raw_rgb_patch",
-                                      "declaration":  "raw 48x48x3 RGB patches; provenance and hashes required before training"
-                                  }
-                              ],
-                    "audio":  [
-                                  {
-                                      "kind":  "raw_audio_frame",
-                                      "declaration":  "raw 640-sample audio frames; provenance and hashes required before training"
-                                  }
-                              ]
-                },
-    "authority":  {
-                      "artifact_class":  "research_candidate",
-                      "execution_authority":  "operator_approved",
-                      "goal_id":  "EMBER-02",
-                      "workstream_id":  "EMBER-02B",
-                      "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-                      "total_parameters":  3141402624,
-                      "native_capabilities":  [
-                                                  "text",
-                                                  "image",
-                                                  "audio",
-                                                  "reasoning",
-                                                  "structured_tool_use"
-                                              ],
-                      "published_family_backbone":  "none",
-                      "model_mediated_signals":  [
-
-                                                 ]
-                  }
+  "contract_name": "ember-restart-3b",
+  "contract_version": 2,
+  "contract_path": "configs/ember-restart-3b.json",
+  "purpose": "Superseding sparse clean-random genesis contract for the owned unified decoder.",
+  "supersedes": {
+    "contract_version": 1,
+    "reason": "dense positionless production shell retired before GPU materialization"
+  },
+  "lineage": {
+    "parent_checkpoint": null,
+    "initialization": "random",
+    "borrowed_weights": false,
+    "teacher_outputs": false,
+    "model_derived_data": false,
+    "external_judges": false
+  },
+  "namespaces": {
+    "model": {"root": "models/ember-restart-3b", "exclusive": true},
+    "training": {"root": "tools/ember-restart-3b", "exclusive": true},
+    "checkpoints": {"root": "receipts/ember-restart-3b", "exclusive": true},
+    "inference": {"root": "inference/ember-restart-3b", "exclusive": true},
+    "data": {"root": "data/ember-restart-3b", "exclusive": true}
+  },
+  "model": {
+    "architecture": "sparse_unified_decoder_verified_expert_accretion",
+    "hidden_size": 2048,
+    "layers": 14,
+    "attention_heads": 16,
+    "vocab_size": 32000,
+    "tied_embeddings": true,
+    "normalization": {"pre_attention": "rmsnorm", "pre_ffn": "rmsnorm", "final": "rmsnorm"},
+    "position_encoding": {
+      "text_audio": "1d_rope",
+      "image": "2d_rope_coordinates",
+      "multimodal_span_metadata": true,
+      "attention_modes": ["causal", "isolated"]
+    },
+    "expert_routing": {
+      "expert_names": ["vision", "audio", "reasoning", "tool"],
+      "expert_architecture": "SwiGLU_4H",
+      "expert_parameter_formula": "12*hidden_size^2",
+      "default_active_expert": "reasoning",
+      "active_experts_per_episode_or_batch": 1,
+      "inactive_experts_frozen": true,
+      "routing_signal": "explicit_local_episode_declaration",
+      "learned_external_routing": false
+    },
+    "image_projection": {
+      "input_shape": [48, 48, 3],
+      "output_size": 2048,
+      "parameter_formula": "(48*48*3)*hidden_size"
+    },
+    "audio_projection": {
+      "frame_samples": 640,
+      "output_size": 2048,
+      "parameter_formula": "640*hidden_size"
+    },
+    "parameter_formula": {
+      "tied_embedding": "vocab_size*hidden_size",
+      "shared_attention_per_layer": "4*hidden_size^2",
+      "four_experts_per_layer": "4*(12*hidden_size^2)",
+      "rmsnorm_per_layer": "2*hidden_size",
+      "final_rmsnorm": "hidden_size",
+      "image_projection": "(48*48*3)*hidden_size",
+      "audio_projection": "640*hidden_size",
+      "total_unique_trainable": "tied_embedding + layers*(shared_attention_per_layer + four_experts_per_layer + rmsnorm_per_layer) + final_rmsnorm + image_projection + audio_projection"
+    },
+    "total_unique_trainable_parameters": 3134515200,
+    "assertion_minimum_unique_trainable_parameters": 3000000000
+  },
+  "training": {
+    "gradient_checkpointing": true,
+    "optimizer": "paged_8bit_adamw",
+    "expert_activation": "exactly_one_declared_expert_per_episode_or_batch",
+    "gpu": {"required": true, "memory_cap_gib": 22, "gpu_hours_cap": 1, "receipt_path": "receipts/ember-restart-3b"},
+    "write_policy": {"runner_contract": "disk_budget_runner", "required_for_write_heavy_commands": true}
+  },
+  "checkpoints": {
+    "retention": {"max_count": 8, "delete_oldest_only": true},
+    "required_state": ["model", "optimizer", "rng", "data_cursor", "contract_hash", "active_expert"]
+  },
+  "sources": {
+    "text": [{"kind": "owned_text", "declaration": "operator-supplied text shards; provenance and hashes required before training"}],
+    "image": [{"kind": "raw_rgb_patch", "declaration": "raw 48x48x3 RGB patches; provenance and hashes required before training"}],
+    "audio": [{"kind": "raw_audio_frame", "declaration": "raw 640-sample audio frames; provenance and hashes required before training"}]
+  },
+  "authority": {
+    "artifact_class": "research_candidate",
+    "execution_authority": "operator_approved",
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02B",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "total_parameters": 3134515200,
+    "native_capabilities": ["text", "image", "audio", "reasoning", "structured_tool_use"],
+    "published_family_backbone": "none",
+    "model_mediated_signals": []
+  }
 }
