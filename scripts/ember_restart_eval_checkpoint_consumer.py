@@ -2,28 +2,104 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Fail-closed byte verifier for an owned sparse checkpoint manifest."""
-import argparse,hashlib,json,os,tempfile
+"""Fail-closed structural verifier for corrected owned v3 sparse checkpoints."""
+import argparse
+import hashlib
+import json
+import os
+import tempfile
 from pathlib import Path
-def _sha256(path):
- d=hashlib.sha256()
- with path.open('rb')as f:
-  for b in iter(lambda:f.read(1024*1024),b''):d.update(b)
- return d.hexdigest()
-def _verify(m):
- p=json.loads(m.read_text(encoding='utf-8'))
- if not isinstance(p,dict) or p.get('schema_version')!='ember-sparse-checkpoint-v2':raise ValueError('unsupported checkpoint manifest')
- if not isinstance(p.get('model_config_sha256'),str) or len(p['model_config_sha256'])!=64 or not isinstance(p.get('shards'),list) or not p['shards']:raise ValueError('checkpoint manifest missing model or shards')
- for e in p['shards']:
-  if not isinstance(e,dict) or set(e)!={'path','role','bytes','sha256'}:raise ValueError('checkpoint shard schema mismatch')
-  q=m.parent/e['path']
-  if not q.is_file() or q.stat().st_size!=e['bytes'] or _sha256(q)!=e['sha256']:raise ValueError('checkpoint shard integrity mismatch')
- return {'goal_id':'EMBER-02','workstream_id':'EMBER-02C','next_executed_outcome':'EMBER-02 first sufficiently pretrained clean-genesis 3B Ember','checkpoint_manifest_sha256':_sha256(m),'model_config_sha256':p['model_config_sha256'],'result':'VERIFIED_CHECKPOINT_INPUT','shard_count':len(p['shards'])}
-def main():
- a=argparse.ArgumentParser();s=a.add_subparsers(dest='c',required=True);v=s.add_parser('verify');v.add_argument('manifest',type=Path);v.add_argument('--output',required=True,type=Path);x=a.parse_args()
- try:r=_verify(x.manifest)
- except (OSError,UnicodeError,json.JSONDecodeError,ValueError)as e:a.error(str(e))
- x.output.parent.mkdir(parents=True,exist_ok=True)
- with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=x.output.parent,delete=False)as h:json.dump(r,h,sort_keys=True,separators=(',',':'));h.write('\n');n=h.name
- os.replace(n,x.output)
-if __name__=='__main__':main()
+
+
+EXPERTS = ("vision", "audio", "reasoning", "tool")
+SHARDS = {"shared.pt": "shared_model_and_optimizer", "replay-state.pt": "replay_state", **{f"expert-{name}.pt": f"expert_{name}" for name in EXPERTS}}
+MANIFEST_FIELDS = {"schema_version", "launch_seed", "rng_state_sha256", "data_cursor", "model_config_sha256", "contract_sha256", "active_expert_ids", "expert_genesis_sha256", "expert_checkpoint_sha256", "shared_optimizer_shard_sha256", "optimizer_contract", "optimizer_realization", "shards"}
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _digest(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def _canonical_digest(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _verify(manifest_path: Path) -> dict[str, object]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict) or set(manifest) != MANIFEST_FIELDS or manifest.get("schema_version") != "ember-sparse-checkpoint-v3":
+        raise ValueError("corrected checkpoint requires closed v3 manifest")
+    if not isinstance(manifest["launch_seed"], int) or manifest["launch_seed"] < 0:
+        raise ValueError("checkpoint launch seed is invalid")
+    rng = manifest["rng_state_sha256"]
+    if not isinstance(rng, dict) or set(rng) != {"cpu", "cuda"} or not all(_digest(value) for value in rng.values()):
+        raise ValueError("checkpoint replay RNG identity is invalid")
+    cursor = manifest["data_cursor"]
+    if not isinstance(cursor, dict) or not {"shard", "record_index", "global_step", "tokens_seen"}.issubset(cursor) or not isinstance(cursor["shard"], str) or not cursor["shard"] or any(not isinstance(cursor[field], int) or cursor[field] < 0 for field in ("record_index", "global_step", "tokens_seen")):
+        raise ValueError("checkpoint replay cursor identity is invalid")
+    if not all(_digest(manifest[field]) for field in ("model_config_sha256", "contract_sha256", "shared_optimizer_shard_sha256")):
+        raise ValueError("checkpoint top-level identity is invalid")
+    active = manifest["active_expert_ids"]
+    if not isinstance(active, list) or len(active) != 1 or active[0] not in EXPERTS:
+        raise ValueError("checkpoint active expert identity is invalid")
+    records: dict[str, dict[str, object]] = {}
+    if not isinstance(manifest["shards"], list) or len(manifest["shards"]) != len(SHARDS):
+        raise ValueError("checkpoint v3 shard set is incomplete")
+    for record in manifest["shards"]:
+        if not isinstance(record, dict) or set(record) != {"path", "role", "bytes", "sha256"}:
+            raise ValueError("checkpoint shard schema mismatch")
+        path, role, size, digest = record["path"], record["role"], record["bytes"], record["sha256"]
+        if path not in SHARDS or role != SHARDS[path] or path in records or not isinstance(size, int) or size <= 0 or not _digest(digest):
+            raise ValueError("checkpoint v3 shard mapping is invalid")
+        shard = manifest_path.parent / path
+        if not shard.is_file() or shard.stat().st_size != size or _sha256(shard) != digest:
+            raise ValueError(f"checkpoint shard integrity mismatch: {path}")
+        records[path] = record
+    if set(records) != set(SHARDS):
+        raise ValueError("checkpoint v3 shard paths are incomplete")
+    if manifest["shared_optimizer_shard_sha256"] != records["shared.pt"]["sha256"]:
+        raise ValueError("checkpoint shared optimizer shard binding mismatch")
+    for field in ("expert_genesis_sha256", "expert_checkpoint_sha256"):
+        mapping = manifest[field]
+        if not isinstance(mapping, dict) or set(mapping) != set(EXPERTS) or not all(_digest(value) for value in mapping.values()):
+            raise ValueError(f"checkpoint {field} mapping is invalid")
+    for expert in EXPERTS:
+        if manifest["expert_checkpoint_sha256"][expert] != records[f"expert-{expert}.pt"]["sha256"]:
+            raise ValueError(f"checkpoint expert shard binding mismatch: {expert}")
+    contract = manifest["optimizer_contract"]
+    if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"} or not all(isinstance(contract[field], str) and contract[field] for field in ("name", "implementation", "state_format")) or not isinstance(contract["hyperparameters"], dict) or not contract["hyperparameters"]:
+        raise ValueError("checkpoint optimizer contract is invalid")
+    realization = manifest["optimizer_realization"]
+    if not isinstance(realization, dict) or set(realization) != {"implementation", "implementation_source_sha256", "state_format", "optimizer_contract_sha256"} or realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"] or not _digest(realization.get("implementation_source_sha256")) or realization.get("optimizer_contract_sha256") != _canonical_digest(contract):
+        raise ValueError("checkpoint optimizer realization is invalid")
+    return {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "checkpoint_manifest_sha256": _sha256(manifest_path), "model_config_sha256": manifest["model_config_sha256"], "result": "VERIFIED_CHECKPOINT_INPUT", "shard_count": len(records)}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    subcommands = parser.add_subparsers(dest="command", required=True)
+    verify = subcommands.add_parser("verify")
+    verify.add_argument("manifest", type=Path)
+    verify.add_argument("--output", required=True, type=Path)
+    arguments = parser.parse_args()
+    try:
+        receipt = _verify(arguments.manifest)
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+        parser.error(str(error))
+    arguments.output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.output.parent, delete=False) as handle:
+        json.dump(receipt, handle, sort_keys=True, separators=(",", ":"))
+        handle.write("\n")
+        temporary = handle.name
+    os.replace(temporary, arguments.output)
+
+
+if __name__ == "__main__":
+    main()
