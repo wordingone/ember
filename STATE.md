@@ -21,7 +21,9 @@ with an exact identity, `goal_id`, and `next_executed_outcome`.
   Ember model under this definition.
 - **Research candidate** is an authorized at-least-3B network that already
   satisfies the required native architecture/capability surface but has not yet
-  earned milestone evidence. EMBER-00 authorizes no research candidate.
+  earned milestone evidence. EMBER-02 permits a candidate only through the
+  executable `ember-owned-rung-v1` contract; architecture or allocation alone
+  earns no model or capability credit.
 - **Historical artifact** is preserved evidence with execution denied. It may
   inform research but cannot become a model milestone or target-lineage seed.
 - **Borrowed reference** is an external learned model or result admitted only
@@ -74,6 +76,7 @@ not promote any current artifact into an Ember model.
 | d3-code-artifact-result | benchmark_result | receipt-sha256:ac3be7d4bb8064de9d1722335a41367d847d66919279c6a8b370014d0275f383 | historical_only | not_applicable | not_applicable | external_code_artifact_loop | none | representative D3-Gym A/B/C/Deleted program result; not owned-model capability |
 | arcade-random-smoke-result | benchmark_result | receipt-sha256:931b3a608c6bf1911bb0ffaa56797014d8ea9a38be475297df9864d6c631a237 | historical_only | not_applicable | not_applicable | random_control | none | 25 games at 200 steps, zero wins; not the preregistered 1000-step floor |
 | ember-target | model_target | uninstantiated:ember-owned-30-35b-unified-sparse | target | 30000000001 | 0 | owned | none | GOAL.md; target identity only, no model claim |
+| ember-owned-rung-v1-contract | admission_contract | source:scripts/ember_restart/contract.py@8b0d684e9e289aa66a7c18217b71bfaecab1e642 | research_prototype | not_applicable | not_applicable | local_fail_closed_validator | none | docs/ember-restart/integration-contract-v1.md and scripts/ember_restart/contract.py; candidate/admission boundary only |
 
 The seven-task frozen evaluation suite is custody, not seven results. Only the
 ARC-Challenge and HellaSwag result rows above are located full owned-checkpoint
@@ -131,5 +134,5 @@ The current truthful category is a fragmented research program, substantial
 body/tooling system, historical sub-3B checkpoint lineages, separate
 multimodal source prototype, explicit borrowed reference backend, and bounded
 benchmark evidence. No row is an admissible Ember model, integrated organism,
-or completed local AI laboratory. The next executable outcome remains the
-EMBER-01 clean 3B custody and identity spine after EMBER-00's full certificate.
+or completed local AI laboratory. The next executable outcome is EMBER-02's
+first sufficiently pretrained clean-genesis 3B Ember.
