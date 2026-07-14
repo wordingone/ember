@@ -43,6 +43,15 @@ TOTAL_PARAMETER_FIELDS = (
     "served_parameters",
 )
 EXPERT_DOMAINS = ("vision", "audio", "reasoning", "tool")
+ARCHITECTURE_REVISION = "ember-sparse-3b-v1"
+ARCHITECTURE_SHAPE = {
+    "hidden_size": 2048,
+    "layers": 14,
+    "attention_heads": 16,
+    "vocab_size": 32000,
+    "image_input_shape": [48, 48, 3],
+    "audio_frame_samples": 640,
+}
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -188,6 +197,84 @@ def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]
     elif active_experts[0] not in bank_ids:
         errors.append("architecture.active_expert_ids: active expert is not declared")
 
+    if architecture.get("revision") != ARCHITECTURE_REVISION:
+        errors.append(f"architecture.revision: must equal {ARCHITECTURE_REVISION}")
+    model_config_ref = architecture.get("model_config")
+    model_config = _load_bound_json(
+        root,
+        model_config_ref,
+        "path",
+        "architecture.model_config",
+        errors,
+    )
+    model_config_sha256 = (
+        model_config_ref.get("sha256") if isinstance(model_config_ref, dict) else None
+    )
+    config_counts: dict[str, int] | None = None
+    if model_config is not None:
+        if model_config.get("contract_name") != "ember-restart-3b":
+            errors.append("architecture.model_config: contract_name mismatch")
+        if model_config.get("contract_version") != 2:
+            errors.append("architecture.model_config: contract_version mismatch")
+        model = model_config.get("model")
+        if not isinstance(model, dict):
+            errors.append("architecture.model_config.model: expected object")
+        else:
+            observed_shape = {
+                "hidden_size": model.get("hidden_size"),
+                "layers": model.get("layers"),
+                "attention_heads": model.get("attention_heads"),
+                "vocab_size": model.get("vocab_size"),
+                "image_input_shape": (
+                    model.get("image_projection", {}).get("input_shape")
+                    if isinstance(model.get("image_projection"), dict)
+                    else None
+                ),
+                "audio_frame_samples": (
+                    model.get("audio_projection", {}).get("frame_samples")
+                    if isinstance(model.get("audio_projection"), dict)
+                    else None
+                ),
+            }
+            if observed_shape != ARCHITECTURE_SHAPE:
+                errors.append("architecture.model_config: shape does not match revision")
+            routing = model.get("expert_routing")
+            if not isinstance(routing, dict) or routing.get("expert_names") != list(EXPERT_DOMAINS):
+                errors.append("architecture.model_config: expert routing mismatch")
+            if model.get("tied_embeddings") is not True:
+                errors.append("architecture.model_config: tied_embeddings must be true")
+            if observed_shape == ARCHITECTURE_SHAPE:
+                hidden = ARCHITECTURE_SHAPE["hidden_size"]
+                layers = ARCHITECTURE_SHAPE["layers"]
+                vocab = ARCHITECTURE_SHAPE["vocab_size"]
+                image_input = 1
+                for size in ARCHITECTURE_SHAPE["image_input_shape"]:
+                    image_input *= size
+                audio_input = ARCHITECTURE_SHAPE["audio_frame_samples"]
+                shared_per_layer = 4 * hidden * hidden + 2 * hidden
+                expert_per_layer = 12 * hidden * hidden
+                total = (
+                    vocab * hidden
+                    + layers * (shared_per_layer + len(EXPERT_DOMAINS) * expert_per_layer)
+                    + image_input * hidden
+                    + audio_input * hidden
+                    + hidden
+                )
+                active_count = total - layers * (len(EXPERT_DOMAINS) - 1) * expert_per_layer
+                config_counts = {
+                    "allocated_parameters": total,
+                    "unique_parameters": total,
+                    "trainable_parameters": total,
+                    "served_parameters": total,
+                    "active_parameters": active_count,
+                    "episode_trainable_parameters": active_count,
+                }
+                if model.get("total_unique_trainable_parameters") != total:
+                    errors.append("architecture.model_config: declared total is not config-derived")
+                for field, expected in config_counts.items():
+                    if architecture.get(field) != expected:
+                        errors.append(f"architecture.{field}: does not match config-derived count")
+
     counter = architecture.get("parameter_counter")
     counter_path = _verify_file(root, counter, "architecture.parameter_counter", errors)
     counter_sha256 = counter.get("sha256") if isinstance(counter, dict) else None
@@ -208,6 +295,10 @@ def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]
             errors.append("architecture.parameter_receipt: checkpoint mismatch")
         if counter_path is None or receipt.get("counter_sha256") != counter_sha256:
             errors.append("architecture.parameter_receipt: counter mismatch")
+        if receipt.get("model_config_sha256") != model_config_sha256:
+            errors.append("architecture.parameter_receipt: model config mismatch")
+        if receipt.get("architecture_revision") != ARCHITECTURE_REVISION:
+            errors.append("architecture.parameter_receipt: architecture revision mismatch")
         for field in (*TOTAL_PARAMETER_FIELDS, "active_parameters", "episode_trainable_parameters"):
             if receipt.get(field) != architecture.get(field):
                 errors.append(f"architecture.parameter_receipt: {field} mismatch")

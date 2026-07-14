@@ -42,7 +42,7 @@ The registry is a separate command-line input. A run manifest cannot declare its
 A candidate must bind all of the following:
 
 - clean owned random initialization, null parent, and explicit false values for borrowed weights, teachers, judges, filters, and generated labels;
-- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must come from a content-addressed instantiated-model counter receipt bound to the exact checkpoint manifest, counter-source bytes, active expert, and expert-genesis shard hashes;
+- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must equal the validator's independent recomputation for the content-addressed `ember-sparse-3b-v1` model config and also match an instantiated-model counter receipt bound to that config, the exact checkpoint manifest, counter-source bytes, active expert, and expert-genesis shard hashes;
 - one `ember-unified-decoder` using raw image patches and audio frames, decoder soft-token splicing, multimodal-span attention, 2D-capable positional treatment, and no separate pretrained encoder;
 - a shared core plus exactly four asymmetric vision, audio, reasoning, and tool expert banks, each bound to its own content-addressed checkpoint shard, with distinct verified bytes and exactly one declared expert active per episode;
 - an owned tokenizer with verified bytes;

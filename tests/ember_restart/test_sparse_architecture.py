@@ -147,3 +147,22 @@ def test_parameter_counter_bytes_are_content_addressed(tmp_path: Path) -> None:
         "architecture.parameter_counter.sha256: content hash mismatch" in error
         for error in json.loads(result.stdout)["errors"]
     )
+
+def test_self_consistent_fabricated_counts_fail_config_recomputation(tmp_path: Path) -> None:
+    path = _make_sparse(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    architecture = payload["architecture"]
+    receipt_ref = architecture["parameter_receipt"]
+    receipt_path = tmp_path / receipt_ref["path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters"):
+        architecture[field] += 1_000
+        receipt[field] += 1_000
+    receipt_ref["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(path, payload)
+    result = _run(path)
+    assert result.returncode == 1
+    assert any(
+        "config-derived" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
