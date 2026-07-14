@@ -47,6 +47,20 @@ def test_ember02_model_workstream_owns_3b_execution_paths() -> None:
     } <= prefixes
 
 
+def test_ember02_eval_workstream_owns_all_published_evaluator_paths() -> None:
+    policy = _policy()
+    scope = policy["workstream_path_scopes"]["EMBER-02C"]
+    assert scope["mode"] == "only"
+    prefixes = set(scope["prefixes"])
+    assert {
+        "docs/ember-restart-sql-",
+        "docs/ember-restart-structured-tools-",
+        "docs/ember-restart-dynamics-",
+        "scripts/ember_restart_measured_receipts",
+        "tests/test_ember_restart_measured_receipts",
+    } <= prefixes
+
+
 def test_authority_verifier_binds_exact_ember02_goal() -> None:
     verifier = (ROOT / "scripts" / "verify_authority_conservation.py").read_text(
         encoding="utf-8"
