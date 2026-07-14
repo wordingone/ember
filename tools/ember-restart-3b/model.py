@@ -329,6 +329,13 @@ class UnifiedDecoder(nn.Module):
         self._activate_expert(self.active_expert)
         self.genesis_metadata = config.genesis_metadata(genesis_seed)
 
+    def _initialize_clean_genesis(self) -> None:
+        """Use transformer-scale random init instead of framework embedding defaults."""
+        for module in self.modules():
+            if isinstance(module, (nn.Linear, nn.Embedding)) and module.weight.device.type != "meta":
+                nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            elif isinstance(module, RMSNorm) and module.weight.device.type != "meta":
+                nn.init.ones_(module.weight)
     def _activate_expert(self, active_expert: str) -> None:
         if active_expert not in self.config.expert_names:
             raise ValueError(f"unknown declared expert: {active_expert}")
