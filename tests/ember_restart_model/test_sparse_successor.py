@@ -50,13 +50,16 @@ class SparseSuccessorTests(unittest.TestCase):
         second = model(tokens, image_patches=patch, image_coordinates=torch.tensor([[1, 0]]))
         self.assertFalse(torch.allclose(first[:, -1], second[:, -1]))
 
-    def test_isolated_multimodal_span_blocks_cross_span_attention(self) -> None:
+    def test_image_span_is_bidirectional_internally_and_causal_elsewhere(self) -> None:
         model = UnifiedDecoder(self.config)
-        spans = [MultimodalSpan(start=1, length=1, modality="image", attention_mode="isolated")]
-        allowed = model.build_attention_mask(batch_size=1, sequence_length=3, spans=spans, device=torch.device("cpu"))
+        spans = [MultimodalSpan(start=1, length=2, modality="image", attention_mode="isolated")]
+        allowed = model.build_attention_mask(batch_size=1, sequence_length=4, spans=spans, device=torch.device("cpu"))
         self.assertTrue(allowed[0, 1, 1])
-        self.assertFalse(allowed[0, 2, 1])
-        self.assertFalse(allowed[0, 1, 0])
+        self.assertTrue(allowed[0, 1, 2])
+        self.assertTrue(allowed[0, 2, 1])
+        self.assertTrue(allowed[0, 1, 0])
+        self.assertTrue(allowed[0, 3, 2])
+        self.assertFalse(allowed[0, 0, 3])
 
     def test_four_expert_banks_are_distinct_and_named(self) -> None:
         model = UnifiedDecoder(self.config)
