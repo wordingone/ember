@@ -24,7 +24,7 @@ def write_v3(root: Path, *, mutate=None) -> Path:
     records=[]
     for shard,role in [(shared,"shared_model_and_optimizer"),(replay,"replay_state")]:records.append({"path":shard.name,"role":role,"bytes":shard.stat().st_size,"sha256":_sha(shard)})
     for expert in EXPERTS:
-        shard=root/f"expert-{expert}.pt";torch.save({"expert":expert,"model":{}},shard);records.append({"path":shard.name,"role":f"expert_{expert}","bytes":shard.stat().st_size,"sha256":_sha(shard)})
+        shard=root/f"expert-{expert}.pt";torch.save({"expert":expert,"genesis_sha256":format(EXPERTS.index(expert)+10,"x")*64,"model":{}},shard);records.append({"path":shard.name,"role":f"expert_{expert}","bytes":shard.stat().st_size,"sha256":_sha(shard)})
     manifest={"schema_version":"ember-sparse-checkpoint-v3","launch_seed":82,"rng_state_sha256":{"cpu":hashlib.sha256(cpu.numpy().tobytes()).hexdigest(),"cuda":hashlib.sha256(cuda.numpy().tobytes()).hexdigest()},"data_cursor":cursor,"model_config_sha256":_sha(config),"contract_sha256":"d"*64,"active_expert_ids":["tool"],"expert_genesis_sha256":{name:format(index+10,"x")*64 for index,name in enumerate(EXPERTS)},"expert_checkpoint_sha256":{name:next(x["sha256"] for x in records if x["path"]==f"expert-{name}.pt") for name in EXPERTS},"shared_optimizer_shard_sha256":records[0]["sha256"],"optimizer_contract":contract,"optimizer_realization":realization,"shards":records}
     if mutate: mutate(manifest)
     path=root/"checkpoint-manifest.json";path.write_text(json.dumps(manifest),encoding="utf-8");return path

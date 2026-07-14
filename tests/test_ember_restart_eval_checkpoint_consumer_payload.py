@@ -30,8 +30,8 @@ def test_rejects_replay_payload_rng_drift_even_when_shard_is_rehashed():
         shared = root / "shared.pt"; torch.save({"model": {}, "optimizer": {}, "optimizer_contract": contract, "optimizer_realization": realization}, shared)
         records = []
         for path, role in [(shared, "shared_model_and_optimizer"), (replay, "replay_state")]: records.append({"path": path.name, "role": role, "bytes": path.stat().st_size, "sha256": digest(path)})
-        for expert in EXPERTS:
-            path = root / f"expert-{expert}.pt"; torch.save({"expert": expert, "model": {}}, path); records.append({"path": path.name, "role": f"expert_{expert}", "bytes": path.stat().st_size, "sha256": digest(path)})
+        for index, expert in enumerate(EXPERTS):
+            path = root / f"expert-{expert}.pt"; torch.save({"expert": expert, "genesis_sha256": format(index + 10, "x") * 64, "model": {}}, path); records.append({"path": path.name, "role": f"expert_{expert}", "bytes": path.stat().st_size, "sha256": digest(path)})
         manifest = {"schema_version": "ember-sparse-checkpoint-v3", "launch_seed": 82, "rng_state_sha256": {"cpu": hashlib.sha256(cpu.numpy().tobytes()).hexdigest(), "cuda": hashlib.sha256(cuda.numpy().tobytes()).hexdigest()}, "data_cursor": cursor, "model_config_sha256": digest(config), "contract_sha256": "b" * 64, "active_expert_ids": ["tool"], "expert_genesis_sha256": {name: format(index + 10, "x") * 64 for index, name in enumerate(EXPERTS)}, "expert_checkpoint_sha256": {name: next(record["sha256"] for record in records if record["path"] == f"expert-{name}.pt") for name in EXPERTS}, "shared_optimizer_shard_sha256": records[0]["sha256"], "optimizer_contract": contract, "optimizer_realization": realization, "shards": records}
         path = root / "checkpoint-manifest.json"; path.write_text(json.dumps(manifest), encoding="utf-8")
         output = root / "receipt.json"
