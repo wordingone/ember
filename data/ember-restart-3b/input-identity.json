@@ -5,7 +5,7 @@
     "schema_version":  "ember-input-identity-v1",
     "artifact_id":  "owned-clean-shard-v1",
     "shard_path":  "data/ember-restart-3b/owned-bootstrap-v1.json",
-    "sha256":  "fe32a7804d52ca76abd41271327764472d0e5fc35c4d321e2e35a7bdae0eea8d",
-    "bytes":  11618,
+    "sha256":  "1bdf3d3035b9a7e8f7b430b4257441b063b4b3b06c0b012b18a76392f0f4770b",
+    "bytes":  12358,
     "provenance":  "owned slice-only bootstrap bytes; not sufficient-pretraining evidence"
 }
