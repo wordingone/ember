@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from batch import decode_owned_batch
 from checkpoint_artifacts import write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
-from parameter_counter import measure_parameter_counts
+from parameter_counter import measure_parameter_counts, write_parameter_receipt
 from train import run_launch
 
 
@@ -64,7 +64,9 @@ def run(*, seed: int) -> dict[str, object]:
     loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
     loss.backward()
     optimizer.step()
-    checkpoint = write_checkpoint_artifacts(model, optimizer, root / "receipts" / "ember-restart-3b" / "vertical-slice", launch_seed=seed)
+    checkpoint_root = root / "receipts" / "ember-restart-3b" / "vertical-slice"
+    checkpoint = write_checkpoint_artifacts(model, optimizer, checkpoint_root, launch_seed=seed)
+    parameter_receipt = write_parameter_receipt(model, root / "configs" / "ember-restart-3b.json", checkpoint_root / "checkpoint-manifest.json", genesis_hashes)
     return {
         "loss": float(loss.detach().cpu()),
         "counts": counts,
@@ -74,6 +76,7 @@ def run(*, seed: int) -> dict[str, object]:
         "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
         "input_identity_receipt": input_receipt,
         "post_step_checkpoint": checkpoint,
+        "parameter_receipt": parameter_receipt,
     }
 
 
