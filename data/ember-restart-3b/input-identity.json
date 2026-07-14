@@ -1,11 +1,11 @@
 {
-  "artifact_id": "owned-clean-shard-v1",
-  "bytes": 1048,
+  "artifact_id": "owned-clean-pretraining-shard-v1",
+  "bytes": 14346,
   "goal_id": "EMBER-02",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "provenance": "owned slice-only bootstrap bytes; not sufficient-pretraining evidence",
+  "provenance": "owned four-domain bootstrap bytes; slice-only and not sufficient-pretraining evidence",
   "schema_version": "ember-input-identity-v1",
-  "sha256": "0085c98ccbce635d442c75c19203cf5b5c004341ec220853a61cc4a1533a3eec",
-  "shard_path": "data/ember-restart-3b/owned-bootstrap-v1.json",
+  "sha256": "0a5815d194c367ef11e6a83c9bb8cdccf4b1576f401958f35331598f48081d4e",
+  "shard_path": "data/ember-restart-3b/owned-pretrain-v1.json",
   "workstream_id": "EMBER-02B"
 }

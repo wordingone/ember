@@ -116,7 +116,7 @@
                                           "required_for_write_heavy_commands":  true
                                       },
                      "input_identity_manifest":  "data/ember-restart-3b/input-identity.json",
-                     "expected_input_artifact_id":  "owned-clean-shard-v1"
+                     "expected_input_artifact_id":  "owned-clean-pretraining-shard-v1"
                  },
     "checkpoints":  {
                         "retention":  {
