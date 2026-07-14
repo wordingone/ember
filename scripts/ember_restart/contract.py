@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import subprocess
 import sys
@@ -19,6 +20,16 @@ from typing import Any
 SCHEMA_VERSION = "ember-owned-rung-v1"
 PARAMETER_FLOOR = 3_000_000_000
 CAPABILITIES = ("text", "image", "audio", "reasoning", "tool")
+CAPABILITY_CRITERIA = {
+    capability: f"ember-3b-{capability}-capability-v1" for capability in CAPABILITIES
+}
+EVALUATION_EVIDENCE = {
+    "split": "split_sha256",
+    "harness": "harness_sha256",
+    "protocol": "protocol_sha256",
+    "predictions": "predictions_sha256",
+    "score_artifact": "score_artifact_sha256",
+}
 BORROWED_FLAGS = (
     "borrowed_weights",
     "borrowed_teachers",
@@ -642,9 +653,46 @@ def _verify_admission(
                     errors.append(f"{prefix} receipt: result must equal MEASURED")
                 if payload.get("subject_checkpoint_sha256") != checkpoint_sha256:
                     errors.append(f"{prefix} receipt: checkpoint mismatch")
+                if payload.get("benchmark_id") != benchmark_id:
+                    errors.append(f"{prefix} receipt: benchmark_id mismatch")
+                benchmark_version = payload.get("benchmark_version")
+                if not isinstance(benchmark_version, str) or not benchmark_version.strip():
+                    errors.append(f"{prefix} receipt: executed evidence benchmark_version missing")
+                evidence = evaluation.get("evidence")
+                if not isinstance(evidence, dict):
+                    errors.append(f"{prefix}: executed evidence object missing")
+                else:
+                    for evidence_name, receipt_field in EVALUATION_EVIDENCE.items():
+                        record = evidence.get(evidence_name)
+                        _verify_file(root, record, f"{prefix}.evidence.{evidence_name}", errors)
+                        evidence_hash = record.get("sha256") if isinstance(record, dict) else None
+                        if payload.get(receipt_field) != evidence_hash:
+                            errors.append(f"{prefix} receipt: executed evidence {receipt_field} mismatch")
+                sample_count = payload.get("sample_count")
+                if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count <= 0:
+                    errors.append(f"{prefix} receipt: executed evidence sample_count must be positive")
+                metrics = payload.get("metrics")
+                if (
+                    not isinstance(metrics, dict)
+                    or not metrics
+                    or any(
+                        not isinstance(value, (int, float))
+                        or isinstance(value, bool)
+                        or not math.isfinite(value)
+                        for value in metrics.values()
+                    )
+                ):
+                    errors.append(f"{prefix} receipt: executed evidence metrics must be finite numeric values")
+                criterion_id = CAPABILITY_CRITERIA.get(capability)
+                if payload.get("criterion_id") != criterion_id:
+                    errors.append(f"{prefix} receipt: capability criterion mismatch")
+                if payload.get("criterion_result") != "PASSED":
+                    errors.append(f"{prefix} receipt: capability criterion must be PASSED")
                 verifier = trusted_verifiers.get(payload.get("verifier_sha256"))
                 if verifier is None or "evaluation" not in verifier.get("evidence_classes", []):
                     errors.append(f"{prefix} receipt: verifier is not trusted")
+                elif criterion_id not in verifier.get("criterion_ids", []):
+                    errors.append(f"{prefix} receipt: capability criterion is not trusted")
         for capability in CAPABILITIES:
             if found.get(capability) != 1:
                 errors.append(f"evaluations: requires exactly one {capability} receipt")
