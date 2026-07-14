@@ -50,17 +50,142 @@ def _candidate_manifest(tmp_path: Path) -> Path:
     shard = tmp_path / "checkpoint" / "model-00001.safetensors"
     shard.parent.mkdir(parents=True)
     shard.write_bytes(b"owned-random-init-checkpoint")
+    shard_records = [
+        {
+            "path": str(shard.relative_to(tmp_path)),
+            "sha256": _sha256(shard),
+            "bytes": shard.stat().st_size,
+        }
+    ]
+    expert_banks = []
+    for index, domain in enumerate(("vision", "audio", "reasoning", "tool")):
+        expert = tmp_path / "checkpoint" / f"expert-{domain}.safetensors"
+        expert.write_bytes(f"owned-{domain}-expert-genesis-{index}".encode("utf-8"))
+        expert_hash = _sha256(expert)
+        expert_path = str(expert.relative_to(tmp_path))
+        shard_records.append(
+            {"path": expert_path, "sha256": expert_hash, "bytes": expert.stat().st_size}
+        )
+        expert_banks.append(
+            {"id": domain, "domain": domain, "path": expert_path, "genesis_sha256": expert_hash}
+        )
     checkpoint_index = tmp_path / "checkpoint" / "checkpoint-manifest.json"
     checkpoint_index_hash = _write_json(
         checkpoint_index,
+        {"shards": shard_records},
+    )
+    parameter_counts = {
+        "allocated_parameters": 3_134_515_200,
+        "unique_parameters": 3_134_515_200,
+        "trainable_parameters": 3_134_515_200,
+        "active_parameters": 1_020_585_984,
+        "episode_trainable_parameters": 1_020_585_984,
+        "served_parameters": 3_134_515_200,
+    }
+    model_config = tmp_path / "configs" / "ember-restart-3b.json"
+    model_config_hash = _write_json(
+        model_config,
         {
-            "shards": [
+            "contract_name": "ember-restart-3b",
+            "contract_version": 2,
+            "model": {
+                "hidden_size": 2048,
+                "layers": 14,
+                "attention_heads": 16,
+                "vocab_size": 32000,
+                "tied_embeddings": True,
+                "image_projection": {"input_shape": [48, 48, 3]},
+                "audio_projection": {"frame_samples": 640},
+                "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
+                "total_unique_trainable_parameters": 3_134_515_200,
+            },
+        },
+    )
+    counter = tmp_path / "counter" / "instantiated_meta_counter.py"
+    counter.parent.mkdir(parents=True)
+    counter.write_text(
+        """import argparse
+import hashlib
+import json
+import math
+from pathlib import Path
+
+
+def sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--model-config", required=True)
+parser.add_argument("--checkpoint-manifest", required=True)
+parser.add_argument("--active-expert", required=True)
+args = parser.parse_args()
+config = json.loads(Path(args.model_config).read_text(encoding="utf-8"))
+checkpoint = json.loads(Path(args.checkpoint_manifest).read_text(encoding="utf-8"))
+if not checkpoint.get("shards"):
+    raise SystemExit(3)
+model = config["model"]
+hidden = model["hidden_size"]
+layers = model["layers"]
+experts = model["expert_routing"]["expert_names"]
+image_input = math.prod(model["image_projection"]["input_shape"])
+audio_input = model["audio_projection"]["frame_samples"]
+expert_per_layer = 12 * hidden * hidden
+total = (
+    model["vocab_size"] * hidden
+    + layers * (4 * hidden * hidden + 2 * hidden + len(experts) * expert_per_layer)
+    + image_input * hidden
+    + audio_input * hidden
+    + hidden
+)
+active = total - layers * (len(experts) - 1) * expert_per_layer
+print(json.dumps({
+    "result": "MEASURED",
+    "subject_checkpoint_sha256": sha256(args.checkpoint_manifest),
+    "model_config_sha256": sha256(args.model_config),
+    "architecture_revision": "ember-sparse-3b-v1",
+    "allocated_parameters": total,
+    "unique_parameters": total,
+    "trainable_parameters": total,
+    "served_parameters": total,
+    "active_parameters": active,
+    "episode_trainable_parameters": active,
+    "active_expert_ids": [args.active_expert],
+}, sort_keys=True))
+""",
+        encoding="utf-8",
+    )
+    counter_record = {
+        "path": str(counter.relative_to(tmp_path)),
+        "sha256": _sha256(counter),
+    }
+    _write_json(
+        tmp_path / "trusted-verifiers.json",
+        {
+            "schema_version": "ember-trusted-verifiers-v1",
+            "verifiers": [
                 {
-                    "path": str(shard.relative_to(tmp_path)),
-                    "sha256": _sha256(shard),
-                    "bytes": shard.stat().st_size,
+                    **counter_record,
+                    "evidence_classes": ["parameter_realization"],
+                    "criterion_ids": [],
                 }
-            ]
+            ],
+        },
+    )
+    parameter_receipt = tmp_path / "receipts" / "parameter-count.json"
+    parameter_receipt_hash = _write_json(
+        parameter_receipt,
+        {
+            "result": "MEASURED",
+            "subject_checkpoint_sha256": checkpoint_index_hash,
+            "counter_sha256": counter_record["sha256"],
+            "model_config_sha256": model_config_hash,
+            "architecture_revision": "ember-sparse-3b-v1",
+            **parameter_counts,
+            "active_expert_ids": ["reasoning"],
+            "expert_genesis_sha256": {
+                bank["id"]: bank["genesis_sha256"] for bank in expert_banks
+            },
         },
     )
 
@@ -80,10 +205,23 @@ def _candidate_manifest(tmp_path: Path) -> Path:
         },
         "architecture": {
             "family": "ember-unified-decoder",
-            "allocated_parameters": 3_140_000_000,
-            "trainable_parameters": 3_140_000_000,
-            "active_parameters": 3_140_000_000,
-            "served_parameters": 3_140_000_000,
+            "revision": "ember-sparse-3b-v1",
+            "model_config": {
+                "path": str(model_config.relative_to(tmp_path)),
+                "sha256": model_config_hash,
+            },
+            **parameter_counts,
+            "parameter_counter": counter_record,
+            "parameter_receipt": {
+                "path": str(parameter_receipt.relative_to(tmp_path)),
+                "sha256": parameter_receipt_hash,
+            },
+            "shared_core": True,
+            "sparse_differentiated_capacity": True,
+            "task_level_expert_routing": True,
+            "asymmetric_expert_initialization": True,
+            "expert_banks": expert_banks,
+            "active_expert_ids": ["reasoning"],
             "raw_image_patches": True,
             "raw_audio_frames": True,
             "soft_token_splicing": True,
@@ -121,7 +259,14 @@ def _candidate_manifest(tmp_path: Path) -> Path:
 def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_path: Path):
     manifest = _candidate_manifest(tmp_path)
     result = subprocess.run(
-        [sys.executable, str(VALIDATOR), "validate", str(manifest)],
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,

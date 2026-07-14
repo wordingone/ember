@@ -9,7 +9,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,16 @@ from typing import Any
 SCHEMA_VERSION = "ember-owned-rung-v1"
 PARAMETER_FLOOR = 3_000_000_000
 CAPABILITIES = ("text", "image", "audio", "reasoning", "tool")
+CAPABILITY_CRITERIA = {
+    capability: f"ember-3b-{capability}-capability-v1" for capability in CAPABILITIES
+}
+EVALUATION_EVIDENCE = {
+    "split": "split_sha256",
+    "harness": "harness_sha256",
+    "protocol": "protocol_sha256",
+    "predictions": "predictions_sha256",
+    "score_artifact": "score_artifact_sha256",
+}
 BORROWED_FLAGS = (
     "borrowed_weights",
     "borrowed_teachers",
@@ -31,13 +43,27 @@ ARCHITECTURE_FLAGS = (
     "soft_token_splicing",
     "multimodal_span_attention",
     "rope_2d",
+    "shared_core",
+    "sparse_differentiated_capacity",
+    "task_level_expert_routing",
+    "asymmetric_expert_initialization",
 )
-PARAMETER_FIELDS = (
+TOTAL_PARAMETER_FIELDS = (
     "allocated_parameters",
+    "unique_parameters",
     "trainable_parameters",
-    "active_parameters",
     "served_parameters",
 )
+EXPERT_DOMAINS = ("vision", "audio", "reasoning", "tool")
+ARCHITECTURE_REVISION = "ember-sparse-3b-v1"
+ARCHITECTURE_SHAPE = {
+    "hidden_size": 2048,
+    "layers": 14,
+    "attention_heads": 16,
+    "vocab_size": 32000,
+    "image_input_shape": [48, 48, 3],
+    "audio_frame_samples": 640,
+}
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -100,22 +126,289 @@ def _verify_lineage(manifest: dict[str, Any], errors: list[str]) -> None:
             errors.append(f"lineage.{field}: must be false")
 
 
-def _verify_architecture(manifest: dict[str, Any], errors: list[str]) -> None:
+def _verify_architecture(
+    root: Path,
+    manifest: dict[str, Any],
+    trusted_verifiers: dict[str, dict[str, Any]],
+    errors: list[str],
+) -> None:
     architecture = manifest.get("architecture")
     if not isinstance(architecture, dict):
         errors.append("architecture: expected object")
         return
     if architecture.get("family") != "ember-unified-decoder":
         errors.append("architecture.family: must equal ember-unified-decoder")
-    for field in PARAMETER_FIELDS:
+    for field in TOTAL_PARAMETER_FIELDS:
         value = architecture.get(field)
         if not isinstance(value, int) or isinstance(value, bool) or value < PARAMETER_FLOOR:
             errors.append(f"architecture.{field}: must be an integer >= {PARAMETER_FLOOR}")
+    allocated = architecture.get("allocated_parameters")
+    unique = architecture.get("unique_parameters")
+    trainable = architecture.get("trainable_parameters")
+    served = architecture.get("served_parameters")
+    active = architecture.get("active_parameters")
+    episode_trainable = architecture.get("episode_trainable_parameters")
+    if not isinstance(active, int) or isinstance(active, bool) or active <= 0:
+        errors.append("architecture.active_parameters: must be a positive integer")
+    if not isinstance(episode_trainable, int) or isinstance(episode_trainable, bool) or episode_trainable <= 0:
+        errors.append("architecture.episode_trainable_parameters: must be a positive integer")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (allocated, unique)) and unique > allocated:
+        errors.append("architecture.unique_parameters: cannot exceed allocated_parameters")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (unique, trainable)) and trainable > unique:
+        errors.append("architecture.trainable_parameters: cannot exceed unique_parameters")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (unique, served)) and served != unique:
+        errors.append("architecture.served_parameters: must equal unique_parameters")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (active, unique)) and active >= unique:
+        errors.append("architecture.active_parameters: sparse execution requires active < unique")
+    if all(isinstance(value, int) and not isinstance(value, bool) for value in (episode_trainable, active)) and episode_trainable > active:
+        errors.append("architecture.episode_trainable_parameters: cannot exceed active_parameters")
     for field in ARCHITECTURE_FLAGS:
         if architecture.get(field) is not True:
             errors.append(f"architecture.{field}: must be true")
     if architecture.get("separate_pretrained_encoders") is not False:
         errors.append("architecture.separate_pretrained_encoders: must be false")
+
+    expert_banks = architecture.get("expert_banks")
+    bank_ids: set[str] = set()
+    bank_domains: set[str] = set()
+    genesis_hashes: set[str] = set()
+    if not isinstance(expert_banks, list) or len(expert_banks) != len(EXPERT_DOMAINS):
+        errors.append("architecture.expert_banks: requires exactly vision/audio/reasoning/tool banks")
+    else:
+        for index, bank in enumerate(expert_banks):
+            prefix = f"architecture.expert_banks[{index}]"
+            if not isinstance(bank, dict):
+                errors.append(f"{prefix}: expected object")
+                continue
+            bank_id = bank.get("id")
+            domain = bank.get("domain")
+            genesis = bank.get("genesis_sha256")
+            if not isinstance(bank_id, str) or not bank_id:
+                errors.append(f"{prefix}.id: expected non-empty string")
+            elif bank_id in bank_ids:
+                errors.append(f"{prefix}.id: duplicate expert id")
+            else:
+                bank_ids.add(bank_id)
+            if domain not in EXPERT_DOMAINS:
+                errors.append(f"{prefix}.domain: unsupported domain")
+            else:
+                bank_domains.add(domain)
+            if not isinstance(genesis, str) or not SHA256_RE.fullmatch(genesis):
+                errors.append(f"{prefix}.genesis_sha256: expected lowercase SHA-256")
+            else:
+                _verify_file(
+                    root,
+                    {"path": bank.get("path"), "sha256": genesis},
+                    f"{prefix}.genesis_artifact",
+                    errors,
+                )
+                if genesis in genesis_hashes:
+                    errors.append(f"{prefix}.genesis_sha256: expert genesis hashes must be distinct")
+                else:
+                    genesis_hashes.add(genesis)
+        if bank_domains != set(EXPERT_DOMAINS):
+            errors.append("architecture.expert_banks: domains must equal vision/audio/reasoning/tool")
+    active_experts = architecture.get("active_expert_ids")
+    if not isinstance(active_experts, list) or len(active_experts) != 1:
+        errors.append("architecture.active_expert_ids: exactly one expert must be active per episode")
+    elif active_experts[0] not in bank_ids:
+        errors.append("architecture.active_expert_ids: active expert is not declared")
+
+    if architecture.get("revision") != ARCHITECTURE_REVISION:
+        errors.append(f"architecture.revision: must equal {ARCHITECTURE_REVISION}")
+    model_config_ref = architecture.get("model_config")
+    model_config = _load_bound_json(
+        root,
+        model_config_ref,
+        "path",
+        "architecture.model_config",
+        errors,
+    )
+    model_config_sha256 = (
+        model_config_ref.get("sha256") if isinstance(model_config_ref, dict) else None
+    )
+    model_config_path = (
+        _artifact(root, model_config_ref.get("path"), "architecture.model_config.path", errors)
+        if isinstance(model_config_ref, dict)
+        else None
+    )
+    config_counts: dict[str, int] | None = None
+    if model_config is not None:
+        if model_config.get("contract_name") != "ember-restart-3b":
+            errors.append("architecture.model_config: contract_name mismatch")
+        if model_config.get("contract_version") != 2:
+            errors.append("architecture.model_config: contract_version mismatch")
+        model = model_config.get("model")
+        if not isinstance(model, dict):
+            errors.append("architecture.model_config.model: expected object")
+        else:
+            observed_shape = {
+                "hidden_size": model.get("hidden_size"),
+                "layers": model.get("layers"),
+                "attention_heads": model.get("attention_heads"),
+                "vocab_size": model.get("vocab_size"),
+                "image_input_shape": (
+                    model.get("image_projection", {}).get("input_shape")
+                    if isinstance(model.get("image_projection"), dict)
+                    else None
+                ),
+                "audio_frame_samples": (
+                    model.get("audio_projection", {}).get("frame_samples")
+                    if isinstance(model.get("audio_projection"), dict)
+                    else None
+                ),
+            }
+            if observed_shape != ARCHITECTURE_SHAPE:
+                errors.append("architecture.model_config: shape does not match revision")
+            routing = model.get("expert_routing")
+            if not isinstance(routing, dict) or routing.get("expert_names") != list(EXPERT_DOMAINS):
+                errors.append("architecture.model_config: expert routing mismatch")
+            if model.get("tied_embeddings") is not True:
+                errors.append("architecture.model_config: tied_embeddings must be true")
+            if observed_shape == ARCHITECTURE_SHAPE:
+                hidden = ARCHITECTURE_SHAPE["hidden_size"]
+                layers = ARCHITECTURE_SHAPE["layers"]
+                vocab = ARCHITECTURE_SHAPE["vocab_size"]
+                image_input = 1
+                for size in ARCHITECTURE_SHAPE["image_input_shape"]:
+                    image_input *= size
+                audio_input = ARCHITECTURE_SHAPE["audio_frame_samples"]
+                shared_per_layer = 4 * hidden * hidden + 2 * hidden
+                expert_per_layer = 12 * hidden * hidden
+                total = (
+                    vocab * hidden
+                    + layers * (shared_per_layer + len(EXPERT_DOMAINS) * expert_per_layer)
+                    + image_input * hidden
+                    + audio_input * hidden
+                    + hidden
+                )
+                active_count = total - layers * (len(EXPERT_DOMAINS) - 1) * expert_per_layer
+                config_counts = {
+                    "allocated_parameters": total,
+                    "unique_parameters": total,
+                    "trainable_parameters": total,
+                    "served_parameters": total,
+                    "active_parameters": active_count,
+                    "episode_trainable_parameters": active_count,
+                }
+                if model.get("total_unique_trainable_parameters") != total:
+                    errors.append("architecture.model_config: declared total is not config-derived")
+                for field, expected in config_counts.items():
+                    if architecture.get(field) != expected:
+                        errors.append(f"architecture.{field}: does not match config-derived count")
+
+    counter = architecture.get("parameter_counter")
+    counter_path = _verify_file(root, counter, "architecture.parameter_counter", errors)
+    counter_sha256 = counter.get("sha256") if isinstance(counter, dict) else None
+    counter_verifier = trusted_verifiers.get(counter_sha256)
+    counter_is_trusted = (
+        counter_verifier is not None
+        and "parameter_realization" in counter_verifier.get("evidence_classes", [])
+    )
+    if not counter_is_trusted:
+        errors.append("architecture.parameter_counter: verifier is not independently trusted")
+    parameter_receipt = architecture.get("parameter_receipt")
+    receipt = _load_bound_json(
+        root,
+        parameter_receipt,
+        "path",
+        "architecture.parameter_receipt",
+        errors,
+    )
+    if receipt is not None:
+        if receipt.get("result") != "MEASURED":
+            errors.append("architecture.parameter_receipt: result must equal MEASURED")
+        checkpoint = manifest.get("checkpoint")
+        checkpoint_sha256 = checkpoint.get("sha256") if isinstance(checkpoint, dict) else None
+        if receipt.get("subject_checkpoint_sha256") != checkpoint_sha256:
+            errors.append("architecture.parameter_receipt: checkpoint mismatch")
+        if counter_path is None or receipt.get("counter_sha256") != counter_sha256:
+            errors.append("architecture.parameter_receipt: counter mismatch")
+        if receipt.get("model_config_sha256") != model_config_sha256:
+            errors.append("architecture.parameter_receipt: model config mismatch")
+        if receipt.get("architecture_revision") != ARCHITECTURE_REVISION:
+            errors.append("architecture.parameter_receipt: architecture revision mismatch")
+        for field in (*TOTAL_PARAMETER_FIELDS, "active_parameters", "episode_trainable_parameters"):
+            if receipt.get(field) != architecture.get(field):
+                errors.append(f"architecture.parameter_receipt: {field} mismatch")
+        if receipt.get("active_expert_ids") != active_experts:
+            errors.append("architecture.parameter_receipt: active_expert_ids mismatch")
+        expected_banks = {
+            bank.get("id"): bank.get("genesis_sha256")
+            for bank in expert_banks
+            if isinstance(bank, dict)
+        } if isinstance(expert_banks, list) else {}
+        if receipt.get("expert_genesis_sha256") != expected_banks:
+            errors.append("architecture.parameter_receipt: expert genesis mismatch")
+
+        checkpoint = manifest.get("checkpoint")
+        checkpoint_path = (
+            _artifact(
+                root,
+                checkpoint.get("manifest_path"),
+                "checkpoint.manifest_path",
+                errors,
+            )
+            if isinstance(checkpoint, dict)
+            else None
+        )
+        if (
+            counter_is_trusted
+            and counter_path is not None
+            and model_config_path is not None
+            and checkpoint_path is not None
+        ):
+            try:
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        str(counter_path),
+                        "--model-config",
+                        str(model_config_path),
+                        "--checkpoint-manifest",
+                        str(checkpoint_path),
+                        "--active-expert",
+                        str(active_experts[0]) if isinstance(active_experts, list) and active_experts else "",
+                    ],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    timeout=120,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                errors.append(f"architecture.parameter_counter: counter execution failed: {exc}")
+            else:
+                if completed.returncode != 0:
+                    errors.append(
+                        "architecture.parameter_counter: counter execution failed "
+                        f"with exit code {completed.returncode}"
+                    )
+                else:
+                    try:
+                        measured = json.loads(completed.stdout)
+                    except json.JSONDecodeError:
+                        errors.append("architecture.parameter_counter: counter execution returned invalid JSON")
+                    else:
+                        if not isinstance(measured, dict):
+                            errors.append("architecture.parameter_counter: counter execution must return an object")
+                        else:
+                            measured_fields = (
+                                "result",
+                                "subject_checkpoint_sha256",
+                                "model_config_sha256",
+                                "architecture_revision",
+                                *TOTAL_PARAMETER_FIELDS,
+                                "active_parameters",
+                                "episode_trainable_parameters",
+                                "active_expert_ids",
+                            )
+                            for field in measured_fields:
+                                if measured.get(field) != receipt.get(field):
+                                    errors.append(
+                                        f"architecture.parameter_counter: executed {field} mismatch"
+                                    )
 
 
 def _verify_data(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
@@ -202,6 +495,7 @@ def _verify_checkpoint(root: Path, manifest: dict[str, Any], errors: list[str]) 
     if not isinstance(shards, list) or not shards:
         errors.append("checkpoint manifest: shards must be a non-empty list")
         return
+    checkpoint_shards: dict[str, str] = {}
     for index, shard in enumerate(shards):
         prefix = f"checkpoint.shards[{index}]"
         shard_path = _verify_file(root, shard, prefix, errors)
@@ -211,6 +505,20 @@ def _verify_checkpoint(root: Path, manifest: dict[str, Any], errors: list[str]) 
                 errors.append(f"{prefix}.bytes: expected non-negative integer")
             elif shard_path is not None and shard_path.stat().st_size != expected_bytes:
                 errors.append(f"{prefix}.bytes: size mismatch")
+            if isinstance(shard.get("path"), str) and isinstance(shard.get("sha256"), str):
+                checkpoint_shards[shard["path"]] = shard["sha256"]
+    architecture = manifest.get("architecture")
+    expert_banks = architecture.get("expert_banks") if isinstance(architecture, dict) else None
+    if isinstance(expert_banks, list):
+        for index, bank in enumerate(expert_banks):
+            if not isinstance(bank, dict):
+                continue
+            path_value = bank.get("path")
+            genesis = bank.get("genesis_sha256")
+            if checkpoint_shards.get(path_value) != genesis:
+                errors.append(
+                    f"architecture.expert_banks[{index}]: genesis artifact must be an exact checkpoint shard"
+                )
 
 
 def _load_bound_json(
@@ -247,7 +555,7 @@ def _load_trusted_verifiers(
     errors: list[str],
 ) -> dict[str, dict[str, Any]]:
     if registry_path is None:
-        errors.append("trusted_verifier_registry: required for OWNED_ADMITTED")
+        errors.append("trusted_verifier_registry: required for checkpoint claims")
         return {}
     try:
         payload = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -279,7 +587,9 @@ def _load_trusted_verifiers(
             if sha256 in trusted:
                 errors.append(f"{prefix}.sha256: duplicate verifier")
             else:
-                trusted[sha256] = entry
+                resolved_entry = dict(entry)
+                resolved_entry["_resolved_path"] = path
+                trusted[sha256] = resolved_entry
     return trusted
 
 
@@ -297,6 +607,12 @@ def _verify_admission(
     sufficient_payload = _load_bound_json(
         root, sufficient, "receipt_path", "training.sufficient_pretraining", errors
     )
+    sufficient_evidence_paths: dict[str, Path] = {}
+    sufficient_evidence_fields = {
+        "training_ledger": "training_ledger_sha256",
+        "stopping_evaluation": "stopping_evaluation_sha256",
+        "checkpoint_progression": "checkpoint_progression_sha256",
+    }
     if not isinstance(sufficient, dict):
         errors.append("training.sufficient_pretraining: expected object")
     else:
@@ -304,6 +620,25 @@ def _verify_admission(
             errors.append("training.sufficient_pretraining.criterion_id: unsupported criterion")
         if sufficient.get("result") != "PASSED":
             errors.append("training.sufficient_pretraining.result: must equal PASSED")
+        sufficient_evidence = sufficient.get("evidence")
+        if not isinstance(sufficient_evidence, dict):
+            errors.append("training.sufficient_pretraining: executed evidence object missing")
+        else:
+            for evidence_name, receipt_field in sufficient_evidence_fields.items():
+                record = sufficient_evidence.get(evidence_name)
+                evidence_path = _verify_file(
+                    root,
+                    record,
+                    f"training.sufficient_pretraining.evidence.{evidence_name}",
+                    errors,
+                )
+                if evidence_path is not None:
+                    sufficient_evidence_paths[evidence_name] = evidence_path
+                evidence_hash = record.get("sha256") if isinstance(record, dict) else None
+                if sufficient_payload is not None and sufficient_payload.get(receipt_field) != evidence_hash:
+                    errors.append(
+                        f"training.sufficient_pretraining receipt: executed evidence {receipt_field} mismatch"
+                    )
     if sufficient_payload is not None:
         if sufficient_payload.get("criterion_id") != "ember-sufficient-pretraining-v1":
             errors.append("training.sufficient_pretraining receipt: criterion mismatch")
@@ -311,11 +646,108 @@ def _verify_admission(
             errors.append("training.sufficient_pretraining receipt: result must equal PASSED")
         if sufficient_payload.get("subject_checkpoint_sha256") != checkpoint_sha256:
             errors.append("training.sufficient_pretraining receipt: checkpoint mismatch")
+        training = manifest.get("training")
+        tokens_seen = sufficient_payload.get("tokens_seen")
+        if (
+            not isinstance(tokens_seen, int)
+            or isinstance(tokens_seen, bool)
+            or tokens_seen <= 0
+            or not isinstance(training, dict)
+            or tokens_seen != training.get("tokens_seen")
+        ):
+            errors.append("training.sufficient_pretraining receipt: executed tokens_seen mismatch")
+        for field in ("gpu_hours", "final_loss"):
+            value = sufficient_payload.get(field)
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                errors.append(f"training.sufficient_pretraining receipt: executed {field} invalid")
         verifier = trusted_verifiers.get(sufficient_payload.get("verifier_sha256"))
         if verifier is None or "sufficient_pretraining" not in verifier.get("evidence_classes", []):
             errors.append("training.sufficient_pretraining receipt: verifier is not trusted")
         elif "ember-sufficient-pretraining-v1" not in verifier.get("criterion_ids", []):
             errors.append("training.sufficient_pretraining receipt: criterion is not trusted")
+        else:
+            verifier_path = verifier.get("_resolved_path")
+            checkpoint_record = manifest.get("checkpoint")
+            checkpoint_path = (
+                _artifact(
+                    root,
+                    checkpoint_record.get("manifest_path"),
+                    "checkpoint.manifest_path",
+                    errors,
+                )
+                if isinstance(checkpoint_record, dict)
+                else None
+            )
+            if (
+                isinstance(verifier_path, Path)
+                and checkpoint_path is not None
+                and set(sufficient_evidence_paths) == set(sufficient_evidence_fields)
+            ):
+                command = [
+                    sys.executable,
+                    "-I",
+                    str(verifier_path),
+                    "--checkpoint-manifest",
+                    str(checkpoint_path),
+                    "--criterion-id",
+                    "ember-sufficient-pretraining-v1",
+                ]
+                for evidence_name in sufficient_evidence_fields:
+                    command.extend(
+                        [f"--{evidence_name.replace('_', '-')}", str(sufficient_evidence_paths[evidence_name])]
+                    )
+                try:
+                    completed = subprocess.run(
+                        command,
+                        cwd=root,
+                        text=True,
+                        capture_output=True,
+                        timeout=120,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError) as exc:
+                    errors.append(
+                        f"training.sufficient_pretraining receipt: sufficiency verifier execution failed: {exc}"
+                    )
+                else:
+                    if completed.returncode != 0:
+                        errors.append(
+                            "training.sufficient_pretraining receipt: sufficiency verifier execution "
+                            f"failed with exit code {completed.returncode}"
+                        )
+                    else:
+                        try:
+                            executed = json.loads(completed.stdout)
+                        except json.JSONDecodeError:
+                            errors.append(
+                                "training.sufficient_pretraining receipt: sufficiency verifier execution returned invalid JSON"
+                            )
+                        else:
+                            executed_fields = (
+                                "criterion_id",
+                                "result",
+                                "subject_checkpoint_sha256",
+                                *sufficient_evidence_fields.values(),
+                                "tokens_seen",
+                                "gpu_hours",
+                                "final_loss",
+                            )
+                            if not isinstance(executed, dict):
+                                errors.append(
+                                    "training.sufficient_pretraining receipt: sufficiency verifier execution must return an object"
+                                )
+                            else:
+                                for field in executed_fields:
+                                    if executed.get(field) != sufficient_payload.get(field):
+                                        errors.append(
+                                            "training.sufficient_pretraining receipt: sufficiency verifier "
+                                            f"execution {field} mismatch"
+                                        )
 
     evaluations = manifest.get("evaluations")
     if not isinstance(evaluations, list):
@@ -345,9 +777,133 @@ def _verify_admission(
                     errors.append(f"{prefix} receipt: result must equal MEASURED")
                 if payload.get("subject_checkpoint_sha256") != checkpoint_sha256:
                     errors.append(f"{prefix} receipt: checkpoint mismatch")
+                if payload.get("benchmark_id") != benchmark_id:
+                    errors.append(f"{prefix} receipt: benchmark_id mismatch")
+                benchmark_version = payload.get("benchmark_version")
+                if not isinstance(benchmark_version, str) or not benchmark_version.strip():
+                    errors.append(f"{prefix} receipt: executed evidence benchmark_version missing")
+                evidence = evaluation.get("evidence")
+                evidence_paths: dict[str, Path] = {}
+                if not isinstance(evidence, dict):
+                    errors.append(f"{prefix}: executed evidence object missing")
+                else:
+                    for evidence_name, receipt_field in EVALUATION_EVIDENCE.items():
+                        record = evidence.get(evidence_name)
+                        evidence_path = _verify_file(
+                            root, record, f"{prefix}.evidence.{evidence_name}", errors
+                        )
+                        if evidence_path is not None:
+                            evidence_paths[evidence_name] = evidence_path
+                        evidence_hash = record.get("sha256") if isinstance(record, dict) else None
+                        if payload.get(receipt_field) != evidence_hash:
+                            errors.append(f"{prefix} receipt: executed evidence {receipt_field} mismatch")
+                sample_count = payload.get("sample_count")
+                if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count <= 0:
+                    errors.append(f"{prefix} receipt: executed evidence sample_count must be positive")
+                metrics = payload.get("metrics")
+                if (
+                    not isinstance(metrics, dict)
+                    or not metrics
+                    or any(
+                        not isinstance(value, (int, float))
+                        or isinstance(value, bool)
+                        or not math.isfinite(value)
+                        for value in metrics.values()
+                    )
+                ):
+                    errors.append(f"{prefix} receipt: executed evidence metrics must be finite numeric values")
+                criterion_id = CAPABILITY_CRITERIA.get(capability)
+                if payload.get("criterion_id") != criterion_id:
+                    errors.append(f"{prefix} receipt: capability criterion mismatch")
+                if payload.get("criterion_result") != "PASSED":
+                    errors.append(f"{prefix} receipt: capability criterion must be PASSED")
                 verifier = trusted_verifiers.get(payload.get("verifier_sha256"))
                 if verifier is None or "evaluation" not in verifier.get("evidence_classes", []):
                     errors.append(f"{prefix} receipt: verifier is not trusted")
+                elif criterion_id not in verifier.get("criterion_ids", []):
+                    errors.append(f"{prefix} receipt: capability criterion is not trusted")
+                else:
+                    verifier_path = verifier.get("_resolved_path")
+                    checkpoint_record = manifest.get("checkpoint")
+                    checkpoint_path = (
+                        _artifact(
+                            root,
+                            checkpoint_record.get("manifest_path"),
+                            "checkpoint.manifest_path",
+                            errors,
+                        )
+                        if isinstance(checkpoint_record, dict)
+                        else None
+                    )
+                    if (
+                        isinstance(verifier_path, Path)
+                        and checkpoint_path is not None
+                        and set(evidence_paths) == set(EVALUATION_EVIDENCE)
+                        and isinstance(benchmark_version, str)
+                        and isinstance(criterion_id, str)
+                    ):
+                        command = [
+                            sys.executable,
+                            "-I",
+                            str(verifier_path),
+                            "--capability",
+                            str(capability),
+                            "--checkpoint-manifest",
+                            str(checkpoint_path),
+                            "--benchmark-id",
+                            str(benchmark_id),
+                            "--benchmark-version",
+                            benchmark_version,
+                            "--criterion-id",
+                            criterion_id,
+                        ]
+                        for evidence_name in EVALUATION_EVIDENCE:
+                            command.extend(
+                                [f"--{evidence_name.replace('_', '-')}", str(evidence_paths[evidence_name])]
+                            )
+                        try:
+                            completed = subprocess.run(
+                                command,
+                                cwd=root,
+                                text=True,
+                                capture_output=True,
+                                timeout=120,
+                                check=False,
+                            )
+                        except (OSError, subprocess.SubprocessError) as exc:
+                            errors.append(f"{prefix} receipt: verifier execution failed: {exc}")
+                        else:
+                            if completed.returncode != 0:
+                                errors.append(
+                                    f"{prefix} receipt: verifier execution failed with exit code "
+                                    f"{completed.returncode}"
+                                )
+                            else:
+                                try:
+                                    executed = json.loads(completed.stdout)
+                                except json.JSONDecodeError:
+                                    errors.append(f"{prefix} receipt: verifier execution returned invalid JSON")
+                                else:
+                                    executed_fields = (
+                                        "capability",
+                                        "result",
+                                        "subject_checkpoint_sha256",
+                                        "benchmark_id",
+                                        "benchmark_version",
+                                        *EVALUATION_EVIDENCE.values(),
+                                        "sample_count",
+                                        "metrics",
+                                        "criterion_id",
+                                        "criterion_result",
+                                    )
+                                    if not isinstance(executed, dict):
+                                        errors.append(f"{prefix} receipt: verifier execution must return an object")
+                                    else:
+                                        for field in executed_fields:
+                                            if executed.get(field) != payload.get(field):
+                                                errors.append(
+                                                    f"{prefix} receipt: verifier execution {field} mismatch"
+                                                )
         for capability in CAPABILITIES:
             if found.get(capability) != 1:
                 errors.append(f"evaluations: requires exactly one {capability} receipt")
@@ -395,13 +951,9 @@ def validate_manifest(
     if not isinstance(source_commit, str) or not COMMIT_RE.fullmatch(source_commit):
         errors.append("source_commit: expected lowercase 40-character Git SHA")
     root = path.resolve().parent
-    trusted_verifiers = (
-        _load_trusted_verifiers(trusted_verifier_registry, errors)
-        if stage == "OWNED_ADMITTED"
-        else {}
-    )
+    trusted_verifiers = _load_trusted_verifiers(trusted_verifier_registry, errors)
     _verify_lineage(manifest, errors)
-    _verify_architecture(manifest, errors)
+    _verify_architecture(root, manifest, trusted_verifiers, errors)
     _verify_data(root, manifest, errors)
     _verify_training(manifest, errors)
     _verify_checkpoint(root, manifest, errors)
