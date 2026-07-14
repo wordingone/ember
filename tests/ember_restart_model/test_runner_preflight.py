@@ -34,8 +34,11 @@ class RunnerPreflightTests(unittest.TestCase):
 
         fake = SimpleNamespace(optim=SimpleNamespace(PagedAdamW8bit=make_adamw))
         with patch.dict(sys.modules, {"bitsandbytes": fake}):
-            optimizer = run_vertical_slice.build_production_optimizer(Subject(), optimizer_name="paged_8bit_adamw")
+            contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+            optimizer = run_vertical_slice.build_production_optimizer(Subject(), optimizer_contract=contract)
         self.assertEqual(optimizer, "optimizer")
+        self.assertEqual(contract["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+        self.assertEqual(contract["hyperparameters"]["learning_rate"], 1e-5)
         self.assertEqual(calls["parameters"], ["parameter"])
         self.assertEqual(calls["percentile_clipping"], 5)
         self.assertEqual(calls["lr"], 1e-5)
