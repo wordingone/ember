@@ -58,6 +58,7 @@ p.add_argument("--criterion-id", required=True)
 p.add_argument("--split", required=True)
 p.add_argument("--harness", required=True)
 p.add_argument("--protocol", required=True)
+p.add_argument("--inference-implementation", required=True)
 p.add_argument("--predictions", required=True)
 p.add_argument("--score-artifact", required=True)
 a = p.parse_args()
@@ -71,6 +72,7 @@ print(json.dumps({
     "split_sha256": sha256(a.split),
     "harness_sha256": sha256(a.harness),
     "protocol_sha256": sha256(a.protocol),
+    "inference_implementation_sha256": sha256(a.inference_implementation),
     "predictions_sha256": sha256(a.predictions),
     "score_artifact_sha256": sha256(a.score_artifact),
     "sample_count": score["rows"],
@@ -186,7 +188,14 @@ print(json.dumps({
         benchmark_id = f"owned-{capability}-v1"
         evidence = {}
         evidence_hashes = {}
-        for evidence_name in ("split", "harness", "protocol", "predictions", "score_artifact"):
+        for evidence_name in (
+            "split",
+            "harness",
+            "protocol",
+            "inference_implementation",
+            "predictions",
+            "score_artifact",
+        ):
             artifact = tmp_path / "evaluation" / capability / f"{evidence_name}.json"
             artifact_hash = _write_json(
                 artifact,
@@ -197,6 +206,57 @@ print(json.dumps({
                 "sha256": artifact_hash,
             }
             evidence_hashes[f"{evidence_name}_sha256"] = artifact_hash
+        output = {
+            "text": {"kind": "text", "text": "answer"},
+            "image": {"kind": "choice", "value": "A"},
+            "audio": {"kind": "transcript", "text": "answer"},
+            "reasoning": {"kind": "text", "text": "answer"},
+            "tool": {
+                "kind": "tool_call",
+                "name": "lookup",
+                "arguments": {"query": "answer"},
+            },
+        }[capability]
+        predictions_path = tmp_path / evidence["predictions"]["path"]
+        predictions_hash = _write_json(
+            predictions_path,
+            {
+                "schema_version": "ember-owned-predictions-v1",
+                "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS",
+                "checkpoint_manifest_sha256": checkpoint_sha256,
+                "model_config_sha256": manifest["architecture"]["model_config"]["sha256"],
+                "tokenizer_sha256": manifest["tokenizer"]["sha256"],
+                "inference_implementation_sha256": evidence_hashes[
+                    "inference_implementation_sha256"
+                ],
+                "benchmark": {
+                    "id": benchmark_id,
+                    "version": "frozen-v1",
+                    "capability": capability,
+                    "split_sha256": evidence_hashes["split_sha256"],
+                    "protocol_sha256": evidence_hashes["protocol_sha256"],
+                },
+                "decoding": {
+                    "strategy": "GREEDY_AUTOREGRESSIVE",
+                    "teacher_forcing": False,
+                    "max_new_tokens": 32,
+                    "temperature": 0,
+                    "top_p": 1,
+                    "stop_token_ids": [2],
+                },
+                "rows": [
+                    {
+                        "id": "sample-1",
+                        "input_sha256": "1" * 64,
+                        "generated_token_ids": [7],
+                        "stop_reason": "eos",
+                        "output": output,
+                    }
+                ],
+            },
+        )
+        evidence["predictions"]["sha256"] = predictions_hash
+        evidence_hashes["predictions_sha256"] = predictions_hash
         receipt = tmp_path / "receipts" / f"eval-{capability}.json"
         receipt_hash = _write_json(
             receipt,
@@ -380,6 +440,63 @@ def test_admission_rejects_tampered_score_artifact(tmp_path: Path):
         "evidence.score_artifact.sha256: content hash mismatch" in error
         for error in json.loads(result.stdout)["errors"]
     )
+
+def _rewrite_prediction_binding(
+    tmp_path: Path, field: str, value: str
+) -> subprocess.CompletedProcess[str]:
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    evaluation = manifest["evaluations"][0]
+    predictions_ref = evaluation["evidence"]["predictions"]
+    predictions_path = tmp_path / predictions_ref["path"]
+    predictions = json.loads(predictions_path.read_text(encoding="utf-8"))
+    target = predictions
+    parts = field.split(".")
+    for part in parts[:-1]:
+        target = target[part]
+    target[parts[-1]] = value
+    predictions_ref["sha256"] = _write_json(predictions_path, predictions)
+    receipt_path = tmp_path / evaluation["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["predictions_sha256"] = predictions_ref["sha256"]
+    evaluation["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+    return _rerun_admission(tmp_path)
+
+
+def test_admission_rejects_prediction_checkpoint_semantic_mismatch(tmp_path: Path):
+    result = _rewrite_prediction_binding(
+        tmp_path, "checkpoint_manifest_sha256", "9" * 64
+    )
+    assert result.returncode == 1
+    assert any(
+        "predictions: checkpoint mismatch" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_prediction_protocol_semantic_mismatch(tmp_path: Path):
+    result = _rewrite_prediction_binding(
+        tmp_path, "benchmark.protocol_sha256", "9" * 64
+    )
+    assert result.returncode == 1
+    assert any(
+        "predictions: protocol mismatch" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_prediction_inference_source_mismatch(tmp_path: Path):
+    result = _rewrite_prediction_binding(
+        tmp_path, "inference_implementation_sha256", "9" * 64
+    )
+    assert result.returncode == 1
+    assert any(
+        "predictions: inference implementation mismatch" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
 
 def test_trusted_evaluation_verifier_must_execute_successfully(tmp_path: Path):
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
