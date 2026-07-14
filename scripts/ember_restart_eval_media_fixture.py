@@ -2,8 +2,9 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Score fixture predictions locally; output is deliberately non-admissible."""
+"""Exact-match image/audio fixture scorer with media-byte custody checks."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -18,10 +19,12 @@ def main() -> int:
     predictions = json.loads(args.predictions.read_text(encoding="utf-8"))
     scored = []
     for row in rows:
-        if not isinstance(row, dict) or "id" not in row or "answer" not in row:
-            parser.error("invalid frozen text row")
-        scored.append({"id": row["id"], "correct": predictions.get(row["id"]) == row["answer"]})
-    args.output.write_text(json.dumps({"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "benchmark_id": "frozen-text-fixture-v1", "rows": scored, "correct": sum(x["correct"] for x in scored), "total": len(scored)}, sort_keys=True) + "\n", encoding="utf-8")
+        media = args.fixture.parent / row["media_path"]
+        digest = hashlib.sha256(media.read_bytes()).hexdigest()
+        if row.get("capability") not in ("image", "audio") or digest != row.get("media_sha256"):
+            parser.error("invalid or changed media fixture")
+        scored.append({"id": row["id"], "capability": row["capability"], "correct": predictions.get(row["id"]) == row["answer"]})
+    args.output.write_text(json.dumps({"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "rows": scored, "correct": sum(x["correct"] for x in scored), "total": len(scored)}, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 
 
