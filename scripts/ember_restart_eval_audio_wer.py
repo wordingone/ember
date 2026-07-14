@@ -8,7 +8,12 @@ HASH=re.compile(r'[0-9a-f]{64}')
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def rows(p):
  out={}
- for x in [json.loads(y) for y in p.read_text(encoding='utf-8').splitlines() if y.strip()]:
+ raw=p.read_text(encoding='utf-8')
+ try:
+  parsed=json.loads(raw);values=parsed if isinstance(parsed,list) else [parsed]
+ except json.JSONDecodeError:
+  values=[json.loads(y) for y in raw.splitlines() if y.strip()]
+ for x in values:
   if not isinstance(x,dict) or not isinstance(x.get('id'),str) or not x['id'] or not isinstance(x.get('transcript'),str) or x['id'] in out:raise ValueError('each row needs a unique non-empty id and transcript')
   out[x['id']]=x['transcript']
  if not out:raise ValueError('rows must be non-empty')
