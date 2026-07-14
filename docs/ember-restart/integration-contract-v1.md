@@ -26,7 +26,7 @@ One `ember-owned-rung-v1` JSON manifest binds the entire path:
 The executable authority is `scripts/ember_restart/contract.py`. A candidate is checked with:
 
 ```text
-python scripts/ember_restart/contract.py validate <run-manifest.json>
+python scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
 ```
 
 An admission attempt is checked with an independently supplied verifier registry:
@@ -35,14 +35,14 @@ An admission attempt is checked with an independently supplied verifier registry
 python scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
 ```
 
-The registry is a separate command-line input. A run manifest cannot declare its own verifier trusted.
+The registry is a separate command-line input for both candidate and admission validation. A run manifest cannot declare its own parameter-realization, sufficiency, or evaluation verifier trusted. The content-addressed parameter counter is executed only when its exact bytes are independently admitted for the `parameter_realization` evidence class.
 
 ## `CHECKPOINT_CANDIDATE`
 
 A candidate must bind all of the following:
 
 - clean owned random initialization, null parent, and explicit false values for borrowed weights, teachers, judges, filters, and generated labels;
-- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must equal the validator's independent recomputation for the content-addressed `ember-sparse-3b-v1` model config and also match an instantiated-model counter receipt bound to that config, the exact checkpoint manifest, counter-source bytes, active expert, and expert-genesis shard hashes;
+- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must equal the validator's independent recomputation for the content-addressed `ember-sparse-3b-v1` model config and also match the output of a content-addressed counter executed in isolated Python mode against that config and exact checkpoint manifest, with the receipt bound to the counter-source bytes, active expert, and expert-genesis shard hashes;
 - one `ember-unified-decoder` using raw image patches and audio frames, decoder soft-token splicing, multimodal-span attention, 2D-capable positional treatment, and no separate pretrained encoder;
 - a shared core plus exactly four asymmetric vision, audio, reasoning, and tool expert banks, each bound to its own content-addressed checkpoint shard, with distinct verified bytes and exactly one declared expert active per episode;
 - an owned tokenizer with verified bytes;

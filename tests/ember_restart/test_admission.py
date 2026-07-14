@@ -20,20 +20,16 @@ def test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path: Pa
     verifier.write_text("# deterministic local verifier\n", encoding="utf-8")
     verifier_sha256 = _sha256(verifier)
     registry = tmp_path / "trusted-verifiers.json"
-    _write_json(
-        registry,
+    registry_payload = json.loads(registry.read_text(encoding="utf-8"))
+    registry_payload["verifiers"].append(
         {
-            "schema_version": "ember-trusted-verifiers-v1",
-            "verifiers": [
-                {
-                    "path": str(verifier.relative_to(tmp_path)),
-                    "sha256": verifier_sha256,
-                    "evidence_classes": ["sufficient_pretraining", "evaluation"],
-                    "criterion_ids": ["ember-sufficient-pretraining-v1"],
-                }
-            ],
-        },
+            "path": str(verifier.relative_to(tmp_path)),
+            "sha256": verifier_sha256,
+            "evidence_classes": ["sufficient_pretraining", "evaluation"],
+            "criterion_ids": ["ember-sufficient-pretraining-v1"],
+        }
     )
+    _write_json(registry, registry_payload)
 
     stopping_receipt = tmp_path / "receipts" / "sufficient-pretraining.json"
     stopping_hash = _write_json(
