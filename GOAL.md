@@ -6,43 +6,59 @@ they cannot reduce, defer, replace, or reinterpret it.
 
 <!-- EMBER_AUTHORITY_V1
 {
-  "allows_new_network": false,
-  "active_goal_id": "EMBER-01",
+  "allows_new_network": true,
+  "active_goal_id": "EMBER-02",
   "active_workstream_ids": [
-    "EMBER-01A",
-    "EMBER-01B",
-    "EMBER-01C"
+    "EMBER-02A",
+    "EMBER-02B",
+    "EMBER-02C"
   ],
   "workstream_path_scopes": {
-    "EMBER-01A": {
+    "EMBER-02A": {
       "mode": "all_except",
       "prefixes": [
-        "manifests/ember-01-custody/",
-        "scripts/ember_01_custody/",
-        "tests/ember_01_custody/",
-        "docs/ember-01-custody/",
-        "manifests/ember-01-identity/",
-        "scripts/ember_01_identity/",
-        "tests/ember_01_identity/",
-        "docs/ember-01-identity/"
+        "configs/ember-restart-3b.json",
+        "docs/ember-restart-3b-",
+        "models/ember-restart-3b/",
+        "tools/ember-restart-3b/",
+        "receipts/ember-restart-3b/",
+        "inference/ember-restart-3b/",
+        "data/ember-restart-3b/",
+        "tests/ember_restart_model/",
+        "docs/ember-restart-eval-",
+        "docs/ember-restart-terminal-",
+        "docs/ember-restart-browser-",
+        "docs/ember-restart-audio-",
+        "docs/ember-restart-image-",
+        "manifests/ember-restart-eval-",
+        "scripts/ember_restart_eval",
+        "tests/test_ember_restart_eval"
       ]
     },
-    "EMBER-01B": {
+    "EMBER-02B": {
       "mode": "only",
       "prefixes": [
-        "manifests/ember-01-custody/",
-        "scripts/ember_01_custody/",
-        "tests/ember_01_custody/",
-        "docs/ember-01-custody/"
+        "configs/ember-restart-3b.json",
+        "docs/ember-restart-3b-",
+        "models/ember-restart-3b/",
+        "tools/ember-restart-3b/",
+        "receipts/ember-restart-3b/",
+        "inference/ember-restart-3b/",
+        "data/ember-restart-3b/",
+        "tests/ember_restart_model/"
       ]
     },
-    "EMBER-01C": {
+    "EMBER-02C": {
       "mode": "only",
       "prefixes": [
-        "manifests/ember-01-identity/",
-        "scripts/ember_01_identity/",
-        "tests/ember_01_identity/",
-        "docs/ember-01-identity/"
+        "docs/ember-restart-eval-",
+        "docs/ember-restart-terminal-",
+        "docs/ember-restart-browser-",
+        "docs/ember-restart-audio-",
+        "docs/ember-restart-image-",
+        "manifests/ember-restart-eval-",
+        "scripts/ember_restart_eval",
+        "tests/test_ember_restart_eval"
       ]
     }
   },
@@ -95,7 +111,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/spec/conditions-v1.md": "5DCB85F97368CE773D25848362E164545D49BEEEFF12CB0B27FDB1C9CCE15229"
     }
   },
-  "authority_only_goal": true,
+  "authority_only_goal": false,
   "destination": {
     "competitive_reference_parameters": [
       27000000000,
