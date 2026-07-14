@@ -8,7 +8,7 @@ from ember_restart.prediction_contract import ContractError,load_predictions
 CAPABILITIES=("text","image","audio","reasoning","tool")
 def sha256(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--capability',required=True,choices=CAPABILITIES);p.add_argument('--checkpoint-manifest',required=True,type=Path);p.add_argument('--benchmark-id',required=True);p.add_argument('--benchmark-version',required=True);p.add_argument('--split-artifact',required=True,type=Path);p.add_argument('--harness-artifact',required=True,type=Path);p.add_argument('--protocol-artifact',required=True,type=Path);p.add_argument('--raw-predictions',required=True,type=Path);p.add_argument('--result-artifact',required=True,type=Path);p.add_argument('--output',required=True,type=Path);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--capability',required=True,choices=CAPABILITIES);p.add_argument('--checkpoint-manifest',required=True,type=Path);p.add_argument('--benchmark-id',required=True);p.add_argument('--benchmark-version',required=True);p.add_argument('--split-artifact',required=True,type=Path);p.add_argument('--harness-artifact',required=True,type=Path);p.add_argument('--protocol-artifact',required=True,type=Path);p.add_argument('--raw-predictions',required=True,type=Path);p.add_argument('--closed-run-artifact',type=Path);p.add_argument('--result-artifact',required=True,type=Path);p.add_argument('--output',required=True,type=Path);a=p.parse_args()
  if not a.benchmark_id.strip() or not a.benchmark_version.strip():p.error('benchmark id and version must be non-empty')
  try:envelope=load_predictions(a.raw_predictions)
  except ContractError as e:p.error(f'canonical prediction envelope required: {e}')
@@ -16,6 +16,9 @@ def main():
  if envelope['checkpoint_manifest_sha256']!=checkpoint or benchmark['capability']!=a.capability or benchmark['id']!=a.benchmark_id or benchmark['version']!=a.benchmark_version or benchmark['split_sha256']!=split or benchmark['protocol_sha256']!=protocol:p.error('canonical prediction envelope does not bind supplied evaluation inputs')
  score=json.loads(a.result_artifact.read_text());expected=f'ember-3b-{a.capability}-capability-v1';rows=envelope['rows']
  if not isinstance(score,dict) or score.get('criterion_id')!=expected or score.get('criterion_result') not in ('PASSED','FAILED'):p.error('evaluator score artifact must explicitly provide the pinned criterion')
+ if a.capability=='audio':
+  if a.closed_run_artifact is None:p.error('AudioBench preflight requires closed run artifact')
+  if score.get('predictions_sha256')!=sha256(a.raw_predictions) or score.get('run_artifact_sha256')!=sha256(a.closed_run_artifact):p.error('AudioBench score source hashes do not bind supplied evidence')
  count=score.get('sample_count')
  if not isinstance(count,int) or isinstance(count,bool) or count!=len(rows):p.error('evaluator sample_count must be an exact integer match for canonical rows')
  metrics=score.get('metrics')
