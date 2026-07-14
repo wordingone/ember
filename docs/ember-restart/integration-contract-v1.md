@@ -42,8 +42,9 @@ The registry is a separate command-line input. A run manifest cannot declare its
 A candidate must bind all of the following:
 
 - clean owned random initialization, null parent, and explicit false values for borrowed weights, teachers, judges, filters, and generated labels;
-- allocated, trainable, active, and served parameter counts of at least 3,000,000,000 each;
+- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are measured separately and must be positive, bounded by total capacity, and strictly sparse;
 - one `ember-unified-decoder` using raw image patches and audio frames, decoder soft-token splicing, multimodal-span attention, 2D-capable positional treatment, and no separate pretrained encoder;
+- a shared core plus exactly four asymmetric vision, audio, reasoning, and tool expert banks, with distinct genesis hashes and exactly one declared expert active per episode;
 - an owned tokenizer with verified bytes;
 - exactly one owned and locally verified data-manifest binding for each of text, image, audio, reasoning, and typed tools;
 - positive observed token exposure for all five capabilities and the exact training command;
@@ -70,4 +71,4 @@ Efficiency, retention, deletion/ablation, comparator gaps, and honest deficienci
 
 ## Next execution
 
-This contract directly enables the model-building founder's disk-budgeted 3.14B allocation plus one-real-batch vertical slice to emit the first `CHECKPOINT_CANDIDATE` manifest, followed by the evaluation founder running the frozen preflight against that exact manifest. It does not authorize a capability claim from allocation, a dry run, or a toy checkpoint.
+This contract directly enables the model-building founder's disk-budgeted sparse >=3B allocation plus one-real-batch routed vertical slice to emit the first `CHECKPOINT_CANDIDATE` manifest, followed by the evaluation founder running the frozen preflight against that exact manifest. It does not authorize a capability claim from allocation, a dry run, or a toy checkpoint.
