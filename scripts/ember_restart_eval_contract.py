@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Fail closed unless an Ember restart evaluation is fully checkpoint-bound."""
+"""Freeze suite readiness before central OWNED_ADMITTED receipt admission.\n\nThe sole OWNED_ADMITTED authority is scripts/ember_restart/contract.py. This\nvalidator never admits a checkpoint or verifier; its suite pins become the\ncentral manifest evaluation records, exactly one each for text, image, audio,\nreasoning, and tool, after the central contract validates their custody.\n"""
 
 from __future__ import annotations
 
