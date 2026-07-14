@@ -23,7 +23,7 @@ def manifest() -> dict:
         "target": {"kind": "owned_checkpoint", "checkpoint_sha256": "a" * 64, "lineage_manifest": "receipts/lineage.json"},
         "comparators": [{"role": "comparison_only", "revision": "b" * 40}],
         "suites": [{"family": family, "dataset_revision": "c" * 40, "split_sha256": "d" * 64, "harness_commit": "e" * 40, "prompt_protocol_sha256": "f" * 64, "scoring_protocol_sha256": "0" * 64} for family in families],
-        "execution": {"runner": "disk_budget_runner.py", "receipt_namespace": "receipts/ember-restart-vera"},
+        "execution": {"runner": "disk_budget_runner.py", "receipt_namespace": "receipts/ember-restart-evaluation"},
     }
 
 

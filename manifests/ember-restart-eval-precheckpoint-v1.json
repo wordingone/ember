@@ -32,6 +32,6 @@
   },
   "required_new_families": ["terminal", "sql", "browser_ui", "image", "audio", "structured_tools", "efficiency", "retention", "deletion_ablation"],
   "per_family_freeze_fields": ["benchmark_source_revision", "dataset_split_sha256", "harness_commit", "prompt_or_tool_protocol_sha256", "scoring_protocol_sha256", "resource_budget", "disk_budget_receipt", "target_checkpoint_sha256", "comparator_revision"],
-  "execution": {"runner": "disk_budget_runner.py", "receipt_namespace": "receipts/ember-restart-vera"},
+  "execution": {"runner": "disk_budget_runner.py", "receipt_namespace": "receipts/ember-restart-evaluation"},
   "claim_rule": "No result is admissible until every required native capability family has a checkpoint-bound frozen score or a visible failure record."
 }
