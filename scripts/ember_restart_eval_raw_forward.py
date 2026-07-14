@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 from ember_restart_eval_checkpoint_consumer import _verify
+from ember_restart.prediction_contract import validate_predictions
 from tokenizers import Tokenizer
 
 
@@ -69,9 +70,17 @@ def main() -> None:
     parser.add_argument("--input-token-id", type=int)
     parser.add_argument("--max-new-tokens", type=int)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--canonical-output", type=Path)
+    parser.add_argument("--benchmark-id")
+    parser.add_argument("--benchmark-version")
+    parser.add_argument("--benchmark-capability", choices=("text", "image", "audio", "reasoning", "tool"))
+    parser.add_argument("--split-sha256")
+    parser.add_argument("--protocol-sha256")
+    parser.add_argument("--row-id")
+    parser.add_argument("--stop-token-id", type=int, default=2)
     arguments = parser.parse_args()
     try:
-        Tokenizer.from_file(str(arguments.tokenizer))
+        tokenizer = Tokenizer.from_file(str(arguments.tokenizer))
         checkpoint = _verify(arguments.checkpoint_manifest, arguments.model_config)
         if arguments.execute and any(value is None for value in (arguments.model_source, arguments.model_source_sha256, arguments.model_config, arguments.model_config_sha256, arguments.active_expert, arguments.input_token_id, arguments.max_new_tokens)):
             raise ValueError("execution requires model/config identities, active expert, input token, and limit")
@@ -83,6 +92,17 @@ def main() -> None:
         parser.error("checkpoint manifest SHA-256 does not match --checkpoint-sha256")
     if sha256(arguments.model_config) != arguments.model_config_sha256:
         parser.error("model config SHA-256 does not match --model-config-sha256")
+    if arguments.canonical_output is not None:
+        required = (arguments.execute, arguments.benchmark_id, arguments.benchmark_version, arguments.benchmark_capability, arguments.split_sha256, arguments.protocol_sha256, arguments.row_id)
+        if any(value is None or value is False for value in required):
+            parser.error("canonical output requires execution and benchmark identities")
+        generated = execution["generated_token_ids"]
+        envelope = {"schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", "checkpoint_manifest_sha256": checkpoint_sha256, "model_config_sha256": arguments.model_config_sha256, "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__)), "benchmark": {"id": arguments.benchmark_id, "version": arguments.benchmark_version, "capability": arguments.benchmark_capability, "split_sha256": arguments.split_sha256, "protocol_sha256": arguments.protocol_sha256}, "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": arguments.max_new_tokens, "temperature": 0, "top_p": 1, "stop_token_ids": [arguments.stop_token_id]}, "rows": [{"id": arguments.row_id, "input_sha256": hashlib.sha256(str(arguments.input_token_id).encode()).hexdigest(), "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "output": {"kind": "text", "text": tokenizer.decode(generated)}}]}
+        validate_predictions(envelope)
+        arguments.canonical_output.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.canonical_output.parent, delete=False) as handle:
+            json.dump(envelope, handle, sort_keys=True); handle.write("\n"); temporary_canonical = handle.name
+        os.replace(temporary_canonical, arguments.canonical_output)
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     payload = {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "checkpoint_sha256": checkpoint_sha256, "checkpoint_model_config_sha256": checkpoint["model_config_sha256"], "shard_count": checkpoint["shard_count"], "tokenizer_sha256": sha256(arguments.tokenizer), **execution}
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.output.parent, delete=False) as handle:
