@@ -9,6 +9,7 @@ import os
 import tempfile
 from pathlib import Path
 
+from ember_restart_eval_checkpoint_consumer import _verify
 from tokenizers import Tokenizer
 
 
@@ -25,8 +26,9 @@ def main() -> None:
     arguments = parser.parse_args()
     try:
         Tokenizer.from_file(str(arguments.tokenizer))
-    except Exception as error:
-        parser.error(f"invalid tokenizer: {error}")
+        checkpoint = _verify(arguments.checkpoint_manifest)
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+        parser.error(str(error))
     checkpoint_sha256 = sha256(arguments.checkpoint_manifest)
     if checkpoint_sha256 != arguments.checkpoint_sha256:
         parser.error("checkpoint manifest SHA-256 does not match --checkpoint-sha256")
@@ -37,6 +39,8 @@ def main() -> None:
         "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         "result": "PREFLIGHT_ONLY",
         "checkpoint_sha256": checkpoint_sha256,
+        "model_config_sha256": checkpoint["model_config_sha256"],
+        "shard_count": checkpoint["shard_count"],
         "tokenizer_sha256": sha256(arguments.tokenizer),
     }
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.output.parent, delete=False) as handle:
