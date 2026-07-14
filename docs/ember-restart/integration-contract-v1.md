@@ -56,8 +56,8 @@ Candidate validation proves an internally bound checkpoint path, not sufficient 
 
 Admission adds all of the following without weakening the candidate gates:
 
-- a `PASSED` `ember-sufficient-pretraining-v1` receipt bound to the exact checkpoint-manifest SHA-256;
-- exactly one checkpoint-bound `MEASURED` external-evaluation receipt for each of text, image, audio, reasoning, and typed tools; every receipt binds benchmark ID/version, split, harness, protocol, raw predictions, score artifact, nonzero sample count, finite numeric metrics, and a trusted capability-specific `PASSED` criterion;
+- a `PASSED` `ember-sufficient-pretraining-v1` receipt bound to the exact checkpoint-manifest SHA-256, content-addressed training ledger, stopping evaluation, and checkpoint progression; it records checkpoint-matching tokens, GPU-hours, and final loss, and its independently trusted local verifier is executed with fixed arguments against those artifacts with output required to match the receipt;
+- exactly one checkpoint-bound `MEASURED` external-evaluation receipt for each of text, image, audio, reasoning, and typed tools; every receipt binds benchmark ID/version, split, harness, protocol, raw predictions, score artifact, nonzero sample count, finite numeric metrics, and a capability-specific `PASSED` criterion; the exact local verifier bytes must be externally trusted for that criterion and are executed with fixed arguments against those artifacts, with output required to match the receipt;
 - verifier-byte hashes admitted for the correct evidence class by the externally supplied trusted-verifier registry;
 - a content-addressed serving manifest whose seat is exactly `OWNED_ADMITTED` and whose checkpoint binding matches the training and evaluation subject.
 
