@@ -137,7 +137,7 @@ def decode_owned_batch(
     _validate_domain(active_expert=active_expert, image_count=len(image_bytes), audio_count=len(audio_bytes))
     image = None
     if image_bytes:
-        image = torch.tensor([list(value) for value in image_bytes], dtype=torch.float32, device=device).reshape(1, len(image_bytes), 48, 48, 3) / 255.0
+        image = torch.tensor([list(value) for value in image_bytes], dtype=torch.float32, device=device).reshape(1, len(image_bytes), 48, 48, 3)
     audio = None
     if audio_bytes:
         audio = torch.tensor([list(memoryview(value).cast("h")) for value in audio_bytes], dtype=torch.float32, device=device).reshape(1, len(audio_bytes), 640) / 32768.0
