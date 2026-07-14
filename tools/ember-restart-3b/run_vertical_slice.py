@@ -54,7 +54,7 @@ def _enforce_retention(parent: Path, *, max_count: int) -> None:
         (path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-")),
         key=lambda path: (path.stat().st_mtime_ns, path.name),
     )
-    while len(bundles) >= max_count:
+    while len(bundles) > max_count:
         oldest = bundles.pop(0)
         shutil.rmtree(oldest)
 
@@ -161,14 +161,16 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
     import bitsandbytes as bnb
 
     optimizer = bnb.optim.AdamW8bit(
-        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        model.parameters(),
         lr=1e-4,
     )
     torch.cuda.reset_peak_memory_stats()
     logits = model(
         batch["input_ids"],
         image_patches=batch["image_patches"],
-        audio_frames=batch["audio_frames"].bfloat16(),
+        audio_frames=batch["audio_frames"],
+        image_coordinates=batch["image_coordinates"],
+        spans=batch["spans"],
         active_expert=batch["active_expert"],
     )
     loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
@@ -191,6 +193,7 @@ def run(*, seed: int, artifact_root: Path) -> dict[str, object]:
         contract_sha256=_sha256(integration_contract_path),
         expert_genesis_sha256=genesis_hashes,
     )
+    _enforce_retention(checkpoint_parent, max_count=8)
     parameter_receipt = _execute_realization_counter(
         root=root,
         config_path=config_path,

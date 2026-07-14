@@ -33,10 +33,34 @@ class PretrainingSegmentTests(unittest.TestCase):
             "active_expert": "reasoning",
         }
 
+
+    def test_complete_optimizer_updates_each_routed_expert_only_on_its_episode(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=23)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        self.assertEqual({id(parameter) for group in optimizer.param_groups for parameter in group["params"]}, {id(parameter) for parameter in model.parameters()})
+        for expert in ("vision", "audio", "reasoning", "tool"):
+            record = self._record(config)
+            record["active_expert"] = expert
+            before = {
+                name: parameter.detach().clone()
+                for name, parameter in model.named_parameters()
+                if ".experts." in name
+            }
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[record], config=config,
+                device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda _step, _result: None,
+            )
+            for name, parameter in model.named_parameters():
+                if ".experts." not in name:
+                    continue
+                selected = f".experts.{expert}." in name
+                self.assertEqual(not torch.equal(parameter.detach(), before[name]), selected, name)
     def test_segment_updates_real_model_and_emits_checkpoint_cadence(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=17)
-        optimizer = torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=1e-4)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
         checkpoints: list[int] = []
         result = run_pretraining_segment(
             model=model,
