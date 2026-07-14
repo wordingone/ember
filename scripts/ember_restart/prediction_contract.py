@@ -19,6 +19,7 @@ SCHEMA_VERSION = "ember-owned-predictions-v1"
 CLAIM_STATUS = "NON_ADMISSIBLE_RAW_PREDICTIONS"
 CAPABILITIES = {"text", "image", "audio", "reasoning", "tool"}
 STOP_REASONS = {"eos", "max_new_tokens", "stop_sequence"}
+VOCAB_SIZE = 32_000
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 ROOT_FIELDS = {
@@ -169,10 +170,18 @@ def validate_predictions(value: Any) -> dict[str, Any]:
     if (
         not isinstance(stops, list)
         or not stops
-        or any(not isinstance(item, int) or isinstance(item, bool) or item < 0 for item in stops)
+        or any(
+            not isinstance(item, int)
+            or isinstance(item, bool)
+            or item < 0
+            or item >= VOCAB_SIZE
+            for item in stops
+        )
         or len(stops) != len(set(stops))
     ):
-        raise ContractError("decoding.stop_token_ids: expected unique non-negative token ids")
+        raise ContractError(
+            f"decoding.stop_token_ids: expected unique token ids in [0, {VOCAB_SIZE})"
+        )
 
     rows = envelope["rows"]
     if not isinstance(rows, list) or not rows:
@@ -191,13 +200,29 @@ def validate_predictions(value: Any) -> dict[str, Any]:
             not isinstance(token_ids, list)
             or not token_ids
             or len(token_ids) > max_new_tokens
-            or any(not isinstance(item, int) or isinstance(item, bool) or item < 0 for item in token_ids)
+            or any(
+                not isinstance(item, int)
+                or isinstance(item, bool)
+                or item < 0
+                or item >= VOCAB_SIZE
+                for item in token_ids
+            )
         ):
             raise ContractError(
-                f"{prefix}.generated_token_ids: expected 1..max_new_tokens non-negative integers"
+                f"{prefix}.generated_token_ids: expected 1..max_new_tokens integers in [0, {VOCAB_SIZE})"
             )
-        if row["stop_reason"] not in STOP_REASONS:
+        stop_reason = row["stop_reason"]
+        if stop_reason not in STOP_REASONS:
             raise ContractError(f"{prefix}.stop_reason: unsupported stop reason")
+        if stop_reason in {"eos", "stop_sequence"} and token_ids[-1] not in stops:
+            raise ContractError(
+                f"{prefix}.stop_reason: last generated token must be a declared stop token"
+            )
+        if stop_reason == "max_new_tokens" and len(token_ids) != max_new_tokens:
+            raise ContractError(
+                f"{prefix}.stop_reason: max_new_tokens stop requires exactly "
+                f"{max_new_tokens} generated tokens"
+            )
         _validate_output(row["output"], capability, f"{prefix}.output")
     return envelope
 
