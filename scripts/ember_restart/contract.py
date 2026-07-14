@@ -21,6 +21,13 @@ from urllib.parse import urlparse
 SCHEMA_VERSION = "ember-owned-rung-v1"
 PARAMETER_FLOOR = 3_000_000_000
 CAPABILITIES = ("text", "image", "audio", "reasoning", "tool")
+SEMANTIC_CHECKS = {
+    "text": ["token_roundtrip", "source_target_pair"],
+    "image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"],
+    "audio": ["token_roundtrip", "source_target_pair", "raw_audio_text_pair"],
+    "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"],
+    "tool": ["token_roundtrip", "source_target_pair", "typed_tool_execution"],
+}
 CAPABILITY_CRITERIA = {
     capability: f"ember-3b-{capability}-capability-v1" for capability in CAPABILITIES
 }
@@ -412,17 +419,127 @@ def _verify_architecture(
                                     )
 
 
-def _verify_data(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
+def _verify_data(
+    root: Path,
+    manifest: dict[str, Any],
+    trusted_verifiers: dict[str, dict[str, Any]],
+    errors: list[str],
+) -> None:
     tokenizer = manifest.get("tokenizer")
-    _verify_file(root, tokenizer, "tokenizer", errors)
-    if isinstance(tokenizer, dict) and tokenizer.get("owned") is not True:
-        errors.append("tokenizer.owned: must be true")
+    tokenizer_path = _verify_file(root, tokenizer, "tokenizer", errors)
+    tokenizer_sha256 = tokenizer.get("sha256") if isinstance(tokenizer, dict) else None
+    if isinstance(tokenizer, dict):
+        if tokenizer.get("owned") is not True:
+            errors.append("tokenizer.owned: must be true")
+        if tokenizer.get("kind") != "OWNED_TRAINED":
+            errors.append("tokenizer.kind: must equal OWNED_TRAINED")
+        if tokenizer.get("vocab_size") != ARCHITECTURE_SHAPE["vocab_size"]:
+            errors.append("tokenizer.vocab_size: must equal model vocab_size")
+        training_script = _verify_file(
+            root, tokenizer.get("training_script"), "tokenizer.training_script", errors
+        )
+        corpus_manifest = _verify_file(
+            root,
+            tokenizer.get("training_corpus_manifest"),
+            "tokenizer.training_corpus_manifest",
+            errors,
+        )
+        tokenizer_verifier = tokenizer.get("verifier")
+        tokenizer_verifier_path = _verify_file(
+            root, tokenizer_verifier, "tokenizer.verifier", errors
+        )
+        tokenizer_verifier_sha256 = (
+            tokenizer_verifier.get("sha256")
+            if isinstance(tokenizer_verifier, dict)
+            else None
+        )
+        tokenizer_trust = trusted_verifiers.get(tokenizer_verifier_sha256)
+        if (
+            tokenizer_trust is None
+            or "tokenizer_freeze" not in tokenizer_trust.get("evidence_classes", [])
+        ):
+            errors.append("tokenizer.verifier: verifier is not independently trusted")
+        freeze = _load_bound_json(
+            root, tokenizer.get("freeze_receipt"), "path", "tokenizer.freeze_receipt", errors
+        )
+        if freeze is not None:
+            expected = {
+                "schema_version": "ember-owned-tokenizer-freeze-v1",
+                "result": "FROZEN",
+                "tokenizer_sha256": tokenizer_sha256,
+                "vocab_size": ARCHITECTURE_SHAPE["vocab_size"],
+                "training_script_sha256": (
+                    _sha256(training_script) if training_script is not None else None
+                ),
+                "training_corpus_sha256": (
+                    _sha256(corpus_manifest) if corpus_manifest is not None else None
+                ),
+                "verifier_sha256": tokenizer_verifier_sha256,
+                "borrowed_tokenizer": False,
+                "frozen_pre_step0": True,
+            }
+            for field, value in expected.items():
+                if freeze.get(field) != value:
+                    errors.append(f"tokenizer.freeze_receipt.{field}: binding mismatch")
+            if (
+                tokenizer_trust is not None
+                and "tokenizer_freeze" in tokenizer_trust.get("evidence_classes", [])
+                and tokenizer_verifier_path is not None
+                and tokenizer_path is not None
+                and training_script is not None
+                and corpus_manifest is not None
+            ):
+                try:
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            "-I",
+                            str(tokenizer_verifier_path),
+                            "--tokenizer",
+                            str(tokenizer_path),
+                            "--training-script",
+                            str(training_script),
+                            "--training-corpus-manifest",
+                            str(corpus_manifest),
+                        ],
+                        cwd=root,
+                        text=True,
+                        capture_output=True,
+                        timeout=120,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError) as exc:
+                    errors.append(f"tokenizer.verifier: execution failed: {exc}")
+                else:
+                    if completed.returncode != 0:
+                        errors.append(
+                            "tokenizer.verifier: execution failed with exit code "
+                            f"{completed.returncode}"
+                        )
+                    else:
+                        try:
+                            executed = json.loads(completed.stdout)
+                        except json.JSONDecodeError:
+                            errors.append("tokenizer.verifier: returned invalid JSON")
+                        else:
+                            if not isinstance(executed, dict):
+                                errors.append("tokenizer.verifier: must return an object")
+                            else:
+                                for field in expected:
+                                    if executed.get(field) != freeze.get(field):
+                                        errors.append(
+                                            f"tokenizer.verifier: executed {field} mismatch"
+                                        )
+    else:
+        errors.append("tokenizer.kind: must equal OWNED_TRAINED")
+        errors.append("tokenizer.freeze_receipt: expected object")
 
     entries = manifest.get("training_data")
     if not isinstance(entries, list):
         errors.append("training_data: expected list")
         return
     found: dict[str, int] = {}
+    data_classes: set[str] = set()
     for index, entry in enumerate(entries):
         prefix = f"training_data[{index}]"
         if not isinstance(entry, dict):
@@ -433,26 +550,263 @@ def _verify_data(root: Path, manifest: dict[str, Any], errors: list[str]) -> Non
             errors.append(f"{prefix}.capability: unsupported capability")
         else:
             found[capability] = found.get(capability, 0) + 1
-        _verify_file(
+        data_ref = {"path": entry.get("manifest_path"), "sha256": entry.get("sha256")}
+        data_path = _verify_file(root, data_ref, prefix, errors)
+        data_payload = _load_bound_json(
+            root, data_ref, "path", f"{prefix} manifest", errors
+        )
+        verifier = entry.get("verifier")
+        verifier_path = _verify_file(root, verifier, f"{prefix}.verifier", errors)
+        verifier_sha256 = verifier.get("sha256") if isinstance(verifier, dict) else None
+        trusted = trusted_verifiers.get(verifier_sha256)
+        if trusted is None or "training_data" not in trusted.get("evidence_classes", []):
+            errors.append(f"{prefix}.verifier: verifier is not independently trusted")
+        verification = _load_bound_json(
             root,
-            {"path": entry.get("manifest_path"), "sha256": entry.get("sha256")},
-            prefix,
+            entry.get("verification_receipt"),
+            "path",
+            f"{prefix}.verification_receipt",
             errors,
         )
         if entry.get("owned") is not True:
             errors.append(f"{prefix}.owned: must be true")
         if entry.get("locally_verified") is not True:
             errors.append(f"{prefix}.locally_verified: must be true")
+        if data_payload is not None:
+            if data_payload.get("schema_version") != "ember-owned-training-data-v1":
+                errors.append(
+                    f"{prefix} manifest.schema_version: "
+                    "must equal ember-owned-training-data-v1"
+                )
+            if data_payload.get("capability") != capability:
+                errors.append(f"{prefix} manifest.capability: binding mismatch")
+            data_class = data_payload.get("data_class")
+            if data_class not in {"SMOKE_ONLY", "SEMANTIC_PRETRAINING"}:
+                errors.append(
+                    f"{prefix} manifest.data_class: "
+                    "must equal SMOKE_ONLY or SEMANTIC_PRETRAINING"
+                )
+            else:
+                data_classes.add(data_class)
+            if data_payload.get("tokenizer_sha256") != tokenizer_sha256:
+                errors.append(f"{prefix} manifest.tokenizer_sha256: binding mismatch")
+            if data_payload.get("model_mediated") is not False:
+                errors.append(f"{prefix} manifest.model_mediated: must be false")
+            if data_payload.get("borrowed_labels") is not False:
+                errors.append(f"{prefix} manifest.borrowed_labels: must be false")
+            for field in ("record_count", "token_count"):
+                value = data_payload.get(field)
+                if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                    errors.append(f"{prefix} manifest.{field}: must be a positive integer")
+            source_manifest = _verify_file(
+                root,
+                data_payload.get("source_manifest"),
+                f"{prefix} manifest.source_manifest",
+                errors,
+            )
+            source_payload = _load_bound_json(
+                root,
+                data_payload.get("source_manifest"),
+                "path",
+                f"{prefix} source_manifest",
+                errors,
+            )
+            if source_payload is not None:
+                if source_payload.get("schema_version") != "ember-owned-source-v1":
+                    errors.append(
+                        f"{prefix} source_manifest.schema_version: "
+                        "must equal ember-owned-source-v1"
+                    )
+                if source_payload.get("capability") != capability:
+                    errors.append(f"{prefix} source_manifest.capability: binding mismatch")
+                if source_payload.get("model_mediated") is not False:
+                    errors.append(f"{prefix} source_manifest.model_mediated: must be false")
+                if source_payload.get("borrowed_labels") is not False:
+                    errors.append(f"{prefix} source_manifest.borrowed_labels: must be false")
+            records_artifact = _verify_file(
+                root,
+                data_payload.get("records_artifact"),
+                f"{prefix} manifest.records_artifact",
+                errors,
+            )
+            required_semantic_checks = (
+                SEMANTIC_CHECKS.get(str(capability), [])
+                if data_class == "SEMANTIC_PRETRAINING"
+                else []
+            )
+            if verification is not None:
+                expected = {
+                    "schema_version": "ember-training-data-verification-v1",
+                    "result": "VERIFIED",
+                    "capability": capability,
+                    "data_manifest_sha256": entry.get("sha256"),
+                    "tokenizer_sha256": tokenizer_sha256,
+                    "verifier_sha256": verifier_sha256,
+                    "data_class": data_class,
+                    "record_count": data_payload.get("record_count"),
+                    "token_count": data_payload.get("token_count"),
+                    "source_manifest_sha256": (
+                        _sha256(source_manifest) if source_manifest is not None else None
+                    ),
+                    "records_artifact_sha256": (
+                        _sha256(records_artifact) if records_artifact is not None else None
+                    ),
+                    "semantic_checks": required_semantic_checks,
+                }
+                for field, value in expected.items():
+                    if verification.get(field) != value:
+                        errors.append(f"{prefix}.verification_receipt.{field}: binding mismatch")
+                if (
+                    trusted is not None
+                    and "training_data" in trusted.get("evidence_classes", [])
+                    and verifier_path is not None
+                    and data_path is not None
+                    and tokenizer_path is not None
+                ):
+                    try:
+                        completed = subprocess.run(
+                            [
+                                sys.executable,
+                                "-I",
+                                str(verifier_path),
+                                "--data-manifest",
+                                str(data_path),
+                                "--tokenizer",
+                                str(tokenizer_path),
+                                "--capability",
+                                str(capability),
+                            ],
+                            cwd=root,
+                            text=True,
+                            capture_output=True,
+                            timeout=120,
+                            check=False,
+                        )
+                    except (OSError, subprocess.SubprocessError) as exc:
+                        errors.append(f"{prefix}.verifier: execution failed: {exc}")
+                    else:
+                        if completed.returncode != 0:
+                            errors.append(
+                                f"{prefix}.verifier: execution failed with exit code "
+                                f"{completed.returncode}"
+                            )
+                        else:
+                            try:
+                                executed = json.loads(completed.stdout)
+                            except json.JSONDecodeError:
+                                errors.append(f"{prefix}.verifier: returned invalid JSON")
+                            else:
+                                if not isinstance(executed, dict):
+                                    errors.append(f"{prefix}.verifier: must return an object")
+                                else:
+                                    for field in expected:
+                                        if executed.get(field) != verification.get(field):
+                                            errors.append(
+                                                f"{prefix}.verifier: executed {field} mismatch"
+                                            )
     for capability in CAPABILITIES:
         if found.get(capability) != 1:
             errors.append(f"training_data: requires exactly one {capability} binding")
+    if len(data_classes) > 1:
+        errors.append("training_data: mixed SMOKE_ONLY and SEMANTIC_PRETRAINING classes")
 
 
-def _verify_training(manifest: dict[str, Any], errors: list[str]) -> None:
+def _verify_training(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
     training = manifest.get("training")
     if not isinstance(training, dict):
         errors.append("training: expected object")
         return
+    input_class = training.get("input_class")
+    if input_class not in {"SMOKE_ONLY", "SEMANTIC_PRETRAINING"}:
+        errors.append(
+            "training.input_class: must equal SMOKE_ONLY or SEMANTIC_PRETRAINING"
+        )
+    optimizer = training.get("optimizer")
+    if not isinstance(optimizer, dict):
+        errors.append("training.optimizer: expected object")
+    else:
+        if not isinstance(optimizer.get("implementation"), str) or not optimizer["implementation"]:
+            errors.append("training.optimizer.implementation: must be non-empty")
+        if not isinstance(optimizer.get("hyperparameters"), dict):
+            errors.append("training.optimizer.hyperparameters: expected object")
+        if not isinstance(optimizer.get("state_format"), str) or not optimizer["state_format"]:
+            errors.append("training.optimizer.state_format: must be non-empty")
+    optimizer_receipt = _load_bound_json(
+        root,
+        training.get("optimizer_receipt"),
+        "path",
+        "training.optimizer_receipt",
+        errors,
+    )
+    architecture = manifest.get("architecture")
+    model_config = None
+    if isinstance(architecture, dict):
+        model_config = _load_bound_json(
+            root,
+            architecture.get("model_config"),
+            "path",
+            "training.model_config",
+            errors,
+        )
+    declared_optimizer = (
+        model_config.get("training", {}).get("optimizer")
+        if isinstance(model_config, dict) and isinstance(model_config.get("training"), dict)
+        else None
+    )
+    if isinstance(optimizer, dict) and declared_optimizer != optimizer:
+        errors.append("training.optimizer: does not match model config")
+    checkpoint = manifest.get("checkpoint")
+    checkpoint_payload = None
+    if isinstance(checkpoint, dict):
+        checkpoint_payload = _load_bound_json(
+            root,
+            {"path": checkpoint.get("manifest_path"), "sha256": checkpoint.get("sha256")},
+            "path",
+            "training.checkpoint_manifest",
+            errors,
+        )
+    if isinstance(optimizer, dict) and isinstance(checkpoint_payload, dict):
+        if checkpoint_payload.get("optimizer") != optimizer:
+            errors.append("training.optimizer: does not match checkpoint manifest")
+    if optimizer_receipt is not None:
+        model_config_ref = architecture.get("model_config") if isinstance(architecture, dict) else None
+        expected = {
+            "schema_version": "ember-optimizer-realization-v1",
+            "result": "REALIZED",
+            "implementation": optimizer.get("implementation") if isinstance(optimizer, dict) else None,
+            "hyperparameters": optimizer.get("hyperparameters") if isinstance(optimizer, dict) else None,
+            "state_format": optimizer.get("state_format") if isinstance(optimizer, dict) else None,
+            "model_config_sha256": (
+                model_config_ref.get("sha256") if isinstance(model_config_ref, dict) else None
+            ),
+        }
+        for field, value in expected.items():
+            if optimizer_receipt.get(field) != value:
+                errors.append(f"training.optimizer_receipt.{field}: binding mismatch")
+    bound_data_classes: set[str] = set()
+    entries = manifest.get("training_data")
+    if isinstance(entries, list):
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            payload = _load_bound_json(
+                root,
+                {"path": entry.get("manifest_path"), "sha256": entry.get("sha256")},
+                "path",
+                f"training.training_data[{index}]",
+                errors,
+            )
+            if isinstance(payload, dict) and payload.get("data_class") in {
+                "SMOKE_ONLY",
+                "SEMANTIC_PRETRAINING",
+            }:
+                bound_data_classes.add(payload["data_class"])
+    if (
+        input_class in {"SMOKE_ONLY", "SEMANTIC_PRETRAINING"}
+        and bound_data_classes
+        and bound_data_classes != {input_class}
+    ):
+        errors.append("training.input_class: does not match bound training data")
     tokens_seen = training.get("tokens_seen")
     if not isinstance(tokens_seen, int) or isinstance(tokens_seen, bool) or tokens_seen <= 0:
         errors.append("training.tokens_seen: must be a positive integer")
@@ -472,7 +826,6 @@ def _verify_training(manifest: dict[str, Any], errors: list[str]) -> None:
             total += value
     if isinstance(tokens_seen, int) and not isinstance(tokens_seen, bool) and total > tokens_seen:
         errors.append("training.modality_tokens: sum exceeds tokens_seen")
-
 
 def _verify_checkpoint(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
     checkpoint = manifest.get("checkpoint")
@@ -979,10 +1332,15 @@ def validate_manifest(
     trusted_verifiers = _load_trusted_verifiers(trusted_verifier_registry, errors)
     _verify_lineage(manifest, errors)
     _verify_architecture(root, manifest, trusted_verifiers, errors)
-    _verify_data(root, manifest, errors)
-    _verify_training(manifest, errors)
+    _verify_data(root, manifest, trusted_verifiers, errors)
+    _verify_training(root, manifest, errors)
     _verify_checkpoint(root, manifest, errors)
     if stage == "OWNED_ADMITTED":
+        training = manifest.get("training")
+        if not isinstance(training, dict) or training.get("input_class") != "SEMANTIC_PRETRAINING":
+            errors.append(
+                "training.input_class: OWNED_ADMITTED requires SEMANTIC_PRETRAINING"
+            )
         _verify_admission(root, manifest, trusted_verifiers, errors)
     return {"valid": not errors, "stage": stage, "errors": errors}
 
