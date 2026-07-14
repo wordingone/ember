@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail-closed verifier for Ember's authority and totality conservation contract.
 
@@ -27,44 +27,46 @@ from typing import Any
 
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
 POLICY_SCHEMA = "ember-authority-v1"
-ACTIVE_GOAL_ID = "EMBER-01"
+ACTIVE_GOAL_ID = "EMBER-02"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
-ACTIVE_WORKSTREAM_IDS = ["EMBER-01A", "EMBER-01B", "EMBER-01C"]
-WORKSTREAM_PATH_SCOPES = {
-    "EMBER-01A": {
-        "mode": "all_except",
-        "prefixes": [
-            "manifests/ember-01-custody/",
-            "scripts/ember_01_custody/",
-            "tests/ember_01_custody/",
-            "docs/ember-01-custody/",
-            "manifests/ember-01-identity/",
-            "scripts/ember_01_identity/",
-            "tests/ember_01_identity/",
-            "docs/ember-01-identity/",
-        ],
-    },
-    "EMBER-01B": {
-        "mode": "only",
-        "prefixes": [
-            "manifests/ember-01-custody/",
-            "scripts/ember_01_custody/",
-            "tests/ember_01_custody/",
-            "docs/ember-01-custody/",
-        ],
-    },
-    "EMBER-01C": {
-        "mode": "only",
-        "prefixes": [
-            "manifests/ember-01-identity/",
-            "scripts/ember_01_identity/",
-            "tests/ember_01_identity/",
-            "docs/ember-01-identity/",
-        ],
-    },
-}
+ACTIVE_WORKSTREAM_IDS = ["EMBER-02A", "EMBER-02B", "EMBER-02C"]
+WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
+               'prefixes': ['configs/ember-restart-3b.json',
+                            'docs/ember-restart-3b-',
+                            'models/ember-restart-3b/',
+                            'tools/ember-restart-3b/',
+                            'receipts/ember-restart-3b/',
+                            'inference/ember-restart-3b/',
+                            'data/ember-restart-3b/',
+                            'tests/ember_restart_model/',
+                            'docs/ember-restart-eval-',
+                            'docs/ember-restart-terminal-',
+                            'docs/ember-restart-browser-',
+                            'docs/ember-restart-audio-',
+                            'docs/ember-restart-image-',
+                            'manifests/ember-restart-eval-',
+                            'scripts/ember_restart_eval',
+                            'tests/test_ember_restart_eval']},
+ 'EMBER-02B': {'mode': 'only',
+               'prefixes': ['configs/ember-restart-3b.json',
+                            'docs/ember-restart-3b-',
+                            'models/ember-restart-3b/',
+                            'tools/ember-restart-3b/',
+                            'receipts/ember-restart-3b/',
+                            'inference/ember-restart-3b/',
+                            'data/ember-restart-3b/',
+                            'tests/ember_restart_model/']},
+ 'EMBER-02C': {'mode': 'only',
+               'prefixes': ['docs/ember-restart-eval-',
+                            'docs/ember-restart-terminal-',
+                            'docs/ember-restart-browser-',
+                            'docs/ember-restart-audio-',
+                            'docs/ember-restart-image-',
+                            'manifests/ember-restart-eval-',
+                            'scripts/ember_restart_eval',
+                            'tests/test_ember_restart_eval']}}
 EXPECTED_ACTIVE_GOAL_SUFFIX = (
-    "goals/ember/ember-01-custody-identity-experiment-spine/goal.md"
+    "goals/ember/ember-02-3b-foundation-birth/goal.md"
 )
 POLICY_RE = re.compile(
     r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
@@ -497,8 +499,8 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
         "policy.future_artifact_fields",
         "future PR/run/control artifacts require goal, workstream, and next outcome",
     )
-    expect(errors, 7, policy.get("authority_only_goal") is True, "policy.authority_only", f"{ACTIVE_GOAL_ID} makes no model or capability completion claim")
-    expect(errors, 7, policy.get("allows_new_network") is False, "policy.new_network", f"{ACTIVE_GOAL_ID} may not create or execute a network")
+    expect(errors, 7, policy.get("authority_only_goal") is False, "policy.authority_only", f"{ACTIVE_GOAL_ID} must retain model-execution authority")
+    expect(errors, 7, policy.get("allows_new_network") is True, "policy.new_network", f"{ACTIVE_GOAL_ID} must permit the owned >=3B network")
 
 
 def check_invariant(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
@@ -764,10 +766,10 @@ def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | No
                     )
                     valid = False
                 if not re.search(
-                    r"(?m)^allows_new_network:\s*false\s*$", selected_text
+                    r"(?m)^allows_new_network:\s*true\s*$", selected_text
                 ):
                     errors.append(
-                        finding(4, "selection.goal_allows_network", str(selected_goal))
+                        finding(4, "selection.goal_forbids_network", str(selected_goal))
                     )
                     valid = False
     return active_goal if valid else None
