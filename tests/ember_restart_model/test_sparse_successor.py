@@ -70,6 +70,11 @@ class SparseSuccessorTests(unittest.TestCase):
         self.assertEqual(first.expert_bank_genesis_hashes(), second.expert_bank_genesis_hashes())
         self.assertNotEqual(first.expert_bank_genesis_hashes(), third.expert_bank_genesis_hashes())
 
+    def test_clean_genesis_uses_transformer_scale_for_tied_embeddings(self) -> None:
+        model = UnifiedDecoder(self.config, genesis_seed=43)
+        self.assertAlmostEqual(float(model.token_embedding.weight.detach().std()), 0.02, delta=0.003)
+        self.assertTrue(torch.equal(model.token_embedding.weight, model.lm_head.weight))
+
 
     def test_omitted_nonproduction_seed_is_explicitly_unknown(self) -> None:
         model = UnifiedDecoder(self.config)

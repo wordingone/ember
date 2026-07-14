@@ -325,6 +325,7 @@ class UnifiedDecoder(nn.Module):
         self.final_norm = RMSNorm(config.hidden_size, device=target_device)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False, device=target_device)
         self.lm_head.weight = self.token_embedding.weight
+        self._initialize_clean_genesis()
         self.active_expert = config.default_active_expert
         self._activate_expert(self.active_expert)
         self.genesis_metadata = config.genesis_metadata(genesis_seed)
