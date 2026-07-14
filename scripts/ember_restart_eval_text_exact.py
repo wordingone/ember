@@ -7,10 +7,13 @@ import argparse, json, os, tempfile
 from pathlib import Path
 
 def read_rows(path: Path) -> dict[str,str]:
+ raw=path.read_text(encoding="utf-8")
+ try:
+  parsed=json.loads(raw);values=parsed if isinstance(parsed,list) else [parsed]
+ except json.JSONDecodeError:
+  values=[json.loads(line) for line in raw.splitlines() if line.strip()]
  rows={}
- for line in path.read_text(encoding="utf-8").splitlines():
-  if not line.strip(): continue
-  value=json.loads(line)
+ for value in values:
   if not isinstance(value,dict) or not isinstance(value.get("id"),str) or not value["id"] or not isinstance(value.get("answer"),str) or value["id"] in rows: raise ValueError("each row needs a unique non-empty id and answer")
   rows[value["id"]]=value["answer"]
  if not rows: raise ValueError("rows must be non-empty")
