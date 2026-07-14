@@ -73,6 +73,8 @@ def load_domain_training_manifest(*, manifest_path: Path, repo_root: Path) -> di
         provenance = source_payload.get("provenance") if isinstance(source_payload, dict) else None
         if source_payload.get("schema_version") != "ember-owned-domain-source-receipt-v1" or source_payload.get("result") != "VERIFIED" or not isinstance(provenance, dict):
             raise ValueError("domain source receipt is not a verified provenance record")
+        if source_payload.get("expert") != domain["expert"] or source_payload.get("shard_sha256") != shard_sha256:
+            raise ValueError("domain source receipt does not bind this exact specialist and shard")
         for field, message in (("generated_labels", "generated labels"), ("borrowed_model_outputs", "borrowed model outputs"), ("teacher_outputs", "teacher outputs"), ("model_derived_data", "model-derived data")):
             if provenance.get(field) is not False:
                 raise ValueError(f"domain source receipt permits forbidden {message}")
