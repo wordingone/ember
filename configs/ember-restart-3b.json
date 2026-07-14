@@ -142,8 +142,8 @@
                  },
     "checkpoints":  {
                         "retention":  {
-                                          "max_count":  8,
-                                          "delete_oldest_only":  true
+                                          "max_serialized_gib":  24,
+                                          "preserve_last_known_good":  true
                                       },
                         "required_state":  [
                                                "model",

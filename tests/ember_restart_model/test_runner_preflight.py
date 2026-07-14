@@ -44,12 +44,14 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(calls["lr"], 1e-5)
     def test_contract_retention_limit_is_used_as_the_runner_limit(self) -> None:
         contract = ROOT / "configs" / "ember-restart-3b.json"
-        self.assertEqual(run_vertical_slice.checkpoint_retention_limit(contract), 8)
+        self.assertTrue(hasattr(run_vertical_slice, "checkpoint_retention_budget_bytes"))
+        self.assertEqual(run_vertical_slice.checkpoint_retention_budget_bytes(contract), 24 * 1024**3)
     def test_runtime_loads_the_exact_bf16_memory_contract(self) -> None:
         self.assertTrue(hasattr(run_vertical_slice, "load_memory_contract"))
         memory = run_vertical_slice.load_memory_contract(ROOT / "configs" / "ember-restart-3b.json")
         self.assertEqual(memory["parameter_dtype"], "bfloat16")
 
+    def test_rng_preflight_hashes_cpu_and_cuda_without_allocation(self) -> None:
         with patch.object(run_vertical_slice.torch.cuda, "get_rng_state", return_value=torch.tensor([1, 2, 3], dtype=torch.uint8)):
             hashes = run_vertical_slice._rng_state_hash(torch.device("cuda"))
         self.assertEqual(set(hashes), {"cpu", "cuda"})
