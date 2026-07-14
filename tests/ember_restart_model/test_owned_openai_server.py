@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sys
+import subprocess
 import threading
 import unittest
 import urllib.error
@@ -16,7 +17,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from serve_owned_openai import OwnedIdentity, create_loopback_server, validate_admission_identity
+from serve_owned_openai import (
+    OwnedIdentity,
+    create_loopback_server,
+    resolve_central_owned_admission,
+)
 
 
 class _Runtime:
@@ -85,36 +90,40 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(self.runtime.calls, [])
 
 
-    def test_admission_rejects_config_or_server_source_substitution(self) -> None:
+
+
+    def test_central_admission_requires_exact_resolved_owned_seat(self) -> None:
         checkpoint = "a" * 64
-        admission = {
+        payload = {
+            "valid": True,
             "seat": "OWNED_ADMITTED",
             "checkpoint_sha256": checkpoint,
-            "model_config_sha256": "b" * 64,
-            "tokenizer_sha256": "c" * 64,
-            "server_source_sha256": "d" * 64,
             "model_name": "ember-owned:" + checkpoint[:12],
+            "errors": [],
         }
-        validate_admission_identity(
-            admission,
-            checkpoint_sha256=checkpoint,
-            model_config_sha256="b" * 64,
-            server_source_sha256="d" * 64,
-        )
-        with self.assertRaisesRegex(ValueError, "model config hash"):
-            validate_admission_identity(
-                admission,
-                checkpoint_sha256=checkpoint,
-                model_config_sha256="e" * 64,
-                server_source_sha256="d" * 64,
-            )
-        with self.assertRaisesRegex(ValueError, "server source hash"):
-            validate_admission_identity(
-                admission,
-                checkpoint_sha256=checkpoint,
-                model_config_sha256="b" * 64,
-                server_source_sha256="e" * 64,
-            )
+        calls: list[list[str]] = []
 
+        def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+        resolved = resolve_central_owned_admission(
+            run_manifest=Path("run.json"),
+            trusted_verifier_registry=Path("registry.json"),
+            checkpoint_sha256=checkpoint,
+            runner=runner,
+        )
+        self.assertEqual(resolved, payload)
+        self.assertEqual(calls[0][1], "-I")
+        self.assertEqual(calls[0][-3:], ["run.json", "--trusted-verifier-registry", "registry.json"])
+
+        payload["checkpoint_sha256"] = "b" * 64
+        with self.assertRaisesRegex(ValueError, "checkpoint hash"):
+            resolve_central_owned_admission(
+                run_manifest=Path("run.json"),
+                trusted_verifier_registry=Path("registry.json"),
+                checkpoint_sha256=checkpoint,
+                runner=runner,
+            )
 if __name__ == "__main__":
     unittest.main()
