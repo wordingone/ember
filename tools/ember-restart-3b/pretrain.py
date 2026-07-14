@@ -103,6 +103,7 @@ def run_pretraining_segment(
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining segment stopped on non-finite loss at step {initial_global_step + local_step}")
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
         tokens_seen += int(batch["input_ids"].numel())
