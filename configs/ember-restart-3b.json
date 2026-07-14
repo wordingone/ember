@@ -48,7 +48,8 @@
                   "normalization":  {
                                         "pre_attention":  "rmsnorm",
                                         "pre_ffn":  "rmsnorm",
-                                        "final":  "rmsnorm"
+                                        "final":  "rmsnorm",
+                                        "qk":  "per_head_rmsnorm_before_rope"
                                     },
                   "position_encoding":  {
                                             "text_audio":  "1d_rope",
@@ -56,7 +57,7 @@
                                             "multimodal_span_metadata":  true,
                                             "attention_modes":  [
                                                                     "causal",
-                                                                    "isolated"
+                                                                    "bidirectional"
                                                                 ]
                                         },
                   "expert_routing":  {
@@ -92,6 +93,7 @@
                   "parameter_formula":  {
                                             "tied_embedding":  "vocab_size*hidden_size",
                                             "shared_attention_per_layer":  "4*hidden_size^2",
+                                            "qk_rmsnorm_per_layer":  "2*(hidden_size/attention_heads)",
                                             "four_experts_per_layer":  "4*(12*hidden_size^2)",
                                             "shared_text_ffn_per_layer":  "12*hidden_size^2",
                                             "rmsnorm_per_layer":  "2*hidden_size",
@@ -100,7 +102,7 @@
                                             "audio_projection":  "640*hidden_size",
                                             "total_unique_trainable":  "tied_embedding + layers*(shared_attention_per_layer + shared_text_ffn_per_layer + four_experts_per_layer + rmsnorm_per_layer) + final_rmsnorm + image_projection + audio_projection"
                                         },
-                  "total_unique_trainable_parameters":  3839158272,
+                  "total_unique_trainable_parameters":  3839161856,
                   "assertion_minimum_unique_trainable_parameters":  3000000000
               },
     "training":  {
@@ -170,7 +172,7 @@
                       "goal_id":  "EMBER-02",
                       "workstream_id":  "EMBER-02B",
                       "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-                      "total_parameters":  3839158272,
+                      "total_parameters":  3839161856,
                       "native_capabilities":  [
                                                   "text",
                                                   "image",

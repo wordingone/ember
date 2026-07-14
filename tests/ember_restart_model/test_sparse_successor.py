@@ -165,7 +165,7 @@ class SparseSuccessorTests(unittest.TestCase):
         measured = count_unique_trainable_parameters(model, include_frozen=True)
         self.assertEqual(measured, config.total_unique_trainable_parameters)
         self.assertGreaterEqual(measured, 3_000_000_000)
-        self.assertEqual(count_unique_trainable_parameters(model), 1_725_229_056)
+        self.assertEqual(count_unique_trainable_parameters(model), 1_725_232_640)
 
 
 if __name__ == "__main__":

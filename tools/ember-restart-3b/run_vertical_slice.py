@@ -226,7 +226,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     genesis_hashes = model.expert_bank_genesis_hashes()
     model.train()
     counts = measure_parameter_counts(model)
-    if counts["unique_parameters"] != 3_839_158_272 or counts["active_parameters"] != 1_725_229_056:
+    if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     optimizer_contract = load_optimizer_contract(config_path)
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
@@ -253,7 +253,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     data_cursor = dict(segment["data_cursor"])
     data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
     counts = measure_parameter_counts(model)
-    if counts["unique_parameters"] != 3_839_158_272 or counts["active_parameters"] != 1_725_229_056:
+    if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     checkpoint = _retain_after_success(
         checkpoint_parent,

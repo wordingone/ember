@@ -118,6 +118,9 @@ class RestartDecoderConfig:
         image = model["image_projection"]
         audio = model["audio_projection"]
         routing = model["expert_routing"]
+        normalization = model.get("normalization")
+        if not isinstance(normalization, Mapping) or normalization.get("qk") != "per_head_rmsnorm_before_rope":
+            raise ValueError("production contract must declare per-head Q/K RMSNorm before RoPE")
         if routing.get("shared_text_ffn") != "always_active_SwiGLU_4H":
             raise ValueError("production contract must declare an always-active shared nonlinear text FFN")
         config = cls(
@@ -175,8 +178,9 @@ class RestartDecoderConfig:
 
     def structural_parameter_count(self) -> int:
         hidden = self.hidden_size
+        head_dim = hidden // self.attention_heads
         image_input = math.prod(self.image_input_shape)
-        per_layer = 4 * hidden * hidden + (1 + len(self.expert_names)) * 12 * hidden * hidden + 2 * hidden
+        per_layer = 4 * hidden * hidden + (1 + len(self.expert_names)) * 12 * hidden * hidden + 2 * hidden + 2 * head_dim
         return (
             self.vocab_size * hidden
             + self.layers * per_layer
@@ -266,6 +270,8 @@ class SharedAttention(nn.Module):
         self.heads = config.attention_heads
         self.head_dim = config.hidden_size // config.attention_heads
         self.qkv = nn.Linear(config.hidden_size, 3 * config.hidden_size, bias=False, device=device)
+        self.q_norm = RMSNorm(self.head_dim, device=device)
+        self.k_norm = RMSNorm(self.head_dim, device=device)
         self.output = nn.Linear(config.hidden_size, config.hidden_size, bias=False, device=device)
         self.rope = RotaryCoordinates(self.head_dim)
 
@@ -273,6 +279,8 @@ class SharedAttention(nn.Module):
         batch, sequence, width = hidden_states.shape
         qkv = self.qkv(hidden_states).view(batch, sequence, 3, self.heads, self.head_dim)
         query, key, value = qkv.unbind(dim=2)
+        query = self.q_norm(query)
+        key = self.k_norm(key)
         query = self.rope.apply(query.transpose(1, 2), coordinates)
         key = self.rope.apply(key.transpose(1, 2), coordinates)
         value = value.transpose(1, 2)
