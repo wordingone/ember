@@ -32,7 +32,7 @@ def _canonical_digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def _verify(manifest_path: Path) -> dict[str, object]:
+def _verify(manifest_path: Path, model_config: Path) -> dict[str, object]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or set(manifest) != MANIFEST_FIELDS or manifest.get("schema_version") != "ember-sparse-checkpoint-v3":
         raise ValueError("corrected checkpoint requires closed v3 manifest")
@@ -46,6 +46,11 @@ def _verify(manifest_path: Path) -> dict[str, object]:
         raise ValueError("checkpoint replay cursor identity is invalid")
     if not all(_digest(manifest[field]) for field in ("model_config_sha256", "contract_sha256", "shared_optimizer_shard_sha256")):
         raise ValueError("checkpoint top-level identity is invalid")
+    if _sha256(model_config) != manifest["model_config_sha256"]:
+        raise ValueError("checkpoint model config hash mismatch")
+    config = json.loads(model_config.read_text(encoding="utf-8"))
+    if not isinstance(config, dict) or not isinstance(config.get("training"), dict):
+        raise ValueError("checkpoint model config training contract is invalid")
     active = manifest["active_expert_ids"]
     if not isinstance(active, list) or len(active) != 1 or active[0] not in EXPERTS:
         raise ValueError("checkpoint active expert identity is invalid")
@@ -68,7 +73,7 @@ def _verify(manifest_path: Path) -> dict[str, object]:
         raise ValueError("checkpoint shared optimizer shard binding mismatch")
     for field in ("expert_genesis_sha256", "expert_checkpoint_sha256"):
         mapping = manifest[field]
-        if not isinstance(mapping, dict) or set(mapping) != set(EXPERTS) or not all(_digest(value) for value in mapping.values()):
+        if not isinstance(mapping, dict) or set(mapping) != set(EXPERTS) or not all(_digest(value) for value in mapping.values()) or (field == "expert_genesis_sha256" and len(set(mapping.values())) != len(EXPERTS)):
             raise ValueError(f"checkpoint {field} mapping is invalid")
     for expert in EXPERTS:
         if manifest["expert_checkpoint_sha256"][expert] != records[f"expert-{expert}.pt"]["sha256"]:
@@ -76,9 +81,26 @@ def _verify(manifest_path: Path) -> dict[str, object]:
     contract = manifest["optimizer_contract"]
     if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"} or not all(isinstance(contract[field], str) and contract[field] for field in ("name", "implementation", "state_format")) or not isinstance(contract["hyperparameters"], dict) or not contract["hyperparameters"]:
         raise ValueError("checkpoint optimizer contract is invalid")
+    if config["training"].get("optimizer") != contract:
+        raise ValueError("checkpoint optimizer contract drifts from model config")
     realization = manifest["optimizer_realization"]
     if not isinstance(realization, dict) or set(realization) != {"implementation", "implementation_source_sha256", "state_format", "optimizer_contract_sha256"} or realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"] or not _digest(realization.get("implementation_source_sha256")) or realization.get("optimizer_contract_sha256") != _canonical_digest(contract):
         raise ValueError("checkpoint optimizer realization is invalid")
+    import torch
+    replay = torch.load(manifest_path.parent / "replay-state.pt", map_location="cpu", weights_only=True)
+    if not isinstance(replay, dict) or not isinstance(replay.get("rng_state"), dict) or set(replay["rng_state"]) != {"cpu", "cuda"} or replay.get("data_cursor") != cursor:
+        raise ValueError("checkpoint replay payload drifts from manifest")
+    for name, state in replay["rng_state"].items():
+        if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1 or hashlib.sha256(state.cpu().numpy().tobytes()).hexdigest() != rng[name]:
+            raise ValueError(f"checkpoint replay RNG payload mismatch: {name}")
+    shared = torch.load(manifest_path.parent / "shared.pt", map_location="cpu", weights_only=True)
+    if not isinstance(shared, dict) or not isinstance(shared.get("model"), dict) or not isinstance(shared.get("optimizer"), dict) or shared.get("optimizer_contract") != contract or shared.get("optimizer_realization") != realization:
+        raise ValueError("checkpoint shared optimizer payload drifts from manifest")
+    for expert in EXPERTS:
+        payload = torch.load(manifest_path.parent / f"expert-{expert}.pt", map_location="cpu", weights_only=True)
+        state = payload.get("model") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict) or payload.get("expert") != expert or not isinstance(state, dict) or any(f".experts.{expert}." not in key for key in state):
+            raise ValueError(f"checkpoint expert payload identity mismatch: {expert}")
     return {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "checkpoint_manifest_sha256": _sha256(manifest_path), "model_config_sha256": manifest["model_config_sha256"], "result": "VERIFIED_CHECKPOINT_INPUT", "shard_count": len(records)}
 
 
@@ -87,10 +109,11 @@ def main() -> None:
     subcommands = parser.add_subparsers(dest="command", required=True)
     verify = subcommands.add_parser("verify")
     verify.add_argument("manifest", type=Path)
+    verify.add_argument("--model-config", required=True, type=Path)
     verify.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
     try:
-        receipt = _verify(arguments.manifest)
+        receipt = _verify(arguments.manifest, arguments.model_config)
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
         parser.error(str(error))
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
