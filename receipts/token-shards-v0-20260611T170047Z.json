@@ -1,4 +1,7 @@
 {
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "ticket": "TOKEN-SHARDS-V0",
   "ts": "20260611T170047Z",
   "shard_dir": "../shards-v0",
@@ -201,13 +204,13 @@
     },
     "tokenizer_json": {
       "path": "tokenizer/tokenizer.json",
-      "sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d"
+      "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
     }
   },
   "sha_convention": "sha256 over the exact on-disk file bytes, no normalization; shard + receipt paths carry the git -text pin",
   "emit": true,
   "no_gpu": true,
-  "provenance_230": [
+  "superseded_provenance_230": [
     {
       "ts": "20260706T000000Z",
       "fields": [
@@ -227,5 +230,17 @@
         "tokenizer_json.sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d"
       }
     }
-  ]
+  ],
+  "provenance_restoration_20260714": {
+    "status": "CURRENT",
+    "reason": "The superseded #230 re-pin bound the shard receipt to tokenizer JSON that does not load because its BPE merge closure is incomplete. The exact content-addressed pre-scrub tokenizer was recovered; its SHA-256 matches both the tokenizer-freeze receipt's longstanding tokenizer_json_sha256 and the original token-shard receipt premise. Publicly sanitized assembly and freeze receipt bytes and all packed shard bytes are unchanged.",
+    "invalid_tokenizer_sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
+    "restored_tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "original_token_shards_receipt_sha256": "3adffdda07bf6de31c5f9a9b82aaa08134aac567898c27c5fb0eae90d8ee409d",
+    "original_tokenizer_freeze_receipt_sha256": "1e2da479d09f896d1ef15cece19255347aff2bc78a450b4160905579910e56ee",
+    "public_sanitized_freeze_receipt_sha256": "2e96e70fe7463b272c00ea49e61e001402319a398a447debb9afe283586ac1c4",
+    "restored_from_content_addressed_lineage": true,
+    "assembly_and_freeze_public_bytes_unchanged": true,
+    "shard_bytes_unchanged": true
+  }
 }
