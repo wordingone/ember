@@ -248,7 +248,7 @@ print(json.dumps({
                     {
                         "id": "sample-1",
                         "input_sha256": "1" * 64,
-                        "generated_token_ids": [7],
+                        "generated_token_ids": [7, 2],
                         "stop_reason": "eos",
                         "output": output,
                     }
