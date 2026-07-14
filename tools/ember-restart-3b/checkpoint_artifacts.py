@@ -72,7 +72,7 @@ def _default_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
     return {
         "name": cls.__name__,
         "implementation": f"{cls.__module__}.{cls.__qualname__}",
-        "hyperparameters": {"param_group_count": len(optimizer.param_groups)},
+        "hyperparameters": {"param_group_count": len(optimizer.param_groups), "learning_rate": float(optimizer.param_groups[0]["lr"]), "weight_decay": float(optimizer.param_groups[0]["weight_decay"])},
         "state_format": "torch-optimizer-state-dict-v1",
     }
 
@@ -92,17 +92,71 @@ def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
     return {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
 
 
+def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
+    """Derive the optimizer identity from the supplied runtime, never its receipt."""
+
+    cls = type(optimizer)
+    runtime_implementation = f"{cls.__module__}.{cls.__qualname__}"
+    if runtime_implementation == "bitsandbytes.optim.adamw.PagedAdamW8bit":
+        if not optimizer.param_groups or not hasattr(optimizer, "args"):
+            raise ValueError("runtime PagedAdamW8bit lacks required state")
+        group = optimizer.param_groups[0]
+        args = optimizer.args
+        required_group = ("lr", "weight_decay")
+        required_args = ("percentile_clipping", "block_wise", "optim_bits")
+        if any(field not in group for field in required_group) or any(not hasattr(args, field) for field in required_args):
+            raise ValueError("runtime PagedAdamW8bit lacks required hyperparameters")
+        if int(args.optim_bits) != 8:
+            raise ValueError("runtime PagedAdamW8bit does not use 8-bit optimizer state")
+        implementation = "bitsandbytes.optim.PagedAdamW8bit"
+        name = "paged_8bit_adamw"
+        hyperparameters = {
+            "learning_rate": float(group["lr"]),
+            "weight_decay": float(group["weight_decay"]),
+            "percentile_clipping": int(args.percentile_clipping),
+            "block_wise": bool(args.block_wise),
+        }
+        state_format = "bitsandbytes-paged-8bit-adamw-state-dict-v1"
+    else:
+        implementation = runtime_implementation
+        name = cls.__name__
+        if not optimizer.param_groups or any("lr" not in group or "weight_decay" not in group for group in optimizer.param_groups):
+            raise ValueError("runtime optimizer lacks required hyperparameters")
+        hyperparameters = {"param_group_count": len(optimizer.param_groups), "learning_rate": float(optimizer.param_groups[0]["lr"]), "weight_decay": float(optimizer.param_groups[0]["weight_decay"])}
+        state_format = "torch-optimizer-state-dict-v1"
+    return {
+        "name": name,
+        "implementation": implementation,
+        "hyperparameters": hyperparameters,
+        "state_format": state_format,
+    }
+
+
 def _optimizer_realization(optimizer: torch.optim.Optimizer, contract: Mapping[str, Any]) -> dict[str, str]:
+    runtime_contract = _runtime_optimizer_contract(optimizer)
+    if runtime_contract != _validate_optimizer_contract(contract):
+        raise ValueError("runtime optimizer realization does not match the declared contract")
     source = inspect.getsourcefile(type(optimizer))
     if source is None or not Path(source).is_file():
         raise ValueError("optimizer implementation source cannot be content-addressed")
     return {
-        "implementation": str(contract["implementation"]),
+        "implementation": runtime_contract["implementation"],
         "implementation_source_sha256": _sha256(Path(source)),
-        "state_format": str(contract["state_format"]),
-        "optimizer_contract_sha256": _canonical_sha256(contract),
+        "state_format": runtime_contract["state_format"],
+        "optimizer_contract_sha256": _canonical_sha256(runtime_contract),
     }
 
+
+def _validate_runtime_optimizer_realization(
+    optimizer: torch.optim.Optimizer,
+    contract: Mapping[str, Any],
+    realization: Mapping[str, Any],
+) -> None:
+    """Recompute the receipt from live optimizer code and reject self-consistent forgeries."""
+
+    runtime_realization = _optimizer_realization(optimizer, contract)
+    if runtime_realization != dict(realization):
+        raise ValueError("runtime optimizer realization does not match the checkpoint receipt")
 
 def _validate_optimizer_realization(contract: Mapping[str, Any], realization: Any) -> dict[str, str]:
     required = {"implementation", "implementation_source_sha256", "state_format", "optimizer_contract_sha256"}
@@ -287,6 +341,8 @@ def load_checkpoint_artifacts(
         raise ValueError("checkpoint optimizer contract requires v3 manifest")
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
     optimizer_realization = _validate_optimizer_realization(optimizer_contract, receipt.get("optimizer_realization"))
+    if optimizer is not None:
+        _validate_runtime_optimizer_realization(optimizer, optimizer_contract, optimizer_realization)
     expected = receipt.get("expert_checkpoint_sha256")
     genesis = receipt.get("expert_genesis_sha256")
     active = receipt.get("active_expert_ids")
@@ -335,5 +391,6 @@ def load_checkpoint_artifacts(
         optimizer.load_state_dict(shared_payload["optimizer"])
     model._activate_expert(active[0])
     torch.set_rng_state(replay_payload["rng_state"]["cpu"])
-    torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
+    if torch.cuda.is_available():
+            torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
     return {"data_cursor": dict(replay_payload["data_cursor"])}

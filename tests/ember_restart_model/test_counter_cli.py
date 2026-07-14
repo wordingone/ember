@@ -31,7 +31,7 @@ class CounterCliTests(unittest.TestCase):
             root = Path(directory)
             config_path = root / "config.json"
             config_payload = {
-                "architecture_revision": "ember-sparse-3b-v1",
+                "architecture_revision": "ember-sparse-3b-v2",
                 "model": {
                     "hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64,
                     "tied_embeddings": True,
