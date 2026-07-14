@@ -66,3 +66,35 @@ def write_checkpoint_artifacts(
     }
     (root / "checkpoint-manifest.json").write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
     return manifest
+
+
+def load_checkpoint_artifacts(
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    root: Path,
+    receipt: dict[str, Any],
+) -> None:
+    """Restore an interruption-safe shared/expert checkpoint after hash checking."""
+
+    expected = receipt.get("expert_checkpoint_sha256")
+    if not isinstance(expected, dict) or set(expected) != set(EXPERT_NAMES):
+        raise ValueError("checkpoint receipt lacks the four expert hashes")
+    records = {item["path"]: item for item in receipt.get("shards", []) if isinstance(item, dict)}
+    for name, digest in expected.items():
+        relative = f"expert-{name}.pt"
+        path = root / relative
+        if _sha256(path) != digest:
+            raise ValueError(f"checkpoint expert shard hash mismatch: {name}")
+        state = torch.load(path, map_location="cpu", weights_only=True)["model"]
+        model.load_state_dict(state, strict=False)
+    shared_path = root / "shared.pt"
+    shared_record = records.get("shared.pt")
+    if not isinstance(shared_record, dict) or _sha256(shared_path) != shared_record.get("sha256"):
+        raise ValueError("shared checkpoint shard hash mismatch")
+    shared = torch.load(shared_path, map_location="cpu", weights_only=False)
+    model.load_state_dict(shared["model"], strict=False)
+    optimizer.load_state_dict(shared["optimizer"])
+    active = receipt.get("active_expert_ids")
+    if not isinstance(active, list) or len(active) != 1:
+        raise ValueError("checkpoint receipt lacks exactly one active expert")
+    model._activate_expert(active[0])
