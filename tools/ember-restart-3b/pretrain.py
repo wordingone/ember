@@ -19,6 +19,7 @@ import torch.nn.functional as F
 
 from batch import DOMAIN_MODALITIES, decode_owned_batch
 from model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
+from semantic_stream import ManifestBoundTokenStream
 
 CheckpointCallback = Callable[[int, dict[str, Any]], None]
 VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
@@ -138,3 +139,90 @@ def run_pretraining_segment(
         "data_cursor": {"shard": data_shard_id, "record_index": data_cursor, "global_step": initial_global_step + len(remaining_records), "tokens_seen": tokens_seen},
         "modality_examples": modality_examples, "expert_examples": expert_examples,
     }
+def run_manifest_bound_semantic_segment(
+    *,
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    stream: ManifestBoundTokenStream,
+    config: RestartDecoderConfig,
+    device: torch.device,
+    sequence_length: int,
+    steps: int,
+    checkpoint_every: int,
+    checkpoint_callback: CheckpointCallback,
+    initial_data_cursor: Mapping[str, object] | None = None,
+    initial_global_step: int = 0,
+    initial_tokens_seen: int = 0,
+) -> dict[str, Any]:
+    """Train bounded shared-text episodes while preserving receipt-bound shard resume state."""
+
+    if not isinstance(sequence_length, int) or sequence_length < 1:
+        raise ValueError("semantic stream sequence_length must be positive")
+    if not isinstance(steps, int) or steps < 1:
+        raise ValueError("semantic stream steps must be positive")
+    if min(initial_global_step, initial_tokens_seen) < 0:
+        raise ValueError("semantic stream resume counters must be nonnegative")
+    if initial_data_cursor is None:
+        shard_index, token_offset = 0, 0
+    else:
+        if (
+            initial_data_cursor.get("receipt_sha256") != stream.receipt_sha256
+            or initial_data_cursor.get("tokenizer_sha256") != stream.tokenizer_sha256
+        ):
+            raise ValueError("semantic stream resume cursor does not bind this receipt and tokenizer")
+        shard_index = initial_data_cursor.get("shard_index")
+        token_offset = initial_data_cursor.get("token_offset")
+        if not isinstance(shard_index, int) or not isinstance(token_offset, int):
+            raise ValueError("semantic stream resume cursor is malformed")
+
+    records: list[dict[str, object]] = []
+    cursors: list[dict[str, int]] = []
+    for _ in range(steps):
+        episode, next_cursor = stream.next_episode(
+            shard_index=shard_index,
+            token_offset=token_offset,
+            sequence_length=sequence_length,
+        )
+        records.append(episode)
+        cursors.append(next_cursor)
+        shard_index, token_offset = next_cursor["shard_index"], next_cursor["token_offset"]
+
+    def bound_cursor(cursor: Mapping[str, int], global_step: int, tokens_seen: int) -> dict[str, object]:
+        return {
+            "receipt_sha256": stream.receipt_sha256,
+            "tokenizer_sha256": stream.tokenizer_sha256,
+            "shard_index": cursor["shard_index"],
+            "token_offset": cursor["token_offset"],
+            "global_step": global_step,
+            "tokens_seen": tokens_seen,
+        }
+
+    def stream_checkpoint(global_step: int, state: dict[str, Any]) -> None:
+        local_index = global_step - initial_global_step - 1
+        checkpoint_state = dict(state)
+        checkpoint_state["data_cursor"] = bound_cursor(
+            cursors[local_index],
+            global_step,
+            int(state["tokens_seen"]),
+        )
+        checkpoint_callback(global_step, checkpoint_state)
+
+    result = run_pretraining_segment(
+        model=model,
+        optimizer=optimizer,
+        records=records,
+        config=config,
+        device=device,
+        checkpoint_every=checkpoint_every,
+        checkpoint_callback=stream_checkpoint,
+        initial_global_step=initial_global_step,
+        initial_tokens_seen=initial_tokens_seen,
+        data_shard_id="TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12],
+        require_complete_coverage=False,
+    )
+    result["data_cursor"] = bound_cursor(
+        cursors[-1],
+        int(result["global_step"]),
+        int(result["tokens_seen"]),
+    )
+    return result
