@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -114,7 +115,12 @@ def _verify_lineage(manifest: dict[str, Any], errors: list[str]) -> None:
             errors.append(f"lineage.{field}: must be false")
 
 
-def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
+def _verify_architecture(
+    root: Path,
+    manifest: dict[str, Any],
+    trusted_verifiers: dict[str, dict[str, Any]],
+    errors: list[str],
+) -> None:
     architecture = manifest.get("architecture")
     if not isinstance(architecture, dict):
         errors.append("architecture: expected object")
@@ -210,6 +216,11 @@ def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]
     model_config_sha256 = (
         model_config_ref.get("sha256") if isinstance(model_config_ref, dict) else None
     )
+    model_config_path = (
+        _artifact(root, model_config_ref.get("path"), "architecture.model_config.path", errors)
+        if isinstance(model_config_ref, dict)
+        else None
+    )
     config_counts: dict[str, int] | None = None
     if model_config is not None:
         if model_config.get("contract_name") != "ember-restart-3b":
@@ -278,6 +289,13 @@ def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]
     counter = architecture.get("parameter_counter")
     counter_path = _verify_file(root, counter, "architecture.parameter_counter", errors)
     counter_sha256 = counter.get("sha256") if isinstance(counter, dict) else None
+    counter_verifier = trusted_verifiers.get(counter_sha256)
+    counter_is_trusted = (
+        counter_verifier is not None
+        and "parameter_realization" in counter_verifier.get("evidence_classes", [])
+    )
+    if not counter_is_trusted:
+        errors.append("architecture.parameter_counter: verifier is not independently trusted")
     parameter_receipt = architecture.get("parameter_receipt")
     receipt = _load_bound_json(
         root,
@@ -311,6 +329,75 @@ def _verify_architecture(root: Path, manifest: dict[str, Any], errors: list[str]
         } if isinstance(expert_banks, list) else {}
         if receipt.get("expert_genesis_sha256") != expected_banks:
             errors.append("architecture.parameter_receipt: expert genesis mismatch")
+
+        checkpoint = manifest.get("checkpoint")
+        checkpoint_path = (
+            _artifact(
+                root,
+                checkpoint.get("manifest_path"),
+                "checkpoint.manifest_path",
+                errors,
+            )
+            if isinstance(checkpoint, dict)
+            else None
+        )
+        if (
+            counter_is_trusted
+            and counter_path is not None
+            and model_config_path is not None
+            and checkpoint_path is not None
+        ):
+            try:
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        str(counter_path),
+                        "--model-config",
+                        str(model_config_path),
+                        "--checkpoint-manifest",
+                        str(checkpoint_path),
+                        "--active-expert",
+                        str(active_experts[0]) if isinstance(active_experts, list) and active_experts else "",
+                    ],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    timeout=120,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                errors.append(f"architecture.parameter_counter: counter execution failed: {exc}")
+            else:
+                if completed.returncode != 0:
+                    errors.append(
+                        "architecture.parameter_counter: counter execution failed "
+                        f"with exit code {completed.returncode}"
+                    )
+                else:
+                    try:
+                        measured = json.loads(completed.stdout)
+                    except json.JSONDecodeError:
+                        errors.append("architecture.parameter_counter: counter execution returned invalid JSON")
+                    else:
+                        if not isinstance(measured, dict):
+                            errors.append("architecture.parameter_counter: counter execution must return an object")
+                        else:
+                            measured_fields = (
+                                "result",
+                                "subject_checkpoint_sha256",
+                                "model_config_sha256",
+                                "architecture_revision",
+                                *TOTAL_PARAMETER_FIELDS,
+                                "active_parameters",
+                                "episode_trainable_parameters",
+                                "active_expert_ids",
+                            )
+                            for field in measured_fields:
+                                if measured.get(field) != receipt.get(field):
+                                    errors.append(
+                                        f"architecture.parameter_counter: executed {field} mismatch"
+                                    )
 
 
 def _verify_data(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
@@ -457,7 +544,7 @@ def _load_trusted_verifiers(
     errors: list[str],
 ) -> dict[str, dict[str, Any]]:
     if registry_path is None:
-        errors.append("trusted_verifier_registry: required for OWNED_ADMITTED")
+        errors.append("trusted_verifier_registry: required for checkpoint claims")
         return {}
     try:
         payload = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -605,13 +692,9 @@ def validate_manifest(
     if not isinstance(source_commit, str) or not COMMIT_RE.fullmatch(source_commit):
         errors.append("source_commit: expected lowercase 40-character Git SHA")
     root = path.resolve().parent
-    trusted_verifiers = (
-        _load_trusted_verifiers(trusted_verifier_registry, errors)
-        if stage == "OWNED_ADMITTED"
-        else {}
-    )
+    trusted_verifiers = _load_trusted_verifiers(trusted_verifier_registry, errors)
     _verify_lineage(manifest, errors)
-    _verify_architecture(root, manifest, errors)
+    _verify_architecture(root, manifest, trusted_verifiers, errors)
     _verify_data(root, manifest, errors)
     _verify_training(manifest, errors)
     _verify_checkpoint(root, manifest, errors)

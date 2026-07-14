@@ -43,7 +43,14 @@ def _make_sparse(tmp_path: Path) -> Path:
 
 def _run(path: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(VALIDATOR), "validate", str(path)],
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(path),
+            "--trusted-verifier-registry",
+            str(path.parent / "trusted-verifiers.json"),
+        ],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -164,5 +171,30 @@ def test_self_consistent_fabricated_counts_fail_config_recomputation(tmp_path: P
     assert result.returncode == 1
     assert any(
         "config-derived" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+def test_hashed_counter_must_execute_successfully(tmp_path: Path) -> None:
+    path = _make_sparse(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    architecture = payload["architecture"]
+    counter_path = tmp_path / architecture["parameter_counter"]["path"]
+    counter_path.write_text("raise SystemExit(9)\n", encoding="utf-8")
+    counter_hash = __import__("hashlib").sha256(counter_path.read_bytes()).hexdigest()
+    architecture["parameter_counter"]["sha256"] = counter_hash
+    registry_path = tmp_path / "trusted-verifiers.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["verifiers"][0]["sha256"] = counter_hash
+    _write_json(registry_path, registry)
+    receipt_ref = architecture["parameter_receipt"]
+    receipt_path = tmp_path / receipt_ref["path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["counter_sha256"] = counter_hash
+    receipt_ref["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(path, payload)
+    result = _run(path)
+    assert result.returncode == 1
+    assert any(
+        "counter execution" in error
         for error in json.loads(result.stdout)["errors"]
     )

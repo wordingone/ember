@@ -103,11 +103,75 @@ def _candidate_manifest(tmp_path: Path) -> Path:
     )
     counter = tmp_path / "counter" / "instantiated_meta_counter.py"
     counter.parent.mkdir(parents=True)
-    counter.write_text("# fixture instantiated-meta counter\n", encoding="utf-8")
+    counter.write_text(
+        """import argparse
+import hashlib
+import json
+import math
+from pathlib import Path
+
+
+def sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--model-config", required=True)
+parser.add_argument("--checkpoint-manifest", required=True)
+parser.add_argument("--active-expert", required=True)
+args = parser.parse_args()
+config = json.loads(Path(args.model_config).read_text(encoding="utf-8"))
+checkpoint = json.loads(Path(args.checkpoint_manifest).read_text(encoding="utf-8"))
+if not checkpoint.get("shards"):
+    raise SystemExit(3)
+model = config["model"]
+hidden = model["hidden_size"]
+layers = model["layers"]
+experts = model["expert_routing"]["expert_names"]
+image_input = math.prod(model["image_projection"]["input_shape"])
+audio_input = model["audio_projection"]["frame_samples"]
+expert_per_layer = 12 * hidden * hidden
+total = (
+    model["vocab_size"] * hidden
+    + layers * (4 * hidden * hidden + 2 * hidden + len(experts) * expert_per_layer)
+    + image_input * hidden
+    + audio_input * hidden
+    + hidden
+)
+active = total - layers * (len(experts) - 1) * expert_per_layer
+print(json.dumps({
+    "result": "MEASURED",
+    "subject_checkpoint_sha256": sha256(args.checkpoint_manifest),
+    "model_config_sha256": sha256(args.model_config),
+    "architecture_revision": "ember-sparse-3b-v1",
+    "allocated_parameters": total,
+    "unique_parameters": total,
+    "trainable_parameters": total,
+    "served_parameters": total,
+    "active_parameters": active,
+    "episode_trainable_parameters": active,
+    "active_expert_ids": [args.active_expert],
+}, sort_keys=True))
+""",
+        encoding="utf-8",
+    )
     counter_record = {
         "path": str(counter.relative_to(tmp_path)),
         "sha256": _sha256(counter),
     }
+    _write_json(
+        tmp_path / "trusted-verifiers.json",
+        {
+            "schema_version": "ember-trusted-verifiers-v1",
+            "verifiers": [
+                {
+                    **counter_record,
+                    "evidence_classes": ["parameter_realization"],
+                    "criterion_ids": [],
+                }
+            ],
+        },
+    )
     parameter_receipt = tmp_path / "receipts" / "parameter-count.json"
     parameter_receipt_hash = _write_json(
         parameter_receipt,
@@ -195,7 +259,14 @@ def _candidate_manifest(tmp_path: Path) -> Path:
 def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_path: Path):
     manifest = _candidate_manifest(tmp_path)
     result = subprocess.run(
-        [sys.executable, str(VALIDATOR), "validate", str(manifest)],
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
