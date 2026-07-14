@@ -13,10 +13,31 @@ def test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path: Pa
     manifest_path = _candidate_manifest(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["stage"] = "OWNED_ADMITTED"
+    manifest["training"]["input_class"] = "SEMANTIC_PRETRAINING"
+    semantic_checks = {
+        "text": ["token_roundtrip", "source_target_pair"],
+        "image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"],
+        "audio": ["token_roundtrip", "source_target_pair", "raw_audio_text_pair"],
+        "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"],
+        "tool": ["token_roundtrip", "source_target_pair", "typed_tool_execution"],
+    }
+    for entry in manifest["training_data"]:
+        data_manifest = tmp_path / entry["manifest_path"]
+        data_payload = json.loads(data_manifest.read_text(encoding="utf-8"))
+        data_payload["data_class"] = "SEMANTIC_PRETRAINING"
+        entry["sha256"] = _write_json(data_manifest, data_payload)
+        receipt_path = tmp_path / entry["verification_receipt"]["path"]
+        receipt_payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt_payload["data_class"] = "SEMANTIC_PRETRAINING"
+        receipt_payload["data_manifest_sha256"] = entry["sha256"]
+        receipt_payload["semantic_checks"] = semantic_checks[entry["capability"]]
+        entry["verification_receipt"]["sha256"] = _write_json(
+            receipt_path, receipt_payload
+        )
     checkpoint_sha256 = manifest["checkpoint"]["sha256"]
 
     verifier = tmp_path / "verifiers" / "local-verifier.py"
-    verifier.parent.mkdir(parents=True)
+    verifier.parent.mkdir(parents=True, exist_ok=True)
     verifier.write_text(
         """import argparse
 import hashlib
