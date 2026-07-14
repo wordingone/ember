@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_screen792_bf16_momentum.py -- required negative fixture for ember
 issue #792 (screen792_bf16_momentum.py).
 
@@ -93,9 +96,6 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import screen792_bf16_momentum as s792  # noqa: E402
-
-goal_id = 'EMBER-02'
-next_executed_outcome = 'EMBER-02 first sufficiently pretrained clean-genesis 3B Ember'
 
 # Working magnitude the momentum buffer sits at once warmed up. bfloat16 has
 # an 8-bit mantissa (7 explicit + 1 implicit) -- at magnitude ~1.0 its ULP is
