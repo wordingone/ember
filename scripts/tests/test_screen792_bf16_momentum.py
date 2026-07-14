@@ -85,8 +85,11 @@ paid_api_surface_used=false (CPU-only test module; no paid API surface).
 """
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import screen792_bf16_momentum as s792  # noqa: E402
@@ -302,6 +305,49 @@ def test_required_negative_fixture_discriminates():
         "required negative fixture failed to discriminate the A1-correct "
         "implementation from the naive in-place-bf16 control -- per #792, "
         "'a screen without it is unmergeable'")
+
+
+def test_live_main_creates_nested_receipt_directory_before_write():
+    """A completed live screen must not lose its verdict at final write."""
+    with tempfile.TemporaryDirectory() as d:
+        receipt_dir = Path(d) / "nested" / "receipts"
+        observed = {}
+
+        def _checked_write(path, receipt):
+            observed["parent_exists"] = Path(path).parent.is_dir()
+            observed["path"] = Path(path)
+
+        def _run_screen(**kwargs):
+            observed["precompute_parent_exists"] = receipt_dir.is_dir()
+            return fake_receipt
+
+        fake_receipt = {
+            "ts": "2026-07-14T22:30:00Z",
+            "verdict": "PROMOTE",
+            "verdict_reason": "fixture-only",
+        }
+        argv = [
+            "--live",
+            "--shard-dir", str(Path(d) / "shards"),
+            "--out-dir", str(Path(d) / "run"),
+            "--receipt-dir", str(receipt_dir),
+            "--device", "cpu",
+        ]
+        with mock.patch.dict(os.environ, {"EMBER_GATE_AUTHORIZED": "1"}), \
+             mock.patch.object(s792, "_schema_probe", return_value=0), \
+             mock.patch.object(s792.ts, "load_contract", return_value={}), \
+             mock.patch.object(s792, "run_screen", side_effect=_run_screen), \
+             mock.patch.object(s792.receipt_write, "checked_write", side_effect=_checked_write):
+            rc = s792.main(argv)
+
+        assert rc == 0
+        assert observed.get("parent_exists") is True, (
+            "main must create --receipt-dir before a completed live run "
+            "reaches receipt_write.checked_write")
+        assert observed.get("precompute_parent_exists") is True, (
+            "main must validate/create --receipt-dir before spending GPU "
+            "compute")
+        assert observed["path"].parent == receipt_dir
 
 
 def _selftest() -> int:
