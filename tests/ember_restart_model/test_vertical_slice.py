@@ -16,6 +16,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
+import batch
 from batch import decode_owned_batch, run_one_batch
 from parameter_counter import measure_parameter_counts
 from model import RestartDecoderConfig, UnifiedDecoder
@@ -41,6 +42,17 @@ class VerticalSliceTests(unittest.TestCase):
         self.assertIsNone(audio["image_patches"])
         self.assertEqual(audio["audio_frames"].shape, (1, 1, 640))
         self.assertEqual((vision["active_expert"], audio["active_expert"]), ("vision", "audio"))
+
+    def test_audio_frame_bytes_decode_as_explicit_little_endian_i16(self) -> None:
+        raw = bytes((0x00, 0x80, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0x7F))
+        self.assertTrue(hasattr(batch, "_decode_i16le"))
+        self.assertEqual(batch._decode_i16le(raw), [-32768, -1, 0, 32767])
+        full_frame = raw + (b"\x00" * ((640 * 2) - len(raw)))
+        record = self._record("audio")
+        record["audio_frames_i16le_base64"] = [base64.b64encode(full_frame).decode("ascii")]
+        decoded = decode_owned_batch(record, self.config, device=torch.device("cpu"))
+        expected = torch.tensor([-1.0, -1.0 / 32768.0, 0.0, 32767.0 / 32768.0])
+        self.assertTrue(torch.allclose(decoded["audio_frames"][0, 0, :4], expected))
 
     def test_multi_patch_coordinates_and_multi_frame_temporal_order_reach_decoder(self) -> None:
         vision = self._record("vision")

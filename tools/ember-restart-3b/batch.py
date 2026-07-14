@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import struct
 from typing import Any
 
 import torch
@@ -31,6 +32,11 @@ def _base64_bytes(value: object, field: str) -> bytes:
     except ValueError as exc:
         raise ValueError(f"{field} is not valid base64") from exc
 
+
+def _decode_i16le(value: bytes) -> list[int]:
+    if len(value) % 2:
+        raise ValueError("audio frame bytes must contain whole little-endian int16 samples")
+    return list(struct.unpack(f"<{len(value) // 2}h", value))
 
 def _sequence_bytes(record: dict[str, Any], *, plural: str, legacy: str, field: str) -> list[bytes]:
     if plural in record:
@@ -143,7 +149,7 @@ def decode_owned_batch(
         image = torch.tensor([list(value) for value in image_bytes], dtype=torch.float32, device=device).reshape(1, len(image_bytes), 48, 48, 3)
     audio = None
     if audio_bytes:
-        audio = torch.tensor([list(memoryview(value).cast("h")) for value in audio_bytes], dtype=torch.float32, device=device).reshape(1, len(audio_bytes), 640) / 32768.0
+        audio = torch.tensor([_decode_i16le(value) for value in audio_bytes], dtype=torch.float32, device=device).reshape(1, len(audio_bytes), 640) / 32768.0
     return {
         "input_ids": torch.tensor(token_ids, dtype=torch.long, device=device).unsqueeze(0),
         "target_ids": torch.tensor(target_ids, dtype=torch.long, device=device).unsqueeze(0),
