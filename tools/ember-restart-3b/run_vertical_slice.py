@@ -19,6 +19,7 @@ import torch.nn.functional as F
 from batch import decode_owned_batch
 from checkpoint_artifacts import write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
+from pretrain import run_pretraining_segment
 from parameter_counter import measure_parameter_counts
 from train import run_launch
 
