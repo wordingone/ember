@@ -390,9 +390,7 @@ class UnifiedDecoder(nn.Module):
             if end > sequence_length:
                 raise ValueError("multimodal span exceeds sequence length")
             if span.attention_mode == "isolated":
-                inside = (positions >= span.start) & (positions < end)
-                same_membership = ~(inside.unsqueeze(1) ^ inside.unsqueeze(0))
-                allowed &= same_membership.unsqueeze(0)
+                allowed[:, span.start:end, span.start:end] = True
         return allowed
 
     def _inject_modality(
