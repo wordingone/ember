@@ -430,7 +430,7 @@ class UnifiedDecoder(nn.Module):
             position_ids = torch.arange(sequence, device=input_ids.device).expand(batch, -1)
         if position_ids.shape != input_ids.shape:
             raise ValueError("position_ids must match input_ids")
-        coordinates = torch.stack((position_ids, torch.zeros_like(position_ids)), dim=-1)
+        coordinates = torch.stack((position_ids, position_ids), dim=-1)
         count = int(image_mask.sum().item())
         if not count:
             if image_coordinates is not None and image_coordinates.numel() != 0:

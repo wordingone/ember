@@ -82,5 +82,14 @@ class RestartDecoderModelTests(unittest.TestCase):
         self.assertEqual(model.token_embedding.weight.device.type, "meta")
 
 
+    def test_text_and_audio_coordinates_rotate_both_rotary_half_widths(self) -> None:
+        model = UnifiedDecoder(self.config)
+        input_ids = torch.tensor([[1, 2, self.config.audio_token_id]])
+        image_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+        coordinates = model._coordinates(input_ids, image_mask, torch.empty((0, 2), dtype=torch.long), torch.tensor([[0, 3, 7]]))
+        self.assertTrue(torch.equal(coordinates[0, 1], torch.tensor([3, 3])))
+        self.assertTrue(torch.equal(coordinates[0, 2], torch.tensor([7, 7])))
+
+
 if __name__ == "__main__":
     unittest.main()
