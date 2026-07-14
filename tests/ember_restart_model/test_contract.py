@@ -32,6 +32,8 @@ class RestartContractTests(unittest.TestCase):
         self.assertFalse(model["expert_routing"]["learned_external_routing"])
         self.assertEqual(model["position_encoding"]["text_audio"], "1d_rope")
         self.assertEqual(model["position_encoding"]["image"], "2d_rope_coordinates")
+        self.assertEqual(model["position_encoding"]["attention_modes"], ["causal", "bidirectional"])
+        self.assertEqual(model["normalization"]["qk"], "per_head_rmsnorm_before_rope")
         self.assertTrue(model["position_encoding"]["multimodal_span_metadata"])
         self.assertIsNone(contract["lineage"]["parent_checkpoint"])
         self.assertEqual(contract["lineage"]["initialization"], "random")
@@ -59,8 +61,10 @@ class RestartContractTests(unittest.TestCase):
         self.assertEqual(contract["authority"]["total_parameters"], model["total_unique_trainable_parameters"])
         formula = model["parameter_formula"]
         self.assertEqual(formula["shared_attention_per_layer"], "4*hidden_size^2")
+        self.assertEqual(formula["qk_rmsnorm_per_layer"], "2*(hidden_size/attention_heads)")
         self.assertEqual(formula["four_experts_per_layer"], "4*(12*hidden_size^2)")
         self.assertEqual(formula["shared_text_ffn_per_layer"], "12*hidden_size^2")
+        self.assertEqual(model["total_unique_trainable_parameters"], 3_839_161_856)
 
 
 if __name__ == "__main__":

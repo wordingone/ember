@@ -71,6 +71,7 @@ def _model_shape(config: Mapping[str, Any]) -> dict[str, int]:
 
 def _expected_shared(shape: Mapping[str, int]) -> dict[str, tuple[int, ...]]:
     hidden, layers, vocab = shape["hidden_size"], shape["layers"], shape["vocab_size"]
+    head_dim = hidden // shape["attention_heads"]
     expected = {
         "token_embedding.weight": (vocab, hidden),
         "lm_head.weight": (vocab, hidden),
@@ -83,6 +84,8 @@ def _expected_shared(shape: Mapping[str, int]) -> dict[str, tuple[int, ...]]:
         expected.update({
             prefix + "pre_attention_norm.weight": (hidden,),
             prefix + "attention.qkv.weight": (3 * hidden, hidden),
+            prefix + "attention.q_norm.weight": (head_dim,),
+            prefix + "attention.k_norm.weight": (head_dim,),
             prefix + "attention.output.weight": (hidden, hidden),
             prefix + "pre_ffn_norm.weight": (hidden,),
             prefix + "shared_ffn.up_gate.weight": (8 * hidden, hidden),
@@ -212,9 +215,10 @@ def _inspect_realization(manifest_path: Path, *, active_expert: str, shape: Mapp
 
 def _counts(shape: Mapping[str, int]) -> dict[str, int]:
     hidden, layers, vocab = shape["hidden_size"], shape["layers"], shape["vocab_size"]
+    head_dim = hidden // shape["attention_heads"]
     shared = (
         vocab * hidden
-        + layers * (4 * hidden * hidden + 12 * hidden * hidden + 2 * hidden)
+        + layers * (4 * hidden * hidden + 12 * hidden * hidden + 2 * hidden + 2 * head_dim)
         + hidden
         + (48 * 48 * 3) * hidden
         + 640 * hidden

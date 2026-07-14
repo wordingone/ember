@@ -18,7 +18,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from model import RawAudioProjector, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from model import RMSNorm, RawAudioProjector, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
 
 class RestartDecoderModelTests(unittest.TestCase):
@@ -73,6 +73,25 @@ class RestartDecoderModelTests(unittest.TestCase):
             path.write_text(json.dumps(contract), encoding="utf-8")
             with self.assertRaises(ValueError):
                 RestartDecoderConfig.from_contract(path)
+
+    def test_production_contract_requires_explicit_per_head_qk_rmsnorm(self) -> None:
+        contract = json.loads(self.contract_path.read_text(encoding="utf-8"))
+        contract = copy.deepcopy(contract)
+        contract["model"]["normalization"]["qk"] = "disabled"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "missing-qk-norm.json"
+            path.write_text(json.dumps(contract), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Q/K RMSNorm"):
+                RestartDecoderConfig.from_contract(path)
+
+    def test_attention_applies_trainable_per_head_qk_rmsnorm_before_rope(self) -> None:
+        model = UnifiedDecoder(self.config)
+        attention = model.layers[0].attention
+        self.assertIsInstance(attention.q_norm, RMSNorm)
+        self.assertIsInstance(attention.k_norm, RMSNorm)
+        self.assertEqual(attention.q_norm.weight.numel(), self.config.hidden_size // self.config.attention_heads)
+        values = torch.randn(1, attention.heads, 3, attention.head_dim) * 100
+        self.assertTrue(torch.allclose(attention.q_norm(values).square().mean(dim=-1), torch.ones(1, attention.heads, 3), rtol=1e-4, atol=1e-4))
 
     def test_production_materialization_is_guarded_and_meta_is_available(self) -> None:
         config = RestartDecoderConfig.from_contract()
