@@ -50,18 +50,29 @@ def _candidate_manifest(tmp_path: Path) -> Path:
     shard = tmp_path / "checkpoint" / "model-00001.safetensors"
     shard.parent.mkdir(parents=True)
     shard.write_bytes(b"owned-random-init-checkpoint")
+    shard_records = [
+        {
+            "path": str(shard.relative_to(tmp_path)),
+            "sha256": _sha256(shard),
+            "bytes": shard.stat().st_size,
+        }
+    ]
+    expert_banks = []
+    for index, domain in enumerate(("vision", "audio", "reasoning", "tool")):
+        expert = tmp_path / "checkpoint" / f"expert-{domain}.safetensors"
+        expert.write_bytes(f"owned-{domain}-expert-genesis-{index}".encode("utf-8"))
+        expert_hash = _sha256(expert)
+        expert_path = str(expert.relative_to(tmp_path))
+        shard_records.append(
+            {"path": expert_path, "sha256": expert_hash, "bytes": expert.stat().st_size}
+        )
+        expert_banks.append(
+            {"id": domain, "domain": domain, "path": expert_path, "genesis_sha256": expert_hash}
+        )
     checkpoint_index = tmp_path / "checkpoint" / "checkpoint-manifest.json"
     checkpoint_index_hash = _write_json(
         checkpoint_index,
-        {
-            "shards": [
-                {
-                    "path": str(shard.relative_to(tmp_path)),
-                    "sha256": _sha256(shard),
-                    "bytes": shard.stat().st_size,
-                }
-            ]
-        },
+        {"shards": shard_records},
     )
 
     manifest = {
@@ -90,10 +101,7 @@ def _candidate_manifest(tmp_path: Path) -> Path:
             "sparse_differentiated_capacity": True,
             "task_level_expert_routing": True,
             "asymmetric_expert_initialization": True,
-            "expert_banks": [
-                {"id": domain, "domain": domain, "genesis_sha256": f"{index + 1:064x}"}
-                for index, domain in enumerate(("vision", "audio", "reasoning", "tool"))
-            ],
+            "expert_banks": expert_banks,
             "active_expert_ids": ["reasoning"],
             "raw_image_patches": True,
             "raw_audio_frames": True,
