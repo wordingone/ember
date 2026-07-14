@@ -112,6 +112,8 @@ class RestartDecoderConfig:
         )
         with contract_path.open(encoding="utf-8") as handle:
             contract = json.load(handle)
+        if contract.get("architecture_revision") != "ember-sparse-3b-v1":
+            raise ValueError("production contract must declare ember-sparse-3b-v1")
         model = contract["model"]
         image = model["image_projection"]
         audio = model["audio_projection"]
@@ -185,11 +187,11 @@ class RestartDecoderConfig:
         """Compatibility alias for the sparse structural count."""
         return self.structural_parameter_count()
 
-    def genesis_metadata(self, seed: int = 0) -> dict[str, Any]:
+    def genesis_metadata(self, seed: int | None = None) -> dict[str, Any]:
         return {
             "contract_name": self.contract_name,
             "contract_version": self.contract_version,
-            "seed": int(seed),
+            "seed": None if seed is None else int(seed),
             "parent_checkpoint": self.lineage.get("parent_checkpoint"),
             "initialization": self.lineage.get("initialization", "random"),
             "borrowed_weights": bool(self.lineage.get("borrowed_weights", False)),
@@ -325,7 +327,7 @@ class UnifiedDecoder(nn.Module):
         self.lm_head.weight = self.token_embedding.weight
         self.active_expert = config.default_active_expert
         self._activate_expert(self.active_expert)
-        self.genesis_metadata = config.genesis_metadata(0 if genesis_seed is None else genesis_seed)
+        self.genesis_metadata = config.genesis_metadata(genesis_seed)
 
     def _activate_expert(self, active_expert: str) -> None:
         if active_expert not in self.config.expert_names:

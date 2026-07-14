@@ -1,6 +1,7 @@
 {
     "contract_name":  "ember-restart-3b",
     "contract_version":  2,
+    "architecture_revision":  "ember-sparse-3b-v1",
     "contract_path":  "configs/ember-restart-3b.json",
     "purpose":  "Superseding sparse clean-random genesis contract for the owned unified decoder.",
     "supersedes":  {

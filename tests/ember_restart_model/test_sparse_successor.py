@@ -70,6 +70,10 @@ class SparseSuccessorTests(unittest.TestCase):
         self.assertEqual(first.expert_bank_genesis_hashes(), second.expert_bank_genesis_hashes())
         self.assertNotEqual(first.expert_bank_genesis_hashes(), third.expert_bank_genesis_hashes())
 
+
+    def test_omitted_nonproduction_seed_is_explicitly_unknown(self) -> None:
+        model = UnifiedDecoder(self.config)
+        self.assertIsNone(model.genesis_metadata["seed"])
     def test_expert_bank_genesis_hashes_are_distinct(self) -> None:
         model = UnifiedDecoder(self.config)
         hashes = model.expert_bank_genesis_hashes()
