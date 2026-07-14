@@ -26,7 +26,7 @@ One `ember-owned-rung-v1` JSON manifest binds the entire path:
 The executable authority is `scripts/ember_restart/contract.py`. A candidate is checked with:
 
 ```text
-python scripts/ember_restart/contract.py validate <run-manifest.json>
+python scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
 ```
 
 An admission attempt is checked with an independently supplied verifier registry:
@@ -35,15 +35,16 @@ An admission attempt is checked with an independently supplied verifier registry
 python scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
 ```
 
-The registry is a separate command-line input. A run manifest cannot declare its own verifier trusted.
+The registry is a separate command-line input for both candidate and admission validation. A run manifest cannot declare its own parameter-realization, sufficiency, or evaluation verifier trusted. The content-addressed parameter counter is executed only when its exact bytes are independently admitted for the `parameter_realization` evidence class.
 
 ## `CHECKPOINT_CANDIDATE`
 
 A candidate must bind all of the following:
 
 - clean owned random initialization, null parent, and explicit false values for borrowed weights, teachers, judges, filters, and generated labels;
-- allocated, trainable, active, and served parameter counts of at least 3,000,000,000 each;
+- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must equal the validator's independent recomputation for the content-addressed `ember-sparse-3b-v1` model config and also match the output of a content-addressed counter executed in isolated Python mode against that config and exact checkpoint manifest, with the receipt bound to the counter-source bytes, active expert, and expert-genesis shard hashes;
 - one `ember-unified-decoder` using raw image patches and audio frames, decoder soft-token splicing, multimodal-span attention, 2D-capable positional treatment, and no separate pretrained encoder;
+- a shared core plus exactly four asymmetric vision, audio, reasoning, and tool expert banks, each bound to its own content-addressed checkpoint shard, with distinct verified bytes and exactly one declared expert active per episode;
 - an owned tokenizer with verified bytes;
 - exactly one owned and locally verified data-manifest binding for each of text, image, audio, reasoning, and typed tools;
 - positive observed token exposure for all five capabilities and the exact training command;
@@ -55,8 +56,8 @@ Candidate validation proves an internally bound checkpoint path, not sufficient 
 
 Admission adds all of the following without weakening the candidate gates:
 
-- a `PASSED` `ember-sufficient-pretraining-v1` receipt bound to the exact checkpoint-manifest SHA-256;
-- exactly one checkpoint-bound `MEASURED` external-evaluation receipt for each of text, image, audio, reasoning, and typed tools;
+- a `PASSED` `ember-sufficient-pretraining-v1` receipt bound to the exact checkpoint-manifest SHA-256, content-addressed training ledger, stopping evaluation, and checkpoint progression; it records checkpoint-matching tokens, GPU-hours, and final loss, and its independently trusted local verifier is executed with fixed arguments against those artifacts with output required to match the receipt;
+- exactly one checkpoint-bound `MEASURED` external-evaluation receipt for each of text, image, audio, reasoning, and typed tools; every receipt binds benchmark ID/version, split, harness, protocol, raw predictions, score artifact, nonzero sample count, finite numeric metrics, and a capability-specific `PASSED` criterion; the exact local verifier bytes must be externally trusted for that criterion and are executed with fixed arguments against those artifacts, with output required to match the receipt;
 - verifier-byte hashes admitted for the correct evidence class by the externally supplied trusted-verifier registry;
 - a content-addressed serving manifest whose seat is exactly `OWNED_ADMITTED` and whose checkpoint binding matches the training and evaluation subject.
 
@@ -70,4 +71,4 @@ Efficiency, retention, deletion/ablation, comparator gaps, and honest deficienci
 
 ## Next execution
 
-This contract directly enables the model-building founder's disk-budgeted 3.14B allocation plus one-real-batch vertical slice to emit the first `CHECKPOINT_CANDIDATE` manifest, followed by the evaluation founder running the frozen preflight against that exact manifest. It does not authorize a capability claim from allocation, a dry run, or a toy checkpoint.
+This contract directly enables the model-building founder's disk-budgeted sparse >=3B allocation plus one-real-batch routed vertical slice to emit the first `CHECKPOINT_CANDIDATE` manifest, followed by the evaluation founder running the frozen preflight against that exact manifest. It does not authorize a capability claim from allocation, a dry run, or a toy checkpoint.

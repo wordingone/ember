@@ -9,9 +9,14 @@ from pathlib import Path
 from test_contract import REPO_ROOT, VALIDATOR, _candidate_manifest, _write_json
 
 
-def _run(manifest: Path) -> tuple[int, dict]:
+def _run(manifest: Path, *, with_registry: bool = True) -> tuple[int, dict]:
+    command = [sys.executable, str(VALIDATOR), "validate", str(manifest)]
+    if with_registry:
+        command.extend(
+            ["--trusted-verifier-registry", str(manifest.parent / "trusted-verifiers.json")]
+        )
     result = subprocess.run(
-        [sys.executable, str(VALIDATOR), "validate", str(manifest)],
+        command,
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -54,6 +59,6 @@ def test_owned_admission_rejects_self_attestation_without_external_registry(tmp_
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["stage"] = "OWNED_ADMITTED"
     _write_json(path, payload)
-    code, result = _run(path)
+    code, result = _run(path, with_registry=False)
     assert code == 1
-    assert "trusted_verifier_registry: required for OWNED_ADMITTED" in result["errors"]
+    assert "trusted_verifier_registry: required for checkpoint claims" in result["errors"]
