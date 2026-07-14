@@ -36,9 +36,14 @@ def sha(path: Path) -> str:
 class FrozenTokenizer:
     """Content-addressed tokenizer bytes used for both prompt IDs and answer text."""
 
-    def __init__(self, tokenizer: Any, *, sha256: str) -> None:
+    def __init__(self, tokenizer: Any, *, sha256: str, eos_token_id: int) -> None:
         self._tokenizer = tokenizer
         self.sha256 = sha256
+        self._eos_token_id = eos_token_id
+
+    @property
+    def eos_token_ids(self) -> set[int]:
+        return {self._eos_token_id}
 
     def encode(self, text: str) -> list[int]:
         if not isinstance(text, str) or not text:
@@ -58,11 +63,31 @@ def load_frozen_tokenizer(path: Path, *, expected_sha256: str) -> FrozenTokenize
     if actual_sha256 != expected_sha256:
         raise ValueError("tokenizer sha256 does not match the frozen split")
     try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        added_tokens = payload["added_tokens"]
+        eos_ids = {
+            item.get("id")
+            for item in added_tokens
+            if isinstance(item, Mapping)
+            and item.get("content") == "<|endoftext|>"
+            and item.get("special") is True
+        }
+        if (
+            len(eos_ids) != 1
+            or not isinstance(next(iter(eos_ids)), int)
+            or isinstance(next(iter(eos_ids)), bool)
+        ):
+            raise ValueError("frozen tokenizer must declare one special <|endoftext|> ID")
+        eos_token_id = next(iter(eos_ids))
         from tokenizers import Tokenizer
         tokenizer = Tokenizer.from_file(str(path))
+    except (KeyError, TypeError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise ValueError("frozen tokenizer bytes lack a valid special EOS declaration") from error
     except Exception as error:
         raise ValueError("frozen tokenizer bytes are not loadable by the tokenizer runtime") from error
-    return FrozenTokenizer(tokenizer, sha256=actual_sha256)
+    if tokenizer.get_vocab().get("<|endoftext|>") != eos_token_id:
+        raise ValueError("frozen tokenizer EOS declaration does not match its vocabulary")
+    return FrozenTokenizer(tokenizer, sha256=actual_sha256, eos_token_id=eos_token_id)
 
 
 def _contains_target_leak(value: Any) -> bool:
