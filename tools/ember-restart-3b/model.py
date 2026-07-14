@@ -304,9 +304,15 @@ class _DecoderLayer(nn.Module):
 class UnifiedDecoder(nn.Module):
     """Routed causal decoder with raw multimodal soft-token injection."""
 
-    def __init__(self, config: RestartDecoderConfig, *, device: str | torch.device | None = None, allow_production_allocation: bool = False) -> None:
+    def __init__(self, config: RestartDecoderConfig, *, device: str | torch.device | None = None, allow_production_allocation: bool = False, genesis_seed: int | None = None) -> None:
         super().__init__()
         target_device = torch.device(device) if device is not None else torch.device("cpu")
+        if genesis_seed is not None:
+            if not isinstance(genesis_seed, int) or genesis_seed < 0:
+                raise ValueError("genesis_seed must be a nonnegative integer")
+            torch.manual_seed(genesis_seed)
+            if target_device.type == "cuda":
+                torch.cuda.manual_seed_all(genesis_seed)
         if config.production and target_device.type != "meta" and not allow_production_allocation:
             raise ValueError("production allocation requires explicit measured-launch authorization")
         self.config = config
@@ -319,7 +325,7 @@ class UnifiedDecoder(nn.Module):
         self.lm_head.weight = self.token_embedding.weight
         self.active_expert = config.default_active_expert
         self._activate_expert(self.active_expert)
-        self.genesis_metadata = config.genesis_metadata()
+        self.genesis_metadata = config.genesis_metadata(0 if genesis_seed is None else genesis_seed)
 
     def _activate_expert(self, active_expert: str) -> None:
         if active_expert not in self.config.expert_names:

@@ -59,6 +59,17 @@ class SparseSuccessorTests(unittest.TestCase):
         weights = [model.layers[0].experts[name].up_gate.weight for name in EXPERT_NAMES]
         self.assertEqual(len({id(weight) for weight in weights}), 4)
 
+    def test_explicit_genesis_seed_replays_and_diverges(self) -> None:
+        torch.manual_seed(41)
+        first = UnifiedDecoder(self.config, genesis_seed=41)
+        torch.manual_seed(41)
+        second = UnifiedDecoder(self.config, genesis_seed=41)
+        torch.manual_seed(42)
+        third = UnifiedDecoder(self.config, genesis_seed=42)
+        self.assertEqual(first.genesis_metadata["seed"], 41)
+        self.assertEqual(first.expert_bank_genesis_hashes(), second.expert_bank_genesis_hashes())
+        self.assertNotEqual(first.expert_bank_genesis_hashes(), third.expert_bank_genesis_hashes())
+
     def test_expert_bank_genesis_hashes_are_distinct(self) -> None:
         model = UnifiedDecoder(self.config)
         hashes = model.expert_bank_genesis_hashes()
