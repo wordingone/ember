@@ -54,6 +54,7 @@
     "required_new_families":  [
                                   "terminal",
                                   "sql",
+                                  "files",
                                   "browser_ui",
                                   "image",
                                   "audio",

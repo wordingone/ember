@@ -16,3 +16,8 @@ def test_precheckpoint_manifest_names_current_v3_structural_input_without_capabi
     assert target["checkpoint_sha256"] == "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b"
     assert target["model_config_sha256"] == "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
     assert target["capability_admission"] == "FORBIDDEN_UNTRAINED_SHARED_ROUTE"
+
+
+def test_precheckpoint_manifest_keeps_files_family_in_required_matrix():
+    value = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    assert "files" in value["required_new_families"]
