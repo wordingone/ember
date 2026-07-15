@@ -3,6 +3,13 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02C",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "authorities": [],
+  "authorities": [
+    {
+      "model_source_sha256": "5609032c21aa6020ddc7a492ab5817a86d425571ae81a46efe951c784e70c5bf",
+      "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+      "tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+      "inference_implementation_sha256": "0870ad51aac718505799452463451929d5192a020460be8dda24b2fdb36d148b"
+    }
+  ],
   "disposition": "NO_EXECUTION_AUTHORITY_PINNED"
 }
