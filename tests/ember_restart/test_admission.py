@@ -14,6 +14,12 @@ def test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path: Pa
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["stage"] = "OWNED_ADMITTED"
     manifest["training"]["input_class"] = "SEMANTIC_PRETRAINING"
+    sufficient_tokens = manifest["architecture"]["trainable_parameters"]
+    manifest["training"]["tokens_seen"] = sufficient_tokens
+    manifest["training"]["modality_tokens"] = {
+        capability: 1_000_000
+        for capability in ("text", "image", "audio", "reasoning", "tool")
+    }
     semantic_checks = {
         "text": ["token_roundtrip", "source_target_pair"],
         "image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"],
@@ -148,9 +154,14 @@ print(json.dumps({
 
     sufficient_evidence = {}
     sufficient_payloads = {
-        "training_ledger": {"tokens_seen": 5, "gpu_hours": 0.01},
-        "stopping_evaluation": {"final_loss": 1.0, "criterion": "plateau-and-heldout-v1"},
-        "checkpoint_progression": {"checkpoints": 2, "monotonic_tokens": True},
+        "training_ledger": {"tokens_seen": sufficient_tokens, "gpu_hours": 0.01},
+        "stopping_evaluation": {
+            "final_loss": 1.0,
+            "genesis_loss": 2.0,
+            "heldout_tokens": 1_000_000,
+            "criterion": "plateau-and-heldout-v1",
+        },
+        "checkpoint_progression": {"checkpoints": 3, "monotonic_tokens": True},
     }
     sufficient_hashes = {}
     for evidence_name, evidence_payload in sufficient_payloads.items():
@@ -170,7 +181,7 @@ print(json.dumps({
             "subject_checkpoint_sha256": checkpoint_sha256,
             "verifier_sha256": sufficient_verifier_sha256,
             **sufficient_hashes,
-            "tokens_seen": 5,
+            "tokens_seen": sufficient_tokens,
             "gpu_hours": 0.01,
             "final_loss": 1.0,
         },
@@ -331,6 +342,156 @@ print(json.dumps({
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload == {"errors": [], "stage": "OWNED_ADMITTED", "valid": True}
+
+
+def test_admission_rejects_subscale_sufficient_pretraining_receipt(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    ledger_record = sufficient["evidence"]["training_ledger"]
+    ledger_path = tmp_path / ledger_record["path"]
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["tokens_seen"] = 5
+    ledger_sha256 = _write_json(ledger_path, ledger)
+    ledger_record["sha256"] = ledger_sha256
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["training_ledger_sha256"] = ledger_sha256
+    receipt["tokens_seen"] = 5
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    manifest["training"]["tokens_seen"] = 5
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "training.sufficient_pretraining: tokens_seen must be at least "
+        "trainable_parameters" in result.stdout
+    )
+
+
+def test_admission_rejects_trivial_native_modality_exposure(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["training"]["modality_tokens"]["image"] = 1
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "training.modality_tokens.image: admission requires at least 1000000" in result.stdout
+
+
+def test_admission_rejects_stopping_claim_without_heldout_learning_evidence(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    stopping_record = sufficient["evidence"]["stopping_evaluation"]
+    stopping_path = tmp_path / stopping_record["path"]
+    stopping = json.loads(stopping_path.read_text(encoding="utf-8"))
+    stopping.pop("heldout_tokens", None)
+    stopping.pop("genesis_loss", None)
+    stopping_sha256 = _write_json(stopping_path, stopping)
+    stopping_record["sha256"] = stopping_sha256
+
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["stopping_evaluation_sha256"] = stopping_sha256
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "training.sufficient_pretraining.stopping_evaluation: "
+        "requires at least 1000000 heldout tokens and 10% loss improvement"
+        in result.stdout
+    )
+
+
+def test_admission_rejects_two_checkpoint_progression(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    progression_record = sufficient["evidence"]["checkpoint_progression"]
+    progression_path = tmp_path / progression_record["path"]
+    progression = json.loads(progression_path.read_text(encoding="utf-8"))
+    progression["checkpoints"] = 2
+    progression_sha256 = _write_json(progression_path, progression)
+    progression_record["sha256"] = progression_sha256
+
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["checkpoint_progression_sha256"] = progression_sha256
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "training.sufficient_pretraining.checkpoint_progression: "
+        "requires at least 3 monotonic checkpoints"
+        in result.stdout
+    )
 
 def test_admission_rejects_remote_or_unbound_serving_endpoint(tmp_path: Path):
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)

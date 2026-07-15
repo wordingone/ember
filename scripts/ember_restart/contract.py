@@ -987,6 +987,28 @@ def _verify_admission(
 
     training = manifest.get("training")
     sufficient = training.get("sufficient_pretraining") if isinstance(training, dict) else None
+    trainable_parameters = (
+        architecture.get("trainable_parameters") if isinstance(architecture, dict) else None
+    )
+    tokens_seen = training.get("tokens_seen") if isinstance(training, dict) else None
+    if (
+        isinstance(trainable_parameters, int)
+        and not isinstance(trainable_parameters, bool)
+        and isinstance(tokens_seen, int)
+        and not isinstance(tokens_seen, bool)
+        and tokens_seen < trainable_parameters
+    ):
+        errors.append("training.sufficient_pretraining: tokens_seen must be at least trainable_parameters")
+    admission_mixture = training.get("modality_tokens") if isinstance(training, dict) else None
+    if isinstance(admission_mixture, dict):
+        for capability in CAPABILITIES:
+            exposure = admission_mixture.get(capability)
+            if (
+                not isinstance(exposure, int)
+                or isinstance(exposure, bool)
+                or exposure < 1_000_000
+            ):
+                errors.append(f"training.modality_tokens.{capability}: admission requires at least 1000000")
     sufficient_payload = _load_bound_json(
         root, sufficient, "receipt_path", "training.sufficient_pretraining", errors
     )
@@ -1022,6 +1044,61 @@ def _verify_admission(
                     errors.append(
                         f"training.sufficient_pretraining receipt: executed evidence {receipt_field} mismatch"
                     )
+    stopping_path = sufficient_evidence_paths.get("stopping_evaluation")
+    if stopping_path is not None:
+        try:
+            stopping_evaluation = json.loads(stopping_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            stopping_evaluation = None
+        heldout_tokens = (
+            stopping_evaluation.get("heldout_tokens") if isinstance(stopping_evaluation, dict) else None
+        )
+        genesis_loss = (
+            stopping_evaluation.get("genesis_loss") if isinstance(stopping_evaluation, dict) else None
+        )
+        final_loss = (
+            stopping_evaluation.get("final_loss") if isinstance(stopping_evaluation, dict) else None
+        )
+        if (
+            not isinstance(stopping_evaluation, dict)
+            or stopping_evaluation.get("criterion") != "plateau-and-heldout-v1"
+            or not isinstance(heldout_tokens, int)
+            or isinstance(heldout_tokens, bool)
+            or heldout_tokens < 1_000_000
+            or not isinstance(genesis_loss, (int, float))
+            or isinstance(genesis_loss, bool)
+            or not math.isfinite(genesis_loss)
+            or genesis_loss <= 0
+            or not isinstance(final_loss, (int, float))
+            or isinstance(final_loss, bool)
+            or not math.isfinite(final_loss)
+            or final_loss < 0
+            or final_loss > genesis_loss * 0.9
+        ):
+            errors.append(
+                "training.sufficient_pretraining.stopping_evaluation: "
+                "requires at least 1000000 heldout tokens and 10% loss improvement"
+            )
+    progression_path = sufficient_evidence_paths.get("checkpoint_progression")
+    if progression_path is not None:
+        try:
+            progression = json.loads(progression_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            progression = None
+        checkpoint_count = (
+            progression.get("checkpoints") if isinstance(progression, dict) else None
+        )
+        if (
+            not isinstance(progression, dict)
+            or not isinstance(checkpoint_count, int)
+            or isinstance(checkpoint_count, bool)
+            or checkpoint_count < 3
+            or progression.get("monotonic_tokens") is not True
+        ):
+            errors.append(
+                "training.sufficient_pretraining.checkpoint_progression: "
+                "requires at least 3 monotonic checkpoints"
+            )
     if sufficient_payload is not None:
         if sufficient_payload.get("criterion_id") != "ember-sufficient-pretraining-v1":
             errors.append("training.sufficient_pretraining receipt: criterion mismatch")
