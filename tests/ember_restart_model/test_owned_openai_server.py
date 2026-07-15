@@ -410,7 +410,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "model config"):
                     serve_main([
                         "--checkpoint", str(checkpoint), "--tokenizer", "tokenizer.json", "--config", str(config),
-                        "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                        "--development-manifest", "development.json", "--expected-development-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64, "--mode", "INTERACTIVE",
                         "--parent-pid", str(os.getpid()), "--device", "cpu",
                     ])
             tokenizer.assert_not_called()
@@ -446,7 +446,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             ):
                 result = serve_main([
                     "--checkpoint", str(checkpoint), "--tokenizer", str(tokenizer_path), "--config", str(config),
-                    "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                    "--development-manifest", "development.json", "--expected-development-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64, "--mode", "INTERACTIVE",
                     "--parent-pid", str(os.getpid()), "--device", "cpu",
                 ])
         self.assertEqual(result, 0)
@@ -479,7 +479,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "server source"):
                 serve_main([
                     "--checkpoint", "checkpoint", "--tokenizer", "tokenizer.json", "--config", "config.json",
-                    "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                    "--development-manifest", "development.json", "--expected-development-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64, "--mode", "INTERACTIVE",
                     "--parent-pid", str(os.getpid()), "--device", "cpu",
                 ])
         tokenizer.assert_not_called()
@@ -522,12 +522,25 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
             calls.append(command)
             return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
-        self.assertEqual(resolve_development_identity(Path("development.json"), runner=runner), payload)
+        self.assertEqual(
+            resolve_development_identity(
+                Path("development.json"),
+                expected_manifest_sha256="a" * 64,
+                expected_runtime_index_sha256="b" * 64,
+                runner=runner,
+            ),
+            payload,
+        )
         self.assertEqual(calls[0][1], "-I")
-        self.assertEqual(calls[0][-1], "development.json")
+        self.assertEqual(calls[0][-4:], ["--expected-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64])
         payload["claim_status"] = "ADMISSIBLE"
         with self.assertRaisesRegex(ValueError, "invalid identity"):
-            resolve_development_identity(Path("development.json"), runner=runner)
+            resolve_development_identity(
+                Path("development.json"),
+                expected_manifest_sha256="a" * 64,
+                expected_runtime_index_sha256="b" * 64,
+                runner=runner,
+            )
     def test_central_admission_requires_exact_resolved_owned_seat(self) -> None:
         checkpoint = "a" * 64
         payload = {
