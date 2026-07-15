@@ -9,6 +9,7 @@ import inspect
 from contextlib import ExitStack
 import hashlib
 import json
+import os
 import tempfile
 
 import sys
@@ -29,6 +30,44 @@ from verify_capability_record import expected_receipt
 
 
 class RunnerPreflightTests(unittest.TestCase):
+    def test_specialist_loader_ignores_ambient_pythonpath_and_prioritizes_canonical_verifier(self) -> None:
+        """The independent verifier must never import ambient generator/tokenizer modules."""
+        from build_specialist_bundle import emit_bundle
+        from tokenizers import Tokenizer, models, pre_tokenizers
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            tokenizer = root / "tokenizer.json"
+            vocabulary = {
+                "<unk>": 0, "reasoning": 1, "sum": 2, "plus": 3, "equals": 4,
+                "tool": 5, "calculator": 6,
+                **{f"filler-{index}": index for index in range(7, 32_000)},
+            }
+            frozen = Tokenizer(models.WordLevel(vocabulary, unk_token="<unk>"))
+            frozen.pre_tokenizer = pre_tokenizers.Whitespace()
+            frozen.save(str(tokenizer))
+            config = root / "config.json"
+            config.write_text(
+                json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}),
+                encoding="utf-8",
+            )
+            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=512)["reasoning"]
+            poison = root / "ambient-poison"
+            poison.mkdir()
+            marker = root / "ambient-imported.txt"
+            poison_module = "from pathlib import Path; Path(" + repr(str(marker)) + ").write_text('poison', encoding='utf-8'); raise RuntimeError('ambient poison imported')\n"
+            (poison / "build_owned_reasoning_tool_trajectories.py").write_text(poison_module, encoding="utf-8")
+            (poison / "tokenizers.py").write_text(poison_module, encoding="utf-8")
+            (poison / "sitecustomize.py").write_text(poison_module, encoding="utf-8")
+            with patch.dict(os.environ, {"PYTHONPATH": str(poison)}, clear=False):
+                records, receipt = run_vertical_slice.load_verified_specialist_records(
+                    root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning",
+                )
+            self.assertFalse(marker.exists(), "the isolated verifier imported an ambient PYTHONPATH candidate")
+            self.assertGreaterEqual(len(records), 512)
+            self.assertEqual(receipt["result"], "VERIFIED")
+        wrapper = inspect.getsource(run_vertical_slice.load_verified_specialist_records)
+        self.assertIn("sys.path[:0]=[sys.argv[1],sys.argv[2]]", wrapper)
     def test_specialist_loader_executes_bound_verifier_and_returns_one_route(self) -> None:
         from build_specialist_bundle import emit_bundle
         from tokenizers import Tokenizer, models, pre_tokenizers
