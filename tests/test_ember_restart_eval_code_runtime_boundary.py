@@ -13,3 +13,4 @@ def test_evalplus_assets_are_held_without_a_digest_pinned_execution_sandbox():
     assert value["target_execution_permitted"] is False
     assert value["execution_runtime_disposition"] == "NO_LOCAL_DIGEST_PINNED_CODE_SANDBOX"
     assert value["unsafe_runtime_exclusion"] == "MUTABLE_EVALPLUS_DOCKER_LATEST_FORBIDDEN"
+    assert value["mathematics"] == {"asset_disposition": "NO_LOCAL_PINNED_FROZEN_MATHEMATICS_TASKS_OR_HARNESS", "target_execution_permitted": False}
