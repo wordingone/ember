@@ -18,7 +18,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import execute_counter
 
@@ -124,6 +124,25 @@ class SpecialistLineageTests(unittest.TestCase):
                 self._write_vision_successor(base, root_manifest=missing)
             self.assertFalse(list(base.glob(".candidate.*.staging")))
 
+    def test_lineage_source_preflight_rejects_missing_root_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            self._root_and_candidate(base)
+            parent_manifest = base / "root" / "checkpoint-manifest.json"
+            with self.assertRaisesRegex(ValueError, "root genesis manifest"):
+                preflight_specialist_lineage_sources(
+                    parent_manifest=parent_manifest,
+                    root_manifest=base / "missing" / "checkpoint-manifest.json",
+                )
+    def test_lineage_source_preflight_rejects_tampered_parent_before_staging(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            self._root_and_candidate(base)
+            manifest = base / "root" / "checkpoint-manifest.json"
+            (base / "root" / "expert-tool.pt").write_bytes(b"tampered")
+            with self.assertRaisesRegex(ValueError, "hash mismatch"):
+                preflight_specialist_lineage_sources(parent_manifest=manifest, root_manifest=manifest)
+            self.assertFalse(list(base.glob(".candidate.*.staging")))
     def test_specialist_writer_rejects_tampered_parent_shard(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -219,5 +238,20 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertEqual(second["expert_checkpoint_sha256"]["vision"], first["expert_checkpoint_sha256"]["vision"])
         self.assertEqual(second["expert_parameter_sha256"]["tool"], first["expert_parameter_sha256"]["tool"])
 
+    def test_writer_refuses_actual_bundle_above_derived_byte_bound_before_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+            model = UnifiedDecoder(config, genesis_seed=83)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+            with self.assertRaisesRegex(ValueError, "serialized checkpoint exceeds"):
+                write_checkpoint_artifacts(
+                    model, optimizer, base / "too-large", launch_seed=83, rng_state=_rng_state(),
+                    data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(), max_serialized_bytes=1,
+                )
+            self.assertFalse((base / "too-large").exists())
+            self.assertFalse(list(base.glob(".too-large.*.staging")))
 if __name__ == "__main__":
     unittest.main()

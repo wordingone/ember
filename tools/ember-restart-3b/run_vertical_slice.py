@@ -17,7 +17,7 @@ import torch
 import torch.nn.functional as F
 
 from batch import decode_owned_batch
-from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from parameter_counter import measure_parameter_counts
@@ -83,21 +83,43 @@ def production_memory_preflight(*, total_parameters: int, active_parameters: int
         "required_bytes": required_bytes,
         "device_free_bytes": device_free_bytes,
     }
-def semantic_publication_plan(*, steps: int, checkpoint_interval: int, estimated_checkpoint_bytes: int, write_budget_bytes: int, initial_global_step: int = 0) -> dict[str, int]:
-    """Bound checkpoint publications and projected serialization before a semantic launch."""
+def checkpoint_serialization_byte_bound(config_path: Path) -> int:
+    """Derive one publishable checkpoint bound from the frozen architecture and optimizer contract."""
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    serialization = payload.get("checkpoints", {}).get("serialization")
+    required = {"model_parameter_bytes", "optimizer_state_bytes_per_active_parameter", "format_overhead_bytes"}
+    if not isinstance(serialization, dict) or set(serialization) != required:
+        raise ValueError("checkpoint serialization contract has an invalid shape")
+    if any(type(serialization[field]) is not int or serialization[field] < 1 for field in required):
+        raise ValueError("checkpoint serialization contract requires positive integer bounds")
+    memory = load_memory_contract(config_path)
+    if serialization["model_parameter_bytes"] != memory["parameter_bytes"] or serialization["optimizer_state_bytes_per_active_parameter"] != memory["optimizer_state_bytes_per_active_parameter"]:
+        raise ValueError("checkpoint serialization contract drifts from the BF16 optimizer memory contract")
+    config = RestartDecoderConfig.from_contract(config_path)
+    specialist_parameters = config.layers * 12 * config.hidden_size * config.hidden_size
+    shared_active_parameters = config.structural_parameter_count() - len(config.expert_names) * specialist_parameters
+    return (
+        config.structural_parameter_count() * serialization["model_parameter_bytes"]
+        + shared_active_parameters * serialization["optimizer_state_bytes_per_active_parameter"]
+        + serialization["format_overhead_bytes"]
+    )
+
+
+def semantic_publication_plan(*, steps: int, checkpoint_interval: int, checkpoint_byte_bound: int, write_budget_bytes: int, initial_global_step: int = 0) -> dict[str, int]:
+    """Bound checkpoint publications using a frozen derived byte bound, never a caller estimate."""
 
     if (not isinstance(steps, int) or steps < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1
-            or not isinstance(estimated_checkpoint_bytes, int) or estimated_checkpoint_bytes < 1
+            or not isinstance(checkpoint_byte_bound, int) or checkpoint_byte_bound < 1
             or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1 or not isinstance(initial_global_step, int) or initial_global_step < 0):
-        raise ValueError("semantic publication plan requires positive integer steps, interval, estimate, and write budget")
+        raise ValueError("semantic publication plan requires positive integer steps, interval, derived bound, and write budget")
     final_global_step = initial_global_step + steps
     periodic = sum(1 for step in range(initial_global_step + 1, final_global_step + 1) if step % checkpoint_interval == 0)
     publication_count = periodic + (0 if final_global_step % checkpoint_interval == 0 else 1)
-    projected_write_bytes = publication_count * estimated_checkpoint_bytes
+    projected_write_bytes = publication_count * checkpoint_byte_bound
     if projected_write_bytes > write_budget_bytes:
         raise ValueError("semantic publication plan exceeds the declared write budget")
-    return {"publication_count": publication_count, "projected_write_bytes": projected_write_bytes}
-
+    return {"publication_count": publication_count, "checkpoint_byte_bound": checkpoint_byte_bound, "projected_write_bytes": projected_write_bytes}
 def production_artifact_root(candidate: Path) -> Path:
     """Require B: for production bundles; manifests themselves stay portable."""
 
@@ -483,13 +505,10 @@ def specialist_lineage_request(
     resume_manifest = resume_checkpoint.resolve() / "checkpoint-manifest.json"
     if parent_manifest.resolve() != resume_manifest:
         raise ValueError("specialist parent manifest must be the exact resumed checkpoint manifest")
-    try:
-        parent = json.loads(parent_manifest.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ValueError("specialist parent manifest is unreadable") from error
-    parent_history = [] if parent.get("schema_version") == "ember-sparse-checkpoint-v3" else parent.get("lineage", {}).get("trained_expert_ids")
-    if not isinstance(parent_history, list) or any(not isinstance(name, str) for name in parent_history):
-        raise ValueError("specialist parent manifest has invalid trained expert history")
+    preflight = preflight_specialist_lineage_sources(
+        parent_manifest=parent_manifest.resolve(), root_manifest=root_manifest.resolve(),
+    )
+    parent_history = preflight["parent_history"]
     return {
         "parent_manifest": parent_manifest.resolve(),
         "root_manifest": root_manifest.resolve(),
@@ -518,13 +537,13 @@ def run_specialist(
     )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
-    steps: int, sequence_length: int, checkpoint_interval: int, estimated_checkpoint_bytes: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
+    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production semantic runner")
-    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(estimated_checkpoint_bytes, int) or estimated_checkpoint_bytes < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
+    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
         raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
     artifact_root = production_artifact_root(artifact_root)
     root = Path(__file__).resolve().parents[2]
@@ -536,7 +555,6 @@ def run_semantic(
         receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path
     )
     config = RestartDecoderConfig.from_contract(config_path)
-    publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, estimated_checkpoint_bytes=estimated_checkpoint_bytes, write_budget_bytes=write_budget_bytes)
     if stream.vocab_size != config.vocab_size:
         raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
     total_parameters = config.structural_parameter_count()
@@ -600,6 +618,7 @@ def run_semantic(
                 contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes,
                 optimizer_contract=optimizer_contract,
+            max_serialized_bytes=checkpoint_byte_bound,
             ),
         )
 
@@ -671,7 +690,6 @@ def main() -> None:
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
-    semantic.add_argument("--estimated-checkpoint-gib", type=int, required=True)
     semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
@@ -687,7 +705,6 @@ def main() -> None:
             steps=args.steps,
             sequence_length=args.sequence_length,
             checkpoint_interval=args.checkpoint_interval,
-            estimated_checkpoint_bytes=args.estimated_checkpoint_gib * 1024**3,
             write_budget_bytes=args.write_budget_gib * 1024**3,
             resume_checkpoint=args.resume_checkpoint,
         )
