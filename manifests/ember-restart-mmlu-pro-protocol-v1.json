@@ -1,0 +1,16 @@
+{
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-mmlu-pro-protocol-v1",
+    "benchmark_id":  "mmlu-pro",
+    "benchmark_revision":  "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+    "split_path":  "data/test-00000-of-00001.parquet",
+    "capability":  "reasoning",
+    "result":  "PREFLIGHT_ONLY",
+    "prohibited_claims":  [
+                              "checkpoint_score",
+                              "capability_admission",
+                              "sufficient_pretraining"
+                          ]
+}
