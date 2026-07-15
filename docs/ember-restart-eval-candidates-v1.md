@@ -10,11 +10,15 @@ checkpoint-bound manifest.
 
 | Required family | Candidate source | Resolved source commit | Why it is included | Still required before scoring |
 | --- | --- | --- | --- | --- |
-| Terminal/file work | `harbor-framework/terminal-bench-2` | `2fd12b88aafdd04a52c298e3940bcb189f9766d6` | Real command-line task outcomes | task subset, Harbor protocol, container/image hashes, resource cap |
-| Browser/UI | `ServiceNow/BrowserGym` | `9e779f087de9a65668b6974d11f9ce9816026e96` | Reproducible browser task environment | benchmark choice, environment snapshot, browser action protocol |
+| Terminal | `harbor-framework/terminal-bench-2` | `2fd12b88aafdd04a52c298e3940bcb189f9766d6` | Real command-line task outcomes | no eligible pinned image/network-safe local task; fixture-only validator remains non-admissible |
+| Code | `evalplus/evalplus` | `26d6d00bb1fd0fa37f39c99d5290da67891d1c5e` | HumanEval+ and MBPP+ task outcomes | digest-pinned offline code sandbox; the mutable upstream Docker tag is forbidden |
+| Mathematics | frozen local MATH-500 exact scorer | `local-v1` | Deterministic exact-answer reasoning check | canonical checkpoint predictions on the frozen split |
+| SQL | `taoyds/spider` | `b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c` | Executable text-to-SQL evaluation | database snapshot hashes and canonical checkpoint predictions |
+| Files | `SWE-bench/SWE-bench` | not materialized | Repository/file repair tasks | licensed pinned SWE-bench Lite release, offline runtime, image digest, canonical patches |
+| Browser/UI | `ServiceNow/BrowserGym` | `9e779f087de9a65668b6974d11f9ce9816026e96` | Reproducible browser task environment | no local pinned runtime or frozen MiniWoB tasks; fixture validator is non-admissible |
+| Structured tools | `ShishirPatil/gorilla` BFCL | `6ea57973c7a6097fd7c5915698c54c17c5b1b6c8` | Local function-call correctness | no local pinned BFCL runtime or frozen tasks; fixture validator is non-admissible |
 | Audio | `audiollms/audiobench` | `85dcdb88c41e6ebb2bcb3ce19b15d061dfef9dba` | Audio-language evaluation families | licensed local splits, raw-audio preprocessing hash, deterministic scorer |
 | Image/reasoning | `MMMU-Benchmark/MMMU` | `bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa` | Expert multimodal understanding and reasoning | permitted split, image preprocessing hash, answer normalization |
-| SQL | `taoyds/spider` | `b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c` | Executable text-to-SQL evaluation | database snapshot hashes, execution sandbox, exact-match/execution scorer |
 
 ## Existing pinned text/code surface
 
