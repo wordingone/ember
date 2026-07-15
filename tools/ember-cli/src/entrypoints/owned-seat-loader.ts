@@ -62,6 +62,7 @@ function resolverError(result: ResolverResult): string {
 const OWNED_LAUNCH_FIELDS = [
   "checkpoint_dir",
   "mode",
+  "model_config_path",
   "run_manifest_path",
   "server_path",
   "tokenizer_path",
@@ -97,6 +98,7 @@ function parseOwnedLaunch(
     authorityKind: "ADMISSION",
     checkpointDir: requireAbsolutePath("checkpoint_dir"),
     mode: "INTERACTIVE",
+    modelConfigPath: requireAbsolutePath("model_config_path"),
     pythonExecutable: expected.pythonExecutable,
     runManifestPath: requireAbsolutePath("run_manifest_path"),
     serverPath: requireAbsolutePath("server_path"),
@@ -106,7 +108,7 @@ function parseOwnedLaunch(
   if (
     launch.runManifestPath !== expected.manifestPath ||
     launch.trustedVerifierRegistryPath !== expected.registryPath ||
-    [launch.checkpointDir, launch.runManifestPath, launch.serverPath, launch.tokenizerPath, launch.trustedVerifierRegistryPath]
+    [launch.checkpointDir, launch.modelConfigPath, launch.runManifestPath, launch.serverPath, launch.tokenizerPath, launch.trustedVerifierRegistryPath]
       .some((path) => !exists(path))
   ) {
     throw new Error("owned seat resolver returned an invalid launch descriptor");
