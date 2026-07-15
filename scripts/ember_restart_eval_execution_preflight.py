@@ -19,6 +19,7 @@ def main():
  except (OSError,json.JSONDecodeError):p.error('invalid evaluator score JSON')
  expected=f'ember-3b-{a.capability}-capability-v1';rows=envelope['rows']
  if not isinstance(score,dict) or score.get('criterion_id')!=expected or score.get('criterion_result') not in ('PASSED','FAILED'):p.error('evaluator score artifact must explicitly provide the pinned criterion')
+ if a.capability=='text' and score.get('predictions_sha256')!=sha256(a.raw_predictions):p.error('text score source hashes do not bind supplied evidence')
  if a.benchmark_id=='audiobench':
   if a.closed_run_artifact is None:p.error('AudioBench preflight requires closed run artifact')
   if score.get('predictions_sha256')!=sha256(a.raw_predictions) or score.get('run_artifact_sha256')!=sha256(a.closed_run_artifact):p.error('AudioBench score source hashes do not bind supplied evidence')

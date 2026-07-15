@@ -4,8 +4,11 @@
 """Regression coverage for the committed, real execution-authority gate."""
 import argparse
 import importlib.util
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,3 +36,19 @@ def test_committed_authority_accepts_the_current_public_forward_dependency_bytes
     # RED until a reviewed successor records the public PR #839 model/config
     # bytes and this file's current implementation hash in the registry.
     module.require_execution_authority(arguments)
+
+def test_authority_rejects_correct_tuple_when_registry_disposition_is_not_authorized(tmp_path):
+    module = _load_raw_forward()
+    arguments = argparse.Namespace(
+        model_source=ROOT / "tools" / "ember-restart-3b" / "model.py",
+        model_config=ROOT / "configs" / "ember-restart-3b.json",
+        tokenizer=ROOT / "tokenizer" / "tokenizer.json",
+    )
+    registry = json.loads(module.EXECUTION_AUTHORITY.read_text(encoding="utf-8"))
+    registry["disposition"] = "NO_EXECUTION_AUTHORITY_PINNED"
+    temporary = tmp_path / "authority.json"
+    temporary.write_text(json.dumps(registry), encoding="utf-8")
+    module.EXECUTION_AUTHORITY = temporary
+
+    with pytest.raises(ValueError, match="execution authority disposition"):
+        module.require_execution_authority(arguments)
