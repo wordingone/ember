@@ -26,6 +26,38 @@ from parameter_counter import _CheckpointMetadataUnpickler, _StorageRef, _Tensor
 
 
 class CounterCliTests(unittest.TestCase):
+    def test_counter_reads_authority_snapshots_and_each_shard_once(self) -> None:
+        """A realization receipt cannot hash one checkpoint revision and inspect another."""
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=71)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW((parameter for parameter in model.parameters() if parameter.requires_grad), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps({"architecture_revision": "ember-sparse-3b-v2", "model": {"hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64, "tied_embeddings": True, "image_projection": {"input_shape": [48, 48, 3], "output_size": 32}, "audio_projection": {"frame_samples": 640, "output_size": 32}, "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]}}}), encoding="utf-8")
+            write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=71, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            manifest_path = root / "checkpoint" / "checkpoint-manifest.json"
+            expected_subject = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            tracked = {path.resolve() for path in (config_path, manifest_path, *(root / "checkpoint" / name for name in ("shared.pt", "replay-state.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt")))}
+            original_open, original_text = Path.open, Path.read_text
+            opens: dict[Path, int] = {}
+
+            def open_once(path: Path, *args: object, **kwargs: object):
+                resolved = path.resolve()
+                if resolved in tracked:
+                    opens[resolved] = opens.get(resolved, 0) + 1
+                return original_open(path, *args, **kwargs)
+
+            def reject_authority_text(path: Path, *args: object, **kwargs: object) -> str:
+                if path.resolve() in tracked:
+                    raise AssertionError("counter must parse authority JSON from one byte snapshot")
+                return original_text(path, *args, **kwargs)
+
+            with patch.object(Path, "open", new=open_once), patch.object(Path, "read_text", new=reject_authority_text):
+                receipt = execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="shared")
+        self.assertEqual(receipt["subject_checkpoint_sha256"], expected_subject)
+        self.assertEqual(opens, {path: 1 for path in tracked})
     def test_isolated_cli_rejects_corrupt_realization_and_reports_measurement(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=7)
@@ -64,6 +96,11 @@ class CounterCliTests(unittest.TestCase):
             self.assertEqual(measured["result"], "MEASURED")
             self.assertEqual(measured["active_expert_ids"], ["shared"])
             self.assertRegex(measured["counter_sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(measured["schema_version"], "ember-sparse-realization-receipt-v1")
+            self.assertEqual(measured["verification_boundary"], "VERIFIED_MEASURED")
+            self.assertEqual(measured["subject_checkpoint_sha256"], hashlib.sha256((root / "checkpoint" / "checkpoint-manifest.json").read_bytes()).hexdigest())
+            self.assertEqual(measured["expert_parameter_sha256"], measured["expert_genesis_sha256"])
+            self.assertEqual(set(measured), {"schema_version", "verification_boundary", "result", "model_config_sha256", "subject_checkpoint_sha256", "architecture_revision", "counter_sha256", "allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters", "active_expert_ids", "expert_genesis_sha256", "expert_parameter_sha256"})
             (root / "checkpoint" / "expert-tool.pt").write_bytes(b"corrupt")
             rejected = subprocess.run(command, check=False, capture_output=True, text=True)
         self.assertNotEqual(rejected.returncode, 0)
