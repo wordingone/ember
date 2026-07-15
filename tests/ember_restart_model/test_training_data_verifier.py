@@ -15,6 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 VERIFIER = ROOT / "tools" / "ember-restart-3b" / "verify_training_data.py"
+sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+from verify_capability_record import expected_receipt
 
 
 def _write_json(path: Path, payload: object) -> str:
@@ -81,6 +83,23 @@ class TrainingDataVerifierTests(unittest.TestCase):
         self.assertEqual(receipt["semantic_checks"], ["token_roundtrip", "source_target_pair"])
         self.assertEqual(receipt["record_count"], 1)
         self.assertEqual(receipt["token_count"], 3)
+    def test_reasoning_semantic_manifest_executes_local_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tokenizer = root / "tokenizer.json"
+            token_hash = _write_json(tokenizer, {"model": {"vocab": {str(index): index for index in range(8, 32)}}})
+            source = root / "source.json"
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False})
+            records = root / "records.json"
+            record = {"token_ids": [8, 9, 10], "target_ids": [9, 10, 11], "active_expert": "reasoning", "capability_evidence": {"reasoning": {"operands": [1, 2], "target": 3, "trace": [1, 2, 3]}}}
+            record["capability_receipt"] = expected_receipt(record)
+            records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": [record]})
+            data = root / "data.json"
+            _write_json(data, {"schema_version": "ember-owned-training-data-v1", "capability": "reasoning", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": token_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 1, "token_count": 3, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
+            completed = subprocess.run([sys.executable, "-I", str(VERIFIER), "--data-manifest", str(data), "--tokenizer", str(tokenizer), "--capability", "reasoning"], cwd=root, text=True, capture_output=True, timeout=15, check=False)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["semantic_checks"], ["token_roundtrip", "source_target_pair", "local_answer_execution"])
+
 
 
 if __name__ == "__main__":
