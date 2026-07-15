@@ -1,0 +1,376 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Bounded CUDA one-batch sparse slice; invoke only through the disk budget runner."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Callable
+
+import torch
+import torch.nn.functional as F
+
+from batch import decode_owned_batch
+from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
+from model import RestartDecoderConfig, UnifiedDecoder
+from pretrain import run_pretraining_segment
+from parameter_counter import measure_parameter_counts
+from train import run_launch
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _json_sha256(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def production_memory_preflight(*, total_parameters: int, active_parameters: int, device_free_bytes: int) -> dict[str, int | str]:
+    """Derive the exact BF16 episode envelope before CUDA model construction."""
+    if min(total_parameters, active_parameters, device_free_bytes) <= 0 or active_parameters > total_parameters:
+        raise ValueError("production memory preflight requires positive total/active/free byte values")
+    parameter_bytes = total_parameters * 2
+    gradient_bytes = active_parameters * 2
+    optimizer_state_bytes = active_parameters * 2
+    activation_reserve_bytes = 4 * 1024**3
+    runtime_reserve_bytes = 2 * 1024**3
+    required_bytes = parameter_bytes + gradient_bytes + optimizer_state_bytes + activation_reserve_bytes + runtime_reserve_bytes
+    if required_bytes > device_free_bytes:
+        raise MemoryError(f"BF16 production envelope requires {required_bytes} bytes but only {device_free_bytes} are free; refusing before allocation")
+    return {
+        "parameter_dtype": "bfloat16",
+        "parameter_bytes": parameter_bytes,
+        "gradient_bytes": gradient_bytes,
+        "optimizer_state_bytes": optimizer_state_bytes,
+        "activation_reserve_bytes": activation_reserve_bytes,
+        "runtime_reserve_bytes": runtime_reserve_bytes,
+        "required_bytes": required_bytes,
+        "device_free_bytes": device_free_bytes,
+    }
+def production_artifact_root(candidate: Path) -> Path:
+    """Require B: for production bundles; manifests themselves stay portable."""
+
+    resolved = candidate.resolve()
+    if resolved.drive.upper() != "B:":
+        raise ValueError("production artifact root must be an explicit B: path")
+    return resolved
+
+
+def _bundle_serialized_bytes(bundle: Path) -> int:
+    """Measure exactly the bytes currently published beneath one bundle root."""
+    return sum(path.stat().st_size for path in bundle.rglob("*") if path.is_file())
+
+def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serialized_bytes: int | None = None) -> None:
+    """Prune only older successful bundles; never delete the final known-good bundle."""
+    if max_count is None and max_serialized_bytes is None:
+        raise ValueError("checkpoint retention requires a count or serialized-byte budget")
+    if max_count is not None and max_count < 1:
+        raise ValueError("checkpoint retention count must retain at least one bundle")
+    if max_serialized_bytes is not None and max_serialized_bytes < 1:
+        raise ValueError("checkpoint retention serialized-byte budget must be positive")
+    parent.mkdir(parents=True, exist_ok=True)
+    bundles = sorted(
+        (path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-")),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+    )
+    if max_count is not None:
+        while len(bundles) > max_count:
+            shutil.rmtree(bundles.pop(0))
+    if max_serialized_bytes is not None:
+        total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+        while total > max_serialized_bytes and len(bundles) > 1:
+            shutil.rmtree(bundles.pop(0))
+            total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+        if total > max_serialized_bytes:
+            raise RuntimeError("published checkpoint exceeds serialized-byte retention budget while preserving the final known-good bundle")
+
+
+def _retain_after_success(parent: Path, *, max_count: int, operation: Callable[[], Any]) -> Any:
+    """Preserve every known-good bundle when a new publication operation fails."""
+
+    result = operation()
+    _enforce_retention(parent, max_count=max_count)
+    return result
+
+
+def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
+    """Consume #812 identity before reading the exact owned four-domain bytes."""
+
+    packet, validation, input_receipt = run_launch(repo_root=root)
+    if validation["decision"] != "ACCEPTED":
+        raise RuntimeError("input launch gate did not accept the selected shard")
+    identity = packet.get("input_identity")
+    if not isinstance(identity, dict):
+        raise RuntimeError("accepted launch packet lacks a concrete input identity")
+    if identity.get("artifact_id") == "owned-clean-curriculum-128-v1" or identity.get("shard_path") == "data/ember-restart-3b/owned-curriculum-128.json":
+        raise RuntimeError("retired bootstrap curriculum is mechanics-only evidence and cannot drive production training")
+    shard = root / str(packet["input_identity"]["shard_path"])
+    payload = json.loads(shard.read_text(encoding="utf-8"))
+    records = payload.get("records") if isinstance(payload, dict) else None
+    if payload.get("schema_version") != "ember-owned-pretraining-shard-v1" or not isinstance(records, list) or not records:
+        raise RuntimeError("production slice requires a nonempty owned four-domain shard")
+    if {record.get("active_expert") for record in records if isinstance(record, dict)} != {"vision", "audio", "reasoning", "tool"}:
+        raise RuntimeError("production slice requires one record for every declared expert")
+    return records, packet, input_receipt
+
+
+def checkpoint_retention_budget_bytes(config_path: Path) -> int:
+    """Load the measured serialized-byte ceiling for published checkpoint bundles."""
+    try:
+        retention = json.loads(config_path.read_text(encoding="utf-8"))["checkpoints"]["retention"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare checkpoint retention") from error
+    gib = retention.get("max_serialized_gib") if isinstance(retention, dict) else None
+    if not isinstance(gib, int) or gib < 1 or retention.get("preserve_last_known_good") is not True:
+        raise ValueError("checkpoint retention must declare a positive serialized-byte budget and preserve the last good bundle")
+    return gib * 1024**3
+
+def checkpoint_retention_limit(config_path: Path) -> int:
+    """Read the contract retention policy instead of maintaining a runner-local copy."""
+
+    try:
+        value = json.loads(config_path.read_text(encoding="utf-8"))["checkpoints"]["retention"]["max_count"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare checkpoint retention") from error
+    if not isinstance(value, int) or value < 1:
+        raise ValueError("checkpoint retention max_count must be a positive integer")
+    return value
+
+
+def load_memory_contract(config_path: Path) -> dict[str, object]:
+    """Load the numerics declaration that must agree with the allocation preflight."""
+    try:
+        value = json.loads(config_path.read_text(encoding="utf-8"))["training"]["memory"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare BF16 memory numerics") from error
+    expected = {
+        "parameter_dtype": "bfloat16",
+        "parameter_bytes": 2,
+        "gradient_bytes_per_active_parameter": 2,
+        "optimizer_state_bytes_per_active_parameter": 2,
+        "activation_reserve_gib": 4,
+        "runtime_reserve_gib": 2,
+    }
+    if value != expected:
+        raise ValueError("production BF16 memory contract differs from the audited numerical envelope")
+    return dict(value)
+
+def load_optimizer_contract(config_path: Path) -> dict[str, object]:
+    """Load the one structured optimizer declaration used by config, runtime, and checkpoint."""
+
+    try:
+        contract = json.loads(config_path.read_text(encoding="utf-8"))["training"]["optimizer"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError("production contract must declare a structured optimizer") from error
+    if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"}:
+        raise ValueError("production optimizer contract has an invalid shape")
+    expected = {
+        "name": "paged_8bit_adamw",
+        "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+        "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+    }
+    if any(contract.get(field) != value for field, value in expected.items()):
+        raise ValueError("production optimizer contract does not declare canonical PagedAdamW8bit")
+    hyperparameters = contract.get("hyperparameters")
+    if not isinstance(hyperparameters, dict) or set(hyperparameters) != {"learning_rate", "weight_decay", "percentile_clipping", "block_wise"}:
+        raise ValueError("production optimizer hyperparameters have an invalid shape")
+    if (not isinstance(hyperparameters["learning_rate"], (int, float)) or hyperparameters["learning_rate"] <= 0 or not isinstance(hyperparameters["weight_decay"], (int, float)) or hyperparameters["weight_decay"] < 0 or not isinstance(hyperparameters["percentile_clipping"], int) or hyperparameters["percentile_clipping"] <= 0 or not isinstance(hyperparameters["block_wise"], bool)):
+        raise ValueError("production optimizer hyperparameters are invalid")
+    return contract
+
+def _rng_state(device: torch.device) -> dict[str, torch.Tensor]:
+    return {"cpu": torch.get_rng_state().clone(), "cuda": torch.cuda.get_rng_state(device).clone()}
+
+
+def _rng_state_hash(device: torch.device) -> dict[str, str]:
+    return {
+        name: hashlib.sha256(state.cpu().numpy().tobytes()).hexdigest()
+        for name, state in _rng_state(device).items()
+    }
+
+def _execute_realization_counter(
+    *,
+    root: Path,
+    config_path: Path,
+    checkpoint_manifest_path: Path,
+    active_expert: str,
+    expected_counts: dict[str, object],
+) -> dict[str, object]:
+    counter_path = root / "tools" / "ember-restart-3b" / "parameter_counter.py"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            str(counter_path),
+            "--model-config",
+            str(config_path),
+            "--checkpoint-manifest",
+            str(checkpoint_manifest_path),
+            "--active-expert",
+            active_expert,
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"isolated parameter counter failed: {completed.stderr.strip()}")
+    try:
+        receipt = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("isolated parameter counter did not emit JSON") from error
+    required = (
+        "allocated_parameters",
+        "unique_parameters",
+        "trainable_parameters",
+        "served_parameters",
+        "active_parameters",
+        "episode_trainable_parameters",
+        "active_expert_ids",
+    )
+    if any(receipt.get(name) != expected_counts.get(name) for name in required):
+        raise RuntimeError("isolated parameter counter disagrees with instantiated capacity")
+    if receipt.get("counter_sha256") != _sha256(counter_path):
+        raise RuntimeError("isolated parameter counter source hash is not self-consistent")
+    return receipt
+
+
+def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dict[str, object]) -> torch.optim.Optimizer:
+    """Build exactly the structured PagedAdamW8bit optimizer declared by config."""
+
+    if optimizer_contract.get("implementation") != "bitsandbytes.optim.PagedAdamW8bit":
+        raise ValueError("production optimizer implementation must be PagedAdamW8bit")
+    hyperparameters = optimizer_contract.get("hyperparameters")
+    if not isinstance(hyperparameters, dict):
+        raise ValueError("production optimizer contract lacks hyperparameters")
+    import bitsandbytes as bnb
+
+    return bnb.optim.PagedAdamW8bit(
+        model.parameters(),
+        lr=float(hyperparameters["learning_rate"]),
+        weight_decay=float(hyperparameters["weight_decay"]),
+        percentile_clipping=int(hyperparameters["percentile_clipping"]),
+        block_wise=bool(hyperparameters["block_wise"]),
+    )
+
+def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None) -> dict[str, object]:
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the production vertical slice")
+    if not isinstance(seed, int) or seed < 0:
+        raise ValueError("launch seed must be a nonnegative integer")
+    artifact_root = production_artifact_root(artifact_root)
+    root = Path(__file__).resolve().parents[2]
+    config_path = root / "configs" / "ember-restart-3b.json"
+    integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
+    if not integration_contract_path.is_file():
+        raise RuntimeError("the merged Ember integration contract is required for production launch")
+    config = RestartDecoderConfig.from_contract(config_path)
+    memory_contract = load_memory_contract(config_path)
+    total_parameters = config.structural_parameter_count()
+    active_parameters = total_parameters - (len(config.expert_names) - 1) * config.layers * 12 * config.hidden_size * config.hidden_size
+    device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
+    memory_preflight = production_memory_preflight(total_parameters=total_parameters, active_parameters=active_parameters, device_free_bytes=int(device_free_bytes))
+    if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
+        raise RuntimeError("memory preflight and production numerics disagree")
+    records, launch_packet, input_receipt = load_authorized_records(root)
+    checkpoint_parent = artifact_root / "checkpoints"
+    checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    rng_state_before_init = _rng_state_hash(torch.device("cuda"))
+    previous_dtype = torch.get_default_dtype()
+    torch.set_default_dtype(torch.bfloat16)
+    try:
+        model = UnifiedDecoder(config, device="cuda", allow_production_allocation=True, genesis_seed=seed)
+    finally:
+        torch.set_default_dtype(previous_dtype)
+    genesis_hashes = model.expert_bank_genesis_hashes()
+    model.train()
+    counts = measure_parameter_counts(model)
+    if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
+        raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
+    optimizer_contract = load_optimizer_contract(config_path)
+    optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
+    resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
+    if resume_checkpoint is not None:
+        resume_checkpoint = resume_checkpoint.resolve()
+        if resume_checkpoint.drive.upper() != "B:" or not resume_checkpoint.is_dir():
+            raise ValueError("resume checkpoint must be a published B: bundle")
+        manifest_path = resume_checkpoint / "checkpoint-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+        resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
+        for group in optimizer.param_groups:
+            group["lr"] = 1e-5
+        checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
+    torch.cuda.reset_peak_memory_stats()
+    segment = run_pretraining_segment(
+        model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
+        checkpoint_every=len(records), checkpoint_callback=lambda _step, _result: None,
+        initial_global_step=int(resume_cursor["global_step"]), initial_tokens_seen=int(resume_cursor["tokens_seen"]),
+        initial_data_cursor=int(resume_cursor["record_index"]), data_shard_id=str(launch_packet["input_identity"]["shard_path"]),
+    )
+    rng_state_after_step = _rng_state(torch.device("cuda"))
+    data_cursor = dict(segment["data_cursor"])
+    data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
+    counts = measure_parameter_counts(model)
+    if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
+        raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
+    checkpoint = _retain_after_success(
+        checkpoint_parent,
+        max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
+        operation=lambda: write_checkpoint_artifacts(
+            model,
+            optimizer,
+            checkpoint_root,
+            launch_seed=seed,
+            rng_state=rng_state_after_step,
+            data_cursor=data_cursor,
+            model_config_sha256=_sha256(config_path),
+            contract_sha256=_sha256(integration_contract_path),
+            expert_genesis_sha256=genesis_hashes,
+            optimizer_contract=optimizer_contract,
+        ),
+    )
+    parameter_receipt = _execute_realization_counter(
+        root=root,
+        config_path=config_path,
+        checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
+        active_expert=str(model.active_expert),
+        expected_counts=counts,
+    )
+    return {
+        "losses": segment["losses"],
+        "counts": counts,
+        "memory_preflight": memory_preflight,
+        "launch_seed": seed,
+        "rng_state_before_init_sha256": rng_state_before_init,
+        "expert_genesis_sha256": genesis_hashes,
+        "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
+        "input_identity_receipt": input_receipt,
+        "post_step_checkpoint": checkpoint,
+        "parameter_receipt": parameter_receipt,
+    }
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument("--artifact-root", type=Path, required=True)
+    parser.add_argument("--resume-checkpoint", type=Path)
+    args = parser.parse_args()
+    print(json.dumps(run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint), sort_keys=True))
