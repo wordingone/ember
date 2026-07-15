@@ -2,6 +2,7 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -106,3 +107,34 @@ def test_canonical_spider_evaluator_cannot_swap_gold_after_custody_check():
         result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-sql-manifest", str(manifest), "--spider-root", str(spider), "--gold", str(gold), "--canonical-predictions", str(predictions), "--database-dir", str(database), "--tables", str(tables), "--score-output", str(score)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
         assert json.loads(score.read_text(encoding="utf-8"))["metrics"] == {"exact_match": 1.0}
+
+def test_custody_manifest_is_read_once_for_validation_and_receipt_hash(monkeypatch):
+    spec = importlib.util.spec_from_file_location("ember_restart_eval_spider", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        spider = root / "spider"; spider.mkdir()
+        gold = root / "gold.sql"; tables = root / "tables.json"
+        database = root / "database"; database.mkdir()
+        gold.write_text("select 1\tdb\n", encoding="utf-8")
+        tables.write_text("[]", encoding="utf-8")
+        (spider / "evaluation.py").write_text("# fixture\n", encoding="utf-8")
+        manifest = frozen_manifest(root, spider, gold, tables, database)
+        original_read_bytes = Path.read_bytes
+        original_read_text = Path.read_text
+        reads = 0
+        def once(self, *args, **kwargs):
+            nonlocal reads
+            if self == manifest:
+                reads += 1
+                if reads > 1:
+                    raise AssertionError("custody manifest reopened after validation")
+            if args or kwargs:
+                return original_read_text(self, *args, **kwargs)
+            return original_read_bytes(self)
+        monkeypatch.setattr(Path, "read_bytes", once)
+        monkeypatch.setattr(Path, "read_text", once)
+        assert module.verify_frozen_custody(manifest, spider, gold, tables, database) == hashlib.sha256(original_read_bytes(manifest)).hexdigest()
+        assert reads == 1
