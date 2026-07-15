@@ -23,9 +23,9 @@ Terminal-Bench, and structured-tools all have public protocol or custody
 records. Their current dispositions are explicit rather than silently
 omitted. In particular, Terminal-Bench has no eligible locally pinned
 image/network-safe task subset; BrowserGym MiniWoB, BFCL, and SWE-bench Lite
-have no locally pinned runtime and frozen task materialization. They therefore
+have no locally pinned runtime; BFCL has only a private frozen static task set, which remains `PREFLIGHT_ONLY`. They therefore
 have no target score.
 
 The authoritative renderer-facing record is
 [`ember-restart-evaluation-results.md`](ember-restart-evaluation-results.md).
-The MATH-500 revision `2cd6fe926f1203a15d19f73c9a329cbe62b806fd` is custody-materialized as a 500-row frozen suite with disposition `FROZEN_MATH500_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS`. It has no checkpoint-bound predictions or capability score.
+The MATH-500 revision `2cd6fe926f1203a15d19f73c9a329cbe62b806fd` is custody-materialized as a 500-row frozen suite with disposition `FROZEN_MATH500_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS`. MMMU validation now also has a 900-row same-byte image-input digest artifact with disposition `FROZEN_MMMU_IMAGE_INPUTS_NO_CHECKPOINT_BOUND_PREDICTIONS`. Neither has checkpoint-bound predictions or a capability score.
