@@ -26,14 +26,20 @@ def _write_json(path: Path, payload: object) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _write_generator(root: Path) -> str:
+    path = root / "generator.py"
+    path.write_text("# owned semantic generator fixture\n", encoding="utf-8")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
 class TrainingDataVerifierTests(unittest.TestCase):
     def test_audio_manifest_rejects_raw_frames_with_fabricated_caption_target(self) -> None:
         from tokenizers import Tokenizer, models, pre_tokenizers
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary); tokenizer = root / "tokenizer.json"
+            root = Path(temporary)
+            generator_hash = _write_generator(root); tokenizer = root / "tokenizer.json"
             frozen = Tokenizer(models.WordLevel({**{"<unk>": 0, "audio": 1, "signal": 2, "has": 3, "positive": 4, "negative": 5, "silent": 6, "frames": 7, "0": 8}, **{f"token-{index}": index for index in range(9, 32_000)}}, unk_token="<unk>")); frozen.pre_tokenizer = pre_tokenizers.Whitespace(); frozen.save(str(tokenizer)); tokenizer_hash = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
             config = root / "config.json"; config_hash = _write_json(config, {"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}})
-            source = root / "source.json"; source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "audio", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_audio_signal_execution", "source_description": "Owned PCM signal generator with labels recomputed from raw samples.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            source = root / "source.json"; source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "audio", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_audio_signal_execution", "source_description": "Owned PCM signal generator with labels recomputed from raw samples.", "minimum_record_count": 128, "minimum_token_count": 4096, "generator": {"path": "generator.py", "sha256": generator_hash}}})
             raw = base64.b64encode(b"\x00" * (640 * 2)).decode("ascii")
             record = {"active_expert": "audio", "token_ids": [31_999, 1], "target_ids": [1, 2], "audio_frames_i16le_base64": [raw], "image_coordinates": [], "multimodal_spans": [{"start": 0, "length": 1, "modality": "audio", "attention_mode": "causal"}], "target_text": "fabricated label", "capability_evidence": {"audio": {"caption_sha256": "0" * 64, "derivation": "raw_audio_signal_execution"}}}
             records = root / "records.json"; records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": [record]})
@@ -46,6 +52,7 @@ class TrainingDataVerifierTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            generator_hash = _write_generator(root)
             tokenizer = root / "tokenizer.json"
             frozen = Tokenizer(models.WordLevel({**{"<unk>": 0, "image": 1, "scene": 2, "has": 3, "red": 4, "green": 5, "blue": 6, "squares": 7, "0": 8}, **{f"token-{index}": index for index in range(9, 32_000)}}, unk_token="<unk>"))
             frozen.pre_tokenizer = pre_tokenizers.Whitespace()
@@ -54,7 +61,7 @@ class TrainingDataVerifierTests(unittest.TestCase):
             config = root / "config.json"
             config_hash = _write_json(config, {"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}})
             source = root / "source.json"
-            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "image", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_image_property_execution", "source_description": "Owned RGB scene generator with labels recomputed from raw pixels.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "image", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_image_property_execution", "source_description": "Owned RGB scene generator with labels recomputed from raw pixels.", "minimum_record_count": 128, "minimum_token_count": 4096, "generator": {"path": "generator.py", "sha256": generator_hash}}})
             raw = base64.b64encode(bytes(48 * 48 * 3)).decode("ascii")
             record = {"active_expert": "vision", "token_ids": [31_998, 31_998, 31_998, 31_998, 1], "target_ids": [31_998, 31_998, 31_998, 1, 2], "image_patches_u8_base64": [raw, raw, raw, raw], "image_coordinates": [[0, 0], [1, 0], [0, 1], [1, 1]], "multimodal_spans": [{"start": 0, "length": 4, "modality": "image", "attention_mode": "isolated"}], "target_text": "fabricated label", "capability_evidence": {"image": {"caption_sha256": "0" * 64, "derivation": "raw_image_property_execution"}}}
             records = root / "records.json"
@@ -69,6 +76,7 @@ class TrainingDataVerifierTests(unittest.TestCase):
         """A deterministic one-row patch is a fixture, never specialist pretraining."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            generator_hash = _write_generator(root)
             tokenizer = root / "tokenizer.json"
             tokenizer_hash = _write_json(
                 tokenizer,
@@ -121,9 +129,27 @@ class TrainingDataVerifierTests(unittest.TestCase):
             )
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("semantic source", completed.stderr)
+    def test_specialist_manifest_requires_content_addressed_generator_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generator_hash = _write_generator(root)
+            tokenizer = root / "tokenizer.json"
+            tokenizer_hash = _write_json(tokenizer, {"model": {"vocab": {f"token-{index}": index for index in range(32_000)}}})
+            config = root / "config.json"
+            config_hash = _write_json(config, {"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}})
+            source = root / "source.json"
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "image", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_image_property_execution", "source_description": "Owned RGB source deliberately omits a content-addressed generator binding.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            records = root / "records.json"
+            records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": []})
+            data = root / "data.json"
+            _write_json(data, {"schema_version": "ember-owned-training-data-v1", "capability": "image", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 0, "token_count": 0, "model_config": {"path": "config.json", "sha256": config_hash}, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
+            completed = subprocess.run([sys.executable, str(VERIFIER), "--data-manifest", str(data), "--tokenizer", str(tokenizer), "--capability", "image"], cwd=root, text=True, capture_output=True, timeout=15, check=False)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("generator", completed.stderr)
     def test_text_semantic_manifest_is_recomputed_from_bound_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            generator_hash = _write_generator(root)
             tokenizer = root / "tokenizer.json"
             tokenizer_hash = _write_json(
                 tokenizer,
@@ -183,13 +209,14 @@ class TrainingDataVerifierTests(unittest.TestCase):
         from build_owned_reasoning_tool_trajectories import build_records
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            generator_hash = _write_generator(root)
             tokenizer = root / "tokenizer.json"
             frozen = Tokenizer(models.WordLevel({"<unk>": 0, "reasoning": 1, "sum": 2, "plus": 3, "equals": 4, **{str(index): index + 5 for index in range(2048)}}, unk_token="<unk>"))
             frozen.pre_tokenizer = pre_tokenizers.Whitespace()
             frozen.save(str(tokenizer))
             token_hash = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
             source = root / "source.json"
-            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectory generator with independently executed sums.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectory generator with independently executed sums.", "minimum_record_count": 128, "minimum_token_count": 4096, "generator": {"path": "generator.py", "sha256": generator_hash}}})
             records = root / "records.json"
             records_list = build_records(frozen, count=704, capability="reasoning")
             records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": records_list})
@@ -202,6 +229,7 @@ class TrainingDataVerifierTests(unittest.TestCase):
         from tokenizers import Tokenizer, models, pre_tokenizers
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            generator_hash = _write_generator(root)
             tokenizer = root / "tokenizer.json"
             vocabulary = {"<unk>": 0, "reasoning": 1, "sum": 2, "plus": 3, "equals": 4, "1": 5, "2": 6, "3": 7}
             frozen = Tokenizer(models.WordLevel(vocabulary, unk_token="<unk>"))
@@ -209,7 +237,7 @@ class TrainingDataVerifierTests(unittest.TestCase):
             frozen.save(str(tokenizer))
             tokenizer_hash = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
             source = root / "source.json"
-            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectories whose targets are executed locally from operands.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectories whose targets are executed locally from operands.", "minimum_record_count": 128, "minimum_token_count": 4096, "generator": {"path": "generator.py", "sha256": generator_hash}}})
             transcript = "reasoning sum 1 plus 2 equals 3"
             encoded = list(frozen.encode(transcript).ids)
             forged = [0] * 33

@@ -118,6 +118,9 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
             or semantic_source["minimum_token_count"] < specialist_minimum["tokens"]
         ):
             raise ValueError("semantic source provenance is insufficient for specialist pretraining")
+        generator_path = _bound_file(root, semantic_source.get("generator"), "semantic source generator")
+        if generator_path.suffix != ".py":
+            raise ValueError("semantic source generator must bind Python generator bytes")
     tokenizer = _load_json(tokenizer_path, "tokenizer")
     vocab = tokenizer.get("model", {}).get("vocab") if isinstance(tokenizer.get("model"), dict) else None
     if not isinstance(vocab, dict) or not vocab:
