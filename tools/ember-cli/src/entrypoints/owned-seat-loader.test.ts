@@ -74,6 +74,7 @@ describe("owned seat loader", () => {
               launch: {
                 checkpoint_dir: resolve("C:/owned/checkpoint"),
                 mode: "INTERACTIVE",
+                model_config_path: resolve("C:/owned/model-config.json"),
                 run_manifest_path: resolve("C:/run.json"),
                 server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
                 tokenizer_path: resolve("C:/owned/tokenizer.json"),
@@ -98,6 +99,7 @@ describe("owned seat loader", () => {
         authorityKind: "ADMISSION",
         checkpointDir: resolve("C:/owned/checkpoint"),
         mode: "INTERACTIVE",
+      modelConfigPath: "C:\\owned\\model-config.json",
         pythonExecutable: "python-owned",
         runManifestPath: resolve("C:/run.json"),
         serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
