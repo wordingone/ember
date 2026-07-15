@@ -37,6 +37,7 @@ def test_source_audit_binds_exact_swebench_source_without_task_release():
         assert payload["result"] == "PREFLIGHT_ONLY"
         assert payload["claim_status"] == "SOURCE_ONLY_NO_FROZEN_SWEBENCH_TASK_RELEASE"
         assert payload["source_commit"] == commit
+        assert payload["capability_families"] == ["code", "files"]
         assert payload["missing_task_release_paths"] == ["data", "datasets", "swebench_lite.json", "swebench_verified.json"]
 
 
