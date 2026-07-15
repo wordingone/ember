@@ -12,6 +12,18 @@ from pathlib import Path
 
 from ember_restart_eval_checkpoint_consumer import _verify
 from ember_restart.prediction_contract import validate_predictions
+
+EXECUTION_AUTHORITY = Path(__file__).parents[1] / "manifests" / "ember-restart-execution-authorities-v1.json"
+
+def require_execution_authority(arguments: argparse.Namespace) -> None:
+    registry = json.loads(EXECUTION_AUTHORITY.read_text(encoding="utf-8"))
+    if not isinstance(registry, dict) or set(registry) != {"schema_version", "goal_id", "workstream_id", "next_executed_outcome", "authorities", "disposition"} or registry.get("schema_version") != "ember-restart-execution-authorities-v1" or registry.get("goal_id") != "EMBER-02" or registry.get("workstream_id") != "EMBER-02C" or not isinstance(registry.get("authorities"), list):
+        raise ValueError("committed execution authority registry is invalid")
+    expected = {"model_source_sha256": sha256(arguments.model_source), "model_config_sha256": sha256(arguments.model_config), "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__))}
+    for authority in registry["authorities"]:
+        if isinstance(authority, dict) and authority == expected:
+            return
+    raise ValueError("committed execution authority does not authorize supplied source/config/tokenizer/inference bytes")
 from tokenizers import Tokenizer
 
 
@@ -22,6 +34,7 @@ def sha256(path: Path) -> str:
 def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dict[str, object]:
     import torch
 
+    require_execution_authority(arguments)
     for path, expected, label in ((arguments.model_source, arguments.model_source_sha256, "model source"), (arguments.model_config, arguments.model_config_sha256, "model config")):
         if sha256(path) != expected:
             raise ValueError(f"{label} SHA-256 does not match its argument")
