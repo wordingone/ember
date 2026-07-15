@@ -15,6 +15,7 @@ import subprocess
 import threading
 import unittest
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -343,6 +344,49 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                     ])
             tokenizer.assert_not_called()
             loader.assert_not_called()
+    def test_development_main_binds_exact_config_and_constructs_resolved_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "checkpoint"
+            checkpoint.mkdir()
+            checkpoint_manifest = checkpoint / "checkpoint-manifest.json"
+            checkpoint_manifest.write_text("{}", encoding="utf-8")
+            config = root / "config.json"
+            config.write_text("{}", encoding="utf-8")
+            tokenizer_path = root / "tokenizer.json"
+            development = {
+                "checkpoint_sha256": hashlib.sha256(checkpoint_manifest.read_bytes()).hexdigest(),
+                "model_config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+                "tokenizer_sha256": "c" * 64,
+                "server_source_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "serve_owned_openai.py").read_bytes()).hexdigest(),
+                "tokens_seen": 2048,
+                "allocated_parameters": 3_839_161_856,
+                "active_parameters": 1_020_589_568,
+            }
+            server = MagicMock()
+            with (
+                patch("serve_owned_openai.start_parent_watchdog"),
+                patch("serve_owned_openai.resolve_development_identity", return_value=development),
+                patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256="c" * 64)) as tokenizer,
+                patch("serve_owned_openai.load_development_shared_runtime", return_value=object()) as loader,
+                patch("serve_owned_openai.create_loopback_server", return_value=server) as create,
+            ):
+                result = serve_main([
+                    "--checkpoint", str(checkpoint), "--tokenizer", str(tokenizer_path), "--config", str(config),
+                    "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                    "--parent-pid", str(os.getpid()), "--device", "cpu",
+                ])
+        self.assertEqual(result, 0)
+        loader.assert_called_once_with(checkpoint=checkpoint, config_path=config, checkpoint_manifest={}, device="cpu")
+        tokenizer.assert_called_once_with(tokenizer_path, expected_sha256="c" * 64)
+        runtime = create.call_args.args[0]
+        self.assertEqual(runtime.identity, DevelopmentIdentity(
+            checkpoint_sha256=development["checkpoint_sha256"], model_config_sha256=development["model_config_sha256"],
+            tokenizer_sha256="c" * 64, server_source_sha256=development["server_source_sha256"],
+            tokens_seen=2048, allocated_parameters=3_839_161_856, active_parameters=1_020_589_568,
+        ))
+        create.assert_called_once_with(runtime, host="127.0.0.1", port=8000, mode="INTERACTIVE")
+        server.serve_forever.assert_called_once_with()
     def test_development_source_mismatch_stops_before_tokenizer_or_loader(self) -> None:
         development = {
             "checkpoint_sha256": "a" * 64,
