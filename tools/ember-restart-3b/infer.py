@@ -56,14 +56,15 @@ class FrozenTokenizer:
         return str(self._tokenizer.decode(token_ids, skip_special_tokens=False))
 
 
-def load_frozen_tokenizer(path: Path, *, expected_sha256: str) -> FrozenTokenizer:
+def load_frozen_tokenizer(path: Path, *, expected_sha256: str, snapshot_bytes: bytes | None = None) -> FrozenTokenizer:
     """Load exact frozen tokenizer bytes and refuse substitutions or malformed bytes."""
 
-    actual_sha256 = sha(path)
+    raw = path.read_bytes() if snapshot_bytes is None else snapshot_bytes
+    actual_sha256 = hashlib.sha256(raw).hexdigest()
     if actual_sha256 != expected_sha256:
         raise ValueError("tokenizer sha256 does not match the frozen split")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(raw)
         added_tokens = payload["added_tokens"]
         eos_ids = {
             item.get("id")
@@ -80,7 +81,7 @@ def load_frozen_tokenizer(path: Path, *, expected_sha256: str) -> FrozenTokenize
             raise ValueError("frozen tokenizer must declare one special <|endoftext|> ID")
         eos_token_id = next(iter(eos_ids))
         from tokenizers import Tokenizer
-        tokenizer = Tokenizer.from_file(str(path))
+        tokenizer = Tokenizer.from_str(raw.decode("utf-8"))
     except (KeyError, TypeError, UnicodeError, json.JSONDecodeError, ValueError) as error:
         raise ValueError("frozen tokenizer bytes lack a valid special EOS declaration") from error
     except Exception as error:

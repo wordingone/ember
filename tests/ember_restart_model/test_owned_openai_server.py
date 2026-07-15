@@ -34,6 +34,7 @@ from serve_owned_openai import (
     load_development_shared_runtime,
     resolve_runtime_inputs,
     start_parent_watchdog,
+    _read_bound_json_snapshot,
     main as serve_main,
 )
 
@@ -137,6 +138,15 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("target", response["error"]["message"])
         self.assertEqual(self.runtime.calls, [])
+    def test_frozen_eval_tool_schema_with_label_is_not_target_sensitive(self) -> None:
+        status, response = self._request("/v1/chat/completions", {
+            "model": self.runtime.identity.model_name,
+            "ember_frozen_row_id": "row-1",
+            "messages": [{"role": "user", "content": "hello"}],
+            "tools": [{"type": "function", "function": {"name": "AskUserQuestion", "parameters": {"type": "object", "properties": {"label": {"type": "string"}}}}}],
+        })
+        self.assertEqual(status, 200, response)
+        self.assertEqual(len(self.runtime.calls), 1)
     def test_chat_requires_a_frozen_row_id_before_runtime(self) -> None:
         status, response = self._request("/v1/chat/completions", {
             "model": self.runtime.identity.model_name,
@@ -170,6 +180,27 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
 
+    def test_interactive_tool_schema_with_labels_is_not_a_frozen_target_leak(self) -> None:
+        runtime = _Runtime()
+        server = create_loopback_server(runtime, host="127.0.0.1", port=0, mode="INTERACTIVE")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+            request = urllib.request.Request(
+                base + "/v1/chat/completions",
+                data=json.dumps({
+                    "model": runtime.identity.model_name,
+                    "messages": [{"role": "user", "content": "ask a question"}],
+                    "tools": [{"type": "function", "function": {"name": "AskUserQuestion", "parameters": {"type": "object", "properties": {"label": {"type": "string"}}}}}],
+                }).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=2) as response:
+                self.assertEqual(response.status, 200)
+            self.assertEqual(len(runtime.calls), 1)
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=2)
     def test_mode_inputs_and_parent_liveness_fail_closed_before_allocation(self) -> None:
         split = Path("frozen.json")
         self.assertIsNone(resolve_runtime_inputs("INTERACTIVE", None))
@@ -312,6 +343,25 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         admitted_loader.assert_not_called()
         development_resolver.assert_not_called()
 
+    def test_bound_json_snapshot_parses_the_hashed_bytes_after_path_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bound.json"
+            original = b'{"identity":"original"}'
+            path.write_bytes(original)
+            expected = hashlib.sha256(original).hexdigest()
+            read_once = Path.read_bytes
+
+            def mutate_after_read(candidate: Path) -> bytes:
+                payload = read_once(candidate)
+                if candidate == path:
+                    path.write_bytes(b'{"identity":"mutated"}')
+                return payload
+
+            with patch.object(Path, "read_bytes", new=mutate_after_read):
+                payload, digest, snapshot = _read_bound_json_snapshot(path, expected_sha256=expected, label="development config")
+        self.assertEqual(payload, {"identity": "original"})
+        self.assertEqual(digest, expected)
+        self.assertEqual(snapshot, original)
     def test_development_config_mismatch_stops_before_tokenizer_or_loader(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -336,7 +386,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 patch("serve_owned_openai.load_frozen_tokenizer") as tokenizer,
                 patch("serve_owned_openai.load_development_shared_runtime") as loader,
             ):
-                with self.assertRaisesRegex(ValueError, "checkpoint/config"):
+                with self.assertRaisesRegex(ValueError, "model config"):
                     serve_main([
                         "--checkpoint", str(checkpoint), "--tokenizer", "tokenizer.json", "--config", str(config),
                         "--development-manifest", "development.json", "--mode", "INTERACTIVE",
@@ -354,10 +404,12 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             config = root / "config.json"
             config.write_text("{}", encoding="utf-8")
             tokenizer_path = root / "tokenizer.json"
+            tokenizer_path.write_text("{}", encoding="utf-8")
+            tokenizer_sha256 = hashlib.sha256(tokenizer_path.read_bytes()).hexdigest()
             development = {
                 "checkpoint_sha256": hashlib.sha256(checkpoint_manifest.read_bytes()).hexdigest(),
                 "model_config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
-                "tokenizer_sha256": "c" * 64,
+                "tokenizer_sha256": tokenizer_sha256,
                 "server_source_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "serve_owned_openai.py").read_bytes()).hexdigest(),
                 "tokens_seen": 2048,
                 "allocated_parameters": 3_839_161_856,
@@ -367,7 +419,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             with (
                 patch("serve_owned_openai.start_parent_watchdog"),
                 patch("serve_owned_openai.resolve_development_identity", return_value=development),
-                patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256="c" * 64)) as tokenizer,
+                patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256=tokenizer_sha256)) as tokenizer,
                 patch("serve_owned_openai.load_development_shared_runtime", return_value=object()) as loader,
                 patch("serve_owned_openai.create_loopback_server", return_value=server) as create,
             ):
@@ -377,12 +429,12 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                     "--parent-pid", str(os.getpid()), "--device", "cpu",
                 ])
         self.assertEqual(result, 0)
-        loader.assert_called_once_with(checkpoint=checkpoint, config_path=config, checkpoint_manifest={}, device="cpu")
-        tokenizer.assert_called_once_with(tokenizer_path, expected_sha256="c" * 64)
+        loader.assert_called_once_with(checkpoint=checkpoint, config_path=config, checkpoint_manifest={}, device="cpu", config_bytes=b"{}")
+        tokenizer.assert_called_once_with(tokenizer_path, expected_sha256=tokenizer_sha256, snapshot_bytes=b"{}")
         runtime = create.call_args.args[0]
         self.assertEqual(runtime.identity, DevelopmentIdentity(
             checkpoint_sha256=development["checkpoint_sha256"], model_config_sha256=development["model_config_sha256"],
-            tokenizer_sha256="c" * 64, server_source_sha256=development["server_source_sha256"],
+            tokenizer_sha256=tokenizer_sha256, server_source_sha256=development["server_source_sha256"],
             tokens_seen=2048, allocated_parameters=3_839_161_856, active_parameters=1_020_589_568,
         ))
         create.assert_called_once_with(runtime, host="127.0.0.1", port=8000, mode="INTERACTIVE")
@@ -411,39 +463,38 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 ])
         tokenizer.assert_not_called()
         loader.assert_not_called()
-    def test_development_loader_uses_bf16_meta_shared_route_without_specialist_loads(self) -> None:
-        model = MagicMock()
-        model.state_dict.return_value = {
-            "token_embedding.weight": object(),
-            "layers.0.experts.vision.up.weight": object(),
-        }
-        payload = {"model": {"token_embedding.weight": object()}}
+    def test_development_loader_uses_real_validator_canonicalize_materialize_chain(self) -> None:
+        from model import RestartDecoderConfig, UnifiedDecoder
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=1, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, device="cpu")
+        payload = {"model": {
+            key: value.detach().clone()
+            for key, value in model.state_dict().items()
+            if ".experts." not in key
+        }}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            config = root / "config.json"
-            config.write_text("{}", encoding="utf-8")
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
             with (
-                patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=object()),
+                patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=config),
                 patch("serve_owned_openai.construct_runtime_model", return_value=model) as construct,
                 patch("serve_owned_openai.tied_embeddings_from_contract", return_value=True),
                 patch("serve_owned_openai.hash_and_load_torch", return_value=payload) as load,
-                patch("serve_owned_openai.validate_state_map", return_value=payload["model"]),
-                patch("serve_owned_openai.canonicalize_tied_embedding_state", return_value=payload["model"]),
-                patch("serve_owned_openai.materialize_state_map", return_value=payload["model"]),
-                patch("serve_owned_openai.rebind_tied_embeddings") as rebind,
             ):
                 loaded = load_development_shared_runtime(
                     checkpoint=root,
-                    config_path=config,
+                    config_path=config_path,
                     checkpoint_manifest={"shards": [{"path": "shared.pt", "sha256": "a" * 64}]},
                     device="cpu",
                 )
-        self.assertIs(loaded, model.eval.return_value)
+        self.assertIs(loaded, model)
         construct.assert_called_once()
         load.assert_called_once_with(torch, root / "shared.pt", "a" * 64, device="cpu")
         self.assertNotIn("expert-vision.pt", str(load.call_args))
-        model._activate_expert.assert_called_once_with("shared")
-        rebind.assert_called_once_with(model, tied_embeddings=True)
+        self.assertEqual(model.active_expert, "shared")
+        self.assertIs(model.lm_head.weight, model.token_embedding.weight)
     def test_development_resolver_requires_exact_non_admissible_seat(self) -> None:
         payload = {"valid": True, "seat": "OWNED_DEVELOPMENT", "claim_status": "NON_ADMISSIBLE"}
         calls: list[list[str]] = []

@@ -108,6 +108,39 @@ def _contains_target_leak(value: Any) -> bool:
     return False
 
 
+def _contains_target_leak_on_prompt_surface(request: Mapping[str, object]) -> bool:
+    """Inspect only content-bearing prompt fields, never tool/control schemas."""
+
+    return any(
+        _contains_target_leak(request[field])
+        for field in ("messages", "prompt", "ember_frozen_row")
+        if field in request
+    )
+
+def _read_bound_json_snapshot(path: Path, *, expected_sha256: str, label: str) -> tuple[dict[str, object], str, bytes]:
+    snapshot = path.read_bytes()
+    actual = hashlib.sha256(snapshot).hexdigest()
+    if actual != expected_sha256:
+        raise ValueError(f"{label} sha256 does not match its authority")
+    try:
+        payload = json.loads(snapshot)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object")
+    return payload, actual, snapshot
+
+
+def _config_snapshot_path(config_bytes: bytes) -> Path:
+    handle = tempfile.NamedTemporaryFile("wb", suffix=".json", delete=False)
+    try:
+        handle.write(config_bytes)
+        handle.flush()
+        os.fsync(handle.fileno())
+        return Path(handle.name)
+    finally:
+        handle.close()
+
 def _error(message: str) -> dict[str, object]:
     return {"error": {"message": message, "type": "invalid_request_error"}}
 
@@ -293,7 +326,7 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, m
             if request.get("model") != runtime.identity.model_name:
                 self._write(400, _error("model identity does not match the loaded owned checkpoint"))
                 return
-            if _contains_target_leak(request):
+            if mode == "FROZEN_EVAL" and _contains_target_leak_on_prompt_surface(request):
                 self._write(400, _error("request contains target leakage"))
                 return
             frozen_row_id = request.get("ember_frozen_row_id")
@@ -356,9 +389,11 @@ class LoadedOwnedRuntime:
         device: str,
     ) -> "LoadedOwnedRuntime":
         manifest_path = checkpoint / "checkpoint-manifest.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        checkpoint_sha256 = sha(manifest_path)
-        run_manifest_sha256 = sha(run_manifest)
+        manifest_bytes = manifest_path.read_bytes()
+        checkpoint_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+        manifest = json.loads(manifest_bytes)
+        run_manifest_bytes = run_manifest.read_bytes()
+        run_manifest_sha256 = hashlib.sha256(run_manifest_bytes).hexdigest()
         admission = resolve_central_owned_admission(
             run_manifest=run_manifest,
             trusted_verifier_registry=trusted_verifier_registry,
@@ -367,7 +402,7 @@ class LoadedOwnedRuntime:
         if sha(run_manifest) != run_manifest_sha256:
             raise ValueError("central run manifest changed during owned-seat resolution")
         try:
-            central_manifest = json.loads(run_manifest.read_text(encoding="utf-8"))
+            central_manifest = json.loads(run_manifest_bytes)
             config_record = central_manifest["architecture"]["model_config"]
             tokenizer_record = central_manifest["tokenizer"]
         except (KeyError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
@@ -385,11 +420,17 @@ class LoadedOwnedRuntime:
 
         expected_config_sha256 = bound_sha256(config_record, "model config")
         expected_tokenizer_sha256 = bound_sha256(tokenizer_record, "tokenizer")
-        model_config_sha256 = sha(config_path)
+        config_bytes = config_path.read_bytes()
+        model_config_sha256 = hashlib.sha256(config_bytes).hexdigest()
         if model_config_sha256 != expected_config_sha256:
             raise ValueError("central model config hash does not match loaded configuration")
-        tokenizer = load_frozen_tokenizer(tokenizer_path, expected_sha256=expected_tokenizer_sha256)
-        config = RestartDecoderConfig.from_contract(config_path)
+        tokenizer_bytes = tokenizer_path.read_bytes()
+        tokenizer = load_frozen_tokenizer(tokenizer_path, expected_sha256=expected_tokenizer_sha256, snapshot_bytes=tokenizer_bytes)
+        config_snapshot = _config_snapshot_path(config_bytes)
+        try:
+            config = RestartDecoderConfig.from_contract(config_snapshot)
+        finally:
+            config_snapshot.unlink(missing_ok=True)
         model = UnifiedDecoder(config, device=device, allow_production_allocation=True).eval()
         from checkpoint_artifacts import load_checkpoint_artifacts
         load_checkpoint_artifacts(
@@ -437,16 +478,22 @@ def load_development_shared_runtime(
     config_path: Path,
     checkpoint_manifest: Mapping[str, object],
     device: str,
+    config_bytes: bytes | None = None,
 ) -> UnifiedDecoder:
     """Load the development seat shared route through the #848 BF16/meta loader."""
 
     try:
-        contract = json.loads(config_path.read_text(encoding="utf-8"))
+        contract = json.loads(config_bytes if config_bytes is not None else config_path.read_bytes())
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"development model contract is invalid: {exc}") from exc
     if not isinstance(contract, dict):
         raise ValueError("development model contract must be an object")
-    config = RestartDecoderConfig.from_contract(config_path)
+    snapshot_path = _config_snapshot_path(config_bytes) if config_bytes is not None else config_path
+    try:
+        config = RestartDecoderConfig.from_contract(snapshot_path)
+    finally:
+        if config_bytes is not None:
+            snapshot_path.unlink(missing_ok=True)
     model = construct_runtime_model(torch, model_module, config, contract)
     tied_embeddings = tied_embeddings_from_contract(config, contract)
     shards = checkpoint_manifest.get("shards")
@@ -469,7 +516,8 @@ def load_development_shared_runtime(
         raise ValueError("development shared checkpoint lacks a model state")
     expected = model.state_dict()
     shared_expected = {key: value for key, value in expected.items() if ".experts." not in key}
-    shared_state = validate_state_map(payload["model"], shared_expected, "shared")
+    shared_state = payload["model"]
+    validate_state_map(shared_state, shared_expected, "shared")
     canonical = canonicalize_tied_embedding_state(torch, shared_state, tied_embeddings=tied_embeddings)
     model.load_state_dict(materialize_state_map(canonical, device), strict=False, assign=True)
     rebind_tied_embeddings(model, tied_embeddings=tied_embeddings)
@@ -500,18 +548,25 @@ def main(argv: list[str] | None = None) -> int:
         if development.get("server_source_sha256") != sha(Path(__file__)):
             raise ValueError("development authority does not match server source bytes")
         config_path = args.config
-        checkpoint_manifest = args.checkpoint / "checkpoint-manifest.json"
-        if sha(checkpoint_manifest) != development["checkpoint_sha256"] or sha(config_path) != development["model_config_sha256"]:
-            raise ValueError("development authority does not match checkpoint/config bytes")
-        tokenizer = load_frozen_tokenizer(args.tokenizer, expected_sha256=str(development["tokenizer_sha256"]))
-        manifest = json.loads(checkpoint_manifest.read_text(encoding="utf-8"))
-        if not isinstance(manifest, dict):
-            raise ValueError("development checkpoint manifest must be an object")
+        checkpoint_manifest_path = args.checkpoint / "checkpoint-manifest.json"
+        manifest, _checkpoint_sha256, _checkpoint_bytes = _read_bound_json_snapshot(
+            checkpoint_manifest_path, expected_sha256=str(development["checkpoint_sha256"]), label="development checkpoint manifest"
+        )
+        _config, _config_sha256, config_bytes = _read_bound_json_snapshot(
+            config_path, expected_sha256=str(development["model_config_sha256"]), label="development model config"
+        )
+        _tokenizer, _tokenizer_sha256, tokenizer_bytes = _read_bound_json_snapshot(
+            args.tokenizer, expected_sha256=str(development["tokenizer_sha256"]), label="development tokenizer"
+        )
+        tokenizer = load_frozen_tokenizer(
+            args.tokenizer, expected_sha256=str(development["tokenizer_sha256"]), snapshot_bytes=tokenizer_bytes
+        )
         model = load_development_shared_runtime(
             checkpoint=args.checkpoint,
             config_path=config_path,
             checkpoint_manifest=manifest,
             device=args.device,
+            config_bytes=config_bytes,
         )
         identity = DevelopmentIdentity(checkpoint_sha256=str(development["checkpoint_sha256"]), model_config_sha256=str(development["model_config_sha256"]), tokenizer_sha256=tokenizer.sha256, server_source_sha256=sha(Path(__file__)), tokens_seen=int(development["tokens_seen"]), allocated_parameters=int(development["allocated_parameters"]), active_parameters=int(development["active_parameters"]))
         runtime = LoadedOwnedRuntime(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(args.device), frozen_split=frozen_split)
