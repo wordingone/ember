@@ -248,6 +248,7 @@ export async function verifyOwnedEndpointIdentity(
   }
   if (
     payload["seat"] !== "OWNED_ADMITTED" ||
+    payload["mode"] !== "INTERACTIVE" ||
     payload["checkpoint_sha256"] !== identity.checkpointSha256 ||
     payload["model_name"] !== identity.modelName ||
     payload["model_config_sha256"] !== identity.modelConfigSha256 ||
