@@ -11,21 +11,19 @@ CLAIM-BEARING**.
 
 ## Current disposition
 
-No corrected v3-or-successor owned checkpoint bundle is currently available to
-the evaluator. Historical v2 snapshots are retained solely as bootstrap and
-raw-forward evidence; they are not corrected-rung capability evidence. No
-capability score is reported here.
+A corrected v3 shared-route checkpoint input exists at manifest
+`bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b`:
+3,839,161,856 allocated/unique/trainable/served parameters, 1,020,589,568
+active parameters, global step 2, and 2,048 observed shared-text tokens. It is
+structural bootstrap-mechanics evidence only. Specialists remain untrained;
+there is no sufficient-pretraining, capability, or admission claim.
 
-The historical v2 checkpoint input verifier executed against manifest
-`355bedc5f2cda3b3c17d5eed3d639f6a8d0ed00d3b4bf6203942d188a8585df9` and
-verified its six declared shard bytes. Its result is
-`HISTORICAL_V2_INPUT_ONLY` with `NOT_ELIGIBLE` admission. An archived decoder
-source is available, but its available configuration hashes to
-`e1351e61c9ede811dc484bb698c4113740c648a1ac434bcdf6fa8f436eb4a5e6`, which
-does not equal the v2 manifest-bound configuration hash
-`ad12a162479ea2ded8bc29bb0c1e7d1894af37899cdd292877a816b1c17fb61b`.
-Consequently no historical raw forward, prediction envelope, or score has been
-emitted from that source/config pair.
+The public execution authority intentionally remains
+`PREPARED_NOT_EXECUTABLE_AWAITING_PROMPT_AND_SAME_BYTE_RUNTIME_BINDING`.
+Accordingly, no checkpoint-bound forward, canonical prediction envelope, or
+capability score has been emitted from this v3 checkpoint. Historical v2
+snapshots remain bootstrap/raw-forward evidence only and are not corrected-rung
+capability evidence.
 
 ## Required result record
 
