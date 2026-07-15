@@ -1,31 +1,33 @@
 {
-  "asset_disposition": "FROZEN_HUMANEVALPLUS_AND_MBPPPLUS_TASK_ASSETS_NO_CHECKPOINT_BOUND_PREDICTIONS",
-  "frozen_task_assets": {
-    "humanevalplus_v0.1.10": {
-      "receipt_sha256": "2edba3d347adfa753356bd0f132eff884192db4a92deeb9fe4df2b1943b698f7",
-      "rows": 164,
-      "sha256": "272720b90ac375502c8ed23cd791c2a93dfb22a911641a494da74a426c09f101"
-    },
-    "mbppplus_v0.2.0": {
-      "receipt_sha256": "28029857489e2633bd5646693e574a5d01b5ca2a15c57e30fd1c1018de8ed3b5",
-      "rows": 378,
-      "sha256": "af43697e8791c4c149bdfd6b489d8b5412507551ac20e28a439f650b8225db63"
-    }
-  },
-  "benchmark_id": "evalplus",
-  "goal_id": "EMBER-02",
-  "license": "Apache-2.0",
-  "license_sha256": "fcc1f77fe5443b21bfc4dfcc3d66f7654f599b91582df771850e5e876986a103",
-  "materialization": {
-    "max_b_write_gib": 0.25,
-    "outcome": "COMPLETED",
-    "receipt_sha256": "24d83ba7a732280e507e9e535f8f719c765ed5208ca9c0d5b3bfd2a412724fb7"
-  },
-  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "schema_version": "ember-restart-benchmark-custody-v1",
-  "source_commit": "26d6d00bb1fd0fa37f39c99d5290da67891d1c5e",
-  "source_tree": "1d0063f35139d70988828fd669aeb365e5030b68",
-  "target_execution_permitted": false,
-  "upstream_url": "https://github.com/evalplus/evalplus",
-  "workstream_id": "EMBER-02C"
+    "asset_disposition":  "FROZEN_HUMANEVALPLUS_AND_MBPPPLUS_TASK_ASSETS_NO_CHECKPOINT_BOUND_PREDICTIONS",
+    "frozen_task_assets":  {
+                               "humanevalplus_v0.1.10":  {
+                                                             "receipt_sha256":  "2edba3d347adfa753356bd0f132eff884192db4a92deeb9fe4df2b1943b698f7",
+                                                             "rows":  164,
+                                                             "sha256":  "272720b90ac375502c8ed23cd791c2a93dfb22a911641a494da74a426c09f101"
+                                                         },
+                               "mbppplus_v0.2.0":  {
+                                                       "receipt_sha256":  "28029857489e2633bd5646693e574a5d01b5ca2a15c57e30fd1c1018de8ed3b5",
+                                                       "rows":  378,
+                                                       "sha256":  "af43697e8791c4c149bdfd6b489d8b5412507551ac20e28a439f650b8225db63"
+                                                   }
+                           },
+    "benchmark_id":  "evalplus",
+    "goal_id":  "EMBER-02",
+    "license":  "Apache-2.0",
+    "license_sha256":  "fcc1f77fe5443b21bfc4dfcc3d66f7654f599b91582df771850e5e876986a103",
+    "materialization":  {
+                            "max_b_write_gib":  0.25,
+                            "outcome":  "COMPLETED",
+                            "receipt_sha256":  "24d83ba7a732280e507e9e535f8f719c765ed5208ca9c0d5b3bfd2a412724fb7"
+                        },
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-benchmark-custody-v1",
+    "source_commit":  "26d6d00bb1fd0fa37f39c99d5290da67891d1c5e",
+    "source_tree":  "1d0063f35139d70988828fd669aeb365e5030b68",
+    "target_execution_permitted":  false,
+    "upstream_url":  "https://github.com/evalplus/evalplus",
+    "workstream_id":  "EMBER-02C",
+    "execution_runtime_disposition":  "NO_LOCAL_DIGEST_PINNED_CODE_SANDBOX",
+    "unsafe_runtime_exclusion":  "MUTABLE_EVALPLUS_DOCKER_LATEST_FORBIDDEN"
 }
