@@ -72,10 +72,10 @@ The optimizer is one structured object containing implementation, hyperparameter
 
 Admission adds all of the following without weakening the candidate gates:
 
-- a `PASSED` `ember-sufficient-pretraining-v1` receipt bound to the exact checkpoint-manifest SHA-256, content-addressed training ledger, stopping evaluation, and checkpoint progression; it records checkpoint-matching tokens, GPU-hours, and final loss, and its independently trusted local verifier is executed with fixed arguments against those artifacts with output required to match the receipt;
+- a `PASSED` `ember-sufficient-pretraining-v2` receipt bound to the exact checkpoint-manifest SHA-256, content-addressed training ledger, stopping evaluation, and checkpoint progression; it records checkpoint-matching tokens, GPU-hours, modality exposure, and held-out measurements, and its independently trusted local verifier is executed with fixed arguments against those artifacts with output required to match the receipt;
 - a minimum non-bootstrap scale floor: total observed training tokens are at least the checkpoint's total trainable parameter count, and each of text, image, audio, reasoning, and typed-tool training has at least 1,000,000 observed tokens;
-- held-out learning evidence over at least 1,000,000 held-out tokens, using the closed `plateau-and-heldout-v1` criterion, with finite loss at least 10 percent below the bound genesis loss;
-- a progression of at least three checkpoints whose token counts are explicitly monotonic;
+- held-out learning evidence over at least 1,000,000 held-out tokens, using the closed `plateau-and-heldout-v2` criterion, with content-addressed genesis/final measurements over the identical frozen split, harness, and protocol, and finite final loss at least 10 percent below the bound genesis loss;
+- a progression of at least three distinct content-addressed `ember-sparse-checkpoint-v3` manifests with complete shard byte/hash records and strictly increasing manifest-bound token cursors, whose first checkpoint binds the genesis measurement and whose terminal checkpoint/path/token count exactly binds the admitted subject;
 
 These numeric gates are only a fail-closed minimum that prevents a random or few-token checkpoint from being renamed "sufficiently pretrained." They do not establish compute-optimal training, useful capability, baseline competitiveness, or the final >27B target. Those claims still require the independent checkpoint-bound external evaluations and comparative evidence below.
 
