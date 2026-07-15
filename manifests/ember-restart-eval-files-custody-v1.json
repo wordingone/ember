@@ -14,6 +14,16 @@
     "outcome": "COMPLETED",
     "receipt_sha256": "b153682746bfcfacbe3f33d8f8749f13f59ea1bd5f17dc937143852c865a8f5c"
   },
+  "candidate_task_release": {
+    "dataset": "SWE-bench/SWE-bench_Lite",
+    "revision": "69611d31007e1c6731db8bd5b5c3f2d33f5bab6e",
+    "config": "default",
+    "split": "test",
+    "rows": 300,
+    "parquet_bytes": 1111559,
+    "license_disposition": "UNDECLARED_IN_EXACT_DATASET_CARD",
+    "materialization_permitted": false
+  },
   "asset_disposition": "PINNED_SWE_BENCH_SOURCE_NO_LOCAL_TASK_SPLIT_OR_RUNTIME",
   "target_execution_permitted": false,
   "target_training_access": "FORBIDDEN",
