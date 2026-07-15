@@ -128,6 +128,13 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
     vocab_size = max(vocab.values()) + 1 if all(isinstance(value, int) and value >= 0 for value in vocab.values()) else 0
     if vocab_size <= 0:
         raise ValueError("tokenizer vocabulary is invalid")
+    frozen_tokenizer = None
+    if capability in {"image", "audio", "reasoning", "tool"}:
+        try:
+            from tokenizers import Tokenizer
+            frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        except Exception as error:
+            raise ValueError(f"{capability} semantic verifier cannot load the exact frozen tokenizer") from error
     records_payload = _load_json(records_path, "records artifact")
     records = records_payload.get("records")
     if records_payload.get("schema_version") != "ember-owned-semantic-records-v1" or not isinstance(records, list) or not records:
@@ -182,9 +189,7 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
                 raise ValueError(f"{capability} modality spans do not cover exactly its raw markers")
         if capability == "image":
             try:
-                from tokenizers import Tokenizer
                 from specialist_semantics import verify_image_supervision
-                frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
             except Exception as error:
                 raise ValueError("image semantic verifier cannot load the exact frozen tokenizer") from error
             try:
@@ -193,9 +198,7 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
                 raise ValueError(str(error)) from error
         if capability == "audio":
             try:
-                from tokenizers import Tokenizer
                 from specialist_semantics import verify_audio_supervision
-                frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
                 verify_audio_supervision(record, frames=decoded, tokenizer=frozen_tokenizer, audio_marker=raw_contract["audio_marker"])
             except ValueError as error:
                 raise ValueError(str(error)) from error
@@ -208,8 +211,6 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
             if not isinstance(target_text, str):
                 raise ValueError(f"{capability} semantic record lacks a target transcript")
             try:
-                from tokenizers import Tokenizer
-                frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
                 expected_target = list(frozen_tokenizer.encode(target_text).ids)
             except Exception as error:
                 raise ValueError(f"{capability} semantic verifier cannot load the exact frozen tokenizer") from error
