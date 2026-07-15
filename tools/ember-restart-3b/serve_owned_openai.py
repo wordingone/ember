@@ -8,13 +8,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Literal, Mapping, Protocol
 
 import torch
 
@@ -23,6 +25,7 @@ from infer import FrozenTokenizer, frozen_split_prompt, greedy_generate, load_fr
 from model import RestartDecoderConfig, UnifiedDecoder
 
 ROOT = Path(__file__).resolve().parents[2]
+RuntimeMode = Literal["INTERACTIVE", "FROZEN_EVAL"]
 
 
 @dataclass(frozen=True)
@@ -53,7 +56,7 @@ class OwnedIdentity:
 class OwnedChatRuntime(Protocol):
     identity: OwnedIdentity
 
-    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str, max_tokens: int) -> tuple[str, str]: ...
+    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str | None, max_tokens: int) -> tuple[str, str]: ...
 
 
 def _contains_target_leak(value: Any) -> bool:
@@ -72,6 +75,82 @@ def _contains_target_leak(value: Any) -> bool:
 def _error(message: str) -> dict[str, object]:
     return {"error": {"message": message, "type": "invalid_request_error"}}
 
+
+def resolve_runtime_inputs(mode: str, frozen_split: Path | None) -> Path | None:
+    if mode == "INTERACTIVE":
+        if frozen_split is not None:
+            raise ValueError("INTERACTIVE mode forbids a frozen split")
+        return None
+    if mode == "FROZEN_EVAL":
+        if frozen_split is None:
+            raise ValueError("FROZEN_EVAL mode requires a frozen split")
+        return frozen_split
+    raise ValueError("owned server mode must be INTERACTIVE or FROZEN_EVAL")
+
+
+def parent_process_alive(parent_pid: int) -> bool:
+    if parent_pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        open_process.restype = ctypes.c_void_p
+        get_exit_code_process = kernel32.GetExitCodeProcess
+        get_exit_code_process.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+        get_exit_code_process.restype = ctypes.c_int
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle.restype = ctypes.c_int
+        handle = open_process(0x1000, False, parent_pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not get_exit_code_process(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == 259
+        finally:
+            close_handle(handle)
+    try:
+        os.kill(parent_pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def require_live_parent(
+    parent_pid: int,
+    *,
+    checker: Callable[[int], bool] = parent_process_alive,
+) -> None:
+    if not checker(parent_pid):
+        raise RuntimeError("owned server parent process is not alive")
+
+
+def start_parent_watchdog(
+    parent_pid: int,
+    *,
+    poll_seconds: float = 1.0,
+    checker: Callable[[int], bool] = parent_process_alive,
+    exit_process: Callable[[int], None] = os._exit,
+) -> threading.Thread:
+    require_live_parent(parent_pid, checker=checker)
+
+    def watch() -> None:
+        while True:
+            time.sleep(poll_seconds)
+            if not checker(parent_pid):
+                exit_process(0)
+                return
+
+    thread = threading.Thread(target=watch, name="ember-owned-parent-watchdog", daemon=True)
+    thread.start()
+    return thread
 
 
 
@@ -121,11 +200,14 @@ def resolve_central_owned_admission(
     if payload.get("model_name") != "ember-owned:" + checkpoint_sha256[:12]:
         raise ValueError("central admission model name does not match loaded checkpoint")
     return payload
-def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -> ThreadingHTTPServer:
+
+def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, mode: RuntimeMode) -> ThreadingHTTPServer:
     """Create a local-only server whose identity and completions share one runtime object."""
 
     if host != "127.0.0.1":
         raise ValueError("owned inference server must bind exactly 127.0.0.1")
+    if mode not in ("INTERACTIVE", "FROZEN_EVAL"):
+        raise ValueError("owned server mode must be INTERACTIVE or FROZEN_EVAL")
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: object) -> None:
@@ -143,7 +225,7 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -
             if self.path != "/v1/models":
                 self._write(404, _error("unknown endpoint"))
                 return
-            self._write(200, runtime.identity.payload())
+            self._write(200, {**runtime.identity.payload(), "mode": mode})
 
         def do_POST(self) -> None:
             if self.path != "/v1/chat/completions":
@@ -165,9 +247,11 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -
                 self._write(400, _error("request contains target leakage"))
                 return
             frozen_row_id = request.get("ember_frozen_row_id")
-            if not isinstance(frozen_row_id, str) or not frozen_row_id:
+            if mode == "FROZEN_EVAL" and (not isinstance(frozen_row_id, str) or not frozen_row_id):
                 self._write(400, _error("request requires a nonempty frozen row identifier"))
                 return
+            if mode == "INTERACTIVE":
+                frozen_row_id = None
             messages = request.get("messages")
             if not isinstance(messages, list) or not messages or any(not isinstance(message, dict) for message in messages):
                 self._write(400, _error("messages must be a nonempty array of objects"))
@@ -206,7 +290,7 @@ class LoadedOwnedRuntime:
         checkpoint: Path,
         tokenizer_path: Path,
         run_manifest: Path,
-        frozen_split: Path,
+        frozen_split: Path | None,
         trusted_verifier_registry: Path,
         device: str,
     ) -> "LoadedOwnedRuntime":
@@ -264,11 +348,13 @@ class LoadedOwnedRuntime:
             raise ValueError("central admission model name does not match loaded checkpoint")
         return cls(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(device), frozen_split=frozen_split)
 
-    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str, max_tokens: int) -> tuple[str, str]:
+    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str | None, max_tokens: int) -> tuple[str, str]:
         if self.frozen_split is None:
             prompt = "\n".join(f"{message.get('role', 'user')}: {message.get('content', '')}" for message in messages)
             prompt_ids = self.tokenizer.encode(prompt)
         else:
+            if frozen_row_id is None:
+                raise ValueError("frozen evaluation requires a frozen row identifier")
             _, record = frozen_split_prompt(self.frozen_split, frozen_row_id, self.tokenizer)
             if messages != [{"role": "user", "content": record["prompt"]}]:
                 raise ValueError("chat does not match frozen split prompt")
@@ -291,19 +377,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-manifest", type=Path, required=True)
     parser.add_argument("--trusted-verifier-registry", type=Path, required=True)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--frozen-split", type=Path, required=True)
+    parser.add_argument("--mode", choices=("INTERACTIVE", "FROZEN_EVAL"), required=True)
+    parser.add_argument("--parent-pid", type=int, required=True)
+    parser.add_argument("--frozen-split", type=Path)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args(argv)
+    frozen_split = resolve_runtime_inputs(args.mode, args.frozen_split)
+    start_parent_watchdog(args.parent_pid)
     runtime = LoadedOwnedRuntime.from_paths(
         checkpoint=args.checkpoint,
         tokenizer_path=args.tokenizer,
         run_manifest=args.run_manifest,
         trusted_verifier_registry=args.trusted_verifier_registry,
         device=args.device,
-        frozen_split=args.frozen_split,
+        frozen_split=frozen_split,
     )
-    server = create_loopback_server(runtime, host=args.host, port=args.port)
+    server = create_loopback_server(runtime, host=args.host, port=args.port, mode=args.mode)
     server.serve_forever()
     return 0
 
